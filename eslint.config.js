@@ -54,8 +54,9 @@ export default tseslint.config(
           { from: "shared",    allow: ["shared"] },
           // contracts: shared + intra-package relative imports (same pattern as shared→shared)
           { from: "contracts", allow: ["shared", "contracts"] },
-          // core: ONLY shared — never adapters, apps, or vendor frameworks
-          { from: "core",      allow: ["shared"] },
+          // core: shared + intra-package relative imports (same pattern as shared→shared)
+          // External vendor imports (hono, drizzle, etc.) are blocked by no-restricted-imports below
+          { from: "core",      allow: ["shared", "core"] },
           // adapters: core ports + shared
           { from: "adapters",  allow: ["core", "shared"] },
           // apps: composition roots — can import everything

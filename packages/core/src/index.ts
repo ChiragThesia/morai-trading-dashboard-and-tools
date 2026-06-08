@@ -1,4 +1,7 @@
 // Core hexagon — domain + application layer.
-// Real use-cases and ports land in plans 02/03.
-export type { Result, Ok, Err } from "@morai/shared";
-export { ok, err, isOk, isErr, assertDefined } from "@morai/shared";
+// Hexagon law: core imports @morai/shared only — no frameworks, no adapters, no contracts.
+
+// Journal bounded context
+export type { ForGettingOpenCalendars, ForPingingDb, StorageError, Calendar } from "./journal/index.ts";
+export type { ForGettingStatus, StatusPayload, StatusError } from "./journal/index.ts";
+export { makeGetStatusUseCase } from "./journal/index.ts";
