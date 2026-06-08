@@ -15,7 +15,7 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 - [x] **FND-01**: Bun-workspaces monorepo installs from one lockfile; `core` / `adapters` / `contracts` / `shared` packages resolve via tsconfig project references.
 - [x] **FND-02**: ESLint boundary rules fail the build when `core` imports an adapter, app, framework, or vendor SDK.
 - [x] **FND-03**: Strict TypeScript config (no `any`/`as`/`!`, exhaustive switches, no floating promises) fails the build on violation.
-- [ ] **FND-04**: `shared` kernel provides `Result<T,E>`, `assertDefined`, and an `OccSymbol` parser/formatter, all unit-tested.
+- [x] **FND-04**: `shared` kernel provides `Result<T,E>`, `assertDefined`, and an `OccSymbol` parser/formatter, all unit-tested.
 - [x] **FND-05**: Root scripts `bun run dev | test | typecheck | lint | migrate` run across the workspace.
 
 ### Persistence
@@ -118,7 +118,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | FND-01 | Phase 1 | Complete |
 | FND-02 | Phase 1 | Complete |
 | FND-03 | Phase 1 | Complete |
-| FND-04 | Phase 1 | Pending |
+| FND-04 | Phase 1 | Complete |
 | FND-05 | Phase 1 | Complete |
 | DATA-01 | Phase 1 | Pending |
 | DATA-02 | Phase 1 | Pending |

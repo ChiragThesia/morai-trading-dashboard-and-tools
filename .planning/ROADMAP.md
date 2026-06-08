@@ -49,7 +49,7 @@ one end-to-end vertical slice from HTTP request through use-case to DB and back.
 Plans:
 
 - [x] 01-01-PLAN.md — Monorepo scaffold + hexagon boundary + strict-TS enforcement (FND-01/02/03/05)
-- [ ] 01-02-PLAN.md — Shared kernel TDD: Result, assertDefined, OccSymbol (FND-04)
+- [x] 01-02-PLAN.md — Shared kernel TDD: Result, assertDefined, OccSymbol (FND-04)
 - [ ] 01-03-PLAN.md — statusResponse contract + calendars port + get_status use-case (DATA-03, MCP-02)
 - [ ] 01-04-PLAN.md — Drizzle schema + idempotent migrator + calendars both adapters + contract test (DATA-01/02/03)
 - [ ] 01-05-PLAN.md — Zod config + Hono /api/status + MCP /mcp get_status + worker (DATA-04, DEPLOY-02/03, MCP-02)
