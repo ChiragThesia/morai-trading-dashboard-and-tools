@@ -50,8 +50,8 @@ Plans:
 
 - [x] 01-01-PLAN.md — Monorepo scaffold + hexagon boundary + strict-TS enforcement (FND-01/02/03/05)
 - [x] 01-02-PLAN.md — Shared kernel TDD: Result, assertDefined, OccSymbol (FND-04)
-- [ ] 01-03-PLAN.md — statusResponse contract + calendars port + get_status use-case (DATA-03, MCP-02)
-- [ ] 01-04-PLAN.md — Drizzle schema + idempotent migrator + calendars both adapters + contract test (DATA-01/02/03)
+- [x] 01-03-PLAN.md — statusResponse contract + calendars port + get_status use-case (DATA-03, MCP-02)
+- [x] 01-04-PLAN.md — Drizzle schema + idempotent migrator + calendars both adapters + contract test (DATA-01/02/03)
 - [ ] 01-05-PLAN.md — Zod config + Hono /api/status + MCP /mcp get_status + worker (DATA-04, DEPLOY-02/03, MCP-02)
 - [ ] 01-06-PLAN.md — CI + Railway/Supabase production deploy (DEPLOY-01/02/03)
 
@@ -152,7 +152,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Walking Skeleton | 1/6 | In Progress|  |
+| 1. Walking Skeleton | 4/6 | In Progress|  |
 | 2. Market Data & BSM Engine | 0/TBD | Not started | - |
 | 3. Calendar Journal (MVP) | 0/TBD | Not started | - |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
