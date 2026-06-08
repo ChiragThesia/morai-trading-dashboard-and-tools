@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-06-08T01:34:17.555Z"
-last_activity: 2026-06-07 — Roadmap created; 38 v1 requirements mapped across 6 phases
+stopped_at: Completed Phase 1 Plan 1 — monorepo scaffold + ESLint boundaries
+last_updated: "2026-06-08T01:59:19.600Z"
+last_activity: 2026-06-08 -- Phase 1 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 6
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 1 of 6 (Walking Skeleton)
-Plan: 0 of TBD in current phase
+Phase: 1 (Walking Skeleton) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-06-07 — Roadmap created; 38 v1 requirements mapped across 6 phases
+Last activity: 2026-06-08 -- Phase 1 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 01-walking-skeleton P01 | 20 | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,8 @@ Recent decisions affecting current work:
 - Roadmap: CBOE (no-auth) feeds journal before Schwab OAuth (Phase 2 → Phase 3 sequencing)
 - Roadmap: BSM engine (Phase 2) precedes snapshot job (Phase 3) — snapshots store computed greeks
 - Roadmap: MCP-02 is a cross-cutting constraint established in Phase 1; every use-case ships both HTTP + MCP adapters from day one
+- [Phase ?]: emitDeclarationOnly instead of noEmit — TypeScript project references require composite packages to emit .d.ts files
+- [Phase ?]: boundaries/dependencies (v6 rename) + **/packages/*/src/** patterns with mode:full — absolute path matching required for Bun monorepo ESLint integration
 
 ### Pending Todos
 
@@ -83,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-08T00:55:41.643Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-walking-skeleton/01-CONTEXT.md
+Last session: 2026-06-08T01:59:19.593Z
+Stopped at: Completed Phase 1 Plan 1 — monorepo scaffold + ESLint boundaries
+Resume file: .planning/phases/01-walking-skeleton/01-02-PLAN.md
