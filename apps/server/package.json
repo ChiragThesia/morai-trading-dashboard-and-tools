@@ -4,10 +4,15 @@
   "module": "src/main.ts",
   "private": true,
   "dependencies": {
-    "@morai/core": "workspace:*",
+    "@hono/zod-validator": "^0.8.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@morai/adapters": "workspace:*",
     "@morai/contracts": "workspace:*",
-    "@morai/shared": "workspace:*"
+    "@morai/core": "workspace:*",
+    "@morai/shared": "workspace:*",
+    "fetch-to-node": "^2.1.0",
+    "hono": "^4.12.23",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",

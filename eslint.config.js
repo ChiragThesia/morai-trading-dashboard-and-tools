@@ -59,8 +59,8 @@ export default tseslint.config(
           { from: "core",      allow: ["shared", "core"] },
           // adapters: core ports + shared + intra-package relative imports (same pattern as core→core)
           { from: "adapters",  allow: ["core", "shared", "adapters"] },
-          // apps: composition roots — can import everything
-          { from: "apps",      allow: ["adapters", "core", "contracts", "shared"] },
+          // apps: composition roots — can import everything + intra-package relative imports
+          { from: "apps",      allow: ["adapters", "core", "contracts", "shared", "apps"] },
         ],
       }],
     },

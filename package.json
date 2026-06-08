@@ -8,7 +8,7 @@
     "test": "vitest run",
     "typecheck": "tsc --build --force",
     "lint": "eslint .",
-    "migrate": "bun run apps/worker/src/main.ts"
+    "migrate": "bun run apps/worker/src/migrate.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

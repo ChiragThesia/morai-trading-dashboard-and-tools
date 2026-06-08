@@ -4,9 +4,10 @@
   "module": "src/main.ts",
   "private": true,
   "dependencies": {
-    "@morai/core": "workspace:*",
     "@morai/adapters": "workspace:*",
-    "@morai/shared": "workspace:*"
+    "@morai/core": "workspace:*",
+    "@morai/shared": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",

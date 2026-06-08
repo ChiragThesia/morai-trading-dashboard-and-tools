@@ -1,10 +1,20 @@
-// Composition root — worker.
-// Boot-time: parse config → run migrator → idle (no pg-boss jobs this phase).
-// Full wiring lands in plans 04/05.
-import { isOk, type Result } from "@morai/shared";
+// Worker composition root.
+// Boot: parse config → run idempotent migrator over the direct connection → idle.
+// No pg-boss jobs this phase (Phase 1 walking skeleton).
 
-// Prove cross-package import chain: apps/worker → @morai/shared
-const _noop = (r: Result<unknown, unknown>): boolean => isOk(r);
-void _noop;
+import { bootWorkerConfig } from "./config.ts";
+import { runMigrations } from "@morai/adapters";
 
-console.warn("morai worker scaffold loaded");
+const config = bootWorkerConfig();
+
+// DATA-02: idempotent boot migration over the direct connection.
+// runMigrations creates a dedicated max:1 client (Pitfall 3) and closes it.
+await runMigrations(config.DATABASE_URL);
+
+console.warn("morai worker: migrations applied, idling");
+
+// Phase 1: no jobs. Worker stays alive to demonstrate idle pattern.
+// pg-boss job registration lands in Phase 3+.
+setInterval(() => {
+  // intentional idle — no jobs this phase
+}, 60_000);
