@@ -52,8 +52,8 @@ export default tseslint.config(
         rules: [
           // shared: may only import from within shared itself (relative intra-package imports)
           { from: "shared",    allow: ["shared"] },
-          // contracts: only shared
-          { from: "contracts", allow: ["shared"] },
+          // contracts: shared + intra-package relative imports (same pattern as shared→shared)
+          { from: "contracts", allow: ["shared", "contracts"] },
           // core: ONLY shared — never adapters, apps, or vendor frameworks
           { from: "core",      allow: ["shared"] },
           // adapters: core ports + shared
