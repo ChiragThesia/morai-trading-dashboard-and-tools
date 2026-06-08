@@ -83,10 +83,14 @@ export default tseslint.config(
     },
   },
 
-  // TypeScript-ESLint strict rules — applies to all TS source files within tsconfig scope
+  // TypeScript-ESLint strict rules — applies to all TS source files within tsconfig scope.
+  // Test files (*.test.ts) are excluded from tsconfig emit but ARE type-checked via vitest's
+  // own type resolution; they are excluded here to avoid "file not in project" parse errors
+  // from the typed lint rules. The strict rules (no-any, no-as, no-!) still apply via the
+  // per-file block below that uses project:false for test files.
   {
     files: ["packages/**/*.ts", "apps/**/*.ts"],
-    ignores: ["**/__fixtures__/**", "**/vitest.config.ts"],
+    ignores: ["**/__fixtures__/**", "**/vitest.config.ts", "**/*.test.ts"],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -115,15 +119,23 @@ export default tseslint.config(
     },
   },
 
-  // Vitest config files — not inside src/, so excluded from per-package tsconfig scope.
-  // Type-aware rules skipped; basic syntactic checks only.
+  // Test files and vitest config files — not in tsconfig emit scope; use project:false
+  // to avoid "file not in project" parse errors. Apply syntactic strict rules only.
   {
-    files: ["**/vitest.config.ts"],
+    files: ["**/*.test.ts", "**/vitest.config.ts"],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
         project: false,
       },
+    },
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/consistent-type-assertions": ["error", { assertionStyle: "never" }],
+      "@typescript-eslint/no-non-null-assertion": "error",
     },
   },
 
