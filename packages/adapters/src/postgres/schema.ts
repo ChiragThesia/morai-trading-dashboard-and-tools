@@ -47,7 +47,7 @@ export const calendars = pgTable("calendars", {
   openNetDebit: numeric("open_net_debit"),
   closeNetCredit: numeric("close_net_credit"),
   notes: text("notes"),
-});
+}).enableRLS();
 
 // ─── 2. calendar_snapshots — THE JOURNAL. 30-min RTH cadence ─────────────────
 
@@ -82,7 +82,7 @@ export const calendarSnapshots = pgTable(
     // Time-leading composite PK — (time, calendar_id)
     primaryKey({ columns: [table.time, table.calendarId] }),
   ],
-);
+).enableRLS();
 
 // ─── 3. leg_observations — raw per-contract quotes ───────────────────────────
 
@@ -121,7 +121,7 @@ export const legObservations = pgTable(
       .on(table.time, table.contract)
       .where(sql`bsm_iv IS NULL AND mark IS NOT NULL`),
   ],
-);
+).enableRLS();
 
 // ─── 4. contracts — first-seen contract metadata ─────────────────────────────
 
@@ -136,7 +136,7 @@ export const contracts = pgTable("contracts", {
   strike: integer("strike").notNull(),
   expiration: date("expiration").notNull(),
   multiplier: integer("multiplier").notNull().default(100),
-});
+}).enableRLS();
 
 // ─── 5. fills — Schwab transaction feed (journal rebuild source) ──────────────
 
@@ -151,7 +151,7 @@ export const fills = pgTable("fills", {
   commission: numeric("commission"),
   fees: numeric("fees"),
   raw: text("raw"), // broker JSON, for audit
-});
+}).enableRLS();
 
 // ─── 6. orders — Schwab order feed ───────────────────────────────────────────
 
@@ -167,14 +167,14 @@ export const orders = pgTable("orders", {
   placedAt: timestamp("placed_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   raw: text("raw"), // broker JSON, for audit
-});
+}).enableRLS();
 
 // ─── 7. rate_observations — FRED DGS3MO daily ────────────────────────────────
 
 export const rateObservations = pgTable("rate_observations", {
   date: date("date").primaryKey(),
   rate: numeric("rate").notNull(),
-});
+}).enableRLS();
 
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
