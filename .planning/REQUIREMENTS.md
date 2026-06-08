@@ -110,17 +110,53 @@ Explicitly excluded. Documented to prevent scope creep.
 
 ## Traceability
 
-Populated during roadmap creation (gsd-roadmapper).
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap) | — | Pending |
+| FND-01 | Phase 1 | Pending |
+| FND-02 | Phase 1 | Pending |
+| FND-03 | Phase 1 | Pending |
+| FND-04 | Phase 1 | Pending |
+| FND-05 | Phase 1 | Pending |
+| DATA-01 | Phase 1 | Pending |
+| DATA-02 | Phase 1 | Pending |
+| DATA-03 | Phase 1 | Pending |
+| DATA-04 | Phase 1 | Pending |
+| DEPLOY-01 | Phase 1 | Pending |
+| DEPLOY-02 | Phase 1 | Pending |
+| DEPLOY-03 | Phase 1 | Pending |
+| MCP-02 | Phase 1 | Pending |
+| MKT-01 | Phase 2 | Pending |
+| MKT-02 | Phase 2 | Pending |
+| MKT-03 | Phase 2 | Pending |
+| BSM-01 | Phase 2 | Pending |
+| BSM-02 | Phase 2 | Pending |
+| BSM-03 | Phase 2 | Pending |
+| CAL-01 | Phase 3 | Pending |
+| CAL-02 | Phase 3 | Pending |
+| CAL-03 | Phase 3 | Pending |
+| CAL-04 | Phase 3 | Pending |
+| CAL-05 | Phase 3 | Pending |
+| MCP-01 | Phase 3 | Pending |
+| AUTH-01 | Phase 4 | Pending |
+| AUTH-02 | Phase 4 | Pending |
+| AUTH-03 | Phase 4 | Pending |
+| AUTH-04 | Phase 4 | Pending |
+| BRK-01 | Phase 4 | Pending |
+| BRK-02 | Phase 4 | Pending |
+| JOB-01 | Phase 5 | Pending |
+| JOB-02 | Phase 5 | Pending |
+| JOB-03 | Phase 5 | Pending |
+| JRNL-01 | Phase 5 | Pending |
+| ANLY-01 | Phase 6 | Pending |
+| ANLY-02 | Phase 6 | Pending |
+| ANLY-03 | Phase 6 | Pending |
 
 **Coverage:**
-- v1 requirements: 32 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 32 ⚠️
+- v1 requirements: 38 total (note: REQUIREMENTS.md traceability section previously said 32 — the
+  actual count from the requirement list is 38; the discrepancy was in the pre-filled estimate)
+- Mapped to phases: 38
+- Unmapped: 0 — full coverage
 
 ---
 *Requirements defined: 2026-06-07*
-*Last updated: 2026-06-07 after initial definition*
+*Last updated: 2026-06-07 — traceability populated by gsd-roadmapper*
