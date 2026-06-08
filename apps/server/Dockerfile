@@ -1,9 +1,8 @@
-# Dockerfile fallback for apps/server (D-03).
-# Nixpacks is the default builder (railway.json forces NIXPACKS).
-# Use this only if Nixpacks monorepo Bun detection proves flaky:
-#   Railway → service → Settings → RAILWAY_DOCKERFILE_PATH=/apps/server/Dockerfile
-#
-# Build context must be the repo root (Railway default when no root directory is set).
+# Dockerfile for apps/server — PRIMARY Railway builder for this service.
+# Per-service start commands can't be set on Railway CLI 4.11, and Nixpacks Bun
+# monorepo detection is flaky, so each service builds from its own Dockerfile,
+# selected per-service via the RAILWAY_DOCKERFILE_PATH env var (=apps/server/Dockerfile).
+# Build context is the repo root (Railway default when no root directory is set).
 
 FROM oven/bun:1.3 AS base
 WORKDIR /app
@@ -11,9 +10,10 @@ WORKDIR /app
 # Copy lockfile + root manifest (workspace declaration) first for layer caching
 COPY package.json bun.lock ./
 
-# Copy all packages and the server app
+# Copy ALL workspace members — `bun install --frozen-lockfile` validates every
+# package the root workspace globs reference; a missing member fails the install.
 COPY packages/ packages/
-COPY apps/server/ apps/server/
+COPY apps/ apps/
 
 # Install with the frozen lockfile (audited in CI)
 RUN bun install --frozen-lockfile
