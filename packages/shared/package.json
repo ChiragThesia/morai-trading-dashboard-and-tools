@@ -1,0 +1,11 @@
+{
+  "name": "@morai/shared",
+  "version": "0.0.1",
+  "module": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^6"
+  }
+}

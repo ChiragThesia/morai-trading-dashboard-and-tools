@@ -1,0 +1,15 @@
+{
+  "name": "@morai/adapters",
+  "version": "0.0.1",
+  "module": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "private": true,
+  "dependencies": {
+    "@morai/core": "workspace:*",
+    "@morai/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^6"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@morai/server",
+  "version": "0.0.1",
+  "module": "src/main.ts",
+  "private": true,
+  "dependencies": {
+    "@morai/core": "workspace:*",
+    "@morai/adapters": "workspace:*",
+    "@morai/contracts": "workspace:*",
+    "@morai/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^6"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/main.ts"
+  }
+}

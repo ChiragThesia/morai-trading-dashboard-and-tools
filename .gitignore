@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.local
+
+# Drizzle generated
+drizzle/
+
+# Bun binary lockfile (legacy, pre-1.1.x)
+bun.lockb
+
+# TypeScript build info
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+*.swp
+*.swo

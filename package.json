@@ -1,0 +1,22 @@
+{
+  "name": "morai",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "test": "vitest run",
+    "typecheck": "tsc --build --force",
+    "lint": "eslint .",
+    "migrate": "bun run apps/worker/src/main.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "eslint": "^10.4.1",
+    "eslint-plugin-boundaries": "^6.0.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8",
+    "@typescript-eslint/eslint-plugin": "^8.60.1",
+    "@typescript-eslint/parser": "^8.60.1",
+    "typescript-eslint": "^8.60.1"
+  }
+}
