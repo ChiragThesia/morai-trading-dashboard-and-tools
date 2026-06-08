@@ -41,7 +41,14 @@ one end-to-end vertical slice from HTTP request through use-case to DB and back.
   3. `GET /api/status` in production returns JSON with `db: "ok"`, `tokenFreshness`, and `lastJobRuns`; the MCP `get_status` tool returns the same payload to Claude Code.
   4. Introducing a `core → adapter` import causes `bun run lint` to fail with a boundary error, confirming ESLint enforcement is live.
   5. Every driven port (repository interfaces defined in Phase 1) has both a Postgres implementation and an in-memory implementation; the shared contract test suite passes against both.
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 01-01-PLAN.md — Monorepo scaffold + hexagon boundary + strict-TS enforcement (FND-01/02/03/05)
+- [ ] 01-02-PLAN.md — Shared kernel TDD: Result, assertDefined, OccSymbol (FND-04)
+- [ ] 01-03-PLAN.md — statusResponse contract + calendars port + get_status use-case (DATA-03, MCP-02)
+- [ ] 01-04-PLAN.md — Drizzle schema + idempotent migrator + calendars both adapters + contract test (DATA-01/02/03)
+- [ ] 01-05-PLAN.md — Zod config + Hono /api/status + MCP /mcp get_status + worker (DATA-04, DEPLOY-02/03, MCP-02)
+- [ ] 01-06-PLAN.md — CI + Railway/Supabase production deploy (DEPLOY-01/02/03)
 
 ### Phase 2: Market Data & BSM Engine
 **Goal**: A delayed SPX option chain flows from CBOE through Zod parsing into
