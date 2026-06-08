@@ -17,12 +17,18 @@ when UI work begins (D19), so it is a distinct origin (CORS configured on the AP
 
 ## Build & Deploy
 
-- Monorepo build: **Dockerfile-per-service** is the primary builder (`apps/server/Dockerfile`,
-  `apps/worker/Dockerfile`), selected per Railway service via the `RAILWAY_DOCKERFILE_PATH` env var.
-  Each Dockerfile builds from the repo root (full workspace context), `bun install --frozen-lockfile`,
-  and carries its own `CMD` (`bun run apps/<app>/src/main.ts`). This gives per-service start commands
-  (the Railway CLI cannot set them) and sidesteps flaky Nixpacks Bun-monorepo detection. Nixpacks is
-  the documented fallback if a Dockerfile build regresses.
+- **Config-as-code** is the source of truth for build + deploy config: `railway.server.toml` and
+  `railway.worker.toml` (repo root). Each service is pointed at its file via its Railway *Config-as-code
+  path* setting (one-time, e.g. `/railway.server.toml`). Config in code overrides dashboard values.
+- Monorepo build: **Dockerfile-per-service** (`build.dockerfilePath` in each config →
+  `apps/<app>/Dockerfile`). Each Dockerfile builds from the repo root (full workspace context),
+  `bun install --frozen-lockfile`, and carries its own `CMD` (`bun run apps/<app>/src/main.ts`). This
+  gives per-service start commands (the Railway CLI cannot set them) and sidesteps flaky Nixpacks
+  Bun-monorepo detection. `build.watchPatterns` scopes each service's rebuilds to its own paths.
+- The server config sets `deploy.healthcheckPath = "/api/status"` — a boot-but-unhealthy deploy (e.g.
+  DB unreachable) is caught before it goes live. `restartPolicyType = "ON_FAILURE"`.
+- Secrets stay **out** of config-as-code — `DATABASE_URL`, `MCP_BEARER_TOKEN`, `TZ` remain Railway env
+  vars. (`RAILWAY_DOCKERFILE_PATH` is superseded by `build.dockerfilePath` once the config path is set.)
 - Deploys per service; worker and server deploy independently.
 - `web` (when built) deploys to Vercel from `apps/web` — its own pipeline, not part of the Railway
   build (D19).

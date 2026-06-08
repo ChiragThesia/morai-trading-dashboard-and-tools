@@ -1,0 +1,16 @@
+# Railway config-as-code for the `server` service (Hono API + MCP).
+# Activate: Railway → server → Settings → Config-as-code path = /railway.server.toml
+# Build/deploy config lives here (version-controlled); secrets stay as Railway env vars.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/server/Dockerfile"
+# Only rebuild when the server app, shared packages, or root manifests change.
+watchPatterns = ["apps/server/**", "packages/**", "package.json", "bun.lock"]
+
+[deploy]
+# Catch boot-but-unhealthy deploys (e.g. DB unreachable) before they go live.
+healthcheckPath = "/api/status"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
