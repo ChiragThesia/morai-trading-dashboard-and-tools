@@ -20,7 +20,7 @@ Cross-cutting constraints active from Phase 1:
 
 ## Phases
 
-- [ ] **Phase 1: Walking Skeleton** - Monorepo + hexagon + DB + deployed status endpoint
+- [x] **Phase 1: Walking Skeleton** - Monorepo + hexagon + DB + deployed status endpoint
 - [ ] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored
 - [ ] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live
 - [ ] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions
@@ -52,8 +52,8 @@ Plans:
 - [x] 01-02-PLAN.md — Shared kernel TDD: Result, assertDefined, OccSymbol (FND-04)
 - [x] 01-03-PLAN.md — statusResponse contract + calendars port + get_status use-case (DATA-03, MCP-02)
 - [x] 01-04-PLAN.md — Drizzle schema + idempotent migrator + calendars both adapters + contract test (DATA-01/02/03)
-- [ ] 01-05-PLAN.md — Zod config + Hono /api/status + MCP /mcp get_status + worker (DATA-04, DEPLOY-02/03, MCP-02)
-- [ ] 01-06-PLAN.md — CI + Railway/Supabase production deploy (DEPLOY-01/02/03)
+- [x] 01-05-PLAN.md — Zod config + Hono /api/status + MCP /mcp get_status + worker (DATA-04, DEPLOY-02/03, MCP-02)
+- [x] 01-06-PLAN.md — CI + Railway/Supabase production deploy (DEPLOY-01/02/03)
 
 ### Phase 2: Market Data & BSM Engine
 
