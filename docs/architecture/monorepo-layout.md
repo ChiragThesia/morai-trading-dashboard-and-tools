@@ -99,6 +99,6 @@ web client gets types from them. **Contracts change = PR includes both sides.**
 
 - Single lockfile (`bun.lock`) at root. `bun install` once.
 - Shared `tsconfig.base.json`; each workspace extends it.
-- One `vitest.workspace.ts` at root running all workspace test suites.
+- One root `vitest.config.ts` with `test.projects` running all per-package test suites.
 - Scripts at root: `bun run dev` (server+web+worker concurrently), `bun run test`,
   `bun run lint`, `bun run typecheck`, `bun run migrate`.

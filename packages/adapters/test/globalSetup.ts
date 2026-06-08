@@ -6,6 +6,18 @@ import type { GlobalSetupContext } from "vitest/node";
 let containerStop: (() => Promise<void>) | undefined;
 
 export async function setup(context: GlobalSetupContext): Promise<void> {
+  // Escape hatch: run against an externally-managed Postgres when set. Lets local
+  // dev use a plain `docker run postgres` (Docker Desktop's testcontainers log-wait
+  // can stall on newer engines); unset in CI, which uses the testcontainers path.
+  const externalUrl = process.env["TEST_DATABASE_URL"];
+  if (externalUrl !== undefined && externalUrl !== "") {
+    const { runMigrations } = await import("../src/postgres/migrate.ts");
+    await runMigrations(externalUrl);
+    context.provide("dbUrl", externalUrl);
+    console.warn("[globalSetup] Using TEST_DATABASE_URL:", externalUrl);
+    return;
+  }
+
   // Detect whether Docker daemon is reachable
   let dockerAvailable = false;
   try {
