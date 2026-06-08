@@ -57,8 +57,8 @@ export default tseslint.config(
           // core: shared + intra-package relative imports (same pattern as shared→shared)
           // External vendor imports (hono, drizzle, etc.) are blocked by no-restricted-imports below
           { from: "core",      allow: ["shared", "core"] },
-          // adapters: core ports + shared
-          { from: "adapters",  allow: ["core", "shared"] },
+          // adapters: core ports + shared + intra-package relative imports (same pattern as core→core)
+          { from: "adapters",  allow: ["core", "shared", "adapters"] },
           // apps: composition roots — can import everything
           { from: "apps",      allow: ["adapters", "core", "contracts", "shared"] },
         ],
@@ -120,10 +120,17 @@ export default tseslint.config(
     },
   },
 
-  // Test files and vitest config files — not in tsconfig emit scope; use project:false
-  // to avoid "file not in project" parse errors. Apply syntactic strict rules only.
+  // Test files, vitest config, contract harnesses, and globalSetup — not in tsconfig emit
+  // scope; use project:false to avoid "file not in project" parse errors.
+  // Applies syntactic strict rules only (no type-aware rules that need parserOptions.project).
   {
-    files: ["**/*.test.ts", "**/vitest.config.ts"],
+    files: [
+      "**/*.test.ts",
+      "**/vitest.config.ts",
+      "**/__contract__/**/*.ts",
+      "**/vitest.d.ts",
+      "**/test/**/*.ts",
+    ],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -137,6 +144,10 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/consistent-type-assertions": ["error", { assertionStyle: "never" }],
       "@typescript-eslint/no-non-null-assertion": "error",
+      // Disable type-aware rules that require parserOptions.project
+      "@typescript-eslint/no-floating-promises": "off",
+      "@typescript-eslint/switch-exhaustiveness-check": "off",
+      "@typescript-eslint/strict-boolean-expressions": "off",
     },
   },
 
