@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed Phase 1 Plan 4 — Drizzle schema + idempotent migrator + calendars both adapters + contract test
-last_updated: "2026-06-08T02:35:00Z"
-last_activity: 2026-06-08 -- Phase 1 Plan 4 complete
+stopped_at: Completed Phase 1 Plan 5 — Zod config + Hono /api/status + MCP /mcp get_status + worker composition root
+last_updated: "2026-06-07T21:49:00Z"
+last_activity: 2026-06-07 -- Phase 1 Plan 5 complete
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 1 (Walking Skeleton) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
-Last activity: 2026-06-08 -- Phase 1 Plan 4 complete
+Last activity: 2026-06-07 -- Phase 1 Plan 5 complete
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -56,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-walking-skeleton P02 | 8 | 2 tasks | 10 files |
 | Phase 01-walking-skeleton P03 | 12 | 2 tasks | 15 files |
 | Phase 01-walking-skeleton P04 | 8 | 2 tasks | 22 files |
+| Phase 01-walking-skeleton P05 | 25 | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,10 @@ Recent decisions affecting current work:
 - [Phase 1 P04]: runMigrations uses fileURLToPath+dirname for CWD-independent migrations path
 - [Phase 1 P04]: adapters→adapters allowed in eslint boundaries — same intra-package pattern as core→core
 - [Phase 1 P04]: vitest workspace-mode skips Postgres tests (no globalSetup); per-package run required for Docker/testcontainers tests — in-memory always runs in workspace mode
+- [Phase 1 P05]: parseConfig(env) takes explicit env param (testable without process.exit); bootConfig() is the thin loud-fail wrapper reading process.env — DATA-04 pattern
+- [Phase 1 P05]: WebStandardStreamableHTTPServerTransport used instead of StreamableHTTPServerTransport + fetch-to-node — native Bun/Hono fetch API, no bridge needed, eliminates exactOptionalPropertyTypes incompatibility from getter/setter onclose
+- [Phase 1 P05]: result.ok guard required before result.value even with Result<T, never> — exactOptionalPropertyTypes strictness
+- [Phase 1 P05]: main field added to @morai/contracts, @morai/core, @morai/adapters package.json — Vite workspace resolver fix (same as @morai/shared in plan 03)
 
 ### Pending Todos
 
@@ -101,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-08T02:35:00Z
-Stopped at: Completed Phase 1 Plan 4 — Drizzle schema + idempotent migrator + calendars both adapters + contract test
-Resume file: .planning/phases/01-walking-skeleton/01-05-PLAN.md
+Last session: 2026-06-07T21:49:00Z
+Stopped at: Completed Phase 1 Plan 5 — Zod config + Hono /api/status + MCP /mcp get_status + worker composition root
+Resume file: .planning/phases/01-walking-skeleton/01-06-PLAN.md
