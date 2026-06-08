@@ -50,8 +50,8 @@ export default tseslint.config(
       "boundaries/dependencies": ["error", {
         default: "disallow",
         rules: [
-          // shared: no imports from anywhere else in this monorepo
-          { from: "shared",    allow: [] },
+          // shared: may only import from within shared itself (relative intra-package imports)
+          { from: "shared",    allow: ["shared"] },
           // contracts: only shared
           { from: "contracts", allow: ["shared"] },
           // core: ONLY shared — never adapters, apps, or vendor frameworks
@@ -86,7 +86,7 @@ export default tseslint.config(
   // TypeScript-ESLint strict rules — applies to all TS source files within tsconfig scope
   {
     files: ["packages/**/*.ts", "apps/**/*.ts"],
-    ignores: ["**/__fixtures__/**"],
+    ignores: ["**/__fixtures__/**", "**/vitest.config.ts"],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -112,6 +112,18 @@ export default tseslint.config(
       "@typescript-eslint/switch-exhaustiveness-check": "error",
       "@typescript-eslint/strict-boolean-expressions": "error",
       "no-console": ["warn", { allow: ["warn", "error"] }],
+    },
+  },
+
+  // Vitest config files — not inside src/, so excluded from per-package tsconfig scope.
+  // Type-aware rules skipped; basic syntactic checks only.
+  {
+    files: ["**/vitest.config.ts"],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: false,
+      },
     },
   },
 

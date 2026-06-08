@@ -126,11 +126,14 @@ describe("OccSymbol round-trip (fast-check property)", () => {
     const rootArb = fc.constantFrom("SPX", "SPXW");
 
     // Expiry: date in range 2025-01-01 to 2027-12-31 (realistic options range)
-    // Use year 2025-2027 to keep 2-digit year in range
-    const expiryArb = fc.date({
-      min: new Date(2025, 0, 1),
-      max: new Date(2027, 11, 31),
-    });
+    // Use year 2025-2027 to keep 2-digit year in range.
+    // fc.date() can produce Invalid Date (NaN) even with bounds — filter those out.
+    const expiryArb = fc
+      .date({
+        min: new Date(2025, 0, 1),
+        max: new Date(2027, 11, 31),
+      })
+      .filter((d) => !Number.isNaN(d.getTime()));
 
     const typeArb = fc.constantFrom("C" as const, "P" as const);
 

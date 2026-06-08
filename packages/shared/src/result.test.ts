@@ -1,12 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { ok, err, isOk, isErr, type Ok, type Err, type Result } from "./result.ts";
+import { ok, err, isOk, isErr, type Result } from "./result.ts";
 
 describe("Result", () => {
   describe("ok()", () => {
     it("constructs an Ok with ok:true and the given value", () => {
       const r = ok(42);
       expect(r.ok).toBe(true);
-      expect((r as Ok<number>).value).toBe(42);
+      // Use isOk narrowing to access .value without a type assertion
+      if (isOk(r)) {
+        expect(r.value).toBe(42);
+      } else {
+        throw new Error("should have been ok");
+      }
     });
 
     it("narrows to Ok<T> when isOk returns true", () => {
@@ -31,7 +36,12 @@ describe("Result", () => {
     it("constructs an Err with ok:false and the given error", () => {
       const r = err("bad input");
       expect(r.ok).toBe(false);
-      expect((r as Err<string>).error).toBe("bad input");
+      // Use isErr narrowing to access .error without a type assertion
+      if (isErr(r)) {
+        expect(r.error).toBe("bad input");
+      } else {
+        throw new Error("should have been err");
+      }
     });
 
     it("narrows to Err<E> when isErr returns true", () => {
