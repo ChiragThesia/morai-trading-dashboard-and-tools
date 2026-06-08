@@ -12,11 +12,11 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 ### Foundation
 
-- [ ] **FND-01**: Bun-workspaces monorepo installs from one lockfile; `core` / `adapters` / `contracts` / `shared` packages resolve via tsconfig project references.
-- [ ] **FND-02**: ESLint boundary rules fail the build when `core` imports an adapter, app, framework, or vendor SDK.
-- [ ] **FND-03**: Strict TypeScript config (no `any`/`as`/`!`, exhaustive switches, no floating promises) fails the build on violation.
+- [x] **FND-01**: Bun-workspaces monorepo installs from one lockfile; `core` / `adapters` / `contracts` / `shared` packages resolve via tsconfig project references.
+- [x] **FND-02**: ESLint boundary rules fail the build when `core` imports an adapter, app, framework, or vendor SDK.
+- [x] **FND-03**: Strict TypeScript config (no `any`/`as`/`!`, exhaustive switches, no floating promises) fails the build on violation.
 - [ ] **FND-04**: `shared` kernel provides `Result<T,E>`, `assertDefined`, and an `OccSymbol` parser/formatter, all unit-tested.
-- [ ] **FND-05**: Root scripts `bun run dev | test | typecheck | lint | migrate` run across the workspace.
+- [x] **FND-05**: Root scripts `bun run dev | test | typecheck | lint | migrate` run across the workspace.
 
 ### Persistence
 
@@ -83,15 +83,18 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 Deferred to a future milestone. Tracked, not in the current roadmap.
 
 ### Web UI
+
 - **UI-01**: React + Vite SPA on Vercel renders the live journal, greeks, vol, and skew/term views.
 - **UI-02**: Status banner surfaces `AUTH_EXPIRED` and job failures.
 
 ### Advanced Data & Scale
+
 - **STRM-01**: Sub-minute streaming quotes behind a `ForStreamingQuotes` port.
 - **SCALE-01**: Timescale hypertable migration when an observations table exceeds 10M rows or p95 journal query > 500ms.
 - **MULTI-01**: Multi-user accounts + API auth beyond the single bearer token.
 
 ### Analytics depth
+
 - **ANLY2-01**: Full-chain capture (~500 contracts) at snapshot cadence.
 - **ANLY2-02**: GEX levels (Call/Put walls, HVL, flip) recomputed from collected chains.
 
@@ -112,11 +115,11 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | Phase 1 | Pending |
-| FND-02 | Phase 1 | Pending |
-| FND-03 | Phase 1 | Pending |
+| FND-01 | Phase 1 | Complete |
+| FND-02 | Phase 1 | Complete |
+| FND-03 | Phase 1 | Complete |
 | FND-04 | Phase 1 | Pending |
-| FND-05 | Phase 1 | Pending |
+| FND-05 | Phase 1 | Complete |
 | DATA-01 | Phase 1 | Pending |
 | DATA-02 | Phase 1 | Pending |
 | DATA-03 | Phase 1 | Pending |
@@ -152,8 +155,10 @@ Explicitly excluded. Documented to prevent scope creep.
 | ANLY-03 | Phase 6 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 38 total (note: REQUIREMENTS.md traceability section previously said 32 — the
   actual count from the requirement list is 38; the discrepancy was in the pre-filled estimate)
+
 - Mapped to phases: 38
 - Unmapped: 0 — full coverage
 
