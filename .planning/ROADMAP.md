@@ -34,8 +34,7 @@ Postgres is reachable, and `GET /api/status` plus MCP `get_status` are live in p
 one end-to-end vertical slice from HTTP request through use-case to DB and back.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
-**Requirements**: FND-01, FND-02, FND-03, FND-04, FND-05, DATA-01, DATA-02, DATA-03,
-DATA-04, DEPLOY-01, DEPLOY-02, DEPLOY-03, MCP-02
+**Requirements**: FND-01, FND-02, FND-03, FND-04, FND-05, DATA-01, DATA-02, DATA-03, DATA-04, DEPLOY-01, DEPLOY-02, DEPLOY-03, MCP-02
 **Success Criteria** (what must be TRUE):
   1. `bun install && bun run typecheck && bun run lint` pass from a clean checkout; `bun run test` runs the full workspace suite.
   2. `bun run migrate` runs pending drizzle-kit migrations idempotently; a second run is a no-op with no errors.
