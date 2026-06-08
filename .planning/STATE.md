@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed Phase 1 Plan 2 — shared kernel Result/assertDefined/OccSymbol
-last_updated: "2026-06-08T02:10:10Z"
-last_activity: 2026-06-08 -- Phase 1 Plan 2 complete
+stopped_at: Completed Phase 1 Plan 3 — statusResponse contract + calendars port + get_status use-case
+last_updated: "2026-06-08T21:21:00Z"
+last_activity: 2026-06-08 -- Phase 1 Plan 3 complete
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 1 (Walking Skeleton) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
-Last activity: 2026-06-08 -- Phase 1 Plan 2 complete
+Last activity: 2026-06-08 -- Phase 1 Plan 3 complete
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,24 +36,25 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 2
-- Average duration: ~14 min
-- Total execution time: ~28 min
+- Total plans completed: 3
+- Average duration: ~13 min
+- Total execution time: ~40 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-walking-skeleton | P01+P02 | ~28 min | ~14 min |
+| 01-walking-skeleton | P01+P02+P03 | ~40 min | ~13 min |
 
 **Recent Trend:**
 
-- Last 5 plans: P01 (~20 min), P02 (~8 min)
-- Trend: Accelerating
+- Last 5 plans: P01 (~20 min), P02 (~8 min), P03 (~12 min)
+- Trend: Stable
 
 *Updated after each plan completion*
 | Phase 01-walking-skeleton P01 | 20 | 2 tasks | 15 files |
 | Phase 01-walking-skeleton P02 | 8 | 2 tasks | 10 files |
+| Phase 01-walking-skeleton P03 | 12 | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,10 @@ Recent decisions affecting current work:
 - [Phase 1 P02]: Test files excluded from tsconfig emit (exclude src/**/*.test.ts) to avoid .test.d.ts artifacts in dist/; syntactic ESLint block with project:false covers test files
 - [Phase 1 P02]: boundaries allow shared→shared for intra-package relative imports within packages/shared/src
 - [Phase 1 P02]: fc.date().filter(!isNaN) required in fast-check v4 — fc.date() can produce Invalid Date despite min/max bounds
+- [Phase 1 P03]: StatusPayload is a plain core type — core never imports @morai/contracts; adapters parse through statusResponse.parse() at the boundary
+- [Phase 1 P03]: Added main field to shared/package.json for Vite workspace resolver — Vite reads main/exports, not the module field (which is Rollup/Webpack convention)
+- [Phase 1 P03]: boundaries allow core→core and contracts→contracts intra-package relative imports (same pattern as shared→shared)
+- [Phase 1 P03]: try/catch around pingDb in getStatus use-case — absorbs both Result.err and thrown exceptions; maps both to db:down (T-01-06)
 
 ### Pending Todos
 
@@ -91,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-08T02:10:10Z
-Stopped at: Completed Phase 1 Plan 2 — shared kernel Result/assertDefined/OccSymbol
-Resume file: .planning/phases/01-walking-skeleton/01-03-PLAN.md
+Last session: 2026-06-08T21:21:00Z
+Stopped at: Completed Phase 1 Plan 3 — statusResponse contract + calendars port + get_status use-case
+Resume file: .planning/phases/01-walking-skeleton/01-04-PLAN.md
