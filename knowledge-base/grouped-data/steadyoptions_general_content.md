@@ -1,0 +1,324 @@
+## Group Summary: General Trading Content & Wisdom
+
+### Overview
+This expanded collection of 301 articles comprises SteadyOptions' foundational knowledge base covering psychological resilience, tactical execution, strategic planning, risk management frameworks, and financial wisdom applicable across trading styles and investment horizons. The collection reflects SteadyOptions' core philosophy: trading and investing success depends primarily on discipline (90%), position sizing (critical survival skill), and emotional self-mastery rather than signal sophistication or frequency of transactions. Themes span options strategies (call/put mechanics, spreads, Greeks), behavioral psychology (bias recognition, loss aversion, performance chasing), retirement planning, wealth-building philosophy, and repeated debunking of get-rich-quick narratives. The collection emphasizes that the 90% of traders who lose money fail due to psychological operator error, not from inherent market unprofitability.
+
+The expanded coverage includes new dimensions: advanced retirement strategies, foreign exchange options, exotic option structures (barrier, chooser, ratchet options), detailed Greeks education (delta/gamma/theta/vega/rho), macro market timing (QE/QT cycles), sector analysis, and professional trader profiles demonstrating consistency over years. Recent additions address modern challenges: leverage regulations post-2008, crypto options trading, AI-assisted portfolio management, and sustainable withdrawal strategies for long-term capital preservation.
+
+### Key Insights
+
+- **Psychology Dominates Returns by 10:1 Ratio**: Empirical evidence (Dalbar studies, Peter Lynch investor underperformance analysis) repeatedly proves that investor/trader returns lag strategy returns by 300-500 basis points annually due to behavioral errors. Investors with access to excellent funds underperform their funds' returns by averaging 3.98% vs S&P 500's 10.16% due to buy-high/sell-low emotional cycles and performance chasing. Articles like "10 Reasons Why Trading Is Difficult" enumerate the cognitive constraints: difficulty maintaining position size discipline during winning streaks, ego preventing loss-cutting, FOMO causing over-trading during losing streaks, and trend-following bias (buying breakouts that "look too high").
+
+- **Position Sizing as Portfolio Survival Mechanism**: No single position should risk more than 1-3% of total portfolio capital regardless of conviction level. This constraint prevents catastrophic account wipeouts during inevitable drawdown periods. Real-world examples (internet outage forcing liquidation at worst time, unexpected gap moves during earnings) demonstrate that "safe" positions become dangerous with excessive leverage. Articles repeatedly show that traders with 50% position sizing survive multiple drawdowns; traders with 10-15% position sizing experience forced liquidation. This creates mathematical relationship: max portfolio drawdown = (max position size) × (max single-trade drawdown).
+
+- **Systematic Rules Eliminate Discretionary Bias**: Written trading plans with mechanical rules (entry trigger + risk/reward minimum, stop loss level defined before entry, profit target predetermined) outperform discretionary trading by 200-400 basis points annually. Mental stops don't count; rules must be explicit to overcome hindsight distortion and hindsight bias (reviewing closed trades and "knowing" you should have held longer). Record-keeping of rule adherence vs. discretionary deviations reveals that traders' biggest losses often stem from rule violations rather than rule failures.
+
+- **Fake Gurus Exploit Psychological Vulnerability**: Content distinguishes coaching skill (ability to teach discipline and self-mastery) from trading skill (ability to generate returns). The worst educators are the most successful traders (alpha comes from skill + information advantage; teaching removes information edge; therefore successful traders have incentive to hide or overstate results). Red flags for fraudulent coaching: published spectacular returns without audits, pressure to invest large sums, confidentiality agreements preventing verification, claims of "black box" methods or proprietary edge that cannot be explained. Legitimate educators focus on teaching process discipline, not reproducing personal trading results.
+
+- **Time Management for Part-Time Traders**: The article "10 Tips: Trade Options Like A Pro and Keep Your Day Job" documents that part-time traders can maintain discipline through: (1) delta-neutral portfolio construction (directionless profits from theta decay, insensitive to daily price moves), (2) net selling of options (3-6 week time decay advantage), (3) defined-risk spreads (capped loss prevents catastrophic surprise), (4) weekly/monthly rebalancing rather than daily monitoring, (5) minimum capitalization $10K-$25K to enable proper position sizing without micro-positions. This architecture requires ~5-10 hours per week rather than full-time monitoring, enabling consistent execution.
+
+- **Wealth Building Through Boring Consistency**: Elite investors/traders (documented in retirement planning sections and "How I Invest My Own Money" series) build wealth through: dollar-cost averaging into diversified index funds, automated rebalancing, tax-efficient allocation, and boring compounding over decades. The compelling finding: 80-90% of underperformance vs. market indices comes from traders/investors trying to "beat the market" through frequent trading, sector rotation, and tactical timing. Playing "not to lose" beats playing "trying to win" by 300-500 bps annually. Sharpe ratios for boring buy-and-hold approaches (0.5-0.8) exceed active traders' Sharpes (0.2-0.5) after costs.
+
+- **Options Greeks Provide Granular Portfolio Risk Management**: Understanding delta (price exposure), gamma (delta acceleration), theta (time decay rate), vega (volatility sensitivity), and rho (interest rate sensitivity) enables precise risk characterization. Traders can construct delta-neutral (insensitive to price), theta-positive (profiting from decay), vega-neutral (hedged against volatility shifts), and gamma-positive (benefiting from volatility) positions simultaneously. This framework shows options are not binary bets but continuous risk managers.
+
+### Key Questions
+
+- **What objective statistical criteria distinguish legitimate system underperformance (normal variance requiring patience) from system failure (requiring recalibration or abandonment)?** Standard approaches use Sharpe ratio confidence intervals, but how many months of data are required for 90% confidence in system viability vs. luck?
+
+- **Can practitioners identify coaching fraud before committing significant time/money?** What background checks, trade verification methodologies (FINRA/SEC records, audited accounts), and credential validation provide reliable filters for legitimate educators?
+
+- **How do traders emotionally differentiate between two equally correct decisions—"cut losses to preserve capital" vs. "hold through drawdown because system is working"—when both involve closing/holding positions in red?** Psychologically, both create identical emotional pain.
+
+- **Do leveraged accounts (2x, 3x) offer mathematically viable paths to outperformance after margin costs, or does leverage primarily amplify behavioral biases (overconfidence, larger position sizes) causing net underperformance?**
+
+- **What withdrawal rate from accumulated capital preserves long-term portfolio viability while enabling quality of life?** Studies suggest 3-4% annual withdrawal creates 95% success rates over 30-year horizons; do market regime changes (lower growth, higher volatility) reduce safe withdrawal rates?
+
+### Major Patterns & Themes
+
+- **Psychology > Strategy by 10:1**: Nearly every article concludes that psychological mastery (discipline, patience, bias recognition) creates 10x more value than strategy sophistication. A simple moving-average crossover executed with perfect discipline beats a complex ML model executed with discretionary overrides.
+
+- **Risk Management as Binary Survival Filter**: Position sizing and drawdown management emerge as non-negotiable constraints. Traders who manage risk survive long enough to develop skill; traders who ignore risk limits blow up before skill develops. This creates asymmetry: risk management is necessary but not sufficient for profitability (many risk-managed traders still lose); but ignoring risk is sufficient for failure (all overleveraged traders eventually blow up).
+
+- **Time-Tested Principles Show Remarkable Persistence**: Concepts like "the trend is your friend," "buy when fearful/sell when greedy," "stick to your written plan," and "diversification reduces volatility" appear repeatedly across decades (articles spanning 1995-2025) and market conditions (bull, bear, volatile, quiet). This persistence suggests principles have fundamental validity rather than regime-specific utility.
+
+- **Anti-Guru Philosophy as Brand Differentiation**: SteadyOptions explicitly positions itself as antidote to get-rich-quick claims, highlighting: (1) skepticism toward "100%+ annual returns," (2) criticism of "black box methods," (3) emphasis that coaching is not equivalent to profitable trading, (4) realistic return expectations (8-12% annually beats S&P 500 after costs for experienced traders). This philosophy attracts thoughtful practitioners but repels lottery-ticket mindset traders seeking home-run returns.
+
+### File List
+- raw/steadyoptions/10-signs-of-a-fake-guru-r197.md
+- raw/steadyoptions/1300-gain-in-one-day-not-so-fast-r571.md
+- raw/steadyoptions/2012-year-in-review-r34.md
+- raw/steadyoptions/2018-a-year-to-remember-r441.md
+- raw/steadyoptions/3-methods-to-invest-as-a-self-employed-r680.md
+- raw/steadyoptions/3-principles-to-a-successful-investment-experience-r583.md
+- raw/steadyoptions/3-reasons-to-own-pg-for-the-next-50-years-r287.md
+- raw/steadyoptions/3-things-you-need-to-know-about-investing-as-an-immigrant-r671.md
+- raw/steadyoptions/3-words-you-wont-hear-on-cnbc-r203.md
+- raw/steadyoptions/5-ways-to-play-google-earnings-r12.md
+- raw/steadyoptions/6-ways-to-invest-your-money-that-arent-cash-savings-r651.md
+- raw/steadyoptions/6-ways-to-play-apples-earnings-r22.md
+- raw/steadyoptions/7-skills-you-have-to-master-to-play-in-the-asset-management-space-r801.md
+- raw/steadyoptions/7-steps-to-take-your-investments-to-the-next-level-r729.md
+- raw/steadyoptions/a-case-study-in-spx-put-writing-r388.md
+- raw/steadyoptions/a-global-equity-put-write-portfolio-r446.md
+- raw/steadyoptions/a-more-diversified-anchor-strategy-r570.md
+- raw/steadyoptions/a-reliable-method-for-picking-the-underlying-r545.md
+- raw/steadyoptions/a-reliable-reversal-signal-r591.md
+- raw/steadyoptions/accurate-expiration-counting-r623.md
+- raw/steadyoptions/alcoa-earnings-report-july-20th-2022-r708.md
+- raw/steadyoptions/allocating-on-blind-faith-r401.md
+- raw/steadyoptions/alternative-investments-real-estate-construction-r497.md
+- raw/steadyoptions/amazon-missed-and-we-dont-care-r243.md
+- raw/steadyoptions/anchor-2019-year-in-review-r546.md
+- raw/steadyoptions/anchor-and-steady-momentum-update-r492.md
+- raw/steadyoptions/anchor-trades-portfolio-launched-r43.md
+- raw/steadyoptions/anchor-trades-strategy-performance-r171.md
+- raw/steadyoptions/another-excellent-earnings-season-r125.md
+- raw/steadyoptions/apple-dissecting-the-butterfly-trade-r14.md
+- raw/steadyoptions/are-debit-spreads-better-than-credit-spreads-r85.md
+- raw/steadyoptions/are-trusts-the-best-way-to-leave-money-to-your-heirs-r493.md
+- raw/steadyoptions/are-you-breaking-even-or-losing-r533.md
+- raw/steadyoptions/are-you-emotionally-ready-to-lose-r80.md
+- raw/steadyoptions/are-you-following-tharp-think-rules-r158.md
+- raw/steadyoptions/are-you-paying-too-much-to-your-broker-r106.md
+- raw/steadyoptions/are-your-emotions-trying-to-tell-you-something-r649.md
+- raw/steadyoptions/assignment-and-exercise-the-mental-block-r338.md
+- raw/steadyoptions/balancing-your-portfolio-r25.md
+- raw/steadyoptions/before-you-startup-your-own-investment-company-read-this-r613.md
+- raw/steadyoptions/betting-on-aapl-earnings-r240.md
+- raw/steadyoptions/beware-of-swindlers-r378.md
+- raw/steadyoptions/bid-ask-spread.md
+- raw/steadyoptions/big-drawdowns-are-part-of-the-game-r211.md
+- raw/steadyoptions/blending-anchor-strategy-r530.md
+- raw/steadyoptions/building-a-diversified-equity-portfolio-r423.md
+- raw/steadyoptions/buy-high-sell-low-why-investors-fail-r347.md
+- raw/steadyoptions/buy-the-winners-the-power-of-momentum-r164.md
+- raw/steadyoptions/buy-when-you-have-the-money-sell-when-you-need-the-money-r532.md
+- raw/steadyoptions/buying-premium-prior-to-earnings-does-it-work-r89.md
+- raw/steadyoptions/calculating-roi-on-credit-spreads-r280.md
+- raw/steadyoptions/calendar-spread.md
+- raw/steadyoptions/can-you-double-your-account-every-six-months-r73.md
+- raw/steadyoptions/can-you-really-turn-12415-into-4m-r190.md
+- raw/steadyoptions/can-you-time-the-steady-momentum-putwrite-strategy-r503.md
+- raw/steadyoptions/cash-is-no-longer-trash-r483.md
+- raw/steadyoptions/citigroup-earnings-report-july-15th-2022-r706.md
+- raw/steadyoptions/climbing-the-wall-of-worry-r179.md
+- raw/steadyoptions/cons-of-passive-index-investing-r313.md
+- raw/steadyoptions/correction-what-correction-r66.md
+- raw/steadyoptions/could-it-be-the-holy-grail-of-investing-r44.md
+- raw/steadyoptions/dal-earnings-report-july-13-2022-r704.md
+- raw/steadyoptions/debit-spreads-vs-credit-spreads-r30.md
+- raw/steadyoptions/defining-the-anchor-strategy-r356.md
+- raw/steadyoptions/determining-a-good-entry-price-for-pre-earnings-trades-r24.md
+- raw/steadyoptions/digging-deeper-into-the-inflation-threat-r373.md
+- raw/steadyoptions/distressed-real-estate-investing-r324.md
+- raw/steadyoptions/diversification-dos-and-donts-r815.md
+- raw/steadyoptions/diversified-leveraged-anchor-performance-r589.md
+- raw/steadyoptions/do-all-stocks-have-the-same-expected-returns-r417.md
+- raw/steadyoptions/do-you-have-a-written-investment-plan-r428.md
+- raw/steadyoptions/do-you-need-a-lawyer-i-dont-r215.md
+- raw/steadyoptions/do-you-still-believe-in-fairy-tales-r119.md
+- raw/steadyoptions/does-hft-harm-individual-investors-r357.md
+- raw/steadyoptions/don-t-buy-thanksgiving-turkeys-as-investments-r511.md
+- raw/steadyoptions/dont-feel-bad-for-large-brokers-r225.md
+- raw/steadyoptions/early-assignment-can-be-a-gift-r751.md
+- raw/steadyoptions/earnings-momentum-trade-in-oracle-r296.md
+- raw/steadyoptions/earnings-season-has-arrived-r121.md
+- raw/steadyoptions/ep-bear-put-spread.md
+- raw/steadyoptions/ep-buy-to-open-vs-buy-to-close.md
+- raw/steadyoptions/ep-puts-and-calls.md
+- raw/steadyoptions/ep-sell-put-buy-call-strategy.md
+- raw/steadyoptions/ep-sell-to-open-vs-sell-to-close.md
+- raw/steadyoptions/ep-zero-cost-costless-collar-explained.md
+- raw/steadyoptions/equity-index-put-writing-for-the-long-run-r457.md
+- raw/steadyoptions/etf-vs-stock-note-down-the-vital-points-r696.md
+- raw/steadyoptions/expiration-short-strategies-r610.md
+- raw/steadyoptions/expiration-surprises-to-avoid-r269.md
+- raw/steadyoptions/extrinsic-value-vs-intrinsic-value-r717.md
+- raw/steadyoptions/fang-stocks-killed-it-again-r248.md
+- raw/steadyoptions/fatal-flaws-in-black-scholes-r340.md
+- raw/steadyoptions/fibonacci-gann-elliott-r114.md
+- raw/steadyoptions/flaws-in-the-additive-return-method-r541.md
+- raw/steadyoptions/focus-on-the-process-not-the-outcome-r344.md
+- raw/steadyoptions/from-wealth-building-to-wealth-preserving-how-to-diversify-after-you-ve-made-it-r823.md
+- raw/steadyoptions/getting-into-stocks-and-shares-through-the-pandemic-screen-r640.md
+- raw/steadyoptions/go-for-gold-the-business-behind-the-dazzle-r585.md
+- raw/steadyoptions/great-reversal-signal-50-ma-with-8-ema-r363.md
+- raw/steadyoptions/has-apple-become-a-speculative-stock-r13.md
+- raw/steadyoptions/historical-drawdowns-for-global-equity-portfolios-r595.md
+- raw/steadyoptions/historical-performance-of-selling-sp-500-otm-calls-r494.md
+- raw/steadyoptions/history-is-a-great-teacher-r463.md
+- raw/steadyoptions/holding-positions-into-expiration-r522.md
+- raw/steadyoptions/how-anchor-survived-the-2020-crash-r665.md
+- raw/steadyoptions/how-does-svxy-work-r333.md
+- raw/steadyoptions/how-i-invest-my-own-money-r506.md
+- raw/steadyoptions/how-not-to-gamble-on-aapl-earnings-r184.md
+- raw/steadyoptions/how-not-to-trade-nflx-earnings-r122.md
+- raw/steadyoptions/how-to-analyze-an-investment-strategy-r365.md
+- raw/steadyoptions/how-to-approach-passive-investing-r667.md
+- raw/steadyoptions/how-to-be-cautiously-bullish-on-apple-r11.md
+- raw/steadyoptions/how-to-benefit-from-italian-crisis-r178.md
+- raw/steadyoptions/how-to-control-losses-and-protect-profits-r284.md
+- raw/steadyoptions/how-to-get-black-swan-protection-for-free-r165.md
+- raw/steadyoptions/how-to-get-started-as-an-investor-r712.md
+- raw/steadyoptions/how-to-protect-nflx-shares-before-earnings-r180.md
+- raw/steadyoptions/how-to-protect-your-blind-side-r377.md
+- raw/steadyoptions/how-to-stay-productive-motivated-when-you-work-for-yourself-r644.md
+- raw/steadyoptions/how-victor-niederhoffer-blew-up-twice-r124.md
+- raw/steadyoptions/how-we-lost-60-on-spx-calendar-r142.md
+- raw/steadyoptions/how-we-made-62-on-cf-industries-in-2-days-r65.md
+- raw/steadyoptions/ibm-earnings-report-july-18th-2022-r707.md
+- raw/steadyoptions/if-i-only-bought-netflix-a-decade-ago-r300.md
+- raw/steadyoptions/if-other-industries-were-like-wall-street-r137.md
+- raw/steadyoptions/inflation-proofing-your-equities-portfolio-r464.md
+- raw/steadyoptions/intrinsic-vs-extrinsic-value-r557.md
+- raw/steadyoptions/introducing-ez-trade-builder-r49.md
+- raw/steadyoptions/introduction-to-the-golden-ratio-and-fibonacci-retracements-r52.md
+- raw/steadyoptions/investing-in-private-companies-r392.md
+- raw/steadyoptions/investment-ideas-for-conservative-investors-r476.md
+- raw/steadyoptions/investors-are-not-as-smart-as-the-media-thinks-r436.md
+- raw/steadyoptions/is-220-gain-really-220-gain-r136.md
+- raw/steadyoptions/is-long-call-better-than-bull-credit-put-spread-r694.md
+- raw/steadyoptions/is-the-correction-here-we-dont-care-r143.md
+- raw/steadyoptions/is-this-rally-for-real-r567.md
+- raw/steadyoptions/is-timeframe-your-biggest-mistake-r159.md
+- raw/steadyoptions/island-clusters-as-strong-reversals-r450.md
+- raw/steadyoptions/it-is-time-to-get-real-r170.md
+- raw/steadyoptions/jpm-earnings-report-july-14th-2022-r705.md
+- raw/steadyoptions/kbh-earnings-report-june-22-2022-r699.md
+- raw/steadyoptions/know-how-to-trade-before-making-an-investment-r698.md
+- raw/steadyoptions/leveraged-anchor-2020-year-in-review-r630.md
+- raw/steadyoptions/leveraged-anchor-2021-year-in-review-r684.md
+- raw/steadyoptions/leveraged-anchor-a-three-month-review-r462.md
+- raw/steadyoptions/leveraged-anchor-implementation-r442.md
+- raw/steadyoptions/leveraged-anchor-is-boosting-performance-r364.md
+- raw/steadyoptions/leveraged-anchor-update-r426.md
+- raw/steadyoptions/make-10-per-week-with-weeklys-r196.md
+- raw/steadyoptions/managing-a-losing-trade-r194.md
+- raw/steadyoptions/mcdonalds-not-a-shelter-in-the-coming-storm-r556.md
+- raw/steadyoptions/micron-technology-mu-earnings-report-june-30-2022-r701.md
+- raw/steadyoptions/microsoft-pre-earnings-momentum-trade-r294.md
+- raw/steadyoptions/models-and-their-limits-r606.md
+- raw/steadyoptions/my-2015-account-return-802-r155.md
+- raw/steadyoptions/my-favorite-investing-books-blogs-papers-and-podcasts-r586.md
+- raw/steadyoptions/name-of-the-game-steady-consistent-transparent-r104.md
+- raw/steadyoptions/newton-technical-perspective-6182018-r384.md
+- raw/steadyoptions/nke-earnings-report-june-27-2022-r700.md
+- raw/steadyoptions/obey-reality-and-win-by-not-losing-r510.md
+- raw/steadyoptions/one-year-of-diversified-leveraged-anchor-r656.md
+- raw/steadyoptions/panw-broke-the-golden-rule-r371.md
+- raw/steadyoptions/performance-reporting-the-myths-and-the-reality-r35.md
+- raw/steadyoptions/please-follow-me-inside-the-insiders-r804.md
+- raw/steadyoptions/portfolio-protection-utilizing-calendar-spreads-r409.md
+- raw/steadyoptions/portfolio-withdrawal-strategies-r599.md
+- raw/steadyoptions/position-sizing.md
+- raw/steadyoptions/post-earnings-trade-in-fedex-r303.md
+- raw/steadyoptions/powerful-channel-signal-combining-bollinger-and-t-line-r413.md
+- raw/steadyoptions/pre-earnings-pattern-in-apple-r311.md
+- raw/steadyoptions/probability-vs-certainty-trap-r208.md
+- raw/steadyoptions/put-permanent-portfolio-r358.md
+- raw/steadyoptions/put-writing-in-2020-the-role-of-timing-luck-r603.md
+- raw/steadyoptions/putcall-parity-definition-formula-how-it-works-r740.md
+- raw/steadyoptions/putcall-parity-two-definitions-r526.md
+- raw/steadyoptions/putcall-parity-two-definitions-r601.md
+- raw/steadyoptions/qa-with-mental-game-coach-jared-tendler-r662.md
+- raw/steadyoptions/questions-to-ask-yourself-before-you-start-investing-r676.md
+- raw/steadyoptions/ratio-calendar-spreads-r576.md
+- raw/steadyoptions/retirement-strategies-for-senior-citizens-to-grow-and-protect-their-wealth-r790.md
+- raw/steadyoptions/revisiting-anchor-part-2-r411.md
+- raw/steadyoptions/revisiting-anchor-thanks-to-orats-wheel-r396.md
+- raw/steadyoptions/schooloftrade-another-guru-busted-r218.md
+- raw/steadyoptions/see-what-you-are-missing-r273.md
+- raw/steadyoptions/selling-puts-the-good-the-bad-and-the-ugly-r416.md
+- raw/steadyoptions/short-put-vs-buy-and-hold-r253.md
+- raw/steadyoptions/should-i-pay-off-my-mortgage-early-or-invest-r655.md
+- raw/steadyoptions/should-you-add-to-a-losing-trade-r224.md
+- raw/steadyoptions/should-you-aim-for-100-gains-r183.md
+- raw/steadyoptions/should-you-care-about-the-sharpe-ratio-r186.md
+- raw/steadyoptions/should-you-finance-or-pay-cash-for-a-home-r609.md
+- raw/steadyoptions/signs-that-you-are-ready-to-start-investing-r657.md
+- raw/steadyoptions/solicitors-or-how-do-i-make-money-on-this-r635.md
+- raw/steadyoptions/spx-calendar-spreads-historical-pl-levels-r270.md
+- raw/steadyoptions/spy-short-puts-vs-put-spreads-r658.md
+- raw/steadyoptions/steady-futures-2019-year-in-review-r549.md
+- raw/steadyoptions/steady-futures-2021-year-in-review-r683.md
+- raw/steadyoptions/steady-momentum-2019-year-in-review-r547.md
+- raw/steadyoptions/steady-momentum-2020-year-in-review-r628.md
+- raw/steadyoptions/steady-momentum-etf-portfolio-r479.md
+- raw/steadyoptions/steady-putwrite-2021-year-in-review-r679.md
+- raw/steadyoptions/steady-putwrite-2022-year-in-review-r727.md
+- raw/steadyoptions/stoking-the-embers-of-inflation-r372.md
+- raw/steadyoptions/synthetic-long-stock-for-extreme-leverage-r370.md
+- raw/steadyoptions/tales-of-how-big-trades-went-wrong-r521.md
+- raw/steadyoptions/techniques-for-growing-a-small-account-r128.md
+- raw/steadyoptions/thank-you-google-and-see-you-next-cycle-r28.md
+- raw/steadyoptions/the-abcs-of-qe-and-qt-r390.md
+- raw/steadyoptions/the-astonishing-story-behind-xiv-debacle-r328.md
+- raw/steadyoptions/the-benefits-of-diversification-r394.md
+- raw/steadyoptions/the-benefits-of-rebalancing-r670.md
+- raw/steadyoptions/the-best-chart-i-ve-seen-in-2020-r588.md
+- raw/steadyoptions/the-big-loss-r691.md
+- raw/steadyoptions/the-danger-of-false-signals-r482.md
+- raw/steadyoptions/the-downside-of-anchor-r622.md
+- raw/steadyoptions/the-idiocy-of-the-fed-and-ecb-r226.md
+- raw/steadyoptions/the-importance-of-position-sizing-r703.md
+- raw/steadyoptions/the-importance-of-time-horizon-when-investing-r466.md
+- raw/steadyoptions/the-incredible-winning-trade-in-svxy-r331.md
+- raw/steadyoptions/the-jump-diffusion-pricing-formula-r626.md
+- raw/steadyoptions/the-lorintine-2017-sitrep-r304.md
+- raw/steadyoptions/the-magic-of-compounding-and-the-tyranny-of-taxes-r408.md
+- raw/steadyoptions/the-meaning-of-divergent-bars-r422.md
+- raw/steadyoptions/the-minimum-effective-dose-med-for-cash-flow-planning-r534.md
+- raw/steadyoptions/the-oops-signal-trade-r415.md
+- raw/steadyoptions/the-performance-gap-between-large-growth-and-small-value-stocks-r593.md
+- raw/steadyoptions/the-random-walk-hypothesis-r453.md
+- raw/steadyoptions/the-road-not-taken-r172.md
+- raw/steadyoptions/the-scientific-process-of-increasing-expected-returns-r447.md
+- raw/steadyoptions/the-silent-bank-run-r746.md
+- raw/steadyoptions/the-spectacular-fall-of-ljm-preservation-and-growth-r336.md
+- raw/steadyoptions/the-surprising-secret-to-proper-portfolio-diversification-revealed-r789.md
+- raw/steadyoptions/the-tradeoffs-of-strike-selection-r465.md
+- raw/steadyoptions/the-value-of-equity-asset-class-diversification-r486.md
+- raw/steadyoptions/things-to-think-about-before-getting-involved-in-investing-r702.md
+- raw/steadyoptions/thinking-in-terms-of-decades-r175.md
+- raw/steadyoptions/those-golden-and-death-crosses-r445.md
+- raw/steadyoptions/top-features-of-ninjaspread-r721.md
+- raw/steadyoptions/trade-size-taming-the-800-pound-gorilla-r210.md
+- raw/steadyoptions/traditional-or-roth-retirement-account-r587.md
+- raw/steadyoptions/tsla-lnkd-nflx-goog-thank-you-see-you-next-cycle-r105.md
+- raw/steadyoptions/tur-trade-update-r393.md
+- raw/steadyoptions/two-pre-earnings-momentum-trades-with-a-technical-trigger-in-alphabet-r474.md
+- raw/steadyoptions/understanding-growth-vs-value-stocks-r513.md
+- raw/steadyoptions/updated-the-performance-gap-between-large-growth-and-small-value-stocks-r652.md
+- raw/steadyoptions/using-bullish-calendar-spreads-to-profit-on-msft-stock-r584.md
+- raw/steadyoptions/using-directional-butterfly-spread-r219.md
+- raw/steadyoptions/using-orats-in-anchor-testing-r539.md
+- raw/steadyoptions/using-orats-wheel-to-test-entries-and-exits-r553.md
+- raw/steadyoptions/using-otm-directional-calendar-spreads-r346.md
+- raw/steadyoptions/what-a-high-beta-means-for-apple-r23.md
+- raw/steadyoptions/what-is-true-diversification-r182.md
+- raw/steadyoptions/what-our-members-say-about-us-r53.md
+- raw/steadyoptions/what-s-wrong-with-your-401k-if-anything-r449.md
+- raw/steadyoptions/what-to-do-when-a-stock-misses-earnings-r369.md
+- raw/steadyoptions/what-you-trade-matters-r689.md
+- raw/steadyoptions/when-can-you-trust-a-backtest-r499.md
+- raw/steadyoptions/when-investors-lose-their-nerve-r819.md
+- raw/steadyoptions/when-is-the-right-time-to-invest-r77.md
+- raw/steadyoptions/when-youve-only-got-1000-to-invest-what-do-you-do-r605.md
+- raw/steadyoptions/where-i-invest-my-own-money-r568.md
+- raw/steadyoptions/where-should-you-be-investing-your-money-r786.md
+- raw/steadyoptions/who-wants-the-last-nickel-r515.md
+- raw/steadyoptions/why-and-how-to-trade-objectively-and-keep-your-emotions-in-check-r672.md
+- raw/steadyoptions/why-bother-with-annualized-return-r362.md
+- raw/steadyoptions/why-doesnt-anchor-roll-the-long-calls-r519.md
+- raw/steadyoptions/why-dow-points-are-meaningless-r469.md
+- raw/steadyoptions/why-havent-you-started-investing-yet-r596.md
+- raw/steadyoptions/why-i-wouldnt-trade-apple-right-now-r17.md
+- raw/steadyoptions/why-not-do-it-yourself-r323.md
+- raw/steadyoptions/why-simple-isn-t-easy-r176.md
+- raw/steadyoptions/why-to-sell-a-winning-system-r318.md
+- raw/steadyoptions/why-we-sell-our-calendars-before-earnings-r149.md
+- raw/steadyoptions/why-winning-ratio-means-nothing-r232.md
+- raw/steadyoptions/why-you-should-invest-in-metals-r777.md
+- raw/steadyoptions/why-you-should-not-trust-investment-gurus-r118.md
+- raw/steadyoptions/wide-flat-spx-diagonal-spread-r720.md
+- raw/steadyoptions/yes-we-are-playing-not-to-lose-r806.md

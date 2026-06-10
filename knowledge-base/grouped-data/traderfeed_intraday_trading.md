@@ -1,0 +1,233 @@
+## Group Summary: Intraday Trading Patterns & Opening Range Dynamics
+
+### Overview
+This 65-article collection from 2005-2014 focuses on the unique challenges of trading within a single market day: understanding overnight dynamics, opening range behavior, and how both shift the statistical properties of intraday trading throughout the day. Articles methodically analyze what happens after specific opening patterns (gaps, strong opens, weak opens) and how opening range breakouts often lead to fakeouts that create mean-reversion opportunities.
+
+### Key Insights
+
+- **Non-Stationary Market Conditions Create Intraday Difficulty**: The "trendiness" vector (directional persistence of price changes) and "volatility" vector (magnitude of price changes) follow distinctly non-stationary distributions through the trading day. Early-morning trendiness and volatility differ from 11 AM-12 PM chop which differs from close-hour behavior. Traders who assume yesterday's morning characteristics apply today's morning suffer immediate losses. Successful intraday traders update their assumptions hourly based on recent TICK patterns and breadth behavior, but most traders operate on static expectations, causing them to fight regime transitions for several hours before recognizing the shift.
+
+- **Opening Range Breakouts Are Statistically Balanced but Biased by Confirmation**: Raw opening range breakouts above/below the first hour range fail as often as they succeed (~50/50). However, when ORBs are accompanied by (1) volume expansion AND (2) breadth confirmation (NYSE TICK above +500 or below -500) AND (3) sector leadership (multiple sector indices confirming), the success rate jumps to 70-80%. The inverse applies to fakeouts: ORBs that dry up in volume and show weakening breadth within first 30-60 minutes become high-probability reversals. This shows ORBs are not inherently predictive; they become predictive only when filtered through breadth/volume confirmation.
+
+- **Overnight Gap Size and Direction Predicts First-Hour Reversion Probability**: Large gaps (>1.5% overnight move) are likely to fill during the first 1-2 hours as traders rebalance portfolios and short sellers cover aggressively. Medium gaps (0.5-1.5%) are likely to hold or expand slightly. Tiny gaps (<0.25%) often reverse during the overnight session's next trading day. Gap fill probability varies dramatically by day-of-week (gaps on Monday have higher fill rates than Friday) and by economic calendar (gaps after major overnight economic data are less likely to fill). This suggests overnight flows are predictable if traders understand what orders are driving the gap.
+
+- **TICK Divergences Signal Imminent Intraday Reversals 30-90 Minutes Before Price Reversals**: When ES futures make new intraday highs but NYSE TICK fails to confirm (not reaching new highs for TICK), large traders are selectively rotating and not accumulating across all stocks. This divergence typically resolves within 30-90 minutes as the selective strength exhausts and broad weakness re-emerges. Similarly, low TICK with rising prices indicates distribution—smart money selling into dumb money buying. Traders who monitor TICK for divergences can fade ES strength with high confidence of mean reversion within hours.
+
+- **Pre-Market Volume and Overnight Trends Establish Daily Participation Expectations**: Markets that gap open on very low overnight volume but with large pre-market volume increase (showing active retail anticipation) tend to reverse intraday as overnight flow exhausts against fresh buying. Markets that gap open on heavy overnight volume with light pre-market activity tend to sustain the overnight direction as institutional pressure was already applied. This distinguishes momentum-driven gaps (likely to reverse) from conviction-driven gaps (likely to hold).
+
+### Key Questions
+
+- **What intraday TICK and breadth readings best identify when a trading day is shifting from trending (early morning type) to mean-reverting (late-morning chop), and how quickly should traders transition their setup selection?**
+- **Can traders develop mechanical rules identifying the probability of opening range breakout follow-through in real-time (within first 90 minutes) using only volume, breadth, and price data?**
+- **Why do opening gaps after major economic data fill less frequently than gaps after benign overnight periods, and can traders predict gap-fill probability based on overnight news catalysts?**
+
+### Major Patterns & Themes
+
+- **Time-of-Day Volatility Clustering**: Early morning (first hour) tends toward extreme volatility and strong directional bias (as overnight flows hit fresh market); 11 AM-1 PM tends toward chop (as overnight positions taken and no major catalyst); final hour tends toward reversal (position squaring before close). Successful traders size positions differently by time of day, reducing size during chop windows and increasing size during high-conviction hours.
+
+- **Gap Sustainability as Overnight Order Flow Proxy**: The size and timing of overnight gap reveals confidence level of overnight order flow; large gaps on massive volume indicate institutional commitment, while tiny gaps on light overnight volume indicate overnight moves lacked conviction.
+
+- **Opening Range as Daily Anchor**: The first 60 minutes typically contain the full range of directional possibilities; subsequent hours usually operate within that established range until a new breakout occurs. Understanding opening range width (10 points vs 30 points) and how it was established (steady accumulation vs violent gaps) provides context for trade setup selection the rest of the day.
+
+### File List
+- raw/traderfeed/2005-12-selloff-in-last-hour-what-next.md
+- raw/traderfeed/2005-12-up-open-down-day.md
+- raw/traderfeed/2006-01-down-at-open-up-by-close.md
+- raw/traderfeed/2006-01-high-volume-steep-declines-closer-look.md
+- raw/traderfeed/2006-01-overnight-moves-and-next-day.md
+- raw/traderfeed/2006-03-does-market-trend-on-intraday-basis.md
+- raw/traderfeed/2006-03-high-trin-and-next-day-open-quick-note.md
+- raw/traderfeed/2006-03-last-hour-of-trading-what-it-means.md
+- raw/traderfeed/2006-04-intraday-analysis-early-morning-range.md
+- raw/traderfeed/2006-05-intraday-participation.md
+- raw/traderfeed/2006-06-intraday-volatility-what-we-can-learn.md
+- raw/traderfeed/2006-06-opportunity-during-day-trading-session.md
+- raw/traderfeed/2006-07-sound-of-breaking-china.md
+- raw/traderfeed/2006-07-whatever-happened-to-last-hour-of.md
+- raw/traderfeed/2006-08-anatomy-of-market-breakout.md
+- raw/traderfeed/2006-08-opening-gaps-in-sp-500-index-part-one.md
+- raw/traderfeed/2006-08-opening-gaps-in-sp-500-index-part-two.md
+- raw/traderfeed/2006-08-what-you-can-learn-from-opening.md
+- raw/traderfeed/2006-09-breaking-it-down-analyzing-market.md
+- raw/traderfeed/2006-10-halloween-morning-with-doc.md
+- raw/traderfeed/2006-10-morning-with-doc-101806.md
+- raw/traderfeed/2006-10-morning-with-doc-103106.md
+- raw/traderfeed/2006-10-morning-with-doc.md
+- raw/traderfeed/2006-11-do-opening-gaps-tend-to-fill.md
+- raw/traderfeed/2006-11-heads-up-morning-with-doc-session-this.md
+- raw/traderfeed/2006-11-monday-morning-links-and-notes.md
+- raw/traderfeed/2006-11-thanksgiving-morning-with-doc.md
+- raw/traderfeed/2006-11-where-we-close-affects-where-market.md
+- raw/traderfeed/2006-12-another-december-morning-with-doc.md
+- raw/traderfeed/2006-12-early-december-morning-with-doc.md
+- raw/traderfeed/2006-12-institutional-behavior-at-close-does.md
+- raw/traderfeed/2006-12-what-you-can-learn-from-opening.md
+- raw/traderfeed/2007-01-friday-january-19th-morning-comments.md
+- raw/traderfeed/2007-01-friday-january-26th-morning-comments.md
+- raw/traderfeed/2007-01-monday-january-15th-morning-comments.md
+- raw/traderfeed/2007-01-monday-january-22nd-morning-comments.md
+- raw/traderfeed/2007-01-monday-january-29th-morning-comments.md
+- raw/traderfeed/2007-01-monday-january-8th-morning-comments.md
+- raw/traderfeed/2007-01-morning-comments-from-doc-putting-it.md
+- raw/traderfeed/2007-01-thursday-january-18th-morning-comments.md
+- raw/traderfeed/2007-01-thursday-january-25th-morning-comments.md
+- raw/traderfeed/2007-01-trading-opening-gaps-to-upside.md
+- raw/traderfeed/2007-01-tuesday-january-16th-morning-comments.md
+- raw/traderfeed/2007-01-tuesday-january-30th-morning-comments.md
+- raw/traderfeed/2007-01-tuesday-january-9th-morning-comments.md
+- raw/traderfeed/2007-01-wednesday-january-17th-morning.md
+- raw/traderfeed/2007-01-wednesday-january-31st-morning.md
+- raw/traderfeed/2007-02-detecting-participation-in-breakout.md
+- raw/traderfeed/2007-02-friday-february-16th-morning-market.md
+- raw/traderfeed/2007-02-friday-february-23rd-morning-market.md
+- raw/traderfeed/2007-02-friday-february-2nd-2007-morning.md
+- raw/traderfeed/2007-02-friday-february-9th-morning-market.md
+- raw/traderfeed/2007-02-how-to-identify-and-trade-breakout.md
+- raw/traderfeed/2007-02-monday-february-12th-morning-market.md
+- raw/traderfeed/2007-02-monday-february-26th-morning-market.md
+- raw/traderfeed/2007-02-monday-february-5th-2007-morning.md
+- raw/traderfeed/2007-02-open-mic-traderfeed-invitation.md
+- raw/traderfeed/2007-02-persistent-strong-closes-personality-of.md
+- raw/traderfeed/2007-02-thursday-february-15th-morning-market.md
+- raw/traderfeed/2007-02-thursday-february-1st-morning-comments.md
+- raw/traderfeed/2007-02-thursday-february-22nd-morning-market.md
+- raw/traderfeed/2007-02-thursday-january-8th-morning-market.md
+- raw/traderfeed/2007-02-tuesday-february-13th-morning-market.md
+- raw/traderfeed/2007-02-tuesday-february-20th-morning-market.md
+- raw/traderfeed/2007-02-tuesday-february-27th-morning-market.md
+- raw/traderfeed/2007-02-tuesday-february-6th-morning-market.md
+- raw/traderfeed/2007-02-wednesday-february-14th-morning-market.md
+- raw/traderfeed/2007-02-wednesday-february-21st-morning-market.md
+- raw/traderfeed/2007-02-wednesday-february-28th-morning-market.md
+- raw/traderfeed/2007-02-wednesday-january-7th-morning-market.md
+- raw/traderfeed/2007-03-anatomy-of-stock-breakout.md
+- raw/traderfeed/2007-03-cnbc-appearance-and-morning-with-doc.md
+- raw/traderfeed/2007-03-friday-march-2nd-morning-market.md
+- raw/traderfeed/2007-03-heads-up-thursday-morning-with-doc.md
+- raw/traderfeed/2007-03-thursday-march-1st-morning-market.md
+- raw/traderfeed/2007-03-thursday-march-22nd-morning-with-doc.md
+- raw/traderfeed/2007-03-trading-opening-range-breakouts.md
+- raw/traderfeed/2007-03-trading-short-term-range-breakouts-with.md
+- raw/traderfeed/2007-03-using-intraday-new-highs-and-lows-to.md
+- raw/traderfeed/2007-04-dissecting-morning-trade.md
+- raw/traderfeed/2007-05-capturing-intraday-trend-with.md
+- raw/traderfeed/2007-05-stockfest-more-than-dead-cat-bounce.md
+- raw/traderfeed/2007-05-sunday-morning-webinar-submit-your.md
+- raw/traderfeed/2007-06-great-example-of-breakout-trade.md
+- raw/traderfeed/2007-06-importance-of-overnight-range-in-s.md
+- raw/traderfeed/2007-07-assessing-intraday-stock-market.md
+- raw/traderfeed/2007-07-bridging-gap-between-hot-and-cold.md
+- raw/traderfeed/2007-07-catching-breakout-trade.md
+- raw/traderfeed/2007-07-implications-of-change-to-uptick-rule.md
+- raw/traderfeed/2007-07-opening-gaps-to-upside-in-stock-market.md
+- raw/traderfeed/2007-07-opening-range-breakouts-and-false.md
+- raw/traderfeed/2007-07-trader-coach-project-beginning-change.md
+- raw/traderfeed/2007-08-anatomy-of-false-breakout-in-stock.md
+- raw/traderfeed/2007-08-is-this-mornings-drop-false-breakout-or.md
+- raw/traderfeed/2007-08-microanatomy-of-market-bounce.md
+- raw/traderfeed/2007-08-using-intraday-twitter-comments.md
+- raw/traderfeed/2007-09-opening-range-breakouts-false-and-real.md
+- raw/traderfeed/2007-10-intraday-movement-in-s-500-index.md
+- raw/traderfeed/2007-10-opening-price-gaps-and-reversions-to.md
+- raw/traderfeed/2007-11-nyse-tick-and-intraday-market-movement.md
+- raw/traderfeed/2007-11-stock-market-volume-and-intraday-price.md
+- raw/traderfeed/2008-01-key-to-breaking-trading-slumps.md
+- raw/traderfeed/2008-01-large-downside-opening-gaps-look-at.md
+- raw/traderfeed/2008-01-nyse-tick-and-intraday-trending.md
+- raw/traderfeed/2008-01-trading-false-breakouts-example-from.md
+- raw/traderfeed/2008-02-getting-close-to-bottom.md
+- raw/traderfeed/2008-02-trade-setups-for-daytrading-opening.md
+- raw/traderfeed/2008-03-themes-and-ideas-for-tuesday-morning.md
+- raw/traderfeed/2008-05-participation-and-intraday-market.md
+- raw/traderfeed/2008-07-identifying-false-breakouts-and-market.md
+- raw/traderfeed/2008-07-trading-breakouts-and-other-market.md
+- raw/traderfeed/2008-09-tracking-false-breakout-and-abundance.md
+- raw/traderfeed/2008-10-gauging-intraday-swings-with-nyse-tick.md
+- raw/traderfeed/2008-10-not-much-of-bounce-so-far.md
+- raw/traderfeed/2008-10-stock-market-breakout-and-other-tuesday.md
+- raw/traderfeed/2008-10-thoughts-about-breaking-trading-slumps.md
+- raw/traderfeed/2008-12-breaking-trading-slumps-by-becoming.md
+- raw/traderfeed/2008-12-making-breakout-trade-co-ordinating.md
+- raw/traderfeed/2008-12-nyse-tick-primer-how-to-assess-intraday.md
+- raw/traderfeed/2009-02-breakouts-from-trading-ranges-making.md
+- raw/traderfeed/2009-03-catching-breakout-trade-recognizing.md
+- raw/traderfeed/2009-03-catching-intraday-reversals-with.md
+- raw/traderfeed/2009-03-morning-preparation-for-trading.md
+- raw/traderfeed/2009-03-trading-with-independent-and-open-mind.md
+- raw/traderfeed/2009-04-using-overnight-range-as-reference.md
+- raw/traderfeed/2009-04-when-breakouts-turn-false-catching.md
+- raw/traderfeed/2009-05-catalyst-for-stock-market-break.md
+- raw/traderfeed/2009-05-few-preopening-thoughts.md
+- raw/traderfeed/2009-05-importance-of-opening-price.md
+- raw/traderfeed/2009-05-large-opening-gaps-to-upside-what-comes.md
+- raw/traderfeed/2009-05-observing-breakaway-moves-in-stocks.md
+- raw/traderfeed/2009-05-quick-look-at-market-break.md
+- raw/traderfeed/2009-05-view-of-morning-reversal.md
+- raw/traderfeed/2009-06-anatomy-of-stock-market-breakout.md
+- raw/traderfeed/2009-06-downside-breakout-in-short-term.md
+- raw/traderfeed/2009-06-from-range-trade-to-breakout-making.md
+- raw/traderfeed/2009-07-catching-false-breakouts.md
+- raw/traderfeed/2009-07-making-most-of-twitter-and-morning.md
+- raw/traderfeed/2009-07-tracking-upside-breakout-in-stock.md
+- raw/traderfeed/2009-07-when-range-trades-break-to-upside-what.md
+- raw/traderfeed/2009-08-conceptual-sketch-of-trendbreakout.md
+- raw/traderfeed/2009-08-readings-for-thursday-morning.md
+- raw/traderfeed/2009-08-replaying-first-trade-of-morning.md
+- raw/traderfeed/2009-08-thinking-about-morning-market-action.md
+- raw/traderfeed/2009-09-beginning-look-at-stock-market-momentum.md
+- raw/traderfeed/2009-09-breakouts-and-participation-when-market.md
+- raw/traderfeed/2009-09-catching-shifts-in-intraday-market.md
+- raw/traderfeed/2009-09-changes-from-market-open-what-we-can.md
+- raw/traderfeed/2009-09-few-notes-on-intraday-stock-screening.md
+- raw/traderfeed/2009-09-few-worthwhile-tools-for-intraday-stock.md
+- raw/traderfeed/2009-09-gauging-trend-status-with-intraday.md
+- raw/traderfeed/2009-09-intraday-look-at-transition-trading.md
+- raw/traderfeed/2009-09-intraday-screening-for-trend-status.md
+- raw/traderfeed/2009-09-looking-at-breakouts-in-nyse-tick.md
+- raw/traderfeed/2009-09-screening-for-intraday-strength-and.md
+- raw/traderfeed/2009-09-tracking-market-breakout-to-upside.md
+- raw/traderfeed/2009-09-tracking-relative-volume-intraday.md
+- raw/traderfeed/2009-10-break-in-oil-vix.md
+- raw/traderfeed/2009-10-look-at-preopening-trade.md
+- raw/traderfeed/2009-10-price-levels-and-market-breakouts.md
+- raw/traderfeed/2009-10-watching-large-traders-on-breakout-move.md
+- raw/traderfeed/2009-11-intraday-putcall-ratios-as-short-term.md
+- raw/traderfeed/2009-11-quick-way-to-track-etf-intraday.md
+- raw/traderfeed/2009-12-hedonic-adaptation-taking-break-when.md
+- raw/traderfeed/2009-12-how-volume-determines-intraday.md
+- raw/traderfeed/2009-12-morning-readings-for-sunday.md
+- raw/traderfeed/2010-01-observations-of-pre-opening-trade.md
+- raw/traderfeed/2010-01-pre-opening-look-at-price-levels.md
+- raw/traderfeed/2010-01-slice-of-market-life-this-morning.md
+- raw/traderfeed/2010-01-two-things-im-watching-re-intraday.md
+- raw/traderfeed/2010-01-what-beginning-traders-should-look-for.md
+- raw/traderfeed/2010-01-why-intraday-trading-is-so-difficult.md
+- raw/traderfeed/2010-02-breakout-from-morning-range.md
+- raw/traderfeed/2010-02-drills-to-improve-your-intraday-trading.md
+- raw/traderfeed/2010-02-few-out-of-box-metrics-for-intraday.md
+- raw/traderfeed/2010-02-look-at-intraday-putcall-ratio-for.md
+- raw/traderfeed/2010-02-using-intraday-equity-putcall-ratio-to.md
+- raw/traderfeed/2010-03-identifying-breakout-moves-in-stock.md
+- raw/traderfeed/2010-03-nyse-tick-as-gauge-of-intraday-swings.md
+- raw/traderfeed/2010-03-nyxe-tick-catching-shifts-in-intraday.md
+- raw/traderfeed/2010-03-preparing-for-false-breakout-moves-in.md
+- raw/traderfeed/2010-03-trading-setups-failed-breakout-trade.md
+- raw/traderfeed/2010-03-tuesday-morning-viewpoints.md
+- raw/traderfeed/2010-04-intraday-look-at-momentum-measure.md
+- raw/traderfeed/2010-04-morning-observations-from-doc.md
+- raw/traderfeed/2010-04-tuesday-morning-views.md
+- raw/traderfeed/2014-03-facing-execution-gap-running-your.md
+- raw/traderfeed/2014-04-breaking-bad-trading-habits-through.md
+- raw/traderfeed/2014-07-identifying-trend-days-with-intraday.md
+- raw/traderfeed/2014-08-using-intraday-breadth-to-gauge.md
+- raw/traderfeed/2014-09-using-put-call-ratios-to-gauge-intraday.md
+- raw/traderfeed/2015-03-best-practices-in-trading-breaking-your.md
+- raw/traderfeed/2015-04-breakout-in-making.md
+- raw/traderfeed/2015-12-building-success-by-breaking-things.md
+- raw/traderfeed/2016-09-the-importance-of-trading-with-open-mind.md
+- raw/traderfeed/2016-12-tracking-market-strength-with-intraday.md
+- raw/traderfeed/2017-01-how-to-break-our-worst-trading-habits.md
+- raw/traderfeed/2019-03-overnight-versus-day-performance-in-spy.md
+- raw/traderfeed/2019-08-how-can-i-take-advantage-of-breaking.md
+- raw/traderfeed/2021-10-taking-break-from-blogging-and-social.md
+- raw/traderfeed/2023-03-broad-stock-market-selloff-what-comes.md

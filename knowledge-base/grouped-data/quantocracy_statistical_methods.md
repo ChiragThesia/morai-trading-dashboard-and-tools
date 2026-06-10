@@ -1,0 +1,170 @@
+## Group Summary: Quantocracy Statistical Methods
+
+### Overview
+This group contains 23 files on statistical and mathematical foundations for quantitative trading research. It covers methods for testing trading hypotheses, validating strategy performance, and building robust statistical frameworks for trading strategy evaluation. The collection emphasizes rigorous methodology for distinguishing signal from noise and addresses the statistical challenges unique to financial time series.
+
+### Key Insights
+
+- **Bootstrap and Permutation Testing Superiority**: Traditional parametric hypothesis tests (t-tests, ANOVA) assume normal distributions that rarely hold in trading returns. Bootstrap resampling and permutation tests make fewer distributional assumptions and directly test the null hypothesis that observed strategy returns are indistinguishable from random. These methods separate genuine alpha from statistical artifacts.
+
+- **Time Series Structure and Lookahead Bias**: Financial data violates i.i.d. assumptions underlying standard statistical tests. Overlapping observations (rolling windows), autocorrelation, and heteroskedasticity inflate test statistics and create false positives. Forward-walk and robust resampling methods that respect temporal ordering are essential for avoiding spurious strategy discovery.
+
+- **Monte Carlo Simulation Limits in Forecasting**: While Monte Carlo methods excel at option pricing and portfolio simulation, they fail at forecasting future price paths because they require accurate volatility and distribution assumptions. Historical simulation and actual forward-testing provide more honest performance assessment than optimistic Monte Carlo projections.
+
+- **Covariance Matrix Estimation Challenge**: Standard covariance estimation produces unstable, high-variance estimates with limited data. PSD shrinkage (Ledoit-Wolf, iterative) and other regularization methods improve estimation accuracy and portfolio robustness. The choice of shrinkage target (identity, single-factor, multi-factor) directly impacts portfolio construction reliability.
+
+### Key Questions
+
+- How many out-of-sample observations are required to distinguish strategy alpha from statistical luck with 95% confidence?
+- Which resampling methods (bootstrap, block bootstrap, permutation) best preserve financial time series properties while testing strategy significance?
+- How do correlation changes during market stress affect portfolio construction validated on normal-market covariance estimates?
+
+### File List
+- raw/quantocracy/docs/2023-rally-how-strong-is-it.md
+- raw/quantocracy/docs/a-dark-winter-for-value-stocks.md
+- raw/quantocracy/docs/a-guide-to-forecast-scalars.md
+- raw/quantocracy/docs/a-portfolio-of-strategies.md
+- raw/quantocracy/docs/a-tale-of-two-prices.md
+- raw/quantocracy/docs/active-reading-with-chatgpt-qpm-stat-arb.md
+- raw/quantocracy/docs/advanced-fx-carry-strategies-with-valuation-adjustment.md
+- raw/quantocracy/docs/alternative-credit-funds-credible-alternatives.md
+- raw/quantocracy/docs/analysis-price-based-quantitative-strategies-country-valuation.md
+- raw/quantocracy/docs/applying-transformers-to-financial-time-series.md
+- raw/quantocracy/docs/are-you-blind-to-the-tail-risks-lurking-in-calm-markets.md
+- raw/quantocracy/docs/attenuation-of-anomalies-what-role-do-fundamentals-play.md
+- raw/quantocracy/docs/aws-trading-part-2-the-strategy.md
+- raw/quantocracy/docs/battle-of-the-back-testers.md
+- raw/quantocracy/docs/beta-in-beta-neutral-factors.md
+- raw/quantocracy/docs/bloomberggpt-where-large-language-models-and-finance-meet.md
+- raw/quantocracy/docs/bootstrap-simulations-with-exact-sample-mean-vector-and-sample-covariance-matrix.md
+- raw/quantocracy/docs/building-a-sector-rotation-strategy-based-on-feds-interest-rate-policy.md
+- raw/quantocracy/docs/business-sentiment-and-commodity-future-returns.md
+- raw/quantocracy/docs/can-factor-investing-become-scientific.md
+- raw/quantocracy/docs/can-skewness-identify-future-outperforming-mutual-funds.md
+- raw/quantocracy/docs/can-we-use-us-government-shutdowns-as-a-signal-for-investment-decisions.md
+- raw/quantocracy/docs/carry-versus-trend-following.md
+- raw/quantocracy/docs/chois-dividend-growth-allocation.md
+- raw/quantocracy/docs/code-walkthrough-alpha-simulator-programming-beginners.md
+- raw/quantocracy/docs/commodity-carry-as-a-trading-signal-part-1.md
+- raw/quantocracy/docs/confessions-of-a-recovering-engineer-why-engineers-make-bad-traders.md
+- raw/quantocracy/docs/covariance-matrix-forecasting-iterated-exponentially-weighted-moving-average-model.md
+- raw/quantocracy/docs/cross-sectional-momentum-results-from-commodities-and-equities.md
+- raw/quantocracy/docs/cut-your-losses-is-it-a-good-strategy.md
+- raw/quantocracy/docs/dataframe-rec-tests-with-recx.md
+- raw/quantocracy/docs/day-16-comps.md
+- raw/quantocracy/docs/day-23-logic-or-luck.md
+- raw/quantocracy/docs/day-30-summing-up.md
+- raw/quantocracy/docs/deep-latent-variable-models.md
+- raw/quantocracy/docs/design-patterns-for-order-latency.md
+- raw/quantocracy/docs/diversification-versus-hedging-ii.md
+- raw/quantocracy/docs/do-smart-machines-make-smarter-trades.md
+- raw/quantocracy/docs/downloading-dukascopy-tick-data-with-node-library.md
+- raw/quantocracy/docs/dual-momentum-in-cryptocurrencies.md
+- raw/quantocracy/docs/economic-momentum.md
+- raw/quantocracy/docs/emerging-market-funds-same-same-but-different.md
+- raw/quantocracy/docs/equity-bond-correlations-higher-than-assumed.md
+- raw/quantocracy/docs/european-investors-and-taa-strategies-four-approaches.md
+- raw/quantocracy/docs/expected-returns-to-green-stocks.md
+- raw/quantocracy/docs/exponentially-weighted-covariance-equal-risk-contribution-portfolio-optimisation.md
+- raw/quantocracy/docs/factor-olympics-2023.md
+- raw/quantocracy/docs/features-selection-in-the-age-of-generative-ai.md
+- raw/quantocracy/docs/finding-latent-trading-factors.md
+- raw/quantocracy/docs/forecasting-current-market-turbulence-with-the-gjr-garch-model.md
+- raw/quantocracy/docs/front-running-commodity-seasonality.md
+- raw/quantocracy/docs/garp-investing-golden-or-garbage-ii.md
+- raw/quantocracy/docs/geographic-investing-business-activity-vs-domicile.md
+- raw/quantocracy/docs/golds-rally-and-the-gold-mining-stocks-trap.md
+- raw/quantocracy/docs/hidden-cost-costless-put-spread-collars-rebalance-timing-luck.md
+- raw/quantocracy/docs/how-does-inflation-impact-trading.md
+- raw/quantocracy/docs/how-mega-tech-stocks-impact-factor-strategies.md
+- raw/quantocracy/docs/how-to-build-mean-reversion-strategies-in-currencies.md
+- raw/quantocracy/docs/how-to-evaluate-the-effectiveness-of-a-trading-strategy-p-values-and-bootstrapping-methods.md
+- raw/quantocracy/docs/how-to-model-features-as-expected-returns.md
+- raw/quantocracy/docs/how-to-use-capture-ratios-to-improve-investment-performance.md
+- raw/quantocracy/docs/i-asked-6-llms-for-better-exit-strategies.md
+- raw/quantocracy/docs/identifying-and-characterizing-market-regimes-across-asset-classes.md
+- raw/quantocracy/docs/index-funds-reimagined.md
+- raw/quantocracy/docs/infra-financial-apis.md
+- raw/quantocracy/docs/intangible-value-modernizing-the-factor-portfolio.md
+- raw/quantocracy/docs/intro-to-black-scholes-implied-volatility-hedging.md
+- raw/quantocracy/docs/investigating-simple-formulaic-investing.md
+- raw/quantocracy/docs/is-machine-learning-better-in-prediction-of-direction-or-value.md
+- raw/quantocracy/docs/is-trend-following-better-than-buy-the-dip.md
+- raw/quantocracy/docs/k-nearest-neighbors-algorithm-python.md
+- raw/quantocracy/docs/leveraged-etfs-in-low-volatility-environments.md
+- raw/quantocracy/docs/low-priced-stocks-do-they-impair-performance.md
+- raw/quantocracy/docs/macro-aware-risk-parity.md
+- raw/quantocracy/docs/macroeconomic-data-and-systematic-trading-strategies.md
+- raw/quantocracy/docs/managing-missing-asset-returns-in-portfolio-analysis-backfilling-through-residuals-recycling.md
+- raw/quantocracy/docs/measuring-performance-chasing.md
+- raw/quantocracy/docs/mitigating-risks-with-factor-strategies.md
+- raw/quantocracy/docs/modified-and-balanced-fx-carry.md
+- raw/quantocracy/docs/momentum-turning-points-and-market-cycles.md
+- raw/quantocracy/docs/most-popular-posts-2023.md
+- raw/quantocracy/docs/nasdaq-no-longer-leading-the-spx-what-this-means-for-the-market.md
+- raw/quantocracy/docs/new-contributor-does-high-interest-rate-volatility-predict-market-turbulence.md
+- raw/quantocracy/docs/new-volatility-based-trading-techniques-with-rob-hanna.md
+- raw/quantocracy/docs/on-inflation-and-stock-returns.md
+- raw/quantocracy/docs/optimization-adaptive-regret-for-regime-shifting-markets.md
+- raw/quantocracy/docs/our-take-on-the-single-greatest-predictor-of-future-stock-market-returns.md
+- raw/quantocracy/docs/overnight-reversal-effects-in-the-high-yield-market.md
+- raw/quantocracy/docs/percentage-or-price-differences-estimating-standard-deviation.md
+- raw/quantocracy/docs/point-in-time-economics-and-financial-market-forecasting.md
+- raw/quantocracy/docs/portfolio-optimization.md
+- raw/quantocracy/docs/pre-holiday-effect-in-commodities.md
+- raw/quantocracy/docs/probabilistic-inferencing-for-trading-strategies.md
+- raw/quantocracy/docs/python-libraries-for-quantitative-trading.md
+- raw/quantocracy/docs/quant-and-machine-learning-links-20230806.md
+- raw/quantocracy/docs/quant-rv-part-9-why-realized-vol.md
+- raw/quantocracy/docs/quantpedia-awards-2024-winners-announcement.md
+- raw/quantocracy/docs/r-d-expected-profitability-and-expected-returns.md
+- raw/quantocracy/docs/rebalancing-can-trading-costs-and-market-frictions-be-mitigated.md
+- raw/quantocracy/docs/regression-is-a-tool-that-can-turn-you-into-a-fool.md
+- raw/quantocracy/docs/resampled-portfolio-stacking.md
+- raw/quantocracy/docs/research-review-15-august-2025-forecasting.md
+- raw/quantocracy/docs/research-review-20-february-2026-forecasting-returns.md
+- raw/quantocracy/docs/research-review-6-december-2024-index-and-passive-investing.md
+- raw/quantocracy/docs/rethinking-asset-growth-in-asset-pricing-models.md
+- raw/quantocracy/docs/revaluation-alpha-why-past-factor-returns-may-be-misleading.md
+- raw/quantocracy/docs/risk-of-momentum-crashes-can-it-be-reduced.md
+- raw/quantocracy/docs/robustness-of-the-211-sharpe-mean-reversion-strategy.md
+- raw/quantocracy/docs/seasonality-in-bitcoin-intraday-trend-trading.md
+- raw/quantocracy/docs/sentiment-as-signal-forecasting-with-alternative-data-and-generative-ai.md
+- raw/quantocracy/docs/short-term-signals-meaningful-alpha.md
+- raw/quantocracy/docs/skew-preferences-for-crypto-degens.md
+- raw/quantocracy/docs/sparse-index-tracking-limiting-the-number-of-assets.md
+- raw/quantocracy/docs/statistical-shrinkage-2.md
+- raw/quantocracy/docs/stock-selection-with-macro-factors-the-case-for-simple-neural-networks.md
+- raw/quantocracy/docs/survivorship-bias.md
+- raw/quantocracy/docs/systematic-stock-selection-with-macro-factors.md
+- raw/quantocracy/docs/talking-vix-trading-and-my-naaim-whitepaper.md
+- raw/quantocracy/docs/terms-of-trade-as-fx-trading-signal.md
+- raw/quantocracy/docs/the-30-percent-selloff-signal-what-history-tells-us-about-market-recoveries.md
+- raw/quantocracy/docs/the-best-defensive-strategies-two-centuries-of-evidence.md
+- raw/quantocracy/docs/the-cybernetic-oscillator.md
+- raw/quantocracy/docs/the-end-of-month-effect-in-valuegrowth-and-realestateequity-spreads.md
+- raw/quantocracy/docs/the-gap-momentum-system.md
+- raw/quantocracy/docs/the-illusion-of-the-small-cap-premium.md
+- raw/quantocracy/docs/the-low-beta-anomaly-are-its-returns-justified.md
+- raw/quantocracy/docs/the-overnight-anomaly-alive-and-well.md
+- raw/quantocracy/docs/the-rise-of-0dte-options-cause-for-concern-or-business-as-usual.md
+- raw/quantocracy/docs/the-single-greatest-predictor-of-future-stock-market-returns-ten-years-after.md
+- raw/quantocracy/docs/the-unreasonable-effectiveness-of-volatility-targeting-and-where-it-falls-short.md
+- raw/quantocracy/docs/there-is-a-low-vol-anomaly-in-spy.md
+- raw/quantocracy/docs/tracking-systematic-default-risk.md
+- raw/quantocracy/docs/trading-signals-in-high-definition.md
+- raw/quantocracy/docs/trend-following-in-bear-markets.md
+- raw/quantocracy/docs/turning-on-chain-data-into-a-profitable-systematic-strategy-with-code.md
+- raw/quantocracy/docs/understanding-what-drives-momentum-in-global-stock-markets.md
+- raw/quantocracy/docs/upside-versus-downside-stocks.md
+- raw/quantocracy/docs/using-skewness-and-kurtosis-to-enhance-trading-and-risk-management.md
+- raw/quantocracy/docs/value-at-risk-univariate-estimation-methods.md
+- raw/quantocracy/docs/visual-quantitative-analysis-of-dow-30-stocks.md
+- raw/quantocracy/docs/volatility-risk-premium-across-different-asset-classes.md
+- raw/quantocracy/docs/we-interrupt-this-service-for-an-important-message.md
+- raw/quantocracy/docs/what-is-a-robust-stochastic-volatility-model-research-paper.md
+- raw/quantocracy/docs/when-correlations-break-or-hold-strategies-for-effective-hedging-and-trading.md
+- raw/quantocracy/docs/why-a-new-high-before-a-fed-day-is-discouraging.md
+- raw/quantocracy/docs/why-the-last-few-minutes-of-trading-might-matter-more-than-you-think.md
+- raw/quantocracy/docs/yield-curve-modeling.md
+- raw/quantocracy/pages-071-080.md

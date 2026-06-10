@@ -1,0 +1,171 @@
+## Group Summary: Quantocracy Coding Implementation
+
+### Overview
+This group contains 15 files focused on the practical implementation and programming aspects of quantitative trading systems. It covers tools, libraries, frameworks, and coding techniques essential for building, testing, and deploying trading algorithms. The collection addresses both the low-level programming mechanics (API integration, data structures) and higher-level considerations (algorithm design patterns, language selection).
+
+### Key Insights
+
+- **API-First Strategy Development**: Modern algo trading requires deep integration with broker APIs (Interactive Brokers, etc.). Understanding native API capabilities (order types, latency, position tracking) determines which strategies are implementable versus theoretical.
+
+- **Python Ecosystem Maturity**: The quantitative trading community standardized on Python due to ecosystem completeness: data handling (Pandas), scientific computing (NumPy, SciPy), machine learning (scikit-learn, TensorFlow), backtesting frameworks (Backtrader, VectorBT), and interactive development (Jupyter). Language choice is less about performance and more about ecosystem network effects.
+
+- **Prompt Engineering as Programming**: Large language models enable non-traditional programming paradigms where natural language specifications can generate trading logic through prompting. LMQL and similar tools represent a shift where domain knowledge (trading rules) can be encoded more naturally than traditional imperative programming.
+
+- **No-Code Backtesting Engines**: Visual, drag-and-drop backtesting platforms democratize strategy development for non-programmers. However, these tools often hide implementation details that create backtesting-to-live gaps (execution model, cost assumptions, survivorship handling).
+
+### Key Questions
+
+- What are the performance trade-offs between native API connectivity versus middleware abstraction layers (e.g., broker-neutral frameworks)?
+- How do different backtesting engines handle edge cases like order execution delays, margin requirements, and position sizing constraints?
+- What programming patterns minimize the backtesting-to-live gap for algorithmic traders?
+
+### File List
+- raw/quantocracy/docs/100-papers-an-hour-10xing-your-strategy-research-speed-with-ai.md
+- raw/quantocracy/docs/97-years-of-death-crosses.md
+- raw/quantocracy/docs/a-different-measure-of-volatility-for-quant-rv.md
+- raw/quantocracy/docs/a-model-for-bond-risk-premia-and-the-macroeconomy.md
+- raw/quantocracy/docs/a-re-introduction-to-quantitative-investing.md
+- raw/quantocracy/docs/absolute-valuation-models-for-the-stock-market-are-indexes-fairly-priced.md
+- raw/quantocracy/docs/active-vs-passive-life-cycle-savings-strategies.md
+- raw/quantocracy/docs/ai-is-no-longer-an-experimental-tool-in-finance.md
+- raw/quantocracy/docs/an-empirical-analysis-of-conference-driven-return-drift-in-tech-stocks.md
+- raw/quantocracy/docs/andrea-unger-672-returns-sure-would-you-like-some-risk-with-that.md
+- raw/quantocracy/docs/are-alternative-social-data-predictors-useful-for-effective-allocation-to-country-etfs.md
+- raw/quantocracy/docs/artificial-intelligence-and-the-risks-of-harking.md
+- raw/quantocracy/docs/autoregressive-moving-average-arma-model-python.md
+- raw/quantocracy/docs/backtesting-the-opening-range-breakout-orb-strategy-using-polygon-io.md
+- raw/quantocracy/docs/behavioral-biases-and-retail-options-trading.md
+- raw/quantocracy/docs/beyond-modified-value-at-risk-application-of-gaussian-mixtures.md
+- raw/quantocracy/docs/book-and-workshop-introduction-generative-ai-for-trading-and-asset-management.md
+- raw/quantocracy/docs/breaking-down-volatility-diffusive-vs-jump-components.md
+- raw/quantocracy/docs/building-a-survivorship-bias-free-crypto-dataset-with-coinmarketcap-api.md
+- raw/quantocracy/docs/calibrating-volatility-smiles-with-sabr.md
+- raw/quantocracy/docs/can-llms-beat-finbert-for-stock-sentiment-trading.md
+- raw/quantocracy/docs/can-we-backtest-asset-allocation-trading-strategy-in-chatgpt.md
+- raw/quantocracy/docs/candlestick-subplots-with-plotly-and-the-alphavantage-api.md
+- raw/quantocracy/docs/cesar-alvarez-a-novel-way-to-combine-trend-reversion-etfs-volatility-more.md
+- raw/quantocracy/docs/closing-the-loop.md
+- raw/quantocracy/docs/coding-trend-factor.md
+- raw/quantocracy/docs/comparing-affordable-intraday-data-sources-tradestation-vs-polygon-vs-alpaca.md
+- raw/quantocracy/docs/correlation-based-clustering-spectral-clustering-methods.md
+- raw/quantocracy/docs/creating-a-returns-series-with-polygon-forex-data.md
+- raw/quantocracy/docs/crypto-perpetual-contract-pair-trading.md
+- raw/quantocracy/docs/data-data-structures-as-lifecycle-engineering.md
+- raw/quantocracy/docs/day-11-autocorrelation.md
+- raw/quantocracy/docs/day-19-circular-sample.md
+- raw/quantocracy/docs/day-26-adjusted-vs-original.md
+- raw/quantocracy/docs/day-6-momentum.md
+- raw/quantocracy/docs/defensive-trend.md
+- raw/quantocracy/docs/did-covid-ruin-opex-week.md
+- raw/quantocracy/docs/diversifying-via-time-zones.md
+- raw/quantocracy/docs/does-gold-belong-in-a-risk-premia-portfolio.md
+- raw/quantocracy/docs/dr-keller-keunings-simple-variation-of-hybrid-asset-allocation.md
+- raw/quantocracy/docs/duration-of-us-equities.md
+- raw/quantocracy/docs/efficient-rolling-median-with-the-two-heaps-algorithm.md
+- raw/quantocracy/docs/enhance-your-portfolio-analysis-framework-with-carbon-emissions-attributions.md
+- raw/quantocracy/docs/equity-trend-following-with-market-and-macro-data.md
+- raw/quantocracy/docs/evaluating-reversal-potential-in-niche-alternative-etfs.md
+- raw/quantocracy/docs/exploration-of-cta-momentum-strategies-using-etfs.md
+- raw/quantocracy/docs/factor-investing-clearing-the-air-datamining-and-the-antidotes.md
+- raw/quantocracy/docs/factors-are-global-respectable-and-repeatable.md
+- raw/quantocracy/docs/financial-statements-effect.md
+- raw/quantocracy/docs/fiscal-policy-criteria-for-fixed-income-allocation.md
+- raw/quantocracy/docs/frog-in-the-pan-momentum-international-evidence.md
+- raw/quantocracy/docs/front-running-seasonality-in-us-stock-sectors.md
+- raw/quantocracy/docs/generate-synthetic-market-data-with-tensorflow.md
+- raw/quantocracy/docs/global-growth-cycle-strategy-new-developments.md
+- raw/quantocracy/docs/hdf5-advanced-ultra-fast-market-data-storage.md
+- raw/quantocracy/docs/historical-market-data-sources.md
+- raw/quantocracy/docs/how-fragile-is-liquidity-across-asset-classes.md
+- raw/quantocracy/docs/how-much-should-we-get-paid-for-skew-risk.md
+- raw/quantocracy/docs/how-to-do-interest-rate-analysis-with-multi-factor-models.md
+- raw/quantocracy/docs/how-to-improve-commodity-momentum-using-intra-market-correlation.md
+- raw/quantocracy/docs/how-to-replicate-your-favorite-investment-portfolio.md
+- raw/quantocracy/docs/hundreds-of-quant-papers-from-quantlinkaday-in-2024.md
+- raw/quantocracy/docs/i-tuned-the-radio-on-my-stock-returns.md
+- raw/quantocracy/docs/improving-low-volatility-strategies.md
+- raw/quantocracy/docs/inflation-surges-how-long-to-return-to-normal.md
+- raw/quantocracy/docs/inside-the-minds-of-expected-stock-returns.md
+- raw/quantocracy/docs/integrating-the-no-code-quant-backtester-into-the-russian-doll-engine.md
+- raw/quantocracy/docs/introduction-to-machine-learning-quantitative-trading.md
+- raw/quantocracy/docs/investor-demand-can-it-explain-returns.md
+- raw/quantocracy/docs/is-predicting-vol-better-worth-the-effort-and-does-the-vix-help.md
+- raw/quantocracy/docs/iterative-psd-shrinkage-ips.md
+- raw/quantocracy/docs/laurens-bensdorp-building-strategies-with-purpose.md
+- raw/quantocracy/docs/log-normal-stochastic-volatility-with-quadratic-drift.md
+- raw/quantocracy/docs/machine-learning-and-the-probability-of-bouncing-back.md
+- raw/quantocracy/docs/macro-trading-signals-with-regression-based-machine-learning.md
+- raw/quantocracy/docs/make-things-easy-on-yourself-roll-up-small-asset-positions.md
+- raw/quantocracy/docs/mastering-the-tri-timeframe-trend-following-system.md
+- raw/quantocracy/docs/merchandise-import-as-predictor-of-duration-returns.md
+- raw/quantocracy/docs/model-clustering.md
+- raw/quantocracy/docs/momentum-everywhere-even-cross-country-factor-momentum.md
+- raw/quantocracy/docs/monte-carlo-simulations-pricing-weather-derivatives-and-convertible-bonds.md
+- raw/quantocracy/docs/multi-strategy-hedge-funds-and-replication-etfs.md
+- raw/quantocracy/docs/navigating-tradeoffs-with-convex-optimisation.md
+- raw/quantocracy/docs/new-feature-10-year-stock-market-return-forecast.md
+- raw/quantocracy/docs/nlx-finances-hybrid-asset-allocation-6040.md
+- raw/quantocracy/docs/open-or-close-why-not-both.md
+- raw/quantocracy/docs/options-iron-butterfly.md
+- raw/quantocracy/docs/outperforming-cap-weighted-and-equal-weighted-portfolios.md
+- raw/quantocracy/docs/parameter-free-optimization.md
+- raw/quantocracy/docs/piards-annual-seasonality.md
+- raw/quantocracy/docs/portfolio-allocations-vs-risk-contributions.md
+- raw/quantocracy/docs/pragmatic-asset-allocation-across-market-cycles.md
+- raw/quantocracy/docs/predictive-information-of-options-volume-in-equity-markets.md
+- raw/quantocracy/docs/prompting-is-programming-with-lmql.md
+- raw/quantocracy/docs/quality-factor-momentum-and-the-cross-section-of-returns.md
+- raw/quantocracy/docs/quant-and-machine-learning-links-20230827.md
+- raw/quantocracy/docs/quantamental-catch-up.md
+- raw/quantocracy/docs/quantpedia-composite-seasonality-in-mesosim.md
+- raw/quantocracy/docs/range-based-volatility-estimators-overview-and-examples.md
+- raw/quantocracy/docs/reducing-the-impact-of-negative-momentum-performance.md
+- raw/quantocracy/docs/replacing-the-40-in-r.md
+- raw/quantocracy/docs/research-review-11-july-2025-risk-factors.md
+- raw/quantocracy/docs/research-review-17-january-2025-risk-premia.md
+- raw/quantocracy/docs/research-review-21-july-2023-forecasting-markets.md
+- raw/quantocracy/docs/research-review-8-march-2024-combination-model-forecasting.md
+- raw/quantocracy/docs/rethinking-pairs-trading-can-traditional-methods-still-deliver-returns.md
+- raw/quantocracy/docs/revisiting-pragmatic-asset-allocation-simple-rules-for-complex-times.md
+- raw/quantocracy/docs/rob-hanna-trading-the-vix-in-a-diversified-portfolio.md
+- raw/quantocracy/docs/rotational-trading-in-python.md
+- raw/quantocracy/docs/sector-rotation-strategy-should-trading-rules-make-sense.md
+- raw/quantocracy/docs/setting-up-an-alpha-generating-strategy-from-scratch.md
+- raw/quantocracy/docs/should-you-buy-a-new-crypto-listing.md
+- raw/quantocracy/docs/slava-ukraini-latest-from-quantocracy-contributor-in-ukraine.md
+- raw/quantocracy/docs/spy-sso-and-tlt-strategy.md
+- raw/quantocracy/docs/step-by-step-python-guide-for-regime-specific-trading-using-hmm-and-random-forest.md
+- raw/quantocracy/docs/structure-function-forgotten-detection-tool-for-periodic-signals.md
+- raw/quantocracy/docs/systematic-allocation-in-international-equity-regimes.md
+- raw/quantocracy/docs/tactical-asset-allocation-performance-lower-bound.md
+- raw/quantocracy/docs/taming-the-anomaly-zoo-how-macroeconomic-forces-shape-market-returns.md
+- raw/quantocracy/docs/testing-strategies.md
+- raw/quantocracy/docs/the-age-of-ai-attractor-markets-one-possible-trajectory.md
+- raw/quantocracy/docs/the-bogle-model-for-bonds.md
+- raw/quantocracy/docs/the-determinants-of-inflation.md
+- raw/quantocracy/docs/the-fallacy-of-concentration-risk.md
+- raw/quantocracy/docs/the-haa-strategy-revisited.md
+- raw/quantocracy/docs/the-impact-of-market-regimes-on-stop-loss-performance.md
+- raw/quantocracy/docs/the-many-facets-of-stock-momentum.md
+- raw/quantocracy/docs/the-powerful-advantages-of-investing-in-conglomerate-stocks.md
+- raw/quantocracy/docs/the-role-of-data-in-financial-modeling-and-risk-management.md
+- raw/quantocracy/docs/the-surefire-ratio-my-custom-risk-ratio.md
+- raw/quantocracy/docs/the-virtue-of-complexity-in-return-prediction.md
+- raw/quantocracy/docs/time-varying-drivers-of-stock-prices.md
+- raw/quantocracy/docs/trading-and-investing-performance-year-nine-part-2-futures-trading.md
+- raw/quantocracy/docs/trading-the-spread-bitcoin-etfs-vs-crypto-infrastructure-etfs.md
+- raw/quantocracy/docs/trend-following-vs-volatility-capping-two-kinds-of-insurance.md
+- raw/quantocracy/docs/undersampling.md
+- raw/quantocracy/docs/unlock-the-secrets-of-seasonal-trading.md
+- raw/quantocracy/docs/use-markov-models-to-detect-regime-changes.md
+- raw/quantocracy/docs/using-trading-volume-to-optimize-portfolio-construction-and-implementation.md
+- raw/quantocracy/docs/variance-for-intuition-cvar-for-optimization.md
+- raw/quantocracy/docs/volatility-forecasting-garch11-model.md
+- raw/quantocracy/docs/volatility-vs-volatility-of-volatility-conceptual-and-practical-differences.md
+- raw/quantocracy/docs/what-are-growth-stocks.md
+- raw/quantocracy/docs/what-the-index-effects-disappearance-means-for-market-efficiency.md
+- raw/quantocracy/docs/when-trading-systems-break-down-causes-of-decay-and-stop-criteria.md
+- raw/quantocracy/docs/why-data-mining-risks-your-trading-career.md
+- raw/quantocracy/docs/wiener-khinchin-theorem-and-gaussian-processes.md
+- raw/quantocracy/pages-021-030.md
+- raw/quantocracy/pages-101-110.md
