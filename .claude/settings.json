@@ -1,0 +1,7 @@
+{
+  "enabledPlugins": {
+    "supabase@claude-plugins-official": true,
+    "vercel@claude-plugins-official": true,
+    "railway@claude-plugins-official": true
+  }
+}
