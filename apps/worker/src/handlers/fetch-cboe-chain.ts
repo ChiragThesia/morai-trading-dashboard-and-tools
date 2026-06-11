@@ -52,9 +52,11 @@ export function makeFetchCboeChainHandler(
     }
 
     // D-07: enqueue compute-bsm-greeks on success; singletonKey prevents duplicate enqueues
-    // void: pg-boss send is fire-and-forget here; failure does not fail the chain job
+    // void: pg-boss send is fire-and-forget here; failure does not fail the chain job (WR-02)
     void deps.boss.send("compute-bsm-greeks", {}, {
       singletonKey: "triggered-by-chain",
+    }).catch((e: unknown) => {
+      console.warn("fetch-cboe-chain: failed to enqueue compute-bsm-greeks", e);
     });
   };
 }
