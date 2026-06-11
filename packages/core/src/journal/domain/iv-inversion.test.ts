@@ -14,7 +14,6 @@ import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { bsmPrice, bsmVega } from "./bsm.ts";
 import { invertIv } from "./iv-inversion.ts";
-import type { IvError } from "./iv-inversion.ts";
 
 // ─────────────────────────────────────────────────────────────
 // Constants (mirror those in implementation)
@@ -137,8 +136,7 @@ describe("bisection fallback — converges on inputs where NR breaks", () => {
     // At minimum, no NaN should leak — result.ok or a typed error
     if (!result.ok) {
       expect(result.error).toBeDefined();
-      const kind = (result.error as IvError).kind;
-      expect(["expired", "below-intrinsic", "above-bound"]).toContain(kind);
+      expect(["expired", "below-intrinsic", "above-bound"]).toContain(result.error.kind);
     }
   });
 
@@ -153,8 +151,7 @@ describe("bisection fallback — converges on inputs where NR breaks", () => {
       const recomputed = bsmPrice(S, K, T, result.value, R, Q, type);
       expect(Math.abs(recomputed - mark)).toBeLessThanOrEqual(1e-6);
     } else {
-      const kind = (result.error as IvError).kind;
-      expect(["expired", "below-intrinsic", "above-bound"]).toContain(kind);
+      expect(["expired", "below-intrinsic", "above-bound"]).toContain(result.error.kind);
     }
   });
 });
