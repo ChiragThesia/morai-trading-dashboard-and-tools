@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
-import { ok, err } from "@morai/shared";
+import { ok } from "@morai/shared";
 import type { ForGettingStatus } from "@morai/core";
 import { statusResponse } from "@morai/contracts";
 import { statusRoutes } from "./status.routes.ts";
@@ -28,6 +28,27 @@ const downGetStatus: ForGettingStatus = async () =>
     lastJobRuns: "none yet" as const,
     version: "0.0.1",
     uptime: 42,
+  });
+
+// NEW: getStatus with populated lastJobRuns (D-10)
+const populatedJobRunsGetStatus: ForGettingStatus = async () =>
+  ok({
+    db: "ok" as const,
+    tokenFreshness: "none yet" as const,
+    lastJobRuns: {
+      "fetch-cboe-chain": {
+        lastSuccessAt: "2026-06-15T14:00:00.000Z",
+        lastErrorAt: null,
+        lastError: null,
+      },
+      "fetch-rates": {
+        lastSuccessAt: null,
+        lastErrorAt: "2026-06-15T09:01:00.000Z",
+        lastError: "FRED timeout",
+      },
+    },
+    version: "0.0.1",
+    uptime: 100,
   });
 
 describe("GET /api/status", () => {
@@ -66,5 +87,23 @@ describe("GET /api/status", () => {
     expect(parsed.lastJobRuns).toBe("none yet");
     expect(typeof parsed.version).toBe("string");
     expect(typeof parsed.uptime).toBe("number");
+  });
+
+  // NEW: populated lastJobRuns round-trips through statusResponse (MCP-02, D-10)
+  it("populated lastJobRuns round-trips through statusResponse.parse (MCP-02)", async () => {
+    const app = buildTestApp(populatedJobRunsGetStatus);
+    const res = await app.request("/api/status");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    // Must not throw
+    const parsed = statusResponse.parse(body);
+    expect(parsed.lastJobRuns).not.toBe("none yet");
+    const jobRuns = parsed.lastJobRuns;
+    if (jobRuns !== "none yet") {
+      expect(jobRuns["fetch-cboe-chain"]?.lastSuccessAt).toBe(
+        "2026-06-15T14:00:00.000Z",
+      );
+      expect(jobRuns["fetch-rates"]?.lastError).toBe("FRED timeout");
+    }
   });
 });

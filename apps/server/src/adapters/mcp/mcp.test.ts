@@ -26,6 +26,22 @@ const healthyGetStatus: ForGettingStatus = async () =>
     uptime: 42,
   });
 
+// NEW: getStatus with populated lastJobRuns for MCP-02 validation
+const populatedJobRunsGetStatus: ForGettingStatus = async () =>
+  ok({
+    db: "ok" as const,
+    tokenFreshness: "none yet" as const,
+    lastJobRuns: {
+      "fetch-cboe-chain": {
+        lastSuccessAt: "2026-06-15T14:00:00.000Z",
+        lastErrorAt: null,
+        lastError: null,
+      },
+    },
+    version: "0.0.1",
+    uptime: 42,
+  });
+
 describe("bearer middleware", () => {
   it("returns 401 when Authorization header is missing", async () => {
     const app = new Hono();
@@ -85,20 +101,16 @@ describe("MCP router", () => {
     expect(res.status).toBe(401);
   });
 
-  it("get_status tool handler returns statusResponse-valid content", async () => {
+  it("get_status tool handler returns statusResponse-valid content with lastJobRuns:'none yet'", async () => {
     // Test the tool handler's output shape directly via registerStatusTool
     const { registerStatusTool } = await import("./tools.ts");
     const { McpServer } = await import(
       "@modelcontextprotocol/sdk/server/mcp.js"
     );
-    const { z } = await import("zod");
 
     const server = new McpServer({ name: "test", version: "0.0.1" });
     registerStatusTool(server, healthyGetStatus);
 
-    // Call the tool handler directly by accessing the registered handler
-    // We can't easily invoke through the full MCP transport in a unit test,
-    // so we verify the use-case result parses against statusResponse.
     const result = await healthyGetStatus();
     if (!result.ok) {
       throw new Error("Use case returned error");
@@ -108,5 +120,23 @@ describe("MCP router", () => {
     expect(parsed.db).toBe("ok");
     expect(parsed.tokenFreshness).toBe("none yet");
     expect(parsed.lastJobRuns).toBe("none yet");
+  });
+
+  // NEW: populated lastJobRuns round-trips through statusResponse in MCP tool (MCP-02, D-10)
+  it("populated lastJobRuns round-trips through statusResponse.parse in MCP tool (MCP-02)", async () => {
+    const result = await populatedJobRunsGetStatus();
+    if (!result.ok) {
+      throw new Error("Use case returned error");
+    }
+    // Must not throw — MCP-02 requires same schema as HTTP route
+    expect(() => statusResponse.parse(result.value)).not.toThrow();
+    const parsed = statusResponse.parse(result.value);
+    expect(parsed.lastJobRuns).not.toBe("none yet");
+    const jobRuns = parsed.lastJobRuns;
+    if (jobRuns !== "none yet") {
+      expect(jobRuns["fetch-cboe-chain"]?.lastSuccessAt).toBe(
+        "2026-06-15T14:00:00.000Z",
+      );
+    }
   });
 });

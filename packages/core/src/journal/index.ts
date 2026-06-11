@@ -21,10 +21,14 @@ export type {
   PendingObs,
   ForReadingPendingObs,
   ForWritingBsmResults,
+  JobRunRecord,
+  JobRunMap,
+  ForReadingJobRuns,
 } from "./application/ports.ts";
 export type { ForGettingStatus, StatusPayload, StatusError } from "./application/getStatus.ts";
 export { makeGetStatusUseCase } from "./application/getStatus.ts";
 export { makeFetchChainUseCase } from "./application/fetchChain.ts";
+export type { ForRunningFetchChain, FetchChainDeps } from "./application/fetchChain.ts";
 export { makeFetchRateUseCase } from "./application/fetchRate.ts";
 export { makeComputeBsmGreeksUseCase } from "./application/computeBsmGreeks.ts";
 // Domain re-exports (Plan 02/03/06) — BSM engine and IV inversion
@@ -33,3 +37,4 @@ export type { BsmGreeks } from "./domain/bsm.ts";
 export { invertIv } from "./domain/iv-inversion.ts";
 export type { IvError } from "./domain/iv-inversion.ts";
 export { computeT, isThirdFriday } from "./domain/dte.ts";
+export { isWithinRth } from "./domain/rth-window.ts";

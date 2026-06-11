@@ -6,7 +6,7 @@
 // - TDD exempt: pure wiring (tdd.md Scope).
 
 import { bootConfig } from "./config.ts";
-import { makeDb, makePostgresCalendarsRepo } from "@morai/adapters";
+import { makeDb, makePostgresCalendarsRepo, makePostgresJobRunsRepo } from "@morai/adapters";
 import { makeGetStatusUseCase } from "@morai/core";
 import { Hono } from "hono";
 import { statusRoutes } from "./adapters/http/status.routes.ts";
@@ -20,12 +20,16 @@ const db = makeDb(config.DATABASE_URL);
 // Build the calendars repo which also implements ForPingingDb
 const calendarsRepo = makePostgresCalendarsRepo(db);
 
+// Build the job-runs repo (reads pgboss.job for D-10 lastJobRuns status)
+const jobRunsRepo = makePostgresJobRunsRepo(db);
+
 // Build the get_status use-case — injecting the DB ping + version + start time
 const startedAt = new Date();
 const version = "0.0.1";
 
 const getStatus = makeGetStatusUseCase({
   pingDb: calendarsRepo.pingDb,
+  readJobRuns: jobRunsRepo.readJobRuns,
   version,
   startedAt,
 });

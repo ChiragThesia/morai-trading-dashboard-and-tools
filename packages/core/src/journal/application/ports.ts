@@ -186,3 +186,21 @@ export type ForWritingBsmResults = (
     readonly bsmVega: string;
   }>,
 ) => Promise<Result<void, StorageError>>;
+
+// Domain type: per-job last-run status map (D-10).
+// Keys are pg-boss job names; values carry the last success/error timestamps and error message.
+// All fields nullable — a job may have succeeded but never failed, or vice versa.
+export type JobRunRecord = {
+  readonly lastSuccessAt: string | null;
+  readonly lastErrorAt: string | null;
+  readonly lastError: string | null;
+};
+
+export type JobRunMap = Readonly<Record<string, JobRunRecord>>;
+
+/**
+ * ForReadingJobRuns — query pgboss.job for the most recent success/error per job (D-10).
+ * Returns an empty map (not an error) when pgboss.job has no matching rows — graceful
+ * first-deploy behavior (Pitfall 6). MUST return ok({}) on empty/absent pgboss schema.
+ */
+export type ForReadingJobRuns = () => Promise<Result<JobRunMap, StorageError>>;
