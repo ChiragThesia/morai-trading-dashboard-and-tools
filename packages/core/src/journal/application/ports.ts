@@ -116,3 +116,33 @@ export type ForPersistingObservations = (
 export type ForUpsertingContracts = (
   rows: ReadonlyArray<ContractRow>,
 ) => Promise<Result<void, StorageError>>;
+
+// Domain type: a single FRED DGS3MO daily rate observation (MKT-02)
+export type RateObservation = {
+  readonly date: string; // YYYY-MM-DD
+  readonly rate: number; // decimal (e.g. 0.045 for 4.5%)
+};
+
+/**
+ * ForFetchingRate — fetch the current DGS3MO 3-month risk-free rate (MKT-02).
+ * Implemented by FRED HTTP adapter and in-memory twin.
+ * Always returns ok — network errors / missing key use 4.5% fallback (D-02/D-13).
+ */
+export type ForFetchingRate = () => Promise<Result<RateObservation, FetchError>>;
+
+/**
+ * ForPersistingRate — upsert rate_observations by date PK (MKT-02).
+ * Implemented by Postgres repo; idempotent on date PK.
+ */
+export type ForPersistingRate = (
+  obs: RateObservation,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingRate — get most-recent rate on or before a given date (MKT-02).
+ * Returns the rate as a Drizzle-numeric string, or null when no row ≤ the date.
+ * Plan 06 (computeBsmGreeks) uses this to supply `r` to BSM.
+ */
+export type ForReadingRate = (
+  onOrBefore: string,
+) => Promise<Result<string | null, StorageError>>;

@@ -14,7 +14,12 @@ export type {
   ContractRow,
   ForPersistingObservations,
   ForUpsertingContracts,
+  RateObservation,
+  ForFetchingRate,
+  ForPersistingRate,
+  ForReadingRate,
 } from "./application/ports.ts";
 export type { ForGettingStatus, StatusPayload, StatusError } from "./application/getStatus.ts";
 export { makeGetStatusUseCase } from "./application/getStatus.ts";
 export { makeFetchChainUseCase } from "./application/fetchChain.ts";
+export { makeFetchRateUseCase } from "./application/fetchRate.ts";
