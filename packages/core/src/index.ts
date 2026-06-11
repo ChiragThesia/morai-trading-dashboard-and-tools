@@ -21,9 +21,12 @@ export type {
   PendingObs,
   ForReadingPendingObs,
   ForWritingBsmResults,
+  JobRunRecord,
+  JobRunMap,
+  ForReadingJobRuns,
 } from "./journal/index.ts";
 export { makeFetchChainUseCase } from "./journal/index.ts";
 export { makeFetchRateUseCase } from "./journal/index.ts";
 export { makeComputeBsmGreeksUseCase } from "./journal/index.ts";
-export { bsmPrice, bsmGreeks, bsmVega, invertIv, computeT, isThirdFriday } from "./journal/index.ts";
+export { bsmPrice, bsmGreeks, bsmVega, invertIv, computeT, isThirdFriday, isWithinRth } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";

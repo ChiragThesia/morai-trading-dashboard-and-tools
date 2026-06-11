@@ -21,6 +21,9 @@ export type {
   PendingObs,
   ForReadingPendingObs,
   ForWritingBsmResults,
+  JobRunRecord,
+  JobRunMap,
+  ForReadingJobRuns,
 } from "./application/ports.ts";
 export type { ForGettingStatus, StatusPayload, StatusError } from "./application/getStatus.ts";
 export { makeGetStatusUseCase } from "./application/getStatus.ts";
@@ -33,3 +36,4 @@ export type { BsmGreeks } from "./domain/bsm.ts";
 export { invertIv } from "./domain/iv-inversion.ts";
 export type { IvError } from "./domain/iv-inversion.ts";
 export { computeT, isThirdFriday } from "./domain/dte.ts";
+export { isWithinRth } from "./domain/rth-window.ts";

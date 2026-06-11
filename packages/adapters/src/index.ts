@@ -18,6 +18,8 @@ export { makePostgresLegObservationsRepo } from "./postgres/repos/leg-observatio
 export type { PostgresLegObservationsRepo } from "./postgres/repos/leg-observations.ts";
 export { makePostgresRateObservationsRepo } from "./postgres/repos/rate-observations.ts";
 export type { PostgresRateObservationsRepo } from "./postgres/repos/rate-observations.ts";
+export { makePostgresJobRunsRepo } from "./postgres/repos/job-runs.ts";
+export type { PostgresJobRunsRepo } from "./postgres/repos/job-runs.ts";
 
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
