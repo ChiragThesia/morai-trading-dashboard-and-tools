@@ -7,6 +7,7 @@
     "@morai/adapters": "workspace:*",
     "@morai/core": "workspace:*",
     "@morai/shared": "workspace:*",
+    "pg-boss": "^12.18.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
