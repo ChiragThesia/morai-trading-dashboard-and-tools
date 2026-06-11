@@ -95,6 +95,34 @@ describe("makeFetchCboeChainHandler", () => {
     expect(boss.send).not.toHaveBeenCalled();
   });
 
+  it("when inside RTH + use-case ok + boss.send rejects: handler resolves and console.warn is called for failed enqueue (WR-02)", async () => {
+    // Monday 2026-06-15 14:00 UTC = 10:00 EDT — inside RTH
+    const insideRth = new Date("2026-06-15T14:00:00Z");
+
+    const fetchChainUseCase = vi.fn().mockResolvedValue(ok(undefined));
+    const boss: BossForChainHandler & { send: ReturnType<typeof vi.fn> } = {
+      send: vi.fn().mockRejectedValue(new Error("queue missing")),
+    };
+
+    const handler = makeFetchCboeChainHandler({
+      fetchChainUseCase,
+      boss,
+      now: () => insideRth,
+    });
+
+    // Handler must resolve — a failed enqueue must not propagate
+    await expect(handler([makeJob()])).resolves.toBeUndefined();
+
+    // Flush microtask queue so the rejected promise settles before the warn spy check
+    await Promise.resolve();
+
+    // The failed enqueue must be logged via console.warn
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("compute-bsm-greeks"),
+      expect.any(Error),
+    );
+  });
+
   it("array guard: undefined job returns immediately without calling use-case", async () => {
     const insideRth = new Date("2026-06-15T14:00:00Z");
     const fetchChainUseCase = vi.fn();
