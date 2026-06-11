@@ -21,7 +21,7 @@ Cross-cutting constraints active from Phase 1:
 ## Phases
 
 - [x] **Phase 1: Walking Skeleton** - Monorepo + hexagon + DB + deployed status endpoint
-- [x] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored (completed 2026-06-11)
+- [ ] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored (gap closure in progress)
 - [ ] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live
 - [ ] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions
 - [ ] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data
@@ -71,7 +71,8 @@ stored observation — giving the journal job real computed values to write.
   4. `leg_observations` rows written by the CBOE fetch have `bsm_iv IS NULL`; after `compute-bsm-greeks` runs, those rows have non-null `bsm_iv`, `bsm_delta`, `bsm_gamma`, `bsm_theta`, `bsm_vega`.
   5. FRED rate fetch returns a numeric rate, and the 4.5% fallback activates (logged) when FRED is unreachable (tested with msw).
 
-**Plans**: 7 plansPlans:
+**Plans**: 9 plans (7 base + 2 gap closure)
+Plans:
 **Wave 1**
 
 - [x] 02-01-PLAN.md — Wave 0: install pg-boss + msw (legitimacy gate), worker vitest project, recorded CBOE fixtures (MKT-01 prep)
@@ -93,6 +94,11 @@ stored observation — giving the journal job real computed values to write.
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 02-07-PLAN.md — Worker jobs (RTH gating + chain→compute) + lastJobRuns status across HTTP + MCP (scheduling, D-06/07/10)
+
+**Gap Closure** *(from 02-VERIFICATION.md — 2 gaps; both Wave 1, parallel, zero file overlap)*
+
+- [ ] 02-08-PLAN.md — Compute engine fixes: obs.time T (CR-02), European no-arb lower bound (CR-03), post-solve residual check (WR-01) — TDD regression (BSM-01, BSM-03)
+- [ ] 02-09-PLAN.md — Worker boot fix: pg-boss createQueue for 3 queues (CR-01) + chain enqueue .catch (WR-02) (BSM-03)
 
 ### Phase 3: Calendar Journal (MVP)
 
@@ -174,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
-| 2. Market Data & BSM Engine | 7/7 | Complete   | 2026-06-11 |
+| 2. Market Data & BSM Engine | 7/9 | Gap Closure | - |
 | 3. Calendar Journal (MVP) | 0/TBD | Not started | - |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
