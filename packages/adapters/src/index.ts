@@ -14,9 +14,16 @@ export { runMigrations } from "./postgres/migrate.ts";
 
 // Postgres adapters
 export { makePostgresCalendarsRepo } from "./postgres/repos/calendars.ts";
+// makePostgresLegObservationsRepo added in Task 2 (Plan 04)
+
+// HTTP adapters (external data sources)
+export { makeCboeChainAdapter } from "./http/cboe.ts";
+export type { CboeChainAdapter } from "./http/cboe.ts";
 
 // In-memory adapters (test doubles; also usable in development)
 export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";
+export { makeMemoryChainAdapter } from "./memory/chain.ts";
+export type { MemoryChainAdapter } from "./memory/chain.ts";
 
 // Note: contract test harness in src/__contract__/ is excluded from tsconfig emit
 // (test-only code using vitest). Import directly from the file path in test code.

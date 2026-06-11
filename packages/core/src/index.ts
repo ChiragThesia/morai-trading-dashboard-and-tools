@@ -5,3 +5,14 @@
 export type { ForGettingOpenCalendars, ForPingingDb, StorageError, Calendar } from "./journal/index.ts";
 export type { ForGettingStatus, StatusPayload, StatusError } from "./journal/index.ts";
 export { makeGetStatusUseCase } from "./journal/index.ts";
+export type {
+  FetchError,
+  RawChain,
+  RawQuote,
+  ForFetchingChain,
+  ObservationRow,
+  ContractRow,
+  ForPersistingObservations,
+  ForUpsertingContracts,
+} from "./journal/index.ts";
+export { makeFetchChainUseCase } from "./journal/index.ts";
