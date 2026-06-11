@@ -71,15 +71,27 @@ stored observation — giving the journal job real computed values to write.
   4. `leg_observations` rows written by the CBOE fetch have `bsm_iv IS NULL`; after `compute-bsm-greeks` runs, those rows have non-null `bsm_iv`, `bsm_delta`, `bsm_gamma`, `bsm_theta`, `bsm_vega`.
   5. FRED rate fetch returns a numeric rate, and the 4.5% fallback activates (logged) when FRED is unreachable (tested with msw).
 
-**Plans**: 7 plans
-Plans:
+**Plans**: 7 plansPlans:
+**Wave 1**
 
 - [ ] 02-01-PLAN.md — Wave 0: install pg-boss + msw (legitimacy gate), worker vitest project, recorded CBOE fixtures (MKT-01 prep)
 - [ ] 02-02-PLAN.md — BSM price + greeks domain, fast-check + 3 calibration fixtures (BSM-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 02-03-PLAN.md — IV inversion Newton-Raphson + bisection fallback, round-trip property tests (BSM-01)
 - [ ] 02-04-PLAN.md — CBOE chain slice: ForFetchingChain + adapter + in-memory twin + filtered leg_observations persistence (MKT-01, MKT-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 02-05-PLAN.md — FRED rate slice: ForFetchingRate + adapter + 4.5% fallback + rate_observations persistence (MKT-02)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 02-06-PLAN.md — compute-bsm-greeks use-case + settlement-aware DTE + pending-scan/NaN-stamp repo methods (BSM-03)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 02-07-PLAN.md — Worker jobs (RTH gating + chain→compute) + lastJobRuns status across HTTP + MCP (scheduling, D-06/07/10)
 
 ### Phase 3: Calendar Journal (MVP)
