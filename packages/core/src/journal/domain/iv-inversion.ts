@@ -74,10 +74,19 @@ export function invertIv(
     return err<IvError>({ kind: "expired" });
   }
 
-  // Guard 2: below intrinsic
-  const intrinsic = type === "C" ? Math.max(S - K, 0) : Math.max(K - S, 0);
-  // Allow a small tolerance (0.5) for rounding/bid-ask but reject clearly below-intrinsic
-  if (mark < intrinsic - 0.5) {
+  // Guard 2: below European no-arb lower bound
+  // SPX/SPXW are European-exercise. The correct lower bound is the discounted no-arb bound,
+  // not the American (undiscounted) intrinsic. Using American intrinsic (max(K-S,0)) would
+  // reject valid deep-ITM European put marks that legitimately trade below raw intrinsic.
+  // European bounds (CR-03):
+  //   Call: max(S·e^(-qT) - K·e^(-rT), 0)
+  //   Put:  max(K·e^(-rT) - S·e^(-qT), 0)
+  const lowerBound =
+    type === "C"
+      ? Math.max(S * Math.exp(-q * T) - K * Math.exp(-r * T), 0)
+      : Math.max(K * Math.exp(-r * T) - S * Math.exp(-q * T), 0);
+  // Allow a small tolerance (0.5) for rounding/bid-ask but reject clearly below-bound
+  if (mark < lowerBound - 0.5) {
     return err<IvError>({ kind: "below-intrinsic" });
   }
 
@@ -181,6 +190,18 @@ export function invertIv(
 
   // Final guard: sigma must be finite and positive
   if (!isFinite(sigma) || sigma <= 0) {
+    return err<IvError>({ kind: "below-intrinsic" });
+  }
+
+  // WR-01: post-solve residual check — ensure the recovered sigma actually reprices to
+  // the mark within tolerance. This collapses the bisection endpoint-clamp path
+  // (where the mark falls outside [price(BISECT_LO), price(BISECT_HI)] and the
+  // solver returns ok(BISECT_LO) or ok(BISECT_HI) — a fabricated IV) and the
+  // non-converged Newton path into typed err rather than silently propagating junk IV.
+  // Tolerance: 1e-4 absolute (stricter than the 1e-6 round-trip property —
+  // the round-trip property has its own guard; 1e-4 here catches endpoint-clamped sigmas).
+  const residualPrice = bsmPrice(S, K, T, sigma, r, q, type);
+  if (Math.abs(residualPrice - mark) > 1e-4) {
     return err<IvError>({ kind: "below-intrinsic" });
   }
 

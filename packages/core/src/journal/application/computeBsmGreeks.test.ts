@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import { ok, err, formatOccSymbol } from "@morai/shared";
 import { makeComputeBsmGreeksUseCase } from "./computeBsmGreeks.ts";
 import type { ForReadingPendingObs, ForWritingBsmResults, ForReadingRate, PendingObs, StorageError } from "./ports.ts";
+import { bsmPrice } from "../domain/bsm.ts";
 
 // ─── Test helpers ─────────────────────────────────────────────
 
@@ -300,6 +301,88 @@ describe("makeComputeBsmGreeksUseCase", () => {
     expect(row.bsmGamma).toBe("NaN");
     expect(row.bsmTheta).toBe("NaN");
     expect(row.bsmVega).toBe("NaN");
+  });
+
+  it("CR-02 regression: 0DTE SPXW row observed 15:30 ET, job runs 16:30 ET — must produce non-NaN bsm_* values", async () => {
+    // The bug: computeT(now, obs.expiry, obs.root) where now=16:30 ET (post-cutoff) gives T=0
+    // → invertIv returns err({kind:'expired'}) → permanent NaN stamp.
+    // The fix: computeT(obs.time, obs.expiry, obs.root) → T = 30 min / 525960 > 0 → solves fine.
+    //
+    // Setup: 2026-06-11 is the expiry day. SPXW PM-settles at 16:00 ET.
+    // obs.time = 15:30 ET = 19:30 UTC (30 minutes before cutoff → T > 0 from obs.time)
+    // now      = 16:30 ET = 20:30 UTC (30 minutes AFTER cutoff → T = 0 from now)
+    // expiry   = new Date(2026, 5, 11) — local date (same day)
+    const obsTime = new Date(Date.UTC(2026, 5, 11, 19, 30, 0)); // 2026-06-11T19:30Z = 15:30 EDT
+    const nowTime = new Date(Date.UTC(2026, 5, 11, 20, 30, 0)); // 2026-06-11T20:30Z = 16:30 EDT
+    const expiryDate = new Date(2026, 5, 11); // local date for SPXW PM cutoff calc
+
+    // Build a valid mark: use bsmPrice with a sigma of 0.5 and the T from obs.time.
+    // T ≈ 30 min / 525960 min/yr ≈ 5.7e-5 years (short but positive).
+    // Use ATM-ish values: underlyingPrice=5500, strike=5500, call.
+    const S = 5500, K = 5500;
+    // Compute a rough T from obs to cutoff for mark construction
+    // (SPXW PM cutoff 16:00 EDT = 20:00 UTC on 2026-06-11)
+    const cutoffUtc = new Date(Date.UTC(2026, 5, 11, 20, 0, 0));
+    const msToExpiry = cutoffUtc.getTime() - obsTime.getTime();
+    const MINUTES_PER_YEAR = 365.25 * 24 * 60;
+    const approxT = Math.max(0, msToExpiry / 60000) / MINUTES_PER_YEAR;
+    const mark = bsmPrice(S, K, approxT, 0.5, 0.045, 0.013, "C");
+
+    const contract0dte = formatOccSymbol({
+      root: "SPXW",
+      expiry: expiryDate,
+      type: "C",
+      strike: K,
+    });
+
+    const pendingObs: PendingObs = {
+      time: obsTime,
+      contract: contract0dte,
+      mark,
+      underlyingPrice: S,
+      strike: K,
+      expiry: expiryDate,
+      root: "SPXW",
+      type: "C",
+    };
+
+    const readPending: ForReadingPendingObs = async () => ok([pendingObs]);
+    const writtenRows: Array<Parameters<ForWritingBsmResults>[0][number]> = [];
+    const writeBsm: ForWritingBsmResults = async (ws) => {
+      writtenRows.push(...ws);
+      return ok(undefined);
+    };
+    const readRate: ForReadingRate = async () => ok("0.045");
+
+    const useCase = makeComputeBsmGreeksUseCase({
+      readPending,
+      writeBsm,
+      readRate,
+      dividendYield: 0.013,
+      fallbackRate: 0.045,
+      now: () => nowTime, // 16:30 ET — post-cutoff, so T=0 if used for computeT
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    expect(writtenRows).toHaveLength(1);
+    const row = writtenRows[0];
+    if (!row) throw new Error("row not found");
+
+    // With the bug: bsmIv === 'NaN' (T=0 from now → expired)
+    // With the fix: bsmIv is a finite numeric string (T>0 from obs.time)
+    expect(row.bsmIv).not.toBe("NaN");
+    expect(row.bsmDelta).not.toBe("NaN");
+    expect(row.bsmGamma).not.toBe("NaN");
+    expect(row.bsmTheta).not.toBe("NaN");
+    expect(row.bsmVega).not.toBe("NaN");
+
+    // All must be parseable as finite numbers
+    expect(Number.isFinite(Number(row.bsmIv))).toBe(true);
+    expect(Number.isFinite(Number(row.bsmDelta))).toBe(true);
+    expect(Number.isFinite(Number(row.bsmGamma))).toBe(true);
+    expect(Number.isFinite(Number(row.bsmTheta))).toBe(true);
+    expect(Number.isFinite(Number(row.bsmVega))).toBe(true);
   });
 
   it("returns ok(void) even when writeBsm fails (absorbs per-row errors as NaN stamps — no throw)", async () => {

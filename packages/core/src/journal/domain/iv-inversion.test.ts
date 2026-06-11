@@ -157,6 +157,79 @@ describe("bisection fallback — converges on inputs where NR breaks", () => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// 3b. Regression: CR-03 European no-arb bound + WR-01 residual check
+// These tests FAIL against the American-intrinsic guard; pass only after the fix.
+// ─────────────────────────────────────────────────────────────
+describe("CR-03 / WR-01 regressions — European lower bound + post-solve residual", () => {
+  // Worked example from 02-REVIEW.md:
+  // S=7000, K=7700, T=90/365, r=0.045, q=0.013
+  // American intrinsic = max(7700-7000,0) = 700
+  // European put bound  = K*exp(-r*T) - S*exp(-q*T) ≈ 637.9
+  const S = 7000, K = 7700, T = 90 / 365, r = 0.045, q = 0.013;
+
+  it("CR-03a: deep-ITM European put mark derived from bsmPrice(sigma=0.15) inverts and round-trips within 1e-4", () => {
+    const sigma = 0.15;
+    const mark = bsmPrice(S, K, T, sigma, r, q, "P");
+    // mark should be below American intrinsic (700) but above European bound (~637.9)
+    // This will FAIL with the current American-intrinsic guard
+    const result = invertIv(mark, S, K, T, r, q, "P");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const recomputed = bsmPrice(S, K, T, result.value, r, q, "P");
+      expect(Math.abs(recomputed - mark)).toBeLessThanOrEqual(1e-4);
+    }
+  });
+
+  it("CR-03b: put mark of 650 (inside [~637.9, 699.5)) returns ok and round-trips", () => {
+    // 650 is between the European bound (~637.9) and American intrinsic (700)
+    // This will FAIL with the current American-intrinsic guard
+    const mark = 650;
+    const result = invertIv(mark, S, K, T, r, q, "P");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const recomputed = bsmPrice(S, K, T, result.value, r, q, "P");
+      expect(Math.abs(recomputed - mark)).toBeLessThanOrEqual(1e-4);
+    }
+  });
+
+  it("CR-03c: put mark of 600 (below European bound ~637.9) returns err(below-intrinsic)", () => {
+    // 600 is below the European no-arb bound; must be rejected
+    const mark = 600;
+    const result = invertIv(mark, S, K, T, r, q, "P");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe("below-intrinsic");
+    }
+  });
+
+  it("WR-01: across 1000-run round-trip property, every ok result reprices to mark within 1e-4 (no fabricated sigma)", () => {
+    // This property test verifies that no endpoint-clamped sigma escapes as ok.
+    // With the post-solve residual check, ok(sigma) => |bsmPrice(sigma)-mark| <= 1e-4.
+    fc.assert(
+      fc.property(
+        fc.float({ min: Math.fround(500), max: Math.fround(8000), noNaN: true }),
+        fc.float({ min: Math.fround(400), max: Math.fround(9000), noNaN: true }),
+        fc.float({ min: Math.fround(0.01), max: Math.fround(2), noNaN: true }),
+        fc.float({ min: Math.fround(0.05), max: Math.fround(3), noNaN: true }),
+        fc.constantFrom("C" as const, "P" as const),
+        (S2, K2, T2, sigma2, type2) => {
+          const mark2 = bsmPrice(S2, K2, T2, sigma2, R, Q, type2);
+          const result = invertIv(mark2, S2, K2, T2, R, Q, type2);
+          if (!result.ok) {
+            // Typed error is always acceptable
+            return true;
+          }
+          // When ok, the recovered sigma MUST reprice to the mark within 1e-4
+          const recomputed = bsmPrice(S2, K2, T2, result.value, R, Q, type2);
+          return Math.abs(recomputed - mark2) <= 1e-4;
+        },
+      ),
+      { numRuns: 1000 },
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
 // 4. Degenerate inputs — Result.err (never NaN)
 // ─────────────────────────────────────────────────────────────
 describe("degenerate inputs — typed Result.err, never NaN", () => {
@@ -190,10 +263,13 @@ describe("degenerate inputs — typed Result.err, never NaN", () => {
     }
   });
 
-  it("mark below put intrinsic returns err({kind:'below-intrinsic'})", () => {
-    // Put intrinsic = max(K - S, 0). With K=5000, S=4000, intrinsic = 1000.
-    // Pass mark = 999 (below intrinsic by 1)
-    const result = invertIv(999, 4000, 5000, 0.5, R, Q, "P");
+  it("mark below European put no-arb bound returns err({kind:'below-intrinsic'})", () => {
+    // European put bound = max(K*e^(-rT) - S*e^(-qT), 0).
+    // With K=5000, S=4000, T=0.5, r=0.045, q=0.013:
+    //   bound ≈ 5000*e^(-0.0225) - 4000*e^(-0.0065) ≈ 4889 - 3974 ≈ 915
+    // mark=850 is below the European bound (~915), so it must be rejected.
+    // Note: mark=999 is ABOVE the European bound (999 > 915), so it is a valid put mark.
+    const result = invertIv(850, 4000, 5000, 0.5, R, Q, "P");
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.kind).toBe("below-intrinsic");
