@@ -1,4 +1,4 @@
-import { ok, err } from "@morai/shared";
+import { ok, err, parseOccSymbol, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type {
   ForPersistingObservations,
@@ -135,6 +135,10 @@ export function makePostgresLegObservationsRepo(
         const meta = metaBySymbol.get(obs.contract);
         if (meta === undefined) continue; // no metadata → skip (shouldn't happen in practice)
 
+        // Re-brand the DB varchar through the OCC parser (parse, don't cast)
+        const occ = parseOccSymbol(obs.contract);
+        if (!occ.ok) continue; // malformed symbol in DB → skip
+
         // Parse the expiration date string (YYYY-MM-DD from Drizzle date column)
         const parts = meta.expiration.split("-");
         if (parts.length !== 3) continue;
@@ -157,7 +161,7 @@ export function makePostgresLegObservationsRepo(
 
         pending.push({
           time: obs.time,
-          contract: obs.contract,
+          contract: formatOccSymbol(occ.value),
           mark: parseFloat(obs.mark),
           underlyingPrice: parseFloat(obs.underlyingPrice),
           strike,
