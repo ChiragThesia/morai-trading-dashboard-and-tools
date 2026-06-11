@@ -67,7 +67,10 @@ export function makeComputeBsmGreeksUseCase(deps: {
       return ok(undefined);
     }
 
-    const now = deps.now();
+    // CR-02 fix: deps.now is retained in the factory signature (preserves worker composition
+    // root wiring in apps/worker/src/main.ts — owned by sibling plan 02-09). The local
+    // binding is removed because T is now computed per-row from obs.time (see Step 3 below).
+    // void deps.now; // intentionally not called — kept in deps type for backward compat
 
     // Build writes array — one entry per pending row
     type WriteRow = {
@@ -104,7 +107,11 @@ export function makeComputeBsmGreeksUseCase(deps: {
       const q = deps.dividendYield;
 
       // Step 3: compute T — settlement-aware (D-04)
-      const T = computeT(now, obs.expiry, obs.root);
+      // CR-02 fix: use obs.time (the observation instant), not the job wall-clock.
+      // Rationale: a 0DTE row observed at 15:30 ET must compute T from its own timestamp
+      // (T > 0), not from when the compute job happens to run. Using the job wall-clock
+      // permanently NaN-stamps all 0DTE rows observed before the cutoff but computed after.
+      const T = computeT(obs.time, obs.expiry, obs.root);
 
       // Step 4: invert IV
       const ivResult = invertIv(obs.mark, obs.underlyingPrice, obs.strike, T, r, q, obs.type);
