@@ -976,22 +976,27 @@ it('BSM-01: monotonicity — higher sigma → higher BSM price', () => {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **SPXW endpoint URL**
+   - **RESOLVED (planning)** — Wave 0 live smoke check (Plan 02-01 Task 3) fetches `_SPXW.json` and records the finding in `packages/adapters/test/fixtures/README.md`; Plan 02-04 Task 1 implements per the recorded finding (separate `_SPXW.json` endpoint, or filter SPXW root from `_SPX.json`). If the synthetic-fixture fallback is taken, the README flags the question STILL OPEN and the Plan 02-04 executor must confirm the endpoint live before adapter work.
    - What we know: reference `cboe.ts` only fetches `_SPX.json` with `root` parameter; no SPXW-specific code
    - What's unclear: whether `_SPXW.json` is the correct endpoint or whether SPXW contracts appear in `_SPX.json`
    - Recommendation: Verify by fetching `https://cdn.cboe.com/api/global/delayed_quotes/options/_SPXW.json` in a Wave 0 smoke test; fall back to filtering OSI symbols for "SPXW" root in the `_SPX.json` payload if the endpoint doesn't exist
 
 2. **pg-boss CBOE payload — should jobs carry payload or be zero-data?**
+   - **RESOLVED** — zero-data jobs adopted. Plan 02-07 handlers carry no market-data payload (no 20k-contract serialization); handlers use the v12 array signature with `if (job === undefined) return` guard and call use-cases that read from the DB. Chaining uses `boss.send('compute-bsm-greeks', {}, { singletonKey: 'triggered-by-chain' })` per D-07.
    - What we know: `boss.send('compute-bsm-greeks', {})` with empty payload works; the use-case reads from DB not job payload
    - What's unclear: `fetch-cboe-chain` payload shape — should it carry the fetched result or just trigger the use-case to refetch?
    - Recommendation: Jobs carry no market-data payload (no JSON serialization of 20k contracts). Handler calls use-case which fetches, persists, and returns. Payload schema is `z.object({})`.
 
 3. **FRED API key absence during Phase 2 development**
+   - **RESOLVED** — `FRED_API_KEY` is an optional field in the worker Zod config (Plan 02-07 Task 2, D-13); the FRED adapter falls back to 4.5% immediately when the key is absent and logs the fallback (Plan 02-05 Task 1, asserted by test); all tests use msw so no live key is needed in development or CI.
    - What we know: `FRED_API_KEY` exists in trade-advisor `.env` (referenced in trade-advisor-inventory.md); not currently in Morai env
    - What's unclear: Whether to add it to Railway env now or rely on the 4.5% fallback during development
    - Recommendation: Add `FRED_API_KEY` as optional in Zod config (`z.string().optional()`); fallback to 4.5% immediately if absent. Ship with key for production; develop/test with msw mocks so no live key needed in test.
+
+*Note on Assumption A3 (pg-boss 14-day retention):* tolerated as-is — the Plan 02-07 `lastJobRuns` query returns only the most recent completed/failed row per job and the repo returns an empty map (→ "none yet") when no rows exist, so shorter-than-expected retention degrades gracefully rather than erroring.
 
 ---
 
