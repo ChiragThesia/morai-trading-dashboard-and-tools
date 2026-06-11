@@ -181,6 +181,10 @@ describe("bsmVega (unscaled, for IV inversion)", () => {
 // ─────────────────────────────────────────────────────────────
 // fast-check sanity properties (numRuns ≥ 1000)
 // Domain: S∈[500,8000], K∈[400,9000], T∈[0.01,2], sigma∈[0.05,3]
+//
+// Note: fc.float in fast-check v4 requires 32-bit float bounds.
+// All literal bounds are wrapped in Math.fround() per fc v4 constraint.
+// (Same pattern as the fc.date().filter fix from Phase 1 — STATE.md decisions)
 // ─────────────────────────────────────────────────────────────
 describe("fast-check sanity properties", () => {
   const r = 0.045, q = 0.013;
@@ -188,10 +192,10 @@ describe("fast-check sanity properties", () => {
   it("call delta ∈ [0, 1]", () => {
     fc.assert(
       fc.property(
-        fc.float({ min: 500, max: 8000, noNaN: true }),
-        fc.float({ min: 400, max: 9000, noNaN: true }),
-        fc.float({ min: 0.01, max: 2, noNaN: true }),
-        fc.float({ min: 0.05, max: 3, noNaN: true }),
+        fc.float({ min: Math.fround(500), max: Math.fround(8000), noNaN: true }),
+        fc.float({ min: Math.fround(400), max: Math.fround(9000), noNaN: true }),
+        fc.float({ min: Math.fround(0.01), max: Math.fround(2), noNaN: true }),
+        fc.float({ min: Math.fround(0.05), max: Math.fround(3), noNaN: true }),
         (S, K, T, sigma) => {
           const g = bsmGreeks(S, K, T, sigma, r, q, "C");
           return g.delta >= 0 && g.delta <= 1;
@@ -204,10 +208,10 @@ describe("fast-check sanity properties", () => {
   it("put delta ∈ [-1, 0]", () => {
     fc.assert(
       fc.property(
-        fc.float({ min: 500, max: 8000, noNaN: true }),
-        fc.float({ min: 400, max: 9000, noNaN: true }),
-        fc.float({ min: 0.01, max: 2, noNaN: true }),
-        fc.float({ min: 0.05, max: 3, noNaN: true }),
+        fc.float({ min: Math.fround(500), max: Math.fround(8000), noNaN: true }),
+        fc.float({ min: Math.fround(400), max: Math.fround(9000), noNaN: true }),
+        fc.float({ min: Math.fround(0.01), max: Math.fround(2), noNaN: true }),
+        fc.float({ min: Math.fround(0.05), max: Math.fround(3), noNaN: true }),
         (S, K, T, sigma) => {
           const g = bsmGreeks(S, K, T, sigma, r, q, "P");
           return g.delta >= -1 && g.delta <= 0;
@@ -220,10 +224,10 @@ describe("fast-check sanity properties", () => {
   it("gamma ≥ 0", () => {
     fc.assert(
       fc.property(
-        fc.float({ min: 500, max: 8000, noNaN: true }),
-        fc.float({ min: 400, max: 9000, noNaN: true }),
-        fc.float({ min: 0.01, max: 2, noNaN: true }),
-        fc.float({ min: 0.05, max: 3, noNaN: true }),
+        fc.float({ min: Math.fround(500), max: Math.fround(8000), noNaN: true }),
+        fc.float({ min: Math.fround(400), max: Math.fround(9000), noNaN: true }),
+        fc.float({ min: Math.fround(0.01), max: Math.fround(2), noNaN: true }),
+        fc.float({ min: Math.fround(0.05), max: Math.fround(3), noNaN: true }),
         (S, K, T, sigma) => {
           const g = bsmGreeks(S, K, T, sigma, r, q, "C");
           return g.gamma >= 0;
@@ -236,10 +240,10 @@ describe("fast-check sanity properties", () => {
   it("vega ≥ 0", () => {
     fc.assert(
       fc.property(
-        fc.float({ min: 500, max: 8000, noNaN: true }),
-        fc.float({ min: 400, max: 9000, noNaN: true }),
-        fc.float({ min: 0.01, max: 2, noNaN: true }),
-        fc.float({ min: 0.05, max: 3, noNaN: true }),
+        fc.float({ min: Math.fround(500), max: Math.fround(8000), noNaN: true }),
+        fc.float({ min: Math.fround(400), max: Math.fround(9000), noNaN: true }),
+        fc.float({ min: Math.fround(0.01), max: Math.fround(2), noNaN: true }),
+        fc.float({ min: Math.fround(0.05), max: Math.fround(3), noNaN: true }),
         (S, K, T, sigma) => {
           const g = bsmGreeks(S, K, T, sigma, r, q, "C");
           return g.vega >= 0;
@@ -249,18 +253,40 @@ describe("fast-check sanity properties", () => {
     );
   });
 
-  it("theta ≤ 0 for both call and put (decay) in the SPX domain", () => {
+  it("call theta ≤ 0 within the ±20% strike band (BSM-03 operational domain)", () => {
+    // Theta sign invariant holds within the realistic SPX options domain (MKT-03 ±10% band).
+    // Extended here to ±20% for robustness. Outside this band (deep ITM/OTM with near-zero T),
+    // BSM theta CAN be positive (dividend carry q*S*N(d1) dominates) — correct, but outside
+    // the operationally relevant domain (contracts outside ±10% never reach compute-bsm-greeks).
+    // Put theta sign can also be positive when r > q (interest > dividend); verified via fixtures.
     fc.assert(
       fc.property(
-        fc.float({ min: 500, max: 8000, noNaN: true }),
-        fc.float({ min: 400, max: 9000, noNaN: true }),
-        fc.float({ min: 0.01, max: 2, noNaN: true }),
-        fc.float({ min: 0.05, max: 3, noNaN: true }),
-        fc.constantFrom("C" as const, "P" as const),
-        (S, K, T, sigma, type) => {
-          const g = bsmGreeks(S, K, T, sigma, r, q, type);
-          // Allow a tiny epsilon for numerical edge cases at boundaries
+        fc.float({ min: Math.fround(500), max: Math.fround(8000), noNaN: true }),
+        fc.float({ min: Math.fround(0.01), max: Math.fround(2), noNaN: true }),
+        fc.float({ min: Math.fround(0.05), max: Math.fround(3), noNaN: true }),
+        // moneyness ratio K/S in [0.80, 1.20] -> +-20% strike band
+        fc.float({ min: Math.fround(0.80), max: Math.fround(1.20), noNaN: true }),
+        (S, T, sigma, moneyness) => {
+          const K = S * moneyness;
+          const g = bsmGreeks(S, K, T, sigma, r, q, "C");
           return g.theta <= 1e-10;
+        },
+      ),
+      { numRuns: 1000 },
+    );
+  });
+
+  it("gamma ≥ 0 for puts in the SPX domain", () => {
+    // Gamma is always non-negative (same formula for calls and puts).
+    fc.assert(
+      fc.property(
+        fc.float({ min: Math.fround(500), max: Math.fround(8000), noNaN: true }),
+        fc.float({ min: Math.fround(400), max: Math.fround(9000), noNaN: true }),
+        fc.float({ min: Math.fround(0.01), max: Math.fround(2), noNaN: true }),
+        fc.float({ min: Math.fround(0.05), max: Math.fround(3), noNaN: true }),
+        (S, K, T, sigma) => {
+          const g = bsmGreeks(S, K, T, sigma, r, q, "P");
+          return g.gamma >= 0;
         },
       ),
       { numRuns: 1000 },
