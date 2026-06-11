@@ -11,6 +11,17 @@ import { sql } from "drizzle-orm";
  * Skips gracefully when the container URL is not provided (Docker unavailable).
  */
 
+/** Type guard to extract the `cnt` field from a raw DB result row without as-casts. */
+function extractCnt(row: unknown): number | undefined {
+  if (typeof row !== "object" || row === null) return undefined;
+  // Access via bracket notation after narrowing to object with index signature
+  const rec: { [key: string]: unknown } = Object.fromEntries(Object.entries(row));
+  const cnt = rec["cnt"];
+  if (typeof cnt === "number") return cnt;
+  if (typeof cnt === "string") return Number(cnt);
+  return undefined;
+}
+
 const dbUrl: string | undefined = inject("dbUrl");
 const shouldSkip = !dbUrl;
 
@@ -33,6 +44,8 @@ describe.skipIf(shouldSkip)("postgres leg-observations adapter", () => {
     return {
       persistObservations: repo.persistObservations,
       upsertContracts: repo.upsertContracts,
+      readPendingObs: repo.readPendingObs,
+      writeBsmResults: repo.writeBsmResults,
       countObservations: async (time: Date): Promise<number> => {
         // Pass timestamp as ISO string; postgres.js handles timestamptz conversion
         const timeStr = time.toISOString();
@@ -41,7 +54,7 @@ describe.skipIf(shouldSkip)("postgres leg-observations adapter", () => {
         );
         const row = rows[0];
         if (row === undefined) return 0;
-        const cnt = (row as Record<string, unknown>)["cnt"];
+        const cnt = extractCnt(row);
         return typeof cnt === "number" ? cnt : Number(cnt ?? 0);
       },
       countContracts: async (
@@ -54,8 +67,39 @@ describe.skipIf(shouldSkip)("postgres leg-observations adapter", () => {
         );
         const row = rows[0];
         if (row === undefined) return 0;
-        const cnt = (row as Record<string, unknown>)["cnt"];
+        const cnt = extractCnt(row);
         return typeof cnt === "number" ? cnt : Number(cnt ?? 0);
+      },
+      countPendingBsm: async (time: Date): Promise<number> => {
+        const timeStr = time.toISOString();
+        const rows = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM leg_observations WHERE time = ${timeStr}::timestamptz AND bsm_iv IS NULL AND mark IS NOT NULL`,
+        );
+        const row = rows[0];
+        if (row === undefined) return 0;
+        const cnt = extractCnt(row);
+        return typeof cnt === "number" ? cnt : Number(cnt ?? 0);
+      },
+      countNanStamped: async (time: Date): Promise<number> => {
+        const timeStr = time.toISOString();
+        const rows = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM leg_observations WHERE time = ${timeStr}::timestamptz AND bsm_iv = 'NaN'::numeric`,
+        );
+        const row = rows[0];
+        if (row === undefined) return 0;
+        const cnt = extractCnt(row);
+        return typeof cnt === "number" ? cnt : Number(cnt ?? 0);
+      },
+      getVendorMark: async (time: Date, contract: string): Promise<string | null> => {
+        const timeStr = time.toISOString();
+        const rows = await db.execute(
+          sql`SELECT mark FROM leg_observations WHERE time = ${timeStr}::timestamptz AND contract = ${contract}`,
+        );
+        const row = rows[0];
+        if (row === undefined) return null;
+        const rec: { [key: string]: unknown } = Object.fromEntries(Object.entries(row));
+        const mark = rec["mark"];
+        return typeof mark === "string" ? mark : mark !== null && mark !== undefined ? String(mark) : null;
       },
     };
   });

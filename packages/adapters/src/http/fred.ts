@@ -82,7 +82,7 @@ export function makeFredRateAdapter(deps: {
 
     // T-02-13: Zod-parse before use — malformed payload → fallback
     const parsed = FredResponseSchema.safeParse(rawBody);
-    if (!parsed.success) {
+    if (parsed.success !== true) {
       console.warn("FRED: unexpected payload shape, using fallback rate");
       return fallback();
     }

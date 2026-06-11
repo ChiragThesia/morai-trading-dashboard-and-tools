@@ -146,3 +146,43 @@ export type ForPersistingRate = (
 export type ForReadingRate = (
   onOrBefore: string,
 ) => Promise<Result<string | null, StorageError>>;
+
+// Domain type: a pending observation row from the leg_obs_pending_bsm_idx partial index
+// (bsm_iv IS NULL AND mark IS NOT NULL). Read by ForReadingPendingObs (BSM-03).
+export type PendingObs = {
+  readonly time: Date;
+  readonly contract: OccSymbol;
+  readonly mark: number; // already converted from DB numeric string
+  readonly underlyingPrice: number; // spot at observation time
+  readonly strike: number; // in points (e.g. 7275)
+  readonly expiry: Date;
+  readonly root: "SPX" | "SPXW";
+  readonly type: "C" | "P";
+};
+
+/**
+ * ForReadingPendingObs — scan leg_observations partial index (BSM-03).
+ * Returns rows where bsm_iv IS NULL AND mark IS NOT NULL.
+ * Uses the partial index leg_obs_pending_bsm_idx for efficiency.
+ */
+export type ForReadingPendingObs = () => Promise<
+  Result<ReadonlyArray<PendingObs>, StorageError>
+>;
+
+/**
+ * ForWritingBsmResults — write the five bsm_* columns for a batch of rows (BSM-03).
+ * Values are Drizzle-numeric strings. 'NaN' is a valid value per D-09.
+ * Only touches bsm_iv/bsm_delta/bsm_gamma/bsm_theta/bsm_vega columns.
+ * Vendor columns (bid/ask/mark/iv/delta) are never modified (T-02-17).
+ */
+export type ForWritingBsmResults = (
+  writes: ReadonlyArray<{
+    readonly time: Date;
+    readonly contract: OccSymbol;
+    readonly bsmIv: string;
+    readonly bsmDelta: string;
+    readonly bsmGamma: string;
+    readonly bsmTheta: string;
+    readonly bsmVega: string;
+  }>,
+) => Promise<Result<void, StorageError>>;
