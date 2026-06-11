@@ -21,7 +21,7 @@ Cross-cutting constraints active from Phase 1:
 ## Phases
 
 - [x] **Phase 1: Walking Skeleton** - Monorepo + hexagon + DB + deployed status endpoint
-- [ ] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored
+- [x] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored (completed 2026-06-11)
 - [ ] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live
 - [ ] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions
 - [ ] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data
@@ -92,7 +92,7 @@ stored observation — giving the journal job real computed values to write.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02-07-PLAN.md — Worker jobs (RTH gating + chain→compute) + lastJobRuns status across HTTP + MCP (scheduling, D-06/07/10)
+- [x] 02-07-PLAN.md — Worker jobs (RTH gating + chain→compute) + lastJobRuns status across HTTP + MCP (scheduling, D-06/07/10)
 
 ### Phase 3: Calendar Journal (MVP)
 
@@ -174,7 +174,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
-| 2. Market Data & BSM Engine | 6/7 | In Progress|  |
+| 2. Market Data & BSM Engine | 7/7 | Complete   | 2026-06-11 |
 | 3. Calendar Journal (MVP) | 0/TBD | Not started | - |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
