@@ -112,9 +112,10 @@ describe("makeFredRateAdapter", () => {
 
   describe("apiKey undefined — immediate fallback, no fetch", () => {
     it("returns ok with 0.045 and does NOT call the injected fetch", async () => {
-      const fetchSpy = vi.fn();
+      // Use a properly-typed mock rather than an `as` cast (typescript.md)
+      const fetchSpy: typeof fetch = vi.fn<typeof fetch>();
       const adapter = makeFredRateAdapter({
-        fetch: fetchSpy as unknown as typeof fetch,
+        fetch: fetchSpy,
         apiKey: undefined,
         fallbackRate: 0.045,
       });
@@ -126,9 +127,9 @@ describe("makeFredRateAdapter", () => {
     });
 
     it("returns ok with 0.045 when apiKey is empty string", async () => {
-      const fetchSpy = vi.fn();
+      const fetchSpy: typeof fetch = vi.fn<typeof fetch>();
       const adapter = makeFredRateAdapter({
-        fetch: fetchSpy as unknown as typeof fetch,
+        fetch: fetchSpy,
         apiKey: "",
         fallbackRate: 0.045,
       });

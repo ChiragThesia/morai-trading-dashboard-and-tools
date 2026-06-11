@@ -14,5 +14,10 @@ export type {
   ContractRow,
   ForPersistingObservations,
   ForUpsertingContracts,
+  RateObservation,
+  ForFetchingRate,
+  ForPersistingRate,
+  ForReadingRate,
 } from "./journal/index.ts";
 export { makeFetchChainUseCase } from "./journal/index.ts";
+export { makeFetchRateUseCase } from "./journal/index.ts";

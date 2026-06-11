@@ -22,3 +22,4 @@ export type {
 export type { ForGettingStatus, StatusPayload, StatusError } from "./application/getStatus.ts";
 export { makeGetStatusUseCase } from "./application/getStatus.ts";
 export { makeFetchChainUseCase } from "./application/fetchChain.ts";
+export { makeFetchRateUseCase } from "./application/fetchRate.ts";

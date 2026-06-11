@@ -16,6 +16,8 @@ export { runMigrations } from "./postgres/migrate.ts";
 export { makePostgresCalendarsRepo } from "./postgres/repos/calendars.ts";
 export { makePostgresLegObservationsRepo } from "./postgres/repos/leg-observations.ts";
 export type { PostgresLegObservationsRepo } from "./postgres/repos/leg-observations.ts";
+export { makePostgresRateObservationsRepo } from "./postgres/repos/rate-observations.ts";
+export type { PostgresRateObservationsRepo } from "./postgres/repos/rate-observations.ts";
 
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
