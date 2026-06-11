@@ -101,6 +101,14 @@ const computeBsmGreeksHandler = makeComputeBsmGreeksHandler({
   computeBsmGreeksUseCase,
 });
 
+// Create queues before scheduling/working — pg-boss v12 requires the queue row to exist
+// (FK on the schedule table) before boss.schedule() or boss.work() (CR-01).
+// createQueue is idempotent — safe to call on every boot.
+// No fourth/manual-trigger queue (D-08).
+await boss.createQueue("fetch-cboe-chain");
+await boss.createQueue("fetch-rates");
+await boss.createQueue("compute-bsm-greeks");
+
 // Schedule three jobs in ET (D-06, D-07).
 // boss.schedule is idempotent — safe to call on every boot.
 // No manual trigger registration (D-08).
@@ -129,5 +137,5 @@ await boss.work("fetch-rates", { pollingIntervalSeconds: 30 }, fetchRatesHandler
 await boss.work("compute-bsm-greeks", { pollingIntervalSeconds: 30 }, computeBsmGreeksHandler);
 
 console.warn(
-  "morai worker: pg-boss started, 3 jobs scheduled (fetch-cboe-chain, fetch-rates, compute-bsm-greeks)",
+  "morai worker: pg-boss started, 3 queues created, 3 jobs scheduled (fetch-cboe-chain, fetch-rates, compute-bsm-greeks)",
 );
