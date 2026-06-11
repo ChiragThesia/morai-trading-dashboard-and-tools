@@ -28,6 +28,7 @@ export type {
 export type { ForGettingStatus, StatusPayload, StatusError } from "./application/getStatus.ts";
 export { makeGetStatusUseCase } from "./application/getStatus.ts";
 export { makeFetchChainUseCase } from "./application/fetchChain.ts";
+export type { ForRunningFetchChain, FetchChainDeps } from "./application/fetchChain.ts";
 export { makeFetchRateUseCase } from "./application/fetchRate.ts";
 export { makeComputeBsmGreeksUseCase } from "./application/computeBsmGreeks.ts";
 // Domain re-exports (Plan 02/03/06) — BSM engine and IV inversion
