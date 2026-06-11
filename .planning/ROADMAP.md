@@ -74,8 +74,8 @@ stored observation — giving the journal job real computed values to write.
 **Plans**: 7 plansPlans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Wave 0: install pg-boss + msw (legitimacy gate), worker vitest project, recorded CBOE fixtures (MKT-01 prep)
-- [ ] 02-02-PLAN.md — BSM price + greeks domain, fast-check + 3 calibration fixtures (BSM-02)
+- [x] 02-01-PLAN.md — Wave 0: install pg-boss + msw (legitimacy gate), worker vitest project, recorded CBOE fixtures (MKT-01 prep)
+- [x] 02-02-PLAN.md — BSM price + greeks domain, fast-check + 3 calibration fixtures (BSM-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -174,7 +174,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
-| 2. Market Data & BSM Engine | 0/7 | Not started | - |
+| 2. Market Data & BSM Engine | 2/7 | In Progress|  |
 | 3. Calendar Journal (MVP) | 0/TBD | Not started | - |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
