@@ -25,7 +25,7 @@ export type Config = z.infer<typeof configSchema>;
  */
 export function parseConfig(env: Record<string, string | undefined>): Config {
   const result = configSchema.safeParse(env);
-  if (!result.success) {
+  if (result.success !== true) {
     throw result.error;
   }
   return result.data;

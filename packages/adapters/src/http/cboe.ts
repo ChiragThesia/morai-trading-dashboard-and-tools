@@ -236,7 +236,7 @@ export function makeCboeChainAdapter(deps: {
 
     // Zod-parse before core sees any data (T-02-07)
     const parsed = CboeResponseSchema.safeParse(rawBody);
-    if (!parsed.success) {
+    if (parsed.success !== true) {
       return err({
         kind: "fetch-error",
         message: `CBOE payload parse error: ${parsed.error.message}`,
@@ -264,11 +264,12 @@ export function makeCboeChainAdapter(deps: {
 
     // Filter options by root prefix (SPX = 3 chars before date, SPXW = 4 chars)
     const filteredOptions = payload.data.options.filter((opt) => {
+      const sym: string = String(opt.option);
       if (root === "SPXW") {
-        return opt.option.startsWith("SPXW");
+        return sym.startsWith("SPXW");
       }
       // SPX: starts with "SPX" but NOT "SPXW"
-      return opt.option.startsWith("SPX") && !opt.option.startsWith("SPXW");
+      return sym.startsWith("SPX") && !sym.startsWith("SPXW");
     });
 
     // Map to RawQuote, silently skip unparseable entries

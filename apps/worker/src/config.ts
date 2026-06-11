@@ -23,7 +23,7 @@ export function parseWorkerConfig(
   env: Record<string, string | undefined>,
 ): WorkerConfig {
   const result = workerConfigSchema.safeParse(env);
-  if (!result.success) {
+  if (result.success !== true) {
     throw result.error;
   }
   return result.data;
