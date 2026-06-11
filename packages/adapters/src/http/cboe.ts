@@ -150,7 +150,7 @@ function nthSunday(year: number, month: number, n: number): number {
 
 // ─── Map a CBOE option to RawQuote ───────────────────────────────────────────
 
-function mapCboeOption(opt: CboeOption, root: "SPX" | "SPXW"): RawQuote | null {
+function mapCboeOption(opt: CboeOption): RawQuote | null {
   const occResult = osiToOcc(opt.option);
   if (!occResult.ok) return null;
 
@@ -174,9 +174,6 @@ function mapCboeOption(opt: CboeOption, root: "SPX" | "SPXW"): RawQuote | null {
   const typeChar = occ.slice(12, 13); // char 12 = C or P
 
   if (typeChar !== "C" && typeChar !== "P") return null;
-
-  // Suppress unused root warning — root determines which OSI symbols are valid
-  void root;
 
   return {
     occSymbol: occResult.value,
@@ -277,7 +274,7 @@ export function makeCboeChainAdapter(deps: {
     // Map to RawQuote, silently skip unparseable entries
     const quotes: RawQuote[] = [];
     for (const opt of filteredOptions) {
-      const quote = mapCboeOption(opt, root);
+      const quote = mapCboeOption(opt);
       if (quote !== null) {
         quotes.push(quote);
       }

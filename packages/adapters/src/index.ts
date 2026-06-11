@@ -14,7 +14,8 @@ export { runMigrations } from "./postgres/migrate.ts";
 
 // Postgres adapters
 export { makePostgresCalendarsRepo } from "./postgres/repos/calendars.ts";
-// makePostgresLegObservationsRepo added in Task 2 (Plan 04)
+export { makePostgresLegObservationsRepo } from "./postgres/repos/leg-observations.ts";
+export type { PostgresLegObservationsRepo } from "./postgres/repos/leg-observations.ts";
 
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
