@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: complete
 phase: 02-market-data-bsm-engine
 source: [02-VERIFICATION.md]
 started: 2026-06-11T19:15:26Z
-updated: 2026-06-12T13:55:00Z
+updated: 2026-06-12T16:15:00Z
 ---
 
 ## Current Test
@@ -14,15 +14,15 @@ updated: 2026-06-12T13:55:00Z
 
 ### 1. Worker boots on fresh database and runs scheduled jobs end-to-end
 expected: Railway worker deploy starts clean (no "Queue <name> not found" crash-loop); three pg-boss queues exist; during an RTH slot the chain fetch → compute pipeline writes real greeks to leg_observations; /status shows lastJobRuns populated for fetch-cboe-chain, fetch-rates, compute-bsm-greeks.
-result: issue
-reported: "Claude tested live during 2026-06-12 RTH (user-directed). PARTIAL: worker boots clean — pgboss.queue has all three queues (CR-01 fix verified in prod); RTH gating works (pre-RTH jobs complete as no-ops); fetch-rates wrote 2026-06-12 rate=0.045 (fallback — FRED_API_KEY unset in Railway). FAILED: leg_observations has 0 rows ever — fetch-cboe-chain insert dies at production scale; /api/status returns 500."
-severity: blocker
+result: pass
+reported: "Three live rounds 2026-06-12. Round 1 found param-limit insert failure + status 500 (gaps A/B). Round 2 after fixes: pipeline flowed (12,092 rows/slot, greeks computed, status 200) but exposed +4h timestamp shift (gap C). Round 3 after UTC fix + data correction: 36,136 rows across 3 slots, 0 future-dated, 23,413 greeks against corrected T, 691 NaN-stamped (~1.9% genuine unsolvables), /api/status 200 with all three lastSuccessAt populated, no errors."
+severity: resolved
 
 ## Summary
 
 total: 1
-passed: 0
-issues: 1
+passed: 1
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
@@ -56,7 +56,8 @@ blocked: 0
     - "Contract test gap: testcontainer DB has no pgboss schema so readJobRuns always returned ok({}) in tests — the real-timestamp path was never validated. Add a contract test that creates a minimal pgboss.job fixture (schema + table + one row) and asserts the returned record parses against the contracts jobRunRecord schema."
 
 - truth: "Stored observation times reflect actual quote time (UTC) so journal/DTE math is correct"
-  status: failed
+  status: resolved
+  resolution: "Plan 02-12 (UTC parse, ET machinery deleted) + orchestrator data correction (12,092 future-dated rows shifted −4h, greeks reset, WHERE time > now() predicate avoided touching new-code rows). Verified live 16:12 UTC: 36,136 rows, 0 future-dated, max_time 15:59:59Z; 23,413 greeks recomputed against corrected T; deep-ITM puts (Δ −0.92) now carry finite IV — European-bound fix proven on real data; /api/status all three jobs lastSuccessAt, no errors."
   reason: "Live round 2 (2026-06-12): max(time) in leg_observations = 19:00:18Z while wall clock was 15:08 UTC — rows future-dated by exactly +4h (EDT offset). Direct CDN check: payload timestamp '2026-06-12 15:09:24' at 15:10 UTC → CBOE timestamp is UTC, not ET-local. Phase 2 RESEARCH Pitfall-1 was wrong; etToUtc() in cboe.ts double-shifts."
   severity: major
   test: 1
