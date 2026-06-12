@@ -56,14 +56,18 @@ describe("makeCboeChainAdapter", () => {
       expect(result.value.spot).toBe(7274.1401);
     });
 
-    it("parses observedAt as a UTC Date (ET timestamp + offset)", async () => {
+    it("parses observedAt as UTC (timestamp interpreted as UTC, no offset)", async () => {
       const adapter = makeAdapter();
       const result = await adapter.fetchChain("SPXW");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      // "2026-06-11 15:13:25" ET = 19:13:25 UTC (EDT = UTC-4)
-      const utcHours = result.value.observedAt.getUTCHours();
-      expect(utcHours).toBe(19);
+      // "2026-06-11 15:13:25" is already UTC — must parse to 2026-06-11T15:13:25.000Z
+      expect(result.value.observedAt.toISOString()).toBe(
+        "2026-06-11T15:13:25.000Z",
+      );
+      expect(result.value.observedAt.getUTCHours()).toBe(15);
+      expect(result.value.observedAt.getUTCMinutes()).toBe(13);
+      expect(result.value.observedAt.getUTCSeconds()).toBe(25);
     });
   });
 
@@ -107,6 +111,27 @@ describe("makeCboeChainAdapter", () => {
       await expect(adapter.fetchChain("SPX")).resolves.toMatchObject({
         ok: false,
       });
+    });
+
+    it("returns err with kind=fetch-error when timestamp is unparseable — never throws or stores Invalid Date", async () => {
+      server.use(
+        http.get(CBOE_SPX_URL, () =>
+          HttpResponse.json({
+            timestamp: "not-a-date",
+            data: {
+              current_price: 5000,
+              close: null,
+              prev_day_close: null,
+              options: [],
+            },
+          }),
+        ),
+      );
+      const adapter = makeAdapter();
+      const result = await adapter.fetchChain("SPX");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.kind).toBe("fetch-error");
     });
 
     it("returns err when spot is null/0 (Pitfall 3)", async () => {
