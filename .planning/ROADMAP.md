@@ -71,7 +71,7 @@ stored observation — giving the journal job real computed values to write.
   4. `leg_observations` rows written by the CBOE fetch have `bsm_iv IS NULL`; after `compute-bsm-greeks` runs, those rows have non-null `bsm_iv`, `bsm_delta`, `bsm_gamma`, `bsm_theta`, `bsm_vega`.
   5. FRED rate fetch returns a numeric rate, and the 4.5% fallback activates (logged) when FRED is unreachable (tested with msw).
 
-**Plans**: 9 plans (7 base + 2 gap closure)
+**Plans**: 11 plans (7 base + 4 gap closure)
 Plans:
 **Wave 1**
 
@@ -95,10 +95,15 @@ Plans:
 
 - [x] 02-07-PLAN.md — Worker jobs (RTH gating + chain→compute) + lastJobRuns status across HTTP + MCP (scheduling, D-06/07/10)
 
-**Gap Closure** *(from 02-VERIFICATION.md — 2 gaps; both Wave 1, parallel, zero file overlap)*
+**Gap Closure — Round 1** *(from 02-VERIFICATION.md — 2 gaps; both Wave 1, parallel, zero file overlap)*
 
 - [x] 02-08-PLAN.md — Compute engine fixes: obs.time T (CR-02), European no-arb lower bound (CR-03), post-solve residual check (WR-01) — TDD regression (BSM-01, BSM-03)
 - [x] 02-09-PLAN.md — Worker boot fix: pg-boss createQueue for 3 queues (CR-01) + chain enqueue .catch (WR-02) (BSM-03)
+
+**Gap Closure — Round 2** *(from 02-UAT.md live RTH test — 2 blocker defects; both Wave 1, parallel, zero file overlap)*
+
+- [ ] 02-10-PLAN.md — Chunk persistObservations + upsertContracts (≤2,000 rows/INSERT) to clear the 65,534 Postgres param limit; large-batch TDD regression (DATA-04, BSM-03)
+- [ ] 02-11-PLAN.md — Normalize job-runs timestamps to ISO-8601 Z so /api/status parses against contracts jobRunRecord; real-pgboss-row contract test closes the test blind spot (STATUS-01)
 
 ### Phase 3: Calendar Journal (MVP)
 
@@ -180,7 +185,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
-| 2. Market Data & BSM Engine | 9/9 | Complete   | 2026-06-11 |
+| 2. Market Data & BSM Engine | 9/11 | Gap Closure | 2026-06-11 |
 | 3. Calendar Journal (MVP) | 0/TBD | Not started | - |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
