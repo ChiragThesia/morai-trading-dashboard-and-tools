@@ -71,7 +71,7 @@ stored observation — giving the journal job real computed values to write.
   4. `leg_observations` rows written by the CBOE fetch have `bsm_iv IS NULL`; after `compute-bsm-greeks` runs, those rows have non-null `bsm_iv`, `bsm_delta`, `bsm_gamma`, `bsm_theta`, `bsm_vega`.
   5. FRED rate fetch returns a numeric rate, and the 4.5% fallback activates (logged) when FRED is unreachable (tested with msw).
 
-**Plans**: 11 plans (7 base + 4 gap closure)
+**Plans**: 12 plans (7 base + 5 gap closure)
 Plans:
 **Wave 1**
 
@@ -104,6 +104,10 @@ Plans:
 
 - [x] 02-10-PLAN.md — Chunk persistObservations + upsertContracts (≤2,000 rows/INSERT) to clear the 65,534 Postgres param limit; large-batch TDD regression (DATA-04, BSM-03)
 - [x] 02-11-PLAN.md — Normalize job-runs timestamps to ISO-8601 Z so /api/status parses against contracts jobRunRecord; real-pgboss-row contract test closes the test blind spot (STATUS-01)
+
+**Gap Closure — Round 3** *(from 02-UAT.md Gap C — CBOE timestamp is UTC, not ET; 1 major defect; Wave 1)*
+
+- [ ] 02-12-PLAN.md — Parse CBOE timestamp as UTC (delete etToUtc/isDstInET/nthSunday); flip observedAt tests to UTC; documented orchestrator runbook for one-time prod data correction (time -= 4h, bsm_* → NULL re-derive) (DATA-04)
 
 ### Phase 3: Calendar Journal (MVP)
 
