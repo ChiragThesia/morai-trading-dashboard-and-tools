@@ -180,6 +180,100 @@ export function runLegObservationsContractTests(
       });
     });
 
+    describe("large batch (parameter-limit regression)", () => {
+      // 5,000 rows × 14 columns = 70,000 bind parameters — exceeds Postgres's 65,534 limit.
+      // Fails on unchunked single INSERT; passes after chunking at ≤2,000 rows per INSERT.
+      const LARGE_OBS_COUNT = 5_000;
+      // 8,200 rows × 8 columns = 65,600 bind parameters — exceeds the 65,534 limit.
+      const LARGE_CONTRACT_COUNT = 8_200;
+
+      function makeLargeObservationRows(
+        time: Date,
+        count: number,
+      ): ReadonlyArray<ObservationRow> {
+        const rows: ObservationRow[] = [];
+        for (let i = 0; i < count; i++) {
+          // Vary strike per row to guarantee unique composite PK (time, contract)
+          const strike = 1000 + i;
+          const occ = formatOccSymbol({
+            root: "SPXW",
+            expiry: new Date(2026, 5, 20),
+            type: "C",
+            strike,
+          });
+          rows.push({
+            time,
+            contract: occ,
+            bid: 1.0,
+            ask: 1.1,
+            mark: 1.05,
+            underlyingPrice: 5500.0,
+            iv: 0.25,
+            delta: 0.5,
+            gamma: 0.001,
+            theta: -0.05,
+            vega: 0.3,
+            openInterest: 0,
+            volume: 0,
+            source: "cboe" as const,
+          });
+        }
+        return rows;
+      }
+
+      function makeLargeContractRows(count: number): ReadonlyArray<ContractRow> {
+        const rows: ContractRow[] = [];
+        for (let i = 0; i < count; i++) {
+          // Vary strike per row to guarantee unique occ_symbol PK
+          const strike = 1000 + i;
+          const occ = formatOccSymbol({
+            root: "SPXW",
+            expiry: new Date(2027, 0, 17),
+            type: "P",
+            strike,
+          });
+          rows.push({
+            occSymbol: occ,
+            underlying: "SPX",
+            root: "SPXW",
+            contractType: "P",
+            exerciseStyle: "european",
+            strike: strike * 1000,
+            expiration: "2027-01-17",
+            multiplier: 100,
+          });
+        }
+        return rows;
+      }
+
+      it("persists a large observation batch exceeding the single-INSERT parameter limit", async () => {
+        const rows = makeLargeObservationRows(observationTime, LARGE_OBS_COUNT);
+        const result = await repo.persistObservations(rows);
+        expect(result.ok).toBe(true);
+        const count = await repo.countObservations(observationTime);
+        expect(count).toBe(rows.length);
+      });
+
+      it("upserts a large contracts batch exceeding the parameter limit", async () => {
+        const rows = makeLargeContractRows(LARGE_CONTRACT_COUNT);
+        const result = await repo.upsertContracts(rows);
+        expect(result.ok).toBe(true);
+        const count = await repo.countContracts(["SPXW"]);
+        expect(count).toBeGreaterThanOrEqual(rows.length);
+      });
+
+      it("re-persisting the same large batch adds zero rows (chunk-boundary idempotency)", async () => {
+        const rows = makeLargeObservationRows(observationTime, LARGE_OBS_COUNT);
+        // First persist
+        await repo.persistObservations(rows);
+        const countAfterFirst = await repo.countObservations(observationTime);
+        // Second identical persist — must be a no-op
+        await repo.persistObservations(rows);
+        const countAfterSecond = await repo.countObservations(observationTime);
+        expect(countAfterSecond).toBe(countAfterFirst);
+      });
+    });
+
     describe("BSM-03: pending scan + bsm write", () => {
       it("pending scan returns newly-seeded rows (bsm_iv NULL)", async () => {
         const { observations, contracts: contractRows } = makeFixtureRows(observationTime);
