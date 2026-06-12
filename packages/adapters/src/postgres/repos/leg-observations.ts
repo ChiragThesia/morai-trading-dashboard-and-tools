@@ -24,7 +24,14 @@ import type { Db } from "../db.ts";
  * First-seen contracts: onConflictDoNothing on occ_symbol PK.
  * BSM-03: pending scan via partial index (bsm_iv IS NULL AND mark IS NOT NULL).
  * T-02-17: bsm-write touches only bsm_* columns; vendor columns never modified.
+ *
+ * GAP-A fix: chunk large batches to stay below Postgres's 65,534 bind-parameter limit.
+ * 2,000 rows × 14 cols (observations) = 28,000 params per INSERT.
+ * 2,000 rows × 8 cols (contracts) = 16,000 params per INSERT.
  */
+
+/** Maximum rows per INSERT statement to stay below Postgres's 65,534 bind-parameter limit. */
+const INSERT_CHUNK_ROWS = 2000;
 export type PostgresLegObservationsRepo = {
   readonly persistObservations: ForPersistingObservations;
   readonly upsertContracts: ForUpsertingContracts;
@@ -58,7 +65,12 @@ export function makePostgresLegObservationsRepo(
         source: row.source,
       }));
 
-      await db.insert(legObservations).values(values).onConflictDoNothing();
+      // Chunk to stay below Postgres's 65,534 bind-parameter limit.
+      // 2,000 rows × 14 cols = 28,000 params per INSERT — comfortable margin.
+      for (let i = 0; i < values.length; i += INSERT_CHUNK_ROWS) {
+        const slice = values.slice(i, i + INSERT_CHUNK_ROWS);
+        await db.insert(legObservations).values(slice).onConflictDoNothing();
+      }
       return ok(undefined);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -83,7 +95,12 @@ export function makePostgresLegObservationsRepo(
         multiplier: row.multiplier,
       }));
 
-      await db.insert(contracts).values(values).onConflictDoNothing();
+      // Chunk to stay below Postgres's 65,534 bind-parameter limit.
+      // 2,000 rows × 8 cols = 16,000 params per INSERT — comfortable margin.
+      for (let i = 0; i < values.length; i += INSERT_CHUNK_ROWS) {
+        const slice = values.slice(i, i + INSERT_CHUNK_ROWS);
+        await db.insert(contracts).values(slice).onConflictDoNothing();
+      }
       return ok(undefined);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
