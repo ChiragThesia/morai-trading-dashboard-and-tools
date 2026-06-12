@@ -107,7 +107,7 @@ Plans:
 
 **Gap Closure — Round 3** *(from 02-UAT.md Gap C — CBOE timestamp is UTC, not ET; 1 major defect; Wave 1)*
 
-- [ ] 02-12-PLAN.md — Parse CBOE timestamp as UTC (delete etToUtc/isDstInET/nthSunday); flip observedAt tests to UTC; documented orchestrator runbook for one-time prod data correction (time -= 4h, bsm_* → NULL re-derive) (DATA-04)
+- [x] 02-12-PLAN.md — Parse CBOE timestamp as UTC (delete etToUtc/isDstInET/nthSunday); flip observedAt tests to UTC; documented orchestrator runbook for one-time prod data correction (time -= 4h, bsm_* → NULL re-derive) (DATA-04)
 
 ### Phase 3: Calendar Journal (MVP)
 
@@ -189,7 +189,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
-| 2. Market Data & BSM Engine | 11/11 | Complete   | 2026-06-12 |
+| 2. Market Data & BSM Engine | 12/12 | Complete   | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 0/TBD | Not started | - |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
