@@ -30,7 +30,8 @@ blocked: 0
 ## Gaps
 
 - truth: "During an RTH slot the chain fetch persists observations to leg_observations and compute writes real greeks"
-  status: failed
+  status: resolved
+  resolution: "Plan 02-10 (chunked inserts ≤2,000 rows). Verified live 2026-06-12 15:00 UTC slot: 12,092 rows persisted, 12,092 contracts, compute wrote 2,979 greeks (287 NaN-stamped unsolvables). Deploy f57dcaa."
   reason: "fetch-cboe-chain job failed at 2026-06-12T13:31:38Z (first real RTH slot). Drizzle insert error captured in pgboss.job.output."
   severity: blocker
   test: 1
@@ -42,7 +43,8 @@ blocked: 0
     - "Regression test with a row count large enough to exceed one chunk boundary (e.g. 3,000 synthetic rows) against testcontainers Postgres."
 
 - truth: "/api/status responds 200 with lastJobRuns populated for all three jobs"
-  status: failed
+  status: resolved
+  resolution: "Plan 02-11 (extractCompletedOn string branch → new Date(v).toISOString() with Invalid Date guard). Verified live: /api/status 200 within 3 min of deploy f57dcaa, lastJobRuns rendering ISO-Z timestamps + lastError text."
   reason: "GET /api/status returns 500. Server logs: ZodError invalid_format 'Invalid ISO datetime' at lastJobRuns.fetch-cboe-chain.lastErrorAt and lastJobRuns.fetch-rates.lastSuccessAt — contracts schema requires Z-anchored ISO; job-runs repo returns Postgres text timestamps ('2026-06-12 13:31:38.031+00')."
   severity: blocker
   test: 1
@@ -52,6 +54,19 @@ blocked: 0
   missing:
     - "Convert job-runs timestamps to ISO-8601 Z format (new Date(v).toISOString()) before returning from the repo, or parse via timestamp mode in the query layer."
     - "Contract test gap: testcontainer DB has no pgboss schema so readJobRuns always returned ok({}) in tests — the real-timestamp path was never validated. Add a contract test that creates a minimal pgboss.job fixture (schema + table + one row) and asserts the returned record parses against the contracts jobRunRecord schema."
+
+- truth: "Stored observation times reflect actual quote time (UTC) so journal/DTE math is correct"
+  status: failed
+  reason: "Live round 2 (2026-06-12): max(time) in leg_observations = 19:00:18Z while wall clock was 15:08 UTC — rows future-dated by exactly +4h (EDT offset). Direct CDN check: payload timestamp '2026-06-12 15:09:24' at 15:10 UTC → CBOE timestamp is UTC, not ET-local. Phase 2 RESEARCH Pitfall-1 was wrong; etToUtc() in cboe.ts double-shifts."
+  severity: major
+  test: 1
+  artifacts:
+    - "packages/adapters/src/http/cboe.ts (etToUtc + isDstInET — entire ET conversion built on wrong premise)"
+    - "Live CDN evidence: payload timestamp ≈ wall-clock UTC (60s skew), not ET"
+  missing:
+    - "Parse CBOE timestamp as UTC: new Date(timestamp.replace(' ', 'T') + 'Z'); delete etToUtc/isDstInET/nthSunday machinery."
+    - "Update adapter tests + fixture expectations to UTC interpretation."
+    - "One-time prod data correction (user-approved): UPDATE leg_observations SET time = time - interval '4 hours'; then reset bsm_* columns to NULL (and bsm_iv NaN stamps) so compute re-derives greeks against corrected T."
 
 ## Observations (non-blocking)
 
