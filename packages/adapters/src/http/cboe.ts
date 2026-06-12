@@ -35,7 +35,7 @@ const CboeDataSchema = z
   .passthrough();
 
 const CboeResponseSchema = z.object({
-  timestamp: z.string(), // "YYYY-MM-DD HH:MM:SS" ET local — no timezone suffix
+  timestamp: z.string(), // "YYYY-MM-DD HH:MM:SS" UTC — production-verified 2026-06-12
   data: CboeDataSchema,
 });
 
@@ -84,68 +84,6 @@ function osiToOcc(osi: string): Result<OccSymbol, FetchError> {
 
   const occ = formatOccSymbol({ root, expiry, type: sideChar, strike });
   return ok(occ);
-}
-
-// ─── ET timestamp → UTC Date (Pitfall 1 from RESEARCH.md) ──────────────────────
-//
-// CBOE timestamp: "2026-06-11 15:13:25" — ET local time, no timezone suffix.
-// During EDT (Mar–Nov): UTC = ET + 4h.
-// During EST (Nov–Mar): UTC = ET + 5h.
-//
-// Strategy: replace the space with "T", append "-04:00" (EDT) or "-05:00" (EST)
-// by checking whether the parsed local date falls within DST.
-
-function etToUtc(timestamp: string): Date {
-  // Parse the ET timestamp as a local Date to detect DST for that date.
-  // We normalise to ISO 8601 first.
-  const normalised = timestamp.replace(" ", "T");
-  // Build a Date assuming UTC to get the year/month/day only, then
-  // check whether that calendar date is in EDT (UTC-4) or EST (UTC-5).
-  const tempDate = new Date(`${normalised}Z`); // treat as UTC temp
-
-  // DST in the US: second Sunday in March → first Sunday in November.
-  // Use the Intl API to reliably check whether the ET timezone is currently
-  // in DST (EDT = UTC-4) or standard (EST = UTC-5).
-  const year = tempDate.getUTCFullYear();
-  const month = tempDate.getUTCMonth(); // 0-indexed
-
-  // DST starts on the 2nd Sunday of March (month 2) and ends on the 1st Sunday
-  // of November (month 10). Check if the timestamp date is within that range.
-  const isDst = isDstInET(year, month, tempDate.getUTCDate());
-  const offsetStr = isDst ? "-04:00" : "-05:00";
-
-  return new Date(`${normalised}${offsetStr}`);
-}
-
-function isDstInET(year: number, month: number, day: number): boolean {
-  // DST in US: starts 2nd Sunday of March, ends 1st Sunday of November.
-  // month is 0-indexed (March = 2, November = 10).
-  if (month < 2 || month > 10) return false; // Jan, Feb, Dec = EST
-  if (month > 2 && month < 10) return true; // Apr–Oct = EDT
-
-  if (month === 2) {
-    // March: DST starts on the 2nd Sunday
-    const dstStart = nthSunday(year, 2, 2);
-    return day >= dstStart;
-  }
-
-  // month === 10: November — DST ends on the 1st Sunday
-  const dstEnd = nthSunday(year, 10, 1);
-  return day < dstEnd;
-}
-
-function nthSunday(year: number, month: number, n: number): number {
-  // Returns the calendar day of the n-th Sunday in the given month (0-indexed month).
-  let count = 0;
-  for (let d = 1; d <= 31; d++) {
-    const date = new Date(year, month, d);
-    if (date.getMonth() !== month) break;
-    if (date.getDay() === 0) {
-      count++;
-      if (count === n) return d;
-    }
-  }
-  return 31; // fallback (should never reach)
 }
 
 // ─── Map a CBOE option to RawQuote ───────────────────────────────────────────
@@ -259,8 +197,14 @@ export function makeCboeChainAdapter(deps: {
       });
     }
 
-    // ET timestamp → UTC (Pitfall 1)
-    const observedAt = etToUtc(payload.timestamp);
+    // CBOE timestamp is UTC: parse "YYYY-MM-DD HH:MM:SS" directly as UTC (production-verified 2026-06-12).
+    const observedAt = new Date(payload.timestamp.replace(" ", "T") + "Z");
+    if (Number.isNaN(observedAt.getTime())) {
+      return err({
+        kind: "fetch-error",
+        message: `CBOE payload unparseable timestamp: ${payload.timestamp}`,
+      });
+    }
 
     // Filter options by root prefix (SPX = 3 chars before date, SPXW = 4 chars)
     const filteredOptions = payload.data.options.filter((opt) => {
