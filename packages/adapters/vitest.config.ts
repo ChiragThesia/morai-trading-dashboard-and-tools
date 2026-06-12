@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   resolve: {
     alias: {
+      "@morai/contracts": fileURLToPath(
+        new URL("../contracts/src/index.ts", import.meta.url),
+      ),
       "@morai/core": fileURLToPath(
         new URL("../core/src/index.ts", import.meta.url),
       ),

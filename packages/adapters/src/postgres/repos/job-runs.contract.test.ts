@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { inject } from "vitest";
 import { makePostgresJobRunsRepo } from "./job-runs.ts";
 import { makeDb } from "../db.ts";
+import { jobRunRecord } from "@morai/contracts";
+import { sql } from "drizzle-orm";
 
 /**
  * Contract test for the Postgres job-runs adapter.
@@ -44,3 +46,150 @@ describe.skipIf(shouldSkip)("postgres job-runs adapter", () => {
     await expect(repo.readJobRuns()).resolves.toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// RED: populated pgboss.job contract test
+// Seed a minimal pgboss.job fixture and assert the adapter output satisfies
+// the contracts jobRunRecord schema (Z-anchored ISO-8601).
+// On the CURRENT code this MUST FAIL because extractCompletedOn passes the
+// Postgres text string ("2026-06-12 13:31:38.031+00") through unchanged,
+// which does not satisfy z.string().datetime() (requires Z-anchored ISO-8601).
+// ---------------------------------------------------------------------------
+describe.skipIf(shouldSkip)(
+  "postgres job-runs adapter — populated pgboss.job",
+  () => {
+    let db: ReturnType<typeof makeDb>;
+
+    beforeAll(async () => {
+      if (!dbUrl) return;
+      db = makeDb(dbUrl);
+
+      // Build a minimal pgboss.job table.
+      // pg-boss is NOT in our Drizzle migrations — we create the schema/table
+      // here with raw SQL. Any NOT NULL column that pg-boss would normally set
+      // gets a DEFAULT so our minimal INSERTs stay clean.
+      await db.execute(sql`CREATE SCHEMA IF NOT EXISTS pgboss`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS pgboss.job (
+          id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+          name        text        NOT NULL,
+          state       text        NOT NULL,
+          completed_on timestamptz,
+          output      jsonb,
+          created_on  timestamptz NOT NULL DEFAULT now(),
+          started_on  timestamptz,
+          expire_in   interval    NOT NULL DEFAULT interval '15 minutes',
+          data        jsonb,
+          retry_limit integer     NOT NULL DEFAULT 0,
+          retry_count integer     NOT NULL DEFAULT 0,
+          retry_delay integer     NOT NULL DEFAULT 0,
+          retry_backoff boolean   NOT NULL DEFAULT false,
+          singleton_key text,
+          singleton_on timestamptz,
+          dead_letter  text,
+          policy      text,
+          priority    integer     NOT NULL DEFAULT 0,
+          on_complete  boolean    NOT NULL DEFAULT false,
+          keep_until   timestamptz NOT NULL DEFAULT now() + interval '14 days'
+        )
+      `);
+
+      // Insert a 'completed' row for fetch-cboe-chain
+      await db.execute(sql`
+        INSERT INTO pgboss.job (name, state, completed_on, output)
+        VALUES (
+          'fetch-cboe-chain',
+          'completed',
+          '2026-06-12 13:31:38.031+00'::timestamptz,
+          NULL
+        )
+      `);
+
+      // Insert a 'failed' row for fetch-rates with an output message
+      await db.execute(sql`
+        INSERT INTO pgboss.job (name, state, completed_on, output)
+        VALUES (
+          'fetch-rates',
+          'failed',
+          '2026-06-12 13:00:00.000+00'::timestamptz,
+          '{"message": "FRED_API_KEY not set"}'::jsonb
+        )
+      `);
+    });
+
+    afterAll(async () => {
+      if (!db) return;
+      // Drop the pgboss schema so the no-schema Pitfall-6 tests in the sibling
+      // describe block and other suites remain unaffected.
+      await db.execute(sql`DROP SCHEMA IF EXISTS pgboss CASCADE`);
+    });
+
+    it("readJobRuns returns records that parse against the contracts jobRunRecord schema", async () => {
+      if (!db) throw new Error("db not initialized");
+      const repo = makePostgresJobRunsRepo(db);
+      const result = await repo.readJobRuns();
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const map = result.value;
+
+      // Both seeded jobs should appear
+      expect(Object.keys(map)).toContain("fetch-cboe-chain");
+      expect(Object.keys(map)).toContain("fetch-rates");
+
+      // Each record must satisfy the contracts schema
+      for (const [jobName, record] of Object.entries(map)) {
+        const parsed = jobRunRecord.safeParse(record);
+        expect(
+          parsed.success,
+          `jobRunRecord.safeParse failed for "${jobName}": ${
+            parsed.success ? "" : JSON.stringify(parsed.error.issues)
+          }`,
+        ).toBe(true);
+      }
+    });
+
+    it("completed_on is emitted as Z-anchored ISO-8601", async () => {
+      if (!db) throw new Error("db not initialized");
+      const repo = makePostgresJobRunsRepo(db);
+      const result = await repo.readJobRuns();
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const map = result.value;
+
+      for (const [jobName, record] of Object.entries(map)) {
+        const ts = record.lastSuccessAt ?? record.lastErrorAt;
+        if (ts !== null) {
+          expect(
+            ts,
+            `${jobName}: timestamp "${ts}" does not end with Z`,
+          ).toMatch(/Z$/);
+          // Must round-trip through new Date → toISOString unchanged
+          expect(
+            new Date(ts).toISOString(),
+            `${jobName}: timestamp "${ts}" does not round-trip cleanly`,
+          ).toBe(ts);
+        }
+      }
+    });
+
+    it("failed row carries lastError message from output", async () => {
+      if (!db) throw new Error("db not initialized");
+      const repo = makePostgresJobRunsRepo(db);
+      const result = await repo.readJobRuns();
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const ratesRecord = result.value["fetch-rates"];
+      expect(ratesRecord).toBeDefined();
+      if (ratesRecord === undefined) return;
+
+      expect(ratesRecord.lastErrorAt).not.toBeNull();
+      expect(ratesRecord.lastError).toBe("FRED_API_KEY not set");
+    });
+  },
+);
