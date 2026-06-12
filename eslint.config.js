@@ -58,7 +58,9 @@ export default tseslint.config(
           // External vendor imports (hono, drizzle, etc.) are blocked by no-restricted-imports below
           { from: "core",      allow: ["shared", "core"] },
           // adapters: core ports + shared + intra-package relative imports (same pattern as core→core)
-          { from: "adapters",  allow: ["core", "shared", "adapters"] },
+          // Contract test files (*.contract.test.ts) additionally import from contracts to assert
+          // the adapter output satisfies the published contract schema (cross-boundary test-only).
+          { from: "adapters",  allow: ["contracts", "core", "shared", "adapters"] },
           // apps: composition roots — can import everything + intra-package relative imports
           { from: "apps",      allow: ["adapters", "core", "contracts", "shared", "apps"] },
         ],
