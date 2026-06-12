@@ -38,7 +38,14 @@ function extractString(value: unknown): string | null {
 
 function extractCompletedOn(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    // postgres.js returns timestamptz as a Postgres text string
+    // (e.g. "2026-06-12 13:31:38.031+00") — normalize to Z-anchored ISO-8601
+    // so the value satisfies z.string().datetime() at the contracts boundary.
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString();
+  }
   return null;
 }
 
