@@ -102,8 +102,8 @@ Plans:
 
 **Gap Closure — Round 2** *(from 02-UAT.md live RTH test — 2 blocker defects; both Wave 1, parallel, zero file overlap)*
 
-- [ ] 02-10-PLAN.md — Chunk persistObservations + upsertContracts (≤2,000 rows/INSERT) to clear the 65,534 Postgres param limit; large-batch TDD regression (DATA-04, BSM-03)
-- [ ] 02-11-PLAN.md — Normalize job-runs timestamps to ISO-8601 Z so /api/status parses against contracts jobRunRecord; real-pgboss-row contract test closes the test blind spot (STATUS-01)
+- [x] 02-10-PLAN.md — Chunk persistObservations + upsertContracts (≤2,000 rows/INSERT) to clear the 65,534 Postgres param limit; large-batch TDD regression (DATA-04, BSM-03)
+- [x] 02-11-PLAN.md — Normalize job-runs timestamps to ISO-8601 Z so /api/status parses against contracts jobRunRecord; real-pgboss-row contract test closes the test blind spot (STATUS-01)
 
 ### Phase 3: Calendar Journal (MVP)
 
@@ -185,7 +185,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
-| 2. Market Data & BSM Engine | 9/11 | Gap Closure | 2026-06-11 |
+| 2. Market Data & BSM Engine | 11/11 | Complete   | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 0/TBD | Not started | - |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
