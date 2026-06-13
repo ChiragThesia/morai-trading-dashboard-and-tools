@@ -33,9 +33,9 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 ### Market Data
 
-- [ ] **MKT-01**: A CBOE adapter fetches a delayed SPX option chain behind a `ForFetchingChain` port, Zod-parsing the response before it reaches core (no auth required).
-- [ ] **MKT-02**: A FRED adapter fetches the DGS3MO risk-free rate behind a port, falling back to 4.5% when unreachable.
-- [ ] **MKT-03**: Raw per-contract quotes land in `leg_observations` (append-only) with their source tagged.
+- [x] **MKT-01**: A CBOE adapter fetches a delayed SPX option chain behind a `ForFetchingChain` port, Zod-parsing the response before it reaches core (no auth required).
+- [x] **MKT-02**: A FRED adapter fetches the DGS3MO risk-free rate behind a port, falling back to 4.5% when unreachable.
+- [x] **MKT-03**: Raw per-contract quotes land in `leg_observations` (append-only) with their source tagged.
 
 ### Schwab Auth & Brokerage
 
@@ -48,9 +48,9 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 ### BSM Analytics Engine
 
-- [ ] **BSM-01**: An IV-inversion routine recovers implied vol from an option mark (European SPX/SPXW), property-tested for monotonicity and round-trip accuracy.
-- [ ] **BSM-02**: A greeks routine computes delta/gamma/theta/vega from spot, strike, rate, IV, and DTE, validated against known reference values.
-- [ ] **BSM-03**: Computed (BSM) values are stored alongside vendor-raw values; reads prefer computed and fall back to raw.
+- [x] **BSM-01**: An IV-inversion routine recovers implied vol from an option mark (European SPX/SPXW), property-tested for monotonicity and round-trip accuracy.
+- [x] **BSM-02**: A greeks routine computes delta/gamma/theta/vega from spot, strike, rate, IV, and DTE, validated against known reference values.
+- [x] **BSM-03**: Computed (BSM) values are stored alongside vendor-raw values; reads prefer computed and fall back to raw.
 
 ### Calendar & Journal
 
@@ -128,12 +128,12 @@ Explicitly excluded. Documented to prevent scope creep.
 | DEPLOY-02 | Phase 1 | Pending |
 | DEPLOY-03 | Phase 1 | Pending |
 | MCP-02 | Phase 1 | Pending |
-| MKT-01 | Phase 2 | Pending |
-| MKT-02 | Phase 2 | Pending |
-| MKT-03 | Phase 2 | Pending |
-| BSM-01 | Phase 2 | Pending |
-| BSM-02 | Phase 2 | Pending |
-| BSM-03 | Phase 2 | Pending |
+| MKT-01 | Phase 2 | Complete |
+| MKT-02 | Phase 2 | Complete |
+| MKT-03 | Phase 2 | Complete |
+| BSM-01 | Phase 2 | Complete |
+| BSM-02 | Phase 2 | Complete |
+| BSM-03 | Phase 2 | Complete |
 | CAL-01 | Phase 3 | Pending |
 | CAL-02 | Phase 3 | Pending |
 | CAL-03 | Phase 3 | Pending |
