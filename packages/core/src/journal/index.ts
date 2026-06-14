@@ -63,3 +63,4 @@ export { invertIv } from "./domain/iv-inversion.ts";
 export type { IvError } from "./domain/iv-inversion.ts";
 export { computeT, isThirdFriday, calendarDte } from "./domain/dte.ts";
 export { isWithinRth } from "./domain/rth-window.ts";
+export { isNyseHoliday } from "./domain/nyse-holidays.ts";
