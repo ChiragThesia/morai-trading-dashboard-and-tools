@@ -99,7 +99,17 @@ export function makePostgresCalendarSnapshotsRepo(
         .where(eq(calendarSnapshots.calendarId, calendarId))
         .orderBy(asc(calendarSnapshots.time));
 
-      return ok(rows.map(mapSnapshotRow));
+      const mapped: SnapshotRow[] = [];
+      for (const row of rows) {
+        const sr = mapSnapshotRow(row);
+        if (sr === null) {
+          // Unexpected source enum value — guard against silent misreport.
+          console.warn(`calendar-snapshots: skipping row with unknown source "${row.source}" for calendar ${calendarId}`);
+          continue;
+        }
+        mapped.push(sr);
+      }
+      return ok(mapped);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       return err<StorageError>({ kind: "storage-error", message });
@@ -186,10 +196,13 @@ export function makePostgresCalendarSnapshotsRepo(
 
 type RawSnapshotRow = typeof calendarSnapshots.$inferSelect;
 
-function mapSnapshotRow(row: RawSnapshotRow): SnapshotRow {
-  // source in the DB can technically be any snapshot_source enum value,
-  // but the snapshot use-case only ever writes "cboe". Narrow defensively.
-  const source: "cboe" = row.source === "cboe" ? "cboe" : "cboe";
+function mapSnapshotRow(row: RawSnapshotRow): SnapshotRow | null {
+  // snapshot_source enum can be "schwab_chain" | "cboe" | "computed_only".
+  // SnapshotRow.source is typed as the literal "cboe" — guard at runtime so
+  // an unexpected source value surfaces loudly rather than being silently
+  // coerced. (No implicit as-cast per typescript.md.)
+  if (row.source !== "cboe") return null;
+  const source = row.source; // narrowed to "cboe"
   return {
     time: row.time,
     calendarId: row.calendarId,
