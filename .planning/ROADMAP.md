@@ -146,7 +146,7 @@ Plans:
 
 **Wave 5**
 
-- [ ] 03-06-PLAN.md — Journal read + live-greeks slice: contracts + use-cases + HTTP route (CAL-03, MCP-01)
+- [x] 03-06-PLAN.md — Journal read + live-greeks slice: contracts + use-cases + HTTP route (CAL-03, MCP-01)
 
 **Wave 6**
 

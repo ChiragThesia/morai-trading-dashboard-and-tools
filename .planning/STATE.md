@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md — Calendar types foundation
-last_updated: "2026-06-14T15:00:27.664Z"
-last_activity: 2026-06-14 -- Phase 03 execution started
+stopped_at: Completed 03-06-PLAN.md — Journal read surface + live-greeks + analytics contracts
+last_updated: "2026-06-14T15:22:00.000Z"
+last_activity: 2026-06-14 -- Phase 03 plan 06 completed
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 25
-  completed_plans: 23
-  percent: 33
+  completed_plans: 24
+  percent: 96
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 03 (calendar-journal-mvp) — EXECUTING
-Plan: 6 of 7
-Status: Ready to execute
-Last activity: 2026-06-14 -- Phase 03 execution started
+Plan: 7 of 7
+Status: Ready to execute next (plan 07 — MCP tools)
+Last activity: 2026-06-14 -- Phase 03 plan 06 completed
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████████░] 96%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-calendar-journal-mvp P03 | 15 | 3 tasks | 18 files |
 | Phase 03-calendar-journal-mvp P04 | 8 | 2 tasks | 6 files |
 | Phase 03 P05 | 19 | 4 tasks | 17 files |
+| Phase 03 P06 | 16 | 3 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,9 @@ Recent decisions affecting current work:
 - [Phase ?]: mustInclude bypass from getOpenCalendarLegs() skips DTE/band filter for open calendar legs
 - [Phase ?]: compute-bsm-greeks fires boss.send(snapshot-calendars) on success fire-and-forget
 - [Phase ?]: all 4 jobs gate on NYSE holiday; compute + snapshot also gate on RTH
+- [Phase 3 P06]: getLiveGreeks uses formatOccSymbol(strike/1000) — same ×1000→points conversion as calendars.ts getOpenCalendarLegs
+- [Phase 3 P06]: Zod v4 UUID regex: test fixtures must use valid RFC 4122 UUIDs (550e8400-... format); 00000000-...-0001 fails Zod v4 validation
+- [Phase 3 P06]: journalRoutes accepts ForReadingJournal directly as the use-case is a thin forwarder
 
 ### Pending Todos
 
@@ -114,9 +118,10 @@ None yet.
 | Streaming | Sub-minute market data (D17) | v2 | Architecture |
 | Scale | Timescale hypertable migration (D7) | v2 trigger | Architecture |
 | Multi-user | API auth beyond single bearer token | v2 | Architecture |
+| Test isolation | Postgres leg-observations contract tests have cross-test contamination (re-persist/large-batch idempotency failures are flaky) | future | Phase 03 P06 |
 
 ## Session Continuity
 
-Last session: 2026-06-14T14:59:44.271Z
-Stopped at: Completed 03-01-PLAN.md — Calendar types foundation
+Last session: 2026-06-14T15:22:00.000Z
+Stopped at: Completed 03-06-PLAN.md — Journal read surface + live-greeks + analytics contracts
 Resume file: None
