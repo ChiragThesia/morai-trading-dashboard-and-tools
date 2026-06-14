@@ -352,6 +352,96 @@ describe("MCP router", () => {
     ).not.toThrow();
   });
 
+  // ─── get_journal / get_live_greeks — safeParse: invalid args → typed error content (CR-02) ──
+
+  it("get_journal tool returns typed error content for non-UUID calendarId — does not throw (CR-02)", async () => {
+    const { registerGetJournalTool } = await import("./tools.ts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    registerGetJournalTool(server, fakeGetJournal);
+
+    // Access the registered tool's handler via Reflect (private property, no 'as' cast).
+    // Narrow the result with runtime checks before calling.
+    const toolsMap: unknown = Reflect.get(server, "_registeredTools");
+    if (typeof toolsMap !== "object" || toolsMap === null) {
+      throw new Error("_registeredTools not found on McpServer instance");
+    }
+    const toolEntry: unknown = (toolsMap as Record<string, unknown>)["get_journal"];
+    if (typeof toolEntry !== "object" || toolEntry === null) {
+      throw new Error("get_journal tool not registered");
+    }
+    const handler: unknown = (toolEntry as Record<string, unknown>)["handler"];
+    if (typeof handler !== "function") {
+      throw new Error("get_journal handler is not a function");
+    }
+
+    // Pass invalid args (not a UUID) — must return typed error content, NOT throw
+    const result: unknown = await handler({ calendarId: "not-a-uuid" });
+    if (typeof result !== "object" || result === null) {
+      throw new Error("handler did not return an object");
+    }
+    const content: unknown = (result as Record<string, unknown>)["content"];
+    expect(Array.isArray(content)).toBe(true);
+    if (!Array.isArray(content)) return;
+    expect(content.length).toBeGreaterThan(0);
+    const first: unknown = content[0];
+    if (typeof first !== "object" || first === null) {
+      throw new Error("first content item is not an object");
+    }
+    expect((first as Record<string, unknown>)["type"]).toBe("text");
+    // The error text must contain "invalid calendarId"
+    const text: unknown = (first as Record<string, unknown>)["text"];
+    expect(typeof text).toBe("string");
+    if (typeof text === "string") {
+      expect(text).toContain("invalid calendarId");
+    }
+  });
+
+  it("get_live_greeks tool returns typed error content for non-UUID calendarId — does not throw (CR-02)", async () => {
+    const { registerGetLiveGreeksTool } = await import("./tools.ts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    registerGetLiveGreeksTool(server, fakeGetLiveGreeks);
+
+    const toolsMap: unknown = Reflect.get(server, "_registeredTools");
+    if (typeof toolsMap !== "object" || toolsMap === null) {
+      throw new Error("_registeredTools not found on McpServer instance");
+    }
+    const toolEntry: unknown = (toolsMap as Record<string, unknown>)["get_live_greeks"];
+    if (typeof toolEntry !== "object" || toolEntry === null) {
+      throw new Error("get_live_greeks tool not registered");
+    }
+    const handler: unknown = (toolEntry as Record<string, unknown>)["handler"];
+    if (typeof handler !== "function") {
+      throw new Error("get_live_greeks handler is not a function");
+    }
+
+    const result: unknown = await handler({ calendarId: "not-a-uuid" });
+    if (typeof result !== "object" || result === null) {
+      throw new Error("handler did not return an object");
+    }
+    const content: unknown = (result as Record<string, unknown>)["content"];
+    expect(Array.isArray(content)).toBe(true);
+    if (!Array.isArray(content)) return;
+    expect(content.length).toBeGreaterThan(0);
+    const first: unknown = content[0];
+    if (typeof first !== "object" || first === null) {
+      throw new Error("first content item is not an object");
+    }
+    expect((first as Record<string, unknown>)["type"]).toBe("text");
+    const text: unknown = (first as Record<string, unknown>)["text"];
+    expect(typeof text).toBe("string");
+    if (typeof text === "string") {
+      expect(text).toContain("invalid calendarId");
+    }
+  });
+
   // ─── get_live_greeks tool ──────────────────────────────────────────────────
 
   it("get_live_greeks tool returns liveGreeksResponse-valid payload", async () => {
