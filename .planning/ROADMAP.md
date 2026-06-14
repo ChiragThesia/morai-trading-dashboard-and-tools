@@ -22,7 +22,7 @@ Cross-cutting constraints active from Phase 1:
 
 - [x] **Phase 1: Walking Skeleton** - Monorepo + hexagon + DB + deployed status endpoint
 - [x] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored (gap closure in progress) (completed 2026-06-11)
-- [ ] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live
+- [x] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live (completed 2026-06-14)
 - [ ] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions
 - [ ] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data
 - [ ] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed
@@ -150,7 +150,7 @@ Plans:
 
 **Wave 6**
 
-- [ ] 03-07-PLAN.md — Six MCP tools registered + server router wiring + live verify (MCP-01)
+- [x] 03-07-PLAN.md — Six MCP tools registered + server router wiring + live verify (MCP-01)
 
 ### Phase 4: Schwab Auth & Brokerage
 
@@ -215,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
-| 3. Calendar Journal (MVP) | 5/7 | In Progress|  |
+| 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |
