@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 03-01-PLAN.md — Calendar types foundation
-last_updated: "2026-06-14T14:10:24.428Z"
+last_updated: "2026-06-14T15:00:27.664Z"
 last_activity: 2026-06-14 -- Phase 03 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 25
-  completed_plans: 22
+  completed_plans: 23
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 03 (calendar-journal-mvp) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-06-14 -- Phase 03 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-calendar-journal-mvp P01 | 6 | 2 tasks | 7 files |
 | Phase 03-calendar-journal-mvp P03 | 15 | 3 tasks | 18 files |
 | Phase 03-calendar-journal-mvp P04 | 8 | 2 tasks | 6 files |
+| Phase 03 P05 | 19 | 4 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,11 @@ Recent decisions affecting current work:
 - [Phase 1 P05]: result.ok guard required before result.value even with Result<T, never> — exactOptionalPropertyTypes strictness
 - [Phase 1 P05]: main field added to @morai/contracts, @morai/core, @morai/adapters package.json — Vite workspace resolver fix (same as @morai/shared in plan 03)
 - [Phase ?]: Added optionType to schema.ts (calendars table) in Plan 01 so adapters compile against extended Calendar type; SQL migration deferred to plan 04 per D-01
+- [Phase ?]: netGreek = (back - front) * qty * 100; NaN propagation when any leg NaN
+- [Phase ?]: NAN_STAMP='NaN'; always write snapshot row even if legs unresolvable
+- [Phase ?]: mustInclude bypass from getOpenCalendarLegs() skips DTE/band filter for open calendar legs
+- [Phase ?]: compute-bsm-greeks fires boss.send(snapshot-calendars) on success fire-and-forget
+- [Phase ?]: all 4 jobs gate on NYSE holiday; compute + snapshot also gate on RTH
 
 ### Pending Todos
 
@@ -111,6 +117,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-14T14:10:24.419Z
+Last session: 2026-06-14T14:59:44.271Z
 Stopped at: Completed 03-01-PLAN.md — Calendar types foundation
 Resume file: None
