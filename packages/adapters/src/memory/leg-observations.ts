@@ -59,7 +59,6 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
     if (latest === null) return ok(null);
 
     const leg: LegSnapshot = {
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- memory adapter: occSymbol is already an OccSymbol brand (persisted via formatOccSymbol by callers)
       occSymbol: latest.contract,
       mark: latest.mark,
       underlyingPrice: latest.underlyingPrice,

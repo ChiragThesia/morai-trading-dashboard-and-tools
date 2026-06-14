@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ok, err, formatOccSymbol } from "@morai/shared";
+import type { OccSymbol } from "@morai/shared";
 import type { ForGettingCalendarById, ForReadingLatestLegObs, Calendar, LegSnapshot, StorageError } from "./ports.ts";
 import { makeGetLiveGreeksUseCase } from "./getLiveGreeks.ts";
 
@@ -37,11 +38,9 @@ const BACK_OCC = formatOccSymbol({
   strike: 7100,
 });
 
-function makeLegSnapshot(occSymbol: string, overrides?: Partial<LegSnapshot>): LegSnapshot {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test helper; occSymbol is a known-valid OCC string
-  const occ = occSymbol as import("@morai/shared").OccSymbol;
+function makeLegSnapshot(occSymbol: OccSymbol, overrides?: Partial<LegSnapshot>): LegSnapshot {
   return {
-    occSymbol: occ,
+    occSymbol,
     mark: 25.4,
     underlyingPrice: 7274.14,
     ivRaw: 0.25,
@@ -69,8 +68,8 @@ describe("makeGetLiveGreeksUseCase", () => {
 
   it("returns ok with populated legs when both observations exist", async () => {
     const getCalendar: ForGettingCalendarById = async (_id) => ok(CALENDAR);
-    const frontLeg = makeLegSnapshot(FRONT_OCC as string);
-    const backLeg = makeLegSnapshot(BACK_OCC as string);
+    const frontLeg = makeLegSnapshot(FRONT_OCC);
+    const backLeg = makeLegSnapshot(BACK_OCC);
     const getLatestLegObs: ForReadingLatestLegObs = async (occ) => {
       if (occ === FRONT_OCC) return ok(frontLeg);
       if (occ === BACK_OCC) return ok(backLeg);
@@ -91,7 +90,7 @@ describe("makeGetLiveGreeksUseCase", () => {
   it("returns 'NaN'/absent bsm fields (without throwing) when a leg has no observation", async () => {
     const getCalendar: ForGettingCalendarById = async (_id) => ok(CALENDAR);
     // Front leg has obs, back leg does not
-    const frontLeg = makeLegSnapshot(FRONT_OCC as string);
+    const frontLeg = makeLegSnapshot(FRONT_OCC);
     const getLatestLegObs: ForReadingLatestLegObs = async (occ) => {
       if (occ === FRONT_OCC) return ok(frontLeg);
       return ok(null); // back leg missing

@@ -33,8 +33,7 @@ describe("snapshotResponse", () => {
   });
 
   it("rejects a row missing pnlOpen", () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { pnlOpen: _, ...withoutPnlOpen } = validSnapshot;
+    const { pnlOpen: _pnlOpen, ...withoutPnlOpen } = validSnapshot;
     expect(() => snapshotResponse.parse(withoutPnlOpen)).toThrow();
   });
 
