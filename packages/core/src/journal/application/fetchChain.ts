@@ -246,16 +246,17 @@ export function makeFetchChainUseCase(deps: FetchChainDeps): ForRunningFetchChai
       allContracts.push(...contracts);
     }
 
-    // Persist observations
-    if (allObservations.length > 0) {
-      const persResult = await deps.persistObservations(allObservations);
-      if (!persResult.ok) return err(persResult.error);
-    }
-
-    // Upsert contracts (first-seen)
+    // Upsert contracts before observations: a crash now leaves harmless contracts
+    // without observations rather than orphan observations with no contract row.
     if (allContracts.length > 0) {
       const contractResult = await deps.upsertContracts(allContracts);
       if (!contractResult.ok) return err(contractResult.error);
+    }
+
+    // Persist observations (contracts must already exist — see ordering above)
+    if (allObservations.length > 0) {
+      const persResult = await deps.persistObservations(allObservations);
+      if (!persResult.ok) return err(persResult.error);
     }
 
     return ok(undefined);
