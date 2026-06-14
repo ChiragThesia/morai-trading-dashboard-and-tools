@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-06-14T03:26:04.841Z"
-last_activity: 2026-06-14 -- Phase 03 planning complete
+stopped_at: Completed 03-01-PLAN.md — Calendar types foundation
+last_updated: "2026-06-14T13:29:24.248Z"
+last_activity: 2026-06-14 -- Phase 03 execution started
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 25
+  completed_plans: 19
   percent: 33
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 02 — market-data-bsm-engine
+**Current focus:** Phase 03 — calendar-journal-mvp
 
 ## Current Position
 
-Phase: 03
-Plan: Not started
+Phase: 03 (calendar-journal-mvp) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-06-14 -- Phase 03 planning complete
+Last activity: 2026-06-14 -- Phase 03 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -58,6 +58,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-walking-skeleton P03 | 12 | 2 tasks | 15 files |
 | Phase 01-walking-skeleton P04 | 8 | 2 tasks | 22 files |
 | Phase 01-walking-skeleton P05 | 25 | 3 tasks | 21 files |
+| Phase 03-calendar-journal-mvp P01 | 6 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,7 @@ Recent decisions affecting current work:
 - [Phase 1 P05]: WebStandardStreamableHTTPServerTransport used instead of StreamableHTTPServerTransport + fetch-to-node — native Bun/Hono fetch API, no bridge needed, eliminates exactOptionalPropertyTypes incompatibility from getter/setter onclose
 - [Phase 1 P05]: result.ok guard required before result.value even with Result<T, never> — exactOptionalPropertyTypes strictness
 - [Phase 1 P05]: main field added to @morai/contracts, @morai/core, @morai/adapters package.json — Vite workspace resolver fix (same as @morai/shared in plan 03)
+- [Phase ?]: Added optionType to schema.ts (calendars table) in Plan 01 so adapters compile against extended Calendar type; SQL migration deferred to plan 04 per D-01
 
 ### Pending Todos
 
@@ -107,6 +109,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-14T02:19:06.232Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-calendar-journal-mvp/03-CONTEXT.md
+Last session: 2026-06-14T13:29:24.240Z
+Stopped at: Completed 03-01-PLAN.md — Calendar types foundation
+Resume file: None
