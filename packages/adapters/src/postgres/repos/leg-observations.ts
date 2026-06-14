@@ -5,12 +5,14 @@ import type {
   ForUpsertingContracts,
   ForReadingPendingObs,
   ForWritingBsmResults,
+  ForReadingLatestLegObs,
   ObservationRow,
   ContractRow,
   PendingObs,
+  LegSnapshot,
   StorageError,
 } from "@morai/core";
-import { and, isNull, isNotNull, eq, inArray } from "drizzle-orm";
+import { and, isNull, isNotNull, eq, inArray, desc } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -37,6 +39,7 @@ export type PostgresLegObservationsRepo = {
   readonly upsertContracts: ForUpsertingContracts;
   readonly readPendingObs: ForReadingPendingObs;
   readonly writeBsmResults: ForWritingBsmResults;
+  readonly getLatestLegObs: ForReadingLatestLegObs;
 };
 
 export function makePostgresLegObservationsRepo(
@@ -228,5 +231,57 @@ export function makePostgresLegObservationsRepo(
     }
   };
 
-  return { persistObservations, upsertContracts, readPendingObs, writeBsmResults };
+  // ─── ForReadingLatestLegObs ───────────────────────────────────────────────
+  // CAL-06: latest leg_observation for an OCC symbol — backs get_live_greeks.
+  // ORDER BY time DESC LIMIT 1 → the most-recent row.
+  // Returns ok(null) when no observation exists for the symbol.
+  // T-03-15: Drizzle parameterized eq(contract, occSymbol) — no raw interpolation.
+  const getLatestLegObs: ForReadingLatestLegObs = async (
+    occSymbol,
+  ): Promise<Result<LegSnapshot | null, StorageError>> => {
+    try {
+      const rows = await db
+        .select({
+          contract: legObservations.contract,
+          mark: legObservations.mark,
+          underlyingPrice: legObservations.underlyingPrice,
+          iv: legObservations.iv,
+          bsmIv: legObservations.bsmIv,
+          bsmDelta: legObservations.bsmDelta,
+          bsmGamma: legObservations.bsmGamma,
+          bsmTheta: legObservations.bsmTheta,
+          bsmVega: legObservations.bsmVega,
+        })
+        .from(legObservations)
+        .where(eq(legObservations.contract, occSymbol))
+        .orderBy(desc(legObservations.time))
+        .limit(1);
+
+      const row = rows[0];
+      if (row === undefined) return ok(null);
+
+      // Reuse the same mapping helper as resolveLegSnapshot in calendar-snapshots.ts
+      const parsedOcc = parseOccSymbol(row.contract);
+      if (!parsedOcc.ok) return ok(null); // malformed symbol — shouldn't happen
+
+      const leg: LegSnapshot = {
+        occSymbol: formatOccSymbol(parsedOcc.value),
+        mark: parseFloat(row.mark),
+        underlyingPrice: parseFloat(row.underlyingPrice),
+        ivRaw: row.iv !== null ? parseFloat(row.iv) : null,
+        bsmIv: row.bsmIv,
+        bsmDelta: row.bsmDelta,
+        bsmGamma: row.bsmGamma,
+        bsmTheta: row.bsmTheta,
+        bsmVega: row.bsmVega,
+      };
+
+      return ok(leg);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  return { persistObservations, upsertContracts, readPendingObs, writeBsmResults, getLatestLegObs };
 }

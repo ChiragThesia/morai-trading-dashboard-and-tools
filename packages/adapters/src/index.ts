@@ -34,6 +34,8 @@ export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";
 export { makeMemoryCalendarSnapshotsRepo } from "./memory/calendar-snapshots.ts";
 export type { MemoryCalendarSnapshotsRepo } from "./memory/calendar-snapshots.ts";
 export type { MemoryCalendarsRepo } from "./memory/calendars.ts";
+export { makeMemoryLegObservationsRepo } from "./memory/leg-observations.ts";
+export type { MemoryLegObservationsRepo } from "./memory/leg-observations.ts";
 export { makeMemoryChainAdapter } from "./memory/chain.ts";
 export type { MemoryChainAdapter } from "./memory/chain.ts";
 export { makeMemoryRateAdapter } from "./memory/rate.ts";
