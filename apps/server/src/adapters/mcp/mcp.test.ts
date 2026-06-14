@@ -254,10 +254,17 @@ describe("MCP router", () => {
     const result = await fakeListCalendars();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    // Serialise Date fields to ISO strings, matching the MCP tool handler's behavior
+    // (mirrors calendarRoutes — MCP-02: same transformation before contract parse).
+    const serialised = result.value.map((cal) => ({
+      ...cal,
+      openedAt: cal.openedAt.toISOString(),
+      closedAt: cal.closedAt !== null ? cal.closedAt.toISOString() : null,
+    }));
     expect(() =>
-      listCalendarsResponse.parse({ calendars: result.value }),
+      listCalendarsResponse.parse({ calendars: serialised }),
     ).not.toThrow();
-    const parsed = listCalendarsResponse.parse({ calendars: result.value });
+    const parsed = listCalendarsResponse.parse({ calendars: serialised });
     expect(parsed.calendars).toHaveLength(1);
     expect(parsed.calendars[0]?.id).toBe("550e8400-e29b-41d4-a716-446655440000");
   });
@@ -290,8 +297,16 @@ describe("MCP router", () => {
     const snapshots = result.value;
     expect(snapshots).not.toBeNull();
     if (snapshots === null) return;
-    expect(() => journalResponse.parse({ snapshots })).not.toThrow();
-    const parsed = journalResponse.parse({ snapshots });
+    // Serialise Date fields to ISO strings, matching the MCP tool handler's behavior
+    // (mirrors journalRoutes: row.time.toISOString() — MCP-02 same contract).
+    const serialisedSnapshots = snapshots.map((row) => ({
+      ...row,
+      time: row.time instanceof Date ? row.time.toISOString() : row.time,
+    }));
+    expect(() =>
+      journalResponse.parse({ snapshots: serialisedSnapshots }),
+    ).not.toThrow();
+    const parsed = journalResponse.parse({ snapshots: serialisedSnapshots });
     expect(parsed.snapshots).toHaveLength(1);
   });
 
