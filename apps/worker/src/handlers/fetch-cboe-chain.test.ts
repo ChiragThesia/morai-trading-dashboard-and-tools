@@ -123,6 +123,28 @@ describe("makeFetchCboeChainHandler", () => {
     );
   });
 
+  it("when NYSE holiday: use-case NOT called and console.warn logged (CAL-05)", async () => {
+    // 2026-01-01T14:00:00Z = 09:00 EST — New Year's Day (NYSE full closure)
+    const holidayInstant = new Date("2026-01-01T14:00:00Z");
+
+    const fetchChainUseCase = vi.fn().mockResolvedValue(ok(undefined));
+    const boss = makeBossStub();
+
+    const handler = makeFetchCboeChainHandler({
+      fetchChainUseCase,
+      boss,
+      now: () => holidayInstant,
+    });
+
+    await handler([makeJob()]);
+
+    expect(fetchChainUseCase).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledOnce();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("outside RTH or NYSE holiday"),
+    );
+  });
+
   it("array guard: undefined job returns immediately without calling use-case", async () => {
     const insideRth = new Date("2026-06-15T14:00:00Z");
     const fetchChainUseCase = vi.fn();
