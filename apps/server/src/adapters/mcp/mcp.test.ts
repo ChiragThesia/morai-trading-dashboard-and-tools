@@ -363,27 +363,29 @@ describe("MCP router", () => {
     const server = new McpServer({ name: "test", version: "0.0.1" });
     registerGetJournalTool(server, fakeGetJournal);
 
-    // Access the registered tool's handler via Reflect (private property, no 'as' cast).
-    // Narrow the result with runtime checks before calling.
+    // Access the registered tool's handler via Reflect (private field, not in TS types).
+    // All property lookups use Reflect.get which returns unknown — no 'as' casts needed.
     const toolsMap: unknown = Reflect.get(server, "_registeredTools");
     if (typeof toolsMap !== "object" || toolsMap === null) {
       throw new Error("_registeredTools not found on McpServer instance");
     }
-    const toolEntry: unknown = (toolsMap as Record<string, unknown>)["get_journal"];
+    const toolEntry: unknown = Reflect.get(toolsMap, "get_journal");
     if (typeof toolEntry !== "object" || toolEntry === null) {
       throw new Error("get_journal tool not registered");
     }
-    const handler: unknown = (toolEntry as Record<string, unknown>)["handler"];
+    const handler: unknown = Reflect.get(toolEntry, "handler");
     if (typeof handler !== "function") {
       throw new Error("get_journal handler is not a function");
     }
 
-    // Pass invalid args (not a UUID) — must return typed error content, NOT throw
-    const result: unknown = await handler({ calendarId: "not-a-uuid" });
+    // Pass invalid args (not a UUID) — must return typed error content, NOT throw.
+    // Reflect.apply avoids any type assertion: handler is Function (narrowed above),
+    // Reflect.apply accepts Function and returns unknown.
+    const result: unknown = await Reflect.apply(handler, undefined, [{ calendarId: "not-a-uuid" }]);
     if (typeof result !== "object" || result === null) {
       throw new Error("handler did not return an object");
     }
-    const content: unknown = (result as Record<string, unknown>)["content"];
+    const content: unknown = Reflect.get(result, "content");
     expect(Array.isArray(content)).toBe(true);
     if (!Array.isArray(content)) return;
     expect(content.length).toBeGreaterThan(0);
@@ -391,9 +393,9 @@ describe("MCP router", () => {
     if (typeof first !== "object" || first === null) {
       throw new Error("first content item is not an object");
     }
-    expect((first as Record<string, unknown>)["type"]).toBe("text");
+    expect(Reflect.get(first, "type")).toBe("text");
     // The error text must contain "invalid calendarId"
-    const text: unknown = (first as Record<string, unknown>)["text"];
+    const text: unknown = Reflect.get(first, "text");
     expect(typeof text).toBe("string");
     if (typeof text === "string") {
       expect(text).toContain("invalid calendarId");
@@ -413,20 +415,20 @@ describe("MCP router", () => {
     if (typeof toolsMap !== "object" || toolsMap === null) {
       throw new Error("_registeredTools not found on McpServer instance");
     }
-    const toolEntry: unknown = (toolsMap as Record<string, unknown>)["get_live_greeks"];
+    const toolEntry: unknown = Reflect.get(toolsMap, "get_live_greeks");
     if (typeof toolEntry !== "object" || toolEntry === null) {
       throw new Error("get_live_greeks tool not registered");
     }
-    const handler: unknown = (toolEntry as Record<string, unknown>)["handler"];
+    const handler: unknown = Reflect.get(toolEntry, "handler");
     if (typeof handler !== "function") {
       throw new Error("get_live_greeks handler is not a function");
     }
 
-    const result: unknown = await handler({ calendarId: "not-a-uuid" });
+    const result: unknown = await Reflect.apply(handler, undefined, [{ calendarId: "not-a-uuid" }]);
     if (typeof result !== "object" || result === null) {
       throw new Error("handler did not return an object");
     }
-    const content: unknown = (result as Record<string, unknown>)["content"];
+    const content: unknown = Reflect.get(result, "content");
     expect(Array.isArray(content)).toBe(true);
     if (!Array.isArray(content)) return;
     expect(content.length).toBeGreaterThan(0);
@@ -434,8 +436,8 @@ describe("MCP router", () => {
     if (typeof first !== "object" || first === null) {
       throw new Error("first content item is not an object");
     }
-    expect((first as Record<string, unknown>)["type"]).toBe("text");
-    const text: unknown = (first as Record<string, unknown>)["text"];
+    expect(Reflect.get(first, "type")).toBe("text");
+    const text: unknown = Reflect.get(first, "text");
     expect(typeof text).toBe("string");
     if (typeof text === "string") {
       expect(text).toContain("invalid calendarId");

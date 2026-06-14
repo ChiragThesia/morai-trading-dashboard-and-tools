@@ -7,10 +7,12 @@
  * Architecture law: every driven port change updates the in-memory adapter
  * in the same PR (architecture-boundaries.md §8).
  *
- * readJournal semantics diverge slightly from Postgres:
- *   - Postgres returns null for an unknown calendarId (requires DB FK lookup).
- *   - Memory returns [] for unknown calendarIds (no FK enforcement).
- *   The null-on-unknown path is exercised by the Postgres contract test.
+ * readJournal semantics mirror Postgres (WR-07 parity fix):
+ *   - Unknown calendarId → ok(null)  (drives 404 in the route layer)
+ *   - Known calendarId, no rows → ok([])
+ * Use seedCalendar(id) to register a calendar id as known before persisting
+ * snapshots, mirroring the FK that the Postgres adapter enforces via the
+ * calendars table.
  *
  * resolveLegSnapshot: backed by seedable LegSnapshot store. Callers seed
  * observations via seedLegSnapshot before calling the use-case.
@@ -32,6 +34,12 @@ export type MemoryCalendarSnapshotsRepo = {
   readonly readJournal: ForReadingJournal;
   readonly resolveLegSnapshot: ForResolvingLegSnapshot;
   /**
+   * seedCalendar — register a calendarId as known so readJournal returns
+   * ok([]) (not ok(null)) for it. Mirrors the FK enforced by the Postgres
+   * calendars table (architecture-boundaries §8 twin parity).
+   */
+  readonly seedCalendar: (id: string) => void;
+  /**
    * seedLegSnapshot — seed a LegSnapshot so resolveLegSnapshot can return it.
    * Key: `${underlying}:${strike}:${optionType}:${expiry}`
    */
@@ -48,6 +56,10 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
   // Key: `${time.toISOString()}:${calendarId}` for composite-PK idempotency
   const store = new Map<string, SnapshotRow>();
 
+  // Tracks calendar ids registered via seedCalendar — mirrors the Postgres
+  // calendars table FK. readJournal returns null for ids not in this set.
+  const knownIds = new Set<string>();
+
   // Key: `${underlying}:${strike}:${optionType}:${expiry}`
   const legStore = new Map<string, LegSnapshot>();
 
@@ -59,11 +71,13 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok(undefined);
   };
 
-  // Memory readJournal returns [] for unknown calendarIds (no FK enforcement).
-  // The Postgres null-on-unknown path is exercised by the contract test.
+  // readJournal mirrors Postgres semantics (architecture-boundaries §8 twin parity):
+  //   Unknown calendarId → ok(null)   (drives 404 in the route layer)
+  //   Known calendarId, no rows → ok([])
   const readJournal: ForReadingJournal = async (
     calendarId: string,
   ): Promise<Result<ReadonlyArray<SnapshotRow> | null, StorageError>> => {
+    if (!knownIds.has(calendarId)) return ok(null);
     const rows = [...store.values()]
       .filter((r) => r.calendarId === calendarId)
       .sort((a, b) => a.time.getTime() - b.time.getTime());
@@ -80,6 +94,10 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok(legStore.get(key) ?? null);
   };
 
+  const seedCalendar = (id: string): void => {
+    knownIds.add(id);
+  };
+
   const seedLegSnapshot = (
     underlying: string,
     strike: number,
@@ -91,5 +109,5 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     legStore.set(key, leg);
   };
 
-  return { persistSnapshot, readJournal, resolveLegSnapshot, seedLegSnapshot };
+  return { persistSnapshot, readJournal, resolveLegSnapshot, seedCalendar, seedLegSnapshot };
 }
