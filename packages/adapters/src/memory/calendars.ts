@@ -1,35 +1,47 @@
-import { ok, err } from "@morai/shared";
-import type { Result } from "@morai/shared";
+import { ok, err, formatOccSymbol } from "@morai/shared";
+import type { Result, OccSymbol } from "@morai/shared";
 import type {
   ForGettingOpenCalendars,
   ForPingingDb,
+  ForRegisteringCalendar,
+  ForListingCalendars,
+  ForClosingCalendar,
+  ForGettingCalendarById,
+  ForGettingOpenCalendarLegs,
   Calendar,
   StorageError,
+  CalendarNotFound,
+  CalendarAlreadyClosed,
 } from "@morai/core";
 
 /**
  * makeMemoryCalendarsRepo — in-memory twin of the Postgres adapter.
  *
- * Implements the ForGettingOpenCalendars and ForPingingDb ports using a plain
- * Map — no Docker, no network, always available.
+ * Implements all calendar ports using a plain Map — no Docker, no network,
+ * always available.
  *
- * Architectural rule: every driven port change updates the in-memory adapter
+ * Architecture law: every driven port change updates the in-memory adapter
  * in the same PR (architecture-boundaries.md §8).
  */
 export type MemoryCalendarsRepo = {
   readonly getOpenCalendars: ForGettingOpenCalendars;
   readonly pingDb: ForPingingDb;
+  readonly registerCalendar: ForRegisteringCalendar;
+  readonly listCalendars: ForListingCalendars;
+  readonly closeCalendar: ForClosingCalendar;
+  readonly getCalendarById: ForGettingCalendarById;
+  readonly getOpenCalendarLegs: ForGettingOpenCalendarLegs;
   readonly seedOpenCalendar: (calendar: Calendar) => Promise<void>;
 };
 
 export function makeMemoryCalendarsRepo(): MemoryCalendarsRepo {
-  // Backing store: id → Calendar (full extended type from Phase 3)
+  // Backing store: id → Calendar (full extended type)
   const store = new Map<string, Calendar>();
 
   const getOpenCalendars: ForGettingOpenCalendars = async (): Promise<
     Result<ReadonlyArray<Calendar>, StorageError>
   > => {
-    return ok([...store.values()]);
+    return ok([...store.values()].filter((c) => c.status === "open"));
   };
 
   const pingDb: ForPingingDb = async (): Promise<
@@ -38,9 +50,113 @@ export function makeMemoryCalendarsRepo(): MemoryCalendarsRepo {
     return ok(undefined);
   };
 
+  const registerCalendar: ForRegisteringCalendar = async (
+    input,
+  ): Promise<Result<Calendar, StorageError>> => {
+    const id = crypto.randomUUID();
+    const calendar: Calendar = {
+      id,
+      underlying: input.underlying,
+      strike: input.strike,
+      optionType: input.optionType,
+      frontExpiry: input.frontExpiry,
+      backExpiry: input.backExpiry,
+      qty: input.qty,
+      openNetDebit: input.openNetDebit,
+      status: "open",
+      openedAt: input.openedAt,
+      closedAt: null,
+      notes: input.notes ?? null,
+    };
+    store.set(id, calendar);
+    return ok(calendar);
+  };
+
+  const listCalendars: ForListingCalendars = async (
+    filter?: "open" | "closed",
+  ): Promise<Result<ReadonlyArray<Calendar>, StorageError>> => {
+    const all = [...store.values()];
+    const filtered =
+      filter !== undefined ? all.filter((c) => c.status === filter) : all;
+    // Sort openedAt desc (most recent first)
+    const sorted = filtered.sort(
+      (a, b) => b.openedAt.getTime() - a.openedAt.getTime(),
+    );
+    return ok(sorted);
+  };
+
+  const closeCalendar: ForClosingCalendar = async (
+    id: string,
+    closeNetCredit: number,
+  ): Promise<
+    Result<Calendar, StorageError | CalendarNotFound | CalendarAlreadyClosed>
+  > => {
+    const existing = store.get(id);
+    if (existing === undefined) {
+      return err<CalendarNotFound>({ kind: "not-found" });
+    }
+    if (existing.status === "closed") {
+      return err<CalendarAlreadyClosed>({ kind: "already-closed" });
+    }
+    // closeNetCredit is stored in the DB by the Postgres adapter but is not part of
+    // the Calendar domain type (it lives in the calendars table only).
+    // The in-memory twin captures status + closedAt only.
+    const updated: Calendar = {
+      ...existing,
+      status: "closed",
+      closedAt: new Date(),
+    };
+    // closeNetCredit is intentionally not stored in-memory (not in Calendar type)
+    const _closeNetCredit = closeNetCredit; // acknowledge param without void-floating
+    void _closeNetCredit;
+    store.set(id, updated);
+    return ok(updated);
+  };
+
+  const getCalendarById: ForGettingCalendarById = async (
+    id: string,
+  ): Promise<Result<Calendar | null, StorageError>> => {
+    return ok(store.get(id) ?? null);
+  };
+
+  const getOpenCalendarLegs: ForGettingOpenCalendarLegs = async (): Promise<
+    Result<ReadonlyArray<OccSymbol>, StorageError>
+  > => {
+    const symbolSet = new Set<OccSymbol>();
+    for (const calendar of store.values()) {
+      if (calendar.status !== "open") continue;
+      // OCC formatOccSymbol takes strike in points (not ×1000 int), so divide by 1000
+      const strikePoints = calendar.strike / 1000;
+      const front = formatOccSymbol({
+        root: calendar.underlying === "SPXW" ? "SPXW" : "SPX",
+        expiry: new Date(calendar.frontExpiry + "T12:00:00Z"),
+        type: calendar.optionType,
+        strike: strikePoints,
+      });
+      const back = formatOccSymbol({
+        root: calendar.underlying === "SPXW" ? "SPXW" : "SPX",
+        expiry: new Date(calendar.backExpiry + "T12:00:00Z"),
+        type: calendar.optionType,
+        strike: strikePoints,
+      });
+      symbolSet.add(front);
+      symbolSet.add(back);
+    }
+    return ok([...symbolSet]);
+  };
+
   const seedOpenCalendar = async (calendar: Calendar): Promise<void> => {
     store.set(calendar.id, calendar);
   };
 
-  return { getOpenCalendars, pingDb, seedOpenCalendar };
+  return {
+    getOpenCalendars,
+    pingDb,
+    registerCalendar,
+    listCalendars,
+    closeCalendar,
+    getCalendarById,
+    getOpenCalendarLegs,
+    seedOpenCalendar,
+  };
 }

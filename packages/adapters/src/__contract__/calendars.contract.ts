@@ -194,7 +194,11 @@ export function runCalendarsContractTests(
 
     describe("closeCalendar", () => {
       it("returns not-found when id is unknown", async () => {
-        const result = await repo.closeCalendar("nonexistent-id", 3.25);
+        // Use a valid UUID that doesn't exist in the store
+        const result = await repo.closeCalendar(
+          "00000000-0000-0000-0000-000000000000",
+          3.25,
+        );
         expect(result.ok).toBe(false);
         if (!result.ok) {
           expect(result.error.kind).toBe("not-found");
@@ -252,7 +256,10 @@ export function runCalendarsContractTests(
 
     describe("getCalendarById", () => {
       it("returns null for an unknown id", async () => {
-        const result = await repo.getCalendarById("nonexistent-id");
+        // Use a valid UUID format that doesn't exist in the store
+        const result = await repo.getCalendarById(
+          "00000000-0000-0000-0000-000000000000",
+        );
         expect(result.ok).toBe(true);
         if (result.ok) {
           expect(result.value).toBeNull();

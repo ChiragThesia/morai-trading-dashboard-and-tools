@@ -49,7 +49,9 @@ export function makeRegisterCalendarUseCase(
         message: "backExpiry must be after frontExpiry",
       });
     }
-    return deps.persistCalendar({
+    // exactOptionalPropertyTypes: omit notes entirely when undefined rather than
+    // passing undefined as a value (ForRegisteringCalendar.notes is optional: string)
+    const payload: Parameters<ForRegisteringCalendar>[0] = {
       underlying: input.underlying,
       strike: input.strike,
       optionType: input.optionType,
@@ -58,7 +60,8 @@ export function makeRegisterCalendarUseCase(
       qty: input.qty,
       openNetDebit: input.openNetDebit,
       openedAt: input.openedAt ?? deps.now(),
-      notes: input.notes,
-    });
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
+    };
+    return deps.persistCalendar(payload);
   };
 }
