@@ -116,11 +116,19 @@ export function registerGetJournalTool(
       inputSchema: { calendarId: z.string().uuid() },
     },
     async (args) => {
-      // Re-parse at boundary (thin-adapter rule + typescript.md parse-don't-cast):
-      // exactOptionalPropertyTypes requires args are re-parsed to narrow the type safely.
-      const { calendarId } = z
-        .object({ calendarId: z.string().uuid() })
-        .parse(args);
+      // safeParse at boundary — never throw on invalid input (SPEC §7, CR-02).
+      // On failure, return descriptive error content; the MCP SDK inputSchema
+      // validation catches most malformed args first, but safeParse here guards
+      // the handler itself and collapses the prior double-parse (WR-01).
+      const parsed = z.object({ calendarId: z.string().uuid() }).safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid calendarId" }) },
+          ],
+        };
+      }
+      const { calendarId } = parsed.data;
       const result = await getJournal(calendarId);
       if (!result.ok) {
         return { content: [{ type: "text" as const, text: "internal error" }] };
@@ -169,10 +177,16 @@ export function registerGetLiveGreeksTool(
       inputSchema: { calendarId: z.string().uuid() },
     },
     async (args) => {
-      // Re-parse at boundary (RESEARCH.md §Focus Area 2, Pitfall 6):
-      const { calendarId } = z
-        .object({ calendarId: z.string().uuid() })
-        .parse(args);
+      // safeParse at boundary — never throw on invalid input (SPEC §7, CR-02).
+      const parsed = z.object({ calendarId: z.string().uuid() }).safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid calendarId" }) },
+          ],
+        };
+      }
+      const { calendarId } = parsed.data;
       const result = await getLiveGreeks(calendarId);
       if (!result.ok) {
         return { content: [{ type: "text" as const, text: "internal error" }] };
