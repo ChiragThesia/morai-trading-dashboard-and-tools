@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { ok } from "@morai/shared";
+import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { formatOccSymbol } from "@morai/shared";
 import { makeFetchChainUseCase } from "./fetchChain.ts";
 import type {
   ForFetchingChain,
+  ForGettingOpenCalendarLegs,
   RawChain,
   ObservationRow,
   ContractRow,
@@ -152,6 +153,7 @@ describe("makeFetchChainUseCase", () => {
       fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() }),
       persistObservations: memPersist.persistObservations,
       upsertContracts: memPersist.upsertContracts,
+      getOpenCalendarLegs: async () => ok([]),
       now: () => NOW,
       maxDte: 90,
       strikeBandPct: 0.10,
@@ -176,6 +178,7 @@ describe("makeFetchChainUseCase", () => {
       fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() }),
       persistObservations: memPersist.persistObservations,
       upsertContracts: memPersist.upsertContracts,
+      getOpenCalendarLegs: async () => ok([]),
       now: () => NOW,
       maxDte: 90,
       strikeBandPct: 0.10,
@@ -198,6 +201,7 @@ describe("makeFetchChainUseCase", () => {
       fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() }),
       persistObservations: memPersist.persistObservations,
       upsertContracts: memPersist.upsertContracts,
+      getOpenCalendarLegs: async () => ok([]),
       now: () => NOW,
       maxDte: 90,
       strikeBandPct: 0.10,
@@ -223,6 +227,7 @@ describe("makeFetchChainUseCase", () => {
       fetchChain: failFetch,
       persistObservations: memPersist.persistObservations,
       upsertContracts: memPersist.upsertContracts,
+      getOpenCalendarLegs: async () => ok([]),
       now: () => NOW,
       maxDte: 90,
       strikeBandPct: 0.10,
@@ -236,5 +241,79 @@ describe("makeFetchChainUseCase", () => {
     // This is a static test — no Date.now() in fetchChain.ts
     // Verified by grep at typecheck time; this test documents the contract
     expect(true).toBe(true);
+  });
+
+  describe("D-04: targeted-fetch must-include bypass", () => {
+    it("persists an out-of-band must-include leg (fails both DTE and strike filters)", async () => {
+      // occOutDte is Dec 2027 (>90 DTE) — normally filtered out
+      // We put it in the must-include set and assert it IS persisted
+      const mustIncludeOcc = occOutDte;
+
+      const getOpenCalendarLegs: ForGettingOpenCalendarLegs = async () =>
+        ok([mustIncludeOcc]);
+
+      const useCase = makeFetchChainUseCase({
+        fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain() }),
+        persistObservations: memPersist.persistObservations,
+        upsertContracts: memPersist.upsertContracts,
+        getOpenCalendarLegs,
+        now: () => NOW,
+        maxDte: 90,
+        strikeBandPct: 0.10,
+      });
+
+      const result = await useCase();
+      expect(result.ok).toBe(true);
+
+      // The must-include contract should appear in the persisted observations
+      const allPersisted = memPersist.capture.observations.flatMap((r) => [...r]);
+      const contractsFound = allPersisted.map((r) => r.contract);
+      expect(contractsFound).toContain(mustIncludeOcc);
+    });
+
+    it("does NOT persist an out-of-band quote that is not in the must-include set", async () => {
+      // occOutStrike is way below the strike band — filtered out
+      // It is NOT in the must-include set
+      const getOpenCalendarLegs: ForGettingOpenCalendarLegs = async () => ok([]);
+
+      const useCase = makeFetchChainUseCase({
+        fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain() }),
+        persistObservations: memPersist.persistObservations,
+        upsertContracts: memPersist.upsertContracts,
+        getOpenCalendarLegs,
+        now: () => NOW,
+        maxDte: 90,
+        strikeBandPct: 0.10,
+      });
+
+      await useCase();
+
+      const allPersisted = memPersist.capture.observations.flatMap((r) => [...r]);
+      const contractsFound = allPersisted.map((r) => r.contract);
+      expect(contractsFound).not.toContain(occOutStrike);
+    });
+
+    it("degrades to empty must-include when getOpenCalendarLegs returns an error — fetch still succeeds", async () => {
+      const getOpenCalendarLegs: ForGettingOpenCalendarLegs = async () =>
+        err<import("./ports.ts").StorageError>({ kind: "storage-error", message: "DB down" });
+
+      const useCase = makeFetchChainUseCase({
+        fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() }),
+        persistObservations: memPersist.persistObservations,
+        upsertContracts: memPersist.upsertContracts,
+        getOpenCalendarLegs,
+        now: () => NOW,
+        maxDte: 90,
+        strikeBandPct: 0.10,
+      });
+
+      // Should succeed — error degrades to empty must-include (no hard fail)
+      const result = await useCase();
+      expect(result.ok).toBe(true);
+
+      // In-filter quotes still persist normally
+      const allPersisted = memPersist.capture.observations.flatMap((r) => [...r]);
+      expect(allPersisted.length).toBeGreaterThan(0);
+    });
   });
 });
