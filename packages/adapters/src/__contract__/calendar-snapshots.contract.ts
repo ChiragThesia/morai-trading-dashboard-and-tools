@@ -277,8 +277,11 @@ export function runCalendarSnapshotsContractTests(
         });
         expect(result.ok).toBe(true);
         if (!result.ok) return;
-        const leg = result.value as LegSnapshot;
-        expect(leg).not.toBeNull();
+        // result.value is LegSnapshot | null — guard handles the null case
+        const legOrNull = result.value;
+        expect(legOrNull).not.toBeNull();
+        if (legOrNull === null) return;
+        const leg: LegSnapshot = legOrNull;
         expect(leg.mark).toBeCloseTo(20.0, 2);
         expect(leg.underlyingPrice).toBeCloseTo(5010.0, 2);
         expect(leg.bsmIv).toBe("0.22");
@@ -307,7 +310,9 @@ export function runCalendarSnapshotsContractTests(
         });
         expect(result.ok).toBe(true);
         if (!result.ok) return;
-        const leg = result.value as LegSnapshot;
+        const leg2OrNull = result.value;
+        if (leg2OrNull === null) throw new Error("expected LegSnapshot but got null");
+        const leg: LegSnapshot = leg2OrNull;
         // Should return the t2 observation (mark=22.0, the latest)
         expect(leg.mark).toBeCloseTo(22.0, 2);
         expect(leg.bsmIv).toBe("0.23");
