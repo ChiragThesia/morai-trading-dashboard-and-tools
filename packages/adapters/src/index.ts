@@ -14,6 +14,8 @@ export { runMigrations } from "./postgres/migrate.ts";
 
 // Postgres adapters
 export { makePostgresCalendarsRepo } from "./postgres/repos/calendars.ts";
+export { makePostgresCalendarSnapshotsRepo } from "./postgres/repos/calendar-snapshots.ts";
+export type { PostgresCalendarSnapshotsRepo } from "./postgres/repos/calendar-snapshots.ts";
 export type { PostgresCalendarsRepo } from "./postgres/repos/calendars.ts";
 export { makePostgresLegObservationsRepo } from "./postgres/repos/leg-observations.ts";
 export type { PostgresLegObservationsRepo } from "./postgres/repos/leg-observations.ts";
@@ -29,6 +31,8 @@ export { makeFredRateAdapter } from "./http/fred.ts";
 
 // In-memory adapters (test doubles; also usable in development)
 export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";
+export { makeMemoryCalendarSnapshotsRepo } from "./memory/calendar-snapshots.ts";
+export type { MemoryCalendarSnapshotsRepo } from "./memory/calendar-snapshots.ts";
 export type { MemoryCalendarsRepo } from "./memory/calendars.ts";
 export { makeMemoryChainAdapter } from "./memory/chain.ts";
 export type { MemoryChainAdapter } from "./memory/chain.ts";
