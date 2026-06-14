@@ -96,9 +96,8 @@ describe("POST /api/calendars", () => {
     });
     expect(res.status).toBe(201);
     const body: unknown = await res.json();
-    expect(
-      typeof (body as { id: unknown }).id,
-    ).toBe("string");
+    // Parse to verify shape without type assertions
+    expect(body).toMatchObject({ id: expect.any(String) });
   });
 
   it("returns 400 on validation-error from use-case (back<=front)", async () => {
@@ -138,7 +137,7 @@ describe("GET /api/calendars", () => {
     const res = await app.request("/api/calendars");
     expect(res.status).toBe(200);
     const body: unknown = await res.json();
-    expect(Array.isArray((body as { calendars: unknown }).calendars)).toBe(true);
+    expect(body).toMatchObject({ calendars: expect.any(Array) });
   });
 
   it("returns 200 + empty array when no calendars", async () => {
@@ -146,7 +145,7 @@ describe("GET /api/calendars", () => {
     const res = await app.request("/api/calendars");
     expect(res.status).toBe(200);
     const body: unknown = await res.json();
-    expect((body as { calendars: unknown[] }).calendars).toHaveLength(0);
+    expect(body).toMatchObject({ calendars: [] });
   });
 
   it("passes ?status=open filter to use-case", async () => {
@@ -182,7 +181,7 @@ describe("POST /api/calendars/:id/close", () => {
     });
     expect(res.status).toBe(200);
     const body: unknown = await res.json();
-    expect((body as { status: string }).status).toBe("closed");
+    expect(body).toMatchObject({ status: "closed" });
   });
 
   it("returns 404 when calendar not found", async () => {

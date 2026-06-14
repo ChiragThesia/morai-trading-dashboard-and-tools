@@ -7,9 +7,15 @@
 
 import { bootConfig } from "./config.ts";
 import { makeDb, makePostgresCalendarsRepo, makePostgresJobRunsRepo } from "@morai/adapters";
-import { makeGetStatusUseCase } from "@morai/core";
+import {
+  makeGetStatusUseCase,
+  makeRegisterCalendarUseCase,
+  makeListCalendarsUseCase,
+  makeCloseCalendarUseCase,
+} from "@morai/core";
 import { Hono } from "hono";
 import { statusRoutes } from "./adapters/http/status.routes.ts";
+import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
 
 const config = bootConfig();
@@ -34,11 +40,24 @@ const getStatus = makeGetStatusUseCase({
   startedAt,
 });
 
+// Build the calendar use-cases
+const registerCalendar = makeRegisterCalendarUseCase({
+  persistCalendar: calendarsRepo.registerCalendar,
+  now: () => new Date(),
+});
+const listCalendars = makeListCalendarsUseCase({
+  listCalendars: calendarsRepo.listCalendars,
+});
+const closeCalendar = makeCloseCalendarUseCase({
+  closeCalendar: calendarsRepo.closeCalendar,
+});
+
 // Build the Hono app
 const app = new Hono();
 
 // Mount HTTP routes
 app.route("/api", statusRoutes(getStatus));
+app.route("/api", calendarRoutes(registerCalendar, listCalendars, closeCalendar));
 
 // Mount MCP transport at /mcp (bearer-protected, stateless)
 const mcpRouter = makeMcpRouter(config, getStatus);
