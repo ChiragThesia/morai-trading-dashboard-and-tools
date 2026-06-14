@@ -4,6 +4,7 @@ import type {
   ForUpsertingContracts,
   ForReadingPendingObs,
   ForWritingBsmResults,
+  ForReadingLatestLegObs,
   ObservationRow,
   ContractRow,
 } from "@morai/core";
@@ -29,6 +30,7 @@ export type LegObservationsRepo = {
   readonly upsertContracts: ForUpsertingContracts;
   readonly readPendingObs: ForReadingPendingObs;
   readonly writeBsmResults: ForWritingBsmResults;
+  readonly getLatestLegObs: ForReadingLatestLegObs;
   /** Count rows in leg_observations for the given time slot */
   readonly countObservations: (time: Date) => Promise<number>;
   /** Count rows in contracts for the given roots */
@@ -387,6 +389,67 @@ export function runLegObservationsContractTests(
           (obs) => obs.time.getTime() === observationTime.getTime(),
         );
         expect(ourPending).toHaveLength(0);
+      });
+    });
+
+    describe("getLatestLegObs", () => {
+      it("returns the latest observation row for an OCC symbol (hit)", async () => {
+        const { observations, contracts: contractRows } = makeFixtureRows(observationTime);
+        const obs0 = observations[0];
+        if (!obs0) throw new Error("no observation");
+
+        await repo.upsertContracts(contractRows);
+        await repo.persistObservations(observations);
+
+        const result = await repo.getLatestLegObs(obs0.contract);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).not.toBeNull();
+        if (result.value === null) return;
+        expect(result.value.occSymbol).toBe(obs0.contract);
+        expect(result.value.mark).toBeCloseTo(obs0.mark, 5);
+      });
+
+      it("returns null for a symbol with no observations (miss)", async () => {
+        const unknownOcc = formatOccSymbol({
+          root: "SPX",
+          expiry: new Date(2027, 0, 15),
+          type: "P",
+          strike: 9999,
+        });
+        const result = await repo.getLatestLegObs(unknownOcc);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toBeNull();
+      });
+
+      it("returns the latest row when multiple observations exist (ORDER BY time DESC LIMIT 1)", async () => {
+        const { observations: firstObs, contracts: contractRows } = makeFixtureRows(observationTime);
+        const firstObs0 = firstObs[0];
+        if (!firstObs0) throw new Error("no observation");
+
+        // Insert a second observation at a later time for the same contract
+        const laterTime = new Date(observationTime.getTime() + 30 * 60 * 1000);
+        laterTime.setMilliseconds(0);
+        const laterObs: ObservationRow = {
+          ...firstObs0,
+          time: laterTime,
+          mark: 99.99,
+          underlyingPrice: 8000,
+        };
+
+        await repo.upsertContracts(contractRows);
+        await repo.persistObservations(firstObs);
+        await repo.persistObservations([laterObs]);
+
+        const result = await repo.getLatestLegObs(firstObs0.contract);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).not.toBeNull();
+        if (result.value === null) return;
+        // Must return the LATEST (later-time) observation
+        expect(result.value.mark).toBeCloseTo(99.99, 2);
+        expect(result.value.underlyingPrice).toBeCloseTo(8000, 0);
       });
     });
   });
