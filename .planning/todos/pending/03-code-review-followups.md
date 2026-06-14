@@ -30,13 +30,18 @@ or fix manually.
 
 ## Pre-existing Phase-2 robustness (out of phase-3 scope)
 
-- **CR-04** `leg-observations.ts` `readPendingObs` silently drops observations with
+- **CR-04** ~~`leg-observations.ts` `readPendingObs` silently drops observations with
   no matching `contracts` row (orphan race if a run crashes between
-  `persistObservations` and `upsertContracts`).
-- **CR-05** `leg-observations.ts` `writeBsmResults` issues N individual UPDATEs with
-  no transaction → partial-write risk; wrap in a transaction.
-- **WR-05** `readPendingObs` builds expiry via `new Date(y, m-1, d)` (local time) —
-  wrong on a non-ET server.
+  `persistObservations` and `upsertContracts`).~~ **DONE** (2026-06-14):
+  (a) `fetchChain.ts` now upserts contracts BEFORE persisting observations.
+  (b) `readPendingObs` emits `console.warn` for any orphaned symbols.
+- **CR-05** ~~`leg-observations.ts` `writeBsmResults` issues N individual UPDATEs with
+  no transaction → partial-write risk; wrap in a transaction.~~ **DONE** (2026-06-14):
+  `writeBsmResults` now wraps the batch in `db.transaction(async (tx) => {...})`.
+- **WR-05** ~~`readPendingObs` builds expiry via `new Date(y, m-1, d)` (local time) —
+  wrong on a non-ET server.~~ **DONE** (2026-06-14):
+  `readPendingObs` now uses `new Date(Date.UTC(...))`. `isThirdFriday` and
+  `computeT` updated to use UTC accessors consistently.
 
 ## Spec question (NOT a bug)
 
