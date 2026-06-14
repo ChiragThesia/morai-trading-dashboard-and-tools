@@ -1,5 +1,5 @@
 import type { Job } from "pg-boss";
-import { isWithinRth } from "@morai/core";
+import { isWithinRth, isNyseHoliday } from "@morai/core";
 import type { ForRunningFetchChain } from "@morai/core";
 
 // Minimal boss interface — only what this handler uses (D-08: no manual trigger)
@@ -39,9 +39,10 @@ export function makeFetchCboeChainHandler(
     // Pitfall 2 (pg-boss v12): array element can be undefined
     if (job === undefined) return;
 
-    // D-06: RTH self-check — no-op outside market hours
-    if (!isWithinRth(deps.now())) {
-      console.warn("fetch-cboe-chain: skipping — outside RTH");
+    // D-06 / CAL-05: RTH + NYSE holiday self-check — no-op outside market hours or on holidays
+    const now = deps.now();
+    if (!isWithinRth(now) || isNyseHoliday(now)) {
+      console.warn("fetch-cboe-chain: skipping — outside RTH or NYSE holiday");
       return;
     }
 
