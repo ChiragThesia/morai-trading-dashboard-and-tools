@@ -45,6 +45,9 @@ export { makeFetchChainUseCase } from "./application/fetchChain.ts";
 export type { ForRunningFetchChain, FetchChainDeps } from "./application/fetchChain.ts";
 export { makeFetchRateUseCase } from "./application/fetchRate.ts";
 export { makeComputeBsmGreeksUseCase } from "./application/computeBsmGreeks.ts";
+// Snapshot use-case (Phase 3, plan 05)
+export { makeSnapshotCalendarsUseCase } from "./application/snapshotCalendars.ts";
+export type { ForRunningSnapshotCalendars, SnapshotCalendarsDeps } from "./application/snapshotCalendars.ts";
 // Calendar CRUD use-case factories (Phase 3, plan 03)
 export { makeRegisterCalendarUseCase } from "./application/registerCalendar.ts";
 export type {
