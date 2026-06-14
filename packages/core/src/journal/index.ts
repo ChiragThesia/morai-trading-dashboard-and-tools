@@ -24,6 +24,20 @@ export type {
   JobRunRecord,
   JobRunMap,
   ForReadingJobRuns,
+  // Phase 3 calendar domain types and ports
+  CalendarNotFound,
+  CalendarAlreadyClosed,
+  ForRegisteringCalendar,
+  ForListingCalendars,
+  ForGettingCalendarById,
+  ForClosingCalendar,
+  ForGettingOpenCalendarLegs,
+  LegSnapshot,
+  ForResolvingLegSnapshot,
+  SnapshotRow,
+  ForPersistingSnapshot,
+  ForReadingJournal,
+  ForReadingLatestLegObs,
 } from "./application/ports.ts";
 export type { ForGettingStatus, StatusPayload, StatusError } from "./application/getStatus.ts";
 export { makeGetStatusUseCase } from "./application/getStatus.ts";
@@ -36,5 +50,5 @@ export { bsmPrice, bsmGreeks, bsmVega } from "./domain/bsm.ts";
 export type { BsmGreeks } from "./domain/bsm.ts";
 export { invertIv } from "./domain/iv-inversion.ts";
 export type { IvError } from "./domain/iv-inversion.ts";
-export { computeT, isThirdFriday } from "./domain/dte.ts";
+export { computeT, isThirdFriday, calendarDte } from "./domain/dte.ts";
 export { isWithinRth } from "./domain/rth-window.ts";

@@ -63,6 +63,36 @@ function nthSundayUtc(year: number, month: number, n: number): Date {
 // ─── Public functions ──────────────────────────────────────────
 
 /**
+ * calendarDte — integer calendar-day DTE from `now` to `expiry`.
+ *
+ * Uses UTC-floored calendar days: both dates are snapped to midnight UTC before
+ * computing the difference, so the result is stable across timezones and DST
+ * transitions (no local-time drift).
+ *
+ * Clamped at 0 — never returns a negative value for expired dates.
+ *
+ * This is the integer DTE the snapshot's dteFront/dteBack columns use.
+ * For the BSM year-fraction T use computeT instead.
+ *
+ * @param now    - Current wall-clock time (injected; never call Date.now() here)
+ * @param expiry - Option expiry date
+ * @returns integer calendar days until expiry, ≥ 0
+ */
+export function calendarDte(now: Date, expiry: Date): number {
+  const nowMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const expiryMs = Date.UTC(
+    expiry.getUTCFullYear(),
+    expiry.getUTCMonth(),
+    expiry.getUTCDate(),
+  );
+  return Math.max(0, Math.floor((expiryMs - nowMs) / 86_400_000));
+}
+
+/**
  * isThirdFriday — true if `d` is the 3rd Friday of its calendar month.
  *
  * Definition: the first Friday on or after the 15th of the month.
