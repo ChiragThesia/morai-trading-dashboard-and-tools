@@ -45,6 +45,17 @@ export { makeFetchChainUseCase } from "./application/fetchChain.ts";
 export type { ForRunningFetchChain, FetchChainDeps } from "./application/fetchChain.ts";
 export { makeFetchRateUseCase } from "./application/fetchRate.ts";
 export { makeComputeBsmGreeksUseCase } from "./application/computeBsmGreeks.ts";
+// Calendar CRUD use-case factories (Phase 3, plan 03)
+export { makeRegisterCalendarUseCase } from "./application/registerCalendar.ts";
+export type {
+  ForRunningRegisterCalendar,
+  RegisterCalendarDeps,
+  ValidationError,
+} from "./application/registerCalendar.ts";
+export { makeListCalendarsUseCase } from "./application/listCalendars.ts";
+export type { ListCalendarsDeps } from "./application/listCalendars.ts";
+export { makeCloseCalendarUseCase } from "./application/closeCalendar.ts";
+export type { CloseCalendarDeps } from "./application/closeCalendar.ts";
 // Domain re-exports (Plan 02/03/06) — BSM engine and IV inversion
 export { bsmPrice, bsmGreeks, bsmVega } from "./domain/bsm.ts";
 export type { BsmGreeks } from "./domain/bsm.ts";
