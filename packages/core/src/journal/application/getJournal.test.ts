@@ -3,7 +3,7 @@ import { ok, err } from "@morai/shared";
 import type { ForReadingJournal, StorageError, SnapshotRow } from "./ports.ts";
 import { makeGetJournalUseCase } from "./getJournal.ts";
 
-const CALENDAR_ID = "00000000-0000-0000-0000-000000000001";
+const CALENDAR_ID = "550e8400-e29b-41d4-a716-446655440001";
 
 function makeSnapshotRow(overrides?: Partial<SnapshotRow>): SnapshotRow {
   return {

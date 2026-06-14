@@ -5,7 +5,7 @@ import { termStructureResponse, skewResponse } from "./analytics.ts";
 describe("snapshotResponse", () => {
   const validSnapshot = {
     time: "2026-06-14T15:00:00.000Z",
-    calendarId: "00000000-0000-0000-0000-000000000001",
+    calendarId: "550e8400-e29b-41d4-a716-446655440001",
     spot: "7274.14",
     netMark: "12.5",
     frontMark: "25.4",
@@ -29,7 +29,7 @@ describe("snapshotResponse", () => {
     expect(() => snapshotResponse.parse(validSnapshot)).not.toThrow();
     const parsed = snapshotResponse.parse(validSnapshot);
     expect(parsed.frontIv).toBe("NaN");
-    expect(parsed.calendarId).toBe("00000000-0000-0000-0000-000000000001");
+    expect(parsed.calendarId).toBe("550e8400-e29b-41d4-a716-446655440001");
   });
 
   it("rejects a row missing pnlOpen", () => {
@@ -71,7 +71,7 @@ describe("journalResponse", () => {
   it("accepts { snapshots: [snapshot] } with a valid snapshot", () => {
     const snapshot = {
       time: "2026-06-14T15:00:00.000Z",
-      calendarId: "00000000-0000-0000-0000-000000000001",
+      calendarId: "550e8400-e29b-41d4-a716-446655440001",
       spot: "7274.14",
       netMark: "12.5",
       frontMark: "25.4",

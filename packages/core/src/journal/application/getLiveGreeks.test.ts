@@ -3,12 +3,12 @@ import { ok, err, formatOccSymbol } from "@morai/shared";
 import type { ForGettingCalendarById, ForReadingLatestLegObs, Calendar, LegSnapshot, StorageError } from "./ports.ts";
 import { makeGetLiveGreeksUseCase } from "./getLiveGreeks.ts";
 
-const CALENDAR_ID = "00000000-0000-0000-0000-000000000002";
+const CALENDAR_ID = "550e8400-e29b-41d4-a716-446655440002";
 
 // SPX calendar: underlying=SPX, strike=7100000 (×1000), optionType=C,
 // frontExpiry=2026-06-20, backExpiry=2026-09-18
 const CALENDAR: Calendar = {
-  id: CALENDAR_ID,
+  id: "550e8400-e29b-41d4-a716-446655440002",
   underlying: "SPX",
   strike: 7100000, // 7100 * 1000
   optionType: "C",

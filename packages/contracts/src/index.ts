@@ -17,3 +17,15 @@ export type {
   ListCalendarsResponse,
   CloseCalendarRequest,
 } from "./calendar.ts";
+
+// Journal read contracts (MCP-02: reused by get_journal MCP tool in plan 07)
+export { snapshotResponse, journalResponse } from "./journal.ts";
+export type { SnapshotResponse, JournalResponse } from "./journal.ts";
+
+// Live greeks contracts (MCP-02: reused by get_live_greeks MCP tool in plan 07)
+export { liveGreeksResponse } from "./live-greeks.ts";
+export type { LegGreeks, LiveGreeksResponse } from "./live-greeks.ts";
+
+// Analytics typed-empty contracts (MCP-02: reused by term_structure/skew MCP tools in plan 07)
+export { termStructureResponse, skewResponse } from "./analytics.ts";
+export type { TermStructureResponse, SkewResponse } from "./analytics.ts";
