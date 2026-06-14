@@ -138,7 +138,7 @@ Plans:
 
 **Wave 3**
 
-- [ ] 03-04-PLAN.md — NYSE holiday domain + RTH/holiday gate into fetch handlers (CAL-05)
+- [x] 03-04-PLAN.md — NYSE holiday domain + RTH/holiday gate into fetch handlers (CAL-05)
 
 **Wave 4**
 
@@ -215,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
-| 3. Calendar Journal (MVP) | 3/7 | In Progress|  |
+| 3. Calendar Journal (MVP) | 4/7 | In Progress|  |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |

@@ -58,7 +58,7 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 - [x] **CAL-02**: The `snapshot-calendars` job writes one `calendar_snapshots` row per open calendar on the 30-min RTH cadence (net mark, per-leg marks, our IV + greeks, term slope, DTEs, open P&L).
 - [ ] **CAL-03**: `GET /api/journal/:calendarId` returns the ordered snapshot series for one calendar — the journal view.
 - [x] **CAL-04**: `GET /api/calendars` lists open and closed calendars.
-- [ ] **CAL-05**: Jobs no-op gracefully outside RTH and on NYSE holidays (holiday calendar consulted).
+- [x] **CAL-05**: Jobs no-op gracefully outside RTH and on NYSE holidays (holiday calendar consulted).
 
 ### Derived Analytics
 
@@ -138,7 +138,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | CAL-02 | Phase 3 | Complete |
 | CAL-03 | Phase 3 | Pending |
 | CAL-04 | Phase 3 | Complete |
-| CAL-05 | Phase 3 | Pending |
+| CAL-05 | Phase 3 | Complete |
 | MCP-01 | Phase 3 | Pending |
 | AUTH-01 | Phase 4 | Pending |
 | AUTH-02 | Phase 4 | Pending |
