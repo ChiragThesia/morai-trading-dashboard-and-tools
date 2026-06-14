@@ -455,20 +455,24 @@ export function runLegObservationsContractTests(
 
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         const pendingResult = await repo.readPendingObs();
-        warnSpy.mockRestore();
 
         expect(pendingResult.ok).toBe(true);
-        if (!pendingResult.ok) return;
+        if (!pendingResult.ok) {
+          warnSpy.mockRestore();
+          return;
+        }
 
         // Orphan must be excluded
         const orphanInPending = pendingResult.value.find((p) => p.contract === orphanOcc);
         expect(orphanInPending).toBeUndefined();
 
-        // console.warn must have been called (observability)
+        // console.warn must have been called (observability) — restore AFTER assertions
+        // so that mockRestore() does not clear mock.calls before we check
         expect(warnSpy).toHaveBeenCalled();
         // The warning message must mention the skipped count
         const warnMsg: string = String(warnSpy.mock.calls[0]?.[0] ?? "");
         expect(warnMsg).toMatch(/readPendingObs/);
+        warnSpy.mockRestore();
       });
     });
 

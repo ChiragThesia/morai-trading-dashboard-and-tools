@@ -151,9 +151,13 @@ export function makePostgresLegObservationsRepo(
       );
 
       const pending: PendingObs[] = [];
+      const orphanedSymbols: string[] = [];
       for (const obs of obsRows) {
         const meta = metaBySymbol.get(obs.contract);
-        if (meta === undefined) continue; // no metadata → skip (shouldn't happen in practice)
+        if (meta === undefined) {
+          orphanedSymbols.push(obs.contract);
+          continue; // no contract row → skip; cannot compute BSM without metadata
+        }
 
         // Re-brand the DB varchar through the OCC parser (parse, don't cast)
         const occ = parseOccSymbol(obs.contract);
@@ -164,10 +168,9 @@ export function makePostgresLegObservationsRepo(
         if (parts.length !== 3) continue;
         const [yearStr, monthStr, dayStr] = parts;
         if (yearStr === undefined || monthStr === undefined || dayStr === undefined) continue;
+        // Use Date.UTC so UTC components equal the DB date string on any server timezone.
         const expiry = new Date(
-          Number(yearStr),
-          Number(monthStr) - 1,
-          Number(dayStr),
+          Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr)),
         );
 
         // Root: Drizzle stores as varchar(8); map to union
@@ -191,6 +194,12 @@ export function makePostgresLegObservationsRepo(
         });
       }
 
+      if (orphanedSymbols.length > 0) {
+        console.warn(
+          `readPendingObs: skipped ${orphanedSymbols.length} observations with no contract row: ${orphanedSymbols.slice(0, 5).join(", ")}${orphanedSymbols.length > 5 ? " …" : ""}`,
+        );
+      }
+
       return ok(pending);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -202,28 +211,32 @@ export function makePostgresLegObservationsRepo(
   // BSM-03: update bsm_* columns for a batch of rows.
   // T-02-16: pass string 'NaN' for unsolvable rows — never JS NaN.
   // T-02-17: ONLY bsm_* columns updated; vendor columns (bid/ask/mark/iv/delta) untouched.
+  // CR-05: entire batch wrapped in a transaction → all-or-nothing; a mid-batch DB
+  // error rolls back all updates so no partial write is ever committed.
   const writeBsmResults: ForWritingBsmResults = async (
     writes,
   ): Promise<Result<void, StorageError>> => {
     if (writes.length === 0) return ok(undefined);
     try {
-      for (const write of writes) {
-        await db
-          .update(legObservations)
-          .set({
-            bsmIv: write.bsmIv,
-            bsmDelta: write.bsmDelta,
-            bsmGamma: write.bsmGamma,
-            bsmTheta: write.bsmTheta,
-            bsmVega: write.bsmVega,
-          })
-          .where(
-            and(
-              eq(legObservations.time, write.time),
-              eq(legObservations.contract, write.contract),
-            ),
-          );
-      }
+      await db.transaction(async (tx) => {
+        for (const write of writes) {
+          await tx
+            .update(legObservations)
+            .set({
+              bsmIv: write.bsmIv,
+              bsmDelta: write.bsmDelta,
+              bsmGamma: write.bsmGamma,
+              bsmTheta: write.bsmTheta,
+              bsmVega: write.bsmVega,
+            })
+            .where(
+              and(
+                eq(legObservations.time, write.time),
+                eq(legObservations.contract, write.contract),
+              ),
+            );
+        }
+      });
       return ok(undefined);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
