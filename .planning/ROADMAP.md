@@ -134,7 +134,7 @@ Plans:
 
 **Wave 2**
 
-- [ ] 03-03-PLAN.md — Calendar register/list/close slice: contracts + use-cases + repos + routes (CAL-01/04)
+- [x] 03-03-PLAN.md — Calendar register/list/close slice: contracts + use-cases + repos + routes (CAL-01/04)
 
 **Wave 3**
 
@@ -215,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
-| 3. Calendar Journal (MVP) | 2/7 | In Progress|  |
+| 3. Calendar Journal (MVP) | 3/7 | In Progress|  |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |
