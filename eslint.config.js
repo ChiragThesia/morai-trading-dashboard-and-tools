@@ -13,6 +13,9 @@ export default tseslint.config(
       // Files outside TypeScript project scope
       ".remember/**",
       ".planning/**",
+      // Agent worktrees + tooling — each worktree is a full repo copy with its
+      // own config/node_modules; never lint them (same rationale as .planning).
+      ".claude/**",
     ],
   },
 
