@@ -19,15 +19,11 @@ import type {
 export type MemoryCalendarsRepo = {
   readonly getOpenCalendars: ForGettingOpenCalendars;
   readonly pingDb: ForPingingDb;
-  readonly seedOpenCalendar: (calendar: {
-    id: string;
-    underlying: string;
-    openedAt: Date;
-  }) => Promise<void>;
+  readonly seedOpenCalendar: (calendar: Calendar) => Promise<void>;
 };
 
 export function makeMemoryCalendarsRepo(): MemoryCalendarsRepo {
-  // Backing store: id → Calendar
+  // Backing store: id → Calendar (full extended type from Phase 3)
   const store = new Map<string, Calendar>();
 
   const getOpenCalendars: ForGettingOpenCalendars = async (): Promise<
@@ -42,16 +38,8 @@ export function makeMemoryCalendarsRepo(): MemoryCalendarsRepo {
     return ok(undefined);
   };
 
-  const seedOpenCalendar = async (calendar: {
-    id: string;
-    underlying: string;
-    openedAt: Date;
-  }): Promise<void> => {
-    store.set(calendar.id, {
-      id: calendar.id,
-      underlying: calendar.underlying,
-      openedAt: calendar.openedAt,
-    });
+  const seedOpenCalendar = async (calendar: Calendar): Promise<void> => {
+    store.set(calendar.id, calendar);
   };
 
   return { getOpenCalendars, pingDb, seedOpenCalendar };

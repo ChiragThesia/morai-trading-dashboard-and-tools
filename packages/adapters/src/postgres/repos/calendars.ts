@@ -23,12 +23,38 @@ import type { Db } from "../db.ts";
 export type PostgresCalendarsRepo = {
   readonly getOpenCalendars: ForGettingOpenCalendars;
   readonly pingDb: ForPingingDb;
-  readonly seedOpenCalendar: (calendar: {
-    id: string;
-    underlying: string;
-    openedAt: Date;
-  }) => Promise<void>;
+  readonly seedOpenCalendar: (calendar: Calendar) => Promise<void>;
 };
+
+function mapCalendarRow(row: {
+  id: string;
+  underlying: string;
+  strike: number;
+  optionType: "C" | "P";
+  frontExpiry: string;
+  backExpiry: string;
+  qty: number;
+  status: "open" | "closed";
+  openedAt: Date;
+  closedAt: Date | null;
+  openNetDebit: string | null;
+  notes: string | null;
+}): Calendar {
+  return {
+    id: row.id,
+    underlying: row.underlying,
+    strike: row.strike,
+    optionType: row.optionType,
+    frontExpiry: row.frontExpiry,
+    backExpiry: row.backExpiry,
+    qty: row.qty,
+    openNetDebit: row.openNetDebit !== null ? parseFloat(row.openNetDebit) : 0,
+    status: row.status,
+    openedAt: row.openedAt,
+    closedAt: row.closedAt,
+    notes: row.notes,
+  };
+}
 
 export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
   const getOpenCalendars: ForGettingOpenCalendars = async (): Promise<
@@ -39,18 +65,21 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
         .select({
           id: calendars.id,
           underlying: calendars.underlying,
+          strike: calendars.strike,
+          optionType: calendars.optionType,
+          frontExpiry: calendars.frontExpiry,
+          backExpiry: calendars.backExpiry,
+          qty: calendars.qty,
+          status: calendars.status,
           openedAt: calendars.openedAt,
+          closedAt: calendars.closedAt,
+          openNetDebit: calendars.openNetDebit,
+          notes: calendars.notes,
         })
         .from(calendars)
         .where(eq(calendars.status, "open"));
 
-      const result: ReadonlyArray<Calendar> = rows.map((row) => ({
-        id: row.id,
-        underlying: row.underlying,
-        openedAt: row.openedAt,
-      }));
-
-      return ok(result);
+      return ok(rows.map(mapCalendarRow));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       return err<StorageError>({
@@ -73,21 +102,19 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
     }
   };
 
-  const seedOpenCalendar = async (calendar: {
-    id: string;
-    underlying: string;
-    openedAt: Date;
-  }): Promise<void> => {
+  const seedOpenCalendar = async (calendar: Calendar): Promise<void> => {
     await db.insert(calendars).values({
       id: calendar.id,
       underlying: calendar.underlying,
-      // Strike required by schema; seed uses a sentinel value (SPX 0 = synthetic)
-      strike: 0,
-      frontExpiry: "2099-01-01",
-      backExpiry: "2099-01-01",
-      qty: 1,
+      strike: calendar.strike,
+      optionType: calendar.optionType,
+      frontExpiry: calendar.frontExpiry,
+      backExpiry: calendar.backExpiry,
+      qty: calendar.qty,
       status: "open",
       openedAt: calendar.openedAt,
+      openNetDebit: String(calendar.openNetDebit),
+      notes: calendar.notes,
     });
   };
 

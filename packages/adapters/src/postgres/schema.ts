@@ -36,8 +36,10 @@ export const exerciseStyleEnum = pgEnum("exercise_style", [
 export const calendars = pgTable("calendars", {
   id: uuid("id").primaryKey().defaultRandom(),
   underlying: varchar("underlying", { length: 16 }).notNull(),
-  // Strike stored ×1000 int convention (7100 → 7100000)
+  // Strike stored ×1000 int convention (7100 → 7100000); same-strike both legs (D-02)
   strike: integer("strike").notNull(),
+  // D-01: option type shared by both legs (C=call, P=put); added via Phase 3 migration
+  optionType: contractTypeEnum("option_type").notNull(),
   frontExpiry: date("front_expiry").notNull(),
   backExpiry: date("back_expiry").notNull(),
   qty: integer("qty").notNull(),

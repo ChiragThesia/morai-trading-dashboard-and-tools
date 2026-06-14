@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import type { ForGettingOpenCalendars, ForPingingDb } from "@morai/core";
+import type { ForGettingOpenCalendars, ForPingingDb, Calendar } from "@morai/core";
 
 /**
  * Shared contract-test suite for the calendars repository port.
@@ -13,11 +13,7 @@ export type CalendarsRepo = {
   readonly getOpenCalendars: ForGettingOpenCalendars;
   readonly pingDb: ForPingingDb;
   /** Optional seed method — called in beforeEach to insert test data */
-  readonly seedOpenCalendar?: (calendar: {
-    id: string;
-    underlying: string;
-    openedAt: Date;
-  }) => Promise<void>;
+  readonly seedOpenCalendar?: (calendar: Calendar) => Promise<void>;
 };
 
 export function runCalendarsContractTests(
@@ -54,10 +50,19 @@ export function runCalendarsContractTests(
           // Postgres adapter seeds via SQL; memory adapter seeds via seedOpenCalendar
           return;
         }
-        const calendar = {
+        const calendar: Calendar = {
           id: "aaaaaaaa-0000-0000-0000-000000000001",
           underlying: "SPX",
+          strike: 7100000,
+          optionType: "C",
+          frontExpiry: "2026-02-21",
+          backExpiry: "2026-03-21",
+          qty: 1,
+          openNetDebit: 5.5,
+          status: "open",
           openedAt: new Date("2026-01-02T14:30:00Z"),
+          closedAt: null,
+          notes: null,
         };
         await repo.seedOpenCalendar(calendar);
 
