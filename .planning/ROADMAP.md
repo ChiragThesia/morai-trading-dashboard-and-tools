@@ -22,7 +22,7 @@ Cross-cutting constraints active from Phase 1:
 
 - [x] **Phase 1: Walking Skeleton** - Monorepo + hexagon + DB + deployed status endpoint
 - [x] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored (gap closure in progress) (completed 2026-06-11)
-- [ ] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live
+- [x] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live (completed 2026-06-14)
 - [ ] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions
 - [ ] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data
 - [ ] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed
@@ -125,7 +125,32 @@ return the ordered snapshot series — the end-to-end MVP anchor.
   4. The `snapshot-calendars` job no-ops (logs "outside RTH / holiday, skipping") when triggered outside Regular Trading Hours or on an NYSE holiday; it never writes a snapshot row in those conditions.
   5. All six MCP tools defined in MCP-01 (`get_status`, `list_calendars`, `get_journal`, `get_live_greeks`, `get_term_structure`, `get_skew`) are registered and reachable; tools whose backing data does not yet exist return a typed empty result, not an error.
 
-**Plans**: TBD
+**Plans**: 7 plans
+Plans:
+**Wave 1**
+
+- [x] 03-01-PLAN.md — Extend Calendar domain type + Phase 3 ports + calendarDte (foundation, CAL-01/02/04)
+- [x] 03-02-PLAN.md — D-01 option_type migration + [BLOCKING] live schema push (CAL-01)
+
+**Wave 2**
+
+- [x] 03-03-PLAN.md — Calendar register/list/close slice: contracts + use-cases + repos + routes (CAL-01/04)
+
+**Wave 3**
+
+- [x] 03-04-PLAN.md — NYSE holiday domain + RTH/holiday gate into fetch handlers (CAL-05)
+
+**Wave 4**
+
+- [x] 03-05-PLAN.md — Snapshot slice: use-case (D-05/D-06) + repos + targeted-fetch (D-04) + job chain (D-03) (CAL-02/04/05)
+
+**Wave 5**
+
+- [x] 03-06-PLAN.md — Journal read + live-greeks slice: contracts + use-cases + HTTP route (CAL-03, MCP-01)
+
+**Wave 6**
+
+- [x] 03-07-PLAN.md — Six MCP tools registered + server router wiring + live verify (MCP-01)
 
 ### Phase 4: Schwab Auth & Brokerage
 
@@ -190,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
-| 3. Calendar Journal (MVP) | 0/TBD | Not started | - |
+| 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-06-14T02:19:06.242Z"
-last_activity: 2026-06-12
+stopped_at: Completed 03-06-PLAN.md — Journal read surface + live-greeks + analytics contracts
+last_updated: "2026-06-14T15:31:57.670Z"
+last_activity: 2026-06-14 -- Phase 03 plan 06 completed
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 18
-  completed_plans: 18
-  percent: 33
+  completed_phases: 3
+  total_plans: 25
+  completed_plans: 25
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 02 — market-data-bsm-engine
+**Current focus:** Phase 03 — calendar-journal-mvp
 
 ## Current Position
 
-Phase: 03
-Plan: Not started
-Status: Executing Phase 02
-Last activity: 2026-06-12
+Phase: 03 (calendar-journal-mvp) — EXECUTING
+Plan: 7 of 7
+Status: Ready to execute next (plan 07 — MCP tools)
+Last activity: 2026-06-14 -- Phase 03 plan 06 completed
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████████░] 96%
 
 ## Performance Metrics
 
@@ -58,6 +58,11 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-walking-skeleton P03 | 12 | 2 tasks | 15 files |
 | Phase 01-walking-skeleton P04 | 8 | 2 tasks | 22 files |
 | Phase 01-walking-skeleton P05 | 25 | 3 tasks | 21 files |
+| Phase 03-calendar-journal-mvp P01 | 6 | 2 tasks | 7 files |
+| Phase 03-calendar-journal-mvp P03 | 15 | 3 tasks | 18 files |
+| Phase 03-calendar-journal-mvp P04 | 8 | 2 tasks | 6 files |
+| Phase 03 P05 | 19 | 4 tasks | 17 files |
+| Phase 03 P06 | 16 | 3 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -87,6 +92,15 @@ Recent decisions affecting current work:
 - [Phase 1 P05]: WebStandardStreamableHTTPServerTransport used instead of StreamableHTTPServerTransport + fetch-to-node — native Bun/Hono fetch API, no bridge needed, eliminates exactOptionalPropertyTypes incompatibility from getter/setter onclose
 - [Phase 1 P05]: result.ok guard required before result.value even with Result<T, never> — exactOptionalPropertyTypes strictness
 - [Phase 1 P05]: main field added to @morai/contracts, @morai/core, @morai/adapters package.json — Vite workspace resolver fix (same as @morai/shared in plan 03)
+- [Phase ?]: Added optionType to schema.ts (calendars table) in Plan 01 so adapters compile against extended Calendar type; SQL migration deferred to plan 04 per D-01
+- [Phase ?]: netGreek = (back - front) * qty * 100; NaN propagation when any leg NaN
+- [Phase ?]: NAN_STAMP='NaN'; always write snapshot row even if legs unresolvable
+- [Phase ?]: mustInclude bypass from getOpenCalendarLegs() skips DTE/band filter for open calendar legs
+- [Phase ?]: compute-bsm-greeks fires boss.send(snapshot-calendars) on success fire-and-forget
+- [Phase ?]: all 4 jobs gate on NYSE holiday; compute + snapshot also gate on RTH
+- [Phase 3 P06]: getLiveGreeks uses formatOccSymbol(strike/1000) — same ×1000→points conversion as calendars.ts getOpenCalendarLegs
+- [Phase 3 P06]: Zod v4 UUID regex: test fixtures must use valid RFC 4122 UUIDs (550e8400-... format); 00000000-...-0001 fails Zod v4 validation
+- [Phase 3 P06]: journalRoutes accepts ForReadingJournal directly as the use-case is a thin forwarder
 
 ### Pending Todos
 
@@ -104,9 +118,10 @@ None yet.
 | Streaming | Sub-minute market data (D17) | v2 | Architecture |
 | Scale | Timescale hypertable migration (D7) | v2 trigger | Architecture |
 | Multi-user | API auth beyond single bearer token | v2 | Architecture |
+| Test isolation | Postgres leg-observations contract tests have cross-test contamination (re-persist/large-batch idempotency failures are flaky) | future | Phase 03 P06 |
 
 ## Session Continuity
 
-Last session: 2026-06-14T02:19:06.232Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-calendar-journal-mvp/03-CONTEXT.md
+Last session: 2026-06-14T15:31:08.495Z
+Stopped at: Completed 03-06-PLAN.md — Journal read surface + live-greeks + analytics contracts
+Resume file: None

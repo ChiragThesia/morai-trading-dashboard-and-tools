@@ -21,9 +21,13 @@ export default defineConfig({
     // Docker startup can take up to 60s
     testTimeout: 60_000,
     hookTimeout: 60_000,
-    // Single fork so all tests share the ONE container from globalSetup
+    // Single fork so all tests share the ONE container from globalSetup.
+    // fileParallelism: false ensures test FILES run sequentially within that fork,
+    // preventing concurrent TRUNCATE statements from different files from wiping
+    // each other's fixtures against the shared Postgres container.
     pool: "forks",
     singleFork: true,
+    fileParallelism: false,
     globalSetup: ["./test/globalSetup.ts"],
   },
 });

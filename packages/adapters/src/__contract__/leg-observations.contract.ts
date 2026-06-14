@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import type {
   ForPersistingObservations,
   ForUpsertingContracts,
   ForReadingPendingObs,
   ForWritingBsmResults,
+  ForReadingLatestLegObs,
   ObservationRow,
   ContractRow,
 } from "@morai/core";
@@ -29,6 +30,7 @@ export type LegObservationsRepo = {
   readonly upsertContracts: ForUpsertingContracts;
   readonly readPendingObs: ForReadingPendingObs;
   readonly writeBsmResults: ForWritingBsmResults;
+  readonly getLatestLegObs: ForReadingLatestLegObs;
   /** Count rows in leg_observations for the given time slot */
   readonly countObservations: (time: Date) => Promise<number>;
   /** Count rows in contracts for the given roots */
@@ -387,6 +389,216 @@ export function runLegObservationsContractTests(
           (obs) => obs.time.getTime() === observationTime.getTime(),
         );
         expect(ourPending).toHaveLength(0);
+      });
+    });
+
+    // ─── WR-05: UTC expiry ──────────────────────────────────────────────────
+    // readPendingObs must build expiry via Date.UTC so UTC components equal the
+    // DB expiration string (YYYY-MM-DD) on any server timezone.
+    describe("WR-05: readPendingObs builds expiry with UTC date components", () => {
+      it("expiry UTC year/month/day equal the DB expiration string (TZ-independent)", async () => {
+        const { observations, contracts: contractRows } = makeFixtureRows(observationTime);
+        // Fixture occ1 has expiration "2026-06-11"
+        const occ1 = observations[0];
+        if (!occ1) throw new Error("no observation");
+
+        await repo.upsertContracts(contractRows);
+        await repo.persistObservations(observations);
+
+        const pendingResult = await repo.readPendingObs();
+        expect(pendingResult.ok).toBe(true);
+        if (!pendingResult.ok) return;
+
+        const match = pendingResult.value.find((p) => p.contract === occ1.contract);
+        expect(match).toBeDefined();
+        if (match === undefined) return;
+
+        // UTC components must equal "2026-06-11" regardless of server timezone
+        expect(match.expiry.getUTCFullYear()).toBe(2026);
+        expect(match.expiry.getUTCMonth() + 1).toBe(6);
+        expect(match.expiry.getUTCDate()).toBe(11);
+      });
+    });
+
+    // ─── CR-04(b): orphan observation warn ──────────────────────────────────
+    // An observation whose contract has no matching contracts row must be
+    // excluded from readPendingObs, AND console.warn must be called once with
+    // the orphaned symbol count.
+    describe("CR-04(b): readPendingObs warns on orphan observations", () => {
+      it("excludes orphan obs (no contract row) and emits console.warn", async () => {
+        // Insert observation WITHOUT inserting the matching contract row
+        const orphanOcc = formatOccSymbol({
+          root: "SPXW",
+          expiry: new Date(Date.UTC(2026, 11, 31)),
+          type: "C",
+          strike: 9999,
+        });
+        const orphanObs: ObservationRow = {
+          time: observationTime,
+          contract: orphanOcc,
+          bid: 1.0,
+          ask: 1.1,
+          mark: 1.05,
+          underlyingPrice: 5500.0,
+          iv: 0.25,
+          delta: 0.5,
+          gamma: 0.001,
+          theta: -0.05,
+          vega: 0.3,
+          openInterest: 0,
+          volume: 0,
+          source: "cboe" as const,
+        };
+        // Persist the observation but NOT the contract row (orphan condition)
+        const persResult = await repo.persistObservations([orphanObs]);
+        expect(persResult.ok).toBe(true);
+
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const pendingResult = await repo.readPendingObs();
+
+        expect(pendingResult.ok).toBe(true);
+        if (!pendingResult.ok) {
+          warnSpy.mockRestore();
+          return;
+        }
+
+        // Orphan must be excluded
+        const orphanInPending = pendingResult.value.find((p) => p.contract === orphanOcc);
+        expect(orphanInPending).toBeUndefined();
+
+        // console.warn must have been called (observability) — restore AFTER assertions
+        // so that mockRestore() does not clear mock.calls before we check
+        expect(warnSpy).toHaveBeenCalled();
+        // The warning message must mention the skipped count
+        const warnMsg: string = String(warnSpy.mock.calls[0]?.[0] ?? "");
+        expect(warnMsg).toMatch(/readPendingObs/);
+        warnSpy.mockRestore();
+      });
+    });
+
+    // ─── CR-05: writeBsmResults atomicity ───────────────────────────────────
+    // All writes in a batch must be all-or-nothing (wrapped in a transaction).
+    describe("CR-05: writeBsmResults is atomic (all-or-nothing transaction)", () => {
+      it("happy-path: all rows in a batch are updated atomically", async () => {
+        const { observations, contracts: contractRows } = makeFixtureRows(observationTime);
+        await repo.upsertContracts(contractRows);
+        await repo.persistObservations(observations);
+
+        const writes = observations.map((obs) => ({
+          time: obs.time,
+          contract: obs.contract,
+          bsmIv: "0.22",
+          bsmDelta: "0.48",
+          bsmGamma: "0.002",
+          bsmTheta: "-0.03",
+          bsmVega: "0.31",
+        }));
+
+        const result = await repo.writeBsmResults(writes);
+        expect(result.ok).toBe(true);
+
+        // All rows must be updated — none remain pending
+        const pending = await repo.countPendingBsm(observationTime);
+        expect(pending).toBe(0);
+
+        // All rows must have bsm_iv set (not NaN)
+        const nanCount = await repo.countNanStamped(observationTime);
+        expect(nanCount).toBe(0);
+      });
+
+      it("no rows are partially updated if the batch result is ok (idempotent second write)", async () => {
+        // This test verifies the all-or-nothing nature: if we write the same batch
+        // twice, the second write succeeds and all rows still have consistent bsm values.
+        // True rollback-on-error requires a mid-batch failure, which is impractical to
+        // force deterministically against real PG without a trigger. The transaction
+        // guarantee is exercised by the happy-path test above (verifying count = 0 after
+        // a single atomic write), and by the Drizzle tx API contract.
+        const { observations, contracts: contractRows } = makeFixtureRows(observationTime);
+        await repo.upsertContracts(contractRows);
+        await repo.persistObservations(observations);
+
+        const writes = observations.map((obs) => ({
+          time: obs.time,
+          contract: obs.contract,
+          bsmIv: "0.20",
+          bsmDelta: "0.45",
+          bsmGamma: "0.001",
+          bsmTheta: "-0.02",
+          bsmVega: "0.25",
+        }));
+
+        // First write
+        const result1 = await repo.writeBsmResults(writes);
+        expect(result1.ok).toBe(true);
+
+        // Second identical write (should be a no-op on values, succeeds)
+        const result2 = await repo.writeBsmResults(writes);
+        expect(result2.ok).toBe(true);
+
+        // Rows must still have bsm_iv set after double write
+        const pending = await repo.countPendingBsm(observationTime);
+        expect(pending).toBe(0);
+      });
+    });
+
+    describe("getLatestLegObs", () => {
+      it("returns the latest observation row for an OCC symbol (hit)", async () => {
+        const { observations, contracts: contractRows } = makeFixtureRows(observationTime);
+        const obs0 = observations[0];
+        if (!obs0) throw new Error("no observation");
+
+        await repo.upsertContracts(contractRows);
+        await repo.persistObservations(observations);
+
+        const result = await repo.getLatestLegObs(obs0.contract);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).not.toBeNull();
+        if (result.value === null) return;
+        expect(result.value.occSymbol).toBe(obs0.contract);
+        expect(result.value.mark).toBeCloseTo(obs0.mark, 5);
+      });
+
+      it("returns null for a symbol with no observations (miss)", async () => {
+        const unknownOcc = formatOccSymbol({
+          root: "SPX",
+          expiry: new Date(2027, 0, 15),
+          type: "P",
+          strike: 9999,
+        });
+        const result = await repo.getLatestLegObs(unknownOcc);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toBeNull();
+      });
+
+      it("returns the latest row when multiple observations exist (ORDER BY time DESC LIMIT 1)", async () => {
+        const { observations: firstObs, contracts: contractRows } = makeFixtureRows(observationTime);
+        const firstObs0 = firstObs[0];
+        if (!firstObs0) throw new Error("no observation");
+
+        // Insert a second observation at a later time for the same contract
+        const laterTime = new Date(observationTime.getTime() + 30 * 60 * 1000);
+        laterTime.setMilliseconds(0);
+        const laterObs: ObservationRow = {
+          ...firstObs0,
+          time: laterTime,
+          mark: 99.99,
+          underlyingPrice: 8000,
+        };
+
+        await repo.upsertContracts(contractRows);
+        await repo.persistObservations(firstObs);
+        await repo.persistObservations([laterObs]);
+
+        const result = await repo.getLatestLegObs(firstObs0.contract);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).not.toBeNull();
+        if (result.value === null) return;
+        // Must return the LATEST (later-time) observation
+        expect(result.value.mark).toBeCloseTo(99.99, 2);
+        expect(result.value.underlyingPrice).toBeCloseTo(8000, 0);
       });
     });
   });

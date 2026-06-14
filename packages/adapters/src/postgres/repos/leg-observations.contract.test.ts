@@ -46,6 +46,7 @@ describe.skipIf(shouldSkip)("postgres leg-observations adapter", () => {
       upsertContracts: repo.upsertContracts,
       readPendingObs: repo.readPendingObs,
       writeBsmResults: repo.writeBsmResults,
+      getLatestLegObs: repo.getLatestLegObs,
       countObservations: async (time: Date): Promise<number> => {
         // Pass timestamp as ISO string; postgres.js handles timestamptz conversion
         const timeStr = time.toISOString();

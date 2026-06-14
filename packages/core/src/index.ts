@@ -29,5 +29,45 @@ export { makeFetchChainUseCase } from "./journal/index.ts";
 export type { ForRunningFetchChain, FetchChainDeps } from "./journal/index.ts";
 export { makeFetchRateUseCase } from "./journal/index.ts";
 export { makeComputeBsmGreeksUseCase } from "./journal/index.ts";
-export { bsmPrice, bsmGreeks, bsmVega, invertIv, computeT, isThirdFriday, isWithinRth } from "./journal/index.ts";
+export { bsmPrice, bsmGreeks, bsmVega, invertIv, computeT, isThirdFriday, isWithinRth, isNyseHoliday, calendarDte } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";
+// Phase 3 calendar domain types and ports
+export type {
+  CalendarNotFound,
+  CalendarAlreadyClosed,
+  ForRegisteringCalendar,
+  ForListingCalendars,
+  ForGettingCalendarById,
+  ForClosingCalendar,
+  ForGettingOpenCalendarLegs,
+  LegSnapshot,
+  ForResolvingLegSnapshot,
+  SnapshotRow,
+  ForPersistingSnapshot,
+  ForReadingJournal,
+  ForReadingLatestLegObs,
+} from "./journal/index.ts";
+// Phase 3 calendar use-case factories
+export {
+  makeRegisterCalendarUseCase,
+  makeListCalendarsUseCase,
+  makeCloseCalendarUseCase,
+  makeSnapshotCalendarsUseCase,
+  makeGetJournalUseCase,
+  makeGetLiveGreeksUseCase,
+} from "./journal/index.ts";
+export type {
+  ForRunningRegisterCalendar,
+  RegisterCalendarDeps,
+  ValidationError,
+  ListCalendarsDeps,
+  CloseCalendarDeps,
+  ForRunningSnapshotCalendars,
+  SnapshotCalendarsDeps,
+  ForRunningGetJournal,
+  GetJournalDeps,
+  ForRunningGetLiveGreeks,
+  GetLiveGreeksDeps,
+  LiveGreeks,
+  LegGreeks,
+} from "./journal/index.ts";

@@ -63,18 +63,48 @@ function nthSundayUtc(year: number, month: number, n: number): Date {
 // ─── Public functions ──────────────────────────────────────────
 
 /**
+ * calendarDte — integer calendar-day DTE from `now` to `expiry`.
+ *
+ * Uses UTC-floored calendar days: both dates are snapped to midnight UTC before
+ * computing the difference, so the result is stable across timezones and DST
+ * transitions (no local-time drift).
+ *
+ * Clamped at 0 — never returns a negative value for expired dates.
+ *
+ * This is the integer DTE the snapshot's dteFront/dteBack columns use.
+ * For the BSM year-fraction T use computeT instead.
+ *
+ * @param now    - Current wall-clock time (injected; never call Date.now() here)
+ * @param expiry - Option expiry date
+ * @returns integer calendar days until expiry, ≥ 0
+ */
+export function calendarDte(now: Date, expiry: Date): number {
+  const nowMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const expiryMs = Date.UTC(
+    expiry.getUTCFullYear(),
+    expiry.getUTCMonth(),
+    expiry.getUTCDate(),
+  );
+  return Math.max(0, Math.floor((expiryMs - nowMs) / 86_400_000));
+}
+
+/**
  * isThirdFriday — true if `d` is the 3rd Friday of its calendar month.
  *
  * Definition: the first Friday on or after the 15th of the month.
  * Equivalently: a Friday whose day-of-month is in [15, 21].
  *
- * Uses the local date components of `d` (the date is supplied by callers who
- * typically construct it with `new Date(year, month, day)` in local time).
+ * Uses the UTC date components of `d` so the result is consistent across
+ * server timezones. Expiry dates are constructed with Date.UTC (WR-05 fix).
  */
 export function isThirdFriday(d: Date): boolean {
-  // 5 = Friday in JS getDay()
-  if (d.getDay() !== 5) return false;
-  const dom = d.getDate();
+  // 5 = Friday in JS getUTCDay()
+  if (d.getUTCDay() !== 5) return false;
+  const dom = d.getUTCDate();
   return dom >= 15 && dom <= 21;
 }
 
@@ -82,7 +112,7 @@ export function isThirdFriday(d: Date): boolean {
  * computeT — settlement-aware time to expiry in years (BSM T).
  *
  * @param now    - Current wall-clock time (injected; never call Date.now() here)
- * @param expiry - Option expiry date (local calendar date; day used, time ignored)
+ * @param expiry - Option expiry date (UTC midnight; UTC components equal the calendar date)
  * @param root   - 'SPX' or 'SPXW'
  * @returns T in years = minutesToCutoff / 525960, always ≥ 0
  */
@@ -95,12 +125,11 @@ export function computeT(
   const isAmSettled = root === "SPX" && isThirdFriday(expiry);
 
   // Build the ET cutoff UTC instant for the expiry date.
-  // We need the UTC date components of `expiry`. Because callers typically build
-  // expiry as new Date(year, month, day) (local time, no TZ), we read the local
-  // date components — which matches how the date was constructed.
-  const year = expiry.getFullYear();
-  const month = expiry.getMonth();
-  const day = expiry.getDate();
+  // Expiry is constructed with Date.UTC (WR-05), so UTC components equal the
+  // calendar date. Use UTC accessors for consistency across server timezones.
+  const year = expiry.getUTCFullYear();
+  const month = expiry.getUTCMonth();
+  const day = expiry.getUTCDate();
 
   // Cutoff time in ET: 09:30 AM or 16:00 PM
   const cutoffHourEt = isAmSettled ? 9 : 16;

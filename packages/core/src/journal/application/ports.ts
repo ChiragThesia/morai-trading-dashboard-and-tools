@@ -12,11 +12,26 @@ export type FetchError = {
   readonly message: string;
 };
 
-// Domain type: an open calendar tracked in the journal context
+// Domain error variants for calendar state transitions
+export type CalendarNotFound = { readonly kind: "not-found" };
+export type CalendarAlreadyClosed = { readonly kind: "already-closed" };
+
+// Domain type: a calendar spread tracked in the journal context.
+// strike is a ×1000 integer (e.g. 7100000 for SPX 7100), matching ContractRow.strike at line 73.
+// Both legs share the same strike and optionType (true calendar; D-02 same-strike-only).
 export type Calendar = {
   readonly id: string;
   readonly underlying: string;
+  readonly strike: number; // ×1000 int (e.g. 7100000); same-strike as ContractRow.strike
+  readonly optionType: "C" | "P"; // D-01: one option type shared by both legs
+  readonly frontExpiry: string; // YYYY-MM-DD — the near-term leg
+  readonly backExpiry: string; // YYYY-MM-DD — the far-term leg
+  readonly qty: number;
+  readonly openNetDebit: number; // parsed to number at repo boundary; stored as numeric string in DB
+  readonly status: "open" | "closed";
   readonly openedAt: Date;
+  readonly closedAt: Date | null;
+  readonly notes: string | null;
 };
 
 // Domain type: a single raw contract quote from the CBOE chain
@@ -86,6 +101,134 @@ export type ContractRow = {
 export type ForGettingOpenCalendars = () => Promise<
   Result<ReadonlyArray<Calendar>, StorageError>
 >;
+
+/**
+ * ForRegisteringCalendar — persist a new calendar spread (CAL-01).
+ * Implemented by Postgres adapter and in-memory twin.
+ */
+export type ForRegisteringCalendar = (input: {
+  readonly underlying: string;
+  readonly strike: number; // ×1000 int
+  readonly optionType: "C" | "P";
+  readonly frontExpiry: string; // YYYY-MM-DD
+  readonly backExpiry: string; // YYYY-MM-DD
+  readonly qty: number;
+  readonly openNetDebit: number;
+  readonly openedAt: Date;
+  readonly notes?: string;
+}) => Promise<Result<Calendar, StorageError>>;
+
+/**
+ * ForListingCalendars — list all calendars, optionally filtered by status (CAL-02).
+ * Returns empty array (not null) when no rows match.
+ */
+export type ForListingCalendars = (
+  filter?: "open" | "closed",
+) => Promise<Result<ReadonlyArray<Calendar>, StorageError>>;
+
+/**
+ * ForGettingCalendarById — single-calendar read by PK (CAL-02).
+ * Returns null when the id is unknown (drives 404 at the route layer).
+ * Backs get_live_greeks leg resolution and any single-calendar read.
+ */
+export type ForGettingCalendarById = (
+  id: string,
+) => Promise<Result<Calendar | null, StorageError>>;
+
+/**
+ * ForClosingCalendar — mark a calendar closed (CAL-04).
+ * Returns CalendarNotFound when id is unknown; CalendarAlreadyClosed when already closed.
+ */
+export type ForClosingCalendar = (
+  id: string,
+  closeNetCredit: number,
+) => Promise<Result<Calendar, StorageError | CalendarNotFound | CalendarAlreadyClosed>>;
+
+/**
+ * ForGettingOpenCalendarLegs — D-04 targeted-fetch port.
+ * Returns OCC symbols for every open calendar's two legs (front + back),
+ * so the fetch-cboe-chain job always captures those contracts regardless of band/DTE filter.
+ */
+export type ForGettingOpenCalendarLegs = () => Promise<
+  Result<ReadonlyArray<OccSymbol>, StorageError>
+>;
+
+// Domain type: a single leg's latest snapshot data from leg_observations.
+// bsm fields are Drizzle-numeric strings, or the literal 'NaN' per D-06 NaN convention.
+// underlyingPrice is needed for the spot column in SnapshotRow.
+export type LegSnapshot = {
+  readonly occSymbol: OccSymbol;
+  readonly mark: number;
+  readonly underlyingPrice: number;
+  readonly ivRaw: number | null;
+  readonly bsmIv: string | null; // 'NaN' | numeric string | null
+  readonly bsmDelta: string | null;
+  readonly bsmGamma: string | null;
+  readonly bsmTheta: string | null;
+  readonly bsmVega: string | null;
+};
+
+/**
+ * ForResolvingLegSnapshot — look up the latest leg_observation for a given calendar leg.
+ * Resolves by (underlying, strike, optionType, expiry) → occSymbol → latest leg_observation.
+ * Returns null when no matching contract or no observation exists for the slot.
+ */
+export type ForResolvingLegSnapshot = (query: {
+  readonly underlying: string;
+  readonly strike: number; // ×1000 int
+  readonly optionType: "C" | "P";
+  readonly expiry: string; // YYYY-MM-DD
+}) => Promise<Result<LegSnapshot | null, StorageError>>;
+
+// Domain type: the full 18-column journal row for calendar_snapshots.
+// All Drizzle-numeric columns are typed string ('NaN' is a valid value per D-06).
+// dteFront/dteBack are integer calendar days (not the year-fraction computeT returns).
+export type SnapshotRow = {
+  readonly time: Date;
+  readonly calendarId: string;
+  readonly spot: string;
+  readonly netMark: string;
+  readonly frontMark: string;
+  readonly backMark: string;
+  readonly frontIv: string; // numeric string or 'NaN'
+  readonly backIv: string;
+  readonly frontIvRaw: string;
+  readonly backIvRaw: string;
+  readonly netDelta: string;
+  readonly netGamma: string;
+  readonly netTheta: string;
+  readonly netVega: string;
+  readonly termSlope: string;
+  readonly dteFront: number; // integer calendar days
+  readonly dteBack: number; // integer calendar days
+  readonly pnlOpen: string;
+  readonly source: "cboe";
+};
+
+/**
+ * ForPersistingSnapshot — write one calendar_snapshots row (CAL-03).
+ * Idempotent: onConflictDoNothing on composite PK (time, calendar_id).
+ */
+export type ForPersistingSnapshot = (
+  row: SnapshotRow,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingJournal — ordered snapshot series for a calendar (CAL-02).
+ * Returns null when the calendarId is unknown (drives 404 at route layer).
+ * Returns empty array when known but zero snapshots exist.
+ */
+export type ForReadingJournal = (
+  calendarId: string,
+) => Promise<Result<ReadonlyArray<SnapshotRow> | null, StorageError>>;
+
+/**
+ * ForReadingLatestLegObs — latest leg_observation for an OCC symbol (CAL-06).
+ * Backs get_live_greeks MCP tool. Returns null when no observation exists.
+ */
+export type ForReadingLatestLegObs = (
+  occSymbol: OccSymbol,
+) => Promise<Result<LegSnapshot | null, StorageError>>;
 
 /**
  * ForPingingDb — lightweight DB health check.

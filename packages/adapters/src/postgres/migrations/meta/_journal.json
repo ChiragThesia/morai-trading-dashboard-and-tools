@@ -15,6 +15,13 @@
       "when": 1780915436894,
       "tag": "0001_sleepy_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781443918006,
+      "tag": "0002_watery_molecule_man",
+      "breakpoints": true
     }
   ]
 }

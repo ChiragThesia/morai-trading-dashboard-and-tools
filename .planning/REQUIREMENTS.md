@@ -54,11 +54,11 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 ### Calendar & Journal
 
-- [ ] **CAL-01**: A user can register an open calendar (underlying, strike, front/back expiry, qty, open debit) via the API.
-- [ ] **CAL-02**: The `snapshot-calendars` job writes one `calendar_snapshots` row per open calendar on the 30-min RTH cadence (net mark, per-leg marks, our IV + greeks, term slope, DTEs, open P&L).
-- [ ] **CAL-03**: `GET /api/journal/:calendarId` returns the ordered snapshot series for one calendar — the journal view.
-- [ ] **CAL-04**: `GET /api/calendars` lists open and closed calendars.
-- [ ] **CAL-05**: Jobs no-op gracefully outside RTH and on NYSE holidays (holiday calendar consulted).
+- [x] **CAL-01**: A user can register an open calendar (underlying, strike, front/back expiry, qty, open debit) via the API.
+- [x] **CAL-02**: The `snapshot-calendars` job writes one `calendar_snapshots` row per open calendar on the 30-min RTH cadence (net mark, per-leg marks, our IV + greeks, term slope, DTEs, open P&L).
+- [x] **CAL-03**: `GET /api/journal/:calendarId` returns the ordered snapshot series for one calendar — the journal view.
+- [x] **CAL-04**: `GET /api/calendars` lists open and closed calendars.
+- [x] **CAL-05**: Jobs no-op gracefully outside RTH and on NYSE holidays (holiday calendar consulted).
 
 ### Derived Analytics
 
@@ -75,7 +75,7 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 ### Claude Code Surface
 
-- [ ] **MCP-01**: MCP tools `get_status`, `list_calendars`, `get_journal`, `get_live_greeks`, `get_term_structure`, `get_skew`, `trigger_job` mirror their HTTP routes, sharing one Zod schema source from `contracts`.
+- [x] **MCP-01**: MCP tools `get_status`, `list_calendars`, `get_journal`, `get_live_greeks`, `get_term_structure`, `get_skew`, `trigger_job` mirror their HTTP routes, sharing one Zod schema source from `contracts`.
 - [ ] **MCP-02**: Every new use-case ships both adapters (HTTP route + MCP tool) in the same change.
 
 ## v2 Requirements
@@ -134,12 +134,12 @@ Explicitly excluded. Documented to prevent scope creep.
 | BSM-01 | Phase 2 | Complete |
 | BSM-02 | Phase 2 | Complete |
 | BSM-03 | Phase 2 | Complete |
-| CAL-01 | Phase 3 | Pending |
-| CAL-02 | Phase 3 | Pending |
-| CAL-03 | Phase 3 | Pending |
-| CAL-04 | Phase 3 | Pending |
-| CAL-05 | Phase 3 | Pending |
-| MCP-01 | Phase 3 | Pending |
+| CAL-01 | Phase 3 | Complete |
+| CAL-02 | Phase 3 | Complete |
+| CAL-03 | Phase 3 | Complete |
+| CAL-04 | Phase 3 | Complete |
+| CAL-05 | Phase 3 | Complete |
+| MCP-01 | Phase 3 | Complete |
 | AUTH-01 | Phase 4 | Pending |
 | AUTH-02 | Phase 4 | Pending |
 | AUTH-03 | Phase 4 | Pending |

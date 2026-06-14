@@ -1,9 +1,9 @@
-import { describe, beforeAll, afterAll } from "vitest";
+import { describe, beforeAll, afterAll, beforeEach } from "vitest";
 import { inject } from "vitest";
 import { runCalendarsContractTests } from "../../__contract__/calendars.contract.ts";
 import { makePostgresCalendarsRepo } from "./calendars.ts";
 import { makeDb } from "../db.ts";
-import { runMigrations } from "../migrate.ts";
+import { sql } from "drizzle-orm";
 
 /**
  * Contract test for the Postgres calendars adapter.
@@ -21,6 +21,12 @@ describe.skipIf(shouldSkip)("postgres adapter", () => {
     if (!dbUrl) return;
     // Migrations have already been run in globalSetup
     db = makeDb(dbUrl);
+  });
+
+  beforeEach(async () => {
+    // Truncate calendars between tests to prevent state leak
+    if (!db) return;
+    await db.execute(sql`TRUNCATE TABLE calendars CASCADE`);
   });
 
   afterAll(async () => {

@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeT, isThirdFriday } from "./dte.ts";
+import { computeT, isThirdFriday, calendarDte } from "./dte.ts";
 
 // MINUTES_PER_YEAR = 365.25 * 24 * 60 = 525960
 const MINUTES_PER_YEAR = 525960;
@@ -130,5 +130,35 @@ describe("computeT", () => {
     const now = new Date(2026, 5, 11);
     const T = computeT(now, expiry, "SPXW");
     expect(T).toBe(0);
+  });
+});
+
+// ─── calendarDte ───────────────────────────────────────────────
+describe("calendarDte", () => {
+  it("returns 0 when expiry is in the past (zero-clamp; never negative)", () => {
+    const now = new Date("2026-03-21T15:00:00Z");
+    const expiry = new Date("2026-03-20T00:00:00Z"); // yesterday UTC
+    expect(calendarDte(now, expiry)).toBe(0);
+  });
+
+  it("returns 0 when expiry is the same calendar day as now (same-day expiry)", () => {
+    const now = new Date("2026-03-21T09:30:00Z");
+    const expiry = new Date("2026-03-21T23:59:59Z"); // same UTC day, later time
+    expect(calendarDte(now, expiry)).toBe(0);
+  });
+
+  it("returns 30 for a typical 30-day DTE", () => {
+    const now = new Date("2026-02-19T15:00:00Z");
+    const expiry = new Date("2026-03-21T00:00:00Z"); // 30 calendar days later (UTC)
+    expect(calendarDte(now, expiry)).toBe(30);
+  });
+
+  it("returns correct integer days across a US DST spring-forward transition", () => {
+    // US DST spring-forward: 2026-03-08 02:00 ET → 03:00 EDT.
+    // now: 2026-02-20 00:00 UTC, expiry: 2026-03-22 00:00 UTC
+    // Calendar days (UTC-floored): 30 full days — no timezone drift.
+    const now = new Date("2026-02-20T00:00:00Z");
+    const expiry = new Date("2026-03-22T00:00:00Z");
+    expect(calendarDte(now, expiry)).toBe(30);
   });
 });

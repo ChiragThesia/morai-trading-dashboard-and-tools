@@ -5,12 +5,14 @@ import type {
   ForUpsertingContracts,
   ForReadingPendingObs,
   ForWritingBsmResults,
+  ForReadingLatestLegObs,
   ObservationRow,
   ContractRow,
   PendingObs,
+  LegSnapshot,
   StorageError,
 } from "@morai/core";
-import { and, isNull, isNotNull, eq, inArray } from "drizzle-orm";
+import { and, isNull, isNotNull, eq, inArray, desc } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -37,6 +39,7 @@ export type PostgresLegObservationsRepo = {
   readonly upsertContracts: ForUpsertingContracts;
   readonly readPendingObs: ForReadingPendingObs;
   readonly writeBsmResults: ForWritingBsmResults;
+  readonly getLatestLegObs: ForReadingLatestLegObs;
 };
 
 export function makePostgresLegObservationsRepo(
@@ -148,9 +151,13 @@ export function makePostgresLegObservationsRepo(
       );
 
       const pending: PendingObs[] = [];
+      const orphanedSymbols: string[] = [];
       for (const obs of obsRows) {
         const meta = metaBySymbol.get(obs.contract);
-        if (meta === undefined) continue; // no metadata → skip (shouldn't happen in practice)
+        if (meta === undefined) {
+          orphanedSymbols.push(obs.contract);
+          continue; // no contract row → skip; cannot compute BSM without metadata
+        }
 
         // Re-brand the DB varchar through the OCC parser (parse, don't cast)
         const occ = parseOccSymbol(obs.contract);
@@ -161,10 +168,9 @@ export function makePostgresLegObservationsRepo(
         if (parts.length !== 3) continue;
         const [yearStr, monthStr, dayStr] = parts;
         if (yearStr === undefined || monthStr === undefined || dayStr === undefined) continue;
+        // Use Date.UTC so UTC components equal the DB date string on any server timezone.
         const expiry = new Date(
-          Number(yearStr),
-          Number(monthStr) - 1,
-          Number(dayStr),
+          Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr)),
         );
 
         // Root: Drizzle stores as varchar(8); map to union
@@ -188,6 +194,12 @@ export function makePostgresLegObservationsRepo(
         });
       }
 
+      if (orphanedSymbols.length > 0) {
+        console.warn(
+          `readPendingObs: skipped ${orphanedSymbols.length} observations with no contract row: ${orphanedSymbols.slice(0, 5).join(", ")}${orphanedSymbols.length > 5 ? " …" : ""}`,
+        );
+      }
+
       return ok(pending);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -199,28 +211,32 @@ export function makePostgresLegObservationsRepo(
   // BSM-03: update bsm_* columns for a batch of rows.
   // T-02-16: pass string 'NaN' for unsolvable rows — never JS NaN.
   // T-02-17: ONLY bsm_* columns updated; vendor columns (bid/ask/mark/iv/delta) untouched.
+  // CR-05: entire batch wrapped in a transaction → all-or-nothing; a mid-batch DB
+  // error rolls back all updates so no partial write is ever committed.
   const writeBsmResults: ForWritingBsmResults = async (
     writes,
   ): Promise<Result<void, StorageError>> => {
     if (writes.length === 0) return ok(undefined);
     try {
-      for (const write of writes) {
-        await db
-          .update(legObservations)
-          .set({
-            bsmIv: write.bsmIv,
-            bsmDelta: write.bsmDelta,
-            bsmGamma: write.bsmGamma,
-            bsmTheta: write.bsmTheta,
-            bsmVega: write.bsmVega,
-          })
-          .where(
-            and(
-              eq(legObservations.time, write.time),
-              eq(legObservations.contract, write.contract),
-            ),
-          );
-      }
+      await db.transaction(async (tx) => {
+        for (const write of writes) {
+          await tx
+            .update(legObservations)
+            .set({
+              bsmIv: write.bsmIv,
+              bsmDelta: write.bsmDelta,
+              bsmGamma: write.bsmGamma,
+              bsmTheta: write.bsmTheta,
+              bsmVega: write.bsmVega,
+            })
+            .where(
+              and(
+                eq(legObservations.time, write.time),
+                eq(legObservations.contract, write.contract),
+              ),
+            );
+        }
+      });
       return ok(undefined);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -228,5 +244,57 @@ export function makePostgresLegObservationsRepo(
     }
   };
 
-  return { persistObservations, upsertContracts, readPendingObs, writeBsmResults };
+  // ─── ForReadingLatestLegObs ───────────────────────────────────────────────
+  // CAL-06: latest leg_observation for an OCC symbol — backs get_live_greeks.
+  // ORDER BY time DESC LIMIT 1 → the most-recent row.
+  // Returns ok(null) when no observation exists for the symbol.
+  // T-03-15: Drizzle parameterized eq(contract, occSymbol) — no raw interpolation.
+  const getLatestLegObs: ForReadingLatestLegObs = async (
+    occSymbol,
+  ): Promise<Result<LegSnapshot | null, StorageError>> => {
+    try {
+      const rows = await db
+        .select({
+          contract: legObservations.contract,
+          mark: legObservations.mark,
+          underlyingPrice: legObservations.underlyingPrice,
+          iv: legObservations.iv,
+          bsmIv: legObservations.bsmIv,
+          bsmDelta: legObservations.bsmDelta,
+          bsmGamma: legObservations.bsmGamma,
+          bsmTheta: legObservations.bsmTheta,
+          bsmVega: legObservations.bsmVega,
+        })
+        .from(legObservations)
+        .where(eq(legObservations.contract, occSymbol))
+        .orderBy(desc(legObservations.time))
+        .limit(1);
+
+      const row = rows[0];
+      if (row === undefined) return ok(null);
+
+      // Reuse the same mapping helper as resolveLegSnapshot in calendar-snapshots.ts
+      const parsedOcc = parseOccSymbol(row.contract);
+      if (!parsedOcc.ok) return ok(null); // malformed symbol — shouldn't happen
+
+      const leg: LegSnapshot = {
+        occSymbol: formatOccSymbol(parsedOcc.value),
+        mark: parseFloat(row.mark),
+        underlyingPrice: parseFloat(row.underlyingPrice),
+        ivRaw: row.iv !== null ? parseFloat(row.iv) : null,
+        bsmIv: row.bsmIv,
+        bsmDelta: row.bsmDelta,
+        bsmGamma: row.bsmGamma,
+        bsmTheta: row.bsmTheta,
+        bsmVega: row.bsmVega,
+      };
+
+      return ok(leg);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  return { persistObservations, upsertContracts, readPendingObs, writeBsmResults, getLatestLegObs };
 }

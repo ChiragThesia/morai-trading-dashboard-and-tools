@@ -1,10 +1,22 @@
 import { Hono } from "hono";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import type { ForGettingStatus } from "@morai/core";
+import type {
+  ForGettingStatus,
+  ForListingCalendars,
+  ForReadingJournal,
+  ForRunningGetLiveGreeks,
+} from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
-import { registerStatusTool } from "./tools.ts";
+import {
+  registerStatusTool,
+  registerListCalendarsTool,
+  registerGetJournalTool,
+  registerGetLiveGreeksTool,
+  registerGetTermStructureTool,
+  registerGetSkewTool,
+} from "./tools.ts";
 
 /**
  * makeMcpRouter — returns a Hono router that mounts the MCP transport at /mcp.
@@ -18,10 +30,18 @@ import { registerStatusTool } from "./tools.ts";
  *
  * T-01-11: bearer middleware on /mcp/* ensures no/wrong token → 401.
  * T-01-13: transport validates Origin header internally.
+ *
+ * MCP-01: all six tools registered per request — get_status, list_calendars, get_journal,
+ *         get_live_greeks, get_term_structure, get_skew.
+ * MCP-02: each tool shares the same Zod contract as its HTTP route (wired in tools.ts).
+ * D-08: trigger_job is NOT registered (deferred to Phase 5).
  */
 export function makeMcpRouter(
   config: Config,
   getStatus: ForGettingStatus,
+  listCalendars: ForListingCalendars,
+  getJournal: ForReadingJournal,
+  getLiveGreeks: ForRunningGetLiveGreeks,
 ): Hono {
   const router = new Hono();
 
@@ -34,7 +54,13 @@ export function makeMcpRouter(
     // Stateless: no sessionIdGenerator — each request is independent
     const transport = new WebStandardStreamableHTTPServerTransport();
     const server = new McpServer({ name: "morai", version: "1.0.0" });
+    // MCP-01: register all six tools
     registerStatusTool(server, getStatus);
+    registerListCalendarsTool(server, listCalendars);
+    registerGetJournalTool(server, getJournal);
+    registerGetLiveGreeksTool(server, getLiveGreeks);
+    registerGetTermStructureTool(server);
+    registerGetSkewTool(server);
     return { server, transport };
   }
 
