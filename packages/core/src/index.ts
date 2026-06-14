@@ -52,6 +52,7 @@ export {
   makeRegisterCalendarUseCase,
   makeListCalendarsUseCase,
   makeCloseCalendarUseCase,
+  makeSnapshotCalendarsUseCase,
 } from "./journal/index.ts";
 export type {
   ForRunningRegisterCalendar,
@@ -59,4 +60,6 @@ export type {
   ValidationError,
   ListCalendarsDeps,
   CloseCalendarDeps,
+  ForRunningSnapshotCalendars,
+  SnapshotCalendarsDeps,
 } from "./journal/index.ts";

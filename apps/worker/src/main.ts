@@ -1,5 +1,5 @@
-// Worker composition root — Phase 2 pg-boss scheduling.
-// Boot: parse config → run migrations → boot pg-boss → schedule + work three jobs.
+// Worker composition root — Phase 3 pg-boss scheduling.
+// Boot: parse config → run migrations → boot pg-boss → schedule + work four jobs.
 //
 // Architecture law (architecture-boundaries.md):
 // - process.env read ONCE here via bootWorkerConfig; typed config flows inward.
@@ -12,6 +12,7 @@ import {
   runMigrations,
   makeDb,
   makePostgresCalendarsRepo,
+  makePostgresCalendarSnapshotsRepo,
   makePostgresJobRunsRepo,
   makePostgresLegObservationsRepo,
   makePostgresRateObservationsRepo,
@@ -22,10 +23,12 @@ import {
   makeFetchChainUseCase,
   makeFetchRateUseCase,
   makeComputeBsmGreeksUseCase,
+  makeSnapshotCalendarsUseCase,
 } from "@morai/core";
 import { makeFetchCboeChainHandler } from "./handlers/fetch-cboe-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
 import { makeComputeBsmGreeksHandler } from "./handlers/compute-bsm-greeks.ts";
+import { makeSnapshotCalendarsHandler } from "./handlers/snapshot-calendars.ts";
 
 const config = bootWorkerConfig();
 
@@ -44,8 +47,8 @@ await boss.start();
 const db = makeDb(config.DATABASE_URL);
 
 // Build repos
-// calendarsRepo: available for status use-case; not used by job handlers
-const _calendarsRepo = makePostgresCalendarsRepo(db);
+const calendarsRepo = makePostgresCalendarsRepo(db);
+const calendarSnapshotsRepo = makePostgresCalendarSnapshotsRepo(db);
 const _jobRunsRepo = makePostgresJobRunsRepo(db);
 const legObsRepo = makePostgresLegObservationsRepo(db);
 const rateObsRepo = makePostgresRateObservationsRepo(db);
@@ -62,11 +65,13 @@ const fredAdapter = makeFredRateAdapter({
   fallbackRate: config.BSM_RATE_FALLBACK,
 });
 
-// Build the three use-cases with config-injected tunables (D-13)
+// Build the four use-cases with config-injected tunables (D-13)
 const fetchChainUseCase = makeFetchChainUseCase({
   fetchChain: cboeAdapter.fetchChain,
   persistObservations: legObsRepo.persistObservations,
   upsertContracts: legObsRepo.upsertContracts,
+  // D-04: targeted-fetch — open calendar legs bypass the DTE/band filter
+  getOpenCalendarLegs: calendarsRepo.getOpenCalendarLegs,
   maxDte: config.BSM_MAX_DTE,
   strikeBandPct: config.BSM_STRIKE_BAND_PCT,
   now: () => new Date(),
@@ -86,6 +91,13 @@ const computeBsmGreeksUseCase = makeComputeBsmGreeksUseCase({
   now: () => new Date(),
 });
 
+const snapshotCalendarsUseCase = makeSnapshotCalendarsUseCase({
+  getOpenCalendars: calendarsRepo.getOpenCalendars,
+  resolveLegs: calendarSnapshotsRepo.resolveLegSnapshot,
+  persistSnapshot: calendarSnapshotsRepo.persistSnapshot,
+  now: () => new Date(),
+});
+
 // Build handlers (thin adapters — zero business logic)
 const fetchCboeChainHandler = makeFetchCboeChainHandler({
   fetchChainUseCase,
@@ -95,21 +107,31 @@ const fetchCboeChainHandler = makeFetchCboeChainHandler({
 
 const fetchRatesHandler = makeFetchRatesHandler({
   fetchRateUseCase,
+  now: () => new Date(),
 });
 
 const computeBsmGreeksHandler = makeComputeBsmGreeksHandler({
   computeBsmGreeksUseCase,
+  boss,
+  now: () => new Date(),
+});
+
+const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
+  snapshotCalendarsUseCase,
+  now: () => new Date(),
 });
 
 // Create queues before scheduling/working — pg-boss v12 requires the queue row to exist
 // (FK on the schedule table) before boss.schedule() or boss.work() (CR-01).
 // createQueue is idempotent — safe to call on every boot.
-// No fourth/manual-trigger queue (D-08).
+// No fifth/manual-trigger queue (D-08).
 await boss.createQueue("fetch-cboe-chain");
 await boss.createQueue("fetch-rates");
 await boss.createQueue("compute-bsm-greeks");
+await boss.createQueue("snapshot-calendars"); // chain-triggered only; no schedule (D-03)
 
 // Schedule three jobs in ET (D-06, D-07).
+// snapshot-calendars is NOT scheduled — chain-triggered only via compute-bsm-greeks (D-03 / Pitfall 5).
 // boss.schedule is idempotent — safe to call on every boot.
 // No manual trigger registration (D-08).
 await boss.schedule(
@@ -135,7 +157,9 @@ await boss.schedule(
 await boss.work("fetch-cboe-chain", { pollingIntervalSeconds: 30 }, fetchCboeChainHandler);
 await boss.work("fetch-rates", { pollingIntervalSeconds: 30 }, fetchRatesHandler);
 await boss.work("compute-bsm-greeks", { pollingIntervalSeconds: 30 }, computeBsmGreeksHandler);
+await boss.work("snapshot-calendars", { pollingIntervalSeconds: 30 }, snapshotCalendarsHandler);
+// NO boss.schedule for snapshot-calendars — chain-triggered only (D-03 / Pitfall 5)
 
 console.warn(
-  "morai worker: pg-boss started, 3 queues created, 3 jobs scheduled (fetch-cboe-chain, fetch-rates, compute-bsm-greeks)",
+  "morai worker: pg-boss started, 4 queues created, 3 jobs scheduled (fetch-cboe-chain, fetch-rates, compute-bsm-greeks); snapshot-calendars chain-triggered only",
 );

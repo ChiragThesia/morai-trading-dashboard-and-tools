@@ -62,7 +62,7 @@ export function isNyseHoliday(now: Date): boolean {
   const day = parts.find((p) => p.type === "day")?.value;
 
   // Defensive guard — matches rth-window.ts pattern
-  if (!year || !month || !day) return false;
+  if (year === undefined || month === undefined || day === undefined) return false;
 
   return NYSE_HOLIDAYS.has(`${year}-${month}-${day}`);
 }

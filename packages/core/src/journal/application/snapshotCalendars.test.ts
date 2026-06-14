@@ -11,9 +11,8 @@
  *   - fast-check property: pnlOpen = (netMark - openNetDebit) * qty * 100 for any inputs
  */
 
-import { describe, it, expect, vi } from "vitest";
-import { ok, err } from "@morai/shared";
-import type { Result } from "@morai/shared";
+import { describe, it, expect } from "vitest";
+import { ok, err, formatOccSymbol } from "@morai/shared";
 import * as fc from "fast-check";
 import { makeSnapshotCalendarsUseCase } from "./snapshotCalendars.ts";
 import type { SnapshotCalendarsDeps } from "./snapshotCalendars.ts";
@@ -47,10 +46,12 @@ function makeCalendar(overrides: Partial<Calendar> = {}): Calendar {
   };
 }
 
+// Reusable branded OccSymbol for test doubles
+const TEST_OCC = formatOccSymbol({ root: "SPX", expiry: new Date("2026-07-18T12:00:00Z"), type: "C", strike: 5000 });
+
 function makeLegSnapshot(overrides: Partial<LegSnapshot> = {}): LegSnapshot {
-  // Import OccSymbol brand via formatOccSymbol — use a raw string for test double
   return {
-    occSymbol: "SPX   260718C05000000" as unknown as import("@morai/shared").OccSymbol,
+    occSymbol: TEST_OCC,
     mark: 20.0,
     underlyingPrice: 5010.0,
     ivRaw: 0.22,
@@ -73,6 +74,21 @@ function makeDeps(overrides: Partial<SnapshotCalendarsDeps> = {}): SnapshotCalen
   };
 }
 
+// ─── Typed capture helper ──────────────────────────────────────────────────────
+// Capture rows via a typed array rather than extracting from vi.fn mock.calls (avoids `as` casts).
+function makePersistCapture(): {
+  persistSnapshot: ForPersistingSnapshot;
+  rows: SnapshotRow[];
+  calledTimes: () => number;
+} {
+  const rows: SnapshotRow[] = [];
+  const persistSnapshot: ForPersistingSnapshot = async (row: SnapshotRow) => {
+    rows.push(row);
+    return ok(undefined);
+  };
+  return { persistSnapshot, rows, calledTimes: () => rows.length };
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("makeSnapshotCalendarsUseCase", () => {
@@ -86,18 +102,18 @@ describe("makeSnapshotCalendarsUseCase", () => {
     it("persists exactly one row per open calendar", async () => {
       const cal1 = makeCalendar({ id: "cal-001" });
       const cal2 = makeCalendar({ id: "cal-002" });
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
       const useCase = makeSnapshotCalendarsUseCase(
         makeDeps({
           getOpenCalendars: async () => ok([cal1, cal2]),
-          persistSnapshot,
+          persistSnapshot: capture.persistSnapshot,
         }),
       );
 
       await useCase();
 
-      expect(persistSnapshot).toHaveBeenCalledTimes(2);
+      expect(capture.calledTimes()).toBe(2);
     });
 
     it("computes netMark = backMark - frontMark", async () => {
@@ -111,15 +127,16 @@ describe("makeSnapshotCalendarsUseCase", () => {
         return ok(callCount === 1 ? frontLeg : backLeg);
       };
 
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
       const useCase = makeSnapshotCalendarsUseCase(
-        makeDeps({ resolveLegs, persistSnapshot }),
+        makeDeps({ resolveLegs, persistSnapshot: capture.persistSnapshot }),
       );
 
       await useCase();
 
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       expect(row.netMark).toBe(String(25.0 - 10.0)); // "15"
       expect(row.frontMark).toBe("10");
       expect(row.backMark).toBe("25");
@@ -135,19 +152,20 @@ describe("makeSnapshotCalendarsUseCase", () => {
         callCount += 1;
         return ok(callCount === 1 ? frontLeg : backLeg);
       };
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
       const useCase = makeSnapshotCalendarsUseCase(
         makeDeps({
           getOpenCalendars: async () => ok([cal]),
           resolveLegs,
-          persistSnapshot,
+          persistSnapshot: capture.persistSnapshot,
         }),
       );
 
       await useCase();
 
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       // netDelta = (0.55 - 0.40) * 3 * 100 = 45
       expect(parseFloat(row.netDelta)).toBeCloseTo((0.55 - 0.40) * 3 * 100, 5);
     });
@@ -161,12 +179,15 @@ describe("makeSnapshotCalendarsUseCase", () => {
         callCount += 1;
         return ok(callCount === 1 ? frontLeg : backLeg);
       };
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
-      const useCase = makeSnapshotCalendarsUseCase(makeDeps({ resolveLegs, persistSnapshot }));
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ resolveLegs, persistSnapshot: capture.persistSnapshot }),
+      );
       await useCase();
 
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       expect(parseFloat(row.termSlope)).toBeCloseTo(0.25 - 0.20, 10);
     });
 
@@ -180,42 +201,47 @@ describe("makeSnapshotCalendarsUseCase", () => {
         callCount += 1;
         return ok(callCount === 1 ? frontLeg : backLeg);
       };
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
       const useCase = makeSnapshotCalendarsUseCase(
         makeDeps({
           getOpenCalendars: async () => ok([cal]),
           resolveLegs,
-          persistSnapshot,
+          persistSnapshot: capture.persistSnapshot,
         }),
       );
       await useCase();
 
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       // netMark = 25 - 10 = 15; pnlOpen = (15 - 5) * 2 * 100 = 2000
       expect(parseFloat(row.pnlOpen)).toBeCloseTo((15 - 5) * 2 * 100, 5);
     });
 
     it("sets source='cboe' on every row", async () => {
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
-      const useCase = makeSnapshotCalendarsUseCase(makeDeps({ persistSnapshot }));
+      const capture = makePersistCapture();
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ persistSnapshot: capture.persistSnapshot }),
+      );
       await useCase();
 
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       expect(row.source).toBe("cboe");
     });
 
     it("sets dteFront and dteBack as integer calendar days", async () => {
       // now = 2026-07-01; frontExpiry = 2026-07-18 (17 days); backExpiry = 2026-09-19 (80 days)
       const now = new Date("2026-07-01T19:00:00Z");
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
       const useCase = makeSnapshotCalendarsUseCase(
-        makeDeps({ now: () => now, persistSnapshot }),
+        makeDeps({ now: () => now, persistSnapshot: capture.persistSnapshot }),
       );
       await useCase();
 
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       expect(row.dteFront).toBe(17);
       expect(row.dteBack).toBe(80);
     });
@@ -231,13 +257,16 @@ describe("makeSnapshotCalendarsUseCase", () => {
         callCount += 1;
         return ok(callCount === 1 ? frontLeg : backLeg);
       };
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
-      const useCase = makeSnapshotCalendarsUseCase(makeDeps({ resolveLegs, persistSnapshot }));
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ resolveLegs, persistSnapshot: capture.persistSnapshot }),
+      );
       await useCase();
 
-      expect(persistSnapshot).toHaveBeenCalledTimes(1);
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      expect(capture.calledTimes()).toBe(1);
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       expect(row.frontIv).toBe("NaN");
       // When front is NaN, greeks are NaN too
       expect(row.netDelta).toBe("NaN");
@@ -254,18 +283,19 @@ describe("makeSnapshotCalendarsUseCase", () => {
         callCount += 1;
         return ok(callCount === 1 ? frontLeg : backLeg);
       };
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
       const useCase = makeSnapshotCalendarsUseCase(
         makeDeps({
           getOpenCalendars: async () => ok([cal]),
           resolveLegs,
-          persistSnapshot,
+          persistSnapshot: capture.persistSnapshot,
         }),
       );
       await useCase();
 
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       // Marks still compute
       expect(row.frontMark).toBe("10");
       expect(row.backMark).toBe("25");
@@ -285,20 +315,21 @@ describe("makeSnapshotCalendarsUseCase", () => {
         }
         return ok(makeLegSnapshot({ mark: 20.0 }));
       };
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
       const useCase = makeSnapshotCalendarsUseCase(
         makeDeps({
           getOpenCalendars: async () => ok([cal]),
           resolveLegs,
-          persistSnapshot,
+          persistSnapshot: capture.persistSnapshot,
         }),
       );
       await useCase();
 
       // Row still persisted despite front leg error
-      expect(persistSnapshot).toHaveBeenCalledTimes(1);
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      expect(capture.calledTimes()).toBe(1);
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       expect(row.frontIv).toBe("NaN");
       expect(row.netDelta).toBe("NaN");
       // Back mark still present; front mark defaults to 0
@@ -313,14 +344,17 @@ describe("makeSnapshotCalendarsUseCase", () => {
         if (callCount === 1) return ok(null); // front is null
         return ok(makeLegSnapshot({ mark: 20.0 }));
       };
-      const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+      const capture = makePersistCapture();
 
-      const useCase = makeSnapshotCalendarsUseCase(makeDeps({ resolveLegs, persistSnapshot }));
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ resolveLegs, persistSnapshot: capture.persistSnapshot }),
+      );
       await useCase();
 
-      const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
       expect(row.frontIv).toBe("NaN");
-      expect(persistSnapshot).toHaveBeenCalledTimes(1);
+      expect(capture.calledTimes()).toBe(1);
     });
   });
 
@@ -352,10 +386,11 @@ describe("makeSnapshotCalendarsUseCase", () => {
     it("pnlOpen = (netMark - openNetDebit) * qty * 100 for arbitrary inputs", async () => {
       await fc.assert(
         fc.asyncProperty(
-          // frontMark, backMark, openNetDebit: finite numbers in a reasonable range
-          fc.float({ min: 0.01, max: 500, noNaN: true }),
-          fc.float({ min: 0.01, max: 500, noNaN: true }),
-          fc.float({ min: 0.01, max: 50, noNaN: true }),
+          // frontMark, backMark, openNetDebit: finite 32-bit floats in a reasonable range
+          // fast-check v4: min/max must be 32-bit floats (Math.fround per Phase-1 P02 decision)
+          fc.float({ min: Math.fround(0.01), max: Math.fround(500), noNaN: true }),
+          fc.float({ min: Math.fround(0.01), max: Math.fround(500), noNaN: true }),
+          fc.float({ min: Math.fround(0.01), max: Math.fround(50), noNaN: true }),
           // qty: positive integer
           fc.integer({ min: 1, max: 100 }),
           async (frontMark, backMark, openNetDebit, qty) => {
@@ -368,18 +403,19 @@ describe("makeSnapshotCalendarsUseCase", () => {
               callCount += 1;
               return ok(callCount === 1 ? frontLeg : backLeg);
             };
-            const persistSnapshot = vi.fn().mockResolvedValue(ok(undefined));
+            const capture = makePersistCapture();
 
             const useCase = makeSnapshotCalendarsUseCase(
               makeDeps({
                 getOpenCalendars: async () => ok([cal]),
                 resolveLegs,
-                persistSnapshot,
+                persistSnapshot: capture.persistSnapshot,
               }),
             );
             await useCase();
 
-            const row: SnapshotRow = persistSnapshot.mock.calls[0]?.[0] as SnapshotRow;
+            const row = capture.rows[0];
+            if (row === undefined) throw new Error("no row captured");
             const netMark = backMark - frontMark;
             const expectedPnl = (netMark - openNetDebit) * qty * 100;
             expect(parseFloat(row.pnlOpen)).toBeCloseTo(expectedPnl, 4);
