@@ -2,8 +2,8 @@
 phase: 3
 slug: calendar-journal-mvp
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-13
 ---
 
@@ -43,7 +43,23 @@ created: 2026-06-13
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| {N}-01-01 | 01 | 1 | REQ-{XX} | T-{N}-01 / — | {expected secure behavior or "N/A"} | unit | `{command}` | ✅ / ❌ W0 | ⬜ pending |
+| 03-01-01 | 01 | 1 | CAL-01/02/04 | T-03-01 | Calendar type cannot widen optionType/strike | typecheck | `bun run typecheck` | ✅ | ⬜ pending |
+| 03-02-01 | 02 | 1 | CAL-01 | T-03-02 | option_type migration generated + schema column | unit | `rg option_type packages/adapters/src/postgres/migrations` | ✅ | ⬜ pending |
+| 03-02-02 | 02 | 1 | CAL-01 | T-03-02/03 | live schema push applied + idempotent | manual | `bun run migrate` | ✅ | ⬜ pending |
+| 03-03-01 | 03 | 2 | CAL-01/04 | T-03-04 | Zod rejects bad optionType/strike; backExpiry rule | unit | `bun run test --run calendar.test registerCalendar.test closeCalendar.test` | ❌ W0 | ⬜ pending |
+| 03-03-02 | 03 | 2 | CAL-01/04 | T-03-04/05 | parameterized insert; register/list/close round-trip | integration | `bun run test --run calendars.contract` | ❌ W0 | ⬜ pending |
+| 03-03-03 | 03 | 2 | CAL-01/04 | T-03-06 | route error bodies flat; 201/400/404/409 mapping | unit | `bun run test --run calendar.routes.test` | ❌ W0 | ⬜ pending |
+| 03-04-01 | 04 | 3 | CAL-05 | T-03-08 | isNyseHoliday true/false on 2026-2027 dates | unit | `bun run test --run nyse-holidays.test` | ❌ W0 | ⬜ pending |
+| 03-04-02 | 04 | 3 | CAL-05 | T-03-08 | fetch handler no-op on holiday/weekend | unit | `bun run test --run fetch-cboe-chain.test` | ✅ | ⬜ pending |
+| 03-05-01 | 05 | 4 | CAL-02 | T-03-13 | net-greek math + NaN-leg continuity + pnlOpen property | unit | `bun run test --run snapshotCalendars.test` | ❌ W0 | ⬜ pending |
+| 03-05-02 | 05 | 4 | CAL-02/04 | T-03-10/13 | idempotent persist + leg resolution + NaN insert | integration | `bun run test --run calendar-snapshots.contract` | ❌ W0 | ⬜ pending |
+| 03-05-03 | 05 | 4 | CAL-04 | T-03-10 | D-04 targeted-fetch persists out-of-band leg | unit | `bun run test --run fetchChain.test` | ✅ | ⬜ pending |
+| 03-05-04 | 05 | 4 | CAL-05 | T-03-11/12 | snapshot handler RTH+holiday no-op; chain trigger | unit | `bun run test --run snapshot-calendars.test` | ❌ W0 | ⬜ pending |
+| 03-06-01 | 06 | 5 | CAL-03/MCP-01 | T-03-16 | journal/analytics contracts validate snapshot row | unit | `bun run test --run journal.test` | ❌ W0 | ⬜ pending |
+| 03-06-02 | 06 | 5 | MCP-01 | T-03-14 | getLatestLegObs latest-by-time + miss | integration | `bun run test --run leg-observations.contract` | ✅ | ⬜ pending |
+| 03-06-03 | 06 | 5 | CAL-03 | T-03-14/15/16 | journal route ordered/404/empty/500 | unit | `bun run test --run journal.routes.test` | ❌ W0 | ⬜ pending |
+| 03-07-01 | 07 | 6 | MCP-01 | T-03-19/20/21 | six tools schema-valid; typed-empty; no trigger_job | unit | `bun run test --run mcp.test` | ✅ | ⬜ pending |
+| 03-07-03 | 07 | 6 | MCP-01 | T-03-18 | live MCP round-trip matches HTTP (manual UAT) | manual | human-check (Claude Code) | n/a | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
