@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
+import type { Result } from "@morai/shared";
 import type { ForGettingStatus } from "@morai/core";
 import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks } from "@morai/core";
 import type { Calendar, SnapshotRow, StorageError } from "@morai/core";
@@ -94,16 +95,22 @@ const fakeSnapshotRow: SnapshotRow = {
   source: "cboe" as const,
 };
 
+// Helper: typed ok(null) for the ForReadingJournal not-found path.
+// Returns Result<ReadonlyArray<SnapshotRow> | null, StorageError> with null value.
+function journalNotFound(): Result<ReadonlyArray<SnapshotRow> | null, StorageError> {
+  return ok(null);
+}
+
 const fakeGetJournal: ForReadingJournal = async (calendarId) => {
   if (calendarId === "550e8400-e29b-41d4-a716-446655440000") {
     return ok([fakeSnapshotRow]);
   }
   // Unknown ID → return null (not-found path)
-  return ok(null as unknown as ReadonlyArray<SnapshotRow>);
+  return journalNotFound();
 };
 
 const fakeGetJournalNotFound: ForReadingJournal = async () =>
-  ok(null as unknown as ReadonlyArray<SnapshotRow>);
+  journalNotFound();
 
 const fakeGetJournalError: ForReadingJournal = async () =>
   err<StorageError>({ kind: "storage-error", message: "db down" });
@@ -409,9 +416,8 @@ describe("MCP router", () => {
 
   it("trigger_job is NOT exported from tools.ts (D-08 deferred)", async () => {
     const toolsModule = await import("./tools.ts");
-    // Cast to unknown first to check without type errors
-    expect(
-      "registerTriggerJobTool" in (toolsModule as unknown as Record<string, unknown>),
-    ).toBe(false);
+    // Object.keys returns string[] — check without type assertions (typescript.md rule)
+    const exportedNames = Object.keys(toolsModule);
+    expect(exportedNames.includes("registerTriggerJobTool")).toBe(false);
   });
 });

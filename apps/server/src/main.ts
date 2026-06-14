@@ -85,7 +85,10 @@ app.route("/api", calendarRoutes(registerCalendar, listCalendars, closeCalendar)
 app.route("/api", journalRoutes(getJournal));
 
 // Mount MCP transport at /mcp (bearer-protected, stateless)
-const mcpRouter = makeMcpRouter(config, getStatus);
+// MCP-01: all six tools wired — getStatus, listCalendars, getJournal, getLiveGreeks
+//         + typed-empty registerGetTermStructureTool + registerGetSkewTool (no use-case).
+// D-08: trigger_job NOT passed (deferred to Phase 5).
+const mcpRouter = makeMcpRouter(config, getStatus, listCalendars, getJournal, getLiveGreeks);
 app.route("", mcpRouter);
 
 // Start server
