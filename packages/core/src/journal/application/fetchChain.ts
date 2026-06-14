@@ -4,6 +4,7 @@ import type {
   ForFetchingChain,
   ForPersistingObservations,
   ForUpsertingContracts,
+  ForGettingOpenCalendarLegs,
   RawChain,
   RawQuote,
   ObservationRow,
@@ -22,6 +23,12 @@ export type FetchChainDeps = {
   readonly maxDte: number;
   /** Strike band: |strike - spot| ≤ strikeBandPct × spot (D-13 default: 0.10) */
   readonly strikeBandPct: number;
+  /**
+   * D-04: OCC symbols for every open calendar's two legs (front + back).
+   * Quotes matching these symbols bypass the DTE/band filter so out-of-band
+   * back legs are always observed. Error → treat as empty set (no hard fail).
+   */
+  readonly getOpenCalendarLegs: ForGettingOpenCalendarLegs;
 };
 
 export type ForRunningFetchChain = () => Promise<
@@ -138,12 +145,16 @@ function quoteToContractRow(
 
 /**
  * processChain — filter and map one RawChain to (observations, contracts).
+ *
+ * D-04: mustInclude set contains OCC symbols for open calendar legs.
+ * A quote that fails the DTE/band filter BUT is in mustInclude is still persisted.
  */
 function processChain(
   chain: RawChain,
   now: Date,
   maxDte: number,
   strikeBandPct: number,
+  mustInclude: ReadonlySet<string>,
 ): {
   observations: ReadonlyArray<ObservationRow>;
   contracts: ReadonlyArray<ContractRow>;
@@ -152,7 +163,10 @@ function processChain(
   const contracts: ContractRow[] = [];
 
   for (const quote of chain.quotes) {
-    if (!isInFilter(quote, now, chain.spot, maxDte, strikeBandPct)) continue;
+    if (
+      !isInFilter(quote, now, chain.spot, maxDte, strikeBandPct) &&
+      !mustInclude.has(quote.occSymbol)
+    ) continue;
 
     const obs = quoteToObservationRow(quote, chain.observedAt, chain.spot);
     if (obs !== null) {
@@ -180,6 +194,13 @@ function processChain(
 export function makeFetchChainUseCase(deps: FetchChainDeps): ForRunningFetchChain {
   return async (): Promise<Result<void, FetchError | StorageError>> => {
     const now = deps.now();
+
+    // D-04: build mustInclude set from open calendar legs BEFORE processing chains.
+    // On error: degrade to empty set (fetch continues without targeted-fetch legs).
+    const legsResult = await deps.getOpenCalendarLegs();
+    const mustInclude: ReadonlySet<string> = legsResult.ok
+      ? new Set(legsResult.value)
+      : new Set();
 
     // Fetch both roots concurrently
     const [spxResult, spxwResult] = await Promise.all([
@@ -219,6 +240,7 @@ export function makeFetchChainUseCase(deps: FetchChainDeps): ForRunningFetchChai
         now,
         deps.maxDte,
         deps.strikeBandPct,
+        mustInclude,
       );
       allObservations.push(...observations);
       allContracts.push(...contracts);
