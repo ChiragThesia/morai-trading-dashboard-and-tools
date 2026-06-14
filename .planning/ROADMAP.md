@@ -130,7 +130,7 @@ Plans:
 **Wave 1**
 
 - [x] 03-01-PLAN.md — Extend Calendar domain type + Phase 3 ports + calendarDte (foundation, CAL-01/02/04)
-- [ ] 03-02-PLAN.md — D-01 option_type migration + [BLOCKING] live schema push (CAL-01)
+- [x] 03-02-PLAN.md — D-01 option_type migration + [BLOCKING] live schema push (CAL-01)
 
 **Wave 2**
 
@@ -215,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/6 | In Progress|  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
-| 3. Calendar Journal (MVP) | 1/7 | In Progress|  |
+| 3. Calendar Journal (MVP) | 2/7 | In Progress|  |
 | 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |
