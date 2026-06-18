@@ -65,21 +65,23 @@ export function makeMcpRouter(
   }
 
   // POST /mcp — main JSON-RPC entrypoint (tool calls, resource fetches, etc.)
+  // Do NOT close synchronously: handleRequest returns a Response wrapping an open
+  // SSE ReadableStream whose body is written asynchronously after this returns.
+  // Closing here tears the stream down before the response is enqueued (empty
+  // content-length:0 → client "Failed to connect"). The SDK closes the stream
+  // itself once the response is sent; the per-request server/transport are then
+  // GC'd. Matches the official @modelcontextprotocol/sdk Hono web-standard example.
   router.post("/mcp", async (c) => {
     const { server, transport } = makeServerAndTransport();
     await server.connect(transport);
-    const response = await transport.handleRequest(c.req.raw);
-    void server.close();
-    return response;
+    return transport.handleRequest(c.req.raw);
   });
 
   // GET /mcp — SSE stream for server→client notifications (Phase 1: mostly no-op)
   router.get("/mcp", async (c) => {
     const { server, transport } = makeServerAndTransport();
     await server.connect(transport);
-    const response = await transport.handleRequest(c.req.raw);
-    void server.close();
-    return response;
+    return transport.handleRequest(c.req.raw);
   });
 
   return router;
