@@ -208,6 +208,51 @@ describe("MCP router", () => {
     expect(res.status).toBe(401);
   });
 
+  // ─── live transport: initialize handshake must return a non-empty body ───────
+  // Regression for the UAT-1 "Failed to connect" bug: the POST /mcp handler called
+  // `void server.close()` synchronously after handleRequest, tearing down the SSE
+  // ReadableStream before the async InitializeResult was enqueued → content-length:0.
+  // This drives the real router end-to-end (the unit tests above only exercise tool
+  // handlers in isolation, so the streaming bug slipped through).
+  it("POST /mcp initialize returns a non-empty InitializeResult body over the wire", async () => {
+    const app = new Hono();
+    app.route(
+      "",
+      makeMcpRouter(
+        testConfig,
+        healthyGetStatus,
+        fakeListCalendars,
+        fakeGetJournal,
+        fakeGetLiveGreeks,
+      ),
+    );
+    const res = await app.request("/mcp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${TEST_BEARER}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "vitest", version: "1.0" },
+        },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // The bug produced an empty stream (content-length:0). A working transport
+    // streams back the InitializeResult.
+    expect(body.length).toBeGreaterThan(0);
+    expect(body).toContain("protocolVersion");
+    expect(body).toContain("morai");
+  });
+
   it("get_status tool handler returns statusResponse-valid content with lastJobRuns:'none yet'", async () => {
     // Test the tool handler's output shape directly via registerStatusTool
     const { registerStatusTool } = await import("./tools.ts");
