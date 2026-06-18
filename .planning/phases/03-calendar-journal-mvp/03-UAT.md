@@ -13,7 +13,7 @@ name: MCP live transport — list_calendars matches HTTP
 expected: |
   With the server running and the morai MCP configured in Claude Code, invoking
   `list_calendars` returns the same calendar list as `GET /api/calendars`.
-awaiting: user response
+awaiting: fix + redeploy (transport bug blocks all live tests)
 
 ## Tests
 
@@ -25,7 +25,11 @@ during Regular Trading Hours (the snapshot + BSM jobs are RTH+holiday gated).
 
 ### 1. MCP live transport — list_calendars
 expected: `list_calendars` (MCP) returns the same list as `GET /api/calendars`.
-result: [pending]
+result: issue
+reported: "morai MCP 'Failed to connect'. Live POST /mcp initialize returns content-type text/event-stream with content-length:0 (empty SSE, no data event). Curl confirms 200 w/ valid bearer, 401 without — server reachable + token valid, transport returns no body."
+severity: blocker
+root_cause: "apps/server/src/adapters/mcp/server.ts — both /mcp handlers call `void server.close()` synchronously after `transport.handleRequest()` returns. handleRequest returns a Response wrapping an open ReadableStream and dispatches `initialize` for async processing; server.close()→transport.close() walks _streamMapping and closes the stream controller before the InitializeResult is enqueued. Fix: match official SDK Hono example — `return transport.handleRequest(c.req.raw)` with no synchronous close (per-request server/transport GC after stream ends), or move cleanup to transport.onclose."
+blocks: [2, 3, 4]
 
 ### 2. MCP live transport — get_journal (live data path)
 expected: After a snapshot writes during RTH, `get_journal` (MCP) returns the
@@ -57,9 +61,18 @@ result: [pending]
 
 total: 6
 passed: 0
-issues: 0
-pending: 6
+issues: 1
+pending: 5
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+- truth: "morai MCP connects over the wire; POST /mcp initialize returns a non-empty response (InitializeResult)."
+  status: failed
+  reason: "User reported: morai MCP 'Failed to connect'. Live POST /mcp initialize returns text/event-stream with content-length:0 — empty SSE, no data event. Server reachable (200 w/ bearer, 401 without)."
+  severity: blocker
+  test: 1
+  artifacts: [apps/server/src/adapters/mcp/server.ts]
+  missing: ["non-empty initialize response", "end-to-end router test asserting non-empty POST /mcp body"]
+  root_cause: "`void server.close()` runs synchronously after `transport.handleRequest()`, tearing down the SSE ReadableStream before the async InitializeResult is enqueued (SDK 1.29.0 webStandardStreamableHttp). Fix: drop the synchronous close (match official Hono example) or move to transport.onclose."
