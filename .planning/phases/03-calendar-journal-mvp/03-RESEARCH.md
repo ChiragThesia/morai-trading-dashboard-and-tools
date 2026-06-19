@@ -741,7 +741,7 @@ This is insufficient for Phase 3. The snapshot use-case needs `strike`, `option_
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`calendarDte` helper export**
    - What we know: `calendarDte` is private inside `fetchChain.ts`. Snapshot use-case needs integer DTE (calendar days), not T-years.

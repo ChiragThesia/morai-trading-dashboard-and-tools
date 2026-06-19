@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-06-PLAN.md — Journal read surface + live-greeks + analytics contracts
-last_updated: "2026-06-14T15:31:57.670Z"
-last_activity: 2026-06-14 -- Phase 03 plan 06 completed
+stopped_at: Phase 03 complete (7/7 plans); UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2)
+last_updated: "2026-06-19"
+last_activity: 2026-06-18 -- Phase 03 UAT-1 verified (MCP transport fix)
 progress:
   total_phases: 6
   completed_phases: 3
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 03 — calendar-journal-mvp
+**Current focus:** Phase 03 complete — next: Phase 04 (Schwab Auth & Brokerage), not yet planned
 
 ## Current Position
 
-Phase: 03 (calendar-journal-mvp) — EXECUTING
-Plan: 7 of 7
-Status: Ready to execute next (plan 07 — MCP tools)
-Last activity: 2026-06-14 -- Phase 03 plan 06 completed
+Phase: 03 (calendar-journal-mvp) — COMPLETE (7/7 plans)
+UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
+Next: Phase 04 — Schwab Auth & Brokerage (plans TBD → /gsd-plan-phase 04)
+Last activity: 2026-06-18 -- Phase 03 UAT-1 verified (MCP transport fix)
 
-Progress: [█████████░] 96%
+Progress: [██████████] Phase 03 100% · milestone 50% (3/6 phases)
 
 ## Performance Metrics
 
@@ -122,6 +122,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-14T15:31:08.495Z
-Stopped at: Completed 03-06-PLAN.md — Journal read surface + live-greeks + analytics contracts
+Last session: 2026-06-18
+Stopped at: Phase 03 complete; UAT-1 PASS. Next: plan Phase 04 (Schwab Auth).
 Resume file: None
