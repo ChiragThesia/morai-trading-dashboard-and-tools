@@ -48,7 +48,7 @@ updated: 2026-06-19
 | 04-02-02 | 02 | 2 | AUTH-02 | T-04-04 / T-04-05 | pgcrypto round-trip; key as bound param; stored bytea ≠ plaintext | integration (testcontainers) | `bun vitest run packages/adapters/src/postgres/repos/broker-tokens.contract.test.ts` | ❌ W0 | ⬜ pending |
 | 04-02-03 | 02 | 2 | AUTH-01 | T-04-08 | Refresh rotates on 200; auth-expired on invalid_grant, no half-state | unit (in-memory) | `bun vitest run packages/core/src/brokerage/application/refreshToken.test.ts` | ❌ W0 | ⬜ pending |
 | 04-03-01 | 03 | 3 | AUTH-03 | T-04-11 / T-04-12 | doctor classifies env-missing / callback-mismatch / live-refresh-fail; status reads DB only | unit | `bun vitest run apps/auth/src/doctor.test.ts` | ❌ W0 | ⬜ pending |
-| 04-03-02 | 03 | 3 | AUTH-03 | T-04-09 / T-04-10 / T-04-13 | setup validates state, exchanges immediately, port from registered URL | typecheck | `bun run typecheck && bun run lint apps/auth` | ✅ | ⬜ pending |
+| 04-03-02 | 03 | 3 | AUTH-03 | T-04-09 / T-04-10 / T-04-13 | validateAndExchange: state-mismatch → err (no exchange), happy → exchange once → tokens, exchange-fail → err; pure (no browser/DB) | unit (TDD) | `bun vitest run apps/auth/src/setup.test.ts` | ❌ W0 | ⬜ pending |
 | 04-03-03 | 03 | 3 | AUTH-03 | T-04-09..13 | Live setup writes 2 encrypted rows; no secret in CLI output | manual | live CLI run | n/a | ⬜ pending |
 | 04-04-01 | 04 | 4 | BRK-01 | — | ObservationRow/SnapshotRow.source accept 'schwab_chain' (type-only) | unit | `bun run typecheck` | ✅ | ⬜ pending |
 | 04-04-02 | 04 | 4 | BRK-01 | T-04-14 | Schwab chain flattener → RawChain; malformed JSON → err, no throw; contract test | unit+contract (msw) | `bun vitest run packages/adapters/src/schwab/market/` | ❌ W0 | ⬜ pending |
@@ -67,6 +67,7 @@ updated: 2026-06-19
 ## Wave 0 Requirements
 
 - [ ] `packages/core/src/brokerage/domain/token-freshness.test.ts` — freshness classification (04-01)
+- [ ] `apps/auth/src/setup.test.ts` — pure validateAndExchange CSRF/state + code-exchange-ordering (04-03)
 - [ ] `packages/adapters/src/schwab/auth/oauth-client.test.ts` — msw token exchange + refresh + invalid_grant + invalid_client (04-02)
 - [ ] `packages/adapters/src/__contract__/broker-tokens.contract.ts` + `.../repos/broker-tokens.contract.test.ts` — testcontainers + pgcrypto round-trip (04-02)
 - [ ] `packages/adapters/src/test/fixtures/schwab-chain.fixture.json` + `chain-adapter.test.ts` + `chain-adapter.contract.test.ts` (04-04)
