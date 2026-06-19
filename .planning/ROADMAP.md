@@ -168,7 +168,31 @@ orders, and transactions are fetchable; and AUTH_EXPIRED degrades gracefully.
   4. When Schwab returns `invalid_grant`, `GET /api/status` reports `tokenFreshness: AUTH_EXPIRED`; Schwab-dependent jobs pause (no new Schwab API calls, logged); the CBOE pull and other non-Schwab jobs continue running.
   5. Schwab trader adapter returns positions and transactions behind their ports; data is Zod-parsed before it reaches core, and a failed parse surfaces a typed `Result.err`, not a thrown exception.
 
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Foundation: install oauth-callback/open, brokerage ports + freshness domain, broker_tokens schema + [BLOCKING] live migration, in-memory twin, config env (AUTH-02)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 04-02-PLAN.md — TDD: vendored Schwab OAuth client + pgcrypto broker_tokens repo + on-demand refresh use-case (AUTH-01, AUTH-02)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 04-03-PLAN.md — auth CLI setup|refresh|status|doctor (loopback HTTPS dance) + live verify checkpoint (AUTH-03)
+
+**Wave 4** *(blocked on Wave 2)*
+
+- [ ] 04-04-PLAN.md — TDD: Schwab market chain adapter behind ForFetchingChain + source widening + CBOE-fallback selector (BRK-01)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 04-05-PLAN.md — TDD: Schwab trader adapter (positions/orders/transactions) + use-cases + HTTP routes + MCP tools (BRK-02)
+
+**Wave 6** *(blocked on Waves 4+5)*
+
+- [ ] 04-06-PLAN.md — TDD: per-app AUTH_EXPIRED status contract + getStatus freshness + job degradation guard (AUTH-04)
 
 ### Phase 5: Jobs, Fill Rebuild & Integrity
 
@@ -216,6 +240,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Walking Skeleton | 6/6 | Complete    |  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
-| 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
+| 4. Schwab Auth & Brokerage | 0/6 | Not started | - |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |
