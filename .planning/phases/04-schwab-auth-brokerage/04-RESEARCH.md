@@ -946,22 +946,25 @@ Phase 4 is greenfield for the auth/brokerage concern (new table, new adapters). 
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **HTTPS loopback: registered port**
    - What is: the already-registered callback URL port for each app (D-05 says apps are already configured)
    - What's unclear: whether the callback is `https://127.0.0.1` (no port) or `https://127.0.0.1:XXXX`
    - Recommendation: the `auth setup` implementation must read the exact registered callback URL from env (`SCHWAB_TRADER_CALLBACK_URL`, `SCHWAB_MARKET_CALLBACK_URL`) and derive the port from it. Make the loopback server bind to whatever port is in the registered URL.
+   - **RESOLVED:** the listener port is derived at runtime from the registered callback URL: `new URL(config.SCHWAB_<APP>_CALLBACK_URL).port`. No hardcoded port. (Implemented in plan 04-03.)
 
 2. **`$SPX` vs `SPX` symbol for index option chains**
    - What we know: community examples use `$SPX` for SPX index; some use `SPX`
    - What's unclear: which form the market data `/chains` endpoint requires
    - Recommendation: Build the market adapter to accept the underlying symbol as a parameter from the use-case. The first live `auth doctor` run should include a chain test that tries `$SPX` and validates the response. If wrong, the env config can hold the correct symbol.
+   - **RESOLVED:** the chain symbol is a caller-supplied parameter, not hardcoded in the adapter; the adapter passes whatever symbol the use-case provides. The live `$SPX`-vs-`SPX` confirmation is a runtime/manual-verification item (already in VALIDATION.md manual checks), not a planning blocker. (Plan 04-04.)
 
 3. **bytea column declaration in Drizzle**
    - What we know: pgcrypto returns `bytea`; Drizzle-orm has `customType` for non-standard types
    - What's unclear: exact Drizzle syntax for a `bytea` column that works with `pgp_sym_encrypt` return value
    - Recommendation: Use `customType<{ data: string; driverData: Buffer }>` from drizzle-orm or `sql<string>` with explicit cast on read. Verify in the testcontainers pgcrypto round-trip test (Wave 0 gap).
+   - **RESOLVED:** use a Drizzle `customType<{ data: string; driverData: Buffer }>` for the encrypted `bytea` columns. (Implemented in plan 04-01 Task 3.)
 
 ---
 
