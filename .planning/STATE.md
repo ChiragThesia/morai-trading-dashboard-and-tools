@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 04 context gathered
-last_updated: "2026-06-19T22:49:22.270Z"
-last_activity: 2026-06-18 -- Phase 03 UAT-1 verified (MCP transport fix)
+status: Executing Phase 04
+stopped_at: Phase 04 Plan 01 complete (Task 5 deferred — live DB push)
+last_updated: "2026-06-20T18:37:00.000Z"
+last_activity: 2026-06-20 -- Phase 04 Plan 01 executed (Tasks 1-4 done, Task 5 deferred)
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 25
-  completed_plans: 25
-  percent: 50
+  total_plans: 31
+  completed_plans: 26
+  percent: 52
 ---
 
 # Project State
@@ -21,14 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 03 complete — next: Phase 04 (Schwab Auth & Brokerage), not yet planned
+**Current focus:** Phase 04 — schwab-auth-brokerage
 
 ## Current Position
 
-Phase: 03 (calendar-journal-mvp) — COMPLETE (7/7 plans)
+Phase: 04 (schwab-auth-brokerage) — EXECUTING
+Plan: 2 of 6 (Plan 01 code-complete; Task 5 live DB push deferred)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: Phase 04 — Schwab Auth & Brokerage (plans TBD → /gsd-plan-phase 04)
-Last activity: 2026-06-18 -- Phase 03 UAT-1 verified (MCP transport fix)
+Last activity: 2026-06-20 -- Phase 04 execution started
 
 Progress: [██████████] Phase 03 100% · milestone 50% (3/6 phases)
 
@@ -63,6 +64,7 @@ Progress: [██████████] Phase 03 100% · milestone 50% (3/6 p
 | Phase 03-calendar-journal-mvp P04 | 8 | 2 tasks | 6 files |
 | Phase 03 P05 | 19 | 4 tasks | 17 files |
 | Phase 03 P06 | 16 | 3 tasks | 20 files |
+| Phase 04 P01 | 7 | 4 tasks (1 deferred) | 18 files |
 
 ## Accumulated Context
 
@@ -101,6 +103,11 @@ Recent decisions affecting current work:
 - [Phase 3 P06]: getLiveGreeks uses formatOccSymbol(strike/1000) — same ×1000→points conversion as calendars.ts getOpenCalendarLegs
 - [Phase 3 P06]: Zod v4 UUID regex: test fixtures must use valid RFC 4122 UUIDs (550e8400-... format); 00000000-...-0001 fails Zod v4 validation
 - [Phase 3 P06]: journalRoutes accepts ForReadingJournal directly as the use-case is a thin forwarder
+- [Phase 4 P01]: bytea customType uses customType<{data:string;driverData:Buffer}> from drizzle-orm/pg-core with dataType()='bytea'; round-trip verified in plan 04-02 testcontainers (RESEARCH A6)
+- [Phase 4 P01]: Migration file renamed from drizzle-kit 0003_famous_azazel to 0003_broker_tokens; journal tag updated to match
+- [Phase 4 P01]: pgcrypto CREATE EXTENSION hand-prepended as first SQL statement (drizzle-kit does not emit it)
+- [Phase 4 P01]: makeMemoryBrokerTokensRepo accepts injectable getNow clock for testability
+- [Phase 4 P01]: Cross-context import of StorageError + FetchError from journal/application/ports.ts allowed (application port type, not domain/ sub-path)
 
 ### Pending Todos
 
@@ -119,9 +126,10 @@ None yet.
 | Scale | Timescale hypertable migration (D7) | v2 trigger | Architecture |
 | Multi-user | API auth beyond single bearer token | v2 | Architecture |
 | Test isolation | Postgres leg-observations contract tests have cross-test contamination (re-persist/large-batch idempotency failures are flaky) | future | Phase 03 P06 |
+| Live DB push | broker_tokens migration (0003_broker_tokens.sql + pgcrypto) not yet applied to live Supabase DB | blocking for 04-02 | Phase 04 P01 Task 5 |
 
 ## Session Continuity
 
-Last session: 2026-06-19T22:49:22.263Z
-Stopped at: Phase 04 context gathered
-Resume file: .planning/phases/04-schwab-auth-brokerage/04-CONTEXT.md
+Last session: 2026-06-20T18:37:00.000Z
+Stopped at: Phase 04 Plan 01 complete (Task 5 deferred — live DB push requires DATABASE_URL + Schwab creds)
+Resume file: .planning/phases/04-schwab-auth-brokerage/04-01-SUMMARY.md
