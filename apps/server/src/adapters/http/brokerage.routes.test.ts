@@ -14,6 +14,7 @@ import {
   positionsResponse,
   transactionsResponse,
   ordersResponse,
+  brokerageAuthExpiredPayload,
 } from "@morai/contracts";
 import { brokerageRoutes } from "./brokerage.routes.ts";
 
@@ -125,8 +126,9 @@ describe("GET /api/positions", () => {
     const res = await app.request("/api/positions");
     expect(res.status).toBe(200);
     const body: unknown = await res.json();
-    expect((body as { paused?: boolean }).paused).toBe(true);
-    expect((body as { reason?: string }).reason).toBe("AUTH_EXPIRED");
+    const parsed = brokerageAuthExpiredPayload.parse(body);
+    expect(parsed.paused).toBe(true);
+    expect(parsed.reason).toBe("AUTH_EXPIRED");
   });
 
   it("returns 500 on fetch-error", async () => {
@@ -154,8 +156,9 @@ describe("GET /api/transactions", () => {
     const res = await app.request("/api/transactions?from=2026-06-01&to=2026-06-30");
     expect(res.status).toBe(200);
     const body: unknown = await res.json();
-    expect((body as { paused?: boolean }).paused).toBe(true);
-    expect((body as { reason?: string }).reason).toBe("AUTH_EXPIRED");
+    const parsed = brokerageAuthExpiredPayload.parse(body);
+    expect(parsed.paused).toBe(true);
+    expect(parsed.reason).toBe("AUTH_EXPIRED");
   });
 
   it("uses from/to defaults when query params absent", async () => {
@@ -183,7 +186,8 @@ describe("GET /api/orders", () => {
     const res = await app.request("/api/orders");
     expect(res.status).toBe(200);
     const body: unknown = await res.json();
-    expect((body as { paused?: boolean }).paused).toBe(true);
-    expect((body as { reason?: string }).reason).toBe("AUTH_EXPIRED");
+    const parsed = brokerageAuthExpiredPayload.parse(body);
+    expect(parsed.paused).toBe(true);
+    expect(parsed.reason).toBe("AUTH_EXPIRED");
   });
 });

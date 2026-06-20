@@ -16,7 +16,9 @@ import {
   makePostgresJobRunsRepo,
   makePostgresLegObservationsRepo,
   makePostgresRateObservationsRepo,
+  makePostgresBrokerTokensRepo,
   makeCboeChainAdapter,
+  makeSchwabChainAdapter,
   makeFredRateAdapter,
 } from "@morai/adapters";
 import {
@@ -24,8 +26,9 @@ import {
   makeFetchRateUseCase,
   makeComputeBsmGreeksUseCase,
   makeSnapshotCalendarsUseCase,
+  selectChainSource,
 } from "@morai/core";
-import { makeFetchCboeChainHandler } from "./handlers/fetch-cboe-chain.ts";
+import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
 import { makeComputeBsmGreeksHandler } from "./handlers/compute-bsm-greeks.ts";
 import { makeSnapshotCalendarsHandler } from "./handlers/snapshot-calendars.ts";
@@ -52,11 +55,35 @@ const calendarSnapshotsRepo = makePostgresCalendarSnapshotsRepo(db);
 const _jobRunsRepo = makePostgresJobRunsRepo(db);
 const legObsRepo = makePostgresLegObservationsRepo(db);
 const rateObsRepo = makePostgresRateObservationsRepo(db);
+// AUTH-04: broker-tokens repo for per-app freshness (used by selectChainSource + T-04-26 logging)
+const brokerTokensRepo = makePostgresBrokerTokensRepo(db, config.TOKEN_ENCRYPTION_KEY);
+
+const USER_AGENT = "morai-worker/0.0.1";
 
 // Build HTTP adapters
 const cboeAdapter = makeCboeChainAdapter({
   fetch: globalThis.fetch,
-  userAgent: "morai-worker/0.0.1",
+  userAgent: USER_AGENT,
+});
+
+// BRK-01: Schwab market chain adapter — getAccessToken reads broker_tokens for the market app
+// On-demand; no pre-cached token (same pattern as server traderGetAccessToken)
+const marketGetAccessToken = async () => {
+  const result = await brokerTokensRepo.readTokens("market");
+  if (!result.ok) {
+    return { ok: false as const, error: { kind: "auth-expired" as const, appId: "market" as const } };
+  }
+  if (result.value === null) {
+    return { ok: false as const, error: { kind: "auth-expired" as const, appId: "market" as const } };
+  }
+  return { ok: true as const, value: result.value.accessToken };
+};
+
+const schwabMarketAdapter = makeSchwabChainAdapter({
+  fetch: globalThis.fetch,
+  getAccessToken: marketGetAccessToken,
+  userAgent: USER_AGENT,
+  symbol: "$SPX",
 });
 
 const fredAdapter = makeFredRateAdapter({
@@ -65,9 +92,15 @@ const fredAdapter = makeFredRateAdapter({
   fallbackRate: config.BSM_RATE_FALLBACK,
 });
 
-// Build the four use-cases with config-injected tunables (D-13)
+// D-07/D-08: selectChainSource — Schwab-primary, CBOE-fallback.
+// Called at job-execution time so freshness is checked per invocation (not at boot).
 const fetchChainUseCase = makeFetchChainUseCase({
-  fetchChain: cboeAdapter.fetchChain,
+  fetchChain: (root) =>
+    selectChainSource({
+      readTokenFreshness: brokerTokensRepo.readTokenFreshness,
+      schwabFetchChain: schwabMarketAdapter.fetchChain,
+      cboeFetchChain: cboeAdapter.fetchChain,
+    }).then((fetchChain) => fetchChain(root)),
   persistObservations: legObsRepo.persistObservations,
   upsertContracts: legObsRepo.upsertContracts,
   // D-04: targeted-fetch — open calendar legs bypass the DTE/band filter
@@ -99,10 +132,15 @@ const snapshotCalendarsUseCase = makeSnapshotCalendarsUseCase({
 });
 
 // Build handlers (thin adapters — zero business logic)
-const fetchCboeChainHandler = makeFetchCboeChainHandler({
+// D-07/D-08: Schwab-primary handler replaces the CBOE-only handler.
+// fetchChainUseCase is pre-wired with selectChainSource above (Schwab→CBOE fallback).
+// T-04-26: readTokenFreshness + logAuthExpiredFallback enable the operator-visible warning.
+const fetchSchwabChainHandler = makeFetchSchwabChainHandler({
   fetchChainUseCase,
   boss,
   now: () => new Date(),
+  readTokenFreshness: brokerTokensRepo.readTokenFreshness,
+  logAuthExpiredFallback: true,
 });
 
 const fetchRatesHandler = makeFetchRatesHandler({
@@ -125,7 +163,9 @@ const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
 // (FK on the schedule table) before boss.schedule() or boss.work() (CR-01).
 // createQueue is idempotent — safe to call on every boot.
 // No fifth/manual-trigger queue (D-08).
-await boss.createQueue("fetch-cboe-chain");
+// D-07/D-08: "fetch-schwab-chain" replaces "fetch-cboe-chain" as the scheduled chain job.
+// The Schwab handler uses selectChainSource internally — CBOE fallback is transparent.
+await boss.createQueue("fetch-schwab-chain");
 await boss.createQueue("fetch-rates");
 await boss.createQueue("compute-bsm-greeks");
 await boss.createQueue("snapshot-calendars"); // chain-triggered only; no schedule (D-03)
@@ -135,7 +175,7 @@ await boss.createQueue("snapshot-calendars"); // chain-triggered only; no schedu
 // boss.schedule is idempotent — safe to call on every boot.
 // No manual trigger registration (D-08).
 await boss.schedule(
-  "fetch-cboe-chain",
+  "fetch-schwab-chain",
   "*/30 * * * 1-5", // every 30 min Mon-Fri ET
   null,
   { tz: "America/New_York" },
@@ -154,12 +194,13 @@ await boss.schedule(
 );
 
 // Register handlers — pg-boss v12 array handler pattern (Pitfall 2)
-await boss.work("fetch-cboe-chain", { pollingIntervalSeconds: 30 }, fetchCboeChainHandler);
+// D-07/D-08: Schwab-primary handler registered on "fetch-schwab-chain" queue.
+await boss.work("fetch-schwab-chain", { pollingIntervalSeconds: 30 }, fetchSchwabChainHandler);
 await boss.work("fetch-rates", { pollingIntervalSeconds: 30 }, fetchRatesHandler);
 await boss.work("compute-bsm-greeks", { pollingIntervalSeconds: 30 }, computeBsmGreeksHandler);
 await boss.work("snapshot-calendars", { pollingIntervalSeconds: 30 }, snapshotCalendarsHandler);
 // NO boss.schedule for snapshot-calendars — chain-triggered only (D-03 / Pitfall 5)
 
 console.warn(
-  "morai worker: pg-boss started, 4 queues created, 3 jobs scheduled (fetch-cboe-chain, fetch-rates, compute-bsm-greeks); snapshot-calendars chain-triggered only",
+  "morai worker: pg-boss started, 4 queues created, 3 jobs scheduled (fetch-schwab-chain [Schwab-primary/CBOE-fallback], fetch-rates, compute-bsm-greeks); snapshot-calendars chain-triggered only",
 );
