@@ -188,11 +188,11 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 04-05-PLAN.md — TDD: Schwab trader adapter (positions/orders/transactions) + use-cases + HTTP routes + MCP tools (BRK-02)
+- [x] 04-05-PLAN.md — TDD: Schwab trader adapter (positions/orders/transactions) + use-cases + HTTP routes + MCP tools (BRK-02)
 
 **Wave 6** *(blocked on Waves 4+5)*
 
-- [ ] 04-06-PLAN.md — TDD: per-app AUTH_EXPIRED status contract + getStatus freshness + job degradation guard (AUTH-04)
+- [x] 04-06-PLAN.md — TDD: per-app AUTH_EXPIRED status contract + getStatus freshness + job degradation guard (AUTH-04)
 
 ### Phase 5: Jobs, Fill Rebuild & Integrity
 
@@ -240,6 +240,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Walking Skeleton | 6/6 | Complete    |  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
-| 4. Schwab Auth & Brokerage | 4/6 | In Progress|  |
+| 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |
