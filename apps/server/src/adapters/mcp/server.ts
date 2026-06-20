@@ -6,6 +6,9 @@ import type {
   ForListingCalendars,
   ForReadingJournal,
   ForRunningGetLiveGreeks,
+  ForGettingPositions,
+  ForGettingTransactions,
+  ForGettingOrders,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -16,6 +19,9 @@ import {
   registerGetLiveGreeksTool,
   registerGetTermStructureTool,
   registerGetSkewTool,
+  registerGetPositionsTool,
+  registerGetTransactionsTool,
+  registerGetOrdersTool,
 } from "./tools.ts";
 
 /**
@@ -42,6 +48,9 @@ export function makeMcpRouter(
   listCalendars: ForListingCalendars,
   getJournal: ForReadingJournal,
   getLiveGreeks: ForRunningGetLiveGreeks,
+  getPositions?: ForGettingPositions,
+  getTransactions?: ForGettingTransactions,
+  getOrders?: ForGettingOrders,
 ): Hono {
   const router = new Hono();
 
@@ -54,13 +63,23 @@ export function makeMcpRouter(
     // Stateless: no sessionIdGenerator — each request is independent
     const transport = new WebStandardStreamableHTTPServerTransport();
     const server = new McpServer({ name: "morai", version: "1.0.0" });
-    // MCP-01: register all six tools
+    // MCP-01: register all six base tools
     registerStatusTool(server, getStatus);
     registerListCalendarsTool(server, listCalendars);
     registerGetJournalTool(server, getJournal);
     registerGetLiveGreeksTool(server, getLiveGreeks);
     registerGetTermStructureTool(server);
     registerGetSkewTool(server);
+    // BRK-02 / MCP-02: trader data tools (optional — wired when trader adapters are available)
+    if (getPositions !== undefined) {
+      registerGetPositionsTool(server, getPositions);
+    }
+    if (getTransactions !== undefined) {
+      registerGetTransactionsTool(server, getTransactions);
+    }
+    if (getOrders !== undefined) {
+      registerGetOrdersTool(server, getOrders);
+    }
     return { server, transport };
   }
 
