@@ -184,7 +184,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 2)*
 
-- [ ] 04-04-PLAN.md — TDD: Schwab market chain adapter behind ForFetchingChain + source widening + CBOE-fallback selector (BRK-01)
+- [x] 04-04-PLAN.md — TDD: Schwab market chain adapter behind ForFetchingChain + source widening + CBOE-fallback selector (BRK-01)
 
 **Wave 5** *(blocked on Wave 4)*
 
