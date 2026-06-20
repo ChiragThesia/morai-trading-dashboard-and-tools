@@ -71,3 +71,24 @@ export type {
   LiveGreeks,
   LegGreeks,
 } from "./journal/index.ts";
+
+// Brokerage bounded context — ports + pure freshness domain (Phase 4)
+export type {
+  AppId,
+  SchwabTokenRow,
+  AppTokenStatus,
+  TokenFreshnessMap,
+  AuthExpiredError,
+  BrokerPosition,
+  BrokerTransaction,
+  ForReadingTokens,
+  ForWritingTokens,
+  ForReadingTokenFreshness,
+  ForFetchingPositions,
+  ForFetchingTransactions,
+} from "./brokerage/index.ts";
+export {
+  isTokenExpired,
+  isTokenStale,
+  toAppTokenStatus,
+} from "./brokerage/index.ts";
