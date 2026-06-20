@@ -87,6 +87,7 @@ function quoteToObservationRow(
   quote: RawQuote,
   observedAt: Date,
   underlyingPrice: number,
+  source: RawChain["source"],
 ): ObservationRow | null {
   // bid and ask must be present for a meaningful mark
   if (quote.bid === null || quote.ask === null) return null;
@@ -108,7 +109,7 @@ function quoteToObservationRow(
     vega: quote.vega,
     openInterest: quote.openInterest,
     volume: quote.volume,
-    source: "cboe",
+    source,
   };
 }
 
@@ -168,7 +169,7 @@ function processChain(
       !mustInclude.has(quote.occSymbol)
     ) continue;
 
-    const obs = quoteToObservationRow(quote, chain.observedAt, chain.spot);
+    const obs = quoteToObservationRow(quote, chain.observedAt, chain.spot, chain.source);
     if (obs !== null) {
       observations.push(obs);
       contracts.push(quoteToContractRow(quote, chain));

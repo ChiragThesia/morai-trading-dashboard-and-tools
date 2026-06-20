@@ -169,7 +169,7 @@ export type LegSnapshot = {
   readonly bsmTheta: string | null;
   readonly bsmVega: string | null;
   /** Source of the underlying leg_observation row — propagated to SnapshotRow.source */
-  readonly source: "cboe" | "schwab_chain";
+  readonly source: "cboe" | "schwab_chain" | "computed_only";
 };
 
 /**
