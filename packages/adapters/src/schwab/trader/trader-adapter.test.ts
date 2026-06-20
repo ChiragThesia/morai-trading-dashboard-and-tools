@@ -66,7 +66,9 @@ afterAll(() => server.close());
 // ─── Factory helpers ──────────────────────────────────────────────────────────
 
 function freshToken() {
-  return async () => ok("test-access-token" as string);
+  // No type assertion needed — string literal is already a string
+  const token: string = "test-access-token";
+  return async () => ok(token);
 }
 function expiredToken() {
   return async () =>

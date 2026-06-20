@@ -13,6 +13,10 @@ import {
   makePostgresLegObservationsRepo,
   makePostgresJobRunsRepo,
   makePostgresBrokerTokensRepo,
+  makeAccountHashResolver,
+  makeSchwabPositionsAdapter,
+  makeSchwabTransactionsAdapter,
+  makeSchwabOrdersAdapter,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -21,11 +25,15 @@ import {
   makeCloseCalendarUseCase,
   makeGetJournalUseCase,
   makeGetLiveGreeksUseCase,
+  makeGetPositionsUseCase,
+  makeGetTransactionsUseCase,
+  makeGetOrdersUseCase,
 } from "@morai/core";
 import { Hono } from "hono";
 import { statusRoutes } from "./adapters/http/status.routes.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
+import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
 
 const config = bootConfig();
@@ -82,6 +90,45 @@ const getLiveGreeks = makeGetLiveGreeksUseCase({
   getLatestLegObs: legObsRepo.getLatestLegObs,
 });
 
+// BRK-02: build trader adapters — reads from broker_tokens for the trader app.
+// getAccessToken closure reads broker_tokens at call time (on-demand refresh deferred to JOB-02).
+const USER_AGENT = "Morai-Server/1.0";
+
+const traderGetAccessToken = async () => {
+  const result = await brokerTokensRepo.readTokens("trader");
+  if (!result.ok) {
+    return { ok: false as const, error: { kind: "auth-expired" as const, appId: "trader" as const } };
+  }
+  if (result.value === null) {
+    return { ok: false as const, error: { kind: "auth-expired" as const, appId: "trader" as const } };
+  }
+  return { ok: true as const, value: result.value.accessToken };
+};
+
+const traderDeps = {
+  fetch: globalThis.fetch,
+  getAccessToken: traderGetAccessToken,
+  userAgent: USER_AGENT,
+};
+
+const accountHashResolver = makeAccountHashResolver(traderDeps);
+const positionsAdapter = makeSchwabPositionsAdapter(traderDeps);
+const transactionsAdapter = makeSchwabTransactionsAdapter(traderDeps);
+const ordersAdapter = makeSchwabOrdersAdapter(traderDeps);
+
+const getPositions = makeGetPositionsUseCase({
+  resolveAccountHash: accountHashResolver.resolveAccountHash,
+  fetchPositions: positionsAdapter.fetchPositions,
+});
+const getTransactions = makeGetTransactionsUseCase({
+  resolveAccountHash: accountHashResolver.resolveAccountHash,
+  fetchTransactions: transactionsAdapter.fetchTransactions,
+});
+const getOrders = makeGetOrdersUseCase({
+  resolveAccountHash: accountHashResolver.resolveAccountHash,
+  fetchOrders: ordersAdapter.fetchOrders,
+});
+
 // Build the Hono app
 const app = new Hono();
 
@@ -89,12 +136,22 @@ const app = new Hono();
 app.route("/api", statusRoutes(getStatus));
 app.route("/api", calendarRoutes(registerCalendar, listCalendars, closeCalendar));
 app.route("/api", journalRoutes(getJournal));
+// BRK-02: positions, transactions, orders read endpoints
+app.route("/api", brokerageRoutes(getPositions, getTransactions, getOrders));
 
 // Mount MCP transport at /mcp (bearer-protected, stateless)
-// MCP-01: all six tools wired — getStatus, listCalendars, getJournal, getLiveGreeks
-//         + typed-empty registerGetTermStructureTool + registerGetSkewTool (no use-case).
+// MCP-01: base tools + BRK-02 trader tools (getPositions, getTransactions, getOrders)
 // D-08: trigger_job NOT passed (deferred to Phase 5).
-const mcpRouter = makeMcpRouter(config, getStatus, listCalendars, getJournal, getLiveGreeks);
+const mcpRouter = makeMcpRouter(
+  config,
+  getStatus,
+  listCalendars,
+  getJournal,
+  getLiveGreeks,
+  getPositions,
+  getTransactions,
+  getOrders,
+);
 app.route("", mcpRouter);
 
 // Start server
