@@ -58,5 +58,19 @@ export type {
 export { makeSchwabChainAdapter } from "./schwab/market/chain-adapter.ts";
 export type { SchwabChainAdapter } from "./schwab/market/chain-adapter.ts";
 
+// BRK-02: Schwab trader adapters (positions, transactions, orders, account hash)
+export { makeAccountHashResolver } from "./schwab/trader/account-hash.ts";
+export type { AccountHashResolver } from "./schwab/trader/account-hash.ts";
+export { makeSchwabPositionsAdapter } from "./schwab/trader/positions-adapter.ts";
+export type { SchwabPositionsAdapter } from "./schwab/trader/positions-adapter.ts";
+export { makeSchwabTransactionsAdapter } from "./schwab/trader/transactions-adapter.ts";
+export type { SchwabTransactionsAdapter } from "./schwab/trader/transactions-adapter.ts";
+export { makeSchwabOrdersAdapter } from "./schwab/trader/orders-adapter.ts";
+export type { SchwabOrdersAdapter } from "./schwab/trader/orders-adapter.ts";
+
+// BRK-02: In-memory twin for Schwab trader ports
+export { makeMemorySchwabTrader } from "./memory/schwab-trader.ts";
+export type { MemorySchwabTrader } from "./memory/schwab-trader.ts";
+
 // Note: contract test harness in src/__contract__/ is excluded from tsconfig emit
 // (test-only code using vitest). Import directly from the file path in test code.
