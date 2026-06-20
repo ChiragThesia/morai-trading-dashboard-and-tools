@@ -23,6 +23,13 @@ const testConfig = {
   PORT: 3000,
   TZ: "America/New_York",
   NODE_ENV: "test" as const,
+  TOKEN_ENCRYPTION_KEY: "test-encryption-key-must-be-32-chars-long",
+  SCHWAB_TRADER_APP_KEY: "test-trader-key",
+  SCHWAB_TRADER_APP_SECRET: "test-trader-secret",
+  SCHWAB_TRADER_CALLBACK_URL: "https://127.0.0.1:8182",
+  SCHWAB_MARKET_APP_KEY: "test-market-key",
+  SCHWAB_MARKET_APP_SECRET: "test-market-secret",
+  SCHWAB_MARKET_CALLBACK_URL: "https://127.0.0.1:8183",
 } satisfies Config;
 
 const healthyGetStatus: ForGettingStatus = async () =>
