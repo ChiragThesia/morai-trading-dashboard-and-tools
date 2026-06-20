@@ -40,6 +40,8 @@ export { makeMemoryChainAdapter } from "./memory/chain.ts";
 export type { MemoryChainAdapter } from "./memory/chain.ts";
 export { makeMemoryRateAdapter } from "./memory/rate.ts";
 export type { MemoryRateAdapter } from "./memory/rate.ts";
+export { makeMemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
+export type { MemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
 
 // Note: contract test harness in src/__contract__/ is excluded from tsconfig emit
 // (test-only code using vitest). Import directly from the file path in test code.

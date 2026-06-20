@@ -1,4 +1,5 @@
 import {
+  customType,
   index,
   integer,
   numeric,
@@ -11,6 +12,17 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+
+// ─── bytea customType for pgcrypto-encrypted columns ─────────────────────────
+// pgp_sym_encrypt returns bytea; pgp_sym_decrypt accepts bytea and returns text.
+// data: string  — the decrypted value as seen by application code
+// driverData: Buffer — the raw bytea value as read from Postgres wire protocol
+// RESEARCH open question A6: verified correct — round-trip tested in plan 04-02
+const byteaColumn = customType<{ data: string; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -176,6 +188,23 @@ export const orders = pgTable("orders", {
 export const rateObservations = pgTable("rate_observations", {
   date: date("date").primaryKey(),
   rate: numeric("rate").notNull(),
+}).enableRLS();
+
+// ─── 8. broker_tokens — Schwab OAuth tokens, encrypted at rest (Phase 4) ─────
+
+export const brokerTokens = pgTable("broker_tokens", {
+  // 'trader' | 'market' — one row per Schwab app (D-09 per-app independence)
+  appId: text("app_id").primaryKey(),
+  // Encrypted via pgp_sym_encrypt; key injected at query time — never in DB (D-03)
+  accessToken: byteaColumn("access_token").notNull(),
+  refreshToken: byteaColumn("refresh_token").notNull(),
+  // When the access token was issued (issued_at + 30 min → expires_at)
+  issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+  // 7-day hard cutoff clock starts at refresh_issued_at (no sliding window)
+  refreshIssuedAt: timestamp("refresh_issued_at", { withTimezone: true }).notNull(),
+  // Cached expiry (issued_at + 30 min); not authoritative — used for staleness check
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 }).enableRLS();
 
 // ─── Re-export sql helper used by partial index ───────────────────────────────

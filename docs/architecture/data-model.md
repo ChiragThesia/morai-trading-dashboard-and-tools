@@ -97,6 +97,34 @@ date PK, rate numeric          -- fallback 4.5% if FRED unreachable (rho impact 
 p95 journal query >500ms. **Upgrade**: Timescale-enabled image on Railway,
 `create_hypertable` + compression-policy migration. Schema shape already compatible.
 
+### `broker_tokens` — Schwab OAuth token storage (brokerage context, Phase 4)
+
+```
+app_id            text PK            -- 'trader' | 'market' — one row per Schwab app
+access_token      bytea NOT NULL     -- pgp_sym_encrypt(token, TOKEN_ENCRYPTION_KEY)
+refresh_token     bytea NOT NULL     -- pgp_sym_encrypt(token, TOKEN_ENCRYPTION_KEY)
+issued_at         timestamptz        -- when access token was issued
+refresh_issued_at timestamptz        -- when refresh token was issued (7-day clock)
+expires_at        timestamptz        -- issued_at + 30 min (cached, not authoritative)
+updated_at        timestamptz
+```
+
+Design rationale:
+
+- **One row per Schwab app** (`app_id` PK discriminator). Trader app and market app
+  are independent OAuth clients — their token lifetimes are independent (D-09).
+- **Encrypted at rest via pgcrypto** (`pgp_sym_encrypt` / `pgp_sym_decrypt`). The
+  symmetric key (`TOKEN_ENCRYPTION_KEY`) is injected at query time from env/secrets
+  and never stored in the database (D-03). Key appears only as a `$N` parameter in the
+  wire protocol, never in query logs or slow-query output.
+- **bytea columns** for the encrypted fields — pgcrypto returns `bytea`, not `text`.
+  Drizzle schema uses `customType<{ data: string; driverData: Buffer }>` for these
+  columns; `pgp_sym_decrypt` unwraps them back to plaintext strings on read.
+- **pgcrypto extension**: migration includes `CREATE EXTENSION IF NOT EXISTS pgcrypto`
+  as its first statement (idempotent; pre-enabled in Supabase by default).
+- **No expiry column for refresh token** — the 7-day hard cutoff is computed from
+  `refresh_issued_at` at read time by the `isTokenExpired` pure domain function.
+
 ## Migrations
 
 - drizzle-kit generated SQL in `packages/adapters/postgres/migrations/`.
