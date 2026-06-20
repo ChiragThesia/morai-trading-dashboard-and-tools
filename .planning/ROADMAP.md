@@ -180,7 +180,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 04-03-PLAN.md — auth CLI setup|refresh|status|doctor (loopback HTTPS dance) + live verify checkpoint (AUTH-03)
+- [x] 04-03-PLAN.md — auth CLI setup|refresh|status|doctor (loopback HTTPS dance) + live verify checkpoint (AUTH-03)
 
 **Wave 4** *(blocked on Wave 2)*
 
@@ -240,6 +240,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Walking Skeleton | 6/6 | Complete    |  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
-| 4. Schwab Auth & Brokerage | 0/6 | Not started | - |
+| 4. Schwab Auth & Brokerage | 4/6 | In Progress|  |
 | 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |

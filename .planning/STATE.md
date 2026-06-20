@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing Phase 04
+status: Ready to execute
 stopped_at: Phase 04 Plan 04 complete
-last_updated: "2026-06-20T12:23:00.000Z"
-last_activity: 2026-06-20 -- Phase 04 Plan 04 executed (Schwab chain adapter + symbol converter + source selector)
+last_updated: "2026-06-20T18:00:37.868Z"
+last_activity: 2026-06-20 -- Phase 04 Plan 04 executed
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 31
-  completed_plans: 28
-  percent: 55
+  completed_plans: 29
+  percent: 50
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 04 (schwab-auth-brokerage) — EXECUTING
-Plan: 5 of 6 (Plan 04 complete — Schwab chain adapter + symbol converter + source selector)
+Plan: 6 of 6 (Plan 04 complete — Schwab chain adapter + symbol converter + source selector)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: Phase 04 Plan 05 — trader adapter (positions/transactions)
 Last activity: 2026-06-20 -- Phase 04 Plan 04 executed
@@ -67,6 +67,7 @@ Progress: [██████████] Phase 03 100% · milestone 50% (3/6 p
 | Phase 04 P01 | 7 | 4 tasks (1 deferred) | 18 files |
 | Phase 04 P02 | 20 | 4 tasks | 15 files |
 | Phase 04 P04 | 13 | 5 tasks | 11 files |
+| Phase 04-schwab-auth-brokerage P03 | 15 | - tasks | - files |
 
 ## Accumulated Context
 
@@ -114,12 +115,15 @@ Recent decisions affecting current work:
 - [Phase 4 P02]: isAppId(value) type guard instead of as cast narrows Drizzle text → AppId union
 - [Phase 4 P02]: refreshIssuedAt preserved from original row on token rotation — 7-day TTL anchored to first auth-code exchange
 - [Phase 4 P02]: OAuthError and SchwabTokens defined in refreshToken.ts (core) to avoid core importing from adapters
-- [Phase 4 P02]: statusResponse tokenFreshness: z.union([z.literal('none yet'), tokenFreshnessMap]) — backward compat preserved
+- [Phase 4 P02]: statusResponse tokenFreshness: z.union([z.literal(''), tokenFreshnessMap]) — backward compat preserved
 - [Phase 4 P04]: z.record(z.string(), z.record(z.string(), ...)) two-argument form required for Zod v4 (one-argument form TS2554)
 - [Phase 4 P04]: Schwab symbol 21-char padded format is structurally identical to OCC; parseSchwabSymbol feeds formatOccSymbol directly
 - [Phase 4 P04]: selectChainSource returns CBOE on AUTH_EXPIRED/none_yet/err — journal never stalls (D-08)
 - [Phase 4 P04]: symbol parameter is caller-supplied ($SPX vs SPX) per RESEARCH A3 open question resolution
 - [Phase 4 P04]: observedAt uses new Date() — Schwab chain has no top-level timestamp field
+- [Phase ?]: [Phase 4 P03]: doctor functions pure — checkEnvCompleteness/checkCallbackExactMatch/checkLiveRefresh take explicit inputs for unit testability
+- [Phase ?]: [Phase 4 P03]: validateAndExchange: CSRF state check before any exchangeCode call (T-04-09 ordering invariant — callCount=0 proven by unit test)
+- [Phase ?]: [Phase 4 P03]: Port from new URL(callbackUrl).port at runtime — no hardcoded port in auth setup (Open Question 1)
 
 ### Pending Todos
 
@@ -142,6 +146,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-20T12:23:00.000Z
+Last session: 2026-06-20T18:00:21.701Z
 Stopped at: Phase 04 Plan 04 complete
 Resume file: .planning/phases/04-schwab-auth-brokerage/04-04-SUMMARY.md

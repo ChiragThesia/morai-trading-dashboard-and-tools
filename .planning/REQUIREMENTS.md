@@ -41,7 +41,7 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 - [ ] **AUTH-01**: A vendored OAuth client authenticates both Schwab apps (trader + market) via authorization-code + refresh grant.
 - [ ] **AUTH-02**: Tokens persist encrypted in Supabase `broker_tokens`; any service reads one source of truth.
-- [ ] **AUTH-03**: An `auth` CLI exposes `setup | refresh | status | doctor` (doctor checks env completeness, callback-URL exact match, live refresh-grant).
+- [x] **AUTH-03**: An `auth` CLI exposes `setup | refresh | status | doctor` (doctor checks env completeness, callback-URL exact match, live refresh-grant).
 - [ ] **AUTH-04**: On `invalid_grant`, Schwab-dependent jobs pause and status flags `AUTH_EXPIRED`; the other app keeps working.
 - [ ] **BRK-01**: A Schwab market adapter fetches option chains and quotes behind the same market-data ports as CBOE.
 - [ ] **BRK-02**: A Schwab trader adapter fetches positions, orders, and transactions behind their ports.
@@ -142,7 +142,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | MCP-01 | Phase 3 | Complete |
 | AUTH-01 | Phase 4 | Pending |
 | AUTH-02 | Phase 4 | Pending |
-| AUTH-03 | Phase 4 | Pending |
+| AUTH-03 | Phase 4 | Complete |
 | AUTH-04 | Phase 4 | Pending |
 | BRK-01 | Phase 4 | Pending |
 | BRK-02 | Phase 4 | Pending |
