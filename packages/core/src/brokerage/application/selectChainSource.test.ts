@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ok, err, formatOccSymbol } from "@morai/shared";
-import type { ObservationRow, SnapshotRow, ForFetchingChain } from "@morai/core";
+import type { ObservationRow, SnapshotRow, ForFetchingChain } from "../../journal/application/ports.ts";
 import type { ForReadingTokenFreshness } from "./ports.ts";
 import { selectChainSource } from "./selectChainSource.ts";
 
