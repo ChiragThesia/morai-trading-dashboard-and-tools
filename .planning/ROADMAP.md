@@ -172,11 +172,11 @@ orders, and transactions are fetchable; and AUTH_EXPIRED degrades gracefully.
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Foundation: install oauth-callback/open, brokerage ports + freshness domain, broker_tokens schema + [BLOCKING] live migration, in-memory twin, config env (AUTH-02)
+- [x] 04-01-PLAN.md — Foundation: install oauth-callback/open, brokerage ports + freshness domain, broker_tokens schema + [BLOCKING] live migration, in-memory twin, config env (AUTH-02)
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 04-02-PLAN.md — TDD: vendored Schwab OAuth client + pgcrypto broker_tokens repo + on-demand refresh use-case (AUTH-01, AUTH-02)
+- [x] 04-02-PLAN.md — TDD: vendored Schwab OAuth client + pgcrypto broker_tokens repo + on-demand refresh use-case (AUTH-01, AUTH-02)
 
 **Wave 3** *(blocked on Wave 2)*
 

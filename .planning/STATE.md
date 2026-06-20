@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Executing Phase 04
-stopped_at: Phase 04 Plan 01 complete (Task 5 deferred — live DB push)
-last_updated: "2026-06-20T18:37:00.000Z"
-last_activity: 2026-06-20 -- Phase 04 Plan 01 executed (Tasks 1-4 done, Task 5 deferred)
+stopped_at: Phase 04 Plan 02 complete
+last_updated: "2026-06-20T12:10:00.000Z"
+last_activity: 2026-06-20 -- Phase 04 Plan 02 executed (OAuth client + pgcrypto repo + refresh use-case)
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 31
-  completed_plans: 26
-  percent: 52
+  completed_plans: 27
+  percent: 53
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 04 (schwab-auth-brokerage) — EXECUTING
-Plan: 2 of 6 (Plan 01 code-complete; Task 5 live DB push deferred)
+Plan: 3 of 6 (Plan 02 complete — OAuth client + pgcrypto repo + refresh use-case)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Phase 04 — Schwab Auth & Brokerage (plans TBD → /gsd-plan-phase 04)
-Last activity: 2026-06-20 -- Phase 04 execution started
+Next: Phase 04 Plan 03 — auth CLI (setup/refresh/status/doctor)
+Last activity: 2026-06-20 -- Phase 04 Plan 02 executed
 
 Progress: [██████████] Phase 03 100% · milestone 50% (3/6 phases)
 
@@ -65,6 +65,7 @@ Progress: [██████████] Phase 03 100% · milestone 50% (3/6 p
 | Phase 03 P05 | 19 | 4 tasks | 17 files |
 | Phase 03 P06 | 16 | 3 tasks | 20 files |
 | Phase 04 P01 | 7 | 4 tasks (1 deferred) | 18 files |
+| Phase 04 P02 | 20 | 4 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,11 @@ Recent decisions affecting current work:
 - [Phase 4 P01]: pgcrypto CREATE EXTENSION hand-prepended as first SQL statement (drizzle-kit does not emit it)
 - [Phase 4 P01]: makeMemoryBrokerTokensRepo accepts injectable getNow clock for testability
 - [Phase 4 P01]: Cross-context import of StorageError + FetchError from journal/application/ports.ts allowed (application port type, not domain/ sub-path)
+- [Phase 4 P02]: readTokenFreshness optional in makeGetStatusUseCase deps — backward compat for tests not injecting it
+- [Phase 4 P02]: isAppId(value) type guard instead of as cast narrows Drizzle text → AppId union
+- [Phase 4 P02]: refreshIssuedAt preserved from original row on token rotation — 7-day TTL anchored to first auth-code exchange
+- [Phase 4 P02]: OAuthError and SchwabTokens defined in refreshToken.ts (core) to avoid core importing from adapters
+- [Phase 4 P02]: statusResponse tokenFreshness: z.union([z.literal('none yet'), tokenFreshnessMap]) — backward compat preserved
 
 ### Pending Todos
 
@@ -130,6 +136,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-20T18:37:00.000Z
-Stopped at: Phase 04 Plan 01 complete (Task 5 deferred — live DB push requires DATABASE_URL + Schwab creds)
-Resume file: .planning/phases/04-schwab-auth-brokerage/04-01-SUMMARY.md
+Last session: 2026-06-20T12:10:00.000Z
+Stopped at: Phase 04 Plan 02 complete
+Resume file: .planning/phases/04-schwab-auth-brokerage/04-02-SUMMARY.md
