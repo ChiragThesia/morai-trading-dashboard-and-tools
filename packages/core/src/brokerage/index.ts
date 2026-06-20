@@ -23,3 +23,11 @@ export {
   isTokenStale,
   toAppTokenStatus,
 } from "./domain/token-freshness.ts";
+
+// AUTH-01: on-demand token refresh use-case (makeRefreshTokenUseCase)
+export { makeRefreshTokenUseCase } from "./application/refreshToken.ts";
+export type {
+  SchwabTokens,
+  OAuthError,
+  ForRefreshingToken,
+} from "./application/refreshToken.ts";

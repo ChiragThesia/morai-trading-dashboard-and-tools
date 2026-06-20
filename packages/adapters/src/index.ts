@@ -23,6 +23,9 @@ export { makePostgresRateObservationsRepo } from "./postgres/repos/rate-observat
 export type { PostgresRateObservationsRepo } from "./postgres/repos/rate-observations.ts";
 export { makePostgresJobRunsRepo } from "./postgres/repos/job-runs.ts";
 export type { PostgresJobRunsRepo } from "./postgres/repos/job-runs.ts";
+// AUTH-02: broker-tokens Postgres repo (pgcrypto encryption at rest)
+export { makePostgresBrokerTokensRepo } from "./postgres/repos/broker-tokens.ts";
+export type { PostgresBrokerTokensRepo } from "./postgres/repos/broker-tokens.ts";
 
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
@@ -42,6 +45,14 @@ export { makeMemoryRateAdapter } from "./memory/rate.ts";
 export type { MemoryRateAdapter } from "./memory/rate.ts";
 export { makeMemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
 export type { MemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
+
+// Schwab HTTP adapters (AUTH-01)
+export { makeSchwabOAuthClient } from "./schwab/auth/oauth-client.ts";
+export type {
+  SchwabOAuthClient,
+  SchwabTokens,
+  OAuthError,
+} from "./schwab/auth/oauth-client.ts";
 
 // Note: contract test harness in src/__contract__/ is excluded from tsconfig emit
 // (test-only code using vitest). Import directly from the file path in test code.

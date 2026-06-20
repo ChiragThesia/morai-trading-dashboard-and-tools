@@ -120,6 +120,7 @@ describe("makeRefreshTokenUseCase", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe("auth-expired");
+    if (result.error.kind !== "auth-expired") return;
     expect(result.error.appId).toBe("trader");
     // MUST NOT write half-state (T-04-08)
     expect(writeCallCount).toBe(0);
@@ -151,6 +152,7 @@ describe("makeRefreshTokenUseCase", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe("auth-expired");
+    if (result.error.kind !== "auth-expired") return;
     expect(result.error.appId).toBe("market");
     expect(writeCallCount).toBe(0);
   });
@@ -194,6 +196,7 @@ describe("makeRefreshTokenUseCase", () => {
     if (result.ok) return;
     // Must return some typed error, not throw
     expect(result.error.kind).toBe("auth-expired");
+    if (result.error.kind !== "auth-expired") return;
     expect(result.error.appId).toBe("trader");
   });
 

@@ -13,9 +13,29 @@ export const jobRunRecord = z.object({
 
 export type JobRunRecord = z.infer<typeof jobRunRecord>;
 
+// AUTH-04: per-app token freshness (Phase 4).
+// status values match domain AppTokenStatus (core/brokerage/application/ports.ts).
+export const appTokenStatus = z.object({
+  status: z.enum(["fresh", "stale", "AUTH_EXPIRED", "none_yet"]),
+  // ISO datetime strings (Date serialized from core domain type)
+  expiresAt: z.string().datetime().nullable(),
+  refreshIssuedAt: z.string().datetime().nullable(),
+});
+
+export type AppTokenStatus = z.infer<typeof appTokenStatus>;
+
+// TokenFreshnessMap — per-app freshness map for both Schwab apps (D-09)
+export const tokenFreshnessMap = z.object({
+  trader: appTokenStatus,
+  market: appTokenStatus,
+});
+
+export type TokenFreshnessMap = z.infer<typeof tokenFreshnessMap>;
+
 export const statusResponse = z.object({
   db: z.enum(["ok", "down"]),
-  tokenFreshness: z.literal("none yet"),
+  // AUTH-04: "none yet" before any tokens stored; per-app map once at least one app is set up
+  tokenFreshness: z.union([z.literal("none yet"), tokenFreshnessMap]),
   // lastJobRuns: "none yet" on first deploy (Pitfall 6), or a map of job-name → run record
   lastJobRuns: z.union([
     z.literal("none yet"),

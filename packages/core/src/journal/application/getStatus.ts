@@ -1,13 +1,15 @@
 import { ok } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForPingingDb, ForReadingJobRuns, JobRunMap } from "./ports.ts";
+import type { TokenFreshnessMap, ForReadingTokenFreshness } from "../../brokerage/application/ports.ts";
 
 // Core-internal payload type whose fields line up with the statusResponse contract.
-// Core must NOT import @morai/contracts — adapters (plan 05) parse this through
+// Core must NOT import @morai/contracts — adapters parse this through
 // statusResponse.parse() at the boundary.
 export type StatusPayload = {
   readonly db: "ok" | "down";
-  readonly tokenFreshness: "none yet";
+  // AUTH-04: "none yet" before any tokens stored; per-app map once set up.
+  readonly tokenFreshness: "none yet" | TokenFreshnessMap;
   // "none yet" when no job has run yet (first deploy / pgboss schema absent).
   // JobRunMap when at least one job has run (D-10).
   readonly lastJobRuns: "none yet" | JobRunMap;
@@ -25,6 +27,8 @@ export type ForGettingStatus = () => Promise<Result<StatusPayload, StatusError>>
 export function makeGetStatusUseCase(deps: {
   readonly pingDb: ForPingingDb;
   readonly readJobRuns: ForReadingJobRuns;
+  // AUTH-04: optional — omit before broker_tokens table is available (backward-compat)
+  readonly readTokenFreshness?: ForReadingTokenFreshness;
   readonly version: string;
   readonly startedAt: Date;
 }): ForGettingStatus {
@@ -56,11 +60,25 @@ export function makeGetStatusUseCase(deps: {
       lastJobRuns = "none yet";
     }
 
+    // AUTH-04: per-app token freshness — absorb errors, fall back to "none yet".
+    // Never throw on this path. readTokenFreshness is optional for backward compat.
+    let tokenFreshness: "none yet" | TokenFreshnessMap = "none yet";
+    if (deps.readTokenFreshness !== undefined) {
+      try {
+        const freshnessResult = await deps.readTokenFreshness();
+        if (freshnessResult.ok) {
+          tokenFreshness = freshnessResult.value;
+        }
+      } catch {
+        // absorb — keep "none yet"
+      }
+    }
+
     const uptimeSeconds = (Date.now() - deps.startedAt.getTime()) / 1000;
 
     const payload: StatusPayload = {
       db: dbStatus,
-      tokenFreshness: "none yet",
+      tokenFreshness,
       lastJobRuns,
       version: deps.version,
       uptime: uptimeSeconds,

@@ -27,6 +27,11 @@ import { sql, eq } from "drizzle-orm";
 import { brokerTokens } from "../schema.ts";
 import type { Db } from "../db.ts";
 
+// Type guard — Drizzle stores appId as text; guard narrows to the AppId union
+function isAppId(value: string): value is AppId {
+  return value === "trader" || value === "market";
+}
+
 // ─── Repo type ────────────────────────────────────────────────────────────────
 
 export type PostgresBrokerTokensRepo = {
@@ -68,8 +73,16 @@ export function makePostgresBrokerTokensRepo(
       const row = rows[0];
       if (row === undefined) return ok(null);
 
+      // Narrow the Drizzle text column to the AppId union via type guard (no `as`)
+      if (!isAppId(row.appId)) {
+        return err<StorageError>({
+          kind: "storage-error",
+          message: `Unexpected appId in broker_tokens: ${row.appId}`,
+        });
+      }
+
       const tokenRow: SchwabTokenRow = {
-        appId: row.appId as AppId,
+        appId: row.appId,
         accessToken: row.accessToken,
         refreshToken: row.refreshToken,
         issuedAt: row.issuedAt,

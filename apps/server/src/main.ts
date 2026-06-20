@@ -12,6 +12,7 @@ import {
   makePostgresCalendarSnapshotsRepo,
   makePostgresLegObservationsRepo,
   makePostgresJobRunsRepo,
+  makePostgresBrokerTokensRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -38,6 +39,9 @@ const calendarsRepo = makePostgresCalendarsRepo(db);
 // Build the job-runs repo (reads pgboss.job for D-10 lastJobRuns status)
 const jobRunsRepo = makePostgresJobRunsRepo(db);
 
+// AUTH-02: build the broker-tokens repo (pgcrypto encryption at rest via TOKEN_ENCRYPTION_KEY)
+const brokerTokensRepo = makePostgresBrokerTokensRepo(db, config.TOKEN_ENCRYPTION_KEY);
+
 // Build the calendar-snapshots repo (readJournal) and leg-observations repo (getLatestLegObs)
 // Both are scoped here as named consts for plan 07 MCP tool injection
 const calendarSnapshotsRepo = makePostgresCalendarSnapshotsRepo(db);
@@ -50,6 +54,8 @@ const version = "0.0.1";
 const getStatus = makeGetStatusUseCase({
   pingDb: calendarsRepo.pingDb,
   readJobRuns: jobRunsRepo.readJobRuns,
+  // AUTH-04: per-app token freshness for /api/status (reads timestamp columns only)
+  readTokenFreshness: brokerTokensRepo.readTokenFreshness,
   version,
   startedAt,
 });
