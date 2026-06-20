@@ -37,3 +37,11 @@ export type {
 
 // BRK-01: Schwab-primary / CBOE-fallback chain source selector (D-07/D-08)
 export { selectChainSource } from "./application/selectChainSource.ts";
+
+// BRK-02: trader data use-cases (positions, transactions, orders)
+export { makeGetPositionsUseCase } from "./application/getPositions.ts";
+export type { ForGettingPositions, GetPositionsDeps } from "./application/getPositions.ts";
+export { makeGetTransactionsUseCase } from "./application/getTransactions.ts";
+export type { ForGettingTransactions, GetTransactionsDeps } from "./application/getTransactions.ts";
+export { makeGetOrdersUseCase } from "./application/getOrders.ts";
+export type { ForGettingOrders, GetOrdersDeps } from "./application/getOrders.ts";

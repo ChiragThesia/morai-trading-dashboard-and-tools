@@ -104,3 +104,10 @@ export type {
 } from "./brokerage/index.ts";
 // BRK-01: source selector (Schwab primary / CBOE fallback)
 export { selectChainSource } from "./brokerage/index.ts";
+// BRK-02: trader data use-cases (positions, transactions, orders)
+export { makeGetPositionsUseCase } from "./brokerage/index.ts";
+export type { ForGettingPositions, GetPositionsDeps } from "./brokerage/index.ts";
+export { makeGetTransactionsUseCase } from "./brokerage/index.ts";
+export type { ForGettingTransactions, GetTransactionsDeps } from "./brokerage/index.ts";
+export { makeGetOrdersUseCase } from "./brokerage/index.ts";
+export type { ForGettingOrders, GetOrdersDeps } from "./brokerage/index.ts";
