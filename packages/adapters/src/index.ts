@@ -54,5 +54,9 @@ export type {
   OAuthError,
 } from "./schwab/auth/oauth-client.ts";
 
+// BRK-01: Schwab market chain adapter (ForFetchingChain implementor)
+export { makeSchwabChainAdapter } from "./schwab/market/chain-adapter.ts";
+export type { SchwabChainAdapter } from "./schwab/market/chain-adapter.ts";
+
 // Note: contract test harness in src/__contract__/ is excluded from tsconfig emit
 // (test-only code using vitest). Import directly from the file path in test code.

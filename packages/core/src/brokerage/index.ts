@@ -31,3 +31,6 @@ export type {
   OAuthError,
   ForRefreshingToken,
 } from "./application/refreshToken.ts";
+
+// BRK-01: Schwab-primary / CBOE-fallback chain source selector (D-07/D-08)
+export { selectChainSource } from "./application/selectChainSource.ts";

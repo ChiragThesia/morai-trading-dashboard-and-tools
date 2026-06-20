@@ -3,7 +3,7 @@ import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
 import { ok, err } from "@morai/shared";
 import { makeSchwabChainAdapter } from "./chain-adapter.ts";
-import schwabChainFixture from "../../test/fixtures/schwab-chain.fixture.json";
+import schwabChainFixture from "../../../test/fixtures/schwab-chain.fixture.json";
 
 const SCHWAB_CHAIN_URL = "https://api.schwabapi.com/marketdata/v1/chains";
 

@@ -1,0 +1,72 @@
+{
+  "symbol": "$SPX",
+  "status": "SUCCESS",
+  "underlying": {
+    "ask": 5951.0,
+    "bid": 5949.5,
+    "close": 5940.0,
+    "last": 5950.25,
+    "mark": 5950.25,
+    "symbol": "$SPX",
+    "totalVolume": 1234567
+  },
+  "underlyingPrice": 5950.25,
+  "isDelayed": false,
+  "isIndex": true,
+  "interestRate": 0.0525,
+  "volatility": 0.175,
+  "callExpDateMap": {
+    "2026-06-20:7": {
+      "5950.0": [
+        {
+          "putCall": "CALL",
+          "symbol": "SPX   260620C05950000",
+          "bidPrice": 45.5,
+          "askPrice": 46.0,
+          "markPrice": 45.75,
+          "lastPrice": 45.8,
+          "totalVolume": 1234,
+          "openInterest": 5678,
+          "volatility": 0.175,
+          "delta": 0.512,
+          "gamma": 0.0042,
+          "theta": -12.35,
+          "vega": 8.71,
+          "rho": 0.15,
+          "strikePrice": 5950,
+          "expirationDate": "2026-06-20",
+          "daysToExpiration": 7,
+          "multiplier": 100,
+          "isIndexOption": true
+        }
+      ]
+    }
+  },
+  "putExpDateMap": {
+    "2026-06-20:7": {
+      "5950.0": [
+        {
+          "putCall": "PUT",
+          "symbol": "SPX   260620P05950000",
+          "bidPrice": 42.0,
+          "askPrice": 42.5,
+          "markPrice": 42.25,
+          "lastPrice": 42.3,
+          "totalVolume": 2567,
+          "openInterest": 8901,
+          "volatility": 0.178,
+          "delta": -0.488,
+          "gamma": 0.0042,
+          "theta": -12.28,
+          "vega": 8.71,
+          "rho": -0.14,
+          "strikePrice": 5950,
+          "expirationDate": "2026-06-20",
+          "daysToExpiration": 7,
+          "multiplier": 100,
+          "isIndexOption": true
+        }
+      ]
+    }
+  }
+}

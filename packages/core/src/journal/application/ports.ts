@@ -75,7 +75,7 @@ export type ObservationRow = {
   readonly vega: number | null;
   readonly openInterest: number;
   readonly volume: number;
-  readonly source: "cboe";
+  readonly source: "cboe" | "schwab_chain";
 };
 
 // Domain type: a first-seen contract metadata row (contracts table)
@@ -202,7 +202,7 @@ export type SnapshotRow = {
   readonly dteFront: number; // integer calendar days
   readonly dteBack: number; // integer calendar days
   readonly pnlOpen: string;
-  readonly source: "cboe";
+  readonly source: "cboe" | "schwab_chain";
 };
 
 /**

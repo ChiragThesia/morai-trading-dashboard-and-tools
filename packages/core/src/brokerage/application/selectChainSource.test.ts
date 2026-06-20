@@ -1,17 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { ok, err } from "@morai/shared";
+import { ok, err, formatOccSymbol } from "@morai/shared";
 import type { ObservationRow, SnapshotRow, ForFetchingChain } from "@morai/core";
 import type { ForReadingTokenFreshness } from "./ports.ts";
 import { selectChainSource } from "./selectChainSource.ts";
 
 // ─── Type-level widening tests (compile-time; runtime just asserts assignability) ──
 
+// Build a valid OccSymbol without `as` — use the branded constructor from @morai/shared
+const testOccSymbol = formatOccSymbol({
+  root: "SPX",
+  expiry: new Date(2026, 5, 20),
+  type: "P",
+  strike: 7100,
+});
+
 describe("ports source widening", () => {
   it("ObservationRow accepts source='schwab_chain'", () => {
     // If ports.ts still has source: "cboe" only, this will cause a TypeScript compile error.
     const row: ObservationRow = {
       time: new Date(),
-      contract: "SPX   260620P07100000" as ObservationRow["contract"],
+      contract: testOccSymbol,
       bid: 1,
       ask: 2,
       mark: 1.5,

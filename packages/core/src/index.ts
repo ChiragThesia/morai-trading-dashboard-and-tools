@@ -99,3 +99,5 @@ export type {
   OAuthError,
   ForRefreshingToken,
 } from "./brokerage/index.ts";
+// BRK-01: source selector (Schwab primary / CBOE fallback)
+export { selectChainSource } from "./brokerage/index.ts";
