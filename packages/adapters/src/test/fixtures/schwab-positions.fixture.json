@@ -1,0 +1,23 @@
+{
+  "securitiesAccount": {
+    "type": "MARGIN",
+    "accountNumber": "12345678",
+    "positions": [
+      {
+        "shortQuantity": 1,
+        "longQuantity": 0,
+        "averagePrice": 12.50,
+        "marketValue": -1250.00,
+        "currentDayProfitLoss": 50.00,
+        "instrument": {
+          "assetType": "OPTION",
+          "symbol": "SPX   260620P05950000",
+          "putCall": "PUT",
+          "optionMultiplier": 100,
+          "underlyingSymbol": "SPX",
+          "description": "SPX Jun 2026 5950 Put"
+        }
+      }
+    ]
+  }
+}

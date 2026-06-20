@@ -81,11 +81,14 @@ export type {
   AuthExpiredError,
   BrokerPosition,
   BrokerTransaction,
+  BrokerOrder,
   ForReadingTokens,
   ForWritingTokens,
   ForReadingTokenFreshness,
   ForFetchingPositions,
   ForFetchingTransactions,
+  ForFetchingOrders,
+  ForResolvingAccountHash,
 } from "./brokerage/index.ts";
 export {
   isTokenExpired,

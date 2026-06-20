@@ -127,3 +127,31 @@ export type ForFetchingTransactions = (
   from: string, // YYYY-MM-DD
   to: string, // YYYY-MM-DD
 ) => Promise<Result<ReadonlyArray<BrokerTransaction>, FetchError | AuthExpiredError>>;
+
+/**
+ * BrokerOrder — a single read-only order (BRK-02, read phase only — no placement).
+ */
+export type BrokerOrder = {
+  readonly orderId: number;
+  readonly status: string;
+  readonly legs: ReadonlyArray<{
+    readonly occSymbol: OccSymbol;
+    readonly qty: number;
+    readonly side: "BUY" | "SELL" | "UNKNOWN";
+  }>;
+};
+
+/**
+ * ForFetchingOrders — fetch orders from the Schwab trader API (BRK-02, read-only).
+ */
+export type ForFetchingOrders = (
+  accountHash: string,
+) => Promise<Result<ReadonlyArray<BrokerOrder>, FetchError | AuthExpiredError>>;
+
+/**
+ * ForResolvingAccountHash — resolve the Schwab account hash from /accounts/accountNumbers.
+ * Must be called before any trader data call (Pitfall 5 — never use the raw account number).
+ */
+export type ForResolvingAccountHash = () => Promise<
+  Result<string, FetchError | AuthExpiredError>
+>;

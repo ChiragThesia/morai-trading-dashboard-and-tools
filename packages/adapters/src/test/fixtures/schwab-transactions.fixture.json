@@ -1,0 +1,50 @@
+[
+  {
+    "activityId": 987654321,
+    "time": "2026-06-10T14:30:00+0000",
+    "accountNumber": "12345678",
+    "type": "TRADE",
+    "tradeDate": "2026-06-10",
+    "settlementDate": "2026-06-11",
+    "netAmount": -1250.00,
+    "orderId": 111222333,
+    "activityType": "EXECUTION",
+    "transferItems": [
+      {
+        "instrument": {
+          "assetType": "OPTION",
+          "symbol": "SPX   260620P05950000",
+          "putCall": "PUT"
+        },
+        "amount": 1,
+        "cost": -1250.00,
+        "price": 12.50,
+        "positionEffect": "OPENING"
+      }
+    ]
+  },
+  {
+    "activityId": 987654322,
+    "time": "2026-06-12T14:30:00+0000",
+    "accountNumber": "12345678",
+    "type": "TRADE",
+    "tradeDate": "2026-06-12",
+    "settlementDate": "2026-06-13",
+    "netAmount": 800.00,
+    "orderId": 111222334,
+    "activityType": "EXECUTION",
+    "transferItems": [
+      {
+        "instrument": {
+          "assetType": "OPTION",
+          "symbol": "SPX   260620P05950000",
+          "putCall": "PUT"
+        },
+        "amount": -1,
+        "cost": 800.00,
+        "price": 8.00,
+        "positionEffect": "CLOSING"
+      }
+    ]
+  }
+]

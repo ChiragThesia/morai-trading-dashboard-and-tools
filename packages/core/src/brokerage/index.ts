@@ -10,11 +10,14 @@ export type {
   AuthExpiredError,
   BrokerPosition,
   BrokerTransaction,
+  BrokerOrder,
   ForReadingTokens,
   ForWritingTokens,
   ForReadingTokenFreshness,
   ForFetchingPositions,
   ForFetchingTransactions,
+  ForFetchingOrders,
+  ForResolvingAccountHash,
 } from "./application/ports.ts";
 
 // Pure domain functions
