@@ -35,6 +35,7 @@ export function runChainContractTests(makeAdapter: () => ChainAdapter): void {
         observedAt: new Date("2026-06-11T19:13:25Z"),
         spot: 7274.14,
         quotes: [],
+        source: "cboe",
       };
       await adapter.seed("SPX", chain);
       const result = await adapter.fetchChain("SPX");
@@ -96,6 +97,7 @@ export function runChainContractTests(makeAdapter: () => ChainAdapter): void {
             volume: 2898,
           },
         ],
+        source: "cboe",
       };
       await adapter.seed("SPXW", chain);
       const result = await adapter.fetchChain("SPXW");

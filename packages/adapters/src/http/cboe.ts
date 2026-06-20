@@ -230,6 +230,7 @@ export function makeCboeChainAdapter(deps: {
       observedAt,
       spot,
       quotes,
+      source: "cboe",
     };
 
     return ok(chain);

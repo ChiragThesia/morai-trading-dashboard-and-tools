@@ -90,6 +90,7 @@ describe("in-memory calendar-snapshots adapter", () => {
           bsmGamma,
           bsmTheta,
           bsmVega,
+          source: "cboe",
         };
         holder.current.seedLegSnapshot(root, strike, optionType, expiry, leg);
       },

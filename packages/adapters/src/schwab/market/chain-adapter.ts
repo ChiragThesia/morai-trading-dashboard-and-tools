@@ -223,6 +223,7 @@ export function makeSchwabChainAdapter(deps: {
       observedAt,
       spot,
       quotes,
+      source: "schwab_chain",
     };
 
     return ok(chain);

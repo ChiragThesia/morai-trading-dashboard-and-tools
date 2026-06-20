@@ -95,7 +95,7 @@ function makeInFilterQuote(occ: ReturnType<typeof makeOcc>) {
   };
 }
 
-function makeSpxwChain(overrideQuotes?: RawChain["quotes"]): RawChain {
+function makeSpxwChain(overrideQuotes?: RawChain["quotes"], source: RawChain["source"] = "cboe"): RawChain {
   return {
     root: "SPXW",
     observedAt: NOW,
@@ -116,10 +116,11 @@ function makeSpxwChain(overrideQuotes?: RawChain["quotes"]): RawChain {
         strike: 6525, // outside ±10%
       },
     ],
+    source,
   };
 }
 
-function makeSpxChain(): RawChain {
+function makeSpxChain(source: RawChain["source"] = "cboe"): RawChain {
   const occSpx = makeOcc("SPX", new Date(2026, 8, 18), "P", 7275); // Sept 18 ~99 DTE
   // Actually Sept 18 is ~99 DTE from June 11, so out of filter — use July 9 instead
   const occSpxIn = makeOcc("SPX", new Date(2026, 6, 9), "P", 7275);
@@ -136,6 +137,7 @@ function makeSpxChain(): RawChain {
         expiry: new Date(2026, 6, 9),
       },
     ],
+    source,
   };
 }
 
@@ -314,6 +316,52 @@ describe("makeFetchChainUseCase", () => {
       // In-filter quotes still persist normally
       const allPersisted = memPersist.capture.observations.flatMap((r) => [...r]);
       expect(allPersisted.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("SC3 regression: chain source provenance — observations carry the adapter's source", () => {
+    it("Schwab-sourced chain (source='schwab_chain') → observations tagged source='schwab_chain'", async () => {
+      const schwabChain = makeSpxwChain(undefined, "schwab_chain");
+
+      const useCase = makeFetchChainUseCase({
+        fetchChain: makeMemoryFetch({ SPXW: schwabChain }),
+        persistObservations: memPersist.persistObservations,
+        upsertContracts: memPersist.upsertContracts,
+        getOpenCalendarLegs: async () => ok([]),
+        now: () => NOW,
+        maxDte: 90,
+        strikeBandPct: 0.10,
+      });
+
+      await useCase();
+
+      const allPersisted = memPersist.capture.observations.flatMap((r) => [...r]);
+      expect(allPersisted.length).toBeGreaterThan(0);
+      for (const row of allPersisted) {
+        expect(row.source).toBe("schwab_chain");
+      }
+    });
+
+    it("CBOE-sourced chain (source='cboe') → observations tagged source='cboe' (no regression)", async () => {
+      const cboeChain = makeSpxwChain(undefined, "cboe");
+
+      const useCase = makeFetchChainUseCase({
+        fetchChain: makeMemoryFetch({ SPXW: cboeChain }),
+        persistObservations: memPersist.persistObservations,
+        upsertContracts: memPersist.upsertContracts,
+        getOpenCalendarLegs: async () => ok([]),
+        now: () => NOW,
+        maxDte: 90,
+        strikeBandPct: 0.10,
+      });
+
+      await useCase();
+
+      const allPersisted = memPersist.capture.observations.flatMap((r) => [...r]);
+      expect(allPersisted.length).toBeGreaterThan(0);
+      for (const row of allPersisted) {
+        expect(row.source).toBe("cboe");
+      }
     });
   });
 });

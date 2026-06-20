@@ -58,6 +58,8 @@ export type RawChain = {
   readonly observedAt: Date; // UTC timestamp from CBOE payload (ET→UTC)
   readonly spot: number; // underlying price at observation time
   readonly quotes: ReadonlyArray<RawQuote>;
+  /** Which vendor produced this chain — propagated to ObservationRow.source and SnapshotRow.source */
+  readonly source: "cboe" | "schwab_chain";
 };
 
 // Domain type: a row ready to persist to leg_observations
@@ -166,6 +168,8 @@ export type LegSnapshot = {
   readonly bsmGamma: string | null;
   readonly bsmTheta: string | null;
   readonly bsmVega: string | null;
+  /** Source of the underlying leg_observation row — propagated to SnapshotRow.source */
+  readonly source: "cboe" | "schwab_chain";
 };
 
 /**
