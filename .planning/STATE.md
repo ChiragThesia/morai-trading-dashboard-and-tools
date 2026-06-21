@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Phase 5 context gathered
-last_updated: "2026-06-21T21:12:04.935Z"
-last_activity: 2026-06-21 -- Phase 04 closed out (UAT live-validated, 2 bugs fixed, security 26/26, verification passed)
+status: Executing Phase 05
+stopped_at: Completed 05-01-PLAN.md — foundation types, docs, Wave-0 stubs
+last_updated: "2026-06-21T21:39:49Z"
+last_activity: 2026-06-21 -- Phase 05 Plan 01 completed (docs-first, schema, domain ADTs, 9 Wave-0 stubs)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 31
-  completed_plans: 32
-  percent: 67
+  total_plans: 39
+  completed_plans: 33
+  percent: 68
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 04 — schwab-auth-brokerage
+**Current focus:** Phase 05 — jobs-fill-rebuild-integrity
 
 ## Current Position
 
-Phase: 04 (schwab-auth-brokerage) — COMPLETE
-Plan: 6 of 6 complete (Plan 06 complete — AUTH-04 degradation loop: per-app status contract + worker Schwab-primary job guard)
+Phase: 05 (jobs-fill-rebuild-integrity) — EXECUTING
+Plan: 2 of 8 (Plan 01 complete)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Phase 05 — Jobs, Fill Rebuild & Integrity
-Last activity: 2026-06-21 -- Phase 04 closed out (UAT live-validated, 2 bugs fixed, security 26/26, verification passed)
+Next: Phase 05 Plan 02 — Drizzle migration (0004_calendar_events.sql) [BLOCKING: needs live DB apply]
+Last activity: 2026-06-21 -- Phase 05 Plan 01 completed (docs-first, schema, domain ADTs, 9 Wave-0 stubs)
 
-Progress: [██████████████] Phase 04 100% · milestone 67% (4/6 phases)
+Progress: [██████████████░] Phase 05 in progress · milestone 68% (33/39 plans)
 
 ## Performance Metrics
 

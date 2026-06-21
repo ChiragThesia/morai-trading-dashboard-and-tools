@@ -215,7 +215,7 @@ from broker transactions.
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Docs-first + schema.ts (calendar_events, orphan_fills, entry_thesis) + new ports/domain types + 8 Wave-0 failing-test stubs (JOB-01, JRNL-01)
+- [x] 05-01-PLAN.md — Docs-first + schema.ts (calendar_events, orphan_fills, entry_thesis) + new ports/domain types + 9 Wave-0 failing-test stubs (JOB-01, JRNL-01) [completed 2026-06-21]
 
 **Wave 2** *(blocked on Wave 1)*
 
