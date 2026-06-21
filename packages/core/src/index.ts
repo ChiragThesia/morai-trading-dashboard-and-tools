@@ -94,6 +94,7 @@ export {
   isTokenExpired,
   isTokenStale,
   toAppTokenStatus,
+  isNearExpiry,
 } from "./brokerage/index.ts";
 // AUTH-01: on-demand refresh use-case + types
 export { makeRefreshTokenUseCase } from "./brokerage/index.ts";

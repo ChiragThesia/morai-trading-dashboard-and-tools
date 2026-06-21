@@ -25,6 +25,7 @@ export {
   isTokenExpired,
   isTokenStale,
   toAppTokenStatus,
+  isNearExpiry,
 } from "./domain/token-freshness.ts";
 
 // AUTH-01: on-demand token refresh use-case (makeRefreshTokenUseCase)

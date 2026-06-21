@@ -17,6 +17,12 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 // 60-second clock-skew buffer for access token staleness check
 const CLOCK_SKEW_BUFFER_MS = 60 * 1000;
 
+// D-14: proactive refresh-token expiry warning constants.
+// REFRESH_TTL_MS = 7 days; WARN_THRESHOLD_MS = 1 day.
+// Warning fires when age >= REFRESH_TTL_MS - WARN_THRESHOLD_MS (i.e., >= 6 days).
+// Pitfall 3: refreshIssuedAt is never reset on access-token rotation — clock anchored to first auth.
+const WARN_THRESHOLD_MS = 1 * 24 * 60 * 60 * 1000; // 1 day
+
 /**
  * isTokenExpired — returns true when the refresh token has exceeded the 7-day hard cutoff.
  * A refresh token this old will return invalid_grant on any refresh attempt.
@@ -34,6 +40,19 @@ export function isTokenExpired(refreshIssuedAt: Date, now: Date): boolean {
  */
 export function isTokenStale(expiresAt: Date, now: Date): boolean {
   return now.getTime() > expiresAt.getTime() - CLOCK_SKEW_BUFFER_MS;
+}
+
+/**
+ * isNearExpiry — returns true when the refresh token is within the proactive warning window.
+ *
+ * Warning threshold: 1 day before the hard 7-day expiry → true when age >= 6 days.
+ * Pure function: no I/O, clock injected as `now` parameter.
+ * Pitfall 3: refreshIssuedAt is NEVER reset on access-token rotation — the 7-day window
+ * is anchored to the first authorization_code grant, not to subsequent refresh operations.
+ */
+export function isNearExpiry(refreshIssuedAt: Date, now: Date): boolean {
+  const ageMs = now.getTime() - refreshIssuedAt.getTime();
+  return ageMs >= SEVEN_DAYS_MS - WARN_THRESHOLD_MS;
 }
 
 /**
