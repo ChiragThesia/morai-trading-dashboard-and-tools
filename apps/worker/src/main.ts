@@ -79,11 +79,26 @@ const marketGetAccessToken = async () => {
   return { ok: true as const, value: result.value.accessToken };
 };
 
+// SC3: scope the Schwab chain request to avoid HTTP 502 "Body buffer overflow".
+// The full SPX chain (all expirations × all strikes) exceeds the gateway buffer.
+// strikeCount=50 NTM strikes + 90-day expiry window captures near-term + calendar back months.
+// fromDate/toDate computed at boot (not hardcoded) so the window slides correctly.
+const schwabChainFromDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD today
+const schwabChainToDate = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 90);
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD today+90d
+})();
+
 const schwabMarketAdapter = makeSchwabChainAdapter({
   fetch: globalThis.fetch,
   getAccessToken: marketGetAccessToken,
   userAgent: USER_AGENT,
   symbol: "$SPX",
+  strikeCount: 50,
+  range: "NTM",
+  fromDate: schwabChainFromDate,
+  toDate: schwabChainToDate,
 });
 
 const fredAdapter = makeFredRateAdapter({

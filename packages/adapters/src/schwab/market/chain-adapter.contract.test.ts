@@ -29,6 +29,10 @@ describe("schwab chain adapter (msw-backed)", () => {
       getAccessToken: async () => ok("test-access-token"),
       userAgent: "Morai-Test/1.0",
       symbol: "$SPX",
+      strikeCount: 50,
+      range: "NTM",
+      fromDate: "2026-06-21",
+      toDate: "2026-09-21",
     });
     return { fetchChain: adapter.fetchChain };
   });

@@ -139,16 +139,28 @@ export type SchwabChainAdapter = {
  * T-04-15: Bearer token never logged; only {kind, message} returned on error.
  * T-04-16: getAccessToken err → short-circuit before network call.
  *
- * @param deps.fetch     - Injected fetch (never globalThis.fetch directly)
+ * SC3 fix: strikeCount/range/fromDate/toDate scope the request so the Schwab gateway
+ * does not overflow (HTTP 502 "Body buffer overflow" when fetching the full SPX chain).
+ * All four scoping params are injected via deps — no magic numbers in this file.
+ *
+ * @param deps.fetch          - Injected fetch (never globalThis.fetch directly)
  * @param deps.getAccessToken - Returns ok(token) or err(AUTH_EXPIRED) — checked first
- * @param deps.userAgent - User-Agent header for requests
- * @param deps.symbol    - Caller-supplied symbol ($SPX vs SPX — RESEARCH A3; not hardcoded)
+ * @param deps.userAgent      - User-Agent header for requests
+ * @param deps.symbol         - Caller-supplied symbol ($SPX vs SPX — RESEARCH A3; not hardcoded)
+ * @param deps.strikeCount    - Strikes around ATM to request (e.g. 50) — limits response size
+ * @param deps.range          - Schwab range filter (e.g. "NTM") — near-the-money only
+ * @param deps.fromDate       - Start expiration date YYYY-MM-DD — bounds the chain to near-term
+ * @param deps.toDate         - End expiration date YYYY-MM-DD — covers near + calendar back months
  */
 export function makeSchwabChainAdapter(deps: {
   fetch: typeof globalThis.fetch;
   getAccessToken: () => Promise<Result<string, AuthExpiredError>>;
   userAgent: string;
   symbol: string;
+  strikeCount: number;
+  range: string;
+  fromDate: string;
+  toDate: string;
 }): SchwabChainAdapter {
   const fetchChain: ForFetchingChain = async (
     root: "SPX" | "SPXW",
@@ -161,10 +173,17 @@ export function makeSchwabChainAdapter(deps: {
     }
     const accessToken = tokenResult.value;
 
-    // Step 2: Fetch the chain from Schwab — symbol is caller-supplied (RESEARCH A3)
+    // Step 2: Fetch the chain from Schwab — symbol is caller-supplied (RESEARCH A3).
+    // SC3: scoping params (strikeCount/range/fromDate/toDate) are REQUIRED to keep the
+    // response under Schwab's gateway buffer limit. Without them, the full SPX chain
+    // (all expirations × all strikes) causes HTTP 502 "Body buffer overflow".
     const url = new URL(SCHWAB_CHAIN_URL);
     url.searchParams.set("symbol", deps.symbol);
     url.searchParams.set("contractType", "ALL");
+    url.searchParams.set("strikeCount", String(deps.strikeCount));
+    url.searchParams.set("range", deps.range);
+    url.searchParams.set("fromDate", deps.fromDate);
+    url.searchParams.set("toDate", deps.toDate);
 
     let rawBody: unknown;
     try {
