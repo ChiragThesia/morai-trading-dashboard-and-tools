@@ -260,6 +260,7 @@ export async function runSetup(
     issuedAt: now,
     refreshIssuedAt: now, // Fresh auth-code exchange resets the 7-day refresh TTL clock
     expiresAt: new Date(now.getTime() + tokens.expiresIn * 1000),
+    lastRefreshError: null, // fresh auth-code exchange clears any prior error
   };
 
   const writeResult = await repo.writeTokens(appId, tokenRow);

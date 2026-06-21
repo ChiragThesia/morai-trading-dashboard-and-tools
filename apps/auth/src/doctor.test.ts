@@ -184,6 +184,7 @@ const TRADER_TOKEN: SchwabTokenRow = {
   issuedAt: new Date(),
   refreshIssuedAt: new Date(),
   expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+  lastRefreshError: null,
 };
 
 describe("runDoctorCommand — real wiring (SC2)", () => {

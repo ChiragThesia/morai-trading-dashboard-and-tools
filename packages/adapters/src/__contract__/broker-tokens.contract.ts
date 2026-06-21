@@ -46,6 +46,7 @@ export function runBrokerTokensContractTests(
       issuedAt: now,
       refreshIssuedAt: now,
       expiresAt: thirtyMinLater,
+      lastRefreshError: null,
       ...overrides,
     };
   }

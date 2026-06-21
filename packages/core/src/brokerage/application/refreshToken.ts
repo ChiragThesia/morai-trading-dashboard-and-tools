@@ -125,6 +125,9 @@ export function makeRefreshTokenUseCase(deps: {
       // Only re-auth (authorization_code grant) resets the 7-day clock.
       refreshIssuedAt: currentTokens.refreshIssuedAt,
       expiresAt: new Date(now.getTime() + newTokens.expiresIn * 1000),
+      // Preserve the existing error state — writeTokens is not responsible for
+      // clearing lastRefreshError; recordRefreshOutcome owns that (D-14, JOB-02).
+      lastRefreshError: currentTokens.lastRefreshError,
     };
 
     try {

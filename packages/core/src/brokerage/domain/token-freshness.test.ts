@@ -14,6 +14,7 @@ function makeRow(
     issuedAt: new Date(expiresAt.getTime() - 30 * 60 * 1000), // 30 min before expiry
     refreshIssuedAt,
     expiresAt,
+    lastRefreshError: null,
   };
 }
 

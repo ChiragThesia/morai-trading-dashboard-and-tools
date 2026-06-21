@@ -39,6 +39,9 @@ export type {
 // Phase 5: ForRefreshingToken re-exported from ports (for consumers of brokerage index)
 export type { ForRefreshingToken as ForRefreshingBrokerageToken } from "./application/ports.ts";
 
+// D-14 (05-05): per-app refresh outcome recording port
+export type { ForRecordingRefreshOutcome } from "./application/ports.ts";
+
 // Phase 5: refreshTokens use-case (JOB-02, D-13/D-14)
 export { makeRefreshTokensUseCase } from "./application/refreshTokens.ts";
 export type {

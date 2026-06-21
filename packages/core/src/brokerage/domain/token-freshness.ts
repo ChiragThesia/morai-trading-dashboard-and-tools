@@ -63,13 +63,15 @@ export function isNearExpiry(refreshIssuedAt: Date, now: Date): boolean {
  * 2. refresh token expired → "AUTH_EXPIRED"
  * 3. access token stale → "stale"
  * 4. otherwise → "fresh"
+ *
+ * lastRefreshError (D-14): passed through from the row; null when no row exists.
  */
 export function toAppTokenStatus(
   row: SchwabTokenRow | null,
   now: Date,
 ): AppTokenStatus {
   if (row === null) {
-    return { status: "none_yet", expiresAt: null, refreshIssuedAt: null };
+    return { status: "none_yet", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null };
   }
 
   if (isTokenExpired(row.refreshIssuedAt, now)) {
@@ -77,6 +79,7 @@ export function toAppTokenStatus(
       status: "AUTH_EXPIRED",
       expiresAt: row.expiresAt,
       refreshIssuedAt: row.refreshIssuedAt,
+      lastRefreshError: row.lastRefreshError,
     };
   }
 
@@ -85,6 +88,7 @@ export function toAppTokenStatus(
       status: "stale",
       expiresAt: row.expiresAt,
       refreshIssuedAt: row.refreshIssuedAt,
+      lastRefreshError: row.lastRefreshError,
     };
   }
 
@@ -92,5 +96,6 @@ export function toAppTokenStatus(
     status: "fresh",
     expiresAt: row.expiresAt,
     refreshIssuedAt: row.refreshIssuedAt,
+    lastRefreshError: row.lastRefreshError,
   };
 }

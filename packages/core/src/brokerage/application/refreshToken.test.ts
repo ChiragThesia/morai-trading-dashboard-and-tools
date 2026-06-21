@@ -17,6 +17,7 @@ function makeStoredRow(overrides: Partial<SchwabTokenRow> = {}): SchwabTokenRow 
     issuedAt: now,
     refreshIssuedAt: now,
     expiresAt: thirtyMinLater,
+    lastRefreshError: null,
     ...overrides,
   };
 }

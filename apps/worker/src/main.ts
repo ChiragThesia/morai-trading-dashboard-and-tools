@@ -19,6 +19,7 @@ import {
   makePostgresBrokerTokensRepo,
   makeCboeChainAdapter,
   makeSchwabChainAdapter,
+  makeSchwabOAuthClient,
   makeFredRateAdapter,
   makePgBossJobQueue,
 } from "@morai/adapters";
@@ -28,6 +29,8 @@ import {
   makeComputeBsmGreeksUseCase,
   makeSnapshotCalendarsUseCase,
   selectChainSource,
+  makeRefreshTokenUseCase,
+  makeRefreshTokensUseCase,
 } from "@morai/core";
 import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
@@ -192,8 +195,46 @@ const syncFillsHandler = makeSyncFillsHandler({
   now: () => new Date(),
 });
 
+// JOB-02 / D-13: refresh both Schwab apps independently via Promise.allSettled (plan 05-05).
+// Each app has its own OAuth client built from the app-specific key/secret/callbackUrl.
+// recordRefreshOutcome persists per-app refresh failure on broker_tokens.last_refresh_error
+// so GET /api/status surfaces the failure flag via readTokenFreshness (D-14, flag-only).
+const traderOAuthClient = makeSchwabOAuthClient({
+  appKey: config.SCHWAB_TRADER_APP_KEY,
+  appSecret: config.SCHWAB_TRADER_APP_SECRET,
+  callbackUrl: config.SCHWAB_TRADER_CALLBACK_URL,
+  fetch: globalThis.fetch,
+});
+
+const marketOAuthClient = makeSchwabOAuthClient({
+  appKey: config.SCHWAB_MARKET_APP_KEY,
+  appSecret: config.SCHWAB_MARKET_APP_SECRET,
+  callbackUrl: config.SCHWAB_MARKET_CALLBACK_URL,
+  fetch: globalThis.fetch,
+});
+
+const refreshTraderTokenUseCase = makeRefreshTokenUseCase({
+  readTokens: brokerTokensRepo.readTokens,
+  writeTokens: brokerTokensRepo.writeTokens,
+  refreshTokens: traderOAuthClient.refreshTokens,
+});
+
+const refreshMarketTokenUseCase = makeRefreshTokenUseCase({
+  readTokens: brokerTokensRepo.readTokens,
+  writeTokens: brokerTokensRepo.writeTokens,
+  refreshTokens: marketOAuthClient.refreshTokens,
+});
+
+const refreshTokensUseCase = makeRefreshTokensUseCase({
+  refreshTraderToken: refreshTraderTokenUseCase,
+  refreshMarketToken: refreshMarketTokenUseCase,
+  readTokenFreshness: brokerTokensRepo.readTokenFreshness,
+  now: () => new Date(),
+});
+
 const refreshTokensHandler = makeRefreshTokensHandler({
-  refreshTokensUseCase: async () => ({ ok: false as const, error: "not implemented" as never }),
+  refreshTokensUseCase,
+  recordRefreshOutcome: brokerTokensRepo.recordRefreshOutcome,
   now: () => new Date(),
 });
 

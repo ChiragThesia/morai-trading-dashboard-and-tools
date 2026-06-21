@@ -213,6 +213,11 @@ export const brokerTokens = pgTable("broker_tokens", {
   // Cached expiry (issued_at + 30 min); not authoritative — used for staleness check
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  // D-14 (05-05, additive): per-app refresh failure flag; null = last refresh succeeded.
+  // Persisted so the server process can surface it at GET /api/status (worker writes it;
+  // server reads it via readTokenFreshness — separate processes require DB persistence).
+  // NEVER contains token values — only appId + error reason (T-05-11).
+  lastRefreshError: text("last_refresh_error"),
 }).enableRLS();
 
 // ─── 9. calendar_events — L1 trade ledger (Phase 5) ──────────────────────────

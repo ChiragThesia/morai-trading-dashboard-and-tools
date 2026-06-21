@@ -10,6 +10,9 @@
  *   - No process.env access — encryptionKey injected as constructor dep
  *   - No logging of encryptionKey or token values — only appId and timestamps
  *   - catch → err({kind:"storage-error"}) — never throw across the port
+ *
+ * D-14 (05-05): recordRefreshOutcome persists per-app last_refresh_error (bound $N UPDATE).
+ * NEVER uses sql.raw touching the encryption key — this plan adds no new key exposure (T-05-14).
  */
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
@@ -20,6 +23,7 @@ import type {
   ForReadingTokens,
   ForWritingTokens,
   ForReadingTokenFreshness,
+  ForRecordingRefreshOutcome,
   StorageError,
 } from "@morai/core";
 import { toAppTokenStatus } from "@morai/core";
@@ -38,6 +42,7 @@ export type PostgresBrokerTokensRepo = {
   readonly readTokens: ForReadingTokens;
   readonly writeTokens: ForWritingTokens;
   readonly readTokenFreshness: ForReadingTokenFreshness;
+  readonly recordRefreshOutcome: ForRecordingRefreshOutcome;
 };
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
@@ -66,6 +71,7 @@ export function makePostgresBrokerTokensRepo(
           issuedAt: brokerTokens.issuedAt,
           refreshIssuedAt: brokerTokens.refreshIssuedAt,
           expiresAt: brokerTokens.expiresAt,
+          lastRefreshError: brokerTokens.lastRefreshError,
         })
         .from(brokerTokens)
         .where(eq(brokerTokens.appId, appId));
@@ -88,6 +94,7 @@ export function makePostgresBrokerTokensRepo(
         issuedAt: row.issuedAt,
         refreshIssuedAt: row.refreshIssuedAt,
         expiresAt: row.expiresAt,
+        lastRefreshError: row.lastRefreshError ?? null,
       };
 
       return ok(tokenRow);
@@ -115,6 +122,9 @@ export function makePostgresBrokerTokensRepo(
           refreshIssuedAt: tokens.refreshIssuedAt,
           expiresAt: tokens.expiresAt,
           updatedAt: new Date(),
+          // Do not carry lastRefreshError through writeTokens —
+          // only recordRefreshOutcome owns that column (D-14).
+          lastRefreshError: tokens.lastRefreshError,
         })
         .onConflictDoUpdate({
           target: brokerTokens.appId,
@@ -125,6 +135,8 @@ export function makePostgresBrokerTokensRepo(
             refreshIssuedAt: tokens.refreshIssuedAt,
             expiresAt: tokens.expiresAt,
             updatedAt: new Date(),
+            // Note: does NOT update lastRefreshError on token rotation —
+            // recordRefreshOutcome is the sole writer of that column.
           },
         });
 
@@ -135,21 +147,45 @@ export function makePostgresBrokerTokensRepo(
     }
   };
 
+  // ─── recordRefreshOutcome ──────────────────────────────────────────────────
+  // D-14 (T-05-11): UPDATE last_refresh_error with a bound $N param.
+  // error = non-null string → failure persisted; error = null → flag cleared on success.
+  // NEVER uses sql.raw — the error string is bound as a $N parameter (T-05-14).
+  // The row may not exist yet if the first-ever refresh fails before any token is stored;
+  // in that case the UPDATE is a no-op (0 rows updated). This is acceptable: the flag
+  // will be surfaced on the next successful readTokenFreshness once a row exists.
+  const recordRefreshOutcome: ForRecordingRefreshOutcome = async (
+    appId: AppId,
+    error: string | null,
+  ): Promise<Result<void, StorageError>> => {
+    try {
+      await db
+        .update(brokerTokens)
+        .set({ lastRefreshError: error })
+        .where(eq(brokerTokens.appId, appId));
+      return ok(undefined);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   // ─── readTokenFreshness ────────────────────────────────────────────────────
   // Reads both apps' timestamp columns only (no decryption needed for freshness).
-  // Composes toAppTokenStatus from the token-freshness domain.
+  // Also reads last_refresh_error to surface the per-app refresh failure flag (D-14).
   // T-04-04: only appId and timestamps are logged — never token values.
   const readTokenFreshness: ForReadingTokenFreshness = async (): Promise<
     Result<TokenFreshnessMap | "none yet", StorageError>
   > => {
     try {
-      // Read only non-encrypted timestamp columns — no decryption key needed here
+      // Read only non-encrypted columns — no decryption key needed here
       const rows = await db
         .select({
           appId: brokerTokens.appId,
           issuedAt: brokerTokens.issuedAt,
           refreshIssuedAt: brokerTokens.refreshIssuedAt,
           expiresAt: brokerTokens.expiresAt,
+          lastRefreshError: brokerTokens.lastRefreshError,
         })
         .from(brokerTokens);
 
@@ -180,6 +216,7 @@ export function makePostgresBrokerTokensRepo(
               issuedAt: traderRow.issuedAt,
               refreshIssuedAt: traderRow.refreshIssuedAt,
               expiresAt: traderRow.expiresAt,
+              lastRefreshError: traderRow.lastRefreshError ?? null,
             }
           : null,
         now,
@@ -194,6 +231,7 @@ export function makePostgresBrokerTokensRepo(
               issuedAt: marketRow.issuedAt,
               refreshIssuedAt: marketRow.refreshIssuedAt,
               expiresAt: marketRow.expiresAt,
+              lastRefreshError: marketRow.lastRefreshError ?? null,
             }
           : null,
         now,
@@ -211,5 +249,5 @@ export function makePostgresBrokerTokensRepo(
     }
   };
 
-  return { readTokens, writeTokens, readTokenFreshness };
+  return { readTokens, writeTokens, readTokenFreshness, recordRefreshOutcome };
 }

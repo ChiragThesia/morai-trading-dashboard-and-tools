@@ -19,6 +19,9 @@ export type AppId = "trader" | "market";
  * SchwabTokenRow — the brokerage domain view of a token row.
  * Adapters translate from the DB schema to this shape at the boundary.
  * Tokens are stored as bytea in the DB; they arrive here as decrypted strings.
+ *
+ * lastRefreshError (D-14 flag-only, 05-05): the most recent per-app refresh failure
+ * message, or null when the last refresh succeeded. Stored as broker_tokens.last_refresh_error.
  */
 export type SchwabTokenRow = {
   readonly appId: AppId;
@@ -27,16 +30,22 @@ export type SchwabTokenRow = {
   readonly issuedAt: Date;
   readonly refreshIssuedAt: Date; // 7-day hard expiry clock starts here
   readonly expiresAt: Date; // issuedAt + 30 min (cached, not authoritative)
+  readonly lastRefreshError: string | null; // null = last refresh succeeded
 };
 
 /**
  * AppTokenStatus — the freshness classification for a single Schwab app.
  * Used by getStatus use-case (AUTH-04) and job-level guards (D-07/D-08).
+ *
+ * lastRefreshError (D-14 flag-only): non-null when the most recent refresh attempt
+ * for this app failed. Cleared to null on a successful refresh. Surfaced by
+ * GET /api/status so operators can see per-app refresh failures without a new table.
  */
 export type AppTokenStatus = {
   readonly status: "fresh" | "stale" | "AUTH_EXPIRED" | "none_yet";
   readonly expiresAt: Date | null;
   readonly refreshIssuedAt: Date | null;
+  readonly lastRefreshError: string | null;
 };
 
 /**
@@ -160,3 +169,18 @@ export type ForResolvingAccountHash = () => Promise<
 
 // Re-export ForRefreshingToken from refreshToken.ts so consumers import from this boundary
 export type { ForRefreshingToken } from "./refreshToken.ts";
+
+/**
+ * ForRecordingRefreshOutcome — persist the per-app refresh result on the broker_tokens row.
+ *
+ * error = non-null string → last_refresh_error persisted (failure; appId + reason only, never token)
+ * error = null            → last_refresh_error cleared (successful refresh)
+ *
+ * Enables the GET /api/status per-app refresh-failure flag (D-14, flag + log only, no new table).
+ * The worker writes this after each refresh attempt; the server reads it via readTokenFreshness.
+ * Architecture: worker and server are separate processes — an in-memory map would not be readable.
+ */
+export type ForRecordingRefreshOutcome = (
+  appId: AppId,
+  error: string | null,
+) => Promise<Result<void, StorageError>>;

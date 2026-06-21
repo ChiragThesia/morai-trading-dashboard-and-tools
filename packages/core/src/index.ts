@@ -128,6 +128,8 @@ export type { ForRebuildingJournal, RebuildJournalDeps } from "./journal/index.t
 // Phase 5: refreshTokens use-case + result type (JOB-02, D-13/D-14)
 export { makeRefreshTokensUseCase } from "./brokerage/index.ts";
 export type { RefreshTokensResult, AppRefreshOutcome, RefreshTokensDeps } from "./brokerage/index.ts";
+// D-14 (05-05): per-app refresh outcome recording port
+export type { ForRecordingRefreshOutcome } from "./brokerage/index.ts";
 // BRK-02: trader data use-cases (positions, transactions, orders)
 export { makeGetPositionsUseCase } from "./brokerage/index.ts";
 export type { ForGettingPositions, GetPositionsDeps } from "./brokerage/index.ts";

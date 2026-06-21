@@ -20,6 +20,8 @@ export const appTokenStatus = z.object({
   // ISO datetime strings (Date serialized from core domain type)
   expiresAt: z.string().datetime().nullable(),
   refreshIssuedAt: z.string().datetime().nullable(),
+  // D-14 (05-05): per-app refresh failure flag; non-null when last refresh failed
+  lastRefreshError: z.string().nullable(),
 });
 
 export type AppTokenStatus = z.infer<typeof appTokenStatus>;
