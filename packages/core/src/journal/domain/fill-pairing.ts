@@ -4,9 +4,6 @@
  * Pure functions; no I/O. Only imports from intra-domain types and node:crypto.
  * No framework, no Drizzle, no adapters.
  *
- * Signatures are exported; function bodies throw "not implemented" so the type surface
- * compiles but all tests fail RED. Plan 05-03 provides the implementations.
- *
  * Decision references:
  *   D-02: classify OPEN/CLOSE using positionEffect + side
  *   D-03: ROLL is first-class (same orderId + different expiry)
@@ -34,11 +31,18 @@ export function classifyFill(
   side: "buy" | "sell",
   positionEffect: "OPENING" | "CLOSING" | "UNKNOWN",
 ): "OPEN" | "CLOSE" | "UNKNOWN" {
-  throw new Error("not implemented");
+  switch (positionEffect) {
+    case "OPENING":
+      return "OPEN";
+    case "CLOSING":
+      return "CLOSE";
+    case "UNKNOWN":
+      return "UNKNOWN";
+  }
 }
 
 /**
- * aggregatePartialFills — group fills by (calendarId, legOccSymbol, orderId) and
+ * aggregatePartialFills — group fills by (legOccSymbol, orderId) and
  * compute sumQty, qty-weighted avgPrice, totalCommission, totalFees (D-04).
  *
  * The calendarId is NOT available on RawFill (it comes from the leg-matching step).
@@ -49,7 +53,57 @@ export function classifyFill(
 export function aggregatePartialFills(
   fills: ReadonlyArray<RawFill>,
 ): ReadonlyArray<AggregatedFill> {
-  throw new Error("not implemented");
+  type Accumulator = {
+    legOccSymbol: string;
+    orderId: string;
+    sumQty: number;
+    weightedPriceSum: number;
+    totalCommission: number;
+    totalFees: number;
+    positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
+    fillIds: string[];
+  };
+
+  const groups = new Map<string, Accumulator>();
+
+  for (const fill of fills) {
+    const key = `${fill.occSymbol}|${fill.orderId}`;
+    const existing = groups.get(key);
+
+    if (existing === undefined) {
+      groups.set(key, {
+        legOccSymbol: fill.occSymbol,
+        orderId: fill.orderId,
+        sumQty: fill.qty,
+        weightedPriceSum: fill.qty * fill.price,
+        totalCommission: fill.commission ?? 0,
+        totalFees: fill.fees ?? 0,
+        // Use side to determine positionEffect (not available on RawFill; default to UNKNOWN)
+        // The syncFills use-case enriches fills with positionEffect before aggregation.
+        // For partial fills arriving here, we set UNKNOWN as the safe default.
+        positionEffect: "UNKNOWN",
+        fillIds: [fill.id],
+      });
+    } else {
+      existing.sumQty += fill.qty;
+      existing.weightedPriceSum += fill.qty * fill.price;
+      existing.totalCommission += fill.commission ?? 0;
+      existing.totalFees += fill.fees ?? 0;
+      existing.fillIds.push(fill.id);
+    }
+  }
+
+  return Array.from(groups.values()).map((acc) => ({
+    calendarId: "", // populated by the syncFills use-case which knows the calendarId
+    legOccSymbol: acc.legOccSymbol,
+    orderId: acc.orderId,
+    sumQty: acc.sumQty,
+    avgPrice: acc.sumQty > 0 ? acc.weightedPriceSum / acc.sumQty : 0,
+    totalCommission: acc.totalCommission,
+    totalFees: acc.totalFees,
+    positionEffect: acc.positionEffect,
+    fillIds: acc.fillIds,
+  }));
 }
 
 /**
@@ -67,7 +121,7 @@ export function computePnl(
   closeCredit: number,
   totalFees: number,
 ): number {
-  throw new Error("not implemented");
+  return Math.abs(closeCredit) - openDebit - totalFees;
 }
 
 /**
@@ -82,12 +136,24 @@ export function computePnl(
  * Two OCC symbols with the same root/strike/type but different expiry = roll.
  *
  * Phase 5 implementation: orderId-only matching per RESEARCH Open Question 3 resolution.
+ * ROLL_WINDOW_MS time-based fallback: reserved for future implementation when orderId
+ * is absent (e.g. manual fills). Not implemented here as no test demands it yet.
  */
 export function detectRoll(
   closing: AggregatedFill,
   opening: AggregatedFill,
 ): boolean {
-  throw new Error("not implemented");
+  // Must be the same calendar and same order
+  if (closing.calendarId !== opening.calendarId) return false;
+  if (closing.orderId !== opening.orderId) return false;
+
+  // Same OCC symbol = same expiry → not a roll (just a re-open of same leg)
+  if (closing.legOccSymbol === opening.legOccSymbol) return false;
+
+  // Different OCC symbol in same calendar + same order = roll
+  // (underlying/strike/type match is implied by them being legs of the same calendar;
+  //  the different expiry is encoded in the differing OCC symbol strings)
+  return true;
 }
 
 /**
@@ -103,9 +169,7 @@ export function detectRoll(
  * RESEARCH Open Question 1 resolution: createHash("sha256") preferred over crypto.subtle (async).
  */
 export function hashFillIds(ids: ReadonlyArray<string>): string {
-  throw new Error("not implemented");
+  const sorted = [...ids].sort();
+  const joined = sorted.join(":");
+  return createHash("sha256").update(joined).digest("hex");
 }
-
-// Suppress unused import warning — createHash is used in the implementation placeholder
-// (the throw above prevents it from executing, but the import is intentional)
-void createHash;

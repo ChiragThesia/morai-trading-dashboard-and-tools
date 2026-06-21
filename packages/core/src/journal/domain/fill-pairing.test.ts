@@ -166,10 +166,10 @@ describe("aggregatePartialFills", () => {
             occSymbol: fc.constantFrom("O:SPX260620P07100000", "O:SPX260718P07100000"),
             side: fc.constantFrom<"buy" | "sell">("buy", "sell"),
             qty: fc.integer({ min: 1, max: 10 }),
-            price: fc.float({ min: 0.01, max: 100, noNaN: true }),
+            price: fc.float({ min: Math.fround(0.01), max: Math.fround(100), noNaN: true }),
             filledAt: fc.date({ min: new Date("2026-01-01"), max: new Date("2026-12-31") }).filter((d) => !isNaN(d.getTime())),
-            commission: fc.option(fc.float({ min: 0, max: 5, noNaN: true }), { nil: null }),
-            fees: fc.option(fc.float({ min: 0, max: 1, noNaN: true }), { nil: null }),
+            commission: fc.option(fc.float({ min: Math.fround(0), max: Math.fround(5), noNaN: true }), { nil: null }),
+            fees: fc.option(fc.float({ min: Math.fround(0), max: Math.fround(1), noNaN: true }), { nil: null }),
           }),
           { minLength: 0, maxLength: 20 },
         ),
@@ -200,10 +200,10 @@ describe("computePnl", () => {
   it("(fast-check) monotonicity: increasing closeCredit → increasing P&L (holding openDebit + fees constant)", () => {
     fc.assert(
       fc.property(
-        fc.float({ min: 0, max: 1000, noNaN: true }),
-        fc.float({ min: 0, max: 1000, noNaN: true }),
-        fc.float({ min: 0, max: 50, noNaN: true }),
-        fc.float({ min: 0.01, max: 10, noNaN: true }),
+        fc.float({ min: Math.fround(0), max: Math.fround(1000), noNaN: true }),
+        fc.float({ min: Math.fround(0), max: Math.fround(1000), noNaN: true }),
+        fc.float({ min: Math.fround(0), max: Math.fround(50), noNaN: true }),
+        fc.float({ min: Math.fround(0.01), max: Math.fround(10), noNaN: true }),
         (openDebit, closeCredit1, totalFees, delta) => {
           const closeCredit2 = closeCredit1 + delta;
           const pnl1 = computePnl(openDebit, closeCredit1, totalFees);
