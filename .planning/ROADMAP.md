@@ -224,7 +224,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 05-04-PLAN.md — JobQueue port + pg-boss adapter + in-memory twin + dedupe-key + schedule.ts (7 jobs) + job-runs TRACKED_JOBS + /api/status (JOB-01, SC1)
+- [x] 05-04-PLAN.md — JobQueue port + pg-boss adapter + in-memory twin + dedupe-key + schedule.ts (7 jobs) + job-runs TRACKED_JOBS + /api/status (JOB-01, SC1)
 
 **Wave 4** *(blocked on Wave 3; 05-05 ‖ 05-06)*
 
@@ -317,5 +317,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
-| 5. Jobs, Fill Rebuild & Integrity | 3/8 | In Progress|  |
+| 5. Jobs, Fill Rebuild & Integrity | 4/8 | In Progress|  |
 | 6. Derived Analytics | 0/TBD | Not started | - |

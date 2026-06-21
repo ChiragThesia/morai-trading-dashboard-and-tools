@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Phase 5 context gathered
-last_updated: "2026-06-21T21:58:39.572Z"
+stopped_at: "Phase 5 Plan 04 completed (jobs backbone: dedupe-key, JobQueue port, schedule.ts, 7-job registration)"
+last_updated: "2026-06-21T22:18:26.918Z"
 last_activity: 2026-06-21 -- Phase 05 Plan 03 completed (fill-pairing domain functions, 26/26 tests GREEN)
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 39
-  completed_plans: 35
+  completed_plans: 36
   percent: 67
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 05 (jobs-fill-rebuild-integrity) — EXECUTING
-Plan: 4 of 8 (Plans 01 + 03 complete; Plan 02 migration pending live DB apply)
+Plan: 5 of 8 (Plans 01 + 03 complete; Plan 02 migration pending live DB apply)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: Phase 05 Plan 04 or Plan 02 (Drizzle migration — BLOCKING: needs live DB apply)
 Last activity: 2026-06-21 -- Phase 05 Plan 03 completed (fill-pairing domain functions, 26/26 tests GREEN)
@@ -72,6 +72,7 @@ Progress: [█████████░] Phase 05 in progress · milestone 87%
 | Phase 04-schwab-auth-brokerage P06 | 10 | 3 tasks | 4 files |
 | Phase 05 P03 | 12 | 1 tasks | 2 files |
 | Phase 05 P02 | 25 | - tasks | - files |
+| Phase 05 P04 | 14 | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,9 @@ Recent decisions affecting current work:
 - [Phase 5 P03]: fc.float bounds require Math.fround() in fast-check v4 — same pattern as Phase 1 P02 fc.date().filter(!isNaN)
 - [Phase ?]: Migration applied via session pooler (port 5432, max:1) — Supabase session pooler is migration-safe for DDL; transaction pooler (port 6543) would not be
 - [Phase ?]: Migration rename: drizzle-kit generated 0004_supreme_snowbird renamed to 0004_calendar_events; journal tag updated (Phase 4 P01 precedent)
+- [Phase ?]: [Phase 5 P04]: ForEnqueueingJob port 3-param: dedupeKey owned by use-case; adapter is thin boss.send wrapper with singletonKey
+- [Phase ?]: [Phase 5 P04]: scheduledDedupeKey uses 10-min window; rebuildDedupeKey is calendar-scoped; null dedupeKey = no dedup
+- [Phase ?]: [Phase 5 P04]: TRACKED_JOBS extended to 7; fetch-cboe-chain removed; SC1 complete
 
 ### Pending Todos
 
@@ -163,6 +167,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-21T21:58:39.564Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-jobs-fill-rebuild-integrity/05-CONTEXT.md
+Last session: 2026-06-21T22:18:26.911Z
+Stopped at: Phase 5 Plan 04 completed (jobs backbone: dedupe-key, JobQueue port, schedule.ts, 7-job registration)
+Resume file: None
