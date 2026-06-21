@@ -29,6 +29,13 @@
       "when": 1781973411329,
       "tag": "0003_broker_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782078713416,
+      "tag": "0004_calendar_events",
+      "breakpoints": true
     }
   ]
 }
