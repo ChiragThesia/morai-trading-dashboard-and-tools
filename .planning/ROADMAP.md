@@ -254,6 +254,19 @@ browser login. It would require storing full Schwab username/password at rest (w
 refresh token), breaks on MFA/2FA, and likely violates Schwab's ToS (risking API access). The
 weekly browser re-auth is a Schwab platform constraint, accepted by design.
 
+### Schwab client library — revisit vendored TS vs @sudowealth/schwab-api
+
+**Decided 2026-06-21** (full analysis: `.planning/notes/schwab-client-decision.md`). Phase 4
+UAT found the vendored chain adapter 502s on the live `$SPX` chain (missing scoping params, not
+a missing library). Decision: fix vendored TS now (add `strikeCount`/`fromDate`/`toDate`);
+**reject** the Python `schwab-py` sidecar (can't ease the unavoidable weekly re-auth; forces
+re-implementing pgcrypto token crypto in Python → violates D-03; breaks the single-stack hexagon).
+
+**Revisit trigger:** when hand-maintaining the Schwab **trader** endpoints becomes painful, or
+before scaling beyond one account → evaluate adopting `@sudowealth/schwab-api` (real full TS
+client, Bun-native, save/load callbacks slot behind the encrypted `broker_tokens` adapter).
+Caveat: 11★ / single maintainer / <13mo — adopt only behind ports, version-pinned, human-verify gate.
+
 ## Progress
 
 **Execution Order:**
