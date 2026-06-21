@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 05-07-PLAN.md
-last_updated: "2026-06-21T23:25:59.473Z"
-last_activity: "2026-06-21 -- Phase 05 Plan 06 completed (SC3/D-15 drain-to-zero contract: 5 testcontainers tests GREEN, JOB-03 proven)"
+status: Phase 05 complete
+stopped_at: Completed 05-08-PLAN.md
+last_updated: "2026-06-21T23:50:00.000Z"
+last_activity: "2026-06-21 -- Phase 05 Plan 08 completed (JRNL-01/SC5/MCP-02: rebuild-journal + trigger_job HTTP + MCP tool)"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 39
-  completed_plans: 39
-  percent: 67
+  completed_plans: 40
+  percent: 72
 ---
 
 # Project State
@@ -25,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 05 (jobs-fill-rebuild-integrity) — EXECUTING
-Plan: 8 of 8 (Plans 01 + 03 + 04 + 05 + 06 complete; Plan 02 migration pending live DB apply)
+Phase: 05 (jobs-fill-rebuild-integrity) — COMPLETE
+Plan: 8 of 8 — ALL DONE (Plans 01-08 complete; Plan 02 migration pending live DB apply)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Phase 05 Plan 07 (sync-fills handler)
+Next: Phase 06
 Last activity: 2026-06-21 -- Phase 05 Plan 06 completed (SC3/D-15 drain-to-zero contract: 5 testcontainers tests GREEN, JOB-03 proven)
 
-Progress: [█████████░] Phase 05 in progress · milestone 89% (35/39 plans)
+Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 
 ## Performance Metrics
 
@@ -76,6 +76,7 @@ Progress: [█████████░] Phase 05 in progress · milestone 89%
 | Phase 05 P05 | 22 | 2 tasks | 19 files |
 | Phase 05 P06 | 22 | 1 tasks | 2 files |
 | Phase 05-jobs-fill-rebuild-integrity P07 | 11 | 3 tasks | 13 files |
+| Phase 05-jobs-fill-rebuild-integrity P08 | 25 | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -155,6 +156,9 @@ Recent decisions affecting current work:
 - [Phase 5 P06]: leg_observations.mark has NOT NULL DB constraint — no mark-NULL rows can exist; T-02-16 NaN-stamp exclusion (bsm_iv = 'NaN'::numeric) is the real skip mechanism
 - [Phase 5 P06]: BSM fixture marks must be realistic: ATM call S=K=5500, T=0.277y needs mark≈200 (sigma≈0.15); mark=25 fails WR-01 residual check in invertIv → NaN-stamp
 - [Phase ?]: id omitted from Postgres calendar_events INSERT: DB defaultRandom() generates PK; fillIdsHash UNIQUE is the sole idempotency key (SC4)
+- [Phase 5 P08]: ForTriggeringJob (2-param) distinct from ForEnqueueingJob (3-param) — use-case output is the injection type for HTTP route + MCP tool; dedupeKey is internal to the use-case
+- [Phase 5 P08]: bearer-guarded sub-group for /api/jobs/* only — existing /api/* unauthenticated routes unaffected; T-05-21 met without breaking existing behavior
+- [Phase 5 P08]: makeEnqueueJobUseCase exported from @morai/core for first time (server needs it); dist/index.d.ts manually patched (tsc incremental cache did not regenerate barrel)
 - [Phase ?]: parseSchwabSymbol not imported in core (adapters boundary): fill.occSymbol passed directly to readCalendarLegs; symbol validation is adapter concern at ingestion
 - [Phase ?]: readUnprocessedFills/readCalendarLegs/resetCalendarAmounts stubbed as safe no-ops in main.ts; 05-08 wires real fills repo
 
@@ -179,6 +183,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-21T23:25:59.466Z
-Stopped at: Completed 05-07-PLAN.md
+Last session: 2026-06-21T23:50:00.000Z
+Stopped at: Completed 05-08-PLAN.md (phase 05 all plans done)
 Resume file: None

@@ -237,7 +237,7 @@ Plans:
 
 **Wave 6** *(blocked on Waves 4/5)*
 
-- [ ] 05-08-PLAN.md — rebuild-journal (delete-then-reinsert, SC5 reconciliation) + trigger_job HTTP route + MCP tool sharing one contracts schema (JRNL-01, SC5, MCP-02)
+- [x] 05-08-PLAN.md — rebuild-journal (delete-then-reinsert, SC5 reconciliation) + trigger_job HTTP route + MCP tool sharing one contracts schema (JRNL-01, SC5, MCP-02)
 
 ### Phase 6: Derived Analytics
 
