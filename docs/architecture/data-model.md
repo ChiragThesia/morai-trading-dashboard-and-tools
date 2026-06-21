@@ -97,6 +97,63 @@ date PK, rate numeric          -- fallback 4.5% if FRED unreachable (rho impact 
 p95 journal query >500ms. **Upgrade**: Timescale-enabled image on Railway,
 `create_hypertable` + compression-policy migration. Schema shape already compatible.
 
+### `calendar_events` — trade ledger (Phase 5, L1)
+
+The L1 trade-ledger layer. Each row records one OPEN, CLOSE, or ROLL event for a calendar,
+sourced from broker fills. Distinct from `calendar_snapshots` (the L2 greeks time-series).
+
+```
+id                uuid PK
+calendar_id       uuid FK → calendars.id
+event_type        enum: OPEN | CLOSE | ROLL
+evented_at        timestamptz          -- timestamp of the first fill in this event
+fill_ids_hash     varchar(64) UNIQUE   -- SHA-256 hex of sorted fill UUIDs (idempotency key)
+leg_occ_symbol    varchar(32)          -- OCC symbol of the primary leg
+rolled_from_occ_symbol varchar(32) NULL -- OLD leg being closed; NULL for OPEN and CLOSE events
+qty               int
+avg_price         numeric              -- qty-weighted average fill price
+net_amount        numeric              -- OPEN debit = positive; CLOSE credit = negative (D-08)
+realized_pnl      numeric NULL         -- populated on CLOSE and ROLL only (D-09)
+leg_breakdown     text NULL            -- JSON: per-leg amounts for L3 attribution (D-09, required)
+entry_thesis      text NULL            -- D-07 free-text hook, set at OPEN time
+created_at        timestamptz
+```
+
+Idempotency: `fill_ids_hash` is a `varchar(64)` UNIQUE index (exactly 64 hex chars = SHA-256).
+Re-running `sync-fills` against the same fill set produces the same hash and the insert is a
+no-op (`onConflictDoNothing`). This prevents duplicate events across job re-runs.
+
+ROLL events set `rolled_from_occ_symbol` to the old leg and `leg_occ_symbol` to the new leg,
+preserving the "same trade continued" chain (D-03).
+
+### `orphan_fills` — unmatched fill parking (Phase 5)
+
+Fills that cannot be matched to any calendar leg are parked here. They are never silently
+dropped and never auto-deleted (D-05). An operator reviews them to detect missing calendars or
+ambiguous legs.
+
+```
+fill_id     uuid PK              -- same UUID as fills.id
+occ_symbol  varchar(32)
+side        varchar(4)           -- "buy" | "sell"
+qty         int
+price       numeric
+filled_at   timestamptz
+reason      text                 -- "no matching calendar" | "ambiguous calendar: [ids]"
+created_at  timestamptz
+```
+
+### `calendars` column addition (Phase 5)
+
+The `calendars` table gains a nullable `entry_thesis` column (D-07):
+
+```
+entry_thesis  text NULL    -- free-text or tag for L4 strategy-rules attach point (D-07)
+```
+
+This is set at OPEN event creation and is never required. It acts as a hook for the future L4
+strategy-rules layer. No default value; non-destructive ALTER TABLE.
+
 ### `broker_tokens` — Schwab OAuth token storage (brokerage context, Phase 4)
 
 ```

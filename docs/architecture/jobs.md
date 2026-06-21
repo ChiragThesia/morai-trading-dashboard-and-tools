@@ -21,13 +21,13 @@ handlers are thin inbound adapters calling application use-cases.
 
 | Job | Schedule (America/New_York) | Does |
 |---|---|---|
-| `snapshot-calendars` | `*/30 9-16 * * 1-5` (RTH only, ~13/day) | For each open calendar: fetch chain → compute marks/IV/greeks/term-slope → store `calendar_snapshots` row |
+| `snapshot-calendars` | chain-triggered only (NO cron) | For each open calendar: fetch chain → compute marks/IV/greeks/term-slope → store `calendar_snapshots` row |
 | `compute-bsm-greeks` | every 1 min (drains pending) | Scan `leg_observations WHERE bsm_iv IS NULL` → IV invert → BSM → upsert |
-| `sync-fills` | every 10 min RTH | Schwab transactions → `fills`/`orders`; pair into calendar open/close events |
-| `refresh-tokens` | `0 4 * * *` (04:00 ET) | Refresh both Schwab apps; one failure must not block the other; alert on failure |
+| `sync-fills` | `*/10 9-16 * * 1-5` (every 10 min RTH) | Schwab transactions → `fills`/`orders`; pair into calendar OPEN/CLOSE/ROLL events |
+| `refresh-tokens` | `0 4 * * *` (04:00 ET, NO RTH gate) | Refresh both Schwab apps independently; proactive 7-day expiry warning; alert on failure |
 | `fetch-rates` | `0 7 * * 1-5` | FRED DGS3MO daily |
 | `compute-analytics` | after `snapshot-calendars` completes | Skew, term structure observations |
-| `rebuild-journal` | manual / on-demand | Full rebuild of calendars+fills from Schwab history (source of truth) |
+| `rebuild-journal` | on-demand only (no schedule) | Reconstructs OPEN/CLOSE/ROLL events for one calendar from fills; idempotent delete-then-reinsert |
 
 Notes carried from old dashboard:
 - **All crons in `America/New_York`** — DST-safe market alignment.
@@ -37,6 +37,68 @@ Notes carried from old dashboard:
   extend the refresh token: Schwab refresh tokens hard-expire 7 days after issuance →
   weekly interactive re-auth is mandatory (`deployment.md` + `stack-decisions.md` D16).
   On `invalid_grant`, Schwab jobs pause gracefully and status flags AUTH_EXPIRED.
+
+## sync-fills (Phase 5, JOB-01 / JRNL-01)
+
+**Schedule:** `*/10 9-16 * * 1-5` — every 10 minutes during RTH.
+
+**Dedupe key:** `sync-fills:{windowStart}` where `windowStart` is the 10-minute boundary
+rounded from `now()` (e.g. `sync-fills:2026-06-21T14:10:00.000Z`). Uses pg-boss `singletonKey`
+— not `singletonSeconds` (Pitfall 1).
+
+**What it does:**
+1. Reads all fills not yet in `calendar_events` (by `fill_ids_hash`) or `orphan_fills`.
+2. Parses each fill's OCC symbol via `parseSchwabSymbol` + `formatOccSymbol` (Phase 4).
+3. Matches fills to calendar legs — exact OCC equality, no fuzzy matching.
+4. Aggregates partial fills per `(calendarId, legOccSymbol, orderId)` — qty-weighted avg price.
+5. Classifies events: OPEN, CLOSE, or ROLL (D-02/D-03). ROLL is first-class.
+6. Computes P&L on CLOSE/ROLL: `closeCredit − openDebit − totalFees` (D-08/D-09).
+7. Writes `calendar_events` rows idempotently (`onConflictDoNothing` on `fill_ids_hash`).
+8. Parks unmatched fills in `orphan_fills` with a reason string (D-05 — never silently dropped).
+
+**RTH gate:** Yes. Does not run outside market hours or on NYSE holidays.
+
+## refresh-tokens (Phase 5, JOB-02)
+
+**Schedule:** `0 4 * * *` — 04:00 ET daily (America/New_York).
+
+**No RTH gate.** Runs every day regardless of market hours or NYSE holidays (D-13). It runs
+at 04:00 ET specifically because that is outside RTH — a deliberate design choice.
+
+**Per-app independence (D-13):** Both the `trader` and `market` Schwab apps are refreshed via
+`Promise.allSettled`. One app failing does not block the other. Per-app failures surface in
+`/api/status` and `console.warn`. The handler does not throw on per-app failure.
+
+**Proactive expiry warning (D-14):** After each refresh, the job checks whether the refresh
+token is within 1 day of its 7-day hard expiry. This is computed from `refreshIssuedAt` (set
+during the initial auth-code exchange and never updated by the refresh job itself — D-14 /
+Pitfall 3 in RESEARCH.md). When the check fires, a warning is emitted to `console.warn` and
+the `/api/status` response includes a token-freshness flag.
+
+**Dedupe key:** Not applicable — only one run per day. pg-boss schedule provides natural
+deduplication.
+
+## rebuild-journal (Phase 5, JRNL-01)
+
+**Schedule:** None — on-demand only. Triggered via `POST /api/jobs/rebuild-journal/trigger`
+or the `trigger_job` MCP tool.
+
+**Dedupe key:** `rebuild-journal:{calendarId}` — prevents concurrent rebuilds for the same
+calendar. Uses pg-boss `singletonKey`.
+
+**Payload:** `{ calendarId: string }` — Zod-parsed at the handler boundary.
+
+**What it does:**
+1. Deletes all `calendar_events` rows for the given `calendarId`.
+2. Resets `calendars.openNetDebit` and `calendars.closeNetCredit` to NULL.
+3. Re-runs the `sync-fills` pairing logic scoped to that calendar's fills.
+
+This reconstructs the entire event/position layer (OPEN/CLOSE/ROLL + P&L) from fills (D-10).
+It does NOT re-derive the 30-min greeks in `calendar_snapshots` — fills carry no greeks.
+
+The "delete-then-reinsert" pattern is safe because `calendar_events` is purely derived from
+`fills`, which are the source of truth (JRNL-01). Re-running against the same fills produces
+identical output due to `fill_ids_hash` determinism.
 
 ## The JobQueue Port
 
