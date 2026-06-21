@@ -221,10 +221,10 @@ describe("runDoctorCommand — real wiring (SC2)", () => {
     expect(fakeRefreshTokensFn).not.toHaveBeenCalledWith("__doctor_probe__");
 
     // Doctor should report OK, not NETWORK_ERROR
-    const warnCalls = consoleWarnSpy.mock.calls.map((c) => String(c[0]));
-    const errorCalls = consoleErrorSpy.mock.calls.map((c) => String(c[0]));
-    const liveRefreshOk = warnCalls.some((m) => m.includes("live refresh: OK"));
-    const networkError = errorCalls.some((m) => m.includes("NETWORK_ERROR"));
+    const warnCalls = consoleWarnSpy.mock.calls.map((args: unknown[]) => String(args[0]));
+    const errorCalls = consoleErrorSpy.mock.calls.map((args: unknown[]) => String(args[0]));
+    const liveRefreshOk = warnCalls.some((msg: string) => msg.includes("live refresh: OK"));
+    const networkError = errorCalls.some((msg: string) => msg.includes("NETWORK_ERROR"));
     expect(liveRefreshOk).toBe(true);
     expect(networkError).toBe(false);
   });
@@ -244,8 +244,8 @@ describe("runDoctorCommand — real wiring (SC2)", () => {
 
     await runDoctorCommand(BASE_CONFIG, repo, fakeRefreshTokensFn);
 
-    const errorCalls = consoleErrorSpy.mock.calls.map((c) => String(c[0]));
-    const authExpired = errorCalls.some((m) => m.includes("AUTH_EXPIRED"));
+    const errorCalls = consoleErrorSpy.mock.calls.map((args: unknown[]) => String(args[0]));
+    const authExpired = errorCalls.some((msg: string) => msg.includes("AUTH_EXPIRED"));
     expect(authExpired).toBe(true);
   });
 });

@@ -12,6 +12,7 @@
  */
 import { ok } from "@morai/shared";
 import type { Result } from "@morai/shared";
+import { makeRefreshTokenUseCase } from "@morai/core";
 import type {
   AppId,
   AuthExpiredError,
@@ -19,6 +20,7 @@ import type {
   ForReadingTokens,
   ForWritingTokens,
 } from "@morai/core";
+import type { SchwabTokens, OAuthError } from "@morai/adapters";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -226,6 +228,10 @@ export async function runDoctor(
  * Builds the live refreshFn from the injected repo + oauth client and delegates
  * to runDoctor. The registered callback URLs are the same as the config values
  * (doctor validates env vs env as a sanity check).
+ *
+ * SC2 fix: builds makeRefreshTokenUseCase with the real repo and real oauth client,
+ * so the live-refresh probe reads the ACTUAL stored refresh token and exercises
+ * the real Schwab token-rotation path — not a hardcoded dummy token.
  */
 export async function runDoctorCommand(
   config: {
@@ -237,41 +243,28 @@ export async function runDoctorCommand(
     readonly SCHWAB_MARKET_APP_SECRET: string;
     readonly SCHWAB_MARKET_CALLBACK_URL: string;
   },
-  _repo: {
+  repo: {
     readonly readTokens: ForReadingTokens;
     readonly writeTokens: ForWritingTokens;
   },
   refreshTokensFn: (
     refreshToken: string,
-  ) => Promise<Result<unknown, { kind: "oauth-error"; code: string; message: string }>>,
+  ) => Promise<Result<SchwabTokens, OAuthError>>,
 ): Promise<void> {
-  // Build a thin refresh closure that attempts to refresh the trader token.
-  // In practice, doctor picks the trader app as the live-refresh test target.
-  const refreshFn = async (): Promise<
-    Result<unknown, AuthExpiredError | StorageError>
-  > => {
-    // We don't have the full makeRefreshTokenUseCase here — just call refreshTokensFn
-    // with a dummy check. Real integration: the full use-case would be injected.
-    // For now, return ok to indicate "refresh callable" (main.ts passes the real use-case).
-    const callResult = await refreshTokensFn("__doctor_probe__");
-    if (callResult.ok) {
-      return { ok: true, value: callResult.value };
-    }
-    const oauthErr = callResult.error;
-    if (
-      oauthErr.code === "invalid_grant" ||
-      oauthErr.code === "invalid_client"
-    ) {
-      return {
-        ok: false,
-        error: { kind: "auth-expired", appId: "trader" },
-      };
-    }
-    return {
-      ok: false,
-      error: { kind: "storage-error", message: oauthErr.message },
-    };
-  };
+  // SC2 fix: build the real refresh use-case that reads the stored trader token,
+  // calls the real Schwab OAuth endpoint, and persists the rotated tokens.
+  // Mirror runRefresh (apps/auth/src/refresh.ts) exactly — same deps pattern.
+  const refreshUseCase = makeRefreshTokenUseCase({
+    readTokens: repo.readTokens,
+    writeTokens: repo.writeTokens,
+    refreshTokens: refreshTokensFn,
+  });
+
+  // Wrap the use-case result in the signature checkLiveRefresh expects.
+  // The use-case returns Result<SchwabTokens, AuthExpiredError | StorageError>
+  // which maps directly: ok → ok, auth-expired err → auth-expired, storage err → network-error.
+  const refreshFn = (): Promise<Result<unknown, AuthExpiredError | StorageError>> =>
+    refreshUseCase("trader");
 
   await runDoctor(
     config,
