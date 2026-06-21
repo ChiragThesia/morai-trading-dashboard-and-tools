@@ -228,7 +228,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3; 05-05 ‖ 05-06)*
 
-- [ ] 05-05-PLAN.md — refresh-tokens slice: per-app independence (allSettled) + isNearExpiry warning + no-RTH handler + status flag (JOB-02, SC2)
+- [x] 05-05-PLAN.md — refresh-tokens slice: per-app independence (allSettled) + isNearExpiry warning + no-RTH handler + status flag (JOB-02, SC2)
 - [ ] 05-06-PLAN.md — compute-bsm-greeks drain SC3 contract (testcontainers): zero pending rows, idempotent (JOB-03, SC3)
 
 **Wave 5** *(blocked on Waves 2/3/4)*
@@ -317,5 +317,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
-| 5. Jobs, Fill Rebuild & Integrity | 4/8 | In Progress|  |
+| 5. Jobs, Fill Rebuild & Integrity | 5/8 | In Progress|  |
 | 6. Derived Analytics | 0/TBD | Not started | - |
