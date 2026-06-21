@@ -267,6 +267,17 @@ before scaling beyond one account → evaluate adopting `@sudowealth/schwab-api`
 client, Bun-native, save/load callbacks slot behind the encrypted `broker_tokens` adapter).
 Caveat: 11★ / single maintainer / <13mo — adopt only behind ports, version-pinned, human-verify gate.
 
+### Strategy rules / logical gates engine (the "why I acted" layer — L4)
+
+**Surfaced during Phase 5 discuss (2026-06-21).** User's stated end-goal: record the
+enter/exit/roll RULES per trade + which rule fired, to improve the system/algo. This is a
+NEW capability beyond Phase 5's trade ledger (JRNL-01 only pairs fills into events). The
+Phase 5 D-07 "entry-thesis" field is the minimal attach point. Pairs with **L3 attribution**
+(decompose a calendar's move into θ/vega/δ + event contributions) which is already scoped
+to **Phase 6 (Derived Analytics)**. Candidate for its own phase after Phase 6. The 4-layer
+model (ledger → greeks time-series → attribution → rules) is documented in
+`.planning/phases/05-jobs-fill-rebuild-integrity/05-CONTEXT.md`.
+
 ## Progress
 
 **Execution Order:**
