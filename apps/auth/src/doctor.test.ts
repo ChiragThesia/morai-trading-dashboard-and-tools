@@ -4,12 +4,16 @@
  * All three conditions tested with in-memory/fake deps — no process.env,
  * no network, no DB.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   checkEnvCompleteness,
   checkCallbackExactMatch,
   checkLiveRefresh,
+  runDoctorCommand,
 } from "./doctor.ts";
+import { makeMemoryBrokerTokensRepo } from "@morai/adapters";
+import { ok, err } from "@morai/shared";
+import type { SchwabTokenRow } from "@morai/core";
 
 // ─── checkEnvCompleteness ─────────────────────────────────────────────────────
 
@@ -153,5 +157,95 @@ describe("checkLiveRefresh", () => {
     if (result.ok) {
       expect(result.value.status).toBe("network-error");
     }
+  });
+});
+
+// ─── runDoctorCommand — real wiring (SC2 regression) ─────────────────────────
+//
+// SC2 regression: the old implementation used a hardcoded dummy token
+// "__doctor_probe__" and ignored the real stored refresh token.
+// These tests verify that runDoctorCommand reads the REAL stored token
+// and drives makeRefreshTokenUseCase correctly.
+
+const BASE_CONFIG = {
+  TOKEN_ENCRYPTION_KEY: "a".repeat(32),
+  SCHWAB_TRADER_APP_KEY: "trader-key",
+  SCHWAB_TRADER_APP_SECRET: "trader-secret",
+  SCHWAB_TRADER_CALLBACK_URL: "https://127.0.0.1:8182",
+  SCHWAB_MARKET_APP_KEY: "market-key",
+  SCHWAB_MARKET_APP_SECRET: "market-secret",
+  SCHWAB_MARKET_CALLBACK_URL: "https://127.0.0.1:8183",
+};
+
+const TRADER_TOKEN: SchwabTokenRow = {
+  appId: "trader",
+  accessToken: "real-access-token",
+  refreshToken: "real-refresh-token",
+  issuedAt: new Date(),
+  refreshIssuedAt: new Date(),
+  expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+};
+
+describe("runDoctorCommand — real wiring (SC2)", () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("reports live-refresh OK when the real use-case succeeds (not NETWORK_ERROR)", async () => {
+    // Seed an in-memory repo with a real trader token
+    const repo = makeMemoryBrokerTokensRepo();
+    await repo.seed("trader", TRADER_TOKEN);
+
+    // Fake oauth client returns a valid token response
+    const fakeRefreshTokensFn = vi.fn().mockResolvedValue(
+      ok({
+        accessToken: "new-access-token",
+        refreshToken: "new-refresh-token",
+        expiresIn: 1800,
+      }),
+    );
+
+    await runDoctorCommand(BASE_CONFIG, repo, fakeRefreshTokensFn);
+
+    // The real refresh token from the repo must have been passed to the oauth client
+    expect(fakeRefreshTokensFn).toHaveBeenCalledWith("real-refresh-token");
+    expect(fakeRefreshTokensFn).not.toHaveBeenCalledWith("__doctor_probe__");
+
+    // Doctor should report OK, not NETWORK_ERROR
+    const warnCalls = consoleWarnSpy.mock.calls.map((c) => String(c[0]));
+    const errorCalls = consoleErrorSpy.mock.calls.map((c) => String(c[0]));
+    const liveRefreshOk = warnCalls.some((m) => m.includes("live refresh: OK"));
+    const networkError = errorCalls.some((m) => m.includes("NETWORK_ERROR"));
+    expect(liveRefreshOk).toBe(true);
+    expect(networkError).toBe(false);
+  });
+
+  it("reports AUTH_EXPIRED when the oauth client returns invalid_grant", async () => {
+    const repo = makeMemoryBrokerTokensRepo();
+    await repo.seed("trader", TRADER_TOKEN);
+
+    // Fake oauth client returns invalid_grant
+    const fakeRefreshTokensFn = vi.fn().mockResolvedValue(
+      err({
+        kind: "oauth-error" as const,
+        code: "invalid_grant" as const,
+        message: "token expired",
+      }),
+    );
+
+    await runDoctorCommand(BASE_CONFIG, repo, fakeRefreshTokensFn);
+
+    const errorCalls = consoleErrorSpy.mock.calls.map((c) => String(c[0]));
+    const authExpired = errorCalls.some((m) => m.includes("AUTH_EXPIRED"));
+    expect(authExpired).toBe(true);
   });
 });
