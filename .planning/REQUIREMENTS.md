@@ -71,7 +71,7 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 - [ ] **JOB-01**: All jobs run behind a `JobQueue` port (pg-boss adapter) with deterministic dedupe keys and idempotent, Zod-parsed handlers.
 - [ ] **JOB-02**: The `refresh-tokens` job (04:00 ET) refreshes both Schwab apps independently and alerts on failure.
 - [ ] **JOB-03**: `compute-bsm-greeks` drains `leg_observations WHERE bsm_iv IS NULL` and upserts computed values.
-- [ ] **JRNL-01**: A `sync-fills` / rebuild path pairs Schwab fills into calendar OPEN/CLOSE events with net debit/credit/P&L — journal history is rebuilt from fills, never hand-written.
+- [x] **JRNL-01**: A `sync-fills` / rebuild path pairs Schwab fills into calendar OPEN/CLOSE events with net debit/credit/P&L — journal history is rebuilt from fills, never hand-written.
 
 ### Claude Code Surface
 
@@ -149,7 +149,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | JOB-01 | Phase 5 | Pending |
 | JOB-02 | Phase 5 | Pending |
 | JOB-03 | Phase 5 | Pending |
-| JRNL-01 | Phase 5 | Pending |
+| JRNL-01 | Phase 5 | Complete |
 | ANLY-01 | Phase 6 | Pending |
 | ANLY-02 | Phase 6 | Pending |
 | ANLY-03 | Phase 6 | Pending |

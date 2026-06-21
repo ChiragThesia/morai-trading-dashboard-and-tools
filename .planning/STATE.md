@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing Phase 05
-stopped_at: Completed 05-01-PLAN.md — foundation types, docs, Wave-0 stubs
-last_updated: "2026-06-21T21:39:49Z"
+status: Ready to execute
+stopped_at: Phase 5 context gathered
+last_updated: "2026-06-21T21:49:26.957Z"
 last_activity: 2026-06-21 -- Phase 05 Plan 01 completed (docs-first, schema, domain ADTs, 9 Wave-0 stubs)
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 39
-  completed_plans: 33
-  percent: 68
+  completed_plans: 34
+  percent: 67
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 05 (jobs-fill-rebuild-integrity) — EXECUTING
-Plan: 2 of 8 (Plan 01 complete)
+Plan: 3 of 8 (Plans 01 + 03 complete; Plan 02 migration pending live DB apply)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Phase 05 Plan 02 — Drizzle migration (0004_calendar_events.sql) [BLOCKING: needs live DB apply]
-Last activity: 2026-06-21 -- Phase 05 Plan 01 completed (docs-first, schema, domain ADTs, 9 Wave-0 stubs)
+Next: Phase 05 Plan 04 or Plan 02 (Drizzle migration — BLOCKING: needs live DB apply)
+Last activity: 2026-06-21 -- Phase 05 Plan 03 completed (fill-pairing domain functions, 26/26 tests GREEN)
 
-Progress: [██████████████░] Phase 05 in progress · milestone 68% (33/39 plans)
+Progress: [█████████░] Phase 05 in progress · milestone 87% (34/39 plans)
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [██████████████░] Phase 05 in progress �
 | Phase 04-schwab-auth-brokerage P03 | 15 | - tasks | - files |
 | Phase 04-schwab-auth-brokerage P05 | 70 | 11 tasks | 22 files |
 | Phase 04-schwab-auth-brokerage P06 | 10 | 3 tasks | 4 files |
+| Phase 05 P03 | 12 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -134,6 +135,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 4 P03]: doctor functions pure — checkEnvCompleteness/checkCallbackExactMatch/checkLiveRefresh take explicit inputs for unit testability
 - [Phase ?]: [Phase 4 P03]: validateAndExchange: CSRF state check before any exchangeCode call (T-04-09 ordering invariant — callCount=0 proven by unit test)
 - [Phase ?]: [Phase 4 P03]: Port from new URL(callbackUrl).port at runtime — no hardcoded port in auth setup (Open Question 1)
+- [Phase 5 P03]: detectRoll uses orderId-only matching (RESEARCH Open Question 3) — ROLL_WINDOW_MS time-window extension documented as comment, not implemented
+- [Phase 5 P03]: aggregatePartialFills sets calendarId="" — syncFills use-case (05-07) populates it during per-calendar partitioning; empty string is intentional design boundary
+- [Phase 5 P03]: fc.float bounds require Math.fround() in fast-check v4 — same pattern as Phase 1 P02 fc.date().filter(!isNaN)
 
 ### Pending Todos
 
@@ -156,6 +160,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-21T20:12:30.515Z
+Last session: 2026-06-21T21:49:26.949Z
 Stopped at: Phase 5 context gathered
 Resume file: .planning/phases/05-jobs-fill-rebuild-integrity/05-CONTEXT.md

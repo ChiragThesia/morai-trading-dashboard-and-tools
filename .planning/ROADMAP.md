@@ -220,7 +220,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1)*
 
 - [ ] 05-02-PLAN.md — [BLOCKING] drizzle generate + live migrate (0004_calendar_events.sql) (JRNL-01)
-- [ ] 05-03-PLAN.md — TDD fill-pairing domain: classifyFill/aggregatePartialFills/computePnl/detectRoll/hashFillIds (JRNL-01)
+- [x] 05-03-PLAN.md — TDD fill-pairing domain: classifyFill/aggregatePartialFills/computePnl/detectRoll/hashFillIds (JRNL-01)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -270,8 +270,10 @@ the 30-min access-token refresh; this item is only about making the unavoidable 
 re-auth painless and never a surprise.
 
 **Proposed (friction-reducing, not eliminating):**
+
 - Proactive expiry detection + alert (e.g. day 6 of 7) via the status surface / a notification
   channel, so re-auth happens *before* a data gap (refresh token → `AUTH_EXPIRED`).
+
 - Surface per-app `refreshExpiresAt` / "expires in N days" in `GET /api/status`.
 - One-command re-auth (`auth setup --all`) that runs both apps in sequence.
 
@@ -315,5 +317,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
-| 5. Jobs, Fill Rebuild & Integrity | 0/8 | Planned | - |
+| 5. Jobs, Fill Rebuild & Integrity | 2/8 | In Progress|  |
 | 6. Derived Analytics | 0/TBD | Not started | - |
