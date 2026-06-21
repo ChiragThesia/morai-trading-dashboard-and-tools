@@ -1,5 +1,5 @@
-// Worker composition root — Phase 3 pg-boss scheduling.
-// Boot: parse config → run migrations → boot pg-boss → schedule + work four jobs.
+// Worker composition root — Phase 5 pg-boss scheduling.
+// Boot: parse config → run migrations → boot pg-boss → register all 7 jobs via registerAllJobs.
 //
 // Architecture law (architecture-boundaries.md):
 // - process.env read ONCE here via bootWorkerConfig; typed config flows inward.
@@ -20,6 +20,7 @@ import {
   makeCboeChainAdapter,
   makeSchwabChainAdapter,
   makeFredRateAdapter,
+  makePgBossJobQueue,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -32,6 +33,10 @@ import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
 import { makeComputeBsmGreeksHandler } from "./handlers/compute-bsm-greeks.ts";
 import { makeSnapshotCalendarsHandler } from "./handlers/snapshot-calendars.ts";
+import { makeSyncFillsHandler } from "./handlers/sync-fills.ts";
+import { makeRefreshTokensHandler } from "./handlers/refresh-tokens.ts";
+import { makeRebuildJournalHandler } from "./handlers/rebuild-journal.ts";
+import { registerAllJobs } from "./schedule.ts";
 
 const config = bootWorkerConfig();
 
@@ -146,6 +151,12 @@ const snapshotCalendarsUseCase = makeSnapshotCalendarsUseCase({
   now: () => new Date(),
 });
 
+// JOB-01: pg-boss JobQueue adapter (makePgBossJobQueue wraps boss.send with singletonKey).
+// Wired here in the composition root; injected into enqueueJob use-case and trigger_job adapters.
+const pgBossJobQueue = makePgBossJobQueue(boss);
+// Suppress unused variable warning — pgBossJobQueue wired into trigger_job (plan 05-08)
+void pgBossJobQueue;
+
 // Build handlers (thin adapters — zero business logic)
 // D-07/D-08: Schwab-primary handler replaces the CBOE-only handler.
 // fetchChainUseCase is pre-wired with selectChainSource above (Schwab→CBOE fallback).
@@ -174,48 +185,35 @@ const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
   now: () => new Date(),
 });
 
-// Create queues before scheduling/working — pg-boss v12 requires the queue row to exist
-// (FK on the schedule table) before boss.schedule() or boss.work() (CR-01).
-// createQueue is idempotent — safe to call on every boot.
-// No fifth/manual-trigger queue (D-08).
-// D-07/D-08: "fetch-schwab-chain" replaces "fetch-cboe-chain" as the scheduled chain job.
-// The Schwab handler uses selectChainSource internally — CBOE fallback is transparent.
-await boss.createQueue("fetch-schwab-chain");
-await boss.createQueue("fetch-rates");
-await boss.createQueue("compute-bsm-greeks");
-await boss.createQueue("snapshot-calendars"); // chain-triggered only; no schedule (D-03)
+// Phase 5 handlers (stub factories — full impl in plans 05-05/05-07/05-08).
+// Registered here so schedule.ts compiles with all 7 typed slots.
+const syncFillsHandler = makeSyncFillsHandler({
+  syncFillsUseCase: async () => ({ ok: false as const, error: { kind: "storage-error" as const, message: "not implemented" } }),
+  now: () => new Date(),
+});
 
-// Schedule three jobs in ET (D-06, D-07).
-// snapshot-calendars is NOT scheduled — chain-triggered only via compute-bsm-greeks (D-03 / Pitfall 5).
-// boss.schedule is idempotent — safe to call on every boot.
-// No manual trigger registration (D-08).
-await boss.schedule(
-  "fetch-schwab-chain",
-  "*/30 * * * 1-5", // every 30 min Mon-Fri ET
-  null,
-  { tz: "America/New_York" },
-);
-await boss.schedule(
-  "fetch-rates",
-  "0 9 * * 1-5", // daily 09:00 ET Mon-Fri
-  null,
-  { tz: "America/New_York" },
-);
-await boss.schedule(
-  "compute-bsm-greeks",
-  "0 10-16 * * 1-5", // sparse fallback: hourly 10:00-16:00 ET Mon-Fri
-  null,
-  { tz: "America/New_York" },
-);
+const refreshTokensHandler = makeRefreshTokensHandler({
+  refreshTokensUseCase: async () => ({ ok: false as const, error: "not implemented" as never }),
+  now: () => new Date(),
+});
 
-// Register handlers — pg-boss v12 array handler pattern (Pitfall 2)
-// D-07/D-08: Schwab-primary handler registered on "fetch-schwab-chain" queue.
-await boss.work("fetch-schwab-chain", { pollingIntervalSeconds: 30 }, fetchSchwabChainHandler);
-await boss.work("fetch-rates", { pollingIntervalSeconds: 30 }, fetchRatesHandler);
-await boss.work("compute-bsm-greeks", { pollingIntervalSeconds: 30 }, computeBsmGreeksHandler);
-await boss.work("snapshot-calendars", { pollingIntervalSeconds: 30 }, snapshotCalendarsHandler);
-// NO boss.schedule for snapshot-calendars — chain-triggered only (D-03 / Pitfall 5)
+const rebuildJournalHandler = makeRebuildJournalHandler({
+  rebuildJournalUseCase: async () => ({ ok: false as const, error: { kind: "storage-error" as const, message: "not implemented" } }),
+  now: () => new Date(),
+});
+
+// Register all 7 queues, 5 crons, and 7 work handlers via registerAllJobs (Plan 05-04).
+// Inline createQueue/schedule/work blocks removed — all scheduling logic is in schedule.ts.
+await registerAllJobs(boss, {
+  fetchSchwabChain: fetchSchwabChainHandler,
+  fetchRates: fetchRatesHandler,
+  computeBsmGreeks: computeBsmGreeksHandler,
+  snapshotCalendars: snapshotCalendarsHandler,
+  syncFills: syncFillsHandler,
+  refreshTokens: refreshTokensHandler,
+  rebuildJournal: rebuildJournalHandler,
+});
 
 console.warn(
-  "morai worker: pg-boss started, 4 queues created, 3 jobs scheduled (fetch-schwab-chain [Schwab-primary/CBOE-fallback], fetch-rates, compute-bsm-greeks); snapshot-calendars chain-triggered only",
+  "morai worker: pg-boss started; 7 queues created, 5 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-fills, refresh-tokens); snapshot-calendars chain-triggered only; rebuild-journal on-demand only",
 );
