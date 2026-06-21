@@ -19,12 +19,20 @@ afterAll(() => server.close());
 function makeAdapter(overrides?: {
   getAccessToken?: () => Promise<ReturnType<typeof ok<string>> | ReturnType<typeof err<{ kind: "auth-expired"; appId: "trader" | "market" }>>>;
   symbol?: string;
+  strikeCount?: number;
+  range?: string;
+  fromDate?: string;
+  toDate?: string;
 }) {
   return makeSchwabChainAdapter({
     fetch: globalThis.fetch,
     getAccessToken: overrides?.getAccessToken ?? (async () => ok("test-access-token")),
     userAgent: "Morai-Test/1.0",
     symbol: overrides?.symbol ?? "$SPX",
+    strikeCount: overrides?.strikeCount ?? 50,
+    range: overrides?.range ?? "NTM",
+    fromDate: overrides?.fromDate ?? "2026-06-21",
+    toDate: overrides?.toDate ?? "2026-09-21",
   });
 }
 
@@ -135,6 +143,84 @@ describe("makeSchwabChainAdapter", () => {
       const adapter = makeAdapter();
       await adapter.fetchChain("SPX");
       expect(capturedAuth).toBe("Bearer test-access-token");
+    });
+  });
+
+  // ─── SC3 regression: request scoping (BRK-01) ──────────────────────────────
+  // These tests guard against the live UAT regression where symbol=$SPX&contractType=ALL
+  // with no narrowing caused HTTP 502 "Body buffer overflow" from Schwab's gateway.
+  // The adapter MUST always send strikeCount, range, fromDate, toDate.
+
+  describe("request scoping — guards against HTTP 502 body overflow (SC3)", () => {
+    it("always sends strikeCount query param on outbound request", async () => {
+      let capturedUrl: string | null = null;
+      server.use(
+        http.get(SCHWAB_CHAIN_URL, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json(schwabChainFixture);
+        }),
+      );
+      const adapter = makeAdapter({ strikeCount: 40 });
+      await adapter.fetchChain("SPX");
+      expect(capturedUrl).not.toBeNull();
+      const url = new URL(capturedUrl ?? "");
+      expect(url.searchParams.get("strikeCount")).toBe("40");
+    });
+
+    it("always sends range query param on outbound request", async () => {
+      let capturedUrl: string | null = null;
+      server.use(
+        http.get(SCHWAB_CHAIN_URL, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json(schwabChainFixture);
+        }),
+      );
+      const adapter = makeAdapter({ range: "NTM" });
+      await adapter.fetchChain("SPX");
+      const url = new URL(capturedUrl ?? "");
+      expect(url.searchParams.get("range")).toBe("NTM");
+    });
+
+    it("always sends fromDate query param on outbound request", async () => {
+      let capturedUrl: string | null = null;
+      server.use(
+        http.get(SCHWAB_CHAIN_URL, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json(schwabChainFixture);
+        }),
+      );
+      const adapter = makeAdapter({ fromDate: "2026-06-21" });
+      await adapter.fetchChain("SPX");
+      const url = new URL(capturedUrl ?? "");
+      expect(url.searchParams.get("fromDate")).toBe("2026-06-21");
+    });
+
+    it("always sends toDate query param on outbound request", async () => {
+      let capturedUrl: string | null = null;
+      server.use(
+        http.get(SCHWAB_CHAIN_URL, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json(schwabChainFixture);
+        }),
+      );
+      const adapter = makeAdapter({ toDate: "2026-09-21" });
+      await adapter.fetchChain("SPX");
+      const url = new URL(capturedUrl ?? "");
+      expect(url.searchParams.get("toDate")).toBe("2026-09-21");
+    });
+
+    it("returns typed fetch-error (not throw) on HTTP 502 — body overflow regression", async () => {
+      server.use(
+        http.get(SCHWAB_CHAIN_URL, () =>
+          new HttpResponse("Bad Gateway", { status: 502 }),
+        ),
+      );
+      const adapter = makeAdapter();
+      const result = await adapter.fetchChain("SPX");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.kind).toBe("fetch-error");
+      expect(result.error.message).toContain("502");
     });
   });
 
