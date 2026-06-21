@@ -442,10 +442,13 @@ export type ForResettingCalendarAmounts = (
 /**
  * ForEnqueueingJob — enqueue a pg-boss job by name with an optional payload (JOB-01).
  * Returns ok(jobId) on success; ok(null) when deduplication key already active (no-op).
- * The singletonKey is computed by the adapter using the deterministic dedupe scheme.
+ * The singletonKey is computed by the use-case (makeEnqueueJobUseCase) and passed here.
  * Implemented by the pg-boss adapter (adapters layer); in-memory twin for tests.
+ *
+ * dedupeKey: pass null to skip deduplication (every enqueue is distinct).
  */
 export type ForEnqueueingJob = (
   name: string,
   payload: Readonly<Record<string, unknown>>,
+  dedupeKey: string | null,
 ) => Promise<Result<string | null, StorageError>>;

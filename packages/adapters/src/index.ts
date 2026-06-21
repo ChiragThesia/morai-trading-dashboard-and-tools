@@ -72,5 +72,13 @@ export type { SchwabOrdersAdapter } from "./schwab/trader/orders-adapter.ts";
 export { makeMemorySchwabTrader } from "./memory/schwab-trader.ts";
 export type { MemorySchwabTrader } from "./memory/schwab-trader.ts";
 
+// pg-boss adapters (job queue, JOB-01)
+export { makePgBossJobQueue } from "./pgboss/job-queue.ts";
+export type { PgBossJobQueue } from "./pgboss/job-queue.ts";
+
+// In-memory job queue twin (JOB-01, architecture-boundaries.md §8)
+export { makeMemoryJobQueue } from "./memory/job-queue.ts";
+export type { MemoryJobQueue, MemoryJobQueueEntry } from "./memory/job-queue.ts";
+
 // Note: contract test harness in src/__contract__/ is excluded from tsconfig emit
 // (test-only code using vitest). Import directly from the file path in test code.
