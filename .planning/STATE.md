@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: "Phase 5 Plan 05 completed (refresh-tokens JOB-02/SC2: isNearExpiry, makeRefreshTokensUseCase, handler, migration 0005)"
-last_updated: "2026-06-21T17:42:00.000Z"
-last_activity: 2026-06-21 -- Phase 05 Plan 05 completed (refresh-tokens vertical slice: JOB-02/SC2, 24/24 tests GREEN, migration 0005 generated)
+stopped_at: "Phase 5 Plan 06 completed (SC3 BSM drain-to-zero verification: 5/5 testcontainers contract tests GREEN, JOB-03 closed)"
+last_updated: "2026-06-21T23:04:54Z"
+last_activity: 2026-06-21 -- Phase 05 Plan 06 completed (SC3/D-15 drain-to-zero contract: 5 testcontainers tests GREEN, JOB-03 formally proven)
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 39
-  completed_plans: 37
-  percent: 67
+  completed_plans: 38
+  percent: 69
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 05 (jobs-fill-rebuild-integrity) — EXECUTING
-Plan: 6 of 8 (Plans 01 + 03 + 04 + 05 complete; Plan 02 migration pending live DB apply)
+Plan: 7 of 8 (Plans 01 + 03 + 04 + 05 + 06 complete; Plan 02 migration pending live DB apply)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Phase 05 Plan 06 or Plan 07 (sync-fills handler)
-Last activity: 2026-06-21 -- Phase 05 Plan 05 completed (refresh-tokens JOB-02/SC2 vertical slice, 24/24 tests GREEN)
+Next: Phase 05 Plan 07 (sync-fills handler)
+Last activity: 2026-06-21 -- Phase 05 Plan 06 completed (SC3/D-15 drain-to-zero contract: 5 testcontainers tests GREEN, JOB-03 proven)
 
-Progress: [█████████░] Phase 05 in progress · milestone 87% (34/39 plans)
+Progress: [█████████░] Phase 05 in progress · milestone 89% (35/39 plans)
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Progress: [█████████░] Phase 05 in progress · milestone 87%
 | Phase 05 P02 | 25 | - tasks | - files |
 | Phase 05 P04 | 14 | 3 tasks | 14 files |
 | Phase 05 P05 | 22 | 2 tasks | 19 files |
+| Phase 05 P06 | 22 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -150,6 +151,8 @@ Recent decisions affecting current work:
 - [Phase 5 P05]: lastRefreshError persisted on broker_tokens column (not in-memory map): worker and server are separate processes; option (a) per RESEARCH A4 = flag-only, no new table (D-14)
 - [Phase 5 P05]: ForRecordingRefreshOutcome: null clears flag on success; non-null persists failure; writeTokens does NOT reset the flag — only recordRefreshOutcome owns last_refresh_error
 - [Phase 5 P05]: makeRefreshTokensHandler.recordRefreshOutcome is optional dep (backward compat with 05-04 stub); rewired to real port in same commit as main.ts wiring
+- [Phase 5 P06]: leg_observations.mark has NOT NULL DB constraint — no mark-NULL rows can exist; T-02-16 NaN-stamp exclusion (bsm_iv = 'NaN'::numeric) is the real skip mechanism
+- [Phase 5 P06]: BSM fixture marks must be realistic: ATM call S=K=5500, T=0.277y needs mark≈200 (sigma≈0.15); mark=25 fails WR-01 residual check in invertIv → NaN-stamp
 
 ### Pending Todos
 
@@ -172,6 +175,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-21T22:35:04.375Z
-Stopped at: Phase 5 Plan 04 completed (jobs backbone: dedupe-key, JobQueue port, schedule.ts, 7-job registration)
+Last session: 2026-06-21T23:04:54Z
+Stopped at: Phase 5 Plan 06 completed (SC3 BSM drain-to-zero verification: 5/5 testcontainers contract tests GREEN, JOB-03 closed)
 Resume file: None

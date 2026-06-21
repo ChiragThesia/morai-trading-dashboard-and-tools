@@ -229,7 +229,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3; 05-05 ‖ 05-06)*
 
 - [x] 05-05-PLAN.md — refresh-tokens slice: per-app independence (allSettled) + isNearExpiry warning + no-RTH handler + status flag (JOB-02, SC2)
-- [ ] 05-06-PLAN.md — compute-bsm-greeks drain SC3 contract (testcontainers): zero pending rows, idempotent (JOB-03, SC3)
+- [x] 05-06-PLAN.md — compute-bsm-greeks drain SC3 contract (testcontainers): zero pending rows, idempotent (JOB-03, SC3)
 
 **Wave 5** *(blocked on Waves 2/3/4)*
 
