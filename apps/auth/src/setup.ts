@@ -18,8 +18,10 @@ import type {
 import type { SchwabTokens, OAuthError } from "@morai/adapters";
 import { makeSchwabOAuthClient } from "@morai/adapters";
 import type { AuthConfig } from "./config.ts";
-import { getAuthCode } from "oauth-callback";
 import open from "open";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +81,79 @@ export async function validateAndExchange(
   }
 
   return ok(exchangeResult.value);
+}
+
+// ─── captureCallbackHttps (HTTPS loopback listener) ──────────────────────────
+
+/**
+ * captureCallbackHttps — opens the browser and captures Schwab's OAuth redirect.
+ *
+ * Schwab mandates an `https://127.0.0.1` callback. oauth-callback@2 serves plain
+ * HTTP only, so the browser's TLS handshake to the listener fails and the code is
+ * never captured. We instead serve HTTPS via Bun.serve with an ephemeral
+ * self-signed cert for 127.0.0.1 (IP SAN). The browser warns on the self-signed
+ * cert — the operator proceeds past it (expected for a loopback dev cert).
+ *
+ * Resolves with the captured {code, state}; rejects on timeout.
+ */
+async function captureCallbackHttps(
+  authUrl: string,
+  port: number,
+  timeoutMs: number,
+): Promise<CallbackResult> {
+  // Ephemeral self-signed cert for 127.0.0.1 (regenerated each run, never persisted).
+  const dir = mkdtempSync(join(tmpdir(), "morai-auth-cert-"));
+  const keyPath = join(dir, "key.pem");
+  const certPath = join(dir, "cert.pem");
+  const gen = Bun.spawn(
+    [
+      "openssl", "req", "-x509", "-newkey", "rsa:2048",
+      "-keyout", keyPath, "-out", certPath,
+      "-days", "3650", "-nodes",
+      "-subj", "/CN=127.0.0.1",
+      "-addext", "subjectAltName=IP:127.0.0.1",
+    ],
+    { stdout: "ignore", stderr: "ignore" },
+  );
+  if ((await gen.exited) !== 0) {
+    throw new Error("failed to generate self-signed loopback certificate (openssl)");
+  }
+  const key = await Bun.file(keyPath).text();
+  const cert = await Bun.file(certPath).text();
+
+  return await new Promise<CallbackResult>((resolve, reject) => {
+    const server = Bun.serve({
+      port,
+      hostname: "127.0.0.1",
+      tls: { key, cert },
+      fetch(req: Request): Response {
+        const url = new URL(req.url);
+        const code = url.searchParams.get("code");
+        const state = url.searchParams.get("state") ?? "";
+        if (code === null || code === "") {
+          return new Response("Waiting for Schwab authorization code…", {
+            status: 400,
+          });
+        }
+        // Resolve after the success page flushes (graceful stop lets it finish).
+        queueMicrotask(() => {
+          clearTimeout(timer);
+          void server.stop();
+          resolve({ code, state });
+        });
+        return new Response(
+          "<html><body><h2>Authenticated.</h2><p>You can close this tab and return to the terminal.</p></body></html>",
+          { headers: { "content-type": "text/html" } },
+        );
+      },
+    });
+    const timer = setTimeout(() => {
+      void server.stop(true);
+      reject(new Error(`timed out after ${timeoutMs}ms waiting for OAuth callback`));
+    }, timeoutMs);
+    // Launch the browser only after the listener is bound.
+    void open(authUrl);
+  });
 }
 
 // ─── runSetup (imperative shell) ─────────────────────────────────────────────
@@ -142,25 +217,18 @@ export async function runSetup(
   console.warn(`[setup] Opening browser for ${appId} app OAuth flow...`);
   console.warn(`[setup] Listening on ${appConfig.callbackUrl} for callback`);
 
-  // oauth-callback: opens browser + captures the redirect (Loopback OAuth Capture Pattern)
-  // The library returns CallbackResult with optional code/state — guard both before use.
+  // HTTPS loopback capture (Schwab requires an https callback; oauth-callback@2 is HTTP-only).
   let rawCode: string;
   let rawState: string;
   try {
-    const captured = await getAuthCode({
-      authorizationUrl: authUrl,
-      launch: (url: string) => open(url),
-      port,
-      hostname: "127.0.0.1",
-      timeout: 120_000,
-    });
+    const captured = await captureCallbackHttps(authUrl, port, 120_000);
     // Guard: code must be present
-    if (captured.code === undefined || captured.code === "") {
+    if (captured.code === "") {
       console.error("[setup] OAuth callback did not include an authorization code");
       process.exit(1);
     }
     rawCode = captured.code;
-    rawState = captured.state ?? "";
+    rawState = captured.state;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error(`[setup] Failed to capture OAuth callback: ${message}`);
