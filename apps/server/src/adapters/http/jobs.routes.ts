@@ -26,16 +26,26 @@ export type ForTriggeringJob = (
 ) => Promise<Result<string | null, StorageError>>;
 
 export function jobsRoutes(enqueueJob: ForTriggeringJob): Hono {
-  throw new Error("not implemented");
   const router = new Hono();
 
+  // POST /jobs/:name/trigger — enqueue an on-demand job by name
+  // T-05-21: MUST be mounted inside bearer-token middleware group in main.ts
+  // T-05-22: zValidator on param rejects names not in TRIGGERABLE_JOBS (400 on invalid)
+  // T-05-24: rebuildDedupeKey inside the use-case prevents duplicate enqueues for same calendarId
   router.post(
     "/jobs/:name/trigger",
     zValidator("param", z.object({ name: z.enum(TRIGGERABLE_JOBS) })),
     zValidator("json", triggerJobPayload),
-    async (_c) => {
-      void enqueueJob;
-      throw new Error("not implemented");
+    async (c) => {
+      const { name } = c.req.valid("param");
+      const body = c.req.valid("json");
+
+      const result = await enqueueJob(name, body as Readonly<Record<string, unknown>>);
+      if (!result.ok) {
+        return c.json({ error: result.error.message }, 422);
+      }
+
+      return c.json({ jobId: result.value }, 202);
     },
   );
 

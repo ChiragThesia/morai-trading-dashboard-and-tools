@@ -22,7 +22,9 @@ import {
   registerGetPositionsTool,
   registerGetTransactionsTool,
   registerGetOrdersTool,
+  registerTriggerJobTool,
 } from "./tools.ts";
+import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
 /**
  * makeMcpRouter — returns a Hono router that mounts the MCP transport at /mcp.
@@ -37,10 +39,10 @@ import {
  * T-01-11: bearer middleware on /mcp/* ensures no/wrong token → 401.
  * T-01-13: transport validates Origin header internally.
  *
- * MCP-01: all six tools registered per request — get_status, list_calendars, get_journal,
- *         get_live_greeks, get_term_structure, get_skew.
+ * MCP-01: base tools — get_status, list_calendars, get_journal, get_live_greeks,
+ *         get_term_structure, get_skew.
  * MCP-02: each tool shares the same Zod contract as its HTTP route (wired in tools.ts).
- * D-08: trigger_job is NOT registered (deferred to Phase 5).
+ * MCP-02: trigger_job registered here (Phase 5) — shares ForTriggeringJob use-case with HTTP route.
  */
 export function makeMcpRouter(
   config: Config,
@@ -51,6 +53,7 @@ export function makeMcpRouter(
   getPositions?: ForGettingPositions,
   getTransactions?: ForGettingTransactions,
   getOrders?: ForGettingOrders,
+  enqueueJob?: ForTriggeringJob,
 ): Hono {
   const router = new Hono();
 
@@ -79,6 +82,10 @@ export function makeMcpRouter(
     }
     if (getOrders !== undefined) {
       registerGetOrdersTool(server, getOrders);
+    }
+    // MCP-02: trigger_job tool — optional, wired when enqueueJob is available (Phase 5)
+    if (enqueueJob !== undefined) {
+      registerTriggerJobTool(server, enqueueJob);
     }
     return { server, transport };
   }

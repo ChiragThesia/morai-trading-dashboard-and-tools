@@ -12,6 +12,7 @@
     "@morai/shared": "workspace:*",
     "fetch-to-node": "^2.1.0",
     "hono": "^4.12.23",
+    "pg-boss": "^12.18.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

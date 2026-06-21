@@ -17,6 +17,7 @@ import {
   makeSchwabPositionsAdapter,
   makeSchwabTransactionsAdapter,
   makeSchwabOrdersAdapter,
+  makePgBossJobQueue,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -28,12 +29,16 @@ import {
   makeGetPositionsUseCase,
   makeGetTransactionsUseCase,
   makeGetOrdersUseCase,
+  makeEnqueueJobUseCase,
 } from "@morai/core";
+import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
+import { bearerAuth } from "./adapters/mcp/bearer.ts";
 import { statusRoutes } from "./adapters/http/status.routes.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
+import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
 
 const config = bootConfig();
@@ -129,6 +134,17 @@ const getOrders = makeGetOrdersUseCase({
   fetchOrders: ordersAdapter.fetchOrders,
 });
 
+// JOB-01 / MCP-02: enqueueJob use-case — shared by HTTP route + MCP tool (trigger_job).
+// PgBoss instance for job enqueueing only (the worker is responsible for processing).
+// Uses DATABASE_URL (direct connection); pg-boss manages its own pool for enqueueing.
+const jobBoss = new PgBoss(config.DATABASE_URL);
+await jobBoss.start();
+const pgBossJobQueue = makePgBossJobQueue(jobBoss);
+const enqueueJob = makeEnqueueJobUseCase({
+  jobQueue: pgBossJobQueue.enqueue,
+  now: () => new Date(),
+});
+
 // Build the Hono app
 const app = new Hono();
 
@@ -139,9 +155,16 @@ app.route("/api", journalRoutes(getJournal));
 // BRK-02: positions, transactions, orders read endpoints
 app.route("/api", brokerageRoutes(getPositions, getTransactions, getOrders));
 
+// JOB-01 / MCP-02: on-demand job trigger — bearer-guarded (T-05-21, Security Domain).
+// Mounted as a separate bearer-protected group so existing /api/* routes are unaffected.
+// The /api/jobs/* sub-group requires the same MCP_BEARER_TOKEN used by the MCP transport.
+const jobsGroup = new Hono();
+jobsGroup.use("/*", bearerAuth(config.MCP_BEARER_TOKEN));
+jobsGroup.route("/", jobsRoutes(enqueueJob));
+app.route("/api", jobsGroup);
+
 // Mount MCP transport at /mcp (bearer-protected, stateless)
-// MCP-01: base tools + BRK-02 trader tools (getPositions, getTransactions, getOrders)
-// D-08: trigger_job NOT passed (deferred to Phase 5).
+// MCP-01: base tools + BRK-02 trader tools + MCP-02 trigger_job tool
 const mcpRouter = makeMcpRouter(
   config,
   getStatus,
@@ -151,6 +174,7 @@ const mcpRouter = makeMcpRouter(
   getPositions,
   getTransactions,
   getOrders,
+  enqueueJob,
 );
 app.route("", mcpRouter);
 

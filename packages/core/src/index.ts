@@ -125,6 +125,9 @@ export { makeSyncFillsUseCase } from "./journal/index.ts";
 export type { ForRunningSyncFills, SyncFillsDeps } from "./journal/index.ts";
 export { makeRebuildJournalUseCase } from "./journal/index.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./journal/index.ts";
+// Phase 5: enqueueJob use-case factory (JOB-01 — MCP-02 trigger surface)
+export { makeEnqueueJobUseCase } from "./journal/index.ts";
+export type { EnqueueJobDeps } from "./journal/index.ts";
 // Phase 5: refreshTokens use-case + result type (JOB-02, D-13/D-14)
 export { makeRefreshTokensUseCase } from "./brokerage/index.ts";
 export type { RefreshTokensResult, AppRefreshOutcome, RefreshTokensDeps } from "./brokerage/index.ts";

@@ -86,6 +86,9 @@ export type { ForRunningSyncFills, SyncFillsDeps } from "./application/syncFills
 // Phase 5: rebuildJournal use-case factory + driver port
 export { makeRebuildJournalUseCase } from "./application/rebuildJournal.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./application/rebuildJournal.ts";
+// Phase 5: enqueueJob use-case factory (JOB-01 — dedup + port delegation)
+export { makeEnqueueJobUseCase } from "./application/enqueueJob.ts";
+export type { EnqueueJobDeps } from "./application/enqueueJob.ts";
 
 // Domain re-exports (Plan 02/03/06) — BSM engine and IV inversion
 export { bsmPrice, bsmGreeks, bsmVega } from "./domain/bsm.ts";

@@ -19,6 +19,7 @@ import type {
   ForGettingTransactions,
   ForGettingOrders,
 } from "@morai/core";
+export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 
 /**
  * registerStatusTool — registers the get_status MCP tool on the given McpServer.
