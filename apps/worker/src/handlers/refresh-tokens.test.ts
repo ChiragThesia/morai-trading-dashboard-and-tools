@@ -1,5 +1,5 @@
 /**
- * refresh-tokens handler tests — Wave 0 RED stubs.
+ * refresh-tokens handler tests — 05-05 TDD suite.
  *
  * Covers:
  *   - No RTH gate: handler runs even outside market hours (04:00 ET design)
@@ -7,15 +7,15 @@
  *   - Handler does NOT throw on per-app failure (per-app errors → console.warn only)
  *   - pg-boss v12 guard: undefined job → no-op
  *   - warnExpirySoon → console.warn with expiry message
- *
- * These tests fail on ASSERTIONS, not import errors.
- * They will go GREEN when plan 05-05 implements makeRefreshTokensHandler.
+ *   - SC2 status surface: after trader-fail / market-ok, readTokenFreshness() returns
+ *     trader.lastRefreshError non-null and market.lastRefreshError null (D-14, flag-only)
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Job } from "pg-boss";
 import { ok } from "@morai/shared";
 import { makeRefreshTokensHandler } from "./refresh-tokens.ts";
+import { makeMemoryBrokerTokensRepo } from "@morai/adapters";
 
 describe("makeRefreshTokensHandler", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -123,5 +123,41 @@ describe("makeRefreshTokensHandler", () => {
 
     await handler([undefined]);
     expect(refreshTokensUseCase).not.toHaveBeenCalled();
+  });
+
+  // SC2 status surface: the getStatus path exposes per-app refresh failure (D-14).
+  // After a trader-fail / market-ok run, readTokenFreshness() must return:
+  //   trader.lastRefreshError = non-null string
+  //   market.lastRefreshError = null
+  // This is the end-to-end assertion through the read model.
+  it("SC2: trader-fail / market-ok → readTokenFreshness returns trader.lastRefreshError non-null, market null", async () => {
+    const now = new Date("2026-06-15T04:00:00Z");
+    const repo = makeMemoryBrokerTokensRepo(() => now);
+
+    // refreshTokensUseCase returns trader failure, market success
+    const refreshTokensUseCase = vi.fn().mockResolvedValue(
+      ok({
+        trader: { ok: false, error: "trader: auth-expired", warnExpirySoon: false },
+        market: { ok: true, warnExpirySoon: false },
+      }),
+    );
+
+    const handler = makeRefreshTokensHandler({
+      refreshTokensUseCase,
+      recordRefreshOutcome: repo.recordRefreshOutcome,
+      now: () => now,
+    });
+
+    await handler([makeJob()]);
+
+    // After the handler runs, read the freshness map (same path getStatus uses)
+    const freshnessResult = await repo.readTokenFreshness();
+    expect(freshnessResult.ok).toBe(true);
+    if (!freshnessResult.ok) return;
+    // "none yet" is not expected since recordRefreshOutcome has been called
+    expect(freshnessResult.value).not.toBe("none yet");
+    if (freshnessResult.value === "none yet") return;
+    expect(freshnessResult.value.trader.lastRefreshError).not.toBeNull();
+    expect(freshnessResult.value.market.lastRefreshError).toBeNull();
   });
 });
