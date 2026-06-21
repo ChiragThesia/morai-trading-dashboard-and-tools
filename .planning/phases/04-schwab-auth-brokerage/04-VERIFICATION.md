@@ -1,8 +1,9 @@
 ---
 phase: 04-schwab-auth-brokerage
 verified: 2026-06-20T13:52:00Z
-status: human_needed
+status: passed
 score: 5/5 success criteria verified
+closeout: "2026-06-21 — human_verification items completed LIVE against real Schwab (setup trader+market, status fresh/fresh, refresh rotates); UAT (04-UAT.md) found+fixed 2 real bugs both live-validated (chain $SPX 502 → scoping params → HTTP 200; doctor live-refresh stub → real use-case → OK); migration applied + pgcrypto/broker_tokens confirmed; security audit 26/26 threats closed (04-SECURITY.md). Carried debt: Test 7 AUTH_EXPIRED end-to-end accepted as unit-covered (needs running server to observe)."
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found

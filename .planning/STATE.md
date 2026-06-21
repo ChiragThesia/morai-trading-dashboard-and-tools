@@ -5,10 +5,10 @@ milestone_name: milestone
 status: Phase 04 complete — ready for Phase 05
 stopped_at: Phase 04 Plan 06 complete
 last_updated: "2026-06-20T18:30:00.000Z"
-last_activity: 2026-06-20 -- Phase 04 Plan 06 executed
+last_activity: 2026-06-21 -- Phase 04 closed out (UAT live-validated, 2 bugs fixed, security 26/26, verification passed)
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 31
   completed_plans: 30
   percent: 52
@@ -29,7 +29,7 @@ Phase: 04 (schwab-auth-brokerage) — COMPLETE
 Plan: 6 of 6 complete (Plan 06 complete — AUTH-04 degradation loop: per-app status contract + worker Schwab-primary job guard)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: Phase 05 — Jobs, Fill Rebuild & Integrity
-Last activity: 2026-06-20 -- Phase 04 Plan 06 executed
+Last activity: 2026-06-21 -- Phase 04 closed out (UAT live-validated, 2 bugs fixed, security 26/26, verification passed)
 
 Progress: [██████████████] Phase 04 100% · milestone 67% (4/6 phases)
 
