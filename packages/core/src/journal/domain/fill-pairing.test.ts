@@ -112,6 +112,41 @@ describe("aggregatePartialFills", () => {
     expect(result[0]?.sumQty).toBe(5);
   });
 
+  it("qty-weighted avgPrice: (2*10 + 3*20) / 5 = 16", () => {
+    // D-04: avgPrice = sum(qty*price) / sumQty
+    const fills = [
+      makeRawFill({ id: "fill-1", qty: 2, price: 10, orderId: "order-A", occSymbol: "O:SPX260620P07100000" }),
+      makeRawFill({ id: "fill-2", qty: 3, price: 20, orderId: "order-A", occSymbol: "O:SPX260620P07100000" }),
+    ];
+    const result = aggregatePartialFills(fills);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.avgPrice).toBeCloseTo(16, 5);
+  });
+
+  it("totalCommission and totalFees summed from all fills", () => {
+    const fills = [
+      makeRawFill({ id: "fill-1", commission: 0.65, fees: 0.10, orderId: "order-A", occSymbol: "O:SPX260620P07100000" }),
+      makeRawFill({ id: "fill-2", commission: 0.65, fees: 0.12, orderId: "order-A", occSymbol: "O:SPX260620P07100000" }),
+    ];
+    const result = aggregatePartialFills(fills);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.totalCommission).toBeCloseTo(1.30, 5);
+    expect(result[0]?.totalFees).toBeCloseTo(0.22, 5);
+  });
+
+  it("null commission/fees treated as 0", () => {
+    const fills = [
+      makeRawFill({ id: "fill-1", commission: null, fees: null, orderId: "order-A", occSymbol: "O:SPX260620P07100000" }),
+    ];
+    const result = aggregatePartialFills(fills);
+    expect(result[0]?.totalCommission).toBe(0);
+    expect(result[0]?.totalFees).toBe(0);
+  });
+
+  it("empty input → empty output", () => {
+    expect(aggregatePartialFills([])).toHaveLength(0);
+  });
+
   it("fills with different orderId → two groups", () => {
     const fills = [
       makeRawFill({ id: "fill-1", orderId: "order-A" }),
