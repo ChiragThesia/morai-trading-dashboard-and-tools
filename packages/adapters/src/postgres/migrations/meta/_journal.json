@@ -36,6 +36,13 @@
       "when": 1782078713416,
       "tag": "0004_calendar_events",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782082298135,
+      "tag": "0005_broker_tokens_refresh_error",
+      "breakpoints": true
     }
   ]
 }
