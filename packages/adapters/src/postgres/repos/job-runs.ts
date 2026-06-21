@@ -4,8 +4,17 @@ import type { ForReadingJobRuns, JobRunMap, JobRunRecord, StorageError } from "@
 import { sql } from "drizzle-orm";
 import type { Db } from "../db.ts";
 
-// The three job names this repo knows about (D-06, D-07)
-const TRACKED_JOBS = ["fetch-cboe-chain", "fetch-rates", "compute-bsm-greeks"] as const;
+// All seven tracked job names (D-12, SC1 — Phase 5 extension).
+// Schwab-primary queue name used (D-07); CBOE queue name no longer tracked.
+const TRACKED_JOBS = [
+  "fetch-schwab-chain",
+  "fetch-rates",
+  "compute-bsm-greeks",
+  "snapshot-calendars",
+  "sync-fills",
+  "refresh-tokens",
+  "rebuild-journal",
+] as const;
 type TrackedJob = (typeof TRACKED_JOBS)[number];
 
 function isTrackedJob(name: unknown): name is TrackedJob {
@@ -82,7 +91,7 @@ export function makePostgresJobRunsRepo(db: Db): PostgresJobRunsRepo {
           completed_on,
           output
         FROM pgboss.job
-        WHERE name IN ('fetch-cboe-chain', 'fetch-rates', 'compute-bsm-greeks')
+        WHERE name IN ('fetch-schwab-chain', 'fetch-rates', 'compute-bsm-greeks', 'snapshot-calendars', 'sync-fills', 'refresh-tokens', 'rebuild-journal')
           AND state IN ('completed', 'failed')
         ORDER BY name, completed_on DESC NULLS LAST
       `);
