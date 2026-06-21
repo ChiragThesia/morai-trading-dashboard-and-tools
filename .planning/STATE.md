@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: "Phase 5 Plan 06 completed (SC3 BSM drain-to-zero verification: 5/5 testcontainers contract tests GREEN, JOB-03 closed)"
-last_updated: "2026-06-21T23:04:54Z"
-last_activity: 2026-06-21 -- Phase 05 Plan 06 completed (SC3/D-15 drain-to-zero contract: 5 testcontainers tests GREEN, JOB-03 formally proven)
+stopped_at: Completed 05-07-PLAN.md
+last_updated: "2026-06-21T23:25:59.473Z"
+last_activity: "2026-06-21 -- Phase 05 Plan 06 completed (SC3/D-15 drain-to-zero contract: 5 testcontainers tests GREEN, JOB-03 proven)"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 39
-  completed_plans: 38
-  percent: 69
+  completed_plans: 39
+  percent: 67
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 05 (jobs-fill-rebuild-integrity) — EXECUTING
-Plan: 7 of 8 (Plans 01 + 03 + 04 + 05 + 06 complete; Plan 02 migration pending live DB apply)
+Plan: 8 of 8 (Plans 01 + 03 + 04 + 05 + 06 complete; Plan 02 migration pending live DB apply)
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: Phase 05 Plan 07 (sync-fills handler)
 Last activity: 2026-06-21 -- Phase 05 Plan 06 completed (SC3/D-15 drain-to-zero contract: 5 testcontainers tests GREEN, JOB-03 proven)
@@ -75,6 +75,7 @@ Progress: [█████████░] Phase 05 in progress · milestone 89%
 | Phase 05 P04 | 14 | 3 tasks | 14 files |
 | Phase 05 P05 | 22 | 2 tasks | 19 files |
 | Phase 05 P06 | 22 | 1 tasks | 2 files |
+| Phase 05-jobs-fill-rebuild-integrity P07 | 11 | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -153,6 +154,9 @@ Recent decisions affecting current work:
 - [Phase 5 P05]: makeRefreshTokensHandler.recordRefreshOutcome is optional dep (backward compat with 05-04 stub); rewired to real port in same commit as main.ts wiring
 - [Phase 5 P06]: leg_observations.mark has NOT NULL DB constraint — no mark-NULL rows can exist; T-02-16 NaN-stamp exclusion (bsm_iv = 'NaN'::numeric) is the real skip mechanism
 - [Phase 5 P06]: BSM fixture marks must be realistic: ATM call S=K=5500, T=0.277y needs mark≈200 (sigma≈0.15); mark=25 fails WR-01 residual check in invertIv → NaN-stamp
+- [Phase ?]: id omitted from Postgres calendar_events INSERT: DB defaultRandom() generates PK; fillIdsHash UNIQUE is the sole idempotency key (SC4)
+- [Phase ?]: parseSchwabSymbol not imported in core (adapters boundary): fill.occSymbol passed directly to readCalendarLegs; symbol validation is adapter concern at ingestion
+- [Phase ?]: readUnprocessedFills/readCalendarLegs/resetCalendarAmounts stubbed as safe no-ops in main.ts; 05-08 wires real fills repo
 
 ### Pending Todos
 
@@ -175,6 +179,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-21T23:04:54Z
-Stopped at: Phase 5 Plan 06 completed (SC3 BSM drain-to-zero verification: 5/5 testcontainers contract tests GREEN, JOB-03 closed)
+Last session: 2026-06-21T23:25:59.466Z
+Stopped at: Completed 05-07-PLAN.md
 Resume file: None

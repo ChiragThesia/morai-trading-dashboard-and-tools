@@ -233,7 +233,7 @@ Plans:
 
 **Wave 5** *(blocked on Waves 2/3/4)*
 
-- [ ] 05-07-PLAN.md — sync-fills slice: pairing use-case (OPEN/CLOSE/ROLL + per-leg P&L + orphan parking) + calendar-events/orphan-fills repos + twins + contracts + RTH handler (JRNL-01, SC4)
+- [x] 05-07-PLAN.md — sync-fills slice: pairing use-case (OPEN/CLOSE/ROLL + per-leg P&L + orphan parking) + calendar-events/orphan-fills repos + twins + contracts + RTH handler (JRNL-01, SC4)
 
 **Wave 6** *(blocked on Waves 4/5)*
 
@@ -317,5 +317,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
-| 5. Jobs, Fill Rebuild & Integrity | 5/8 | In Progress|  |
+| 5. Jobs, Fill Rebuild & Integrity | 7/8 | In Progress|  |
 | 6. Derived Analytics | 0/TBD | Not started | - |
