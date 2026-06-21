@@ -230,6 +230,30 @@ return current and historical series queryable by API and Claude Code.
 
 **Plans**: TBD
 
+## Backlog / Future Enhancements
+
+*Unscheduled — not yet assigned to a phase.*
+
+### Schwab re-auth friction reduction (7-day refresh token)
+
+**Context:** Schwab refresh tokens hard-expire 7 days after issue with no sliding window —
+refreshing the 30-min access token does NOT extend them. A new refresh token can only be
+minted via the interactive authorization-code grant (browser login), so a **weekly manual
+`auth setup` re-auth is unavoidable**. Phase 5 `JOB-02` (`refresh-tokens`) already automates
+the 30-min access-token refresh; this item is only about making the unavoidable weekly
+re-auth painless and never a surprise.
+
+**Proposed (friction-reducing, not eliminating):**
+- Proactive expiry detection + alert (e.g. day 6 of 7) via the status surface / a notification
+  channel, so re-auth happens *before* a data gap (refresh token → `AUTH_EXPIRED`).
+- Surface per-app `refreshExpiresAt` / "expires in N days" in `GET /api/status`.
+- One-command re-auth (`auth setup --all`) that runs both apps in sequence.
+
+**Explicitly OUT of scope (rejected):** fully-automated refresh-token renewal via headless
+browser login. It would require storing full Schwab username/password at rest (worse than the
+refresh token), breaks on MFA/2FA, and likely violates Schwab's ToS (risking API access). The
+weekly browser re-auth is a Schwab platform constraint, accepted by design.
+
 ## Progress
 
 **Execution Order:**
