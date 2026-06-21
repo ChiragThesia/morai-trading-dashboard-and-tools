@@ -205,7 +205,7 @@ from broker transactions.
 **Requirements**: JOB-01, JOB-02, JOB-03, JRNL-01
 **Success Criteria** (what must be TRUE):
 
-  1. All scheduled jobs (`snapshot-calendars`, `compute-bsm-greeks`, `sync-fills`, `refresh-tokens`, `fetch-rates`, `compute-analytics`) are registered in `apps/worker/src/schedule.ts` and visible in `GET /api/status` under `lastJobRuns`; duplicate enqueues within the same window are idempotent (no duplicate rows in the DB).
+  1. All seven jobs (`fetch-schwab-chain`, `fetch-rates`, `compute-bsm-greeks`, `snapshot-calendars`, `sync-fills`, `refresh-tokens`, `rebuild-journal`) are registered in `apps/worker/src/schedule.ts` and visible in `GET /api/status` under `lastJobRuns` (`snapshot-calendars` is chain-triggered and `rebuild-journal` is on-demand — both registered but cronless); duplicate enqueues within the same window are idempotent (no duplicate rows in the DB).
   2. `JOB-02` (`refresh-tokens`, 04:00 ET): both Schwab apps refresh independently; a simulated failure on one app does not block the other; `GET /api/status` flags the failing app.
   3. `JOB-03` (`compute-bsm-greeks`): after running, `SELECT count(*) FROM leg_observations WHERE bsm_iv IS NULL AND mark IS NOT NULL` returns 0 (all pending observations computed).
   4. `sync-fills` pairs Schwab fill transactions into calendar OPEN/CLOSE events with correct net debit, credit, and P&L; paired events are idempotent on re-run (re-running against the same fill set produces no duplicate rows).

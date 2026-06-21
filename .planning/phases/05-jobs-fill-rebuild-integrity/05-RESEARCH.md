@@ -890,22 +890,27 @@ Security enforcement applies. Phase 5 inherits all Phase 4 security patterns.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three resolved during planning (Phase 5 plans 05-01 / 05-03); answers encoded in plan tasks.
 
 1. **fillIdsHash implementation: Bun crypto.subtle vs crypto module**
    - What we know: Bun supports both `crypto.subtle` (WebCrypto API) and Node.js `crypto` module.
    - What's unclear: Which is preferred for `packages/shared/` where the hash function should live?
    - Recommendation: Use `crypto.createHash("sha256")` from Node.js `crypto` module — it's sync, simpler, and available in both Bun and Node runtimes. Import as `import { createHash } from "node:crypto"`.
+   - **RESOLVED:** `node:crypto` `createHash("sha256")` (sync) adopted in plan 05-01 Task 3 / 05-03 `hashFillIds`.
 
 2. **entryThesis field placement: on calendars table or on calendar_events table**
    - What we know: D-07 says "per calendar (or per OPEN event)".
    - What's unclear: If placed on OPEN event only, it's harder to surface without a join; if on calendars table, it's simpler but less granular.
    - Recommendation: Add `entry_thesis TEXT` as a nullable column on `calendars` (not `calendar_events`) for Phase 5. The OPEN event creation sets it. This avoids a join on the common case. Per-event thesis is a Phase 6+ enhancement.
+   - **RESOLVED:** nullable `entry_thesis` declared in plan 05-01 Task 2 (primary attach point on `calendars`); per-event thesis deferred to Phase 6+.
 
 3. **ROLL detection time window**
    - What we know: Same `orderId` is the strongest signal. Not all rolls share an orderId (OCO orders vs manual).
    - What's unclear: Whether a configurable `ROLL_WINDOW_MS` is needed or if orderId matching alone is sufficient for the expected trading style (calendar spreads via Schwab).
    - Recommendation: Start with orderId matching only; if the orderId is null or mismatched, park as two separate CLOSE + OPEN events. Add time-window matching as a Claude's Discretion enhancement if needed.
+   - **RESOLVED:** orderId-only matching for Phase 5 (plan 05-03 `detectRoll`); null/mismatched orderId → separate CLOSE + OPEN; time-window matching deferred as a Claude's Discretion enhancement.
 
 ---
 
