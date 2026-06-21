@@ -17,6 +17,8 @@ import {
   makePostgresLegObservationsRepo,
   makePostgresRateObservationsRepo,
   makePostgresBrokerTokensRepo,
+  makePostgresCalendarEventsRepo,
+  makePostgresOrphanFillsRepo,
   makeCboeChainAdapter,
   makeSchwabChainAdapter,
   makeSchwabOAuthClient,
@@ -28,6 +30,7 @@ import {
   makeFetchRateUseCase,
   makeComputeBsmGreeksUseCase,
   makeSnapshotCalendarsUseCase,
+  makeSyncFillsUseCase,
   selectChainSource,
   makeRefreshTokenUseCase,
   makeRefreshTokensUseCase,
@@ -65,6 +68,10 @@ const legObsRepo = makePostgresLegObservationsRepo(db);
 const rateObsRepo = makePostgresRateObservationsRepo(db);
 // AUTH-04: broker-tokens repo for per-app freshness (used by selectChainSource + T-04-26 logging)
 const brokerTokensRepo = makePostgresBrokerTokensRepo(db, config.TOKEN_ENCRYPTION_KEY);
+
+// JRNL-01: calendar-events + orphan-fills repos (sync-fills, rebuild-journal)
+const calendarEventsRepo = makePostgresCalendarEventsRepo(db);
+const orphanFillsRepo = makePostgresOrphanFillsRepo(db);
 
 const USER_AGENT = "morai-worker/0.0.1";
 
@@ -188,10 +195,21 @@ const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
   now: () => new Date(),
 });
 
-// Phase 5 handlers (stub factories — full impl in plans 05-05/05-07/05-08).
-// Registered here so schedule.ts compiles with all 7 typed slots.
+// JRNL-01: sync-fills use-case — composed with calendar-events + orphan-fills repos.
+// readUnprocessedFills + readCalendarLegs + resetCalendarAmounts are fills-table ports
+// not yet implemented (pending fills repo in plan 05-08). Safe stub: returns empty fills,
+// making sync-fills a no-op until the fills repo is wired.
+const syncFillsUseCase = makeSyncFillsUseCase({
+  readUnprocessedFills: async () => ({ ok: true as const, value: [] }),
+  readCalendarLegs: async (_occSymbol) => ({ ok: true as const, value: [] }),
+  storeCalendarEvent: calendarEventsRepo.storeCalendarEvent,
+  storeOrphanFill: orphanFillsRepo.storeOrphanFill,
+  resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
+  now: () => new Date(),
+});
+
 const syncFillsHandler = makeSyncFillsHandler({
-  syncFillsUseCase: async () => ({ ok: false as const, error: { kind: "storage-error" as const, message: "not implemented" } }),
+  syncFillsUseCase,
   now: () => new Date(),
 });
 

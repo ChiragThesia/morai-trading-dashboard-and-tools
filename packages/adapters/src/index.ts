@@ -27,6 +27,18 @@ export type { PostgresJobRunsRepo } from "./postgres/repos/job-runs.ts";
 export { makePostgresBrokerTokensRepo } from "./postgres/repos/broker-tokens.ts";
 export type { PostgresBrokerTokensRepo } from "./postgres/repos/broker-tokens.ts";
 
+// Phase 5: calendar-events + orphan-fills Postgres repos (JRNL-01 / SC4)
+export { makePostgresCalendarEventsRepo } from "./postgres/repos/calendar-events.ts";
+export type { PostgresCalendarEventsRepo } from "./postgres/repos/calendar-events.ts";
+export { makePostgresOrphanFillsRepo } from "./postgres/repos/orphan-fills.ts";
+export type { PostgresOrphanFillsRepo } from "./postgres/repos/orphan-fills.ts";
+
+// Phase 5: in-memory twins for calendar-events + orphan-fills
+export { makeMemoryCalendarEventsRepo } from "./memory/calendar-events.ts";
+export type { MemoryCalendarEventsRepo } from "./memory/calendar-events.ts";
+export { makeMemoryOrphanFillsRepo } from "./memory/orphan-fills.ts";
+export type { MemoryOrphanFillsRepo } from "./memory/orphan-fills.ts";
+
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
 export type { CboeChainAdapter } from "./http/cboe.ts";
