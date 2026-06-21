@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toAppTokenStatus, isTokenExpired, isTokenStale } from "./token-freshness.ts";
+import { toAppTokenStatus, isTokenExpired, isTokenStale, isNearExpiry } from "./token-freshness.ts";
 import type { SchwabTokenRow } from "../application/ports.ts";
 
 // Helper to build a SchwabTokenRow for a given appId with specified times
@@ -89,5 +89,42 @@ describe("isTokenExpired", () => {
       now.getTime() - (7 * 24 * 60 * 60 * 1000 + 60 * 1000),
     );
     expect(isTokenExpired(sevenDaysPlusOneMin, now)).toBe(true);
+  });
+});
+
+// ─── isNearExpiry (D-14 proactive warning) ────────────────────────────────────
+// Warn window: day 6 of 7 (REFRESH_TTL=7d, WARN=1d → true when age >= 6d).
+// Pitfall 3: clock anchored to refreshIssuedAt, which never resets on access-token refresh.
+
+describe("isNearExpiry", () => {
+  it("returns false when refreshIssuedAt is 5 days old (well within safe window)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+    expect(isNearExpiry(fiveDaysAgo, now)).toBe(false);
+  });
+
+  it("returns true when refreshIssuedAt is exactly 6 days old (enters warn window)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+    expect(isNearExpiry(sixDaysAgo, now)).toBe(true);
+  });
+
+  it("returns true when refreshIssuedAt is 7 days old (hard expiry imminent)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    expect(isNearExpiry(sevenDaysAgo, now)).toBe(true);
+  });
+
+  it("returns false when refreshIssuedAt is 5 days and 59 minutes old (just under threshold)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    // 6 days = 6 * 24 * 60 * 60 * 1000 ms. 1 minute before = subtract 59 min from 6d
+    const justUnder = new Date(now.getTime() - (6 * 24 * 60 * 60 * 1000 - 60 * 1000));
+    expect(isNearExpiry(justUnder, now)).toBe(false);
+  });
+
+  it("returns true when refreshIssuedAt is 6 days and 1 minute old (just past threshold)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const justOver = new Date(now.getTime() - (6 * 24 * 60 * 60 * 1000 + 60 * 1000));
+    expect(isNearExpiry(justOver, now)).toBe(true);
   });
 });
