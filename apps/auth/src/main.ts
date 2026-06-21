@@ -93,3 +93,9 @@ switch (subcommand) {
     process.exit(1);
   }
 }
+
+// The auth CLI is a one-shot process. makeDb opens a postgres-js pool that keeps
+// the event loop alive (no exposed closer), so the process would hang after a
+// successful subcommand. All cases fully await their work before reaching here;
+// exit explicitly so the CLI returns to the shell.
+process.exit(0);
