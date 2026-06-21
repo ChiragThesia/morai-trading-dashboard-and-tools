@@ -31,6 +31,7 @@ import {
   makeComputeBsmGreeksUseCase,
   makeSnapshotCalendarsUseCase,
   makeSyncFillsUseCase,
+  makeRebuildJournalUseCase,
   selectChainSource,
   makeRefreshTokenUseCase,
   makeRefreshTokensUseCase,
@@ -256,8 +257,19 @@ const refreshTokensHandler = makeRefreshTokensHandler({
   now: () => new Date(),
 });
 
+// JRNL-01 / D-10: rebuildJournal use-case — delete-then-reinsert from fills (idempotent).
+// syncFillsForCalendar: wraps syncFillsUseCase so rebuild re-processes fills for the given calendar.
+// readUnprocessedFills + readCalendarLegs still stubbed (fills repo pending); 05-08 completes
+// the use-case layer; fills repo wire-up is a follow-up once the fills table is populated.
+const rebuildJournalUseCase = makeRebuildJournalUseCase({
+  deleteCalendarEvents: calendarEventsRepo.deleteCalendarEvents,
+  resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
+  syncFillsForCalendar: async (_calendarId) => syncFillsUseCase(),
+  now: () => new Date(),
+});
+
 const rebuildJournalHandler = makeRebuildJournalHandler({
-  rebuildJournalUseCase: async () => ({ ok: false as const, error: { kind: "storage-error" as const, message: "not implemented" } }),
+  rebuildJournalUseCase,
   now: () => new Date(),
 });
 

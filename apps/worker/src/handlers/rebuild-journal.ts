@@ -37,6 +37,10 @@ export function makeRebuildJournalHandler(
       throw new Error(`rebuild-journal: invalid payload: ${payloadResult.error.message}`);
     }
 
-    throw new Error("not implemented");
+    const { calendarId } = payloadResult.data;
+    const result = await deps.rebuildJournalUseCase(calendarId);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
   };
 }

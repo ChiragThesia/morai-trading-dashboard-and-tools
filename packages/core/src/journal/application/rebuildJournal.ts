@@ -38,7 +38,17 @@ export type ForRebuildingJournal = (
 // ─── Use-case factory ─────────────────────────────────────────────────────────
 
 export function makeRebuildJournalUseCase(deps: RebuildJournalDeps): ForRebuildingJournal {
-  return async (_calendarId: string): Promise<Result<void, StorageError>> => {
-    throw new Error("not implemented");
+  return async (calendarId: string): Promise<Result<void, StorageError>> => {
+    // Step 1: Delete all existing calendar_events for this calendar (D-10)
+    const deleteResult = await deps.deleteCalendarEvents(calendarId);
+    if (!deleteResult.ok) return deleteResult;
+
+    // Step 2: Reset openNetDebit / closeNetCredit to NULL (clear derived P&L totals)
+    const resetResult = await deps.resetCalendarAmounts(calendarId);
+    if (!resetResult.ok) return resetResult;
+
+    // Step 3: Re-run sync-fills scoped to this calendar — rebuild events from fills
+    // Same fills → same events (fillIdsHash determinism). SC5: P&L reconciles after rebuild.
+    return deps.syncFillsForCalendar(calendarId);
   };
 }
