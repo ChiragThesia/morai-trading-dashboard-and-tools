@@ -210,10 +210,10 @@ export function runBsmDrainContractTests(makeRepo: () => BsmDrainContractRepo): 
     });
 
     it("T-02-16: NaN-stamped rows remain excluded from pending scan after drain (not re-processed)", async () => {
-      // RED: mark=25.0 for ATM call (too low — IV inversion fails, row gets NaN-stamped).
-      // The test expects nanAfter==2, but 3 NaN rows will exist (bug: bad fixture data).
-      // GREEN fix: use mark=200.0 (realistic ATM call mark → solvable IV, computed row).
-      await repo.seedPendingRow(pendingOcc1, obsTime, 25.0, UNDERLYING, 5500, "2026-09-19", "SPX", "C");
+      // pendingOcc1 uses a realistic ATM call mark (200.0, ~15% vol) that produces a solvable IV.
+      // After drain it becomes computed (bsm_iv IS NOT NULL, not 'NaN'), so the 2 seeded
+      // NaN-stamped rows remain at count=2 — proving existing NaN-stamped rows are not re-processed.
+      await repo.seedPendingRow(pendingOcc1, obsTime, 200.0, UNDERLYING, 5500, "2026-09-19", "SPX", "C");
       await repo.seedNanStampedRow(nanOcc1, obsTime, 5.0, UNDERLYING);
       await repo.seedNanStampedRow(nanOcc2, obsTime, 3.0, UNDERLYING);
 
