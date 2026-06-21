@@ -1,4 +1,5 @@
 import type { OccSymbol, Result } from "@morai/shared";
+import type { CalendarEvent, RawFill } from "../domain/calendar-event.ts";
 
 // Domain error for storage operations (used by driven ports)
 export type StorageError = {
@@ -351,3 +352,100 @@ export type JobRunMap = Readonly<Record<string, JobRunRecord>>;
  * first-deploy behavior (Pitfall 6). MUST return ok({}) on empty/absent pgboss schema.
  */
 export type ForReadingJobRuns = () => Promise<Result<JobRunMap, StorageError>>;
+
+// ─── Phase 5: calendar_events + orphan_fills ports (JOB-01 / JRNL-01) ────────
+
+// Re-export domain types so adapters and use-cases import from this application boundary
+export type { CalendarEvent, RawFill } from "../domain/calendar-event.ts";
+import type { AggregatedFill } from "../domain/calendar-event.ts";
+export type { AggregatedFill } from "../domain/calendar-event.ts";
+
+// Domain type for a calendar leg entry returned by ForReadingCalendarLegs.
+// Adapters translate from the DB schema at the boundary.
+export type CalendarLegEntry = {
+  readonly calendarId: string;
+  readonly legOccSymbol: string;
+  readonly positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
+};
+
+// Domain type for an orphan fill row (D-05: unmatched fills parked, never dropped)
+export type OrphanFillInput = {
+  readonly fillId: string;
+  readonly occSymbol: string;
+  readonly side: "buy" | "sell";
+  readonly qty: number;
+  readonly price: number;
+  readonly filledAt: Date;
+  readonly reason: string;
+};
+
+/**
+ * ForStoringCalendarEvent — write one calendar_events row (JRNL-01).
+ * Idempotent: onConflictDoNothing on fillIdsHash UNIQUE constraint.
+ * Implemented by Postgres repo and in-memory twin.
+ */
+export type ForStoringCalendarEvent = (
+  event: CalendarEvent,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingCalendarEvents — read all calendar_events for a calendarId (JRNL-01).
+ * Returns rows ordered by eventedAt ASC. Returns empty array when none exist.
+ */
+export type ForReadingCalendarEvents = (
+  calendarId: string,
+) => Promise<Result<ReadonlyArray<CalendarEvent>, StorageError>>;
+
+/**
+ * ForDeletingCalendarEvents — delete all calendar_events for a calendarId (rebuild-journal D-10).
+ * Used by makeRebuildJournalUseCase to clear events before re-inserting from fills.
+ */
+export type ForDeletingCalendarEvents = (
+  calendarId: string,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingUnprocessedFills — read fills not yet reflected in calendar_events (JRNL-01).
+ * Adapters filter by fill IDs not present in calendar_events.fill_ids_hash or orphan_fills.
+ * Returns all RawFill rows (adapters translate from DB schema at boundary).
+ */
+export type ForReadingUnprocessedFills = () => Promise<
+  Result<ReadonlyArray<RawFill>, StorageError>
+>;
+
+/**
+ * ForReadingCalendarLegs — find calendar legs matching a given OCC symbol (JRNL-01, D-01).
+ * Returns all (calendarId, legOccSymbol, positionEffect) entries whose leg matches the symbol.
+ * Returns empty array when no calendar has this symbol as a leg.
+ */
+export type ForReadingCalendarLegs = (
+  occSymbol: string,
+) => Promise<Result<ReadonlyArray<CalendarLegEntry>, StorageError>>;
+
+/**
+ * ForStoringOrphanFill — write one orphan_fills row (D-05).
+ * Idempotent: onConflictDoNothing on fillId PK.
+ * Unmatched fills are parked here; never silently dropped.
+ */
+export type ForStoringOrphanFill = (
+  orphan: OrphanFillInput,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForResettingCalendarAmounts — set openNetDebit and closeNetCredit to NULL for a calendar.
+ * Used by makeRebuildJournalUseCase before re-running sync-fills (D-10).
+ */
+export type ForResettingCalendarAmounts = (
+  calendarId: string,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForEnqueueingJob — enqueue a pg-boss job by name with an optional payload (JOB-01).
+ * Returns ok(jobId) on success; ok(null) when deduplication key already active (no-op).
+ * The singletonKey is computed by the adapter using the deterministic dedupe scheme.
+ * Implemented by the pg-boss adapter (adapters layer); in-memory twin for tests.
+ */
+export type ForEnqueueingJob = (
+  name: string,
+  payload: Readonly<Record<string, unknown>>,
+) => Promise<Result<string | null, StorageError>>;

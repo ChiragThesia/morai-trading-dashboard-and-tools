@@ -155,3 +155,8 @@ export type ForFetchingOrders = (
 export type ForResolvingAccountHash = () => Promise<
   Result<string, FetchError | AuthExpiredError>
 >;
+
+// ─── Phase 5 brokerage ports (JOB-02) ────────────────────────────────────────
+
+// Re-export ForRefreshingToken from refreshToken.ts so consumers import from this boundary
+export type { ForRefreshingToken } from "./refreshToken.ts";

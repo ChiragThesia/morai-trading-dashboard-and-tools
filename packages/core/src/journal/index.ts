@@ -64,6 +64,29 @@ export { makeListCalendarsUseCase } from "./application/listCalendars.ts";
 export type { ListCalendarsDeps } from "./application/listCalendars.ts";
 export { makeCloseCalendarUseCase } from "./application/closeCalendar.ts";
 export type { CloseCalendarDeps } from "./application/closeCalendar.ts";
+// Phase 5: calendar_events + orphan_fills ports + fill-pairing types (JOB-01/JRNL-01)
+export type {
+  CalendarEvent,
+  RawFill,
+  AggregatedFill,
+  CalendarLegEntry,
+  OrphanFillInput,
+  ForStoringCalendarEvent,
+  ForReadingCalendarEvents,
+  ForDeletingCalendarEvents,
+  ForReadingUnprocessedFills,
+  ForReadingCalendarLegs,
+  ForStoringOrphanFill,
+  ForResettingCalendarAmounts,
+  ForEnqueueingJob,
+} from "./application/ports.ts";
+// Phase 5: syncFills use-case factory + driver port
+export { makeSyncFillsUseCase } from "./application/syncFills.ts";
+export type { ForRunningSyncFills, SyncFillsDeps } from "./application/syncFills.ts";
+// Phase 5: rebuildJournal use-case factory + driver port
+export { makeRebuildJournalUseCase } from "./application/rebuildJournal.ts";
+export type { ForRebuildingJournal, RebuildJournalDeps } from "./application/rebuildJournal.ts";
+
 // Domain re-exports (Plan 02/03/06) — BSM engine and IV inversion
 export { bsmPrice, bsmGreeks, bsmVega } from "./domain/bsm.ts";
 export type { BsmGreeks } from "./domain/bsm.ts";

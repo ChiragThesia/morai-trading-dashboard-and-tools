@@ -17,8 +17,15 @@ import { ok, err } from "@morai/shared";
 import type { ForRefreshingToken, ForReadingTokenFreshness } from "./ports.ts";
 import type { StorageError, AuthExpiredError } from "./ports.ts";
 import type { TokenFreshnessMap } from "./ports.ts";
+import type { SchwabTokens } from "./refreshToken.ts";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const STUB_TOKENS: SchwabTokens = {
+  accessToken: "stub-access",
+  refreshToken: "stub-refresh",
+  expiresIn: 1800,
+};
 
 function makeFreshnessMap(opts: {
   traderRefreshIssuedAt?: Date;
@@ -50,8 +57,8 @@ describe("makeRefreshTokensUseCase", () => {
     const { makeRefreshTokensUseCase } = await import("./refreshTokens.ts");
     const now = new Date("2026-06-15T04:00:00Z");
 
-    const refreshTraderToken: ForRefreshingToken = async (_appId) => ok(undefined);
-    const refreshMarketToken: ForRefreshingToken = async (_appId) => ok(undefined);
+    const refreshTraderToken: ForRefreshingToken = async (_appId) => ok(STUB_TOKENS);
+    const refreshMarketToken: ForRefreshingToken = async (_appId) => ok(STUB_TOKENS);
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok(makeFreshnessMap({ now }));
 
@@ -75,7 +82,7 @@ describe("makeRefreshTokensUseCase", () => {
 
     const traderErr: AuthExpiredError = { kind: "auth-expired", appId: "trader" };
     const refreshTraderToken: ForRefreshingToken = async (_appId) => err(traderErr);
-    const refreshMarketToken: ForRefreshingToken = async (_appId) => ok(undefined);
+    const refreshMarketToken: ForRefreshingToken = async (_appId) => ok(STUB_TOKENS);
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok(makeFreshnessMap({ now }));
 
@@ -98,7 +105,7 @@ describe("makeRefreshTokensUseCase", () => {
     const now = new Date("2026-06-15T04:00:00Z");
 
     const marketErr: AuthExpiredError = { kind: "auth-expired", appId: "market" };
-    const refreshTraderToken: ForRefreshingToken = async (_appId) => ok(undefined);
+    const refreshTraderToken: ForRefreshingToken = async (_appId) => ok(STUB_TOKENS);
     const refreshMarketToken: ForRefreshingToken = async (_appId) => err(marketErr);
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok(makeFreshnessMap({ now }));
@@ -123,8 +130,8 @@ describe("makeRefreshTokensUseCase", () => {
     // 6 days and 1 minute ago — within the 1-day warning window
     const nearExpiry = new Date(now.getTime() - (6 * 24 * 60 + 1) * 60 * 1000);
 
-    const refreshTraderToken: ForRefreshingToken = async (_appId) => ok(undefined);
-    const refreshMarketToken: ForRefreshingToken = async (_appId) => ok(undefined);
+    const refreshTraderToken: ForRefreshingToken = async (_appId) => ok(STUB_TOKENS);
+    const refreshMarketToken: ForRefreshingToken = async (_appId) => ok(STUB_TOKENS);
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok(makeFreshnessMap({ traderRefreshIssuedAt: nearExpiry, now }));
 
@@ -147,8 +154,8 @@ describe("makeRefreshTokensUseCase", () => {
     // Only 1 day ago — well within the safe window
     const freshIssued = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
 
-    const refreshTraderToken: ForRefreshingToken = async (_appId) => ok(undefined);
-    const refreshMarketToken: ForRefreshingToken = async (_appId) => ok(undefined);
+    const refreshTraderToken: ForRefreshingToken = async (_appId) => ok(STUB_TOKENS);
+    const refreshMarketToken: ForRefreshingToken = async (_appId) => ok(STUB_TOKENS);
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok(makeFreshnessMap({ traderRefreshIssuedAt: freshIssued, now }));
 

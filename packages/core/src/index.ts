@@ -104,6 +104,29 @@ export type {
 } from "./brokerage/index.ts";
 // BRK-01: source selector (Schwab primary / CBOE fallback)
 export { selectChainSource } from "./brokerage/index.ts";
+// Phase 5: journal ports for fill-pairing + calendar events + orphan fills (JOB-01/JRNL-01)
+export type {
+  CalendarEvent,
+  RawFill,
+  AggregatedFill,
+  CalendarLegEntry,
+  OrphanFillInput,
+  ForStoringCalendarEvent,
+  ForReadingCalendarEvents,
+  ForDeletingCalendarEvents,
+  ForReadingUnprocessedFills,
+  ForReadingCalendarLegs,
+  ForStoringOrphanFill,
+  ForResettingCalendarAmounts,
+  ForEnqueueingJob,
+} from "./journal/index.ts";
+export { makeSyncFillsUseCase } from "./journal/index.ts";
+export type { ForRunningSyncFills, SyncFillsDeps } from "./journal/index.ts";
+export { makeRebuildJournalUseCase } from "./journal/index.ts";
+export type { ForRebuildingJournal, RebuildJournalDeps } from "./journal/index.ts";
+// Phase 5: refreshTokens use-case + result type (JOB-02, D-13/D-14)
+export { makeRefreshTokensUseCase } from "./brokerage/index.ts";
+export type { RefreshTokensResult, AppRefreshOutcome, RefreshTokensDeps } from "./brokerage/index.ts";
 // BRK-02: trader data use-cases (positions, transactions, orders)
 export { makeGetPositionsUseCase } from "./brokerage/index.ts";
 export type { ForGettingPositions, GetPositionsDeps } from "./brokerage/index.ts";

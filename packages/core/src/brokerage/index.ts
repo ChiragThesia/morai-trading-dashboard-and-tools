@@ -35,6 +35,17 @@ export type {
   ForRefreshingToken,
 } from "./application/refreshToken.ts";
 
+// Phase 5: ForRefreshingToken re-exported from ports (for consumers of brokerage index)
+export type { ForRefreshingToken as ForRefreshingBrokerageToken } from "./application/ports.ts";
+
+// Phase 5: refreshTokens use-case (JOB-02, D-13/D-14)
+export { makeRefreshTokensUseCase } from "./application/refreshTokens.ts";
+export type {
+  RefreshTokensResult,
+  AppRefreshOutcome,
+  RefreshTokensDeps,
+} from "./application/refreshTokens.ts";
+
 // BRK-01: Schwab-primary / CBOE-fallback chain source selector (D-07/D-08)
 export { selectChainSource } from "./application/selectChainSource.ts";
 

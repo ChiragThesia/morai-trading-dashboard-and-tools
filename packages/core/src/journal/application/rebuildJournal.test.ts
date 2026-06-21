@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { ok, err } from "@morai/shared";
+import type { Result } from "@morai/shared";
 import type {
   ForDeletingCalendarEvents,
   ForResettingCalendarAmounts,
@@ -107,9 +108,9 @@ describe("makeRebuildJournalUseCase", () => {
       return ok(undefined);
     };
     const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
-    const syncFillsForCalendar = async (id: string) => {
+    const syncFillsForCalendar = async (id: string): Promise<Result<void, StorageError>> => {
       syncedCalendarId = id;
-      return ok<void, StorageError>(undefined);
+      return ok(undefined);
     };
 
     const rebuildJournal = makeRebuildJournalUseCase({
