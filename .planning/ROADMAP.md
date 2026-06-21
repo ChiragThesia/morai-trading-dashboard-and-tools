@@ -211,7 +211,33 @@ from broker transactions.
   4. `sync-fills` pairs Schwab fill transactions into calendar OPEN/CLOSE events with correct net debit, credit, and P&L; paired events are idempotent on re-run (re-running against the same fill set produces no duplicate rows).
   5. `rebuild-journal` (manual trigger via `trigger_job` MCP tool or API) reconstructs a calendar's snapshot history from fills; the resulting `calendar_snapshots` rows match those written by the live snapshot job for the same period.
 
-**Plans**: TBD
+**Plans**: 8 plans (TDD red→green; MVP vertical slices; 6 waves)
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — Docs-first + schema.ts (calendar_events, orphan_fills, entry_thesis) + new ports/domain types + 8 Wave-0 failing-test stubs (JOB-01, JRNL-01)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 05-02-PLAN.md — [BLOCKING] drizzle generate + live migrate (0004_calendar_events.sql) (JRNL-01)
+- [ ] 05-03-PLAN.md — TDD fill-pairing domain: classifyFill/aggregatePartialFills/computePnl/detectRoll/hashFillIds (JRNL-01)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 05-04-PLAN.md — JobQueue port + pg-boss adapter + in-memory twin + dedupe-key + schedule.ts (7 jobs) + job-runs TRACKED_JOBS + /api/status (JOB-01, SC1)
+
+**Wave 4** *(blocked on Wave 3; 05-05 ‖ 05-06)*
+
+- [ ] 05-05-PLAN.md — refresh-tokens slice: per-app independence (allSettled) + isNearExpiry warning + no-RTH handler + status flag (JOB-02, SC2)
+- [ ] 05-06-PLAN.md — compute-bsm-greeks drain SC3 contract (testcontainers): zero pending rows, idempotent (JOB-03, SC3)
+
+**Wave 5** *(blocked on Waves 2/3/4)*
+
+- [ ] 05-07-PLAN.md — sync-fills slice: pairing use-case (OPEN/CLOSE/ROLL + per-leg P&L + orphan parking) + calendar-events/orphan-fills repos + twins + contracts + RTH handler (JRNL-01, SC4)
+
+**Wave 6** *(blocked on Waves 4/5)*
+
+- [ ] 05-08-PLAN.md — rebuild-journal (delete-then-reinsert, SC5 reconciliation) + trigger_job HTTP route + MCP tool sharing one contracts schema (JRNL-01, SC5, MCP-02)
 
 ### Phase 6: Derived Analytics
 
@@ -289,5 +315,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
-| 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
+| 5. Jobs, Fill Rebuild & Integrity | 0/8 | Planned | - |
 | 6. Derived Analytics | 0/TBD | Not started | - |
