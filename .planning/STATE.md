@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+current_phase: 05
+current_phase_name: jobs-fill-rebuild-integrity
 status: Phase 05 gap-round in progress
-stopped_at: Completed 05-11-PLAN.md
-last_updated: "2026-06-21T22:55:00.000Z"
-last_activity: "2026-06-21 -- Phase 05 Plan 11 (gap round Wave 2) completed: B1 prior-OPEN realized-P&L lookup + B5 per-fill UNKNOWN orphan parking + C1 injected id/hasher (no crypto in core) + A2 calendar-scoped sync (CR-04); 715/715 workspace tests GREEN"
+stopped_at: Completed 05-12-PLAN.md
+last_updated: "2026-06-22T04:10:00.000Z"
+last_activity: 2026-06-22
+last_activity_desc: Phase 05 Plan 12 completed (A1 fills repo postgres+memory twin SQL-contract-tested, A3 calendar-amounts recompute, A4 sync-transactions fills source; 744/744 workspace tests GREEN)
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 39
-  completed_plans: 41
-  percent: 72
+  completed_phases: 4
+  total_plans: 44
+  completed_plans: 44
+  percent: 67
 ---
 
 # Project State
@@ -26,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 05 (jobs-fill-rebuild-integrity) — GAP ROUND (plans 05-09..05-13 close SC4/SC5 review findings)
-Plan: 05-11 of gap round DONE (Wave 2 — B1/B5/C1 use-case half + A2/CR-04 scoped sync closed). Plans 01-10 complete; Plan 02 migration pending live DB apply.
+Plan: 05-12 of gap round DONE (Wave 2 — A1 fills repo + A3 recompute amounts + A4 sync-transactions source, all SQL-contract-tested). 05-11 DONE. Plans 01-10 complete; Plan 02 migration pending live DB apply.
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Plan 05-12 / 05-13 (gap round Wave 3 — fills source job + real adapters wiring: NewId/HashFillIds/ForReadingUnprocessedFillsForCalendar implementations)
-Last activity: 2026-06-21 -- Phase 05 Plan 11 completed (B1 prior-OPEN lookup, B5 per-fill orphan parking, C1 no-crypto core, A2 scoped sync; 715/715 workspace tests GREEN)
+Next: Plan 05-13 (gap round Wave 3 — real adapters wiring: replace worker stubs with the fills repo/source, NewId/HashFillIds composition-root injection).
+Last activity: 2026-06-22 -- Phase 05 Plan 12 completed (A1 fills repo postgres+memory twin SQL-contract-tested, A3 calendar-amounts recompute, A4 sync-transactions fills source; 744/744 workspace tests GREEN)
 
 Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 

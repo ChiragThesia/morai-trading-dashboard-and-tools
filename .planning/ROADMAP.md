@@ -211,7 +211,7 @@ from broker transactions.
   4. `sync-fills` pairs Schwab fill transactions into calendar OPEN/CLOSE events with correct net debit, credit, and P&L; paired events are idempotent on re-run (re-running against the same fill set produces no duplicate rows).
   5. `rebuild-journal` (manual trigger via `trigger_job` MCP tool or API) reconstructs a calendar's snapshot history from fills; the resulting `calendar_snapshots` rows match those written by the live snapshot job for the same period.
 
-**Plans**: 13 plans (8 base + 5 gap closure; TDD red→green; MVP vertical slices; 9 waves)
+**Plans**: 12/13 plans executed
 Plans:
 **Wave 1**
 
@@ -249,7 +249,7 @@ Plans:
 *Wave 8 (blocked on 05-09; parallel; zero file overlap)*
 
 - [x] 05-11-PLAN.md — sync-fills use-case: B1 realized-P&L lookup, B5 orphan parking, C1 injection, A2 calendar-scoped sync / CR-04 (JRNL-01) (completed 2026-06-21)
-- [ ] 05-12-PLAN.md — Data path: A1 fills repo + twin (testcontainers), A3 recompute amounts, A4 fills source (sync-transactions from Schwab BrokerTransaction) (JRNL-01)
+- [x] 05-12-PLAN.md — Data path: A1 fills repo + twin (testcontainers), A3 recompute amounts, A4 fills source (sync-transactions from Schwab BrokerTransaction) (JRNL-01)
 
 *Wave 9 (blocked on 05-10/05-11/05-12)*
 
@@ -333,5 +333,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
-| 5. Jobs, Fill Rebuild & Integrity | 7/8 | In Progress|  |
+| 5. Jobs, Fill Rebuild & Integrity | 12/13 | In Progress|  |
 | 6. Derived Analytics | 0/TBD | Not started | - |
