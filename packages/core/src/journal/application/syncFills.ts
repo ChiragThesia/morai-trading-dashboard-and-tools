@@ -23,11 +23,10 @@
 
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import {
   classifyFill,
   aggregatePartialFills,
-  computePnl,
   detectRoll,
   hashFillIds,
 } from "../domain/fill-pairing.ts";
@@ -70,8 +69,10 @@ type ClassifiedFill = AggregatedFill & {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function classifiedSide(positionEffect: "OPENING" | "CLOSING" | "UNKNOWN"): "buy" | "sell" {
-  return positionEffect === "CLOSING" ? "sell" : "buy";
+// Interim sha256 hasher passed to the pure-domain hashFillIds. Plan 05-11 replaces this
+// with an injected `deps.hashFillIds` port so this use-case imports no crypto builtin (C1).
+function sha256Hex(input: string): string {
+  return createHash("sha256").update(input).digest("hex");
 }
 
 // ─── Use-case factory ─────────────────────────────────────────────────────────
@@ -151,18 +152,34 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
     const classified: ClassifiedFill[] = [];
 
     for (const { fills: bucketFills, leg } of buckets.values()) {
-      const rawAggregated = aggregatePartialFills(bucketFills);
-      for (const agg of rawAggregated) {
-        const enriched: AggregatedFill = {
-          ...agg,
-          calendarId: leg.calendarId,
-          legOccSymbol: leg.legOccSymbol,
-          positionEffect: leg.positionEffect,
-        };
-        const side = classifiedSide(enriched.positionEffect);
-        const classification = classifyFill(side, enriched.positionEffect);
-        classified.push({ ...enriched, classification });
+      const aggResult = aggregatePartialFills(
+        bucketFills,
+        leg.calendarId,
+        leg.positionEffect,
+      );
+      if (!aggResult.ok) {
+        // Malformed bucket (empty / non-positive qty) — park its fills as orphans (D-05),
+        // never silently drop. Full per-fill parking with real fields lands in 05-11 (B5).
+        for (const fill of bucketFills) {
+          const orphanResult = await deps.storeOrphanFill({
+            fillId: fill.id,
+            occSymbol: fill.occSymbol,
+            side: fill.side,
+            qty: fill.qty,
+            price: fill.price,
+            filledAt: fill.filledAt,
+            reason: `aggregation error: ${aggResult.error.message}`,
+          });
+          if (!orphanResult.ok) return err(orphanResult.error);
+        }
+        continue;
       }
+      const enriched: AggregatedFill = {
+        ...aggResult.value,
+        legOccSymbol: leg.legOccSymbol,
+      };
+      const classification = classifyFill(enriched.positionEffect);
+      classified.push({ ...enriched, classification });
     }
 
     // Step 6: ROLL detection
@@ -221,14 +238,16 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
 
             // ONE ROLL event referencing both legs (D-03)
             const allFillIds = [...cf.fillIds, ...paired.fillIds];
-            const fillIdsHash = hashFillIds(allFillIds);
+            const fillIdsHash = hashFillIds(allFillIds, sha256Hex);
 
-            // P&L: close leg provides credit; open leg provides new debit (D-08/D-09)
+            // P&L: close leg provides credit; open leg provides new debit (D-08/D-09).
+            // realizedPnl reflects ONLY the closed leg:
+            //   closeCredit − originalOpenDebit − feesOnClose.
+            // The prior-OPEN lookup that supplies originalOpenDebit is wired in 05-11; until
+            // then realizedPnl is null (locked decision 2: never report a wrong number).
             const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
             const openDebit = paired.avgPrice * paired.sumQty;
-            const totalFees =
-              cf.totalCommission + cf.totalFees + paired.totalCommission + paired.totalFees;
-            const realizedPnl = computePnl(openDebit, closeCredit, totalFees);
+            const realizedPnl: number | null = null;
 
             const legBreakdown = JSON.stringify({
               closing: {
@@ -273,7 +292,7 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
       }
 
       // Emit OPEN or CLOSE event
-      const fillIdsHash = hashFillIds(cf.fillIds);
+      const fillIdsHash = hashFillIds(cf.fillIds, sha256Hex);
       const isClose = cf.classification === "CLOSE";
 
       // D-08: OPEN debit = positive; CLOSE credit = negative
@@ -281,10 +300,11 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
         ? -(cf.avgPrice * cf.sumQty) // credit received = negative
         : cf.avgPrice * cf.sumQty;   // debit paid = positive
 
-      // D-09: realizedPnl populated on CLOSE (NULL on OPEN)
-      const realizedPnl = isClose
-        ? computePnl(0, cf.avgPrice * cf.sumQty, cf.totalCommission + cf.totalFees)
-        : null;
+      // D-09: realizedPnl = closeCredit − originalOpenDebit − feesOnClose on CLOSE.
+      // The prior-OPEN lookup that supplies originalOpenDebit is wired in 05-11 (via the
+      // ForReadingCalendarEvents + computeRealizedPnl path); until then realizedPnl is null
+      // (locked decision 2: never report a wrong number when originalOpenDebit is unknown).
+      const realizedPnl: number | null = null;
 
       // D-09 hard requirement: legBreakdown on CLOSE/ROLL
       const legBreakdown = isClose

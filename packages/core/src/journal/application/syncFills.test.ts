@@ -284,7 +284,7 @@ describe("makeSyncFillsUseCase", () => {
     expect(event?.qty).toBe(5);
   });
 
-  it("CLOSE event: realized_pnl populated; legBreakdown populated (D-09 hard requirement)", async () => {
+  it("CLOSE event with no prior OPEN: realized_pnl null (WR-01); legBreakdown populated (D-09)", async () => {
     const { makeSyncFillsUseCase } = await import("./syncFills.ts");
 
     const storedEvents: CalendarEvent[] = [];
@@ -318,10 +318,11 @@ describe("makeSyncFillsUseCase", () => {
     expect(storedEvents).toHaveLength(1);
     const closeEvent = storedEvents[0];
     expect(closeEvent?.eventType).toBe("CLOSE");
-    // D-09: realizedPnl must be populated on CLOSE (not null)
-    expect(closeEvent?.realizedPnl).not.toBeNull();
-    expect(typeof closeEvent?.realizedPnl).toBe("number");
-    // D-09 hard requirement: legBreakdown must be populated
+    // WR-01 (locked decision 2): with no prior OPEN event for the leg, originalOpenDebit is
+    // unknown, so realizedPnl is null — never a wrong number. The prior-OPEN lookup that
+    // populates it lands in 05-11; this asserts the gap-round corrected interim behavior.
+    expect(closeEvent?.realizedPnl).toBeNull();
+    // D-09 hard requirement: legBreakdown must still be populated on CLOSE
     expect(closeEvent?.legBreakdown).not.toBeNull();
     expect(closeEvent?.legBreakdown).toBeTruthy();
   });
