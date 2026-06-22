@@ -161,6 +161,8 @@ export type { ForGettingOrders, GetOrdersDeps } from "./brokerage/index.ts";
 // ─── Analytics bounded context (Phase 6) ──────────────────────────────────────
 // StorageError is already exported above (journal); analytics shares the same shape, so it is
 // NOT re-exported here to avoid a duplicate-export. Analytics row types + ports follow.
+// Analytics domain functions (06-03)
+export { interpolateRiskReversal, percentileRank } from "./analytics/index.ts";
 export type {
   SmileQuote,
   CalendarSnapshotForCycle,
