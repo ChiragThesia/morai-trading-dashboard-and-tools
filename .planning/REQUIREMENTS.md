@@ -62,9 +62,9 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 ### Derived Analytics
 
-- [ ] **ANLY-01**: A `compute-analytics` job writes skew observations (append-only, time-leading).
-- [ ] **ANLY-02**: The same job writes term-structure observations (back_iv − front_iv forward-vol signal).
-- [ ] **ANLY-03**: `GET /api/analytics/skew` and `GET /api/analytics/term-structure` return current + historical series.
+- [x] **ANLY-01**: A `compute-analytics` job writes skew observations (append-only, time-leading).
+- [x] **ANLY-02**: The same job writes term-structure observations (back_iv − front_iv forward-vol signal).
+- [x] **ANLY-03**: `GET /api/analytics/skew` and `GET /api/analytics/term-structure` return current + historical series.
 
 ### Jobs & Integrity
 
@@ -76,7 +76,7 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 ### Claude Code Surface
 
 - [x] **MCP-01**: MCP tools `get_status`, `list_calendars`, `get_journal`, `get_live_greeks`, `get_term_structure`, `get_skew`, `trigger_job` mirror their HTTP routes, sharing one Zod schema source from `contracts`.
-- [ ] **MCP-02**: Every new use-case ships both adapters (HTTP route + MCP tool) in the same change.
+- [x] **MCP-02**: Every new use-case ships both adapters (HTTP route + MCP tool) in the same change.
 
 ## v2 Requirements
 
@@ -127,7 +127,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | DEPLOY-01 | Phase 1 | Pending |
 | DEPLOY-02 | Phase 1 | Pending |
 | DEPLOY-03 | Phase 1 | Pending |
-| MCP-02 | Phase 1 | Pending |
+| MCP-02 | Phase 1 | Complete |
 | MKT-01 | Phase 2 | Complete |
 | MKT-02 | Phase 2 | Complete |
 | MKT-03 | Phase 2 | Complete |
@@ -150,9 +150,9 @@ Explicitly excluded. Documented to prevent scope creep.
 | JOB-02 | Phase 5 | Complete |
 | JOB-03 | Phase 5 | Complete |
 | JRNL-01 | Phase 5 | Complete |
-| ANLY-01 | Phase 6 | Pending |
-| ANLY-02 | Phase 6 | Pending |
-| ANLY-03 | Phase 6 | Pending |
+| ANLY-01 | Phase 6 | Complete |
+| ANLY-02 | Phase 6 | Complete |
+| ANLY-03 | Phase 6 | Complete |
 
 **Coverage:**
 
