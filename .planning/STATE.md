@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 05 complete
-stopped_at: Completed 05-08-PLAN.md
-last_updated: "2026-06-21T23:50:00.000Z"
-last_activity: "2026-06-21 -- Phase 05 Plan 08 completed (JRNL-01/SC5/MCP-02: rebuild-journal + trigger_job HTTP + MCP tool)"
+status: Phase 05 gap-round in progress
+stopped_at: Completed 05-09-PLAN.md
+last_updated: "2026-06-21T22:25:00.000Z"
+last_activity: "2026-06-21 -- Phase 05 Plan 09 (gap round Wave 1) completed: B1-B4 fill-pairing economics + C1 hexagon purity + data-path port contracts + D-08/D-09 docs"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 05 (jobs-fill-rebuild-integrity) — COMPLETE
-Plan: 8 of 8 — ALL DONE (Plans 01-08 complete; Plan 02 migration pending live DB apply)
+Phase: 05 (jobs-fill-rebuild-integrity) — GAP ROUND (plans 05-09..05-13 close SC4/SC5 review findings)
+Plan: 05-09 of gap round DONE (Wave 1 interface anchor). Plans 01-08 complete; Plan 02 migration pending live DB apply.
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Phase 06
-Last activity: 2026-06-21 -- Phase 05 Plan 06 completed (SC3/D-15 drain-to-zero contract: 5 testcontainers tests GREEN, JOB-03 proven)
+Next: Plan 05-10/05-11 (gap round Wave 2 — syncFills prior-OPEN lookup, C1 use-case half, A2 scoped sync)
+Last activity: 2026-06-21 -- Phase 05 Plan 09 completed (B1-B4 fill-pairing economics + C1 hexagon purity; 699/699 workspace tests GREEN)
 
 Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 
@@ -161,6 +161,13 @@ Recent decisions affecting current work:
 - [Phase 5 P08]: makeEnqueueJobUseCase exported from @morai/core for first time (server needs it); dist/index.d.ts manually patched (tsc incremental cache did not regenerate barrel)
 - [Phase ?]: parseSchwabSymbol not imported in core (adapters boundary): fill.occSymbol passed directly to readCalendarLegs; symbol validation is adapter concern at ingestion
 - [Phase ?]: readUnprocessedFills/readCalendarLegs/resetCalendarAmounts stubbed as safe no-ops in main.ts; 05-08 wires real fills repo
+- [Phase 5 P09]: realizedPnl = closeCredit − originalOpenDebit − feesOnClose (locked decision 2); null when no prior OPEN exists — never a wrong number; ROLL new-leg premium is cost basis not realized P&L
+- [Phase 5 P09]: detectRoll delegates to shared parseOccSymbol (OSI 21-char padded canonical form); requires same root+strike+type + DIFFERENT expiry (WR-02)
+- [Phase 5 P09]: aggregatePartialFills returns Result, takes caller calendarId/positionEffect, errors on empty/sumQty<=0 (no avgPrice 0 placeholder) (WR-03)
+- [Phase 5 P09]: classifyFill drops dead side param — positionEffect is authoritative (WR-06)
+- [Phase 5 P09]: C1 fix — fill-pairing.ts imports no node crypto; hashFillIds(ids, hasher) delegates sha256 to an injected HashFillIds port; adapter supplies sha256 hex (05-13)
+- [Phase 5 P09]: 05-09 owns ALL fills data-path ports.ts additions (ForWritingFills/ForRecomputingCalendarAmounts/ForReadingUnprocessedFillsForCalendar/NewId/HashFillIds) — interface anchor for 05-11/05-12/05-13
+- [Phase 5 P09]: syncFills.ts realizedPnl=null interim (prior-OPEN lookup + computeRealizedPnl call + crypto removal are 05-11 scope)
 
 ### Pending Todos
 

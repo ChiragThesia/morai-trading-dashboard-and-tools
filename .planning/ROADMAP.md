@@ -243,7 +243,7 @@ Plans:
 
 *Wave 7 (parallel; zero file overlap)*
 
-- [ ] 05-09-PLAN.md — Docs-first D-08/D-09 realized-P&L redefinition + fill-pairing domain fixes (B1-B4) + C1 boundary + data-path port contracts anchor (JRNL-01)
+- [x] 05-09-PLAN.md — Docs-first D-08/D-09 realized-P&L redefinition + fill-pairing domain fixes (B1-B4) + C1 boundary + data-path port contracts anchor (JRNL-01) (completed 2026-06-21)
 - [ ] 05-10-PLAN.md — Criticals/infra: CR-02 token refresh mapping, CR-03 job-runs independent success/error, WR-04 rebuild calendarId boundary, WR-05 twin dedup, IN-01 (JOB-01, MCP-02)
 
 *Wave 8 (blocked on 05-09; parallel; zero file overlap)*
