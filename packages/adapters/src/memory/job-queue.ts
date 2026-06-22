@@ -42,10 +42,11 @@ export function makeMemoryJobQueue(): MemoryJobQueue {
     dedupeKey: string | null,
   ): Promise<Result<string | null, StorageError>> => {
     if (dedupeKey !== null) {
-      // Dedup: return existing jobId if key already active
+      // WR-05: dedup hit → ok(null), mirroring pg-boss singletonKey collisions
+      // (the real adapter returns ok(null) when the key is already active).
       const existing = dedupeStore.get(dedupeKey);
       if (existing !== undefined) {
-        return ok(existing.jobId);
+        return ok(null);
       }
       const jobId = randomUUID();
       dedupeStore.set(dedupeKey, { jobId, name, payload, dedupeKey });

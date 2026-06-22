@@ -48,5 +48,5 @@ export type {
 } from "./brokerage.ts";
 
 // Jobs contracts (MCP-02: shared by POST /api/jobs/:name/trigger and trigger_job MCP tool)
-export { TRIGGERABLE_JOBS, triggerJobPayload, triggerJobResponse } from "./jobs.ts";
+export { TRIGGERABLE_JOBS, triggerJobPayload, triggerJobBodyFor, triggerJobResponse } from "./jobs.ts";
 export type { TriggerableJob, TriggerJobPayload, TriggerJobResponse } from "./jobs.ts";

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { TRIGGERABLE_JOBS, triggerJobPayload } from "@morai/contracts";
+import { TRIGGERABLE_JOBS, triggerJobBodyFor } from "@morai/contracts";
 import type { StorageError } from "@morai/core";
 import type { Result } from "@morai/shared";
 
@@ -35,12 +35,19 @@ export function jobsRoutes(enqueueJob: ForTriggeringJob): Hono {
   router.post(
     "/jobs/:name/trigger",
     zValidator("param", z.object({ name: z.enum(TRIGGERABLE_JOBS) })),
-    zValidator("json", triggerJobPayload),
     async (c) => {
       const { name } = c.req.valid("param");
-      const body = c.req.valid("json");
 
-      const result = await enqueueJob(name, body);
+      // WR-04: validate the body against the per-job schema (rebuild-journal ⇒
+      // calendarId required). Parse manually here because the schema depends on
+      // the validated name. A failed parse → 400, and enqueueJob is never called.
+      const rawBody: unknown = await c.req.json().catch(() => undefined);
+      const parsed = triggerJobBodyFor(name).safeParse(rawBody);
+      if (!parsed.success) {
+        return c.json({ error: "invalid request body" }, 400);
+      }
+
+      const result = await enqueueJob(name, parsed.data);
       if (!result.ok) {
         return c.json({ error: result.error.message }, 422);
       }

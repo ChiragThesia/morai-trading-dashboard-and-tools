@@ -23,7 +23,6 @@ import {
   makeSchwabChainAdapter,
   makeSchwabOAuthClient,
   makeFredRateAdapter,
-  makePgBossJobQueue,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -161,12 +160,6 @@ const snapshotCalendarsUseCase = makeSnapshotCalendarsUseCase({
   persistSnapshot: calendarSnapshotsRepo.persistSnapshot,
   now: () => new Date(),
 });
-
-// JOB-01: pg-boss JobQueue adapter (makePgBossJobQueue wraps boss.send with singletonKey).
-// Wired here in the composition root; injected into enqueueJob use-case and trigger_job adapters.
-const pgBossJobQueue = makePgBossJobQueue(boss);
-// Suppress unused variable warning — pgBossJobQueue wired into trigger_job (plan 05-08)
-void pgBossJobQueue;
 
 // Build handlers (thin adapters — zero business logic)
 // D-07/D-08: Schwab-primary handler replaces the CBOE-only handler.

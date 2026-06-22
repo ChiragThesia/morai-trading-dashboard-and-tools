@@ -22,7 +22,7 @@ describe("makeMemoryJobQueue", () => {
     }
   });
 
-  it("second enqueue with SAME dedupeKey is a no-op (returns existing jobId)", async () => {
+  it("WR-05: second enqueue with SAME dedupeKey returns ok(null) (mirrors pg-boss singletonKey)", async () => {
     const q = makeMemoryJobQueue();
     const key = "sync-fills:2026-06-21T14:10:00.000Z";
     const first = await q.enqueue("sync-fills", {}, key);
@@ -31,8 +31,11 @@ describe("makeMemoryJobQueue", () => {
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (first.ok && second.ok) {
-      // Same jobId returned — no duplicate
-      expect(second.value).toBe(first.value);
+      // First enqueue returns a jobId string.
+      expect(typeof first.value).toBe("string");
+      // Dedup hit returns null — the real pg-boss adapter returns ok(null) on
+      // a singletonKey collision; the twin must match that contract exactly.
+      expect(second.value).toBeNull();
     }
   });
 
