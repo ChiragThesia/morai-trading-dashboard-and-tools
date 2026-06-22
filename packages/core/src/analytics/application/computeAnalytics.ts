@@ -1,8 +1,11 @@
 /**
  * makeComputeAnalyticsUseCase — the compute-analytics use-case.
  *
- * 06-04 implements the TERM-STRUCTURE half; 06-05 adds the skew/RR half (readSmile/writeSkew/
- * writeRr/readRrHistory are accepted now but only the term-structure path is exercised here).
+ * 06-04 implemented the TERM-STRUCTURE half; 06-05 adds the skew/RR half: read the per-strike
+ * smile, write the full smile to skew_observations (R1), then per (underlying, expiration) compute
+ * the 25Δ risk-reversal (interpolateRiskReversal — null when unbracketable, R2) + its trailing-
+ * window rank (percentileRank over readRrHistory). The use-case calls the 06-03 domain functions;
+ * it does NOT reimplement interpolation or rank.
  *
  * Term-structure algorithm (SPEC R3):
  *   1. Read calendar_snapshots for the current cycle (ForReadingCalendarSnapshotsForCycle,
@@ -26,9 +29,14 @@ import type {
   ForWritingRiskReversalObservations,
   ForWritingTermStructureObservations,
   ForReadingRiskReversalHistory,
+  SmileQuote,
+  SkewObservationRow,
+  RiskReversalObservationRow,
   TermStructureObservationRow,
   StorageError,
 } from "./ports.ts";
+import { interpolateRiskReversal } from "../domain/risk-reversal.ts";
+import { percentileRank } from "../domain/percentile-rank.ts";
 
 export type ComputeAnalyticsDeps = {
   /** Skew/RR-half source — read the per-strike smile (exercised in 06-05). */
@@ -77,7 +85,64 @@ export function makeComputeAnalyticsUseCase(
     const writeResult = await deps.writeTerm(termRows);
     if (!writeResult.ok) return err(writeResult.error);
 
-    // Skew/RR half (06-05) intentionally not run here — this is the term-structure slice.
+    // ── Skew / risk-reversal half (SPEC R1 + R2) ───────────────────────────────
+    const smileResult = await deps.readSmile(cycle);
+    if (!smileResult.ok) return err(smileResult.error);
+    const smile = smileResult.value;
+
+    // R1: write the full per-strike smile — one row per (underlying, expiration, strike).
+    const skewRows: SkewObservationRow[] = smile.map((q) => ({
+      snapshotTime: cycle,
+      underlying: q.underlying,
+      expiration: q.expiration,
+      strike: q.strike,
+      iv: q.iv,
+      delta: q.delta,
+      moneyness: q.moneyness,
+    }));
+    const skewWrite = await deps.writeSkew(skewRows);
+    if (!skewWrite.ok) return err(skewWrite.error);
+
+    // R2: per (underlying, expiration) group → 25Δ risk-reversal + trailing-window rank.
+    const groups = new Map<string, { underlying: string; expiration: string; points: SmileQuote[] }>();
+    for (const q of smile) {
+      const key = `${q.underlying}|${q.expiration}`;
+      const existing = groups.get(key);
+      if (existing === undefined) {
+        groups.set(key, { underlying: q.underlying, expiration: q.expiration, points: [q] });
+      } else {
+        existing.points.push(q);
+      }
+    }
+
+    const rrRows: RiskReversalObservationRow[] = [];
+    for (const group of groups.values()) {
+      // R2 prohibition: null when ±25Δ cannot be bracketed — never fabricated.
+      const riskReversal = interpolateRiskReversal(group.points);
+
+      let rrRank: number | null = null;
+      if (riskReversal !== null) {
+        const historyResult = await deps.readRrHistory({
+          underlying: group.underlying,
+          expiration: group.expiration,
+          beforeOrAt: cycle,
+        });
+        if (!historyResult.ok) return err(historyResult.error);
+        rrRank = percentileRank(riskReversal, historyResult.value);
+      }
+
+      rrRows.push({
+        snapshotTime: cycle,
+        underlying: group.underlying,
+        expiration: group.expiration,
+        riskReversal,
+        rrRank,
+      });
+    }
+
+    const rrWrite = await deps.writeRr(rrRows);
+    if (!rrWrite.ok) return err(rrWrite.error);
+
     return ok(undefined);
   };
 }

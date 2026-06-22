@@ -17,6 +17,9 @@ export type {
   GetTermStructureDeps,
   ForRunningGetTermStructure,
 } from "./application/getTermStructure.ts";
+// Use-case (06-05: skew read forwarder over the headline risk-reversal series)
+export { makeGetSkewUseCase } from "./application/getSkew.ts";
+export type { GetSkewDeps, ForRunningGetSkew } from "./application/getSkew.ts";
 export type {
   StorageError,
   SmileQuote,

@@ -167,12 +167,15 @@ export { interpolateRiskReversal, percentileRank } from "./analytics/index.ts";
 export {
   makeComputeAnalyticsUseCase,
   makeGetTermStructureUseCase,
+  makeGetSkewUseCase,
 } from "./analytics/index.ts";
 export type {
   ComputeAnalyticsDeps,
   ForRunningComputeAnalytics,
   GetTermStructureDeps,
   ForRunningGetTermStructure,
+  GetSkewDeps,
+  ForRunningGetSkew,
 } from "./analytics/index.ts";
 export type {
   SmileQuote,
