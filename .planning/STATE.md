@@ -6,14 +6,14 @@ current_phase: 05
 current_phase_name: jobs-fill-rebuild-integrity
 status: Phase 05 gap-round-2 in progress (CR-A1/WR-A3/IN-A1 closed)
 stopped_at: Completed 05-14-PLAN.md
-last_updated: "2026-06-22T09:05:00.000Z"
+last_updated: "2026-06-22T14:31:58.475Z"
 last_activity: 2026-06-22
-last_activity_desc: Phase 05 Plan 14 completed (round-2 gaps — CR-A1 MCP trigger_job parity rejects rebuild-journal without calendarId before enqueue; WR-A3 hexToUuid total nibble mapping kills fill-id collision; IN-A1 extractLastError direct narrow; 669 passed / 92 skipped workspace tests GREEN)
+last_activity_desc: Phase 05 Plan 13 completed (A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute; SC4 realizedPnl=2.0 and SC5 reconciliation proven end-to-end; 755/755 workspace tests GREEN)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 45
-  completed_plans: 45
+  total_plans: 47
+  completed_plans: 47
   percent: 67
 ---
 
@@ -82,6 +82,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 05-jobs-fill-rebuild-integrity P08 | 25 | 2 tasks | 12 files |
 | Phase 05-jobs-fill-rebuild-integrity P10 | 10 | 2 tasks | 12 files |
 | Phase 05-jobs-fill-rebuild-integrity P11 | 30 | 2 tasks | 5 files |
+| Phase 05 P15 | 33min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -185,6 +186,8 @@ Recent decisions affecting current work:
 - [Phase 5 P14]: CR-A1 — MCP trigger_job now routes through triggerJobBodyFor(name) (same per-job refinement as the HTTP route, architecture-boundaries §9); rebuild-journal without calendarId returns error content and never calls enqueueJob (closes the agent-driven queue-flood path WR-04 missed); inputSchema advertised shape unchanged (MCP-02)
 - [Phase 5 P14]: WR-A3 — hexToUuid is now a contiguous TOTAL nibble mapping; the v5 version/variant rewrite (which skipped input nibble 12) is removed because fills.id is a plain Postgres uuid; two (activityId,legIndex) keys differing only at nibble 12 no longer collide on the id PK (onConflictDoNothing no longer silently drops a real fill); hexToUuid exported for direct testing
 - [Phase 5 P14]: IN-A1 — extractLastError uses a direct `in`+typeof narrow instead of an Object.entries scan for the single known 'message' key (behavior-preserving)
+- [Phase 05]: 05-15: WR-A2 rebuild needs ForResettingFillsProcessedForCalendar — deleting events un-marks their fills so the scoped re-pair re-reads them (delete scope == sync scope)
+- [Phase 05]: 05-15: ROLL split persisted as dedicated columns read by eventType-summing recompute, not re-parsed from legBreakdown JSON
 
 ### Pending Todos
 
@@ -208,6 +211,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-22T09:05:00.000Z
+Last session: 2026-06-22T14:31:31.190Z
 Stopped at: Completed 05-14-PLAN.md (gap round 2, Wave 1 — CR-A1/WR-A3/IN-A1)
 Resume file: None
