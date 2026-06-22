@@ -4,10 +4,10 @@
  * Extracts all pg-boss createQueue / schedule / work calls from main.ts into a single
  * exported function. main.ts imports and calls registerAllJobs; inline blocks removed.
  *
- * Registers all 7 queues:
+ * Registers all 8 queues:
  *   fetch-schwab-chain, fetch-rates, compute-bsm-greeks, snapshot-calendars (no cron — D-03),
- *   sync-fills (every 10 min RTH), refresh-tokens (04:00 ET daily),
- *   rebuild-journal (no cron — on-demand only)
+ *   sync-transactions (every 10 min RTH, +5 min ahead of sync-fills), sync-fills (every 10 min RTH),
+ *   refresh-tokens (04:00 ET daily), rebuild-journal (no cron — on-demand only)
  *
  * CRITICAL (RESEARCH Pitfall 2):
  *   snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
@@ -45,6 +45,7 @@ export type AllHandlers = {
   readonly fetchRates: PgBossHandler;
   readonly computeBsmGreeks: PgBossHandler;
   readonly snapshotCalendars: PgBossHandler;
+  readonly syncTransactions: PgBossHandler;
   readonly syncFills: PgBossHandler;
   readonly refreshTokens: PgBossHandler;
   readonly rebuildJournal: PgBossHandler;
@@ -53,9 +54,9 @@ export type AllHandlers = {
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
 
 /**
- * registerAllJobs — create 7 queues, schedule 5 crons, register 7 handlers.
+ * registerAllJobs — create 8 queues, schedule 6 crons, register 8 handlers.
  *
- * Order: createQueue (all 7) → schedule (5 crons) → work (all 7).
+ * Order: createQueue (all 8) → schedule (6 crons) → work (all 8).
  * The createQueue phase must complete before schedule/work — pg-boss FK constraint (CR-01).
  */
 export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers): Promise<void> {
@@ -65,6 +66,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("fetch-rates");
   await boss.createQueue("compute-bsm-greeks");
   await boss.createQueue("snapshot-calendars"); // chain-triggered only; no cron (D-03)
+  await boss.createQueue("sync-transactions"); // A4: fills source — runs before sync-fills
   await boss.createQueue("sync-fills");
   await boss.createQueue("refresh-tokens");
   await boss.createQueue("rebuild-journal"); // on-demand only; no cron
@@ -91,6 +93,14 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   );
 
   // New Phase 5 crons:
+  // A4: ingest broker transactions into fills BEFORE sync-fills pairs them. Offset 5 min
+  // earlier in each 10-min slot so fresh fills are present when sync-fills runs.
+  await boss.schedule(
+    "sync-transactions",
+    "5,15,25,35,45,55 9-16 * * 1-5", // every 10 min RTH, offset +5 min ahead of sync-fills
+    null,
+    { tz: "America/New_York" },
+  );
   await boss.schedule(
     "sync-fills",
     "*/10 9-16 * * 1-5", // every 10 min RTH (D-12 / D-13)
@@ -112,6 +122,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("fetch-rates", POLLING_INTERVAL, handlers.fetchRates);
   await boss.work("compute-bsm-greeks", POLLING_INTERVAL, handlers.computeBsmGreeks);
   await boss.work("snapshot-calendars", POLLING_INTERVAL, handlers.snapshotCalendars);
+  await boss.work("sync-transactions", POLLING_INTERVAL, handlers.syncTransactions);
   await boss.work("sync-fills", POLLING_INTERVAL, handlers.syncFills);
   await boss.work("refresh-tokens", POLLING_INTERVAL, handlers.refreshTokens);
   await boss.work("rebuild-journal", POLLING_INTERVAL, handlers.rebuildJournal);

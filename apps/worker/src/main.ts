@@ -20,9 +20,12 @@ import {
   makePostgresBrokerTokensRepo,
   makePostgresCalendarEventsRepo,
   makePostgresOrphanFillsRepo,
+  makePostgresFillsRepo,
   makeCboeChainAdapter,
   makeSchwabChainAdapter,
   makeSchwabOAuthClient,
+  makeSchwabTransactionsAdapter,
+  makeAccountHashResolver,
   makeFredRateAdapter,
 } from "@morai/adapters";
 import {
@@ -32,6 +35,7 @@ import {
   makeSnapshotCalendarsUseCase,
   makeSyncFillsUseCase,
   makeSyncFillsForCalendarUseCase,
+  makeSyncTransactionsUseCase,
   hashFillIds,
   makeRebuildJournalUseCase,
   selectChainSource,
@@ -43,6 +47,7 @@ import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
 import { makeComputeBsmGreeksHandler } from "./handlers/compute-bsm-greeks.ts";
 import { makeSnapshotCalendarsHandler } from "./handlers/snapshot-calendars.ts";
 import { makeSyncFillsHandler } from "./handlers/sync-fills.ts";
+import { makeSyncTransactionsHandler } from "./handlers/sync-transactions.ts";
 import { makeRefreshTokensHandler } from "./handlers/refresh-tokens.ts";
 import { makeRebuildJournalHandler } from "./handlers/rebuild-journal.ts";
 import { registerAllJobs } from "./schedule.ts";
@@ -72,9 +77,13 @@ const rateObsRepo = makePostgresRateObservationsRepo(db);
 // AUTH-04: broker-tokens repo for per-app freshness (used by selectChainSource + T-04-26 logging)
 const brokerTokensRepo = makePostgresBrokerTokensRepo(db, config.TOKEN_ENCRYPTION_KEY);
 
-// JRNL-01: calendar-events + orphan-fills repos (sync-fills, rebuild-journal)
+// JRNL-01: calendar-events + orphan-fills + fills repos (sync-fills, rebuild-journal).
+// A5/A1: the real fills data-path repo replaces the prior stubs — sync-fills now reads
+// actual unprocessed fills, rebuild re-pairs from real per-calendar fills, and amounts
+// reconcile via recomputeCalendarAmounts (WR-08).
 const calendarEventsRepo = makePostgresCalendarEventsRepo(db);
 const orphanFillsRepo = makePostgresOrphanFillsRepo(db);
+const fillsRepo = makePostgresFillsRepo(db);
 
 const USER_AGENT = "morai-worker/0.0.1";
 
@@ -192,20 +201,19 @@ const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
   now: () => new Date(),
 });
 
-// JRNL-01: sync-fills use-case — composed with calendar-events + orphan-fills repos.
-// readUnprocessedFills + readCalendarLegs + resetCalendarAmounts are fills-table ports
-// not yet implemented (pending fills repo in plan 05-08). Safe stub: returns empty fills,
-// making sync-fills a no-op until the fills repo is wired.
+// JRNL-01 (A5): sync-fills use-case — composed with the REAL fills, calendar-events, and
+// orphan-fills repos. No fills stubs remain: readUnprocessedFills / readCalendarLegs /
+// resetCalendarAmounts come from makePostgresFillsRepo.
 // C1: id/hash adapters supplied at the composition root (node:crypto stays out of core).
 const sha256Hex = (input: string): string =>
   createHash("sha256").update(input).digest("hex");
 
 const syncFillsUseCase = makeSyncFillsUseCase({
-  readUnprocessedFills: async () => ({ ok: true as const, value: [] }),
-  readCalendarLegs: async (_occSymbol) => ({ ok: true as const, value: [] }),
+  readUnprocessedFills: fillsRepo.readUnprocessedFills,
+  readCalendarLegs: fillsRepo.readCalendarLegs,
   storeCalendarEvent: calendarEventsRepo.storeCalendarEvent,
   storeOrphanFill: orphanFillsRepo.storeOrphanFill,
-  resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
+  resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
   // B1: prior-OPEN lookup uses the real calendar_events repo.
   readCalendarEvents: calendarEventsRepo.readCalendarEvents,
   // C1: injected id minter + fill-ids hasher (reference algorithm + node sha256).
@@ -219,21 +227,76 @@ const syncFillsHandler = makeSyncFillsHandler({
   now: () => new Date(),
 });
 
-// A2/CR-04: calendar-scoped sync — rebuild-journal re-pairs ONLY the target calendar
-// (delete scope == sync scope). readUnprocessedFillsForCalendar is stubbed pending the
-// fills repo (plan 05-13); a no-op empty read keeps rebuild a safe no-op until then.
+// A2/CR-04 (A5): calendar-scoped sync — rebuild-journal re-pairs ONLY the target calendar
+// (delete scope == sync scope). Now reads the REAL per-calendar unprocessed fills from the
+// fills repo; no stub remains.
 const syncFillsForCalendarUseCase = makeSyncFillsForCalendarUseCase({
-  readUnprocessedFillsForCalendar: async (_calendarId) => ({
-    ok: true as const,
-    value: [],
-  }),
-  readCalendarLegs: async (_occSymbol) => ({ ok: true as const, value: [] }),
+  readUnprocessedFillsForCalendar: fillsRepo.readUnprocessedFillsForCalendar,
+  readCalendarLegs: fillsRepo.readCalendarLegs,
   storeCalendarEvent: calendarEventsRepo.storeCalendarEvent,
   storeOrphanFill: orphanFillsRepo.storeOrphanFill,
-  resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
+  resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
   readCalendarEvents: calendarEventsRepo.readCalendarEvents,
   newId: () => randomUUID(),
   hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
+  now: () => new Date(),
+});
+
+// A4 (A5): sync-transactions SOURCE — populate the fills table from Schwab trader
+// transactions so sync-fills has real input to pair. Uses the trader app's on-demand token
+// (same pattern as the server). The trader adapter resolves the account hash itself; the
+// use-case's static accountHash/from/to are computed at boot (the adapter reads them per call).
+const traderGetAccessToken = async () => {
+  const result = await brokerTokensRepo.readTokens("trader");
+  if (!result.ok || result.value === null) {
+    return { ok: false as const, error: { kind: "auth-expired" as const, appId: "trader" as const } };
+  }
+  return { ok: true as const, value: result.value.accessToken };
+};
+
+const traderDeps = {
+  fetch: globalThis.fetch,
+  getAccessToken: traderGetAccessToken,
+  userAgent: USER_AGENT,
+};
+
+const accountHashResolver = makeAccountHashResolver(traderDeps);
+const transactionsAdapter = makeSchwabTransactionsAdapter(traderDeps);
+
+// fetchTransactions resolves the real account hash, then calls the adapter. The accountHash
+// argument from the use-case is ignored (the resolver is authoritative — Pitfall 5).
+const fetchTransactionsResolved = async (
+  _accountHash: string,
+  from: string,
+  to: string,
+) => {
+  const hashResult = await accountHashResolver.resolveAccountHash();
+  if (!hashResult.ok) return hashResult;
+  return transactionsAdapter.fetchTransactions(hashResult.value, from, to);
+};
+
+// Window: last 7 days through today (YYYY-MM-DD). Re-syncing the same window is idempotent
+// (deterministic fill ids + onConflictDoNothing), so an overlapping window is safe.
+const txWindowTo = new Date().toISOString().slice(0, 10);
+const txWindowFrom = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return d.toISOString().slice(0, 10);
+})();
+
+const syncTransactionsUseCase = makeSyncTransactionsUseCase({
+  fetchTransactions: fetchTransactionsResolved,
+  writeFills: fillsRepo.writeFills,
+  // C1: injected sha256 hasher → deterministic UUID fill ids.
+  hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
+  accountHash: "resolved-at-call-time", // ignored by fetchTransactionsResolved (resolver wins)
+  from: txWindowFrom,
+  to: txWindowTo,
+  now: () => new Date(),
+});
+
+const syncTransactionsHandler = makeSyncTransactionsHandler({
+  syncTransactionsUseCase,
   now: () => new Date(),
 });
 
@@ -280,17 +343,17 @@ const refreshTokensHandler = makeRefreshTokensHandler({
   now: () => new Date(),
 });
 
-// JRNL-01 / D-10: rebuildJournal use-case — delete-then-reinsert from fills (idempotent).
-// syncFillsForCalendar uses the calendar-scoped sync (CR-04) so a single-calendar rebuild
-// re-pairs ONLY that calendar. readUnprocessedFillsForCalendar is stubbed (fills repo pending,
-// plan 05-13); real wire-up follows once the fills table is populated.
+// JRNL-01 / D-10 (A5): rebuildJournal use-case — delete-then-reinsert from fills (idempotent).
+// All ports are now real: deleteCalendarEvents + the calendar-scoped sync (CR-04) re-pair ONLY
+// the target calendar, resetCalendarAmounts clears the aggregates, and recomputeCalendarAmounts
+// repopulates openNetDebit/closeNetCredit from the rebuilt events (WR-08 / SC5 reconciliation).
 const rebuildJournalUseCase = makeRebuildJournalUseCase({
   deleteCalendarEvents: calendarEventsRepo.deleteCalendarEvents,
-  resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
+  resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
   // CR-04: genuinely calendar-scoped — re-pairs only the target calendar (not a full sweep).
   syncFillsForCalendar: syncFillsForCalendarUseCase,
-  // WR-08: recompute calendar aggregates after the rebuild (real repo wired in plan 05-13 Task 2).
-  recomputeCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
+  // WR-08: recompute calendar aggregates from the rebuilt events (final reconciliation step).
+  recomputeCalendarAmounts: fillsRepo.recomputeCalendarAmounts,
   now: () => new Date(),
 });
 
@@ -306,11 +369,12 @@ await registerAllJobs(boss, {
   fetchRates: fetchRatesHandler,
   computeBsmGreeks: computeBsmGreeksHandler,
   snapshotCalendars: snapshotCalendarsHandler,
+  syncTransactions: syncTransactionsHandler,
   syncFills: syncFillsHandler,
   refreshTokens: refreshTokensHandler,
   rebuildJournal: rebuildJournalHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 7 queues created, 5 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-fills, refresh-tokens); snapshot-calendars chain-triggered only; rebuild-journal on-demand only",
+  "morai worker: pg-boss started; 8 queues created, 6 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, refresh-tokens); snapshot-calendars chain-triggered only; rebuild-journal on-demand only",
 );
