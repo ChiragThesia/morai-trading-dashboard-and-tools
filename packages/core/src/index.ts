@@ -123,6 +123,7 @@ export type {
 } from "./journal/index.ts";
 export { makeSyncFillsUseCase } from "./journal/index.ts";
 export type { ForRunningSyncFills, SyncFillsDeps } from "./journal/index.ts";
+export { hashFillIds } from "./journal/index.ts";
 export { makeRebuildJournalUseCase } from "./journal/index.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./journal/index.ts";
 // Phase 5: enqueueJob use-case factory (JOB-01 — MCP-02 trigger surface)

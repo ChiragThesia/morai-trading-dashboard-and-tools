@@ -19,6 +19,8 @@ import type {
   ForReadingCalendarLegs,
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
+  ForReadingCalendarEvents,
+  OrphanFillInput,
 } from "./ports.ts";
 import type { RawFill, CalendarEvent } from "../domain/calendar-event.ts";
 
@@ -43,7 +45,15 @@ function makeFill(overrides: Partial<RawFill> = {}): RawFill {
   };
 }
 
-type OrphanCapture = { readonly fillId: string; readonly reason: string };
+// Full orphan record captured by the storeOrphanFill twin (B5 asserts real fields).
+type OrphanCapture = OrphanFillInput;
+
+// Deterministic injected ports (C1): the adapter supplies the real sha256/uuid in 05-13.
+let idCounter = 0;
+const seqId = (): string =>
+  `00000000-0000-4000-8000-${String(idCounter++).padStart(12, "0")}`;
+const fakeHashFillIds = (ids: ReadonlyArray<string>): string =>
+  `hash(${[...ids].sort().join(":")})`;
 
 function buildDeps(opts: {
   fills: RawFill[];
@@ -57,6 +67,8 @@ function buildDeps(opts: {
   >;
   storedEvents: CalendarEvent[];
   storedOrphans: OrphanCapture[];
+  // Prior OPEN events seeded per calendarId (B1: originalOpenDebit lookup source)
+  priorEvents?: Record<string, CalendarEvent[]>;
 }) {
   const readUnprocessedFills: ForReadingUnprocessedFills = async () => ok(opts.fills);
   const readCalendarLegs: ForReadingCalendarLegs = async (occSymbol) =>
@@ -70,13 +82,39 @@ function buildDeps(opts: {
     return ok(undefined);
   };
   const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
+  const readCalendarEvents: ForReadingCalendarEvents = async (calendarId) =>
+    ok(opts.priorEvents?.[calendarId] ?? []);
+  idCounter = 0;
   return {
     readUnprocessedFills,
     readCalendarLegs,
     storeCalendarEvent,
     storeOrphanFill,
     resetCalendarAmounts,
+    readCalendarEvents,
+    newId: seqId,
+    hashFillIds: fakeHashFillIds,
     now: () => new Date("2026-06-15T14:00:00Z"),
+  };
+}
+
+// Build a prior OPEN calendar_event for a leg with a given debit (netAmount positive).
+function makeOpenEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
+  return {
+    id: "open-evt-1",
+    calendarId: "cal-1",
+    eventType: "OPEN",
+    eventedAt: new Date("2026-06-01T14:00:00Z"),
+    fillIdsHash: "hash-open-1",
+    legOccSymbol: OCC_FRONT,
+    rolledFromOccSymbol: null,
+    qty: 1,
+    avgPrice: 15.0,
+    netAmount: 300, // originalOpenDebit
+    realizedPnl: null,
+    legBreakdown: null,
+    entryThesis: null,
+    ...overrides,
   };
 }
 
@@ -155,12 +193,17 @@ describe("makeSyncFillsUseCase", () => {
     const storeOrphanFill: ForStoringOrphanFill = async () => ok(undefined);
     const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
 
+    const readCalendarEvents: ForReadingCalendarEvents = async () => ok([]);
+
     const syncFills = makeSyncFillsUseCase({
       readUnprocessedFills,
       readCalendarLegs,
       storeCalendarEvent,
       storeOrphanFill,
       resetCalendarAmounts,
+      readCalendarEvents,
+      newId: seqId,
+      hashFillIds: fakeHashFillIds,
       now: () => new Date("2026-06-15T14:00:00Z"),
     });
 
@@ -325,5 +368,208 @@ describe("makeSyncFillsUseCase", () => {
     // D-09 hard requirement: legBreakdown must still be populated on CLOSE
     expect(closeEvent?.legBreakdown).not.toBeNull();
     expect(closeEvent?.legBreakdown).toBeTruthy();
+  });
+
+  // ─── B1: realized-P&L lookup against the prior OPEN event ────────────────────
+
+  it("CLOSE after a prior OPEN: realizedPnl = closeCredit − priorOpenNetAmount − feesOnClose (B1/WR-01)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    // CLOSE the front leg: closeCredit = |price*qty| = 500; feesOnClose = 1 + 1 = 2.
+    const fillClose = makeFill({
+      id: "fill-close-b1",
+      occSymbol: OCC_FRONT,
+      side: "sell",
+      orderId: "order-close-b1",
+      qty: 1,
+      price: 500,
+      commission: 1,
+      fees: 1,
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fillClose],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+        // Prior OPEN event for the same leg: originalOpenDebit = netAmount = 300.
+        priorEvents: {
+          "cal-1": [makeOpenEvent({ legOccSymbol: OCC_FRONT, netAmount: 300 })],
+        },
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedOrphans).toHaveLength(0);
+    expect(storedEvents).toHaveLength(1);
+    const closeEvent = storedEvents[0];
+    expect(closeEvent?.eventType).toBe("CLOSE");
+    // 500 − 300 − 2 = 198
+    expect(closeEvent?.realizedPnl).toBeCloseTo(198, 6);
+  });
+
+  it("CLOSE with no prior OPEN event → realizedPnl null, never a wrong number (B1/WR-01)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    const fillClose = makeFill({
+      id: "fill-close-noprior",
+      occSymbol: OCC_FRONT,
+      side: "sell",
+      orderId: "order-close-noprior",
+      qty: 1,
+      price: 500,
+      commission: 1,
+      fees: 1,
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fillClose],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+        priorEvents: { "cal-1": [] }, // no prior OPEN for the leg
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedEvents).toHaveLength(1);
+    expect(storedEvents[0]?.realizedPnl).toBeNull();
+  });
+
+  it("ROLL: realizedPnl reflects only the closed leg, excludes the new leg's debit (B1/WR-01)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    // Close the front leg (closeCredit = 500, feesOnClose = 2), open the back leg (debit 20).
+    const fillClose = makeFill({
+      id: "fill-roll-close-b1",
+      occSymbol: OCC_FRONT,
+      side: "sell",
+      orderId: "roll-order-b1",
+      qty: 1,
+      price: 500,
+      commission: 1,
+      fees: 1,
+    });
+    const fillOpen = makeFill({
+      id: "fill-roll-open-b1",
+      occSymbol: OCC_BACK,
+      side: "buy",
+      orderId: "roll-order-b1",
+      qty: 1,
+      price: 20,
+      commission: 0,
+      fees: 0,
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fillClose, fillOpen],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+          ],
+          [OCC_BACK]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+        // originalOpenDebit of the CLOSED (front) leg = 300.
+        priorEvents: {
+          "cal-1": [makeOpenEvent({ legOccSymbol: OCC_FRONT, netAmount: 300 })],
+        },
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedEvents).toHaveLength(1);
+    const rollEvent = storedEvents[0];
+    expect(rollEvent?.eventType).toBe("ROLL");
+    // realizedPnl = closeCredit(500) − originalOpenDebit(300) − feesOnClose(2) = 198.
+    // The new leg's debit (20) is NOT subtracted (locked decision 2).
+    expect(rollEvent?.realizedPnl).toBeCloseTo(198, 6);
+  });
+
+  // ─── B5: UNKNOWN aggregate parks each raw fill individually ──────────────────
+
+  it("UNKNOWN aggregate of 2 raw fills → 2 orphan rows, each with real side/filledAt/UUID (B5/WR-07)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    const fill1 = makeFill({
+      id: "11111111-1111-4111-8111-111111111111",
+      occSymbol: OCC_FRONT,
+      orderId: "order-unknown",
+      side: "buy",
+      qty: 2,
+      price: 14,
+      filledAt: new Date("2026-06-10T15:30:00Z"),
+    });
+    const fill2 = makeFill({
+      id: "22222222-2222-4222-8222-222222222222",
+      occSymbol: OCC_FRONT,
+      orderId: "order-unknown",
+      side: "sell",
+      qty: 3,
+      price: 16,
+      filledAt: new Date("2026-06-11T16:45:00Z"),
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fill1, fill2],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "UNKNOWN" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedEvents).toHaveLength(0);
+    // Each underlying raw fill parked individually — never one synthesized row.
+    expect(storedOrphans).toHaveLength(2);
+
+    const o1 = storedOrphans.find((o) => o.fillId === fill1.id);
+    const o2 = storedOrphans.find((o) => o.fillId === fill2.id);
+    expect(o1).toBeDefined();
+    expect(o2).toBeDefined();
+    // Real side + real filledAt preserved (not hardcoded "buy"/now).
+    expect(o1?.side).toBe("buy");
+    expect(o1?.filledAt).toEqual(new Date("2026-06-10T15:30:00Z"));
+    expect(o2?.side).toBe("sell");
+    expect(o2?.filledAt).toEqual(new Date("2026-06-11T16:45:00Z"));
+    // No synthesized non-UUID fillId.
+    for (const o of storedOrphans) {
+      expect(o.fillId.startsWith("agg-unknown-")).toBe(false);
+    }
   });
 });

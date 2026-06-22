@@ -11,8 +11,12 @@
  *   4. aggregatePartialFills per bucket; enrich calendarId + positionEffect from leg
  *   5. classifyFill (OPENING→OPEN, CLOSING→CLOSE, UNKNOWN→orphan) per aggregated fill
  *   6. detectRoll: same calendarId + same orderId + different legOccSymbol → ONE ROLL event (D-03)
- *   7. computePnl on CLOSE/ROLL (D-08/D-09); build legBreakdown JSON
- *   8. hashFillIds → fillIdsHash; storeCalendarEvent (idempotent via UNIQUE constraint)
+ *   7. computeRealizedPnl on CLOSE/ROLL using the prior OPEN event's debit (B1); build
+ *      legBreakdown JSON
+ *   8. deps.hashFillIds → fillIdsHash; storeCalendarEvent (idempotent via UNIQUE constraint)
+ *
+ * Ids and fill-id hashes are injected (deps.newId / deps.hashFillIds, C1) so this core file
+ * imports no node:crypto — the adapter supplies the real uuid/sha256 (plan 05-13).
  *
  * Architecture (architecture-boundaries.md):
  *   - Pure core: no I/O, no framework, no Drizzle.
@@ -23,12 +27,11 @@
 
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { createHash, randomUUID } from "crypto";
 import {
   classifyFill,
   aggregatePartialFills,
   detectRoll,
-  hashFillIds,
+  computeRealizedPnl,
 } from "../domain/fill-pairing.ts";
 import type {
   ForStoringCalendarEvent,
@@ -36,6 +39,9 @@ import type {
   ForReadingCalendarLegs,
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
+  ForReadingCalendarEvents,
+  NewId,
+  HashFillIds,
   StorageError,
   CalendarLegEntry,
 } from "./ports.ts";
@@ -49,6 +55,11 @@ export type SyncFillsDeps = {
   readonly storeCalendarEvent: ForStoringCalendarEvent;
   readonly storeOrphanFill: ForStoringOrphanFill;
   readonly resetCalendarAmounts: ForResettingCalendarAmounts;
+  // B1: read prior OPEN events for a calendar to find originalOpenDebit on CLOSE/ROLL.
+  readonly readCalendarEvents: ForReadingCalendarEvents;
+  // C1: injected id minter + fill-ids hasher — core imports no node builtin hasher.
+  readonly newId: NewId;
+  readonly hashFillIds: HashFillIds;
   readonly now: () => Date;
 };
 
@@ -62,25 +73,17 @@ type MatchedFill = {
   readonly leg: CalendarLegEntry;
 };
 
-// Aggregated fill enriched with calendar context and classification
+// Aggregated fill enriched with calendar context, classification, and the underlying
+// raw fills (carried so the UNKNOWN branch can park each fill individually — B5).
 type ClassifiedFill = AggregatedFill & {
   readonly classification: "OPEN" | "CLOSE" | "UNKNOWN";
+  readonly rawFills: ReadonlyArray<RawFill>;
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// Interim sha256 hasher passed to the pure-domain hashFillIds. Plan 05-11 replaces this
-// with an injected `deps.hashFillIds` port so this use-case imports no crypto builtin (C1).
-function sha256Hex(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
-}
 
 // ─── Use-case factory ─────────────────────────────────────────────────────────
 
 export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
   return async (): Promise<Result<void, StorageError>> => {
-    const now = deps.now();
-
     // Step 1: Read unprocessed fills
     const fillsResult = await deps.readUnprocessedFills();
     if (!fillsResult.ok) return err(fillsResult.error);
@@ -179,7 +182,30 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
         legOccSymbol: leg.legOccSymbol,
       };
       const classification = classifyFill(enriched.positionEffect);
-      classified.push({ ...enriched, classification });
+      classified.push({ ...enriched, classification, rawFills: bucketFills });
+    }
+
+    // B1: prior-OPEN-debit lookup. Cache calendar_events per calendarId so we read each
+    // calendar's events at most once, then find the OPEN event for the closed leg to pin
+    // originalOpenDebit. Returns null when no prior OPEN exists → realizedPnl stays null
+    // (locked decision 2 / WR-01: never report a wrong number).
+    const priorEventsCache = new Map<string, ReadonlyArray<CalendarEvent>>();
+    async function originalOpenDebitFor(
+      calendarId: string,
+      legOccSymbol: string,
+    ): Promise<Result<number | null, StorageError>> {
+      let events = priorEventsCache.get(calendarId);
+      if (events === undefined) {
+        const eventsResult = await deps.readCalendarEvents(calendarId);
+        if (!eventsResult.ok) return err(eventsResult.error);
+        events = eventsResult.value;
+        priorEventsCache.set(calendarId, events);
+      }
+      const open = events.find(
+        (e) => e.eventType === "OPEN" && e.legOccSymbol === legOccSymbol,
+      );
+      // OPEN netAmount is the original open debit (positive, D-08).
+      return ok(open === undefined ? null : open.netAmount);
     }
 
     // Step 6: ROLL detection
@@ -203,19 +229,30 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
 
     // Steps 7-8: Emit events
     for (const cf of classified) {
-      // UNKNOWN positionEffect → orphan (D-02: cross-check with calendar dates is adapter concern)
+      // UNKNOWN positionEffect → orphan (D-02: cross-check with calendar dates is adapter concern).
+      // B5/WR-07: park EACH underlying raw fill individually with its real side + filledAt and
+      // its real UUID — never a synthesized `agg-unknown-${orderId}` PK, and never drop siblings.
       if (cf.classification === "UNKNOWN") {
-        const firstFillId = cf.fillIds[0] ?? `agg-unknown-${cf.orderId}`;
-        const orphanResult = await deps.storeOrphanFill({
-          fillId: firstFillId,
-          occSymbol: cf.legOccSymbol,
-          side: "buy",
-          qty: cf.sumQty,
-          price: cf.avgPrice,
-          filledAt: now,
-          reason: "unknown positionEffect — cannot classify without calendar context",
-        });
-        if (!orphanResult.ok) return err(orphanResult.error);
+        if (cf.rawFills.length === 0) {
+          // A malformed aggregate with no underlying fills cannot be parked without
+          // fabricating a PK — surface an error rather than synthesize one (WR-07).
+          return err({
+            kind: "storage-error",
+            message: `UNKNOWN aggregate for order ${cf.orderId} has no underlying fills to park`,
+          });
+        }
+        for (const fill of cf.rawFills) {
+          const orphanResult = await deps.storeOrphanFill({
+            fillId: fill.id,
+            occSymbol: fill.occSymbol,
+            side: fill.side,
+            qty: fill.qty,
+            price: fill.price,
+            filledAt: fill.filledAt,
+            reason: "unknown positionEffect — cannot classify without calendar context",
+          });
+          if (!orphanResult.ok) return err(orphanResult.error);
+        }
         continue;
       }
 
@@ -238,16 +275,24 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
 
             // ONE ROLL event referencing both legs (D-03)
             const allFillIds = [...cf.fillIds, ...paired.fillIds];
-            const fillIdsHash = hashFillIds(allFillIds, sha256Hex);
+            const fillIdsHash = deps.hashFillIds(allFillIds);
 
             // P&L: close leg provides credit; open leg provides new debit (D-08/D-09).
-            // realizedPnl reflects ONLY the closed leg:
+            // realizedPnl reflects ONLY the closed (old) leg:
             //   closeCredit − originalOpenDebit − feesOnClose.
-            // The prior-OPEN lookup that supplies originalOpenDebit is wired in 05-11; until
-            // then realizedPnl is null (locked decision 2: never report a wrong number).
+            // The new leg's debit is cost basis / netAmount, NOT subtracted (locked decision 2).
             const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
             const openDebit = paired.avgPrice * paired.sumQty;
-            const realizedPnl: number | null = null;
+            const feesOnClose = cf.totalCommission + cf.totalFees;
+
+            // B1/WR-01: originalOpenDebit comes from the prior OPEN event for the CLOSED leg.
+            const debitResult = await originalOpenDebitFor(cf.calendarId, cf.legOccSymbol);
+            if (!debitResult.ok) return err(debitResult.error);
+            const originalOpenDebit = debitResult.value;
+            const realizedPnl: number | null =
+              originalOpenDebit === null
+                ? null // no prior OPEN → never a wrong number
+                : computeRealizedPnl(closeCredit, originalOpenDebit, feesOnClose);
 
             const legBreakdown = JSON.stringify({
               closing: {
@@ -267,10 +312,10 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
             });
 
             const rollEvent: CalendarEvent = {
-              id: randomUUID(),
+              id: deps.newId(),
               calendarId: cf.calendarId,
               eventType: "ROLL",
-              eventedAt: now,
+              eventedAt: deps.now(),
               fillIdsHash,
               // legOccSymbol = new leg (the OPEN leg); rolledFromOccSymbol = old leg (D-03)
               legOccSymbol: paired.legOccSymbol,
@@ -292,7 +337,7 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
       }
 
       // Emit OPEN or CLOSE event
-      const fillIdsHash = hashFillIds(cf.fillIds, sha256Hex);
+      const fillIdsHash = deps.hashFillIds(cf.fillIds);
       const isClose = cf.classification === "CLOSE";
 
       // D-08: OPEN debit = positive; CLOSE credit = negative
@@ -300,11 +345,22 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
         ? -(cf.avgPrice * cf.sumQty) // credit received = negative
         : cf.avgPrice * cf.sumQty;   // debit paid = positive
 
-      // D-09: realizedPnl = closeCredit − originalOpenDebit − feesOnClose on CLOSE.
-      // The prior-OPEN lookup that supplies originalOpenDebit is wired in 05-11 (via the
-      // ForReadingCalendarEvents + computeRealizedPnl path); until then realizedPnl is null
-      // (locked decision 2: never report a wrong number when originalOpenDebit is unknown).
-      const realizedPnl: number | null = null;
+      // D-09 (B1/WR-01): realizedPnl = closeCredit − originalOpenDebit − feesOnClose on CLOSE.
+      // originalOpenDebit is read from the prior OPEN event for the leg; when no prior OPEN
+      // exists realizedPnl is null (locked decision 2: never report a wrong number). OPEN
+      // events carry null realizedPnl by definition.
+      let realizedPnl: number | null = null;
+      if (isClose) {
+        const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
+        const feesOnClose = cf.totalCommission + cf.totalFees;
+        const debitResult = await originalOpenDebitFor(cf.calendarId, cf.legOccSymbol);
+        if (!debitResult.ok) return err(debitResult.error);
+        const originalOpenDebit = debitResult.value;
+        realizedPnl =
+          originalOpenDebit === null
+            ? null
+            : computeRealizedPnl(closeCredit, originalOpenDebit, feesOnClose);
+      }
 
       // D-09 hard requirement: legBreakdown on CLOSE/ROLL
       const legBreakdown = isClose
@@ -320,10 +376,10 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
         : null;
 
       const event: CalendarEvent = {
-        id: randomUUID(),
+        id: deps.newId(),
         calendarId: cf.calendarId,
         eventType: cf.classification,
-        eventedAt: now,
+        eventedAt: deps.now(),
         fillIdsHash,
         legOccSymbol: cf.legOccSymbol,
         rolledFromOccSymbol: null,

@@ -6,6 +6,7 @@
 // - No business logic in this file; only composition.
 // - TDD exempt: pure wiring (tdd.md Scope).
 
+import { randomUUID, createHash } from "node:crypto";
 import { PgBoss } from "pg-boss";
 import { bootWorkerConfig } from "./config.ts";
 import {
@@ -30,6 +31,7 @@ import {
   makeComputeBsmGreeksUseCase,
   makeSnapshotCalendarsUseCase,
   makeSyncFillsUseCase,
+  hashFillIds,
   makeRebuildJournalUseCase,
   selectChainSource,
   makeRefreshTokenUseCase,
@@ -193,12 +195,21 @@ const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
 // readUnprocessedFills + readCalendarLegs + resetCalendarAmounts are fills-table ports
 // not yet implemented (pending fills repo in plan 05-08). Safe stub: returns empty fills,
 // making sync-fills a no-op until the fills repo is wired.
+// C1: id/hash adapters supplied at the composition root (node:crypto stays out of core).
+const sha256Hex = (input: string): string =>
+  createHash("sha256").update(input).digest("hex");
+
 const syncFillsUseCase = makeSyncFillsUseCase({
   readUnprocessedFills: async () => ({ ok: true as const, value: [] }),
   readCalendarLegs: async (_occSymbol) => ({ ok: true as const, value: [] }),
   storeCalendarEvent: calendarEventsRepo.storeCalendarEvent,
   storeOrphanFill: orphanFillsRepo.storeOrphanFill,
   resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
+  // B1: prior-OPEN lookup uses the real calendar_events repo.
+  readCalendarEvents: calendarEventsRepo.readCalendarEvents,
+  // C1: injected id minter + fill-ids hasher (reference algorithm + node sha256).
+  newId: () => randomUUID(),
+  hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
   now: () => new Date(),
 });
 

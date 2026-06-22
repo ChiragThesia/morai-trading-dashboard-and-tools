@@ -83,6 +83,8 @@ export type {
 // Phase 5: syncFills use-case factory + driver port
 export { makeSyncFillsUseCase } from "./application/syncFills.ts";
 export type { ForRunningSyncFills, SyncFillsDeps } from "./application/syncFills.ts";
+// Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
+export { hashFillIds } from "./domain/fill-pairing.ts";
 // Phase 5: rebuildJournal use-case factory + driver port
 export { makeRebuildJournalUseCase } from "./application/rebuildJournal.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./application/rebuildJournal.ts";
