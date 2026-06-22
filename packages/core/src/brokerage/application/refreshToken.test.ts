@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ok, err } from "@morai/shared";
+import type { Result } from "@morai/shared";
 import { makeRefreshTokenUseCase } from "./refreshToken.ts";
 import type { ForReadingTokens, ForWritingTokens, AuthExpiredError, SchwabTokenRow } from "./ports.ts";
 import type { SchwabTokens, OAuthError, ForRefreshingToken } from "./refreshToken.ts";
@@ -158,11 +159,15 @@ describe("makeRefreshTokenUseCase", () => {
     expect(writeCallCount).toBe(0);
   });
 
-  it("on network error from refreshTokens: surfaces as auth-expired (safe degradation)", async () => {
+  it("CR-02: network error → storage-error (retryable), NOT auth-expired and does NOT write", async () => {
     const storedRow = makeStoredRow();
+    let writeCallCount = 0;
 
     const readTokens: ForReadingTokens = async () => ok(storedRow);
-    const writeTokens: ForWritingTokens = async () => ok(undefined);
+    const writeTokens: ForWritingTokens = async () => {
+      writeCallCount++;
+      return ok(undefined);
+    };
     const refreshTokensFn = async () =>
       err<OAuthError>({
         kind: "oauth-error",
@@ -177,8 +182,62 @@ describe("makeRefreshTokenUseCase", () => {
     });
 
     const result = await useCase("trader");
-    // Any OAuth error should surface as a typed error — never throw
     expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // Transient failure must be retryable, never claim expiry.
+    expect(result.error.kind).toBe("storage-error");
+    if (result.error.kind !== "storage-error") return;
+    expect(result.error.message).toBe("trader: network");
+    expect(writeCallCount).toBe(0);
+  });
+
+  it("CR-02: parse error → storage-error (retryable), NOT auth-expired", async () => {
+    const storedRow = makeStoredRow();
+
+    const readTokens: ForReadingTokens = async () => ok(storedRow);
+    const writeTokens: ForWritingTokens = async () => ok(undefined);
+    const refreshTokensFn = async () =>
+      err<OAuthError>({
+        kind: "oauth-error",
+        code: "parse",
+        message: "malformed token response",
+      });
+
+    const useCase = makeRefreshTokenUseCase({
+      readTokens,
+      writeTokens,
+      refreshTokens: refreshTokensFn,
+    });
+
+    const result = await useCase("trader");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe("storage-error");
+    if (result.error.kind !== "storage-error") return;
+    expect(result.error.message).toBe("trader: parse");
+  });
+
+  it("CR-02: unexpected throw from refreshTokens → storage-error (retryable)", async () => {
+    const storedRow = makeStoredRow();
+
+    const readTokens: ForReadingTokens = async () => ok(storedRow);
+    const writeTokens: ForWritingTokens = async () => ok(undefined);
+    const refreshTokensFn = async (): Promise<
+      Result<SchwabTokens, OAuthError>
+    > => {
+      throw new Error("socket hang up");
+    };
+
+    const useCase = makeRefreshTokenUseCase({
+      readTokens,
+      writeTokens,
+      refreshTokens: refreshTokensFn,
+    });
+
+    const result = await useCase("trader");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe("storage-error");
   });
 
   it("no stored tokens for appId: returns err (auth-expired style)", async () => {

@@ -104,13 +104,18 @@ export function makeRefreshTokenUseCase(deps: {
         ) {
           return err<AuthExpiredError>({ kind: "auth-expired", appId });
         }
-        // network / parse error — also surface as auth-expired for safe degradation
-        return err<AuthExpiredError>({ kind: "auth-expired", appId });
+        // CR-02: network / parse are TRANSIENT — surface a retryable storage-error
+        // so pg-boss retries and the status flag does NOT falsely claim expiry.
+        return err<StorageError>({
+          kind: "storage-error",
+          message: `${appId}: ${oauthErr.code}`,
+        });
       }
       newTokens = refreshResult.value;
     } catch (e) {
-      // Unexpected throw from OAuth client — treat as auth-expired (defensive)
-      return err<AuthExpiredError>({ kind: "auth-expired", appId });
+      // CR-02: an unexpected throw is transient, not terminal — retryable storage-error.
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
     }
 
     // Step 4: Persist the rotated tokens (upsert)

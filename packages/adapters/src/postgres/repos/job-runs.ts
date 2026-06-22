@@ -40,11 +40,6 @@ export type PostgresJobRunsRepo = {
   readonly readJobRuns: ForReadingJobRuns;
 };
 
-function extractString(value: unknown): string | null {
-  if (typeof value === "string") return value;
-  return null;
-}
-
 function extractCompletedOn(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "string") {
@@ -81,19 +76,27 @@ export function makePostgresJobRunsRepo(db: Db): PostgresJobRunsRepo {
     Result<JobRunMap, StorageError>
   > => {
     try {
-      // RESEARCH.md Pattern 6: DISTINCT ON (name) for most-recent row per job.
-      // pg-boss uses snake_case column names and stores completed_on as a timestamp.
-      // Rows with state='completed' → lastSuccessAt; state='failed' → lastErrorAt + lastError.
+      // CR-03: report last-success and last-error INDEPENDENTLY per job.
+      // FILTER aggregates compute the most-recent completed timestamp and the
+      // most-recent failed timestamp separately, so a job that succeeded then
+      // later failed surfaces BOTH (the D-10 "succeeded at X but now failing" signal).
+      // The correlated subselect carries the LATEST failed run's output → lastError.
       const rows = await db.execute(sql`
-        SELECT DISTINCT ON (name)
-          name,
-          state,
-          completed_on,
-          output
-        FROM pgboss.job
-        WHERE name IN ('fetch-schwab-chain', 'fetch-rates', 'compute-bsm-greeks', 'snapshot-calendars', 'sync-fills', 'refresh-tokens', 'rebuild-journal')
-          AND state IN ('completed', 'failed')
-        ORDER BY name, completed_on DESC NULLS LAST
+        SELECT
+          j.name AS name,
+          MAX(j.completed_on) FILTER (WHERE j.state = 'completed') AS last_success_at,
+          MAX(j.completed_on) FILTER (WHERE j.state = 'failed')    AS last_error_at,
+          (
+            SELECT f.output
+            FROM pgboss.job f
+            WHERE f.name = j.name AND f.state = 'failed'
+            ORDER BY f.completed_on DESC NULLS LAST
+            LIMIT 1
+          ) AS last_error_output
+        FROM pgboss.job j
+        WHERE j.name IN ('fetch-schwab-chain', 'fetch-rates', 'compute-bsm-greeks', 'snapshot-calendars', 'sync-fills', 'refresh-tokens', 'rebuild-journal')
+          AND j.state IN ('completed', 'failed')
+        GROUP BY j.name
       `);
 
       // db.execute returns an array of row objects (unknown shape from postgres.js)
@@ -103,16 +106,21 @@ export function makePostgresJobRunsRepo(db: Db): PostgresJobRunsRepo {
         // rawRow is Record<string, unknown> from Drizzle's execute return type
         const rowEntries = Object.fromEntries(Object.entries(rawRow));
         const name = rowEntries["name"];
-        const state = extractString(rowEntries["state"]) ?? "";
 
         if (!isTrackedJob(name)) continue;
 
-        const completedOn = extractCompletedOn(rowEntries["completed_on"]);
-        const lastError = extractLastError(rowEntries["output"], state);
+        const lastSuccessAt = extractCompletedOn(rowEntries["last_success_at"]);
+        const lastErrorAt = extractCompletedOn(rowEntries["last_error_at"]);
+        // lastError carries the latest failed run's output message — and only when
+        // a failure actually occurred (lastErrorAt non-null).
+        const lastError =
+          lastErrorAt === null
+            ? null
+            : extractLastError(rowEntries["last_error_output"], "failed");
 
         const record: JobRunRecord = {
-          lastSuccessAt: state === "completed" ? completedOn : null,
-          lastErrorAt: state === "failed" ? completedOn : null,
+          lastSuccessAt,
+          lastErrorAt,
           lastError,
         };
 

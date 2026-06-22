@@ -195,3 +195,96 @@ describe.skipIf(shouldSkip)(
     });
   },
 );
+
+// ---------------------------------------------------------------------------
+// CR-03: independent last-success AND last-error per job.
+// Seed ONE job with a completed run at T1 then a FAILED run at T2 (T2 > T1).
+// On the CURRENT DISTINCT ON (name) code this MUST FAIL: only the most-recent
+// row (the failure) survives, so lastSuccessAt is forced to null even though
+// the job succeeded earlier. The fix surfaces BOTH timestamps independently.
+// ---------------------------------------------------------------------------
+describe.skipIf(shouldSkip)(
+  "postgres job-runs adapter — independent success/error per job (CR-03)",
+  () => {
+    let db: ReturnType<typeof makeDb>;
+
+    const T1 = "2026-06-12 10:00:00.000+00"; // earlier completed
+    const T2 = "2026-06-12 11:00:00.000+00"; // later failed
+
+    beforeAll(async () => {
+      if (!dbUrl) return;
+      db = makeDb(dbUrl);
+
+      await db.execute(sql`CREATE SCHEMA IF NOT EXISTS pgboss`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS pgboss.job (
+          id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+          name         text        NOT NULL,
+          state        text        NOT NULL,
+          completed_on timestamptz,
+          output       jsonb,
+          created_on   timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+
+      // sync-fills: completed at T1, then failed at T2 (T2 > T1)
+      await db.execute(sql`
+        INSERT INTO pgboss.job (name, state, completed_on, output)
+        VALUES ('sync-fills', 'completed', ${T1}::timestamptz, NULL)
+      `);
+      await db.execute(sql`
+        INSERT INTO pgboss.job (name, state, completed_on, output)
+        VALUES ('sync-fills', 'failed', ${T2}::timestamptz, '{"message": "broker 503"}'::jsonb)
+      `);
+
+      // refresh-tokens: only completed runs → lastErrorAt/lastError stay null
+      await db.execute(sql`
+        INSERT INTO pgboss.job (name, state, completed_on, output)
+        VALUES ('refresh-tokens', 'completed', ${T1}::timestamptz, NULL)
+      `);
+      await db.execute(sql`
+        INSERT INTO pgboss.job (name, state, completed_on, output)
+        VALUES ('refresh-tokens', 'completed', ${T2}::timestamptz, NULL)
+      `);
+    });
+
+    afterAll(async () => {
+      if (!db) return;
+      await db.execute(sql`DROP SCHEMA IF EXISTS pgboss CASCADE`);
+    });
+
+    it("reports lastSuccessAt AND lastErrorAt independently for a completed-then-failed job", async () => {
+      if (!db) throw new Error("db not initialized");
+      const repo = makePostgresJobRunsRepo(db);
+      const result = await repo.readJobRuns();
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const rec = result.value["sync-fills"];
+      expect(rec).toBeDefined();
+      if (rec === undefined) return;
+
+      expect(rec.lastSuccessAt).toBe(new Date(T1).toISOString());
+      expect(rec.lastErrorAt).toBe(new Date(T2).toISOString());
+      expect(rec.lastError).toBe("broker 503");
+    });
+
+    it("a job with only completed runs has null lastErrorAt and lastError", async () => {
+      if (!db) throw new Error("db not initialized");
+      const repo = makePostgresJobRunsRepo(db);
+      const result = await repo.readJobRuns();
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const rec = result.value["refresh-tokens"];
+      expect(rec).toBeDefined();
+      if (rec === undefined) return;
+
+      expect(rec.lastSuccessAt).toBe(new Date(T2).toISOString());
+      expect(rec.lastErrorAt).toBeNull();
+      expect(rec.lastError).toBeNull();
+    });
+  },
+);
