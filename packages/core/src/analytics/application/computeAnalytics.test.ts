@@ -312,6 +312,31 @@ describe("makeComputeAnalyticsUseCase — skew / risk-reversal half", () => {
     expect(rrSpy.rows[0]?.rrRank).toBeNull();
   });
 
+  it("persists rr_rank = null for a non-null risk_reversal with NO prior history (first-ever, WR-01)", async () => {
+    const skewSpy = makeWriteSkewSpy();
+    const rrSpy = makeWriteRrSpy();
+    const smileStub = makeSmileStub(workedExampleSmile("SPX", "2026-07-17")); // rr = 0.06, non-null
+    // Empty trailing history → no prior distribution → rank is null (not the old 100 sentinel).
+    const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
+
+    const useCase = makeComputeAnalyticsUseCase({
+      readSmile: smileStub.readSmile,
+      readSnapshots: noSnapshots,
+      writeSkew: skewSpy.writeSkew,
+      writeRr: rrSpy.writeRr,
+      writeTerm: noTermWrite,
+      readRrHistory,
+      now: () => NOW,
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    expect(rrSpy.rows).toHaveLength(1);
+    // risk_reversal is a real number, but its rank is null with no history.
+    expect(rrSpy.rows[0]?.riskReversal).not.toBeNull();
+    expect(rrSpy.rows[0]?.rrRank).toBeNull();
+  });
+
   it("sets rr_rank to the trailing-window inclusive percentile of the computed risk_reversal", async () => {
     const skewSpy = makeWriteSkewSpy();
     const rrSpy = makeWriteRrSpy();

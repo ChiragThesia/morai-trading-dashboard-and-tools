@@ -37,6 +37,14 @@ describe("skewEntry / skewResponse (headline risk-reversal)", () => {
   it("accepts a populated response array", () => {
     expect(skewResponse.parse([validSkew])).toHaveLength(1);
   });
+
+  // WR-01: the first-ever risk-reversal has a real value but no rank (empty trailing history).
+  // The contract must carry rrRank: null end-to-end.
+  it("accepts a response entry with a real value but null rrRank (first-ever, no history)", () => {
+    const parsed = skewResponse.parse([{ ...validSkew, value: 0.06, rrRank: null }]);
+    expect(parsed[0]?.rrRank).toBeNull();
+    expect(parsed[0]?.value).toBe(0.06);
+  });
 });
 
 describe("skewSmileEntry / skewSmileResponse (per-strike detail)", () => {

@@ -4,12 +4,12 @@
  * `percentileRank(value, history)` returns an INCLUSIVE (weak) percentile in [0, 100]:
  *   rank = 100 · (count of history values ≤ value) / history.length
  * The caller (06-05) passes the trailing window (≤ 252 prior values, all-available-if-shorter)
- * and excludes null risk_reversal values. Empty history → 100 (a lone observation is the 100th
- * percentile of the inclusive set {value} once it is added). Forward-only.
+ * and excludes null risk_reversal values. Empty history → null (no defined rank: there is no
+ * prior distribution to rank against). Forward-only.
  *
- * NOTE (deviation from 06-01 RED scaffold): the scaffold used a [0,1] scale and null-on-empty.
- * The 06-03 plan <behavior> locks the [0,100] scale and the empty→100 sentinel; these example
- * tests were updated to the locked contract (order of authority: plan > scaffold).
+ * NOTE (06-08 / WR-01): the earlier empty→100 sentinel made the first-ever observation read as the
+ * richest skew ever seen — economically misleading. percentileRank now returns null on empty
+ * history; the use-case persists rr_rank = null until at least one prior value exists.
  */
 
 import { describe, it, expect } from "vitest";
@@ -43,8 +43,8 @@ describe("percentileRank", () => {
     expect(percentileRank(-0.01, history)).toBeCloseTo(0, 5);
   });
 
-  it("returns 100 for empty history (first observation ever, forward-only sentinel)", () => {
-    expect(percentileRank(0.03, [])).toBeCloseTo(100, 5);
+  it("returns null for empty history (no prior distribution to rank against)", () => {
+    expect(percentileRank(0.03, [])).toBeNull();
   });
 
   it("counts repeated values inclusively", () => {
