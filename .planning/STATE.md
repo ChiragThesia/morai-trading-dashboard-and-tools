@@ -6,14 +6,14 @@ current_phase: 06
 current_phase_name: derived-analytics
 status: Phase 06 in progress (Wave 1 — plan 06-01 foundation complete)
 stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-06-22T16:26:46.327Z"
+last_updated: "2026-06-22T16:52:11.266Z"
 last_activity: 2026-06-22
 last_activity_desc: Phase 06 Plan 01 complete (analytics foundation; production typecheck clean; 3 RED scaffolds left for 06-03/06-04/06-05)
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 52
-  completed_plans: 51
+  completed_plans: 52
   percent: 83
 ---
 
@@ -86,6 +86,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 06 P01 | 12 | 3 tasks | 15 files |
 | Phase 06 P02 | 5min | 2 tasks | 5 files |
 | Phase 06 P03 | 10min | 2 tasks | 8 files |
+| Phase 06 P04 | 17min | 3 tasks | 30 files |
 
 ## Accumulated Context
 
@@ -203,6 +204,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-03: interpAtDelta returns null when ±0.25 not bracketed (SPEC R2)
 - [Phase ?]: 06-03: percentileRank empty-history sentinel = 100; rr_rank null-ness handled by 06-05 caller
 - [Phase ?]: 06-03: reconciled 06-01 percentile RED scaffold from [0,1]+null to plan-locked [0,100]+100-on-empty
+- [Phase ?]: 06-04: term-structure value = calendar_snapshots.term_slope passed through unchanged (no recompute)
+- [Phase ?]: 06-04: readSnapshotsForCycle = most recent snapshot time <= now, then all rows at that time (current cycle)
+- [Phase ?]: 06-04: compute-analytics is the new terminal job; chain-triggered by snapshot-calendars via boss.send singletonKey
 
 ### Pending Todos
 
@@ -226,6 +230,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-22T16:26:07.326Z
+Last session: 2026-06-22T16:51:28.080Z
 Stopped at: Completed 05-16-PLAN.md (gap round 2, Wave 2 — fast-check property tests; fixed ROLL double-count)
 Resume file: None
