@@ -25,7 +25,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live (completed 2026-06-14)
 - [x] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions (completed 2026-06-21)
 - [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
-- [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (completed 2026-06-22)
+- [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (verified 4/4 2026-06-22; 8 plans + 1 gap round; ON BRANCH plan/06-derived-analytics — merge pending operator review; prod migration 0007 deferred)
 
 ## Phase Details
 
