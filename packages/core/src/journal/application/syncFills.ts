@@ -36,6 +36,7 @@ import {
 import type {
   ForStoringCalendarEvent,
   ForReadingUnprocessedFills,
+  ForReadingUnprocessedFillsForCalendar,
   ForReadingCalendarLegs,
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
@@ -47,10 +48,11 @@ import type {
 } from "./ports.ts";
 import type { RawFill, AggregatedFill, CalendarEvent } from "../domain/calendar-event.ts";
 
-// ─── Deps type ────────────────────────────────────────────────────────────────
+// ─── Deps types ───────────────────────────────────────────────────────────────
 
-export type SyncFillsDeps = {
-  readonly readUnprocessedFills: ForReadingUnprocessedFills;
+// Shared pairing dependencies — everything the pairing pipeline needs except the
+// fills source. Both the full-sweep and the calendar-scoped factories supply these.
+type PairingDeps = {
   readonly readCalendarLegs: ForReadingCalendarLegs;
   readonly storeCalendarEvent: ForStoringCalendarEvent;
   readonly storeOrphanFill: ForStoringOrphanFill;
@@ -63,8 +65,24 @@ export type SyncFillsDeps = {
   readonly now: () => Date;
 };
 
-// Driver port type for this use-case
+// Full-sweep deps: read ALL unprocessed fills across every calendar.
+export type SyncFillsDeps = PairingDeps & {
+  readonly readUnprocessedFills: ForReadingUnprocessedFills;
+};
+
+// A2/CR-04 — calendar-scoped deps: read ONLY the target calendar's unprocessed fills,
+// so rebuild-journal re-pairs exactly one calendar (delete scope == sync scope).
+export type SyncFillsForCalendarDeps = PairingDeps & {
+  readonly readUnprocessedFillsForCalendar: ForReadingUnprocessedFillsForCalendar;
+};
+
+// Driver port type for the full-sweep use-case
 export type ForRunningSyncFills = () => Promise<Result<void, StorageError>>;
+
+// A2/CR-04 — scoped driver type exported for 05-13 wiring as `syncFillsForCalendar`.
+export type ForRunningSyncFillsForCalendar = (
+  calendarId: string,
+) => Promise<Result<void, StorageError>>;
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
@@ -80,27 +98,87 @@ type ClassifiedFill = AggregatedFill & {
   readonly rawFills: ReadonlyArray<RawFill>;
 };
 
-// ─── Use-case factory ─────────────────────────────────────────────────────────
+// ─── Pairing pipeline (shared by full-sweep + calendar-scoped use-cases) ───────
 
-export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
-  return async (): Promise<Result<void, StorageError>> => {
-    // Step 1: Read unprocessed fills
-    const fillsResult = await deps.readUnprocessedFills();
-    if (!fillsResult.ok) return err(fillsResult.error);
+async function pairFills(
+  deps: PairingDeps,
+  fills: ReadonlyArray<RawFill>,
+): Promise<Result<void, StorageError>> {
+  if (fills.length === 0) return ok(undefined);
 
-    const fills = fillsResult.value;
-    if (fills.length === 0) return ok(undefined);
+  // Steps 2: Match each fill to a calendar leg
+  const matched: MatchedFill[] = [];
 
-    // Steps 2: Match each fill to a calendar leg
-    const matched: MatchedFill[] = [];
+  for (const fill of fills) {
+    const legsResult = await deps.readCalendarLegs(fill.occSymbol);
+    if (!legsResult.ok) return err(legsResult.error);
 
-    for (const fill of fills) {
-      const legsResult = await deps.readCalendarLegs(fill.occSymbol);
-      if (!legsResult.ok) return err(legsResult.error);
+    const legs = legsResult.value;
 
-      const legs = legsResult.value;
+    if (legs.length === 0) {
+      const orphanResult = await deps.storeOrphanFill({
+        fillId: fill.id,
+        occSymbol: fill.occSymbol,
+        side: fill.side,
+        qty: fill.qty,
+        price: fill.price,
+        filledAt: fill.filledAt,
+        reason: "no matching calendar",
+      });
+      if (!orphanResult.ok) return err(orphanResult.error);
+      continue;
+    }
 
-      if (legs.length === 0) {
+    if (legs.length > 1) {
+      // Pitfall 6: ambiguous calendar — never auto-assign
+      const calIds = legs.map((l) => l.calendarId).join(", ");
+      const orphanResult = await deps.storeOrphanFill({
+        fillId: fill.id,
+        occSymbol: fill.occSymbol,
+        side: fill.side,
+        qty: fill.qty,
+        price: fill.price,
+        filledAt: fill.filledAt,
+        reason: `ambiguous calendar: [${calIds}]`,
+      });
+      if (!orphanResult.ok) return err(orphanResult.error);
+      continue;
+    }
+
+    const leg = legs[0];
+    if (leg === undefined) continue;
+    matched.push({ fill, leg });
+  }
+
+  if (matched.length === 0) return ok(undefined);
+
+  // Step 3: Group by (calendarId, legOccSymbol, orderId) for partial fill aggregation (D-04)
+  type BucketEntry = { fills: RawFill[]; leg: CalendarLegEntry };
+  const buckets = new Map<string, BucketEntry>();
+
+  for (const { fill, leg } of matched) {
+    const key = `${leg.calendarId}|${leg.legOccSymbol}|${fill.orderId}`;
+    const existing = buckets.get(key);
+    if (existing === undefined) {
+      buckets.set(key, { fills: [fill], leg });
+    } else {
+      existing.fills.push(fill);
+    }
+  }
+
+  // Step 4-5: Aggregate and classify fills
+  const classified: ClassifiedFill[] = [];
+
+  for (const { fills: bucketFills, leg } of buckets.values()) {
+    const aggResult = aggregatePartialFills(
+      bucketFills,
+      leg.calendarId,
+      leg.positionEffect,
+    );
+    if (!aggResult.ok) {
+      // Malformed bucket (empty / non-positive qty) — park its fills as orphans (D-05),
+      // never silently drop. Full per-fill parking with real fields lands in 05-11 (B5).
+      for (const fill of bucketFills) {
         const orphanResult = await deps.storeOrphanFill({
           fillId: fill.id,
           occSymbol: fill.occSymbol,
@@ -108,15 +186,77 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
           qty: fill.qty,
           price: fill.price,
           filledAt: fill.filledAt,
-          reason: "no matching calendar",
+          reason: `aggregation error: ${aggResult.error.message}`,
         });
         if (!orphanResult.ok) return err(orphanResult.error);
-        continue;
       }
+      continue;
+    }
+    const enriched: AggregatedFill = {
+      ...aggResult.value,
+      legOccSymbol: leg.legOccSymbol,
+    };
+    const classification = classifyFill(enriched.positionEffect);
+    classified.push({ ...enriched, classification, rawFills: bucketFills });
+  }
 
-      if (legs.length > 1) {
-        // Pitfall 6: ambiguous calendar — never auto-assign
-        const calIds = legs.map((l) => l.calendarId).join(", ");
+  // B1: prior-OPEN-debit lookup. Cache calendar_events per calendarId so we read each
+  // calendar's events at most once, then find the OPEN event for the closed leg to pin
+  // originalOpenDebit. Returns null when no prior OPEN exists → realizedPnl stays null
+  // (locked decision 2 / WR-01: never report a wrong number).
+  const priorEventsCache = new Map<string, ReadonlyArray<CalendarEvent>>();
+  async function originalOpenDebitFor(
+    calendarId: string,
+    legOccSymbol: string,
+  ): Promise<Result<number | null, StorageError>> {
+    let events = priorEventsCache.get(calendarId);
+    if (events === undefined) {
+      const eventsResult = await deps.readCalendarEvents(calendarId);
+      if (!eventsResult.ok) return err(eventsResult.error);
+      events = eventsResult.value;
+      priorEventsCache.set(calendarId, events);
+    }
+    const open = events.find(
+      (e) => e.eventType === "OPEN" && e.legOccSymbol === legOccSymbol,
+    );
+    // OPEN netAmount is the original open debit (positive, D-08).
+    return ok(open === undefined ? null : open.netAmount);
+  }
+
+  // Step 6: ROLL detection
+  // Group by (calendarId|orderId) to find CLOSE+OPEN pairs with different legOccSymbol
+  type OrderGroup = { closes: ClassifiedFill[]; opens: ClassifiedFill[] };
+  const orderGroups = new Map<string, OrderGroup>();
+
+  for (const cf of classified) {
+    const key = `${cf.calendarId}|${cf.orderId}`;
+    const group = orderGroups.get(key) ?? { closes: [], opens: [] };
+    if (cf.classification === "CLOSE") {
+      group.closes.push(cf);
+    } else if (cf.classification === "OPEN") {
+      group.opens.push(cf);
+    }
+    orderGroups.set(key, group);
+  }
+
+  // Track which opens were consumed by a ROLL so we don't emit them separately
+  const consumedOpens = new Set<ClassifiedFill>();
+
+  // Steps 7-8: Emit events
+  for (const cf of classified) {
+    // UNKNOWN positionEffect → orphan (D-02: cross-check with calendar dates is adapter concern).
+    // B5/WR-07: park EACH underlying raw fill individually with its real side + filledAt and
+    // its real UUID — never a synthesized `agg-unknown-${orderId}` PK, and never drop siblings.
+    if (cf.classification === "UNKNOWN") {
+      if (cf.rawFills.length === 0) {
+        // A malformed aggregate with no underlying fills cannot be parked without
+        // fabricating a PK — surface an error rather than synthesize one (WR-07).
+        return err({
+          kind: "storage-error",
+          message: `UNKNOWN aggregate for order ${cf.orderId} has no underlying fills to park`,
+        });
+      }
+      for (const fill of cf.rawFills) {
         const orphanResult = await deps.storeOrphanFill({
           fillId: fill.id,
           occSymbol: fill.occSymbol,
@@ -124,277 +264,180 @@ export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
           qty: fill.qty,
           price: fill.price,
           filledAt: fill.filledAt,
-          reason: `ambiguous calendar: [${calIds}]`,
+          reason: "unknown positionEffect — cannot classify without calendar context",
         });
         if (!orphanResult.ok) return err(orphanResult.error);
-        continue;
       }
-
-      const leg = legs[0];
-      if (leg === undefined) continue;
-      matched.push({ fill, leg });
+      continue;
     }
 
-    if (matched.length === 0) return ok(undefined);
-
-    // Step 3: Group by (calendarId, legOccSymbol, orderId) for partial fill aggregation (D-04)
-    type BucketEntry = { fills: RawFill[]; leg: CalendarLegEntry };
-    const buckets = new Map<string, BucketEntry>();
-
-    for (const { fill, leg } of matched) {
-      const key = `${leg.calendarId}|${leg.legOccSymbol}|${fill.orderId}`;
-      const existing = buckets.get(key);
-      if (existing === undefined) {
-        buckets.set(key, { fills: [fill], leg });
-      } else {
-        existing.fills.push(fill);
-      }
+    // If this OPEN was already consumed by a ROLL, skip it
+    if (cf.classification === "OPEN" && consumedOpens.has(cf)) {
+      continue;
     }
 
-    // Step 4-5: Aggregate and classify fills
-    const classified: ClassifiedFill[] = [];
+    // Check for ROLL: CLOSE fill paired with an OPEN in the same (calendarId, orderId)
+    if (cf.classification === "CLOSE") {
+      const groupKey = `${cf.calendarId}|${cf.orderId}`;
+      const group = orderGroups.get(groupKey);
+      const paired = group?.opens.find((o) => !consumedOpens.has(o));
 
-    for (const { fills: bucketFills, leg } of buckets.values()) {
-      const aggResult = aggregatePartialFills(
-        bucketFills,
-        leg.calendarId,
-        leg.positionEffect,
-      );
-      if (!aggResult.ok) {
-        // Malformed bucket (empty / non-positive qty) — park its fills as orphans (D-05),
-        // never silently drop. Full per-fill parking with real fields lands in 05-11 (B5).
-        for (const fill of bucketFills) {
-          const orphanResult = await deps.storeOrphanFill({
-            fillId: fill.id,
-            occSymbol: fill.occSymbol,
-            side: fill.side,
-            qty: fill.qty,
-            price: fill.price,
-            filledAt: fill.filledAt,
-            reason: `aggregation error: ${aggResult.error.message}`,
-          });
-          if (!orphanResult.ok) return err(orphanResult.error);
-        }
-        continue;
-      }
-      const enriched: AggregatedFill = {
-        ...aggResult.value,
-        legOccSymbol: leg.legOccSymbol,
-      };
-      const classification = classifyFill(enriched.positionEffect);
-      classified.push({ ...enriched, classification, rawFills: bucketFills });
-    }
+      if (paired !== undefined) {
+        // detectRoll verifies: same calendarId + same orderId + different legOccSymbol
+        const isRoll = detectRoll(cf, paired);
+        if (isRoll) {
+          consumedOpens.add(paired);
 
-    // B1: prior-OPEN-debit lookup. Cache calendar_events per calendarId so we read each
-    // calendar's events at most once, then find the OPEN event for the closed leg to pin
-    // originalOpenDebit. Returns null when no prior OPEN exists → realizedPnl stays null
-    // (locked decision 2 / WR-01: never report a wrong number).
-    const priorEventsCache = new Map<string, ReadonlyArray<CalendarEvent>>();
-    async function originalOpenDebitFor(
-      calendarId: string,
-      legOccSymbol: string,
-    ): Promise<Result<number | null, StorageError>> {
-      let events = priorEventsCache.get(calendarId);
-      if (events === undefined) {
-        const eventsResult = await deps.readCalendarEvents(calendarId);
-        if (!eventsResult.ok) return err(eventsResult.error);
-        events = eventsResult.value;
-        priorEventsCache.set(calendarId, events);
-      }
-      const open = events.find(
-        (e) => e.eventType === "OPEN" && e.legOccSymbol === legOccSymbol,
-      );
-      // OPEN netAmount is the original open debit (positive, D-08).
-      return ok(open === undefined ? null : open.netAmount);
-    }
+          // ONE ROLL event referencing both legs (D-03)
+          const allFillIds = [...cf.fillIds, ...paired.fillIds];
+          const fillIdsHash = deps.hashFillIds(allFillIds);
 
-    // Step 6: ROLL detection
-    // Group by (calendarId|orderId) to find CLOSE+OPEN pairs with different legOccSymbol
-    type OrderGroup = { closes: ClassifiedFill[]; opens: ClassifiedFill[] };
-    const orderGroups = new Map<string, OrderGroup>();
+          // P&L: close leg provides credit; open leg provides new debit (D-08/D-09).
+          // realizedPnl reflects ONLY the closed (old) leg:
+          //   closeCredit − originalOpenDebit − feesOnClose.
+          // The new leg's debit is cost basis / netAmount, NOT subtracted (locked decision 2).
+          const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
+          const openDebit = paired.avgPrice * paired.sumQty;
+          const feesOnClose = cf.totalCommission + cf.totalFees;
 
-    for (const cf of classified) {
-      const key = `${cf.calendarId}|${cf.orderId}`;
-      const group = orderGroups.get(key) ?? { closes: [], opens: [] };
-      if (cf.classification === "CLOSE") {
-        group.closes.push(cf);
-      } else if (cf.classification === "OPEN") {
-        group.opens.push(cf);
-      }
-      orderGroups.set(key, group);
-    }
+          // B1/WR-01: originalOpenDebit comes from the prior OPEN event for the CLOSED leg.
+          const debitResult = await originalOpenDebitFor(cf.calendarId, cf.legOccSymbol);
+          if (!debitResult.ok) return err(debitResult.error);
+          const originalOpenDebit = debitResult.value;
+          const realizedPnl: number | null =
+            originalOpenDebit === null
+              ? null // no prior OPEN → never a wrong number
+              : computeRealizedPnl(closeCredit, originalOpenDebit, feesOnClose);
 
-    // Track which opens were consumed by a ROLL so we don't emit them separately
-    const consumedOpens = new Set<ClassifiedFill>();
-
-    // Steps 7-8: Emit events
-    for (const cf of classified) {
-      // UNKNOWN positionEffect → orphan (D-02: cross-check with calendar dates is adapter concern).
-      // B5/WR-07: park EACH underlying raw fill individually with its real side + filledAt and
-      // its real UUID — never a synthesized `agg-unknown-${orderId}` PK, and never drop siblings.
-      if (cf.classification === "UNKNOWN") {
-        if (cf.rawFills.length === 0) {
-          // A malformed aggregate with no underlying fills cannot be parked without
-          // fabricating a PK — surface an error rather than synthesize one (WR-07).
-          return err({
-            kind: "storage-error",
-            message: `UNKNOWN aggregate for order ${cf.orderId} has no underlying fills to park`,
-          });
-        }
-        for (const fill of cf.rawFills) {
-          const orphanResult = await deps.storeOrphanFill({
-            fillId: fill.id,
-            occSymbol: fill.occSymbol,
-            side: fill.side,
-            qty: fill.qty,
-            price: fill.price,
-            filledAt: fill.filledAt,
-            reason: "unknown positionEffect — cannot classify without calendar context",
-          });
-          if (!orphanResult.ok) return err(orphanResult.error);
-        }
-        continue;
-      }
-
-      // If this OPEN was already consumed by a ROLL, skip it
-      if (cf.classification === "OPEN" && consumedOpens.has(cf)) {
-        continue;
-      }
-
-      // Check for ROLL: CLOSE fill paired with an OPEN in the same (calendarId, orderId)
-      if (cf.classification === "CLOSE") {
-        const groupKey = `${cf.calendarId}|${cf.orderId}`;
-        const group = orderGroups.get(groupKey);
-        const paired = group?.opens.find((o) => !consumedOpens.has(o));
-
-        if (paired !== undefined) {
-          // detectRoll verifies: same calendarId + same orderId + different legOccSymbol
-          const isRoll = detectRoll(cf, paired);
-          if (isRoll) {
-            consumedOpens.add(paired);
-
-            // ONE ROLL event referencing both legs (D-03)
-            const allFillIds = [...cf.fillIds, ...paired.fillIds];
-            const fillIdsHash = deps.hashFillIds(allFillIds);
-
-            // P&L: close leg provides credit; open leg provides new debit (D-08/D-09).
-            // realizedPnl reflects ONLY the closed (old) leg:
-            //   closeCredit − originalOpenDebit − feesOnClose.
-            // The new leg's debit is cost basis / netAmount, NOT subtracted (locked decision 2).
-            const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
-            const openDebit = paired.avgPrice * paired.sumQty;
-            const feesOnClose = cf.totalCommission + cf.totalFees;
-
-            // B1/WR-01: originalOpenDebit comes from the prior OPEN event for the CLOSED leg.
-            const debitResult = await originalOpenDebitFor(cf.calendarId, cf.legOccSymbol);
-            if (!debitResult.ok) return err(debitResult.error);
-            const originalOpenDebit = debitResult.value;
-            const realizedPnl: number | null =
-              originalOpenDebit === null
-                ? null // no prior OPEN → never a wrong number
-                : computeRealizedPnl(closeCredit, originalOpenDebit, feesOnClose);
-
-            const legBreakdown = JSON.stringify({
-              closing: {
-                legOccSymbol: cf.legOccSymbol,
-                qty: cf.sumQty,
-                avgPrice: cf.avgPrice,
-                netAmount: -(cf.avgPrice * cf.sumQty),
-                totalFees: cf.totalCommission + cf.totalFees,
-              },
-              opening: {
-                legOccSymbol: paired.legOccSymbol,
-                qty: paired.sumQty,
-                avgPrice: paired.avgPrice,
-                netAmount: paired.avgPrice * paired.sumQty,
-                totalFees: paired.totalCommission + paired.totalFees,
-              },
-            });
-
-            const rollEvent: CalendarEvent = {
-              id: deps.newId(),
-              calendarId: cf.calendarId,
-              eventType: "ROLL",
-              eventedAt: deps.now(),
-              fillIdsHash,
-              // legOccSymbol = new leg (the OPEN leg); rolledFromOccSymbol = old leg (D-03)
-              legOccSymbol: paired.legOccSymbol,
-              rolledFromOccSymbol: cf.legOccSymbol,
-              qty: paired.sumQty,
-              avgPrice: paired.avgPrice,
-              // Net ROLL amount: net debit/credit of both legs combined
-              netAmount: openDebit - closeCredit,
-              realizedPnl,
-              legBreakdown,
-              entryThesis: null,
-            };
-
-            const storeResult = await deps.storeCalendarEvent(rollEvent);
-            if (!storeResult.ok) return err(storeResult.error);
-            continue;
-          }
-        }
-      }
-
-      // Emit OPEN or CLOSE event
-      const fillIdsHash = deps.hashFillIds(cf.fillIds);
-      const isClose = cf.classification === "CLOSE";
-
-      // D-08: OPEN debit = positive; CLOSE credit = negative
-      const netAmount = isClose
-        ? -(cf.avgPrice * cf.sumQty) // credit received = negative
-        : cf.avgPrice * cf.sumQty;   // debit paid = positive
-
-      // D-09 (B1/WR-01): realizedPnl = closeCredit − originalOpenDebit − feesOnClose on CLOSE.
-      // originalOpenDebit is read from the prior OPEN event for the leg; when no prior OPEN
-      // exists realizedPnl is null (locked decision 2: never report a wrong number). OPEN
-      // events carry null realizedPnl by definition.
-      let realizedPnl: number | null = null;
-      if (isClose) {
-        const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
-        const feesOnClose = cf.totalCommission + cf.totalFees;
-        const debitResult = await originalOpenDebitFor(cf.calendarId, cf.legOccSymbol);
-        if (!debitResult.ok) return err(debitResult.error);
-        const originalOpenDebit = debitResult.value;
-        realizedPnl =
-          originalOpenDebit === null
-            ? null
-            : computeRealizedPnl(closeCredit, originalOpenDebit, feesOnClose);
-      }
-
-      // D-09 hard requirement: legBreakdown on CLOSE/ROLL
-      const legBreakdown = isClose
-        ? JSON.stringify({
-            leg: {
+          const legBreakdown = JSON.stringify({
+            closing: {
               legOccSymbol: cf.legOccSymbol,
               qty: cf.sumQty,
               avgPrice: cf.avgPrice,
-              netAmount,
+              netAmount: -(cf.avgPrice * cf.sumQty),
               totalFees: cf.totalCommission + cf.totalFees,
             },
-          })
-        : null;
+            opening: {
+              legOccSymbol: paired.legOccSymbol,
+              qty: paired.sumQty,
+              avgPrice: paired.avgPrice,
+              netAmount: paired.avgPrice * paired.sumQty,
+              totalFees: paired.totalCommission + paired.totalFees,
+            },
+          });
 
-      const event: CalendarEvent = {
-        id: deps.newId(),
-        calendarId: cf.calendarId,
-        eventType: cf.classification,
-        eventedAt: deps.now(),
-        fillIdsHash,
-        legOccSymbol: cf.legOccSymbol,
-        rolledFromOccSymbol: null,
-        qty: cf.sumQty,
-        avgPrice: cf.avgPrice,
-        netAmount,
-        realizedPnl,
-        legBreakdown,
-        entryThesis: null,
-      };
+          const rollEvent: CalendarEvent = {
+            id: deps.newId(),
+            calendarId: cf.calendarId,
+            eventType: "ROLL",
+            eventedAt: deps.now(),
+            fillIdsHash,
+            // legOccSymbol = new leg (the OPEN leg); rolledFromOccSymbol = old leg (D-03)
+            legOccSymbol: paired.legOccSymbol,
+            rolledFromOccSymbol: cf.legOccSymbol,
+            qty: paired.sumQty,
+            avgPrice: paired.avgPrice,
+            // Net ROLL amount: net debit/credit of both legs combined
+            netAmount: openDebit - closeCredit,
+            realizedPnl,
+            legBreakdown,
+            entryThesis: null,
+          };
 
-      const storeResult = await deps.storeCalendarEvent(event);
-      if (!storeResult.ok) return err(storeResult.error);
+          const storeResult = await deps.storeCalendarEvent(rollEvent);
+          if (!storeResult.ok) return err(storeResult.error);
+          continue;
+        }
+      }
     }
 
-    return ok(undefined);
+    // Emit OPEN or CLOSE event
+    const fillIdsHash = deps.hashFillIds(cf.fillIds);
+    const isClose = cf.classification === "CLOSE";
+
+    // D-08: OPEN debit = positive; CLOSE credit = negative
+    const netAmount = isClose
+      ? -(cf.avgPrice * cf.sumQty) // credit received = negative
+      : cf.avgPrice * cf.sumQty;   // debit paid = positive
+
+    // D-09 (B1/WR-01): realizedPnl = closeCredit − originalOpenDebit − feesOnClose on CLOSE.
+    // originalOpenDebit is read from the prior OPEN event for the leg; when no prior OPEN
+    // exists realizedPnl is null (locked decision 2: never report a wrong number). OPEN
+    // events carry null realizedPnl by definition.
+    let realizedPnl: number | null = null;
+    if (isClose) {
+      const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
+      const feesOnClose = cf.totalCommission + cf.totalFees;
+      const debitResult = await originalOpenDebitFor(cf.calendarId, cf.legOccSymbol);
+      if (!debitResult.ok) return err(debitResult.error);
+      const originalOpenDebit = debitResult.value;
+      realizedPnl =
+        originalOpenDebit === null
+          ? null
+          : computeRealizedPnl(closeCredit, originalOpenDebit, feesOnClose);
+    }
+
+    // D-09 hard requirement: legBreakdown on CLOSE/ROLL
+    const legBreakdown = isClose
+      ? JSON.stringify({
+          leg: {
+            legOccSymbol: cf.legOccSymbol,
+            qty: cf.sumQty,
+            avgPrice: cf.avgPrice,
+            netAmount,
+            totalFees: cf.totalCommission + cf.totalFees,
+          },
+        })
+      : null;
+
+    const event: CalendarEvent = {
+      id: deps.newId(),
+      calendarId: cf.calendarId,
+      eventType: cf.classification,
+      eventedAt: deps.now(),
+      fillIdsHash,
+      legOccSymbol: cf.legOccSymbol,
+      rolledFromOccSymbol: null,
+      qty: cf.sumQty,
+      avgPrice: cf.avgPrice,
+      netAmount,
+      realizedPnl,
+      legBreakdown,
+      entryThesis: null,
+    };
+
+    const storeResult = await deps.storeCalendarEvent(event);
+    if (!storeResult.ok) return err(storeResult.error);
+  }
+
+  return ok(undefined);
+}
+
+// ─── Use-case factories ────────────────────────────────────────────────────────
+
+/**
+ * makeSyncFillsUseCase — full-sweep sync: reads ALL unprocessed fills across every
+ * calendar and pairs them into OPEN/CLOSE/ROLL events.
+ */
+export function makeSyncFillsUseCase(deps: SyncFillsDeps): ForRunningSyncFills {
+  return async (): Promise<Result<void, StorageError>> => {
+    const fillsResult = await deps.readUnprocessedFills();
+    if (!fillsResult.ok) return err(fillsResult.error);
+    return pairFills(deps, fillsResult.value);
+  };
+}
+
+/**
+ * makeSyncFillsForCalendarUseCase — A2/CR-04 calendar-scoped sync: reads ONLY the target
+ * calendar's unprocessed fills and pairs them, so rebuild-journal re-pairs exactly one
+ * calendar. The delete scope and the sync scope agree (no cross-calendar event bleed).
+ */
+export function makeSyncFillsForCalendarUseCase(
+  deps: SyncFillsForCalendarDeps,
+): ForRunningSyncFillsForCalendar {
+  return async (calendarId: string): Promise<Result<void, StorageError>> => {
+    const fillsResult = await deps.readUnprocessedFillsForCalendar(calendarId);
+    if (!fillsResult.ok) return err(fillsResult.error);
+    return pairFills(deps, fillsResult.value);
   };
 }

@@ -20,6 +20,7 @@ import type {
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
   ForReadingCalendarEvents,
+  ForReadingUnprocessedFillsForCalendar,
   OrphanFillInput,
 } from "./ports.ts";
 import type { RawFill, CalendarEvent } from "../domain/calendar-event.ts";
@@ -571,5 +572,88 @@ describe("makeSyncFillsUseCase", () => {
     for (const o of storedOrphans) {
       expect(o.fillId.startsWith("agg-unknown-")).toBe(false);
     }
+  });
+});
+
+// ─── A2 / CR-04: calendar-scoped sync ──────────────────────────────────────────
+
+describe("makeSyncFillsForCalendarUseCase", () => {
+  it("scoped sync for calendar A emits only A's events; B's fills untouched (CR-04)", async () => {
+    const { makeSyncFillsForCalendarUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    // Fills span calendar A (front leg) and calendar B (back leg).
+    const fillA = makeFill({
+      id: "aaaaaaaa-0000-4000-8000-000000000001",
+      occSymbol: OCC_FRONT,
+      orderId: "order-A",
+      side: "buy",
+    });
+    const fillB = makeFill({
+      id: "bbbbbbbb-0000-4000-8000-000000000002",
+      occSymbol: OCC_BACK,
+      orderId: "order-B",
+      side: "buy",
+    });
+
+    const legMap: Record<
+      string,
+      Array<{
+        calendarId: string;
+        legOccSymbol: string;
+        positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
+      }>
+    > = {
+      [OCC_FRONT]: [
+        { calendarId: "cal-A", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+      ],
+      [OCC_BACK]: [
+        { calendarId: "cal-B", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+      ],
+    };
+
+    // Calendar-scoped fills reader: returns only the target calendar's fills.
+    const fillsByCalendar: Record<string, RawFill[]> = {
+      "cal-A": [fillA],
+      "cal-B": [fillB],
+    };
+    const readUnprocessedFillsForCalendar: ForReadingUnprocessedFillsForCalendar =
+      async (calendarId) => ok(fillsByCalendar[calendarId] ?? []);
+
+    const readCalendarLegs: ForReadingCalendarLegs = async (occSymbol) =>
+      ok(legMap[occSymbol] ?? []);
+    const storeCalendarEvent: ForStoringCalendarEvent = async (event) => {
+      storedEvents.push(event);
+      return ok(undefined);
+    };
+    const storeOrphanFill: ForStoringOrphanFill = async (orphan) => {
+      storedOrphans.push(orphan);
+      return ok(undefined);
+    };
+    const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
+    const readCalendarEvents: ForReadingCalendarEvents = async () => ok([]);
+
+    idCounter = 0;
+    const syncForCalendar = makeSyncFillsForCalendarUseCase({
+      readUnprocessedFillsForCalendar,
+      readCalendarLegs,
+      storeCalendarEvent,
+      storeOrphanFill,
+      resetCalendarAmounts,
+      readCalendarEvents,
+      newId: seqId,
+      hashFillIds: fakeHashFillIds,
+      now: () => new Date("2026-06-15T14:00:00Z"),
+    });
+
+    const result = await syncForCalendar("cal-A");
+    expect(result.ok).toBe(true);
+    expect(storedOrphans).toHaveLength(0);
+    // Only calendar A's event emitted; B is untouched.
+    expect(storedEvents).toHaveLength(1);
+    expect(storedEvents[0]?.calendarId).toBe("cal-A");
+    expect(storedEvents.some((e) => e.calendarId === "cal-B")).toBe(false);
   });
 });

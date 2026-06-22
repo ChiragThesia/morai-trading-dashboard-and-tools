@@ -31,6 +31,7 @@ import {
   makeComputeBsmGreeksUseCase,
   makeSnapshotCalendarsUseCase,
   makeSyncFillsUseCase,
+  makeSyncFillsForCalendarUseCase,
   hashFillIds,
   makeRebuildJournalUseCase,
   selectChainSource,
@@ -218,6 +219,24 @@ const syncFillsHandler = makeSyncFillsHandler({
   now: () => new Date(),
 });
 
+// A2/CR-04: calendar-scoped sync — rebuild-journal re-pairs ONLY the target calendar
+// (delete scope == sync scope). readUnprocessedFillsForCalendar is stubbed pending the
+// fills repo (plan 05-13); a no-op empty read keeps rebuild a safe no-op until then.
+const syncFillsForCalendarUseCase = makeSyncFillsForCalendarUseCase({
+  readUnprocessedFillsForCalendar: async (_calendarId) => ({
+    ok: true as const,
+    value: [],
+  }),
+  readCalendarLegs: async (_occSymbol) => ({ ok: true as const, value: [] }),
+  storeCalendarEvent: calendarEventsRepo.storeCalendarEvent,
+  storeOrphanFill: orphanFillsRepo.storeOrphanFill,
+  resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
+  readCalendarEvents: calendarEventsRepo.readCalendarEvents,
+  newId: () => randomUUID(),
+  hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
+  now: () => new Date(),
+});
+
 // JOB-02 / D-13: refresh both Schwab apps independently via Promise.allSettled (plan 05-05).
 // Each app has its own OAuth client built from the app-specific key/secret/callbackUrl.
 // recordRefreshOutcome persists per-app refresh failure on broker_tokens.last_refresh_error
@@ -262,13 +281,14 @@ const refreshTokensHandler = makeRefreshTokensHandler({
 });
 
 // JRNL-01 / D-10: rebuildJournal use-case — delete-then-reinsert from fills (idempotent).
-// syncFillsForCalendar: wraps syncFillsUseCase so rebuild re-processes fills for the given calendar.
-// readUnprocessedFills + readCalendarLegs still stubbed (fills repo pending); 05-08 completes
-// the use-case layer; fills repo wire-up is a follow-up once the fills table is populated.
+// syncFillsForCalendar uses the calendar-scoped sync (CR-04) so a single-calendar rebuild
+// re-pairs ONLY that calendar. readUnprocessedFillsForCalendar is stubbed (fills repo pending,
+// plan 05-13); real wire-up follows once the fills table is populated.
 const rebuildJournalUseCase = makeRebuildJournalUseCase({
   deleteCalendarEvents: calendarEventsRepo.deleteCalendarEvents,
   resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
-  syncFillsForCalendar: async (_calendarId) => syncFillsUseCase(),
+  // CR-04: genuinely calendar-scoped — re-pairs only the target calendar (not a full sweep).
+  syncFillsForCalendar: syncFillsForCalendarUseCase,
   now: () => new Date(),
 });
 
