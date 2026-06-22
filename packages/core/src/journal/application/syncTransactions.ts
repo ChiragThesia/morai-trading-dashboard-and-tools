@@ -57,21 +57,21 @@ export type ForRunningSyncTransactions = () => Promise<
 
 // ─── Deterministic id helper ────────────────────────────────────────────────────
 
-// Format a 64-char sha256 hex digest into a canonical UUID string (8-4-4-4-12) with the
-// version nibble set to 5 (name-based) and the variant nibble set to RFC-4122. Same digest
-// → same UUID, so the same (activityId, legIndex) key always yields the same fill id.
-function hexToUuid(hex: string): string {
+// Format a 64-char sha256 hex digest into a canonical UUID string (8-4-4-4-12).
+// WR-A3: every nibble of the 32-char prefix contributes — none is dropped. The fills.id
+// column is a plain Postgres `uuid` (not validated as RFC-4122 v5), so no version/variant
+// nibble is synthesized; the prior version-5 rewrite skipped input nibble 12 and let two
+// distinct (activityId, legIndex) keys collide on the id PK (the second real fill was then
+// silently dropped by onConflictDoNothing). The mapping is now contiguous and total:
+// same digest → same UUID, so the same key always yields the same fill id (idempotent).
+export function hexToUuid(hex: string): string {
   const h = hex.slice(0, 32);
   const timeLow = h.slice(0, 8);
   const timeMid = h.slice(8, 12);
-  const timeHiVersion = "5" + h.slice(13, 16); // version 5
-  // variant: high bits 10xx → take a hex digit in [8,9,a,b]
-  const variantNibbles = "89ab";
-  const vIndex = parseInt(h.slice(16, 17), 16) % 4;
-  const variantDigit = variantNibbles[vIndex] ?? "8";
-  const clockSeq = variantDigit + h.slice(17, 20);
+  const timeHi = h.slice(12, 16);
+  const clockSeq = h.slice(16, 20);
   const node = h.slice(20, 32);
-  return `${timeLow}-${timeMid}-${timeHiVersion}-${clockSeq}-${node}`;
+  return `${timeLow}-${timeMid}-${timeHi}-${clockSeq}-${node}`;
 }
 
 // ─── Use-case factory ────────────────────────────────────────────────────────────

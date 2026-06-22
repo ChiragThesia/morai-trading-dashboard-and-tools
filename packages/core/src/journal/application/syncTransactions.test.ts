@@ -18,7 +18,10 @@ import type {
   AuthExpiredError,
 } from "../../brokerage/application/ports.ts";
 import type { ForWritingFills, RawFill, StorageError } from "./ports.ts";
-import { makeSyncTransactionsUseCase } from "./syncTransactions.ts";
+import { hexToUuid, makeSyncTransactionsUseCase } from "./syncTransactions.ts";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -188,6 +191,45 @@ describe("makeSyncTransactionsUseCase — A4 fills source", () => {
     const result = await run();
     expect(result.ok).toBe(true);
     expect(captured).toHaveLength(0);
+  });
+
+  // ─── WR-A3: hexToUuid is total (every prefix nibble contributes) ──────────────
+
+  it("hexToUuid: two digests differing ONLY at nibble 12 yield DIFFERENT UUIDs (collision regression)", () => {
+    const d1 = "a".repeat(12) + "0" + "a".repeat(51); // nibble 12 = "0"
+    const d2 = "a".repeat(12) + "f" + "a".repeat(51); // nibble 12 = "f"
+    expect(d1).toHaveLength(64);
+    expect(d2).toHaveLength(64);
+    // The previously-dropped nibble (index 12) must now change the output.
+    expect(hexToUuid(d1)).not.toBe(hexToUuid(d2));
+  });
+
+  it("hexToUuid: flipping ANY single nibble of the 32-nibble prefix changes the UUID (total mapping)", () => {
+    // A prefix where each nibble differs from a chosen replacement, so a flip is observable.
+    const base = "0123456789abcdef0123456789abcdef" + "0".repeat(32); // 64 hex chars
+    expect(base).toHaveLength(64);
+    const baseUuid = hexToUuid(base);
+    for (let i = 0; i < 32; i++) {
+      const original = base[i];
+      // pick a different hex nibble deterministically
+      const flipped = original === "0" ? "f" : "0";
+      const mutated = base.slice(0, i) + flipped + base.slice(i + 1);
+      expect(hexToUuid(mutated), `nibble index ${i} must affect the UUID`).not.toBe(
+        baseUuid,
+      );
+    }
+  });
+
+  it("hexToUuid: output is a syntactically valid UUID (fills.id is a Postgres uuid)", () => {
+    const samples = [
+      "0".repeat(64),
+      "f".repeat(64),
+      "0123456789abcdef".repeat(4),
+      "a".repeat(12) + "f" + "a".repeat(51),
+    ];
+    for (const s of samples) {
+      expect(hexToUuid(s)).toMatch(UUID_RE);
+    }
   });
 
   it("FetchError → err (retryable; pg-boss retries the job)", async () => {
