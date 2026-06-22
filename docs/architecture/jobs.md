@@ -26,7 +26,7 @@ handlers are thin inbound adapters calling application use-cases.
 | `sync-fills` | `*/10 9-16 * * 1-5` (every 10 min RTH) | Schwab transactions → `fills`/`orders`; pair into calendar OPEN/CLOSE/ROLL events |
 | `refresh-tokens` | `0 4 * * *` (04:00 ET, NO RTH gate) | Refresh both Schwab apps independently; proactive 7-day expiry warning; alert on failure |
 | `fetch-rates` | `0 7 * * 1-5` | FRED DGS3MO daily |
-| `compute-analytics` | after `snapshot-calendars` completes | Skew, term structure observations |
+| `compute-analytics` | chain-triggered only (NO cron) | Reads `leg_observations` + `calendar_snapshots`; writes `skew_observations`, `risk_reversal_observations`, `term_structure_observations` |
 | `rebuild-journal` | on-demand only (no schedule) | Reconstructs OPEN/CLOSE/ROLL events for one calendar from fills; idempotent delete-then-reinsert |
 
 Notes carried from old dashboard:
@@ -69,6 +69,31 @@ broker transaction feed (the Phase-4 transactions adapter) and writes `fills` ro
 `sync-fills` real input to pair. Without it `sync-fills` reads an empty table and produces no
 events. This source job lands in plan 05-12; the `ForWritingFills` port (below) is its writer
 contract. It runs before `sync-fills` in the RTH cadence so each pairing run sees fresh fills.
+
+## compute-analytics (Phase 6, ANLY-01/ANLY-02)
+
+**Schedule:** None — chain-triggered only. It fires after `snapshot-calendars` completes a
+cycle, the same chain pattern as `compute-bsm-greeks` → `snapshot-calendars`: the upstream
+handler enqueues the next job on success (fire-and-forget). There is no cron entry.
+
+**What it does:** for the snapshot time of the cycle, it reads `leg_observations` (the
+per-strike smile) and `calendar_snapshots` (the stored `term_slope`), then writes all three
+analytics tables:
+1. `skew_observations` — one row per `(underlying, expiration, strike)` in the smile.
+2. `risk_reversal_observations` — the interpolated 25Δ risk-reversal plus its trailing-window
+   rank per `(underlying, expiration)`. The risk-reversal is NULL when ±25Δ cannot be
+   bracketed (never fabricated), and a NULL value is excluded from the rank.
+3. `term_structure_observations` — one row per calendar, `value` read through from that
+   calendar's `calendar_snapshots.term_slope` (no recompute drift).
+
+**Idempotent:** every table has a per-grain UNIQUE key (the time-leading composite PK). A
+re-run for the same snapshot time inserts zero new rows (`onConflictDoNothing`).
+
+**RTH gate:** inherited from its trigger — it only runs because `snapshot-calendars` ran, and
+that job already gates on RTH and NYSE holidays.
+
+**Surfaced in status:** added to `TRACKED_JOBS` so its last success/error appears in
+`GET /api/status` `lastJobRuns`.
 
 ## refresh-tokens (Phase 5, JOB-02)
 

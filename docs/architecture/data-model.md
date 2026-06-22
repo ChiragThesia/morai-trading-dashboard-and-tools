@@ -82,8 +82,48 @@ discipline as the trade-advisor plugin's `rebuild-journal`.
 date PK, rate numeric          -- fallback 4.5% if FRED unreachable (rho impact tiny)
 ```
 
-### Analytics tables (added when analytics context lands)
-`skew_observations`, `term_structure_observations` — same append-only, time-leading shape.
+### Analytics tables (analytics context, Phase 6)
+
+Three append-only observation tables, written by the `compute-analytics` job after each
+`snapshot-calendars` cycle. Each has a time-leading composite PK that doubles as the per-grain
+UNIQUE key, so a same-snapshot-time re-run inserts zero new rows (`onConflictDoNothing`).
+
+#### `skew_observations` — per-strike volatility smile
+```
+snapshot_time   timestamptz    ┐
+underlying      varchar(16)    │ PK (snapshot_time, underlying, expiration, strike)
+expiration      date           │  = per-grain UNIQUE key
+strike          int            ┘  -- ×1000 convention (7100 → 7100000)
+iv              numeric        -- from leg_observations.bsm_iv
+delta           numeric NULL   -- interpolation source for the ±25Δ points
+moneyness       numeric NULL
+```
+One row per smile point — `(underlying, expiration, strike)` in `leg_observations`.
+
+#### `risk_reversal_observations` — 25Δ risk-reversal + trailing rank
+```
+snapshot_time   timestamptz    ┐ PK (snapshot_time, underlying, expiration)
+underlying      varchar(16)    │  = per-grain UNIQUE key
+expiration      date           ┘
+risk_reversal   numeric NULL   -- IV(25Δ put) − IV(25Δ call); NULL when ±25Δ unbracketable
+rr_rank         numeric NULL   -- trailing-window inclusive percentile; NULL when RR or history absent
+```
+`risk_reversal = IV(25Δ put) − IV(25Δ call)`, interpolated linear-in-delta from the smile's
+`(delta, iv)` pairs to the ±0.25 points. `rr_rank` is the inclusive percentile of that value
+over a trailing window for the same `(underlying, expiration)` — last 252, or all when shorter.
+Forward-only: no backfill of pre-phase history.
+
+#### `term_structure_observations` — forward-vol slope per calendar
+```
+snapshot_time   timestamptz    ┐ PK (snapshot_time, calendar_id)
+calendar_id     uuid           ┘  = per-grain UNIQUE key
+value           numeric        -- back_iv − front_iv; equals calendar_snapshots.term_slope
+front_iv        numeric
+back_iv         numeric
+```
+
+**Two non-negotiable invariants.** (1) **No recompute drift** — `term_structure_observations.value` MUST equal the `term_slope` in the matching `calendar_snapshots` row; the job reads it through, never recomputes.
+(2) **Never fabricate a risk-reversal** — when the smile cannot bracket ±25Δ, `risk_reversal` is NULL (never guessed) and a NULL value is excluded from the rank.
 
 ## Postgres vs Timescale — The Decision
 
