@@ -94,11 +94,13 @@ describe.skipIf(shouldSkip)(
         )
       `);
 
-      // Insert a 'completed' row for fetch-cboe-chain
+      // Insert a 'completed' row for fetch-schwab-chain (the scheduled chain job
+      // since the P4 Schwab-primary switch; fetch-cboe-chain is fallback-only and
+      // is not in TRACKED_JOBS, so readJobRuns would correctly exclude it).
       await db.execute(sql`
         INSERT INTO pgboss.job (name, state, completed_on, output)
         VALUES (
-          'fetch-cboe-chain',
+          'fetch-schwab-chain',
           'completed',
           '2026-06-12 13:31:38.031+00'::timestamptz,
           NULL
@@ -135,7 +137,7 @@ describe.skipIf(shouldSkip)(
       const map = result.value;
 
       // Both seeded jobs should appear
-      expect(Object.keys(map)).toContain("fetch-cboe-chain");
+      expect(Object.keys(map)).toContain("fetch-schwab-chain");
       expect(Object.keys(map)).toContain("fetch-rates");
 
       // Each record must satisfy the contracts schema

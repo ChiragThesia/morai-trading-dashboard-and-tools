@@ -14,6 +14,7 @@ import {
 import { bearerAuth } from "./bearer.ts";
 import { makeMcpRouter } from "./server.ts";
 import type { Config } from "../../config.ts";
+import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
 const TEST_BEARER = "test-bearer-token-1234";
 
@@ -556,12 +557,21 @@ describe("MCP router", () => {
     });
   });
 
-  // ─── trigger_job must NOT be registered ────────────────────────────────────
+  // ─── trigger_job IS registered (MCP-02, Plan 05-08 — supersedes the D-08 deferral) ─
 
-  it("trigger_job is NOT exported from tools.ts (D-08 deferred)", async () => {
+  it("trigger_job is exported from tools.ts and registers without throwing (MCP-02)", async () => {
     const toolsModule = await import("./tools.ts");
     // Object.keys returns string[] — check without type assertions (typescript.md rule)
     const exportedNames = Object.keys(toolsModule);
-    expect(exportedNames.includes("registerTriggerJobTool")).toBe(false);
+    expect(exportedNames.includes("registerTriggerJobTool")).toBe(true);
+
+    const { registerTriggerJobTool } = toolsModule;
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+    const enqueueJob: ForTriggeringJob = async () => ok("job-123");
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    // Should not throw on registration
+    expect(() => registerTriggerJobTool(server, enqueueJob)).not.toThrow();
   });
 });
