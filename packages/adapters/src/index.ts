@@ -45,6 +45,12 @@ export type { PostgresFillsRepo } from "./postgres/repos/fills.ts";
 export { makeMemoryFillsRepo } from "./memory/fills.ts";
 export type { MemoryFillsRepo } from "./memory/fills.ts";
 
+// Phase 6 (06-04): term-structure observations repo (ANLY-02) — postgres + memory twin
+export { makePostgresTermStructureObservationsRepo } from "./postgres/repos/term-structure-observations.ts";
+export type { PostgresTermStructureObservationsRepo } from "./postgres/repos/term-structure-observations.ts";
+export { makeMemoryTermStructureObservationsRepo } from "./memory/term-structure-observations.ts";
+export type { MemoryTermStructureObservationsRepo } from "./memory/term-structure-observations.ts";
+
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
 export type { CboeChainAdapter } from "./http/cboe.ts";
