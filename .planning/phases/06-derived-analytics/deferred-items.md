@@ -26,3 +26,24 @@ Out-of-scope discoveries logged per the executor SCOPE BOUNDARY rule. NOT fixed 
   stashed — not introduced by this plan. From Phase 5 contract-test work.
 - **Why deferred:** Out of scope (not caused by 06-01 changes). Belongs to a Phase 5 follow-up
   or a dedicated typecheck-cleanup task.
+
+## 3. 06-02 Task 2: live production Supabase migrate (0007) — DEFERRED
+
+- **Found during:** 06-02 execution (operator scope modification)
+- **What:** 06-02 Task 2 is a `checkpoint:human-verify gate="blocking"` step that applies
+  `0007_analytics_observations.sql` to the **live** Supabase Postgres via `bun run migrate`.
+  Per operator decision (same as phases 03/04/05), the live production push is DEFERRED — NOT
+  executed during this run.
+- **Action required before deploy:** operator runs `bun run migrate` against the live Supabase
+  DB (session pooler / direct URL, max:1 — NOT the 6543 transaction pooler), then re-runs it once
+  to confirm a clean no-op (DATA-02 idempotency), then confirms the three tables exist
+  (skew_observations, risk_reversal_observations, term_structure_observations).
+- **Local validation already done:** the full migration chain (0000→0007) applied cleanly on a
+  `postgres:16` testcontainer and a second `runMigrations` run was a clean no-op
+  (`migrate.idempotent.test.ts` + `rls.test.ts` both green). The SQL is proven valid + idempotent;
+  only the live apply is pending.
+- **Does NOT block downstream:** 06-03/06-04/06-05 use testcontainers, which replay the migration
+  files (including 0007) to build their schema — they do not need the live DB.
+- **Note for the operator:** Postgres emits a NOTICE truncating the
+  `risk_reversal_observations_snapshot_time_underlying_expiration_pk` constraint name (65 chars)
+  to 63 chars. This is informational, deterministic, and idempotent — not an error.

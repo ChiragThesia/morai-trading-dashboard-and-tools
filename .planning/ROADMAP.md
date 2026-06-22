@@ -289,7 +289,7 @@ Plans:
 
 **Wave 2** *(blocked on 06-01)*
 
-- [ ] 06-02-PLAN.md — [BLOCKING] drizzle generate + live migrate (0007_analytics_observations.sql) (ANLY-01/02/03)
+- [x] 06-02-PLAN.md — [BLOCKING] drizzle generate + live migrate (0007_analytics_observations.sql) (ANLY-01/02/03)
 
 **Wave 3** *(blocked on 06-01)*
 

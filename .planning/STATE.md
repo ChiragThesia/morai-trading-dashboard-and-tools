@@ -6,15 +6,15 @@ current_phase: 06
 current_phase_name: derived-analytics
 status: Phase 06 in progress (Wave 1 — plan 06-01 foundation complete)
 stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-06-22T16:07:17.025Z"
+last_updated: "2026-06-22T16:18:06.046Z"
 last_activity: 2026-06-22
-last_activity_desc: Phase 06 Plan 01 complete (docs-first analytics foundation — three observation tables, ONE shared MCP-02 Zod contract, hexagon-pure analytics context with 8 ports, 3 RED scaffolds for downstream plans; production typecheck clean)
+last_activity_desc: Phase 06 Plan 01 complete (analytics foundation; production typecheck clean; 3 RED scaffolds left for 06-03/06-04/06-05)
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 68
-  completed_plans: 49
-  percent: 67
+  completed_phases: 5
+  total_plans: 52
+  completed_plans: 50
+  percent: 83
 ---
 
 # Project State
@@ -84,6 +84,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 05-jobs-fill-rebuild-integrity P11 | 30 | 2 tasks | 5 files |
 | Phase 05 P15 | 33min | 2 tasks | 16 files |
 | Phase 06 P01 | 12 | 3 tasks | 15 files |
+| Phase 06 P02 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -196,6 +197,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 06 P01]: analytics tables idempotency = time-leading composite PK as per-grain UNIQUE key (skew: snapshot_time,underlying,expiration,strike; RR: snapshot_time,underlying,expiration; term: snapshot_time,calendar_id)
 - [Phase ?]: [Phase 06 P01]: analytics responses are bare z.array(entry) so .parse([]) is the contract-valid no-data case (SPEC R5); old typed-empty {observations:[]} stubs removed, stale journal.test.ts assertions relocated to analytics.test.ts
 - [Phase ?]: [Phase 06 P01]: foundation plan ships RED scaffolds committed intentionally failing on unresolved SUT import (risk-reversal/percentile-rank/computeAnalytics) — 06-03/06-04/06-05 turn green
+- [Phase ?]: 06-02: reconstructed missing meta/0006_snapshot.json (Phase 5 omitted it) so 0007 contains only the 3 analytics tables
+- [Phase ?]: 06-02: live production Supabase migrate (0007) DEFERRED to operator (phases 03/04/05 precedent); validated against postgres:16 testcontainer
 
 ### Pending Todos
 
@@ -219,6 +222,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-22T16:06:36.099Z
+Last session: 2026-06-22T16:17:34.299Z
 Stopped at: Completed 05-16-PLAN.md (gap round 2, Wave 2 — fast-check property tests; fixed ROLL double-count)
 Resume file: None
