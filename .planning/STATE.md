@@ -6,15 +6,15 @@ current_phase: 06
 current_phase_name: derived-analytics
 status: Phase 06 in progress (Wave 1 — plan 06-01 foundation complete)
 stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-06-22T16:52:11.266Z"
+last_updated: "2026-06-22T17:14:59.042Z"
 last_activity: 2026-06-22
 last_activity_desc: Phase 06 Plan 01 complete (analytics foundation; production typecheck clean; 3 RED scaffolds left for 06-03/06-04/06-05)
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 52
-  completed_plans: 52
-  percent: 83
+  completed_plans: 53
+  percent: 100
 ---
 
 # Project State
@@ -87,6 +87,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 06 P02 | 5min | 2 tasks | 5 files |
 | Phase 06 P03 | 10min | 2 tasks | 8 files |
 | Phase 06 P04 | 17min | 3 tasks | 30 files |
+| Phase 06 P05 | 16min | 3 tasks | 33 files |
 
 ## Accumulated Context
 
@@ -207,6 +208,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-04: term-structure value = calendar_snapshots.term_slope passed through unchanged (no recompute)
 - [Phase ?]: 06-04: readSnapshotsForCycle = most recent snapshot time <= now, then all rows at that time (current cycle)
 - [Phase ?]: 06-04: compute-analytics is the new terminal job; chain-triggered by snapshot-calendars via boss.send singletonKey
+- [Phase ?]: skewResponse repurposed to headline 25Δ risk-reversal shape (value=risk_reversal); smile detail -> skewSmileResponse (SPEC R5)
+- [Phase ?]: Added ForReadingSkewSmileDetail port (smile detail) distinct from ForReadingSkewSeries (headline RR series)
 
 ### Pending Todos
 
@@ -230,6 +233,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-22T16:51:28.080Z
+Last session: 2026-06-22T17:14:38.920Z
 Stopped at: Completed 05-16-PLAN.md (gap round 2, Wave 2 — fast-check property tests; fixed ROLL double-count)
 Resume file: None

@@ -25,7 +25,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live (completed 2026-06-14)
 - [x] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions (completed 2026-06-21)
 - [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
-- [ ] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed
+- [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (completed 2026-06-22)
 
 ## Phase Details
 
@@ -281,7 +281,7 @@ return current and historical series queryable by API and Claude Code.
   3. `GET /api/analytics/skew` returns a JSON array with at least one entry of `{ time, value, … }`; `GET /api/analytics/term-structure` returns the same shape for term-structure data.
   4. MCP `get_skew` and `get_term_structure` tools return the same series as their HTTP counterparts, validated against the shared Zod contract from `contracts`.
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 Plans:
 **Wave 1**
 
@@ -301,7 +301,7 @@ Plans:
 
 **Wave 5** *(blocked on 06-03 + 06-04)*
 
-- [ ] 06-05-PLAN.md — Skew vertical slice: skew + risk-reversal repos+twins+contracts + smile/RR/rank compute-analytics half + GET /api/analytics/skew + MCP get_skew over shared schema (ANLY-01/03, MCP-02)
+- [x] 06-05-PLAN.md — Skew vertical slice: skew + risk-reversal repos+twins+contracts + smile/RR/rank compute-analytics half + GET /api/analytics/skew + MCP get_skew over shared schema (ANLY-01/03, MCP-02)
 
 ## Backlog / Future Enhancements
 
@@ -365,4 +365,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
 | 5. Jobs, Fill Rebuild & Integrity | 15/16 | In Progress|  |
-| 6. Derived Analytics | 4/5 | In Progress|  |
+| 6. Derived Analytics | 5/5 | Complete   | 2026-06-22 |
