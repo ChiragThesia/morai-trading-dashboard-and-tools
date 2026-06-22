@@ -19,8 +19,8 @@ const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
 
 const freshnessFresh: ForReadingTokenFreshness = async () =>
   ok({
-    trader: { status: "fresh", expiresAt: thirtyMinLater, refreshIssuedAt: now },
-    market: { status: "AUTH_EXPIRED", expiresAt: thirtyMinLater, refreshIssuedAt: eightDaysAgo },
+    trader: { status: "fresh", expiresAt: thirtyMinLater, refreshIssuedAt: now, lastRefreshError: null },
+    market: { status: "AUTH_EXPIRED", expiresAt: thirtyMinLater, refreshIssuedAt: eightDaysAgo, lastRefreshError: null },
   });
 
 const freshnessErr: ForReadingTokenFreshness = async () =>
