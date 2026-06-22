@@ -78,8 +78,11 @@ export type TermStructureObservationRow = {
 // Declared here in 06-01; implemented by Postgres + memory adapters in 06-04/06-05.
 
 /**
- * ForReadingSmileSource — read the per-strike smile (delta, iv) for a snapshot cycle from
- * leg_observations. Returns empty array when no quotes exist for the time.
+ * ForReadingSmileSource — read the per-strike smile (delta, iv) for a cycle from leg_observations.
+ * The argument is the cycle ANCHOR (an upper bound), NOT an exact-equality match: the read resolves
+ * the latest leg-observations cohort AT OR BEFORE the anchor (mirroring readSnapshotsForCycle's
+ * "latest snapshot ≤ now" resolution) and returns only that cohort. Returns an empty array when no
+ * BSM-solved cohort exists at or before the anchor (06-06 / CR-01).
  */
 export type ForReadingSmileSource = (
   snapshotTime: Date,

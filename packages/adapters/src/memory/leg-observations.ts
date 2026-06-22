@@ -101,14 +101,29 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
     smileStore.set(key, leg);
   };
 
-  // ForReadingSmileSource: per-strike smile points for a snapshot time. Excludes NaN-stamped iv
-  // (bsmIv === "NaN") and unsolved rows (bsmIv === null), mirroring the Postgres adapter.
+  // ForReadingSmileSource (06-06 / CR-01): the argument is the cycle ANCHOR (upper bound), not an
+  // exact-equality match. Resolve the latest BSM-solved leg cohort AT OR BEFORE the anchor, then
+  // return only that cohort. Excludes NaN-stamped iv (bsmIv === "NaN") and unsolved rows
+  // (bsmIv === null), mirroring the Postgres adapter. No cohort ≤ anchor → [].
   const readSmile: ForReadingSmileSource = async (
     snapshotTime,
   ): Promise<Result<ReadonlyArray<SmileQuote>, StorageError>> => {
+    const anchor = snapshotTime.getTime();
+
+    // Step 1: resolve the latest time ≤ anchor that has at least one BSM-solved leg.
+    let resolvedTime: number | null = null;
+    for (const leg of smileStore.values()) {
+      if (leg.bsmIv === null || leg.bsmIv === "NaN") continue; // only solved cohorts qualify
+      const t = leg.snapshotTime.getTime();
+      if (t > anchor) continue;
+      if (resolvedTime === null || t > resolvedTime) resolvedTime = t;
+    }
+    if (resolvedTime === null) return ok([]);
+
+    // Step 2: return only the resolved cohort's solved legs.
     const smile: SmileQuote[] = [];
     for (const leg of smileStore.values()) {
-      if (leg.snapshotTime.getTime() !== snapshotTime.getTime()) continue;
+      if (leg.snapshotTime.getTime() !== resolvedTime) continue;
       if (leg.bsmIv === null || leg.bsmIv === "NaN") continue;
       smile.push({
         underlying: leg.underlying,

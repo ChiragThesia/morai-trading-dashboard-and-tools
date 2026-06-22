@@ -14,7 +14,7 @@ import type {
   SmileQuote,
   StorageError,
 } from "@morai/core";
-import { and, isNull, isNotNull, ne, eq, inArray, desc, sql } from "drizzle-orm";
+import { and, isNull, isNotNull, ne, eq, lte, inArray, desc, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -302,14 +302,37 @@ export function makePostgresLegObservationsRepo(
   };
 
   // ─── ForReadingSmileSource ────────────────────────────────────────────────
-  // ANLY-01 R1: per-(underlying, expiration, strike) smile points for a snapshot time.
-  // Joins leg_observations → contracts for underlying/expiration/strike; maps bsm_iv → iv and
-  // bsm_delta → delta. Excludes NaN-stamped iv rows (bsm_iv = 'NaN') and unsolved rows (bsm_iv
-  // IS NULL) so only BSM-solved strikes form the smile. moneyness has no source column → null.
+  // ANLY-01 R1 + 06-06 (CR-01): per-(underlying, expiration, strike) smile points for a CYCLE
+  // resolved as the latest leg_observations cohort AT OR BEFORE the anchor — NOT exact-equality.
+  // The argument is an upper bound (the cycle anchor), mirroring readSnapshotsForCycle's
+  // "latest snapshot ≤ now" resolution. Two-step:
+  //   Step 1 — resolve the cycle time: MAX(leg_observations.time) ≤ anchor among BSM-solved rows
+  //            (bsm_iv NOT NULL AND != 'NaN') so the resolved cycle is one that actually has a smile.
+  //   Step 2 — read that cohort's smile via the existing join, eq(time, resolvedTime).
+  // Maps bsm_iv → iv and bsm_delta → delta. Excludes NaN-stamped / unsolved rows. moneyness has no
+  // source column → null (06-08 owns the moneyness fix). Empty source / no cohort ≤ anchor → [].
   const readSmile: ForReadingSmileSource = async (
     snapshotTime,
   ): Promise<Result<ReadonlyArray<SmileQuote>, StorageError>> => {
     try {
+      // Step 1: resolve the latest BSM-solved leg cycle at or before the anchor.
+      const latest = await db
+        .select({ time: legObservations.time })
+        .from(legObservations)
+        .where(
+          and(
+            lte(legObservations.time, snapshotTime),
+            isNotNull(legObservations.bsmIv),
+            ne(legObservations.bsmIv, sql`'NaN'::numeric`),
+          ),
+        )
+        .orderBy(desc(legObservations.time))
+        .limit(1);
+
+      const resolvedTime = latest[0]?.time;
+      if (resolvedTime === undefined) return ok([]);
+
+      // Step 2: read the resolved cohort's smile.
       const rows = await db
         .select({
           underlying: contracts.underlying,
@@ -322,7 +345,7 @@ export function makePostgresLegObservationsRepo(
         .innerJoin(contracts, eq(legObservations.contract, contracts.occSymbol))
         .where(
           and(
-            eq(legObservations.time, snapshotTime),
+            eq(legObservations.time, resolvedTime),
             isNotNull(legObservations.bsmIv),
             // Exclude NaN-stamped rows — bsm_iv = 'NaN'::numeric is NOT NULL but unusable.
             ne(legObservations.bsmIv, sql`'NaN'::numeric`),
