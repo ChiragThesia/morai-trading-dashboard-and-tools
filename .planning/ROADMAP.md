@@ -281,7 +281,7 @@ return current and historical series queryable by API and Claude Code.
   3. `GET /api/analytics/skew` returns a JSON array with at least one entry of `{ time, value, … }`; `GET /api/analytics/term-structure` returns the same shape for term-structure data.
   4. MCP `get_skew` and `get_term_structure` tools return the same series as their HTTP counterparts, validated against the shared Zod contract from `contracts`.
 
-**Plans**: 5/5 plans complete
+**Plans**: 5/5 plans complete + 3 gap-round plans (06-06..06-08, post-review)
 Plans:
 **Wave 1**
 
@@ -302,6 +302,17 @@ Plans:
 **Wave 5** *(blocked on 06-03 + 06-04)*
 
 - [x] 06-05-PLAN.md — Skew vertical slice: skew + risk-reversal repos+twins+contracts + smile/RR/rank compute-analytics half + GET /api/analytics/skew + MCP get_skew over shared schema (ANLY-01/03, MCP-02)
+
+**Gap round** *(post-review 06-REVIEW.md — 2 BLOCKER + 4 WARNING + 2 INFO; Phase 6 left unmerged)*
+
+**Wave 1 (gap)**
+
+- [ ] 06-06-PLAN.md — [BLOCKER] Cycle-resolution seam (CR-01/CR-02): data-anchored bounded smile read (latest leg cycle ≤ anchor, repo+twin+contract) + computeAnalytics stamps skew/RR/term with ONE resolved instant (never now()) + Postgres testcontainer seam suite (distinct broker-observedAt/snapshotTime/now() FAILS on old code; run-twice = 0 new rows) (ANLY-01/03)
+- [ ] 06-07-PLAN.md — [WARNING] RR domain guards: WR-04 |delta|≥1 non-physical drop (mis-signed wing protection) + WR-02 ±25Δ bracket-width policy (decide/enforce/document) + fast-check (ANLY-01)
+
+**Wave 2 (gap)** *(blocked on 06-06 — shares computeAnalytics.ts / leg-observations.ts / smile-source contract)*
+
+- [ ] 06-08-PLAN.md — [WARNING+INFO] WR-01 percentileRank empty→null carried through use-case+contract + WR-03 populate moneyness (K/S from spot) on both smile reads+contract (no migration) + IN-01 stale 7-queue/5-cron worker comments → 9/6 (ANLY-01/03, MCP-02)
 
 ## Backlog / Future Enhancements
 
