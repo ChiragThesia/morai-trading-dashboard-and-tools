@@ -94,6 +94,12 @@ export type {
   SyncFillsDeps,
   SyncFillsForCalendarDeps,
 } from "./application/syncFills.ts";
+// Phase 5 (gap round 05-12): A4 sync-transactions fills source use-case
+export { makeSyncTransactionsUseCase } from "./application/syncTransactions.ts";
+export type {
+  ForRunningSyncTransactions,
+  SyncTransactionsDeps,
+} from "./application/syncTransactions.ts";
 // Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
 export { hashFillIds } from "./domain/fill-pairing.ts";
 // Phase 5: rebuildJournal use-case factory + driver port

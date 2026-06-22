@@ -131,6 +131,12 @@ export type {
   SyncFillsDeps,
   SyncFillsForCalendarDeps,
 } from "./journal/index.ts";
+// Phase 5 (gap round 05-12): A4 sync-transactions fills source use-case
+export { makeSyncTransactionsUseCase } from "./journal/index.ts";
+export type {
+  ForRunningSyncTransactions,
+  SyncTransactionsDeps,
+} from "./journal/index.ts";
 export { hashFillIds } from "./journal/index.ts";
 export { makeRebuildJournalUseCase } from "./journal/index.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./journal/index.ts";
