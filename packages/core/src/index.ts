@@ -163,6 +163,17 @@ export type { ForGettingOrders, GetOrdersDeps } from "./brokerage/index.ts";
 // NOT re-exported here to avoid a duplicate-export. Analytics row types + ports follow.
 // Analytics domain functions (06-03)
 export { interpolateRiskReversal, percentileRank } from "./analytics/index.ts";
+// Analytics use-cases (06-04: term-structure half + read forwarder)
+export {
+  makeComputeAnalyticsUseCase,
+  makeGetTermStructureUseCase,
+} from "./analytics/index.ts";
+export type {
+  ComputeAnalyticsDeps,
+  ForRunningComputeAnalytics,
+  GetTermStructureDeps,
+  ForRunningGetTermStructure,
+} from "./analytics/index.ts";
 export type {
   SmileQuote,
   CalendarSnapshotForCycle,

@@ -6,6 +6,18 @@
 export { interpolateRiskReversal } from "./domain/risk-reversal.ts";
 export { percentileRank } from "./domain/percentile-rank.ts";
 
+// Use-cases (06-04: term-structure half of compute-analytics + the read forwarder)
+export { makeComputeAnalyticsUseCase } from "./application/computeAnalytics.ts";
+export type {
+  ComputeAnalyticsDeps,
+  ForRunningComputeAnalytics,
+} from "./application/computeAnalytics.ts";
+export { makeGetTermStructureUseCase } from "./application/getTermStructure.ts";
+export type {
+  GetTermStructureDeps,
+  ForRunningGetTermStructure,
+} from "./application/getTermStructure.ts";
+
 export type {
   StorageError,
   SmileQuote,
