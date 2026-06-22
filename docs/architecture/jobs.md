@@ -52,11 +52,23 @@ rounded from `now()` (e.g. `sync-fills:2026-06-21T14:10:00.000Z`). Uses pg-boss 
 3. Matches fills to calendar legs — exact OCC equality, no fuzzy matching.
 4. Aggregates partial fills per `(calendarId, legOccSymbol, orderId)` — qty-weighted avg price.
 5. Classifies events: OPEN, CLOSE, or ROLL (D-02/D-03). ROLL is first-class.
-6. Computes P&L on CLOSE/ROLL: `closeCredit − openDebit − totalFees` (D-08/D-09).
+6. Computes realized P&L on CLOSE/ROLL by reading the prior OPEN event for the leg:
+   `realizedPnl = closeCredit − originalOpenDebit − feesOnClose` (D-08/D-09). The
+   `originalOpenDebit` is that prior OPEN event's recorded debit. When no prior OPEN event
+   exists for the leg, `realizedPnl` is left NULL rather than reporting a wrong number. On a
+   ROLL the new leg's premium is cost basis (`netAmount`), never realized P&L.
 7. Writes `calendar_events` rows idempotently (`onConflictDoNothing` on `fill_ids_hash`).
 8. Parks unmatched fills in `orphan_fills` with a reason string (D-05 — never silently dropped).
 
 **RTH gate:** Yes. Does not run outside market hours or on NYSE holidays.
+
+## sync-transactions (Phase 5, JRNL-01 — fills source)
+
+The `fills` table is populated from Schwab transactions. A `sync-transactions` job reads the
+broker transaction feed (the Phase-4 transactions adapter) and writes `fills` rows, giving
+`sync-fills` real input to pair. Without it `sync-fills` reads an empty table and produces no
+events. This source job lands in plan 05-12; the `ForWritingFills` port (below) is its writer
+contract. It runs before `sync-fills` in the RTH cadence so each pairing run sees fresh fills.
 
 ## refresh-tokens (Phase 5, JOB-02)
 

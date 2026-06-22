@@ -119,6 +119,25 @@ entry_thesis      text NULL            -- D-07 free-text hook, set at OPEN time
 created_at        timestamptz
 ```
 
+**Realized P&L (D-08/D-09).** Realized P&L on a CLOSE or ROLL is the gain or loss of the
+leg being closed, not a forward-looking cost:
+
+```
+realizedPnl = closeCredit − originalOpenDebit − feesOnClose
+```
+
+`originalOpenDebit` is the debit recorded on the prior OPEN event for the same leg — read
+from that leg's earlier `calendar_events` row at close time. `closeCredit` is the credit
+received on the close. `feesOnClose` is the commission plus fees paid on the closing fills
+only. When no prior OPEN event exists for the leg, `realized_pnl` stays NULL — a missing
+result, never a wrong number.
+
+On a ROLL the new leg's premium is cost basis. It lands in `net_amount`, never in
+`realized_pnl`. The roll's `realized_pnl` reflects only the closed (old) leg:
+`closeCredit_oldLeg − originalOpenDebit_oldLeg − feesOnClose`. The new leg's
+`originalOpenDebit` is its own future cost basis and is irrelevant to the closed leg's
+result.
+
 Idempotency: `fill_ids_hash` is a `varchar(64)` UNIQUE index (exactly 64 hex chars = SHA-256).
 Re-running `sync-fills` against the same fill set produces the same hash and the insert is a
 no-op (`onConflictDoNothing`). This prevents duplicate events across job re-runs.

@@ -439,6 +439,54 @@ export type ForResettingCalendarAmounts = (
   calendarId: string,
 ) => Promise<Result<void, StorageError>>;
 
+// ─── Gap-round data-path port contracts (interface anchor, plan 05-09) ────────
+// These types are the stable contract consumed by plans 05-11/05-12/05-13.
+// No implementations live in 05-09 — only the surface.
+
+/**
+ * ForWritingFills — write broker fills into the fills table (A4 — fills source).
+ * Idempotent on the fill id PK at the adapter (onConflictDoNothing). Populated by the
+ * sync-transactions source job (plan 05-12) so sync-fills has real input to pair.
+ */
+export type ForWritingFills = (
+  fills: ReadonlyArray<RawFill>,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForRecomputingCalendarAmounts — recompute AND write openNetDebit/closeNetCredit on the
+ * calendars row from the rebuilt calendar_events (A3 — fixes WR-08). Distinct from
+ * ForResettingCalendarAmounts, which only clears the amounts. Called as the final
+ * reconciliation step of rebuild-journal so SC5 (P&L reconciles after rebuild) holds.
+ */
+export type ForRecomputingCalendarAmounts = (
+  calendarId: string,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingUnprocessedFillsForCalendar — calendar-scoped variant of
+ * ForReadingUnprocessedFills (A2 — fixes CR-04). Returns only the unprocessed fills whose
+ * legs belong to the target calendar, so rebuild-journal re-pairs ONLY that calendar and
+ * the delete scope and sync scope agree.
+ */
+export type ForReadingUnprocessedFillsForCalendar = (
+  calendarId: string,
+) => Promise<Result<ReadonlyArray<RawFill>, StorageError>>;
+
+/**
+ * NewId — injected unique-id minter (C1 — fixes CR-01). Core stays pure: the adapter
+ * supplies `() => randomUUID()` from node:crypto (plan 05-13). The use-case calls
+ * `deps.newId()` instead of importing crypto.
+ */
+export type NewId = () => string;
+
+/**
+ * HashFillIds — injected fill-ids hasher (C1 — fixes CR-01). The adapter supplies the
+ * sha256-hex implementation from node:crypto (plan 05-13); the pure-domain reference
+ * algorithm (sorted ids, ':'-join, sha256 hex, 64 chars) lives in fill-pairing.ts. The
+ * use-case calls `deps.hashFillIds(...)` so the hexagon imports no crypto builtin.
+ */
+export type HashFillIds = (ids: ReadonlyArray<string>) => string;
+
 /**
  * ForEnqueueingJob — enqueue a pg-boss job by name with an optional payload (JOB-01).
  * Returns ok(jobId) on success; ok(null) when deduplication key already active (no-op).
