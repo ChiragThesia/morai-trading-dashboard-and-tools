@@ -24,8 +24,10 @@ import type {
   ForPersistingSnapshot,
   ForReadingJournal,
   ForResolvingLegSnapshot,
+  ForReadingCalendarSnapshotsForCycle,
   SnapshotRow,
   LegSnapshot,
+  CalendarSnapshotForCycle,
   StorageError,
 } from "@morai/core";
 
@@ -33,6 +35,7 @@ export type MemoryCalendarSnapshotsRepo = {
   readonly persistSnapshot: ForPersistingSnapshot;
   readonly readJournal: ForReadingJournal;
   readonly resolveLegSnapshot: ForResolvingLegSnapshot;
+  readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
   /**
    * seedCalendar — register a calendarId as known so readJournal returns
    * ok([]) (not ok(null)) for it. Mirrors the FK enforced by the Postgres
@@ -94,6 +97,29 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok(legStore.get(key) ?? null);
   };
 
+  // readSnapshotsForCycle (06-04) — most recent snapshot time ≤ snapshotTime, mapped to the
+  // term-slope passthrough shape. Mirrors the Postgres adapter (parseFloat at the numeric boundary;
+  // "NaN" → NaN so the use-case skips it). Empty array when no snapshots on or before the time.
+  const readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle = async (
+    snapshotTime: Date,
+  ): Promise<Result<ReadonlyArray<CalendarSnapshotForCycle>, StorageError>> => {
+    const onOrBefore = [...store.values()].filter(
+      (r) => r.time.getTime() <= snapshotTime.getTime(),
+    );
+    if (onOrBefore.length === 0) return ok([]);
+    const cycleTime = Math.max(...onOrBefore.map((r) => r.time.getTime()));
+    const mapped: CalendarSnapshotForCycle[] = onOrBefore
+      .filter((r) => r.time.getTime() === cycleTime)
+      .map((r) => ({
+        snapshotTime: r.time,
+        calendarId: r.calendarId,
+        termSlope: parseFloat(r.termSlope),
+        frontIv: parseFloat(r.frontIv),
+        backIv: parseFloat(r.backIv),
+      }));
+    return ok(mapped);
+  };
+
   const seedCalendar = (id: string): void => {
     knownIds.add(id);
   };
@@ -109,5 +135,5 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     legStore.set(key, leg);
   };
 
-  return { persistSnapshot, readJournal, resolveLegSnapshot, seedCalendar, seedLegSnapshot };
+  return { persistSnapshot, readJournal, resolveLegSnapshot, readSnapshotsForCycle, seedCalendar, seedLegSnapshot };
 }

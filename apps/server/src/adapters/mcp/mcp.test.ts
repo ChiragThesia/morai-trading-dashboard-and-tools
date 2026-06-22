@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForGettingStatus } from "@morai/core";
-import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks } from "@morai/core";
+import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks, ForRunningGetTermStructure } from "@morai/core";
 import type { Calendar, SnapshotRow, StorageError } from "@morai/core";
 import {
   statusResponse,
@@ -139,6 +139,20 @@ const fakeGetLiveGreeks: ForRunningGetLiveGreeks = async (calendarId) =>
     ],
   });
 
+// 06-04: get_term_structure tool fake — returns one term-structure observation by default.
+const fakeGetTermStructure: ForRunningGetTermStructure = async () =>
+  ok([
+    {
+      snapshotTime: new Date("2026-07-01T19:00:00Z"),
+      calendarId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      value: 0.05,
+      frontIv: 0.2,
+      backIv: 0.25,
+    },
+  ]);
+
+const fakeGetTermStructureEmpty: ForRunningGetTermStructure = async () => ok([]);
+
 describe("bearer middleware", () => {
   it("returns 401 when Authorization header is missing", async () => {
     const app = new Hono();
@@ -183,6 +197,7 @@ describe("MCP router", () => {
         fakeListCalendars,
         fakeGetJournal,
         fakeGetLiveGreeks,
+        fakeGetTermStructure,
       ),
     );
     const res = await app.request("/mcp", {
@@ -203,6 +218,7 @@ describe("MCP router", () => {
         fakeListCalendars,
         fakeGetJournal,
         fakeGetLiveGreeks,
+        fakeGetTermStructure,
       ),
     );
     const res = await app.request("/mcp", {
@@ -232,6 +248,7 @@ describe("MCP router", () => {
         fakeListCalendars,
         fakeGetJournal,
         fakeGetLiveGreeks,
+        fakeGetTermStructure,
       ),
     );
     const res = await app.request("/mcp", {
@@ -521,21 +538,40 @@ describe("MCP router", () => {
 
   // ─── get_term_structure tool ───────────────────────────────────────────────
 
-  it("get_term_structure tool returns typed-empty {observations:[]} — never an error", async () => {
+  it("get_term_structure tool registers with the real use-case and returns the shared contract series", async () => {
     const { registerGetTermStructureTool } = await import("./tools.ts");
     const { McpServer } = await import(
       "@modelcontextprotocol/sdk/server/mcp.js"
     );
+    const { termStructureResponse } = await import("@morai/contracts");
 
     const server = new McpServer({ name: "test", version: "0.0.1" });
-    // Should not throw on registration
-    expect(() => registerGetTermStructureTool(server)).not.toThrow();
+    // 06-04: registration now requires the use-case; should not throw.
+    expect(() =>
+      registerGetTermStructureTool(server, fakeGetTermStructure),
+    ).not.toThrow();
 
-    // The tool always returns {observations:[]} — verify the static payload shape
-    const staticPayload = { observations: [] };
-    expect(JSON.parse(JSON.stringify(staticPayload))).toEqual({
-      observations: [],
-    });
+    // MCP-02: the tool's payload validates against the SAME contract as the HTTP route.
+    const result = await fakeGetTermStructure({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const payload = termStructureResponse.parse(
+      result.value.map((row) => ({
+        time: row.snapshotTime.toISOString(),
+        calendarId: row.calendarId,
+        value: row.value,
+      })),
+    );
+    expect(payload).toHaveLength(1);
+    expect(payload[0]?.value).toBe(0.05);
+  });
+
+  it("get_term_structure tool returns a contract-valid EMPTY array (not an error) on no data", async () => {
+    const { termStructureResponse } = await import("@morai/contracts");
+    const result = await fakeGetTermStructureEmpty({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(termStructureResponse.parse(result.value)).toEqual([]);
   });
 
   // ─── get_skew tool ─────────────────────────────────────────────────────────

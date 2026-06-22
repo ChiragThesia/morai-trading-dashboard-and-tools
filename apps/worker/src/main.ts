@@ -1,5 +1,5 @@
-// Worker composition root — Phase 5 pg-boss scheduling.
-// Boot: parse config → run migrations → boot pg-boss → register all 7 jobs via registerAllJobs.
+// Worker composition root — pg-boss scheduling.
+// Boot: parse config → run migrations → boot pg-boss → register all 9 jobs via registerAllJobs.
 //
 // Architecture law (architecture-boundaries.md):
 // - process.env read ONCE here via bootWorkerConfig; typed config flows inward.
@@ -8,6 +8,7 @@
 
 import { randomUUID, createHash } from "node:crypto";
 import { PgBoss } from "pg-boss";
+import { ok } from "@morai/shared";
 import { bootWorkerConfig } from "./config.ts";
 import {
   runMigrations,
@@ -27,12 +28,14 @@ import {
   makeSchwabTransactionsAdapter,
   makeAccountHashResolver,
   makeFredRateAdapter,
+  makePostgresTermStructureObservationsRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
   makeFetchRateUseCase,
   makeComputeBsmGreeksUseCase,
   makeSnapshotCalendarsUseCase,
+  makeComputeAnalyticsUseCase,
   makeSyncFillsUseCase,
   makeSyncFillsForCalendarUseCase,
   makeSyncTransactionsUseCase,
@@ -46,6 +49,7 @@ import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
 import { makeComputeBsmGreeksHandler } from "./handlers/compute-bsm-greeks.ts";
 import { makeSnapshotCalendarsHandler } from "./handlers/snapshot-calendars.ts";
+import { makeComputeAnalyticsHandler } from "./handlers/compute-analytics.ts";
 import { makeSyncFillsHandler } from "./handlers/sync-fills.ts";
 import { makeSyncTransactionsHandler } from "./handlers/sync-transactions.ts";
 import { makeRefreshTokensHandler } from "./handlers/refresh-tokens.ts";
@@ -173,6 +177,24 @@ const snapshotCalendarsUseCase = makeSnapshotCalendarsUseCase({
   now: () => new Date(),
 });
 
+// ANLY-02 (06-04): compute-analytics use-case — TERM-STRUCTURE half only.
+// readSnapshots reads the current cycle from calendar_snapshots; writeTerm persists the
+// term_slope passthrough. The skew/RR-half ports (readSmile/writeSkew/writeRr/readRrHistory)
+// are NOT exercised by this half — they are wired with real adapters in 06-05. Until then they
+// are inert ok-returning placeholders; the term-structure code path never invokes them.
+const termStructureRepo = makePostgresTermStructureObservationsRepo(db);
+const computeAnalyticsUseCase = makeComputeAnalyticsUseCase({
+  // term-structure half (live):
+  readSnapshots: calendarSnapshotsRepo.readSnapshotsForCycle,
+  writeTerm: termStructureRepo.storeTermStructureObservations,
+  // skew/RR half (06-05) — inert placeholders, never called by the term-structure path:
+  readSmile: async () => ok([]),
+  writeSkew: async () => ok(undefined),
+  writeRr: async () => ok(undefined),
+  readRrHistory: async () => ok([]),
+  now: () => new Date(),
+});
+
 // Build handlers (thin adapters — zero business logic)
 // D-07/D-08: Schwab-primary handler replaces the CBOE-only handler.
 // fetchChainUseCase is pre-wired with selectChainSource above (Schwab→CBOE fallback).
@@ -198,6 +220,13 @@ const computeBsmGreeksHandler = makeComputeBsmGreeksHandler({
 
 const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
   snapshotCalendarsUseCase,
+  // 06-04: snapshot success chain-triggers compute-analytics (mirrors compute-bsm-greeks → snapshot).
+  boss,
+  now: () => new Date(),
+});
+
+const computeAnalyticsHandler = makeComputeAnalyticsHandler({
+  computeAnalyticsUseCase,
   now: () => new Date(),
 });
 
@@ -375,6 +404,7 @@ await registerAllJobs(boss, {
   fetchRates: fetchRatesHandler,
   computeBsmGreeks: computeBsmGreeksHandler,
   snapshotCalendars: snapshotCalendarsHandler,
+  computeAnalytics: computeAnalyticsHandler,
   syncTransactions: syncTransactionsHandler,
   syncFills: syncFillsHandler,
   refreshTokens: refreshTokensHandler,
@@ -382,5 +412,5 @@ await registerAllJobs(boss, {
 });
 
 console.warn(
-  "morai worker: pg-boss started; 8 queues created, 6 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, refresh-tokens); snapshot-calendars chain-triggered only; rebuild-journal on-demand only",
+  "morai worker: pg-boss started; 9 queues created, 6 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, refresh-tokens); snapshot-calendars + compute-analytics chain-triggered only; rebuild-journal on-demand only",
 );

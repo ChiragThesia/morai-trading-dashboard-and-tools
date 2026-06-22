@@ -4,13 +4,14 @@ import type { ForReadingJobRuns, JobRunMap, JobRunRecord, StorageError } from "@
 import { sql } from "drizzle-orm";
 import type { Db } from "../db.ts";
 
-// All seven tracked job names (D-12, SC1 — Phase 5 extension).
+// All tracked job names (D-12, SC1 — Phase 5; 06-04 adds compute-analytics).
 // Schwab-primary queue name used (D-07); CBOE queue name no longer tracked.
 const TRACKED_JOBS = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
   "snapshot-calendars",
+  "compute-analytics",
   "sync-fills",
   "refresh-tokens",
   "rebuild-journal",
@@ -95,7 +96,7 @@ export function makePostgresJobRunsRepo(db: Db): PostgresJobRunsRepo {
             LIMIT 1
           ) AS last_error_output
         FROM pgboss.job j
-        WHERE j.name IN ('fetch-schwab-chain', 'fetch-rates', 'compute-bsm-greeks', 'snapshot-calendars', 'sync-fills', 'refresh-tokens', 'rebuild-journal')
+        WHERE j.name IN ('fetch-schwab-chain', 'fetch-rates', 'compute-bsm-greeks', 'snapshot-calendars', 'compute-analytics', 'sync-fills', 'refresh-tokens', 'rebuild-journal')
           AND j.state IN ('completed', 'failed')
         GROUP BY j.name
       `);

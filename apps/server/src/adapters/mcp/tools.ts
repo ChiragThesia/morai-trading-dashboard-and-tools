@@ -8,6 +8,7 @@ import {
   positionsResponse,
   transactionsResponse,
   ordersResponse,
+  termStructureResponse,
   brokerageAuthExpiredPayload,
 } from "@morai/contracts";
 import type {
@@ -15,6 +16,7 @@ import type {
   ForListingCalendars,
   ForReadingJournal,
   ForRunningGetLiveGreeks,
+  ForRunningGetTermStructure,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -208,29 +210,60 @@ export function registerGetLiveGreeksTool(
 }
 
 /**
- * registerGetTermStructureTool — registers the get_term_structure MCP tool.
+ * registerGetTermStructureTool — registers the get_term_structure MCP tool (ANLY-03 / MCP-02).
  *
- * Typed-empty stub (SPEC §7): analytics compute lands in Phase 6.
- * Always returns {observations:[]} — NO use-case call, NO result.ok branch.
- * Never an error.
+ * Wired to the real getTermStructure use-case (06-04). Parses the response through the SAME
+ * termStructureResponse schema as GET /api/analytics/term-structure — a one-sided field change
+ * fails `bun run typecheck` (MCP-02 invariant).
+ *
+ * SPEC R5: returns a contract-valid EMPTY array (never an error) when there is no data.
+ * T-06-09: optional calendarId is safeParsed at the boundary — never throws on bad input.
  */
-export function registerGetTermStructureTool(server: McpServer): void {
+export function registerGetTermStructureTool(
+  server: McpServer,
+  getTermStructure: ForRunningGetTermStructure,
+): void {
   server.registerTool(
     "get_term_structure",
     {
       title: "Get Term Structure",
       description:
-        "Returns term structure observations. Returns empty {observations:[]} until Phase 6 analytics land.",
-      inputSchema: {},
+        "Returns the term-structure series (value = back_iv − front_iv per calendar). Same payload as GET /api/analytics/term-structure. Optional calendarId filter.",
+      inputSchema: { calendarId: z.string().optional() },
     },
-    async () => ({
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({ observations: [] }),
-        },
-      ],
-    }),
+    async (args) => {
+      // T-06-09: safeParse at boundary — never throw on invalid input.
+      const parsed = z.object({ calendarId: z.string().optional() }).safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid params" }) },
+          ],
+        };
+      }
+      const query =
+        parsed.data.calendarId === undefined ? {} : { calendarId: parsed.data.calendarId };
+
+      const result = await getTermStructure(query);
+      if (!result.ok) {
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      // Serialise Date → ISO before parsing through the SHARED contract (MCP-02).
+      // Empty array on no data — never an error (SPEC R5).
+      const payload = termStructureResponse.parse(
+        result.value.map((row) => ({
+          time:
+            row.snapshotTime instanceof Date
+              ? row.snapshotTime.toISOString()
+              : row.snapshotTime,
+          calendarId: row.calendarId,
+          value: row.value,
+        })),
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
   );
 }
 

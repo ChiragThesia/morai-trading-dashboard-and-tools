@@ -6,6 +6,7 @@ import type {
   ForListingCalendars,
   ForReadingJournal,
   ForRunningGetLiveGreeks,
+  ForRunningGetTermStructure,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -50,6 +51,7 @@ export function makeMcpRouter(
   listCalendars: ForListingCalendars,
   getJournal: ForReadingJournal,
   getLiveGreeks: ForRunningGetLiveGreeks,
+  getTermStructure: ForRunningGetTermStructure,
   getPositions?: ForGettingPositions,
   getTransactions?: ForGettingTransactions,
   getOrders?: ForGettingOrders,
@@ -71,7 +73,7 @@ export function makeMcpRouter(
     registerListCalendarsTool(server, listCalendars);
     registerGetJournalTool(server, getJournal);
     registerGetLiveGreeksTool(server, getLiveGreeks);
-    registerGetTermStructureTool(server);
+    registerGetTermStructureTool(server, getTermStructure);
     registerGetSkewTool(server);
     // BRK-02 / MCP-02: trader data tools (optional — wired when trader adapters are available)
     if (getPositions !== undefined) {

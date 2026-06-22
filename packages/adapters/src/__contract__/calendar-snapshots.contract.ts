@@ -19,6 +19,7 @@ import type {
   ForPersistingSnapshot,
   ForReadingJournal,
   ForResolvingLegSnapshot,
+  ForReadingCalendarSnapshotsForCycle,
   SnapshotRow,
   LegSnapshot,
   StorageError,
@@ -34,6 +35,8 @@ export type CalendarSnapshotsRepo = {
   readonly resolveLegSnapshot: ForResolvingLegSnapshot;
   /** Count rows in calendar_snapshots for the given calendarId */
   readonly countSnapshots: (calendarId: string) => Promise<number>;
+  /** 06-04: read the most recent snapshot cycle on or before a time (term-slope passthrough) */
+  readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -316,6 +319,51 @@ export function runCalendarSnapshotsContractTests(
         // Should return the t2 observation (mark=22.0, the latest)
         expect(leg.mark).toBeCloseTo(22.0, 2);
         expect(leg.bsmIv).toBe("0.23");
+      });
+    });
+
+    describe("readSnapshotsForCycle — current-cycle term-slope passthrough (06-04)", () => {
+      it("returns the rows at the most recent snapshot time ≤ the cycle time", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const t1 = new Date("2026-07-01T19:00:00Z");
+        const t2 = new Date("2026-07-01T19:30:00Z");
+        await repo.persistSnapshot(makeSnapshotRow(t1, CAL_ID, { termSlope: "0.04" }));
+        await repo.persistSnapshot(makeSnapshotRow(t2, CAL_ID, { termSlope: "0.06" }));
+
+        // Cycle time slightly after t2 → latest cycle is t2.
+        const result = await repo.readSnapshotsForCycle(new Date("2026-07-01T19:31:00Z"));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toHaveLength(1);
+        const row = result.value[0];
+        expect(row).toBeDefined();
+        if (row === undefined) return;
+        expect(row.snapshotTime.getTime()).toBe(t2.getTime());
+        // term_slope read THROUGH from the source — equals back_iv − front_iv (0.25 − 0.20).
+        expect(row.termSlope).toBeCloseTo(0.06, 10);
+        expect(row.frontIv).toBeCloseTo(0.2, 10);
+        expect(row.backIv).toBeCloseTo(0.25, 10);
+      });
+
+      it("returns NaN termSlope for a continuity row (caller skips it)", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T20:00:00Z");
+        await repo.persistSnapshot(makeNanSnapshotRow(time, CAL_ID));
+
+        const result = await repo.readSnapshotsForCycle(new Date("2026-07-01T20:01:00Z"));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const row = result.value[0];
+        expect(row).toBeDefined();
+        if (row === undefined) return;
+        expect(Number.isNaN(row.termSlope)).toBe(true);
+      });
+
+      it("returns an empty array when no snapshot exists on or before the time", async () => {
+        const result = await repo.readSnapshotsForCycle(new Date("2020-01-01T00:00:00Z"));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toEqual([]);
       });
     });
   });

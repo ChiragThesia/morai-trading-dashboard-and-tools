@@ -1,14 +1,15 @@
 // schedule.ts — registerAllJobs tests (Plan 05-04 Task 3; updated plan 05-13 for A4)
 //
 // Behaviors tested:
-//   - createQueue called for all 8 job names (added sync-transactions, A4)
+//   - createQueue called for all 9 job names (added compute-analytics, 06-04)
 //   - schedule called for exactly 6 jobs (sync-transactions, sync-fills, refresh-tokens + existing 3)
 //   - snapshot-calendars NOT scheduled (chain-triggered only, D-03 / Pitfall 2)
+//   - compute-analytics NOT scheduled (chain-triggered by snapshot-calendars, 06-04)
 //   - rebuild-journal NOT scheduled (on-demand only)
 //   - sync-fills cron is every 10 min RTH tz America/New_York
 //   - sync-transactions cron runs +5 min ahead of sync-fills (fills source before pairing)
 //   - refresh-tokens cron is 04:00 ET daily tz America/New_York
-//   - work() registered for all 8 queues
+//   - work() registered for all 9 queues
 //   - createQueue calls precede schedule/work calls (CR-01 ordering)
 
 import { describe, it, expect, vi } from "vitest";
@@ -48,6 +49,7 @@ function makeFakeHandlers(): AllHandlers {
     fetchRates: handler,
     computeBsmGreeks: handler,
     snapshotCalendars: handler,
+    computeAnalytics: handler,
     syncTransactions: handler,
     syncFills: handler,
     refreshTokens: handler,
@@ -55,11 +57,12 @@ function makeFakeHandlers(): AllHandlers {
   };
 }
 
-const ALL_8_QUEUES = [
+const ALL_9_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
   "snapshot-calendars",
+  "compute-analytics",
   "sync-transactions",
   "sync-fills",
   "refresh-tokens",
@@ -76,11 +79,11 @@ const SCHEDULED_6 = [
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 8 job names", async () => {
+  it("calls createQueue for all 9 job names", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_8_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_9_QUEUES.sort());
   });
 
   it("calls schedule for exactly 6 jobs", async () => {
@@ -108,6 +111,14 @@ describe("registerAllJobs", () => {
 
     const names = scheduleCalls.map((c) => c.name);
     expect(names).not.toContain("snapshot-calendars");
+  });
+
+  it("does NOT schedule compute-analytics (chain-triggered by snapshot-calendars, 06-04)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const names = scheduleCalls.map((c) => c.name);
+    expect(names).not.toContain("compute-analytics");
   });
 
   it("does NOT schedule rebuild-journal (on-demand only)", async () => {
@@ -138,11 +149,11 @@ describe("registerAllJobs", () => {
     expect(refreshTokens?.tz).toBe("America/New_York");
   });
 
-  it("calls work() for all 8 queues", async () => {
+  it("calls work() for all 9 queues", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_8_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_9_QUEUES.sort());
   });
 
   it("createQueue calls precede all schedule and work calls (CR-01 ordering)", async () => {
