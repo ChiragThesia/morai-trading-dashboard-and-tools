@@ -157,3 +157,22 @@ export { makeGetTransactionsUseCase } from "./brokerage/index.ts";
 export type { ForGettingTransactions, GetTransactionsDeps } from "./brokerage/index.ts";
 export { makeGetOrdersUseCase } from "./brokerage/index.ts";
 export type { ForGettingOrders, GetOrdersDeps } from "./brokerage/index.ts";
+
+// ─── Analytics bounded context (Phase 6) ──────────────────────────────────────
+// StorageError is already exported above (journal); analytics shares the same shape, so it is
+// NOT re-exported here to avoid a duplicate-export. Analytics row types + ports follow.
+export type {
+  SmileQuote,
+  CalendarSnapshotForCycle,
+  SkewObservationRow,
+  RiskReversalObservationRow,
+  TermStructureObservationRow,
+  ForReadingSmileSource,
+  ForReadingCalendarSnapshotsForCycle,
+  ForWritingSkewObservations,
+  ForWritingRiskReversalObservations,
+  ForWritingTermStructureObservations,
+  ForReadingRiskReversalHistory,
+  ForReadingSkewSeries,
+  ForReadingTermStructureSeries,
+} from "./analytics/index.ts";
