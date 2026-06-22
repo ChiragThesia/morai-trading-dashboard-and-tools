@@ -248,7 +248,7 @@ Plans:
 
 *Wave 8 (blocked on 05-09; parallel; zero file overlap)*
 
-- [ ] 05-11-PLAN.md — sync-fills use-case: B1 realized-P&L lookup, B5 orphan parking, C1 injection, A2 calendar-scoped sync / CR-04 (JRNL-01)
+- [x] 05-11-PLAN.md — sync-fills use-case: B1 realized-P&L lookup, B5 orphan parking, C1 injection, A2 calendar-scoped sync / CR-04 (JRNL-01) (completed 2026-06-21)
 - [ ] 05-12-PLAN.md — Data path: A1 fills repo + twin (testcontainers), A3 recompute amounts, A4 fills source (sync-transactions from Schwab BrokerTransaction) (JRNL-01)
 
 *Wave 9 (blocked on 05-10/05-11/05-12)*
