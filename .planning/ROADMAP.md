@@ -211,7 +211,7 @@ from broker transactions.
   4. `sync-fills` pairs Schwab fill transactions into calendar OPEN/CLOSE events with correct net debit, credit, and P&L; paired events are idempotent on re-run (re-running against the same fill set produces no duplicate rows).
   5. `rebuild-journal` (manual trigger via `trigger_job` MCP tool or API) reconstructs a calendar's snapshot history from fills; the resulting `calendar_snapshots` rows match those written by the live snapshot job for the same period.
 
-**Plans**: 8 plans (TDD red→green; MVP vertical slices; 6 waves)
+**Plans**: 13 plans (8 base + 5 gap closure; TDD red→green; MVP vertical slices; 9 waves)
 Plans:
 **Wave 1**
 
@@ -238,6 +238,22 @@ Plans:
 **Wave 6** *(blocked on Waves 4/5)*
 
 - [x] 05-08-PLAN.md — rebuild-journal (delete-then-reinsert, SC5 reconciliation) + trigger_job HTTP route + MCP tool sharing one contracts schema (JRNL-01, SC5, MCP-02)
+
+**Gap Closure — Round 1** *(from 05-REVIEW.md 4 critical + 8 warning + corrected 05-VERIFICATION SC4/SC5 fail; full SC4/SC5 vertical slice — real fills repo + source)*
+
+*Wave 7 (parallel; zero file overlap)*
+
+- [ ] 05-09-PLAN.md — Docs-first D-08/D-09 realized-P&L redefinition + fill-pairing domain fixes (B1-B4) + C1 boundary + data-path port contracts anchor (JRNL-01)
+- [ ] 05-10-PLAN.md — Criticals/infra: CR-02 token refresh mapping, CR-03 job-runs independent success/error, WR-04 rebuild calendarId boundary, WR-05 twin dedup, IN-01 (JOB-01, MCP-02)
+
+*Wave 8 (blocked on 05-09; parallel; zero file overlap)*
+
+- [ ] 05-11-PLAN.md — sync-fills use-case: B1 realized-P&L lookup, B5 orphan parking, C1 injection, A2 calendar-scoped sync / CR-04 (JRNL-01)
+- [ ] 05-12-PLAN.md — Data path: A1 fills repo + twin (testcontainers), A3 recompute amounts, A4 fills source (sync-transactions from Schwab BrokerTransaction) (JRNL-01)
+
+*Wave 9 (blocked on 05-10/05-11/05-12)*
+
+- [ ] 05-13-PLAN.md — A5 real wiring (delete fills stubs) + sync-transactions job + WR-08 rebuild reconciliation + end-to-end SC4/SC5 verification (JRNL-01, JOB-01)
 
 ### Phase 6: Derived Analytics
 
