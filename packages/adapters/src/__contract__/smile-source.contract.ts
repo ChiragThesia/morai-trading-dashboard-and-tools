@@ -7,10 +7,13 @@ import type { ForReadingSmileSource } from "@morai/core";
  *
  * readSmile(snapshotTime) returns the per-(underlying, expiration, strike) smile points present in
  * leg_observations at that snapshot time, mapping bsm_iv → iv and bsm_delta → delta, EXCLUDING
- * NaN-stamped iv rows (bsm_iv = 'NaN'). moneyness has no source column → null.
+ * NaN-stamped iv rows (bsm_iv = 'NaN'). moneyness is computed K/S = (strike / 1000) / spot from
+ * the leg's underlying_price (spot); null when spot is absent/non-finite-positive (WR-03 / 06-08).
  *
  * Asserts (ANLY-01 R1 source):
  * - a snapshot with N BSM-solved strikes → N smile points with iv from bsm_iv, delta from bsm_delta
+ * - moneyness = (strike / 1000) / spot when spot is a finite positive number
+ * - moneyness = null when spot is absent/zero/non-finite (never Infinity/NaN persisted)
  * - NaN-stamped rows (bsm_iv = 'NaN') are excluded
  * - rows whose bsm_iv is NULL (not yet solved) are excluded
  * - an empty time → empty array (never null/error)
@@ -34,6 +37,8 @@ export type SmileSourceRepo = {
     readonly strike: number; // ×1000 int
     readonly bsmIv: string | null; // numeric string, "NaN", or null
     readonly bsmDelta: string | null;
+    /** spot = underlying_price (points). Omitted → adapter default; explicit "0"/non-finite → null moneyness. */
+    readonly spot?: string;
   }) => Promise<void>;
 };
 
@@ -72,7 +77,40 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       expect(byStrike.get(5600000)?.delta).toBeCloseTo(0.3, 9);
       expect(byStrike.get(5400000)?.underlying).toBe("SPX");
       expect(byStrike.get(5400000)?.expiration).toBe("2026-07-17");
+      // No spot seeded here → moneyness falls back to null (computed only when spot is present).
       expect(byStrike.get(5400000)?.moneyness).toBeNull();
+    });
+
+    it("computes moneyness = (strike / 1000) / spot from underlying_price (WR-03)", async () => {
+      // strike 5400000 → 5400 pts; spot 5500 → moneyness = 5400 / 5500 ≈ 0.98182.
+      await repo.seedLeg({
+        snapshotTime, underlying: "SPX", expiration: "2026-07-17", strike: 5400000,
+        bsmIv: "0.18", bsmDelta: "-0.2", spot: "5500",
+      });
+      // strike 5600000 → 5600 pts; spot 5500 → moneyness = 5600 / 5500 ≈ 1.01818.
+      await repo.seedLeg({
+        snapshotTime, underlying: "SPX", expiration: "2026-07-17", strike: 5600000,
+        bsmIv: "0.15", bsmDelta: "0.3", spot: "5500",
+      });
+
+      const result = await repo.readSmile(snapshotTime);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const byStrike = new Map(result.value.quotes.map((q) => [q.strike, q]));
+      expect(byStrike.get(5400000)?.moneyness ?? Number.NaN).toBeCloseTo(0.981818, 5);
+      expect(byStrike.get(5600000)?.moneyness ?? Number.NaN).toBeCloseTo(1.018182, 5);
+    });
+
+    it("falls back to null moneyness when spot is zero/non-finite (never Infinity/NaN)", async () => {
+      await repo.seedLeg({
+        snapshotTime, underlying: "SPX", expiration: "2026-07-17", strike: 5400000,
+        bsmIv: "0.18", bsmDelta: "-0.2", spot: "0",
+      });
+      const result = await repo.readSmile(snapshotTime);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.quotes).toHaveLength(1);
+      expect(result.value.quotes[0]?.moneyness).toBeNull();
     });
 
     it("excludes NaN-stamped iv rows (bsm_iv = 'NaN')", async () => {

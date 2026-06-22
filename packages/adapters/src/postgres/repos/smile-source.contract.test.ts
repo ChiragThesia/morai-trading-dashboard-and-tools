@@ -57,11 +57,14 @@ describe.skipIf(shouldSkip)("postgres leg-observations smile-source read", () =>
               ON CONFLICT DO NOTHING`,
         );
         // leg_observations row at the snapshot time with the BSM result (or NaN/null).
+        // underlying_price is NOT NULL in the schema; spot omitted → '0' so the moneyness guard
+        // (finite positive) yields null moneyness, matching the memory twin's "no spot" behaviour.
+        const spot = leg.spot ?? "0";
         const bsmIvSql = leg.bsmIv === null ? sql`NULL` : sql`${leg.bsmIv}::numeric`;
         const bsmDeltaSql = leg.bsmDelta === null ? sql`NULL` : sql`${leg.bsmDelta}::numeric`;
         await db.execute(
           sql`INSERT INTO leg_observations (time, contract, bid, ask, mark, underlying_price, open_interest, volume, source, bsm_iv, bsm_delta)
-              VALUES (${leg.snapshotTime.toISOString()}::timestamptz, ${occ}, '1.0', '1.1', '1.05', '5500.0', 0, 0, 'cboe', ${bsmIvSql}, ${bsmDeltaSql})
+              VALUES (${leg.snapshotTime.toISOString()}::timestamptz, ${occ}, '1.0', '1.1', '1.05', ${spot}, 0, 0, 'cboe', ${bsmIvSql}, ${bsmDeltaSql})
               ON CONFLICT DO NOTHING`,
         );
       },

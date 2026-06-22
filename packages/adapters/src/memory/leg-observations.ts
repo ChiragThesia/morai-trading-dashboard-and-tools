@@ -15,6 +15,7 @@
 
 import { ok } from "@morai/shared";
 import type { Result } from "@morai/shared";
+import { computeMoneyness } from "../smile-moneyness.ts";
 import type {
   ForPersistingObservations,
   ForReadingLatestLegObs,
@@ -38,6 +39,8 @@ export type SeededSmileLeg = {
   readonly strike: number; // ×1000 int
   readonly bsmIv: string | null;
   readonly bsmDelta: string | null;
+  /** spot = underlying_price (points). Omitted → moneyness null (mirrors Postgres' guard). */
+  readonly underlyingPrice?: string;
 };
 
 export type MemoryLegObservationsRepo = {
@@ -126,13 +129,15 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
     for (const leg of smileStore.values()) {
       if (leg.snapshotTime.getTime() !== resolvedTime) continue;
       if (leg.bsmIv === null || leg.bsmIv === "NaN") continue;
+      // moneyness = K/S from the seeded spot (underlying_price); null when absent/non-finite.
+      const spot = leg.underlyingPrice === undefined ? Number.NaN : parseFloat(leg.underlyingPrice);
       smile.push({
         underlying: leg.underlying,
         expiration: leg.expiration,
         strike: leg.strike,
         iv: parseFloat(leg.bsmIv),
         delta: leg.bsmDelta !== null ? parseFloat(leg.bsmDelta) : null,
-        moneyness: null,
+        moneyness: computeMoneyness(leg.strike, spot),
       });
     }
     return ok({ cycleTime: new Date(resolvedTime), quotes: smile });

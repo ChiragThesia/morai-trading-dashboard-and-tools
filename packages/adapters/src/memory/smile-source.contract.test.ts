@@ -22,6 +22,8 @@ runSmileSourceContractTests((): SmileSourceRepo => {
         strike: leg.strike,
         bsmIv: leg.bsmIv,
         bsmDelta: leg.bsmDelta,
+        // spot omitted → null moneyness; explicit value drives the K/S computation.
+        ...(leg.spot === undefined ? {} : { underlyingPrice: leg.spot }),
       });
     },
   };

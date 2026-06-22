@@ -17,6 +17,7 @@ import type {
 } from "@morai/core";
 import { and, isNull, isNotNull, ne, eq, lte, inArray, desc, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
+import { computeMoneyness } from "../../smile-moneyness.ts";
 import type { Db } from "../db.ts";
 
 /**
@@ -310,8 +311,9 @@ export function makePostgresLegObservationsRepo(
   //   Step 1 — resolve the cycle time: MAX(leg_observations.time) ≤ anchor among BSM-solved rows
   //            (bsm_iv NOT NULL AND != 'NaN') so the resolved cycle is one that actually has a smile.
   //   Step 2 — read that cohort's smile via the existing join, eq(time, resolvedTime).
-  // Maps bsm_iv → iv and bsm_delta → delta. Excludes NaN-stamped / unsolved rows. moneyness has no
-  // source column → null (06-08 owns the moneyness fix). Empty source / no cohort ≤ anchor → [].
+  // Maps bsm_iv → iv and bsm_delta → delta. Excludes NaN-stamped / unsolved rows. moneyness = K/S
+  // is computed from the leg's underlying_price (spot); null when spot is non-finite-positive
+  // (WR-03 / 06-08). Empty source / no cohort ≤ anchor → [].
   const readSmile: ForReadingSmileSource = async (
     snapshotTime,
   ): Promise<Result<SmileReadResult, StorageError>> => {
@@ -342,6 +344,7 @@ export function makePostgresLegObservationsRepo(
           strike: contracts.strike,
           bsmIv: legObservations.bsmIv,
           bsmDelta: legObservations.bsmDelta,
+          underlyingPrice: legObservations.underlyingPrice,
         })
         .from(legObservations)
         .innerJoin(contracts, eq(legObservations.contract, contracts.occSymbol))
@@ -360,7 +363,8 @@ export function makePostgresLegObservationsRepo(
         strike: row.strike,
         iv: parseFloat(row.bsmIv ?? "NaN"),
         delta: row.bsmDelta !== null ? parseFloat(row.bsmDelta) : null,
-        moneyness: null,
+        // moneyness = K/S from underlying_price (spot); null when spot is non-finite-positive.
+        moneyness: computeMoneyness(row.strike, parseFloat(row.underlyingPrice)),
       }));
       return ok({ cycleTime: resolvedTime, quotes: smile });
     } catch (e) {
