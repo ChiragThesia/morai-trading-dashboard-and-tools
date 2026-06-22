@@ -13,6 +13,17 @@ type DeltaIvPoint = {
 const PUT_TARGET_DELTA = -0.25;
 const CALL_TARGET_DELTA = 0.25;
 
+// Bracket-width policy (WR-02). interpAtDelta brackets the ±25Δ target with the tightest spanning
+// pair, but two points far apart in delta describe a smile too sparse to trust a straight line
+// between them: linear-in-delta interpolation across such a gap can land far from the true 25Δ vol
+// yet still return a real number. We take the SPEC R2 "never emit a wrong number" stance — when the
+// bracketing pair is wider than this threshold we treat the target as unbracketable and return null,
+// rather than guessing. The threshold admits a normal adjacent-OTM bracket straddling ±0.25 (typical
+// near-the-money strike grids give adjacent-strike delta steps well under this) while rejecting a
+// bracket that jumps across the entire near-the-money region (the 0.40–0.60-wide spans flagged in
+// review). It is a delta-space distance, so it is unit-consistent with the interpolation axis.
+const MAX_BRACKET_WIDTH = 0.3;
+
 /**
  * Keep only points with a finite delta and a finite iv (drop null/NaN-stamped points), and drop
  * non-physical deltas. A real option delta is strictly within (-1, 1); a magnitude at or beyond 1
@@ -53,6 +64,7 @@ function interpAtDelta(points: ReadonlyArray<DeltaIvPoint>, target: number): num
 
   const span = upper.delta - lower.delta;
   if (span === 0) return lower.iv; // exact hit (lower === upper at target)
+  if (span > MAX_BRACKET_WIDTH) return null; // bracket too wide to trust (WR-02) → unbracketable
 
   const fraction = (target - lower.delta) / span;
   return lower.iv + fraction * (upper.iv - lower.iv);
