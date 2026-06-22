@@ -11,7 +11,7 @@
  *   D-08/D-09: computePnl = closeCredit − openDebit − totalFees
  */
 
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 import type { RawFill, AggregatedFill } from "./calendar-event.ts";
 
 // Re-export types used by fill-pairing consumers

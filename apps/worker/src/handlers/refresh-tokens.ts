@@ -44,14 +44,14 @@ export function makeRefreshTokensHandler(
     // NEVER throw on recordRefreshOutcome failure — the flag is advisory (log only).
     if (deps.recordRefreshOutcome !== undefined) {
       void deps.recordRefreshOutcome(
-        "trader" as AppId,
+        "trader",
         trader.ok ? null : (trader.error ?? "unknown error"),
       ).catch((e: unknown) => {
         const msg = e instanceof Error ? e.message : String(e);
         console.warn(`refresh-tokens: failed to record trader outcome: ${msg}`);
       });
       void deps.recordRefreshOutcome(
-        "market" as AppId,
+        "market",
         market.ok ? null : (market.error ?? "unknown error"),
       ).catch((e: unknown) => {
         const msg = e instanceof Error ? e.message : String(e);

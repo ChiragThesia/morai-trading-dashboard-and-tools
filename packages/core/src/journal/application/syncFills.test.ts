@@ -43,7 +43,7 @@ function makeFill(overrides: Partial<RawFill> = {}): RawFill {
   };
 }
 
-type OrphanCapture = { fillId: string; reason: string; [k: string]: unknown };
+type OrphanCapture = { readonly fillId: string; readonly reason: string };
 
 function buildDeps(opts: {
   fills: RawFill[];
@@ -66,7 +66,7 @@ function buildDeps(opts: {
     return ok(undefined);
   };
   const storeOrphanFill: ForStoringOrphanFill = async (orphan) => {
-    opts.storedOrphans.push(orphan as OrphanCapture);
+    opts.storedOrphans.push(orphan);
     return ok(undefined);
   };
   const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);

@@ -59,7 +59,7 @@ describe.skipIf(shouldSkip)("postgres orphan-fills adapter", () => {
             return {
               fillId: String(r["fill_id"] ?? ""),
               occSymbol: String(r["occ_symbol"] ?? ""),
-              side: (r["side"] === "sell" ? "sell" : "buy") as "buy" | "sell",
+              side: r["side"] === "sell" ? "sell" : "buy",
               qty: Number(r["qty"] ?? 0),
               price: Number(r["price"] ?? 0),
               filledAt: new Date(String(r["filled_at"] ?? "")),

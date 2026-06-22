@@ -12,25 +12,26 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { registerAllJobs } from "./schedule.ts";
-import type { AllHandlers } from "./schedule.ts";
+import type { AllHandlers, JobScheduler, PgBossHandler } from "./schedule.ts";
+import type { WorkOptions } from "pg-boss";
 
-// Fake boss that records all method calls
+// Fake boss that records all method calls — typed to satisfy JobScheduler (no as-casts needed)
 function makeFakeBoss() {
   const createQueueCalls: string[] = [];
   const scheduleCalls: Array<{ name: string; cron: string; tz: string }> = [];
   const workCalls: string[] = [];
   const callOrder: string[] = [];
 
-  const boss = {
-    createQueue: vi.fn(async (name: string) => {
+  const boss: JobScheduler = {
+    createQueue: vi.fn(async (name: string): Promise<void> => {
       createQueueCalls.push(name);
       callOrder.push(`createQueue:${name}`);
     }),
-    schedule: vi.fn(async (name: string, cron: string, _data: unknown, opts: { tz: string }) => {
+    schedule: vi.fn(async (name: string, cron: string, _data: null, opts: { tz: string }): Promise<void> => {
       scheduleCalls.push({ name, cron, tz: opts.tz });
       callOrder.push(`schedule:${name}`);
     }),
-    work: vi.fn(async (name: string, _opts: unknown, _handler: unknown) => {
+    work: vi.fn(async (name: string, _opts: WorkOptions, _handler: PgBossHandler): Promise<void> => {
       workCalls.push(name);
       callOrder.push(`work:${name}`);
     }),
@@ -73,14 +74,14 @@ const SCHEDULED_5 = [
 describe("registerAllJobs", () => {
   it("calls createQueue for all 7 job names", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
-    await registerAllJobs(boss as never, makeFakeHandlers());
+    await registerAllJobs(boss, makeFakeHandlers());
 
     expect(createQueueCalls.sort()).toEqual(ALL_7_QUEUES.sort());
   });
 
   it("calls schedule for exactly 5 jobs", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
-    await registerAllJobs(boss as never, makeFakeHandlers());
+    await registerAllJobs(boss, makeFakeHandlers());
 
     expect(scheduleCalls).toHaveLength(5);
     const scheduledNames = scheduleCalls.map((c) => c.name).sort();
@@ -89,7 +90,7 @@ describe("registerAllJobs", () => {
 
   it("does NOT schedule snapshot-calendars (chain-triggered only, Pitfall 2)", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
-    await registerAllJobs(boss as never, makeFakeHandlers());
+    await registerAllJobs(boss, makeFakeHandlers());
 
     const names = scheduleCalls.map((c) => c.name);
     expect(names).not.toContain("snapshot-calendars");
@@ -97,7 +98,7 @@ describe("registerAllJobs", () => {
 
   it("does NOT schedule rebuild-journal (on-demand only)", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
-    await registerAllJobs(boss as never, makeFakeHandlers());
+    await registerAllJobs(boss, makeFakeHandlers());
 
     const names = scheduleCalls.map((c) => c.name);
     expect(names).not.toContain("rebuild-journal");
@@ -105,7 +106,7 @@ describe("registerAllJobs", () => {
 
   it("sync-fills cron is '*/10 9-16 * * 1-5' tz America/New_York", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
-    await registerAllJobs(boss as never, makeFakeHandlers());
+    await registerAllJobs(boss, makeFakeHandlers());
 
     const syncFills = scheduleCalls.find((c) => c.name === "sync-fills");
     expect(syncFills).toBeDefined();
@@ -115,7 +116,7 @@ describe("registerAllJobs", () => {
 
   it("refresh-tokens cron is '0 4 * * *' tz America/New_York", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
-    await registerAllJobs(boss as never, makeFakeHandlers());
+    await registerAllJobs(boss, makeFakeHandlers());
 
     const refreshTokens = scheduleCalls.find((c) => c.name === "refresh-tokens");
     expect(refreshTokens).toBeDefined();
@@ -125,14 +126,14 @@ describe("registerAllJobs", () => {
 
   it("calls work() for all 7 queues", async () => {
     const { boss, workCalls } = makeFakeBoss();
-    await registerAllJobs(boss as never, makeFakeHandlers());
+    await registerAllJobs(boss, makeFakeHandlers());
 
     expect(workCalls.sort()).toEqual(ALL_7_QUEUES.sort());
   });
 
   it("createQueue calls precede all schedule and work calls (CR-01 ordering)", async () => {
     const { boss, callOrder } = makeFakeBoss();
-    await registerAllJobs(boss as never, makeFakeHandlers());
+    await registerAllJobs(boss, makeFakeHandlers());
 
     const lastCreateQueueIdx = callOrder.reduce(
       (max, call, idx) => (call.startsWith("createQueue:") ? idx : max),

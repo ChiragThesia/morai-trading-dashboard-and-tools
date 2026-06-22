@@ -19,10 +19,21 @@
  * Architecture: pg-boss specifics confined here; main.ts is composition-only (architecture-boundaries.md §3).
  */
 
-import type { PgBoss, Job } from "pg-boss";
+import type { PgBoss, Job, WorkOptions } from "pg-boss";
 
 /** Handler type shared by all 7 job queues (pg-boss v12 array pattern) */
 export type PgBossHandler = (jobs: ReadonlyArray<Job | undefined>) => Promise<void>;
+
+/**
+ * JobScheduler — minimal interface for the pg-boss operations used by registerAllJobs.
+ * Exposes only the exact call forms used in this file so tests can inject a plain fake.
+ * PgBoss satisfies this interface structurally (createQueue/schedule/work shapes match).
+ */
+export type JobScheduler = {
+  createQueue(name: string): Promise<unknown>;
+  schedule(name: string, cron: string, data: null, opts: { tz: string }): Promise<unknown>;
+  work(name: string, opts: WorkOptions, handler: PgBossHandler): Promise<unknown>;
+};
 
 /**
  * AllHandlers — typed handler map for all 7 queues.
@@ -47,7 +58,7 @@ const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
  * Order: createQueue (all 7) → schedule (5 crons) → work (all 7).
  * The createQueue phase must complete before schedule/work — pg-boss FK constraint (CR-01).
  */
-export async function registerAllJobs(boss: PgBoss, handlers: AllHandlers): Promise<void> {
+export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers): Promise<void> {
   // ── Phase 1: create queues (idempotent — safe on every boot) ──────────────────
   // Order matters: all createQueue calls must precede schedule/work (CR-01).
   await boss.createQueue("fetch-schwab-chain");

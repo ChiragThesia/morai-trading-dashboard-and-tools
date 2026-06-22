@@ -15,8 +15,12 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { Hono } from "hono";
+import { z } from "zod";
 import { ok, err } from "@morai/shared";
-import { TRIGGERABLE_JOBS } from "@morai/contracts";
+import { TRIGGERABLE_JOBS, triggerJobResponse } from "@morai/contracts";
+
+// Local schema for error responses — no shared contract for error bodies
+const errorBody = z.object({ error: z.string() });
 
 describe("jobsRoutes", () => {
   function makeEnqueueJobSpy(returnValue = ok<string | null>("job-123")) {
@@ -42,7 +46,7 @@ describe("jobsRoutes", () => {
     });
 
     expect(res.status).toBe(202);
-    const body = await res.json() as { jobId: string | null };
+    const body = triggerJobResponse.parse(await res.json());
     expect(body.jobId).toBe("job-123");
     expect(enqueueJob).toHaveBeenCalledWith(
       "rebuild-journal",
@@ -60,7 +64,7 @@ describe("jobsRoutes", () => {
     });
 
     expect(res.status).toBe(202);
-    const body = await res.json() as { jobId: string | null };
+    const body = triggerJobResponse.parse(await res.json());
     expect(body.jobId).toBe("job-123");
     expect(enqueueJob).toHaveBeenCalledWith("sync-fills", expect.any(Object));
   });
@@ -93,7 +97,7 @@ describe("jobsRoutes", () => {
     });
 
     expect(res.status).toBe(422);
-    const body = await res.json() as { error: string };
+    const body = errorBody.parse(await res.json());
     expect(body.error).toBe("queue unavailable");
   });
 
@@ -110,7 +114,7 @@ describe("jobsRoutes", () => {
     });
 
     expect(res.status).toBe(202);
-    const body = await res.json() as { jobId: string | null };
+    const body = triggerJobResponse.parse(await res.json());
     expect(body.jobId).toBeNull();
   });
 

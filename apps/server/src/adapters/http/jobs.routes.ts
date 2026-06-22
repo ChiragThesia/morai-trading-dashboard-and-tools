@@ -40,7 +40,7 @@ export function jobsRoutes(enqueueJob: ForTriggeringJob): Hono {
       const { name } = c.req.valid("param");
       const body = c.req.valid("json");
 
-      const result = await enqueueJob(name, body as Readonly<Record<string, unknown>>);
+      const result = await enqueueJob(name, body);
       if (!result.ok) {
         return c.json({ error: result.error.message }, 422);
       }

@@ -23,7 +23,7 @@
 
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "crypto";
 import {
   classifyFill,
   aggregatePartialFills,
