@@ -259,8 +259,26 @@ async function pairFills(
     orderGroups.set(key, group);
   }
 
-  // Track which opens were consumed by a ROLL so we don't emit them separately
+  // Pre-pair ROLLs BEFORE emitting (input-order independence). A CLOSE and an OPEN in the
+  // same (calendarId, orderId) on different legs form ONE ROLL (D-03). This must be decided up
+  // front: classified is iterated in bucket-insertion order, so an OPEN that will be consumed
+  // by a later CLOSE would otherwise be emitted eagerly as a standalone OPEN AND folded into
+  // the ROLL — double-counting that OPEN's fills (caught by the P1 no-double-count property).
+  // Matching is deterministic: within each order group, pair closes to not-yet-consumed opens
+  // in classified order.
+  const rollPairing = new Map<ClassifiedFill, ClassifiedFill>(); // close → its paired open
   const consumedOpens = new Set<ClassifiedFill>();
+  for (const cf of classified) {
+    if (cf.classification !== "CLOSE") continue;
+    const group = orderGroups.get(`${cf.calendarId}|${cf.orderId}`);
+    const paired = group?.opens.find(
+      (o) => !consumedOpens.has(o) && detectRoll(cf, o),
+    );
+    if (paired !== undefined) {
+      rollPairing.set(cf, paired);
+      consumedOpens.add(paired);
+    }
+  }
 
   // Steps 7-8: Emit events
   for (const cf of classified) {
@@ -301,18 +319,12 @@ async function pairFills(
       continue;
     }
 
-    // Check for ROLL: CLOSE fill paired with an OPEN in the same (calendarId, orderId)
+    // Check for ROLL: CLOSE fill pre-paired with an OPEN in the same (calendarId, orderId).
     if (cf.classification === "CLOSE") {
-      const groupKey = `${cf.calendarId}|${cf.orderId}`;
-      const group = orderGroups.get(groupKey);
-      const paired = group?.opens.find((o) => !consumedOpens.has(o));
+      const paired = rollPairing.get(cf);
 
       if (paired !== undefined) {
-        // detectRoll verifies: same calendarId + same orderId + different legOccSymbol
-        const isRoll = detectRoll(cf, paired);
-        if (isRoll) {
-          consumedOpens.add(paired);
-
+        {
           // ONE ROLL event referencing both legs (D-03)
           const allFillIds = [...cf.fillIds, ...paired.fillIds];
           const fillIdsHash = deps.hashFillIds(allFillIds);
