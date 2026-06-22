@@ -4,11 +4,11 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 05
 current_phase_name: jobs-fill-rebuild-integrity
-status: Phase 05 gap-round complete (SC4/SC5 proven end-to-end)
-stopped_at: Completed 05-13-PLAN.md
-last_updated: "2026-06-22T04:35:00.000Z"
+status: Phase 05 gap-round-2 in progress (CR-A1/WR-A3/IN-A1 closed)
+stopped_at: Completed 05-14-PLAN.md
+last_updated: "2026-06-22T09:05:00.000Z"
 last_activity: 2026-06-22
-last_activity_desc: Phase 05 Plan 13 completed (A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute; SC4 realizedPnl=2.0 and SC5 reconciliation proven end-to-end; 755/755 workspace tests GREEN)
+last_activity_desc: Phase 05 Plan 14 completed (round-2 gaps — CR-A1 MCP trigger_job parity rejects rebuild-journal without calendarId before enqueue; WR-A3 hexToUuid total nibble mapping kills fill-id collision; IN-A1 extractLastError direct narrow; 669 passed / 92 skipped workspace tests GREEN)
 progress:
   total_phases: 6
   completed_phases: 4
@@ -182,6 +182,9 @@ Recent decisions affecting current work:
 - [Phase 5 P11]: B5 — UNKNOWN aggregate parks EACH underlying raw fill individually with real side/filledAt/UUID; zero-fill aggregate returns StorageError instead of synthesizing a non-UUID PK (WR-07)
 - [Phase 5 P11]: C1 (use-case half) — syncFills imports no node crypto; deps.newId + deps.hashFillIds injected; composition root supplies node:crypto uuid/sha256; hashFillIds reference algo exported from core barrel
 - [Phase 5 P11]: A2/CR-04 — extracted shared pairFills pipeline; makeSyncFillsForCalendarUseCase reads via readUnprocessedFillsForCalendar; worker rebuildJournal.syncFillsForCalendar rewired to the scoped use-case (was a full sweep discarding calendarId)
+- [Phase 5 P14]: CR-A1 — MCP trigger_job now routes through triggerJobBodyFor(name) (same per-job refinement as the HTTP route, architecture-boundaries §9); rebuild-journal without calendarId returns error content and never calls enqueueJob (closes the agent-driven queue-flood path WR-04 missed); inputSchema advertised shape unchanged (MCP-02)
+- [Phase 5 P14]: WR-A3 — hexToUuid is now a contiguous TOTAL nibble mapping; the v5 version/variant rewrite (which skipped input nibble 12) is removed because fills.id is a plain Postgres uuid; two (activityId,legIndex) keys differing only at nibble 12 no longer collide on the id PK (onConflictDoNothing no longer silently drops a real fill); hexToUuid exported for direct testing
+- [Phase 5 P14]: IN-A1 — extractLastError uses a direct `in`+typeof narrow instead of an Object.entries scan for the single known 'message' key (behavior-preserving)
 
 ### Pending Todos
 
@@ -201,9 +204,10 @@ None yet.
 | Multi-user | API auth beyond single bearer token | v2 | Architecture |
 | Test isolation | Postgres leg-observations contract tests have cross-test contamination (re-persist/large-batch idempotency failures are flaky) | future | Phase 03 P06 |
 | Live DB push | broker_tokens migration (0003_broker_tokens.sql + pgcrypto) not yet applied to live Supabase DB | blocking for 04-02 | Phase 04 P01 Task 5 |
+| Realized P&L | IN-A2 — real per-leg commission/fees + intraday filledAt: BrokerTransaction domain type carries no time/commission/fees fields; needs docs-first brokerage domain + Schwab adapter change. Realized P&L stays fee-blind until a dedicated plan. | future | Phase 05 P14 |
 
 ## Session Continuity
 
-Last session: 2026-06-21T22:55:00.000Z
-Stopped at: Completed 05-11-PLAN.md (gap round Wave 2)
+Last session: 2026-06-22T09:05:00.000Z
+Stopped at: Completed 05-14-PLAN.md (gap round 2, Wave 1 — CR-A1/WR-A3/IN-A1)
 Resume file: None
