@@ -8,7 +8,6 @@
 
 import { randomUUID, createHash } from "node:crypto";
 import { PgBoss } from "pg-boss";
-import { ok } from "@morai/shared";
 import { bootWorkerConfig } from "./config.ts";
 import {
   runMigrations,
@@ -29,6 +28,8 @@ import {
   makeAccountHashResolver,
   makeFredRateAdapter,
   makePostgresTermStructureObservationsRepo,
+  makePostgresSkewObservationsRepo,
+  makePostgresRiskReversalObservationsRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -177,21 +178,22 @@ const snapshotCalendarsUseCase = makeSnapshotCalendarsUseCase({
   now: () => new Date(),
 });
 
-// ANLY-02 (06-04): compute-analytics use-case — TERM-STRUCTURE half only.
-// readSnapshots reads the current cycle from calendar_snapshots; writeTerm persists the
-// term_slope passthrough. The skew/RR-half ports (readSmile/writeSkew/writeRr/readRrHistory)
-// are NOT exercised by this half — they are wired with real adapters in 06-05. Until then they
-// are inert ok-returning placeholders; the term-structure code path never invokes them.
+// ANLY-01/ANLY-02 (06-04 + 06-05): compute-analytics use-case — BOTH halves now live.
+// Term-structure: readSnapshots → writeTerm (term_slope passthrough). Skew/RR (06-05): readSmile
+// reads the per-strike smile from leg_observations; writeSkew persists the full smile; writeRr
+// persists the 25Δ risk-reversal + trailing-window rank; readRrHistory feeds the rank window.
 const termStructureRepo = makePostgresTermStructureObservationsRepo(db);
+const skewRepo = makePostgresSkewObservationsRepo(db);
+const riskReversalRepo = makePostgresRiskReversalObservationsRepo(db);
 const computeAnalyticsUseCase = makeComputeAnalyticsUseCase({
   // term-structure half (live):
   readSnapshots: calendarSnapshotsRepo.readSnapshotsForCycle,
   writeTerm: termStructureRepo.storeTermStructureObservations,
-  // skew/RR half (06-05) — inert placeholders, never called by the term-structure path:
-  readSmile: async () => ok([]),
-  writeSkew: async () => ok(undefined),
-  writeRr: async () => ok(undefined),
-  readRrHistory: async () => ok([]),
+  // skew/RR half (06-05) — real adapters:
+  readSmile: legObsRepo.readSmile,
+  writeSkew: skewRepo.storeSkewObservations,
+  writeRr: riskReversalRepo.storeRiskReversalObservations,
+  readRrHistory: riskReversalRepo.readRiskReversalHistory,
   now: () => new Date(),
 });
 

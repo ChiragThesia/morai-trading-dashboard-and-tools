@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   skewEntry,
   skewResponse,
-  riskReversalEntry,
-  riskReversalResponse,
+  skewSmileEntry,
+  skewSmileResponse,
   termStructureEntry,
   termStructureResponse,
 } from "./analytics.ts";
@@ -12,23 +12,22 @@ import {
 // schema parses a valid entry and that the response array accepts the no-data EMPTY array (the
 // no-data case returns a contract-valid empty array, never an error — SPEC R5).
 
-describe("skewEntry / skewResponse", () => {
+// skewEntry/skewResponse is the HEADLINE skew read (value = risk_reversal + rr_rank) — SPEC R5.
+describe("skewEntry / skewResponse (headline risk-reversal)", () => {
   const validSkew = {
     time: "2026-06-22T15:00:00.000Z",
     underlying: "SPX",
     expiration: "2026-07-17",
-    strike: 5500,
-    iv: 0.18,
-    delta: -0.25,
-    moneyness: 1.01,
+    value: 0.03,
+    rrRank: 0.72,
   };
 
-  it("parses a valid skew entry", () => {
+  it("parses a valid headline skew entry", () => {
     expect(() => skewEntry.parse(validSkew)).not.toThrow();
   });
 
-  it("accepts null delta and null moneyness", () => {
-    expect(() => skewEntry.parse({ ...validSkew, delta: null, moneyness: null })).not.toThrow();
+  it("accepts null value and null rrRank (unbracketable ±25Δ)", () => {
+    expect(() => skewEntry.parse({ ...validSkew, value: null, rrRank: null })).not.toThrow();
   });
 
   it("accepts an EMPTY response array (no data, not an error)", () => {
@@ -40,27 +39,29 @@ describe("skewEntry / skewResponse", () => {
   });
 });
 
-describe("riskReversalEntry / riskReversalResponse", () => {
-  const validRr = {
+describe("skewSmileEntry / skewSmileResponse (per-strike detail)", () => {
+  const validSmile = {
     time: "2026-06-22T15:00:00.000Z",
     underlying: "SPX",
     expiration: "2026-07-17",
-    riskReversal: 0.03,
-    rrRank: 0.72,
+    strike: 5500,
+    iv: 0.18,
+    delta: -0.25,
+    moneyness: 1.01,
   };
 
-  it("parses a valid risk-reversal entry", () => {
-    expect(() => riskReversalEntry.parse(validRr)).not.toThrow();
+  it("parses a valid smile entry", () => {
+    expect(() => skewSmileEntry.parse(validSmile)).not.toThrow();
   });
 
-  it("accepts null riskReversal and null rrRank (unbracketable ±25Δ)", () => {
+  it("accepts null delta and null moneyness", () => {
     expect(() =>
-      riskReversalEntry.parse({ ...validRr, riskReversal: null, rrRank: null }),
+      skewSmileEntry.parse({ ...validSmile, delta: null, moneyness: null }),
     ).not.toThrow();
   });
 
   it("accepts an EMPTY response array", () => {
-    expect(riskReversalResponse.parse([])).toEqual([]);
+    expect(skewSmileResponse.parse([])).toEqual([]);
   });
 });
 

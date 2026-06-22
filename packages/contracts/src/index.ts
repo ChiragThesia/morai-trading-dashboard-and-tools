@@ -30,16 +30,16 @@ export type { LegGreeks, LiveGreeksResponse } from "./live-greeks.ts";
 export {
   skewEntry,
   skewResponse,
-  riskReversalEntry,
-  riskReversalResponse,
+  skewSmileEntry,
+  skewSmileResponse,
   termStructureEntry,
   termStructureResponse,
 } from "./analytics.ts";
 export type {
   SkewEntry,
   SkewResponse,
-  RiskReversalEntry,
-  RiskReversalResponse,
+  SkewSmileEntry,
+  SkewSmileResponse,
   TermStructureEntry,
   TermStructureResponse,
 } from "./analytics.ts";

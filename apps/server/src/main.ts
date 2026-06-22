@@ -19,6 +19,7 @@ import {
   makeSchwabOrdersAdapter,
   makePgBossJobQueue,
   makePostgresTermStructureObservationsRepo,
+  makePostgresRiskReversalObservationsRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -32,6 +33,7 @@ import {
   makeGetOrdersUseCase,
   makeEnqueueJobUseCase,
   makeGetTermStructureUseCase,
+  makeGetSkewUseCase,
 } from "@morai/core";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
@@ -104,6 +106,13 @@ const getTermStructure = makeGetTermStructureUseCase({
   readTermStructureSeries: termStructureRepo.readTermStructureSeries,
 });
 
+// ANLY-03 (06-05): skew (headline risk-reversal) read use-case — shared by the HTTP route + MCP
+// tool over the ONE skewResponse contract (MCP-02).
+const riskReversalRepo = makePostgresRiskReversalObservationsRepo(db);
+const getSkew = makeGetSkewUseCase({
+  readSkewSeries: riskReversalRepo.readRiskReversalSeries,
+});
+
 // BRK-02: build trader adapters — reads from broker_tokens for the trader app.
 // getAccessToken closure reads broker_tokens at call time (on-demand refresh deferred to JOB-02).
 const USER_AGENT = "Morai-Server/1.0";
@@ -163,8 +172,8 @@ app.route("/api", calendarRoutes(registerCalendar, listCalendars, closeCalendar)
 app.route("/api", journalRoutes(getJournal));
 // BRK-02: positions, transactions, orders read endpoints
 app.route("/api", brokerageRoutes(getPositions, getTransactions, getOrders));
-// ANLY-03 (06-04): GET /api/analytics/term-structure (skew route added in 06-05)
-app.route("/api", analyticsRoutes(getTermStructure));
+// ANLY-03 (06-04/06-05): GET /api/analytics/term-structure + GET /api/analytics/skew
+app.route("/api", analyticsRoutes(getTermStructure, getSkew));
 
 // JOB-01 / MCP-02: on-demand job trigger — bearer-guarded (T-05-21, Security Domain).
 // Mounted as a separate bearer-protected group so existing /api/* routes are unaffected.
@@ -183,6 +192,7 @@ const mcpRouter = makeMcpRouter(
   getJournal,
   getLiveGreeks,
   getTermStructure,
+  getSkew,
   getPositions,
   getTransactions,
   getOrders,

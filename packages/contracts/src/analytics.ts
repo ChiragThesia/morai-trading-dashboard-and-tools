@@ -7,10 +7,10 @@ import { z } from "zod";
 // Each response is a JSON ARRAY of entries (current + historical). The no-data case returns a
 // contract-valid EMPTY array, never an error (SPEC R5 / api-design.md): `.parse([])` succeeds.
 
-// ─── Skew (per-strike smile entry) ─────────────────────────────────────────────
+// ─── Skew smile detail (per-strike) ────────────────────────────────────────────
 
-/** skewEntry — one smile point at a snapshot time. */
-export const skewEntry = z.object({
+/** skewSmileEntry — one per-strike smile point at a snapshot time (optional detail surface). */
+export const skewSmileEntry = z.object({
   time: z.string().datetime(),
   underlying: z.string(),
   expiration: z.string(),
@@ -22,32 +22,36 @@ export const skewEntry = z.object({
   moneyness: z.number().nullable(),
 });
 
-export type SkewEntry = z.infer<typeof skewEntry>;
+export type SkewSmileEntry = z.infer<typeof skewSmileEntry>;
 
-/** skewResponse — array of smile points (empty array = no data, not an error). */
-export const skewResponse = z.array(skewEntry);
+/** skewSmileResponse — array of per-strike smile points (empty array = no data, not an error). */
+export const skewSmileResponse = z.array(skewSmileEntry);
 
-export type SkewResponse = z.infer<typeof skewResponse>;
+export type SkewSmileResponse = z.infer<typeof skewSmileResponse>;
 
-// ─── Risk-reversal (25Δ scalar + trailing rank) ────────────────────────────────
+// ─── Skew headline = 25Δ risk-reversal scalar + trailing rank ──────────────────
+// SPEC R5: GET /api/analytics/skew returns {time, value=risk_reversal, …} — the derived headline,
+// NOT the smile detail. The skew read surface and MCP get_skew share this ONE skewResponse schema
+// (MCP-02). A one-sided field rename fails `bun run typecheck`.
 
-/** riskReversalEntry — the headline 25Δ risk-reversal + rank per (underlying, expiration). */
-export const riskReversalEntry = z.object({
+/** skewEntry — the headline 25Δ risk-reversal + rank per (underlying, expiration). */
+export const skewEntry = z.object({
   time: z.string().datetime(),
   underlying: z.string(),
   expiration: z.string(),
-  // NULL when ±25Δ cannot be bracketed — never fabricated
-  riskReversal: z.number().nullable(),
-  // NULL when riskReversal is null or no trailing history exists
+  // value = risk_reversal = IV(25Δ put) − IV(25Δ call); NULL when ±25Δ cannot be bracketed
+  // (never fabricated). `value` is the SPEC R5 generic field name shared with term-structure.
+  value: z.number().nullable(),
+  // NULL when value is null or no trailing history exists
   rrRank: z.number().nullable(),
 });
 
-export type RiskReversalEntry = z.infer<typeof riskReversalEntry>;
+export type SkewEntry = z.infer<typeof skewEntry>;
 
-/** riskReversalResponse — array of risk-reversal entries (empty array = no data). */
-export const riskReversalResponse = z.array(riskReversalEntry);
+/** skewResponse — array of headline risk-reversal entries (empty array = no data). */
+export const skewResponse = z.array(skewEntry);
 
-export type RiskReversalResponse = z.infer<typeof riskReversalResponse>;
+export type SkewResponse = z.infer<typeof skewResponse>;
 
 // ─── Term structure (forward-vol slope per calendar) ───────────────────────────
 

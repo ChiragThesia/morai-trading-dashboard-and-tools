@@ -9,6 +9,7 @@ import {
   transactionsResponse,
   ordersResponse,
   termStructureResponse,
+  skewResponse,
   brokerageAuthExpiredPayload,
 } from "@morai/contracts";
 import type {
@@ -17,6 +18,7 @@ import type {
   ForReadingJournal,
   ForRunningGetLiveGreeks,
   ForRunningGetTermStructure,
+  ForRunningGetSkew,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -268,29 +270,69 @@ export function registerGetTermStructureTool(
 }
 
 /**
- * registerGetSkewTool — registers the get_skew MCP tool.
+ * registerGetSkewTool — registers the get_skew MCP tool (ANLY-03 / MCP-02).
  *
- * Typed-empty stub (SPEC §7): analytics compute lands in Phase 6.
- * Always returns {observations:[]} — NO use-case call, NO result.ok branch.
- * Never an error.
+ * Wired to the real getSkew use-case (06-05). Returns the HEADLINE 25Δ risk-reversal series
+ * (value = risk_reversal, with rr_rank + underlying/expiration) parsed through the SAME skewResponse
+ * schema as GET /api/analytics/skew — a one-sided field change fails `bun run typecheck` (MCP-02).
+ *
+ * SPEC R5: returns a contract-valid EMPTY array (never an error) when there is no data.
+ * T-06-14: optional underlying/expiration are safeParsed at the boundary — never throws.
  */
-export function registerGetSkewTool(server: McpServer): void {
+export function registerGetSkewTool(
+  server: McpServer,
+  getSkew: ForRunningGetSkew,
+): void {
   server.registerTool(
     "get_skew",
     {
       title: "Get Skew",
       description:
-        "Returns skew observations. Returns empty {observations:[]} until Phase 6 analytics land.",
-      inputSchema: {},
+        "Returns the skew series (value = 25Δ risk-reversal per underlying/expiration, with rr_rank). Same payload as GET /api/analytics/skew. Optional underlying/expiration filter.",
+      inputSchema: {
+        underlying: z.string().optional(),
+        expiration: z.string().optional(),
+      },
     },
-    async () => ({
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({ observations: [] }),
-        },
-      ],
-    }),
+    async (args) => {
+      // T-06-14: safeParse at boundary — never throw on invalid input.
+      const parsed = z
+        .object({ underlying: z.string().optional(), expiration: z.string().optional() })
+        .safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid params" }) },
+          ],
+        };
+      }
+      const query = {
+        ...(parsed.data.underlying === undefined ? {} : { underlying: parsed.data.underlying }),
+        ...(parsed.data.expiration === undefined ? {} : { expiration: parsed.data.expiration }),
+      };
+
+      const result = await getSkew(query);
+      if (!result.ok) {
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      // Serialise Date → ISO before parsing through the SHARED contract (MCP-02).
+      // Empty array on no data — never an error (SPEC R5).
+      const payload = skewResponse.parse(
+        result.value.map((row) => ({
+          time:
+            row.snapshotTime instanceof Date
+              ? row.snapshotTime.toISOString()
+              : row.snapshotTime,
+          underlying: row.underlying,
+          expiration: row.expiration,
+          value: row.riskReversal,
+          rrRank: row.rrRank,
+        })),
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
   );
 }
 
