@@ -281,7 +281,7 @@ return current and historical series queryable by API and Claude Code.
   3. `GET /api/analytics/skew` returns a JSON array with at least one entry of `{ time, value, … }`; `GET /api/analytics/term-structure` returns the same shape for term-structure data.
   4. MCP `get_skew` and `get_term_structure` tools return the same series as their HTTP counterparts, validated against the shared Zod contract from `contracts`.
 
-**Plans**: 6/8 plans executed
+**Plans**: 7/8 plans executed
 Plans:
 **Wave 1**
 
@@ -308,7 +308,7 @@ Plans:
 **Wave 1 (gap)**
 
 - [x] 06-06-PLAN.md — [BLOCKER] Cycle-resolution seam (CR-01/CR-02): data-anchored bounded smile read (latest leg cycle ≤ anchor, repo+twin+contract) + computeAnalytics stamps skew/RR/term with ONE resolved instant (never now()) + Postgres testcontainer seam suite (distinct broker-observedAt/snapshotTime/now() FAILS on old code; run-twice = 0 new rows) (ANLY-01/03)
-- [ ] 06-07-PLAN.md — [WARNING] RR domain guards: WR-04 |delta|≥1 non-physical drop (mis-signed wing protection) + WR-02 ±25Δ bracket-width policy (decide/enforce/document) + fast-check (ANLY-01)
+- [x] 06-07-PLAN.md — [WARNING] RR domain guards: WR-04 |delta|≥1 non-physical drop (mis-signed wing protection) + WR-02 ±25Δ bracket-width policy (decide/enforce/document) + fast-check (ANLY-01)
 
 **Wave 2 (gap)** *(blocked on 06-06 — shares computeAnalytics.ts / leg-observations.ts / smile-source contract)*
 
@@ -376,4 +376,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
 | 5. Jobs, Fill Rebuild & Integrity | 15/16 | In Progress|  |
-| 6. Derived Analytics | 6/8 | In Progress|  |
+| 6. Derived Analytics | 7/8 | In Progress|  |

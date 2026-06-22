@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 06
 current_phase_name: derived-analytics
-status: Phase 06 in progress (Wave 1 — plan 06-01 foundation complete)
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-06-22T17:53:56.123Z"
+status: Phase 06 in progress (gap round — plan 06-07 numeric guards complete)
+stopped_at: Completed 06-07-PLAN.md
+last_updated: "2026-06-22T18:02:22.723Z"
 last_activity: 2026-06-22
 last_activity_desc: Phase 06 Plan 01 complete (analytics foundation; production typecheck clean; 3 RED scaffolds left for 06-03/06-04/06-05)
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 55
-  completed_plans: 54
+  completed_plans: 55
   percent: 83
 ---
 
@@ -89,6 +89,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 06 P04 | 17min | 3 tasks | 30 files |
 | Phase 06 P05 | 16min | 3 tasks | 33 files |
 | Phase 06 P06 | 50m | 3 tasks | 10 files |
+| Phase 06 P07 | 25m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -213,6 +214,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Added ForReadingSkewSmileDetail port (smile detail) distinct from ForReadingSkewSeries (headline RR series)
 - [Phase ?]: [Phase 6 P06]: cycle-resolution seam fixed (CR-01/CR-02) — computeAnalytics resolves ONE data anchor (never now()); bounded latest-leg-cohort <= anchor smile read; all three analytics tables share one snapshot_time so re-runs are idempotent
 - [Phase ?]: [Phase 6 P06]: ForReadingSmileSource returns {cycleTime, quotes} so the time-less smile carries the resolved DATA instant the use-case stamps with
+- [Phase ?]: 06-07: risk-reversal bracket-width policy = Decision A (gate at MAX_BRACKET_WIDTH=0.30 delta units) — return null rather than interpolate across a wide non-adjacent bracket; pairs with the |delta|>=1 sign filter (WR-02/WR-04)
 
 ### Pending Todos
 
@@ -236,6 +238,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-22T17:53:17.307Z
+Last session: 2026-06-22T18:01:35.876Z
 Stopped at: Completed 05-16-PLAN.md (gap round 2, Wave 2 — fast-check property tests; fixed ROLL double-count)
 Resume file: None
