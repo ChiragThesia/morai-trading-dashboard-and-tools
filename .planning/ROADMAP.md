@@ -211,7 +211,7 @@ from broker transactions.
   4. `sync-fills` pairs Schwab fill transactions into calendar OPEN/CLOSE events with correct net debit, credit, and P&L; paired events are idempotent on re-run (re-running against the same fill set produces no duplicate rows).
   5. `rebuild-journal` (manual trigger via `trigger_job` MCP tool or API) reconstructs a calendar's snapshot history from fills; the resulting `calendar_snapshots` rows match those written by the live snapshot job for the same period.
 
-**Plans**: 12/13 plans executed
+**Plans**: 13/16 plans executed (round-2 gap closure: 05-14..05-16)
 Plans:
 **Wave 1**
 
@@ -254,6 +254,17 @@ Plans:
 *Wave 9 (blocked on 05-10/05-11/05-12)*
 
 - [x] 05-13-PLAN.md — A5 real wiring (delete fills stubs) + sync-transactions job + WR-08 rebuild reconciliation + end-to-end SC4/SC5 verification (JRNL-01, JOB-01) (completed 2026-06-22)
+
+**Gap Closure — Round 2** *(from 05-REVIEW-2.md re-review: 1 blocker + 4 warnings + 2 info; round-1 fixes verified genuine)*
+
+*Wave 1 (parallel; zero file overlap)*
+
+- [ ] 05-14-PLAN.md — CR-A1 MCP trigger_job ⇒ triggerJobBodyFor parity (blocker) + WR-A3 hexToUuid total-nibble mapping + IN-A1 job-runs cleanup (MCP-02, JRNL-01)
+- [ ] 05-15-PLAN.md — WR-A2 fills.processed_at + ForMarkingFillsProcessed (no re-pair/double-count) + WR-A1 ROLL recompute by eventType (explicit components) + WR-A4 full-shape memory seedEvent (JRNL-01)
+
+*Wave 2 (blocked on 05-14 + 05-15)*
+
+- [ ] 05-16-PLAN.md — fast-check property tests: no double-count, idempotent sync, rebuild reconciliation (OPEN/CLOSE/ROLL), distinct keys ⇒ distinct fill UUID (JRNL-01)
 
 ### Phase 6: Derived Analytics
 
