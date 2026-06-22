@@ -59,14 +59,15 @@ function extractLastError(output: unknown, state: string): string | null {
 
   if (typeof output === "string") return output;
 
-  // output is an object (pg-boss stores JSON); extract 'message' field without as-cast
-  if (typeof output === "object") {
-    const entries = Object.entries(output);
-    for (const [key, val] of entries) {
-      if (key === "message" && typeof val === "string") {
-        return val;
-      }
-    }
+  // output is an object (pg-boss stores JSON); extract the single known 'message' key
+  // directly via an `in` + typeof narrow (no entries scan, no as-cast).
+  if (
+    typeof output === "object" &&
+    output !== null &&
+    "message" in output &&
+    typeof output.message === "string"
+  ) {
+    return output.message;
   }
   return null;
 }
