@@ -302,15 +302,22 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
     }
   };
 
-  // ─── recomputeCalendarAmounts (ForRecomputingCalendarAmounts — A3 / WR-08) ──
-  // Recompute open_net_debit (sum of positive net_amounts) and close_net_credit
-  // (absolute sum of negative net_amounts) from calendar_events, then write them.
+  // ─── recomputeCalendarAmounts (ForRecomputingCalendarAmounts — A3 / WR-08 / WR-A1) ──
+  // WR-A1: sum by eventType (NOT by sign). OPEN.netAmount → open_net_debit; CLOSE.netAmount
+  // → close_net_credit (CLOSE netAmount is negative, D-08 — abs it); ROLL splits via its
+  // persisted components (roll_open_debit → open_net_debit, roll_close_credit →
+  // close_net_credit) so a calendar containing a roll reconciles after rebuild (SC5).
   const recomputeCalendarAmounts: ForRecomputingCalendarAmounts = async (
     calendarId: string,
   ): Promise<Result<void, StorageError>> => {
     try {
       const rows = await db
-        .select({ netAmount: calendarEvents.netAmount })
+        .select({
+          eventType: calendarEvents.eventType,
+          netAmount: calendarEvents.netAmount,
+          rollOpenDebit: calendarEvents.rollOpenDebit,
+          rollCloseCredit: calendarEvents.rollCloseCredit,
+        })
         .from(calendarEvents)
         .where(eq(calendarEvents.calendarId, calendarId));
 
@@ -318,10 +325,18 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
       let closeCredit = 0;
       for (const row of rows) {
         const amount = parseFloat(row.netAmount);
-        if (amount >= 0) {
-          openDebit += amount;
-        } else {
-          closeCredit += -amount;
+        switch (row.eventType) {
+          case "OPEN":
+            openDebit += amount; // OPEN debit is positive (D-08)
+            break;
+          case "CLOSE":
+            closeCredit += -amount; // CLOSE credit is negative (D-08) → abs
+            break;
+          case "ROLL":
+            // ROLL combined netAmount is sign-ambiguous — split via persisted components.
+            if (row.rollOpenDebit !== null) openDebit += parseFloat(row.rollOpenDebit);
+            if (row.rollCloseCredit !== null) closeCredit += parseFloat(row.rollCloseCredit);
+            break;
         }
       }
 

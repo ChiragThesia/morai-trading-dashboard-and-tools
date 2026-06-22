@@ -57,9 +57,18 @@ describe.skipIf(shouldSkip)("postgres fills adapter", () => {
       },
       seedEvent: async (event: SeedEvent): Promise<void> => {
         if (!db) throw new Error("db not initialized");
+        const rolledFrom = event.rolledFromOccSymbol ?? null;
+        const rollOpen =
+          event.rollOpenDebit === undefined || event.rollOpenDebit === null
+            ? null
+            : String(event.rollOpenDebit);
+        const rollClose =
+          event.rollCloseCredit === undefined || event.rollCloseCredit === null
+            ? null
+            : String(event.rollCloseCredit);
         await db.execute(
-          sql`INSERT INTO calendar_events (calendar_id, event_type, evented_at, fill_ids_hash, leg_occ_symbol, qty, avg_price, net_amount)
-              VALUES (${event.calendarId}::uuid, ${event.eventType}, NOW(), ${event.fillIdsHash}, ${event.legOccSymbol}, 1, '0', ${String(event.netAmount)})`,
+          sql`INSERT INTO calendar_events (calendar_id, event_type, evented_at, fill_ids_hash, leg_occ_symbol, rolled_from_occ_symbol, qty, avg_price, net_amount, roll_open_debit, roll_close_credit)
+              VALUES (${event.calendarId}::uuid, ${event.eventType}, NOW(), ${event.fillIdsHash}, ${event.legOccSymbol}, ${rolledFrom}, 1, '0', ${String(event.netAmount)}, ${rollOpen}, ${rollClose})`,
         );
       },
       seedOrphan: async (orphan: SeedOrphan): Promise<void> => {

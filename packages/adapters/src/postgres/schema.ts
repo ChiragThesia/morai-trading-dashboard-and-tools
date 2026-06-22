@@ -249,6 +249,11 @@ export const calendarEvents = pgTable("calendar_events", {
   netAmount: numeric("net_amount").notNull(),
   // Realized P&L: closeCredit − openDebit − totalFees; NULL on OPEN events (D-09)
   realizedPnl: numeric("realized_pnl"),
+  // WR-A1 (05-15, additive nullable): explicit ROLL split components recompute reads.
+  // NULL for OPEN/CLOSE; set for ROLL (open-leg debit → openNetDebit, close-leg credit →
+  // closeNetCredit) so a calendar containing a roll reconciles after rebuild (SC5).
+  rollOpenDebit: numeric("roll_open_debit"),
+  rollCloseCredit: numeric("roll_close_credit"),
   // Per-leg JSON breakdown for L3 attribution — hard requirement (D-09)
   legBreakdown: text("leg_breakdown"),
   // D-07: entry thesis free-text hook (set at OPEN time, carried to CLOSE/ROLL)

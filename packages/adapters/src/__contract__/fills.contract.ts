@@ -57,6 +57,11 @@ export type SeedEvent = {
   readonly fillIdsHash: string; // 64-char unique
   readonly legOccSymbol: string;
   readonly netAmount: number; // OPEN debit positive; CLOSE credit negative (D-08)
+  // WR-A1: explicit ROLL split components — recompute reads these (not re-parsed JSON).
+  // Optional/nullable so existing OPEN/CLOSE seeds are unaffected (null = not a ROLL split).
+  readonly rolledFromOccSymbol?: string | null;
+  readonly rollOpenDebit?: number | null;
+  readonly rollCloseCredit?: number | null;
 };
 
 /** An orphan_fills row to seed (drives the unprocessed exclusion). */
@@ -374,6 +379,46 @@ export function runFillsContractTests(
         const amounts = await seed.readCalendarAmounts(CAL_ID);
         expect(amounts.openNetDebit).toBeCloseTo(20.5, 5);
         expect(amounts.closeNetCredit).toBeCloseTo(8, 5);
+      });
+
+      it("WR-A1: sums by eventType — a ROLL splits into openNetDebit + closeNetCredit", async () => {
+        await seed.seedCalendar(calendar({ openNetDebit: null }));
+        // OPEN debit (+10) → openNetDebit; CLOSE credit (−4) → closeNetCredit;
+        // ROLL: open-leg debit +6 → openNetDebit, close-leg credit 5 → closeNetCredit
+        // (combined netAmount = 6 − 5 = +1; sign-bucketing would wrongly add +1 to openNetDebit
+        //  and nothing to closeNetCredit for the close leg).
+        await seed.seedEvent({
+          calendarId: CAL_ID,
+          eventType: "OPEN",
+          fillIdsHash: "e".repeat(64),
+          legOccSymbol: FRONT_OCC,
+          netAmount: 10,
+        });
+        await seed.seedEvent({
+          calendarId: CAL_ID,
+          eventType: "CLOSE",
+          fillIdsHash: "f".repeat(64),
+          legOccSymbol: FRONT_OCC,
+          netAmount: -4,
+        });
+        await seed.seedEvent({
+          calendarId: CAL_ID,
+          eventType: "ROLL",
+          fillIdsHash: "0".repeat(64),
+          legOccSymbol: BACK_OCC,
+          rolledFromOccSymbol: FRONT_OCC,
+          netAmount: 1,
+          rollOpenDebit: 6,
+          rollCloseCredit: 5,
+        });
+
+        const result = await repo.recomputeCalendarAmounts(CAL_ID);
+        expect(result.ok).toBe(true);
+
+        const amounts = await seed.readCalendarAmounts(CAL_ID);
+        // openNetDebit = 10 + 6 = 16; closeNetCredit = 4 + 5 = 9.
+        expect(amounts.openNetDebit).toBeCloseTo(16, 5);
+        expect(amounts.closeNetCredit).toBeCloseTo(9, 5);
       });
 
       it("scopes recompute to the target calendar only", async () => {

@@ -26,6 +26,11 @@ export type CalendarEventType = "OPEN" | "CLOSE" | "ROLL";
  * - netAmount: OPEN debit = positive; CLOSE credit = negative (D-08).
  * - realizedPnl: populated on CLOSE and ROLL only (D-09). NULL on OPEN events.
  * - legBreakdown: JSON string with per-leg amounts for L3 attribution (D-09 hard requirement).
+ * - rollOpenDebit / rollCloseCredit: WR-A1 structured ROLL split components. A ROLL stores a
+ *   combined netAmount (openDebit − closeCredit); recompute needs the two legs separately so a
+ *   roll's open-leg debit lands in openNetDebit and its close-leg credit in closeNetCredit.
+ *   These are the explicit components recompute reads (NOT re-parsed from legBreakdown JSON).
+ *   NULL for OPEN/CLOSE; set for ROLL.
  */
 export type CalendarEvent = {
   readonly id: string; // uuid
@@ -41,6 +46,9 @@ export type CalendarEvent = {
   readonly realizedPnl: number | null; // D-09: NULL on OPEN; populated on CLOSE/ROLL
   readonly legBreakdown: string | null; // JSON: { front: { qty, avgPrice, netAmount }, back: ... }
   readonly entryThesis: string | null; // D-07: free-text hook, set at OPEN time
+  // WR-A1: structured ROLL split. NULL on OPEN/CLOSE; set on ROLL.
+  readonly rollOpenDebit: number | null; // ROLL new-leg debit → openNetDebit on recompute
+  readonly rollCloseCredit: number | null; // ROLL old-leg credit → closeNetCredit on recompute
 };
 
 // ─── RawFill ──────────────────────────────────────────────────────────────────

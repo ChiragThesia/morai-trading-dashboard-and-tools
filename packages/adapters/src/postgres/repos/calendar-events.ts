@@ -52,6 +52,10 @@ export function makePostgresCalendarEventsRepo(db: Db): PostgresCalendarEventsRe
           avgPrice: String(event.avgPrice),
           netAmount: String(event.netAmount),
           realizedPnl: event.realizedPnl !== null ? String(event.realizedPnl) : null,
+          // WR-A1: persist the explicit ROLL split components (null for OPEN/CLOSE).
+          rollOpenDebit: event.rollOpenDebit !== null ? String(event.rollOpenDebit) : null,
+          rollCloseCredit:
+            event.rollCloseCredit !== null ? String(event.rollCloseCredit) : null,
           legBreakdown: event.legBreakdown,
           entryThesis: event.entryThesis,
         })
@@ -88,6 +92,9 @@ export function makePostgresCalendarEventsRepo(db: Db): PostgresCalendarEventsRe
         avgPrice: parseFloat(row.avgPrice),
         netAmount: parseFloat(row.netAmount),
         realizedPnl: row.realizedPnl !== null ? parseFloat(row.realizedPnl) : null,
+        rollOpenDebit: row.rollOpenDebit !== null ? parseFloat(row.rollOpenDebit) : null,
+        rollCloseCredit:
+          row.rollCloseCredit !== null ? parseFloat(row.rollCloseCredit) : null,
         legBreakdown: row.legBreakdown ?? null,
         entryThesis: row.entryThesis ?? null,
       }));

@@ -67,6 +67,9 @@ function makeCalendarEvent(
     realizedPnl: null,
     legBreakdown: null,
     entryThesis: null,
+    // WR-A1: explicit ROLL open/close components — null for OPEN/CLOSE, set for ROLL.
+    rollOpenDebit: null,
+    rollCloseCredit: null,
     ...overrides,
   };
 }
@@ -116,6 +119,40 @@ export function runCalendarEventsContractTests(
 
         const count = await repo.countEvents(CAL_A);
         expect(count).toBe(2);
+      });
+
+      it("WR-A1: a ROLL event round-trips its rollOpenDebit / rollCloseCredit components", async () => {
+        await seed.seedCalendar(CAL_A);
+        const roll = makeCalendarEvent(CAL_A, HASH_1, {
+          eventType: "ROLL",
+          rolledFromOccSymbol: "O:SPX260620P07100000",
+          legOccSymbol: "O:SPX260919P07100000",
+          netAmount: 1, // combined: openDebit(6) − closeCredit(5)
+          rollOpenDebit: 6,
+          rollCloseCredit: 5,
+        });
+        const stored = await repo.storeCalendarEvent(roll);
+        expect(stored.ok).toBe(true);
+
+        const result = await repo.readCalendarEvents(CAL_A);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const read = result.value.find((e) => e.eventType === "ROLL");
+        expect(read).toBeDefined();
+        expect(read?.rollOpenDebit).toBeCloseTo(6, 5);
+        expect(read?.rollCloseCredit).toBeCloseTo(5, 5);
+      });
+
+      it("WR-A1: OPEN/CLOSE events keep null roll components on round-trip", async () => {
+        await seed.seedCalendar(CAL_A);
+        await repo.storeCalendarEvent(makeCalendarEvent(CAL_A, HASH_2, { eventType: "OPEN" }));
+
+        const result = await repo.readCalendarEvents(CAL_A);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const read = result.value[0];
+        expect(read?.rollOpenDebit).toBeNull();
+        expect(read?.rollCloseCredit).toBeNull();
       });
     });
 

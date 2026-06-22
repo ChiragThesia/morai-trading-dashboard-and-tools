@@ -42,9 +42,18 @@ export type MemorySeedCalendar = {
   readonly openNetDebit: number | null;
 };
 
+// WR-A4: full event shape so the twin can model a ROLL (eventType + components), keeping
+// twin/Postgres recompute parity once WR-A1 sums by eventType. Defined locally (no __contract__
+// import) — the shared contract passes structurally-compatible objects.
 export type MemorySeedEvent = {
   readonly calendarId: string;
+  readonly eventType: "OPEN" | "CLOSE" | "ROLL";
+  readonly fillIdsHash: string;
+  readonly legOccSymbol: string;
   readonly netAmount: number;
+  readonly rolledFromOccSymbol?: string | null;
+  readonly rollOpenDebit?: number | null;
+  readonly rollCloseCredit?: number | null;
 };
 
 export type MemorySeedOrphan = {
@@ -199,14 +208,26 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
   ): Promise<Result<void, StorageError>> => {
     const cal = calendarStore.get(calendarId);
     if (cal === undefined) return ok(undefined);
+    // WR-A1: sum by eventType (mirror the Postgres adapter exactly for twin parity).
     let openDebit = 0;
     let closeCredit = 0;
     for (const event of eventStore) {
       if (event.calendarId !== calendarId) continue;
-      if (event.netAmount >= 0) {
-        openDebit += event.netAmount;
-      } else {
-        closeCredit += -event.netAmount;
+      switch (event.eventType) {
+        case "OPEN":
+          openDebit += event.netAmount; // OPEN debit positive (D-08)
+          break;
+        case "CLOSE":
+          closeCredit += -event.netAmount; // CLOSE credit negative (D-08) → abs
+          break;
+        case "ROLL":
+          if (event.rollOpenDebit !== null && event.rollOpenDebit !== undefined) {
+            openDebit += event.rollOpenDebit;
+          }
+          if (event.rollCloseCredit !== null && event.rollCloseCredit !== undefined) {
+            closeCredit += event.rollCloseCredit;
+          }
+          break;
       }
     }
     calendarStore.set(calendarId, {

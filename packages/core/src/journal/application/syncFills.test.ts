@@ -123,6 +123,8 @@ function makeOpenEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     realizedPnl: null,
     legBreakdown: null,
     entryThesis: null,
+    rollOpenDebit: null,
+    rollCloseCredit: null,
     ...overrides,
   };
 }
@@ -582,6 +584,85 @@ describe("makeSyncFillsUseCase", () => {
     for (const o of storedOrphans) {
       expect(o.fillId.startsWith("agg-unknown-")).toBe(false);
     }
+  });
+
+  it("ROLL: sets rollOpenDebit (open-leg debit) and rollCloseCredit (close-leg credit) (WR-A1)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    // Close front leg (credit = 8*1 = 8), open back leg (debit = 20*1 = 20).
+    const fillClose = makeFill({
+      id: "fill-roll-close-a1",
+      occSymbol: OCC_FRONT,
+      side: "sell",
+      orderId: "roll-order-a1",
+      qty: 1,
+      price: 8,
+    });
+    const fillOpen = makeFill({
+      id: "fill-roll-open-a1",
+      occSymbol: OCC_BACK,
+      side: "buy",
+      orderId: "roll-order-a1",
+      qty: 1,
+      price: 20,
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fillClose, fillOpen],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+          ],
+          [OCC_BACK]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedEvents).toHaveLength(1);
+    const roll = storedEvents[0];
+    expect(roll?.eventType).toBe("ROLL");
+    // rollOpenDebit = open-leg debit (20); rollCloseCredit = close-leg credit (8).
+    expect(roll?.rollOpenDebit).toBeCloseTo(20, 6);
+    expect(roll?.rollCloseCredit).toBeCloseTo(8, 6);
+    // combined netAmount = openDebit − closeCredit = 20 − 8 = 12 (unchanged).
+    expect(roll?.netAmount).toBeCloseTo(12, 6);
+  });
+
+  it("OPEN/CLOSE events carry null roll components (WR-A1)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+    const fill = makeFill({ id: "fill-open-null-roll", side: "buy" });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fill],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedEvents).toHaveLength(1);
+    expect(storedEvents[0]?.rollOpenDebit).toBeNull();
+    expect(storedEvents[0]?.rollCloseCredit).toBeNull();
   });
 
   // ─── WR-A2: mark-processed tracking ──────────────────────────────────────────

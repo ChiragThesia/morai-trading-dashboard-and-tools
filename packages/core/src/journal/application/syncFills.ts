@@ -367,6 +367,10 @@ async function pairFills(
             realizedPnl,
             legBreakdown,
             entryThesis: null,
+            // WR-A1: structured split — recompute reads these (open-leg debit → openNetDebit,
+            // close-leg credit → closeNetCredit), not the combined sign-bucketed netAmount.
+            rollOpenDebit: openDebit,
+            rollCloseCredit: closeCredit,
           };
 
           const storeResult = await deps.storeCalendarEvent(rollEvent);
@@ -432,6 +436,9 @@ async function pairFills(
       realizedPnl,
       legBreakdown,
       entryThesis: null,
+      // WR-A1: OPEN/CLOSE carry no roll split.
+      rollOpenDebit: null,
+      rollCloseCredit: null,
     };
 
     const storeResult = await deps.storeCalendarEvent(event);
