@@ -278,6 +278,74 @@ export const orphanFills = pgTable("orphan_fills", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
+// ─── 11. skew_observations — per-strike volatility smile (analytics, Phase 6) ─
+// Append-only smile detail. One row per (underlying, expiration, strike) present in
+// leg_observations at a snapshot time. Time-leading composite PK = per-grain UNIQUE key;
+// re-run for the same snapshot time is a no-op (onConflictDoNothing).
+
+export const skewObservations = pgTable(
+  "skew_observations",
+  {
+    snapshotTime: timestamp("snapshot_time", { withTimezone: true }).notNull(),
+    underlying: varchar("underlying", { length: 16 }).notNull(),
+    expiration: date("expiration").notNull(),
+    // Strike stored ×1000 int convention (7100 → 7100000), like contracts.strike
+    strike: integer("strike").notNull(),
+    // IV from leg_observations.bsm_iv
+    iv: numeric("iv").notNull(),
+    // Interpolation source for the ±25Δ points; nullable when delta unavailable
+    delta: numeric("delta"),
+    moneyness: numeric("moneyness"),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.snapshotTime, table.underlying, table.expiration, table.strike],
+    }),
+  ],
+).enableRLS();
+
+// ─── 12. risk_reversal_observations — 25Δ RR + trailing rank (analytics) ──────
+// riskReversal = IV(25Δ put) − IV(25Δ call); NULL when ±25Δ cannot be bracketed (never
+// fabricated). rrRank = trailing-window inclusive percentile; NULL when RR is null or no
+// history exists. Time-leading composite PK = per-grain UNIQUE key.
+
+export const riskReversalObservations = pgTable(
+  "risk_reversal_observations",
+  {
+    snapshotTime: timestamp("snapshot_time", { withTimezone: true }).notNull(),
+    underlying: varchar("underlying", { length: 16 }).notNull(),
+    expiration: date("expiration").notNull(),
+    // NULL when ±25Δ cannot be bracketed — never a guessed number
+    riskReversal: numeric("risk_reversal"),
+    // NULL when riskReversal is null or no trailing history
+    rrRank: numeric("rr_rank"),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.snapshotTime, table.underlying, table.expiration],
+    }),
+  ],
+).enableRLS();
+
+// ─── 13. term_structure_observations — forward-vol slope per calendar ─────────
+// value MUST equal the source calendar_snapshots.term_slope (no recompute drift).
+// One row per calendar per snapshot time. Time-leading composite PK = per-grain UNIQUE key.
+
+export const termStructureObservations = pgTable(
+  "term_structure_observations",
+  {
+    snapshotTime: timestamp("snapshot_time", { withTimezone: true }).notNull(),
+    calendarId: uuid("calendar_id").notNull(),
+    // back_iv − front_iv; equals calendar_snapshots.term_slope (read through, never recomputed)
+    value: numeric("value").notNull(),
+    frontIv: numeric("front_iv").notNull(),
+    backIv: numeric("back_iv").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.snapshotTime, table.calendarId] }),
+  ],
+).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };
