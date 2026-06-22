@@ -6,13 +6,15 @@ import type {
   ForReadingPendingObs,
   ForWritingBsmResults,
   ForReadingLatestLegObs,
+  ForReadingSmileSource,
   ObservationRow,
   ContractRow,
   PendingObs,
   LegSnapshot,
+  SmileQuote,
   StorageError,
 } from "@morai/core";
-import { and, isNull, isNotNull, eq, inArray, desc } from "drizzle-orm";
+import { and, isNull, isNotNull, ne, eq, inArray, desc, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -40,6 +42,7 @@ export type PostgresLegObservationsRepo = {
   readonly readPendingObs: ForReadingPendingObs;
   readonly writeBsmResults: ForWritingBsmResults;
   readonly getLatestLegObs: ForReadingLatestLegObs;
+  readonly readSmile: ForReadingSmileSource;
 };
 
 export function makePostgresLegObservationsRepo(
@@ -298,5 +301,55 @@ export function makePostgresLegObservationsRepo(
     }
   };
 
-  return { persistObservations, upsertContracts, readPendingObs, writeBsmResults, getLatestLegObs };
+  // ─── ForReadingSmileSource ────────────────────────────────────────────────
+  // ANLY-01 R1: per-(underlying, expiration, strike) smile points for a snapshot time.
+  // Joins leg_observations → contracts for underlying/expiration/strike; maps bsm_iv → iv and
+  // bsm_delta → delta. Excludes NaN-stamped iv rows (bsm_iv = 'NaN') and unsolved rows (bsm_iv
+  // IS NULL) so only BSM-solved strikes form the smile. moneyness has no source column → null.
+  const readSmile: ForReadingSmileSource = async (
+    snapshotTime,
+  ): Promise<Result<ReadonlyArray<SmileQuote>, StorageError>> => {
+    try {
+      const rows = await db
+        .select({
+          underlying: contracts.underlying,
+          expiration: contracts.expiration,
+          strike: contracts.strike,
+          bsmIv: legObservations.bsmIv,
+          bsmDelta: legObservations.bsmDelta,
+        })
+        .from(legObservations)
+        .innerJoin(contracts, eq(legObservations.contract, contracts.occSymbol))
+        .where(
+          and(
+            eq(legObservations.time, snapshotTime),
+            isNotNull(legObservations.bsmIv),
+            // Exclude NaN-stamped rows — bsm_iv = 'NaN'::numeric is NOT NULL but unusable.
+            ne(legObservations.bsmIv, sql`'NaN'::numeric`),
+          ),
+        );
+
+      const smile: SmileQuote[] = rows.map((row) => ({
+        underlying: row.underlying,
+        expiration: row.expiration,
+        strike: row.strike,
+        iv: parseFloat(row.bsmIv ?? "NaN"),
+        delta: row.bsmDelta !== null ? parseFloat(row.bsmDelta) : null,
+        moneyness: null,
+      }));
+      return ok(smile);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  return {
+    persistObservations,
+    upsertContracts,
+    readPendingObs,
+    writeBsmResults,
+    getLatestLegObs,
+    readSmile,
+  };
 }

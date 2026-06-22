@@ -18,19 +18,40 @@ import type { Result } from "@morai/shared";
 import type {
   ForPersistingObservations,
   ForReadingLatestLegObs,
+  ForReadingSmileSource,
   ObservationRow,
   LegSnapshot,
+  SmileQuote,
   StorageError,
 } from "@morai/core";
+
+/**
+ * SeededSmileLeg — a BSM-solved leg observation at the grain the smile read joins on
+ * (leg_observations × contracts). Used by the memory twin's readSmile (ANLY-01 R1 source).
+ * bsmIv "NaN" or null → excluded from the smile, mirroring Postgres.
+ */
+export type SeededSmileLeg = {
+  readonly snapshotTime: Date;
+  readonly underlying: string;
+  readonly expiration: string; // YYYY-MM-DD
+  readonly strike: number; // ×1000 int
+  readonly bsmIv: string | null;
+  readonly bsmDelta: string | null;
+};
 
 export type MemoryLegObservationsRepo = {
   readonly persistObservations: ForPersistingObservations;
   readonly getLatestLegObs: ForReadingLatestLegObs;
+  readonly readSmile: ForReadingSmileSource;
+  /** Test helper: seed a BSM-solved leg for the smile-source read. */
+  readonly seedSmileLeg: (leg: SeededSmileLeg) => void;
 };
 
 export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
   // Composite key: `${contract}:${time.toISOString()}` — idempotent (mirrors onConflictDoNothing)
   const store = new Map<string, ObservationRow>();
+  // Smile-source seed store, keyed on the smile grain (snapshot_time, underlying, expiration, strike).
+  const smileStore = new Map<string, SeededSmileLeg>();
 
   const persistObservations: ForPersistingObservations = async (
     rows: ReadonlyArray<ObservationRow>,
@@ -75,5 +96,31 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
     return ok(leg);
   };
 
-  return { persistObservations, getLatestLegObs };
+  const seedSmileLeg = (leg: SeededSmileLeg): void => {
+    const key = `${leg.snapshotTime.toISOString()}|${leg.underlying}|${leg.expiration}|${leg.strike}`;
+    smileStore.set(key, leg);
+  };
+
+  // ForReadingSmileSource: per-strike smile points for a snapshot time. Excludes NaN-stamped iv
+  // (bsmIv === "NaN") and unsolved rows (bsmIv === null), mirroring the Postgres adapter.
+  const readSmile: ForReadingSmileSource = async (
+    snapshotTime,
+  ): Promise<Result<ReadonlyArray<SmileQuote>, StorageError>> => {
+    const smile: SmileQuote[] = [];
+    for (const leg of smileStore.values()) {
+      if (leg.snapshotTime.getTime() !== snapshotTime.getTime()) continue;
+      if (leg.bsmIv === null || leg.bsmIv === "NaN") continue;
+      smile.push({
+        underlying: leg.underlying,
+        expiration: leg.expiration,
+        strike: leg.strike,
+        iv: parseFloat(leg.bsmIv),
+        delta: leg.bsmDelta !== null ? parseFloat(leg.bsmDelta) : null,
+        moneyness: null,
+      });
+    }
+    return ok(smile);
+  };
+
+  return { persistObservations, getLatestLegObs, readSmile, seedSmileLeg };
 }

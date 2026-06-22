@@ -187,5 +187,6 @@ export type {
   ForWritingTermStructureObservations,
   ForReadingRiskReversalHistory,
   ForReadingSkewSeries,
+  ForReadingSkewSmileDetail,
   ForReadingTermStructureSeries,
 } from "./analytics/index.ts";

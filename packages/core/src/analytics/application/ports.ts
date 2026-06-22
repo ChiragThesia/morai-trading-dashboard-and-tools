@@ -130,8 +130,10 @@ export type ForReadingRiskReversalHistory = (
 ) => Promise<Result<ReadonlyArray<number>, StorageError>>;
 
 /**
- * ForReadingSkewSeries — read the risk-reversal series for GET /api/analytics/skew, queryable by
- * underlying/expiration. Returns empty array when no rows match.
+ * ForReadingSkewSeries — read the headline risk-reversal series for GET /api/analytics/skew,
+ * queryable by underlying/expiration. The "skew" read surface (SPEC R5) returns the derived 25Δ
+ * risk-reversal scalar + trailing rank (value = risk_reversal), NOT the per-strike smile detail.
+ * Returns empty array when no rows match.
  */
 export type ForReadingSkewSeries = (
   query: {
@@ -139,6 +141,18 @@ export type ForReadingSkewSeries = (
     readonly expiration?: string; // YYYY-MM-DD
   },
 ) => Promise<Result<ReadonlyArray<RiskReversalObservationRow>, StorageError>>;
+
+/**
+ * ForReadingSkewSmileDetail — read the per-strike smile rows from skew_observations, ordered by
+ * snapshot_time ASC, queryable by underlying/expiration. This is the optional smile DETAIL (ANLY-01
+ * R1), distinct from the headline ForReadingSkewSeries (risk-reversal). Empty array when none.
+ */
+export type ForReadingSkewSmileDetail = (
+  query: {
+    readonly underlying?: string;
+    readonly expiration?: string; // YYYY-MM-DD
+  },
+) => Promise<Result<ReadonlyArray<SkewObservationRow>, StorageError>>;
 
 /**
  * ForReadingTermStructureSeries — read the term-structure series for

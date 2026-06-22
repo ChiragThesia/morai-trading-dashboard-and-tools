@@ -17,7 +17,6 @@ export type {
   GetTermStructureDeps,
   ForRunningGetTermStructure,
 } from "./application/getTermStructure.ts";
-
 export type {
   StorageError,
   SmileQuote,
@@ -32,5 +31,6 @@ export type {
   ForWritingTermStructureObservations,
   ForReadingRiskReversalHistory,
   ForReadingSkewSeries,
+  ForReadingSkewSmileDetail,
   ForReadingTermStructureSeries,
 } from "./application/ports.ts";
