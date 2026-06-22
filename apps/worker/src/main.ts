@@ -289,6 +289,8 @@ const rebuildJournalUseCase = makeRebuildJournalUseCase({
   resetCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
   // CR-04: genuinely calendar-scoped — re-pairs only the target calendar (not a full sweep).
   syncFillsForCalendar: syncFillsForCalendarUseCase,
+  // WR-08: recompute calendar aggregates after the rebuild (real repo wired in plan 05-13 Task 2).
+  recomputeCalendarAmounts: async (_calendarId) => ({ ok: true as const, value: undefined }),
   now: () => new Date(),
 });
 

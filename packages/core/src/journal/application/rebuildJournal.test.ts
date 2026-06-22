@@ -19,8 +19,14 @@ import type { Result } from "@morai/shared";
 import type {
   ForDeletingCalendarEvents,
   ForResettingCalendarAmounts,
+  ForRecomputingCalendarAmounts,
   StorageError,
 } from "./ports.ts";
+
+// WR-08 (plan 05-13): rebuildJournal gained a required recomputeCalendarAmounts step.
+// A non-counting ok-twin satisfies the dep for the pre-existing order/error cases that
+// don't assert on it.
+const noopRecompute: ForRecomputingCalendarAmounts = async () => ok(undefined);
 
 describe("makeRebuildJournalUseCase", () => {
   it("calls deleteCalendarEvents, then resetCalendarAmounts, then syncFillsForCalendar in order", async () => {
@@ -49,6 +55,7 @@ describe("makeRebuildJournalUseCase", () => {
       deleteCalendarEvents,
       resetCalendarAmounts,
       syncFillsForCalendar,
+      recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
     });
 
@@ -69,6 +76,7 @@ describe("makeRebuildJournalUseCase", () => {
       deleteCalendarEvents,
       resetCalendarAmounts,
       syncFillsForCalendar,
+      recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
     });
 
@@ -91,6 +99,7 @@ describe("makeRebuildJournalUseCase", () => {
       deleteCalendarEvents,
       resetCalendarAmounts,
       syncFillsForCalendar,
+      recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
     });
 
@@ -119,6 +128,7 @@ describe("makeRebuildJournalUseCase", () => {
       deleteCalendarEvents,
       resetCalendarAmounts,
       syncFillsForCalendar,
+      recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
     });
 
@@ -154,6 +164,7 @@ describe("makeRebuildJournalUseCase", () => {
       deleteCalendarEvents,
       resetCalendarAmounts,
       syncFillsForCalendar,
+      recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
     });
 
@@ -177,11 +188,13 @@ describe("makeRebuildJournalUseCase", () => {
     const storageErr: StorageError = { kind: "storage-error", message: "sync failed" };
     const deleteCalendarEvents: ForDeletingCalendarEvents = async () => ok(undefined);
     const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
+    const recomputeCalendarAmounts: ForRecomputingCalendarAmounts = async () => ok(undefined);
     const syncFillsForCalendar = async (): Promise<Result<void, StorageError>> => err(storageErr);
 
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      recomputeCalendarAmounts,
       syncFillsForCalendar,
       now: () => new Date("2026-06-15T14:00:00Z"),
     });
@@ -190,5 +203,122 @@ describe("makeRebuildJournalUseCase", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toBe("sync failed");
+  });
+
+  // ─── WR-08: recompute-amounts reconciliation step (plan 05-13) ────────────────
+
+  it("WR-08: calls delete → reset → scoped sync → recompute in that order", async () => {
+    const { makeRebuildJournalUseCase } = await import("./rebuildJournal.ts");
+
+    const calls: string[] = [];
+
+    const deleteCalendarEvents: ForDeletingCalendarEvents = async (id) => {
+      calls.push(`delete:${id}`);
+      return ok(undefined);
+    };
+    const resetCalendarAmounts: ForResettingCalendarAmounts = async (id) => {
+      calls.push(`reset:${id}`);
+      return ok(undefined);
+    };
+    const syncFillsForCalendar = async (id: string): Promise<Result<void, StorageError>> => {
+      calls.push(`sync:${id}`);
+      return ok(undefined);
+    };
+    const recomputeCalendarAmounts: ForRecomputingCalendarAmounts = async (id) => {
+      calls.push(`recompute:${id}`);
+      return ok(undefined);
+    };
+
+    const rebuildJournal = makeRebuildJournalUseCase({
+      deleteCalendarEvents,
+      resetCalendarAmounts,
+      syncFillsForCalendar,
+      recomputeCalendarAmounts,
+      now: () => new Date("2026-06-15T14:00:00Z"),
+    });
+
+    const result = await rebuildJournal("cal-wr08");
+    expect(result.ok).toBe(true);
+    // recompute MUST run AFTER the scoped sync (events must exist before they're summed)
+    expect(calls).toEqual([
+      "delete:cal-wr08",
+      "reset:cal-wr08",
+      "sync:cal-wr08",
+      "recompute:cal-wr08",
+    ]);
+  });
+
+  it("WR-08: post-rebuild amounts are non-null and equal the summed scoped-sync events (SC5)", async () => {
+    const { makeRebuildJournalUseCase } = await import("./rebuildJournal.ts");
+
+    // Twin: the scoped sync writes events; recompute sums them onto the calendar amounts.
+    type Event = { netAmount: number };
+    const events: Event[] = [];
+    let amounts: { openNetDebit: number | null; closeNetCredit: number | null } = {
+      openNetDebit: 999, // stale pre-rebuild value (must be reset then recomputed)
+      closeNetCredit: 999,
+    };
+
+    const deleteCalendarEvents: ForDeletingCalendarEvents = async () => {
+      events.length = 0;
+      return ok(undefined);
+    };
+    const resetCalendarAmounts: ForResettingCalendarAmounts = async () => {
+      amounts = { openNetDebit: null, closeNetCredit: null };
+      return ok(undefined);
+    };
+    const syncFillsForCalendar = async (): Promise<Result<void, StorageError>> => {
+      // Scoped sync rebuilds two events: an OPEN debit (+300) and a CLOSE credit (−500).
+      events.push({ netAmount: 300 });
+      events.push({ netAmount: -500 });
+      return ok(undefined);
+    };
+    const recomputeCalendarAmounts: ForRecomputingCalendarAmounts = async () => {
+      let openDebit = 0;
+      let closeCredit = 0;
+      for (const e of events) {
+        if (e.netAmount >= 0) openDebit += e.netAmount;
+        else closeCredit += -e.netAmount;
+      }
+      amounts = { openNetDebit: openDebit, closeNetCredit: closeCredit };
+      return ok(undefined);
+    };
+
+    const rebuildJournal = makeRebuildJournalUseCase({
+      deleteCalendarEvents,
+      resetCalendarAmounts,
+      syncFillsForCalendar,
+      recomputeCalendarAmounts,
+      now: () => new Date("2026-06-15T14:00:00Z"),
+    });
+
+    const result = await rebuildJournal("cal-sc5");
+    expect(result.ok).toBe(true);
+    // SC5: amounts are non-null after rebuild and equal the summed rebuilt events.
+    expect(amounts.openNetDebit).toBe(300);
+    expect(amounts.closeNetCredit).toBe(500);
+  });
+
+  it("WR-08: recomputeCalendarAmounts error → returns err", async () => {
+    const { makeRebuildJournalUseCase } = await import("./rebuildJournal.ts");
+
+    const storageErr: StorageError = { kind: "storage-error", message: "recompute failed" };
+    const deleteCalendarEvents: ForDeletingCalendarEvents = async () => ok(undefined);
+    const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
+    const syncFillsForCalendar = async (): Promise<Result<void, StorageError>> => ok(undefined);
+    const recomputeCalendarAmounts: ForRecomputingCalendarAmounts = async () => err(storageErr);
+
+    const rebuildJournal = makeRebuildJournalUseCase({
+      deleteCalendarEvents,
+      resetCalendarAmounts,
+      syncFillsForCalendar,
+      recomputeCalendarAmounts,
+      now: () => new Date("2026-06-15T14:00:00Z"),
+    });
+
+    const result = await rebuildJournal("cal-abc");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toBe("recompute failed");
   });
 });
