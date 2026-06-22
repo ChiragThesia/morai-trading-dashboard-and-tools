@@ -10,15 +10,67 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { ok } from "@morai/shared";
+import type { Result } from "@morai/shared";
 import { makeEnqueueJobUseCase } from "./enqueueJob.ts";
-import { makeMemoryJobQueue } from "../../../../adapters/src/memory/job-queue.ts";
+import type { ForEnqueueingJob, StorageError } from "./ports.ts";
+
+// ─── In-core test double ──────────────────────────────────────────────────────
+// Mirrors pg-boss singletonKey semantics: same dedupeKey → same jobId, no new entry.
+// dedupeKey=null: every call creates a distinct entry (no dedup).
+// Must NOT import from packages/adapters (architecture-boundaries.md §2).
+// Must NOT import node:* builtins (eslint.config.js §core restriction).
+// Uses a monotonic counter for unique job IDs — sufficient for test isolation.
+
+type QueueEntry = {
+  readonly jobId: string;
+  readonly name: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly dedupeKey: string | null;
+};
+
+let _jobIdSeq = 0;
+function nextJobId(): string {
+  _jobIdSeq += 1;
+  return `test-job-${_jobIdSeq}`;
+}
+
+function makeTestJobQueue(): {
+  readonly enqueue: ForEnqueueingJob;
+  readonly getAll: () => ReadonlyArray<QueueEntry>;
+} {
+  const dedupeStore = new Map<string, QueueEntry>();
+  const unKeyed: QueueEntry[] = [];
+
+  const enqueue: ForEnqueueingJob = async (
+    name: string,
+    payload: Readonly<Record<string, unknown>>,
+    dedupeKey: string | null,
+  ): Promise<Result<string | null, StorageError>> => {
+    if (dedupeKey !== null) {
+      const existing = dedupeStore.get(dedupeKey);
+      if (existing !== undefined) return ok(existing.jobId);
+      const jobId = nextJobId();
+      dedupeStore.set(dedupeKey, { jobId, name, payload, dedupeKey });
+      return ok(jobId);
+    }
+    const jobId = nextJobId();
+    unKeyed.push({ jobId, name, payload, dedupeKey: null });
+    return ok(jobId);
+  };
+
+  return {
+    enqueue,
+    getAll: () => [...dedupeStore.values(), ...unKeyed],
+  };
+}
 
 // A fixed 10-min window boundary
 const BASE_TIME = new Date("2026-06-21T14:10:00.000Z");
 
 describe("makeEnqueueJobUseCase", () => {
   it("enqueues a scheduled job and returns ok(jobId)", async () => {
-    const q = makeMemoryJobQueue();
+    const q = makeTestJobQueue();
     const enqueueJob = makeEnqueueJobUseCase({
       jobQueue: q.enqueue,
       now: () => BASE_TIME,
@@ -32,7 +84,7 @@ describe("makeEnqueueJobUseCase", () => {
   });
 
   it("repeated enqueue for a scheduled job in the same window returns same jobId", async () => {
-    const q = makeMemoryJobQueue();
+    const q = makeTestJobQueue();
     const enqueueJob = makeEnqueueJobUseCase({
       jobQueue: q.enqueue,
       now: () => BASE_TIME,
@@ -55,7 +107,7 @@ describe("makeEnqueueJobUseCase", () => {
   });
 
   it("rebuild-journal uses rebuildDedupeKey (calendar-scoped)", async () => {
-    const q = makeMemoryJobQueue();
+    const q = makeTestJobQueue();
     const enqueueJob = makeEnqueueJobUseCase({
       jobQueue: q.enqueue,
       now: () => BASE_TIME,
@@ -73,7 +125,7 @@ describe("makeEnqueueJobUseCase", () => {
   });
 
   it("rebuild-journal with different calendarIds produces different entries", async () => {
-    const q = makeMemoryJobQueue();
+    const q = makeTestJobQueue();
     const enqueueJob = makeEnqueueJobUseCase({
       jobQueue: q.enqueue,
       now: () => BASE_TIME,
@@ -85,7 +137,7 @@ describe("makeEnqueueJobUseCase", () => {
   });
 
   it("different scheduled job names produce different entries", async () => {
-    const q = makeMemoryJobQueue();
+    const q = makeTestJobQueue();
     const enqueueJob = makeEnqueueJobUseCase({
       jobQueue: q.enqueue,
       now: () => BASE_TIME,
