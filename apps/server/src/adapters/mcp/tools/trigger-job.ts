@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { TRIGGERABLE_JOBS, triggerJobPayload } from "@morai/contracts";
+import { TRIGGERABLE_JOBS, triggerJobBodyFor, triggerJobPayload } from "@morai/contracts";
 import type { ForTriggeringJob } from "../../http/jobs.routes.ts";
 
 /**
@@ -34,23 +34,42 @@ export function registerTriggerJobTool(
     },
     async (args) => {
       // safeParse at MCP boundary — never throw on invalid input (SPEC §7, CR-02).
-      // MCP-02: same validation schema as the HTTP route (shared contracts).
-      const parsed = z
-        .object({
-          name: z.enum(TRIGGERABLE_JOBS),
-          calendarId: z.string().uuid().optional(),
-        })
-        .safeParse(args);
+      // CR-A1 / architecture-boundaries §9: route through the SAME per-job refinement
+      // the HTTP route uses (triggerJobBodyFor) so both adapter surfaces stay in sync.
 
-      if (!parsed.success) {
+      // (1) Validate the job name first.
+      const nameParsed = z
+        .object({ name: z.enum(TRIGGERABLE_JOBS) })
+        .safeParse(args);
+      if (!nameParsed.success) {
         return {
           content: [
             { type: "text" as const, text: JSON.stringify({ error: "invalid params" }) },
           ],
         };
       }
+      const { name } = nameParsed.data;
 
-      const { name, calendarId } = parsed.data;
+      // (2) Once the name is known, validate the calendarId-bearing body with the
+      // per-job schema (rebuild-journal ⇒ calendarId REQUIRED). A failed parse rejects
+      // here and enqueueJob is NEVER called — this closes the WR-04 queue-flood path
+      // through the agent-driven MCP surface (CR-A1). Mirrors jobs.routes.ts.
+      const calendarIdRaw: unknown = Reflect.get(Object(args), "calendarId");
+      const bodyParsed = triggerJobBodyFor(name).safeParse({ calendarId: calendarIdRaw });
+      if (!bodyParsed.success) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "calendarId is required for rebuild-journal",
+              }),
+            },
+          ],
+        };
+      }
+
+      const { calendarId } = bodyParsed.data;
       // Build payload as Record<string, unknown> — matches ForTriggeringJob signature.
       // calendarId omitted when undefined (exactOptionalPropertyTypes).
       const payload: Record<string, unknown> = {};
