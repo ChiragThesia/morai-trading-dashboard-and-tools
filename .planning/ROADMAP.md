@@ -253,7 +253,7 @@ Plans:
 
 *Wave 9 (blocked on 05-10/05-11/05-12)*
 
-- [ ] 05-13-PLAN.md — A5 real wiring (delete fills stubs) + sync-transactions job + WR-08 rebuild reconciliation + end-to-end SC4/SC5 verification (JRNL-01, JOB-01)
+- [x] 05-13-PLAN.md — A5 real wiring (delete fills stubs) + sync-transactions job + WR-08 rebuild reconciliation + end-to-end SC4/SC5 verification (JRNL-01, JOB-01) (completed 2026-06-22)
 
 ### Phase 6: Derived Analytics
 

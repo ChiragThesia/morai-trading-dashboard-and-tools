@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 05
 current_phase_name: jobs-fill-rebuild-integrity
-status: Phase 05 gap-round in progress
-stopped_at: Completed 05-12-PLAN.md
-last_updated: "2026-06-22T04:10:00.000Z"
+status: Phase 05 gap-round complete (SC4/SC5 proven end-to-end)
+stopped_at: Completed 05-13-PLAN.md
+last_updated: "2026-06-22T04:35:00.000Z"
 last_activity: 2026-06-22
-last_activity_desc: Phase 05 Plan 12 completed (A1 fills repo postgres+memory twin SQL-contract-tested, A3 calendar-amounts recompute, A4 sync-transactions fills source; 744/744 workspace tests GREEN)
+last_activity_desc: Phase 05 Plan 13 completed (A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute; SC4 realizedPnl=2.0 and SC5 reconciliation proven end-to-end; 755/755 workspace tests GREEN)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 44
-  completed_plans: 44
+  total_plans: 45
+  completed_plans: 45
   percent: 67
 ---
 
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 05 (jobs-fill-rebuild-integrity) — GAP ROUND (plans 05-09..05-13 close SC4/SC5 review findings)
-Plan: 05-12 of gap round DONE (Wave 2 — A1 fills repo + A3 recompute amounts + A4 sync-transactions source, all SQL-contract-tested). 05-11 DONE. Plans 01-10 complete; Plan 02 migration pending live DB apply.
+Plan: 05-13 of gap round DONE (Wave 3 — A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute). Gap round 05-09..05-13 COMPLETE; SC4/SC5 proven end-to-end. Plans 01-08 complete; Plan 02 migration pending live DB apply.
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Plan 05-13 (gap round Wave 3 — real adapters wiring: replace worker stubs with the fills repo/source, NewId/HashFillIds composition-root injection).
-Last activity: 2026-06-22 -- Phase 05 Plan 12 completed (A1 fills repo postgres+memory twin SQL-contract-tested, A3 calendar-amounts recompute, A4 sync-transactions fills source; 744/744 workspace tests GREEN)
+Next: Phase 05 verification / merge phases 04+05 (re-run goal-backward verification with SC4/SC5 exercised against the real repo path).
+Last activity: 2026-06-22 -- Phase 05 Plan 13 completed (A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute; SC4 realizedPnl=2.0 and SC5 reconciliation proven end-to-end; 755/755 workspace tests GREEN)
 
 Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 
