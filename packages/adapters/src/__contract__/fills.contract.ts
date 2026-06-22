@@ -13,11 +13,13 @@
  *   - ForRecomputingCalendarAmounts        (A3: recompute amounts from calendar_events)
  *   - ForWritingFills                      (idempotent INSERT on fill id PK)
  *
- * Unprocessed-fills exclusion rule (documented, plan 05-12):
- *   A fill is "processed" iff its id is present in orphan_fills. calendar_events stores
- *   only fill_ids_hash (a hash, not per-fill ids), so we cannot join fills→events by id;
- *   re-emission is absorbed by the calendar_events.fill_ids_hash UNIQUE constraint
- *   (onConflictDoNothing). The contract therefore asserts orphan-parked fills are excluded.
+ * Unprocessed-fills exclusion rule (WR-A2, plan 05-15 — supersedes the 05-12 orphan-only rule):
+ *   A fill is "processed" iff its id is parked in orphan_fills OR its processed_at column is
+ *   set. syncFills calls markFillsProcessed once a bucket's event is stored (and orphan-parked
+ *   fills are processed too). readUnprocessedFills = WHERE processed_at IS NULL AND id NOT IN
+ *   orphan_fills. Semantics: each fill is incorporated into exactly ONE event; later fills for
+ *   the same order/leg form a NEW event covering only the new fills — no fill is double-counted,
+ *   and the full lifetime fills table is never re-paired unbounded.
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
@@ -27,6 +29,7 @@ import type {
   ForReadingCalendarLegs,
   ForResettingCalendarAmounts,
   ForRecomputingCalendarAmounts,
+  ForMarkingFillsProcessed,
   ForWritingFills,
   RawFill,
   StorageError,
@@ -71,6 +74,8 @@ export type FillsSeedContext = {
   ) => Promise<{ openNetDebit: number | null; closeNetCredit: number | null }>;
   /** Count fills rows (writeFills idempotency check). */
   readonly countFills: () => Promise<number>;
+  /** WR-A2: read the ids of fills whose processed_at is set (assert mark-processed). */
+  readonly readProcessedFillIds: () => Promise<ReadonlyArray<string>>;
 };
 
 export type FillsRepo = {
@@ -79,6 +84,7 @@ export type FillsRepo = {
   readonly readCalendarLegs: ForReadingCalendarLegs;
   readonly resetCalendarAmounts: ForResettingCalendarAmounts;
   readonly recomputeCalendarAmounts: ForRecomputingCalendarAmounts;
+  readonly markFillsProcessed: ForMarkingFillsProcessed;
   readonly writeFills: ForWritingFills;
 };
 
@@ -184,6 +190,77 @@ export function runFillsContractTests(
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.value).toHaveLength(0);
+      });
+    });
+
+    describe("markFillsProcessed — WR-A2 processed_at tracking", () => {
+      it("readUnprocessedFills excludes processed fills", async () => {
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC),
+          makeFill(FILL_ID_2, BACK_OCC),
+          makeFill(FILL_ID_3, FRONT_OCC),
+        ]);
+        const marked = await repo.markFillsProcessed([FILL_ID_2]);
+        expect(marked.ok).toBe(true);
+
+        const result = await repo.readUnprocessedFills();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const ids = result.value.map((f) => f.id).sort();
+        expect(ids).toEqual([FILL_ID_1, FILL_ID_3].sort());
+
+        const processed = await seed.readProcessedFillIds();
+        expect([...processed].sort()).toEqual([FILL_ID_2]);
+      });
+
+      it("readUnprocessedFillsForCalendar excludes processed fills", async () => {
+        await seed.seedCalendar(calendar());
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC),
+          makeFill(FILL_ID_2, BACK_OCC),
+        ]);
+        await repo.markFillsProcessed([FILL_ID_1]);
+
+        const result = await repo.readUnprocessedFillsForCalendar(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.map((f) => f.id)).toEqual([FILL_ID_2]);
+      });
+
+      it("markFillsProcessed is idempotent (marking the same id twice is a no-op)", async () => {
+        await repo.writeFills([makeFill(FILL_ID_1, FRONT_OCC)]);
+        const first = await repo.markFillsProcessed([FILL_ID_1]);
+        const second = await repo.markFillsProcessed([FILL_ID_1]);
+        expect(first.ok).toBe(true);
+        expect(second.ok).toBe(true);
+
+        const result = await repo.readUnprocessedFills();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toHaveLength(0);
+      });
+
+      it("markFillsProcessed with an empty array is a no-op", async () => {
+        await repo.writeFills([makeFill(FILL_ID_1, FRONT_OCC)]);
+        const result = await repo.markFillsProcessed([]);
+        expect(result.ok).toBe(true);
+        const unprocessed = await repo.readUnprocessedFills();
+        expect(unprocessed.ok).toBe(true);
+        if (!unprocessed.ok) return;
+        expect(unprocessed.value).toHaveLength(1);
+      });
+
+      it("orphan-parked fills stay excluded even when processed_at IS NULL", async () => {
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC),
+          makeFill(FILL_ID_2, BACK_OCC),
+        ]);
+        await seed.seedOrphan({ fillId: FILL_ID_1 });
+
+        const result = await repo.readUnprocessedFills();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.map((f) => f.id)).toEqual([FILL_ID_2]);
       });
     });
 

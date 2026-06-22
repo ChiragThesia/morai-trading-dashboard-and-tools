@@ -216,6 +216,8 @@ const syncFillsUseCase = makeSyncFillsUseCase({
   resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
   // B1: prior-OPEN lookup uses the real calendar_events repo.
   readCalendarEvents: calendarEventsRepo.readCalendarEvents,
+  // WR-A2: stamp processed fills so re-sync never re-pairs them.
+  markFillsProcessed: fillsRepo.markFillsProcessed,
   // C1: injected id minter + fill-ids hasher (reference algorithm + node sha256).
   newId: () => randomUUID(),
   hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
@@ -237,6 +239,8 @@ const syncFillsForCalendarUseCase = makeSyncFillsForCalendarUseCase({
   storeOrphanFill: orphanFillsRepo.storeOrphanFill,
   resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
   readCalendarEvents: calendarEventsRepo.readCalendarEvents,
+  // WR-A2: stamp processed fills so per-calendar re-sync never re-pairs them.
+  markFillsProcessed: fillsRepo.markFillsProcessed,
   newId: () => randomUUID(),
   hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
   now: () => new Date(),
@@ -350,6 +354,8 @@ const refreshTokensHandler = makeRefreshTokensHandler({
 const rebuildJournalUseCase = makeRebuildJournalUseCase({
   deleteCalendarEvents: calendarEventsRepo.deleteCalendarEvents,
   resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
+  // WR-A2: un-mark the calendar's fills processed so the scoped re-pair re-reads them.
+  resetFillsProcessedForCalendar: fillsRepo.resetFillsProcessedForCalendar,
   // CR-04: genuinely calendar-scoped — re-pairs only the target calendar (not a full sweep).
   syncFillsForCalendar: syncFillsForCalendarUseCase,
   // WR-08: recompute calendar aggregates from the rebuilt events (final reconciliation step).

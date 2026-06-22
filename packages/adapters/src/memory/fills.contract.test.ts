@@ -21,6 +21,7 @@ describe("in-memory fills twin", () => {
       readCalendarLegs: repo.readCalendarLegs,
       resetCalendarAmounts: repo.resetCalendarAmounts,
       recomputeCalendarAmounts: repo.recomputeCalendarAmounts,
+      markFillsProcessed: repo.markFillsProcessed,
       writeFills: repo.writeFills,
     }),
     () => ({
@@ -29,6 +30,7 @@ describe("in-memory fills twin", () => {
       seedOrphan: async (orphan) => repo.seedOrphan(orphan),
       readCalendarAmounts: async (calendarId) => repo.readCalendarAmounts(calendarId),
       countFills: async () => repo.countFills(),
+      readProcessedFillIds: async () => repo.readProcessedFillIds(),
     }),
   );
 });

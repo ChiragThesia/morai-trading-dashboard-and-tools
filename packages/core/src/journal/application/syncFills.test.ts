@@ -21,6 +21,7 @@ import type {
   ForResettingCalendarAmounts,
   ForReadingCalendarEvents,
   ForReadingUnprocessedFillsForCalendar,
+  ForMarkingFillsProcessed,
   OrphanFillInput,
 } from "./ports.ts";
 import type { RawFill, CalendarEvent } from "../domain/calendar-event.ts";
@@ -70,6 +71,8 @@ function buildDeps(opts: {
   storedOrphans: OrphanCapture[];
   // Prior OPEN events seeded per calendarId (B1: originalOpenDebit lookup source)
   priorEvents?: Record<string, CalendarEvent[]>;
+  // WR-A2: capture fill ids passed to markFillsProcessed (paired + orphaned).
+  markedFillIds?: string[];
 }) {
   const readUnprocessedFills: ForReadingUnprocessedFills = async () => ok(opts.fills);
   const readCalendarLegs: ForReadingCalendarLegs = async (occSymbol) =>
@@ -85,6 +88,10 @@ function buildDeps(opts: {
   const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
   const readCalendarEvents: ForReadingCalendarEvents = async (calendarId) =>
     ok(opts.priorEvents?.[calendarId] ?? []);
+  const markFillsProcessed: ForMarkingFillsProcessed = async (fillIds) => {
+    if (opts.markedFillIds !== undefined) opts.markedFillIds.push(...fillIds);
+    return ok(undefined);
+  };
   idCounter = 0;
   return {
     readUnprocessedFills,
@@ -93,6 +100,7 @@ function buildDeps(opts: {
     storeOrphanFill,
     resetCalendarAmounts,
     readCalendarEvents,
+    markFillsProcessed,
     newId: seqId,
     hashFillIds: fakeHashFillIds,
     now: () => new Date("2026-06-15T14:00:00Z"),
@@ -195,6 +203,7 @@ describe("makeSyncFillsUseCase", () => {
     const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
 
     const readCalendarEvents: ForReadingCalendarEvents = async () => ok([]);
+    const markFillsProcessed: ForMarkingFillsProcessed = async () => ok(undefined);
 
     const syncFills = makeSyncFillsUseCase({
       readUnprocessedFills,
@@ -203,6 +212,7 @@ describe("makeSyncFillsUseCase", () => {
       storeOrphanFill,
       resetCalendarAmounts,
       readCalendarEvents,
+      markFillsProcessed,
       newId: seqId,
       hashFillIds: fakeHashFillIds,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -573,6 +583,119 @@ describe("makeSyncFillsUseCase", () => {
       expect(o.fillId.startsWith("agg-unknown-")).toBe(false);
     }
   });
+
+  // ─── WR-A2: mark-processed tracking ──────────────────────────────────────────
+
+  it("marks a bucket's fills processed once its OPEN event is stored (WR-A2)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+    const markedFillIds: string[] = [];
+    const fill = makeFill({ id: "fill-open-mark", side: "buy" });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fill],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+        markedFillIds,
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedEvents).toHaveLength(1);
+    // The composing fill is marked processed so the next sync won't re-read it.
+    expect(markedFillIds).toContain("fill-open-mark");
+  });
+
+  it("marks orphan-parked fills processed so they are not re-read (WR-A2)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+    const markedFillIds: string[] = [];
+    const fill = makeFill({ id: "fill-orphan-mark" });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fill],
+        legMap: {},
+        storedEvents,
+        storedOrphans,
+        markedFillIds,
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedOrphans).toHaveLength(1);
+    expect(markedFillIds).toContain("fill-orphan-mark");
+  });
+
+  it("re-run under processed-tracking: a fill added in a later sync emits exactly ONE new event covering only it (WR-A2)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    // Simulate the data path: a processed Set the reader honors. The first sync marks fillA
+    // processed; the second sync's reader returns only fillB (the not-yet-marked fill).
+    const processed = new Set<string>();
+    const fillA = makeFill({ id: "fill-grow-A", orderId: "order-grow" });
+    const fillB = makeFill({ id: "fill-grow-B", orderId: "order-grow" });
+    const allFills = [fillA, fillB];
+
+    const storedEvents: CalendarEvent[] = [];
+
+    const readUnprocessedFills: ForReadingUnprocessedFills = async () =>
+      ok(allFills.filter((f) => !processed.has(f.id)));
+    const readCalendarLegs: ForReadingCalendarLegs = async () =>
+      ok([{ calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" as const }]);
+    const storeCalendarEvent: ForStoringCalendarEvent = async (event) => {
+      storedEvents.push(event);
+      return ok(undefined);
+    };
+    const storeOrphanFill: ForStoringOrphanFill = async () => ok(undefined);
+    const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
+    const readCalendarEvents: ForReadingCalendarEvents = async () => ok([]);
+    const markFillsProcessed: ForMarkingFillsProcessed = async (fillIds) => {
+      for (const id of fillIds) processed.add(id);
+      return ok(undefined);
+    };
+
+    const deps = {
+      readUnprocessedFills,
+      readCalendarLegs,
+      storeCalendarEvent,
+      storeOrphanFill,
+      resetCalendarAmounts,
+      readCalendarEvents,
+      markFillsProcessed,
+      newId: seqId,
+      hashFillIds: fakeHashFillIds,
+      now: () => new Date("2026-06-15T14:00:00Z"),
+    };
+
+    // First sync: fillA only is unprocessed.
+    processed.add("fill-grow-B"); // pretend B not yet arrived → reader skips it
+    const r1 = await makeSyncFillsUseCase(deps)();
+    expect(r1.ok).toBe(true);
+    expect(storedEvents).toHaveLength(1);
+    const firstEvent = storedEvents[0];
+
+    // B "arrives": un-skip it. fillA is now processed (marked during sync 1).
+    processed.delete("fill-grow-B");
+    const r2 = await makeSyncFillsUseCase(deps)();
+    expect(r2.ok).toBe(true);
+    // Exactly ONE additional event, covering only fillB — A's event is untouched.
+    expect(storedEvents).toHaveLength(2);
+    expect(storedEvents[0]).toBe(firstEvent);
+    expect(storedEvents[1]?.fillIdsHash).toBe(fakeHashFillIds([fillB.id]));
+  });
 });
 
 // ─── A2 / CR-04: calendar-scoped sync ──────────────────────────────────────────
@@ -634,6 +757,7 @@ describe("makeSyncFillsForCalendarUseCase", () => {
     };
     const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
     const readCalendarEvents: ForReadingCalendarEvents = async () => ok([]);
+    const markFillsProcessed: ForMarkingFillsProcessed = async () => ok(undefined);
 
     idCounter = 0;
     const syncForCalendar = makeSyncFillsForCalendarUseCase({
@@ -643,6 +767,7 @@ describe("makeSyncFillsForCalendarUseCase", () => {
       storeOrphanFill,
       resetCalendarAmounts,
       readCalendarEvents,
+      markFillsProcessed,
       newId: seqId,
       hashFillIds: fakeHashFillIds,
       now: () => new Date("2026-06-15T14:00:00Z"),

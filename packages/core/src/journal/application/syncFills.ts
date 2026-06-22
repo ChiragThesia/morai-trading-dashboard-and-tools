@@ -14,6 +14,10 @@
  *   7. computeRealizedPnl on CLOSE/ROLL using the prior OPEN event's debit (B1); build
  *      legBreakdown JSON
  *   8. deps.hashFillIds → fillIdsHash; storeCalendarEvent (idempotent via UNIQUE constraint)
+ *   9. WR-A2: deps.markFillsProcessed for the event's composing fills (and for parked orphans)
+ *      so they are never re-read. Each fill is incorporated into exactly ONE event; later fills
+ *      for the same order/leg arrive unprocessed and form a NEW event covering only the new
+ *      fills — no fill is double-counted, and the lifetime fills table is never re-paired.
  *
  * Ids and fill-id hashes are injected (deps.newId / deps.hashFillIds, C1) so this core file
  * imports no node:crypto — the adapter supplies the real uuid/sha256 (plan 05-13).
@@ -41,6 +45,7 @@ import type {
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
   ForReadingCalendarEvents,
+  ForMarkingFillsProcessed,
   NewId,
   HashFillIds,
   StorageError,
@@ -59,6 +64,10 @@ type PairingDeps = {
   readonly resetCalendarAmounts: ForResettingCalendarAmounts;
   // B1: read prior OPEN events for a calendar to find originalOpenDebit on CLOSE/ROLL.
   readonly readCalendarEvents: ForReadingCalendarEvents;
+  // WR-A2: stamp a bucket's fills processed once its event is stored (and parked orphans
+  // processed too) so the next sync never re-reads them. Each fill lands in exactly ONE event;
+  // later fills for the same order/leg form a NEW event over only the new fills (no double-count).
+  readonly markFillsProcessed: ForMarkingFillsProcessed;
   // C1: injected id minter + fill-ids hasher — core imports no node builtin hasher.
   readonly newId: NewId;
   readonly hashFillIds: HashFillIds;
@@ -126,6 +135,9 @@ async function pairFills(
         reason: "no matching calendar",
       });
       if (!orphanResult.ok) return err(orphanResult.error);
+      // WR-A2: parked → processed, so it is not re-read next sync.
+      const markedResult = await deps.markFillsProcessed([fill.id]);
+      if (!markedResult.ok) return err(markedResult.error);
       continue;
     }
 
@@ -142,6 +154,9 @@ async function pairFills(
         reason: `ambiguous calendar: [${calIds}]`,
       });
       if (!orphanResult.ok) return err(orphanResult.error);
+      // WR-A2: parked → processed.
+      const markedResult = await deps.markFillsProcessed([fill.id]);
+      if (!markedResult.ok) return err(markedResult.error);
       continue;
     }
 
@@ -190,6 +205,11 @@ async function pairFills(
         });
         if (!orphanResult.ok) return err(orphanResult.error);
       }
+      // WR-A2: all parked bucket fills → processed.
+      const markedResult = await deps.markFillsProcessed(
+        bucketFills.map((f) => f.id),
+      );
+      if (!markedResult.ok) return err(markedResult.error);
       continue;
     }
     const enriched: AggregatedFill = {
@@ -268,6 +288,11 @@ async function pairFills(
         });
         if (!orphanResult.ok) return err(orphanResult.error);
       }
+      // WR-A2: all parked raw fills → processed.
+      const markedResult = await deps.markFillsProcessed(
+        cf.rawFills.map((f) => f.id),
+      );
+      if (!markedResult.ok) return err(markedResult.error);
       continue;
     }
 
@@ -346,6 +371,9 @@ async function pairFills(
 
           const storeResult = await deps.storeCalendarEvent(rollEvent);
           if (!storeResult.ok) return err(storeResult.error);
+          // WR-A2: both legs' composing fills are now in exactly ONE event → processed.
+          const markedResult = await deps.markFillsProcessed(allFillIds);
+          if (!markedResult.ok) return err(markedResult.error);
           continue;
         }
       }
@@ -408,6 +436,9 @@ async function pairFills(
 
     const storeResult = await deps.storeCalendarEvent(event);
     if (!storeResult.ok) return err(storeResult.error);
+    // WR-A2: the bucket's fills are now in exactly ONE event → processed.
+    const markedResult = await deps.markFillsProcessed(cf.fillIds);
+    if (!markedResult.ok) return err(markedResult.error);
   }
 
   return ok(undefined);

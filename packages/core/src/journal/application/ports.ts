@@ -473,6 +473,32 @@ export type ForReadingUnprocessedFillsForCalendar = (
 ) => Promise<Result<ReadonlyArray<RawFill>, StorageError>>;
 
 /**
+ * ForMarkingFillsProcessed — mark a set of fills processed (WR-A2 — fixes the
+ * re-pair-forever / partial-fill double-count). A fill is "processed" once it has been
+ * incorporated into exactly ONE calendar_event (paired) OR parked as an orphan. syncFills
+ * calls this with a bucket's composing fill ids after the event is stored, and with parked
+ * fill ids after orphan parking, so readUnprocessedFills (WHERE processed_at IS NULL AND id
+ * NOT IN orphan_fills) never re-reads them. Later fills for the same order/leg arrive
+ * unprocessed and form a NEW event covering only the new fills — no fill is double-counted.
+ * Idempotent: marking an already-processed id is a no-op; an empty array is a no-op.
+ */
+export type ForMarkingFillsProcessed = (
+  fillIds: ReadonlyArray<string>,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForResettingFillsProcessedForCalendar — clear processed_at for a calendar's fills (WR-A2,
+ * rebuild support). rebuild-journal deletes a calendar's events and re-pairs its fills; with
+ * processed_at tracking those fills are already marked processed, so the scoped re-sync would
+ * read zero fills and the rebuild would produce no events. This resets processed_at = NULL for
+ * the fills whose OCC symbol matches the calendar's legs (delete scope == sync scope), so the
+ * scoped re-pair sees them again. Orphan-parked fills stay excluded by the orphan filter.
+ */
+export type ForResettingFillsProcessedForCalendar = (
+  calendarId: string,
+) => Promise<Result<void, StorageError>>;
+
+/**
  * NewId — injected unique-id minter (C1 — fixes CR-01). Core stays pure: the adapter
  * supplies `() => randomUUID()` from node:crypto (plan 05-13). The use-case calls
  * `deps.newId()` instead of importing crypto.

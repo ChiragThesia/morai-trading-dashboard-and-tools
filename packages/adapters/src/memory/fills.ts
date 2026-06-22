@@ -20,6 +20,8 @@ import type {
   ForReadingCalendarLegs,
   ForResettingCalendarAmounts,
   ForRecomputingCalendarAmounts,
+  ForMarkingFillsProcessed,
+  ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   RawFill,
   CalendarLegEntry,
@@ -60,6 +62,8 @@ export type MemoryFillsRepo = {
   readonly readCalendarLegs: ForReadingCalendarLegs;
   readonly resetCalendarAmounts: ForResettingCalendarAmounts;
   readonly recomputeCalendarAmounts: ForRecomputingCalendarAmounts;
+  readonly markFillsProcessed: ForMarkingFillsProcessed;
+  readonly resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar;
   readonly writeFills: ForWritingFills;
   // ─── Test seed helpers (mirror the Postgres contract harness) ──────────────
   readonly seedCalendar: (cal: MemorySeedCalendar) => void;
@@ -69,6 +73,7 @@ export type MemoryFillsRepo = {
     calendarId: string,
   ) => { openNetDebit: number | null; closeNetCredit: number | null };
   readonly countFills: () => number;
+  readonly readProcessedFillIds: () => ReadonlyArray<string>;
 };
 
 function statusToPositionEffect(
@@ -102,6 +107,7 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
   const calendarStore = new Map<string, StoredCalendar>(); // keyed on calendar id
   const eventStore: MemorySeedEvent[] = [];
   const orphanIds = new Set<string>();
+  const processedIds = new Set<string>(); // WR-A2: processed_at IS NOT NULL equivalent
 
   const writeFills: ForWritingFills = async (
     rows: ReadonlyArray<RawFill>,
@@ -117,8 +123,33 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
   const readUnprocessedFills: ForReadingUnprocessedFills = async (): Promise<
     Result<ReadonlyArray<RawFill>, StorageError>
   > => {
-    const rows = [...fillStore.values()].filter((f) => !orphanIds.has(f.id));
+    // WR-A2: exclude processed (processed_at set) AND orphan-parked fills.
+    const rows = [...fillStore.values()].filter(
+      (f) => !processedIds.has(f.id) && !orphanIds.has(f.id),
+    );
     return ok(rows);
+  };
+
+  const markFillsProcessed: ForMarkingFillsProcessed = async (
+    fillIds: ReadonlyArray<string>,
+  ): Promise<Result<void, StorageError>> => {
+    for (const id of fillIds) processedIds.add(id); // idempotent; empty array = no-op
+    return ok(undefined);
+  };
+
+  // WR-A2 rebuild support: clear processed_at for the calendar's leg fills so the scoped
+  // re-pair re-reads them (mirrors readUnprocessedFillsForCalendar's leg matching).
+  const resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar = async (
+    calendarId: string,
+  ): Promise<Result<void, StorageError>> => {
+    const cal = calendarStore.get(calendarId);
+    if (cal === undefined) return ok(undefined);
+    const { front, back } = calendarLegSymbols(cal);
+    const legSet = new Set<string>([front, back]);
+    for (const f of fillStore.values()) {
+      if (legSet.has(f.occSymbol)) processedIds.delete(f.id);
+    }
+    return ok(undefined);
   };
 
   const readUnprocessedFillsForCalendar: ForReadingUnprocessedFillsForCalendar =
@@ -130,7 +161,8 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
       const { front, back } = calendarLegSymbols(cal);
       const legSet = new Set<string>([front, back]);
       const rows = [...fillStore.values()].filter(
-        (f) => !orphanIds.has(f.id) && legSet.has(f.occSymbol),
+        (f) =>
+          !processedIds.has(f.id) && !orphanIds.has(f.id) && legSet.has(f.occSymbol),
       );
       return ok(rows);
     };
@@ -205,6 +237,7 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
     return { openNetDebit: cal.openNetDebit, closeNetCredit: cal.closeNetCredit };
   };
   const countFills = (): number => fillStore.size;
+  const readProcessedFillIds = (): ReadonlyArray<string> => [...processedIds];
 
   return {
     readUnprocessedFills,
@@ -212,11 +245,14 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
     readCalendarLegs,
     resetCalendarAmounts,
     recomputeCalendarAmounts,
+    markFillsProcessed,
+    resetFillsProcessedForCalendar,
     writeFills,
     seedCalendar,
     seedEvent,
     seedOrphan,
     readCalendarAmounts,
     countFills,
+    readProcessedFillIds,
   };
 }

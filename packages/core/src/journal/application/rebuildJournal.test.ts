@@ -20,6 +20,7 @@ import type {
   ForDeletingCalendarEvents,
   ForResettingCalendarAmounts,
   ForRecomputingCalendarAmounts,
+  ForResettingFillsProcessedForCalendar,
   StorageError,
 } from "./ports.ts";
 
@@ -27,9 +28,13 @@ import type {
 // A non-counting ok-twin satisfies the dep for the pre-existing order/error cases that
 // don't assert on it.
 const noopRecompute: ForRecomputingCalendarAmounts = async () => ok(undefined);
+// WR-A2 (plan 05-15): rebuild gained a required resetFillsProcessedForCalendar step (un-mark
+// the calendar's fills so the scoped re-pair re-reads them). Non-counting ok-twin for cases
+// that don't assert on it.
+const noopResetProcessed: ForResettingFillsProcessedForCalendar = async () => ok(undefined);
 
 describe("makeRebuildJournalUseCase", () => {
-  it("calls deleteCalendarEvents, then resetCalendarAmounts, then syncFillsForCalendar in order", async () => {
+  it("calls delete, then resetAmounts, then resetFillsProcessed, then syncFillsForCalendar in order", async () => {
     const { makeRebuildJournalUseCase } = await import("./rebuildJournal.ts");
 
     const calls: string[] = [];
@@ -44,6 +49,13 @@ describe("makeRebuildJournalUseCase", () => {
       return ok(undefined);
     };
 
+    const resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar = async (
+      calendarId,
+    ) => {
+      calls.push(`resetProcessed:${calendarId}`);
+      return ok(undefined);
+    };
+
     const syncFillsForCalendar = vi.fn().mockResolvedValue(ok(undefined));
     // Track call in the spy
     syncFillsForCalendar.mockImplementation(async (calendarId: string) => {
@@ -54,6 +66,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar,
       syncFillsForCalendar,
       recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -61,7 +74,39 @@ describe("makeRebuildJournalUseCase", () => {
 
     const result = await rebuildJournal("cal-abc");
     expect(result.ok).toBe(true);
-    expect(calls).toEqual(["delete:cal-abc", "reset:cal-abc", "sync:cal-abc"]);
+    // WR-A2: resetProcessed runs after resetAmounts and before sync (delete scope == sync scope).
+    expect(calls).toEqual([
+      "delete:cal-abc",
+      "reset:cal-abc",
+      "resetProcessed:cal-abc",
+      "sync:cal-abc",
+    ]);
+  });
+
+  it("resetFillsProcessedForCalendar error → returns err immediately, syncFillsForCalendar NOT called (WR-A2)", async () => {
+    const { makeRebuildJournalUseCase } = await import("./rebuildJournal.ts");
+
+    const storageErr: StorageError = { kind: "storage-error", message: "reset-processed failed" };
+    const deleteCalendarEvents: ForDeletingCalendarEvents = async () => ok(undefined);
+    const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
+    const resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar = async () =>
+      err(storageErr);
+    const syncFillsForCalendar = vi.fn().mockResolvedValue(ok(undefined));
+
+    const rebuildJournal = makeRebuildJournalUseCase({
+      deleteCalendarEvents,
+      resetCalendarAmounts,
+      resetFillsProcessedForCalendar,
+      syncFillsForCalendar,
+      recomputeCalendarAmounts: noopRecompute,
+      now: () => new Date("2026-06-15T14:00:00Z"),
+    });
+
+    const result = await rebuildJournal("cal-abc");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toBe("reset-processed failed");
+    expect(syncFillsForCalendar).not.toHaveBeenCalled();
   });
 
   it("deleteCalendarEvents error → returns err immediately, syncFillsForCalendar NOT called", async () => {
@@ -75,6 +120,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
       syncFillsForCalendar,
       recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -98,6 +144,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
       syncFillsForCalendar,
       recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -127,6 +174,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
       syncFillsForCalendar,
       recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -163,6 +211,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
       syncFillsForCalendar,
       recomputeCalendarAmounts: noopRecompute,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -194,6 +243,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
       recomputeCalendarAmounts,
       syncFillsForCalendar,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -232,6 +282,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
       syncFillsForCalendar,
       recomputeCalendarAmounts,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -287,6 +338,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
       syncFillsForCalendar,
       recomputeCalendarAmounts,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -311,6 +363,7 @@ describe("makeRebuildJournalUseCase", () => {
     const rebuildJournal = makeRebuildJournalUseCase({
       deleteCalendarEvents,
       resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
       syncFillsForCalendar,
       recomputeCalendarAmounts,
       now: () => new Date("2026-06-15T14:00:00Z"),

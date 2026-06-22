@@ -1,0 +1,1 @@
+ALTER TABLE "fills" ADD COLUMN "processed_at" timestamp with time zone;

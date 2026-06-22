@@ -173,6 +173,10 @@ export const fills = pgTable("fills", {
   commission: numeric("commission"),
   fees: numeric("fees"),
   raw: text("raw"), // broker JSON, for audit
+  // WR-A2 (05-15, additive nullable): set once a fill is incorporated into exactly ONE
+  // calendar_event (paired) or orphan-parked. readUnprocessedFills filters
+  // WHERE processed_at IS NULL — paired fills are never re-read / re-paired (no double-count).
+  processedAt: timestamp("processed_at", { withTimezone: true }),
 }).enableRLS();
 
 // ─── 6. orders — Schwab order feed ───────────────────────────────────────────

@@ -80,6 +80,8 @@ export type {
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
   ForRecomputingCalendarAmounts,
+  ForMarkingFillsProcessed,
+  ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   ForEnqueueingJob,
 } from "./application/ports.ts";

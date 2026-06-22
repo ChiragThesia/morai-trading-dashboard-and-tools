@@ -121,6 +121,8 @@ export type {
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
   ForRecomputingCalendarAmounts,
+  ForMarkingFillsProcessed,
+  ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   ForEnqueueingJob,
 } from "./journal/index.ts";

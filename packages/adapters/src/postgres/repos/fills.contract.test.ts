@@ -41,6 +41,7 @@ describe.skipIf(shouldSkip)("postgres fills adapter", () => {
         readCalendarLegs: repo.readCalendarLegs,
         resetCalendarAmounts: repo.resetCalendarAmounts,
         recomputeCalendarAmounts: repo.recomputeCalendarAmounts,
+        markFillsProcessed: repo.markFillsProcessed,
         writeFills: repo.writeFills,
       };
     },
@@ -97,6 +98,19 @@ describe.skipIf(shouldSkip)("postgres fills adapter", () => {
         if (typeof cnt === "number") return cnt;
         if (typeof cnt === "string") return Number(cnt);
         return 0;
+      },
+      readProcessedFillIds: async (): Promise<ReadonlyArray<string>> => {
+        if (!db) throw new Error("db not initialized");
+        const rows = await db.execute(
+          sql`SELECT id::text AS id FROM fills WHERE processed_at IS NOT NULL`,
+        );
+        const ids: string[] = [];
+        for (const row of rows) {
+          const rec: { [key: string]: unknown } = Object.fromEntries(Object.entries(row));
+          const id = rec["id"];
+          if (typeof id === "string") ids.push(id);
+        }
+        return ids;
       },
     }),
   );
