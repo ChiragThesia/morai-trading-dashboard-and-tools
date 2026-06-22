@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Phase 05 gap-round in progress
-stopped_at: Completed 05-09-PLAN.md
-last_updated: "2026-06-21T22:25:00.000Z"
-last_activity: "2026-06-21 -- Phase 05 Plan 09 (gap round Wave 1) completed: B1-B4 fill-pairing economics + C1 hexagon purity + data-path port contracts + D-08/D-09 docs"
+stopped_at: Completed 05-10-PLAN.md
+last_updated: "2026-06-21T22:36:00.000Z"
+last_activity: "2026-06-21 -- Phase 05 Plan 10 (gap round Wave 1) completed: CR-02 transient OAuth retry + CR-03 independent job-runs + WR-04 rebuild calendarId boundary + WR-05 twin dedup ok(null) + IN-01 dead-wiring cleanup; 710/710 workspace tests GREEN"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 05 (jobs-fill-rebuild-integrity) — GAP ROUND (plans 05-09..05-13 close SC4/SC5 review findings)
-Plan: 05-09 of gap round DONE (Wave 1 interface anchor). Plans 01-08 complete; Plan 02 migration pending live DB apply.
+Plan: 05-10 of gap round DONE (Wave 1 — CR-02/CR-03/WR-04/WR-05/IN-01 closed). Plans 01-09 complete; Plan 02 migration pending live DB apply.
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Plan 05-10/05-11 (gap round Wave 2 — syncFills prior-OPEN lookup, C1 use-case half, A2 scoped sync)
-Last activity: 2026-06-21 -- Phase 05 Plan 09 completed (B1-B4 fill-pairing economics + C1 hexagon purity; 699/699 workspace tests GREEN)
+Next: Plan 05-11 (gap round Wave 2 — syncFills prior-OPEN lookup, C1 use-case half, A2 scoped sync)
+Last activity: 2026-06-21 -- Phase 05 Plan 10 completed (CR-02/CR-03/WR-04/WR-05/IN-01; 710/710 workspace tests GREEN)
 
 Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 
@@ -77,6 +77,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 05 P06 | 22 | 1 tasks | 2 files |
 | Phase 05-jobs-fill-rebuild-integrity P07 | 11 | 3 tasks | 13 files |
 | Phase 05-jobs-fill-rebuild-integrity P08 | 25 | 2 tasks | 12 files |
+| Phase 05-jobs-fill-rebuild-integrity P10 | 10 | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -168,6 +169,11 @@ Recent decisions affecting current work:
 - [Phase 5 P09]: C1 fix — fill-pairing.ts imports no node crypto; hashFillIds(ids, hasher) delegates sha256 to an injected HashFillIds port; adapter supplies sha256 hex (05-13)
 - [Phase 5 P09]: 05-09 owns ALL fills data-path ports.ts additions (ForWritingFills/ForRecomputingCalendarAmounts/ForReadingUnprocessedFillsForCalendar/NewId/HashFillIds) — interface anchor for 05-11/05-12/05-13
 - [Phase 5 P09]: syncFills.ts realizedPnl=null interim (prior-OPEN lookup + computeRealizedPnl call + crypto removal are 05-11 scope)
+- [Phase 5 P10]: CR-02 — only invalid_grant/invalid_client are terminal (auth-expired); network/parse/unexpected-throws are retryable storage-error so pg-boss retries and status never falsely claims expiry
+- [Phase 5 P10]: CR-03 — job-runs uses GROUP BY name with MAX(...) FILTER per state + correlated subselect for latest failed output; lastError only set when lastErrorAt non-null
+- [Phase 5 P10]: WR-04 — triggerJobBodyFor(name) factory refines rebuild-journal⇒calendarId required without mutating triggerJobPayload.shape (MCP-02 stability); route parses body manually post-param-validation, 400 before enqueue
+- [Phase 5 P10]: WR-05 — memory job-queue twin returns ok(null) on dedup hit, matching pg-boss singletonKey collision contract
+- [Phase 5 P10]: IN-01 — worker does not enqueue triggers; dead pgBossJobQueue construction + import deleted (only server enqueues)
 
 ### Pending Todos
 
@@ -190,6 +196,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-21T23:50:00.000Z
-Stopped at: Completed 05-08-PLAN.md (phase 05 all plans done)
+Last session: 2026-06-21T22:36:00.000Z
+Stopped at: Completed 05-10-PLAN.md (gap round Wave 1)
 Resume file: None
