@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForGettingStatus } from "@morai/core";
-import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks } from "@morai/core";
+import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks, ForRunningGetTermStructure, ForRunningGetSkew } from "@morai/core";
 import type { Calendar, SnapshotRow, StorageError } from "@morai/core";
 import {
   statusResponse,
@@ -139,6 +139,34 @@ const fakeGetLiveGreeks: ForRunningGetLiveGreeks = async (calendarId) =>
     ],
   });
 
+// 06-04: get_term_structure tool fake — returns one term-structure observation by default.
+const fakeGetTermStructure: ForRunningGetTermStructure = async () =>
+  ok([
+    {
+      snapshotTime: new Date("2026-07-01T19:00:00Z"),
+      calendarId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      value: 0.05,
+      frontIv: 0.2,
+      backIv: 0.25,
+    },
+  ]);
+
+const fakeGetTermStructureEmpty: ForRunningGetTermStructure = async () => ok([]);
+
+// 06-05: get_skew tool fake — returns one headline risk-reversal observation by default.
+const fakeGetSkew: ForRunningGetSkew = async () =>
+  ok([
+    {
+      snapshotTime: new Date("2026-07-01T19:00:00Z"),
+      underlying: "SPX",
+      expiration: "2026-07-17",
+      riskReversal: 0.06,
+      rrRank: 50,
+    },
+  ]);
+
+const fakeGetSkewEmpty: ForRunningGetSkew = async () => ok([]);
+
 describe("bearer middleware", () => {
   it("returns 401 when Authorization header is missing", async () => {
     const app = new Hono();
@@ -183,6 +211,8 @@ describe("MCP router", () => {
         fakeListCalendars,
         fakeGetJournal,
         fakeGetLiveGreeks,
+        fakeGetTermStructure,
+        fakeGetSkew,
       ),
     );
     const res = await app.request("/mcp", {
@@ -203,6 +233,8 @@ describe("MCP router", () => {
         fakeListCalendars,
         fakeGetJournal,
         fakeGetLiveGreeks,
+        fakeGetTermStructure,
+        fakeGetSkew,
       ),
     );
     const res = await app.request("/mcp", {
@@ -232,6 +264,8 @@ describe("MCP router", () => {
         fakeListCalendars,
         fakeGetJournal,
         fakeGetLiveGreeks,
+        fakeGetTermStructure,
+        fakeGetSkew,
       ),
     );
     const res = await app.request("/mcp", {
@@ -521,40 +555,79 @@ describe("MCP router", () => {
 
   // ─── get_term_structure tool ───────────────────────────────────────────────
 
-  it("get_term_structure tool returns typed-empty {observations:[]} — never an error", async () => {
+  it("get_term_structure tool registers with the real use-case and returns the shared contract series", async () => {
     const { registerGetTermStructureTool } = await import("./tools.ts");
     const { McpServer } = await import(
       "@modelcontextprotocol/sdk/server/mcp.js"
     );
+    const { termStructureResponse } = await import("@morai/contracts");
 
     const server = new McpServer({ name: "test", version: "0.0.1" });
-    // Should not throw on registration
-    expect(() => registerGetTermStructureTool(server)).not.toThrow();
+    // 06-04: registration now requires the use-case; should not throw.
+    expect(() =>
+      registerGetTermStructureTool(server, fakeGetTermStructure),
+    ).not.toThrow();
 
-    // The tool always returns {observations:[]} — verify the static payload shape
-    const staticPayload = { observations: [] };
-    expect(JSON.parse(JSON.stringify(staticPayload))).toEqual({
-      observations: [],
-    });
+    // MCP-02: the tool's payload validates against the SAME contract as the HTTP route.
+    const result = await fakeGetTermStructure({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const payload = termStructureResponse.parse(
+      result.value.map((row) => ({
+        time: row.snapshotTime.toISOString(),
+        calendarId: row.calendarId,
+        value: row.value,
+      })),
+    );
+    expect(payload).toHaveLength(1);
+    expect(payload[0]?.value).toBe(0.05);
   });
 
-  // ─── get_skew tool ─────────────────────────────────────────────────────────
+  it("get_term_structure tool returns a contract-valid EMPTY array (not an error) on no data", async () => {
+    const { termStructureResponse } = await import("@morai/contracts");
+    const result = await fakeGetTermStructureEmpty({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(termStructureResponse.parse(result.value)).toEqual([]);
+  });
 
-  it("get_skew tool returns typed-empty {observations:[]} — never an error", async () => {
+  // ─── get_skew tool (06-05 — real use-case over the shared skewResponse contract, MCP-02) ──
+
+  it("get_skew tool registers with the real use-case and returns the shared contract series", async () => {
     const { registerGetSkewTool } = await import("./tools.ts");
     const { McpServer } = await import(
       "@modelcontextprotocol/sdk/server/mcp.js"
     );
+    const { skewResponse } = await import("@morai/contracts");
 
     const server = new McpServer({ name: "test", version: "0.0.1" });
-    // Should not throw on registration
-    expect(() => registerGetSkewTool(server)).not.toThrow();
+    // 06-05: registration now requires the use-case; should not throw.
+    expect(() => registerGetSkewTool(server, fakeGetSkew)).not.toThrow();
 
-    // The tool always returns {observations:[]} — verify the static payload shape
-    const staticPayload = { observations: [] };
-    expect(JSON.parse(JSON.stringify(staticPayload))).toEqual({
-      observations: [],
-    });
+    // MCP-02: the tool's payload validates against the SAME skewResponse as the HTTP route.
+    const result = await fakeGetSkew({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const payload = skewResponse.parse(
+      result.value.map((row) => ({
+        time: row.snapshotTime.toISOString(),
+        underlying: row.underlying,
+        expiration: row.expiration,
+        value: row.riskReversal,
+        rrRank: row.rrRank,
+      })),
+    );
+    expect(payload).toHaveLength(1);
+    expect(payload[0]?.value).toBe(0.06);
+    expect(payload[0]?.rrRank).toBe(50);
+  });
+
+  it("get_skew tool returns a contract-valid EMPTY array (not an error) on no data", async () => {
+    const { skewResponse } = await import("@morai/contracts");
+    const result = await fakeGetSkewEmpty({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(skewResponse.parse(result.value)).toEqual([]);
   });
 
   // ─── trigger_job IS registered (MCP-02, Plan 05-08 — supersedes the D-08 deferral) ─

@@ -157,3 +157,40 @@ export { makeGetTransactionsUseCase } from "./brokerage/index.ts";
 export type { ForGettingTransactions, GetTransactionsDeps } from "./brokerage/index.ts";
 export { makeGetOrdersUseCase } from "./brokerage/index.ts";
 export type { ForGettingOrders, GetOrdersDeps } from "./brokerage/index.ts";
+
+// ─── Analytics bounded context (Phase 6) ──────────────────────────────────────
+// StorageError is already exported above (journal); analytics shares the same shape, so it is
+// NOT re-exported here to avoid a duplicate-export. Analytics row types + ports follow.
+// Analytics domain functions (06-03)
+export { interpolateRiskReversal, percentileRank } from "./analytics/index.ts";
+// Analytics use-cases (06-04: term-structure half + read forwarder)
+export {
+  makeComputeAnalyticsUseCase,
+  makeGetTermStructureUseCase,
+  makeGetSkewUseCase,
+} from "./analytics/index.ts";
+export type {
+  ComputeAnalyticsDeps,
+  ForRunningComputeAnalytics,
+  GetTermStructureDeps,
+  ForRunningGetTermStructure,
+  GetSkewDeps,
+  ForRunningGetSkew,
+} from "./analytics/index.ts";
+export type {
+  SmileQuote,
+  SmileReadResult,
+  CalendarSnapshotForCycle,
+  SkewObservationRow,
+  RiskReversalObservationRow,
+  TermStructureObservationRow,
+  ForReadingSmileSource,
+  ForReadingCalendarSnapshotsForCycle,
+  ForWritingSkewObservations,
+  ForWritingRiskReversalObservations,
+  ForWritingTermStructureObservations,
+  ForReadingRiskReversalHistory,
+  ForReadingSkewSeries,
+  ForReadingSkewSmileDetail,
+  ForReadingTermStructureSeries,
+} from "./analytics/index.ts";

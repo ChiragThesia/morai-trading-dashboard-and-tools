@@ -146,6 +146,27 @@ packages/core/src/journal/
 Acceptance tests live at context level (`packages/core/src/journal/journal.acceptance.test.ts`),
 wiring use-cases with in-memory adapters — per the article's test-placement guidance.
 
+The `analytics` context (Phase 6) follows the same shape:
+
+```
+packages/core/src/analytics/
+├── domain/
+│   ├── risk-reversal.ts         # linear-in-delta interpolation to ±25Δ
+│   └── percentile-rank.ts       # trailing-window inclusive percentile
+├── application/
+│   ├── ports.ts                 # driven ports + row domain types
+│   ├── computeAnalytics.ts      # use-case: writes the three analytics tables
+│   ├── getSkew.ts               # read use-case for GET /api/analytics/skew
+│   └── getTermStructure.ts      # read use-case for GET /api/analytics/term-structure
+└── index.ts                     # public surface of the context
+```
+
+**Cross-context rule (strict).** Analytics reads journal and market-data DATA through its own
+application ports (`ForReadingSmileSource`, `ForReadingCalendarSnapshotsForCycle`) — it never
+imports another context's `domain/`. A cross-context APPLICATION port TYPE import (e.g. the
+`StorageError` shape) is allowed per the Phase 4 precedent; a cross-context DOMAIN import is
+forbidden and ESLint-enforced (see Enforcement below).
+
 ## Enforcement (mechanical, not honor-system)
 
 - ESLint boundaries config forbids:

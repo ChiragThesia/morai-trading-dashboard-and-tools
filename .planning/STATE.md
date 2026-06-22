@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 05
-current_phase_name: jobs-fill-rebuild-integrity
-status: Phase 05 gap-round-2 in progress (CR-A1/WR-A3/IN-A1 closed)
-stopped_at: Completed 05-14-PLAN.md
-last_updated: "2026-06-22T14:31:58.475Z"
+current_phase: 06
+current_phase_name: derived-analytics
+status: Phase 06 in progress (gap round — plan 06-07 numeric guards complete)
+stopped_at: Completed 06-07-PLAN.md
+last_updated: "2026-06-22T18:13:49.125Z"
 last_activity: 2026-06-22
-last_activity_desc: Phase 05 Plan 13 completed (A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute; SC4 realizedPnl=2.0 and SC5 reconciliation proven end-to-end; 755/755 workspace tests GREEN)
+last_activity_desc: Phase 06 Plan 01 complete (analytics foundation; production typecheck clean; 3 RED scaffolds left for 06-03/06-04/06-05)
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 47
-  completed_plans: 47
-  percent: 67
+  completed_phases: 6
+  total_plans: 55
+  completed_plans: 56
+  percent: 100
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 05 (jobs-fill-rebuild-integrity) — GAP ROUND (plans 05-09..05-13 close SC4/SC5 review findings)
-Plan: 05-13 of gap round DONE (Wave 3 — A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute). Gap round 05-09..05-13 COMPLETE; SC4/SC5 proven end-to-end. Plans 01-08 complete; Plan 02 migration pending live DB apply.
+Phase: 06 (derived-analytics) — Wave 1 (foundation) in progress
+Plan: 06-01 of 5 DONE (docs-first + 3 analytics tables + ONE shared MCP-02 contract + analytics context skeleton with 8 ports + 3 RED scaffolds). 06-02 (migration), 06-03 (domain), 06-04 (term-structure slice), 06-05 (skew/RR slice) remain.
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Phase 05 verification / merge phases 04+05 (re-run goal-backward verification with SC4/SC5 exercised against the real repo path).
-Last activity: 2026-06-22 -- Phase 05 Plan 13 completed (A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute; SC4 realizedPnl=2.0 and SC5 reconciliation proven end-to-end; 755/755 workspace tests GREEN)
+Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
+Last activity: 2026-06-22 -- Phase 06 Plan 01 complete (analytics foundation; production typecheck clean; 3 RED scaffolds left for 06-03/06-04/06-05)
 
 Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 
@@ -83,6 +83,14 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 05-jobs-fill-rebuild-integrity P10 | 10 | 2 tasks | 12 files |
 | Phase 05-jobs-fill-rebuild-integrity P11 | 30 | 2 tasks | 5 files |
 | Phase 05 P15 | 33min | 2 tasks | 16 files |
+| Phase 06 P01 | 12 | 3 tasks | 15 files |
+| Phase 06 P02 | 5min | 2 tasks | 5 files |
+| Phase 06 P03 | 10min | 2 tasks | 8 files |
+| Phase 06 P04 | 17min | 3 tasks | 30 files |
+| Phase 06 P05 | 16min | 3 tasks | 33 files |
+| Phase 06 P06 | 50m | 3 tasks | 10 files |
+| Phase 06 P07 | 25m | 2 tasks | 3 files |
+| Phase 06 P08 | 8min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -191,6 +199,23 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-16: fast-check property suite locks the round-2 invariants over randomized fill/roll/partial sequences (P1 no-double-count, P2 idempotent, P2b partial-growth, P3 rebuild reconciliation, P4 distinct-keys→distinct-uuid)
 - [Phase 05]: 05-16: P1 exposed a real ROLL double-count — an OPEN consumed by a later ROLL was also emitted as a standalone OPEN. Fixed at root cause: ROLL pairing pre-computed before the emit loop (input-order independent, one fill in exactly one event)
 - [Phase 05]: 05-16: P3 reconciles via the WR-A1 recompute RULE applied locally (not by importing the twin) — core tests import only @morai/shared; twin/Postgres parity already proven by 05-15's contract suite
+- [Phase ?]: [Phase 06 P01]: analytics StorageError defined locally per-context (not re-exported via core barrel) to avoid duplicate-export with journal
+- [Phase ?]: [Phase 06 P01]: analytics tables idempotency = time-leading composite PK as per-grain UNIQUE key (skew: snapshot_time,underlying,expiration,strike; RR: snapshot_time,underlying,expiration; term: snapshot_time,calendar_id)
+- [Phase ?]: [Phase 06 P01]: analytics responses are bare z.array(entry) so .parse([]) is the contract-valid no-data case (SPEC R5); old typed-empty {observations:[]} stubs removed, stale journal.test.ts assertions relocated to analytics.test.ts
+- [Phase ?]: [Phase 06 P01]: foundation plan ships RED scaffolds committed intentionally failing on unresolved SUT import (risk-reversal/percentile-rank/computeAnalytics) — 06-03/06-04/06-05 turn green
+- [Phase ?]: 06-02: reconstructed missing meta/0006_snapshot.json (Phase 5 omitted it) so 0007 contains only the 3 analytics tables
+- [Phase ?]: 06-02: live production Supabase migrate (0007) DEFERRED to operator (phases 03/04/05 precedent); validated against postgres:16 testcontainer
+- [Phase ?]: 06-03: interpAtDelta returns null when ±0.25 not bracketed (SPEC R2)
+- [Phase ?]: 06-03: percentileRank empty-history sentinel = 100; rr_rank null-ness handled by 06-05 caller
+- [Phase ?]: 06-03: reconciled 06-01 percentile RED scaffold from [0,1]+null to plan-locked [0,100]+100-on-empty
+- [Phase ?]: 06-04: term-structure value = calendar_snapshots.term_slope passed through unchanged (no recompute)
+- [Phase ?]: 06-04: readSnapshotsForCycle = most recent snapshot time <= now, then all rows at that time (current cycle)
+- [Phase ?]: 06-04: compute-analytics is the new terminal job; chain-triggered by snapshot-calendars via boss.send singletonKey
+- [Phase ?]: skewResponse repurposed to headline 25Δ risk-reversal shape (value=risk_reversal); smile detail -> skewSmileResponse (SPEC R5)
+- [Phase ?]: Added ForReadingSkewSmileDetail port (smile detail) distinct from ForReadingSkewSeries (headline RR series)
+- [Phase ?]: [Phase 6 P06]: cycle-resolution seam fixed (CR-01/CR-02) — computeAnalytics resolves ONE data anchor (never now()); bounded latest-leg-cohort <= anchor smile read; all three analytics tables share one snapshot_time so re-runs are idempotent
+- [Phase ?]: [Phase 6 P06]: ForReadingSmileSource returns {cycleTime, quotes} so the time-less smile carries the resolved DATA instant the use-case stamps with
+- [Phase ?]: 06-07: risk-reversal bracket-width policy = Decision A (gate at MAX_BRACKET_WIDTH=0.30 delta units) — return null rather than interpolate across a wide non-adjacent bracket; pairs with the |delta|>=1 sign filter (WR-02/WR-04)
 
 ### Pending Todos
 
@@ -214,6 +239,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-22T16:00:00.000Z
+Last session: 2026-06-22T18:01:35.876Z
 Stopped at: Completed 05-16-PLAN.md (gap round 2, Wave 2 — fast-check property tests; fixed ROLL double-count)
 Resume file: None

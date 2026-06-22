@@ -26,9 +26,23 @@ export type { SnapshotResponse, JournalResponse } from "./journal.ts";
 export { liveGreeksResponse } from "./live-greeks.ts";
 export type { LegGreeks, LiveGreeksResponse } from "./live-greeks.ts";
 
-// Analytics typed-empty contracts (MCP-02: reused by term_structure/skew MCP tools in plan 07)
-export { termStructureResponse, skewResponse } from "./analytics.ts";
-export type { TermStructureResponse, SkewResponse } from "./analytics.ts";
+// Analytics contracts (MCP-02: ONE schema source for HTTP routes + MCP get_skew/get_term_structure)
+export {
+  skewEntry,
+  skewResponse,
+  skewSmileEntry,
+  skewSmileResponse,
+  termStructureEntry,
+  termStructureResponse,
+} from "./analytics.ts";
+export type {
+  SkewEntry,
+  SkewResponse,
+  SkewSmileEntry,
+  SkewSmileResponse,
+  TermStructureEntry,
+  TermStructureResponse,
+} from "./analytics.ts";
 
 // Brokerage contracts (MCP-02: shared by HTTP routes and MCP tools for positions/transactions/orders)
 export {

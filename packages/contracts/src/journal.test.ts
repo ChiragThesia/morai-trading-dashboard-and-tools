@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { snapshotResponse, journalResponse } from "./journal.ts";
-import { termStructureResponse, skewResponse } from "./analytics.ts";
 
 describe("snapshotResponse", () => {
   const validSnapshot = {
@@ -96,22 +95,5 @@ describe("journalResponse", () => {
 
   it("rejects a missing snapshots field", () => {
     expect(() => journalResponse.parse({})).toThrow();
-  });
-});
-
-describe("termStructureResponse", () => {
-  it("accepts { observations: [] }", () => {
-    expect(() => termStructureResponse.parse({ observations: [] })).not.toThrow();
-  });
-
-  it("accepts { observations: [anything] }", () => {
-    const parsed = termStructureResponse.parse({ observations: [{ x: 1 }, { y: "foo" }] });
-    expect(parsed.observations).toHaveLength(2);
-  });
-});
-
-describe("skewResponse", () => {
-  it("accepts { observations: [] }", () => {
-    expect(() => skewResponse.parse({ observations: [] })).not.toThrow();
   });
 });

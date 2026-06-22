@@ -25,7 +25,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live (completed 2026-06-14)
 - [x] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions (completed 2026-06-21)
 - [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
-- [ ] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed
+- [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (verified 4/4 2026-06-22; 8 plans + 1 gap round; ON BRANCH plan/06-derived-analytics — merge pending operator review; prod migration 0007 deferred)
 
 ## Phase Details
 
@@ -273,7 +273,7 @@ each snapshot cycle; `GET /api/analytics/skew` and `GET /api/analytics/term-stru
 return current and historical series queryable by API and Claude Code.
 **Mode:** mvp
 **Depends on**: Phase 5
-**Requirements**: ANLY-01, ANLY-02, ANLY-03
+**Requirements**: ANLY-01, ANLY-02, ANLY-03, MCP-02
 **Success Criteria** (what must be TRUE):
 
   1. After `snapshot-calendars` completes a cycle, `skew_observations` gains new append-only rows for that snapshot time; duplicate runs for the same snapshot time produce no duplicate rows.
@@ -281,7 +281,38 @@ return current and historical series queryable by API and Claude Code.
   3. `GET /api/analytics/skew` returns a JSON array with at least one entry of `{ time, value, … }`; `GET /api/analytics/term-structure` returns the same shape for term-structure data.
   4. MCP `get_skew` and `get_term_structure` tools return the same series as their HTTP counterparts, validated against the shared Zod contract from `contracts`.
 
-**Plans**: TBD
+**Plans**: 8/8 plans complete
+Plans:
+**Wave 1**
+
+- [x] 06-01-PLAN.md — Docs-first (data-model/jobs/hexagonal-ddd/api-design) + schema.ts 3 analytics tables + shared @morai/contracts analytics Zod (MCP-02) + analytics context ports + 3 RED test scaffolds (ANLY-01/02/03, MCP-02)
+
+**Wave 2** *(blocked on 06-01)*
+
+- [x] 06-02-PLAN.md — [BLOCKING] drizzle generate + live migrate (0007_analytics_observations.sql) (ANLY-01/02/03)
+
+**Wave 3** *(blocked on 06-01)*
+
+- [x] 06-03-PLAN.md — TDD skew numerics domain: interpolateRiskReversal (linear-in-delta ±25Δ, null when unbracketable) + percentileRank (inclusive trailing window) + fast-check (ANLY-01)
+
+**Wave 4** *(blocked on 06-02 + 06-03)*
+
+- [x] 06-04-PLAN.md — Term-structure vertical slice: repo+twin+contract + compute-analytics use-case (term_slope passthrough) + chain-triggered job + GET /api/analytics/term-structure + MCP get_term_structure + TRACKED_JOBS (ANLY-02/03, MCP-02)
+
+**Wave 5** *(blocked on 06-03 + 06-04)*
+
+- [x] 06-05-PLAN.md — Skew vertical slice: skew + risk-reversal repos+twins+contracts + smile/RR/rank compute-analytics half + GET /api/analytics/skew + MCP get_skew over shared schema (ANLY-01/03, MCP-02)
+
+**Gap round** *(post-review 06-REVIEW.md — 2 BLOCKER + 4 WARNING + 2 INFO; Phase 6 left unmerged)*
+
+**Wave 1 (gap)**
+
+- [x] 06-06-PLAN.md — [BLOCKER] Cycle-resolution seam (CR-01/CR-02): data-anchored bounded smile read (latest leg cycle ≤ anchor, repo+twin+contract) + computeAnalytics stamps skew/RR/term with ONE resolved instant (never now()) + Postgres testcontainer seam suite (distinct broker-observedAt/snapshotTime/now() FAILS on old code; run-twice = 0 new rows) (ANLY-01/03)
+- [x] 06-07-PLAN.md — [WARNING] RR domain guards: WR-04 |delta|≥1 non-physical drop (mis-signed wing protection) + WR-02 ±25Δ bracket-width policy (decide/enforce/document) + fast-check (ANLY-01)
+
+**Wave 2 (gap)** *(blocked on 06-06 — shares computeAnalytics.ts / leg-observations.ts / smile-source contract)*
+
+- [x] 06-08-PLAN.md — [WARNING+INFO] WR-01 percentileRank empty→null carried through use-case+contract + WR-03 populate moneyness (K/S from spot) on both smile reads+contract (no migration) + IN-01 stale 7-queue/5-cron worker comments → 9/6 (ANLY-01/03, MCP-02)
 
 ## Backlog / Future Enhancements
 
@@ -345,4 +376,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
 | 5. Jobs, Fill Rebuild & Integrity | 15/16 | In Progress|  |
-| 6. Derived Analytics | 0/TBD | Not started | - |
+| 6. Derived Analytics | 8/8 | Complete   | 2026-06-22 |

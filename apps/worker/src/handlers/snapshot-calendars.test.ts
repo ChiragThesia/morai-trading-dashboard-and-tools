@@ -1,18 +1,34 @@
 /**
- * snapshot-calendars handler tests — RED phase.
+ * snapshot-calendars handler tests.
  *
  * Covers:
  *   - Holiday: use-case NOT called, warn issued (CAL-05)
  *   - Outside RTH (weekend): use-case NOT called, warn issued
  *   - Normal RTH instant: use-case IS called and result ok → no throw
  *   - Normal RTH instant: use-case err → handler throws
+ *   - 06-04: on success, compute-analytics is chain-enqueued (boss.send with singletonKey)
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Job } from "pg-boss";
 import { ok, err } from "@morai/shared";
 import { makeSnapshotCalendarsHandler } from "./snapshot-calendars.ts";
+import type { BossForChainHandler } from "./fetch-cboe-chain.ts";
 import type { ForRunningSnapshotCalendars } from "@morai/core";
+
+// Fake boss capturing chain-trigger sends (06-04: snapshot → compute-analytics).
+function makeFakeBoss(): BossForChainHandler & {
+  readonly sends: Array<{ name: string; singletonKey: string }>;
+} {
+  const sends: Array<{ name: string; singletonKey: string }> = [];
+  return {
+    sends,
+    send: async (name, _data, options) => {
+      sends.push({ name, singletonKey: options.singletonKey });
+      return "fake-job-id";
+    },
+  };
+}
 
 describe("makeSnapshotCalendarsHandler", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -43,8 +59,10 @@ describe("makeSnapshotCalendarsHandler", () => {
 
     const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
 
+    const boss = makeFakeBoss();
     const handler = makeSnapshotCalendarsHandler({
       snapshotCalendarsUseCase,
+      boss,
       now: () => holidayRth,
     });
 
@@ -60,8 +78,10 @@ describe("makeSnapshotCalendarsHandler", () => {
 
     const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
 
+    const boss = makeFakeBoss();
     const handler = makeSnapshotCalendarsHandler({
       snapshotCalendarsUseCase,
+      boss,
       now: () => outsideRth,
     });
 
@@ -77,8 +97,10 @@ describe("makeSnapshotCalendarsHandler", () => {
 
     const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
 
+    const boss = makeFakeBoss();
     const handler = makeSnapshotCalendarsHandler({
       snapshotCalendarsUseCase,
+      boss,
       now: () => normalRth,
     });
 
@@ -86,6 +108,26 @@ describe("makeSnapshotCalendarsHandler", () => {
 
     expect(snapshotCalendarsUseCase).toHaveBeenCalledOnce();
     expect(consoleSpy).not.toHaveBeenCalled();
+    // 06-04: success chain-triggers compute-analytics with the singleton key.
+    expect(boss.sends).toEqual([
+      { name: "compute-analytics", singletonKey: "triggered-by-snapshot" },
+    ]);
+  });
+
+  it("does NOT enqueue compute-analytics when the use-case errors", async () => {
+    const normalRth = new Date("2026-06-15T14:00:00Z");
+    const snapshotCalendarsUseCase: ForRunningSnapshotCalendars = async () =>
+      err({ kind: "storage-error", message: "boom" });
+
+    const boss = makeFakeBoss();
+    const handler = makeSnapshotCalendarsHandler({
+      snapshotCalendarsUseCase,
+      boss,
+      now: () => normalRth,
+    });
+
+    await expect(handler([makeJob()])).rejects.toThrow("boom");
+    expect(boss.sends).toEqual([]);
   });
 
   it("when inside RTH + use-case err: handler throws Error (pg-boss marks job failed)", async () => {
@@ -94,8 +136,10 @@ describe("makeSnapshotCalendarsHandler", () => {
     const snapshotCalendarsUseCase: ForRunningSnapshotCalendars = async () =>
       err({ kind: "storage-error", message: "DB write failed" });
 
+    const boss = makeFakeBoss();
     const handler = makeSnapshotCalendarsHandler({
       snapshotCalendarsUseCase,
+      boss,
       now: () => normalRth,
     });
 
@@ -107,8 +151,10 @@ describe("makeSnapshotCalendarsHandler", () => {
 
     const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
 
+    const boss = makeFakeBoss();
     const handler = makeSnapshotCalendarsHandler({
       snapshotCalendarsUseCase,
+      boss,
       now: () => normalRth,
     });
 

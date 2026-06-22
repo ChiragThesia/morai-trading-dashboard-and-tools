@@ -30,12 +30,29 @@ export const journalRoutes = new Hono<Env>()
 | `GET /api/calendars` | open/closed calendars list |
 | `GET /api/journal/:calendarId` | snapshot series for one calendar (the journal view) |
 | `GET /api/greeks` | live net greeks for open positions |
-| `GET /api/analytics/term-structure` | current + historical term slope |
-| `GET /api/analytics/skew` | skew observations |
+| `GET /api/analytics/term-structure` | current + historical term slope (queryable by `calendarId`) |
+| `GET /api/analytics/skew` | risk-reversal series + rank (queryable by `underlying`/`expiration`) |
 | `POST /api/jobs/:name/trigger` | manual job trigger (rebuild-journal etc.) — enqueues, returns job id |
 
 Mutations are rare by design — data flows in via jobs, not user POSTs. The journal is rebuilt
 from broker fills, not edited.
+
+### Analytics read shape (Phase 6, ANLY-03 / MCP-02)
+
+Both analytics routes return a JSON array of time-stamped entries, current and historical:
+
+- `GET /api/analytics/skew` → array of `{ time, underlying, expiration, risk_reversal, rr_rank }`
+  (`risk_reversal` and `rr_rank` are nullable — null when ±25Δ cannot be bracketed), queryable
+  by `underlying` and `expiration`.
+- `GET /api/analytics/term-structure` → array of `{ time, calendarId, value }` where
+  `value = back_iv − front_iv`, queryable by `calendarId`.
+
+When no data matches, each route returns a contract-valid **EMPTY array, not an error** —
+"no data yet" is a normal state, not a failure.
+
+**MCP-02:** the MCP `get_skew` / `get_term_structure` tools return the identical series,
+validated against the SAME Zod schema in `packages/contracts/src/analytics.ts`. There is no
+second or inline analytics schema; a one-sided change fails `bun run typecheck`.
 
 ## Error Model
 

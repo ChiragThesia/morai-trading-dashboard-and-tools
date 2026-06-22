@@ -21,11 +21,13 @@ import type {
   ForPersistingSnapshot,
   ForReadingJournal,
   ForResolvingLegSnapshot,
+  ForReadingCalendarSnapshotsForCycle,
   SnapshotRow,
   LegSnapshot,
+  CalendarSnapshotForCycle,
   StorageError,
 } from "@morai/core";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, lte, desc, asc } from "drizzle-orm";
 import { calendarSnapshots, legObservations, contracts, calendars } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -33,6 +35,7 @@ export type PostgresCalendarSnapshotsRepo = {
   readonly persistSnapshot: ForPersistingSnapshot;
   readonly readJournal: ForReadingJournal;
   readonly resolveLegSnapshot: ForResolvingLegSnapshot;
+  readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
 };
 
 export function makePostgresCalendarSnapshotsRepo(
@@ -191,7 +194,52 @@ export function makePostgresCalendarSnapshotsRepo(
     }
   };
 
-  return { persistSnapshot, readJournal, resolveLegSnapshot };
+  // ─── ForReadingCalendarSnapshotsForCycle (06-04) ──────────────────────────────
+  // Reads the calendar_snapshots rows for the CURRENT cycle — the most recent snapshot
+  // time on or before `snapshotTime` — and maps them to the term-slope passthrough shape.
+  // term_slope crosses as a numeric string; "NaN" → parseFloat → NaN, which the
+  // computeAnalytics use-case skips (D-06 continuity rows are never written).
+  const readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle = async (
+    snapshotTime: Date,
+  ): Promise<Result<ReadonlyArray<CalendarSnapshotForCycle>, StorageError>> => {
+    try {
+      // Find the latest snapshot time on or before the requested cycle time.
+      const latest = await db
+        .select({ time: calendarSnapshots.time })
+        .from(calendarSnapshots)
+        .where(lte(calendarSnapshots.time, snapshotTime))
+        .orderBy(desc(calendarSnapshots.time))
+        .limit(1);
+
+      const cycleTime = latest[0]?.time;
+      if (cycleTime === undefined) return ok([]);
+
+      const rows = await db
+        .select({
+          time: calendarSnapshots.time,
+          calendarId: calendarSnapshots.calendarId,
+          termSlope: calendarSnapshots.termSlope,
+          frontIv: calendarSnapshots.frontIv,
+          backIv: calendarSnapshots.backIv,
+        })
+        .from(calendarSnapshots)
+        .where(eq(calendarSnapshots.time, cycleTime));
+
+      const mapped: CalendarSnapshotForCycle[] = rows.map((row) => ({
+        snapshotTime: row.time,
+        calendarId: row.calendarId,
+        termSlope: parseFloat(row.termSlope),
+        frontIv: parseFloat(row.frontIv),
+        backIv: parseFloat(row.backIv),
+      }));
+      return ok(mapped);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  return { persistSnapshot, readJournal, resolveLegSnapshot, readSnapshotsForCycle };
 }
 
 // ─── Row mapper ─────────────────────────────────────────────────────────────

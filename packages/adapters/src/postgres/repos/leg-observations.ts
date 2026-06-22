@@ -6,14 +6,18 @@ import type {
   ForReadingPendingObs,
   ForWritingBsmResults,
   ForReadingLatestLegObs,
+  ForReadingSmileSource,
   ObservationRow,
   ContractRow,
   PendingObs,
   LegSnapshot,
+  SmileQuote,
+  SmileReadResult,
   StorageError,
 } from "@morai/core";
-import { and, isNull, isNotNull, eq, inArray, desc } from "drizzle-orm";
+import { and, isNull, isNotNull, ne, eq, lte, inArray, desc, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
+import { computeMoneyness } from "../../smile-moneyness.ts";
 import type { Db } from "../db.ts";
 
 /**
@@ -40,6 +44,7 @@ export type PostgresLegObservationsRepo = {
   readonly readPendingObs: ForReadingPendingObs;
   readonly writeBsmResults: ForWritingBsmResults;
   readonly getLatestLegObs: ForReadingLatestLegObs;
+  readonly readSmile: ForReadingSmileSource;
 };
 
 export function makePostgresLegObservationsRepo(
@@ -298,5 +303,82 @@ export function makePostgresLegObservationsRepo(
     }
   };
 
-  return { persistObservations, upsertContracts, readPendingObs, writeBsmResults, getLatestLegObs };
+  // ─── ForReadingSmileSource ────────────────────────────────────────────────
+  // ANLY-01 R1 + 06-06 (CR-01): per-(underlying, expiration, strike) smile points for a CYCLE
+  // resolved as the latest leg_observations cohort AT OR BEFORE the anchor — NOT exact-equality.
+  // The argument is an upper bound (the cycle anchor), mirroring readSnapshotsForCycle's
+  // "latest snapshot ≤ now" resolution. Two-step:
+  //   Step 1 — resolve the cycle time: MAX(leg_observations.time) ≤ anchor among BSM-solved rows
+  //            (bsm_iv NOT NULL AND != 'NaN') so the resolved cycle is one that actually has a smile.
+  //   Step 2 — read that cohort's smile via the existing join, eq(time, resolvedTime).
+  // Maps bsm_iv → iv and bsm_delta → delta. Excludes NaN-stamped / unsolved rows. moneyness = K/S
+  // is computed from the leg's underlying_price (spot); null when spot is non-finite-positive
+  // (WR-03 / 06-08). Empty source / no cohort ≤ anchor → [].
+  const readSmile: ForReadingSmileSource = async (
+    snapshotTime,
+  ): Promise<Result<SmileReadResult, StorageError>> => {
+    try {
+      // Step 1: resolve the latest BSM-solved leg cycle at or before the anchor.
+      const latest = await db
+        .select({ time: legObservations.time })
+        .from(legObservations)
+        .where(
+          and(
+            lte(legObservations.time, snapshotTime),
+            isNotNull(legObservations.bsmIv),
+            ne(legObservations.bsmIv, sql`'NaN'::numeric`),
+          ),
+        )
+        .orderBy(desc(legObservations.time))
+        .limit(1);
+
+      const resolvedTime = latest[0]?.time;
+      // No BSM-solved cohort at or before the anchor → null cycle, no quotes.
+      if (resolvedTime === undefined) return ok({ cycleTime: null, quotes: [] });
+
+      // Step 2: read the resolved cohort's smile.
+      const rows = await db
+        .select({
+          underlying: contracts.underlying,
+          expiration: contracts.expiration,
+          strike: contracts.strike,
+          bsmIv: legObservations.bsmIv,
+          bsmDelta: legObservations.bsmDelta,
+          underlyingPrice: legObservations.underlyingPrice,
+        })
+        .from(legObservations)
+        .innerJoin(contracts, eq(legObservations.contract, contracts.occSymbol))
+        .where(
+          and(
+            eq(legObservations.time, resolvedTime),
+            isNotNull(legObservations.bsmIv),
+            // Exclude NaN-stamped rows — bsm_iv = 'NaN'::numeric is NOT NULL but unusable.
+            ne(legObservations.bsmIv, sql`'NaN'::numeric`),
+          ),
+        );
+
+      const smile: SmileQuote[] = rows.map((row) => ({
+        underlying: row.underlying,
+        expiration: row.expiration,
+        strike: row.strike,
+        iv: parseFloat(row.bsmIv ?? "NaN"),
+        delta: row.bsmDelta !== null ? parseFloat(row.bsmDelta) : null,
+        // moneyness = K/S from underlying_price (spot); null when spot is non-finite-positive.
+        moneyness: computeMoneyness(row.strike, parseFloat(row.underlyingPrice)),
+      }));
+      return ok({ cycleTime: resolvedTime, quotes: smile });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  return {
+    persistObservations,
+    upsertContracts,
+    readPendingObs,
+    writeBsmResults,
+    getLatestLegObs,
+    readSmile,
+  };
 }

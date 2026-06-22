@@ -18,6 +18,8 @@ import {
   makeSchwabTransactionsAdapter,
   makeSchwabOrdersAdapter,
   makePgBossJobQueue,
+  makePostgresTermStructureObservationsRepo,
+  makePostgresRiskReversalObservationsRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -30,6 +32,8 @@ import {
   makeGetTransactionsUseCase,
   makeGetOrdersUseCase,
   makeEnqueueJobUseCase,
+  makeGetTermStructureUseCase,
+  makeGetSkewUseCase,
 } from "@morai/core";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
@@ -38,6 +42,7 @@ import { statusRoutes } from "./adapters/http/status.routes.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
+import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
 import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
 
@@ -93,6 +98,19 @@ const getJournal = makeGetJournalUseCase({
 const getLiveGreeks = makeGetLiveGreeksUseCase({
   getCalendar: calendarsRepo.getCalendarById,
   getLatestLegObs: legObsRepo.getLatestLegObs,
+});
+
+// ANLY-03 (06-04): term-structure read use-case — shared by the HTTP route + MCP tool (MCP-02).
+const termStructureRepo = makePostgresTermStructureObservationsRepo(db);
+const getTermStructure = makeGetTermStructureUseCase({
+  readTermStructureSeries: termStructureRepo.readTermStructureSeries,
+});
+
+// ANLY-03 (06-05): skew (headline risk-reversal) read use-case — shared by the HTTP route + MCP
+// tool over the ONE skewResponse contract (MCP-02).
+const riskReversalRepo = makePostgresRiskReversalObservationsRepo(db);
+const getSkew = makeGetSkewUseCase({
+  readSkewSeries: riskReversalRepo.readRiskReversalSeries,
 });
 
 // BRK-02: build trader adapters — reads from broker_tokens for the trader app.
@@ -154,6 +172,8 @@ app.route("/api", calendarRoutes(registerCalendar, listCalendars, closeCalendar)
 app.route("/api", journalRoutes(getJournal));
 // BRK-02: positions, transactions, orders read endpoints
 app.route("/api", brokerageRoutes(getPositions, getTransactions, getOrders));
+// ANLY-03 (06-04/06-05): GET /api/analytics/term-structure + GET /api/analytics/skew
+app.route("/api", analyticsRoutes(getTermStructure, getSkew));
 
 // JOB-01 / MCP-02: on-demand job trigger — bearer-guarded (T-05-21, Security Domain).
 // Mounted as a separate bearer-protected group so existing /api/* routes are unaffected.
@@ -171,6 +191,8 @@ const mcpRouter = makeMcpRouter(
   listCalendars,
   getJournal,
   getLiveGreeks,
+  getTermStructure,
+  getSkew,
   getPositions,
   getTransactions,
   getOrders,

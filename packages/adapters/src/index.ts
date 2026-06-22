@@ -45,6 +45,22 @@ export type { PostgresFillsRepo } from "./postgres/repos/fills.ts";
 export { makeMemoryFillsRepo } from "./memory/fills.ts";
 export type { MemoryFillsRepo } from "./memory/fills.ts";
 
+// Phase 6 (06-04): term-structure observations repo (ANLY-02) — postgres + memory twin
+export { makePostgresTermStructureObservationsRepo } from "./postgres/repos/term-structure-observations.ts";
+export type { PostgresTermStructureObservationsRepo } from "./postgres/repos/term-structure-observations.ts";
+export { makeMemoryTermStructureObservationsRepo } from "./memory/term-structure-observations.ts";
+export type { MemoryTermStructureObservationsRepo } from "./memory/term-structure-observations.ts";
+
+// Phase 6 (06-05): skew (per-strike smile) + risk-reversal repos (ANLY-01) — postgres + memory twin
+export { makePostgresSkewObservationsRepo } from "./postgres/repos/skew-observations.ts";
+export type { PostgresSkewObservationsRepo } from "./postgres/repos/skew-observations.ts";
+export { makeMemorySkewObservationsRepo } from "./memory/skew-observations.ts";
+export type { MemorySkewObservationsRepo } from "./memory/skew-observations.ts";
+export { makePostgresRiskReversalObservationsRepo } from "./postgres/repos/risk-reversal-observations.ts";
+export type { PostgresRiskReversalObservationsRepo } from "./postgres/repos/risk-reversal-observations.ts";
+export { makeMemoryRiskReversalObservationsRepo } from "./memory/risk-reversal-observations.ts";
+export type { MemoryRiskReversalObservationsRepo } from "./memory/risk-reversal-observations.ts";
+
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
 export type { CboeChainAdapter } from "./http/cboe.ts";
