@@ -273,7 +273,7 @@ each snapshot cycle; `GET /api/analytics/skew` and `GET /api/analytics/term-stru
 return current and historical series queryable by API and Claude Code.
 **Mode:** mvp
 **Depends on**: Phase 5
-**Requirements**: ANLY-01, ANLY-02, ANLY-03
+**Requirements**: ANLY-01, ANLY-02, ANLY-03, MCP-02
 **Success Criteria** (what must be TRUE):
 
   1. After `snapshot-calendars` completes a cycle, `skew_observations` gains new append-only rows for that snapshot time; duplicate runs for the same snapshot time produce no duplicate rows.
@@ -281,7 +281,27 @@ return current and historical series queryable by API and Claude Code.
   3. `GET /api/analytics/skew` returns a JSON array with at least one entry of `{ time, value, … }`; `GET /api/analytics/term-structure` returns the same shape for term-structure data.
   4. MCP `get_skew` and `get_term_structure` tools return the same series as their HTTP counterparts, validated against the shared Zod contract from `contracts`.
 
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — Docs-first (data-model/jobs/hexagonal-ddd/api-design) + schema.ts 3 analytics tables + shared @morai/contracts analytics Zod (MCP-02) + analytics context ports + 3 RED test scaffolds (ANLY-01/02/03, MCP-02)
+
+**Wave 2** *(blocked on 06-01)*
+
+- [ ] 06-02-PLAN.md — [BLOCKING] drizzle generate + live migrate (0007_analytics_observations.sql) (ANLY-01/02/03)
+
+**Wave 3** *(blocked on 06-01)*
+
+- [ ] 06-03-PLAN.md — TDD skew numerics domain: interpolateRiskReversal (linear-in-delta ±25Δ, null when unbracketable) + percentileRank (inclusive trailing window) + fast-check (ANLY-01)
+
+**Wave 4** *(blocked on 06-02 + 06-03)*
+
+- [ ] 06-04-PLAN.md — Term-structure vertical slice: repo+twin+contract + compute-analytics use-case (term_slope passthrough) + chain-triggered job + GET /api/analytics/term-structure + MCP get_term_structure + TRACKED_JOBS (ANLY-02/03, MCP-02)
+
+**Wave 5** *(blocked on 06-03 + 06-04)*
+
+- [ ] 06-05-PLAN.md — Skew vertical slice: skew + risk-reversal repos+twins+contracts + smile/RR/rank compute-analytics half + GET /api/analytics/skew + MCP get_skew over shared schema (ANLY-01/03, MCP-02)
 
 ## Backlog / Future Enhancements
 
@@ -345,4 +365,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
 | 5. Jobs, Fill Rebuild & Integrity | 15/16 | In Progress|  |
-| 6. Derived Analytics | 0/TBD | Not started | - |
+| 6. Derived Analytics | 0/5 | Not started | - |
