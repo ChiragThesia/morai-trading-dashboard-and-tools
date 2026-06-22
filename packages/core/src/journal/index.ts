@@ -75,9 +75,12 @@ export type {
   ForReadingCalendarEvents,
   ForDeletingCalendarEvents,
   ForReadingUnprocessedFills,
+  ForReadingUnprocessedFillsForCalendar,
   ForReadingCalendarLegs,
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
+  ForRecomputingCalendarAmounts,
+  ForWritingFills,
   ForEnqueueingJob,
 } from "./application/ports.ts";
 // Phase 5: syncFills use-case factories + driver ports

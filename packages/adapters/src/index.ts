@@ -39,6 +39,12 @@ export type { MemoryCalendarEventsRepo } from "./memory/calendar-events.ts";
 export { makeMemoryOrphanFillsRepo } from "./memory/orphan-fills.ts";
 export type { MemoryOrphanFillsRepo } from "./memory/orphan-fills.ts";
 
+// Phase 5 (gap round 05-12): fills data-path repo (A1 + A3) — postgres + memory twin
+export { makePostgresFillsRepo } from "./postgres/repos/fills.ts";
+export type { PostgresFillsRepo } from "./postgres/repos/fills.ts";
+export { makeMemoryFillsRepo } from "./memory/fills.ts";
+export type { MemoryFillsRepo } from "./memory/fills.ts";
+
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
 export type { CboeChainAdapter } from "./http/cboe.ts";

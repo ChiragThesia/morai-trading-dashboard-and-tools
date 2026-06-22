@@ -116,9 +116,12 @@ export type {
   ForReadingCalendarEvents,
   ForDeletingCalendarEvents,
   ForReadingUnprocessedFills,
+  ForReadingUnprocessedFillsForCalendar,
   ForReadingCalendarLegs,
   ForStoringOrphanFill,
   ForResettingCalendarAmounts,
+  ForRecomputingCalendarAmounts,
+  ForWritingFills,
   ForEnqueueingJob,
 } from "./journal/index.ts";
 export { makeSyncFillsUseCase, makeSyncFillsForCalendarUseCase } from "./journal/index.ts";
