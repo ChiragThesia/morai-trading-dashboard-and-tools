@@ -13,13 +13,20 @@ type DeltaIvPoint = {
 const PUT_TARGET_DELTA = -0.25;
 const CALL_TARGET_DELTA = 0.25;
 
-/** Keep only points with a finite delta and a finite iv (drop null/NaN-stamped points). */
+/**
+ * Keep only points with a finite delta and a finite iv (drop null/NaN-stamped points), and drop
+ * non-physical deltas. A real option delta is strictly within (-1, 1); a magnitude at or beyond 1
+ * signals a mis-signed or numerically unstable BSM solve (e.g. a deep-ITM root). Dropping it here,
+ * before the put/call split, keeps such a point out of either ±25Δ bracket regardless of its sign —
+ * defense-in-depth even though the strike band is enforced upstream in fetchChain.isInFilter.
+ */
 function usablePoints(smile: ReadonlyArray<SmileQuote>): ReadonlyArray<DeltaIvPoint> {
   const out: DeltaIvPoint[] = [];
   for (const q of smile) {
     const { delta, iv } = q;
     if (delta === null) continue;
     if (!Number.isFinite(delta) || !Number.isFinite(iv)) continue;
+    if (Math.abs(delta) >= 1) continue; // non-physical delta → cannot belong to a real wing
     out.push({ delta, iv });
   }
   return out;
