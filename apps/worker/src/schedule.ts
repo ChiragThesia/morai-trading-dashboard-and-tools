@@ -23,7 +23,7 @@
 
 import type { PgBoss, Job, WorkOptions } from "pg-boss";
 
-/** Handler type shared by all 7 job queues (pg-boss v12 array pattern) */
+/** Handler type shared by all 9 job queues (pg-boss v12 array pattern) */
 export type PgBossHandler = (jobs: ReadonlyArray<Job | undefined>) => Promise<void>;
 
 /**
@@ -38,7 +38,7 @@ export type JobScheduler = {
 };
 
 /**
- * AllHandlers — typed handler map for all 7 queues.
+ * AllHandlers — typed handler map for all 9 queues.
  * Plans 05-05/05-07/05-08 wire the 3 new handler factories in their own main.ts edits.
  * This plan wires the existing 4 + accepts the 3 new ones as typed slots.
  */
@@ -96,7 +96,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
     { tz: "America/New_York" },
   );
 
-  // New Phase 5 crons:
+  // Crons added in Phase 5:
   // A4: ingest broker transactions into fills BEFORE sync-fills pairs them. Offset 5 min
   // earlier in each 10-min slot so fresh fills are present when sync-fills runs.
   await boss.schedule(

@@ -399,7 +399,7 @@ const rebuildJournalHandler = makeRebuildJournalHandler({
   now: () => new Date(),
 });
 
-// Register all 7 queues, 5 crons, and 7 work handlers via registerAllJobs (Plan 05-04).
+// Register all 9 queues, 6 crons, and 9 work handlers via registerAllJobs (Plan 05-04).
 // Inline createQueue/schedule/work blocks removed — all scheduling logic is in schedule.ts.
 await registerAllJobs(boss, {
   fetchSchwabChain: fetchSchwabChainHandler,
