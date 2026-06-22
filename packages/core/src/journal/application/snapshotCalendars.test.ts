@@ -60,6 +60,7 @@ function makeLegSnapshot(overrides: Partial<LegSnapshot> = {}): LegSnapshot {
     bsmGamma: "0.003",
     bsmTheta: "-1.8",
     bsmVega: "6.2",
+    source: "cboe",
     ...overrides,
   };
 }
@@ -379,6 +380,48 @@ describe("makeSnapshotCalendarsUseCase", () => {
       );
       const result = await useCase();
       expect(result.ok).toBe(false);
+    });
+  });
+
+  describe("SC3 regression: snapshot source propagation from leg observations", () => {
+    it("when leg source is 'schwab_chain', snapshot row source is 'schwab_chain'", async () => {
+      const front = makeLegSnapshot({ source: "schwab_chain" });
+      const back = makeLegSnapshot({ source: "schwab_chain" });
+      let callCount = 0;
+      const resolveLegs: ForResolvingLegSnapshot = async () => {
+        callCount += 1;
+        return ok(callCount === 1 ? front : back);
+      };
+      const capture = makePersistCapture();
+
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ resolveLegs, persistSnapshot: capture.persistSnapshot }),
+      );
+      await useCase();
+
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
+      expect(row.source).toBe("schwab_chain");
+    });
+
+    it("when leg source is 'cboe', snapshot row source is 'cboe' (no regression)", async () => {
+      const front = makeLegSnapshot({ source: "cboe" });
+      const back = makeLegSnapshot({ source: "cboe" });
+      let callCount = 0;
+      const resolveLegs: ForResolvingLegSnapshot = async () => {
+        callCount += 1;
+        return ok(callCount === 1 ? front : back);
+      };
+      const capture = makePersistCapture();
+
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ resolveLegs, persistSnapshot: capture.persistSnapshot }),
+      );
+      await useCase();
+
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
+      expect(row.source).toBe("cboe");
     });
   });
 

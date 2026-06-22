@@ -1,0 +1,1 @@
+ALTER TABLE "broker_tokens" ADD COLUMN "last_refresh_error" text;

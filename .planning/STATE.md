@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 03 complete (7/7 plans); UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2)
-last_updated: "2026-06-19"
-last_activity: 2026-06-18 -- Phase 03 UAT-1 verified (MCP transport fix)
+current_phase: 05
+current_phase_name: jobs-fill-rebuild-integrity
+status: Phase 05 gap-round-2 in progress (CR-A1/WR-A3/IN-A1 closed)
+stopped_at: Completed 05-14-PLAN.md
+last_updated: "2026-06-22T14:31:58.475Z"
+last_activity: 2026-06-22
+last_activity_desc: Phase 05 Plan 13 completed (A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute; SC4 realizedPnl=2.0 and SC5 reconciliation proven end-to-end; 755/755 workspace tests GREEN)
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 25
-  completed_plans: 25
-  percent: 50
+  completed_phases: 4
+  total_plans: 47
+  completed_plans: 47
+  percent: 67
 ---
 
 # Project State
@@ -21,16 +24,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 03 complete — next: Phase 04 (Schwab Auth & Brokerage), not yet planned
+**Current focus:** Phase 05 — jobs-fill-rebuild-integrity
 
 ## Current Position
 
-Phase: 03 (calendar-journal-mvp) — COMPLETE (7/7 plans)
+Phase: 05 (jobs-fill-rebuild-integrity) — GAP ROUND (plans 05-09..05-13 close SC4/SC5 review findings)
+Plan: 05-13 of gap round DONE (Wave 3 — A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute). Gap round 05-09..05-13 COMPLETE; SC4/SC5 proven end-to-end. Plans 01-08 complete; Plan 02 migration pending live DB apply.
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: Phase 04 — Schwab Auth & Brokerage (plans TBD → /gsd-plan-phase 04)
-Last activity: 2026-06-18 -- Phase 03 UAT-1 verified (MCP transport fix)
+Next: Phase 05 verification / merge phases 04+05 (re-run goal-backward verification with SC4/SC5 exercised against the real repo path).
+Last activity: 2026-06-22 -- Phase 05 Plan 13 completed (A5 real fills repo wiring + sync-transactions job + WR-08 rebuild recompute; SC4 realizedPnl=2.0 and SC5 reconciliation proven end-to-end; 755/755 workspace tests GREEN)
 
-Progress: [██████████] Phase 03 100% · milestone 50% (3/6 phases)
+Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 
 ## Performance Metrics
 
@@ -63,6 +67,22 @@ Progress: [██████████] Phase 03 100% · milestone 50% (3/6 p
 | Phase 03-calendar-journal-mvp P04 | 8 | 2 tasks | 6 files |
 | Phase 03 P05 | 19 | 4 tasks | 17 files |
 | Phase 03 P06 | 16 | 3 tasks | 20 files |
+| Phase 04 P01 | 7 | 4 tasks (1 deferred) | 18 files |
+| Phase 04 P02 | 20 | 4 tasks | 15 files |
+| Phase 04 P04 | 13 | 5 tasks | 11 files |
+| Phase 04-schwab-auth-brokerage P03 | 15 | - tasks | - files |
+| Phase 04-schwab-auth-brokerage P05 | 70 | 11 tasks | 22 files |
+| Phase 04-schwab-auth-brokerage P06 | 10 | 3 tasks | 4 files |
+| Phase 05 P03 | 12 | 1 tasks | 2 files |
+| Phase 05 P02 | 25 | - tasks | - files |
+| Phase 05 P04 | 14 | 3 tasks | 14 files |
+| Phase 05 P05 | 22 | 2 tasks | 19 files |
+| Phase 05 P06 | 22 | 1 tasks | 2 files |
+| Phase 05-jobs-fill-rebuild-integrity P07 | 11 | 3 tasks | 13 files |
+| Phase 05-jobs-fill-rebuild-integrity P08 | 25 | 2 tasks | 12 files |
+| Phase 05-jobs-fill-rebuild-integrity P10 | 10 | 2 tasks | 12 files |
+| Phase 05-jobs-fill-rebuild-integrity P11 | 30 | 2 tasks | 5 files |
+| Phase 05 P15 | 33min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -101,6 +121,76 @@ Recent decisions affecting current work:
 - [Phase 3 P06]: getLiveGreeks uses formatOccSymbol(strike/1000) — same ×1000→points conversion as calendars.ts getOpenCalendarLegs
 - [Phase 3 P06]: Zod v4 UUID regex: test fixtures must use valid RFC 4122 UUIDs (550e8400-... format); 00000000-...-0001 fails Zod v4 validation
 - [Phase 3 P06]: journalRoutes accepts ForReadingJournal directly as the use-case is a thin forwarder
+- [Phase 4 P01]: bytea customType uses customType<{data:string;driverData:Buffer}> from drizzle-orm/pg-core with dataType()='bytea'; round-trip verified in plan 04-02 testcontainers (RESEARCH A6)
+- [Phase 4 P01]: Migration file renamed from drizzle-kit 0003_famous_azazel to 0003_broker_tokens; journal tag updated to match
+- [Phase 4 P01]: pgcrypto CREATE EXTENSION hand-prepended as first SQL statement (drizzle-kit does not emit it)
+- [Phase 4 P01]: makeMemoryBrokerTokensRepo accepts injectable getNow clock for testability
+- [Phase 4 P01]: Cross-context import of StorageError + FetchError from journal/application/ports.ts allowed (application port type, not domain/ sub-path)
+- [Phase 4 P02]: readTokenFreshness optional in makeGetStatusUseCase deps — backward compat for tests not injecting it
+- [Phase 4 P02]: isAppId(value) type guard instead of as cast narrows Drizzle text → AppId union
+- [Phase 4 P02]: refreshIssuedAt preserved from original row on token rotation — 7-day TTL anchored to first auth-code exchange
+- [Phase 4 P02]: OAuthError and SchwabTokens defined in refreshToken.ts (core) to avoid core importing from adapters
+- [Phase 4 P02]: statusResponse tokenFreshness: z.union([z.literal(''), tokenFreshnessMap]) — backward compat preserved
+- [Phase 4 P04]: z.record(z.string(), z.record(z.string(), ...)) two-argument form required for Zod v4 (one-argument form TS2554)
+- [Phase 4 P04]: Schwab symbol 21-char padded format is structurally identical to OCC; parseSchwabSymbol feeds formatOccSymbol directly
+- [Phase 4 P04]: selectChainSource returns CBOE on AUTH_EXPIRED/none_yet/err — journal never stalls (D-08)
+- [Phase 4 P04]: symbol parameter is caller-supplied ($SPX vs SPX) per RESEARCH A3 open question resolution
+- [Phase 4 P04]: observedAt uses new Date() — Schwab chain has no top-level timestamp field
+- [Phase 4 P05]: ForResolvingAccountHash resolves hashValue from /accounts/accountNumbers (Pitfall 5 — raw number forbidden in data-call URLs)
+- [Phase 4 P05]: AUTH_EXPIRED → 200 with {paused:true,reason:AUTH_EXPIRED} (brokerageAuthExpiredPayload schema) not 503 — encodes D-09 business state
+- [Phase 4 P05]: makeMcpRouter getPositions/Transactions/Orders optional params — backward compat with existing 4-arg call sites
+- [Phase 4 P05]: traderGetAccessToken reads broker_tokens.readTokens at call time; on-demand refresh deferred to JOB-02 (Phase 5)
+- [Phase 4 P06]: fetchChainUseCase pre-wired with selectChainSource closure in worker composition root — fetch-schwab-chain handler stays thin (architecture §3)
+- [Phase 4 P06]: readTokenFreshness + logAuthExpiredFallback optional on handler for T-04-26 logging only — selectChainSource owns actual chain selection
+- [Phase 4 P06]: fetch-cboe-chain queue replaced by fetch-schwab-chain (D-07 Schwab-primary); selectChainSource provides transparent CBOE fallback
+- [Phase 4 P06]: fetch-rates, compute-bsm-greeks, snapshot-calendars schedules untouched — non-Schwab jobs continue on AUTH_EXPIRED (D-09)
+- [Phase ?]: [Phase 4 P03]: doctor functions pure — checkEnvCompleteness/checkCallbackExactMatch/checkLiveRefresh take explicit inputs for unit testability
+- [Phase ?]: [Phase 4 P03]: validateAndExchange: CSRF state check before any exchangeCode call (T-04-09 ordering invariant — callCount=0 proven by unit test)
+- [Phase ?]: [Phase 4 P03]: Port from new URL(callbackUrl).port at runtime — no hardcoded port in auth setup (Open Question 1)
+- [Phase 5 P03]: detectRoll uses orderId-only matching (RESEARCH Open Question 3) — ROLL_WINDOW_MS time-window extension documented as comment, not implemented
+- [Phase 5 P03]: aggregatePartialFills sets calendarId="" — syncFills use-case (05-07) populates it during per-calendar partitioning; empty string is intentional design boundary
+- [Phase 5 P03]: fc.float bounds require Math.fround() in fast-check v4 — same pattern as Phase 1 P02 fc.date().filter(!isNaN)
+- [Phase ?]: Migration applied via session pooler (port 5432, max:1) — Supabase session pooler is migration-safe for DDL; transaction pooler (port 6543) would not be
+- [Phase ?]: Migration rename: drizzle-kit generated 0004_supreme_snowbird renamed to 0004_calendar_events; journal tag updated (Phase 4 P01 precedent)
+- [Phase ?]: [Phase 5 P04]: ForEnqueueingJob port 3-param: dedupeKey owned by use-case; adapter is thin boss.send wrapper with singletonKey
+- [Phase ?]: [Phase 5 P04]: scheduledDedupeKey uses 10-min window; rebuildDedupeKey is calendar-scoped; null dedupeKey = no dedup
+- [Phase ?]: [Phase 5 P04]: TRACKED_JOBS extended to 7; fetch-cboe-chain removed; SC1 complete
+- [Phase 5 P05]: isNearExpiry threshold: age >= 6 days (REFRESH_TTL 7d - WARN_THRESHOLD 1d = 6d); Pitfall 3: refreshIssuedAt never reset on access-token rotation
+- [Phase 5 P05]: lastRefreshError persisted on broker_tokens column (not in-memory map): worker and server are separate processes; option (a) per RESEARCH A4 = flag-only, no new table (D-14)
+- [Phase 5 P05]: ForRecordingRefreshOutcome: null clears flag on success; non-null persists failure; writeTokens does NOT reset the flag — only recordRefreshOutcome owns last_refresh_error
+- [Phase 5 P05]: makeRefreshTokensHandler.recordRefreshOutcome is optional dep (backward compat with 05-04 stub); rewired to real port in same commit as main.ts wiring
+- [Phase 5 P06]: leg_observations.mark has NOT NULL DB constraint — no mark-NULL rows can exist; T-02-16 NaN-stamp exclusion (bsm_iv = 'NaN'::numeric) is the real skip mechanism
+- [Phase 5 P06]: BSM fixture marks must be realistic: ATM call S=K=5500, T=0.277y needs mark≈200 (sigma≈0.15); mark=25 fails WR-01 residual check in invertIv → NaN-stamp
+- [Phase ?]: id omitted from Postgres calendar_events INSERT: DB defaultRandom() generates PK; fillIdsHash UNIQUE is the sole idempotency key (SC4)
+- [Phase 5 P08]: ForTriggeringJob (2-param) distinct from ForEnqueueingJob (3-param) — use-case output is the injection type for HTTP route + MCP tool; dedupeKey is internal to the use-case
+- [Phase 5 P08]: bearer-guarded sub-group for /api/jobs/* only — existing /api/* unauthenticated routes unaffected; T-05-21 met without breaking existing behavior
+- [Phase 5 P08]: makeEnqueueJobUseCase exported from @morai/core for first time (server needs it); dist/index.d.ts manually patched (tsc incremental cache did not regenerate barrel)
+- [Phase ?]: parseSchwabSymbol not imported in core (adapters boundary): fill.occSymbol passed directly to readCalendarLegs; symbol validation is adapter concern at ingestion
+- [Phase ?]: readUnprocessedFills/readCalendarLegs/resetCalendarAmounts stubbed as safe no-ops in main.ts; 05-08 wires real fills repo
+- [Phase 5 P09]: realizedPnl = closeCredit − originalOpenDebit − feesOnClose (locked decision 2); null when no prior OPEN exists — never a wrong number; ROLL new-leg premium is cost basis not realized P&L
+- [Phase 5 P09]: detectRoll delegates to shared parseOccSymbol (OSI 21-char padded canonical form); requires same root+strike+type + DIFFERENT expiry (WR-02)
+- [Phase 5 P09]: aggregatePartialFills returns Result, takes caller calendarId/positionEffect, errors on empty/sumQty<=0 (no avgPrice 0 placeholder) (WR-03)
+- [Phase 5 P09]: classifyFill drops dead side param — positionEffect is authoritative (WR-06)
+- [Phase 5 P09]: C1 fix — fill-pairing.ts imports no node crypto; hashFillIds(ids, hasher) delegates sha256 to an injected HashFillIds port; adapter supplies sha256 hex (05-13)
+- [Phase 5 P09]: 05-09 owns ALL fills data-path ports.ts additions (ForWritingFills/ForRecomputingCalendarAmounts/ForReadingUnprocessedFillsForCalendar/NewId/HashFillIds) — interface anchor for 05-11/05-12/05-13
+- [Phase 5 P09]: syncFills.ts realizedPnl=null interim (prior-OPEN lookup + computeRealizedPnl call + crypto removal are 05-11 scope)
+- [Phase 5 P10]: CR-02 — only invalid_grant/invalid_client are terminal (auth-expired); network/parse/unexpected-throws are retryable storage-error so pg-boss retries and status never falsely claims expiry
+- [Phase 5 P10]: CR-03 — job-runs uses GROUP BY name with MAX(...) FILTER per state + correlated subselect for latest failed output; lastError only set when lastErrorAt non-null
+- [Phase 5 P10]: WR-04 — triggerJobBodyFor(name) factory refines rebuild-journal⇒calendarId required without mutating triggerJobPayload.shape (MCP-02 stability); route parses body manually post-param-validation, 400 before enqueue
+- [Phase 5 P10]: WR-05 — memory job-queue twin returns ok(null) on dedup hit, matching pg-boss singletonKey collision contract
+- [Phase 5 P10]: IN-01 — worker does not enqueue triggers; dead pgBossJobQueue construction + import deleted (only server enqueues)
+- [Phase 5 P11]: B1 — syncFills reads the prior OPEN event's netAmount as originalOpenDebit (per-calendar cache); realizedPnl = computeRealizedPnl(closeCredit, originalOpenDebit, feesOnClose), null when no prior OPEN; ROLL excludes the new leg's debit
+- [Phase 5 P11]: B5 — UNKNOWN aggregate parks EACH underlying raw fill individually with real side/filledAt/UUID; zero-fill aggregate returns StorageError instead of synthesizing a non-UUID PK (WR-07)
+- [Phase 5 P11]: C1 (use-case half) — syncFills imports no node crypto; deps.newId + deps.hashFillIds injected; composition root supplies node:crypto uuid/sha256; hashFillIds reference algo exported from core barrel
+- [Phase 5 P11]: A2/CR-04 — extracted shared pairFills pipeline; makeSyncFillsForCalendarUseCase reads via readUnprocessedFillsForCalendar; worker rebuildJournal.syncFillsForCalendar rewired to the scoped use-case (was a full sweep discarding calendarId)
+- [Phase 5 P14]: CR-A1 — MCP trigger_job now routes through triggerJobBodyFor(name) (same per-job refinement as the HTTP route, architecture-boundaries §9); rebuild-journal without calendarId returns error content and never calls enqueueJob (closes the agent-driven queue-flood path WR-04 missed); inputSchema advertised shape unchanged (MCP-02)
+- [Phase 5 P14]: WR-A3 — hexToUuid is now a contiguous TOTAL nibble mapping; the v5 version/variant rewrite (which skipped input nibble 12) is removed because fills.id is a plain Postgres uuid; two (activityId,legIndex) keys differing only at nibble 12 no longer collide on the id PK (onConflictDoNothing no longer silently drops a real fill); hexToUuid exported for direct testing
+- [Phase 5 P14]: IN-A1 — extractLastError uses a direct `in`+typeof narrow instead of an Object.entries scan for the single known 'message' key (behavior-preserving)
+- [Phase 05]: 05-15: WR-A2 rebuild needs ForResettingFillsProcessedForCalendar — deleting events un-marks their fills so the scoped re-pair re-reads them (delete scope == sync scope)
+- [Phase 05]: 05-15: ROLL split persisted as dedicated columns read by eventType-summing recompute, not re-parsed from legBreakdown JSON
+- [Phase 05]: 05-16: fast-check property suite locks the round-2 invariants over randomized fill/roll/partial sequences (P1 no-double-count, P2 idempotent, P2b partial-growth, P3 rebuild reconciliation, P4 distinct-keys→distinct-uuid)
+- [Phase 05]: 05-16: P1 exposed a real ROLL double-count — an OPEN consumed by a later ROLL was also emitted as a standalone OPEN. Fixed at root cause: ROLL pairing pre-computed before the emit loop (input-order independent, one fill in exactly one event)
+- [Phase 05]: 05-16: P3 reconciles via the WR-A1 recompute RULE applied locally (not by importing the twin) — core tests import only @morai/shared; twin/Postgres parity already proven by 05-15's contract suite
 
 ### Pending Todos
 
@@ -119,9 +209,11 @@ None yet.
 | Scale | Timescale hypertable migration (D7) | v2 trigger | Architecture |
 | Multi-user | API auth beyond single bearer token | v2 | Architecture |
 | Test isolation | Postgres leg-observations contract tests have cross-test contamination (re-persist/large-batch idempotency failures are flaky) | future | Phase 03 P06 |
+| Live DB push | broker_tokens migration (0003_broker_tokens.sql + pgcrypto) not yet applied to live Supabase DB | blocking for 04-02 | Phase 04 P01 Task 5 |
+| Realized P&L | IN-A2 — real per-leg commission/fees + intraday filledAt: BrokerTransaction domain type carries no time/commission/fees fields; needs docs-first brokerage domain + Schwab adapter change. Realized P&L stays fee-blind until a dedicated plan. | future | Phase 05 P14 |
 
 ## Session Continuity
 
-Last session: 2026-06-18
-Stopped at: Phase 03 complete; UAT-1 PASS. Next: plan Phase 04 (Schwab Auth).
+Last session: 2026-06-22T16:00:00.000Z
+Stopped at: Completed 05-16-PLAN.md (gap round 2, Wave 2 — fast-check property tests; fixed ROLL double-count)
 Resume file: None

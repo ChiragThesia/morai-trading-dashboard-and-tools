@@ -22,6 +22,34 @@
       "when": 1781443918006,
       "tag": "0002_watery_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781973411329,
+      "tag": "0003_broker_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782078713416,
+      "tag": "0004_calendar_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782082298135,
+      "tag": "0005_broker_tokens_refresh_error",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782168698135,
+      "tag": "0006_fills_processed_at",
+      "breakpoints": true
     }
   ]
 }

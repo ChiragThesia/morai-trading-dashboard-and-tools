@@ -6,6 +6,9 @@ import type {
   ForListingCalendars,
   ForReadingJournal,
   ForRunningGetLiveGreeks,
+  ForGettingPositions,
+  ForGettingTransactions,
+  ForGettingOrders,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -16,7 +19,12 @@ import {
   registerGetLiveGreeksTool,
   registerGetTermStructureTool,
   registerGetSkewTool,
+  registerGetPositionsTool,
+  registerGetTransactionsTool,
+  registerGetOrdersTool,
+  registerTriggerJobTool,
 } from "./tools.ts";
+import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
 /**
  * makeMcpRouter — returns a Hono router that mounts the MCP transport at /mcp.
@@ -31,10 +39,10 @@ import {
  * T-01-11: bearer middleware on /mcp/* ensures no/wrong token → 401.
  * T-01-13: transport validates Origin header internally.
  *
- * MCP-01: all six tools registered per request — get_status, list_calendars, get_journal,
- *         get_live_greeks, get_term_structure, get_skew.
+ * MCP-01: base tools — get_status, list_calendars, get_journal, get_live_greeks,
+ *         get_term_structure, get_skew.
  * MCP-02: each tool shares the same Zod contract as its HTTP route (wired in tools.ts).
- * D-08: trigger_job is NOT registered (deferred to Phase 5).
+ * MCP-02: trigger_job registered here (Phase 5) — shares ForTriggeringJob use-case with HTTP route.
  */
 export function makeMcpRouter(
   config: Config,
@@ -42,6 +50,10 @@ export function makeMcpRouter(
   listCalendars: ForListingCalendars,
   getJournal: ForReadingJournal,
   getLiveGreeks: ForRunningGetLiveGreeks,
+  getPositions?: ForGettingPositions,
+  getTransactions?: ForGettingTransactions,
+  getOrders?: ForGettingOrders,
+  enqueueJob?: ForTriggeringJob,
 ): Hono {
   const router = new Hono();
 
@@ -54,13 +66,27 @@ export function makeMcpRouter(
     // Stateless: no sessionIdGenerator — each request is independent
     const transport = new WebStandardStreamableHTTPServerTransport();
     const server = new McpServer({ name: "morai", version: "1.0.0" });
-    // MCP-01: register all six tools
+    // MCP-01: register all six base tools
     registerStatusTool(server, getStatus);
     registerListCalendarsTool(server, listCalendars);
     registerGetJournalTool(server, getJournal);
     registerGetLiveGreeksTool(server, getLiveGreeks);
     registerGetTermStructureTool(server);
     registerGetSkewTool(server);
+    // BRK-02 / MCP-02: trader data tools (optional — wired when trader adapters are available)
+    if (getPositions !== undefined) {
+      registerGetPositionsTool(server, getPositions);
+    }
+    if (getTransactions !== undefined) {
+      registerGetTransactionsTool(server, getTransactions);
+    }
+    if (getOrders !== undefined) {
+      registerGetOrdersTool(server, getOrders);
+    }
+    // MCP-02: trigger_job tool — optional, wired when enqueueJob is available (Phase 5)
+    if (enqueueJob !== undefined) {
+      registerTriggerJobTool(server, enqueueJob);
+    }
     return { server, transport };
   }
 

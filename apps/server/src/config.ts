@@ -9,6 +9,16 @@ const configSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
+  // Phase 4: Schwab brokerage + token encryption (D-01/D-02/D-03/D-05)
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .min(32, "TOKEN_ENCRYPTION_KEY must be at least 32 chars"),
+  SCHWAB_TRADER_APP_KEY: z.string().min(1),
+  SCHWAB_TRADER_APP_SECRET: z.string().min(1),
+  SCHWAB_TRADER_CALLBACK_URL: z.string().url(),
+  SCHWAB_MARKET_APP_KEY: z.string().min(1),
+  SCHWAB_MARKET_APP_SECRET: z.string().min(1),
+  SCHWAB_MARKET_CALLBACK_URL: z.string().url(),
 });
 
 export type Config = z.infer<typeof configSchema>;

@@ -3,6 +3,7 @@ import { ok, err } from "@morai/shared";
 import { makeGetStatusUseCase } from "./getStatus.ts";
 import type { ForGettingStatus } from "./getStatus.ts";
 import type { ForPingingDb, ForReadingJobRuns } from "./ports.ts";
+import type { ForReadingTokenFreshness } from "../../brokerage/application/ports.ts";
 
 // Define a minimal StorageError for test doubles — the real one is defined in ports.ts
 type StorageError = { readonly kind: "storage-error"; readonly message: string };
@@ -10,6 +11,24 @@ type StorageError = { readonly kind: "storage-error"; readonly message: string }
 function makeStorageError(message: string): StorageError {
   return { kind: "storage-error", message };
 }
+
+// AUTH-04: tokenFreshnessMap fixture
+const now = new Date();
+const thirtyMinLater = new Date(now.getTime() + 30 * 60 * 1000);
+const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
+
+const freshnessFresh: ForReadingTokenFreshness = async () =>
+  ok({
+    trader: { status: "fresh", expiresAt: thirtyMinLater, refreshIssuedAt: now, lastRefreshError: null },
+    market: { status: "AUTH_EXPIRED", expiresAt: thirtyMinLater, refreshIssuedAt: eightDaysAgo, lastRefreshError: null },
+  });
+
+const freshnessErr: ForReadingTokenFreshness = async () =>
+  err(makeStorageError("DB down during freshness read"));
+
+const freshnessThrows: ForReadingTokenFreshness = async () => {
+  throw new Error("Unexpected freshness error");
+};
 
 describe("makeGetStatusUseCase", () => {
   const version = "1.2.3";
@@ -49,19 +68,70 @@ describe("makeGetStatusUseCase", () => {
     }
   });
 
-  it("sets tokenFreshness to 'none yet'", async () => {
+  it("sets tokenFreshness to 'none yet' when readTokenFreshness not provided", async () => {
     const pingDb: ForPingingDb = async () => ok(undefined);
     const getStatus: ForGettingStatus = makeGetStatusUseCase({
       pingDb,
       readJobRuns: noJobRuns,
       version,
       startedAt,
+      // readTokenFreshness omitted — backward-compat
     });
     const result = await getStatus();
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.tokenFreshness).toBe("none yet");
     }
+  });
+
+  // AUTH-04: per-app freshness wiring
+  it("returns per-app tokenFreshnessMap when readTokenFreshness provided and succeeds", async () => {
+    const pingDb: ForPingingDb = async () => ok(undefined);
+    const getStatus: ForGettingStatus = makeGetStatusUseCase({
+      pingDb,
+      readJobRuns: noJobRuns,
+      readTokenFreshness: freshnessFresh,
+      version,
+      startedAt,
+    });
+    const result = await getStatus();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.tokenFreshness).not.toBe("none yet");
+    const freshness = result.value.tokenFreshness;
+    if (freshness === "none yet") return; // narrow to TokenFreshnessMap
+    expect(freshness.trader.status).toBe("fresh");
+    expect(freshness.market.status).toBe("AUTH_EXPIRED");
+  });
+
+  it("falls back to 'none yet' when readTokenFreshness returns err — never throws", async () => {
+    const pingDb: ForPingingDb = async () => ok(undefined);
+    const getStatus: ForGettingStatus = makeGetStatusUseCase({
+      pingDb,
+      readJobRuns: noJobRuns,
+      readTokenFreshness: freshnessErr,
+      version,
+      startedAt,
+    });
+    const result = await getStatus();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.tokenFreshness).toBe("none yet");
+  });
+
+  it("falls back to 'none yet' when readTokenFreshness throws — never throws", async () => {
+    const pingDb: ForPingingDb = async () => ok(undefined);
+    const getStatus: ForGettingStatus = makeGetStatusUseCase({
+      pingDb,
+      readJobRuns: noJobRuns,
+      readTokenFreshness: freshnessThrows,
+      version,
+      startedAt,
+    });
+    const result = await getStatus();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.tokenFreshness).toBe("none yet");
   });
 
   it("returns lastJobRuns:'none yet' when readJobRuns returns empty map (first deploy)", async () => {

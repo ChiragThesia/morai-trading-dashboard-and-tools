@@ -49,10 +49,76 @@ describe("statusResponse schema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects wrong tokenFreshness value", () => {
+  it("rejects wrong tokenFreshness value (neither 'none yet' nor a valid map)", () => {
     const invalid = {
       db: "ok",
       tokenFreshness: "fresh",
+      lastJobRuns: "none yet",
+      version: "1.0.0",
+      uptime: 0,
+    };
+    const result = statusResponse.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  // AUTH-04: per-app tokenFreshness map
+  it("accepts tokenFreshness as a per-app freshness map (AUTH-04)", () => {
+    const valid = {
+      db: "ok",
+      tokenFreshness: {
+        trader: {
+          status: "fresh",
+          expiresAt: "2026-06-20T12:30:00.000Z",
+          refreshIssuedAt: "2026-06-20T12:00:00.000Z",
+          lastRefreshError: null,
+        },
+        market: {
+          status: "AUTH_EXPIRED",
+          expiresAt: "2026-06-13T12:30:00.000Z",
+          refreshIssuedAt: "2026-06-13T12:00:00.000Z",
+          lastRefreshError: null,
+        },
+      },
+      lastJobRuns: "none yet",
+      version: "1.0.0",
+      uptime: 42.5,
+    };
+    const result = statusResponse.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts tokenFreshness with status:'stale'", () => {
+    const valid = {
+      db: "ok",
+      tokenFreshness: {
+        trader: {
+          status: "stale",
+          expiresAt: "2026-06-20T12:00:00.000Z",
+          refreshIssuedAt: "2026-06-20T11:00:00.000Z",
+          lastRefreshError: null,
+        },
+        market: {
+          status: "none_yet",
+          expiresAt: null,
+          refreshIssuedAt: null,
+          lastRefreshError: null,
+        },
+      },
+      lastJobRuns: "none yet",
+      version: "1.0.0",
+      uptime: 10,
+    };
+    const result = statusResponse.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects tokenFreshness map with invalid status value", () => {
+    const invalid = {
+      db: "ok",
+      tokenFreshness: {
+        trader: { status: "expired", expiresAt: null, refreshIssuedAt: null },
+        market: { status: "none_yet", expiresAt: null, refreshIssuedAt: null },
+      },
       lastJobRuns: "none yet",
       version: "1.0.0",
       uptime: 0,

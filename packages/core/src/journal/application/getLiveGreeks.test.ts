@@ -49,6 +49,7 @@ function makeLegSnapshot(occSymbol: OccSymbol, overrides?: Partial<LegSnapshot>)
     bsmGamma: "0.0061",
     bsmTheta: "-25.88",
     bsmVega: "0.6955",
+    source: "cboe",
     ...overrides,
   };
 }

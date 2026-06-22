@@ -23,6 +23,27 @@ export { makePostgresRateObservationsRepo } from "./postgres/repos/rate-observat
 export type { PostgresRateObservationsRepo } from "./postgres/repos/rate-observations.ts";
 export { makePostgresJobRunsRepo } from "./postgres/repos/job-runs.ts";
 export type { PostgresJobRunsRepo } from "./postgres/repos/job-runs.ts";
+// AUTH-02: broker-tokens Postgres repo (pgcrypto encryption at rest)
+export { makePostgresBrokerTokensRepo } from "./postgres/repos/broker-tokens.ts";
+export type { PostgresBrokerTokensRepo } from "./postgres/repos/broker-tokens.ts";
+
+// Phase 5: calendar-events + orphan-fills Postgres repos (JRNL-01 / SC4)
+export { makePostgresCalendarEventsRepo } from "./postgres/repos/calendar-events.ts";
+export type { PostgresCalendarEventsRepo } from "./postgres/repos/calendar-events.ts";
+export { makePostgresOrphanFillsRepo } from "./postgres/repos/orphan-fills.ts";
+export type { PostgresOrphanFillsRepo } from "./postgres/repos/orphan-fills.ts";
+
+// Phase 5: in-memory twins for calendar-events + orphan-fills
+export { makeMemoryCalendarEventsRepo } from "./memory/calendar-events.ts";
+export type { MemoryCalendarEventsRepo } from "./memory/calendar-events.ts";
+export { makeMemoryOrphanFillsRepo } from "./memory/orphan-fills.ts";
+export type { MemoryOrphanFillsRepo } from "./memory/orphan-fills.ts";
+
+// Phase 5 (gap round 05-12): fills data-path repo (A1 + A3) — postgres + memory twin
+export { makePostgresFillsRepo } from "./postgres/repos/fills.ts";
+export type { PostgresFillsRepo } from "./postgres/repos/fills.ts";
+export { makeMemoryFillsRepo } from "./memory/fills.ts";
+export type { MemoryFillsRepo } from "./memory/fills.ts";
 
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
@@ -40,6 +61,42 @@ export { makeMemoryChainAdapter } from "./memory/chain.ts";
 export type { MemoryChainAdapter } from "./memory/chain.ts";
 export { makeMemoryRateAdapter } from "./memory/rate.ts";
 export type { MemoryRateAdapter } from "./memory/rate.ts";
+export { makeMemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
+export type { MemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
+
+// Schwab HTTP adapters (AUTH-01)
+export { makeSchwabOAuthClient } from "./schwab/auth/oauth-client.ts";
+export type {
+  SchwabOAuthClient,
+  SchwabTokens,
+  OAuthError,
+} from "./schwab/auth/oauth-client.ts";
+
+// BRK-01: Schwab market chain adapter (ForFetchingChain implementor)
+export { makeSchwabChainAdapter } from "./schwab/market/chain-adapter.ts";
+export type { SchwabChainAdapter } from "./schwab/market/chain-adapter.ts";
+
+// BRK-02: Schwab trader adapters (positions, transactions, orders, account hash)
+export { makeAccountHashResolver } from "./schwab/trader/account-hash.ts";
+export type { AccountHashResolver } from "./schwab/trader/account-hash.ts";
+export { makeSchwabPositionsAdapter } from "./schwab/trader/positions-adapter.ts";
+export type { SchwabPositionsAdapter } from "./schwab/trader/positions-adapter.ts";
+export { makeSchwabTransactionsAdapter } from "./schwab/trader/transactions-adapter.ts";
+export type { SchwabTransactionsAdapter } from "./schwab/trader/transactions-adapter.ts";
+export { makeSchwabOrdersAdapter } from "./schwab/trader/orders-adapter.ts";
+export type { SchwabOrdersAdapter } from "./schwab/trader/orders-adapter.ts";
+
+// BRK-02: In-memory twin for Schwab trader ports
+export { makeMemorySchwabTrader } from "./memory/schwab-trader.ts";
+export type { MemorySchwabTrader } from "./memory/schwab-trader.ts";
+
+// pg-boss adapters (job queue, JOB-01)
+export { makePgBossJobQueue } from "./pgboss/job-queue.ts";
+export type { PgBossJobQueue } from "./pgboss/job-queue.ts";
+
+// In-memory job queue twin (JOB-01, architecture-boundaries.md §8)
+export { makeMemoryJobQueue } from "./memory/job-queue.ts";
+export type { MemoryJobQueue, MemoryJobQueueEntry } from "./memory/job-queue.ts";
 
 // Note: contract test harness in src/__contract__/ is excluded from tsconfig emit
 // (test-only code using vitest). Import directly from the file path in test code.

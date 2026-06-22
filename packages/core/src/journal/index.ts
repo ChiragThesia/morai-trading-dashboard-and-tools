@@ -64,6 +64,53 @@ export { makeListCalendarsUseCase } from "./application/listCalendars.ts";
 export type { ListCalendarsDeps } from "./application/listCalendars.ts";
 export { makeCloseCalendarUseCase } from "./application/closeCalendar.ts";
 export type { CloseCalendarDeps } from "./application/closeCalendar.ts";
+// Phase 5: calendar_events + orphan_fills ports + fill-pairing types (JOB-01/JRNL-01)
+export type {
+  CalendarEvent,
+  RawFill,
+  AggregatedFill,
+  CalendarLegEntry,
+  OrphanFillInput,
+  ForStoringCalendarEvent,
+  ForReadingCalendarEvents,
+  ForDeletingCalendarEvents,
+  ForReadingUnprocessedFills,
+  ForReadingUnprocessedFillsForCalendar,
+  ForReadingCalendarLegs,
+  ForStoringOrphanFill,
+  ForResettingCalendarAmounts,
+  ForRecomputingCalendarAmounts,
+  ForMarkingFillsProcessed,
+  ForResettingFillsProcessedForCalendar,
+  ForWritingFills,
+  ForEnqueueingJob,
+} from "./application/ports.ts";
+// Phase 5: syncFills use-case factories + driver ports
+export {
+  makeSyncFillsUseCase,
+  makeSyncFillsForCalendarUseCase,
+} from "./application/syncFills.ts";
+export type {
+  ForRunningSyncFills,
+  ForRunningSyncFillsForCalendar,
+  SyncFillsDeps,
+  SyncFillsForCalendarDeps,
+} from "./application/syncFills.ts";
+// Phase 5 (gap round 05-12): A4 sync-transactions fills source use-case
+export { makeSyncTransactionsUseCase } from "./application/syncTransactions.ts";
+export type {
+  ForRunningSyncTransactions,
+  SyncTransactionsDeps,
+} from "./application/syncTransactions.ts";
+// Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
+export { hashFillIds } from "./domain/fill-pairing.ts";
+// Phase 5: rebuildJournal use-case factory + driver port
+export { makeRebuildJournalUseCase } from "./application/rebuildJournal.ts";
+export type { ForRebuildingJournal, RebuildJournalDeps } from "./application/rebuildJournal.ts";
+// Phase 5: enqueueJob use-case factory (JOB-01 — dedup + port delegation)
+export { makeEnqueueJobUseCase } from "./application/enqueueJob.ts";
+export type { EnqueueJobDeps } from "./application/enqueueJob.ts";
+
 // Domain re-exports (Plan 02/03/06) — BSM engine and IV inversion
 export { bsmPrice, bsmGreeks, bsmVega } from "./domain/bsm.ts";
 export type { BsmGreeks } from "./domain/bsm.ts";

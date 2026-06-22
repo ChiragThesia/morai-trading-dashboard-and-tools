@@ -23,8 +23,8 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 1: Walking Skeleton** - Monorepo + hexagon + DB + deployed status endpoint
 - [x] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored (gap closure in progress) (completed 2026-06-11)
 - [x] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live (completed 2026-06-14)
-- [ ] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions
-- [ ] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data
+- [x] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions (completed 2026-06-21)
+- [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
 - [ ] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed
 
 ## Phase Details
@@ -168,7 +168,31 @@ orders, and transactions are fetchable; and AUTH_EXPIRED degrades gracefully.
   4. When Schwab returns `invalid_grant`, `GET /api/status` reports `tokenFreshness: AUTH_EXPIRED`; Schwab-dependent jobs pause (no new Schwab API calls, logged); the CBOE pull and other non-Schwab jobs continue running.
   5. Schwab trader adapter returns positions and transactions behind their ports; data is Zod-parsed before it reaches core, and a failed parse surfaces a typed `Result.err`, not a thrown exception.
 
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+**Wave 1**
+
+- [x] 04-01-PLAN.md — Foundation: install oauth-callback/open, brokerage ports + freshness domain, broker_tokens schema + [BLOCKING] live migration, in-memory twin, config env (AUTH-02)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [x] 04-02-PLAN.md — TDD: vendored Schwab OAuth client + pgcrypto broker_tokens repo + on-demand refresh use-case (AUTH-01, AUTH-02)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [x] 04-03-PLAN.md — auth CLI setup|refresh|status|doctor (loopback HTTPS dance) + live verify checkpoint (AUTH-03)
+
+**Wave 4** *(blocked on Wave 2)*
+
+- [x] 04-04-PLAN.md — TDD: Schwab market chain adapter behind ForFetchingChain + source widening + CBOE-fallback selector (BRK-01)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [x] 04-05-PLAN.md — TDD: Schwab trader adapter (positions/orders/transactions) + use-cases + HTTP routes + MCP tools (BRK-02)
+
+**Wave 6** *(blocked on Waves 4+5)*
+
+- [x] 04-06-PLAN.md — TDD: per-app AUTH_EXPIRED status contract + getStatus freshness + job degradation guard (AUTH-04)
 
 ### Phase 5: Jobs, Fill Rebuild & Integrity
 
@@ -181,13 +205,66 @@ from broker transactions.
 **Requirements**: JOB-01, JOB-02, JOB-03, JRNL-01
 **Success Criteria** (what must be TRUE):
 
-  1. All scheduled jobs (`snapshot-calendars`, `compute-bsm-greeks`, `sync-fills`, `refresh-tokens`, `fetch-rates`, `compute-analytics`) are registered in `apps/worker/src/schedule.ts` and visible in `GET /api/status` under `lastJobRuns`; duplicate enqueues within the same window are idempotent (no duplicate rows in the DB).
+  1. All seven jobs (`fetch-schwab-chain`, `fetch-rates`, `compute-bsm-greeks`, `snapshot-calendars`, `sync-fills`, `refresh-tokens`, `rebuild-journal`) are registered in `apps/worker/src/schedule.ts` and visible in `GET /api/status` under `lastJobRuns` (`snapshot-calendars` is chain-triggered and `rebuild-journal` is on-demand — both registered but cronless); duplicate enqueues within the same window are idempotent (no duplicate rows in the DB).
   2. `JOB-02` (`refresh-tokens`, 04:00 ET): both Schwab apps refresh independently; a simulated failure on one app does not block the other; `GET /api/status` flags the failing app.
   3. `JOB-03` (`compute-bsm-greeks`): after running, `SELECT count(*) FROM leg_observations WHERE bsm_iv IS NULL AND mark IS NOT NULL` returns 0 (all pending observations computed).
   4. `sync-fills` pairs Schwab fill transactions into calendar OPEN/CLOSE events with correct net debit, credit, and P&L; paired events are idempotent on re-run (re-running against the same fill set produces no duplicate rows).
   5. `rebuild-journal` (manual trigger via `trigger_job` MCP tool or API) reconstructs a calendar's snapshot history from fills; the resulting `calendar_snapshots` rows match those written by the live snapshot job for the same period.
 
-**Plans**: TBD
+**Plans**: 15/16 plans executed
+Plans:
+**Wave 1**
+
+- [x] 05-01-PLAN.md — Docs-first + schema.ts (calendar_events, orphan_fills, entry_thesis) + new ports/domain types + 9 Wave-0 failing-test stubs (JOB-01, JRNL-01) [completed 2026-06-21]
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [x] 05-02-PLAN.md — [BLOCKING] drizzle generate + live migrate (0004_calendar_events.sql) (JRNL-01)
+- [x] 05-03-PLAN.md — TDD fill-pairing domain: classifyFill/aggregatePartialFills/computePnl/detectRoll/hashFillIds (JRNL-01)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [x] 05-04-PLAN.md — JobQueue port + pg-boss adapter + in-memory twin + dedupe-key + schedule.ts (7 jobs) + job-runs TRACKED_JOBS + /api/status (JOB-01, SC1)
+
+**Wave 4** *(blocked on Wave 3; 05-05 ‖ 05-06)*
+
+- [x] 05-05-PLAN.md — refresh-tokens slice: per-app independence (allSettled) + isNearExpiry warning + no-RTH handler + status flag (JOB-02, SC2)
+- [x] 05-06-PLAN.md — compute-bsm-greeks drain SC3 contract (testcontainers): zero pending rows, idempotent (JOB-03, SC3)
+
+**Wave 5** *(blocked on Waves 2/3/4)*
+
+- [x] 05-07-PLAN.md — sync-fills slice: pairing use-case (OPEN/CLOSE/ROLL + per-leg P&L + orphan parking) + calendar-events/orphan-fills repos + twins + contracts + RTH handler (JRNL-01, SC4)
+
+**Wave 6** *(blocked on Waves 4/5)*
+
+- [x] 05-08-PLAN.md — rebuild-journal (delete-then-reinsert, SC5 reconciliation) + trigger_job HTTP route + MCP tool sharing one contracts schema (JRNL-01, SC5, MCP-02)
+
+**Gap Closure — Round 1** *(from 05-REVIEW.md 4 critical + 8 warning + corrected 05-VERIFICATION SC4/SC5 fail; full SC4/SC5 vertical slice — real fills repo + source)*
+
+*Wave 7 (parallel; zero file overlap)*
+
+- [x] 05-09-PLAN.md — Docs-first D-08/D-09 realized-P&L redefinition + fill-pairing domain fixes (B1-B4) + C1 boundary + data-path port contracts anchor (JRNL-01) (completed 2026-06-21)
+- [x] 05-10-PLAN.md — Criticals/infra: CR-02 token refresh mapping, CR-03 job-runs independent success/error, WR-04 rebuild calendarId boundary, WR-05 twin dedup, IN-01 (JOB-01, MCP-02) (completed 2026-06-21)
+
+*Wave 8 (blocked on 05-09; parallel; zero file overlap)*
+
+- [x] 05-11-PLAN.md — sync-fills use-case: B1 realized-P&L lookup, B5 orphan parking, C1 injection, A2 calendar-scoped sync / CR-04 (JRNL-01) (completed 2026-06-21)
+- [x] 05-12-PLAN.md — Data path: A1 fills repo + twin (testcontainers), A3 recompute amounts, A4 fills source (sync-transactions from Schwab BrokerTransaction) (JRNL-01)
+
+*Wave 9 (blocked on 05-10/05-11/05-12)*
+
+- [x] 05-13-PLAN.md — A5 real wiring (delete fills stubs) + sync-transactions job + WR-08 rebuild reconciliation + end-to-end SC4/SC5 verification (JRNL-01, JOB-01) (completed 2026-06-22)
+
+**Gap Closure — Round 2** *(from 05-REVIEW-2.md re-review: 1 blocker + 4 warnings + 2 info; round-1 fixes verified genuine)*
+
+*Wave 1 (parallel; zero file overlap)*
+
+- [x] 05-14-PLAN.md — CR-A1 MCP trigger_job ⇒ triggerJobBodyFor parity (blocker) + WR-A3 hexToUuid total-nibble mapping + IN-A1 job-runs cleanup (MCP-02, JRNL-01)
+- [x] 05-15-PLAN.md — WR-A2 fills.processed_at + ForMarkingFillsProcessed (no re-pair/double-count) + WR-A1 ROLL recompute by eventType (explicit components) + WR-A4 full-shape memory seedEvent (JRNL-01)
+
+*Wave 2 (blocked on 05-14 + 05-15)*
+
+- [x] 05-16-PLAN.md — fast-check property tests: no double-count, idempotent sync, rebuild reconciliation (OPEN/CLOSE/ROLL), distinct keys ⇒ distinct fill UUID (JRNL-01) — P1 exposed + fixed a real ROLL double-count (eager OPEN emission); full suite 790 green
 
 ### Phase 6: Derived Analytics
 
@@ -206,6 +283,56 @@ return current and historical series queryable by API and Claude Code.
 
 **Plans**: TBD
 
+## Backlog / Future Enhancements
+
+*Unscheduled — not yet assigned to a phase.*
+
+### Schwab re-auth friction reduction (7-day refresh token)
+
+**Context:** Schwab refresh tokens hard-expire 7 days after issue with no sliding window —
+refreshing the 30-min access token does NOT extend them. A new refresh token can only be
+minted via the interactive authorization-code grant (browser login), so a **weekly manual
+`auth setup` re-auth is unavoidable**. Phase 5 `JOB-02` (`refresh-tokens`) already automates
+the 30-min access-token refresh; this item is only about making the unavoidable weekly
+re-auth painless and never a surprise.
+
+**Proposed (friction-reducing, not eliminating):**
+
+- Proactive expiry detection + alert (e.g. day 6 of 7) via the status surface / a notification
+  channel, so re-auth happens *before* a data gap (refresh token → `AUTH_EXPIRED`).
+
+- Surface per-app `refreshExpiresAt` / "expires in N days" in `GET /api/status`.
+- One-command re-auth (`auth setup --all`) that runs both apps in sequence.
+
+**Explicitly OUT of scope (rejected):** fully-automated refresh-token renewal via headless
+browser login. It would require storing full Schwab username/password at rest (worse than the
+refresh token), breaks on MFA/2FA, and likely violates Schwab's ToS (risking API access). The
+weekly browser re-auth is a Schwab platform constraint, accepted by design.
+
+### Schwab client library — revisit vendored TS vs @sudowealth/schwab-api
+
+**Decided 2026-06-21** (full analysis: `.planning/notes/schwab-client-decision.md`). Phase 4
+UAT found the vendored chain adapter 502s on the live `$SPX` chain (missing scoping params, not
+a missing library). Decision: fix vendored TS now (add `strikeCount`/`fromDate`/`toDate`);
+**reject** the Python `schwab-py` sidecar (can't ease the unavoidable weekly re-auth; forces
+re-implementing pgcrypto token crypto in Python → violates D-03; breaks the single-stack hexagon).
+
+**Revisit trigger:** when hand-maintaining the Schwab **trader** endpoints becomes painful, or
+before scaling beyond one account → evaluate adopting `@sudowealth/schwab-api` (real full TS
+client, Bun-native, save/load callbacks slot behind the encrypted `broker_tokens` adapter).
+Caveat: 11★ / single maintainer / <13mo — adopt only behind ports, version-pinned, human-verify gate.
+
+### Strategy rules / logical gates engine (the "why I acted" layer — L4)
+
+**Surfaced during Phase 5 discuss (2026-06-21).** User's stated end-goal: record the
+enter/exit/roll RULES per trade + which rule fired, to improve the system/algo. This is a
+NEW capability beyond Phase 5's trade ledger (JRNL-01 only pairs fills into events). The
+Phase 5 D-07 "entry-thesis" field is the minimal attach point. Pairs with **L3 attribution**
+(decompose a calendar's move into θ/vega/δ + event contributions) which is already scoped
+to **Phase 6 (Derived Analytics)**. Candidate for its own phase after Phase 6. The 4-layer
+model (ledger → greeks time-series → attribution → rules) is documented in
+`.planning/phases/05-jobs-fill-rebuild-integrity/05-CONTEXT.md`.
+
 ## Progress
 
 **Execution Order:**
@@ -216,6 +343,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Walking Skeleton | 6/6 | Complete    |  |
 | 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
-| 4. Schwab Auth & Brokerage | 0/TBD | Not started | - |
-| 5. Jobs, Fill Rebuild & Integrity | 0/TBD | Not started | - |
+| 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
+| 5. Jobs, Fill Rebuild & Integrity | 15/16 | In Progress|  |
 | 6. Derived Analytics | 0/TBD | Not started | - |

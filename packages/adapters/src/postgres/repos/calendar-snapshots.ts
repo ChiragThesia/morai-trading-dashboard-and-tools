@@ -161,6 +161,7 @@ export function makePostgresCalendarSnapshotsRepo(
           bsmGamma: legObservations.bsmGamma,
           bsmTheta: legObservations.bsmTheta,
           bsmVega: legObservations.bsmVega,
+          source: legObservations.source,
         })
         .from(legObservations)
         .where(eq(legObservations.contract, occSymbolRaw))
@@ -180,6 +181,7 @@ export function makePostgresCalendarSnapshotsRepo(
         bsmGamma: obsRow.bsmGamma,
         bsmTheta: obsRow.bsmTheta,
         bsmVega: obsRow.bsmVega,
+        source: obsRow.source,
       };
 
       return ok(leg);

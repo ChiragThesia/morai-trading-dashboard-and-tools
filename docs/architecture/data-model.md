@@ -97,6 +97,110 @@ date PK, rate numeric          -- fallback 4.5% if FRED unreachable (rho impact 
 p95 journal query >500ms. **Upgrade**: Timescale-enabled image on Railway,
 `create_hypertable` + compression-policy migration. Schema shape already compatible.
 
+### `calendar_events` — trade ledger (Phase 5, L1)
+
+The L1 trade-ledger layer. Each row records one OPEN, CLOSE, or ROLL event for a calendar,
+sourced from broker fills. Distinct from `calendar_snapshots` (the L2 greeks time-series).
+
+```
+id                uuid PK
+calendar_id       uuid FK → calendars.id
+event_type        enum: OPEN | CLOSE | ROLL
+evented_at        timestamptz          -- timestamp of the first fill in this event
+fill_ids_hash     varchar(64) UNIQUE   -- SHA-256 hex of sorted fill UUIDs (idempotency key)
+leg_occ_symbol    varchar(32)          -- OCC symbol of the primary leg
+rolled_from_occ_symbol varchar(32) NULL -- OLD leg being closed; NULL for OPEN and CLOSE events
+qty               int
+avg_price         numeric              -- qty-weighted average fill price
+net_amount        numeric              -- OPEN debit = positive; CLOSE credit = negative (D-08)
+realized_pnl      numeric NULL         -- populated on CLOSE and ROLL only (D-09)
+leg_breakdown     text NULL            -- JSON: per-leg amounts for L3 attribution (D-09, required)
+entry_thesis      text NULL            -- D-07 free-text hook, set at OPEN time
+created_at        timestamptz
+```
+
+**Realized P&L (D-08/D-09).** Realized P&L on a CLOSE or ROLL is the gain or loss of the
+leg being closed, not a forward-looking cost:
+
+```
+realizedPnl = closeCredit − originalOpenDebit − feesOnClose
+```
+
+`originalOpenDebit` is the debit recorded on the prior OPEN event for the same leg — read
+from that leg's earlier `calendar_events` row at close time. `closeCredit` is the credit
+received on the close. `feesOnClose` is the commission plus fees paid on the closing fills
+only. When no prior OPEN event exists for the leg, `realized_pnl` stays NULL — a missing
+result, never a wrong number.
+
+On a ROLL the new leg's premium is cost basis. It lands in `net_amount`, never in
+`realized_pnl`. The roll's `realized_pnl` reflects only the closed (old) leg:
+`closeCredit_oldLeg − originalOpenDebit_oldLeg − feesOnClose`. The new leg's
+`originalOpenDebit` is its own future cost basis and is irrelevant to the closed leg's
+result.
+
+Idempotency: `fill_ids_hash` is a `varchar(64)` UNIQUE index (exactly 64 hex chars = SHA-256).
+Re-running `sync-fills` against the same fill set produces the same hash and the insert is a
+no-op (`onConflictDoNothing`). This prevents duplicate events across job re-runs.
+
+ROLL events set `rolled_from_occ_symbol` to the old leg and `leg_occ_symbol` to the new leg,
+preserving the "same trade continued" chain (D-03).
+
+### `orphan_fills` — unmatched fill parking (Phase 5)
+
+Fills that cannot be matched to any calendar leg are parked here. They are never silently
+dropped and never auto-deleted (D-05). An operator reviews them to detect missing calendars or
+ambiguous legs.
+
+```
+fill_id     uuid PK              -- same UUID as fills.id
+occ_symbol  varchar(32)
+side        varchar(4)           -- "buy" | "sell"
+qty         int
+price       numeric
+filled_at   timestamptz
+reason      text                 -- "no matching calendar" | "ambiguous calendar: [ids]"
+created_at  timestamptz
+```
+
+### `calendars` column addition (Phase 5)
+
+The `calendars` table gains a nullable `entry_thesis` column (D-07):
+
+```
+entry_thesis  text NULL    -- free-text or tag for L4 strategy-rules attach point (D-07)
+```
+
+This is set at OPEN event creation and is never required. It acts as a hook for the future L4
+strategy-rules layer. No default value; non-destructive ALTER TABLE.
+
+### `broker_tokens` — Schwab OAuth token storage (brokerage context, Phase 4)
+
+```
+app_id            text PK            -- 'trader' | 'market' — one row per Schwab app
+access_token      bytea NOT NULL     -- pgp_sym_encrypt(token, TOKEN_ENCRYPTION_KEY)
+refresh_token     bytea NOT NULL     -- pgp_sym_encrypt(token, TOKEN_ENCRYPTION_KEY)
+issued_at         timestamptz        -- when access token was issued
+refresh_issued_at timestamptz        -- when refresh token was issued (7-day clock)
+expires_at        timestamptz        -- issued_at + 30 min (cached, not authoritative)
+updated_at        timestamptz
+```
+
+Design rationale:
+
+- **One row per Schwab app** (`app_id` PK discriminator). Trader app and market app
+  are independent OAuth clients — their token lifetimes are independent (D-09).
+- **Encrypted at rest via pgcrypto** (`pgp_sym_encrypt` / `pgp_sym_decrypt`). The
+  symmetric key (`TOKEN_ENCRYPTION_KEY`) is injected at query time from env/secrets
+  and never stored in the database (D-03). Key appears only as a `$N` parameter in the
+  wire protocol, never in query logs or slow-query output.
+- **bytea columns** for the encrypted fields — pgcrypto returns `bytea`, not `text`.
+  Drizzle schema uses `customType<{ data: string; driverData: Buffer }>` for these
+  columns; `pgp_sym_decrypt` unwraps them back to plaintext strings on read.
+- **pgcrypto extension**: migration includes `CREATE EXTENSION IF NOT EXISTS pgcrypto`
+  as its first statement (idempotent; pre-enabled in Supabase by default).
+- **No expiry column for refresh token** — the 7-day hard cutoff is computed from
+  `refresh_issued_at` at read time by the `isTokenExpired` pure domain function.
+
 ## Migrations
 
 - drizzle-kit generated SQL in `packages/adapters/postgres/migrations/`.

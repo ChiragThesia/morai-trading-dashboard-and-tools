@@ -1,0 +1,187 @@
+/**
+ * fill-pairing — pure domain functions for fill→event pairing (Phase 5, JRNL-01).
+ *
+ * Pure functions; no I/O, no framework, no Drizzle, no node builtins. Imports ONLY
+ * @morai/shared and intra-domain types (architecture-boundaries.md §2; CLAUDE.md #1).
+ *
+ * Decision references:
+ *   D-02: classify OPEN/CLOSE/UNKNOWN from positionEffect
+ *   D-03: ROLL is first-class — same root+strike+type, DIFFERENT expiry, same orderId
+ *   D-04: aggregate partial fills (sum qty, qty-weighted avg price)
+ *   D-08/D-09: realizedPnl = closeCredit − originalOpenDebit − feesOnClose
+ */
+
+import { ok, err, parseOccSymbol } from "@morai/shared";
+import type { Result } from "@morai/shared";
+import type { RawFill, AggregatedFill } from "./calendar-event.ts";
+
+// Re-export types used by fill-pairing consumers
+export type { RawFill, AggregatedFill };
+
+// Error sentinel for a malformed aggregation (e.g. empty group, non-positive sumQty).
+export type FillAggregationError = {
+  readonly kind: "fill-aggregation-error";
+  readonly message: string;
+};
+
+/**
+ * classifyFill — map a positionEffect to OPEN, CLOSE, or UNKNOWN (D-02).
+ *
+ * positionEffect is the authoritative classification signal: OPENING→OPEN,
+ * CLOSING→CLOSE, UNKNOWN→UNKNOWN. The raw fill `side` is not used here — it carries no
+ * classification information beyond positionEffect, so a dead `side` param is omitted
+ * (REVIEW WR-06: do not fabricate a side and feed it to a branch that ignores it).
+ */
+export function classifyFill(
+  positionEffect: "OPENING" | "CLOSING" | "UNKNOWN",
+): "OPEN" | "CLOSE" | "UNKNOWN" {
+  switch (positionEffect) {
+    case "OPENING":
+      return "OPEN";
+    case "CLOSING":
+      return "CLOSE";
+    case "UNKNOWN":
+      return "UNKNOWN";
+  }
+}
+
+/**
+ * aggregatePartialFills — collapse one pre-bucketed group of partial fills into a single
+ * AggregatedFill (D-04). The caller (syncFills use-case) buckets by
+ * (calendarId, legOccSymbol, orderId) and supplies the calendarId and positionEffect
+ * resolved from the matched calendar leg.
+ *
+ * - sumQty = sum of individual qtys
+ * - avgPrice = qty-weighted average price
+ * - totalCommission/totalFees = summed (null treated as 0)
+ *
+ * Returns err(FillAggregationError) for an empty group or a non-positive sumQty — never
+ * an avgPrice of 0 (REVIEW WR-03). The orderId/legOccSymbol are taken from the first fill;
+ * the bucket key guarantees they are uniform within the group.
+ */
+export function aggregatePartialFills(
+  fills: ReadonlyArray<RawFill>,
+  calendarId: string,
+  positionEffect: "OPENING" | "CLOSING" | "UNKNOWN",
+): Result<AggregatedFill, FillAggregationError> {
+  if (fills.length === 0) {
+    return err({
+      kind: "fill-aggregation-error",
+      message: "cannot aggregate an empty fill group",
+    });
+  }
+
+  let sumQty = 0;
+  let weightedPriceSum = 0;
+  let totalCommission = 0;
+  let totalFees = 0;
+  const fillIds: string[] = [];
+
+  for (const fill of fills) {
+    sumQty += fill.qty;
+    weightedPriceSum += fill.qty * fill.price;
+    totalCommission += fill.commission ?? 0;
+    totalFees += fill.fees ?? 0;
+    fillIds.push(fill.id);
+  }
+
+  if (sumQty <= 0) {
+    return err({
+      kind: "fill-aggregation-error",
+      message: `non-positive aggregate quantity (sumQty=${sumQty})`,
+    });
+  }
+
+  const first = fills[0];
+  if (first === undefined) {
+    return err({
+      kind: "fill-aggregation-error",
+      message: "fill group lost its first element",
+    });
+  }
+
+  return ok({
+    calendarId,
+    legOccSymbol: first.occSymbol,
+    orderId: first.orderId,
+    sumQty,
+    avgPrice: weightedPriceSum / sumQty,
+    totalCommission,
+    totalFees,
+    positionEffect,
+    fillIds,
+  });
+}
+
+/**
+ * computeRealizedPnl — realized P&L of the leg being closed (D-08/D-09).
+ *
+ *   realizedPnl = closeCredit − originalOpenDebit − feesOnClose
+ *
+ * Signs:
+ *   closeCredit      = positive credit received on the close
+ *   originalOpenDebit = positive debit recorded on the prior OPEN event for the leg
+ *   feesOnClose      = positive commissions + fees paid on the closing fills only
+ *
+ * On a ROLL the new leg's premium is cost basis (netAmount), never passed here — the
+ * roll's realized P&L reflects only the closed (old) leg (locked decision 2 / WR-01).
+ */
+export function computeRealizedPnl(
+  closeCredit: number,
+  originalOpenDebit: number,
+  feesOnClose: number,
+): number {
+  return closeCredit - originalOpenDebit - feesOnClose;
+}
+
+/**
+ * detectRoll — true when a closing and an opening aggregate are a ROLL (D-03).
+ *
+ * Requires: same calendarId, same orderId, and same root + strike + option type with a
+ * DIFFERENT expiry (REVIEW WR-02 — the old "different OCC implies roll" assumption was
+ * unsafe). A same-expiry pair, a different strike/type/root, or an unparseable symbol all
+ * return false (a non-roll is safely emitted as separate events).
+ *
+ * legOccSymbol is the canonical OSI 21-char form (root space-padded to 6, YYMMDD, C/P,
+ * 8-digit strike×1000) — the same form parseOccSymbol consumes and formatOccSymbol emits.
+ */
+export function detectRoll(
+  closing: AggregatedFill,
+  opening: AggregatedFill,
+): boolean {
+  if (closing.calendarId !== opening.calendarId) return false;
+  if (closing.orderId !== opening.orderId) return false;
+
+  const c = parseOccSymbol(closing.legOccSymbol);
+  const o = parseOccSymbol(opening.legOccSymbol);
+  if (!c.ok || !o.ok) return false;
+
+  // Same instrument family: root, strike, and option type must all match.
+  if (c.value.root !== o.value.root) return false;
+  if (c.value.strike !== o.value.strike) return false;
+  if (c.value.type !== o.value.type) return false;
+
+  // A roll moves to a DIFFERENT expiry. Same expiry is not a roll.
+  return c.value.expiry.getTime() !== o.value.expiry.getTime();
+}
+
+/**
+ * hashFillIds — deterministic idempotency key from a set of fill ids (D-11).
+ *
+ * Pure reference algorithm: sort ids, join with ':', delegate the hashing to an INJECTED
+ * hasher (C1 — fixes CR-01). The hasher (an `HashFillIds`-compatible string→string
+ * function) is supplied by the adapter as a sha256-hex implementation (plan 05-13); the
+ * pure domain stays free of any node:crypto import.
+ *
+ * The adapter's hasher MUST produce a 64-char sha256 hex string for the
+ * calendar_events.fill_ids_hash UNIQUE constraint. Re-running sync against the same fill
+ * set yields the same canonical string and therefore the same hash → no-op insert.
+ */
+export function hashFillIds(
+  ids: ReadonlyArray<string>,
+  hasher: (input: string) => string,
+): string {
+  const sorted = [...ids].sort();
+  const joined = sorted.join(":");
+  return hasher(joined);
+}

@@ -20,6 +20,16 @@ const workerConfigSchema = z.object({
   BSM_STRIKE_BAND_PCT: z.coerce.number().positive().default(0.10),
   BSM_DIVIDEND_YIELD: z.coerce.number().nonnegative().default(0.013),
   BSM_RATE_FALLBACK: z.coerce.number().nonnegative().default(0.045),
+  // Phase 4: Schwab brokerage + token encryption (D-01/D-02/D-03/D-05)
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .min(32, "TOKEN_ENCRYPTION_KEY must be at least 32 chars"),
+  SCHWAB_TRADER_APP_KEY: z.string().min(1),
+  SCHWAB_TRADER_APP_SECRET: z.string().min(1),
+  SCHWAB_TRADER_CALLBACK_URL: z.string().url(),
+  SCHWAB_MARKET_APP_KEY: z.string().min(1),
+  SCHWAB_MARKET_APP_SECRET: z.string().min(1),
+  SCHWAB_MARKET_CALLBACK_URL: z.string().url(),
 });
 
 export type WorkerConfig = z.infer<typeof workerConfigSchema>;

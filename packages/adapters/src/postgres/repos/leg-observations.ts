@@ -264,6 +264,7 @@ export function makePostgresLegObservationsRepo(
           bsmGamma: legObservations.bsmGamma,
           bsmTheta: legObservations.bsmTheta,
           bsmVega: legObservations.bsmVega,
+          source: legObservations.source,
         })
         .from(legObservations)
         .where(eq(legObservations.contract, occSymbol))
@@ -287,6 +288,7 @@ export function makePostgresLegObservationsRepo(
         bsmGamma: row.bsmGamma,
         bsmTheta: row.bsmTheta,
         bsmVega: row.bsmVega,
+        source: row.source,
       };
 
       return ok(leg);

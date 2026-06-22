@@ -98,6 +98,11 @@ function buildSnapshotRow(
       ? String(back.ivRaw)
       : NAN_STAMP;
 
+  // Source: prefer front leg, fall back to back, default to 'cboe' when both legs are null.
+  // 'computed_only' observations have no vendor source; map to 'cboe' (the historical default).
+  const rawSource = front?.source ?? back?.source ?? "cboe";
+  const source: "cboe" | "schwab_chain" = rawSource === "schwab_chain" ? "schwab_chain" : "cboe";
+
   return {
     time: now,
     calendarId: cal.id,
@@ -117,7 +122,7 @@ function buildSnapshotRow(
     dteFront: calendarDte(now, new Date(cal.frontExpiry)),
     dteBack: calendarDte(now, new Date(cal.backExpiry)),
     pnlOpen,
-    source: "cboe",
+    source,
   };
 }
 

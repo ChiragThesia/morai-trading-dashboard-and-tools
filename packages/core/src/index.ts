@@ -71,3 +71,89 @@ export type {
   LiveGreeks,
   LegGreeks,
 } from "./journal/index.ts";
+
+// Brokerage bounded context — ports + pure freshness domain (Phase 4)
+export type {
+  AppId,
+  SchwabTokenRow,
+  AppTokenStatus,
+  TokenFreshnessMap,
+  AuthExpiredError,
+  BrokerPosition,
+  BrokerTransaction,
+  BrokerOrder,
+  ForReadingTokens,
+  ForWritingTokens,
+  ForReadingTokenFreshness,
+  ForFetchingPositions,
+  ForFetchingTransactions,
+  ForFetchingOrders,
+  ForResolvingAccountHash,
+} from "./brokerage/index.ts";
+export {
+  isTokenExpired,
+  isTokenStale,
+  toAppTokenStatus,
+  isNearExpiry,
+} from "./brokerage/index.ts";
+// AUTH-01: on-demand refresh use-case + types
+export { makeRefreshTokenUseCase } from "./brokerage/index.ts";
+export type {
+  SchwabTokens,
+  OAuthError,
+  ForRefreshingToken,
+} from "./brokerage/index.ts";
+// BRK-01: source selector (Schwab primary / CBOE fallback)
+export { selectChainSource } from "./brokerage/index.ts";
+// Phase 5: journal ports for fill-pairing + calendar events + orphan fills (JOB-01/JRNL-01)
+export type {
+  CalendarEvent,
+  RawFill,
+  AggregatedFill,
+  CalendarLegEntry,
+  OrphanFillInput,
+  ForStoringCalendarEvent,
+  ForReadingCalendarEvents,
+  ForDeletingCalendarEvents,
+  ForReadingUnprocessedFills,
+  ForReadingUnprocessedFillsForCalendar,
+  ForReadingCalendarLegs,
+  ForStoringOrphanFill,
+  ForResettingCalendarAmounts,
+  ForRecomputingCalendarAmounts,
+  ForMarkingFillsProcessed,
+  ForResettingFillsProcessedForCalendar,
+  ForWritingFills,
+  ForEnqueueingJob,
+} from "./journal/index.ts";
+export { makeSyncFillsUseCase, makeSyncFillsForCalendarUseCase } from "./journal/index.ts";
+export type {
+  ForRunningSyncFills,
+  ForRunningSyncFillsForCalendar,
+  SyncFillsDeps,
+  SyncFillsForCalendarDeps,
+} from "./journal/index.ts";
+// Phase 5 (gap round 05-12): A4 sync-transactions fills source use-case
+export { makeSyncTransactionsUseCase } from "./journal/index.ts";
+export type {
+  ForRunningSyncTransactions,
+  SyncTransactionsDeps,
+} from "./journal/index.ts";
+export { hashFillIds } from "./journal/index.ts";
+export { makeRebuildJournalUseCase } from "./journal/index.ts";
+export type { ForRebuildingJournal, RebuildJournalDeps } from "./journal/index.ts";
+// Phase 5: enqueueJob use-case factory (JOB-01 — MCP-02 trigger surface)
+export { makeEnqueueJobUseCase } from "./journal/index.ts";
+export type { EnqueueJobDeps } from "./journal/index.ts";
+// Phase 5: refreshTokens use-case + result type (JOB-02, D-13/D-14)
+export { makeRefreshTokensUseCase } from "./brokerage/index.ts";
+export type { RefreshTokensResult, AppRefreshOutcome, RefreshTokensDeps } from "./brokerage/index.ts";
+// D-14 (05-05): per-app refresh outcome recording port
+export type { ForRecordingRefreshOutcome } from "./brokerage/index.ts";
+// BRK-02: trader data use-cases (positions, transactions, orders)
+export { makeGetPositionsUseCase } from "./brokerage/index.ts";
+export type { ForGettingPositions, GetPositionsDeps } from "./brokerage/index.ts";
+export { makeGetTransactionsUseCase } from "./brokerage/index.ts";
+export type { ForGettingTransactions, GetTransactionsDeps } from "./brokerage/index.ts";
+export { makeGetOrdersUseCase } from "./brokerage/index.ts";
+export type { ForGettingOrders, GetOrdersDeps } from "./brokerage/index.ts";

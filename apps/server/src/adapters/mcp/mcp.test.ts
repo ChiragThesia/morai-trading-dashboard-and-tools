@@ -14,6 +14,7 @@ import {
 import { bearerAuth } from "./bearer.ts";
 import { makeMcpRouter } from "./server.ts";
 import type { Config } from "../../config.ts";
+import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
 const TEST_BEARER = "test-bearer-token-1234";
 
@@ -23,6 +24,13 @@ const testConfig = {
   PORT: 3000,
   TZ: "America/New_York",
   NODE_ENV: "test" as const,
+  TOKEN_ENCRYPTION_KEY: "test-encryption-key-must-be-32-chars-long",
+  SCHWAB_TRADER_APP_KEY: "test-trader-key",
+  SCHWAB_TRADER_APP_SECRET: "test-trader-secret",
+  SCHWAB_TRADER_CALLBACK_URL: "https://127.0.0.1:8182",
+  SCHWAB_MARKET_APP_KEY: "test-market-key",
+  SCHWAB_MARKET_APP_SECRET: "test-market-secret",
+  SCHWAB_MARKET_CALLBACK_URL: "https://127.0.0.1:8183",
 } satisfies Config;
 
 const healthyGetStatus: ForGettingStatus = async () =>
@@ -549,12 +557,133 @@ describe("MCP router", () => {
     });
   });
 
-  // ─── trigger_job must NOT be registered ────────────────────────────────────
+  // ─── trigger_job IS registered (MCP-02, Plan 05-08 — supersedes the D-08 deferral) ─
 
-  it("trigger_job is NOT exported from tools.ts (D-08 deferred)", async () => {
+  it("trigger_job is exported from tools.ts and registers without throwing (MCP-02)", async () => {
     const toolsModule = await import("./tools.ts");
     // Object.keys returns string[] — check without type assertions (typescript.md rule)
     const exportedNames = Object.keys(toolsModule);
-    expect(exportedNames.includes("registerTriggerJobTool")).toBe(false);
+    expect(exportedNames.includes("registerTriggerJobTool")).toBe(true);
+
+    const { registerTriggerJobTool } = toolsModule;
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+    const enqueueJob: ForTriggeringJob = async () => ok("job-123");
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    // Should not throw on registration
+    expect(() => registerTriggerJobTool(server, enqueueJob)).not.toThrow();
+  });
+
+  // ─── trigger_job — MCP/HTTP parity for per-job calendarId refinement (CR-A1) ──
+  // The MCP trigger_job tool MUST route through triggerJobBodyFor(name) exactly as
+  // jobs.routes.ts does, so the agent-driven MCP surface cannot enqueue a null-keyed,
+  // un-deduplicated rebuild-journal (the WR-04 queue-flood path).
+
+  // Reach the registered trigger_job handler via the same Reflect pattern the CR-02
+  // tests use — no 'as' casts. Returns the handler narrowed to Function.
+  async function getTriggerJobHandler(
+    enqueueJob: ForTriggeringJob,
+  ): Promise<(args: unknown) => Promise<unknown>> {
+    const { registerTriggerJobTool } = await import("./tools.ts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    registerTriggerJobTool(server, enqueueJob);
+
+    const toolsMap: unknown = Reflect.get(server, "_registeredTools");
+    if (typeof toolsMap !== "object" || toolsMap === null) {
+      throw new Error("_registeredTools not found on McpServer instance");
+    }
+    const toolEntry: unknown = Reflect.get(toolsMap, "trigger_job");
+    if (typeof toolEntry !== "object" || toolEntry === null) {
+      throw new Error("trigger_job tool not registered");
+    }
+    const handler: unknown = Reflect.get(toolEntry, "handler");
+    if (typeof handler !== "function") {
+      throw new Error("trigger_job handler is not a function");
+    }
+    return async (args: unknown): Promise<unknown> =>
+      Reflect.apply(handler, undefined, [args]);
+  }
+
+  // Extract content[0].text (string) from a tool result without casts.
+  function firstContentText(result: unknown): string {
+    if (typeof result !== "object" || result === null) {
+      throw new Error("handler did not return an object");
+    }
+    const content: unknown = Reflect.get(result, "content");
+    if (!Array.isArray(content) || content.length === 0) {
+      throw new Error("handler result has no content");
+    }
+    const first: unknown = content[0];
+    if (typeof first !== "object" || first === null) {
+      throw new Error("first content item is not an object");
+    }
+    const text: unknown = Reflect.get(first, "text");
+    if (typeof text !== "string") {
+      throw new Error("content text is not a string");
+    }
+    return text;
+  }
+
+  it("trigger_job {name:'rebuild-journal'} with NO calendarId is rejected and never enqueues (CR-A1 blocker)", async () => {
+    let enqueueCalls = 0;
+    const enqueueJob: ForTriggeringJob = async () => {
+      enqueueCalls += 1;
+      return ok("job-should-not-happen");
+    };
+
+    const handler = await getTriggerJobHandler(enqueueJob);
+    const result = await handler({ name: "rebuild-journal" });
+
+    const text = firstContentText(result);
+    // Error content — no jobId, an error indicator present.
+    expect(text.toLowerCase()).toMatch(/calendarid|invalid/);
+    expect(text).not.toContain("jobId");
+    // The flood path: enqueueJob MUST NOT be reached.
+    expect(enqueueCalls).toBe(0);
+  });
+
+  it("trigger_job {name:'rebuild-journal', calendarId} enqueues once with the calendarId (CR-A1)", async () => {
+    const validId = "550e8400-e29b-41d4-a716-446655440000";
+    let enqueueCalls = 0;
+    let seenName: string | null = null;
+    let seenCalendarId: unknown = undefined;
+    const enqueueJob: ForTriggeringJob = async (name, payload) => {
+      enqueueCalls += 1;
+      seenName = name;
+      seenCalendarId = Reflect.get(payload, "calendarId");
+      return ok("job-abc");
+    };
+
+    const handler = await getTriggerJobHandler(enqueueJob);
+    const result = await handler({ name: "rebuild-journal", calendarId: validId });
+
+    const text = firstContentText(result);
+    expect(enqueueCalls).toBe(1);
+    expect(seenName).toBe("rebuild-journal");
+    expect(seenCalendarId).toBe(validId);
+    expect(text).toContain("jobId");
+    expect(text).toContain("job-abc");
+  });
+
+  it("trigger_job {name:'sync-fills'} with NO calendarId still enqueues once (CR-A1 no regression)", async () => {
+    let enqueueCalls = 0;
+    let seenName: string | null = null;
+    const enqueueJob: ForTriggeringJob = async (name) => {
+      enqueueCalls += 1;
+      seenName = name;
+      return ok("job-sync");
+    };
+
+    const handler = await getTriggerJobHandler(enqueueJob);
+    const result = await handler({ name: "sync-fills" });
+
+    const text = firstContentText(result);
+    expect(enqueueCalls).toBe(1);
+    expect(seenName).toBe("sync-fills");
+    expect(text).toContain("jobId");
   });
 });

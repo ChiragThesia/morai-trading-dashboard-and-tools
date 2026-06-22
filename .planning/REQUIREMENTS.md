@@ -41,7 +41,7 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 - [ ] **AUTH-01**: A vendored OAuth client authenticates both Schwab apps (trader + market) via authorization-code + refresh grant.
 - [ ] **AUTH-02**: Tokens persist encrypted in Supabase `broker_tokens`; any service reads one source of truth.
-- [ ] **AUTH-03**: An `auth` CLI exposes `setup | refresh | status | doctor` (doctor checks env completeness, callback-URL exact match, live refresh-grant).
+- [x] **AUTH-03**: An `auth` CLI exposes `setup | refresh | status | doctor` (doctor checks env completeness, callback-URL exact match, live refresh-grant).
 - [ ] **AUTH-04**: On `invalid_grant`, Schwab-dependent jobs pause and status flags `AUTH_EXPIRED`; the other app keeps working.
 - [ ] **BRK-01**: A Schwab market adapter fetches option chains and quotes behind the same market-data ports as CBOE.
 - [ ] **BRK-02**: A Schwab trader adapter fetches positions, orders, and transactions behind their ports.
@@ -68,10 +68,10 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 
 ### Jobs & Integrity
 
-- [ ] **JOB-01**: All jobs run behind a `JobQueue` port (pg-boss adapter) with deterministic dedupe keys and idempotent, Zod-parsed handlers.
-- [ ] **JOB-02**: The `refresh-tokens` job (04:00 ET) refreshes both Schwab apps independently and alerts on failure.
-- [ ] **JOB-03**: `compute-bsm-greeks` drains `leg_observations WHERE bsm_iv IS NULL` and upserts computed values.
-- [ ] **JRNL-01**: A `sync-fills` / rebuild path pairs Schwab fills into calendar OPEN/CLOSE events with net debit/credit/P&L — journal history is rebuilt from fills, never hand-written.
+- [x] **JOB-01**: All jobs run behind a `JobQueue` port (pg-boss adapter) with deterministic dedupe keys and idempotent, Zod-parsed handlers.
+- [x] **JOB-02**: The `refresh-tokens` job (04:00 ET) refreshes both Schwab apps independently and alerts on failure.
+- [x] **JOB-03**: `compute-bsm-greeks` drains `leg_observations WHERE bsm_iv IS NULL` and upserts computed values.
+- [x] **JRNL-01**: A `sync-fills` / rebuild path pairs Schwab fills into calendar OPEN/CLOSE events with net debit/credit/P&L — journal history is rebuilt from fills, never hand-written.
 
 ### Claude Code Surface
 
@@ -142,14 +142,14 @@ Explicitly excluded. Documented to prevent scope creep.
 | MCP-01 | Phase 3 | Complete |
 | AUTH-01 | Phase 4 | Pending |
 | AUTH-02 | Phase 4 | Pending |
-| AUTH-03 | Phase 4 | Pending |
+| AUTH-03 | Phase 4 | Complete |
 | AUTH-04 | Phase 4 | Pending |
 | BRK-01 | Phase 4 | Pending |
 | BRK-02 | Phase 4 | Pending |
-| JOB-01 | Phase 5 | Pending |
-| JOB-02 | Phase 5 | Pending |
-| JOB-03 | Phase 5 | Pending |
-| JRNL-01 | Phase 5 | Pending |
+| JOB-01 | Phase 5 | Complete |
+| JOB-02 | Phase 5 | Complete |
+| JOB-03 | Phase 5 | Complete |
+| JRNL-01 | Phase 5 | Complete |
 | ANLY-01 | Phase 6 | Pending |
 | ANLY-02 | Phase 6 | Pending |
 | ANLY-03 | Phase 6 | Pending |

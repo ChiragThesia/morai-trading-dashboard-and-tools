@@ -69,6 +69,7 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
       bsmGamma: null,
       bsmTheta: null,
       bsmVega: null,
+      source: latest.source,
     };
 
     return ok(leg);

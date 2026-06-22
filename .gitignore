@@ -21,3 +21,6 @@ bun.lockb
 .idea/
 *.swp
 *.swo
+
+# Claude agent worktrees
+.claude/worktrees/

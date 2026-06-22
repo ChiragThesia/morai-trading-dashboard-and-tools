@@ -5,13 +5,21 @@ import {
   listCalendarsResponse,
   journalResponse,
   liveGreeksResponse,
+  positionsResponse,
+  transactionsResponse,
+  ordersResponse,
+  brokerageAuthExpiredPayload,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
   ForListingCalendars,
   ForReadingJournal,
   ForRunningGetLiveGreeks,
+  ForGettingPositions,
+  ForGettingTransactions,
+  ForGettingOrders,
 } from "@morai/core";
+export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 
 /**
  * registerStatusTool — registers the get_status MCP tool on the given McpServer.
@@ -250,5 +258,133 @@ export function registerGetSkewTool(server: McpServer): void {
         },
       ],
     }),
+  );
+}
+
+/**
+ * registerGetPositionsTool — registers the get_positions MCP tool (BRK-02).
+ *
+ * MCP-02: shares positionsResponse schema with GET /api/positions HTTP route.
+ * D-09: AUTH_EXPIRED → paused payload (same shape as HTTP route).
+ */
+export function registerGetPositionsTool(
+  server: McpServer,
+  getPositions: ForGettingPositions,
+): void {
+  server.registerTool(
+    "get_positions",
+    {
+      title: "Get Positions",
+      description:
+        "Returns current Schwab trader positions. Returns a paused payload when the trader app token is AUTH_EXPIRED.",
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getPositions();
+      if (!result.ok) {
+        if (result.error.kind === "auth-expired") {
+          const payload = brokerageAuthExpiredPayload.parse({ paused: true, reason: "AUTH_EXPIRED" });
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+          };
+        }
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      const payload = positionsResponse.parse({ positions: result.value });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetTransactionsTool — registers the get_transactions MCP tool (BRK-02).
+ *
+ * MCP-02: shares transactionsResponse schema with GET /api/transactions HTTP route.
+ * D-09: AUTH_EXPIRED → paused payload.
+ */
+export function registerGetTransactionsTool(
+  server: McpServer,
+  getTransactions: ForGettingTransactions,
+): void {
+  server.registerTool(
+    "get_transactions",
+    {
+      title: "Get Transactions",
+      description:
+        "Returns Schwab trader transactions. Accepts optional from/to date parameters (YYYY-MM-DD). Defaults to last 90 days.",
+      inputSchema: {
+        from: z.string().optional(),
+        to: z.string().optional(),
+      },
+    },
+    async (args) => {
+      // safeParse at boundary — never throw on invalid input
+      const parsed = z.object({ from: z.string().optional(), to: z.string().optional() }).safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "invalid params" }) }],
+        };
+      }
+
+      const today = new Date();
+      const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const from = parsed.data.from ?? ninetyDaysAgo.toISOString().slice(0, 10);
+      const to = parsed.data.to ?? today.toISOString().slice(0, 10);
+
+      const result = await getTransactions(from, to);
+      if (!result.ok) {
+        if (result.error.kind === "auth-expired") {
+          const payload = brokerageAuthExpiredPayload.parse({ paused: true, reason: "AUTH_EXPIRED" });
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+          };
+        }
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      const payload = transactionsResponse.parse({ transactions: result.value });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetOrdersTool — registers the get_orders MCP tool (BRK-02, read-only).
+ *
+ * MCP-02: shares ordersResponse schema with GET /api/orders HTTP route.
+ * D-09: AUTH_EXPIRED → paused payload.
+ * T-04-22: read-only — no order placement.
+ */
+export function registerGetOrdersTool(
+  server: McpServer,
+  getOrders: ForGettingOrders,
+): void {
+  server.registerTool(
+    "get_orders",
+    {
+      title: "Get Orders",
+      description:
+        "Returns current Schwab trader orders (read-only). Returns a paused payload when the trader app token is AUTH_EXPIRED.",
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getOrders();
+      if (!result.ok) {
+        if (result.error.kind === "auth-expired") {
+          const payload = brokerageAuthExpiredPayload.parse({ paused: true, reason: "AUTH_EXPIRED" });
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+          };
+        }
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      const payload = ordersResponse.parse({ orders: result.value });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
   );
 }

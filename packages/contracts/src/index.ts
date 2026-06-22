@@ -29,3 +29,24 @@ export type { LegGreeks, LiveGreeksResponse } from "./live-greeks.ts";
 // Analytics typed-empty contracts (MCP-02: reused by term_structure/skew MCP tools in plan 07)
 export { termStructureResponse, skewResponse } from "./analytics.ts";
 export type { TermStructureResponse, SkewResponse } from "./analytics.ts";
+
+// Brokerage contracts (MCP-02: shared by HTTP routes and MCP tools for positions/transactions/orders)
+export {
+  positionsResponse,
+  transactionsResponse,
+  ordersResponse,
+  brokerageAuthExpiredPayload,
+} from "./brokerage.ts";
+export type {
+  PositionsResponse,
+  TransactionsResponse,
+  OrdersResponse,
+  BrokerageAuthExpiredPayload,
+  BrokerPositionResponse,
+  BrokerTransactionResponse,
+  BrokerOrderResponse,
+} from "./brokerage.ts";
+
+// Jobs contracts (MCP-02: shared by POST /api/jobs/:name/trigger and trigger_job MCP tool)
+export { TRIGGERABLE_JOBS, triggerJobPayload, triggerJobBodyFor, triggerJobResponse } from "./jobs.ts";
+export type { TriggerableJob, TriggerJobPayload, TriggerJobResponse } from "./jobs.ts";

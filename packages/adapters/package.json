@@ -9,6 +9,7 @@
     "@morai/core": "workspace:*",
     "@morai/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
+    "pg-boss": "^12.18.3",
     "postgres": "^3.4.9",
     "zod": "^4.4.3"
   },

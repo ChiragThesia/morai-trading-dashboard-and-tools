@@ -1,4 +1,5 @@
 import {
+  customType,
   index,
   integer,
   numeric,
@@ -12,9 +13,26 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+// ─── bytea customType for pgcrypto-encrypted columns ─────────────────────────
+// pgp_sym_encrypt returns bytea; pgp_sym_decrypt accepts bytea and returns text.
+// data: string  — the decrypted value as seen by application code
+// driverData: Buffer — the raw bytea value as read from Postgres wire protocol
+// RESEARCH open question A6: verified correct — round-trip tested in plan 04-02
+const byteaColumn = customType<{ data: string; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
+
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 export const calendarStatusEnum = pgEnum("calendar_status", ["open", "closed"]);
+// Phase 5 — additive enum, no existing enum changed
+export const calendarEventTypeEnum = pgEnum("calendar_event_type", [
+  "OPEN",
+  "CLOSE",
+  "ROLL",
+]);
 export const snapshotSourceEnum = pgEnum("snapshot_source", [
   "schwab_chain",
   "cboe",
@@ -49,6 +67,8 @@ export const calendars = pgTable("calendars", {
   openNetDebit: numeric("open_net_debit"),
   closeNetCredit: numeric("close_net_credit"),
   notes: text("notes"),
+  // D-07: free-text/tag entry thesis hook — nullable, no default (non-destructive ALTER)
+  entryThesis: text("entry_thesis"),
 }).enableRLS();
 
 // ─── 2. calendar_snapshots — THE JOURNAL. 30-min RTH cadence ─────────────────
@@ -153,6 +173,10 @@ export const fills = pgTable("fills", {
   commission: numeric("commission"),
   fees: numeric("fees"),
   raw: text("raw"), // broker JSON, for audit
+  // WR-A2 (05-15, additive nullable): set once a fill is incorporated into exactly ONE
+  // calendar_event (paired) or orphan-parked. readUnprocessedFills filters
+  // WHERE processed_at IS NULL — paired fills are never re-read / re-paired (no double-count).
+  processedAt: timestamp("processed_at", { withTimezone: true }),
 }).enableRLS();
 
 // ─── 6. orders — Schwab order feed ───────────────────────────────────────────
@@ -176,6 +200,82 @@ export const orders = pgTable("orders", {
 export const rateObservations = pgTable("rate_observations", {
   date: date("date").primaryKey(),
   rate: numeric("rate").notNull(),
+}).enableRLS();
+
+// ─── 8. broker_tokens — Schwab OAuth tokens, encrypted at rest (Phase 4) ─────
+
+export const brokerTokens = pgTable("broker_tokens", {
+  // 'trader' | 'market' — one row per Schwab app (D-09 per-app independence)
+  appId: text("app_id").primaryKey(),
+  // Encrypted via pgp_sym_encrypt; key injected at query time — never in DB (D-03)
+  accessToken: byteaColumn("access_token").notNull(),
+  refreshToken: byteaColumn("refresh_token").notNull(),
+  // When the access token was issued (issued_at + 30 min → expires_at)
+  issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+  // 7-day hard cutoff clock starts at refresh_issued_at (no sliding window)
+  refreshIssuedAt: timestamp("refresh_issued_at", { withTimezone: true }).notNull(),
+  // Cached expiry (issued_at + 30 min); not authoritative — used for staleness check
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  // D-14 (05-05, additive): per-app refresh failure flag; null = last refresh succeeded.
+  // Persisted so the server process can surface it at GET /api/status (worker writes it;
+  // server reads it via readTokenFreshness — separate processes require DB persistence).
+  // NEVER contains token values — only appId + error reason (T-05-11).
+  lastRefreshError: text("last_refresh_error"),
+}).enableRLS();
+
+// ─── 9. calendar_events — L1 trade ledger (Phase 5) ──────────────────────────
+// One row per OPEN, CLOSE, or ROLL event sourced from broker fills.
+// fill_ids_hash UNIQUE = idempotency key (SHA-256 of sorted fill UUIDs, exactly 64 hex chars
+// per RESEARCH Pitfall 7 — prevents duplicate event injection via re-runs).
+
+export const calendarEvents = pgTable("calendar_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // FK → calendars.id (which calendar this event belongs to)
+  calendarId: uuid("calendar_id").notNull(),
+  eventType: calendarEventTypeEnum("event_type").notNull(), // OPEN | CLOSE | ROLL
+  // ISO timestamp of the first fill that produced this event
+  eventedAt: timestamp("evented_at", { withTimezone: true }).notNull(),
+  // Idempotency key: SHA-256 of sorted fill UUIDs (exactly 64 hex chars for SHA-256)
+  fillIdsHash: varchar("fill_ids_hash", { length: 64 }).notNull().unique(),
+  // OCC symbol of the primary leg (front for OPEN, new leg for ROLL)
+  legOccSymbol: varchar("leg_occ_symbol", { length: 32 }).notNull(),
+  // For ROLL events only: OCC symbol of the OLD leg being closed (D-03)
+  rolledFromOccSymbol: varchar("rolled_from_occ_symbol", { length: 32 }),
+  qty: integer("qty").notNull(),
+  // Qty-weighted average fill price (D-04 aggregated partial fills)
+  avgPrice: numeric("avg_price").notNull(),
+  // Net debit/credit: OPEN debit = positive; CLOSE credit = negative (D-08 includes fees)
+  netAmount: numeric("net_amount").notNull(),
+  // Realized P&L: closeCredit − openDebit − totalFees; NULL on OPEN events (D-09)
+  realizedPnl: numeric("realized_pnl"),
+  // WR-A1 (05-15, additive nullable): explicit ROLL split components recompute reads.
+  // NULL for OPEN/CLOSE; set for ROLL (open-leg debit → openNetDebit, close-leg credit →
+  // closeNetCredit) so a calendar containing a roll reconciles after rebuild (SC5).
+  rollOpenDebit: numeric("roll_open_debit"),
+  rollCloseCredit: numeric("roll_close_credit"),
+  // Per-leg JSON breakdown for L3 attribution — hard requirement (D-09)
+  legBreakdown: text("leg_breakdown"),
+  // D-07: entry thesis free-text hook (set at OPEN time, carried to CLOSE/ROLL)
+  entryThesis: text("entry_thesis"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
+// ─── 10. orphan_fills — unmatched fill parking (Phase 5, D-05) ───────────────
+// Fills that cannot be matched to any calendar leg land here.
+// Never silently dropped; never auto-deleted. fill_id PK → one row per unmatched fill.
+
+export const orphanFills = pgTable("orphan_fills", {
+  // Fill UUID is PK — one orphan row per unmatched fill (D-05)
+  fillId: uuid("fill_id").primaryKey(),
+  occSymbol: varchar("occ_symbol", { length: 32 }).notNull(),
+  side: varchar("side", { length: 4 }).notNull(), // "buy" | "sell"
+  qty: integer("qty").notNull(),
+  price: numeric("price").notNull(),
+  filledAt: timestamp("filled_at", { withTimezone: true }).notNull(),
+  // "no matching calendar" | "ambiguous calendar: [calendarIds]" etc.
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
 // ─── Re-export sql helper used by partial index ───────────────────────────────
