@@ -188,6 +188,9 @@ Recent decisions affecting current work:
 - [Phase 5 P14]: IN-A1 — extractLastError uses a direct `in`+typeof narrow instead of an Object.entries scan for the single known 'message' key (behavior-preserving)
 - [Phase 05]: 05-15: WR-A2 rebuild needs ForResettingFillsProcessedForCalendar — deleting events un-marks their fills so the scoped re-pair re-reads them (delete scope == sync scope)
 - [Phase 05]: 05-15: ROLL split persisted as dedicated columns read by eventType-summing recompute, not re-parsed from legBreakdown JSON
+- [Phase 05]: 05-16: fast-check property suite locks the round-2 invariants over randomized fill/roll/partial sequences (P1 no-double-count, P2 idempotent, P2b partial-growth, P3 rebuild reconciliation, P4 distinct-keys→distinct-uuid)
+- [Phase 05]: 05-16: P1 exposed a real ROLL double-count — an OPEN consumed by a later ROLL was also emitted as a standalone OPEN. Fixed at root cause: ROLL pairing pre-computed before the emit loop (input-order independent, one fill in exactly one event)
+- [Phase 05]: 05-16: P3 reconciles via the WR-A1 recompute RULE applied locally (not by importing the twin) — core tests import only @morai/shared; twin/Postgres parity already proven by 05-15's contract suite
 
 ### Pending Todos
 
@@ -211,6 +214,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-22T14:31:31.190Z
-Stopped at: Completed 05-14-PLAN.md (gap round 2, Wave 1 — CR-A1/WR-A3/IN-A1)
+Last session: 2026-06-22T16:00:00.000Z
+Stopped at: Completed 05-16-PLAN.md (gap round 2, Wave 2 — fast-check property tests; fixed ROLL double-count)
 Resume file: None

@@ -264,7 +264,7 @@ Plans:
 
 *Wave 2 (blocked on 05-14 + 05-15)*
 
-- [ ] 05-16-PLAN.md — fast-check property tests: no double-count, idempotent sync, rebuild reconciliation (OPEN/CLOSE/ROLL), distinct keys ⇒ distinct fill UUID (JRNL-01)
+- [x] 05-16-PLAN.md — fast-check property tests: no double-count, idempotent sync, rebuild reconciliation (OPEN/CLOSE/ROLL), distinct keys ⇒ distinct fill UUID (JRNL-01) — P1 exposed + fixed a real ROLL double-count (eager OPEN emission); full suite 790 green
 
 ### Phase 6: Derived Analytics
 
