@@ -24,7 +24,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored (gap closure in progress) (completed 2026-06-11)
 - [x] **Phase 3: Calendar Journal (MVP)** - Register calendar, snapshot job, journal read surface live (completed 2026-06-14)
 - [x] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions (completed 2026-06-21)
-- [ ] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data
+- [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
 - [ ] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed
 
 ## Phase Details
