@@ -23,6 +23,7 @@ export type { GetSkewDeps, ForRunningGetSkew } from "./application/getSkew.ts";
 export type {
   StorageError,
   SmileQuote,
+  SmileReadResult,
   CalendarSnapshotForCycle,
   SkewObservationRow,
   RiskReversalObservationRow,

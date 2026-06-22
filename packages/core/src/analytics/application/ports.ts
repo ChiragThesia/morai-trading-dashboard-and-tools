@@ -30,6 +30,18 @@ export type SmileQuote = {
 };
 
 /**
+ * SmileReadResult — the bounded smile read's result (06-06 / CR-01). `quotes` is the resolved
+ * cohort's per-strike smile; `cycleTime` is the DATA instant that cohort was stamped at (the
+ * resolved leg-observations cycle), or null when no BSM-solved cohort exists at or before the
+ * anchor. The use-case stamps skew/RR rows with `cycleTime` — never now() — so re-runs are
+ * idempotent. SmileQuote points carry no time field, so the resolved instant is surfaced here.
+ */
+export type SmileReadResult = {
+  readonly cycleTime: Date | null;
+  readonly quotes: ReadonlyArray<SmileQuote>;
+};
+
+/**
  * CalendarSnapshotForCycle — the term-slope passthrough source for one calendar at a snapshot
  * time. value is read THROUGH from calendar_snapshots.term_slope — never recomputed (invariant 1).
  */
@@ -81,12 +93,14 @@ export type TermStructureObservationRow = {
  * ForReadingSmileSource — read the per-strike smile (delta, iv) for a cycle from leg_observations.
  * The argument is the cycle ANCHOR (an upper bound), NOT an exact-equality match: the read resolves
  * the latest leg-observations cohort AT OR BEFORE the anchor (mirroring readSnapshotsForCycle's
- * "latest snapshot ≤ now" resolution) and returns only that cohort. Returns an empty array when no
- * BSM-solved cohort exists at or before the anchor (06-06 / CR-01).
+ * "latest snapshot ≤ now" resolution) and returns it as a SmileReadResult. `cycleTime` is the
+ * resolved DATA instant (the cohort's time) — the use-case stamps skew/RR with it, never now().
+ * `cycleTime` is null and `quotes` is empty when no BSM-solved cohort exists at or before the
+ * anchor (06-06 / CR-01).
  */
 export type ForReadingSmileSource = (
   snapshotTime: Date,
-) => Promise<Result<ReadonlyArray<SmileQuote>, StorageError>>;
+) => Promise<Result<SmileReadResult, StorageError>>;
 
 /**
  * ForReadingCalendarSnapshotsForCycle — read the per-calendar term-slope source rows for a

@@ -1,12 +1,15 @@
 /**
- * computeAnalytics use-case — term-structure half (Phase 6, Plan 06-04 Task 2).
+ * computeAnalytics use-case — both halves (Phase 6, Plans 06-04/06-05) + the cycle-resolution
+ * seam fix (06-06, CR-01/CR-02).
  *
  * `makeComputeAnalyticsUseCase` reads calendar_snapshots for the current cycle and writes one
  * term_structure_observations row per calendar, with `value = term_slope` PASSED THROUGH
  * UNCHANGED (SPEC R3 — no recompute). NaN-slope continuity rows are skipped.
  *
- * The skew/RR half (readSmile/writeSkew/writeRr/readRrHistory) lands in 06-05; those deps are
- * accepted now but exercised there.
+ * Cycle-resolution seam (06-06): the use-case resolves ONE canonical cycle instant from DATA and
+ * NEVER stamps now(). The smile read returns {cycleTime, quotes}; skew + RR + term rows are all
+ * stamped with the resolved cycle. The tests below use DISTINCT instants — SMILE_TIME, SNAPSHOT_TIME
+ * and NOW are all different — so an exact-now() read/stamp fails them (RED for the old code).
  */
 
 import { describe, it, expect } from "vitest";
@@ -26,13 +29,18 @@ import type {
   TermStructureObservationRow,
 } from "./ports.ts";
 
-const CYCLE = new Date("2026-07-01T19:00:00Z");
+// ─── Distinct instants (06-06 seam): broker observedAt != snapshotTime != now() ────
+const SMILE_TIME = new Date("2026-07-01T18:30:00Z"); // broker observedAt (leg cohort)
+const SNAPSHOT_TIME = new Date("2026-07-01T19:00:00Z"); // calendar_snapshots cycle
+const NOW = new Date("2026-07-01T19:07:42Z"); // wall-clock now() — never stamped
+const NOW_LATER = new Date("2026-07-01T19:42:11Z"); // a different now() for re-run idempotency
+
 const CAL_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CAL_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const CAL_C = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
-// Skew/RR-half stubs (no-op for the term-structure half; exercised in 06-05).
-const readSmile: ForReadingSmileSource = async () => ok([]);
+// Default smile stub for the term-structure-only tests: empty cohort.
+const emptySmile: ForReadingSmileSource = async () => ok({ cycleTime: null, quotes: [] });
 const writeSkew: ForWritingSkewObservations = async () => ok(undefined);
 const writeRr: ForWritingRiskReversalObservations = async () => ok(undefined);
 const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
@@ -43,7 +51,7 @@ function makeSnapshot(
   frontIv = 0.2,
   backIv = 0.25,
 ): CalendarSnapshotForCycle {
-  return { snapshotTime: CYCLE, calendarId, termSlope, frontIv, backIv };
+  return { snapshotTime: SNAPSHOT_TIME, calendarId, termSlope, frontIv, backIv };
 }
 
 // A writeTerm spy that captures the rows it is handed and stores them idempotently
@@ -75,13 +83,13 @@ describe("makeComputeAnalyticsUseCase — term-structure half", () => {
     const spy = makeWriteTermSpy();
     const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () => ok([]);
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile,
+      readSmile: emptySmile,
       readSnapshots,
       writeSkew,
       writeRr,
       writeTerm: spy.writeTerm,
       readRrHistory,
-      now: () => CYCLE,
+      now: () => NOW,
     });
     expect(typeof useCase).toBe("function");
   });
@@ -95,8 +103,8 @@ describe("makeComputeAnalyticsUseCase — term-structure half", () => {
     ];
     const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () => ok(snapshots);
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile, readSnapshots, writeSkew, writeRr, writeTerm: spy.writeTerm, readRrHistory,
-      now: () => CYCLE,
+      readSmile: emptySmile, readSnapshots, writeSkew, writeRr, writeTerm: spy.writeTerm, readRrHistory,
+      now: () => NOW,
     });
 
     const result = await useCase();
@@ -120,8 +128,8 @@ describe("makeComputeAnalyticsUseCase — term-structure half", () => {
     const snapshots = [makeSnapshot(CAL_A, 0.05), makeSnapshot(CAL_B, 0.12)];
     const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () => ok(snapshots);
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile, readSnapshots, writeSkew, writeRr, writeTerm: spy.writeTerm, readRrHistory,
-      now: () => CYCLE,
+      readSmile: emptySmile, readSnapshots, writeSkew, writeRr, writeTerm: spy.writeTerm, readRrHistory,
+      now: () => NOW,
     });
 
     await useCase();
@@ -137,8 +145,8 @@ describe("makeComputeAnalyticsUseCase — term-structure half", () => {
     ];
     const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () => ok(snapshots);
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile, readSnapshots, writeSkew, writeRr, writeTerm: spy.writeTerm, readRrHistory,
-      now: () => CYCLE,
+      readSmile: emptySmile, readSnapshots, writeSkew, writeRr, writeTerm: spy.writeTerm, readRrHistory,
+      now: () => NOW,
     });
 
     const result = await useCase();
@@ -173,17 +181,20 @@ function makeWriteSkewSpy() {
   };
 }
 
-// An RR spy capturing the last batch of rows written.
+// An RR spy storing rows idempotently on the (snapshot_time, underlying, expiration) grain.
 function makeWriteRrSpy() {
-  const all: RiskReversalObservationRow[] = [];
+  const store = new Map<string, RiskReversalObservationRow>();
   const writeRr: ForWritingRiskReversalObservations = async (rows) => {
-    all.push(...rows);
+    for (const row of rows) {
+      const key = `${row.snapshotTime.toISOString()}|${row.underlying}|${row.expiration}`;
+      if (!store.has(key)) store.set(key, row);
+    }
     return ok(undefined);
   };
   return {
     writeRr,
     get rows(): RiskReversalObservationRow[] {
-      return all;
+      return [...store.values()];
     },
   };
 }
@@ -198,6 +209,25 @@ function workedExampleSmile(underlying: string, expiration: string): SmileQuote[
   ];
 }
 
+/**
+ * A smile stub that records the anchor it was called with and resolves the cohort to SMILE_TIME.
+ * Mirrors the bounded "latest leg cycle ≤ anchor" adapter: cycleTime is the resolved DATA instant
+ * (SMILE_TIME), never the passed anchor and never now().
+ */
+function makeSmileStub(quotes: SmileQuote[], cycleTime: Date | null = SMILE_TIME) {
+  const anchors: Date[] = [];
+  const readSmile: ForReadingSmileSource = async (anchor) => {
+    anchors.push(anchor);
+    return ok({ cycleTime: quotes.length === 0 ? null : cycleTime, quotes });
+  };
+  return {
+    readSmile,
+    get anchors(): Date[] {
+      return anchors;
+    },
+  };
+}
+
 describe("makeComputeAnalyticsUseCase — skew / risk-reversal half", () => {
   it("writes the full N×M smile (one row per (underlying, expiration, strike)); re-run adds 0", async () => {
     const skewSpy = makeWriteSkewSpy();
@@ -207,42 +237,41 @@ describe("makeComputeAnalyticsUseCase — skew / risk-reversal half", () => {
       ...workedExampleSmile("SPX", "2026-07-17"),
       ...workedExampleSmile("SPX", "2026-08-21"),
     ];
-    const readSmile: ForReadingSmileSource = async () => ok(smile);
+    const smileStub = makeSmileStub(smile);
     const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
 
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile,
+      readSmile: smileStub.readSmile,
       readSnapshots: noSnapshots,
       writeSkew: skewSpy.writeSkew,
       writeRr: rrSpy.writeRr,
       writeTerm: noTermWrite,
       readRrHistory,
-      now: () => CYCLE,
+      now: () => NOW,
     });
 
     const first = await useCase();
     expect(first.ok).toBe(true);
     expect(skewSpy.rows).toHaveLength(8);
 
-    await useCase(); // idempotent re-run
+    await useCase(); // idempotent re-run (same now)
     expect(skewSpy.rows).toHaveLength(8);
   });
 
   it("computes risk_reversal ≈ 0.06 from the worked-example smile", async () => {
     const skewSpy = makeWriteSkewSpy();
     const rrSpy = makeWriteRrSpy();
-    const readSmile: ForReadingSmileSource = async () =>
-      ok(workedExampleSmile("SPX", "2026-07-17"));
+    const smileStub = makeSmileStub(workedExampleSmile("SPX", "2026-07-17"));
     const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
 
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile,
+      readSmile: smileStub.readSmile,
       readSnapshots: noSnapshots,
       writeSkew: skewSpy.writeSkew,
       writeRr: rrSpy.writeRr,
       writeTerm: noTermWrite,
       readRrHistory,
-      now: () => CYCLE,
+      now: () => NOW,
     });
 
     const result = await useCase();
@@ -263,17 +292,17 @@ describe("makeComputeAnalyticsUseCase — skew / risk-reversal half", () => {
       { underlying: "SPX", expiration: "2026-07-17", strike: 5600000, iv: 0.17, delta: 0.1, moneyness: 1.02 },
       { underlying: "SPX", expiration: "2026-07-17", strike: 5700000, iv: 0.16, delta: 0.05, moneyness: 1.04 },
     ];
-    const readSmile: ForReadingSmileSource = async () => ok(unbracketable);
+    const smileStub = makeSmileStub(unbracketable);
     const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
 
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile,
+      readSmile: smileStub.readSmile,
       readSnapshots: noSnapshots,
       writeSkew: skewSpy.writeSkew,
       writeRr: rrSpy.writeRr,
       writeTerm: noTermWrite,
       readRrHistory,
-      now: () => CYCLE,
+      now: () => NOW,
     });
 
     const result = await useCase();
@@ -286,51 +315,212 @@ describe("makeComputeAnalyticsUseCase — skew / risk-reversal half", () => {
   it("sets rr_rank to the trailing-window inclusive percentile of the computed risk_reversal", async () => {
     const skewSpy = makeWriteSkewSpy();
     const rrSpy = makeWriteRrSpy();
-    const readSmile: ForReadingSmileSource = async () =>
-      ok(workedExampleSmile("SPX", "2026-07-17")); // rr = 0.06
-    // History: three of four prior values ≤ 0.06 → inclusive rank counts 0.06 itself once added.
-    // percentileRank(0.06, [0.01,0.05,0.07,0.09]) = 100·(count ≤ 0.06)/4 = 100·2/4 = 50.
+    const smileStub = makeSmileStub(workedExampleSmile("SPX", "2026-07-17")); // rr = 0.06
+    // History: percentileRank(0.06, [0.01,0.05,0.07,0.09]) = 100·2/4 = 50.
     const readRrHistory: ForReadingRiskReversalHistory = async () => ok([0.01, 0.05, 0.07, 0.09]);
 
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile,
+      readSmile: smileStub.readSmile,
       readSnapshots: noSnapshots,
       writeSkew: skewSpy.writeSkew,
       writeRr: rrSpy.writeRr,
       writeTerm: noTermWrite,
       readRrHistory,
-      now: () => CYCLE,
+      now: () => NOW,
     });
 
     const result = await useCase();
     expect(result.ok).toBe(true);
     expect(rrSpy.rows[0]?.rrRank ?? Number.NaN).toBeCloseTo(50, 6);
   });
+});
 
-  it("passes the computed snapshot time + (underlying, expiration) to the RR history reader", async () => {
+// ─── Cycle-resolution seam (06-06 / CR-01 + CR-02) ─────────────────────────────
+
+describe("makeComputeAnalyticsUseCase — data-anchored cycle resolution (CR-01/CR-02)", () => {
+  it("stamps skew + RR + term rows all with the resolved cycle, NOT now()", async () => {
     const skewSpy = makeWriteSkewSpy();
     const rrSpy = makeWriteRrSpy();
+    const termSpy = makeWriteTermSpy();
+    const smileStub = makeSmileStub(workedExampleSmile("SPX", "2026-07-17"), SNAPSHOT_TIME);
+    const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () =>
+      ok([makeSnapshot(CAL_A, 0.05)]);
+    const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
+
+    const useCase = makeComputeAnalyticsUseCase({
+      readSmile: smileStub.readSmile,
+      readSnapshots,
+      writeSkew: skewSpy.writeSkew,
+      writeRr: rrSpy.writeRr,
+      writeTerm: termSpy.writeTerm,
+      readRrHistory,
+      now: () => NOW, // a THIRD distinct instant
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+
+    // Skew rows stamped with the resolved cycle (SNAPSHOT_TIME), never NOW.
+    expect(skewSpy.rows.length).toBeGreaterThan(0);
+    for (const row of skewSpy.rows) {
+      expect(row.snapshotTime.getTime()).toBe(SNAPSHOT_TIME.getTime());
+      expect(row.snapshotTime.getTime()).not.toBe(NOW.getTime());
+    }
+    // RR rows likewise.
+    expect(rrSpy.rows.length).toBeGreaterThan(0);
+    for (const row of rrSpy.rows) {
+      expect(row.snapshotTime.getTime()).toBe(SNAPSHOT_TIME.getTime());
+      expect(row.snapshotTime.getTime()).not.toBe(NOW.getTime());
+    }
+    // Term rows stamped with the snapshot cycle.
+    for (const row of termSpy.rows) {
+      expect(row.snapshotTime.getTime()).toBe(SNAPSHOT_TIME.getTime());
+    }
+
+    // Cross-table agreement (SC1): skew == term == RR snapshot_time for the cycle.
+    const skewT = skewSpy.rows[0]?.snapshotTime.getTime();
+    const termT = termSpy.rows[0]?.snapshotTime.getTime();
+    const rrT = rrSpy.rows[0]?.snapshotTime.getTime();
+    expect(skewT).toBe(termT);
+    expect(skewT).toBe(rrT);
+  });
+
+  it("calls readSmile with the snapshot anchor (not now()) when snapshots exist", async () => {
+    const smileStub = makeSmileStub(workedExampleSmile("SPX", "2026-07-17"), SNAPSHOT_TIME);
+    const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () =>
+      ok([makeSnapshot(CAL_A, 0.05)]);
+
+    const useCase = makeComputeAnalyticsUseCase({
+      readSmile: smileStub.readSmile,
+      readSnapshots,
+      writeSkew,
+      writeRr,
+      writeTerm: noTermWrite,
+      readRrHistory,
+      now: () => NOW,
+    });
+
+    await useCase();
+    expect(smileStub.anchors).toHaveLength(1);
+    expect(smileStub.anchors[0]?.getTime()).toBe(SNAPSHOT_TIME.getTime());
+    expect(smileStub.anchors[0]?.getTime()).not.toBe(NOW.getTime());
+  });
+
+  it("passes the resolved cycle (not now()) as beforeOrAt to the RR history reader", async () => {
     let historyQuery: { underlying: string; expiration: string; beforeOrAt: Date } | undefined;
-    const readSmile: ForReadingSmileSource = async () =>
-      ok(workedExampleSmile("SPX", "2026-07-17"));
+    const smileStub = makeSmileStub(workedExampleSmile("SPX", "2026-07-17"), SNAPSHOT_TIME);
+    const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () =>
+      ok([makeSnapshot(CAL_A, 0.05)]);
     const readRrHistory: ForReadingRiskReversalHistory = async (query) => {
       historyQuery = query;
       return ok([]);
     };
 
     const useCase = makeComputeAnalyticsUseCase({
-      readSmile,
-      readSnapshots: noSnapshots,
-      writeSkew: skewSpy.writeSkew,
-      writeRr: rrSpy.writeRr,
+      readSmile: smileStub.readSmile,
+      readSnapshots,
+      writeSkew,
+      writeRr,
       writeTerm: noTermWrite,
       readRrHistory,
-      now: () => CYCLE,
+      now: () => NOW,
     });
 
     await useCase();
     expect(historyQuery?.underlying).toBe("SPX");
     expect(historyQuery?.expiration).toBe("2026-07-17");
-    expect(historyQuery?.beforeOrAt.getTime()).toBe(CYCLE.getTime());
+    expect(historyQuery?.beforeOrAt.getTime()).toBe(SNAPSHOT_TIME.getTime());
+    expect(historyQuery?.beforeOrAt.getTime()).not.toBe(NOW.getTime());
+  });
+
+  it("is idempotent across a now()-advanced re-run — skew/RR/term counts unchanged (CR-02)", async () => {
+    const skewSpy = makeWriteSkewSpy();
+    const rrSpy = makeWriteRrSpy();
+    const termSpy = makeWriteTermSpy();
+    const smile = workedExampleSmile("SPX", "2026-07-17");
+    const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () =>
+      ok([makeSnapshot(CAL_A, 0.05)]);
+    const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
+
+    // First run at NOW. Smile resolves to SNAPSHOT_TIME (the data anchor).
+    const firstStub = makeSmileStub(smile, SNAPSHOT_TIME);
+    const firstRun = makeComputeAnalyticsUseCase({
+      readSmile: firstStub.readSmile, readSnapshots,
+      writeSkew: skewSpy.writeSkew, writeRr: rrSpy.writeRr, writeTerm: termSpy.writeTerm,
+      readRrHistory, now: () => NOW,
+    });
+    await firstRun();
+    const skewAfterFirst = skewSpy.rows.length;
+    const rrAfterFirst = rrSpy.rows.length;
+    const termAfterFirst = termSpy.rows.length;
+    expect(skewAfterFirst).toBeGreaterThan(0);
+
+    // Second run at a DIFFERENT now() — but the resolved cycle is still SNAPSHOT_TIME, so the PKs
+    // collide and the idempotent spies show unchanged counts.
+    const secondStub = makeSmileStub(smile, SNAPSHOT_TIME);
+    const secondRun = makeComputeAnalyticsUseCase({
+      readSmile: secondStub.readSmile, readSnapshots,
+      writeSkew: skewSpy.writeSkew, writeRr: rrSpy.writeRr, writeTerm: termSpy.writeTerm,
+      readRrHistory, now: () => NOW_LATER,
+    });
+    await secondRun();
+
+    expect(skewSpy.rows).toHaveLength(skewAfterFirst);
+    expect(rrSpy.rows).toHaveLength(rrAfterFirst);
+    expect(termSpy.rows).toHaveLength(termAfterFirst);
+  });
+
+  it("snapshots-absent fallback: anchor = now(), smile resolves to its own cycle; skew/RR written, 0 term", async () => {
+    const skewSpy = makeWriteSkewSpy();
+    const rrSpy = makeWriteRrSpy();
+    const termSpy = makeWriteTermSpy();
+    // No snapshots → the smile read is anchored at now(); the bounded read resolves SMILE_TIME.
+    const smileStub = makeSmileStub(workedExampleSmile("SPX", "2026-07-17"), SMILE_TIME);
+    const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
+
+    const useCase = makeComputeAnalyticsUseCase({
+      readSmile: smileStub.readSmile,
+      readSnapshots: noSnapshots,
+      writeSkew: skewSpy.writeSkew,
+      writeRr: rrSpy.writeRr,
+      writeTerm: termSpy.writeTerm,
+      readRrHistory,
+      now: () => NOW,
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+
+    // Anchor passed to readSmile is now() (no snapshot anchor available).
+    expect(smileStub.anchors[0]?.getTime()).toBe(NOW.getTime());
+    // Skew/RR stamped with the smile's own resolved cycle (SMILE_TIME), not now().
+    expect(skewSpy.rows.length).toBeGreaterThan(0);
+    for (const row of skewSpy.rows) {
+      expect(row.snapshotTime.getTime()).toBe(SMILE_TIME.getTime());
+    }
+    expect(rrSpy.rows[0]?.snapshotTime.getTime()).toBe(SMILE_TIME.getTime());
+    // No snapshots → 0 term rows.
+    expect(termSpy.rows).toHaveLength(0);
+  });
+
+  it("clean no-op: no snapshots and an empty smile cohort → no writes, ok(undefined)", async () => {
+    const skewSpy = makeWriteSkewSpy();
+    const rrSpy = makeWriteRrSpy();
+    const termSpy = makeWriteTermSpy();
+    const useCase = makeComputeAnalyticsUseCase({
+      readSmile: emptySmile, // cycleTime null, no quotes
+      readSnapshots: noSnapshots,
+      writeSkew: skewSpy.writeSkew,
+      writeRr: rrSpy.writeRr,
+      writeTerm: termSpy.writeTerm,
+      readRrHistory,
+      now: () => NOW,
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    expect(skewSpy.rows).toHaveLength(0);
+    expect(rrSpy.rows).toHaveLength(0);
+    expect(termSpy.rows).toHaveLength(0);
   });
 });

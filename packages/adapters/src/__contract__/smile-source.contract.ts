@@ -63,8 +63,9 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       const result = await repo.readSmile(snapshotTime);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(2);
-      const byStrike = new Map(result.value.map((q) => [q.strike, q]));
+      expect(result.value.cycleTime?.getTime()).toBe(snapshotTime.getTime());
+      expect(result.value.quotes).toHaveLength(2);
+      const byStrike = new Map(result.value.quotes.map((q) => [q.strike, q]));
       expect(byStrike.get(5400000)?.iv).toBeCloseTo(0.18, 9);
       expect(byStrike.get(5400000)?.delta).toBeCloseTo(-0.2, 9);
       expect(byStrike.get(5600000)?.iv).toBeCloseTo(0.15, 9);
@@ -87,8 +88,8 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       const result = await repo.readSmile(snapshotTime);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0]?.strike).toBe(5400000);
+      expect(result.value.quotes).toHaveLength(1);
+      expect(result.value.quotes[0]?.strike).toBe(5400000);
     });
 
     it("excludes not-yet-solved rows (bsm_iv IS NULL)", async () => {
@@ -104,8 +105,8 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       const result = await repo.readSmile(snapshotTime);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0]?.strike).toBe(5400000);
+      expect(result.value.quotes).toHaveLength(1);
+      expect(result.value.quotes[0]?.strike).toBe(5400000);
     });
 
     it("preserves a null delta when bsm_delta is NULL but bsm_iv is solved", async () => {
@@ -116,15 +117,16 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       const result = await repo.readSmile(snapshotTime);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0]?.delta).toBeNull();
+      expect(result.value.quotes).toHaveLength(1);
+      expect(result.value.quotes[0]?.delta).toBeNull();
     });
 
-    it("returns an empty array when no leg observations exist at the time", async () => {
+    it("returns an empty cohort (null cycleTime, no quotes) when no leg observations exist", async () => {
       const result = await repo.readSmile(snapshotTime);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toEqual([]);
+      expect(result.value.cycleTime).toBeNull();
+      expect(result.value.quotes).toEqual([]);
     });
 
     // ─── Bounded "latest leg cycle ≤ anchor" resolution (06-06 / CR-01) ──────────
@@ -142,8 +144,11 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       // Exact-equality read returns 0 rows here (A != T_obs); the bounded read returns the cohort.
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0]?.strike).toBe(5400000);
+      expect(result.value.quotes).toHaveLength(1);
+      expect(result.value.quotes[0]?.strike).toBe(5400000);
+      // cycleTime is the resolved DATA instant (T_obs), NOT the anchor.
+      expect(result.value.cycleTime?.getTime()).toBe(tObs.getTime());
+      expect(result.value.cycleTime?.getTime()).not.toBe(anchor.getTime());
     });
 
     it("resolves to the LATEST cohort at or before the anchor when two distinct times exist", async () => {
@@ -165,11 +170,12 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       // ONLY the T2 cohort — never a union across times.
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0]?.strike).toBe(5500000);
+      expect(result.value.quotes).toHaveLength(1);
+      expect(result.value.quotes[0]?.strike).toBe(5500000);
+      expect(result.value.cycleTime?.getTime()).toBe(t2.getTime());
     });
 
-    it("returns [] when the anchor is earlier than every seeded leg time", async () => {
+    it("returns an empty cohort when the anchor is earlier than every seeded leg time", async () => {
       const tObs = snapshotTime;
       const anchor = new Date(tObs.getTime() - 30 * 60 * 1000); // A < T_obs
       await repo.seedLeg({
@@ -180,7 +186,8 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       const result = await repo.readSmile(anchor);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toEqual([]);
+      expect(result.value.cycleTime).toBeNull();
+      expect(result.value.quotes).toEqual([]);
     });
 
     it("resolves the latest cohort that has a SOLVED smile, skipping a later all-NaN/NULL time", async () => {
@@ -201,8 +208,10 @@ export function runSmileSourceContractTests(makeRepo: () => SmileSourceRepo): vo
       const result = await repo.readSmile(anchor);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0]?.strike).toBe(5400000);
+      expect(result.value.quotes).toHaveLength(1);
+      expect(result.value.quotes[0]?.strike).toBe(5400000);
+      // Resolved cycle is the solved time, not the later all-NaN time.
+      expect(result.value.cycleTime?.getTime()).toBe(tSolved.getTime());
     });
   });
 }

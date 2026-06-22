@@ -179,6 +179,7 @@ export type {
 } from "./analytics/index.ts";
 export type {
   SmileQuote,
+  SmileReadResult,
   CalendarSnapshotForCycle,
   SkewObservationRow,
   RiskReversalObservationRow,

@@ -12,6 +12,7 @@ import type {
   PendingObs,
   LegSnapshot,
   SmileQuote,
+  SmileReadResult,
   StorageError,
 } from "@morai/core";
 import { and, isNull, isNotNull, ne, eq, lte, inArray, desc, sql } from "drizzle-orm";
@@ -313,7 +314,7 @@ export function makePostgresLegObservationsRepo(
   // source column → null (06-08 owns the moneyness fix). Empty source / no cohort ≤ anchor → [].
   const readSmile: ForReadingSmileSource = async (
     snapshotTime,
-  ): Promise<Result<ReadonlyArray<SmileQuote>, StorageError>> => {
+  ): Promise<Result<SmileReadResult, StorageError>> => {
     try {
       // Step 1: resolve the latest BSM-solved leg cycle at or before the anchor.
       const latest = await db
@@ -330,7 +331,8 @@ export function makePostgresLegObservationsRepo(
         .limit(1);
 
       const resolvedTime = latest[0]?.time;
-      if (resolvedTime === undefined) return ok([]);
+      // No BSM-solved cohort at or before the anchor → null cycle, no quotes.
+      if (resolvedTime === undefined) return ok({ cycleTime: null, quotes: [] });
 
       // Step 2: read the resolved cohort's smile.
       const rows = await db
@@ -360,7 +362,7 @@ export function makePostgresLegObservationsRepo(
         delta: row.bsmDelta !== null ? parseFloat(row.bsmDelta) : null,
         moneyness: null,
       }));
-      return ok(smile);
+      return ok({ cycleTime: resolvedTime, quotes: smile });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       return err<StorageError>({ kind: "storage-error", message });

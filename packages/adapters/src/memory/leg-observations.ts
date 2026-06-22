@@ -22,6 +22,7 @@ import type {
   ObservationRow,
   LegSnapshot,
   SmileQuote,
+  SmileReadResult,
   StorageError,
 } from "@morai/core";
 
@@ -107,7 +108,7 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
   // (bsmIv === null), mirroring the Postgres adapter. No cohort ≤ anchor → [].
   const readSmile: ForReadingSmileSource = async (
     snapshotTime,
-  ): Promise<Result<ReadonlyArray<SmileQuote>, StorageError>> => {
+  ): Promise<Result<SmileReadResult, StorageError>> => {
     const anchor = snapshotTime.getTime();
 
     // Step 1: resolve the latest time ≤ anchor that has at least one BSM-solved leg.
@@ -118,7 +119,7 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
       if (t > anchor) continue;
       if (resolvedTime === null || t > resolvedTime) resolvedTime = t;
     }
-    if (resolvedTime === null) return ok([]);
+    if (resolvedTime === null) return ok({ cycleTime: null, quotes: [] });
 
     // Step 2: return only the resolved cohort's solved legs.
     const smile: SmileQuote[] = [];
@@ -134,7 +135,7 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
         moneyness: null,
       });
     }
-    return ok(smile);
+    return ok({ cycleTime: new Date(resolvedTime), quotes: smile });
   };
 
   return { persistObservations, getLatestLegObs, readSmile, seedSmileLeg };

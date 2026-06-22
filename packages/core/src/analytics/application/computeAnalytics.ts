@@ -62,14 +62,23 @@ export function makeComputeAnalyticsUseCase(
   deps: ComputeAnalyticsDeps,
 ): ForRunningComputeAnalytics {
   return async (): Promise<Result<void, StorageError>> => {
-    const cycle = deps.now();
+    // now() bounds resolution ONLY (architecture-boundaries §2). It is NEVER a stamped value:
+    // every persisted snapshot_time derives from DATA (the resolved cycle instant). See 06-GAPS.md
+    // (CR-01/CR-02 locked design).
+    const now = deps.now();
 
     // ── Term-structure half (SPEC R3) ──────────────────────────────────────────
-    const snapshotsResult = await deps.readSnapshots(cycle);
+    // Resolve the snapshot cycle = the latest snapshot ≤ now (readSnapshotsForCycle). All rows in
+    // a cycle share one snapshotTime; that instant is the canonical cycle anchor when present.
+    const snapshotsResult = await deps.readSnapshots(now);
     if (!snapshotsResult.ok) return err(snapshotsResult.error);
+    const snapshots = snapshotsResult.value;
+
+    // The snapshot anchor (one shared instant) — undefined when no snapshots exist for the cycle.
+    const snapshotAnchor = snapshots[0]?.snapshotTime;
 
     const termRows: TermStructureObservationRow[] = [];
-    for (const snap of snapshotsResult.value) {
+    for (const snap of snapshots) {
       // D-06: skip NaN-slope continuity rows — never write a NaN term-structure value.
       if (Number.isNaN(snap.termSlope)) continue;
       termRows.push({
@@ -86,13 +95,30 @@ export function makeComputeAnalyticsUseCase(
     if (!writeResult.ok) return err(writeResult.error);
 
     // ── Skew / risk-reversal half (SPEC R1 + R2) ───────────────────────────────
-    const smileResult = await deps.readSmile(cycle);
+    // The smile read is a bounded "latest leg cycle ≤ anchor" read (CR-01). Anchor = the snapshot
+    // anchor when present, else now() (the bounded read resolves the latest leg cycle ≤ that upper
+    // bound). The DATA instant the cohort resolved to comes back as cycleTime — that is what we
+    // stamp skew/RR rows with, NEVER now() and NEVER the raw anchor (they may differ when no
+    // snapshots exist).
+    const smileAnchor = snapshotAnchor ?? now;
+    const smileResult = await deps.readSmile(smileAnchor);
     if (!smileResult.ok) return err(smileResult.error);
-    const smile = smileResult.value;
+    const { cycleTime, quotes } = smileResult.value;
 
-    // R1: write the full per-strike smile — one row per (underlying, expiration, strike).
-    const skewRows: SkewObservationRow[] = smile.map((q) => ({
-      snapshotTime: cycle,
+    // No BSM-solved cohort ≤ anchor → 0 skew/RR rows. Combined with 0 snapshots this is the clean
+    // no-op (term half already wrote nothing).
+    if (cycleTime === null) return ok(undefined);
+
+    // Structural single-anchor (06-GAPS.md locked design / SC1): when snapshots exist for the
+    // cycle, ALL THREE tables share the SNAPSHOT anchor so skew_snapshot_time == term_snapshot_time
+    // by construction (not just by coincidence). Only when no snapshots exist does the cycle fall
+    // back to the smile's own resolved leg instant (skew/RR only; no term rows were written).
+    const stampInstant = snapshotAnchor ?? cycleTime;
+
+    // R1: write the full per-strike smile — one row per (underlying, expiration, strike), stamped
+    // with the resolved cycle instant.
+    const skewRows: SkewObservationRow[] = quotes.map((q) => ({
+      snapshotTime: stampInstant,
       underlying: q.underlying,
       expiration: q.expiration,
       strike: q.strike,
@@ -105,7 +131,7 @@ export function makeComputeAnalyticsUseCase(
 
     // R2: per (underlying, expiration) group → 25Δ risk-reversal + trailing-window rank.
     const groups = new Map<string, { underlying: string; expiration: string; points: SmileQuote[] }>();
-    for (const q of smile) {
+    for (const q of quotes) {
       const key = `${q.underlying}|${q.expiration}`;
       const existing = groups.get(key);
       if (existing === undefined) {
@@ -125,14 +151,15 @@ export function makeComputeAnalyticsUseCase(
         const historyResult = await deps.readRrHistory({
           underlying: group.underlying,
           expiration: group.expiration,
-          beforeOrAt: cycle,
+          // Trailing window bounded by the resolved cycle anchor, NOT now().
+          beforeOrAt: stampInstant,
         });
         if (!historyResult.ok) return err(historyResult.error);
         rrRank = percentileRank(riskReversal, historyResult.value);
       }
 
       rrRows.push({
-        snapshotTime: cycle,
+        snapshotTime: stampInstant,
         underlying: group.underlying,
         expiration: group.expiration,
         riskReversal,
