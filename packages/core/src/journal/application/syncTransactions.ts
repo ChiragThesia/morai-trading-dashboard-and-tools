@@ -128,7 +128,10 @@ function flattenTransaction(
     if (leg.positionEffect === "UNKNOWN") return;
     const side: "buy" | "sell" = leg.positionEffect === "OPENING" ? "buy" : "sell";
     // Deterministic id from (activityId, legIndex) → stable across re-runs.
-    const idHex = hashFillIds([`${tx.activityId}`, `${legIndex}`]);
+    // hashFillIds SORTS its input (set-hash for unordered fill-id sets), so the key MUST be a
+    // single pre-combined element — passing [activityId, legIndex] as two elements would let
+    // (4,5) and (5,4) sort to the same input and collide on the fills.id PK (WR-A3b).
+    const idHex = hashFillIds([`${tx.activityId}:${legIndex}`]);
     out.push({
       id: hexToUuid(idHex),
       orderId,

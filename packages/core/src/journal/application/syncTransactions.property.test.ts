@@ -56,9 +56,10 @@ function strongHexHash(ids: ReadonlyArray<string>): string {
 }
 
 // The exact derivation the use-case uses (syncTransactions.ts flattenTransaction):
-// hexToUuid(hashFillIds([String(activityId), String(legIndex)])).
+// hexToUuid(hashFillIds([`${activityId}:${legIndex}`])) — a SINGLE pre-combined key element so
+// the set-hash's internal sort cannot transpose (activityId, legIndex) into a collision (WR-A3b).
 function deriveFillId(activityId: number, legIndex: number): string {
-  return hexToUuid(strongHexHash([`${activityId}`, `${legIndex}`]));
+  return hexToUuid(strongHexHash([`${activityId}:${legIndex}`]));
 }
 
 describe("syncTransactions id-derivation properties", () => {
@@ -94,6 +95,15 @@ describe("syncTransactions id-derivation properties", () => {
       }),
       { numRuns: 1000 },
     );
+  });
+
+  it("P4-regression: swapped (activityId, legIndex) keys do NOT collide", () => {
+    // WR-A3b: hashFillIds SORTS its input (it is a set-hash for unordered fill-id sets),
+    // so a two-element key [activityId, legIndex] collides under transposition: (4,5) and
+    // (5,4) both sort to "4:5". The fill id must be order-sensitive — distinct (activityId,
+    // legIndex) pairs MUST yield distinct ids. This is the [4,5,5,4] counterexample P4 found.
+    expect(deriveFillId(4, 5)).not.toBe(deriveFillId(5, 4));
+    expect(deriveFillId(10, 2)).not.toBe(deriveFillId(2, 10));
   });
 
   it("P4b: every derived id matches the UUID regex (fills.id is a uuid column) (numRuns≥1000)", () => {
