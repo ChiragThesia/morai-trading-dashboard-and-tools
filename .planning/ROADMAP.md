@@ -281,7 +281,7 @@ return current and historical series queryable by API and Claude Code.
   3. `GET /api/analytics/skew` returns a JSON array with at least one entry of `{ time, value, … }`; `GET /api/analytics/term-structure` returns the same shape for term-structure data.
   4. MCP `get_skew` and `get_term_structure` tools return the same series as their HTTP counterparts, validated against the shared Zod contract from `contracts`.
 
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans complete
 Plans:
 **Wave 1**
 
@@ -312,7 +312,7 @@ Plans:
 
 **Wave 2 (gap)** *(blocked on 06-06 — shares computeAnalytics.ts / leg-observations.ts / smile-source contract)*
 
-- [ ] 06-08-PLAN.md — [WARNING+INFO] WR-01 percentileRank empty→null carried through use-case+contract + WR-03 populate moneyness (K/S from spot) on both smile reads+contract (no migration) + IN-01 stale 7-queue/5-cron worker comments → 9/6 (ANLY-01/03, MCP-02)
+- [x] 06-08-PLAN.md — [WARNING+INFO] WR-01 percentileRank empty→null carried through use-case+contract + WR-03 populate moneyness (K/S from spot) on both smile reads+contract (no migration) + IN-01 stale 7-queue/5-cron worker comments → 9/6 (ANLY-01/03, MCP-02)
 
 ## Backlog / Future Enhancements
 
@@ -376,4 +376,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
 | 5. Jobs, Fill Rebuild & Integrity | 15/16 | In Progress|  |
-| 6. Derived Analytics | 7/8 | In Progress|  |
+| 6. Derived Analytics | 8/8 | Complete   | 2026-06-22 |
