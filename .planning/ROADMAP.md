@@ -328,14 +328,16 @@ Schwab's lookback cap, idempotent) so trade history flows into `fills` → calen
 
   1. MCP `get_transactions` returns date-ranged trade transactions over the shared
      `transactionsResponse` contract (default last 90d); AUTH_EXPIRED → typed paused payload.
+
   2. A backfill entrypoint runs `sync-transactions` over an arbitrary past range, chunked within
      Schwab's lookback cap, writing `fills`; re-run is idempotent (0 duplicate rows).
 
 **Note:** built + tested OFFLINE (msw + testcontainers); a live pull additionally requires the
 Schwab OAuth dance + a healthy deploy (db-up) — operator prerequisites, tracked separately.
 
-**Plans**: 2 plans
-- [ ] 07-01-PLAN.md — get_transactions MCP tool: contract-locked + tested (msw-equivalent valid-range payload, default-90d, AUTH_EXPIRED typed payload, MCP-02) + docs (BRK-03)
+**Plans**: 1/2 plans executed
+
+- [x] 07-01-PLAN.md — get_transactions MCP tool: contract-locked + tested (msw-equivalent valid-range payload, default-90d, AUTH_EXPIRED typed payload, MCP-02) + docs (BRK-03)
 - [ ] 07-02-PLAN.md — historical backfill CLI: pure chunkDateRange (fast-check) + sync-transactions per chunk, idempotent, error-on-over-cap + docs (BRK-04)
 
 ## Backlog / Future Enhancements
