@@ -141,7 +141,12 @@ export type {
 } from "./journal/index.ts";
 // Phase 7 (BRK-04): pure date-window chunker. RangeError is aliased to ChunkRangeError on the
 // public surface to avoid shadowing the global RangeError at consumers.
-export { chunkDateRange } from "./journal/index.ts";
+export {
+  chunkDateRange,
+  inclusiveDays,
+  SCHWAB_TX_LOOKBACK_MAX_DAYS,
+  SCHWAB_TX_MAX_RANGE_DAYS,
+} from "./journal/index.ts";
 export type {
   DateWindow,
   RangeError as ChunkRangeError,

@@ -103,7 +103,12 @@ export type {
   SyncTransactionsDeps,
 } from "./application/syncTransactions.ts";
 // Phase 7 (BRK-04): pure date-window chunker for the historical trade-history backfill
-export { chunkDateRange } from "./application/chunkDateRange.ts";
+export {
+  chunkDateRange,
+  inclusiveDays,
+  SCHWAB_TX_LOOKBACK_MAX_DAYS,
+  SCHWAB_TX_MAX_RANGE_DAYS,
+} from "./application/chunkDateRange.ts";
 export type { DateWindow, RangeError } from "./application/chunkDateRange.ts";
 // Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
 export { hashFillIds } from "./domain/fill-pairing.ts";
