@@ -131,10 +131,13 @@ describe("GET /api/positions", () => {
     expect(parsed.reason).toBe("AUTH_EXPIRED");
   });
 
-  it("returns 500 on fetch-error", async () => {
+  it("returns 500 on fetch-error and surfaces the message (not generic 'internal')", async () => {
     const app = buildTestApp(errGetPositions, okGetTransactions, okGetOrders);
     const res = await app.request("/api/positions");
     expect(res.status).toBe(500);
+    const body: unknown = await res.json();
+    // The adapter's FetchError message must reach the client for diagnosis.
+    expect(body).toEqual({ error: "network error" });
   });
 });
 
