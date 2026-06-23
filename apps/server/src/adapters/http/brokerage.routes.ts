@@ -46,7 +46,10 @@ export function brokerageRoutes(
       if (result.error.kind === "auth-expired") {
         return c.json(brokerageAuthExpiredPayload.parse({ paused: true, reason: "AUTH_EXPIRED" }));
       }
-      return c.json({ error: "internal" }, 500);
+      // Surface the adapter's FetchError message (no secrets in these messages) +
+      // log it server-side — a generic "internal" hides why Schwab rejected the call.
+      console.error(`brokerage route fetch-error: ${result.error.message}`);
+      return c.json({ error: result.error.message }, 500);
     }
 
     // MCP-02: same positionsResponse schema used by the MCP get_positions tool
@@ -72,7 +75,10 @@ export function brokerageRoutes(
       if (result.error.kind === "auth-expired") {
         return c.json(brokerageAuthExpiredPayload.parse({ paused: true, reason: "AUTH_EXPIRED" }));
       }
-      return c.json({ error: "internal" }, 500);
+      // Surface the adapter's FetchError message (no secrets in these messages) +
+      // log it server-side — a generic "internal" hides why Schwab rejected the call.
+      console.error(`brokerage route fetch-error: ${result.error.message}`);
+      return c.json({ error: result.error.message }, 500);
     }
 
     // MCP-02: same transactionsResponse schema used by the MCP get_transactions tool
@@ -91,7 +97,10 @@ export function brokerageRoutes(
       if (result.error.kind === "auth-expired") {
         return c.json(brokerageAuthExpiredPayload.parse({ paused: true, reason: "AUTH_EXPIRED" }));
       }
-      return c.json({ error: "internal" }, 500);
+      // Surface the adapter's FetchError message (no secrets in these messages) +
+      // log it server-side — a generic "internal" hides why Schwab rejected the call.
+      console.error(`brokerage route fetch-error: ${result.error.message}`);
+      return c.json({ error: result.error.message }, 500);
     }
 
     // MCP-02: same ordersResponse schema used by the MCP get_orders tool
