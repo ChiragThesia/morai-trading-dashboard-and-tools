@@ -1,8 +1,9 @@
 /**
  * get-transactions.test.ts — behavioral coverage for the get_transactions MCP tool (BRK-03).
  *
- * The production tool already exists (registerGetTransactionsTool in tools.ts, Phase 4 / BRK-02).
- * These tests VERIFY it against the SPEC acceptance — they do not rebuild it.
+ * The get_transactions MCP tool is BRK-03 (Phase 7): Phase 4 built the read path (use-case +
+ * HTTP route + transactionsResponse contract) but registered no MCP tool. These tests verify
+ * registerGetTransactionsTool against the SPEC acceptance.
  *
  * Seam: a faked ForGettingTransactions stands in for the msw'd Schwab adapter (offline). The
  * function-type port makes the double a plain async function, exactly as syncTransactions.test.ts

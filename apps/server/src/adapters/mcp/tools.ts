@@ -374,8 +374,10 @@ export function registerGetPositionsTool(
 }
 
 /**
- * registerGetTransactionsTool — registers the get_transactions MCP tool (BRK-02).
+ * registerGetTransactionsTool — registers the get_transactions MCP tool (BRK-03, Phase 7).
  *
+ * Phase 4 built the read path (use-case + HTTP route + transactionsResponse contract) but
+ * registered NO brokerage MCP tool; this tool closes that gap (07-SPEC Background).
  * MCP-02: shares transactionsResponse schema with GET /api/transactions HTTP route.
  * D-09: AUTH_EXPIRED → paused payload.
  */
