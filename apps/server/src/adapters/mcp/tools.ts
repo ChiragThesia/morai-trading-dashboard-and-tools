@@ -416,7 +416,11 @@ export function registerGetTransactionsTool(
             content: [{ type: "text" as const, text: JSON.stringify(payload) }],
           };
         }
-        return { content: [{ type: "text" as const, text: "internal error" }] };
+        // WR-02: non-auth errors emit a structured JSON envelope (matching the {error}
+        // shape used elsewhere in this file) so an MCP client's JSON.parse never throws.
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "internal error" }) }],
+        };
       }
       const payload = transactionsResponse.parse({ transactions: result.value });
       return {

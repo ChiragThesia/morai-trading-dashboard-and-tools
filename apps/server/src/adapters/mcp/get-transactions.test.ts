@@ -155,6 +155,30 @@ describe("get_transactions MCP tool (BRK-03)", () => {
     expect(parsed.reason).toBe("AUTH_EXPIRED");
   });
 
+  // ─── Test E: non-auth fetch-error → structured JSON payload, not a JSON.parse landmine ─
+  it("E: fetch-error → structured JSON error payload the client can JSON.parse (WR-02)", async () => {
+    const fakeGetTransactions: ForGettingTransactions = async () =>
+      err({ kind: "fetch-error", message: "schwab 503" });
+
+    const handler = await getTransactionsHandler(fakeGetTransactions);
+    let result: unknown;
+    await expect(
+      (async () => {
+        result = await handler({ from: "2026-06-01", to: "2026-06-20" });
+      })(),
+    ).resolves.toBeUndefined();
+
+    const text = firstContentText(result);
+    // The whole point of WR-02: every error branch must be JSON, never a bare string,
+    // so an MCP client doing JSON.parse(text) never throws.
+    const payload: unknown = JSON.parse(text);
+    expect(typeof payload).toBe("object");
+    expect(payload).not.toBeNull();
+    if (typeof payload !== "object" || payload === null) return;
+    const errorField: unknown = Reflect.get(payload, "error");
+    expect(typeof errorField).toBe("string");
+  });
+
   // ─── Test D: MCP-02 contract parity (runtime backstop) ───────────────────────
   it("D: success payload validates against the SAME @morai/contracts transactionsResponse", async () => {
     const fakeGetTransactions: ForGettingTransactions = async () => ok([ONE_TX]);
