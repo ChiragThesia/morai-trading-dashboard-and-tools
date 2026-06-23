@@ -26,6 +26,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions (completed 2026-06-21)
 - [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
 - [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (verified 4/4 2026-06-22; 8 plans + 1 gap round; merged PR #5; prod migration 0007 applied + verified)
+- [ ] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history
 
 ## Phase Details
 
@@ -313,6 +314,27 @@ Plans:
 **Wave 2 (gap)** *(blocked on 06-06 — shares computeAnalytics.ts / leg-observations.ts / smile-source contract)*
 
 - [x] 06-08-PLAN.md — [WARNING+INFO] WR-01 percentileRank empty→null carried through use-case+contract + WR-03 populate moneyness (K/S from spot) on both smile reads+contract (no migration) + IN-01 stale 7-queue/5-cron worker comments → 9/6 (ANLY-01/03, MCP-02)
+
+### Phase 7: Trade History
+
+**Goal**: Expose Schwab trade transactions via an MCP `get_transactions` tool (date-ranged,
+over the shared contract) and add a historical `sync-transactions` backfill (chunked to
+Schwab's lookback cap, idempotent) so trade history flows into `fills` → calendar events.
+**Mode:** mvp
+**Depends on**: Phase 4 (transactions read path), Phase 5 (sync-transactions)
+**Requirements**: BRK-03, BRK-04
+**Spec:** `.planning/phases/07-trade-history/07-SPEC.md`
+**Success Criteria** (what must be TRUE):
+
+  1. MCP `get_transactions` returns date-ranged trade transactions over the shared
+     `transactionsResponse` contract (default last 90d); AUTH_EXPIRED → typed paused payload.
+  2. A backfill entrypoint runs `sync-transactions` over an arbitrary past range, chunked within
+     Schwab's lookback cap, writing `fills`; re-run is idempotent (0 duplicate rows).
+
+**Note:** built + tested OFFLINE (msw + testcontainers); a live pull additionally requires the
+Schwab OAuth dance + a healthy deploy (db-up) — operator prerequisites, tracked separately.
+
+**Plans**: TBD
 
 ## Backlog / Future Enhancements
 
