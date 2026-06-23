@@ -128,9 +128,18 @@ describe("get_transactions MCP tool (BRK-03)", () => {
     expect(seenTo).not.toBeNull();
     if (seenFrom === null || seenTo === null) return;
 
-    const today = new Date().toISOString().slice(0, 10);
-    expect(seenTo).toBe(today);
-    // from is 90 days earlier (mirrors brokerage.routes.ts).
+    // WR-03: the handler computes `to` from new Date() internally; a separate new Date()
+    // here can land on the next UTC day if the run crosses midnight between the two calls.
+    // The handler has no injected clock, so accept either side of that boundary rather than
+    // a single `=== today` that can flake. The 90-day span below is the deterministic check.
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    expect([yesterday, today]).toContain(seenTo);
+    // from is 90 days earlier (mirrors brokerage.routes.ts) — internally consistent,
+    // immune to the midnight boundary.
     expect(daysBetween(seenFrom, seenTo)).toBe(90);
   });
 
