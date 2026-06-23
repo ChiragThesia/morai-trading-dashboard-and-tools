@@ -15,6 +15,7 @@
     "typescript": "^6"
   },
   "scripts": {
-    "dev": "bun run --watch src/main.ts"
+    "dev": "bun run --watch src/main.ts",
+    "backfill-transactions": "bun run src/backfill-transactions.ts"
   }
 }

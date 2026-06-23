@@ -70,6 +70,38 @@ broker transaction feed (the Phase-4 transactions adapter) and writes `fills` ro
 events. This source job lands in plan 05-12; the `ForWritingFills` port (below) is its writer
 contract. It runs before `sync-fills` in the RTH cadence so each pairing run sees fresh fills.
 
+### Historical backfill (Phase 7, BRK-04)
+
+The scheduled `sync-transactions` job only ever covers a rolling 7-day window. To pull older
+trade history there is an on-demand CLI: `bun run backfill-transactions <from> <to>` in
+`apps/worker`. It is not a pg-boss job. It runs the same `sync-transactions` use-case over an
+operator-supplied `[from, to]` range, so backfilled trades flow into `fills` and from there into
+calendar events through the existing `sync-fills` / `rebuild-journal` path.
+
+**Chunking and the two Schwab caps.** Schwab applies two distinct limits, and the backfill
+keeps them separate (both are domain constants in `@morai/core` beside `chunkDateRange`):
+
+- `SCHWAB_TX_LOOKBACK_MAX_DAYS = 365` — the **total** span the operator may request in one run.
+- `SCHWAB_TX_MAX_RANGE_DAYS = 90` — the **per-call** window passed to `chunkDateRange`.
+
+A pure domain function `chunkDateRange(from, to, maxDays)` splits the requested range into
+contiguous windows, each no longer than `maxDays`, with no gaps and no overlapping days. The CLI
+passes the per-call cap as `maxDays`, so a wide-but-within-lookback range is fetched in cap-sized
+windows — the chunk loop actually splits in production, not only in tests. (CONFIRM Schwab's real
+per-call transactions range on the first live run; if it differs from 90, adjust the constant.)
+
+**Over-cap is an error, not a silent truncation.** If the requested `[from, to]` spans more days
+than `SCHWAB_TX_LOOKBACK_MAX_DAYS`, the backfill returns a clear error and writes nothing. It
+never quietly clips the range to what Schwab allows — the operator must narrow the range and
+re-run.
+
+**Idempotent.** A second run over the same range adds zero `fills` rows. The use-case derives
+each fill id deterministically from `(activityId, legIndex)`, and `writeFills` is
+`onConflictDoNothing`, so re-running a window is a no-op.
+
+A live run needs valid Schwab trader tokens; building and testing the backfill does not (the
+chunk loop and idempotency are covered offline with a faked fetch and the in-memory fills twin).
+
 ## compute-analytics (Phase 6, ANLY-01/ANLY-02)
 
 **Schedule:** None — chain-triggered only. It fires after `snapshot-calendars` completes a
