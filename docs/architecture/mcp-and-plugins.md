@@ -28,7 +28,13 @@ Browser ─────(HTTP / Hono RPC)─────────▶ apps/serv
 | `get_journal` | `GET /api/journal/:id` — snapshot series, the core analysis tool |
 | `get_live_greeks` | `GET /api/greeks` |
 | `get_term_structure` / `get_skew` | analytics routes |
+| `get_transactions` | `GET /api/transactions` — trade history for a date range |
 | `trigger_job` | `POST /api/jobs/:name/trigger` |
+
+`get_transactions` takes optional `from`/`to` (YYYY-MM-DD); omit them and the window
+defaults to the last 90 days, matching the HTTP route. It shares the one
+`transactionsResponse` contract from `@morai/contracts` (MCP-02). When the trader token
+is AUTH_EXPIRED the tool returns the typed paused payload instead of throwing.
 
 Rule: **new use-case ⇒ both adapters in the same PR** (HTTP route + MCP tool), unless explicitly
 scoped otherwise. Keeps Claude's capability surface from drifting behind the UI.
