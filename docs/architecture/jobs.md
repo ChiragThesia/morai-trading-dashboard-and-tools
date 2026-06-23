@@ -78,11 +78,17 @@ trade history there is an on-demand CLI: `bun run backfill-transactions <from> <
 operator-supplied `[from, to]` range, so backfilled trades flow into `fills` and from there into
 calendar events through the existing `sync-fills` / `rebuild-journal` path.
 
-**Chunking and the Schwab lookback cap.** Schwab caps transactions lookback at roughly one year.
-The backfill encodes this as a documented constant, `SCHWAB_TX_LOOKBACK_MAX_DAYS = 365`. A pure
-domain function `chunkDateRange(from, to, maxDays)` splits the requested range into contiguous
-windows, each no longer than `maxDays`, with no gaps and no overlapping days. The CLI runs the
-use-case once per window.
+**Chunking and the two Schwab caps.** Schwab applies two distinct limits, and the backfill
+keeps them separate (both are domain constants in `@morai/core` beside `chunkDateRange`):
+
+- `SCHWAB_TX_LOOKBACK_MAX_DAYS = 365` — the **total** span the operator may request in one run.
+- `SCHWAB_TX_MAX_RANGE_DAYS = 90` — the **per-call** window passed to `chunkDateRange`.
+
+A pure domain function `chunkDateRange(from, to, maxDays)` splits the requested range into
+contiguous windows, each no longer than `maxDays`, with no gaps and no overlapping days. The CLI
+passes the per-call cap as `maxDays`, so a wide-but-within-lookback range is fetched in cap-sized
+windows — the chunk loop actually splits in production, not only in tests. (CONFIRM Schwab's real
+per-call transactions range on the first live run; if it differs from 90, adjust the constant.)
 
 **Over-cap is an error, not a silent truncation.** If the requested `[from, to]` spans more days
 than `SCHWAB_TX_LOOKBACK_MAX_DAYS`, the backfill returns a clear error and writes nothing. It

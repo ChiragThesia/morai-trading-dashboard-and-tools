@@ -22,12 +22,16 @@
  */
 
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import { err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import {
   chunkDateRange,
   hashFillIds,
+  inclusiveDays,
   makeSyncTransactionsUseCase,
+  SCHWAB_TX_LOOKBACK_MAX_DAYS,
+  SCHWAB_TX_MAX_RANGE_DAYS,
 } from "@morai/core";
 import type {
   ForFetchingTransactions,
@@ -35,12 +39,11 @@ import type {
   StorageError,
 } from "@morai/core";
 
-// ─── Documented Schwab lookback cap ──────────────────────────────────────────────
-// Schwab caps transactions lookback at ~1 year. Documented in docs/architecture/jobs.md.
-// A requested total range exceeding this is rejected (no silent truncation).
-export const SCHWAB_TX_LOOKBACK_MAX_DAYS = 365;
-
-const DAY_MS = 86_400_000;
+// Schwab transaction caps (SCHWAB_TX_LOOKBACK_MAX_DAYS = total span guard;
+// SCHWAB_TX_MAX_RANGE_DAYS = per-call window passed to chunkDateRange) are domain constants
+// in @morai/core alongside chunkDateRange. Re-exported here so existing importers (tests, docs
+// references) keep their import path. Documented in docs/architecture/jobs.md.
+export { SCHWAB_TX_LOOKBACK_MAX_DAYS, SCHWAB_TX_MAX_RANGE_DAYS };
 
 // ─── Errors ──────────────────────────────────────────────────────────────────────
 
@@ -70,15 +73,8 @@ export type RunBackfillDeps = {
   readonly now: () => Date;
   readonly from: string; // YYYY-MM-DD inclusive
   readonly to: string; // YYYY-MM-DD inclusive
-  readonly maxDays: number; // window cap (≤ SCHWAB_TX_LOOKBACK_MAX_DAYS)
+  readonly maxDays: number; // per-call window cap (≤ SCHWAB_TX_LOOKBACK_MAX_DAYS)
 };
-
-// Inclusive day count between two YYYY-MM-DD dates (>= 1 for a valid range).
-function inclusiveDays(from: string, to: string): number {
-  const fromMs = new Date(from + "T00:00:00Z").getTime();
-  const toMs = new Date(to + "T00:00:00Z").getTime();
-  return Math.floor((toMs - fromMs) / DAY_MS) + 1;
-}
 
 /**
  * runBackfill — chunk [from, to] and run sync-transactions per window.
@@ -145,15 +141,35 @@ if (import.meta.main) {
     makeSchwabTransactionsAdapter,
   } = await import("@morai/adapters");
 
+  // WR-01: parse, don't cast. process.argv is external input — validate the YYYY-MM-DD
+  // shape AND that each is a real calendar date (rejecting JS Date rollovers like
+  // 2026-13-40) at the composition root before anything touches the range.
   const [, , rawFrom, rawTo] = process.argv;
-  const from = rawFrom ?? "";
-  const to = rawTo ?? "";
-  if (from === "" || to === "") {
+  const ymd = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
+    .refine((s) => {
+      const ms = new Date(`${s}T00:00:00Z`).getTime();
+      // Round-trip guard: a real date re-serialises to the same YYYY-MM-DD; a rolled-over
+      // value (e.g. 2026-13-40 → 2027-02-09) does not.
+      return (
+        !Number.isNaN(ms) &&
+        new Date(ms).toISOString().slice(0, 10) === s
+      );
+    }, "not a real calendar date");
+  const argSchema = z.object({ from: ymd, to: ymd });
+  const parsed = argSchema.safeParse({ from: rawFrom ?? "", to: rawTo ?? "" });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const where = issue?.path[0] === "to" ? "to" : "from";
     console.error(
-      "backfill-transactions requires <from> <to> (YYYY-MM-DD). Example: bun run backfill-transactions 2026-01-01 2026-03-31",
+      `backfill-transactions: <${where}> ${issue?.message ?? "invalid"}. ` +
+        "Usage: bun run backfill-transactions <from> <to> (YYYY-MM-DD). " +
+        "Example: bun run backfill-transactions 2026-01-01 2026-03-31",
     );
     process.exit(1);
   }
+  const { from, to } = parsed.data;
 
   const config = bootWorkerConfig();
   const db = makeDb(config.DATABASE_URL);
@@ -207,11 +223,18 @@ if (import.meta.main) {
     fetchTransactions: fetchTransactionsResolved,
     writeFills: fillsRepo.writeFills,
     hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
-    accountHash: "resolved-at-call-time",
+    // IN-02: accountHash is NOT authoritative on the CLI path. fetchTransactionsResolved
+    // ignores this value and re-resolves the real hash per call (Pitfall 5). It is threaded
+    // only because RunBackfillDeps/makeSyncTransactionsUseCase require the field; the sentinel
+    // string makes that intent explicit to a reader.
+    accountHash: "resolved-per-call-see-fetchTransactionsResolved",
     now: () => new Date(),
     from,
     to,
-    maxDays: SCHWAB_TX_LOOKBACK_MAX_DAYS,
+    // WR-04: per-call window cap drives chunking; the TOTAL span is still guarded against
+    // SCHWAB_TX_LOOKBACK_MAX_DAYS inside runBackfill. Since SCHWAB_TX_MAX_RANGE_DAYS <
+    // SCHWAB_TX_LOOKBACK_MAX_DAYS, the chunk loop actually splits in production.
+    maxDays: SCHWAB_TX_MAX_RANGE_DAYS,
   });
 
   if (!result.ok) {

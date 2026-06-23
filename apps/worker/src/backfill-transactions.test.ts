@@ -17,7 +17,11 @@
 import { describe, it, expect } from "vitest";
 import { ok, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { chunkDateRange, hashFillIds } from "@morai/core";
+import {
+  chunkDateRange,
+  hashFillIds,
+  SCHWAB_TX_MAX_RANGE_DAYS,
+} from "@morai/core";
 import type {
   BrokerTransaction,
   ForFetchingTransactions,
@@ -170,6 +174,23 @@ describe("runBackfill — historical trade-history backfill (BRK-04)", () => {
 
   it("the documented cap constant is 365 days", () => {
     expect(SCHWAB_TX_LOOKBACK_MAX_DAYS).toBe(365);
+  });
+
+  it("WR-04: with the production per-call cap, a within-lookback span splits into multiple windows", () => {
+    // Span that survives the lookback guard (< 365 days) but exceeds the per-call cap.
+    const from = "2026-01-01";
+    const to = "2026-06-30"; // ~181 days, within lookback, > SCHWAB_TX_MAX_RANGE_DAYS (90)
+    const chunks = chunkDateRange(from, to, SCHWAB_TX_MAX_RANGE_DAYS);
+    expect(chunks.ok).toBe(true);
+    if (!chunks.ok) return;
+    // The whole point of WR-04: chunking is NOT inert in production — it actually splits.
+    expect(chunks.value.length).toBeGreaterThan(1);
+    for (const w of chunks.value) {
+      const fromMs = Date.parse(`${w.from}T00:00:00Z`);
+      const toMs = Date.parse(`${w.to}T00:00:00Z`);
+      const days = Math.round((toMs - fromMs) / (24 * 60 * 60 * 1000)) + 1;
+      expect(days).toBeLessThanOrEqual(SCHWAB_TX_MAX_RANGE_DAYS);
+    }
   });
 
   it("an inverted range (from > to) returns a clear error and writes nothing", async () => {
