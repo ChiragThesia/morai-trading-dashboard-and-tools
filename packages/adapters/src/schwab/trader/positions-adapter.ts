@@ -111,8 +111,9 @@ export function makeSchwabPositionsAdapter(deps: {
     }
     const accessToken = tokenResult.value;
 
-    // Step 2: Fetch positions — note trailing slash required by Schwab API
-    const url = `https://api.schwabapi.com/trader/v1/accounts/${accountHash}/?fields=positions`;
+    // Step 2: Fetch positions. Single-account endpoint is /accounts/{hash}?fields=positions —
+    // the trailing slash before the query (/?) returns HTTP 404 against the live API.
+    const url = `https://api.schwabapi.com/trader/v1/accounts/${accountHash}?fields=positions`;
 
     let rawBody: unknown;
     try {

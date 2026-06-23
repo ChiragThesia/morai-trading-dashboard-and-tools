@@ -130,8 +130,10 @@ export function makeSchwabTransactionsAdapter(deps: {
     const url = new URL(
       `https://api.schwabapi.com/trader/v1/accounts/${accountHash}/transactions`,
     );
-    url.searchParams.set("startDate", from);
-    url.searchParams.set("endDate", to);
+    // Schwab /transactions requires ISO-8601 datetimes, not date-only (date-only → HTTP 400).
+    // The use-case passes YYYY-MM-DD; widen to full-day UTC bounds (inclusive).
+    url.searchParams.set("startDate", `${from}T00:00:00.000Z`);
+    url.searchParams.set("endDate", `${to}T23:59:59.999Z`);
     url.searchParams.set("types", "TRADE");
 
     let rawBody: unknown;
