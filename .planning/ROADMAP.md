@@ -26,7 +26,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions (completed 2026-06-21)
 - [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
 - [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (verified 4/4 2026-06-22; 8 plans + 1 gap round; merged PR #5; prod migration 0007 applied + verified)
-- [x] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history (completed 2026-06-23)
+- [x] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history (verified 2/2 offline 2026-06-22; 2 plans + 1 review round; live pull needs Schwab auth + healthy deploy)
 
 ## Phase Details
 
