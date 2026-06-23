@@ -26,7 +26,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 4: Schwab Auth & Brokerage** - OAuth client, tokens in DB, Schwab chain + positions (completed 2026-06-21)
 - [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
 - [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (verified 4/4 2026-06-22; 8 plans + 1 gap round; merged PR #5; prod migration 0007 applied + verified)
-- [ ] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history
+- [x] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history (completed 2026-06-23)
 
 ## Phase Details
 
@@ -335,10 +335,10 @@ Schwab's lookback cap, idempotent) so trade history flows into `fills` → calen
 **Note:** built + tested OFFLINE (msw + testcontainers); a live pull additionally requires the
 Schwab OAuth dance + a healthy deploy (db-up) — operator prerequisites, tracked separately.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans complete
 
 - [x] 07-01-PLAN.md — get_transactions MCP tool: contract-locked + tested (msw-equivalent valid-range payload, default-90d, AUTH_EXPIRED typed payload, MCP-02) + docs (BRK-03)
-- [ ] 07-02-PLAN.md — historical backfill CLI: pure chunkDateRange (fast-check) + sync-transactions per chunk, idempotent, error-on-over-cap + docs (BRK-04)
+- [x] 07-02-PLAN.md — historical backfill CLI: pure chunkDateRange (fast-check) + sync-transactions per chunk, idempotent, error-on-over-cap + docs (BRK-04)
 
 ## Backlog / Future Enhancements
 

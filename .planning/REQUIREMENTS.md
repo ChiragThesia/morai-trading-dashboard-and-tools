@@ -46,7 +46,7 @@ Requirements for the initial backend release. Each maps to exactly one roadmap p
 - [ ] **BRK-01**: A Schwab market adapter fetches option chains and quotes behind the same market-data ports as CBOE.
 - [ ] **BRK-02**: A Schwab trader adapter fetches positions, orders, and transactions behind their ports.
 - [x] **BRK-03**: A `get_transactions` MCP tool returns date-ranged trade transactions over the shared `transactionsResponse` contract (MCP-02).
-- [ ] **BRK-04**: A historical backfill runs `sync-transactions` over an arbitrary past range (chunked to Schwab's lookback cap, idempotent) to populate `fills` from trade history.
+- [x] **BRK-04**: A historical backfill runs `sync-transactions` over an arbitrary past range (chunked to Schwab's lookback cap, idempotent) to populate `fills` from trade history.
 
 ### BSM Analytics Engine
 
@@ -156,7 +156,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | ANLY-02 | Phase 6 | Complete |
 | ANLY-03 | Phase 6 | Complete |
 | BRK-03 | Phase 7 | Complete |
-| BRK-04 | Phase 7 | Pending |
+| BRK-04 | Phase 7 | Complete |
 
 **Coverage:**
 
