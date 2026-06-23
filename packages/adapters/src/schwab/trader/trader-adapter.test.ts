@@ -25,7 +25,7 @@ const ACCOUNT_NUMBERS_URL =
   "https://api.schwabapi.com/trader/v1/accounts/accountNumbers";
 const ACCOUNT_HASH = "HASH_ABC123";
 const RAW_ACCOUNT = "12345678";
-const POSITIONS_URL = `https://api.schwabapi.com/trader/v1/accounts/${ACCOUNT_HASH}/`;
+const POSITIONS_URL = `https://api.schwabapi.com/trader/v1/accounts/${ACCOUNT_HASH}`;
 const TRANSACTIONS_URL = `https://api.schwabapi.com/trader/v1/accounts/${ACCOUNT_HASH}/transactions`;
 const ORDERS_URL = `https://api.schwabapi.com/trader/v1/accounts/${ACCOUNT_HASH}/orders`;
 
@@ -269,6 +269,22 @@ describe("makeSchwabTransactionsAdapter", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.length).toBe(2);
+    });
+
+    it("sends startDate/endDate as ISO-8601 datetimes (regression: date-only → Schwab 400)", async () => {
+      let captured: URL | null = null;
+      server.use(
+        http.get(TRANSACTIONS_URL, ({ request }) => {
+          captured = new URL(request.url);
+          return HttpResponse.json(schwabTransactionsFixture);
+        }),
+      );
+      const adapter = makeTransactions();
+      await adapter.fetchTransactions(ACCOUNT_HASH, "2026-06-01", "2026-06-30");
+      const url = captured;
+      if (url === null) throw new Error("transactions request was not captured");
+      expect(url.searchParams.get("startDate")).toBe("2026-06-01T00:00:00.000Z");
+      expect(url.searchParams.get("endDate")).toBe("2026-06-30T23:59:59.999Z");
     });
 
     it("returns a transaction with activityId, tradeDate, netAmount", async () => {
