@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { statusResponse } from "@morai/contracts";
 import type { ForGettingStatus } from "@morai/core";
+import { toStatusResponse } from "../status-dto.ts";
 
 /**
  * statusRoutes — factory returning a Hono router for the status endpoints.
@@ -22,7 +22,7 @@ export function statusRoutes(getStatus: ForGettingStatus) {
       // unreachable — StatusError = never; satisfies the type checker
       return c.json({ error: "internal" }, 500);
     }
-    return c.json(statusResponse.parse(result.value));
+    return c.json(toStatusResponse(result.value));
   });
 
   return router;

@@ -51,7 +51,48 @@ const populatedJobRunsGetStatus: ForGettingStatus = async () =>
     uptime: 100,
   });
 
+// REGRESSION: token freshness carries Date objects in the core domain; the contract
+// expects ISO strings. Before the status-dto fix, statusResponse.parse(payload) threw
+// on the Date fields → /api/status 500 → Railway healthcheck failed → deploy rejected.
+const dateFreshnessGetStatus: ForGettingStatus = async () =>
+  ok({
+    db: "ok" as const,
+    tokenFreshness: {
+      trader: {
+        status: "fresh" as const,
+        expiresAt: new Date("2026-06-22T15:30:00.000Z"),
+        refreshIssuedAt: new Date("2026-06-20T09:00:00.000Z"),
+        lastRefreshError: null,
+      },
+      market: {
+        status: "AUTH_EXPIRED" as const,
+        expiresAt: new Date("2026-06-15T15:30:00.000Z"),
+        refreshIssuedAt: new Date("2026-06-08T09:00:00.000Z"),
+        lastRefreshError: "invalid_grant",
+      },
+    },
+    lastJobRuns: "none yet" as const,
+    version: "0.0.1",
+    uptime: 100,
+  });
+
 describe("GET /api/status", () => {
+  it("serializes Date token-freshness to ISO strings (regression: Date≠string 500)", async () => {
+    const app = buildTestApp(dateFreshnessGetStatus);
+    const res = await app.request("/api/status");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    const parsed = statusResponse.parse(body); // threw before the fix
+    const tf = parsed.tokenFreshness;
+    expect(tf).not.toBe("none yet");
+    if (tf !== "none yet") {
+      expect(tf.trader.expiresAt).toBe("2026-06-22T15:30:00.000Z");
+      expect(tf.trader.refreshIssuedAt).toBe("2026-06-20T09:00:00.000Z");
+      expect(tf.market.status).toBe("AUTH_EXPIRED");
+      expect(tf.market.lastRefreshError).toBe("invalid_grant");
+    }
+  });
+
   it("returns 200 with db:ok on a healthy ping", async () => {
     const app = buildTestApp(okGetStatus);
     const res = await app.request("/api/status");

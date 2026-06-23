@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  statusResponse,
   listCalendarsResponse,
   journalResponse,
   liveGreeksResponse,
@@ -24,6 +23,7 @@ import type {
   ForGettingOrders,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
+import { toStatusResponse } from "../status-dto.ts";
 
 /**
  * registerStatusTool — registers the get_status MCP tool on the given McpServer.
@@ -56,7 +56,7 @@ export function registerStatusTool(
       if (!result.ok) {
         return { content: [{ type: "text" as const, text: "internal error" }] };
       }
-      const payload = statusResponse.parse(result.value);
+      const payload = toStatusResponse(result.value);
       return {
         content: [
           {
