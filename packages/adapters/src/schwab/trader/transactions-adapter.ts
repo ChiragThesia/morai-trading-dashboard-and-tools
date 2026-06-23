@@ -90,7 +90,10 @@ function mapTransaction(
 
   return {
     activityId,
-    tradeDate: tx.tradeDate ?? tx.time?.slice(0, 10) ?? "",
+    // Schwab sends tradeDate/time as full ISO-8601 datetimes; the BrokerTransaction
+    // contract is date-only (YYYY-MM-DD). Slice whichever source we use — live, an
+    // unsliced datetime + "T00:00:00Z" in the fills write path → Invalid Date.
+    tradeDate: (tx.tradeDate ?? tx.time)?.slice(0, 10) ?? "",
     netAmount: tx.netAmount ?? 0,
     orderId: tx.orderId ?? null,
     legs,

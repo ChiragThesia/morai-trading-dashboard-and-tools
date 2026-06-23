@@ -287,7 +287,7 @@ describe("makeSchwabTransactionsAdapter", () => {
       expect(url.searchParams.get("endDate")).toBe("2026-06-30T23:59:59.999Z");
     });
 
-    it("returns a transaction with activityId, tradeDate, netAmount", async () => {
+    it("returns a transaction with activityId, tradeDate (datetime→YYYY-MM-DD), netAmount", async () => {
       const adapter = makeTransactions();
       const result = await adapter.fetchTransactions(
         ACCOUNT_HASH,
