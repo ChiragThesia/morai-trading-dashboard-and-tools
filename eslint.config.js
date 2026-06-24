@@ -103,7 +103,7 @@ export default tseslint.config(
   // per-file block below that uses project:false for test files.
   {
     files: ["packages/**/*.ts", "packages/**/*.tsx", "apps/**/*.ts", "apps/**/*.tsx"],
-    ignores: ["**/__fixtures__/**", "**/vitest.config.ts", "**/*.test.ts", "**/*.test.tsx"],
+    ignores: ["**/__fixtures__/**", "**/vitest.config.ts", "apps/web/vite.config.ts", "**/*.test.ts", "**/*.test.tsx"],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {

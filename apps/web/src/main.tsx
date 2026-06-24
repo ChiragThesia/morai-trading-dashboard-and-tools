@@ -1,5 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./lib/queryClient.ts";
 import "./index.css";
 
 // Placeholder root — real App (auth gate + Shell) lands in Plan 04.
@@ -29,6 +31,8 @@ if (rootEl === null) {
 
 createRoot(rootEl).render(
   <StrictMode>
-    <Placeholder />
+    <QueryClientProvider client={queryClient}>
+      <Placeholder />
+    </QueryClientProvider>
   </StrictMode>,
 );

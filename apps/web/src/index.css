@@ -1,7 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-/* Morai design tokens — mapped to Tailwind @theme for utility class generation */
-/* Source: 09-UI-SPEC.md Color table (LOCKED palette) */
+/* Morai design tokens — Tailwind @theme for utility class generation */
+/* Source: 09-UI-SPEC.md Color table (LOCKED palette — do not alter) */
 @theme {
   --color-bg: #0a0e14;
   --color-panel: #0f1521;
@@ -26,8 +27,8 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* shadcn/ui token bridge — maps shadcn variable names to Tailwind v4 --color-* namespace */
-/* Source: https://ui.shadcn.com/docs/tailwind-v4 (Pitfall 2 — @theme inline required) */
+/* shadcn/ui token bridge — @theme inline maps shadcn names to Tailwind v4 --color-* namespace */
+/* Without this, bg-background etc. won't resolve (Pitfall 2) */
 @theme inline {
   --color-background: var(--color-bg);
   --color-foreground: var(--color-txt);
@@ -47,9 +48,15 @@
   --color-secondary-foreground: var(--color-txt);
   --color-popover: var(--color-panel);
   --color-popover-foreground: var(--color-txt);
+  --color-muted: var(--color-panel2);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-/* shadcn base variables (used by component internals) */
+/* shadcn base variables — overridden to Morai dark palette (always dark, no light mode) */
 :root {
   --background: var(--color-bg);
   --foreground: var(--color-txt);
@@ -90,7 +97,6 @@ body {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* animate-shimmer, glow filters */
   @keyframes shimmer {
     0% {
       background-position: -200% 0;
