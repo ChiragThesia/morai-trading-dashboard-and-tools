@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 06
-current_phase_name: derived-analytics
+current_phase: 08
+current_phase_name: web-dashboard-backend-gex-auth-rpc
 status: Phase 06 in progress (gap round — plan 06-07 numeric guards complete)
-stopped_at: Phase 9 context gathered
-last_updated: "2026-06-24T13:47:57.254Z"
-last_activity: 2026-06-22
-last_activity_desc: Phase 06 Plan 01 complete (analytics foundation; production typecheck clean; 3 RED scaffolds left for 06-03/06-04/06-05)
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-06-24T15:22:31.978Z"
+last_activity: 2026-06-24
+last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 9
   completed_phases: 7
-  total_plans: 57
-  completed_plans: 58
+  total_plans: 64
+  completed_plans: 59
   percent: 78
 ---
 
@@ -24,15 +24,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 05 — jobs-fill-rebuild-integrity
+**Current focus:** Phase 08 — web-dashboard-backend-gex-auth-rpc
 
 ## Current Position
 
-Phase: 06 (derived-analytics) — Wave 1 (foundation) in progress
-Plan: 06-01 of 5 DONE (docs-first + 3 analytics tables + ONE shared MCP-02 contract + analytics context skeleton with 8 ports + 3 RED scaffolds). 06-02 (migration), 06-03 (domain), 06-04 (term-structure slice), 06-05 (skew/RR slice) remain.
+Phase: 08 (web-dashboard-backend-gex-auth-rpc) — EXECUTING
+Plan: 2 of 7
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
-Last activity: 2026-06-22 -- Phase 06 Plan 01 complete (analytics foundation; production typecheck clean; 3 RED scaffolds left for 06-03/06-04/06-05)
+Last activity: 2026-06-24 — Phase 08 execution started
 
 Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 
@@ -93,6 +93,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 06 P08 | 8min | 3 tasks | 12 files |
 | Phase 07 P01 | 6min | 2 tasks | 2 files |
 | Phase 07 P02 | 7min | 3 tasks | 9 files |
+| Phase 08 P01 | 3 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -223,6 +224,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 6 P06]: ForReadingSmileSource returns {cycleTime, quotes} so the time-less smile carries the resolved DATA instant the use-case stamps with
 - [Phase ?]: 06-07: risk-reversal bracket-width policy = Decision A (gate at MAX_BRACKET_WIDTH=0.30 delta units) — return null rather than interpolate across a wide non-adjacent bracket; pairs with the |delta|>=1 sign filter (WR-02/WR-04)
 - [Phase ?]: MCP-02 transactions parity is enforced at runtime (transactionsResponse.parse), not compile time; a contract field rename fails the get_transactions tests but not bun run typecheck
+- [Phase ?]: D20: Supabase Auth JWT (HS256 offline verify via hono/jwt) + exact-origin CORS decided for Phase 8 read endpoints
 
 ### Pending Todos
 
@@ -246,6 +248,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-24T13:47:57.245Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-web-dashboard-frontend-react-spa-on-hono-rpc/09-CONTEXT.md
+Last session: 2026-06-24T15:22:31.969Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
