@@ -1,19 +1,24 @@
 ---
 phase: 9
 slug: web-dashboard-frontend-react-spa-on-hono-rpc
-status: approved
+status: draft
 shadcn_initialized: false
 preset: none
 created: 2026-06-23
+updated: 2026-06-24
 reviewed_at: 2026-06-23
 ---
 
-# Phase 8 — UI Design Contract
+# Phase 9 — UI Design Contract
 
 > Visual and interaction contract for the Morai web dashboard (apps/web). Generated from
 > five user-approved HTML mockups in `mockups/`. Every design decision below is LOCKED —
 > grounded in what the user iterated to and approved. Do not re-litigate palette,
 > typography, chart library, or layout choices.
+>
+> **Update 2026-06-24:** Added Login screen contract (Supabase Auth gate), AUTH_EXPIRED
+> status banner, and TanStack Query polling intervals. Fixed heading (was "Phase 8").
+> Backend Data Gaps updated to reflect Phase 8 as the delivery vehicle.
 
 ---
 
@@ -156,6 +161,27 @@ All colors extracted directly from the mockup `:root` CSS variables (source of t
 | Market strip: gamma label | net γ /1% |
 | Market strip: flip label | γ flip |
 | Market strip: P&L label | book P&L |
+
+### Login screen
+
+| Element | Copy |
+|---------|------|
+| Page title | Morai |
+| Heading | Sign in |
+| Sub-heading | Trading dashboard — access restricted to authorized users |
+| Email label | Email |
+| Email placeholder | you@example.com |
+| Password label | Password |
+| Submit button | Sign in |
+| Error: invalid credentials | Invalid email or password. |
+| Error: network failure | Could not reach the server. Check your connection. |
+
+### AUTH_EXPIRED status banner
+
+| Element | Copy |
+|---------|------|
+| Banner text | Schwab auth expired. Run `auth setup` to reconnect. Live data may be stale. |
+| Banner dismiss | — (no dismiss; banner persists until AUTH_EXPIRED clears) |
 
 ### Overview screen
 
@@ -316,6 +342,7 @@ emphasis serve this anchor; everything else is secondary.
 
 | Screen | Primary anchor |
 |--------|----------------|
+| Login | Sign in card (centered, max-width 360px) |
 | Overview | Open Positions card (Row A, span 7) — the book at a glance |
 | Analyzer | The visx payoff / risk-profile chart (center column, flex:1) |
 | Positions | The greek-attribution waterfall ("Why it's moving") |
@@ -325,6 +352,63 @@ emphasis serve this anchor; everything else is secondary.
 ---
 
 ## Screen-by-Screen Interaction Contracts
+
+### Login screen
+
+The login screen is the **app gate**. It renders instead of the full layout shell when no
+valid Supabase Auth session exists. The five-screen nav and market strip are NOT rendered;
+only the login card appears.
+
+Layout: full viewport, centered flex column. Background: same body gradient as the main app
+(`radial-gradient(1100px 560px at 80% -10%, #141b29 0%, rgba(10,14,20,0) 58%), #0a0e14`).
+
+**Login card:**
+- Max-width: 360px. Centered horizontally and vertically (or 40% down from top).
+- Background: `linear-gradient(180deg, #0f1521, #0c111a)`. Border: `1px solid #1b2433`. Border-radius: 12px. Padding: 24px.
+- Brand: MOR**AI** logotype at top, `subhead` token, violet "AI".
+- Heading: "Sign in" — `subhead` token (Space Grotesk 700, 16px).
+- Sub-heading: "Trading dashboard — access restricted to authorized users" — `label` token (10px), `color: #566273`.
+- Email field: shadcn `Input`, full width. Label above: `label` token, `text-muted`.
+- Password field: shadcn `Input` (type=password), full width. Label above: `label` token.
+- Submit button: shadcn `Button` (default variant), full width, `bg-violet text-bg`. Text: "Sign in".
+- Inline error: coral `#ef5350`, `label` token, below the password field. Appears on invalid credentials or network failure.
+- Loading state: button text becomes "Signing in…"; button disabled; no spinner overlay.
+- On success: redirect to Overview. Session stored in Supabase Auth cookie/storage (handled by `@supabase/ssr`).
+- Focus management: email field auto-focused on mount. Enter in password field submits.
+- No "forgot password" or "sign up" links — single-user, closed system.
+
+**Session handling across screens:**
+- TanStack Query's `queryClient` stores the auth state. On 401 response from any API call, clear session and redirect to Login.
+- Session refresh: `@supabase/ssr` handles token refresh automatically on each request. No manual polling needed for auth.
+- Logout: not surfaced in the main UI (single-user tool; reload/clear session via browser is sufficient). May be added to a settings dropdown in a future phase.
+
+### AUTH_EXPIRED status banner
+
+The banner is a fixed-position strip at the bottom of the viewport (`position: fixed; bottom: 0; left: 0; right: 0; z-index: 100`). It renders on all five main screens when `GET /api/status` returns `tokenFreshness: "AUTH_EXPIRED"`.
+
+**Visual spec:**
+- Background: `#180f10`. Border-top: `1px solid #5a2b2e` (blood-dark border, same as the regime stat pill). Padding: `8px 16px`.
+- Text: "Schwab auth expired. Run `auth setup` to reconnect. Data may be stale." — `body` token (12px JetBrains Mono), `color: #ef5350`.
+- The `auth setup` portion is rendered in a `<code>` element: `font-family: inherit; background: #3e1f23; padding: 1px 4px; border-radius: 3px`.
+- No close/dismiss button. Banner disappears automatically when the next status poll returns a non-expired state.
+- When banner is visible, the page body gains `padding-bottom: 38px` to prevent content overlap.
+
+**Data source:** `GET /api/status` polled by TanStack Query every 30s (see Auto-Poll Intervals below). The `AUTH_EXPIRED` check reads `data.tokenFreshness === "AUTH_EXPIRED"`.
+
+### Auto-Poll Intervals (TanStack Query `refetchInterval`)
+
+| Data | Endpoint | Interval | Stale time | Notes |
+|------|----------|----------|------------|-------|
+| Status (auth + jobs) | `GET /api/status` | 30s | 20s | Drives AUTH_EXPIRED banner and system health card |
+| Market strip (SPX, GEX, P&L) | `GET /api/gex` + `GET /api/positions` | 30s | 20s | Header values update on the same cycle |
+| GEX snapshot | `GET /api/gex` | 30s | 20s | Source data is 30-min-fresh; polling is inexpensive (cached row, no recompute) |
+| Positions + live greeks | `GET /api/positions` | 30s | 20s | Current P&L, mark, greeks for open positions |
+| Journal snapshots | `GET /api/journal/:calendarId` | 60s | 50s | Slower: snapshot job is 30-min cadence; more frequent polling is wasteful |
+| Analytics (skew, term-structure) | `GET /api/analytics/skew`, `/term-structure` | 60s | 50s | Same cadence as journal |
+
+**On tab focus:** all queries with `staleTime` exceeded re-fetch immediately on window focus (`refetchOnWindowFocus: true` — TanStack Query default).
+
+**Error retry:** 3 retries with exponential back-off (TanStack default). After 3 failures, display the generic error state for that region; do not crash the full page.
 
 ### Global — all screens
 
@@ -519,17 +603,20 @@ On failure: show coral error "Could not parse — need 2 expiries, a strike, and
 
 ## Backend Data Gaps (Planner Action Items)
 
-These are build tasks, not design problems. The planner MUST create plans for each:
+Phase 8 delivers the backend; Phase 9 consumes it. The items below are
+**Phase 8 delivery targets** — the frontend depends on each being available via the
+typed Hono RPC client before the corresponding Phase 9 screen can be wired.
 
-| Gap | Description | Required For |
-|-----|-------------|-------------|
-| GEX-01 | No GEX endpoint exists. Compute `net_gamma_profile` (full chain re-priced across spot grid, $Bn/1%), `flip_level` (zero-crossing), `call_wall`/`put_wall` (peak |GEX| above/below flip), `gex_by_strike` (net GEX per strike), `gex_by_expiry` (sum by expiry). All computable from `leg_observations` (gamma, delta, OI per contract). | Market screen, Analyzer right panel, all header stats |
-| GEX-02 | New Zod contract in `packages/contracts/src/gex.ts` for `gexSnapshot` response: `{ spot, flip, callWall, putWall, netGammaAtSpot, profile: [{strike, gamma}], strikes: [{k, gex, coi, poi, vol}], byExpiry: [{date, gex}] }`. Export from `packages/contracts/src/index.ts`. | Hono RPC type safety |
-| RPC-01 | `AppType` (Hono app type) not exported from `apps/server`. Must export for `hc<AppType>()` client in `apps/web`. See stack-decisions.md D4. | All API calls in apps/web |
-| WEB-01 | `apps/web` not scaffolded. Need Vite + React + Tailwind v4 + shadcn/ui init + TanStack Query provider. | Everything |
-| JOURNAL-01 | Journal day-by-day only available for trades from Jun-12 forward (chain history start). UI must mark older trades (entry/exit only badge) and handle the no-history state gracefully — no error, no blank screen. | Journal screen |
-| REBUILD-01 | `rebuild-journal` MCP trigger exists but web UI should offer a button per-calendar in Journal screen. Wire to `POST /api/jobs/rebuild-journal/trigger` with `calendarId`. | Journal screen |
-| POSITIONS-01 | Positions screen needs current unrealized P&L and per-position greeks from live chain. Already available via `GET /api/positions` (brokerage adapter) but may need a read-through-BSM layer for real-time greeks. Confirm whether the API returns computed greeks or raw. | Positions screen |
+| Gap | Description | Required For | Phase |
+|-----|-------------|-------------|-------|
+| GEX-01 | Compute `net_gamma_profile` (full chain re-priced across spot grid, $Bn/1%), `flip_level`, `call_wall`/`put_wall`, `gex_by_strike`, `gex_by_expiry` from `leg_observations`. Snapshot-job (not per-request). | Market screen, Analyzer right panel, all header stats | Phase 8 |
+| GEX-02 | Zod contract `gexSnapshot` in `packages/contracts/src/gex.ts`: `{ spot, flip, callWall, putWall, netGammaAtSpot, profile: [{strike, gamma}], strikes: [{k, gex, coi, poi, vol}], byExpiry: [{date, gex}] }`. Export from index. | Hono RPC type safety | Phase 8 |
+| RPC-01 | `AppType` (Hono app type) exported from `apps/server` for `hc<AppType>()` client in `apps/web`. See stack-decisions.md D4. | All API calls in apps/web | Phase 8 |
+| AUTH-01 | Supabase Auth gating on read endpoints; CORS for Vercel origin. Unauthenticated → 401. | Login screen, session refresh | Phase 8 |
+| WEB-01 | `apps/web` scaffold: Vite + React + Tailwind v4 + shadcn/ui init + TanStack Query provider + Supabase Auth client (`@supabase/ssr`). | Everything | Phase 9 (first task) |
+| JOURNAL-01 | Journal day-by-day only available for trades from Jun-12 forward. UI marks older trades (entry/exit only badge). No error, no blank screen. | Journal screen | Phase 9 |
+| REBUILD-01 | Per-calendar rebuild button in Journal wires to `POST /api/jobs/rebuild-journal/trigger` with `calendarId`. Confirmation dialog before trigger. | Journal screen | Phase 9 |
+| POSITIONS-01 | Positions screen needs current unrealized P&L and per-position greeks. Confirm whether `GET /api/positions` returns computed greeks or raw (may need read-through-BSM layer). | Positions screen | Phase 8 / 9 |
 
 ---
 
@@ -570,11 +657,11 @@ No third-party registry blocks declared. Registry vetting gate not required.
 
 ## Checker Sign-Off
 
-- [x] Dimension 1 Copywriting: PASS
-- [x] Dimension 2 Visuals: PASS
-- [x] Dimension 3 Color: PASS
-- [x] Dimension 4 Typography: PASS
-- [x] Dimension 5 Spacing: PASS
-- [x] Dimension 6 Registry Safety: PASS
+- [ ] Dimension 1 Copywriting: PASS
+- [ ] Dimension 2 Visuals: PASS
+- [ ] Dimension 3 Color: PASS
+- [ ] Dimension 4 Typography: PASS
+- [ ] Dimension 5 Spacing: PASS
+- [ ] Dimension 6 Registry Safety: PASS
 
-**Approval:** approved (2026-06-23, gsd-ui-checker — 6/6 PASS, 0 flags)
+**Approval:** pending (updated 2026-06-24 — awaiting re-check after Login screen + AUTH_EXPIRED banner additions)
