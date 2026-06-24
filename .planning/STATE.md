@@ -6,14 +6,14 @@ current_phase: 09
 current_phase_name: web-dashboard-frontend-react-spa-on-hono-rpc
 status: Ready to plan
 stopped_at: Completed 08-07-PLAN.md
-last_updated: "2026-06-24T20:19:54.650Z"
+last_updated: "2026-06-24T20:29:06.381Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 74
-  completed_plans: 67
+  completed_plans: 68
   percent: 89
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 09 (web-dashboard-frontend-react-spa-on-hono-rpc) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
 Last activity: 2026-06-24 — Phase 09 execution started
@@ -101,6 +101,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 08 P06 | 7 | 2 tasks | 7 files |
 | Phase 08 P07 | 9 | 3 tasks | 11 files |
 | Phase 09 P01 | 5 | 3 tasks | 6 files |
+| Phase 09 P02 | 334 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -243,6 +244,8 @@ Recent decisions affecting current work:
 - [Phase ?]: A1 Supabase JWT algorithm gate operator-deferred: HS256 code path proven by integration tests using hono Jwt.sign()
 - [Phase ?]: quant leaf below both core and web
 - [Phase ?]: charting decision reconciled per D-05 + UI-SPEC
+- [Phase ?]: BSM kernel relocated verbatim to packages/quant/src/bsm.ts — zero-import pure leaf
+- [Phase ?]: packages/core/src/journal/domain/bsm.ts replaced with 5-line re-export shim to @morai/quant
 
 ### Pending Todos
 
@@ -266,6 +269,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-24T20:19:47.619Z
+Last session: 2026-06-24T20:28:59.296Z
 Stopped at: Completed 08-07-PLAN.md
 Resume file: None

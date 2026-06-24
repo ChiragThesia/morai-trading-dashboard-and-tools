@@ -478,7 +478,7 @@ render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8)
   4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
      delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
 
-**Plans:** 1/10 plans executed
+**Plans:** 2/10 plans executed
 
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
@@ -487,7 +487,7 @@ Plans:
 
 **Wave 2** *(blocked on 09-01)*
 
-- [ ] 09-02-PLAN.md — TDD: extract pure BSM kernel to packages/quant leaf, parity + fast-check, core re-export shim (D-01, UI-01)
+- [x] 09-02-PLAN.md — TDD: extract pure BSM kernel to packages/quant leaf, parity + fast-check, core re-export shim (D-01, UI-01)
 
 **Wave 3** *(blocked on 09-01)*
 
