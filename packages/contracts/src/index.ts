@@ -64,3 +64,7 @@ export type {
 // Jobs contracts (MCP-02: shared by POST /api/jobs/:name/trigger and trigger_job MCP tool)
 export { TRIGGERABLE_JOBS, triggerJobPayload, triggerJobBodyFor, triggerJobResponse } from "./jobs.ts";
 export type { TriggerableJob, TriggerJobPayload, TriggerJobResponse } from "./jobs.ts";
+
+// GEX contracts (MCP-02: ONE schema source for GET /api/analytics/gex + get_gex MCP tool)
+export { gexWallEntry, gexSnapshotEntry, gexSnapshotResponse } from "./gex.ts";
+export type { GexWallEntry, GexSnapshotEntry, GexSnapshotResponse } from "./gex.ts";
