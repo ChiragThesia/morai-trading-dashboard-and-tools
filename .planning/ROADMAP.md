@@ -478,7 +478,7 @@ render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8)
   4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
      delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
 
-**Plans:** 5/10 plans executed
+**Plans:** 6/10 plans executed
 
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
@@ -499,7 +499,7 @@ Plans:
 
 **Wave 5** *(blocked on 09-04 — closes the D-02 thin-slice)*
 
-- [ ] 09-05-PLAN.md — Layout Shell (sticky header + live market strip) + Overview screen + economic-calendar stub + Vercel deploy + human-verify (D-02, UI-01, UI-02)
+- [x] 09-05-PLAN.md — Layout Shell (sticky header + live market strip) + Overview screen + economic-calendar stub + Vercel deploy + human-verify (D-02, UI-01, UI-02)
 
 **Wave 6** *(blocked on 09-05; 06 also on 09-02; parallel, zero file overlap)*
 
