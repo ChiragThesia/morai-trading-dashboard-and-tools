@@ -478,7 +478,7 @@ render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8)
   4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
      delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
 
-**Plans:** 3/10 plans executed
+**Plans:** 4/10 plans executed
 
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
@@ -495,7 +495,7 @@ Plans:
 
 **Wave 4** *(blocked on 09-03)*
 
-- [ ] 09-04-PLAN.md — Auth gate + typed hc<AppType>() RPC client + 401 intercept + AUTH_EXPIRED banner + Login (threat model L1) (UI-01, UI-02)
+- [x] 09-04-PLAN.md — Auth gate + typed hc<AppType>() RPC client + 401 intercept + AUTH_EXPIRED banner + Login (threat model L1) (UI-01, UI-02)
 
 **Wave 5** *(blocked on 09-04 — closes the D-02 thin-slice)*
 
