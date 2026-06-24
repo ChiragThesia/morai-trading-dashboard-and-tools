@@ -74,10 +74,11 @@ describe("Overview screen", () => {
   });
 
   it("renders the locked empty-state copy when usePositions returns an empty array", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     mockUsePositions.mockReturnValue({
       data: { positions: [] },
       isPending: false,
-    } as ReturnType<typeof usePositions>);
+    } as unknown as ReturnType<typeof usePositions>);
 
     renderOverview();
 
@@ -91,10 +92,11 @@ describe("Overview screen", () => {
 
   it("renders the position row and net row when positions exist", () => {
     const pos = makePosition();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     mockUsePositions.mockReturnValue({
       data: { positions: [pos] },
       isPending: false,
-    } as ReturnType<typeof usePositions>);
+    } as unknown as ReturnType<typeof usePositions>);
 
     renderOverview();
 
@@ -115,10 +117,11 @@ describe("Overview screen", () => {
   });
 
   it("renders the economic-calendar ComingSoon stub with '○ needs feed' badge", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     mockUsePositions.mockReturnValue({
       data: { positions: [] },
       isPending: false,
-    } as ReturnType<typeof usePositions>);
+    } as unknown as ReturnType<typeof usePositions>);
 
     renderOverview();
 
@@ -127,10 +130,11 @@ describe("Overview screen", () => {
   });
 
   it("renders the locked Data-range note", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     mockUsePositions.mockReturnValue({
       data: { positions: [] },
       isPending: false,
-    } as ReturnType<typeof usePositions>);
+    } as unknown as ReturnType<typeof usePositions>);
 
     renderOverview();
 
@@ -143,10 +147,11 @@ describe("Overview screen", () => {
   });
 
   it("renders loading skeleton when positions are still loading", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     mockUsePositions.mockReturnValue({
       data: undefined,
       isPending: true,
-    } as ReturnType<typeof usePositions>);
+    } as unknown as ReturnType<typeof usePositions>);
 
     const { container } = renderOverview();
 

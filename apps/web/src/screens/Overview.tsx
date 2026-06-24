@@ -1,5 +1,6 @@
 import { usePositions } from "../hooks/usePositions.ts";
 import { useStatus } from "../hooks/useStatus.ts";
+import { ComingSoon } from "../components/stubs/ComingSoon.tsx";
 
 /**
  * Overview — the main dashboard screen (Plan 05, Task 2).
@@ -428,8 +429,8 @@ export function Overview(): React.ReactElement {
           gap: "12px",
         }}
       >
-        {/* Catalysts — ComingSoon stub (span 4) */}
-        <ComingSoonStub
+        {/* Catalysts — ComingSoon stub (span 4) — UI-SPEC "Catalysts" stub exact copy */}
+        <ComingSoon
           badge="○ needs feed"
           title="Catalysts"
           body="Event calendar not wired — FOMC · CPI · OPEX · jobs — add an economic-calendar feed"
@@ -551,72 +552,3 @@ export function Overview(): React.ReactElement {
   );
 }
 
-// ─── ComingSoonStub (inline for this file, real component in Task 2) ──────────
-
-interface ComingSoonStubProps {
-  badge: string;
-  title: string;
-  body: string;
-  style?: React.CSSProperties;
-}
-
-/**
- * ComingSoonStub — inline version used only by Overview.tsx.
- * The canonical reusable version lives in apps/web/src/components/stubs/ComingSoon.tsx
- * (created in Task 2). This inline version matches the UI-SPEC "Coming-Soon Stubs Contract".
- */
-function ComingSoonStub({
-  badge,
-  title,
-  body,
-  style,
-}: ComingSoonStubProps): React.ReactElement {
-  return (
-    <div
-      style={{
-        border: "1px dashed #27313f",
-        borderRadius: "8px",
-        padding: "16px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "8px",
-        ...style,
-      }}
-    >
-      <span
-        style={{
-          fontSize: "10px",
-          fontFamily: "'Space Grotesk', system-ui, sans-serif",
-          fontWeight: 600,
-          color: "#566273",
-        }}
-      >
-        {badge}
-      </span>
-      <span
-        style={{
-          fontSize: "10px",
-          fontFamily: "'Space Grotesk', system-ui, sans-serif",
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.9px",
-          color: "#d6dbe4",
-        }}
-      >
-        {title}
-      </span>
-      <span
-        style={{
-          fontSize: "10px",
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          color: "#566273",
-          textAlign: "center",
-        }}
-      >
-        {body}
-      </span>
-    </div>
-  );
-}
