@@ -27,6 +27,8 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
 - [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (verified 4/4 2026-06-22; 8 plans + 1 gap round; merged PR #5; prod migration 0007 applied + verified)
 - [x] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history (verified 2/2 offline 2026-06-22; 2 plans + 1 review round; live pull needs Schwab auth + healthy deploy)
+- [ ] **Phase 8: Web Dashboard Backend** - GEX analytics endpoint + Zod contract (scheduled snapshot job), Hono `AppType` export for typed RPC, Supabase Auth on read endpoints + CORS
+- [ ] **Phase 9: Web Dashboard Frontend** - React + Vite SPA (apps/web) on Vercel: 5 screens over typed Hono RPC, TanStack auto-poll, Supabase Auth login
 
 ## Phase Details
 
@@ -403,3 +405,65 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
 | 5. Jobs, Fill Rebuild & Integrity | 15/16 | In Progress|  |
 | 6. Derived Analytics | 8/8 | Complete   | 2026-06-22 |
+
+### Phase 8: Web Dashboard Backend — GEX analytics endpoint, contract, RPC export, Supabase Auth + CORS
+
+**Goal:** Build the typed, authenticated API surface the web SPA consumes. Add a GEX
+(gamma exposure) analytics endpoint backed by a **scheduled snapshot job** (computed from
+`leg_observations` into a new `gex_snapshot` table, served cached — not per-request), its Zod
+contract in `packages/contracts`, export the Hono `AppType` so `hc<AppType>()` typed RPC works
+from `apps/web`, and gate the read endpoints behind **Supabase Auth** + CORS for the Vercel
+origin. Backend slice of the web dashboard (frontend is Phase 9).
+**Requirements**: New web-backend scope (no v1 REQ IDs) — GEX endpoint + contract, `AppType`
+export, Supabase Auth + CORS. See CONTEXT for locked decisions; formalize via `/gsd-spec-phase 8`
+if needed.
+**Depends on:** Phase 6 (derived analytics + `leg_observations`), Phase 7
+**Context:** `.planning/phases/08-web-dashboard-backend-gex-auth-rpc/08-CONTEXT.md`
+**Success Criteria** (what must be TRUE):
+
+  1. A read endpoint returns a `gexSnapshot` over a shared Zod contract (`spot`, `flip`,
+     `callWall`, `putWall`, `netGammaAtSpot`, `profile[]`, `strikes[]`, `byExpiry[]`), served
+     from a stored snapshot row — not recomputed per request.
+
+  2. A scheduled pg-boss job computes GEX from the latest `leg_observations` each RTH snapshot
+     cycle and writes a `gex_snapshot` row; re-run within a cycle is idempotent (0 duplicate rows).
+
+  3. `apps/server` exports `AppType`; a typed `hc<AppType>()` client compiles against it.
+
+  4. Read endpoints (status, journal, brokerage, analytics, gex) require a valid Supabase Auth
+     session; CORS allows the Vercel web origin; unauthenticated request → 401.
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 8 to break down)
+
+### Phase 9: Web Dashboard Frontend — React SPA (apps/web) on Vercel over typed Hono RPC
+
+**Goal:** Scaffold `apps/web` (Vite + React + Tailwind v4 + shadcn/ui + TanStack Query) and
+build the five approved screens (Overview, Analyzer, Positions, Journal, Market) per the locked
+UI-SPEC, consuming the typed Hono RPC client. Live data (greeks, positions, GEX) auto-polls via
+TanStack `refetchInterval`; Supabase Auth login gates the app; the three coming-soon features
+render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8).
+**Requirements**: UI-01, UI-02
+**Depends on:** Phase 8 (typed authenticated API + GEX endpoint)
+**UI Design Contract:** `.planning/phases/09-web-dashboard-frontend-react-spa-on-hono-rpc/09-UI-SPEC.md` (approved — LOCKED)
+**Success Criteria** (what must be TRUE):
+
+  1. `apps/web` builds and deploys to Vercel; renders all five screens per the UI-SPEC over the
+     typed RPC client (UI-01).
+
+  2. Live data (greeks, positions, GEX) auto-polls via TanStack `refetchInterval`; journal renders
+     30-min snapshots and handles trades older than the Jun-12 chain-history start gracefully (UI-01).
+
+  3. The status banner surfaces `AUTH_EXPIRED` and job failures (UI-02).
+
+  4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
+     delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 9 to break down)

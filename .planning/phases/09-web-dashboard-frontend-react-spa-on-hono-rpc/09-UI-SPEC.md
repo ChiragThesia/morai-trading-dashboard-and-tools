@@ -1,6 +1,6 @@
 ---
-phase: 8
-slug: web-dashboard-react-frontend-apps-web-on-hono-rpc-gex-analyt
+phase: 9
+slug: web-dashboard-frontend-react-spa-on-hono-rpc
 status: approved
 shadcn_initialized: false
 preset: none
