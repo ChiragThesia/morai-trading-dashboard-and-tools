@@ -56,10 +56,13 @@ everything else fails, this must work.
 
 ## Context
 
-- **Greenfield, but architecture-complete.** No application code exists. A full hand-authored
-  architecture doc set is the source of truth: `docs/architecture/` (read `overview.md` first) +
-  STRICT working rules in `.claude/rules/`. This PROJECT.md sits on top of those — it does not
-  restate them.
+- **Backend shipped; architecture-complete.** Phases 1–8 are merged: hexagon scaffold,
+  Supabase/Drizzle, CBOE + Schwab adapters, own BSM engine, journal + 30-min snapshot jobs,
+  derived analytics, trade history, and the web-dashboard **backend** (GEX analytics endpoint +
+  scheduled snapshot job, typed Hono `AppType` RPC export, Supabase-Auth + CORS). The frontend
+  (`apps/web`) is Phase 9. A full hand-authored architecture doc set remains the source of truth:
+  `docs/architecture/` (read `overview.md` first) + STRICT working rules in `.claude/rules/`. This
+  PROJECT.md sits on top of those — it does not restate them.
 - **Prior art to port, not invent.** A working `trade-advisor` plugin already implements Schwab
   OAuth (`auth.ts`: setup/refresh/status/doctor), a BSM engine, CBOE pulls, OCC symbol parsing,
   and journal-rebuild-from-fills. Inventory: `docs/trade-advisor-inventory.md`. These are
@@ -118,4 +121,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after initialization*
+*Last updated: 2026-06-24 after Phase 8 (web-dashboard backend — GEX endpoint, Supabase Auth + CORS, AppType RPC export).*
