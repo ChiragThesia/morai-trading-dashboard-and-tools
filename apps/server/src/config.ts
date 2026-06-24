@@ -19,6 +19,12 @@ const configSchema = z.object({
   SCHWAB_MARKET_APP_KEY: z.string().min(1),
   SCHWAB_MARKET_APP_SECRET: z.string().min(1),
   SCHWAB_MARKET_CALLBACK_URL: z.string().url(),
+  // Phase 8: Supabase Auth + CORS (D20 / SC-4 / AUTH-01)
+  // T-01-12: values are NEVER logged — only field names on parse failure (bootConfig).
+  SUPABASE_JWT_SECRET: z
+    .string()
+    .min(32, "SUPABASE_JWT_SECRET must be at least 32 chars"),
+  WEB_ORIGIN: z.string().url("WEB_ORIGIN must be a valid URL"),
 });
 
 export type Config = z.infer<typeof configSchema>;

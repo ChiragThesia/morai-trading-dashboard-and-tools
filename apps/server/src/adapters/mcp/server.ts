@@ -8,6 +8,7 @@ import type {
   ForRunningGetLiveGreeks,
   ForRunningGetTermStructure,
   ForRunningGetSkew,
+  ForRunningGetGex,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -21,6 +22,7 @@ import {
   registerGetLiveGreeksTool,
   registerGetTermStructureTool,
   registerGetSkewTool,
+  registerGetGexTool,
   registerGetPositionsTool,
   registerGetTransactionsTool,
   registerGetOrdersTool,
@@ -45,6 +47,8 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  *         get_term_structure, get_skew.
  * MCP-02: each tool shares the same Zod contract as its HTTP route (wired in tools.ts).
  * MCP-02: trigger_job registered here (Phase 5) — shares ForTriggeringJob use-case with HTTP route.
+ * GEX-02 / MCP-02: get_gex registered here (Phase 8, 08-07) — shares gexSnapshotResponse with
+ *         GET /api/analytics/gex; injected as optional for backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -54,6 +58,7 @@ export function makeMcpRouter(
   getLiveGreeks: ForRunningGetLiveGreeks,
   getTermStructure: ForRunningGetTermStructure,
   getSkew: ForRunningGetSkew,
+  getGex?: ForRunningGetGex,
   getPositions?: ForGettingPositions,
   getTransactions?: ForGettingTransactions,
   getOrders?: ForGettingOrders,
@@ -77,6 +82,10 @@ export function makeMcpRouter(
     registerGetLiveGreeksTool(server, getLiveGreeks);
     registerGetTermStructureTool(server, getTermStructure);
     registerGetSkewTool(server, getSkew);
+    // GEX-02 / MCP-02: get_gex tool — optional, wired when getGex use-case is available (Phase 8)
+    if (getGex !== undefined) {
+      registerGetGexTool(server, getGex);
+    }
     // BRK-02 / MCP-02: trader data tools (optional — wired when trader adapters are available)
     if (getPositions !== undefined) {
       registerGetPositionsTool(server, getPositions);

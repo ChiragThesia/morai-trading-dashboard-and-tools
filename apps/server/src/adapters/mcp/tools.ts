@@ -9,6 +9,7 @@ import {
   ordersResponse,
   termStructureResponse,
   skewResponse,
+  gexSnapshotResponse,
   brokerageAuthExpiredPayload,
 } from "@morai/contracts";
 import type {
@@ -18,6 +19,7 @@ import type {
   ForRunningGetLiveGreeks,
   ForRunningGetTermStructure,
   ForRunningGetSkew,
+  ForRunningGetGex,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -463,6 +465,75 @@ export function registerGetOrdersTool(
         return { content: [{ type: "text" as const, text: "internal error" }] };
       }
       const payload = ordersResponse.parse({ orders: result.value });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetGexTool — registers the get_gex MCP tool (GEX-02 / MCP-02).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: call use-case → map Result → parse through gexSnapshotResponse → return content.
+ *
+ * MCP-02: the SAME gexSnapshotResponse schema used by GET /api/analytics/gex is used here.
+ * A one-sided field rename fails `bun run typecheck`.
+ *
+ * D-01 / GEX-01: no recompute — getGex reads the stored snapshot row only.
+ * No-snapshot case → structured {error:"no-snapshot"} payload (never throws, never 404 from MCP).
+ */
+export function registerGetGexTool(
+  server: McpServer,
+  getGex: ForRunningGetGex,
+): void {
+  server.registerTool(
+    "get_gex",
+    {
+      title: "Get GEX",
+      description:
+        "Returns the latest GEX (Gamma Exposure) snapshot — flip level, call/put walls, net gamma at spot, profile grid, per-strike detail, per-expiry rollup. Returns {error:'no-snapshot'} when no snapshot has been computed yet.",
+      // No input parameters — returns the latest stored snapshot (no filters).
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getGex();
+
+      if (!result.ok) {
+        // T-08-AUTH5: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      if (result.value === null) {
+        // No snapshot yet — structured payload, never throw (MCP-02 stability).
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ error: "no-snapshot" }),
+            },
+          ],
+        };
+      }
+
+      // Parse through the SAME gexSnapshotResponse contract as the HTTP route (MCP-02).
+      const row = result.value;
+      const payload = gexSnapshotResponse.parse({
+        spot: row.spot,
+        flip: row.flip,
+        callWall: row.callWall,
+        putWall: row.putWall,
+        netGammaAtSpot: row.netGammaAtSpot,
+        profile: row.profile,
+        strikes: row.strikes,
+        byExpiry: row.byExpiry,
+        computedAt:
+          row.computedAt instanceof Date
+            ? row.computedAt.toISOString()
+            : row.computedAt,
+      });
+
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
