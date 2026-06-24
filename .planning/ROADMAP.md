@@ -433,7 +433,7 @@ if needed.
   4. Read endpoints (status, journal, brokerage, analytics, gex) require a valid Supabase Auth
      session; CORS allows the Vercel web origin; unauthenticated request → 401.
 
-**Plans:** 2/7 plans executed
+**Plans:** 3/7 plans executed
 
 Plans:
 **Wave 1**
@@ -443,7 +443,7 @@ Plans:
 
 **Wave 2** *(blocked on 08-02)*
 
-- [ ] 08-03-PLAN.md — TDD GEX domain math: dollarGamma/strikeGex/findFlip/buildProfile vs playground-v3 oracle (GEX-01)
+- [x] 08-03-PLAN.md — TDD GEX domain math: dollarGamma/strikeGex/findFlip/buildProfile vs playground-v3 oracle (GEX-01)
 - [ ] 08-04-PLAN.md — [BLOCKING] migration 0008_gex_snapshot.sql + live push (GEX-01)
 
 **Wave 3** *(blocked on 08-02/08-03/08-04)*
