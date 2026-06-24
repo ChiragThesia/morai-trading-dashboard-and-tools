@@ -757,22 +757,22 @@ Supabase Auth is newly enabled (`security_enforcement` applies).
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **POSITIONS-01 — raw vs. BSM greeks for positions screen**
    - What we know: `GET /api/positions` returns raw Schwab greeks from the API response. The Positions screen in the UI-SPEC shows per-leg delta/gamma/theta/vega.
    - What's unclear: Whether Schwab's reported greeks are accurate enough for the positions screen, or whether a BSM re-compute layer is needed.
-   - Recommendation: **Mark as out-of-scope for Phase 8** (raw greeks are available, Positions screen is Phase 9). Phase 9 research can confirm. Document as a planner decision.
+   - **Resolution:** POSITIONS-01 (read-through-BSM greeks for the Positions screen) is **deferred OUT OF SCOPE to Phase 9**. Raw Schwab greeks suffice for Phase 8; the Positions screen itself is Phase 9 (Assumption A4). No read-through-BSM layer is built in this phase. Persisted in the plan set via 08-07's `<deferred_items>`.
 
 2. **GEX job chain position: after `compute-analytics` or after `snapshot-calendars`?**
    - `compute-analytics` is the current terminal job in the chain. Adding GEX after it keeps the chain linear: `fetch-chain → bsm-greeks → snapshot-calendars → compute-analytics → compute-gex-snapshot`.
    - Alternative: chain GEX directly from `snapshot-calendars` (parallel with analytics).
-   - Recommendation: **Serial chain from `compute-analytics`** — simpler, matches existing pattern, GEX needs BSM-filled `bsm_gamma` values (filled by `compute-bsm-greeks`), which are present by the time `compute-analytics` completes.
+   - **Resolution:** **Serial chain after `compute-analytics`** — simpler, matches existing pattern, GEX needs BSM-filled `bsm_gamma` values (filled by `compute-bsm-greeks`), which are present by the time `compute-analytics` completes.
 
 3. **`callWall` / `putWall` integer vs. per-strike with full data**
    - The `gex_snapshot` table stores `callWall` as an integer strike level. But the UI-SPEC shows a `gexWallEntry` with `{k, gex, coi, poi, vol}`.
    - The `strikes[]` array in the contract already includes all per-strike data.
-   - Resolution: `callWall` and `putWall` at the top level are the integer strike values only (for the regime strip KPIs). The full metadata is in `strikes[]`. No separate wall-detail structure needed.
+   - **Resolution:** `callWall` and `putWall` at the top level are the **integer strike values only** (for the regime strip KPIs); the **full per-strike metadata lives in `strikes[]`**. No separate wall-detail structure needed.
 
 ---
 

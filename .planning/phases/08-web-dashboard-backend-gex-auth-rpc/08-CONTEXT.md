@@ -55,12 +55,12 @@ phase reuses the approved UI-SPEC (moved to the Phase 9 directory).
   the job handler). `core` imports `shared` only.
 
 ### Phasing
-- **D-05:** **Backend (Phase 8) before frontend (Phase 9).** ROADMAP restructured this session:
+- **D-05 [informational]:** **Backend (Phase 8) before frontend (Phase 9).** ROADMAP restructured this session:
   the old single "Phase 8: Web Dashboard — React frontend …" became Phase 8 (this backend
   slice) + a new Phase 9 (frontend). Frontend starts against a finished, typed, authenticated API.
 
 ### Refresh model (decided here, applies in Phase 9)
-- **D-06:** The frontend will **auto-poll** live data via TanStack `refetchInterval`. The
+- **D-06 [informational]:** The frontend will **auto-poll** live data via TanStack `refetchInterval`. The
   snapshot-job (D-01) keeps GEX reads cheap, so polling is inexpensive. Recorded here for
   continuity; implemented in Phase 9.
 
