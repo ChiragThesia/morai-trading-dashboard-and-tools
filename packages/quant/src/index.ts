@@ -1,4 +1,4 @@
-// packages/quant — pure BSM math leaf
-// Content added by Plan 02 (kernel extraction)
-// This file is a placeholder so tsconfig composite build is valid
-export {};
+// @morai/quant — pure BSM math leaf, imported by core and web.
+
+export type { BsmGreeks } from "./bsm.ts";
+export { bsmPrice, bsmGreeks, bsmVega } from "./bsm.ts";
