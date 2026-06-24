@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 08
 current_phase_name: web-dashboard-backend-gex-auth-rpc
 status: Phase 06 in progress (gap round — plan 06-07 numeric guards complete)
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-06-24T16:01:35.495Z"
+stopped_at: Completed 08-06-PLAN.md
+last_updated: "2026-06-24T16:14:01.766Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 64
-  completed_plans: 63
+  completed_plans: 64
   percent: 78
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 08 (web-dashboard-backend-gex-auth-rpc) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
 Last activity: 2026-06-24 — Phase 08 execution started
@@ -97,6 +97,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 08 P02 | 5 | 3 tasks | 8 files |
 | Phase 08-web-dashboard-backend-gex-auth-rpc P04 | 2 | - tasks | - files |
 | Phase 08 P05 | 11 | 2 tasks | 10 files |
+| Phase 08 P06 | 7 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -231,6 +232,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 08-04: 0008_gex_snapshot.sql migration generated from gexSnapshots schema via drizzle-kit generate; renamed from random-word filename; live Supabase push operator-deferred
 - [Phase ?]: 08-05: cycle_time derived from DATA cohort time via snapCycleTime(), never now() (SC-2/CR-01)
 - [Phase ?]: 08-05: Drizzle jsonb dollar-type<T>() annotation eliminates as-casts at JSONB read time
+- [Phase ?]: 08-06: compute-gex-snapshot is terminal (no boss.send) — GEX is the last step in the RTH chain (D-01, RESEARCH Open Question 2)
+- [Phase ?]: 08-06: compute-analytics chain-triggers compute-gex-snapshot via boss.send(singletonKey: triggered-by-analytics) — T-08-10 dedupe
+- [Phase ?]: 08-06: makePostgresGexSnapshotRepo added to @morai/adapters barrel (was missing from 08-05)
 
 ### Pending Todos
 
@@ -254,6 +258,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-24T16:01:20.233Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-06-24T16:14:01.757Z
+Stopped at: Completed 08-06-PLAN.md
 Resume file: None

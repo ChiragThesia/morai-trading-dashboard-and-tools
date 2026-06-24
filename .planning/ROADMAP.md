@@ -433,7 +433,7 @@ if needed.
   4. Read endpoints (status, journal, brokerage, analytics, gex) require a valid Supabase Auth
      session; CORS allows the Vercel web origin; unauthenticated request → 401.
 
-**Plans:** 5/7 plans executed
+**Plans:** 6/7 plans executed
 
 Plans:
 **Wave 1**
@@ -452,7 +452,7 @@ Plans:
 
 **Wave 4** *(08-06 blocked on 08-05; 08-07 blocked on 08-01+08-05; parallel, zero file overlap)*
 
-- [ ] 08-06-PLAN.md — compute-gex-snapshot job: handler RTH gate + serial chain after compute-analytics + worker wiring (GEX-01, D-01)
+- [x] 08-06-PLAN.md — compute-gex-snapshot job: handler RTH gate + serial chain after compute-analytics + worker wiring (GEX-01, D-01)
 - [ ] 08-07-PLAN.md — GEX route + get_gex MCP tool + env config + main.ts CORS-first/Supabase-Auth/AppType + auth integration test (GEX-01/02, RPC-01, AUTH-01)
 
 ### Phase 9: Web Dashboard Frontend — React SPA (apps/web) on Vercel over typed Hono RPC
