@@ -433,7 +433,7 @@ if needed.
   4. Read endpoints (status, journal, brokerage, analytics, gex) require a valid Supabase Auth
      session; CORS allows the Vercel web origin; unauthenticated request → 401.
 
-**Plans:** 4/7 plans executed
+**Plans:** 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -448,7 +448,7 @@ Plans:
 
 **Wave 3** *(blocked on 08-02/08-03/08-04)*
 
-- [ ] 08-05-PLAN.md — TDD computeGexSnapshot + getGex use-cases + Postgres repo + memory twin + testcontainers idempotency (GEX-01, SC-4)
+- [x] 08-05-PLAN.md — TDD computeGexSnapshot + getGex use-cases + Postgres repo + memory twin + testcontainers idempotency (GEX-01, SC-4)
 
 **Wave 4** *(08-06 blocked on 08-05; 08-07 blocked on 08-01+08-05; parallel, zero file overlap)*
 
