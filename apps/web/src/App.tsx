@@ -1,6 +1,28 @@
 import { useAuthSession } from "./hooks/useAuthSession.ts";
 import { Login } from "./screens/Login.tsx";
-import { AuthExpiredBanner } from "./components/AuthExpiredBanner.tsx";
+import { ShellWithRouter } from "./components/Shell.tsx";
+
+// Screens — imported lazily here as placeholders; each plan (05-10) fills them in.
+// Plan 05 provides Overview; Plans 06-10 fill in the remaining screens.
+// The placeholder `<div>` for screens not yet built prevents empty renders.
+import { Overview } from "./screens/Overview.tsx";
+
+const COMING_SOON_SCREEN = (name: string): React.ReactNode => (
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: "60vh",
+      color: "#7b8696",
+      fontFamily: "'Space Grotesk', system-ui, sans-serif",
+      fontSize: "16px",
+      fontWeight: 700,
+    }}
+  >
+    {name} — coming in the next plan
+  </div>
+);
 
 /**
  * App — the auth gate component.
@@ -8,15 +30,12 @@ import { AuthExpiredBanner } from "./components/AuthExpiredBanner.tsx";
  * Three states (from useAuthSession):
  *   - `undefined` (loading): blank splash — show nothing while checking localStorage
  *   - `null` (no session): render <Login>
- *   - Session (authenticated): render the app shell + <AuthExpiredBanner>
- *
- * The authenticated shell placeholder will be replaced by the real Shell component
- * in Plan 05 (layout shell + sticky header + market strip + routing).
+ *   - Session (authenticated): render <ShellWithRouter> with all five nav screens
  *
  * Security (T-09-03): client-side gate is defense-in-depth only.
  * Phase 8 server enforces 401 on every read endpoint — bypassing the SPA gate yields no data.
  */
-export function App() {
+export function App(): React.ReactElement | null {
   const session = useAuthSession();
 
   // Loading splash — undefined means getSession() is still in flight
@@ -29,29 +48,19 @@ export function App() {
     return <Login />;
   }
 
-  // Authenticated — render app shell (Plan 05 will replace this placeholder)
-  // AuthExpiredBanner is always mounted in the authenticated view (polls /api/status)
+  // Authenticated — render full Shell with nav + market strip + content area
+  // AuthExpiredBanner is mounted inside Shell (polls /api/status automatically)
   return (
-    <>
-      <div
-        data-testid="app-shell"
-        style={{
-          minHeight: "100vh",
-          background:
-            "radial-gradient(1100px 560px at 80% -10%, #141b29 0%, rgba(10,14,20,0) 58%), #0a0e14",
-          color: "#d6dbe4",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "'Space Grotesk', system-ui, sans-serif",
-          fontSize: "16px",
-          fontWeight: 700,
+    <div data-testid="app-shell">
+      <ShellWithRouter
+        screens={{
+          Overview: <Overview />,
+          Analyzer: COMING_SOON_SCREEN("Analyzer"),
+          Positions: COMING_SOON_SCREEN("Positions"),
+          Journal: COMING_SOON_SCREEN("Journal"),
+          Market: COMING_SOON_SCREEN("Market"),
         }}
-      >
-        {/* Placeholder: real Shell with nav, market strip, and routing lands in Plan 05 */}
-        MOR<strong style={{ color: "#a78bfa" }}>AI</strong>
-      </div>
-      <AuthExpiredBanner />
-    </>
+      />
+    </div>
   );
 }
