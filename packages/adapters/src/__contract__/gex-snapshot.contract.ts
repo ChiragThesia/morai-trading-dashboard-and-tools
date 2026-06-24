@@ -187,4 +187,44 @@ export function runGexSnapshotContractTests(
       expect(Array.isArray(result.value)).toBe(true);
     });
   });
+
+  // CR-02 regression: computedAt must round-trip faithfully and MUST NOT be
+  // silently substituted with cycleTime on read.
+  //
+  // The two fields represent distinct concepts:
+  //   cycleTime  = when the snapped DATA was captured (30-min RTH slot boundary)
+  //   computedAt = when the GEX snapshot was COMPUTED (clock wall-time from deps.now())
+  //
+  // Test: persist a row where computedAt is several minutes after cycleTime (a realistic
+  // scenario where the job runs after the data cycle closes). Read it back; assert that
+  // the returned computedAt equals the persisted computedAt — NOT cycleTime.
+  describe("computedAt — round-trip (CR-02)", () => {
+    it("reads back the persisted computedAt distinct from cycleTime", async () => {
+      // cycleTime = the data cycle (30-min slot boundary)
+      const cycleTime = new Date("2026-06-23T14:00:00Z");
+      // computedAt = job ran 7 minutes 42 seconds later — an off-slot instant
+      const computedAt = new Date("2026-06-23T14:07:42Z");
+
+      // Confirm they are genuinely distinct (guard against fixture mistake)
+      expect(computedAt.getTime()).not.toBe(cycleTime.getTime());
+
+      const row = makeSnapshotRow(cycleTime, { computedAt });
+
+      const persistResult = await repo.persistGexSnapshot(row);
+      expect(persistResult.ok).toBe(true);
+
+      const readResult = await repo.readGexSnapshot();
+      expect(readResult.ok).toBe(true);
+      if (!readResult.ok) return;
+
+      const found = readResult.value;
+      expect(found).not.toBeNull();
+      if (found === null) return;
+
+      // The round-tripped computedAt must equal the PERSISTED computedAt,
+      // not cycleTime (which would indicate the repo is fabricating the value).
+      expect(found.computedAt.getTime()).toBe(computedAt.getTime());
+      expect(found.computedAt.getTime()).not.toBe(cycleTime.getTime());
+    });
+  });
 }

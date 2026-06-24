@@ -117,6 +117,7 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
           profile: row.profile,
           strikes: row.strikes,
           byExpiry: row.byExpiry,
+          computedAt: row.computedAt,
         })
         .onConflictDoNothing(); // SC-4: cycle_time PK — re-run within same cycle = no-op
 
@@ -146,7 +147,6 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
       // Map DB row → GexSnapshotRow domain type.
       // JSONB columns come back as typed JS objects via the $type<> schema annotation.
       // Numeric columns come back as strings (Drizzle numeric convention).
-      // computedAt is NOT stored in the DB — cycleTime is used as a stable proxy on reads.
       const snap: GexSnapshotRow = {
         cycleTime: row.cycleTime,
         spot: parseFloat(row.spot),
@@ -157,7 +157,7 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
         profile: row.profile,
         strikes: row.strikes,
         byExpiry: row.byExpiry,
-        computedAt: row.cycleTime,
+        computedAt: row.computedAt,
       };
 
       return ok(snap);

@@ -1,0 +1,1 @@
+ALTER TABLE "gex_snapshots" ADD COLUMN "computed_at" timestamp with time zone NOT NULL;
