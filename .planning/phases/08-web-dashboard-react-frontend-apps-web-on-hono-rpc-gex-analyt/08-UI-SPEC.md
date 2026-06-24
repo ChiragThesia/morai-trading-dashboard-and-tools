@@ -59,30 +59,35 @@ Declared values (multiples of 4, extracted from mockup CSS):
 | 2xl | 48px | Page-level wrap padding |
 | 3xl | 64px | Not used at this phase |
 
-**Exceptions:**
-- Card internal padding: 13px (use `p-3.5` or exact CSS; mockup uses 13px not 12 or 16). Use `p-3` (12px) in Tailwind as the closest standard token.
-- Market strip stat pill: 5px top/bottom, 11px left/right — use `py-1.5 px-3` (6px/12px) as Tailwind approximation.
-- Header: 10px vertical, 18px horizontal — use `py-2.5 px-4.5` or `py-2 px-5`.
-- Analyzer 3-column gutters: 11px — use `gap-3` (12px).
+**Exceptions:** all shipped values are multiples of 4. The mockups use a few odd-pixel
+values (11–13px); these round to the nearest grid token below — the grid token is what ships.
+
+- Card internal padding: ships as `p-3` (12px). Mockup's 13px rounds down to 12px.
+- Market strip stat pill: ships as `py-1.5 px-3` (6px / 12px). Note: 6px is the one permitted half-step on pills only.
+- Header padding: ships as `py-2 px-4` (8px / 16px). Single grid-aligned value, no alternatives.
+- Analyzer 3-column gutters: ships as `gap-3` (12px). Mockup's 11px rounds up to 12px.
 - Touch targets: minimum 44×44px for all interactive controls (sliders, buttons, checkboxes in position list).
 
 ---
 
 ## Typography
 
-| Role | Family | Size | Weight | Line Height | Usage |
-|------|--------|------|--------|-------------|-------|
-| Body / data | JetBrains Mono | 12px | 400 | 1.45 | Default page body, table cells, labels |
-| Data small | JetBrains Mono | 11px | 400 | 1.4 | Table headers alternate, sub-labels, notes |
-| Data xs | JetBrains Mono | 9–10px | 400–500 | 1.4 | Column headers (9px uppercase), badge text, axis tick labels |
-| Display / KPI | Space Grotesk | 14–26px | 700 | 1.0–1.1 | Market strip values (14px), KPI values (15–17px), P&L (22–26px) |
-| Card heading | Space Grotesk | 10px | 600 | 1.2 | All `h3` card titles — UPPERCASE, letter-spacing 0.9px |
-| Nav label | JetBrains Mono | 11px | 400 | 1.4 | Tab labels |
-| Brand | Space Grotesk | 15px | 700 | 1.0 | "MORAI" logotype in header |
+Exactly **4 shipped size tokens.** The mockups use a spread of raw pixel values
+(9–26px); every one rounds to the nearest token below, and the token is what ships.
+All interaction-contract references use these token names, never raw px.
+
+| Token | Family | Size | Weight | Line Height | Maps every use of |
+|-------|--------|------|--------|-------------|-------------------|
+| `label` | JetBrains Mono (data) / Space Grotesk (`h3` headings) | 10px | 400 (data) / 600 (`h3`) | 1.2–1.4 | Card `h3` headings (UPPERCASE, tracking 0.9px), column headers, nav tab labels, badges, tags, stub copy, axis tick labels, sub-labels, notes — all 9–11px mockup uses |
+| `body` | JetBrains Mono | 12px | 400 | 1.45 | Table cells, data body text, key-value rows, regime chip values, callout blocks — all 12–13px mockup uses |
+| `subhead` | Space Grotesk | 16px | 700 | 1.1 | KPI values, market-strip values, brand logotype, trade headers, position card titles — all 14–18px mockup uses |
+| `display` | Space Grotesk | 24px | 700 | 1.0 | Combined P&L readout, realized P&L figure, large regime label — all 22–26px mockup uses |
+
+Two weights only: 400 (regular) and 600/700 (semibold/bold — the heading/display weight).
 
 **Typographic rules:**
 - `font-variant-numeric: tabular-nums` on every numeric cell, KPI value, and price display. Use Tailwind `tabular-nums` class globally on `body` and per-element.
-- Card section headings: `text-[10px] font-semibold uppercase tracking-[0.9px] text-muted`. This is a locked pattern — every `h3` follows it.
+- Card section headings: `label` token — `text-[10px] font-semibold uppercase tracking-[0.9px] text-muted`. This is a locked pattern — every `h3` follows it.
 - Compact number display: values ≥ $1M render as "$1.2M"; ≥ $1B as "$3.4B"; ≤ $999 as "$47". Never raw large integers in display.
 - Signed values: prefix "+" for positive, "−" (U+2212 true minus) or "-" for negative. Color confirms sign.
 
@@ -302,6 +307,22 @@ All colors extracted directly from the mockup `:root` CSS variables (source of t
 
 ---
 
+## Visual Anchor (Focal Point per Screen)
+
+Each screen has ONE primary visual anchor — the element that earns the most visual weight
+(size, contrast, position) and that the eye lands on first. Layout, spacing, and color
+emphasis serve this anchor; everything else is secondary.
+
+| Screen | Primary anchor |
+|--------|----------------|
+| Overview | Open Positions card (Row A, span 7) — the book at a glance |
+| Analyzer | The visx payoff / risk-profile chart (center column, flex:1) |
+| Positions | The greek-attribution waterfall ("Why it's moving") |
+| Journal | The lifecycle chart (Running-P&L / Price / Greeks tabs) |
+| Market | The Net Dealer Gamma Profile chart (span 7) |
+
+---
+
 ## Screen-by-Screen Interaction Contracts
 
 ### Global — all screens
@@ -382,11 +403,11 @@ Three-column dense cockpit: `236px | 1fr | 320px`, gap 11px, padding 11px. Each 
   8. T+0 breakeven lines: `#a78bfa` dashed, labeled "BE·T0 {strike}" near top.
   9. Spot vertical line: `#5b9cf6` weight 1.1px. Circle dot at T+0 value, fill `#5b9cf6`, `r=4.5`.
 - Crosshair: vertical gray line `#8a98ad` opacity 30% on pointermove. Fixed tooltip (not SVG): `background: rgba(8,11,16,0.97); border: 1px solid #27313f; border-radius: 8px`. Shows: P&L value (colored by sign), SPX price, distance to put wall, distance to call wall.
-- Combined P&L readout: top-right of chart head. Large Space Grotesk 22px bold, sign-colored.
+- Combined P&L readout: top-right of chart head. `display` token (Space Grotesk bold), sign-colored.
 
 *Greek strips (4-column, height 104px):*
 - Four panels: Net Δ / Net Γ / Net Θ/d / Net Vega.
-- Per strip: 9px uppercase label top-left, current value top-right (Space Grotesk 11px bold).
+- Per strip: `label` token uppercase top-left, current value top-right (`label` token, Space Grotesk bold).
 - SVG line chart, uPlot implementation. Zero line `#283342`. Spot vertical `#5b9cf6` opacity 45%. Curve colors: Δ=`#5b9cf6`, Γ=`#22d3ee`, Θ=`#f0b429`, Vega=`#26a69a`. Dot at current spot on each curve.
 
 *P&L heatmap:*
@@ -399,7 +420,7 @@ Three-column dense cockpit: `236px | 1fr | 320px`, gap 11px, padding 11px. Each 
 **Right column (analytics):**
 
 *What's moving SPX panel:*
-- Regime strip: 4 chips (SPX spot / net γ /1% / γ flip / regime). Negative gamma chip: blood-dark bg/border. Chip labels uppercase 8px, values Space Grotesk 700 13px.
+- Regime strip: 4 chips (SPX spot / net γ /1% / γ flip / regime). Negative gamma chip: blood-dark bg/border. Chip labels `label` token uppercase, chip values `body` token (Space Grotesk bold).
 - Net gamma profile curve: visx. 300×130px logical. Same rendering as full Market screen profile, at compact size. Amber flip line + blue spot line.
 - Key levels table: call wall / γ flip / spot / put wall. Color-coded first column. Distance column in dim color.
 - GEX by-strike bars: Apache ECharts horizontal bars. Toggle GEX/OI/Volume. GEX: teal bars right / coral bars left of center. OI: call teal right / put coral left. Volume: blue bars from left. Wall + spot horizontal dashed lines drawn over bars.
@@ -444,7 +465,7 @@ Layout: `height: 100vh` shell. Three-column: `250px | 1fr | 290px`, gap 12px, pa
 - Selected row: violet border + dark violet bg.
 
 **Center column — lifecycle:**
-- Trade header: name (Space Grotesk 700 16px) + date range (dim 11px) + realized P&L (18px).
+- Trade header: name (`subhead` token, Space Grotesk bold) + date range (`label` token, dim) + realized P&L (`subhead` token).
 - 3 KPIs: Realized / Max favorable / Max adverse.
 - Chart with three mode tabs: Running P&L (violet curve + area fill) / Price & spot (blue curve) / Greeks (teal for vega or amber for theta).
 - Day separators: vertical dashed lines `#27313f` with date label.
@@ -455,7 +476,7 @@ Layout: `height: 100vh` shell. Three-column: `250px | 1fr | 290px`, gap 12px, pa
 **Right column — snapshot + notes:**
 - Snapshot table: Time / SPX / Net / P&L / Θ / Vega. Selected row via scrubber: `background: rgba(22,32,48,0.27)`.
 - "Why it moved" card: callout block with auto-generated narrative.
-- Notes textarea: editable. Placeholder: "Entry thesis, management, post-mortem…". Mono font, 11px, min-height 60px.
+- Notes textarea: editable. Placeholder: "Entry thesis, management, post-mortem…". Mono `body` token, min-height 60px.
 
 ### Market screen
 
@@ -521,7 +542,7 @@ Three features must render as clearly-badged placeholder panels, never omitted, 
 | Intraday delta-flow | `○ needs denser snapshots` | HIRO-style net delta-flow | Δ(delta-notional) between snapshots — 30-min cadence → coarse; finer feed later |
 | Economic calendar | `○ needs feed` | Event calendar not wired | FOMC · CPI · OPEX · jobs — add an economic-calendar feed |
 
-**Stub visual spec:** dashed border `#27313f`, border-radius 8px, padding 14–16px, centered flex column, icon/title bold `#d6dbe4` or `#566273`, body text `#566273` 10.5px. Height matches adjacent content (Market: 140px minimum; Overview: auto).
+**Stub visual spec:** dashed border `#27313f`, border-radius 8px, padding 16px (`md`), centered flex column, icon/title `label` token bold `#d6dbe4` or `#566273`, body text `label` token `#566273`. Height matches adjacent content (Market: 140px minimum; Overview: auto).
 
 ---
 
