@@ -24,7 +24,8 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D15 | Lint/boundaries | ESLint flat config + boundary enforcement | — | — |
 | D16 | Schwab auth | Own TS OAuth client (vendored, port of trade-advisor `auth.ts`); tokens in Postgres | Low | Schwab changes OAuth contract |
 | D17 | Market data streaming | Deferred — poll-based jobs cover the journal use-case | New driven port + adapter | Need for sub-minute live data → TS streamer adapter OR schwab-py Python sidecar |
-| D18 | DB provider / host | **Supabase** (managed Postgres 16) | Low (connection string) | Need Supabase-native features (Realtime/Auth/RLS) OR cost/limits |
+| D18 | DB provider / host | **Supabase** (managed Postgres 16) | Low (connection string) | Need Supabase Realtime (sub-second push) OR cost/limits |
+| D20 | API auth | Supabase Auth JWT (HS256, offline verify via `hono/jwt`) + exact-origin CORS | Low (middleware seam) | Need multi-tenant auth OR provider swap |
 | D19 | Web host + build order | **Vercel** for `apps/web`, **deferred**; backend + data layer built first | Low | UI work begins |
 
 ## D1 — Bun
@@ -194,8 +195,10 @@ the transaction pooler later if connection count becomes a constraint. Config ca
 **Swap cost**: Low — change the connection string back to any Postgres. Because we avoid
 Supabase-native features, nothing else moves.
 
-**Revisit trigger**: a concrete need for Supabase Realtime (sub-second UI push), Supabase Auth, or
-RLS — at which point we weigh vendor coupling against the feature, and update this decision.
+**Revisit trigger**: a concrete need for Supabase Realtime (sub-second UI push) OR cost/limits
+push us to a different Postgres host.
+
+**Auth update (Phase 8, D-02):** The Supabase Auth deferral is lifted. See D20.
 
 ## D19 — Vercel for the web app; backend-first build order
 
@@ -213,3 +216,39 @@ config with Vite.
 **Revisit trigger**: UI phase begins, OR a need to colocate UI with the API (then fold the SPA back
 into the server's static serving).
 
+## D20 — Supabase Auth JWT verification + CORS (Phase 8)
+
+**Context**: Phase 8 adds `apps/web` on Vercel. The existing read endpoints
+(`/api/status`, `/api/journal`, `/api/brokerage`, `/api/analytics`, `/api/analytics/gex`)
+are unauthenticated. Once the web dashboard reaches them from a browser, that brokerage
+data — real positions, P&L, order history — is internet-reachable. It needs a login gate.
+
+**Decision**: Gate all read endpoints with Supabase Auth JWT verification. Single trader
+account; signups closed. This lifts the D18 "Supabase Auth" deferral.
+
+**How — JWT verification (offline HS256)**:
+- Supabase Auth issues JWTs signed with HS256 using the project JWT secret.
+- The server verifies these tokens offline with Hono's built-in `hono/jwt` middleware and
+  `SUPABASE_JWT_SECRET` (a env var from Supabase Dashboard → Settings → API).
+- No Supabase SDK on the server. No per-request network call. Stateless JWT verify.
+- Invalid or missing token → Hono returns `401` before reaching any route handler.
+
+**How — CORS**:
+- `hono/cors` middleware restricts `Access-Control-Allow-Origin` to `WEB_ORIGIN`.
+- `WEB_ORIGIN` is the Vercel deployment URL (env var; e.g. `https://morai.vercel.app`).
+- `credentials: true` is required for the `Authorization` header. The origin must be
+  exact — never `*` with credentials.
+- CORS middleware applies first, before the JWT group, so `OPTIONS` preflights succeed.
+
+**Scope**: Read endpoints only. The `/api/jobs/*` group keeps its existing `bearerAuth`
+(MCP bearer token, separate group). MCP tools are not gated by Supabase Auth.
+
+**New env vars**: `SUPABASE_JWT_SECRET` (min 32 chars), `WEB_ORIGIN` (URL string).
+
+**Swap cost**: Low. JWT verification sits behind a middleware seam. Swapping to any
+provider means replacing the middleware and the env var; routes and use-cases are
+unchanged.
+
+**Revisit trigger**: Multi-tenant auth (RLS per user) or provider swap.
+
+**References**: Phase 8 CONTEXT.md D-02, D-02a; `apps/server/src/main.ts` middleware group.
