@@ -507,7 +507,10 @@ Plans:
 - [ ] 09-07-PLAN.md — Journal screen: lifecycle + scrubber + pre-Jun-12 graceful UX (JOURNAL-01) + rebuild button (REBUILD-01) (UI-01)
 - [ ] 09-08-PLAN.md — Market screen: gamma profile (visx) + GEX bars/by-expiry (ECharts) + regime + Charm/Vanna + intraday coming-soon stubs (UI-01)
 
-**Wave 7** *(Analyzer LAST — hardest; blocked on 09-02 quant + 09-06/09-08 components; 10 on 09-09)*
+**Wave 7** *(TDD parser — blocked on 09-02 quant)*
 
 - [ ] 09-09-PLAN.md — TDD: TOS calendar paste parser (9 rules) + implied-IV bisection over @morai/quant (threat model L1) (UI-01)
+
+**Wave 8** *(Analyzer LAST — hardest; blocked on 09-06/09-08 components + 09-09 parser)*
+
 - [ ] 09-10-PLAN.md — Analyzer 3-col cockpit: client-side live re-pricing (scenario engine over @morai/quant) + payoff z-order + heatmap + roll simulator (D-01, D-02, D-04, UI-01)
