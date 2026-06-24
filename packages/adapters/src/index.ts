@@ -61,9 +61,11 @@ export type { PostgresRiskReversalObservationsRepo } from "./postgres/repos/risk
 export { makeMemoryRiskReversalObservationsRepo } from "./memory/risk-reversal-observations.ts";
 export type { MemoryRiskReversalObservationsRepo } from "./memory/risk-reversal-observations.ts";
 
-// Phase 8 (08-05/08-06): GEX snapshot repo — postgres (memory twin deferred to 08-07 via getGex)
+// Phase 8 (08-05/08-06): GEX snapshot repo — postgres + in-memory twin (WR-07: §8 "ship the twin")
 export { makePostgresGexSnapshotRepo } from "./postgres/gex-snapshot.repo.ts";
 export type { PostgresGexSnapshotRepo } from "./postgres/gex-snapshot.repo.ts";
+export { makeMemoryGexSnapshotRepo } from "./memory/gex-snapshot.ts";
+export type { MemoryGexSnapshotRepo } from "./memory/gex-snapshot.ts";
 
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
