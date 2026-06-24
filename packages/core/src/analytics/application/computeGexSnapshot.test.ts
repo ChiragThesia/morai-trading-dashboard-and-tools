@@ -18,6 +18,7 @@
 import { describe, it, expect } from "vitest";
 import { ok, err } from "@morai/shared";
 import { makeComputeGexSnapshotUseCase } from "./computeGexSnapshot.ts";
+import { buildProfile } from "../domain/gex.ts";
 import type {
   ForReadingLegObsForGex,
   ForPersistingGexSnapshot,
@@ -182,5 +183,44 @@ describe("makeComputeGexSnapshotUseCase", () => {
     const result = await useCase();
     // Empty cohort — use-case returns ok but may skip persisting (implementation decides)
     expect(result.ok).toBe(true);
+  });
+
+  // CR-01 regression: netGammaAtSpot must be the PROFILE value at spot, not the
+  // closest per-strike concentrated GEX value.
+  //
+  // The correct definition (oracle: gex.test.ts comment lines 9-11):
+  //   netGammaAtSpot = buildProfile(legs, [spot])[0].gamma
+  //   — the sum of dollar-gamma re-priced at spot across all contracts, in $Bn/1%.
+  //
+  // The wrong implementation (computeNetGammaAtSpot) returns the gex of the single
+  // strike closest to spot — a per-strike concentrated value in the $Bn raw range
+  // (e.g. 1e9 magnitude), not the profile-at-spot scalar in the tens range.
+  it("CR-01: netGammaAtSpot equals buildProfile(legs,[spot])[0].gamma — not the closest-strike concentrated GEX", async () => {
+    const spy = makePersistSpy();
+    const spot = 7381; // underlyingPrice of FIXTURE_LEGS
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(FIXTURE_LEGS),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    // Expected value: profile evaluated AT spot (single-point grid)
+    const [spotPoint] = buildProfile(FIXTURE_LEGS, [spot]);
+    expect(spotPoint).toBeDefined();
+    if (spotPoint === undefined) return;
+    const expectedNetGammaAtSpot = spotPoint.gamma;
+
+    // Must match the profile value within a tight epsilon (same calculation path)
+    expect(row.netGammaAtSpot).toBeCloseTo(expectedNetGammaAtSpot, 6);
+
+    // Guard: the profile-at-spot value must NOT be in the per-strike concentrated
+    // magnitude range (|gex| > 1e6 indicates the wrong implementation).
+    // The profile value is in the single-digit $Bn/1% range for realistic inputs.
+    expect(Math.abs(row.netGammaAtSpot)).toBeLessThan(1e6);
   });
 });

@@ -77,9 +77,6 @@ export function makeComputeGexSnapshotUseCase(
   deps: ComputeGexSnapshotDeps,
 ): () => Promise<Result<void, StorageError>> {
   return async (): Promise<Result<void, StorageError>> => {
-    // now() bounds the resolution window — never stamped into the row (CR-01).
-    const _now = deps.now();
-
     // ── Step 1: Read the latest leg-obs cohort ───────────────────────────────
     const readResult = await deps.readLegObsForGex();
     if (!readResult.ok) return err(readResult.error);
@@ -133,13 +130,16 @@ export function makeComputeGexSnapshotUseCase(
       }
     }
 
-    // netGammaAtSpot: find the entry closest to the current spot.
-    // Interpolate between the two nearest strikes.
-    const netGammaAtSpot = computeNetGammaAtSpot(strikeEntries, spot);
-
     // ── Step 6: Build the spot-grid profile ──────────────────────────────────
     const spotGrid = buildSpotGrid(spot);
     const profile = buildProfile(legs, spotGrid);
+
+    // netGammaAtSpot: the profile value AT spot — the sum of dollar-gamma
+    // re-priced at the current spot across all contracts (profile-at-spot semantics).
+    // This is the oracle-defined scalar (gex.test.ts: "profile at s=7380 is -47.43").
+    // It is NOT the per-strike concentrated GEX of the closest strike.
+    const [spotPoint] = buildProfile(legs, [spot]);
+    const netGammaAtSpot = spotPoint?.gamma ?? 0;
 
     // ── Step 7: Find the flip level ──────────────────────────────────────────
     const flip = findFlip(profile);
@@ -193,29 +193,4 @@ export function makeComputeGexSnapshotUseCase(
 /** Dollar gamma contribution (same formula as domain dollarGamma). */
 function dollarGammaContrib(gamma: number, oi: number, spot: number): number {
   return (gamma * oi * 100 * spot * spot * 0.01) / 1e9;
-}
-
-/**
- * Compute net gamma at the current spot by finding the closest strike in the
- * per-strike GEX array and returning its gex. If spot falls between two strikes,
- * pick the nearer one (closest-strike approach, sufficient for the scalar summary).
- */
-function computeNetGammaAtSpot(
-  entries: ReadonlyArray<{ readonly k: number; readonly gex: number }>,
-  spot: number,
-): number {
-  if (entries.length === 0) return 0;
-  let closest = entries[0];
-  if (closest === undefined) return 0;
-  let minDist = Math.abs(closest.k - spot);
-
-  for (const entry of entries) {
-    const dist = Math.abs(entry.k - spot);
-    if (dist < minDist) {
-      minDist = dist;
-      closest = entry;
-    }
-  }
-
-  return closest?.gex ?? 0;
 }
