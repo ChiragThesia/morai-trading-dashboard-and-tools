@@ -205,4 +205,21 @@ export type {
   ForReadingSkewSeries,
   ForReadingSkewSmileDetail,
   ForReadingTermStructureSeries,
+  // GEX ports + row types (Phase 8, Plan 08-05)
+  LegObsForGex,
+  GexSnapshotRow,
+  ForReadingLegObsForGex,
+  ForReadingGexSnapshot,
+  ForPersistingGexSnapshot,
+  ForRunningComputeGexSnapshot,
+  ForRunningGetGex,
+} from "./analytics/index.ts";
+// GEX use-cases (08-05)
+export {
+  makeComputeGexSnapshotUseCase,
+  makeGetGexUseCase,
+} from "./analytics/index.ts";
+export type {
+  ComputeGexSnapshotDeps,
+  GetGexDeps,
 } from "./analytics/index.ts";

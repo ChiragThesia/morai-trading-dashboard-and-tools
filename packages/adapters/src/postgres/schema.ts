@@ -362,9 +362,10 @@ export const gexSnapshots = pgTable("gex_snapshots", {
   putWall: integer("put_wall"),
   netGammaAtSpot: numeric("net_gamma_at_spot").notNull(),
   // JSONB blobs: [{strike, gamma}], [{k, gex, coi, poi, vol}], [{date, gex}]
-  profile: jsonb("profile").notNull(),
-  strikes: jsonb("strikes").notNull(),
-  byExpiry: jsonb("by_expiry").notNull(),
+  // $type<> parameters give Drizzle the JS type so adapters need no as-casts (lint: no-as).
+  profile: jsonb("profile").$type<ReadonlyArray<{ readonly strike: number; readonly gamma: number }>>().notNull(),
+  strikes: jsonb("strikes").$type<ReadonlyArray<{ readonly k: number; readonly gex: number; readonly coi: number; readonly poi: number; readonly vol: number }>>().notNull(),
+  byExpiry: jsonb("by_expiry").$type<ReadonlyArray<{ readonly date: string; readonly gex: number }>>().notNull(),
 }).enableRLS();
 
 // ─── Re-export sql helper used by partial index ───────────────────────────────
