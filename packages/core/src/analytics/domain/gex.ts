@@ -126,14 +126,17 @@ export function strikeGex(
  * Find the gamma-flip level — the spot price where the net GEX profile crosses zero
  * (transitions from negative dealer gamma to positive dealer gamma).
  *
- * Linear interpolation between adjacent { strike, gamma } pairs where the sign changes.
+ * Linear interpolation between adjacent { spot, gamma } pairs where the sign changes.
  * Returns null when the profile never changes sign (Pitfall 5: all-negative or all-positive).
  *
- * @param grid - net gamma profile sorted by strike ascending, each entry { strike, gamma }
- * @returns interpolated zero-crossing strike, or null when no crossing exists
+ * The grid axis is named `spot` (not `strike`) because each entry is a simulated
+ * spot level, not an option strike — the flip level is itself a spot level (WR-01).
+ *
+ * @param grid - net gamma profile sorted by spot ascending, each entry { spot, gamma }
+ * @returns interpolated zero-crossing spot level, or null when no crossing exists
  */
 export function findFlip(
-  grid: ReadonlyArray<{ strike: number; gamma: number }>,
+  grid: ReadonlyArray<{ spot: number; gamma: number }>,
 ): number | null {
   if (grid.length < 2) return null;
 
@@ -144,18 +147,18 @@ export function findFlip(
     if (a === undefined || b === undefined) continue;
 
     // Exact zero: treat as crossing (includes the b.gamma === 0 case)
-    if (a.gamma === 0) return a.strike;
-    if (b.gamma === 0) return b.strike;
+    if (a.gamma === 0) return a.spot;
+    if (b.gamma === 0) return b.spot;
 
     // Sign change between a and b → linear interpolation
     if (a.gamma < 0 && b.gamma > 0) {
       // zero crossing: a.gamma + t*(b.gamma - a.gamma) = 0 → t = -a.gamma / (b.gamma - a.gamma)
       const t = -a.gamma / (b.gamma - a.gamma);
-      return a.strike + t * (b.strike - a.strike);
+      return a.spot + t * (b.spot - a.spot);
     }
     if (a.gamma > 0 && b.gamma < 0) {
       const t = -a.gamma / (b.gamma - a.gamma);
-      return a.strike + t * (b.strike - a.strike);
+      return a.spot + t * (b.spot - a.spot);
     }
   }
 
@@ -177,14 +180,18 @@ export function findFlip(
  *   r = 0.043  (risk-free rate, Fed funds approx)
  *   q = 0.013  (SPX continuous dividend yield, D-01)
  *
+ * Each profile entry uses field `spot` (not `strike`) because the axis is a simulated
+ * spot-price level, not an option strike. The flip returned by findFlip is also a spot
+ * level — using the same name end-to-end prevents mislabeling (WR-01).
+ *
  * @param contracts - leg observations with bsmIv, bsmGamma, dte, expiration
  * @param spotGrid  - array of spot prices at which to evaluate the profile
- * @returns profile array of { strike: gridSpot, gamma: netDollarGamma } sorted by spot ascending
+ * @returns profile array of { spot: gridSpotLevel, gamma: netDollarGamma } sorted by spot ascending
  */
 export function buildProfile(
   contracts: ReadonlyArray<LegObsForGex>,
   spotGrid: ReadonlyArray<number>,
-): ReadonlyArray<{ strike: number; gamma: number }> {
+): ReadonlyArray<{ spot: number; gamma: number }> {
   // SPX standard constants
   const R = 0.043; // risk-free rate
   const Q = 0.013; // continuous dividend yield (D-01)
@@ -218,7 +225,7 @@ export function buildProfile(
   }
 
   // Build profile: for each grid spot, sum dollar gamma across all usable legs
-  const profile: { strike: number; gamma: number }[] = [];
+  const profile: { spot: number; gamma: number }[] = [];
 
   for (const S of spotGrid) {
     let netGamma = 0;
@@ -228,7 +235,7 @@ export function buildProfile(
       const sign = leg.type === "C" ? 1 : -1;
       netGamma += sign * dollarGamma(greeks.gamma, leg.oi, S);
     }
-    profile.push({ strike: S, gamma: netGamma });
+    profile.push({ spot: S, gamma: netGamma });
   }
 
   return profile;

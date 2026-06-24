@@ -14,10 +14,11 @@ const STORED_ROW = {
   callWall: 5600,
   putWall: 5400,
   netGammaAtSpot: -1.2,
+  // WR-01: profile axis is `spot` (simulated spot-price grid level), not `strike`
   profile: [
-    { strike: 5400, gamma: 0.5 },
-    { strike: 5500, gamma: -1.2 },
-    { strike: 5600, gamma: 2.1 },
+    { spot: 5400, gamma: 0.5 },
+    { spot: 5500, gamma: -1.2 },
+    { spot: 5600, gamma: 2.1 },
   ],
   strikes: [
     { k: 5400, gex: 0.5, coi: 1000, poi: 1200, vol: 500 },

@@ -13,8 +13,8 @@
  * Function signatures expected from gex.ts (to be implemented in 08-03):
  *   dollarGamma(gamma: number, oi: number, spot: number): number
  *   strikeGex(contracts: ReadonlyArray<LegObsForGex>, spot: number): ReadonlyArray<{k:number; gex:number; coi:number; poi:number; vol:number}>
- *   findFlip(profile: ReadonlyArray<{strike:number; gamma:number}>): number | null
- *   buildProfile(contracts: ReadonlyArray<LegObsForGex>, spotGrid: ReadonlyArray<number>): ReadonlyArray<{strike:number; gamma:number}>
+ *   findFlip(profile: ReadonlyArray<{spot:number; gamma:number}>): number | null
+ *   buildProfile(contracts: ReadonlyArray<LegObsForGex>, spotGrid: ReadonlyArray<number>): ReadonlyArray<{spot:number; gamma:number}>
  */
 
 import { describe, it, expect } from "vitest";
@@ -27,58 +27,58 @@ import type { LegObsForGex } from "../application/ports.ts";
 // spot=7381, netGammaAtSpot≈-47 (profile at s=7380 is -47.43 in the oracle).
 // The profile crosses zero between s=7480 (g=-4.09) and s=7500 (g=5.98), giving flip≈7488.
 
-const oracleProfile: ReadonlyArray<{ strike: number; gamma: number }> = [
-  { strike: 6900, gamma: -34.16 },
-  { strike: 6920, gamma: -35.79 },
-  { strike: 6940, gamma: -37.5 },
-  { strike: 6960, gamma: -39.29 },
-  { strike: 6980, gamma: -41.16 },
-  { strike: 7000, gamma: -43.11 },
-  { strike: 7020, gamma: -45.13 },
-  { strike: 7040, gamma: -47.22 },
-  { strike: 7060, gamma: -49.37 },
-  { strike: 7080, gamma: -51.56 },
-  { strike: 7100, gamma: -53.76 },
-  { strike: 7120, gamma: -55.94 },
-  { strike: 7140, gamma: -58.07 },
-  { strike: 7160, gamma: -60.07 },
-  { strike: 7180, gamma: -61.89 },
-  { strike: 7200, gamma: -63.45 },
-  { strike: 7220, gamma: -64.65 },
-  { strike: 7240, gamma: -65.39 },
-  { strike: 7260, gamma: -65.54 },
-  { strike: 7280, gamma: -64.97 },
-  { strike: 7300, gamma: -63.57 },
-  { strike: 7320, gamma: -61.2 },
-  { strike: 7340, gamma: -57.77 },
-  { strike: 7360, gamma: -53.18 },
-  { strike: 7380, gamma: -47.43 },
-  { strike: 7400, gamma: -40.51 },
-  { strike: 7420, gamma: -32.53 },
-  { strike: 7440, gamma: -23.65 },
-  { strike: 7460, gamma: -14.07 },
-  { strike: 7480, gamma: -4.09 },
-  { strike: 7500, gamma: 5.98 },
-  { strike: 7520, gamma: 15.81 },
-  { strike: 7540, gamma: 25.07 },
-  { strike: 7560, gamma: 33.47 },
-  { strike: 7580, gamma: 40.79 },
-  { strike: 7600, gamma: 46.87 },
-  { strike: 7620, gamma: 51.64 },
-  { strike: 7640, gamma: 55.09 },
-  { strike: 7660, gamma: 57.28 },
-  { strike: 7680, gamma: 58.33 },
-  { strike: 7700, gamma: 58.39 },
-  { strike: 7720, gamma: 57.62 },
-  { strike: 7740, gamma: 56.18 },
-  { strike: 7760, gamma: 54.24 },
-  { strike: 7780, gamma: 51.92 },
-  { strike: 7800, gamma: 49.36 },
-  { strike: 7820, gamma: 46.66 },
-  { strike: 7840, gamma: 43.88 },
-  { strike: 7860, gamma: 41.1 },
-  { strike: 7880, gamma: 38.37 },
-  { strike: 7900, gamma: 35.7 },
+const oracleProfile: ReadonlyArray<{ spot: number; gamma: number }> = [
+  { spot: 6900, gamma: -34.16 },
+  { spot: 6920, gamma: -35.79 },
+  { spot: 6940, gamma: -37.5 },
+  { spot: 6960, gamma: -39.29 },
+  { spot: 6980, gamma: -41.16 },
+  { spot: 7000, gamma: -43.11 },
+  { spot: 7020, gamma: -45.13 },
+  { spot: 7040, gamma: -47.22 },
+  { spot: 7060, gamma: -49.37 },
+  { spot: 7080, gamma: -51.56 },
+  { spot: 7100, gamma: -53.76 },
+  { spot: 7120, gamma: -55.94 },
+  { spot: 7140, gamma: -58.07 },
+  { spot: 7160, gamma: -60.07 },
+  { spot: 7180, gamma: -61.89 },
+  { spot: 7200, gamma: -63.45 },
+  { spot: 7220, gamma: -64.65 },
+  { spot: 7240, gamma: -65.39 },
+  { spot: 7260, gamma: -65.54 },
+  { spot: 7280, gamma: -64.97 },
+  { spot: 7300, gamma: -63.57 },
+  { spot: 7320, gamma: -61.2 },
+  { spot: 7340, gamma: -57.77 },
+  { spot: 7360, gamma: -53.18 },
+  { spot: 7380, gamma: -47.43 },
+  { spot: 7400, gamma: -40.51 },
+  { spot: 7420, gamma: -32.53 },
+  { spot: 7440, gamma: -23.65 },
+  { spot: 7460, gamma: -14.07 },
+  { spot: 7480, gamma: -4.09 },
+  { spot: 7500, gamma: 5.98 },
+  { spot: 7520, gamma: 15.81 },
+  { spot: 7540, gamma: 25.07 },
+  { spot: 7560, gamma: 33.47 },
+  { spot: 7580, gamma: 40.79 },
+  { spot: 7600, gamma: 46.87 },
+  { spot: 7620, gamma: 51.64 },
+  { spot: 7640, gamma: 55.09 },
+  { spot: 7660, gamma: 57.28 },
+  { spot: 7680, gamma: 58.33 },
+  { spot: 7700, gamma: 58.39 },
+  { spot: 7720, gamma: 57.62 },
+  { spot: 7740, gamma: 56.18 },
+  { spot: 7760, gamma: 54.24 },
+  { spot: 7780, gamma: 51.92 },
+  { spot: 7800, gamma: 49.36 },
+  { spot: 7820, gamma: 46.66 },
+  { spot: 7840, gamma: 43.88 },
+  { spot: 7860, gamma: 41.1 },
+  { spot: 7880, gamma: 38.37 },
+  { spot: 7900, gamma: 35.7 },
 ];
 
 // ─── Minimal synthetic leg for unit tests ─────────────────────────────────────
@@ -139,19 +139,19 @@ describe("findFlip", () => {
   });
 
   it("returns null when the profile never crosses zero (all-negative)", () => {
-    const allNegative: ReadonlyArray<{ strike: number; gamma: number }> = [
-      { strike: 7000, gamma: -10 },
-      { strike: 7100, gamma: -5 },
-      { strike: 7200, gamma: -1 },
+    const allNegative: ReadonlyArray<{ spot: number; gamma: number }> = [
+      { spot: 7000, gamma: -10 },
+      { spot: 7100, gamma: -5 },
+      { spot: 7200, gamma: -1 },
     ];
     expect(findFlip(allNegative)).toBeNull();
   });
 
   it("returns null when the profile is always positive (all-positive)", () => {
-    const allPositive: ReadonlyArray<{ strike: number; gamma: number }> = [
-      { strike: 7000, gamma: 1 },
-      { strike: 7100, gamma: 5 },
-      { strike: 7200, gamma: 10 },
+    const allPositive: ReadonlyArray<{ spot: number; gamma: number }> = [
+      { spot: 7000, gamma: 1 },
+      { spot: 7100, gamma: 5 },
+      { spot: 7200, gamma: 10 },
     ];
     expect(findFlip(allPositive)).toBeNull();
   });
@@ -161,10 +161,10 @@ describe("findFlip", () => {
   });
 
   it("finds an exact zero crossing when one profile point is exactly 0", () => {
-    const exactZero: ReadonlyArray<{ strike: number; gamma: number }> = [
-      { strike: 7400, gamma: -5 },
-      { strike: 7450, gamma: 0 },
-      { strike: 7500, gamma: 5 },
+    const exactZero: ReadonlyArray<{ spot: number; gamma: number }> = [
+      { spot: 7400, gamma: -5 },
+      { spot: 7450, gamma: 0 },
+      { spot: 7500, gamma: 5 },
     ];
     const flip = findFlip(exactZero);
     expect(flip).not.toBeNull();
@@ -190,7 +190,7 @@ describe("buildProfile", () => {
     expect(profile).toHaveLength(spotGrid.length);
   });
 
-  it("profile entries have strike and gamma fields", () => {
+  it("profile entries have spot and gamma fields (WR-01: axis is spot level not option strike)", () => {
     const legs = [
       makeLeg({ contractType: "C", strike: 7400000, bsmGamma: "0.001", openInterest: 500 }),
     ];
@@ -199,7 +199,7 @@ describe("buildProfile", () => {
     const entry = profile[0];
     expect(entry).toBeDefined();
     if (entry === undefined) return;
-    expect(typeof entry.strike).toBe("number");
+    expect(typeof entry.spot).toBe("number");
     expect(typeof entry.gamma).toBe("number");
   });
 
@@ -249,7 +249,8 @@ describe("dollarGamma — fast-check properties", () => {
           maxLength: 20,
         }),
         (gammas) => {
-          const profile = gammas.map((g, i) => ({ strike: 7000 + i * 10, gamma: g }));
+          // WR-01: field is `spot` not `strike` — the axis is a spot-price grid level
+          const profile = gammas.map((g, i) => ({ spot: 7000 + i * 10, gamma: g }));
           return findFlip(profile) === null;
         },
       ),

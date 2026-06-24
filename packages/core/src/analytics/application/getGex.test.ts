@@ -26,9 +26,10 @@ const FIXTURE_ROW: GexSnapshotRow = {
   callWall: 7600,
   putWall: 7400,
   netGammaAtSpot: -47,
+  // WR-01: profile axis is `spot` (simulated spot-price grid level), not `strike`
   profile: [
-    { strike: 7380, gamma: -47.43 },
-    { strike: 7500, gamma: 5.98 },
+    { spot: 7380, gamma: -47.43 },
+    { spot: 7500, gamma: 5.98 },
   ],
   strikes: [
     { k: 7400, gex: -5974395559.112409, coi: 17071, poi: 52786, vol: 8406 },

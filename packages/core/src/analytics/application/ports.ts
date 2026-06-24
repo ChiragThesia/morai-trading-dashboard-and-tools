@@ -216,7 +216,11 @@ export type GexSnapshotRow = {
   readonly callWall: number | null;
   readonly putWall: number | null;
   readonly netGammaAtSpot: number;
-  readonly profile: ReadonlyArray<{ readonly strike: number; readonly gamma: number }>;
+  /**
+   * Spot-price grid profile. Field is `spot` (not `strike`) — the axis is a
+   * simulated spot level, not an option strike (WR-01).
+   */
+  readonly profile: ReadonlyArray<{ readonly spot: number; readonly gamma: number }>;
   readonly strikes: ReadonlyArray<{
     readonly k: number;
     readonly gex: number;
