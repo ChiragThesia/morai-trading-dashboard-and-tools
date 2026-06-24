@@ -1,12 +1,12 @@
 ---
 phase: 9
 slug: web-dashboard-frontend-react-spa-on-hono-rpc
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-06-23
 updated: 2026-06-24
-reviewed_at: 2026-06-23
+reviewed_at: 2026-06-24
 ---
 
 # Phase 9 — UI Design Contract
