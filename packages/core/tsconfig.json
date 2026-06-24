@@ -8,6 +8,7 @@
   "include": ["src"],
   "exclude": ["src/__fixtures__/**"],
   "references": [
+    { "path": "../quant" },
     { "path": "../shared" }
   ]
 }

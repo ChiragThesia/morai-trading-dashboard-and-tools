@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "private": true,
   "dependencies": {
+    "@morai/quant": "workspace:*",
     "@morai/shared": "workspace:*"
   },
   "devDependencies": {

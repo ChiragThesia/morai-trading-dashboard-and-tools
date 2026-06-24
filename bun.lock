@@ -110,6 +110,7 @@
       "name": "@morai/core",
       "version": "0.0.1",
       "dependencies": {
+        "@morai/quant": "workspace:*",
         "@morai/shared": "workspace:*",
       },
       "devDependencies": {
