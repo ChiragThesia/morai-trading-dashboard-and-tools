@@ -478,8 +478,36 @@ render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8)
   4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
      delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
 
-**Plans:** 0 plans
+**Plans:** 10 plans
 
 Plans:
+**Wave 1** *(docs-before-code — BLOCKING predecessor)*
 
-- [ ] TBD (run /gsd-plan-phase 9 to break down)
+- [ ] 09-01-PLAN.md — Docs-before-code: reconcile D3 charting → visx/uPlot/ECharts (D-05) + record quant-leaf decision (D-01) + eslint quant boundary + apps/web lint wiring (UI-01)
+
+**Wave 2** *(blocked on 09-01)*
+
+- [ ] 09-02-PLAN.md — TDD: extract pure BSM kernel to packages/quant leaf, parity + fast-check, core re-export shim (D-01, UI-01)
+
+**Wave 3** *(blocked on 09-01)*
+
+- [ ] 09-03-PLAN.md — apps/web scaffold: Vite + React + Tailwind v4 @theme + shadcn init + TanStack provider + Supabase client + jsdom vitest (WEB-01, UI-01)
+
+**Wave 4** *(blocked on 09-03)*
+
+- [ ] 09-04-PLAN.md — Auth gate + typed hc<AppType>() RPC client + 401 intercept + AUTH_EXPIRED banner + Login (threat model L1) (UI-01, UI-02)
+
+**Wave 5** *(blocked on 09-04 — closes the D-02 thin-slice)*
+
+- [ ] 09-05-PLAN.md — Layout Shell (sticky header + live market strip) + Overview screen + economic-calendar stub + Vercel deploy + human-verify (D-02, UI-01, UI-02)
+
+**Wave 6** *(blocked on 09-05; 06 also on 09-02; parallel, zero file overlap)*
+
+- [ ] 09-06-PLAN.md — Positions screen + POSITIONS-01 resolve (client-side greeks via @morai/quant) + GreekStrips/AttributionWaterfall/LevelBar (D-01, D-03, UI-01)
+- [ ] 09-07-PLAN.md — Journal screen: lifecycle + scrubber + pre-Jun-12 graceful UX (JOURNAL-01) + rebuild button (REBUILD-01) (UI-01)
+- [ ] 09-08-PLAN.md — Market screen: gamma profile (visx) + GEX bars/by-expiry (ECharts) + regime + Charm/Vanna + intraday coming-soon stubs (UI-01)
+
+**Wave 7** *(Analyzer LAST — hardest; blocked on 09-02 quant + 09-06/09-08 components; 10 on 09-09)*
+
+- [ ] 09-09-PLAN.md — TDD: TOS calendar paste parser (9 rules) + implied-IV bisection over @morai/quant (threat model L1) (UI-01)
+- [ ] 09-10-PLAN.md — Analyzer 3-col cockpit: client-side live re-pricing (scenario engine over @morai/quant) + payoff z-order + heatmap + roll simulator (D-01, D-02, D-04, UI-01)
