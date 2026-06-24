@@ -9,7 +9,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 |---|---|---|---|---|
 | D1 | Runtime + pkg mgr | Bun | Low | Bun-specific blocker in a critical lib |
 | D2 | Backend HTTP | Hono + Zod | Low (inbound adapter) | Need for websockets at scale beyond Hono support |
-| D3 | Frontend | React + Vite + TS + Tailwind v4 + shadcn/ui | Medium | — |
+| D3 | Frontend + charting | React + Vite + TS + Tailwind v4 + shadcn/ui · visx + uPlot + ECharts for charts (see D3 section) | Medium | — |
 | D4 | Data fetching (web) | TanStack Query + Hono RPC client | Low | — |
 | D5 | Database | Postgres 16 (hosted on **Supabase**) | Low (outbound adapter) | — |
 | D6 | ORM / DAO | Drizzle | Low | — |
@@ -27,6 +27,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D18 | DB provider / host | **Supabase** (managed Postgres 16) | Low (connection string) | Need Supabase Realtime (sub-second push) OR cost/limits |
 | D20 | API auth | Supabase Auth JWT (HS256, offline verify via `hono/jwt`) + exact-origin CORS | Low (middleware seam) | Need multi-tenant auth OR provider swap |
 | D19 | Web host + build order | **Vercel** for `apps/web`, **deferred**; backend + data layer built first | Low | UI work begins |
+| D21 | BSM kernel leaf | `packages/quant` — pure math leaf imported by both `core` and `web` (see D21 section) | Low (call sites + tsconfig refs + ESLint boundary) | — |
 
 ## D1 — Bun
 
@@ -43,10 +44,23 @@ Zod validator gives end-to-end type-safety to the React client without codegen. 
 application use-cases, serialize results. **No business logic in routes — ever.**
 **Swap cost**: Low. Replace `apps/server/src/adapters/http/` and the client import in web.
 
-## D3 — React + Vite + Tailwind v4 + shadcn/ui
+## D3 — React + Vite + Tailwind v4 + shadcn/ui + visx + uPlot + ECharts
 
 **Why**: Team familiarity, prior art from old dashboard, shadcn gives composable primitives we own
-(copy-in, not dependency). Recharts for charting (greeks/term-structure plots) unless a need outgrows it.
+(copy-in, not dependency).
+
+**Charting libraries (locked by D-05 + UI-SPEC, Phase 9):** Three libraries cover five distinct chart
+types. Recharts was the initial placeholder. The UI-SPEC locked these three after mockup iteration
+(see `mockups/playground-v3.html`). Recharts cannot handle synced greek-strip small-multiples or
+gradient-fill payoff z-order — both are hard requirements for the trading dashboard.
+
+| Library | Package(s) | Chart types |
+|---|---|---|
+| **visx** | `@visx/shape`, `@visx/gradient`, `@visx/event`, `@visx/scale`, `@visx/axis`, `@visx/group`, `@visx/tooltip` | Payoff chart, net-gamma profile, equity curve, term/skew minis — SVG with crosshair |
+| **uPlot** | `uplot`, `uplot-react` | Greek strips (Δ/Γ/Θ/Vega) — 4-panel synced small multiples, high-performance canvas |
+| **Apache ECharts** | `echarts`, `echarts-for-react` | GEX by-strike bars, P&L heatmap, GEX-by-expiry bars |
+
+**Recharts**: superseded. Not used. The locked UI-SPEC (D-05) records the swap reason.
 
 ## D4 — TanStack Query + Hono RPC client
 
@@ -252,3 +266,28 @@ unchanged.
 **Revisit trigger**: Multi-tenant auth (RLS per user) or provider swap.
 
 **References**: Phase 8 CONTEXT.md D-02, D-02a; `apps/server/src/main.ts` middleware group.
+
+## D21 — `packages/quant` pure-leaf BSM kernel (Phase 9, D-01)
+
+**Context**: The BSM pricing kernel (`bsmPrice`/`bsmGreeks`/`bsmVega`) lives at
+`packages/core/src/journal/domain/bsm.ts`. It has zero imports — pure math. Phase 9 needs it in the
+browser for live Analyzer re-pricing on slider drag (proven sub-1ms in `mockups/playground-v3.html`).
+The law forbids `web → core` imports. See D-01 in `09-CONTEXT.md`.
+
+**Decision**: Extract the BSM kernel DOWN to a new pure leaf — `packages/quant` (`@morai/quant`).
+Both `core` and `web` import from `@morai/quant`. No dependency arrow reverses: `core → quant` and
+`web → quant` are both valid; `quant` imports nothing. The hexagon stays intact.
+
+**Why a dedicated `quant` leaf (not `packages/shared`)**: `shared` holds Result, assertDefined,
+OccSymbol, and time utilities — general-purpose primitives. `quant` holds financial math — a
+distinct concern. Keeping them separate lets each grow without coupling unrelated domains.
+
+**One kernel = cross-screen consistency**: the Analyzer's live P&L preview and the
+Positions/Journal server-computed P&L run the same kernel on the same float64 inputs → identical
+output. A second copy in the browser would risk visible divergence on the same calendar.
+
+**Swap cost**: Low. Call sites in `packages/core` update their import path. `tsconfig.json`
+references and the ESLint boundary element (`type: "quant"`) are added. No logic changes.
+
+**References**: Phase 9 CONTEXT.md D-01; `packages/core/src/journal/domain/bsm.ts` (source file
+before extraction); `monorepo-layout.md` (updated dependency graph).

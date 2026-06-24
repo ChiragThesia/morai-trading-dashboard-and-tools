@@ -34,9 +34,11 @@ export default tseslint.config(
             "packages/contracts/tsconfig.json",
             "packages/core/tsconfig.json",
             "packages/adapters/tsconfig.json",
+            "packages/quant/tsconfig.json",
             "apps/server/tsconfig.json",
             "apps/worker/tsconfig.json",
             "apps/auth/tsconfig.json",
+            "apps/web/tsconfig.json",
           ],
         },
       },
@@ -45,6 +47,7 @@ export default tseslint.config(
         { type: "contracts", pattern: "**/packages/contracts/src/**", mode: "full" },
         { type: "core",      pattern: "**/packages/core/src/**",      mode: "full" },
         { type: "adapters",  pattern: "**/packages/adapters/src/**",  mode: "full" },
+        { type: "quant",     pattern: "**/packages/quant/src/**",     mode: "full" },
         { type: "apps",      pattern: "**/apps/**",                   mode: "full" },
       ],
     },
@@ -58,15 +61,18 @@ export default tseslint.config(
           { from: "shared",    allow: ["shared"] },
           // contracts: shared + intra-package relative imports (same pattern as shared→shared)
           { from: "contracts", allow: ["shared", "contracts"] },
-          // core: shared + intra-package relative imports (same pattern as shared→shared)
+          // quant: pure math leaf — imports nothing (self-only for intra-package relative imports)
+          { from: "quant",     allow: ["quant"] },
+          // core: shared + quant (BSM kernel leaf) + intra-package relative imports
           // External vendor imports (hono, drizzle, etc.) are blocked by no-restricted-imports below
-          { from: "core",      allow: ["shared", "core"] },
+          { from: "core",      allow: ["shared", "quant", "core"] },
           // adapters: core ports + shared + intra-package relative imports (same pattern as core→core)
           // Contract test files (*.contract.test.ts) additionally import from contracts to assert
           // the adapter output satisfies the published contract schema (cross-boundary test-only).
           { from: "adapters",  allow: ["contracts", "core", "shared", "adapters"] },
           // apps: composition roots — can import everything + intra-package relative imports
-          { from: "apps",      allow: ["adapters", "core", "contracts", "shared", "apps"] },
+          // apps/web imports quant for client-side BSM live re-pricing (D21)
+          { from: "apps",      allow: ["adapters", "core", "contracts", "shared", "quant", "apps"] },
         ],
       }],
     },
@@ -96,8 +102,8 @@ export default tseslint.config(
   // from the typed lint rules. The strict rules (no-any, no-as, no-!) still apply via the
   // per-file block below that uses project:false for test files.
   {
-    files: ["packages/**/*.ts", "apps/**/*.ts"],
-    ignores: ["**/__fixtures__/**", "**/vitest.config.ts", "**/*.test.ts"],
+    files: ["packages/**/*.ts", "packages/**/*.tsx", "apps/**/*.ts", "apps/**/*.tsx"],
+    ignores: ["**/__fixtures__/**", "**/vitest.config.ts", "**/*.test.ts", "**/*.test.tsx"],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -106,9 +112,11 @@ export default tseslint.config(
           "packages/contracts/tsconfig.json",
           "packages/core/tsconfig.json",
           "packages/adapters/tsconfig.json",
+          "packages/quant/tsconfig.json",
           "apps/server/tsconfig.json",
           "apps/worker/tsconfig.json",
           "apps/auth/tsconfig.json",
+          "apps/web/tsconfig.json",
         ],
         tsconfigRootDir: import.meta.dirname,
       },
@@ -133,6 +141,7 @@ export default tseslint.config(
   {
     files: [
       "**/*.test.ts",
+      "**/*.test.tsx",
       "**/vitest.config.ts",
       "**/__contract__/**/*.ts",
       "**/vitest.d.ts",

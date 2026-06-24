@@ -12,7 +12,8 @@ morai-trading-dashboard-and-tools/
 │   ├── core/                 # THE HEXAGON — domain + application, per bounded context
 │   ├── adapters/             # driven adapters: postgres, schwab, cboe, fred, jobqueue
 │   ├── contracts/            # Zod API schemas shared web ↔ server
-│   └── shared/               # Result, assertDefined, OccSymbol, time utils
+│   ├── shared/               # Result, assertDefined, OccSymbol, time utils
+│   └── quant/                # BSM kernel — pure math leaf, zero runtime deps (D21)
 ├── docs/
 │   └── architecture/         # this doc set
 ├── knowledge-base/           # synthesized trading knowledge (read-only reference)
@@ -28,18 +29,33 @@ morai-trading-dashboard-and-tools/
 
 ```
 apps/web ────────▶ packages/contracts ──▶ packages/shared
-apps/server ─────▶ packages/core ▲ packages/adapters ▲ packages/contracts
-apps/worker ─────▶ packages/core │ packages/adapters │
-packages/adapters ▶ packages/core (ports only) + packages/shared
-packages/core ───▶ packages/shared ONLY
+                 ▶ packages/quant  ◀─────────────────────────────────────────┐
+apps/server ─────▶ packages/core ▲ packages/adapters ▲ packages/contracts    │
+apps/worker ─────▶ packages/core │ packages/adapters │                        │
+packages/adapters ▶ packages/core (ports only) + packages/shared              │
+packages/core ───▶ packages/shared + packages/quant ──────────────────────────┘
+packages/quant ──▶ (nothing — pure leaf, zero deps)
 ```
 
 Rules:
-- `core` imports **nothing** but `shared`. No framework, no vendor SDK, no node builtins
-  beyond pure-computation safe ones.
+- `core` imports **nothing** but `shared` and `quant`. No framework, no vendor SDK, no node
+  builtins beyond pure-computation safe ones.
 - `web` never imports `core` or `adapters` — it speaks HTTP via `contracts` types
-  (Hono RPC client).
+  (Hono RPC client) and uses `quant` for client-side BSM math (D21).
+- `quant` is a pure math leaf — it imports nothing. Both `core` and `web` may import it.
+  The `web → quant` edge does NOT reach `core`; the hexagon stays intact.
 - `apps/*` are composition roots — the only places where core meets adapters.
+
+## apps/web
+
+Hosts the React + Vite SPA deployed to Vercel (D19, D21). May import:
+
+- `packages/contracts` — Zod API schemas + inferred types for the typed Hono RPC client
+- `packages/shared` — Result, assertDefined, time utils
+- `packages/quant` — BSM kernel for client-side live Analyzer re-pricing (D21)
+- `apps/server` — **type-only** import of `AppType` for `hc<AppType>()` (never runtime)
+
+`web` never imports `core` or `adapters` directly.
 
 ## apps/server
 
@@ -89,6 +105,18 @@ packages/adapters/src/
 
 `memory/` is a first-class citizen: every driven port gets an in-memory implementation,
 maintained alongside the real one. This is what makes acceptance tests fast and TDD viable.
+
+## packages/quant
+
+```
+packages/quant/src/
+├── bsm.ts       # bsmPrice / bsmGreeks / bsmVega — relocated from core (D21)
+└── index.ts     # barrel: export { bsmPrice, bsmGreeks, bsmVega, BsmGreeks }
+```
+
+Pure math leaf. Zero runtime dependencies. Imported by both `packages/core` (server-side
+computed P&L) and `apps/web` (client-side Analyzer live re-pricing). This is the shared
+kernel that guarantees cross-screen P&L consistency (D21). See `stack-decisions.md` D21.
 
 ## packages/contracts
 
