@@ -433,13 +433,13 @@ if needed.
   4. Read endpoints (status, journal, brokerage, analytics, gex) require a valid Supabase Auth
      session; CORS allows the Vercel web origin; unauthenticated request → 401.
 
-**Plans:** 1/7 plans executed
+**Plans:** 2/7 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 08-01-PLAN.md — Docs-before-code: un-defer Supabase Auth + CORS in stack-decisions.md (D-02a gate, AUTH-01)
-- [ ] 08-02-PLAN.md — Foundation: GEX Zod contract + barrel + gex_snapshots schema + 5 ports + Wave-0 RED scaffolds (GEX-02, GEX-01, MCP-02)
+- [x] 08-02-PLAN.md — Foundation: GEX Zod contract + barrel + gex_snapshots schema + 5 ports + Wave-0 RED scaffolds (GEX-02, GEX-01, MCP-02)
 
 **Wave 2** *(blocked on 08-02)*
 
