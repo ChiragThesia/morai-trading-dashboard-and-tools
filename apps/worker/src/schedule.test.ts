@@ -50,6 +50,7 @@ function makeFakeHandlers(): AllHandlers {
     computeBsmGreeks: handler,
     snapshotCalendars: handler,
     computeAnalytics: handler,
+    computeGexSnapshot: handler,
     syncTransactions: handler,
     syncFills: handler,
     refreshTokens: handler,
@@ -57,12 +58,13 @@ function makeFakeHandlers(): AllHandlers {
   };
 }
 
-const ALL_9_QUEUES = [
+const ALL_10_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
   "snapshot-calendars",
   "compute-analytics",
+  "compute-gex-snapshot",
   "sync-transactions",
   "sync-fills",
   "refresh-tokens",
@@ -79,11 +81,11 @@ const SCHEDULED_6 = [
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 9 job names", async () => {
+  it("calls createQueue for all 10 job names", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_9_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_10_QUEUES.sort());
   });
 
   it("calls schedule for exactly 6 jobs", async () => {
@@ -149,11 +151,19 @@ describe("registerAllJobs", () => {
     expect(refreshTokens?.tz).toBe("America/New_York");
   });
 
-  it("calls work() for all 9 queues", async () => {
+  it("calls work() for all 10 queues", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_9_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_10_QUEUES.sort());
+  });
+
+  it("does NOT schedule compute-gex-snapshot (chain-triggered only by compute-analytics, 08-06 D-01)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const names = scheduleCalls.map((c) => c.name);
+    expect(names).not.toContain("compute-gex-snapshot");
   });
 
   it("createQueue calls precede all schedule and work calls (CR-01 ordering)", async () => {

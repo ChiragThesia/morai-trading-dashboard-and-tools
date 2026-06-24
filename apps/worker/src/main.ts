@@ -30,6 +30,7 @@ import {
   makePostgresTermStructureObservationsRepo,
   makePostgresSkewObservationsRepo,
   makePostgresRiskReversalObservationsRepo,
+  makePostgresGexSnapshotRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -37,6 +38,7 @@ import {
   makeComputeBsmGreeksUseCase,
   makeSnapshotCalendarsUseCase,
   makeComputeAnalyticsUseCase,
+  makeComputeGexSnapshotUseCase,
   makeSyncFillsUseCase,
   makeSyncFillsForCalendarUseCase,
   makeSyncTransactionsUseCase,
@@ -51,6 +53,7 @@ import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
 import { makeComputeBsmGreeksHandler } from "./handlers/compute-bsm-greeks.ts";
 import { makeSnapshotCalendarsHandler } from "./handlers/snapshot-calendars.ts";
 import { makeComputeAnalyticsHandler } from "./handlers/compute-analytics.ts";
+import { makeComputeGexSnapshotHandler } from "./handlers/compute-gex-snapshot.ts";
 import { makeSyncFillsHandler } from "./handlers/sync-fills.ts";
 import { makeSyncTransactionsHandler } from "./handlers/sync-transactions.ts";
 import { makeRefreshTokensHandler } from "./handlers/refresh-tokens.ts";
@@ -197,6 +200,16 @@ const computeAnalyticsUseCase = makeComputeAnalyticsUseCase({
   now: () => new Date(),
 });
 
+// GEX-01 (08-05/08-06): computeGexSnapshot use-case — chain-triggered by compute-analytics.
+// gexRepo provides readLegObsForGex (JOIN leg_observations × contracts) + persistGexSnapshot
+// (SC-4 idempotency via onConflictDoNothing on cycle_time PK) + readGexSnapshot (used by server).
+const gexRepo = makePostgresGexSnapshotRepo(db);
+const computeGexSnapshotUseCase = makeComputeGexSnapshotUseCase({
+  readLegObsForGex: gexRepo.readLegObsForGex,
+  persistGexSnapshot: gexRepo.persistGexSnapshot,
+  now: () => new Date(),
+});
+
 // Build handlers (thin adapters — zero business logic)
 // D-07/D-08: Schwab-primary handler replaces the CBOE-only handler.
 // fetchChainUseCase is pre-wired with selectChainSource above (Schwab→CBOE fallback).
@@ -227,8 +240,16 @@ const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
   now: () => new Date(),
 });
 
+// 08-06: compute-analytics chain-triggers compute-gex-snapshot on success (D-01).
+// boss dep added here — mirrors snapshotCalendarsHandler adding boss in 06-04.
 const computeAnalyticsHandler = makeComputeAnalyticsHandler({
   computeAnalyticsUseCase,
+  boss,
+  now: () => new Date(),
+});
+
+const computeGexSnapshotHandler = makeComputeGexSnapshotHandler({
+  computeGexSnapshotUseCase,
   now: () => new Date(),
 });
 
@@ -399,7 +420,7 @@ const rebuildJournalHandler = makeRebuildJournalHandler({
   now: () => new Date(),
 });
 
-// Register all 9 queues, 6 crons, and 9 work handlers via registerAllJobs (Plan 05-04).
+// Register all 10 queues, 6 crons, and 10 work handlers via registerAllJobs (Plan 05-04 + 08-06).
 // Inline createQueue/schedule/work blocks removed — all scheduling logic is in schedule.ts.
 await registerAllJobs(boss, {
   fetchSchwabChain: fetchSchwabChainHandler,
@@ -407,6 +428,7 @@ await registerAllJobs(boss, {
   computeBsmGreeks: computeBsmGreeksHandler,
   snapshotCalendars: snapshotCalendarsHandler,
   computeAnalytics: computeAnalyticsHandler,
+  computeGexSnapshot: computeGexSnapshotHandler,
   syncTransactions: syncTransactionsHandler,
   syncFills: syncFillsHandler,
   refreshTokens: refreshTokensHandler,
@@ -414,5 +436,5 @@ await registerAllJobs(boss, {
 });
 
 console.warn(
-  "morai worker: pg-boss started; 9 queues created, 6 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, refresh-tokens); snapshot-calendars + compute-analytics chain-triggered only; rebuild-journal on-demand only",
+  "morai worker: pg-boss started; 10 queues created, 6 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, refresh-tokens); snapshot-calendars + compute-analytics + compute-gex-snapshot chain-triggered only; rebuild-journal on-demand only",
 );

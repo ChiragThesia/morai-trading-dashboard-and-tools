@@ -4,15 +4,17 @@
  * Extracts all pg-boss createQueue / schedule / work calls from main.ts into a single
  * exported function. main.ts imports and calls registerAllJobs; inline blocks removed.
  *
- * Registers all 9 queues:
+ * Registers all 10 queues:
  *   fetch-schwab-chain, fetch-rates, compute-bsm-greeks, snapshot-calendars (no cron — D-03),
  *   compute-analytics (no cron — chain-triggered by snapshot-calendars, 06-04),
+ *   compute-gex-snapshot (no cron — chain-triggered by compute-analytics, 08-06 D-01),
  *   sync-transactions (every 10 min RTH, +5 min ahead of sync-fills), sync-fills (every 10 min RTH),
  *   refresh-tokens (04:00 ET daily), rebuild-journal (no cron — on-demand only)
  *
  * CRITICAL (RESEARCH Pitfall 2):
  *   snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
  *   compute-analytics: NO schedule — chain-triggered only by snapshot-calendars (06-04)
+ *   compute-gex-snapshot: NO schedule — chain-triggered only by compute-analytics (08-06 D-01)
  *   rebuild-journal: NO schedule — on-demand via trigger_job
  *
  * createQueue → schedule → work order enforced (CR-01: FK constraint on pg-boss schedule table).
@@ -23,7 +25,7 @@
 
 import type { PgBoss, Job, WorkOptions } from "pg-boss";
 
-/** Handler type shared by all 9 job queues (pg-boss v12 array pattern) */
+/** Handler type shared by all 10 job queues (pg-boss v12 array pattern) */
 export type PgBossHandler = (jobs: ReadonlyArray<Job | undefined>) => Promise<void>;
 
 /**
@@ -38,9 +40,8 @@ export type JobScheduler = {
 };
 
 /**
- * AllHandlers — typed handler map for all 9 queues.
- * Plans 05-05/05-07/05-08 wire the 3 new handler factories in their own main.ts edits.
- * This plan wires the existing 4 + accepts the 3 new ones as typed slots.
+ * AllHandlers — typed handler map for all 10 queues.
+ * Plans 05-05/05-07/05-08 wire the original handlers; 08-06 adds computeGexSnapshot.
  */
 export type AllHandlers = {
   readonly fetchSchwabChain: PgBossHandler;
@@ -48,6 +49,7 @@ export type AllHandlers = {
   readonly computeBsmGreeks: PgBossHandler;
   readonly snapshotCalendars: PgBossHandler;
   readonly computeAnalytics: PgBossHandler;
+  readonly computeGexSnapshot: PgBossHandler;
   readonly syncTransactions: PgBossHandler;
   readonly syncFills: PgBossHandler;
   readonly refreshTokens: PgBossHandler;
@@ -57,19 +59,20 @@ export type AllHandlers = {
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
 
 /**
- * registerAllJobs — create 9 queues, schedule 6 crons, register 9 handlers.
+ * registerAllJobs — create 10 queues, schedule 6 crons, register 10 handlers.
  *
- * Order: createQueue (all 9) → schedule (6 crons) → work (all 9).
+ * Order: createQueue (all 10) → schedule (6 crons) → work (all 10).
  * The createQueue phase must complete before schedule/work — pg-boss FK constraint (CR-01).
  */
 export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers): Promise<void> {
   // ── Phase 1: create queues (idempotent — safe on every boot) ──────────────────
-  // Order matters: all createQueue calls must precede schedule/work (CR-01). 9 queues.
+  // Order matters: all createQueue calls must precede schedule/work (CR-01). 10 queues.
   await boss.createQueue("fetch-schwab-chain");
   await boss.createQueue("fetch-rates");
   await boss.createQueue("compute-bsm-greeks");
   await boss.createQueue("snapshot-calendars"); // chain-triggered only; no cron (D-03)
   await boss.createQueue("compute-analytics"); // 06-04: chain-triggered by snapshot-calendars; no cron
+  await boss.createQueue("compute-gex-snapshot"); // 08-06: chain-triggered by compute-analytics; no cron (D-01)
   await boss.createQueue("sync-transactions"); // A4: fills source — runs before sync-fills
   await boss.createQueue("sync-fills");
   await boss.createQueue("refresh-tokens");
@@ -120,6 +123,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
 
   // snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
   // compute-analytics: NO schedule — chain-triggered only by snapshot-calendars (06-04)
+  // compute-gex-snapshot: NO schedule — chain-triggered only by compute-analytics (08-06 D-01)
   // rebuild-journal: NO schedule — on-demand via trigger_job
 
   // ── Phase 3: register handlers (work) ─────────────────────────────────────────
@@ -128,6 +132,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("compute-bsm-greeks", POLLING_INTERVAL, handlers.computeBsmGreeks);
   await boss.work("snapshot-calendars", POLLING_INTERVAL, handlers.snapshotCalendars);
   await boss.work("compute-analytics", POLLING_INTERVAL, handlers.computeAnalytics);
+  await boss.work("compute-gex-snapshot", POLLING_INTERVAL, handlers.computeGexSnapshot);
   await boss.work("sync-transactions", POLLING_INTERVAL, handlers.syncTransactions);
   await boss.work("sync-fills", POLLING_INTERVAL, handlers.syncFills);
   await boss.work("refresh-tokens", POLLING_INTERVAL, handlers.refreshTokens);
