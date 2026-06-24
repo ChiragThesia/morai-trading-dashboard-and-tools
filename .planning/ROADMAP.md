@@ -433,11 +433,27 @@ if needed.
   4. Read endpoints (status, journal, brokerage, analytics, gex) require a valid Supabase Auth
      session; CORS allows the Vercel web origin; unauthenticated request → 401.
 
-**Plans:** 0 plans
+**Plans:** 7 plans
 
 Plans:
+**Wave 1**
 
-- [ ] TBD (run /gsd-plan-phase 8 to break down)
+- [ ] 08-01-PLAN.md — Docs-before-code: un-defer Supabase Auth + CORS in stack-decisions.md (D-02a gate, AUTH-01)
+- [ ] 08-02-PLAN.md — Foundation: GEX Zod contract + barrel + gex_snapshots schema + 5 ports + Wave-0 RED scaffolds (GEX-02, GEX-01, MCP-02)
+
+**Wave 2** *(blocked on 08-02)*
+
+- [ ] 08-03-PLAN.md — TDD GEX domain math: dollarGamma/strikeGex/findFlip/buildProfile vs playground-v3 oracle (GEX-01)
+- [ ] 08-04-PLAN.md — [BLOCKING] migration 0008_gex_snapshot.sql + live push (GEX-01)
+
+**Wave 3** *(blocked on 08-02/08-03/08-04)*
+
+- [ ] 08-05-PLAN.md — TDD computeGexSnapshot + getGex use-cases + Postgres repo + memory twin + testcontainers idempotency (GEX-01, SC-4)
+
+**Wave 4** *(08-06 blocked on 08-05; 08-07 blocked on 08-01+08-05; parallel, zero file overlap)*
+
+- [ ] 08-06-PLAN.md — compute-gex-snapshot job: handler RTH gate + serial chain after compute-analytics + worker wiring (GEX-01, D-01)
+- [ ] 08-07-PLAN.md — GEX route + get_gex MCP tool + env config + main.ts CORS-first/Supabase-Auth/AppType + auth integration test (GEX-01/02, RPC-01, AUTH-01)
 
 ### Phase 9: Web Dashboard Frontend — React SPA (apps/web) on Vercel over typed Hono RPC
 
