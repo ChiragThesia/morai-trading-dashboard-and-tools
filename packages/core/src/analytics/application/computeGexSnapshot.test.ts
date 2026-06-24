@@ -185,6 +185,39 @@ describe("makeComputeGexSnapshotUseCase", () => {
     expect(result.ok).toBe(true);
   });
 
+  // WR-05: putWall must be null when ALL strikes have positive GEX.
+  //
+  // The contract documents putWall as "Strike with highest net NEGATIVE GEX".
+  // The prior implementation used a pure argmin (seeded at +Infinity), so on a
+  // fully long-gamma chain it would label the least-positive strike as the put wall —
+  // a non-negative "negative-GEX" wall, contradicting the field's stated meaning.
+  //
+  // Fix: mirror the callWall gate — only set putWall when entry.gex < 0.
+  it("WR-05: putWall is null when all strikes have positive GEX (fully long-gamma chain)", async () => {
+    // All legs are calls — positive GEX only.
+    const allCallLegs: ReadonlyArray<LegObsForGex> = [
+      makeLeg({ contractType: "C", strike: 7400000, bsmGamma: "0.002", openInterest: 17071 }),
+      makeLeg({ contractType: "C", strike: 7600000, bsmGamma: "0.003", openInterest: 69015 }),
+    ];
+
+    const spy = makePersistSpy();
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(allCallLegs),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    // All GEX is positive — putWall must be null (no negative-GEX strike exists).
+    expect(row.putWall).toBeNull();
+    // callWall should be set (there ARE positive-GEX entries).
+    expect(typeof row.callWall).toBe("number");
+  });
+
   // CR-01 regression: netGammaAtSpot must be the PROFILE value at spot, not the
   // closest per-strike concentrated GEX value.
   //

@@ -25,7 +25,7 @@ import type {
   LegObsForGex,
   StorageError,
 } from "./ports.ts";
-import { strikeGex, buildProfile, findFlip } from "../domain/gex.ts";
+import { dollarGamma, strikeGex, buildProfile, findFlip } from "../domain/gex.ts";
 
 // ─── Spot grid constants (from RESEARCH Pattern 3 + playground-v3 oracle) ────
 
@@ -98,12 +98,15 @@ export function makeComputeGexSnapshotUseCase(
 
     const cycleTime = snapCycleTime(latestTime);
 
-    // ── Step 3: Extract spot (average underlyingPrice across the cohort) ─────
-    // Use the first leg's underlyingPrice as spot — all legs at the same cycle time
-    // share the same underlying quote.
-    const firstLeg = legs[0];
-    if (firstLeg === undefined) return ok(undefined);
-    const spot = firstLeg.underlyingPrice;
+    // ── Step 3: Compute spot as the average underlyingPrice across the cohort ─
+    // All legs in the cohort are at the same cycle time and share the same
+    // underlying quote (SPX). Computing the average rather than taking legs[0]
+    // is deterministic — it does not depend on JOIN order (WR-03 / IN-04).
+    // In practice the values should all be equal (same RTH snapshot), so the
+    // average equals any individual value; the average is the safer invariant.
+    if (legs.length === 0) return ok(undefined);
+    const spot =
+      legs.reduce((sum, leg) => sum + leg.underlyingPrice, 0) / legs.length;
 
     // ── Step 4: Compute per-strike GEX ───────────────────────────────────────
     const strikeEntries = strikeGex(legs, spot);
@@ -124,7 +127,9 @@ export function makeComputeGexSnapshotUseCase(
         callWallGex = entry.gex;
         callWall = entry.k;
       }
-      if (entry.gex < putWallGex) {
+      // WR-05: gate putWall on negative GEX (mirrors callWall's positive gate).
+      // putWall = null when no strike has negative GEX (fully long-gamma chain).
+      if (entry.gex < 0 && entry.gex < putWallGex) {
         putWallGex = entry.gex;
         putWall = entry.k;
       }
@@ -146,6 +151,7 @@ export function makeComputeGexSnapshotUseCase(
 
     // ── Step 8: Compute byExpiry ─────────────────────────────────────────────
     // Group per-strike GEX by expiration date.
+    // Uses domain dollarGamma directly (WR-02: removed duplicate dollarGammaContrib).
     const byExpiryMap = new Map<string, number>();
     for (const leg of legs) {
       // Skip legs without usable gamma
@@ -155,12 +161,9 @@ export function makeComputeGexSnapshotUseCase(
       if (!Number.isFinite(gamma)) continue;
 
       const sign = leg.contractType === "C" ? 1 : -1;
-      const k = leg.strike / 1000;
-      const dg = sign * dollarGammaContrib(gamma, leg.openInterest, spot);
+      const dg = sign * dollarGamma(gamma, leg.openInterest, spot);
       const existing = byExpiryMap.get(leg.expiration);
       byExpiryMap.set(leg.expiration, (existing ?? 0) + dg);
-
-      void k; // k is used in strikeGex not here
     }
 
     const byExpiry = [...byExpiryMap.entries()]
@@ -175,7 +178,8 @@ export function makeComputeGexSnapshotUseCase(
       callWall,
       putWall,
       netGammaAtSpot,
-      profile: profile.map((p) => ({ strike: p.strike, gamma: p.gamma })),
+      // WR-01: profile field is `spot` (spot-price grid level), not `strike`
+      profile: profile.map((p) => ({ spot: p.spot, gamma: p.gamma })),
       strikes: strikeEntries.map((e) => ({ k: e.k, gex: e.gex, coi: e.coi, poi: e.poi, vol: e.vol })),
       byExpiry,
       computedAt: deps.now(),
@@ -188,9 +192,3 @@ export function makeComputeGexSnapshotUseCase(
   };
 }
 
-// ─── Private helpers ──────────────────────────────────────────────────────────
-
-/** Dollar gamma contribution (same formula as domain dollarGamma). */
-function dollarGammaContrib(gamma: number, oi: number, spot: number): number {
-  return (gamma * oi * 100 * spot * spot * 0.01) / 1e9;
-}
