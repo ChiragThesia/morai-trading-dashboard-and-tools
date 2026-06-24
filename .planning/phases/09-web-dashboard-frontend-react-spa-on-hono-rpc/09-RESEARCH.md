@@ -910,7 +910,13 @@ The TOS parser is pure logic with no I/O — it belongs in `apps/web/src/lib/tos
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Resolved during Phase 9 planning (2026-06-24):
+> - **Q1 POSITIONS-01 — RESOLVED:** `brokerPosition` (`packages/contracts/src/brokerage.ts`) carries **no** computed greeks. Per D-03, Positions/Analyzer greeks compute **client-side via the shared `@morai/quant` kernel** (Plan 09-06 Task 1 + Plan 09-10), asserting parity with `bsmGreeks` so live P&L matches server-computed P&L. No frontend fake/cache.
+> - **Q2 Hono route method names — RESOLVED:** executor reads `apps/server/src/adapters/http/*.routes.ts` + the existing `app-type.assert.ts` working example before writing hooks (Plan 09-04 `read_first`).
+> - **Q3 Router — RESOLVED:** React Router v7 (History API deep-linking + Vercel SPA rewrites; supports the Overview "open analyzer →" pre-selection). Adopted in the scaffold (Plan 09-03/09-05).
+> - **Q4 Vite dev proxy — RESOLVED:** `server.proxy['/api'] → VITE_API_BASE_URL`, `changeOrigin: true`; dev uses the `/api` base to bypass CORS (Plan 09-03 scaffold).
 
 1. **POSITIONS-01: Does `GET /api/positions` return computed BSM greeks or raw broker positions?**
    - What we know: Phase 8 CONTEXT.md listed this as an open gap. The `positionsResponse` contract in `packages/contracts/src/brokerage.ts` returns raw broker positions (no computed greeks fields).

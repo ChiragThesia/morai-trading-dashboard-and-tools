@@ -1,9 +1,9 @@
 ---
 phase: 9
 slug: web-dashboard-frontend-react-spa-on-hono-rpc
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-24
 ---
 
@@ -57,6 +57,17 @@ created: 2026-06-24
 
 ## Wave 0 Requirements
 
+> **No separate pre-phase Wave 0.** This phase has no standalone Wave-0 plan — the test
+> infrastructure is created **in-phase, RED-first**, as the leading tasks of the early TDD
+> plans, and gates everything downstream via `depends_on`:
+> - `packages/quant` parity tests + fast-check → **Plan 09-02** (Wave 2, RED before the kernel move)
+> - `apps/web/vitest.config.ts` (jsdom + react) + RTL/jsdom dev deps → **Plan 09-03** (Wave 3 scaffold)
+> - `AuthExpiredBanner` + auth-gate component tests → **Plan 09-04** (Wave 4, RED-first)
+> - TOS-parser + IV-bisection tests → **Plan 09-09** (Wave 7, RED-first)
+>
+> `wave_0_complete: true` reflects that every item below is owned by a specific plan task; the
+> files materialize when those plans execute. No screen/chart task runs before its test infra.
+
 - [ ] `apps/web/vitest.config.ts` — jsdom environment + react plugin
 - [ ] React test setup: `@testing-library/react`, `@testing-library/user-event`, `jsdom` (dev deps in `apps/web`)
 - [ ] `packages/quant/src/bsm.test.ts` — parity vs original `core` bsm.ts + fast-check round-trips
@@ -80,11 +91,11 @@ created: 2026-06-24
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (each owned by a plan task — see Wave 0 Requirements note)
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-06-24
