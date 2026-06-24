@@ -478,7 +478,7 @@ render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8)
   4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
      delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
 
-**Plans:** 4/10 plans executed
+**Plans:** 5/10 plans executed
 
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
@@ -509,7 +509,7 @@ Plans:
 
 **Wave 7** *(TDD parser — blocked on 09-02 quant)*
 
-- [ ] 09-09-PLAN.md — TDD: TOS calendar paste parser (9 rules) + implied-IV bisection over @morai/quant (threat model L1) (UI-01)
+- [x] 09-09-PLAN.md — TDD: TOS calendar paste parser (9 rules) + implied-IV bisection over @morai/quant (threat model L1) (UI-01)
 
 **Wave 8** *(Analyzer LAST — hardest; blocked on 09-06/09-08 components + 09-09 parser)*
 

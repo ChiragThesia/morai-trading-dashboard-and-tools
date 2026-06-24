@@ -6,14 +6,14 @@ current_phase: 09
 current_phase_name: web-dashboard-frontend-react-spa-on-hono-rpc
 status: Ready to plan
 stopped_at: Completed 09-03-PLAN.md
-last_updated: "2026-06-24T21:09:09.747Z"
+last_updated: "2026-06-24T21:20:51.420Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 74
-  completed_plans: 70
+  completed_plans: 71
   percent: 89
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 09 (web-dashboard-frontend-react-spa-on-hono-rpc) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
 Last activity: 2026-06-24 — Phase 09 execution started
@@ -104,6 +104,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 09 P02 | 334 | 3 tasks | 8 files |
 | Phase 09 P03 | 13 | 3 tasks | 25 files |
 | Phase 09 P04 | 17min | 3 tasks | 9 files |
+| Phase 09 P09 | 10 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -250,6 +251,8 @@ Recent decisions affecting current work:
 - [Phase ?]: packages/core/src/journal/domain/bsm.ts replaced with 5-line re-export shim to @morai/quant
 - [Phase ?]: shadcn init rewrites :root to oklch light-mode defaults — override with Morai palette hex; @theme inline bridge required for bg-background resolution
 - [Phase ?]: vitest project name:'web' required for --project web filter; auto-discovered by root apps/*/vitest.config.ts glob
+- [Phase ?]: Date regex anchored to JAN|FEB|...|DEC month alternation to prevent false matches on '7500 PUT 30 NOV' producing '00 PUT 30'
+- [Phase ?]: impliedFlatIv returns lo/hi bound (not null) when debit outside bracket; MAX_ITER=64 hard cap (T-09-07)
 
 ### Pending Todos
 
@@ -273,6 +276,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-24T21:09:09.739Z
+Last session: 2026-06-24T21:20:44.822Z
 Stopped at: Completed 09-03-PLAN.md
 Resume file: None
