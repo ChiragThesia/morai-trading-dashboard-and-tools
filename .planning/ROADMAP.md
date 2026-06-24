@@ -433,7 +433,7 @@ if needed.
   4. Read endpoints (status, journal, brokerage, analytics, gex) require a valid Supabase Auth
      session; CORS allows the Vercel web origin; unauthenticated request → 401.
 
-**Plans:** 7/7 plans complete
+**Plans:** 8/7 plans complete
 
 Plans:
 **Wave 1**
