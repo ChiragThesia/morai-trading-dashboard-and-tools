@@ -6,21 +6,34 @@
  *   1. Banner renders when tokenFreshness === "AUTH_EXPIRED"
  *   2. Banner renders nothing when tokenFreshness is any non-expired value
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, cleanup } from "@testing-library/react";
+import type { StatusResponse } from "@morai/contracts";
 import { AuthExpiredBanner } from "./AuthExpiredBanner.tsx";
 
 // Mock the useStatus hook — AuthExpiredBanner consumes it for tokenFreshness
 vi.mock("../hooks/useStatus.ts", () => ({
+  // Using vi.fn() without typed wrapper: useStatus in tests only needs .data read by the component.
+  // The full UseQueryResult discriminated union cannot be satisfied without type assertions,
+  // so we mock at the vi.fn() level and inject data via mockImplementation at the call site.
   useStatus: vi.fn(),
 }));
 
 import { useStatus } from "../hooks/useStatus.ts";
 
+const mockUseStatus = vi.mocked(useStatus);
+
+// Helper: set up the mock to return a specific data value.
+// Only `.data` is read by AuthExpiredBanner; all other fields are irrelevant.
+function setStatusData(data: StatusResponse | undefined) {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  mockUseStatus.mockReturnValue({ data } as ReturnType<typeof useStatus>);
+}
+
 // Helper: create a mock status data object with tokenFreshness in the trader slot
-function makeStatusData(freshness: "AUTH_EXPIRED" | "fresh" | "stale" | "none_yet") {
+function makeStatusData(freshness: "AUTH_EXPIRED" | "fresh" | "stale" | "none_yet"): StatusResponse {
   return {
-    db: "ok" as const,
+    db: "ok",
     tokenFreshness: {
       trader: {
         status: freshness,
@@ -29,38 +42,29 @@ function makeStatusData(freshness: "AUTH_EXPIRED" | "fresh" | "stale" | "none_ye
         lastRefreshError: null,
       },
       market: {
-        status: "fresh" as const,
+        status: "fresh",
         expiresAt: null,
         refreshIssuedAt: null,
         lastRefreshError: null,
       },
     },
-    lastJobRuns: "none yet" as const,
+    lastJobRuns: "none yet",
     version: "0.0.1",
     uptime: 42,
   };
 }
 
 describe("AuthExpiredBanner", () => {
-  const mockUseStatus = vi.mocked(useStatus);
-
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("renders the locked banner copy when tokenFreshness is AUTH_EXPIRED", () => {
-    mockUseStatus.mockReturnValue({
-      data: makeStatusData("AUTH_EXPIRED"),
-      isPending: false,
-      isError: false,
-      error: null,
-      isSuccess: true,
-      isLoading: false,
-      isFetching: false,
-      isRefetching: false,
-      status: "success",
-      fetchStatus: "idle",
-    } as ReturnType<typeof useStatus>);
+    setStatusData(makeStatusData("AUTH_EXPIRED"));
 
     render(<AuthExpiredBanner />);
 
@@ -74,78 +78,34 @@ describe("AuthExpiredBanner", () => {
   });
 
   it("renders nothing (null) when tokenFreshness is fresh", () => {
-    mockUseStatus.mockReturnValue({
-      data: makeStatusData("fresh"),
-      isPending: false,
-      isError: false,
-      error: null,
-      isSuccess: true,
-      isLoading: false,
-      isFetching: false,
-      isRefetching: false,
-      status: "success",
-      fetchStatus: "idle",
-    } as ReturnType<typeof useStatus>);
+    setStatusData(makeStatusData("fresh"));
 
     const { container } = render(<AuthExpiredBanner />);
     expect(container.firstChild).toBeNull();
   });
 
   it("renders nothing when status is still loading (data undefined)", () => {
-    mockUseStatus.mockReturnValue({
-      data: undefined,
-      isPending: true,
-      isError: false,
-      error: null,
-      isSuccess: false,
-      isLoading: true,
-      isFetching: true,
-      isRefetching: false,
-      status: "pending",
-      fetchStatus: "fetching",
-    } as ReturnType<typeof useStatus>);
+    setStatusData(undefined);
 
     const { container } = render(<AuthExpiredBanner />);
     expect(container.firstChild).toBeNull();
   });
 
   it("renders nothing when tokenFreshness is 'none yet' string (pre-setup)", () => {
-    mockUseStatus.mockReturnValue({
-      data: {
-        db: "ok" as const,
-        tokenFreshness: "none yet" as const,
-        lastJobRuns: "none yet" as const,
-        version: "0.0.1",
-        uptime: 42,
-      },
-      isPending: false,
-      isError: false,
-      error: null,
-      isSuccess: true,
-      isLoading: false,
-      isFetching: false,
-      isRefetching: false,
-      status: "success",
-      fetchStatus: "idle",
-    } as ReturnType<typeof useStatus>);
+    setStatusData({
+      db: "ok",
+      tokenFreshness: "none yet",
+      lastJobRuns: "none yet",
+      version: "0.0.1",
+      uptime: 42,
+    });
 
     const { container } = render(<AuthExpiredBanner />);
     expect(container.firstChild).toBeNull();
   });
 
   it("renders no dismiss/close button", () => {
-    mockUseStatus.mockReturnValue({
-      data: makeStatusData("AUTH_EXPIRED"),
-      isPending: false,
-      isError: false,
-      error: null,
-      isSuccess: true,
-      isLoading: false,
-      isFetching: false,
-      isRefetching: false,
-      status: "success",
-      fetchStatus: "idle",
-    } as ReturnType<typeof useStatus>);
+    setStatusData(makeStatusData("AUTH_EXPIRED"));
 
     render(<AuthExpiredBanner />);
     // No close/dismiss button exists per spec

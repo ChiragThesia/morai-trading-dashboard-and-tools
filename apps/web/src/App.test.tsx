@@ -1,52 +1,55 @@
 /**
  * App auth gate tests — asserts the routing behavior between Login and the app shell.
  *
- * RED-first: written before App.tsx / useAuthSession.ts / Login.tsx exist.
- *
- * Requirements:
- *   - App renders <Login> when session is null (no auth)
- *   - App renders the authenticated shell when session exists
- *   - Auth gate shows blank splash while session is loading (undefined)
+ * Tests the three auth gate states via useAuthSession mock (deterministic, timing-independent):
+ *   - session === null  → renders <Login>
+ *   - session exists   → renders authenticated shell
+ *   - session === undefined → blank loading splash (null)
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { QueryClient } from "@tanstack/react-query";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, cleanup } from "@testing-library/react";
+import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { App } from "./App.tsx";
 
-// Mock supabase — the auth gate uses supabase.auth.getSession + onAuthStateChange
+// Mock useAuthSession — controls the session state directly without supabase internals
+vi.mock("./hooks/useAuthSession.ts", () => ({
+  useAuthSession: vi.fn(),
+}));
+
+// Mock useStatus — AuthExpiredBanner (mounted in the authenticated shell) polls /api/status
+vi.mock("./hooks/useStatus.ts", () => ({
+  useStatus: vi.fn(() => ({ data: undefined, isPending: true })),
+}));
+
+// Mock supabase — Login.tsx calls signInWithPassword; prevent real network calls in tests
 vi.mock("./lib/supabase.ts", () => ({
   supabase: {
     auth: {
-      getSession: vi.fn(),
-      onAuthStateChange: vi.fn(),
+      signInWithPassword: vi.fn(),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn(() => ({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      })),
     },
   },
 }));
 
-// Mock rpc setAuthToken — called on session changes
+// Mock rpc — prevent real API calls in tests
 vi.mock("./lib/rpc.ts", () => ({
   setAuthToken: vi.fn(),
   apiFetch: vi.fn(),
   rpc: {},
 }));
 
-// Mock queryClient — App uses the singleton; we override clear() for test isolation
+// Mock queryClient — prevent cross-test state pollution
 vi.mock("./lib/queryClient.ts", () => ({
-  queryClient: {
-    clear: vi.fn(),
-  },
+  queryClient: { clear: vi.fn() },
 }));
 
-// Mock useStatus — AuthExpiredBanner (mounted in the authenticated shell) calls it
-vi.mock("./hooks/useStatus.ts", () => ({
-  useStatus: vi.fn(() => ({ data: undefined, isPending: true })),
-}));
+import { useAuthSession } from "./hooks/useAuthSession.ts";
 
-import { supabase } from "./lib/supabase.ts";
-
-const mockSupabase = vi.mocked(supabase);
+const mockUseAuthSession = vi.mocked(useAuthSession);
 
 // Minimal session fixture
 function makeSession(): Session {
@@ -70,7 +73,6 @@ function makeSession(): Session {
 }
 
 function renderApp() {
-  // Fresh QueryClient per test to avoid cross-test cache pollution
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -80,61 +82,33 @@ function renderApp() {
 }
 
 describe("App auth gate", () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    // Default: onAuthStateChange returns a subscription that does nothing
-    mockSupabase.auth.onAuthStateChange.mockReturnValue({
-      data: {
-        subscription: {
-          unsubscribe: vi.fn(),
-          id: "sub-1",
-          callback: vi.fn(),
-          handleApiError: vi.fn(),
-        },
-      },
-    });
+  afterEach(() => {
+    cleanup();
   });
 
-  it("renders the Login screen when there is no session (session === null)", async () => {
-    mockSupabase.auth.getSession.mockResolvedValue({
-      data: { session: null },
-      error: null,
-    });
-
-    await act(async () => {
-      renderApp();
-    });
-
-    // Login screen must render — look for the "Sign in" heading or the form
+  it("renders the Login screen when there is no session (session === null)", () => {
+    mockUseAuthSession.mockReturnValue(null);
+    renderApp();
+    // Login screen must show the "Sign in" heading
     expect(screen.getByRole("heading", { name: /Sign in/i })).toBeDefined();
   });
 
-  it("renders the authenticated shell when a session exists (session !== null)", async () => {
-    mockSupabase.auth.getSession.mockResolvedValue({
-      data: { session: makeSession() },
-      error: null,
-    });
-
-    await act(async () => {
-      renderApp();
-    });
-
-    // The authenticated app should render (not Login) — Login heading should NOT be present
+  it("renders the authenticated shell when a session exists (session !== null)", () => {
+    mockUseAuthSession.mockReturnValue(makeSession());
+    renderApp();
+    // Login heading must NOT be present
     expect(screen.queryByRole("heading", { name: /Sign in/i })).toBeNull();
-    // The shell placeholder should render with data-testid="app-shell"
+    // The authenticated shell placeholder must render
     expect(screen.getByTestId("app-shell")).toBeDefined();
   });
 
-  it("renders a blank loading splash while session is loading (session === undefined)", async () => {
-    // getSession is pending — never resolves during this render
-    mockSupabase.auth.getSession.mockReturnValue(new Promise(() => undefined));
-
+  it("renders a blank loading splash while session is loading (session === undefined)", () => {
+    mockUseAuthSession.mockReturnValue(undefined);
     const { container } = renderApp();
-
-    // During loading, the App renders nothing (null)
+    // Neither Login nor shell renders during loading
     expect(screen.queryByRole("heading", { name: /Sign in/i })).toBeNull();
     expect(screen.queryByTestId("app-shell")).toBeNull();
-    // Container should be effectively empty (no visible content)
+    // Container is empty during loading
     expect(container.textContent).toBe("");
   });
 });
