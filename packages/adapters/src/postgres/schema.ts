@@ -2,6 +2,7 @@ import {
   customType,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -345,6 +346,26 @@ export const termStructureObservations = pgTable(
     primaryKey({ columns: [table.snapshotTime, table.calendarId] }),
   ],
 ).enableRLS();
+
+// ─── 14. gex_snapshots — computed GEX snapshot per cycle (Phase 8) ───────────
+// Single-row upsert idempotency via cycle_time PRIMARY KEY (SC-2 idempotency anchor).
+// profile, strikes, byExpiry stored as JSONB blobs — never fanned out to per-row inserts
+// (avoids 65,534-param insert ceiling; T-08-02).
+
+export const gexSnapshots = pgTable("gex_snapshots", {
+  cycleTime: timestamp("cycle_time", { withTimezone: true }).primaryKey(),
+  spot: numeric("spot").notNull(),
+  // Nullable: flip level is null when the GEX profile never crosses zero.
+  flip: numeric("flip"),
+  // Nullable: call/put walls are null when no dominant wall exists.
+  callWall: integer("call_wall"),
+  putWall: integer("put_wall"),
+  netGammaAtSpot: numeric("net_gamma_at_spot").notNull(),
+  // JSONB blobs: [{strike, gamma}], [{k, gex, coi, poi, vol}], [{date, gex}]
+  profile: jsonb("profile").notNull(),
+  strikes: jsonb("strikes").notNull(),
+  byExpiry: jsonb("by_expiry").notNull(),
+}).enableRLS();
 
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";

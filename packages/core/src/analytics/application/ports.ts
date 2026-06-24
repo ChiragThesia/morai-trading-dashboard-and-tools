@@ -180,3 +180,84 @@ export type ForReadingTermStructureSeries = (
     readonly calendarId?: string;
   },
 ) => Promise<Result<ReadonlyArray<TermStructureObservationRow>, StorageError>>;
+
+// ─── GEX driven ports + row types (Phase 8, Plan 08-02) ─────────────────────
+// Declared here; implemented by Postgres + memory adapters in 08-05.
+// Hexagon law (§2): imports ONLY @morai/shared — no drizzle, no zod, no other context domain.
+
+/**
+ * LegObsForGex — one leg observation row read for GEX computation.
+ * Joined from leg_observations + contracts; filtered to the latest available cycle.
+ * `strike` follows the ×1000 integer convention (e.g. 7400000 = 7400 strike).
+ * `bsmGamma` and `bsmIv` are string (numeric PG column) — null when BSM not yet computed.
+ */
+export type LegObsForGex = {
+  readonly time: Date;
+  readonly contract: string;
+  readonly underlyingPrice: number;
+  readonly bsmGamma: string | null;
+  readonly bsmIv: string | null;
+  readonly openInterest: number;
+  readonly contractType: "C" | "P";
+  /** Strike ×1000 integer convention (e.g. 7400 strike → 7400000). */
+  readonly strike: number;
+  /** YYYY-MM-DD expiration date. */
+  readonly expiration: string;
+};
+
+/**
+ * GexSnapshotRow — the full GEX snapshot ready to persist or return from the repo.
+ * Mirrors gexSnapshotEntry (contracts package) as a domain-typed readonly struct.
+ */
+export type GexSnapshotRow = {
+  readonly cycleTime: Date;
+  readonly spot: number;
+  readonly flip: number | null;
+  readonly callWall: number | null;
+  readonly putWall: number | null;
+  readonly netGammaAtSpot: number;
+  readonly profile: ReadonlyArray<{ readonly strike: number; readonly gamma: number }>;
+  readonly strikes: ReadonlyArray<{
+    readonly k: number;
+    readonly gex: number;
+    readonly coi: number;
+    readonly poi: number;
+    readonly vol: number;
+  }>;
+  readonly byExpiry: ReadonlyArray<{ readonly date: string; readonly gex: number }>;
+  readonly computedAt: Date;
+};
+
+/**
+ * ForReadingLegObsForGex — read the latest leg_observations cohort for GEX computation.
+ * Returns the full chain (all strikes, both calls and puts) at the most recent cycle time.
+ */
+export type ForReadingLegObsForGex = () => Promise<
+  Result<ReadonlyArray<LegObsForGex>, StorageError>
+>;
+
+/**
+ * ForReadingGexSnapshot — read the most recent persisted GexSnapshotRow.
+ * Returns ok(null) when no snapshot exists yet.
+ */
+export type ForReadingGexSnapshot = () => Promise<Result<GexSnapshotRow | null, StorageError>>;
+
+/**
+ * ForPersistingGexSnapshot — upsert a GexSnapshotRow keyed on cycleTime.
+ * Idempotent: re-running for the same cycleTime is a no-op (onConflictDoNothing).
+ */
+export type ForPersistingGexSnapshot = (
+  row: GexSnapshotRow,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForRunningComputeGexSnapshot — driver port for the compute-gex-snapshot use-case factory.
+ * Called by the pg-boss job handler; reads leg-obs, computes GEX, persists snapshot.
+ */
+export type ForRunningComputeGexSnapshot = () => Promise<Result<void, StorageError>>;
+
+/**
+ * ForRunningGetGex — driver port for the get-gex use-case factory.
+ * Called by the HTTP route and MCP tool; returns the latest stored snapshot or null.
+ */
+export type ForRunningGetGex = () => Promise<Result<GexSnapshotRow | null, StorageError>>;
