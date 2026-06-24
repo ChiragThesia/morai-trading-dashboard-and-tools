@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 08
 current_phase_name: web-dashboard-backend-gex-auth-rpc
 status: Phase 06 in progress (gap round — plan 06-07 numeric guards complete)
-stopped_at: Completed 08-06-PLAN.md
-last_updated: "2026-06-24T16:14:01.766Z"
+stopped_at: Completed 08-07-PLAN.md
+last_updated: "2026-06-24T16:28:36.280Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 9
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 64
-  completed_plans: 64
-  percent: 78
+  completed_plans: 65
+  percent: 89
 ---
 
 # Project State
@@ -98,6 +98,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 08-web-dashboard-backend-gex-auth-rpc P04 | 2 | - tasks | - files |
 | Phase 08 P05 | 11 | 2 tasks | 10 files |
 | Phase 08 P06 | 7 | 2 tasks | 7 files |
+| Phase 08 P07 | 9 | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -235,6 +236,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 08-06: compute-gex-snapshot is terminal (no boss.send) — GEX is the last step in the RTH chain (D-01, RESEARCH Open Question 2)
 - [Phase ?]: 08-06: compute-analytics chain-triggers compute-gex-snapshot via boss.send(singletonKey: triggered-by-analytics) — T-08-10 dedupe
 - [Phase ?]: 08-06: makePostgresGexSnapshotRepo added to @morai/adapters barrel (was missing from 08-05)
+- [Phase ?]: CORS-first middleware (Pitfall 7): CORS applied before JWT group so preflight returns headers before auth rejects
+- [Phase ?]: Chained apiRouter required for AppType inference (RESEARCH A5/Pattern 6): statement-style app.route() is not chainable
+- [Phase ?]: A1 Supabase JWT algorithm gate operator-deferred: HS256 code path proven by integration tests using hono Jwt.sign()
 
 ### Pending Todos
 
@@ -258,6 +262,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-24T16:14:01.757Z
-Stopped at: Completed 08-06-PLAN.md
+Last session: 2026-06-24T16:28:36.272Z
+Stopped at: Completed 08-07-PLAN.md
 Resume file: None

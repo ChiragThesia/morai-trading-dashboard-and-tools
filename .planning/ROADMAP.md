@@ -27,7 +27,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 5: Jobs, Fill Rebuild & Integrity** - Full job queue, sync-fills, journal rebuilt from broker data (completed 2026-06-22; 13 plans + 2 gap rounds, SC4/SC5 verified 5/5)
 - [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (verified 4/4 2026-06-22; 8 plans + 1 gap round; merged PR #5; prod migration 0007 applied + verified)
 - [x] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history (verified 2/2 offline 2026-06-22; 2 plans + 1 review round; live pull needs Schwab auth + healthy deploy)
-- [ ] **Phase 8: Web Dashboard Backend** - GEX analytics endpoint + Zod contract (scheduled snapshot job), Hono `AppType` export for typed RPC, Supabase Auth on read endpoints + CORS
+- [x] **Phase 8: Web Dashboard Backend** - GEX analytics endpoint + Zod contract (scheduled snapshot job), Hono `AppType` export for typed RPC, Supabase Auth on read endpoints + CORS (completed 2026-06-24)
 - [ ] **Phase 9: Web Dashboard Frontend** - React + Vite SPA (apps/web) on Vercel: 5 screens over typed Hono RPC, TanStack auto-poll, Supabase Auth login
 
 ## Phase Details
@@ -433,7 +433,7 @@ if needed.
   4. Read endpoints (status, journal, brokerage, analytics, gex) require a valid Supabase Auth
      session; CORS allows the Vercel web origin; unauthenticated request → 401.
 
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 **Wave 1**
@@ -453,7 +453,7 @@ Plans:
 **Wave 4** *(08-06 blocked on 08-05; 08-07 blocked on 08-01+08-05; parallel, zero file overlap)*
 
 - [x] 08-06-PLAN.md — compute-gex-snapshot job: handler RTH gate + serial chain after compute-analytics + worker wiring (GEX-01, D-01)
-- [ ] 08-07-PLAN.md — GEX route + get_gex MCP tool + env config + main.ts CORS-first/Supabase-Auth/AppType + auth integration test (GEX-01/02, RPC-01, AUTH-01)
+- [x] 08-07-PLAN.md — GEX route + get_gex MCP tool + env config + main.ts CORS-first/Supabase-Auth/AppType + auth integration test (GEX-01/02, RPC-01, AUTH-01)
 
 ### Phase 9: Web Dashboard Frontend — React SPA (apps/web) on Vercel over typed Hono RPC
 
