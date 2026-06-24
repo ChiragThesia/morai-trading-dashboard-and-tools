@@ -14,7 +14,6 @@ files_reviewed_list:
   - apps/worker/src/schedule.ts
   - apps/worker/src/main.ts
   - packages/adapters/src/postgres/gex-snapshot.repo.ts
-  - packages/adapters/src/postgres/migrations/0008_gex_snapshot.sql
   - packages/adapters/src/postgres/schema.ts
   - packages/adapters/src/memory/gex-snapshot.ts
   - packages/contracts/src/gex.ts
@@ -22,9 +21,10 @@ files_reviewed_list:
   - packages/core/src/analytics/application/computeGexSnapshot.ts
   - packages/core/src/analytics/application/getGex.ts
   - packages/core/src/analytics/application/ports.ts
+  - packages/adapters/src/__contract__/gex-snapshot.contract.ts
 findings:
-  critical: 2
-  warning: 6
+  critical: 1
+  warning: 7
   info: 4
   total: 12
 status: issues_found
@@ -39,231 +39,221 @@ status: issues_found
 
 ## Summary
 
-Reviewed the GEX backend slice (domain math, compute use-case, repo, contracts), the
-Supabase-Auth/CORS security boundary in `main.ts`, the MCP `get_gex` tool, and the job
-chain wiring. The auth + CORS ordering is correct and the idempotency design is sound.
+Re-review of the GEX-snapshot backend slice after the two prior criticals were fixed. Both are
+confirmed resolved against current code (see "Resolved Criticals"). One NEW critical surfaced that
+the prior advisories circled but never named as a hard failure: the contract enforces integer
+`k`/`callWall`/`putWall`, but the producer feeds them `strike / 1000` (fractional for any
+half/quarter-point SPX strike) and the DB wall columns are `integer`. That pairing is a runtime
+fault (write-side truncation or read-side Zod throw → 500), not a quality smell, so it is escalated
+to BLOCKER and the prior WR-04/WR-05 are reframed around it.
 
-However the **GEX domain math has a correctness defect** (`netGammaAtSpot` is computed
-from per-strike aggregates, not the spot-grid profile — it does not match the oracle and
-ships a wrong scalar to the dashboard), and **`computedAt` is silently lost on every
-write** (the column does not exist; the repo substitutes `cycleTime` on read, so the
-contract's `computedAt` is fabricated). Both are masked by a green suite — the existing
-tests assert only `typeof === "number"` / structural shape, never the numeric values.
-This is the exact "green suite hid a prod bug" failure mode flagged in project memory.
+The remaining findings are the prior advisories, re-verified and re-numbered against current line
+numbers, plus one boundary-rule violation (the in-memory GEX twin is implemented but never exported,
+so architecture-boundaries §8 "ship the twin" is only half-met at the package surface).
 
-A `flip` strike-vs-spot-grid sign-convention quirk and several robustness gaps round out
-the warnings.
+### Resolved Criticals (do not reopen)
+
+- **CR-01 (netGammaAtSpot, prior phase):** RESOLVED. `computeGexSnapshot.ts:141-142` derives the
+  scalar from `buildProfile(legs, [spot])` (profile-at-spot semantics) rather than the per-strike
+  concentrated GEX of the nearest strike. Matches the oracle (-47.43 @ s=7380).
+- **CR-02 (computedAt persistence, prior phase):** RESOLVED. A dedicated `computed_at` column exists
+  (migration `0009_gex_computed_at.sql`; `schema.ts:371`), the use-case stamps it with `deps.now()`
+  (`computeGexSnapshot.ts:181`), the repo round-trips it distinctly from `cycleTime`
+  (`gex-snapshot.repo.ts:120,160`), and a regression test pins it
+  (`__contract__/gex-snapshot.contract.ts:201-229`).
+
+## Structural Findings (fallow)
+
+No structural-findings block was provided for this re-review.
+
+## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: `netGammaAtSpot` computed from per-strike GEX, not the spot-grid profile — wrong value shipped
+### CR-01: Integer contract on `k`/`callWall`/`putWall` vs `strike/1000` producer + `integer` wall columns
 
-**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:138,203-221`
-**Issue:**
-`netGammaAtSpot` is the net dealer gamma evaluated *at the current spot across all
-contracts* — i.e. the profile's value at `S = spot`. The oracle confirms this:
-`gex.test.ts:9-11` documents `netGammaAtSpot ≈ -47` and explicitly says it is "the profile
-at s=7380 is -47.43". But the use-case derives it via `computeNetGammaAtSpot(strikeEntries, spot)`,
-which scans the **per-strike GEX aggregate** (`strikeGex` output) and returns the `gex` of
-the *strike closest to spot*. That is the gamma *concentrated at one strike*, a completely
-different quantity and magnitude from "total net gamma evaluated at spot". The values it
-produces will not match the oracle and the dashboard's headline GEX number will be wrong.
+**File:** `packages/contracts/src/gex.ts:12,38,39`; `packages/core/src/analytics/domain/gex.ts:94`;
+`packages/core/src/analytics/application/computeGexSnapshot.ts:124,129,158`;
+`packages/adapters/src/postgres/schema.ts:361,362`
 
-The correct source already exists in scope: `buildProfile` is called at line 142 to build
-`profile`. The spot-at-grid value should come from the profile (the grid point nearest
-`spot`, or a direct `buildProfile(legs, [spot])` evaluation), not from `strikeEntries`.
+**Issue:** The contract pins `gexWallEntry.k`, `callWall`, and `putWall` to `z.number().int()`. The
+producer computes every strike as `leg.strike / 1000` (`domain/gex.ts:94`,
+`computeGexSnapshot.ts:158`), and `callWall`/`putWall` are assigned directly from `entry.k`
+(`computeGexSnapshot.ts:124,129`). The `×1000` convention only guarantees integrality after `/1000`
+for whole-point strikes. Any half- or quarter-point listed strike (e.g. 7412.5 → stored `7412500`
+→ `/1000 = 7412.5`) produces a fractional value. One fractional input yields two failure paths:
+  1. **Write side:** `callWall`/`putWall` map to `integer("call_wall")`/`integer("put_wall")`
+     columns (`schema.ts:361-362`). Persisting `7412.5` into an `integer` column errors or silently
+     truncates — the wall is lost or wrong.
+  2. **Read side:** even with null walls, a fractional `k` in any `strikes[]` entry makes
+     `gexSnapshotResponse.parse(...)` throw at the read seam in BOTH `gex.routes.ts:44` and
+     `tools.ts:522`, returning `{error:"internal"}`/`500` for an otherwise-valid snapshot.
+There is no integrality guard anywhere between the `×1000` source and these integer sinks.
 
-The reason this passed review/tests: `computeGexSnapshot.test.ts:118` asserts only
-`expect(typeof row.netGammaAtSpot).toBe("number")` — it never checks the value against the
-documented oracle (-47). Green suite, wrong number.
-
-**Fix:**
+**Fix:** Decide the grain explicitly and enforce it once. Either (a) relax the contract to
+`z.number()` for `k`/`callWall`/`putWall` and change the wall columns to `numeric`, or (b) keep
+integers and round/validate at the domain boundary:
 ```ts
-// Evaluate the profile directly at spot (same units as buildProfile output, $Bn/1%).
-const [spotPoint] = buildProfile(legs, [spot]);
-const netGammaAtSpot = spotPoint?.gamma ?? 0;
-// Delete computeNetGammaAtSpot + dollarGammaContrib (now unused).
+// domain/gex.ts — make the ×1000→points conversion total and integral
+const kRaw = leg.strike / 1000;
+const k = Number.isInteger(kRaw) ? kRaw : Math.round(kRaw); // or skip + log non-integral strikes
 ```
-Add a value-level test asserting `netGammaAtSpot` against the mockup oracle so the
-regression cannot reappear.
-
-### CR-02: `computedAt` is never persisted — the contract field is fabricated on read (data loss)
-
-**File:** `packages/adapters/src/postgres/gex-snapshot.repo.ts:103-121,149-160`; `packages/adapters/src/postgres/migrations/0008_gex_snapshot.sql:1-11`; `packages/adapters/src/postgres/schema.ts:355-369`
-**Issue:**
-The domain row carries `computedAt: deps.now()` (`computeGexSnapshot.ts:181`) and the
-contract requires `computedAt` (`gex.ts:50`, `z.string().datetime()`). But there is **no
-`computed_at` column** in the migration or the Drizzle schema, and `persistGexSnapshot`
-never writes it. On read the repo sets `computedAt: row.cycleTime` (line 160) with a
-comment "computedAt is NOT stored in the DB — cycleTime used as a stable proxy".
-
-Consequences:
-1. The actual compute timestamp is silently discarded on every write — irrecoverable.
-2. The API/MCP `computedAt` is a **lie**: it reports the snapped 30-min data-cycle time
-   (which can be many minutes/hours before the row was actually computed), not when the
-   snapshot was produced. For a "freshness" field on a trading dashboard this is a
-   correctness/trust defect, not cosmetic.
-3. `cycleTime` is already exposed implicitly; conflating the two collapses two distinct
-   concepts (data instant vs compute instant) that the rest of the codebase (skew/RR,
-   06-06 CR-01) deliberately keeps separate.
-
-The mismatch slipped through because the contract only enforces *shape* (a datetime
-string), and `cycleTime` happens to be a valid datetime — so `gexSnapshotResponse.parse`
-never throws.
-
-**Fix:** Add the column and persist/read it honestly:
-```sql
--- 0008 migration
-"computed_at" timestamp with time zone NOT NULL,
-```
-```ts
-// schema.ts
-computedAt: timestamp("computed_at", { withTimezone: true }).notNull(),
-// repo persist .values({ ..., computedAt: row.computedAt })
-// repo read     computedAt: row.computedAt,  // not row.cycleTime
-```
-(If a deliberate decision was made to not store `computedAt`, then remove it from the
-contract and domain row rather than fabricating it — but that should be an explicit doc
-decision, not a silent proxy.)
+Add a property test over fractional strikes so the seam can never 500 on real chain data again.
 
 ## Warnings
 
-### WR-01: `flip` is interpolated over the SPOT GRID but typed/treated as a strike
+### WR-01: `findFlip` interpolates over a spot grid but its parameter is named/typed `strike`
 
-**File:** `packages/core/src/analytics/domain/gex.ts:135-163`, `computeGexSnapshot.ts:142-145`
-**Issue:** `findFlip` receives `buildProfile`'s output where `strike` is actually the
-*grid spot price* (line 231: `profile.push({ strike: S, ... })`). So the returned "flip
-strike" is really a grid-spot value, and its resolution is bounded by `GRID_STEP = 20`.
-This works for the oracle but the naming (`strike`) is misleading and the 20-point grid
-caps flip precision. Confirm the dashboard treats `flip` as a price level, not an option
-strike. Consider naming the profile field `spot`/`s` to avoid the conflation that already
-produced CR-01.
-**Fix:** Rename `buildProfile`'s `{ strike, gamma }` to `{ spot, gamma }` and update
-`findFlip`'s param type, so a future reader cannot mistake grid spots for strikes.
+**File:** `packages/core/src/analytics/domain/gex.ts:135-163`, fed by `buildProfile` at `184-235`
 
-### WR-02: `buildProfile` reuses a private `dollarGamma` copy in the use-case (drift risk)
+**Issue:** `buildProfile` returns `{ strike: S, gamma }` where `S` is a grid SPOT (`gex.ts:231`),
+not an option strike. `findFlip` consumes `{ strike, gamma }` and returns
+`a.strike + t*(b.strike - a.strike)` — an interpolated spot level. The math is correct (the flip is
+a spot level), but the field name `strike` mislabels the dimension, inviting a future bug when
+someone treats the flip as a strike.
 
-**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:193-196`
-**Issue:** `dollarGammaContrib` duplicates the exact formula of the exported
-`dollarGamma` (`gex.ts:42-44`). Two copies of the same financial constant chain
-(`× 100 × spot² × 0.01 / 1e9`) will drift; if one is corrected the other silently won't be.
-This is only used by the `byExpiry` loop, which after CR-01's fix is the sole remaining
-caller.
-**Fix:** Import and call the domain `dollarGamma` instead of redefining it.
+**Fix:** Rename the profile/flip axis field to `spot` (or `level`) end-to-end: `buildProfile`
+returns `{ spot, gamma }`, `findFlip` takes `{ spot, gamma }`. Align or document the contract's
+`profile` field accordingly.
 
-### WR-03: `spot` taken from `legs[0]` only, contradicting the documented "average"
+### WR-02: `dollarGamma` formula duplicated in the use-case as `dollarGammaContrib`
 
-**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:104-109`
-**Issue:** The step comment says "Extract spot (average underlyingPrice across the
-cohort)" but the code uses `legs[0].underlyingPrice`. If the cohort spans rows with
-slightly differing `underlyingPrice` (e.g. quotes captured a few ms apart, or a NaN/0 in
-the first row), `spot` is whatever the first JOIN row happened to be — non-deterministic
-across query orderings since the repo query has no `ORDER BY`. Spot feeds every downstream
-number (profile grid, dollar gamma, netGammaAtSpot), so a bad first row poisons the whole
-snapshot.
-**Fix:** Either compute the documented average, or pick deterministically (e.g. max/most
-common) and validate `spot > 0` before computing; bail to `ok(undefined)` if not finite.
+**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:193-196` vs
+`packages/core/src/analytics/domain/gex.ts:42-44`
 
-### WR-04: `callWall`/`putWall` are `integer` columns but domain values are unvalidated floats
+**Issue:** `dollarGammaContrib` is a byte-for-byte copy of domain `dollarGamma`
+(`(gamma * oi * 100 * spot * spot * 0.01) / 1e9`). The byExpiry rollup uses the copy while the
+strike/profile paths use the domain function. Two copies of a numeric formula drift the moment one
+is tuned, silently desyncing byExpiry from the rest of the snapshot.
 
-**File:** `packages/adapters/src/postgres/schema.ts:361-362`, `migrations/0008_gex_snapshot.sql:5-6`, `computeGexSnapshot.ts:120-134`
-**Issue:** `callWall`/`putWall` are persisted into `integer` columns and the contract is
-`z.number().int()`. They are assigned `entry.k` where `k = leg.strike / 1000`
-(`gex.ts:95`). For SPX ×1000-convention strikes this is integral *today*, but nothing
-enforces it — a non-multiple-of-1000 strike (or any future underlying with finer strikes)
-yields a fractional `k`, which Postgres `integer` will silently truncate/round on insert
-and `z.number().int()` will reject before that. There is no guard. A truncated wall on a
-trading dashboard is a silent data corruption.
-**Fix:** Either store `numeric` (matching `flip`/`spot`) and relax the contract to
-`z.number()`, or assert/validate that wall strikes are integral before persist and fail
-loudly otherwise.
+**Fix:** Delete `dollarGammaContrib` and call the exported domain `dollarGamma` in the byExpiry
+loop — it is already importable from `../domain/gex.ts`.
 
-### WR-05: `putWall` selected by absolute argmin including positive GEX — can mislabel
+### WR-03: Spot taken from non-deterministic `legs[0]` despite the "average" comment
 
-**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:130-134`
-**Issue:** `callWall` is correctly gated on `entry.gex > 0`, but `putWall` is the global
-argmin with no `entry.gex < 0` gate. If every strike has positive net GEX (all-call-heavy
-chain — uncommon but possible for short-dated cohorts), `putWall` is set to the
-*least positive* strike, i.e. a "put wall" that is actually positive GEX. The contract
-documents putWall as "highest net negative GEX" (`gex.ts:39`), so this violates its own
-spec. The oracle path never exercises the all-positive case, so tests pass.
-**Fix:** Gate `putWall` on `entry.gex < 0` and leave it `null` when no negative strike
-exists (mirroring the `callWall` treatment).
+**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:101-106`
 
-### WR-06: `getGex` use-case has no `byExpiry`/`profile` integrity guard at the read boundary
+**Issue:** The comment says "Extract spot (average underlyingPrice across the cohort)" but the code
+takes `legs[0].underlyingPrice`. Leg order comes from the repo JOIN, which has no `ORDER BY`
+(`gex-snapshot.repo.ts:58-78`), so "first leg" is whatever Postgres returns — non-deterministic. If
+the cohort spans more than one underlying quote (clock skew, partial re-fetch), the chosen spot is
+arbitrary and propagates into the entire profile/grid/netGammaAtSpot computation.
 
-**File:** `packages/adapters/src/postgres/gex-snapshot.repo.ts:157-159`
-**Issue:** The read path trusts `row.profile`, `row.strikes`, `row.byExpiry` JSONB blobs
-verbatim via the Drizzle `$type<>` annotation and forwards them straight into the contract
-parse at the route (`gex.routes.ts:44`). `$type<>` is a compile-time assertion, not a
-runtime check — if a malformed/legacy JSONB blob exists (manual edit, older writer,
-partial migration), the route's `gexSnapshotResponse.parse` will throw and surface as a
-flat 500 with no diagnostics, rather than being caught/logged at the storage seam. Given
-the project rule "parse, don't cast", the JSONB shapes crossing the storage boundary are
-exactly external input that should be Zod-validated, not `$type`-cast.
-**Fix:** Validate the JSONB blobs with a Zod schema in the repo read (or accept the
-documented risk explicitly). At minimum, ensure the route's parse failure is logged
-distinctly from a DB error so a bad row is diagnosable.
+**Fix:** Either compute the actual average to match the comment, or assert single-valued
+underlyingPrice and document the invariant. Do not depend on unordered `legs[0]`.
+
+### WR-04: No integrality guard on `callWall`/`putWall` before the `integer` column write
+
+**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:117-131,175-176`;
+`packages/adapters/src/postgres/gex-snapshot.repo.ts:113-114`
+
+**Issue:** Narrower companion to CR-01, kept actionable on its own. `callWall`/`putWall` are written
+through `gex-snapshot.repo.ts` with no rounding or validation (`callWall: row.callWall`), straight
+into `integer` columns. Even after CR-01's contract decision, the repo write path should not assume
+integrality silently.
+
+**Fix:** Enforce the chosen grain at the repo boundary too (round or reject), so a fractional wall
+can never reach an integer column undetected.
+
+### WR-05: `putWall` argmin is not gated on negative GEX, contradicting the contract doc
+
+**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:119-131`;
+contract doc `packages/contracts/src/gex.ts:40`
+
+**Issue:** `callWall` is gated on positive GEX (`entry.gex > 0 && entry.gex > callWallGex`), but
+`putWall` is a pure argmin (`entry.gex < putWallGex`, seeded at `+Infinity`). The contract documents
+`putWall` as "Strike with highest net NEGATIVE GEX". On a fully long-gamma chain (every strike
+positive), the argmin still returns the least-positive strike and labels it the put wall — a
+non-negative "negative-GEX" wall, contradicting the field's stated meaning.
+
+**Fix:** Mirror the callWall gate:
+```ts
+if (entry.gex < 0 && entry.gex < putWallGex) { putWallGex = entry.gex; putWall = entry.k; }
+```
+leaving `putWall` null when no strike has negative GEX.
+
+### WR-06: JSONB blobs `$type`-cast on read instead of Zod-parsed (parse-don't-cast)
+
+**File:** `packages/adapters/src/postgres/gex-snapshot.repo.ts:157-159`;
+`packages/adapters/src/postgres/schema.ts:366-368`
+
+**Issue:** `profile`, `strikes`, and `byExpiry` come back from Postgres as untyped JSONB but are
+trusted as their `$type<>`-annotated shapes and assigned straight onto `GexSnapshotRow`
+(`repo.ts:157-159`). `$type<>` is a compile-time annotation only — zero runtime validation — so a
+malformed/legacy/hand-edited JSONB row flows into the domain unchecked. The typescript rule mandates
+"parse, don't cast" for every external input, and a DB read crossing the adapter seam is external
+input. (The HTTP/MCP routes parse on the way out, but the domain boundary itself is unguarded.)
+
+**Fix:** Validate the JSONB blobs with a Zod schema in the repo read path before constructing
+`GexSnapshotRow` (reuse the contract sub-schemas or a domain-local schema). Keep `$type<>` for
+ergonomics; the runtime parse is what satisfies the rule.
+
+### WR-07: In-memory GEX twin exists but is never exported — boundary §8 only half-met
+
+**File:** `packages/adapters/src/index.ts:64-66` (only `makePostgresGexSnapshotRepo` exported); twin
+lives at `packages/adapters/src/memory/gex-snapshot.ts`
+
+**Issue:** architecture-boundaries §8 requires shipping the in-memory twin for every driven port.
+`makeMemoryGexSnapshotRepo` is implemented (`memory/gex-snapshot.ts`) but absent from the package
+public surface, while every other memory twin (calendars, fills, term-structure, skew,
+risk-reversal, job-queue) IS exported. Consumers outside the package cannot wire the twin for
+in-process/dev use, and the §8 "same PR" intent is satisfied only internally. The comment at
+`index.ts:64` ("memory twin deferred to 08-07 via getGex") acknowledges the gap rather than closing
+it.
+
+**Fix:**
+```ts
+export { makeMemoryGexSnapshotRepo } from "./memory/gex-snapshot.ts";
+export type { MemoryGexSnapshotRepo } from "./memory/gex-snapshot.ts";
+```
 
 ## Info
 
-### IN-01: Dead `_now` and dead `void k` in compute use-case
+### IN-01: `void k` dead computation in the byExpiry loop
 
-**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:81,163`
-**Issue:** `const _now = deps.now()` (line 81) is computed and never used (the comment
-even says now() is unused for cycle time). `void k` (line 163) computes `k = leg.strike/1000`
-then discards it with an explanatory `void`. Both are noise; `_now` in particular reads as
-if it bounds resolution but does nothing.
-**Fix:** Remove `_now` (keep `deps.now()` only at line 181 where `computedAt` uses it).
-Remove the unused `k`/`void k` from the `byExpiry` loop.
+**File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:158,163`
 
-### IN-02: `buildSpotGrid` can drop the upper bound for non-multiple spots
+**Issue:** `const k = leg.strike / 1000;` is computed then discarded via `void k;` with the comment
+"k is used in strikeGex not here". Pure dead code in this loop.
+
+**Fix:** Remove both the `const k` line and the `void k;` line.
+
+### IN-02: Asymmetric / off-center spot grid relative to spot
 
 **File:** `packages/core/src/analytics/application/computeGexSnapshot.ts:54-62`
-**Issue:** `start = Math.round(spot - 600)`, `end = Math.round(spot + 600)`, step 20.
-Because `end - start = 1200` is divisible by 20 only when `Math.round` doesn't shift
-parity, the final `s <= end` point can be `end - something`; the grid is not guaranteed
-symmetric about `spot` and may not include `spot` itself as a grid node. Minor (profile is
-for charting), but it means `netGammaAtSpot` (after CR-01 fix via grid) could interpolate
-rather than land on spot.
-**Fix:** Center the grid on `spot` explicitly (`spot + i*STEP` for i in [-30..30]) so spot
-is always a node.
 
-### IN-03: MCP `get_gex` injected as optional, silently registering nothing if unwired
+**Issue:** `buildSpotGrid` rounds `start`/`end` independently and steps by `GRID_STEP=20` from
+`start`, so when `spot` is not aligned to the 20-pt step the grid is not symmetric about `spot` and
+`spot` itself may not be a grid node. `netGammaAtSpot` is computed separately via
+`buildProfile(legs, [spot])` so it is unaffected, but the charting profile is subtly off-center.
+
+**Fix:** Anchor the grid on `spot` (step outward from `Math.round(spot)` both directions), or
+document that the profile grid is intentionally step-aligned rather than spot-centered.
+
+### IN-03: Optional `get_gex` MCP tool registers silently when `getGex` is omitted
 
 **File:** `apps/server/src/adapters/mcp/server.ts:61,86-88`
-**Issue:** `getGex?` is optional and the tool is only registered when defined. `main.ts`
-does pass it, so it works today, but an optional security/feature-surface arg means a
-wiring regression (dropping the arg) degrades silently to "tool missing" with no error.
-The same pattern applies to positions/transactions/orders/enqueueJob.
-**Fix:** Make `getGex` required now that it is always wired, or add a boot-time assertion
-that the expected tool set registered.
 
-### IN-04: Repo `readLegObsForGex` JOIN has no `ORDER BY` — non-deterministic `legs[0]`
+**Issue:** `getGex` is an optional constructor param; when undefined the tool is simply not
+registered, with no log. main.ts always passes it today (`main.ts:234`), so this is latent, but a
+future call site dropping the arg would silently lose the tool with no boot-time signal — same
+pattern as the other optional trader tools.
+
+**Fix:** Either make `getGex` required (it is always wired) or `console.warn` when an expected tool
+is skipped.
+
+### IN-04: Non-deterministic JOIN order in `readLegObsForGex`
 
 **File:** `packages/adapters/src/postgres/gex-snapshot.repo.ts:58-78`
-**Issue:** The Step-2 JOIN returns rows in unspecified order. `computeGexSnapshot` relies
-on `legs[0]` for spot (WR-03). Without an `ORDER BY`, two runs on the same cycle can pick
-different first rows. Pair this fix with WR-03.
-**Fix:** Add a deterministic `ORDER BY` (e.g. strike, contract_type) to the JOIN query.
+
+**Issue:** The leg-obs JOIN has no `ORDER BY`. Aggregates are order-independent (strikeGex/
+buildProfile sum correctly), but the missing ordering is what makes WR-03's `legs[0]` spot pick
+non-deterministic and makes raw-cohort debugging/snapshotting unstable.
+
+**Fix:** Add a deterministic `ORDER BY` (e.g. `contracts.strike, contracts.contractType`). It also
+directly de-risks WR-03 by making `legs[0]` stable.
 
 ---
-
-## Notes on items checked and found OK
-
-- **CORS-first ordering (main.ts:184-214):** correct — `cors` is the first `app.use` over
-  `/*`, applied before the JWT group, with exact `WEB_ORIGIN` origin and `credentials:true`
-  (never `*`). Preflight OPTIONS resolves before the JWT gate. Security boundary sound.
-- **JWT HS256 offline verify (main.ts:208-214):** read routes correctly wrapped; `/api/jobs/*`
-  (bearer) and `/mcp` (bearer) correctly excluded from the Supabase JWT group per D-02.
-- **Idempotency (repo:103-121, memory:49-58):** `onConflictDoNothing` on the `cycle_time`
-  PK and the memory twin's `has(key)` guard match; cycle_time derives from data time
-  (`snapCycleTime(latestTime)`), not now() — SC-2/CR-01 honored.
-- **RLS-enabled-no-policy (0008:13):** consistent with the established project pattern
-  (app connects as table owner, bypassing RLS); not a new defect.
-- **Job chain (compute-analytics.ts:51-55, schedule.ts:75):** compute-gex-snapshot is
-  chain-triggered (no cron), fire-and-forget enqueue with singletonKey; terminal handler
-  has RTH/holiday gate before compute. Wiring correct.
 
 _Reviewed: 2026-06-24_
 _Reviewer: Claude (gsd-code-reviewer)_
