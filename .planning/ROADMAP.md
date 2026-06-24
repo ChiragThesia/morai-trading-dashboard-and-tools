@@ -478,12 +478,12 @@ render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8)
   4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
      delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
 
-**Plans:** 10 plans
+**Plans:** 1/10 plans executed
 
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
 
-- [ ] 09-01-PLAN.md — Docs-before-code: reconcile D3 charting → visx/uPlot/ECharts (D-05) + record quant-leaf decision (D-01) + eslint quant boundary + apps/web lint wiring (UI-01)
+- [x] 09-01-PLAN.md — Docs-before-code: reconcile D3 charting → visx/uPlot/ECharts (D-05) + record quant-leaf decision (D-01) + eslint quant boundary + apps/web lint wiring (UI-01)
 
 **Wave 2** *(blocked on 09-01)*
 

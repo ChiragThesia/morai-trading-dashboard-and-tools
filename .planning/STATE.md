@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 09
-current_phase_name: apps/web
+current_phase_name: web-dashboard-frontend-react-spa-on-hono-rpc
 status: Ready to plan
 stopped_at: Completed 08-07-PLAN.md
-last_updated: "2026-06-24T16:51:59.003Z"
+last_updated: "2026-06-24T20:19:54.650Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 08 complete, transitioned to Phase 09
+last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 9
   completed_phases: 8
-  total_plans: 64
-  completed_plans: 66
+  total_plans: 74
+  completed_plans: 67
   percent: 89
 ---
 
@@ -24,15 +24,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 08 — web-dashboard-backend-gex-auth-rpc
+**Current focus:** Phase 09 — web-dashboard-frontend-react-spa-on-hono-rpc
 
 ## Current Position
 
-Phase: 09 — Web Dashboard Frontend — React SPA (apps/web) on Vercel over typed Hono RPC
-Plan: Not started
+Phase: 09 (web-dashboard-frontend-react-spa-on-hono-rpc) — EXECUTING
+Plan: 2 of 10
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
-Last activity: 2026-06-24 — Phase 08 complete, transitioned to Phase 09
+Last activity: 2026-06-24 — Phase 09 execution started
 
 Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
 
@@ -100,6 +100,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 08 P05 | 11 | 2 tasks | 10 files |
 | Phase 08 P06 | 7 | 2 tasks | 7 files |
 | Phase 08 P07 | 9 | 3 tasks | 11 files |
+| Phase 09 P01 | 5 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -240,6 +241,8 @@ Recent decisions affecting current work:
 - [Phase ?]: CORS-first middleware (Pitfall 7): CORS applied before JWT group so preflight returns headers before auth rejects
 - [Phase ?]: Chained apiRouter required for AppType inference (RESEARCH A5/Pattern 6): statement-style app.route() is not chainable
 - [Phase ?]: A1 Supabase JWT algorithm gate operator-deferred: HS256 code path proven by integration tests using hono Jwt.sign()
+- [Phase ?]: quant leaf below both core and web
+- [Phase ?]: charting decision reconciled per D-05 + UI-SPEC
 
 ### Pending Todos
 
@@ -263,6 +266,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-24T16:28:36.272Z
+Last session: 2026-06-24T20:19:47.619Z
 Stopped at: Completed 08-07-PLAN.md
 Resume file: None
