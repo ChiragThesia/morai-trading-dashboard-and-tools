@@ -77,9 +77,10 @@ describe.skipIf(shouldSkip)("postgres gex-snapshot adapter", () => {
     const flip: number | null = 7488;
     const callWall: number | null = 7600;
     const putWall: number | null = 7400;
-    const profile: ReadonlyArray<{ readonly strike: number; readonly gamma: number }> = [
-      { strike: 7380, gamma: -47.43 },
-      { strike: 7500, gamma: 5.98 },
+    // WR-01: profile axis field is `spot` (simulated spot-price grid level), not `strike`
+    const profile: ReadonlyArray<{ readonly spot: number; readonly gamma: number }> = [
+      { spot: 7380, gamma: -47.43 },
+      { spot: 7500, gamma: 5.98 },
     ] as const;
     const strikes: ReadonlyArray<{ readonly k: number; readonly gex: number; readonly coi: number; readonly poi: number; readonly vol: number }> = [
       { k: 7400, gex: -5974395559.1, coi: 17071, poi: 52786, vol: 69857 },

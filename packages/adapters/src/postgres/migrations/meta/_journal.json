@@ -71,6 +71,13 @@
       "when": 1782319311187,
       "tag": "0009_gex_computed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782322275704,
+      "tag": "0010_gex_wall_numeric",
+      "breakpoints": true
     }
   ]
 }

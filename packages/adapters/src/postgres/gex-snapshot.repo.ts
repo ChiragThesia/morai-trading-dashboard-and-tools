@@ -25,9 +25,33 @@ import type {
   LegObsForGex,
   StorageError,
 } from "@morai/core";
-import { eq, and, isNotNull, desc, max } from "drizzle-orm";
+import { z } from "zod";
+import { eq, and, isNotNull, desc, max, asc } from "drizzle-orm";
 import { legObservations, contracts, gexSnapshots } from "./schema.ts";
 import type { Db } from "./db.ts";
+
+// ── JSONB sub-schemas for parse-don't-cast at the read seam (WR-06) ──────────
+// DB JSONB blobs are untyped at runtime; $type<> is compile-time only.
+// Parse through Zod so a malformed/legacy row surfaces a StorageError rather
+// than flowing into the domain as a silently invalid shape.
+
+const profileSchema = z.array(
+  z.object({ spot: z.number(), gamma: z.number() }),
+);
+
+const strikesSchema = z.array(
+  z.object({
+    k: z.number(),
+    gex: z.number(),
+    coi: z.number(),
+    poi: z.number(),
+    vol: z.number(),
+  }),
+);
+
+const byExpirySchema = z.array(
+  z.object({ date: z.string(), gex: z.number() }),
+);
 
 export type PostgresGexSnapshotRepo = {
   readonly readLegObsForGex: ForReadingLegObsForGex;
@@ -55,6 +79,9 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
       if (latestTime === undefined || latestTime === null) return ok([]);
 
       // Step 2: JOIN leg_observations ↔ contracts at the resolved cycle time.
+      // ORDER BY strike, contractType for a deterministic row order (IN-04 / WR-03):
+      // the use-case now averages underlyingPrice, so legs[0] is moot, but a stable
+      // order also makes raw-cohort debugging reproducible.
       const rows = await db
         .select({
           time: legObservations.time,
@@ -75,7 +102,8 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
             eq(legObservations.time, latestTime),
             isNotNull(legObservations.bsmGamma),
           ),
-        );
+        )
+        .orderBy(asc(contracts.strike), asc(contracts.contractType));
 
       const legs: LegObsForGex[] = rows.map((row) => ({
         time: row.time,
@@ -110,8 +138,9 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
           cycleTime: row.cycleTime,
           spot: String(row.spot),
           flip: row.flip !== null ? String(row.flip) : null,
-          callWall: row.callWall,
-          putWall: row.putWall,
+          // callWall/putWall are now numeric columns (may be fractional for half-point strikes)
+          callWall: row.callWall !== null ? String(row.callWall) : null,
+          putWall: row.putWall !== null ? String(row.putWall) : null,
           netGammaAtSpot: String(row.netGammaAtSpot),
           // JSONB columns: pass as JS objects; Drizzle jsonb handles serialization.
           profile: row.profile,
@@ -145,18 +174,31 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
       if (row === undefined) return ok(null);
 
       // Map DB row → GexSnapshotRow domain type.
-      // JSONB columns come back as typed JS objects via the $type<> schema annotation.
-      // Numeric columns come back as strings (Drizzle numeric convention).
+      // Numeric columns come back as strings (Drizzle numeric convention) → parseFloat.
+      // JSONB blobs are Zod-parsed at the seam rather than trust-cast (WR-06:
+      // parse-don't-cast for every external input at an adapter boundary).
+      const profileParsed = profileSchema.safeParse(row.profile);
+      const strikesParsed = strikesSchema.safeParse(row.strikes);
+      const byExpiryParsed = byExpirySchema.safeParse(row.byExpiry);
+
+      if (!profileParsed.success || !strikesParsed.success || !byExpiryParsed.success) {
+        return err<StorageError>({
+          kind: "storage-error",
+          message: `JSONB parse failed: profile=${!profileParsed.success}, strikes=${!strikesParsed.success}, byExpiry=${!byExpiryParsed.success}`,
+        });
+      }
+
       const snap: GexSnapshotRow = {
         cycleTime: row.cycleTime,
         spot: parseFloat(row.spot),
         flip: row.flip !== null ? parseFloat(row.flip) : null,
-        callWall: row.callWall,
-        putWall: row.putWall,
+        // callWall/putWall are now numeric columns (may be fractional) — parseFloat guards null
+        callWall: row.callWall !== null ? parseFloat(row.callWall) : null,
+        putWall: row.putWall !== null ? parseFloat(row.putWall) : null,
         netGammaAtSpot: parseFloat(row.netGammaAtSpot),
-        profile: row.profile,
-        strikes: row.strikes,
-        byExpiry: row.byExpiry,
+        profile: profileParsed.data,
+        strikes: strikesParsed.data,
+        byExpiry: byExpiryParsed.data,
         computedAt: row.computedAt,
       };
 

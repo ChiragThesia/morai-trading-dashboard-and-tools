@@ -17,10 +17,11 @@ const oraclePayload = {
   callWall: 7600,
   putWall: 7400,
   netGammaAtSpot: -47,
+  // WR-01: profile axis field is `spot` (simulated spot-price level), not `strike`
   profile: [
-    { strike: 6900, gamma: -34.16 },
-    { strike: 7380, gamma: -47.43 },
-    { strike: 7500, gamma: 5.98 },
+    { spot: 6900, gamma: -34.16 },
+    { spot: 7380, gamma: -47.43 },
+    { spot: 7500, gamma: 5.98 },
   ],
   strikes: [
     { k: 7400, gex: -5974395559.112409, coi: 17071, poi: 52786, vol: 8406 },
@@ -98,7 +99,8 @@ describe("gexWallEntry", () => {
     expect(() => gexWallEntry.parse(validWall)).not.toThrow();
   });
 
-  it("rejects a non-integer k", () => {
-    expect(() => gexWallEntry.parse({ ...validWall, k: 7600.5 })).toThrow();
+  it("accepts a fractional k (BLOCKER: SPX half-point strikes are valid)", () => {
+    // BLOCKER fix: k is z.number() not z.number().int() — fractional strikes are valid
+    expect(() => gexWallEntry.parse({ ...validWall, k: 7600.5 })).not.toThrow();
   });
 });

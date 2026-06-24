@@ -56,9 +56,10 @@ function makeSnapshotRow(cycleTime: Date, overrides: Partial<GexSnapshotRow> = {
     callWall: 7600,
     putWall: 7400,
     netGammaAtSpot: -47.3,
+    // WR-01: profile axis field is `spot` (simulated spot-price grid level), not `strike`
     profile: [
-      { strike: 7380, gamma: -47.43 },
-      { strike: 7500, gamma: 5.98 },
+      { spot: 7380, gamma: -47.43 },
+      { spot: 7500, gamma: 5.98 },
     ],
     strikes: [
       { k: 7400, gex: -5974395559.1, coi: 17071, poi: 52786, vol: 69857 },
@@ -225,6 +226,56 @@ export function runGexSnapshotContractTests(
       // not cycleTime (which would indicate the repo is fabricating the value).
       expect(found.computedAt.getTime()).toBe(computedAt.getTime());
       expect(found.computedAt.getTime()).not.toBe(cycleTime.getTime());
+    });
+  });
+
+  // BLOCKER regression: callWall/putWall must survive a fractional strike (e.g. 7412.5).
+  //
+  // Producer feeds strike / 1000 (×1000 convention). For half-point SPX strikes
+  // (e.g. stored as 7412500 → / 1000 = 7412.5), the prior integer column silently
+  // truncated to 7412 on write, and z.number().int() threw on read.
+  //
+  // Fix: relax contract to z.number() + change DB column to numeric.
+  // Test: persist a row with callWall = 7412.5, read back, assert exact equality.
+  // Also assert the row parses through gexSnapshotResponse.parse() without throwing.
+  describe("fractional wall round-trip (BLOCKER — numeric column)", () => {
+    it("persists and reads back a fractional callWall (7412.5) without truncation", async () => {
+      const cycleTime = new Date("2026-06-23T16:00:00Z");
+      const row = makeSnapshotRow(cycleTime, {
+        callWall: 7412.5,
+        putWall: 7387.5,
+      });
+
+      const persistResult = await repo.persistGexSnapshot(row);
+      expect(persistResult.ok).toBe(true);
+
+      const readResult = await repo.readGexSnapshot();
+      expect(readResult.ok).toBe(true);
+      if (!readResult.ok) return;
+      const found = readResult.value;
+      expect(found).not.toBeNull();
+      if (found === null) return;
+
+      // Must survive as 7412.5 — NOT truncated to 7412
+      expect(found.callWall).toBe(7412.5);
+      expect(found.putWall).toBe(7387.5);
+    });
+
+    it("gexSnapshotResponse.parse() accepts fractional k/callWall/putWall without throwing", async () => {
+      const { gexSnapshotResponse } = await import("@morai/contracts");
+      const payload = {
+        spot: 7380,
+        flip: 7488.25,
+        callWall: 7412.5,
+        putWall: 7387.5,
+        netGammaAtSpot: -47.3,
+        profile: [{ spot: 7380, gamma: -47.43 }],
+        strikes: [{ k: 7412.5, gex: 1230277553.8, coi: 69015, poi: 39475, vol: 108490 }],
+        byExpiry: [{ date: "2026-06-27", gex: -12345678.9 }],
+        computedAt: new Date("2026-06-23T14:07:42Z").toISOString(),
+      };
+      // Must not throw (previously threw: Expected number to be an integer)
+      expect(() => gexSnapshotResponse.parse(payload)).not.toThrow();
     });
   });
 }

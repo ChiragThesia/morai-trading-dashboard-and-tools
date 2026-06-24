@@ -358,12 +358,15 @@ export const gexSnapshots = pgTable("gex_snapshots", {
   // Nullable: flip level is null when the GEX profile never crosses zero.
   flip: numeric("flip"),
   // Nullable: call/put walls are null when no dominant wall exists.
-  callWall: integer("call_wall"),
-  putWall: integer("put_wall"),
+  // numeric (not integer): SPX half-point strikes produce fractional wall values
+  // (e.g. 7412500 stored strike → 7412500/1000 = 7412.5 as a spot level).
+  callWall: numeric("call_wall"),
+  putWall: numeric("put_wall"),
   netGammaAtSpot: numeric("net_gamma_at_spot").notNull(),
-  // JSONB blobs: [{strike, gamma}], [{k, gex, coi, poi, vol}], [{date, gex}]
+  // JSONB blobs: [{spot, gamma}], [{k, gex, coi, poi, vol}], [{date, gex}]
   // $type<> parameters give Drizzle the JS type so adapters need no as-casts (lint: no-as).
-  profile: jsonb("profile").$type<ReadonlyArray<{ readonly strike: number; readonly gamma: number }>>().notNull(),
+  // Profile field is `spot` (WR-01: axis is a simulated spot-price level, not an option strike).
+  profile: jsonb("profile").$type<ReadonlyArray<{ readonly spot: number; readonly gamma: number }>>().notNull(),
   strikes: jsonb("strikes").$type<ReadonlyArray<{ readonly k: number; readonly gex: number; readonly coi: number; readonly poi: number; readonly vol: number }>>().notNull(),
   byExpiry: jsonb("by_expiry").$type<ReadonlyArray<{ readonly date: string; readonly gex: number }>>().notNull(),
   // When the snapshot was COMPUTED (wall-clock from deps.now()), distinct from cycleTime
