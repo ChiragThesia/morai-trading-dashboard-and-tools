@@ -3,9 +3,13 @@
   "compilerOptions": {
     "composite": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": [],
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "noEmit": true
   },
-  "include": ["src"],
+  "include": ["src", "vite-env.d.ts"],
   "references": [
     { "path": "../../packages/contracts" },
     { "path": "../../packages/shared" },

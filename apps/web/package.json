@@ -1,0 +1,45 @@
+{
+  "name": "@morai/web",
+  "version": "0.0.1",
+  "module": "src/main.tsx",
+  "private": true,
+  "dependencies": {
+    "@morai/contracts": "workspace:*",
+    "@morai/quant": "workspace:*",
+    "@supabase/supabase-js": "^2.108.2",
+    "@tailwindcss/vite": "^4.3.1",
+    "@tanstack/react-query": "^5.101.1",
+    "@visx/axis": "^4.0.0",
+    "@visx/event": "^4.0.0",
+    "@visx/gradient": "^4.0.0",
+    "@visx/group": "^4.0.0",
+    "@visx/scale": "^4.0.0",
+    "@visx/shape": "^4.0.0",
+    "@visx/tooltip": "^4.0.0",
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6",
+    "hono": "^4.12.23",
+    "lucide-react": "latest",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.1",
+    "uplot": "^1.6.32",
+    "uplot-react": "^1.2.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.7.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  }
+}

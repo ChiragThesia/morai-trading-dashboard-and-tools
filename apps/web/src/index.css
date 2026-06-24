@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/* Morai design tokens — mapped to Tailwind @theme for utility class generation */
+/* Source: 09-UI-SPEC.md Color table (LOCKED palette) */
+@theme {
+  --color-bg: #0a0e14;
+  --color-panel: #0f1521;
+  --color-panel2: #0c111a;
+  --color-raise: #161d2b;
+  --color-line: #1b2433;
+  --color-line2: #27313f;
+  --color-faint: #3a4453;
+  --color-txt: #d6dbe4;
+  --color-muted: #7b8696;
+  --color-dim: #566273;
+  --color-up: #26a69a;
+  --color-down: #ef5350;
+  --color-upd: #0e3b36;
+  --color-downd: #3e1f23;
+  --color-violet: #a78bfa;
+  --color-violetd: #241d40;
+  --color-amber: #f0b429;
+  --color-blue: #5b9cf6;
+  --color-cyan: #22d3ee;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* shadcn/ui token bridge — maps shadcn variable names to Tailwind v4 --color-* namespace */
+/* Source: https://ui.shadcn.com/docs/tailwind-v4 (Pitfall 2 — @theme inline required) */
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-txt);
+  --color-card: var(--color-panel);
+  --color-card-foreground: var(--color-txt);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line2);
+  --color-ring: var(--color-violet);
+  --color-muted-foreground: var(--color-muted);
+  --color-accent: var(--color-violetd);
+  --color-accent-foreground: var(--color-violet);
+  --color-destructive: var(--color-down);
+  --color-destructive-foreground: var(--color-txt);
+  --color-primary: var(--color-violet);
+  --color-primary-foreground: var(--color-bg);
+  --color-secondary: var(--color-raise);
+  --color-secondary-foreground: var(--color-txt);
+  --color-popover: var(--color-panel);
+  --color-popover-foreground: var(--color-txt);
+}
+
+/* shadcn base variables (used by component internals) */
+:root {
+  --background: var(--color-bg);
+  --foreground: var(--color-txt);
+  --card: var(--color-panel);
+  --card-foreground: var(--color-txt);
+  --popover: var(--color-panel);
+  --popover-foreground: var(--color-txt);
+  --primary: var(--color-violet);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-raise);
+  --secondary-foreground: var(--color-txt);
+  --muted: var(--color-panel2);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-violetd);
+  --accent-foreground: var(--color-violet);
+  --destructive: var(--color-down);
+  --destructive-foreground: var(--color-txt);
+  --border: var(--color-line);
+  --input: var(--color-line2);
+  --ring: var(--color-violet);
+  --radius: 0.5rem;
+}
+
+body {
+  background: radial-gradient(
+      1100px 560px at 80% -10%,
+      #141b29 0%,
+      rgba(10, 14, 20, 0) 58%
+    ),
+    var(--color-bg);
+  color: var(--color-txt);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* animate-shimmer, glow filters */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+}
