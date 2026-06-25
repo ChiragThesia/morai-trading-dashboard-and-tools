@@ -42,7 +42,7 @@ Cross-cutting regression gates (must never regress across any phase):
 ### Milestone v1.1 — Real-Time Schwab Streaming
 
 - [x] **Phase 10: Stack Decisions Doc Update** - Record Python sidecar as 3rd Railway service; lift D17 (streaming deferred); supersede D16 (TS OAuth client) (completed 2026-06-25)
-- [ ] **Phase 11: Sidecar Scaffold + Auth Migration** - schwab-py sidecar deployed; TS refresh-tokens job retired; sidecar is sole token owner; journal re-sourced through sidecar REST proxy
+- [x] **Phase 11: Sidecar Scaffold + Auth Migration** - schwab-py sidecar deployed; TS refresh-tokens job retired; sidecar is sole token owner; journal re-sourced through sidecar REST proxy (completed 2026-06-25)
 - [ ] **Phase 12: Streaming + TS Fan-Out** - LEVELONE_OPTION + ACCT_ACTIVITY ingestion; `GET /api/stream` with Supabase JWT edge; Zod stream contracts; cold-start reconcile
 - [ ] **Phase 13: COT Adapter** - Weekly `fetch-cot` job; `cot_observations` table; `GET /api/analytics/cot` + MCP `get_cot`
 - [ ] **Phase 14: FRED Expansion** - Expanded macro series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS + VVIX via CBOE); prod FRED_API_KEY set; `GET /api/analytics/macro` + MCP `get_macro`
@@ -513,7 +513,7 @@ fallback during the 7-day re-auth gap).
   4. `apps/server` is the only process that can reach the sidecar (Railway private network / service binding); the sidecar has no public ingress route (GW-05).
   5. A Postgres advisory lock is held by the sidecar's StreamClient before `login()` is called; a second sidecar instance (simulated restart) cannot acquire the lock and logs a clear error rather than opening a second Schwab streaming session (GW-04).
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans complete
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
 
@@ -538,7 +538,7 @@ Plans:
 
 **Wave 6** *(blocked on 11-05 + 11-06)*
 
-- [ ] 11-07-PLAN.md — Retire the TS `apps/auth` (`@morai/auth`) OAuth setup/refresh CLI now the sidecar owns the dance + refresh; drop it from the workspace; prove typecheck/lint/test green (D-04, GW-03)
+- [x] 11-07-PLAN.md — Retire the TS `apps/auth` (`@morai/auth`) OAuth setup/refresh CLI now the sidecar owns the dance + refresh; drop it from the workspace; prove typecheck/lint/test green (D-04, GW-03)
 
 ### Phase 12: Streaming + TS Fan-Out
 
@@ -666,7 +666,7 @@ requires Phase 11 complete (sidecar health endpoint).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
-| 11. Sidecar Scaffold + Auth Migration | 6/7 | In Progress|  |
+| 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
 | 13. COT Adapter | 0/TBD | Not started | - |
 | 14. FRED Expansion | 0/TBD | Not started | - |

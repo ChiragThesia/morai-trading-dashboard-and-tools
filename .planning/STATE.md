@@ -6,7 +6,7 @@ current_phase: 11
 current_phase_name: sidecar-scaffold-auth-migration
 status: executing
 stopped_at: Phase 11 context gathered
-last_updated: "2026-06-25T22:27:09.999Z"
+last_updated: "2026-06-25T22:34:54.113Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 11 execution started
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 11 (sidecar-scaffold-auth-migration) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 11 execution started
 
@@ -133,6 +133,7 @@ Regression gates (must survive every phase):
 | Phase 11 P03 | 5m | 4 tasks | 5 files |
 | Phase 11 P05 | 8m | 2 tasks | 10 files |
 | Phase 11-sidecar-scaffold-auth-migration P06 | 6 | 1 tasks | 4 files |
+| Phase 11-sidecar-scaffold-auth-migration P07 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -300,6 +301,7 @@ Recent decisions affecting current work:
 - [Phase ?]: 11-05: JSONResponse for 503 avoids FastAPI detail wrapper
 - [Phase ?]: GW-03: refresh-tokens TS job retired in single hard-cut release (11-06, D-06); Python sidecar is sole Schwab token writer
 - [Phase ?]: JRNL-02: worker chain source swapped from schwabMarketAdapter to sidecarAdapter; SIDECAR_URL added to worker config; CBOE fallback intact
+- [Phase ?]: Stale tsconfig refs cause TS5012 ENOENT lint failures after deletion
 
 ### Pending Todos
 
@@ -324,6 +326,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25T22:27:04.403Z
+Last session: 2026-06-25T22:34:47.782Z
 Stopped at: Phase 11 context gathered
 Resume file: .planning/phases/11-sidecar-scaffold-auth-migration/11-CONTEXT.md
