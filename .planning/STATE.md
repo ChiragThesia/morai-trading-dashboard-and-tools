@@ -4,9 +4,9 @@ milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
 current_phase: 10
 current_phase_name: Stack Decisions Doc Update ✓ COMPLETE
-status: Phase 10 complete — ready to plan Phase 11
+status: executing
 stopped_at: Phase 11 context gathered
-last_updated: "2026-06-25T20:07:56.571Z"
+last_updated: "2026-06-25T21:03:26.104Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 10 complete (D16 superseded, D17 lifted, D22 sidecar decision recorded)
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 Phase: 10 — Stack Decisions Doc Update ✓ COMPLETE
 Plan: 1/1 (10-01) — executed (e992c63, 20718ac) + verified 4/4 (10-VERIFICATION.md)
-Status: Phase 10 complete. Next: Phase 11 — Sidecar Scaffold + Auth Migration (the hard one)
+Status: Ready to execute
 Last activity: 2026-06-25 — Phase 10 complete (D16 superseded, D17 lifted, D22 sidecar decision recorded)
 
 ## Milestone v1.1 Summary
