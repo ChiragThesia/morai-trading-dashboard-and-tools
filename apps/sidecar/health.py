@@ -94,9 +94,11 @@ async def health(request: Request) -> JSONResponse:
 
     freshness = _read_token_freshness(db_url, app_id)
 
-    if freshness == "not_seeded":
+    # Degraded when token is absent, expired, or status is unknown — only a fresh
+    # token means chain requests will succeed (WR-03).
+    if freshness in ("not_seeded", "expired", "unknown"):
         return JSONResponse(
-            content={"status": "degraded", "tokenFreshness": "not_seeded"}
+            content={"status": "degraded", "tokenFreshness": freshness}
         )
 
     return JSONResponse(
