@@ -4,6 +4,9 @@ import { z } from "zod";
 // DATABASE_URL: the direct/session Supabase URL (port 5432) used by runMigrations.
 // DATABASE_POOL_URL: optional connection pooler URL for pg-boss (if absent, falls back to DATABASE_URL).
 // D-13: all tunables have defaults so Railway env stays minimal (no required additions).
+// 11-06 (GW-03/JRNL-02): SIDECAR_URL added (sidecar chain source); SCHWAB_MARKET_* + SCHWAB_TRADER_CALLBACK_URL
+//   removed (refresh-tokens retired; OAuth dance lives in the sidecar). SCHWAB_TRADER_APP_KEY/SECRET
+//   retained per D-01 prohibition (trader data path stays direct — future direct-trader work may need them).
 const workerConfigSchema = z.object({
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid postgres URL"),
   // Optional pool URL for pg-boss (LISTEN/NOTIFY needs direct URL; pool URL preferred for job workers)
@@ -20,16 +23,17 @@ const workerConfigSchema = z.object({
   BSM_STRIKE_BAND_PCT: z.coerce.number().positive().default(0.10),
   BSM_DIVIDEND_YIELD: z.coerce.number().nonnegative().default(0.013),
   BSM_RATE_FALLBACK: z.coerce.number().nonnegative().default(0.045),
-  // Phase 4: Schwab brokerage + token encryption (D-01/D-02/D-03/D-05)
+  // Phase 4: token encryption key — worker still reads broker_tokens for freshness (D-08)
   TOKEN_ENCRYPTION_KEY: z
     .string()
     .min(32, "TOKEN_ENCRYPTION_KEY must be at least 32 chars"),
+  // D-01: trader Schwab app key/secret retained — direct trader data path (sync-transactions)
+  // may need them in future phases; prohibited from removal this phase.
   SCHWAB_TRADER_APP_KEY: z.string().min(1),
   SCHWAB_TRADER_APP_SECRET: z.string().min(1),
-  SCHWAB_TRADER_CALLBACK_URL: z.string().url(),
-  SCHWAB_MARKET_APP_KEY: z.string().min(1),
-  SCHWAB_MARKET_APP_SECRET: z.string().min(1),
-  SCHWAB_MARKET_CALLBACK_URL: z.string().url(),
+  // 11-06 (JRNL-02): sidecar URL — the Python sidecar exposes /sidecar/chain for the chain fetch job.
+  // e.g. "http://sidecar.railway.internal:8000" on Railway; "http://localhost:8000" in local dev.
+  SIDECAR_URL: z.string().url("SIDECAR_URL must be a valid URL"),
 });
 
 export type WorkerConfig = z.infer<typeof workerConfigSchema>;

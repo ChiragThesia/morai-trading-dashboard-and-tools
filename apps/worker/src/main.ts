@@ -5,6 +5,7 @@
 // - process.env read ONCE here via bootWorkerConfig; typed config flows inward.
 // - No business logic in this file; only composition.
 // - TDD exempt: pure wiring (tdd.md Scope).
+// 11-06 (GW-03/JRNL-02): refresh-tokens job retired; chain source swapped to sidecar adapter.
 
 import { randomUUID, createHash } from "node:crypto";
 import { PgBoss } from "pg-boss";
@@ -22,8 +23,7 @@ import {
   makePostgresOrphanFillsRepo,
   makePostgresFillsRepo,
   makeCboeChainAdapter,
-  makeSchwabChainAdapter,
-  makeSchwabOAuthClient,
+  makeSidecarChainAdapter,
   makeSchwabTransactionsAdapter,
   makeAccountHashResolver,
   makeFredRateAdapter,
@@ -45,8 +45,6 @@ import {
   hashFillIds,
   makeRebuildJournalUseCase,
   selectChainSource,
-  makeRefreshTokenUseCase,
-  makeRefreshTokensUseCase,
 } from "@morai/core";
 import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
@@ -56,7 +54,6 @@ import { makeComputeAnalyticsHandler } from "./handlers/compute-analytics.ts";
 import { makeComputeGexSnapshotHandler } from "./handlers/compute-gex-snapshot.ts";
 import { makeSyncFillsHandler } from "./handlers/sync-fills.ts";
 import { makeSyncTransactionsHandler } from "./handlers/sync-transactions.ts";
-import { makeRefreshTokensHandler } from "./handlers/refresh-tokens.ts";
 import { makeRebuildJournalHandler } from "./handlers/rebuild-journal.ts";
 import { registerAllJobs } from "./schedule.ts";
 
@@ -101,39 +98,12 @@ const cboeAdapter = makeCboeChainAdapter({
   userAgent: USER_AGENT,
 });
 
-// BRK-01: Schwab market chain adapter — getAccessToken reads broker_tokens for the market app
-// On-demand; no pre-cached token (same pattern as server traderGetAccessToken)
-const marketGetAccessToken = async () => {
-  const result = await brokerTokensRepo.readTokens("market");
-  if (!result.ok) {
-    return { ok: false as const, error: { kind: "auth-expired" as const, appId: "market" as const } };
-  }
-  if (result.value === null) {
-    return { ok: false as const, error: { kind: "auth-expired" as const, appId: "market" as const } };
-  }
-  return { ok: true as const, value: result.value.accessToken };
-};
-
-// SC3: scope the Schwab chain request to avoid HTTP 502 "Body buffer overflow".
-// The full SPX chain (all expirations × all strikes) exceeds the gateway buffer.
-// strikeCount=50 NTM strikes + 90-day expiry window captures near-term + calendar back months.
-// fromDate/toDate computed at boot (not hardcoded) so the window slides correctly.
-const schwabChainFromDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD today
-const schwabChainToDate = (() => {
-  const d = new Date();
-  d.setDate(d.getDate() + 90);
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD today+90d
-})();
-
-const schwabMarketAdapter = makeSchwabChainAdapter({
+// JRNL-02 / 11-06: sidecar chain adapter — fetches the SPX option chain from the Python sidecar.
+// The sidecar (schwab-py) is the sole Schwab boundary; it handles auth + chain fetch.
+// CBOE fallback (selectChainSource) remains unchanged: AUTH_EXPIRED → CBOE source.
+const sidecarAdapter = makeSidecarChainAdapter({
   fetch: globalThis.fetch,
-  getAccessToken: marketGetAccessToken,
-  userAgent: USER_AGENT,
-  symbol: "$SPX",
-  strikeCount: 50,
-  range: "NTM",
-  fromDate: schwabChainFromDate,
-  toDate: schwabChainToDate,
+  sidecarUrl: config.SIDECAR_URL,
 });
 
 const fredAdapter = makeFredRateAdapter({
@@ -142,13 +112,15 @@ const fredAdapter = makeFredRateAdapter({
   fallbackRate: config.BSM_RATE_FALLBACK,
 });
 
-// D-07/D-08: selectChainSource — Schwab-primary, CBOE-fallback.
+// D-07/D-08: selectChainSource — sidecar-primary (JRNL-02), CBOE-fallback (D-08).
 // Called at job-execution time so freshness is checked per invocation (not at boot).
+// 11-06 (GW-03): schwabMarketAdapter replaced by sidecarAdapter as schwabFetchChain input.
+// selectChainSource + cboeFetchChain wiring unchanged — CBOE fallback intact on AUTH_EXPIRED.
 const fetchChainUseCase = makeFetchChainUseCase({
   fetchChain: (root) =>
     selectChainSource({
       readTokenFreshness: brokerTokensRepo.readTokenFreshness,
-      schwabFetchChain: schwabMarketAdapter.fetchChain,
+      schwabFetchChain: sidecarAdapter.fetchChain,
       cboeFetchChain: cboeAdapter.fetchChain,
     }).then((fetchChain) => fetchChain(root)),
   persistObservations: legObsRepo.persistObservations,
@@ -356,48 +328,10 @@ const syncTransactionsHandler = makeSyncTransactionsHandler({
   now: () => new Date(),
 });
 
-// JOB-02 / D-13: refresh both Schwab apps independently via Promise.allSettled (plan 05-05).
-// Each app has its own OAuth client built from the app-specific key/secret/callbackUrl.
-// recordRefreshOutcome persists per-app refresh failure on broker_tokens.last_refresh_error
-// so GET /api/status surfaces the failure flag via readTokenFreshness (D-14, flag-only).
-const traderOAuthClient = makeSchwabOAuthClient({
-  appKey: config.SCHWAB_TRADER_APP_KEY,
-  appSecret: config.SCHWAB_TRADER_APP_SECRET,
-  callbackUrl: config.SCHWAB_TRADER_CALLBACK_URL,
-  fetch: globalThis.fetch,
-});
-
-const marketOAuthClient = makeSchwabOAuthClient({
-  appKey: config.SCHWAB_MARKET_APP_KEY,
-  appSecret: config.SCHWAB_MARKET_APP_SECRET,
-  callbackUrl: config.SCHWAB_MARKET_CALLBACK_URL,
-  fetch: globalThis.fetch,
-});
-
-const refreshTraderTokenUseCase = makeRefreshTokenUseCase({
-  readTokens: brokerTokensRepo.readTokens,
-  writeTokens: brokerTokensRepo.writeTokens,
-  refreshTokens: traderOAuthClient.refreshTokens,
-});
-
-const refreshMarketTokenUseCase = makeRefreshTokenUseCase({
-  readTokens: brokerTokensRepo.readTokens,
-  writeTokens: brokerTokensRepo.writeTokens,
-  refreshTokens: marketOAuthClient.refreshTokens,
-});
-
-const refreshTokensUseCase = makeRefreshTokensUseCase({
-  refreshTraderToken: refreshTraderTokenUseCase,
-  refreshMarketToken: refreshMarketTokenUseCase,
-  readTokenFreshness: brokerTokensRepo.readTokenFreshness,
-  now: () => new Date(),
-});
-
-const refreshTokensHandler = makeRefreshTokensHandler({
-  refreshTokensUseCase,
-  recordRefreshOutcome: brokerTokensRepo.recordRefreshOutcome,
-  now: () => new Date(),
-});
+// GW-03 (11-06): refresh-tokens TS job retired — Python sidecar is the sole Schwab token refresher.
+// The Schwab OAuth dance and both app (trader + market) token rotations now live in apps/sidecar.
+// This worker still reads broker_tokens for freshness via brokerTokensRepo (TOKEN_ENCRYPTION_KEY
+// kept in config for that purpose — D-01/D-08). No makeSchwabOAuthClient wiring here.
 
 // JRNL-01 / D-10 (A5): rebuildJournal use-case — delete-then-reinsert from fills (idempotent).
 // All ports are now real: deleteCalendarEvents + the calendar-scoped sync (CR-04) re-pair ONLY
@@ -420,7 +354,8 @@ const rebuildJournalHandler = makeRebuildJournalHandler({
   now: () => new Date(),
 });
 
-// Register all 10 queues, 6 crons, and 10 work handlers via registerAllJobs (Plan 05-04 + 08-06).
+// Register all 9 queues, 5 crons, and 9 work handlers via registerAllJobs (Plan 05-04 + 08-06).
+// 11-06 (GW-03): refresh-tokens retired — 9 queues, 5 scheduled jobs.
 // Inline createQueue/schedule/work blocks removed — all scheduling logic is in schedule.ts.
 await registerAllJobs(boss, {
   fetchSchwabChain: fetchSchwabChainHandler,
@@ -431,10 +366,9 @@ await registerAllJobs(boss, {
   computeGexSnapshot: computeGexSnapshotHandler,
   syncTransactions: syncTransactionsHandler,
   syncFills: syncFillsHandler,
-  refreshTokens: refreshTokensHandler,
   rebuildJournal: rebuildJournalHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 10 queues created, 6 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, refresh-tokens); snapshot-calendars + compute-analytics + compute-gex-snapshot chain-triggered only; rebuild-journal on-demand only",
+  "morai worker: pg-boss started; 9 queues created, 5 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills); snapshot-calendars + compute-analytics + compute-gex-snapshot chain-triggered only; rebuild-journal on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );

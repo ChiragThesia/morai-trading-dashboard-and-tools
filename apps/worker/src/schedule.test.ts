@@ -1,14 +1,14 @@
-// schedule.ts — registerAllJobs tests (Plan 05-04 Task 3; updated plan 05-13 for A4)
+// schedule.ts — registerAllJobs tests (Plan 05-04 Task 3; updated plan 05-13 for A4; updated 11-06 GW-03)
 //
 // Behaviors tested:
-//   - createQueue called for all 9 job names (added compute-analytics, 06-04)
-//   - schedule called for exactly 6 jobs (sync-transactions, sync-fills, refresh-tokens + existing 3)
+//   - createQueue called for all 9 job names (refresh-tokens retired, GW-03)
+//   - schedule called for exactly 5 jobs (sync-transactions, sync-fills + existing 3; refresh-tokens RETIRED)
 //   - snapshot-calendars NOT scheduled (chain-triggered only, D-03 / Pitfall 2)
 //   - compute-analytics NOT scheduled (chain-triggered by snapshot-calendars, 06-04)
 //   - rebuild-journal NOT scheduled (on-demand only)
+//   - refresh-tokens NOT scheduled (GW-03 sole-writer cutover: sidecar is sole refresher)
 //   - sync-fills cron is every 10 min RTH tz America/New_York
 //   - sync-transactions cron runs +5 min ahead of sync-fills (fills source before pairing)
-//   - refresh-tokens cron is 04:00 ET daily tz America/New_York
 //   - work() registered for all 9 queues
 //   - createQueue calls precede schedule/work calls (CR-01 ordering)
 
@@ -53,12 +53,12 @@ function makeFakeHandlers(): AllHandlers {
     computeGexSnapshot: handler,
     syncTransactions: handler,
     syncFills: handler,
-    refreshTokens: handler,
     rebuildJournal: handler,
   };
 }
 
-const ALL_10_QUEUES = [
+// GW-03: refresh-tokens retired from schedule — 9 queues, 5 crons
+const ALL_9_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
@@ -67,34 +67,32 @@ const ALL_10_QUEUES = [
   "compute-gex-snapshot",
   "sync-transactions",
   "sync-fills",
-  "refresh-tokens",
   "rebuild-journal",
 ];
 
-const SCHEDULED_6 = [
+const SCHEDULED_5 = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
   "sync-transactions",
   "sync-fills",
-  "refresh-tokens",
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 10 job names", async () => {
+  it("calls createQueue for all 9 job names (refresh-tokens retired, GW-03)", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_10_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_9_QUEUES.sort());
   });
 
-  it("calls schedule for exactly 6 jobs", async () => {
+  it("calls schedule for exactly 5 jobs (refresh-tokens retired, GW-03)", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(scheduleCalls).toHaveLength(6);
+    expect(scheduleCalls).toHaveLength(5);
     const scheduledNames = scheduleCalls.map((c) => c.name).sort();
-    expect(scheduledNames).toEqual(SCHEDULED_6.sort());
+    expect(scheduledNames).toEqual(SCHEDULED_5.sort());
   });
 
   it("sync-transactions cron runs +5 min ahead of sync-fills, tz America/New_York", async () => {
@@ -141,21 +139,19 @@ describe("registerAllJobs", () => {
     expect(syncFills?.tz).toBe("America/New_York");
   });
 
-  it("refresh-tokens cron is '0 4 * * *' tz America/New_York", async () => {
+  it("does NOT schedule refresh-tokens (GW-03 sole-writer cutover: sidecar is sole refresher)", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    const refreshTokens = scheduleCalls.find((c) => c.name === "refresh-tokens");
-    expect(refreshTokens).toBeDefined();
-    expect(refreshTokens?.cron).toBe("0 4 * * *");
-    expect(refreshTokens?.tz).toBe("America/New_York");
+    const names = scheduleCalls.map((c) => c.name);
+    expect(names).not.toContain("refresh-tokens");
   });
 
-  it("calls work() for all 10 queues", async () => {
+  it("calls work() for all 9 queues (refresh-tokens retired, GW-03)", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_10_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_9_QUEUES.sort());
   });
 
   it("does NOT schedule compute-gex-snapshot (chain-triggered only by compute-analytics, 08-06 D-01)", async () => {
