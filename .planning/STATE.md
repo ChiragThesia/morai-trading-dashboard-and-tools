@@ -6,7 +6,7 @@ current_phase: 11
 current_phase_name: sidecar-scaffold-auth-migration
 status: executing
 stopped_at: Phase 11 context gathered
-last_updated: "2026-06-25T21:54:37.097Z"
+last_updated: "2026-06-25T22:03:07.144Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 11 execution started
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 11 (sidecar-scaffold-auth-migration) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 11 execution started
 
@@ -294,6 +294,7 @@ Recent decisions affecting current work:
 - [Phase ?]: D17 lifted (v1.1): streaming scoped to position legs (LEVELONE_OPTION) + ACCT_ACTIVITY; ~500-symbol cap makes full-chain impossible
 - [Phase ?]: D-08 enforced: SidecarChainResponseSchema adapter-local in packages/adapters, not packages/contracts
 - [Phase ?]: OccSymbol branded via parseOccSymbol+formatOccSymbol round-trip — no 'as OccSymbol' type assertion
+- [Phase ?]: timezone-aware datetime.now(UTC) in token_store.py for Python 3.14 compatibility
 
 ### Pending Todos
 
@@ -318,6 +319,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25T21:54:31.262Z
+Last session: 2026-06-25T22:02:37.495Z
 Stopped at: Phase 11 context gathered
 Resume file: .planning/phases/11-sidecar-scaffold-auth-migration/11-CONTEXT.md

@@ -513,7 +513,7 @@ fallback during the 7-day re-auth gap).
   4. `apps/server` is the only process that can reach the sidecar (Railway private network / service binding); the sidecar has no public ingress route (GW-05).
   5. A Postgres advisory lock is held by the sidecar's StreamClient before `login()` is called; a second sidecar instance (simulated restart) cannot acquire the lock and logs a clear error rather than opening a second Schwab streaming session (GW-04).
 
-**Plans**: 3/7 plans executed
+**Plans**: 4/7 plans executed
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
 
@@ -526,7 +526,7 @@ Plans:
 
 **Wave 3** *(blocked on 11-02 — needs live token_json column)*
 
-- [ ] 11-04-PLAN.md — TDD Python core: token_store dual-write callbacks (GW-01) + advisory_lock guard (GW-04) + pytest fixtures
+- [x] 11-04-PLAN.md — TDD Python core: token_store dual-write callbacks (GW-01) + advisory_lock guard (GW-04) + pytest fixtures
 
 **Wave 4** *(blocked on 11-04)*
 
@@ -666,7 +666,7 @@ requires Phase 11 complete (sidecar health endpoint).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
-| 11. Sidecar Scaffold + Auth Migration | 3/7 | In Progress|  |
+| 11. Sidecar Scaffold + Auth Migration | 4/7 | In Progress|  |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
 | 13. COT Adapter | 0/TBD | Not started | - |
 | 14. FRED Expansion | 0/TBD | Not started | - |

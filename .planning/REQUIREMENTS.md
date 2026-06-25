@@ -92,7 +92,7 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 - [x] **GW-01**: A Python schwab-py sidecar deploys as a third Railway service and is the sole process that authenticates to Schwab — OAuth plus token read/write against the existing `broker_tokens` row (no schema change, no token file).
 - [x] **GW-02**: The sidecar exposes a REST proxy (chain, positions, transactions, orders) behind the existing brokerage ports; TS adapters become thin HTTP clients to the sidecar, not Schwab directly.
 - [ ] **GW-03**: The TS `refresh-tokens` job is retired and the sidecar is the only token refresher — exactly one process ever writes `broker_tokens` (no dual-refresher rotating-token race).
-- [ ] **GW-04**: A Postgres advisory lock guarantees a single Schwab streamer session, so a redeploy or restart cannot open a second session and kill the first.
+- [x] **GW-04**: A Postgres advisory lock guarantees a single Schwab streamer session, so a redeploy or restart cannot open a second session and kill the first.
 - [ ] **GW-05**: The sidecar is internal-only and never internet-reachable; only `apps/server` can reach it.
 
 ### Real-Time Streaming
@@ -207,7 +207,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | GW-01 | Phase 11 | Complete |
 | GW-02 | Phase 11 | Complete |
 | GW-03 | Phase 11 | Pending |
-| GW-04 | Phase 11 | Pending |
+| GW-04 | Phase 11 | Complete |
 | GW-05 | Phase 11 | Pending |
 | JRNL-02 | Phase 11 | Complete |
 | STRM-01 | Phase 12 | Pending |
