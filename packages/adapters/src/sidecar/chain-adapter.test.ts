@@ -48,12 +48,12 @@ const VALID_CHAIN_BODY = {
 
 /** Helper: build a fake fetch that returns the given body and status */
 function makeFakeFetch(body: unknown, status: number): typeof globalThis.fetch {
-  return async (_input, _init) => {
-    return {
-      ok: status >= 200 && status < 300,
+  return async (_input: RequestInfo | URL, _init?: RequestInit) => {
+    const resp: Response = new Response(JSON.stringify(body), {
       status,
-      json: async () => body,
-    } as Response;
+      headers: { "Content-Type": "application/json" },
+    });
+    return resp;
   };
 }
 
