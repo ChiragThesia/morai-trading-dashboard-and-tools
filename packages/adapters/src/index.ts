@@ -70,6 +70,10 @@ export type { MemoryGexSnapshotRepo } from "./memory/gex-snapshot.ts";
 // HTTP adapters (external data sources)
 export { makeCboeChainAdapter } from "./http/cboe.ts";
 export type { CboeChainAdapter } from "./http/cboe.ts";
+
+// Sidecar HTTP adapter (ForFetchingChain via Python sidecar — JRNL-02, D-08)
+export { makeSidecarChainAdapter, SidecarChainResponseSchema } from "./sidecar/chain-adapter.ts";
+export type { SidecarChainAdapter } from "./sidecar/chain-adapter.ts";
 export { makeFredRateAdapter } from "./http/fred.ts";
 
 // In-memory adapters (test doubles; also usable in development)
@@ -81,6 +85,8 @@ export { makeMemoryLegObservationsRepo } from "./memory/leg-observations.ts";
 export type { MemoryLegObservationsRepo } from "./memory/leg-observations.ts";
 export { makeMemoryChainAdapter } from "./memory/chain.ts";
 export type { MemoryChainAdapter } from "./memory/chain.ts";
+export { makeMemorySidecarChainAdapter } from "./memory/sidecar-chain.ts";
+export type { MemorySidecarChainAdapter } from "./memory/sidecar-chain.ts";
 export { makeMemoryRateAdapter } from "./memory/rate.ts";
 export type { MemoryRateAdapter } from "./memory/rate.ts";
 export { makeMemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
