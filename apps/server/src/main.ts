@@ -192,11 +192,16 @@ app.use(
   }),
 );
 
-// SC-4 / AUTH-01 / RPC-01: Chain all read routes into one sub-router so hc<AppType>()
+// PUBLIC: /api/status — no JWT required.
+// Railway's healthcheckPath = "/api/status" hits this endpoint without any auth token;
+// mounting it outside the JWT group ensures healthchecks pass and deploys are not rejected.
+app.route("/api", statusRoutes(getStatus));
+
+// SC-4 / AUTH-01 / RPC-01: Chain all data read routes into one sub-router so hc<AppType>()
 // inference works (RESEARCH A5 / Pattern 6). The chained form is REQUIRED for AppType;
 // the statement-style app.route() calls are NOT chainable and break type inference.
+// NOTE: statusRoutes is NOT in this group — it is public (see above).
 const apiRouter = new Hono()
-  .route("/", statusRoutes(getStatus))
   .route("/", calendarRoutes(registerCalendar, listCalendars, closeCalendar))
   .route("/", journalRoutes(getJournal))
   // BRK-02: positions, transactions, orders read endpoints
@@ -206,8 +211,9 @@ const apiRouter = new Hono()
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex));
 
-// Wrap the read router in a Supabase-Auth JWT group (asymmetric JWKS verify — ES256).
-// D20 / D-02 scope: ONLY /api/analytics/* + /api/status + /api/journal + /api/positions etc.
+// Wrap the data read router in a Supabase-Auth JWT group (asymmetric JWKS verify — ES256).
+// D20 / D-02 scope: /api/calendars + /api/journal + /api/positions + /api/analytics/* etc.
+// /api/status is intentionally EXCLUDED from this group (public healthcheck — see above).
 // The /api/jobs/* bearerAuth group and /mcp mount are NOT in this group (D-02 anti-pattern).
 const supabaseJwksUrl = new URL(`${config.SUPABASE_URL}/auth/v1/.well-known/jwks.json`);
 const authReadGroup = new Hono();
