@@ -42,81 +42,91 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         cfg = SidecarConfig()
     except Exception as exc:
-        logger.error("sidecar: config validation failed — field names: %s", [
-            f.alias or f.field_name
-            for f in type(exc).__mro__  # best-effort; pydantic will print fields
-        ])
+        # pydantic-settings ValidationError exposes .errors() for field-level detail.
+        # Log only field names (loc) — never values (CLAUDE.md).
+        import pydantic_core
+        if isinstance(exc, pydantic_core.ValidationError):
+            field_names = [str(e["loc"]) for e in exc.errors()]
+        else:
+            field_names = [type(exc).__name__]
+        logger.error(
+            "sidecar: config validation failed — check env vars: %s",
+            field_names,
+        )
         raise
 
     # 2. Acquire advisory lock (GW-04).
     #    Uses direct DATABASE_URL (port 5432) — MUST NOT be pool URL (RESEARCH Pitfall 2).
     lock_conn = acquire_sidecar_lock(cfg.DATABASE_URL)
 
-    # Store db_url on app.state for health + chain handlers.
-    app.state.db_url = cfg.DATABASE_URL
-    app.state.market_app_id = "market"
-
-    # 3. Init two schwab-py clients (D-05).
-    trader_read, trader_write = make_token_callbacks(
-        cfg.DATABASE_URL, "trader", cfg.TOKEN_ENCRYPTION_KEY
-    )
-    market_read, market_write = make_token_callbacks(
-        cfg.DATABASE_URL, "market", cfg.TOKEN_ENCRYPTION_KEY
-    )
-
-    trader_client: Optional[object] = None
-    market_client: Optional[object] = None
-
+    # Wrap everything after lock acquisition in try/finally so lock_conn.close() is
+    # guaranteed on ANY exception (not just ValueError) during client init (CR-02).
     try:
-        trader_client = schwab.auth.client_from_access_functions(
-            cfg.SCHWAB_TRADER_APP_KEY,
-            cfg.SCHWAB_TRADER_APP_SECRET,
-            trader_read,
-            trader_write,
-            asyncio=True,
+        # Store db_url on app.state for health + chain handlers.
+        app.state.db_url = cfg.DATABASE_URL
+        app.state.market_app_id = "market"
+
+        # 3. Init two schwab-py clients (D-05).
+        trader_read, trader_write = make_token_callbacks(
+            cfg.DATABASE_URL, "trader", cfg.TOKEN_ENCRYPTION_KEY
         )
-        logger.info("sidecar: trader client initialised")
-    except ValueError as exc:
-        # token_json is NULL (not yet seeded) — degrade gracefully.
-        logger.warning(
-            "sidecar: trader client not initialised — token not seeded. "
-            "Run the manual OAuth dance (D-03) to seed token_json. "
-            "Error type: %s",
-            type(exc).__name__,
+        market_read, market_write = make_token_callbacks(
+            cfg.DATABASE_URL, "market", cfg.TOKEN_ENCRYPTION_KEY
         )
 
-    try:
-        market_client = schwab.auth.client_from_access_functions(
-            cfg.SCHWAB_MARKET_APP_KEY,
-            cfg.SCHWAB_MARKET_APP_SECRET,
-            market_read,
-            market_write,
-            asyncio=True,
-        )
-        logger.info("sidecar: market client initialised")
-    except ValueError as exc:
-        logger.warning(
-            "sidecar: market client not initialised — token not seeded. "
-            "Run the manual OAuth dance (D-03) to seed token_json. "
-            "Error type: %s",
-            type(exc).__name__,
-        )
+        trader_client: Optional[object] = None
+        market_client: Optional[object] = None
 
-    # Store clients on app.state (None if not seeded — handlers degrade gracefully).
-    app.state.trader_client = trader_client
-    app.state.market_client = market_client
-    app.state.degraded = market_client is None
+        try:
+            trader_client = schwab.auth.client_from_access_functions(
+                cfg.SCHWAB_TRADER_APP_KEY,
+                cfg.SCHWAB_TRADER_APP_SECRET,
+                trader_read,
+                trader_write,
+                asyncio=True,
+            )
+            logger.info("sidecar: trader client initialised")
+        except ValueError as exc:
+            # token_json is NULL (not yet seeded) — degrade gracefully.
+            logger.warning(
+                "sidecar: trader client not initialised — token not seeded. "
+                "Run the manual OAuth dance (D-03) to seed token_json. "
+                "Error type: %s",
+                type(exc).__name__,
+            )
 
-    if app.state.degraded:
-        logger.warning(
-            "sidecar: running in degraded mode — market client not available. "
-            "/sidecar/chain will return 503 until token_json is seeded."
-        )
+        try:
+            market_client = schwab.auth.client_from_access_functions(
+                cfg.SCHWAB_MARKET_APP_KEY,
+                cfg.SCHWAB_MARKET_APP_SECRET,
+                market_read,
+                market_write,
+                asyncio=True,
+            )
+            logger.info("sidecar: market client initialised")
+        except ValueError as exc:
+            logger.warning(
+                "sidecar: market client not initialised — token not seeded. "
+                "Run the manual OAuth dance (D-03) to seed token_json. "
+                "Error type: %s",
+                type(exc).__name__,
+            )
 
-    try:
+        # Store clients on app.state (None if not seeded — handlers degrade gracefully).
+        app.state.trader_client = trader_client
+        app.state.market_client = market_client
+        app.state.degraded = market_client is None
+
+        if app.state.degraded:
+            logger.warning(
+                "sidecar: running in degraded mode — market client not available. "
+                "/sidecar/chain will return 503 until token_json is seeded."
+            )
+
         yield
     finally:
         # Shutdown: close the advisory-lock connection — releases the session-level lock.
+        # Runs on clean shutdown AND on any startup exception after lock acquisition (CR-02).
         lock_conn.close()
         logger.info("sidecar: advisory lock released; shutdown complete")
 
