@@ -18,7 +18,16 @@ Cross-cutting constraints active from Phase 1:
 - Zod at every boundary: env config, inbound HTTP, external API responses, job payloads.
 - Every use-case ships both HTTP route and MCP tool in the same change (MCP-02).
 
+Cross-cutting regression gates (must never regress across any phase):
+
+- SPX OI=0 / SPY proxy: OI is always zero for SPX options; use SPY × 10.048 as proxy.
+- CBOE timestamps are UTC: never interpret as ET; do not apply ET offset.
+- GEX put-sign: puts carry negative gamma exposure; sign must be preserved in all GEX math.
+- 65,534-param insert limit: chunk Postgres inserts at ≤ 2,000 rows per statement.
+
 ## Phases
+
+### Milestone v1.0 — Backend + Data Layer
 
 - [x] **Phase 1: Walking Skeleton** - Monorepo + hexagon + DB + deployed status endpoint
 - [x] **Phase 2: Market Data & BSM Engine** - CBOE chain in, BSM greeks computed and stored (gap closure in progress) (completed 2026-06-11)
@@ -29,6 +38,15 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history (verified 2/2 offline 2026-06-22; 2 plans + 1 review round; live pull needs Schwab auth + healthy deploy)
 - [x] **Phase 8: Web Dashboard Backend** - GEX analytics endpoint + Zod contract (scheduled snapshot job), Hono `AppType` export for typed RPC, Supabase Auth on read endpoints + CORS (completed 2026-06-24)
 - [x] **Phase 9: Web Dashboard Frontend** - React + Vite SPA (apps/web) on Vercel: 5 screens over typed Hono RPC, TanStack auto-poll, Supabase Auth login (completed 2026-06-25)
+
+### Milestone v1.1 — Real-Time Schwab Streaming
+
+- [ ] **Phase 10: Stack Decisions Doc Update** - Record Python sidecar as 3rd Railway service; lift D17 (streaming deferred); supersede D16 (TS OAuth client)
+- [ ] **Phase 11: Sidecar Scaffold + Auth Migration** - schwab-py sidecar deployed; TS refresh-tokens job retired; sidecar is sole token owner; journal re-sourced through sidecar REST proxy
+- [ ] **Phase 12: Streaming + TS Fan-Out** - LEVELONE_OPTION + ACCT_ACTIVITY ingestion; `GET /api/stream` with Supabase JWT edge; Zod stream contracts; cold-start reconcile
+- [ ] **Phase 13: COT Adapter** - Weekly `fetch-cot` job; `cot_observations` table; `GET /api/analytics/cot` + MCP `get_cot`
+- [ ] **Phase 14: FRED Expansion** - Expanded macro series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS + VVIX via CBOE); prod FRED_API_KEY set; `GET /api/analytics/macro` + MCP `get_macro`
+- [ ] **Phase 15: Re-Auth Smoothing** - T-24h expiry alert; one-click/operator re-auth flow; operator runbook
 
 ## Phase Details
 
@@ -342,70 +360,6 @@ Schwab OAuth dance + a healthy deploy (db-up) — operator prerequisites, tracke
 - [x] 07-01-PLAN.md — get_transactions MCP tool: contract-locked + tested (msw-equivalent valid-range payload, default-90d, AUTH_EXPIRED typed payload, MCP-02) + docs (BRK-03)
 - [x] 07-02-PLAN.md — historical backfill CLI: pure chunkDateRange (fast-check) + sync-transactions per chunk, idempotent, error-on-over-cap + docs (BRK-04)
 
-## Backlog / Future Enhancements
-
-*Unscheduled — not yet assigned to a phase.*
-
-### Schwab re-auth friction reduction (7-day refresh token)
-
-**Context:** Schwab refresh tokens hard-expire 7 days after issue with no sliding window —
-refreshing the 30-min access token does NOT extend them. A new refresh token can only be
-minted via the interactive authorization-code grant (browser login), so a **weekly manual
-`auth setup` re-auth is unavoidable**. Phase 5 `JOB-02` (`refresh-tokens`) already automates
-the 30-min access-token refresh; this item is only about making the unavoidable weekly
-re-auth painless and never a surprise.
-
-**Proposed (friction-reducing, not eliminating):**
-
-- Proactive expiry detection + alert (e.g. day 6 of 7) via the status surface / a notification
-  channel, so re-auth happens *before* a data gap (refresh token → `AUTH_EXPIRED`).
-
-- Surface per-app `refreshExpiresAt` / "expires in N days" in `GET /api/status`.
-- One-command re-auth (`auth setup --all`) that runs both apps in sequence.
-
-**Explicitly OUT of scope (rejected):** fully-automated refresh-token renewal via headless
-browser login. It would require storing full Schwab username/password at rest (worse than the
-refresh token), breaks on MFA/2FA, and likely violates Schwab's ToS (risking API access). The
-weekly browser re-auth is a Schwab platform constraint, accepted by design.
-
-### Schwab client library — revisit vendored TS vs @sudowealth/schwab-api
-
-**Decided 2026-06-21** (full analysis: `.planning/notes/schwab-client-decision.md`). Phase 4
-UAT found the vendored chain adapter 502s on the live `$SPX` chain (missing scoping params, not
-a missing library). Decision: fix vendored TS now (add `strikeCount`/`fromDate`/`toDate`);
-**reject** the Python `schwab-py` sidecar (can't ease the unavoidable weekly re-auth; forces
-re-implementing pgcrypto token crypto in Python → violates D-03; breaks the single-stack hexagon).
-
-**Revisit trigger:** when hand-maintaining the Schwab **trader** endpoints becomes painful, or
-before scaling beyond one account → evaluate adopting `@sudowealth/schwab-api` (real full TS
-client, Bun-native, save/load callbacks slot behind the encrypted `broker_tokens` adapter).
-Caveat: 11★ / single maintainer / <13mo — adopt only behind ports, version-pinned, human-verify gate.
-
-### Strategy rules / logical gates engine (the "why I acted" layer — L4)
-
-**Surfaced during Phase 5 discuss (2026-06-21).** User's stated end-goal: record the
-enter/exit/roll RULES per trade + which rule fired, to improve the system/algo. This is a
-NEW capability beyond Phase 5's trade ledger (JRNL-01 only pairs fills into events). The
-Phase 5 D-07 "entry-thesis" field is the minimal attach point. Pairs with **L3 attribution**
-(decompose a calendar's move into θ/vega/δ + event contributions) which is already scoped
-to **Phase 6 (Derived Analytics)**. Candidate for its own phase after Phase 6. The 4-layer
-model (ledger → greeks time-series → attribution → rules) is documented in
-`.planning/phases/05-jobs-fill-rebuild-integrity/05-CONTEXT.md`.
-
-## Progress
-
-**Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Walking Skeleton | 6/6 | Complete    |  |
-| 2. Market Data & BSM Engine | 12/12 | Complete    | 2026-06-12 |
-| 3. Calendar Journal (MVP) | 7/7 | Complete   | 2026-06-14 |
-| 4. Schwab Auth & Brokerage | 6/6 | Complete   | 2026-06-20 |
-| 5. Jobs, Fill Rebuild & Integrity | 15/16 | In Progress|  |
-| 6. Derived Analytics | 8/8 | Complete   | 2026-06-22 |
-
 ### Phase 8: Web Dashboard Backend — GEX analytics endpoint, contract, RPC export, Supabase Auth + CORS
 
 **Goal:** Build the typed, authenticated API surface the web SPA consumes. Add a GEX
@@ -514,3 +468,178 @@ Plans:
 **Wave 8** *(Analyzer LAST — hardest; blocked on 09-06/09-08 components + 09-09 parser)*
 
 - [x] 09-10-PLAN.md — Analyzer 3-col cockpit: client-side live re-pricing (scenario engine over @morai/quant) + payoff z-order + heatmap + roll simulator (D-01, D-02, D-04, UI-01)
+
+---
+
+## Milestone v1.1 Phase Details
+
+### Phase 10: Stack Decisions Doc Update
+
+**Goal**: `docs/architecture/stack-decisions.md` records the three architectural changes that
+make v1.1 possible before any sidecar code is written — satisfying the docs-before-code rule
+and giving every subsequent phase a stable decision record to cite.
+**Depends on**: Phase 9 (milestone v1.0 complete)
+**Requirements**: DOC-01
+**Research flag**: None — standard doc edit, established pattern (Phases 1, 5, 6, 8, 9 all opened with a doc plan).
+**Success Criteria** (what must be TRUE):
+
+  1. `docs/architecture/stack-decisions.md` contains a superseded entry for D16 (TS OAuth client retired in favor of schwab-py sidecar) with rationale referencing the dual-refresher race and streamer ownership.
+  2. `docs/architecture/stack-decisions.md` contains a lifted entry for D17 (streaming no longer deferred) scoped to account/position legs only (not full-chain), with the 500-symbol cap noted.
+  3. `docs/architecture/stack-decisions.md` contains a new decision for the Python schwab-py sidecar as the third Railway service (`apps/sidecar/`), documenting the FastAPI + schwab-py stack, the `broker_tokens` Postgres callback pattern, and the Railway private-network isolation requirement.
+  4. `docs/TOPIC-MAP.md` is updated to reference any new sidecar architecture doc if one is created alongside the decision entries.
+
+**Plans**: TBD
+
+### Phase 11: Sidecar Scaffold + Auth Migration
+
+**Goal**: The Python schwab-py sidecar is running as a third Railway service and is the
+sole process that authenticates to Schwab; the TS `refresh-tokens` job is retired before
+the sidecar goes active (closing the dual-refresher rotating-token race); the sidecar owns
+a Postgres advisory lock so restarts cannot open a second streamer session; and the
+journal's chain-snapshot job is re-sourced through the sidecar REST proxy (with CBOE as
+fallback during the 7-day re-auth gap).
+**Depends on**: Phase 10
+**Requirements**: GW-01, GW-02, GW-03, GW-04, GW-05, JRNL-02
+**Research flag**: Railway private-networking config (prefer internal URL with no egress cost; confirm at infra setup). Confirm 500-symbol streamer cap on Schwab Developer Portal; scope subscriptions to legs-only regardless.
+**Cross-cutting**: Regression gates (SPX OI=0/SPY proxy, CBOE UTC timestamps, GEX put-sign, 65,534-param chunking) must all remain green after the chain-source switch.
+**Success Criteria** (what must be TRUE):
+
+  1. `apps/sidecar/` builds and deploys as a Railway service; `GET /sidecar/health` returns `{ status: "ok", tokenFreshness: "... " }` — the sidecar is reading `broker_tokens` from Postgres via `client_from_access_functions` callbacks (GW-01).
+  2. The TS `refresh-tokens` job is removed from `apps/worker/src/schedule.ts` and its `TRACKED_JOBS` entry is retired before the sidecar's auto-refresh is activated — `GET /api/status` no longer lists it; no dual-writer window exists (GW-03).
+  3. The chain-snapshot job (`fetch-schwab-chain`) routes through the sidecar REST proxy (`/sidecar/chain`) instead of direct Schwab REST; CBOE fallback activates automatically when the sidecar returns `AUTH_EXPIRED` or is unreachable, and `leg_observations` continues to gain rows with `source = 'cboe'` in that case (GW-02, JRNL-02).
+  4. `apps/server` is the only process that can reach the sidecar (Railway private network / service binding); the sidecar has no public ingress route (GW-05).
+  5. A Postgres advisory lock is held by the sidecar's StreamClient before `login()` is called; a second sidecar instance (simulated restart) cannot acquire the lock and logs a clear error rather than opening a second Schwab streaming session (GW-04).
+
+**Plans**: TBD
+
+### Phase 12: Streaming + TS Fan-Out
+
+**Goal**: The sidecar streams live LEVELONE_OPTION data (marks, per-leg greeks, IV) and
+ACCT_ACTIVITY fill events for open position legs; `apps/server` multiplexes the sidecar's
+single SSE stream to N browser clients over an authed `GET /api/stream` endpoint, with a
+Supabase JWT verified at the server edge; on cold start or reconnect the sidecar reconciles
+current state via a REST pull so the live view has no gaps.
+**Depends on**: Phase 11 (stable sidecar with advisory lock and REST proxy)
+**Requirements**: STRM-01, STRM-02, STRM-03, STRM-04, STRM-05
+**Research flag**: ACCT_ACTIVITY `MESSAGE_TYPE` values are not publicly documented — discover empirically once the sidecar runs; do not hard-code from assumptions. EventSource JWT-as-query-param vs opaque-ticket security choice — prefer a short-lived ticket if cheap (query-param JWTs leak into server logs).
+**Cross-cutting**: Stream data is display-only — no per-tick Postgres writes; `sync-transactions` (REST) remains the authoritative fill source (STRM-04 constraint applies across all streaming code).
+**Success Criteria** (what must be TRUE):
+
+  1. With at least one open position leg, the sidecar logs LEVELONE_OPTION updates (mark, delta, gamma, theta, vega, IV) for that leg's OCC symbol within 30 seconds of market open; fields map to the Zod `liveGreeks` contract from `packages/contracts` (STRM-01).
+  2. A fill event executed in a test account appears as an ACCT_ACTIVITY message in the sidecar's stream within 10 seconds of execution; the message is forwarded to the server fan-out (STRM-02).
+  3. `GET /api/stream` (with a valid Supabase JWT) delivers a well-formed SSE stream to a browser client; an unauthenticated request is rejected at the server edge before proxying to the sidecar (STRM-03).
+  4. After a sidecar restart, `GET /sidecar/positions` is called and the resulting positions are reconciled so the first SSE event to reconnecting browsers reflects current state, not a stale pre-restart snapshot (STRM-05).
+  5. The stream contains no Postgres writes in the hot path; `SELECT count(*) FROM leg_observations` does not grow during a streaming-only session (STRM-04 regression gate).
+
+**Plans**: TBD
+
+### Phase 13: COT Adapter
+
+**Goal**: A weekly `fetch-cot` job pulls CFTC COT data for E-mini S&P 500 (TFF report) into
+a `cot_observations` table, storing the Tuesday `as_of` date separately from the Friday
+`published_at` date; `GET /api/analytics/cot` and MCP `get_cot` expose current and
+historical COT positioning series.
+**Depends on**: Phase 10 (docs complete); independent of sidecar — can run in parallel with Phase 12 execution.
+**Requirements**: COT-01, COT-02
+**Research flag**: Confirm exact CFTC COT DataFrame column names from the `cot-reports` library before writing the `cot_observations` schema (validate against a live pull, not community examples).
+**Cross-cutting**: MCP-02 applies — `get_cot` and `GET /api/analytics/cot` ship in the same change; Zod contract in `packages/contracts`.
+**Success Criteria** (what must be TRUE):
+
+  1. After `fetch-cot` runs on a Friday, `cot_observations` gains one row per report week with `as_of` set to the preceding Tuesday and `published_at` set to the Friday fetch date; a second run for the same week is idempotent (0 duplicate rows) (COT-01).
+  2. `GET /api/analytics/cot` returns a JSON array of COT series entries (as_of, net_noncommercial, net_commercial, open_interest, …) over the shared Zod contract; MCP `get_cot` returns the same data to Claude Code (COT-02, MCP-02).
+
+**Plans**: TBD
+
+### Phase 14: FRED Expansion
+
+**Goal**: The `fetch-rates` job is extended to an expanded FRED series set (DFF, DGS1MO,
+DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS); VVIX is sourced via the existing CBOE adapter; the
+production `FRED_API_KEY` is set; `GET /api/analytics/macro` and MCP `get_macro` expose the
+full macro series.
+**Depends on**: Phase 10 (docs complete); independent of sidecar — can run in parallel with Phase 12 or 13 execution.
+**Requirements**: MAC-01, MAC-02
+**Research flag**: None — FRED series IDs are confirmed; VVIX via CBOE is an established pattern; env var set is operator work.
+**Cross-cutting**: MCP-02 applies — `get_macro` and `GET /api/analytics/macro` ship in the same change; Zod contract in `packages/contracts`.
+**Success Criteria** (what must be TRUE):
+
+  1. After `fetch-rates` runs with the prod `FRED_API_KEY` set, `rate_observations` contains rows for all seven FRED series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) plus VVIX sourced via the CBOE adapter; a second run for the same observation date is idempotent (MAC-01).
+  2. `GET /api/analytics/macro` returns a JSON object keyed by series ID, each containing a time-ordered array of `{ time, value }` entries over the shared Zod contract; MCP `get_macro` returns the same payload to Claude Code (MAC-02, MCP-02).
+
+**Plans**: TBD
+
+### Phase 15: Re-Auth Smoothing
+
+**Goal**: The system alerts the operator at T-24h before the Schwab refresh-token 7-day
+cutoff (never a silent outage) and provides a one-click/operator re-auth flow that writes
+a fresh token pair to Postgres without a Railway redeploy, so the sidecar picks up the
+new tokens on its next auto-refresh cycle.
+**Depends on**: Phase 11 (sidecar health endpoint + `broker_tokens` ownership established)
+**Requirements**: AUTH-05, AUTH-06
+**Research flag**: None — alert pattern matches Phase 5 `isNearExpiry` (JOB-02); re-auth flow uses `client_from_manual_flow` (established schwab-py pattern from SUMMARY.md).
+**Success Criteria** (what must be TRUE):
+
+  1. When the Schwab refresh token is within 24 hours of its 7-day expiry, `GET /api/status` includes a non-null `refreshExpiresIn` field and the status surface logs a warning; the alert fires before the token expires (AUTH-05).
+  2. The operator can run a local re-auth flow (manual-flow → `token_write` callback → Postgres) that writes a new refresh token to `broker_tokens`; the sidecar picks up the new token on its next auto-refresh cycle without a Railway redeploy; `GET /api/status` reports token freshness restored (AUTH-06).
+
+**Plans**: TBD
+
+## Backlog / Future Enhancements
+
+*Unscheduled — not yet assigned to a phase.*
+
+### Schwab client library — revisit vendored TS vs @sudowealth/schwab-api
+
+**Decided 2026-06-21** (full analysis: `.planning/notes/schwab-client-decision.md`). Phase 4
+UAT found the vendored chain adapter 502s on the live `$SPX` chain (missing scoping params, not
+a missing library). Decision: fix vendored TS now (add `strikeCount`/`fromDate`/`toDate`);
+**reject** the Python `schwab-py` sidecar for the pure-TS hexagon (v1.0 decision, now superseded
+by v1.1 arch for streaming ownership — the sidecar is the right answer for streaming but not
+for the hexagon core). Revisit TS client adoption behind ports, version-pinned, human-verify gate.
+
+### Strategy rules / logical gates engine (the "why I acted" layer — L4)
+
+**Surfaced during Phase 5 discuss (2026-06-21).** User's stated end-goal: record the
+enter/exit/roll RULES per trade + which rule fired, to improve the system/algo. This is a
+NEW capability beyond Phase 5's trade ledger (JRNL-01 only pairs fills into events). The
+Phase 5 D-07 "entry-thesis" field is the minimal attach point. Pairs with **L3 attribution**
+(decompose a calendar's move into θ/vega/δ + event contributions). Candidate for its own
+phase after v1.1. The 4-layer model (ledger → greeks time-series → attribution → rules) is
+documented in `.planning/phases/05-jobs-fill-rebuild-integrity/05-CONTEXT.md`.
+
+### Event-triggered supplemental journal snapshot
+
+**Surfaced in SUMMARY.md.** On large underlying moves (captured via stream), trigger a
+supplemental out-of-cycle snapshot. P2 — depends on the live stream (Phase 12). Candidate
+for a v1.2 addendum after streaming is stable in production.
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order. Phases 13 and 14 are independent of the sidecar and can
+be executed in parallel with each other or interleaved with Phase 12 execution. Phase 15
+requires Phase 11 complete (sidecar health endpoint).
+
+### Milestone v1.0
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Walking Skeleton | 6/6 | Complete | - |
+| 2. Market Data & BSM Engine | 12/12 | Complete | 2026-06-12 |
+| 3. Calendar Journal (MVP) | 7/7 | Complete | 2026-06-14 |
+| 4. Schwab Auth & Brokerage | 6/6 | Complete | 2026-06-20 |
+| 5. Jobs, Fill Rebuild & Integrity | 15/16 | Complete | 2026-06-22 |
+| 6. Derived Analytics | 8/8 | Complete | 2026-06-22 |
+| 7. Trade History | 2/2 | Complete | 2026-06-22 |
+| 8. Web Dashboard Backend | 8/7 | Complete | 2026-06-24 |
+| 9. Web Dashboard Frontend | 10/10 | Complete | 2026-06-25 |
+
+### Milestone v1.1
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 10. Stack Decisions Doc Update | 0/TBD | Not started | - |
+| 11. Sidecar Scaffold + Auth Migration | 0/TBD | Not started | - |
+| 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
+| 13. COT Adapter | 0/TBD | Not started | - |
+| 14. FRED Expansion | 0/TBD | Not started | - |
+| 15. Re-Auth Smoothing | 0/TBD | Not started | - |

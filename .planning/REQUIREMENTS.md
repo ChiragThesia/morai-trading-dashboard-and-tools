@@ -203,15 +203,33 @@ Explicitly excluded. Documented to prevent scope creep.
 | ANLY-03 | Phase 6 | Complete |
 | BRK-03 | Phase 7 | Complete |
 | BRK-04 | Phase 7 | Complete |
+| DOC-01 | Phase 10 | Pending |
+| GW-01 | Phase 11 | Pending |
+| GW-02 | Phase 11 | Pending |
+| GW-03 | Phase 11 | Pending |
+| GW-04 | Phase 11 | Pending |
+| GW-05 | Phase 11 | Pending |
+| JRNL-02 | Phase 11 | Pending |
+| STRM-01 | Phase 12 | Pending |
+| STRM-02 | Phase 12 | Pending |
+| STRM-03 | Phase 12 | Pending |
+| STRM-04 | Phase 12 | Pending |
+| STRM-05 | Phase 12 | Pending |
+| COT-01 | Phase 13 | Pending |
+| COT-02 | Phase 13 | Pending |
+| MAC-01 | Phase 14 | Pending |
+| MAC-02 | Phase 14 | Pending |
+| AUTH-05 | Phase 15 | Pending |
+| AUTH-06 | Phase 15 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 38 total (note: REQUIREMENTS.md traceability section previously said 32 — the
-  actual count from the requirement list is 38; the discrepancy was in the pre-filled estimate)
-
+- v1 requirements: 38 total
 - Mapped to phases: 38
-- Unmapped: 0 — full coverage
+- v1.1 requirements: 18 total (DOC-01, GW-01..05, STRM-01..05, JRNL-02, COT-01..02, MAC-01..02, AUTH-05..06)
+- Mapped to phases: 18
+- Unmapped: 0 — full coverage (both milestones)
 
 ---
 *Requirements defined: 2026-06-07*
-*Last updated: 2026-06-07 — traceability populated by gsd-roadmapper*
+*Last updated: 2026-06-25 — v1.1 traceability (Phases 10-15) populated by gsd-roadmapper*

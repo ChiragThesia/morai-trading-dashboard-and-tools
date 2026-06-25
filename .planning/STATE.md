@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Real-Time Schwab Streaming
 status: planning
-last_updated: "2026-06-25T13:56:07.440Z"
+last_updated: "2026-06-25T00:00:00.000Z"
 last_activity: 2026-06-25
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,23 +17,43 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-07)
+See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 09 — web-dashboard-frontend-react-spa-on-hono-rpc
+**Current focus:** Phase 10 — Stack Decisions Doc Update (first phase of milestone v1.1)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 10 — Stack Decisions Doc Update
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-25 — Milestone v1.1 started
+Status: Roadmap written; ready to plan Phase 10
+Last activity: 2026-06-25 — v1.1 roadmap created (Phases 10-15)
+
+## Milestone v1.1 Summary
+
+**6 phases, 18 requirements (GW-01..05, STRM-01..05, JRNL-02, COT-01..02, MAC-01..02, AUTH-05..06, DOC-01)**
+
+Strict dependency chain:
+- Phase 10 (DOC-01) → Phase 11 (GW-01..05, JRNL-02) → Phase 12 (STRM-01..05) → Phase 15 (AUTH-05..06)
+- Phases 13 (COT-01..02) and 14 (MAC-01..02) are independent; can run parallel with 12 and each other.
+
+Key risks carried into planning:
+1. Dual-refresher rotating-token race — Phase 11 must retire TS refresh job BEFORE sidecar goes active.
+2. One-streamer-per-account limit — Postgres advisory lock required before any streaming work.
+3. 7-day headless re-auth gap — CBOE fallback must be confirmed live before Phase 12 go-live.
+4. ACCT_ACTIVITY message types undocumented — discover empirically in Phase 12; do not hard-code.
+
+Regression gates (must survive every phase):
+- SPX OI=0 / SPY proxy (~10.048×)
+- CBOE timestamps are UTC (not ET)
+- GEX put-sign (negative gamma for puts)
+- 65,534-param insert limit (chunk at ≤2,000 rows)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 23
+- Total plans completed (v1.0): 76
 - Average duration: ~13 min
 - Total execution time: ~40 min
 
@@ -108,6 +128,7 @@ Last activity: 2026-06-25 — Milestone v1.1 started
 ### Roadmap Evolution
 
 - Phase 8 added (2026-06-23): Web Dashboard — React/Vite/Tailwind/shadcn frontend (apps/web) on Hono RPC + new GEX analytics endpoint. 5 screens prototyped as HTML mockups in `mockups/` (overview, analyzer, positions, journal, market).
+- Phases 10-15 added (2026-06-25): Milestone v1.1 — Real-Time Schwab Streaming. schwab-py sidecar as sole Schwab boundary; live stream; COT + expanded FRED.
 
 ### Decisions
 
@@ -266,22 +287,23 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- **Prod deploy debt** (carried from v1.0): Railway prod deploy is db-down + STALE. Before Phase 11 sidecar go-live, must: redeploy + fix DATABASE_URL → Schwab OAuth dance → backfill trades. Track in morai-prod-live-pipeline-state.md memory.
+- **FRED_API_KEY unset in prod** (carried from Phase 2): must be set before Phase 14 can be verified live.
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | Web UI | apps/web React SPA (D19) | v2 | Architecture |
-| Streaming | Sub-minute market data (D17) | v2 | Architecture |
+| Streaming | Sub-minute full-chain market data | v2 | Architecture (500-symbol cap) |
 | Scale | Timescale hypertable migration (D7) | v2 trigger | Architecture |
 | Multi-user | API auth beyond single bearer token | v2 | Architecture |
 | Test isolation | Postgres leg-observations contract tests have cross-test contamination (re-persist/large-batch idempotency failures are flaky) | future | Phase 03 P06 |
-| Live DB push | broker_tokens migration (0003_broker_tokens.sql + pgcrypto) not yet applied to live Supabase DB | blocking for 04-02 | Phase 04 P01 Task 5 |
 | Realized P&L | IN-A2 — real per-leg commission/fees + intraday filledAt: BrokerTransaction domain type carries no time/commission/fees fields; needs docs-first brokerage domain + Schwab adapter change. Realized P&L stays fee-blind until a dedicated plan. | future | Phase 05 P14 |
+| Event-triggered snapshot | Supplemental out-of-cycle snapshot on large underlying moves (via stream) | v1.2 | SUMMARY.md |
 
 ## Session Continuity
 
-Last session: 2026-06-25T01:29:21.017Z
-Stopped at: Completed 09-08-PLAN.md
+Last session: 2026-06-25
+Stopped at: v1.1 roadmap created (Phases 10-15); ready to plan Phase 10
 Resume file: None
