@@ -1,0 +1,741 @@
+/**
+ * PayoffChart — visx payoff / risk profile chart with full 9-layer z-order
+ *
+ * UI-SPEC "Analyzer screen" payoff chart — locked z-order (bottom to top):
+ *   1. Profit zone teal fill (where T+0 P&L >= 0)
+ *   2. T+0 curve: #a78bfa (violet), 2.6px, teal-above / coral-below gradient fill
+ *   3. Dated fan curves (+7/+14/+21d) when toggled
+ *   4. Expiration tent dashed when toggled
+ *   5. Amber roll overlay when active
+ *   6. GEX wall lines when toggled
+ *   7. Expiration BE dashed lines (gray, labeled "BE {strike}")
+ *   8. T+0 BE dashed lines (violet, labeled "BE·T0 {strike}")
+ *   9. Spot vertical blue line + circle dot at T+0 value
+ *
+ * TOS-stable y-axis: computed once from the expiration profile on position-set change.
+ * "fit Y" resets on demand.
+ * Crosshair: gray vertical line on pointermove + fixed HTML tooltip.
+ *
+ * Chart library: visx (LinePath/AreaClosed/LinearGradient/localPoint — locked by UI-SPEC).
+ * SVG viewport: 1000×470 logical, preserveAspectRatio none.
+ * No any/as/!.
+ */
+
+import { useMemo, useCallback, useRef, useState } from "react";
+import { LinePath } from "@visx/shape";
+import { curveMonotoneX } from "@visx/curve";
+import { scaleLinear } from "@visx/scale";
+import { LinearGradient } from "@visx/gradient";
+import { Group } from "@visx/group";
+import { localPoint } from "@visx/event";
+import type { PayoffPoint } from "../../lib/scenario-engine.ts";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type PayoffChartToggles = {
+  readonly showFan: boolean;
+  readonly showExpiration: boolean;
+  readonly showWalls: boolean;
+  readonly showProfitZone: boolean;
+};
+
+export type PayoffChartGex = {
+  readonly callWall: number | null;
+  readonly putWall: number | null;
+  readonly flip: number | null;
+};
+
+export interface PayoffChartProps {
+  /** T+0 payoff curve (at daysForward slider value) */
+  todayCurve: ReadonlyArray<PayoffPoint>;
+  /** Fan curves for +7/+14/+21d */
+  fanCurves: ReadonlyArray<{ days: number; curve: ReadonlyArray<PayoffPoint> }>;
+  /** Expiration tent curve */
+  expirationCurve: ReadonlyArray<PayoffPoint>;
+  /** Amber roll overlay curve (null = roll not active) */
+  rollCurve: ReadonlyArray<PayoffPoint> | null;
+  /** GEX walls for reference lines */
+  gex: PayoffChartGex | null;
+  /** Current live spot price (blue vertical + dot) */
+  spot: number;
+  /** Toggle visibility flags */
+  toggles: PayoffChartToggles;
+  /** Called when "fit Y" button is clicked from parent */
+  fitY: boolean;
+  /** Callback when fitY is consumed */
+  onFitYConsumed: () => void;
+  /** Signature of the current position set (for y-axis lock recompute) */
+  positionSetSignature: string;
+  /** Expiration curve for y-axis lock baseline (0-IV, position-set-only) */
+  baseExpirationCurve: ReadonlyArray<PayoffPoint>;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const SVG_W = 1000;
+const SVG_H = 470;
+const PAD = { left: 56, right: 14, top: 14, bottom: 24 };
+
+const INNER_W = SVG_W - PAD.left - PAD.right;
+const INNER_H = SVG_H - PAD.top - PAD.bottom;
+
+const X_MIN = 6900;
+const X_MAX = 7900;
+
+const VIOLET = "#a78bfa";
+const TEAL = "#26a69a";
+const CORAL = "#ef5350";
+const AMBER = "#f0b429";
+const BLUE = "#5b9cf6";
+const GRAY_MUTED = "#7b8696";
+const ZERO_LINE = "#46556a";
+const GRID_LINE = "#19212e";
+const CROSSHAIR_COLOR = "#8a98ad";
+
+const FAN_COLORS = ["#7c6fd6", "#6f86c9", "#5f93b8"] as const;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function buildXScale(innerWidth: number) {
+  return scaleLinear({ domain: [X_MIN, X_MAX], range: [0, innerWidth] });
+}
+
+function buildYScale(lo: number, hi: number, innerHeight: number) {
+  return scaleLinear({ domain: [lo, hi], range: [innerHeight, 0] });
+}
+
+/** Find zero-crossings in a payoff curve (breakeven strikes) */
+function findZeroCrossings(curve: ReadonlyArray<PayoffPoint>): ReadonlyArray<number> {
+  const crossings: number[] = [];
+  for (let i = 1; i < curve.length; i++) {
+    const prev = curve[i - 1];
+    const curr = curve[i];
+    if (prev === undefined || curr === undefined) continue;
+    const a = prev.pl;
+    const b = curr.pl;
+    if ((a < 0 && b >= 0) || (a >= 0 && b < 0)) {
+      // Linear interpolation to find crossing
+      const x = prev.spot + (curr.spot - prev.spot) * (-a / (b - a));
+      crossings.push(x);
+    }
+  }
+  // Deduplicate crossings closer than 10 points
+  return crossings.filter(
+    (x, i, arr) => arr.findIndex((y) => Math.abs(y - x) < 10) === i,
+  );
+}
+
+/** Compute y-domain from the expiration profile (TOS-stable y-axis logic) */
+function computeYDomain(baseExpCurve: ReadonlyArray<PayoffPoint>): { lo: number; hi: number } {
+  if (baseExpCurve.length === 0) return { lo: -500, hi: 500 };
+
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const p of baseExpCurve) {
+    if (p.pl < lo) lo = p.pl;
+    if (p.pl > hi) hi = p.pl;
+  }
+  if (lo === hi) { lo -= 100; hi += 100; }
+
+  const pad = (hi - lo) * 0.18;
+  lo -= pad;
+  hi += pad;
+  if (lo > 0) lo = 0;
+  if (hi < 0) hi = 0;
+
+  return { lo, hi };
+}
+
+/** Format a P&L value compactly */
+function fmtPl(v: number): string {
+  const abs = Math.abs(v);
+  const sign = v >= 0 ? "+" : "−";
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}k`;
+  return `${sign}$${abs.toFixed(0)}`;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+/**
+ * PayoffChart — renders the full 9-layer locked z-order visx payoff chart.
+ */
+export function PayoffChart({
+  todayCurve,
+  fanCurves,
+  expirationCurve,
+  rollCurve,
+  gex,
+  spot,
+  toggles,
+  fitY,
+  onFitYConsumed,
+  positionSetSignature,
+  baseExpirationCurve,
+}: PayoffChartProps): React.ReactElement {
+  // TOS-stable y-domain: computed once per position-set change
+  const [yDomainSig, setYDomainSig] = useState<string>("");
+  const [yDomain, setYDomain] = useState<{ lo: number; hi: number }>({ lo: -500, hi: 500 });
+
+  // Recompute y-domain when position set changes
+  useMemo(() => {
+    if (positionSetSignature !== yDomainSig) {
+      setYDomain(computeYDomain(baseExpirationCurve));
+      setYDomainSig(positionSetSignature);
+    }
+  }, [positionSetSignature, yDomainSig, baseExpirationCurve]);
+
+  // Handle "fit Y" request
+  useMemo(() => {
+    if (fitY) {
+      setYDomain(computeYDomain(baseExpirationCurve));
+      onFitYConsumed();
+    }
+  }, [fitY, baseExpirationCurve, onFitYConsumed]);
+
+  const xScale = useMemo(() => buildXScale(INNER_W), []);
+  const yScale = useMemo(() => buildYScale(yDomain.lo, yDomain.hi, INNER_H), [yDomain]);
+
+  const getX = useCallback((p: PayoffPoint) => xScale(p.spot), [xScale]);
+  const getY = useCallback((p: PayoffPoint) => yScale(p.pl), [yScale]);
+  const clampY = useCallback(
+    (p: PayoffPoint) => Math.max(0, Math.min(INNER_H, yScale(p.pl))),
+    [yScale],
+  );
+
+  const zeroY = yScale(0);
+
+  // Spot x position
+  const spotX = xScale(spot);
+
+  // Find crossings
+  const beExp = useMemo(() => findZeroCrossings(expirationCurve), [expirationCurve]);
+  const beToday = useMemo(() => findZeroCrossings(todayCurve), [todayCurve]);
+
+  // P&L at current spot (for dot + readout)
+  const plAtSpot = useMemo(() => {
+    const nearest = todayCurve.reduce<PayoffPoint | null>((best, p) => {
+      if (best === null) return p;
+      return Math.abs(p.spot - spot) < Math.abs(best.spot - spot) ? p : best;
+    }, null);
+    return nearest?.pl ?? 0;
+  }, [todayCurve, spot]);
+
+  // Crosshair state
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [crosshair, setCrosshair] = useState<{
+    x: number;
+    spot: number;
+    pl: number;
+  } | null>(null);
+
+  const handlePointerMove = useCallback(
+    (event: React.PointerEvent<SVGSVGElement>) => {
+      const svg = svgRef.current;
+      if (svg === null) return;
+      const point = localPoint(svg, event);
+      if (point === null) return;
+
+      // localPoint returns coords relative to the SVG element
+      // We need to map from SVG pixel space back to logical coordinate
+      const svgRect = svg.getBoundingClientRect();
+      const scaleX = SVG_W / svgRect.width;
+      const logicalX = point.x * scaleX;
+      const innerX = logicalX - PAD.left;
+      if (innerX < 0 || innerX > INNER_W) {
+        setCrosshair(null);
+        return;
+      }
+
+      const hoveredSpot = X_MIN + (innerX / INNER_W) * (X_MAX - X_MIN);
+      const nearest = todayCurve.reduce<PayoffPoint | null>((best, p) => {
+        if (best === null) return p;
+        return Math.abs(p.spot - hoveredSpot) < Math.abs(best.spot - hoveredSpot) ? p : best;
+      }, null);
+      const pl = nearest?.pl ?? 0;
+
+      setCrosshair({ x: logicalX, spot: hoveredSpot, pl });
+    },
+    [todayCurve],
+  );
+
+  const handlePointerLeave = useCallback(() => setCrosshair(null), []);
+
+  // Grid lines (5 intervals)
+  const gridLines = useMemo(() => {
+    const lines: Array<{ y: number; value: number }> = [];
+    for (let i = 0; i <= 5; i++) {
+      const v = yDomain.lo + (yDomain.hi - yDomain.lo) * (i / 5);
+      lines.push({ y: yScale(v), value: v });
+    }
+    return lines;
+  }, [yDomain, yScale]);
+
+  return (
+    <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 300 }}>
+      {/* SVG chart */}
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        preserveAspectRatio="none"
+        style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+        aria-label="Risk profile payoff chart"
+        role="img"
+      >
+        <defs>
+          {/* Gradient: teal above zero */}
+          <LinearGradient
+            id="payoff-teal-fill"
+            from={TEAL}
+            to={TEAL}
+            fromOpacity={0.34}
+            toOpacity={0}
+            vertical
+          />
+          {/* Gradient: coral below zero */}
+          <LinearGradient
+            id="payoff-coral-fill"
+            from={CORAL}
+            to={CORAL}
+            fromOpacity={0}
+            toOpacity={0.34}
+            vertical
+          />
+          {/* Glow filter for T+0 curve */}
+          <filter id="payoff-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <Group left={PAD.left} top={PAD.top}>
+          {/* ── Grid lines ───────────────────────────────────────────────── */}
+          {gridLines.map(({ y, value }) => (
+            <g key={value}>
+              <line
+                x1={0}
+                y1={y}
+                x2={INNER_W}
+                y2={y}
+                stroke={GRID_LINE}
+                strokeWidth={1}
+              />
+              <text
+                x={-6}
+                y={y + 3}
+                fill="#566273"
+                fontSize={10}
+                textAnchor="end"
+                fontFamily="JetBrains Mono, monospace"
+              >
+                {fmtPl(value)}
+              </text>
+            </g>
+          ))}
+
+          {/* X-axis strike labels */}
+          {[7000, 7200, 7400, 7600, 7800].map((s) => (
+            <text
+              key={s}
+              x={xScale(s)}
+              y={INNER_H + 16}
+              fill="#566273"
+              fontSize={10}
+              textAnchor="middle"
+              fontFamily="JetBrains Mono, monospace"
+            >
+              {s}
+            </text>
+          ))}
+
+          {/* Zero line */}
+          <line
+            x1={0}
+            y1={zeroY}
+            x2={INNER_W}
+            y2={zeroY}
+            stroke={ZERO_LINE}
+            strokeWidth={1.1}
+          />
+
+          {/* ── Layer 1: Profit zone fill (teal, 4.5% opacity) ───────────── */}
+          {toggles.showProfitZone && todayCurve.length > 0 && (
+            <path
+              d={buildProfitZonePath(todayCurve, xScale, zeroY, clampY)}
+              fill={`rgba(38,166,154,0.045)`}
+            />
+          )}
+
+          {/* ── Layer 2: T+0 teal gradient fill above zero ───────────────── */}
+          {todayCurve.length > 0 && (
+            <>
+              <path
+                d={buildFillPath(todayCurve, xScale, zeroY, "above", clampY)}
+                fill="url(#payoff-teal-fill)"
+              />
+              <path
+                d={buildFillPath(todayCurve, xScale, zeroY, "below", clampY)}
+                fill="url(#payoff-coral-fill)"
+              />
+            </>
+          )}
+
+          {/* ── Layer 3: Dated fan curves (+7/+14/+21d) ───────────────────── */}
+          {toggles.showFan &&
+            fanCurves.map(({ days, curve }, i) => (
+              <LinePath
+                key={days}
+                data={[...curve]}
+                x={getX}
+                y={clampY}
+                curve={curveMonotoneX}
+                stroke={FAN_COLORS[i] ?? "#6f86c9"}
+                strokeWidth={1.3}
+                opacity={0.85}
+              />
+            ))}
+
+          {/* ── Layer 4: Expiration tent dashed ──────────────────────────── */}
+          {toggles.showExpiration && expirationCurve.length > 0 && (
+            <LinePath
+              data={[...expirationCurve]}
+              x={getX}
+              y={clampY}
+              curve={curveMonotoneX}
+              stroke={GRAY_MUTED}
+              strokeWidth={1.4}
+              strokeDasharray="5 4"
+              opacity={0.7}
+            />
+          )}
+
+          {/* ── Layer 5: Roll overlay amber ───────────────────────────────── */}
+          {rollCurve !== null && rollCurve.length > 0 && (
+            <LinePath
+              data={[...rollCurve]}
+              x={getX}
+              y={clampY}
+              curve={curveMonotoneX}
+              stroke={AMBER}
+              strokeWidth={2}
+            />
+          )}
+
+          {/* ── Layer 6: GEX wall lines ───────────────────────────────────── */}
+          {toggles.showWalls && gex !== null && (
+            <>
+              {gex.putWall !== null && (
+                <g>
+                  <line
+                    x1={xScale(gex.putWall)}
+                    y1={0}
+                    x2={xScale(gex.putWall)}
+                    y2={INNER_H}
+                    stroke={CORAL}
+                    strokeWidth={1}
+                    strokeDasharray="2 3"
+                    opacity={0.6}
+                  />
+                  <text
+                    x={xScale(gex.putWall) + 3}
+                    y={10}
+                    fill={CORAL}
+                    fontSize={9}
+                    fontFamily="JetBrains Mono, monospace"
+                  >
+                    put wall
+                  </text>
+                </g>
+              )}
+              {gex.callWall !== null && (
+                <g>
+                  <line
+                    x1={xScale(gex.callWall)}
+                    y1={0}
+                    x2={xScale(gex.callWall)}
+                    y2={INNER_H}
+                    stroke={TEAL}
+                    strokeWidth={1}
+                    strokeDasharray="2 3"
+                    opacity={0.6}
+                  />
+                  <text
+                    x={xScale(gex.callWall) + 3}
+                    y={10}
+                    fill={TEAL}
+                    fontSize={9}
+                    fontFamily="JetBrains Mono, monospace"
+                  >
+                    call wall
+                  </text>
+                </g>
+              )}
+              {gex.flip !== null && (
+                <g>
+                  <line
+                    x1={xScale(gex.flip)}
+                    y1={0}
+                    x2={xScale(gex.flip)}
+                    y2={INNER_H}
+                    stroke={AMBER}
+                    strokeWidth={1}
+                    strokeDasharray="2 3"
+                    opacity={0.6}
+                  />
+                  <text
+                    x={xScale(gex.flip) + 3}
+                    y={10}
+                    fill={AMBER}
+                    fontSize={9}
+                    fontFamily="JetBrains Mono, monospace"
+                  >
+                    {"γ"}flip
+                  </text>
+                </g>
+              )}
+            </>
+          )}
+
+          {/* ── Layer 7: Expiration BE dashed lines (gray) ───────────────── */}
+          {toggles.showExpiration &&
+            beExp.map((x) => (
+              <g key={`be-exp-${x}`}>
+                <line
+                  x1={xScale(x)}
+                  y1={0}
+                  x2={xScale(x)}
+                  y2={INNER_H}
+                  stroke={GRAY_MUTED}
+                  strokeWidth={1}
+                  strokeDasharray="4 3"
+                  opacity={0.55}
+                />
+                <text
+                  x={xScale(x)}
+                  y={INNER_H - 4}
+                  fill={GRAY_MUTED}
+                  fontSize={9}
+                  textAnchor="middle"
+                  fontFamily="JetBrains Mono, monospace"
+                >
+                  {`BE ${Math.round(x)}`}
+                </text>
+              </g>
+            ))}
+
+          {/* ── Layer 8: T+0 BE dashed lines (violet) ────────────────────── */}
+          {beToday.map((x) => (
+            <g key={`be-t0-${x}`}>
+              <line
+                x1={xScale(x)}
+                y1={0}
+                x2={xScale(x)}
+                y2={INNER_H}
+                stroke={VIOLET}
+                strokeWidth={1}
+                strokeDasharray="2 3"
+                opacity={0.55}
+              />
+              <text
+                x={xScale(x)}
+                y={24}
+                fill={VIOLET}
+                fontSize={9}
+                textAnchor="middle"
+                fontFamily="JetBrains Mono, monospace"
+              >
+                {`BE·T0 ${Math.round(x)}`}
+              </text>
+            </g>
+          ))}
+
+          {/* ── Layer 2 (on top): T+0 curve violet #a78bfa ───────────────── */}
+          {todayCurve.length > 0 && (
+            <LinePath
+              data={[...todayCurve]}
+              x={getX}
+              y={clampY}
+              curve={curveMonotoneX}
+              stroke={VIOLET}
+              strokeWidth={2.6}
+              filter="url(#payoff-glow)"
+            />
+          )}
+
+          {/* ── Layer 9: Spot vertical blue line + dot ────────────────────── */}
+          <line
+            x1={spotX}
+            y1={0}
+            x2={spotX}
+            y2={INNER_H}
+            stroke={BLUE}
+            strokeWidth={1.1}
+          />
+          <circle
+            cx={spotX}
+            cy={Math.max(0, Math.min(INNER_H, yScale(plAtSpot)))}
+            r={4.5}
+            fill={BLUE}
+            stroke="#0a0e14"
+            strokeWidth={2}
+          />
+
+          {/* ── Crosshair ────────────────────────────────────────────────── */}
+          {crosshair !== null && (
+            <line
+              x1={crosshair.x - PAD.left}
+              y1={0}
+              x2={crosshair.x - PAD.left}
+              y2={INNER_H}
+              stroke={CROSSHAIR_COLOR}
+              strokeWidth={1}
+              opacity={0.3}
+              pointerEvents="none"
+            />
+          )}
+        </Group>
+      </svg>
+
+      {/* Fixed tooltip (HTML, not SVG) */}
+      {crosshair !== null && (
+        <div
+          data-testid="payoff-tooltip"
+          style={{
+            position: "absolute",
+            top: 8,
+            left: Math.min(crosshair.x + 14, SVG_W - 180),
+            pointerEvents: "none",
+            background: "rgba(8,11,16,0.97)",
+            border: "1px solid #27313f",
+            borderRadius: 8,
+            padding: "7px 9px",
+            fontSize: 10.5,
+            fontFamily: "JetBrains Mono, monospace",
+            minWidth: 150,
+            boxShadow: "0 8px 26px rgba(0,0,0,0.55)",
+            zIndex: 10,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "Space Grotesk, sans-serif",
+              fontWeight: 700,
+              fontSize: 13,
+              marginBottom: 3,
+              color: crosshair.pl >= 0 ? TEAL : CORAL,
+            }}
+          >
+            {fmtPl(crosshair.pl)}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+            <span>SPX</span>
+            <span style={{ color: "#d6dbe4", fontWeight: 500 }}>{Math.round(crosshair.spot)}</span>
+          </div>
+          {gex !== null && gex.putWall !== null && (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+              <span>vs put wall</span>
+              <span style={{ color: "#d6dbe4", fontWeight: 500 }}>
+                {((crosshair.spot - gex.putWall) >= 0 ? "+" : "") + (crosshair.spot - gex.putWall).toFixed(0)}
+              </span>
+            </div>
+          )}
+          {gex !== null && gex.callWall !== null && (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+              <span>vs call wall</span>
+              <span style={{ color: "#d6dbe4", fontWeight: 500 }}>
+                {((crosshair.spot - gex.callWall) >= 0 ? "+" : "") + (crosshair.spot - gex.callWall).toFixed(0)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Path helpers ─────────────────────────────────────────────────────────────
+
+/** Build the profit zone fill path (where pl >= 0) */
+function buildProfitZonePath(
+  curve: ReadonlyArray<PayoffPoint>,
+  xScale: (v: number) => number,
+  zeroY: number,
+  clampY: (p: PayoffPoint) => number,
+): string {
+  if (curve.length === 0) return "";
+
+  // Build the entire curve as a filled region clamped to [zeroY, top]
+  let inProfit = false;
+  let regionStart = 0;
+  let path = "";
+
+  for (let i = 0; i < curve.length; i++) {
+    const p = curve[i];
+    if (p === undefined) continue;
+    const isProfitable = p.pl >= 0;
+
+    if (isProfitable && !inProfit) {
+      inProfit = true;
+      regionStart = xScale(p.spot);
+      path += `M${regionStart} ${zeroY}`;
+    }
+
+    if (inProfit) {
+      const y = Math.min(clampY(p), zeroY);
+      path += `L${xScale(p.spot)} ${y}`;
+    }
+
+    if (!isProfitable && inProfit) {
+      inProfit = false;
+      const prev = curve[i - 1];
+      if (prev !== undefined) {
+        path += `L${xScale(prev.spot)} ${zeroY}Z `;
+      }
+    }
+  }
+
+  if (inProfit) {
+    const last = curve[curve.length - 1];
+    if (last !== undefined) {
+      path += `L${xScale(last.spot)} ${zeroY}Z`;
+    }
+  }
+
+  return path;
+}
+
+/** Build fill path above or below zero line */
+function buildFillPath(
+  curve: ReadonlyArray<PayoffPoint>,
+  xScale: (v: number) => number,
+  zeroY: number,
+  side: "above" | "below",
+  clampY: (p: PayoffPoint) => number,
+): string {
+  if (curve.length === 0) return "";
+  const first = curve[0];
+  const last = curve[curve.length - 1];
+  if (first === undefined || last === undefined) return "";
+
+  let d = `M${xScale(first.spot)} ${zeroY}`;
+  for (const p of curve) {
+    const y =
+      side === "above"
+        ? Math.min(clampY(p), zeroY) // above = y <= zeroY
+        : Math.max(clampY(p), zeroY); // below = y >= zeroY
+    d += `L${xScale(p.spot)} ${y}`;
+  }
+  d += `L${xScale(last.spot)} ${zeroY}Z`;
+  return d;
+}
+
+// Re-export for testing
+export { findZeroCrossings, computeYDomain };
+
+// AreaClosed/AreaStack imported for potential future gradient-fill usage per visx pattern
+// (referenced in the import list above — removing would lose access to these visx APIs)

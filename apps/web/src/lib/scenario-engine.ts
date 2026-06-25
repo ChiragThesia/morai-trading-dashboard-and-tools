@@ -360,13 +360,14 @@ export function repriceScenario(
     : 45;
 
   const fanDays = [7, 14, 21].filter((d) => d > daysForward && d <= minFrontDte);
-  const fanCurves = fanDays.map((days) => ({
-    days,
-    curve: spots.map((S) => ({
-      spot: S,
-      pl: bookPL(positions, S, days, ivShift, rate, divYield, liveSpot),
-    })) as ReadonlyArray<PayoffPoint>,
-  }));
+  const fanCurves: ReadonlyArray<{ readonly days: number; readonly curve: ReadonlyArray<PayoffPoint> }> =
+    fanDays.map((days) => ({
+      days,
+      curve: spots.map((S) => ({
+        spot: S,
+        pl: bookPL(positions, S, days, ivShift, rate, divYield, liveSpot),
+      })),
+    }));
 
   // ── Expiration tent (at each position's front expiry) ────────────────────
   const expirationCurve: PayoffPoint[] = spots.map((S) => ({
