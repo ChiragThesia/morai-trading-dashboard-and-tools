@@ -528,10 +528,16 @@ Plans:
 
 - [ ] 11-04-PLAN.md — TDD Python core: token_store dual-write callbacks (GW-01) + advisory_lock guard (GW-04) + pytest fixtures
 
-**Wave 4** *(11-05 blocked on 11-04; 11-06 blocked on 11-03+11-05; 11-07 blocked on 11-05+11-06; zero file overlap)*
+**Wave 4** *(blocked on 11-04)*
 
 - [ ] 11-05-PLAN.md — Python FastAPI service (lifespan: lock→2 clients→not-seeded degrade) + /sidecar/health + /sidecar/chain + Dockerfile + Railway internal-only service + deploy checkpoint (GW-01, GW-02, GW-05)
+
+**Wave 5** *(blocked on 11-03 + 11-05)*
+
 - [ ] 11-06-PLAN.md — GW-03 sole-writer cutover: retire refresh-tokens (RED-first schedule.test) + swap chain source to sidecar + SIDECAR_URL config (GW-03, JRNL-02, GW-02)
+
+**Wave 6** *(blocked on 11-05 + 11-06)*
+
 - [ ] 11-07-PLAN.md — Retire the TS `apps/auth` (`@morai/auth`) OAuth setup/refresh CLI now the sidecar owns the dance + refresh; drop it from the workspace; prove typecheck/lint/test green (D-04, GW-03)
 
 ### Phase 12: Streaming + TS Fan-Out
