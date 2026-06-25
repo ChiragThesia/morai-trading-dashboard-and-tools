@@ -513,7 +513,25 @@ fallback during the 7-day re-auth gap).
   4. `apps/server` is the only process that can reach the sidecar (Railway private network / service binding); the sidecar has no public ingress route (GW-05).
   5. A Postgres advisory lock is held by the sidecar's StreamClient before `login()` is called; a second sidecar instance (simulated restart) cannot acquire the lock and logs a clear error rather than opening a second Schwab streaming session (GW-04).
 
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+**Wave 1** *(docs-before-code — BLOCKING predecessor)*
+
+- [ ] 11-01-PLAN.md — Docs-first GW-01 relaxation (token_json) in stack-decisions.md + additive schema column + Wave-0 RED scaffolds (Python pytest lane + TS adapter test) (GW-01, JRNL-02)
+
+**Wave 2** *(blocked on 11-01)*
+
+- [ ] 11-02-PLAN.md — [BLOCKING] drizzle generate 0011_broker_tokens_token_json + live `bun run migrate` (direct conn, port 5432) (GW-01)
+- [ ] 11-03-PLAN.md — TDD: TS sidecar chain-adapter (ForFetchingChain, adapter-local Zod) + in-memory twin + barrel (JRNL-02, GW-02)
+
+**Wave 3** *(blocked on 11-02 — needs live token_json column)*
+
+- [ ] 11-04-PLAN.md — TDD Python core: token_store dual-write callbacks (GW-01) + advisory_lock guard (GW-04) + pytest fixtures
+
+**Wave 4** *(11-05 blocked on 11-04; 11-06 blocked on 11-03+11-05; zero file overlap)*
+
+- [ ] 11-05-PLAN.md — Python FastAPI service (lifespan: lock→2 clients→not-seeded degrade) + /sidecar/health + /sidecar/chain + Dockerfile + Railway internal-only service + deploy checkpoint (GW-01, GW-02, GW-05)
+- [ ] 11-06-PLAN.md — GW-03 sole-writer cutover: retire refresh-tokens (RED-first schedule.test) + swap chain source to sidecar + SIDECAR_URL config (GW-03, JRNL-02, GW-02)
 
 ### Phase 12: Streaming + TS Fan-Out
 
