@@ -152,6 +152,11 @@ def make_token_callbacks(
                         app_id,            # WHERE clause
                     ),
                 )
+                if cur.rowcount == 0:
+                    raise ValueError(
+                        f"token_write_func: no broker_tokens row for app_id={app_id!r} — "
+                        "row absent. Cannot write token. Run schema migration or seed the row."
+                    )
             conn.commit()
         finally:
             conn.close()
