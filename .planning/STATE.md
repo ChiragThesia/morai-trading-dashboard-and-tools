@@ -6,7 +6,7 @@ current_phase: 11
 current_phase_name: sidecar-scaffold-auth-migration
 status: executing
 stopped_at: Phase 11 context gathered
-last_updated: "2026-06-25T21:45:07.662Z"
+last_updated: "2026-06-25T21:54:37.097Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 11 execution started
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 11 (sidecar-scaffold-auth-migration) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 11 execution started
 
@@ -130,6 +130,7 @@ Regression gates (must survive every phase):
 | Phase 09 P08 | 11 | 3 tasks | 9 files |
 | Phase 09 P10 | 75m | 3 tasks | 9 files |
 | Phase 11 P01 | 3 | 3 tasks | 7 files |
+| Phase 11 P03 | 5m | 4 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -291,6 +292,8 @@ Recent decisions affecting current work:
 - [Phase ?]: D22 added: Python schwab-py sidecar as third Railway service; FastAPI + schwab-py v1.5.1; client_from_access_functions token callbacks; Railway private-net isolation
 - [Phase ?]: D16 superseded by D22: dual-refresher rotating-token race + streamer-session ownership require single-process auth; TS OAuth client retired
 - [Phase ?]: D17 lifted (v1.1): streaming scoped to position legs (LEVELONE_OPTION) + ACCT_ACTIVITY; ~500-symbol cap makes full-chain impossible
+- [Phase ?]: D-08 enforced: SidecarChainResponseSchema adapter-local in packages/adapters, not packages/contracts
+- [Phase ?]: OccSymbol branded via parseOccSymbol+formatOccSymbol round-trip — no 'as OccSymbol' type assertion
 
 ### Pending Todos
 
@@ -315,6 +318,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25T21:44:41.797Z
+Last session: 2026-06-25T21:54:31.262Z
 Stopped at: Phase 11 context gathered
 Resume file: .planning/phases/11-sidecar-scaffold-auth-migration/11-CONTEXT.md
