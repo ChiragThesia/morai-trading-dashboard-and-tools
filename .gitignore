@@ -24,3 +24,5 @@ bun.lockb
 
 # Claude agent worktrees
 .claude/worktrees/
+.vercel
+.env*
