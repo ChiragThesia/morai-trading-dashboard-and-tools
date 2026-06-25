@@ -7,6 +7,7 @@ import { ShellWithRouter } from "./components/Shell.tsx";
 // The placeholder `<div>` for screens not yet built prevents empty renders.
 import { Overview } from "./screens/Overview.tsx";
 import { Market } from "./screens/Market.tsx";
+import { Analyzer } from "./screens/Analyzer.tsx";
 
 const COMING_SOON_SCREEN = (name: string): React.ReactNode => (
   <div
@@ -56,7 +57,7 @@ export function App(): React.ReactElement | null {
       <ShellWithRouter
         screens={{
           Overview: <Overview />,
-          Analyzer: COMING_SOON_SCREEN("Analyzer"),
+          Analyzer: <Analyzer />,
           Positions: COMING_SOON_SCREEN("Positions"),
           Journal: COMING_SOON_SCREEN("Journal"),
           Market: <Market />,

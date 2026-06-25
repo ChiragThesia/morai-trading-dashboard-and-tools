@@ -10,7 +10,45 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
+import React from "react";
 import { App } from "./App.tsx";
+
+// Mock uplot-react + CSS — Analyzer and Positions screens use uPlot; matchMedia is not
+// available in jsdom so we stub the module at the top level here.
+vi.mock("uplot-react", () => ({
+  default: (): React.ReactElement => React.createElement("div", { "data-testid": "uplot-mock" }),
+}));
+
+vi.mock("uplot/dist/uPlot.min.css", () => ({}));
+
+// Mock echarts-for-react — canvas init fails under jsdom
+vi.mock("echarts-for-react", () => ({
+  default: (): React.ReactElement => React.createElement("div", { "data-testid": "echarts-stub" }),
+}));
+
+// Mock visx — SVG APIs not available in jsdom
+vi.mock("@visx/shape", () => ({
+  LinePath: (): React.ReactElement => React.createElement("g"),
+  AreaClosed: (): React.ReactElement => React.createElement("g"),
+}));
+
+vi.mock("@visx/gradient", () => ({
+  LinearGradient: (): React.ReactElement => React.createElement("defs"),
+}));
+
+vi.mock("@visx/group", () => ({
+  Group: ({ children }: { children?: React.ReactNode }): React.ReactElement =>
+    React.createElement("g", null, children),
+}));
+
+vi.mock("@visx/scale", () => ({ scaleLinear: () => (v: number) => v }));
+vi.mock("@visx/curve", () => ({ curveMonotoneX: {} }));
+vi.mock("@visx/event", () => ({ localPoint: () => null }));
+
+// Mock data hooks — prevent real API calls from authenticated shell screens
+vi.mock("./hooks/usePositions.ts", () => ({ usePositions: vi.fn(() => ({ data: undefined, isLoading: true, isError: false, error: null })) }));
+vi.mock("./hooks/useGex.ts", () => ({ useGex: vi.fn(() => ({ data: undefined, isLoading: true, isError: false, error: null })) }));
+vi.mock("./hooks/useMarketStatus.ts", () => ({ useMarketStatus: vi.fn(() => ({ data: undefined, isLoading: true })) }));
 
 // Mock useAuthSession — controls the session state directly without supabase internals
 vi.mock("./hooks/useAuthSession.ts", () => ({
