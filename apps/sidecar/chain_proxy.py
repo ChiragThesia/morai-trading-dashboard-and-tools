@@ -193,11 +193,11 @@ async def get_chain(
         resp = await client.get_option_chain(root)
         raw = resp.json()
     except Exception as exc:
-        # Log the error type without exposing token values (T-11-05-02).
+        # Log only the exception type — never str(exc) which may contain response body
+        # text from httpx.HTTPStatusError (token-adjacent content) (T-11-05-02, WR-02).
         logger.error(
-            "chain proxy: get_option_chain failed — %s: %s",
+            "chain proxy: get_option_chain failed — %s (message redacted)",
             type(exc).__name__,
-            exc,
         )
         return JSONResponse(
             status_code=503,
@@ -209,9 +209,8 @@ async def get_chain(
         return chain
     except Exception as exc:
         logger.error(
-            "chain proxy: failed to map schwab response — %s: %s",
+            "chain proxy: failed to map schwab response — %s (message redacted)",
             type(exc).__name__,
-            exc,
         )
         return JSONResponse(
             status_code=503,
