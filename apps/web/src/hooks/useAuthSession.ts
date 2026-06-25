@@ -32,6 +32,21 @@ export function useAuthSession(): Session | null | undefined {
       setAuthToken(s?.access_token ?? null);
       if (s === null) {
         queryClient.clear();
+        // Dev-only auto-login: skip the manual login form locally. Gated on
+        // import.meta.env.DEV so Vite dead-code-eliminates this from prod builds.
+        if (import.meta.env.DEV) {
+          const email = import.meta.env.VITE_DEV_AUTH_EMAIL;
+          const password = import.meta.env.VITE_DEV_AUTH_PASSWORD;
+          if (
+            typeof email === "string" &&
+            email.length > 0 &&
+            typeof password === "string" &&
+            password.length > 0
+          ) {
+            // signInWithPassword fires onAuthStateChange → session updates below.
+            void supabase.auth.signInWithPassword({ email, password });
+          }
+        }
       }
     });
 
