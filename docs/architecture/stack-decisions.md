@@ -326,3 +326,17 @@ before extraction); `monorepo-layout.md` (updated dependency graph).
 **Swap cost**: Medium. Retiring the Python service means writing a TS streamer adapter (the original D17 option 1). The hexagon ports are unchanged either way.
 
 **Revisit trigger**: TS streaming libraries mature enough to cover Schwab's WebSocket protocol without the maintenance burden of hand-rolled reconnect + token injection.
+
+### D22 — GW-01 Relaxation: additive `token_json` column (Phase 11, D-02)
+
+GW-01 was carried into Phase 11 locked as "no schema change." D-02 pre-authorized a single exception: add one `token_json` JSONB column to `broker_tokens`. This is the option that relaxes GW-01.
+
+**Why the relaxation is necessary.** schwab-py's `client_from_access_functions` advises storing its token object as an opaque JSON blob — "don't inspect it." The wrapped blob (`{creation_timestamp, token:{access_token, refresh_token, expires_at, token_type, scope}}`) contains fields beyond the discrete columns the TS side currently stores. Losing those fields in a decompose-only approach risks corrupting the client's OAuth session on the next startup. The blob column is safer.
+
+**Dual-write decompose pattern (D-01 chain-only compatibility).** The sidecar's `token_write_func` performs two writes on every refresh: it stores the full wrapped blob in `token_json` AND decomposes `access_token`/`refresh_token` into the existing encrypted discrete columns (`access_token`, `refresh_token` via `pgp_sym_encrypt`). The TS trader reader continues to read only `access_token` from the discrete column — no TS-side code change. This keeps the D-01 chain-only decision intact: the trader adapter reads `broker_tokens` directly without any sidecar dependency.
+
+**The `refresh_issued_at` invariant.** `refresh_issued_at` anchors the 7-day refresh-token TTL (Phase 4 P02 rule). It is set once during the initial OAuth dance (`client_from_manual_flow`). The sidecar's `token_write_func` NEVER updates `refresh_issued_at` on access-token rotation — only `issued_at` and `expires_at` change on each 30-minute refresh cycle. Resetting `refresh_issued_at` on access rotation would restart the 7-day clock on every rotation and hide the need for a re-dance.
+
+**Column properties.** `token_json` is nullable. It is NULL until the first sidecar OAuth dance seeds it (D-03 one-time prod activation). The sidecar is the sole writer (GW-03). The column is strictly additive — no existing `broker_tokens` column is modified or dropped.
+
+**Cite:** GW-01 relaxation authorized by D-02 in 11-CONTEXT.md. Column added in Phase 11 plan 01; migration applied in Phase 11 plan 02.
