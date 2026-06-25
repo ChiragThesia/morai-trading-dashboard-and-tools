@@ -2,9 +2,10 @@
  * auth-integration.test.ts — auth group integration tests (SC-4 / AUTH-01 / D20).
  *
  * Validates:
- *   (a) No-JWT → 401 on read endpoints (T-08-AUTH1)
+ *   (a) No-JWT → 200 on GET /api/status (public healthcheck — Railway healthcheckPath)
+ *   (a2) No-JWT → 401 on data routes (T-08-AUTH1)
  *   (b) Valid ES256 JWT with correct audience → passes gate (not 401) (T-08-AUTH2)
- *   (c) Tampered / invalid JWT → 401 (T-08-AUTH2)
+ *   (c) Tampered / invalid JWT → 401 on data routes (T-08-AUTH2)
  *   (d) Preflight OPTIONS from WEB_ORIGIN → CORS headers returned,
  *       Access-Control-Allow-Origin = WEB_ORIGIN (not '*') (T-08-AUTH3 / Pitfall 7)
  *   (e) Request from a different origin → no WEB_ORIGIN allow-origin header (T-08-AUTH3)
@@ -82,8 +83,11 @@ beforeAll(async () => {
 
 /**
  * buildAuthApp — build a Hono test app that mirrors the main.ts auth composition:
- *   CORS first → JWKS-authenticated authReadGroup → read routes.
+ *   CORS first → public /api/status → JWKS-authenticated authReadGroup → data routes.
  * Accepts an injectable getKey so tests run fully offline.
+ *
+ * /api/status is mounted PUBLIC (outside the auth group) so Railway's healthcheckPath
+ * can reach it without a JWT token (SC-4 / healthcheck fix).
  */
 function buildAuthApp(getKey: JWTVerifyGetKey) {
   const app = new Hono();
@@ -99,14 +103,16 @@ function buildAuthApp(getKey: JWTVerifyGetKey) {
     }),
   );
 
+  // PUBLIC: /api/status — no JWT required (Railway healthcheck + status page).
+  app.route("/api", statusRoutes(okGetStatus));
+
   // JWKS-authenticated read group (ES256 asymmetric verify — same structure as main.ts).
-  const apiRouter = new Hono()
-    .route("/", statusRoutes(okGetStatus))
-    .route("/analytics", gexRoutes(getGexNull));
+  // Data routes are gated; /api/status is NOT in this group.
+  const dataRouter = new Hono().route("/analytics", gexRoutes(getGexNull));
 
   const authReadGroup = new Hono();
   authReadGroup.use("/*", makeSupabaseJwtAuth({ getKey }));
-  authReadGroup.route("/", apiRouter);
+  authReadGroup.route("/", dataRouter);
   app.route("/api", authReadGroup);
 
   return app;
@@ -137,13 +143,14 @@ async function signWrongKeyJwt(): Promise<string> {
 // ── Auth integration tests ────────────────────────────────────────────────────
 
 describe("Supabase Auth JWT gate — ES256 JWKS verify (SC-4 / AUTH-01 / D20)", () => {
-  it("(a) no Authorization header → 401 on GET /api/status", async () => {
+  it("(a) no Authorization header → 200 on GET /api/status (public healthcheck)", async () => {
     const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/status");
-    expect(res.status).toBe(401);
+    // /api/status is public — Railway healthcheckPath must reach it without a JWT.
+    expect(res.status).toBe(200);
   });
 
-  it("(a) no Authorization header → 401 on GET /api/analytics/gex", async () => {
+  it("(a2) no Authorization header → 401 on GET /api/analytics/gex (data route stays gated)", async () => {
     const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/analytics/gex");
     expect(res.status).toBe(401);
@@ -155,7 +162,7 @@ describe("Supabase Auth JWT gate — ES256 JWKS verify (SC-4 / AUTH-01 / D20)", 
     const res = await app.request("/api/status", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    // Should NOT be 401 (auth passed); actual status is route-dependent (200/404/500)
+    // Should be 200 — route is public so token is irrelevant, but must not 401.
     expect(res.status).not.toBe(401);
   });
 
@@ -179,30 +186,30 @@ describe("Supabase Auth JWT gate — ES256 JWKS verify (SC-4 / AUTH-01 / D20)", 
     expect(header.alg).toBe("ES256");
   });
 
-  it("(c) tampered JWT → 401", async () => {
+  it("(c) tampered JWT → 401 on data route", async () => {
     const app = buildAuthApp(keys.localJwks);
     const token = await signValidJwt();
     // Tamper the signature portion
     const parts = token.split(".");
     const tamperedToken = `${parts[0]}.${parts[1]}.TAMPERED_SIGNATURE_HERE`;
-    const res = await app.request("/api/status", {
+    const res = await app.request("/api/analytics/gex", {
       headers: { Authorization: `Bearer ${tamperedToken}` },
     });
     expect(res.status).toBe(401);
   });
 
-  it("(c) completely invalid JWT string → 401", async () => {
+  it("(c) completely invalid JWT string → 401 on data route", async () => {
     const app = buildAuthApp(keys.localJwks);
-    const res = await app.request("/api/status", {
+    const res = await app.request("/api/analytics/gex", {
       headers: { Authorization: "Bearer not.a.jwt" },
     });
     expect(res.status).toBe(401);
   });
 
-  it("(f) token signed by a DIFFERENT (wrong) ES256 key → 401 (real signature verification)", async () => {
+  it("(f) token signed by a DIFFERENT (wrong) ES256 key → 401 on data route (real signature verification)", async () => {
     const app = buildAuthApp(keys.localJwks);
     const wrongToken = await signWrongKeyJwt();
-    const res = await app.request("/api/status", {
+    const res = await app.request("/api/analytics/gex", {
       headers: { Authorization: `Bearer ${wrongToken}` },
     });
     expect(res.status).toBe(401);
