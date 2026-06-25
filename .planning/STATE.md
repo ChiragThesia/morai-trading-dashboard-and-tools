@@ -6,15 +6,15 @@ current_phase: 09
 current_phase_name: web-dashboard-frontend-react-spa-on-hono-rpc
 status: Ready to plan
 stopped_at: Completed 09-08-PLAN.md
-last_updated: "2026-06-25T01:04:24.319Z"
+last_updated: "2026-06-25T01:29:56.947Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 74
-  completed_plans: 75
-  percent: 89
+  completed_plans: 76
+  percent: 100
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 09 (web-dashboard-frontend-react-spa-on-hono-rpc) — EXECUTING
-Plan: 9 of 10
+Plan: 10 of 10
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
 Last activity: 2026-06-24 — Phase 09 execution started
@@ -108,6 +108,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 09 P06 | 10 | 3 tasks | 9 files |
 | Phase 09 P07 | 9 | 3 tasks | 8 files |
 | Phase 09 P08 | 11 | 3 tasks | 9 files |
+| Phase 09 P10 | 75m | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -263,6 +264,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 09 P08]: classifyRegime pure fn — AMPLIFY when netGammaAtSpot<0, DAMPEN when >=0; drives regime strip + GEX note text
 - [Phase ?]: [Phase 09 P08]: GexBars ToggleGroup uses base-ui value=[] array API (shadcn toggle-group wraps @base-ui/react/toggle-group, not Radix)
 - [Phase ?]: [Phase 09 P08]: GammaProfile uses two AreaClosed instances clipped to zero line for teal/coral fills — no SVG clipPath required
+- [Phase ?]: D-01 enforced: bsmPrice/bsmGreeks shared kernel across Analyzer and server for P&L consistency
+- [Phase ?]: OCC strike inline extraction avoids circular import in scenario-engine
 
 ### Pending Todos
 
@@ -286,6 +289,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25T01:04:24.309Z
+Last session: 2026-06-25T01:29:21.017Z
 Stopped at: Completed 09-08-PLAN.md
 Resume file: None

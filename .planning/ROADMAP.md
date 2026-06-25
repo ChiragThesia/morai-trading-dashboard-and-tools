@@ -28,7 +28,7 @@ Cross-cutting constraints active from Phase 1:
 - [x] **Phase 6: Derived Analytics** - Skew + term-structure observations, API + MCP exposed (verified 4/4 2026-06-22; 8 plans + 1 gap round; merged PR #5; prod migration 0007 applied + verified)
 - [x] **Phase 7: Trade History** - `get_transactions` MCP tool (date-ranged) + historical `sync-transactions` backfill (chunked, idempotent) — pull/journal Schwab trade history (verified 2/2 offline 2026-06-22; 2 plans + 1 review round; live pull needs Schwab auth + healthy deploy)
 - [x] **Phase 8: Web Dashboard Backend** - GEX analytics endpoint + Zod contract (scheduled snapshot job), Hono `AppType` export for typed RPC, Supabase Auth on read endpoints + CORS (completed 2026-06-24)
-- [ ] **Phase 9: Web Dashboard Frontend** - React + Vite SPA (apps/web) on Vercel: 5 screens over typed Hono RPC, TanStack auto-poll, Supabase Auth login
+- [x] **Phase 9: Web Dashboard Frontend** - React + Vite SPA (apps/web) on Vercel: 5 screens over typed Hono RPC, TanStack auto-poll, Supabase Auth login (completed 2026-06-25)
 
 ## Phase Details
 
@@ -478,7 +478,7 @@ render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8)
   4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
      delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
 
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
@@ -513,4 +513,4 @@ Plans:
 
 **Wave 8** *(Analyzer LAST — hardest; blocked on 09-06/09-08 components + 09-09 parser)*
 
-- [ ] 09-10-PLAN.md — Analyzer 3-col cockpit: client-side live re-pricing (scenario engine over @morai/quant) + payoff z-order + heatmap + roll simulator (D-01, D-02, D-04, UI-01)
+- [x] 09-10-PLAN.md — Analyzer 3-col cockpit: client-side live re-pricing (scenario engine over @morai/quant) + payoff z-order + heatmap + roll simulator (D-01, D-02, D-04, UI-01)
