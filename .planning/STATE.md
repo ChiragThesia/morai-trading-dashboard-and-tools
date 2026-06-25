@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.1
-milestone_name: Real-Time Schwab Streaming
+milestone_name: — Real-Time Schwab Streaming
 current_phase: 10
-current_phase_name: Stack Decisions Doc Update
+current_phase_name: Stack Decisions Doc Update ✓ COMPLETE
 status: Phase 10 complete — ready to plan Phase 11
-stopped_at: Phase 10 verified (VERIFICATION passed 4/4); next is Phase 11 (sidecar + auth migration)
-last_updated: "2026-06-25T17:24:25.397Z"
+stopped_at: Phase 11 context gathered
+last_updated: "2026-06-25T20:07:56.571Z"
 last_activity: 2026-06-25
-last_activity_desc: Phase 10 complete — stack-decisions doc edit verified 4/4
+last_activity_desc: Phase 10 complete (D16 superseded, D17 lifted, D22 sidecar decision recorded)
 progress:
-  total_phases: 6
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 17
+  total_phases: 9
+  completed_phases: 9
+  total_plans: 74
+  completed_plans: 76
+  percent: 100
 ---
 
 # Project State
@@ -314,6 +314,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25T17:23:57.809Z
-Stopped at: v1.1 roadmap created (Phases 10-15); ready to plan Phase 10
-Resume file: None
+Last session: 2026-06-25T20:07:56.558Z
+Stopped at: Phase 11 context gathered
+Resume file: .planning/phases/11-sidecar-scaffold-auth-migration/11-CONTEXT.md
