@@ -191,7 +191,9 @@ def _patch_app_state(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_market_client = unittest.mock.AsyncMock()
     mock_market_client.get_option_chain.return_value = mock_resp
 
-    app.state.market_client = mock_market_client
-    app.state.degraded = False
-    app.state.db_url = _DB_URL
-    app.state.market_app_id = "market"
+    # Use monkeypatch.setattr so pytest registers teardown undo-hooks and state
+    # is restored after each test regardless of fixture scope changes (WR-06).
+    monkeypatch.setattr(app.state, "market_client", mock_market_client)
+    monkeypatch.setattr(app.state, "degraded", False)
+    monkeypatch.setattr(app.state, "db_url", _DB_URL)
+    monkeypatch.setattr(app.state, "market_app_id", "market")
