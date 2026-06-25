@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 09
 current_phase_name: web-dashboard-frontend-react-spa-on-hono-rpc
 status: Ready to plan
-stopped_at: Completed 09-07-PLAN.md
-last_updated: "2026-06-25T00:48:52.381Z"
+stopped_at: Completed 09-08-PLAN.md
+last_updated: "2026-06-25T01:04:24.319Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 74
-  completed_plans: 74
+  completed_plans: 75
   percent: 89
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 09 (web-dashboard-frontend-react-spa-on-hono-rpc) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
 Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
 Last activity: 2026-06-24 — Phase 09 execution started
@@ -107,6 +107,7 @@ Progress: [██████████] Phase 05 complete · milestone 92% (4
 | Phase 09 P09 | 10 | 2 tasks | 4 files |
 | Phase 09 P06 | 10 | 3 tasks | 9 files |
 | Phase 09 P07 | 9 | 3 tasks | 8 files |
+| Phase 09 P08 | 11 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -259,6 +260,9 @@ Recent decisions affecting current work:
 - [Phase ?]: hasSnapshots authoritative for classifyTradeHistory (JOURNAL-01)
 - [Phase ?]: DialogClose uses render= prop (not asChild) for base-ui Dialog API
 - [Phase ?]: Journal receives trades as props — real trade list wire-up deferred to Plan 09-10
+- [Phase ?]: [Phase 09 P08]: classifyRegime pure fn — AMPLIFY when netGammaAtSpot<0, DAMPEN when >=0; drives regime strip + GEX note text
+- [Phase ?]: [Phase 09 P08]: GexBars ToggleGroup uses base-ui value=[] array API (shadcn toggle-group wraps @base-ui/react/toggle-group, not Radix)
+- [Phase ?]: [Phase 09 P08]: GammaProfile uses two AreaClosed instances clipped to zero line for teal/coral fills — no SVG clipPath required
 
 ### Pending Todos
 
@@ -282,6 +286,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25T00:48:52.371Z
-Stopped at: Completed 09-07-PLAN.md
+Last session: 2026-06-25T01:04:24.309Z
+Stopped at: Completed 09-08-PLAN.md
 Resume file: None
