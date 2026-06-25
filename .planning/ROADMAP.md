@@ -513,7 +513,7 @@ fallback during the 7-day re-auth gap).
   4. `apps/server` is the only process that can reach the sidecar (Railway private network / service binding); the sidecar has no public ingress route (GW-05).
   5. A Postgres advisory lock is held by the sidecar's StreamClient before `login()` is called; a second sidecar instance (simulated restart) cannot acquire the lock and logs a clear error rather than opening a second Schwab streaming session (GW-04).
 
-**Plans**: 4/7 plans executed
+**Plans**: 5/7 plans executed
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
 
@@ -530,7 +530,7 @@ Plans:
 
 **Wave 4** *(blocked on 11-04)*
 
-- [ ] 11-05-PLAN.md — Python FastAPI service (lifespan: lock→2 clients→not-seeded degrade) + /sidecar/health + /sidecar/chain + Dockerfile + Railway internal-only service + deploy checkpoint (GW-01, GW-02, GW-05)
+- [x] 11-05-PLAN.md — Python FastAPI service (lifespan: lock→2 clients→not-seeded degrade) + /sidecar/health + /sidecar/chain + Dockerfile + Railway internal-only service + deploy checkpoint (GW-01, GW-02, GW-05)
 
 **Wave 5** *(blocked on 11-03 + 11-05)*
 
@@ -666,7 +666,7 @@ requires Phase 11 complete (sidecar health endpoint).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
-| 11. Sidecar Scaffold + Auth Migration | 4/7 | In Progress|  |
+| 11. Sidecar Scaffold + Auth Migration | 5/7 | In Progress|  |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
 | 13. COT Adapter | 0/TBD | Not started | - |
 | 14. FRED Expansion | 0/TBD | Not started | - |
