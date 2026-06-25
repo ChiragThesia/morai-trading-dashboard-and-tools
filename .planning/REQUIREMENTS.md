@@ -124,7 +124,7 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 
 ### Docs
 
-- [ ] **DOC-01**: `docs/architecture/stack-decisions.md` is updated before sidecar code — D16 (TS OAuth client) superseded, D17 (streaming deferred) lifted, and a new decision recorded for the Python sidecar as a third Railway service.
+- [x] **DOC-01**: `docs/architecture/stack-decisions.md` is updated before sidecar code — D16 (TS OAuth client) superseded, D17 (streaming deferred) lifted, and a new decision recorded for the Python sidecar as a third Railway service.
 
 ## v2 Requirements
 
@@ -203,7 +203,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | ANLY-03 | Phase 6 | Complete |
 | BRK-03 | Phase 7 | Complete |
 | BRK-04 | Phase 7 | Complete |
-| DOC-01 | Phase 10 | Pending |
+| DOC-01 | Phase 10 | Complete |
 | GW-01 | Phase 11 | Pending |
 | GW-02 | Phase 11 | Pending |
 | GW-03 | Phase 11 | Pending |

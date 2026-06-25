@@ -41,7 +41,7 @@ Cross-cutting regression gates (must never regress across any phase):
 
 ### Milestone v1.1 — Real-Time Schwab Streaming
 
-- [ ] **Phase 10: Stack Decisions Doc Update** - Record Python sidecar as 3rd Railway service; lift D17 (streaming deferred); supersede D16 (TS OAuth client)
+- [x] **Phase 10: Stack Decisions Doc Update** - Record Python sidecar as 3rd Railway service; lift D17 (streaming deferred); supersede D16 (TS OAuth client) (completed 2026-06-25)
 - [ ] **Phase 11: Sidecar Scaffold + Auth Migration** - schwab-py sidecar deployed; TS refresh-tokens job retired; sidecar is sole token owner; journal re-sourced through sidecar REST proxy
 - [ ] **Phase 12: Streaming + TS Fan-Out** - LEVELONE_OPTION + ACCT_ACTIVITY ingestion; `GET /api/stream` with Supabase JWT edge; Zod stream contracts; cold-start reconcile
 - [ ] **Phase 13: COT Adapter** - Weekly `fetch-cot` job; `cot_observations` table; `GET /api/analytics/cot` + MCP `get_cot`
@@ -488,10 +488,10 @@ and giving every subsequent phase a stable decision record to cite.
   3. `docs/architecture/stack-decisions.md` contains a new decision for the Python schwab-py sidecar as the third Railway service (`apps/sidecar/`), documenting the FastAPI + schwab-py stack, the `broker_tokens` Postgres callback pattern, and the Railway private-network isolation requirement.
   4. `docs/TOPIC-MAP.md` is updated to reference any new sidecar architecture doc if one is created alongside the decision entries.
 
-**Plans**: 1 plan
+**Plans**: 1/1 plans complete
 Plans:
 
-- [ ] 10-01-PLAN.md — Supersede D16 + lift D17 + add D22 (schwab-py sidecar) in stack-decisions.md; reconcile 3 cross-refs in deployment.md/jobs.md (DOC-01)
+- [x] 10-01-PLAN.md — Supersede D16 + lift D17 + add D22 (schwab-py sidecar) in stack-decisions.md; reconcile 3 cross-refs in deployment.md/jobs.md (DOC-01)
 
 ### Phase 11: Sidecar Scaffold + Auth Migration
 
@@ -640,7 +640,7 @@ requires Phase 11 complete (sidecar health endpoint).
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Stack Decisions Doc Update | 0/1 | Not started | - |
+| 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
 | 11. Sidecar Scaffold + Auth Migration | 0/TBD | Not started | - |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
 | 13. COT Adapter | 0/TBD | Not started | - |

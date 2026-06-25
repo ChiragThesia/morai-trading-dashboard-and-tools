@@ -1,18 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.1
-milestone_name: Real-Time Schwab Streaming
-current_phase: "10"
-current_phase_name: stack-decisions-doc-update
+milestone_name: — Real-Time Schwab Streaming
+current_phase: 10
+current_phase_name: Stack Decisions Doc Update
 status: Ready to execute
-last_updated: "2026-06-25T00:00:00.000Z"
+stopped_at: v1.1 roadmap created (Phases 10-15); ready to plan Phase 10
+last_updated: "2026-06-25T17:24:25.397Z"
 last_activity: 2026-06-25
+last_activity_desc: Phase 10 planned (research + validation + plan, all gates green)
 progress:
-  total_phases: 6
-  completed_phases: 0
-  total_plans: 1
-  completed_plans: 0
-  percent: 0
+  total_phases: 9
+  completed_phases: 9
+  total_plans: 74
+  completed_plans: 76
+  percent: 100
 ---
 
 # Project State
@@ -36,16 +38,19 @@ Last activity: 2026-06-25 — Phase 10 planned (research + validation + plan, al
 **6 phases, 18 requirements (GW-01..05, STRM-01..05, JRNL-02, COT-01..02, MAC-01..02, AUTH-05..06, DOC-01)**
 
 Strict dependency chain:
+
 - Phase 10 (DOC-01) → Phase 11 (GW-01..05, JRNL-02) → Phase 12 (STRM-01..05) → Phase 15 (AUTH-05..06)
 - Phases 13 (COT-01..02) and 14 (MAC-01..02) are independent; can run parallel with 12 and each other.
 
 Key risks carried into planning:
+
 1. Dual-refresher rotating-token race — Phase 11 must retire TS refresh job BEFORE sidecar goes active.
 2. One-streamer-per-account limit — Postgres advisory lock required before any streaming work.
 3. 7-day headless re-auth gap — CBOE fallback must be confirmed live before Phase 12 go-live.
 4. ACCT_ACTIVITY message types undocumented — discover empirically in Phase 12; do not hard-code.
 
 Regression gates (must survive every phase):
+
 - SPX OI=0 / SPY proxy (~10.048×)
 - CBOE timestamps are UTC (not ET)
 - GEX put-sign (negative gamma for puts)
@@ -282,6 +287,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 09 P08]: GammaProfile uses two AreaClosed instances clipped to zero line for teal/coral fills — no SVG clipPath required
 - [Phase ?]: D-01 enforced: bsmPrice/bsmGreeks shared kernel across Analyzer and server for P&L consistency
 - [Phase ?]: OCC strike inline extraction avoids circular import in scenario-engine
+- [Phase ?]: D22 added: Python schwab-py sidecar as third Railway service; FastAPI + schwab-py v1.5.1; client_from_access_functions token callbacks; Railway private-net isolation
+- [Phase ?]: D16 superseded by D22: dual-refresher rotating-token race + streamer-session ownership require single-process auth; TS OAuth client retired
+- [Phase ?]: D17 lifted (v1.1): streaming scoped to position legs (LEVELONE_OPTION) + ACCT_ACTIVITY; ~500-symbol cap makes full-chain impossible
 
 ### Pending Todos
 
@@ -306,6 +314,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25
+Last session: 2026-06-25T17:23:57.809Z
 Stopped at: v1.1 roadmap created (Phases 10-15); ready to plan Phase 10
 Resume file: None
