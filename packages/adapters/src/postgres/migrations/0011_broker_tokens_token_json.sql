@@ -1,0 +1,1 @@
+ALTER TABLE "broker_tokens" ADD COLUMN "token_json" jsonb;
