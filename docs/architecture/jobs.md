@@ -35,7 +35,7 @@ Notes carried from old dashboard:
   TODO — fixed here from day one). Jobs no-op gracefully on holidays.
 - **Token refresh at 04:00 ET** — keeps access tokens fresh outside market hours. Does NOT
   extend the refresh token: Schwab refresh tokens hard-expire 7 days after issuance →
-  weekly interactive re-auth is mandatory (`deployment.md` + `stack-decisions.md` D16).
+  weekly interactive re-auth is mandatory (`deployment.md` + `stack-decisions.md` D22).
   On `invalid_grant`, Schwab jobs pause gracefully and status flags AUTH_EXPIRED.
 
 ## sync-fills (Phase 5, JOB-01 / JRNL-01)

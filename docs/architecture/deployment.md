@@ -50,11 +50,10 @@ when UI work begins (D19), so it is a distinct origin (CORS configured on the AP
 - Tokens (access + refresh) must survive restarts → **tokens stored in Supabase Postgres**
   (`broker_tokens` table, encrypted at rest with app-level key from `TOKEN_ENCRYPTION_KEY`).
   Railway compute is stateless and ephemeral; the database is the one source of truth — any
-  service can refresh, no volume coordination. A future Python sidecar (schwab-py, D17) reads the
-  same row via custom token access functions.
+  service can refresh, no volume coordination. The schwab-py sidecar (D22) reads the same row via `client_from_access_functions` callbacks.
 - `refresh-tokens` job (04:00 ET daily) keeps **access** tokens fresh. It does NOT extend the
   refresh token: **Schwab refresh tokens expire 7 days after issuance, hard, no sliding window.**
-- **Weekly re-auth is mandatory and designed in** (see `stack-decisions.md` D16):
+- **Weekly re-auth is mandatory and designed in** (see `stack-decisions.md` D22):
   - On `invalid_grant`: Schwab-dependent jobs pause gracefully, status flags AUTH_EXPIRED,
     UI banner + MCP `get_status` surface it. One app failing must not block the other.
   - Re-auth = one command run locally (interactive browser OAuth, port of trade-advisor

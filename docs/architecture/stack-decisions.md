@@ -22,12 +22,13 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D13 | Monorepo | Bun workspaces | Low | — |
 | D14 | Validation | Zod everywhere (API edges, env, external API responses) | Medium | — |
 | D15 | Lint/boundaries | ESLint flat config + boundary enforcement | — | — |
-| D16 | Schwab auth | Own TS OAuth client (vendored, port of trade-advisor `auth.ts`); tokens in Postgres | Low | Schwab changes OAuth contract |
-| D17 | Market data streaming | Deferred — poll-based jobs cover the journal use-case | New driven port + adapter | Need for sub-minute live data → TS streamer adapter OR schwab-py Python sidecar |
+| D16 | Schwab auth | **Superseded by D22.** TS OAuth client retired; the schwab-py sidecar owns all Schwab auth. | — | — |
+| D17 | Market data streaming | **Lifted (v1.1)** — the schwab-py sidecar streams position legs + fills (not the full chain); see D22 | Low (sidecar owns the session) | Full-chain streaming needed (impossible at the ~500-symbol cap) |
 | D18 | DB provider / host | **Supabase** (managed Postgres 16) | Low (connection string) | Need Supabase Realtime (sub-second push) OR cost/limits |
 | D20 | API auth | Supabase Auth JWT (HS256, offline verify via `hono/jwt`) + exact-origin CORS | Low (middleware seam) | Need multi-tenant auth OR provider swap |
 | D19 | Web host + build order | **Vercel** for `apps/web`, **deferred**; backend + data layer built first | Low | UI work begins |
 | D21 | BSM kernel leaf | `packages/quant` — pure math leaf imported by both `core` and `web` (see D21 section) | Low (call sites + tsconfig refs + ESLint boundary) | — |
+| D22 | Python schwab-py sidecar | `apps/sidecar/` — FastAPI + schwab-py; sole Schwab auth + REST proxy + streamer; internal Railway network only | Medium (Python service + Railway topology) | TS stack fully covers Schwab streaming natively |
 
 ## D1 — Bun
 
@@ -148,6 +149,12 @@ The dependency rule is enforced mechanically, not by review vigilance:
 
 ## D16 — Schwab auth: own TS OAuth client, tokens in Postgres
 
+**Superseded by D22.** The schwab-py sidecar is now the sole Schwab authenticator; the vendored TS OAuth client and the TS `refresh-tokens` job are retired.
+
+**Why the reversal:**
+- **Dual-refresher rotating-token race**: Schwab invalidates the old refresh token on each refresh. Two refreshers — the TS `refresh-tokens` job and the sidecar — racing causes `invalid_grant` within one 30-min cycle. One process must own the token lifecycle.
+- **Streamer-session ownership**: the sidecar owns the one allowed Schwab websocket session. The token owner and the session owner must be the same process. schwab-py handles both by design.
+
 **Why**: The flow is plain OAuth2 (authorization_code + refresh grant, Basic auth header,
 two apps: trader + market). Proven implementation exists — trade-advisor `auth.ts` with
 `setup`/`refresh`/`status`/`doctor` subcommands. Port it into the `brokerage` context +
@@ -168,20 +175,15 @@ Consequences (designed in, see `deployment.md`):
 app-side. Any future consumer (including a Python sidecar — schwab-py supports custom
 token read/write functions) reads the same row. No file/volume coordination.
 
-## D17 — Streaming: deferred
+## D17 — Streaming: lifted (v1.1)
 
-**Why deferred**: journal cadence is 30-min snapshots; scheduled pulls cover it.
-Streaming adds a long-lived websocket process for no current consumer.
+The streaming deferral is lifted in v1.1 for account/position data.
 
-**When the trigger fires** (sub-minute live data need), two adapter options behind a
-`ForStreamingQuotes` driven port — hexagon unchanged either way:
-1. **TS-native streamer adapter** — Schwab streamer is documented websocket + JSON
-   (login with access token, SUBS commands). Keeps the stack single-language.
-2. **Python sidecar with schwab-py** — separate Railway service running schwab-py's
-   `StreamClient`, writing observations to Postgres. Reads tokens from `broker_tokens`
-   via custom access functions → one token source, no refresh races.
+Streaming is scoped to LEVELONE_OPTION for open position legs (typically 2–30 symbols) plus ACCT_ACTIVITY for fill events.
 
-Decide at trigger time; default lean is (1) to avoid a second language in the repo.
+Full SPX chain streaming stays impossible: the streamer caps at ~500 symbols vs the 2,000–5,000 SPX contracts. The chain snapshot and GEX stay REST jobs.
+
+One streamer session per account. The schwab-py sidecar (D22) owns that single session.
 
 ## D18 — Supabase as the database provider
 
@@ -306,3 +308,21 @@ references and the ESLint boundary element (`type: "quant"`) are added. No logic
 
 **References**: Phase 9 CONTEXT.md D-01; `packages/core/src/journal/domain/bsm.ts` (source file
 before extraction); `monorepo-layout.md` (updated dependency graph).
+
+## D22 — Python schwab-py sidecar: third Railway service
+
+**What**: A third Railway service at `apps/sidecar/`. Python 3.10+. FastAPI + uvicorn + sse-starlette. schwab-py v1.5.1.
+
+**Why Python, not TS**: schwab-py's `StreamClient` is an asyncio-native WebSocket client that handles Schwab's streamer protocol (login, SUBS commands, reconnect). Hand-rolling this in TS is the pain the sidecar avoids. FastAPI's native asyncio bridges the `StreamClient` event loop to an SSE endpoint without thread hacks.
+
+**Token pattern**: `client_from_access_functions` with custom `token_read`/`token_write` callbacks that read and write the existing `broker_tokens` Postgres row (pgcrypto-encrypted, same as the TS side). No schema change. The sidecar is the sole writer; the TS `refresh-tokens` job is retired (D16 superseded).
+
+**Streaming scope**: LEVELONE_OPTION (position legs only) + ACCT_ACTIVITY. The ~500-symbol cap makes full-chain streaming impossible. GEX and journal snapshots stay REST jobs.
+
+**Isolation**: Railway private network — the sidecar has no public ingress. Only `apps/server` reaches it. The sidecar pushes SSE; the TS server fans out to browser clients with Supabase JWT verification at the server edge (D20). [ASSUMED: Railway private-networking specifics confirmed at Phase 11 infra setup]
+
+**Why no message broker**: sidecar → one TS server is a one-writer, one-reader path. Direct SSE is sufficient. No Redis/Kafka/RabbitMQ.
+
+**Swap cost**: Medium. Retiring the Python service means writing a TS streamer adapter (the original D17 option 1). The hexagon ports are unchanged either way.
+
+**Revisit trigger**: TS streaming libraries mature enough to cover Schwab's WebSocket protocol without the maintenance burden of hand-rolled reconnect + token injection.
