@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.1
-milestone_name: — Real-Time Schwab Streaming
+milestone_name: Real-Time Schwab Streaming
 current_phase: 10
 current_phase_name: Stack Decisions Doc Update
-status: Ready to execute
-stopped_at: v1.1 roadmap created (Phases 10-15); ready to plan Phase 10
+status: Phase 10 complete — ready to plan Phase 11
+stopped_at: Phase 10 verified (VERIFICATION passed 4/4); next is Phase 11 (sidecar + auth migration)
 last_updated: "2026-06-25T17:24:25.397Z"
 last_activity: 2026-06-25
-last_activity_desc: Phase 10 planned (research + validation + plan, all gates green)
+last_activity_desc: Phase 10 complete — stack-decisions doc edit verified 4/4
 progress:
-  total_phases: 9
-  completed_phases: 9
-  total_plans: 74
-  completed_plans: 76
-  percent: 100
+  total_phases: 6
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 17
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
-Phase: 10 — Stack Decisions Doc Update
-Plan: 1 plan (10-01) — planned + plan-checker PASSED
-Status: Ready to execute Phase 10 (`/gsd-execute-phase 10`)
-Last activity: 2026-06-25 — Phase 10 planned (research + validation + plan, all gates green)
+Phase: 10 — Stack Decisions Doc Update ✓ COMPLETE
+Plan: 1/1 (10-01) — executed (e992c63, 20718ac) + verified 4/4 (10-VERIFICATION.md)
+Status: Phase 10 complete. Next: Phase 11 — Sidecar Scaffold + Auth Migration (the hard one)
+Last activity: 2026-06-25 — Phase 10 complete (D16 superseded, D17 lifted, D22 sidecar decision recorded)
 
 ## Milestone v1.1 Summary
 
