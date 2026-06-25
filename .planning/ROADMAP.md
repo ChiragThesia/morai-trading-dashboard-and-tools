@@ -488,7 +488,10 @@ and giving every subsequent phase a stable decision record to cite.
   3. `docs/architecture/stack-decisions.md` contains a new decision for the Python schwab-py sidecar as the third Railway service (`apps/sidecar/`), documenting the FastAPI + schwab-py stack, the `broker_tokens` Postgres callback pattern, and the Railway private-network isolation requirement.
   4. `docs/TOPIC-MAP.md` is updated to reference any new sidecar architecture doc if one is created alongside the decision entries.
 
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+
+- [ ] 10-01-PLAN.md — Supersede D16 + lift D17 + add D22 (schwab-py sidecar) in stack-decisions.md; reconcile 3 cross-refs in deployment.md/jobs.md (DOC-01)
 
 ### Phase 11: Sidecar Scaffold + Auth Migration
 
@@ -637,7 +640,7 @@ requires Phase 11 complete (sidecar health endpoint).
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Stack Decisions Doc Update | 0/TBD | Not started | - |
+| 10. Stack Decisions Doc Update | 0/1 | Not started | - |
 | 11. Sidecar Scaffold + Auth Migration | 0/TBD | Not started | - |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
 | 13. COT Adapter | 0/TBD | Not started | - |
