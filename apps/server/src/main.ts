@@ -39,8 +39,9 @@ import {
 } from "@morai/core";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
-import { jwt } from "hono/jwt";
 import { cors } from "hono/cors";
+import { createRemoteJWKSet } from "jose";
+import { makeSupabaseJwtAuth } from "./adapters/http/supabase-auth.ts";
 import { bearerAuth } from "./adapters/mcp/bearer.ts";
 import { statusRoutes } from "./adapters/http/status.routes.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
@@ -205,11 +206,12 @@ const apiRouter = new Hono()
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex));
 
-// Wrap the read router in a Supabase-Auth JWT group (HS256 offline verify — no network call).
-// D-02 scope: ONLY /api/analytics/* + /api/status + /api/journal + /api/positions etc.
+// Wrap the read router in a Supabase-Auth JWT group (asymmetric JWKS verify — ES256).
+// D20 / D-02 scope: ONLY /api/analytics/* + /api/status + /api/journal + /api/positions etc.
 // The /api/jobs/* bearerAuth group and /mcp mount are NOT in this group (D-02 anti-pattern).
+const supabaseJwksUrl = new URL(`${config.SUPABASE_URL}/auth/v1/.well-known/jwks.json`);
 const authReadGroup = new Hono();
-authReadGroup.use("/*", jwt({ secret: config.SUPABASE_JWT_SECRET, alg: "HS256" }));
+authReadGroup.use("/*", makeSupabaseJwtAuth({ getKey: createRemoteJWKSet(supabaseJwksUrl) }));
 authReadGroup.route("/", apiRouter);
 app.route("/api", authReadGroup);
 
