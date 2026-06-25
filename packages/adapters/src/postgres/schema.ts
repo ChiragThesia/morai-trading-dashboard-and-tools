@@ -223,6 +223,11 @@ export const brokerTokens = pgTable("broker_tokens", {
   // server reads it via readTokenFreshness — separate processes require DB persistence).
   // NEVER contains token values — only appId + error reason (T-05-11).
   lastRefreshError: text("last_refresh_error"),
+  // GW-01 relaxation (D-02, Phase 11 plan 01): full schwab-py wrapped token blob (opaque);
+  // sidecar is sole writer (GW-03); decomposed access/refresh also kept in the discrete
+  // encrypted columns above for the TS reader (D-01). NULL until first sidecar OAuth dance
+  // seeds it (D-03). refresh_issued_at is never touched by the sidecar write callback.
+  tokenJson: jsonb("token_json"),
 }).enableRLS();
 
 // ─── 9. calendar_events — L1 trade ledger (Phase 5) ──────────────────────────
