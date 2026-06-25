@@ -15,6 +15,43 @@ queryable.
 trade?" — collected automatically, never hand-edited, queryable by API and by Claude Code. If
 everything else fails, this must work.
 
+## Current Milestone: v1.1 Real-Time Schwab Streaming
+
+**Goal:** One Python schwab-py sidecar owns all Schwab data (REST + stream) behind a single
+auth and a single interface; live positions never go stale; the journal is re-sourced through
+the sidecar; COT positioning and an expanded FRED macro layer are added; everything is exposed
+via typed API + a live stream the future UI rebuild consumes.
+
+**Target features:**
+- **schwab-py sidecar = sole Schwab boundary** — OAuth, encrypted token store, auto-refresh,
+  REST (chain snapshots, transactions, gap-fill) + one streamer websocket. One auth, one weekly
+  re-auth.
+- **Kill 30-min access-token staleness** (schwab-py auto-refresh) + **real-time** marks /
+  per-leg greeks / fills via the stream.
+- **TS server fan-out** — one upstream Schwab session → authed SSE/WS to N browsers, Supabase
+  JWT at the edge.
+- **Schwab auth-ownership migration** — TS Schwab REST adapters swap token source
+  `broker_tokens → sidecar` (single refresher, no rotating-token race).
+- **Journal kept**, re-sourced through the sidecar; **CBOE** no-auth chain fallback retained for
+  the 7-day re-auth gap.
+- **CFTC COT** — new no-auth adapter + positioning analytic (data/API).
+- **FRED expanded** — macro series (rates curve / Fed funds / VIX / key indicators) + switch on
+  the unset prod key.
+- **7-day re-auth smoothing** — alert before expiry + one-click browser re-auth.
+
+**Key context:**
+- ONE auth burden: Schwab OAuth (weekly re-auth, Schwab server limit — unavoidable, sidecar
+  centralizes it). CBOE + COT are auth-free; FRED is a set-once free key.
+- Historical option chains/greeks are **not** sold by Schwab or cleanly free anywhere — the
+  journal self-collects them forward on the same sidecar/auth (already collecting since Jun-12).
+- Streaming is **additive** — does NOT replace the snapshot journal / GEX batch. Schwab allows
+  ~1 streamer session/account → sidecar owns it.
+- Reverses **D17** (websocket streaming deferred) for account/position data.
+- **UI panels (macro, COT, live positions) are a separate UI-rebuild milestone** that consumes
+  v1.1's endpoints — v1.1 ships data/backend/contracts only.
+- Stack change: **Python** in a TS monorepo + a **3rd Railway service** → requires
+  `docs/architecture/stack-decisions.md` update first (docs-before-code).
+
 ## Requirements
 
 ### Validated
@@ -121,4 +158,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-24 after Phase 8 (web-dashboard backend — GEX endpoint, Supabase Auth + CORS, AppType RPC export).*
+*Last updated: 2026-06-25 — started milestone v1.1 (Real-Time Schwab Streaming: schwab-py sidecar, single-auth gateway, live stream, COT + expanded FRED).*

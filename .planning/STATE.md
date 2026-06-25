@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-current_phase: 09
-current_phase_name: web-dashboard-frontend-react-spa-on-hono-rpc
-status: Ready to plan
-stopped_at: Completed 09-08-PLAN.md
-last_updated: "2026-06-25T01:29:56.947Z"
-last_activity: 2026-06-24
-last_activity_desc: Phase 09 execution started
+milestone: v1.1
+milestone_name: Real-Time Schwab Streaming
+status: planning
+last_updated: "2026-06-25T13:56:07.440Z"
+last_activity: 2026-06-25
 progress:
-  total_phases: 9
-  completed_phases: 9
-  total_plans: 74
-  completed_plans: 76
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,13 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 09 (web-dashboard-frontend-react-spa-on-hono-rpc) — EXECUTING
-Plan: 10 of 10
-UAT: UAT-1 (live MCP transport) PASS 2026-06-18 (PR #2). UAT-2/3 pending — need a registered prod test calendar + RTH snapshot (ops-gated, non-blocking).
-Next: 06-02 — drizzle generate + 0007_analytics_observations.sql migration over the three new tables.
-Last activity: 2026-06-24 — Phase 09 execution started
-
-Progress: [██████████] Phase 05 complete · milestone 92% (40/39 plans)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-25 — Milestone v1.1 started
 
 ## Performance Metrics
 
