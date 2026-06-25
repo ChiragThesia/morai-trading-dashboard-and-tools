@@ -221,9 +221,23 @@ describe("Analyzer screen", () => {
     vi.clearAllMocks();
   });
 
+  // regression: Analyzer:692 — positionsQuery.data is {positions:[…]}, NOT an array.
+  // The old code `positionsQuery.data ?? []` would call [].map on an object and crash.
+  it("regression: does NOT crash when positionsQuery.data is {positions:[…]} (object, not array)", () => {
+    vi.mocked(usePositions).mockReturnValue(
+      makePositionsResult({ positions: [LIVE_BROKER_POS] }),
+    );
+    vi.mocked(useGex).mockReturnValue(makeGexResult(SAMPLE_GEX));
+
+    // Must not throw
+    expect(() => renderWithProvider(<Analyzer />)).not.toThrow();
+    // Live position row must be visible
+    expect(screen.getByText(/●live|live/)).toBeTruthy();
+  });
+
   // (a) Render with one live position → chart region + greek strips render
   it("(a) renders payoff chart region and greek strips with one live position", () => {
-    vi.mocked(usePositions).mockReturnValue(makePositionsResult([LIVE_BROKER_POS]));
+    vi.mocked(usePositions).mockReturnValue(makePositionsResult({ positions: [LIVE_BROKER_POS] }));
     vi.mocked(useGex).mockReturnValue(makeGexResult(SAMPLE_GEX));
 
     renderWithProvider(<Analyzer />);
@@ -237,7 +251,7 @@ describe("Analyzer screen", () => {
 
   // (b) Spot slider change → re-prices locally, NO network call fires
   it("(b) re-prices scenario on slider change without firing any network calls", () => {
-    vi.mocked(usePositions).mockReturnValue(makePositionsResult([LIVE_BROKER_POS]));
+    vi.mocked(usePositions).mockReturnValue(makePositionsResult({ positions: [LIVE_BROKER_POS] }));
     vi.mocked(useGex).mockReturnValue(makeGexResult(SAMPLE_GEX));
 
     renderWithProvider(<Analyzer />);
@@ -261,7 +275,7 @@ describe("Analyzer screen", () => {
 
   // (c) "+ add from paste" with canonical TOS string → success message + new row
   it("(c) add from paste with valid TOS string shows locked success message", () => {
-    vi.mocked(usePositions).mockReturnValue(makePositionsResult([LIVE_BROKER_POS]));
+    vi.mocked(usePositions).mockReturnValue(makePositionsResult({ positions: [LIVE_BROKER_POS] }));
     vi.mocked(useGex).mockReturnValue(makeGexResult(SAMPLE_GEX));
 
     renderWithProvider(<Analyzer />);
@@ -283,7 +297,7 @@ describe("Analyzer screen", () => {
 
   // (c2) Invalid TOS string → locked parse-error copy
   it("(c2) add from paste with garbage shows locked parse-error copy", () => {
-    vi.mocked(usePositions).mockReturnValue(makePositionsResult([LIVE_BROKER_POS]));
+    vi.mocked(usePositions).mockReturnValue(makePositionsResult({ positions: [LIVE_BROKER_POS] }));
     vi.mocked(useGex).mockReturnValue(makeGexResult(SAMPLE_GEX));
 
     renderWithProvider(<Analyzer />);
@@ -302,7 +316,7 @@ describe("Analyzer screen", () => {
 
   // (d) Live position shows protected indicator, no × remove
   it("(d) live position shows protected indicator and no remove button", () => {
-    vi.mocked(usePositions).mockReturnValue(makePositionsResult([LIVE_BROKER_POS]));
+    vi.mocked(usePositions).mockReturnValue(makePositionsResult({ positions: [LIVE_BROKER_POS] }));
     vi.mocked(useGex).mockReturnValue(makeGexResult(SAMPLE_GEX));
 
     renderWithProvider(<Analyzer />);

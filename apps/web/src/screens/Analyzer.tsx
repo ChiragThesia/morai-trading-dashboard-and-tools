@@ -689,7 +689,7 @@ export function Analyzer(): React.ReactElement {
   // ── Convert broker positions to AnalyzerPositions ─────────────────────────
 
   const livePositions = useMemo<ReadonlyArray<AnalyzerPosition>>(() => {
-    const raw = positionsQuery.data ?? [];
+    const raw = positionsQuery.data?.positions ?? [];
     return raw.map((p) => brokerToAnalyzerPosition(p, liveSpot));
   }, [positionsQuery.data, liveSpot]);
 
