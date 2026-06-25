@@ -8,6 +8,7 @@
     "@fontsource-variable/geist": "^5.2.9",
     "@morai/contracts": "workspace:*",
     "@morai/quant": "workspace:*",
+    "@morai/shared": "workspace:*",
     "@supabase/supabase-js": "^2.108.2",
     "@tailwindcss/vite": "^4.3.1",
     "@tanstack/react-query": "^5.101.1",
