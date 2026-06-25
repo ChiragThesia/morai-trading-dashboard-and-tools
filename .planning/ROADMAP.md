@@ -478,7 +478,7 @@ render as badged stubs. Frontend slice of the web dashboard (backend is Phase 8)
   4. Supabase Auth login gates the app; the three coming-soon features (Charm/Vanna, intraday
      delta-flow, economic calendar) render as badged stubs — never errors, never omitted.
 
-**Plans:** 6/10 plans executed
+**Plans:** 7/10 plans executed
 
 Plans:
 **Wave 1** *(docs-before-code — BLOCKING predecessor)*
@@ -503,7 +503,7 @@ Plans:
 
 **Wave 6** *(blocked on 09-05; 06 also on 09-02; parallel, zero file overlap)*
 
-- [ ] 09-06-PLAN.md — Positions screen + POSITIONS-01 resolve (client-side greeks via @morai/quant) + GreekStrips/AttributionWaterfall/LevelBar (D-01, D-03, UI-01)
+- [x] 09-06-PLAN.md — Positions screen + POSITIONS-01 resolve (client-side greeks via @morai/quant) + GreekStrips/AttributionWaterfall/LevelBar (D-01, D-03, UI-01)
 - [ ] 09-07-PLAN.md — Journal screen: lifecycle + scrubber + pre-Jun-12 graceful UX (JOURNAL-01) + rebuild button (REBUILD-01) (UI-01)
 - [ ] 09-08-PLAN.md — Market screen: gamma profile (visx) + GEX bars/by-expiry (ECharts) + regime + Charm/Vanna + intraday coming-soon stubs (UI-01)
 
