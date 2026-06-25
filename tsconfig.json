@@ -6,7 +6,6 @@
     { "path": "packages/core" },
     { "path": "packages/adapters" },
     { "path": "apps/server" },
-    { "path": "apps/worker" },
-    { "path": "apps/auth" }
+    { "path": "apps/worker" }
   ]
 }
