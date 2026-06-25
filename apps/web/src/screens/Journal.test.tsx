@@ -159,8 +159,8 @@ describe("Journal screen", () => {
     const trade = makePreJun12Trade();
     renderJournal([trade]);
 
-    // Trade appears in the list
-    expect(screen.getByText(/7375P/)).toBeDefined();
+    // Trade name appears in the screen (may appear in list and header — use getAllByText)
+    expect(screen.getAllByText(/7375P/).length).toBeGreaterThan(0);
 
     // Select the pre-Jun-12 trade (it should be auto-selected as first trade)
     // The graceful stub text should appear (JOURNAL-01 — never an error)
