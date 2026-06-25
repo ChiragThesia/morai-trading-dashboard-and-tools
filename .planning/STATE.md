@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
-current_phase: 10
-current_phase_name: Stack Decisions Doc Update ✓ COMPLETE
+current_phase: 11
+current_phase_name: sidecar-scaffold-auth-migration
 status: executing
 stopped_at: Phase 11 context gathered
-last_updated: "2026-06-25T21:03:26.104Z"
+last_updated: "2026-06-25T21:39:45.753Z"
 last_activity: 2026-06-25
-last_activity_desc: Phase 10 complete (D16 superseded, D17 lifted, D22 sidecar decision recorded)
+last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 9
   completed_phases: 9
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 10 — Stack Decisions Doc Update (first phase of milestone v1.1)
+**Current focus:** Phase 11 — sidecar-scaffold-auth-migration
 
 ## Current Position
 
-Phase: 10 — Stack Decisions Doc Update ✓ COMPLETE
-Plan: 1/1 (10-01) — executed (e992c63, 20718ac) + verified 4/4 (10-VERIFICATION.md)
+Phase: 11 (sidecar-scaffold-auth-migration) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-06-25 — Phase 10 complete (D16 superseded, D17 lifted, D22 sidecar decision recorded)
+Last activity: 2026-06-25 — Phase 11 execution started
 
 ## Milestone v1.1 Summary
 
@@ -129,6 +129,7 @@ Regression gates (must survive every phase):
 | Phase 09 P07 | 9 | 3 tasks | 8 files |
 | Phase 09 P08 | 11 | 3 tasks | 9 files |
 | Phase 09 P10 | 75m | 3 tasks | 9 files |
+| Phase 11 P01 | 3 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -314,6 +315,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25T20:07:56.558Z
+Last session: 2026-06-25T21:39:45.743Z
 Stopped at: Phase 11 context gathered
 Resume file: .planning/phases/11-sidecar-scaffold-auth-migration/11-CONTEXT.md

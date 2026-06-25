@@ -89,7 +89,7 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 
 ### Gateway & Auth Migration
 
-- [ ] **GW-01**: A Python schwab-py sidecar deploys as a third Railway service and is the sole process that authenticates to Schwab — OAuth plus token read/write against the existing `broker_tokens` row (no schema change, no token file).
+- [x] **GW-01**: A Python schwab-py sidecar deploys as a third Railway service and is the sole process that authenticates to Schwab — OAuth plus token read/write against the existing `broker_tokens` row (no schema change, no token file).
 - [ ] **GW-02**: The sidecar exposes a REST proxy (chain, positions, transactions, orders) behind the existing brokerage ports; TS adapters become thin HTTP clients to the sidecar, not Schwab directly.
 - [ ] **GW-03**: The TS `refresh-tokens` job is retired and the sidecar is the only token refresher — exactly one process ever writes `broker_tokens` (no dual-refresher rotating-token race).
 - [ ] **GW-04**: A Postgres advisory lock guarantees a single Schwab streamer session, so a redeploy or restart cannot open a second session and kill the first.
@@ -105,7 +105,7 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 
 ### Journal Re-Sourcing
 
-- [ ] **JRNL-02**: The chain-snapshot job sources the SPX chain through the sidecar (replacing direct Schwab REST), with CBOE retained as the no-auth fallback during the 7-day re-auth gap.
+- [x] **JRNL-02**: The chain-snapshot job sources the SPX chain through the sidecar (replacing direct Schwab REST), with CBOE retained as the no-auth fallback during the 7-day re-auth gap.
 
 ### COT Positioning
 
@@ -204,12 +204,12 @@ Explicitly excluded. Documented to prevent scope creep.
 | BRK-03 | Phase 7 | Complete |
 | BRK-04 | Phase 7 | Complete |
 | DOC-01 | Phase 10 | Complete |
-| GW-01 | Phase 11 | Pending |
+| GW-01 | Phase 11 | Complete |
 | GW-02 | Phase 11 | Pending |
 | GW-03 | Phase 11 | Pending |
 | GW-04 | Phase 11 | Pending |
 | GW-05 | Phase 11 | Pending |
-| JRNL-02 | Phase 11 | Pending |
+| JRNL-02 | Phase 11 | Complete |
 | STRM-01 | Phase 12 | Pending |
 | STRM-02 | Phase 12 | Pending |
 | STRM-03 | Phase 12 | Pending |
