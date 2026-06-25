@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
-Phase: 11 (sidecar-scaffold-auth-migration) — EXECUTING
-Plan: 7 of 7
-Status: Ready to execute
-Last activity: 2026-06-25 — Phase 11 execution started
+Phase: 11 (sidecar-scaffold-auth-migration) — CODE COMPLETE, awaiting go-live UAT
+Plan: 7 of 7 executed + code-review fixes (4 blockers + 4 warnings)
+Status: human_needed — 5 go-live operator items in 11-UAT.md (run /gsd-verify-work 11 at go-live)
+Last activity: 2026-06-25 — Phase 11 executed: schwab-py sidecar built (FastAPI lifespan + advisory lock + chain proxy), GW-03 cutover (refresh-tokens retired), apps/auth retired; 1221 TS + 9 py tests green; deploy/live-migrate/OAuth-seed deferred to go-live
 
 ## Milestone v1.1 Summary
 
@@ -323,6 +323,8 @@ None yet.
 | Test isolation | Postgres leg-observations contract tests have cross-test contamination (re-persist/large-batch idempotency failures are flaky) | future | Phase 03 P06 |
 | Realized P&L | IN-A2 — real per-leg commission/fees + intraday filledAt: BrokerTransaction domain type carries no time/commission/fees fields; needs docs-first brokerage domain + Schwab adapter change. Realized P&L stays fee-blind until a dedicated plan. | future | Phase 05 P14 |
 | Event-triggered snapshot | Supplemental out-of-cycle snapshot on large underlying moves (via stream) | v1.2 | SUMMARY.md |
+| Go-live: migration 0011 | `bun run migrate` (direct DATABASE_URL 5432) to apply token_json to live Supabase — file committed, testcontainer-applied; live apply pending prod-up | go-live UAT | Phase 11 P02 |
+| Go-live: sidecar deploy | Create Railway sidecar service (railway.sidecar.toml, NO public domain GW-05), set 6 env vars + SIDECAR_URL on server/worker, run one-time Schwab OAuth dance to seed token_json, verify /sidecar/health ok + not public | go-live UAT | Phase 11 P05 |
 
 ## Session Continuity
 
