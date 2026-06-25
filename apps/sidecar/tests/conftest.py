@@ -1,11 +1,13 @@
 """
-pytest fixtures for sidecar token-store and advisory-lock tests (GW-01, GW-04).
+pytest fixtures for sidecar token-store, advisory-lock, chain-proxy and health tests.
 
 Provides:
-  db_url   – connection string for the test Postgres container
-  app_id   – the seeded app_id ('test-trader')
-  enc_key  – AES encryption key for pgp_sym_encrypt
-  (DB setup is done once per session via a module-level autouse fixture)
+  db_url         – connection string for the test Postgres container
+  app_id         – the seeded app_id ('test-trader')
+  enc_key        – AES encryption key for pgp_sym_encrypt
+  mock_market_client_on_app_state (autouse) – patches app.state.market_client with a
+                   stub for chain-proxy and health tests so they don't require a live
+                   Schwab session or lifespan execution.
 
 Design constraints:
   - Uses a real Postgres via Docker/psycopg2 (no mocks — SQL must be real per tdd.md)
@@ -14,6 +16,9 @@ Design constraints:
   - No Schwab credentials; token values in tests are synthetic constants (workflow.md)
   - db_url fixture must point to direct connection (port 5432, not 6543 pool — RESEARCH Pitfall 2)
 """
+
+import datetime
+import unittest.mock
 
 import pytest
 import psycopg2
@@ -122,3 +127,71 @@ def app_id() -> str:
 def enc_key() -> str:
     """Synthetic encryption key bound as a psycopg2 %s parameter — never logged."""
     return _ENC_KEY
+
+
+# ── Chain-proxy and health test fixtures ──────────────────────────────────────
+
+
+def _make_mock_chain_response(root: str = "SPX") -> dict:
+    """
+    Minimal valid Schwab get_option_chain() response shape used by the mock client.
+    Mirrors the fields that _map_option_chain_to_response() expects.
+    """
+    expiry_key = "2026-06-20:30"
+    strike = "5950.0"
+    return {
+        "underlyingPrice": 5950.0,
+        "callExpDateMap": {
+            expiry_key: {
+                strike: [
+                    {
+                        "symbol": "SPX   260620C05950000",
+                        "bid": 12.50,
+                        "ask": 13.00,
+                        "mark": 12.75,
+                        "volatility": 0.18,
+                        "delta": 0.45,
+                        "gamma": 0.002,
+                        "theta": -0.85,
+                        "vega": 1.2,
+                        "openInterest": 1500,
+                        "totalVolume": 320,
+                    }
+                ]
+            }
+        },
+        "putExpDateMap": {},
+    }
+
+
+@pytest.fixture(autouse=True)
+def _patch_app_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Autouse fixture: patch app.state with test stubs so chain-proxy and health
+    tests can run without a live lifespan (no DB connection or Schwab session).
+
+    Sets:
+      app.state.market_client  – an AsyncMock whose get_option_chain() returns a
+                                  response-like object wrapping _make_mock_chain_response().
+      app.state.degraded       – False (client is available)
+      app.state.db_url         – _DB_URL (so health endpoint can read from the test DB)
+      app.state.market_app_id  – "market" (health endpoint app_id)
+    """
+    try:
+        from main import app
+    except ImportError:
+        # main.py not yet created — skip patching (RED state for chain-proxy tests).
+        return
+
+    # Build a mock response object that supports .json() synchronously.
+    mock_resp = unittest.mock.MagicMock()
+    mock_resp.json.return_value = _make_mock_chain_response()
+
+    # market_client is async (asyncio=True in schwab-py).
+    mock_market_client = unittest.mock.AsyncMock()
+    mock_market_client.get_option_chain.return_value = mock_resp
+
+    app.state.market_client = mock_market_client
+    app.state.degraded = False
+    app.state.db_url = _DB_URL
+    app.state.market_app_id = "market"
