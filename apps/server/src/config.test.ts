@@ -11,8 +11,8 @@ const BASE_VALID_ENV = {
   SCHWAB_MARKET_APP_KEY: "test-market-key",
   SCHWAB_MARKET_APP_SECRET: "test-market-secret",
   SCHWAB_MARKET_CALLBACK_URL: "https://127.0.0.1:8183",
-  // Phase 8 (08-07): Supabase Auth + CORS env vars
-  SUPABASE_JWT_SECRET: "test-supabase-jwt-secret-32-chars-minimum-value",
+  // Phase 8 (D20 — updated): JWKS asymmetric verify — no shared secret; SUPABASE_URL replaces SUPABASE_JWT_SECRET
+  SUPABASE_URL: "https://cwcdcosxoaqyqbsfifsh.supabase.co",
   WEB_ORIGIN: "http://localhost:5173",
 };
 
@@ -53,29 +53,17 @@ describe("parseConfig", () => {
     expect(config.PORT).toBe(4000);
   });
 
-  // Phase 8 (08-07): SUPABASE_JWT_SECRET + WEB_ORIGIN validation (T-01-12 + SC-4 / AUTH-01)
+  // Phase 8 (D20 — updated): SUPABASE_URL + WEB_ORIGIN validation (SC-4 / AUTH-01)
+  // SUPABASE_JWT_SECRET removed — asymmetric JWKS verify needs no shared secret.
 
-  it("throws a Zod error naming SUPABASE_JWT_SECRET when it is missing", () => {
-    const env = { ...BASE_VALID_ENV, SUPABASE_JWT_SECRET: undefined };
-    expect(() => parseConfig(env)).toThrow(/SUPABASE_JWT_SECRET/);
+  it("throws a Zod error naming SUPABASE_URL when it is missing", () => {
+    const env = { ...BASE_VALID_ENV, SUPABASE_URL: undefined };
+    expect(() => parseConfig(env)).toThrow(/SUPABASE_URL/);
   });
 
-  it("throws a Zod error when SUPABASE_JWT_SECRET is shorter than 32 chars", () => {
-    const env = { ...BASE_VALID_ENV, SUPABASE_JWT_SECRET: "tooshort" };
-    expect(() => parseConfig(env)).toThrow(/SUPABASE_JWT_SECRET/);
-  });
-
-  it("throws a Zod error when SUPABASE_JWT_SECRET error does NOT echo the value (T-01-12)", () => {
-    const secretValue = "secretval-must-not-appear-in-error-message!!";
-    const env = { ...BASE_VALID_ENV, SUPABASE_JWT_SECRET: "short" };
-    try {
-      parseConfig(env);
-    } catch (e) {
-      // The error must name the field but NEVER echo the actual secret value
-      const msg = String(e);
-      expect(msg).toContain("SUPABASE_JWT_SECRET");
-      expect(msg).not.toContain(secretValue);
-    }
+  it("throws a Zod error when SUPABASE_URL is not a valid URL", () => {
+    const env = { ...BASE_VALID_ENV, SUPABASE_URL: "not-a-url" };
+    expect(() => parseConfig(env)).toThrow(/SUPABASE_URL/);
   });
 
   it("throws a Zod error naming WEB_ORIGIN when it is missing", () => {
@@ -88,11 +76,9 @@ describe("parseConfig", () => {
     expect(() => parseConfig(env)).toThrow(/WEB_ORIGIN/);
   });
 
-  it("parses valid SUPABASE_JWT_SECRET and WEB_ORIGIN without throwing", () => {
+  it("parses valid SUPABASE_URL and WEB_ORIGIN without throwing", () => {
     const config = parseConfig(BASE_VALID_ENV);
-    expect(config.SUPABASE_JWT_SECRET).toBe(
-      "test-supabase-jwt-secret-32-chars-minimum-value",
-    );
+    expect(config.SUPABASE_URL).toBe("https://cwcdcosxoaqyqbsfifsh.supabase.co");
     expect(config.WEB_ORIGIN).toBe("http://localhost:5173");
   });
 });

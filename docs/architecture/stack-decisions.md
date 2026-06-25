@@ -240,12 +240,22 @@ data — real positions, P&L, order history — is internet-reachable. It needs 
 **Decision**: Gate all read endpoints with Supabase Auth JWT verification. Single trader
 account; signups closed. This lifts the D18 "Supabase Auth" deferral.
 
-**How — JWT verification (offline HS256)**:
-- Supabase Auth issues JWTs signed with HS256 using the project JWT secret.
-- The server verifies these tokens offline with Hono's built-in `hono/jwt` middleware and
-  `SUPABASE_JWT_SECRET` (a env var from Supabase Dashboard → Settings → API).
-- No Supabase SDK on the server. No per-request network call. Stateless JWT verify.
-- Invalid or missing token → Hono returns `401` before reaching any route handler.
+**How — JWT verification (asymmetric JWKS, ES256)**:
+- Supabase Auth signs user access tokens with ES256 (asymmetric). The live project
+  (`cwcdcosxoaqyqbsfifsh`) publishes an EC public key at
+  `https://<project>.supabase.co/auth/v1/.well-known/jwks.json`.
+- The server fetches and caches the public JWKS via `jose`'s `createRemoteJWKSet`.
+  Verification runs asymmetrically — no shared secret on the server.
+- **Why changed from HS256**: the original implementation used `hono/jwt` with
+  `SUPABASE_JWT_SECRET` (HS256 shared-secret verify). Empirical inspection showed the
+  live Supabase project now issues ES256 tokens. HS256 cannot verify an ES256 signature;
+  every real user JWT returned 401. JWKS verification is the correct and forward-safe
+  approach — it requires no shared secret and works with any asymmetric algorithm
+  Supabase may adopt.
+- Token `aud` claim is asserted to be `"authenticated"` (Supabase access-token value).
+- Invalid or missing token → middleware returns `401` before reaching any route handler.
+- No Supabase SDK on the server. The only network call is the JWKS fetch, which `jose`
+  caches with appropriate HTTP headers.
 
 **How — CORS**:
 - `hono/cors` middleware restricts `Access-Control-Allow-Origin` to `WEB_ORIGIN`.
@@ -257,15 +267,20 @@ account; signups closed. This lifts the D18 "Supabase Auth" deferral.
 **Scope**: Read endpoints only. The `/api/jobs/*` group keeps its existing `bearerAuth`
 (MCP bearer token, separate group). MCP tools are not gated by Supabase Auth.
 
-**New env vars**: `SUPABASE_JWT_SECRET` (min 32 chars), `WEB_ORIGIN` (URL string).
+**Env vars**: `SUPABASE_URL` (URL string, e.g. `https://<project>.supabase.co`),
+`WEB_ORIGIN` (URL string). `SUPABASE_JWT_SECRET` is **removed** — asymmetric verify
+needs no shared secret. Both remaining values are non-secret public values.
 
-**Swap cost**: Low. JWT verification sits behind a middleware seam. Swapping to any
-provider means replacing the middleware and the env var; routes and use-cases are
-unchanged.
+**Swap cost**: Low. JWT verification sits behind a middleware seam
+(`apps/server/src/adapters/http/supabase-auth.ts`). The factory accepts an injectable
+JWKS resolver, so tests use `createLocalJWKSet` (offline) and production uses
+`createRemoteJWKSet`. Swapping provider means updating the JWKS URL and the `aud` claim.
 
-**Revisit trigger**: Multi-tenant auth (RLS per user) or provider swap.
+**Revisit trigger**: Multi-tenant auth (RLS per user), provider swap, or Supabase
+changing the JWKS endpoint path.
 
-**References**: Phase 8 CONTEXT.md D-02, D-02a; `apps/server/src/main.ts` middleware group.
+**References**: Phase 8 CONTEXT.md D-02, D-02a; `apps/server/src/adapters/http/supabase-auth.ts`;
+`apps/server/src/main.ts` middleware group.
 
 ## D21 — `packages/quant` pure-leaf BSM kernel (Phase 9, D-01)
 

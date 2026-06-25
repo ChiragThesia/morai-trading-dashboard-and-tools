@@ -1,32 +1,38 @@
 /**
- * auth-integration.test.ts — Task 3: auth group integration tests (SC-4 / AUTH-01).
+ * auth-integration.test.ts — auth group integration tests (SC-4 / AUTH-01 / D20).
  *
  * Validates:
  *   (a) No-JWT → 401 on read endpoints (T-08-AUTH1)
- *   (b) Valid HS256 JWT signed with test secret → passes gate (not 401) (T-08-AUTH2)
+ *   (b) Valid ES256 JWT with correct audience → passes gate (not 401) (T-08-AUTH2)
  *   (c) Tampered / invalid JWT → 401 (T-08-AUTH2)
  *   (d) Preflight OPTIONS from WEB_ORIGIN → CORS headers returned,
  *       Access-Control-Allow-Origin = WEB_ORIGIN (not '*') (T-08-AUTH3 / Pitfall 7)
  *   (e) Request from a different origin → no WEB_ORIGIN allow-origin header (T-08-AUTH3)
+ *   (f) Token signed by a DIFFERENT (wrong) ES256 key → 401 (proves real signature verify)
  *
- * Test JWTs are signed with Jwt.sign() from hono/utils/jwt using the test secret + alg HS256.
- * This proves the offline HS256 verify path (A2) — no supabase.auth.getUser() network call.
+ * Test JWTs are signed with ES256 via jose SignJWT.
+ * The test app wires makeSupabaseJwtAuth with createLocalJWKSet (offline — no network).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { Hono } from "hono";
-import { jwt } from "hono/jwt";
 import { cors } from "hono/cors";
-import { Jwt } from "hono/utils/jwt";
+import {
+  generateKeyPair,
+  exportJWK,
+  SignJWT,
+  createLocalJWKSet,
+} from "jose";
+import type { JWTVerifyGetKey } from "jose";
 import { ok } from "@morai/shared";
 import type { ForRunningGetGex } from "@morai/core";
 import { gexRoutes } from "./gex.routes.ts";
 import type { ForGettingStatus } from "@morai/core";
 import { statusRoutes } from "./status.routes.ts";
+import { makeSupabaseJwtAuth } from "./supabase-auth.ts";
 
 // ── Test constants ────────────────────────────────────────────────────────────
 
-const TEST_JWT_SECRET = "test-supabase-jwt-secret-must-be-32-chars-min";
 const TEST_WEB_ORIGIN = "http://localhost:5173";
 const OTHER_ORIGIN = "http://evil.example.com";
 
@@ -43,17 +49,46 @@ const okGetStatus: ForGettingStatus = async () =>
     uptime: 42,
   });
 
+// ── ES256 key material (generated once per suite) ─────────────────────────────
+
+type KeyMaterial = {
+  privateKey: CryptoKey;
+  localJwks: JWTVerifyGetKey;
+};
+
+type WrongKeyMaterial = {
+  privateKey: CryptoKey;
+};
+
+let keys: KeyMaterial;
+let wrongKeys: WrongKeyMaterial;
+
+beforeAll(async () => {
+  // Primary ES256 keypair — used for valid tokens
+  const { privateKey, publicKey } = await generateKeyPair("ES256");
+  const publicJwk = await exportJWK(publicKey);
+  // Set alg and use so createLocalJWKSet can select this key correctly
+  publicJwk.alg = "ES256";
+  publicJwk.use = "sig";
+  const localJwks = createLocalJWKSet({ keys: [publicJwk] });
+  keys = { privateKey, localJwks };
+
+  // Wrong ES256 keypair — proves a foreign key is rejected
+  const { privateKey: wrongPrivateKey } = await generateKeyPair("ES256");
+  wrongKeys = { privateKey: wrongPrivateKey };
+});
+
 // ── Test app builder (mirrors the main.ts composition) ───────────────────────
 
 /**
  * buildAuthApp — build a Hono test app that mirrors the main.ts auth composition:
- *   CORS first → JWT authReadGroup → read routes.
- * Used to test the auth + CORS middleware wiring in isolation.
+ *   CORS first → JWKS-authenticated authReadGroup → read routes.
+ * Accepts an injectable getKey so tests run fully offline.
  */
-function buildAuthApp() {
+function buildAuthApp(getKey: JWTVerifyGetKey) {
   const app = new Hono();
 
-  // Pitfall 7: CORS must be FIRST — before the JWT group.
+  // Pitfall 7: CORS must be FIRST — before the auth group.
   app.use(
     "/*",
     cors({
@@ -64,13 +99,13 @@ function buildAuthApp() {
     }),
   );
 
-  // JWT-guarded read group (HS256 offline verify — same as main.ts).
+  // JWKS-authenticated read group (ES256 asymmetric verify — same structure as main.ts).
   const apiRouter = new Hono()
     .route("/", statusRoutes(okGetStatus))
     .route("/analytics", gexRoutes(getGexNull));
 
   const authReadGroup = new Hono();
-  authReadGroup.use("/*", jwt({ secret: TEST_JWT_SECRET, alg: "HS256" }));
+  authReadGroup.use("/*", makeSupabaseJwtAuth({ getKey }));
   authReadGroup.route("/", apiRouter);
   app.route("/api", authReadGroup);
 
@@ -79,35 +114,44 @@ function buildAuthApp() {
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
 
-/** Sign a test JWT with HS256 using the test secret. */
-async function signTestJwt(
+/** Mint a valid ES256 JWT with the correct audience using the primary test keypair. */
+async function signValidJwt(
   payload: Record<string, unknown> = {},
 ): Promise<string> {
-  return Jwt.sign(
-    { sub: "test-user", iat: Math.floor(Date.now() / 1000), ...payload },
-    TEST_JWT_SECRET,
-    "HS256",
-  );
+  return new SignJWT({ sub: "test-user", ...payload })
+    .setProtectedHeader({ alg: "ES256" })
+    .setAudience("authenticated")
+    .setExpirationTime("1h")
+    .sign(keys.privateKey);
+}
+
+/** Mint an ES256 JWT signed by the WRONG keypair (simulates a forged token). */
+async function signWrongKeyJwt(): Promise<string> {
+  return new SignJWT({ sub: "attacker" })
+    .setProtectedHeader({ alg: "ES256" })
+    .setAudience("authenticated")
+    .setExpirationTime("1h")
+    .sign(wrongKeys.privateKey);
 }
 
 // ── Auth integration tests ────────────────────────────────────────────────────
 
-describe("Supabase Auth JWT gate (SC-4 / AUTH-01)", () => {
+describe("Supabase Auth JWT gate — ES256 JWKS verify (SC-4 / AUTH-01 / D20)", () => {
   it("(a) no Authorization header → 401 on GET /api/status", async () => {
-    const app = buildAuthApp();
+    const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/status");
     expect(res.status).toBe(401);
   });
 
   it("(a) no Authorization header → 401 on GET /api/analytics/gex", async () => {
-    const app = buildAuthApp();
+    const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/analytics/gex");
     expect(res.status).toBe(401);
   });
 
-  it("(b) valid HS256 JWT → passes gate (not 401) on GET /api/status", async () => {
-    const app = buildAuthApp();
-    const token = await signTestJwt();
+  it("(b) valid ES256 JWT → passes gate (not 401) on GET /api/status", async () => {
+    const app = buildAuthApp(keys.localJwks);
+    const token = await signValidJwt();
     const res = await app.request("/api/status", {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -115,9 +159,9 @@ describe("Supabase Auth JWT gate (SC-4 / AUTH-01)", () => {
     expect(res.status).not.toBe(401);
   });
 
-  it("(b) valid HS256 JWT → passes gate (not 401) on GET /api/analytics/gex", async () => {
-    const app = buildAuthApp();
-    const token = await signTestJwt();
+  it("(b) valid ES256 JWT → passes gate (not 401) on GET /api/analytics/gex", async () => {
+    const app = buildAuthApp(keys.localJwks);
+    const token = await signValidJwt();
     const res = await app.request("/api/analytics/gex", {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -126,21 +170,18 @@ describe("Supabase Auth JWT gate (SC-4 / AUTH-01)", () => {
     expect(res.status).toBe(404);
   });
 
-  it("(b) valid HS256 JWT is signed with hono Jwt.sign() using test secret (A2 — offline path)", async () => {
-    // This test explicitly proves the token was signed with HS256 + test secret
-    // and is accepted by the same hono/jwt middleware — no network call.
-    const app = buildAuthApp();
-    const token = await signTestJwt({ role: "authenticated" });
+  it("(b) minted token is a 3-part JWT with alg:ES256 header", async () => {
+    const token = await signValidJwt({ role: "authenticated" });
     expect(typeof token).toBe("string");
     const parts = token.split(".");
     expect(parts).toHaveLength(3); // header.payload.signature
     const header = JSON.parse(atob(parts[0] ?? ""));
-    expect(header.alg).toBe("HS256");
+    expect(header.alg).toBe("ES256");
   });
 
   it("(c) tampered JWT → 401", async () => {
-    const app = buildAuthApp();
-    const token = await signTestJwt();
+    const app = buildAuthApp(keys.localJwks);
+    const token = await signValidJwt();
     // Tamper the signature portion
     const parts = token.split(".");
     const tamperedToken = `${parts[0]}.${parts[1]}.TAMPERED_SIGNATURE_HERE`;
@@ -151,21 +192,16 @@ describe("Supabase Auth JWT gate (SC-4 / AUTH-01)", () => {
   });
 
   it("(c) completely invalid JWT string → 401", async () => {
-    const app = buildAuthApp();
+    const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/status", {
       headers: { Authorization: "Bearer not.a.jwt" },
     });
     expect(res.status).toBe(401);
   });
 
-  it("(c) JWT signed with wrong secret → 401 (forgery attempt)", async () => {
-    const app = buildAuthApp();
-    // Sign with a DIFFERENT secret
-    const wrongToken = await Jwt.sign(
-      { sub: "attacker", iat: Math.floor(Date.now() / 1000) },
-      "wrong-secret-32-chars-must-be-here-pad",
-      "HS256",
-    );
+  it("(f) token signed by a DIFFERENT (wrong) ES256 key → 401 (real signature verification)", async () => {
+    const app = buildAuthApp(keys.localJwks);
+    const wrongToken = await signWrongKeyJwt();
     const res = await app.request("/api/status", {
       headers: { Authorization: `Bearer ${wrongToken}` },
     });
@@ -175,7 +211,7 @@ describe("Supabase Auth JWT gate (SC-4 / AUTH-01)", () => {
 
 describe("CORS headers (SC-4 / T-08-AUTH3 / Pitfall 7)", () => {
   it("(d) preflight OPTIONS from WEB_ORIGIN → 200 + Access-Control-Allow-Origin = WEB_ORIGIN", async () => {
-    const app = buildAuthApp();
+    const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/status", {
       method: "OPTIONS",
       headers: {
@@ -184,7 +220,7 @@ describe("CORS headers (SC-4 / T-08-AUTH3 / Pitfall 7)", () => {
         "Access-Control-Request-Headers": "Authorization",
       },
     });
-    // Preflight must not be blocked by the JWT gate (CORS is applied first — Pitfall 7)
+    // Preflight must not be blocked by the auth gate (CORS is applied first — Pitfall 7)
     expect(res.status).not.toBe(401);
     const allowOrigin = res.headers.get("Access-Control-Allow-Origin");
     // Must be the exact origin, never '*'
@@ -193,7 +229,7 @@ describe("CORS headers (SC-4 / T-08-AUTH3 / Pitfall 7)", () => {
   });
 
   it("(d) CORS allows credentials (required for auth header delivery)", async () => {
-    const app = buildAuthApp();
+    const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/analytics/gex", {
       method: "OPTIONS",
       headers: {
@@ -207,7 +243,7 @@ describe("CORS headers (SC-4 / T-08-AUTH3 / Pitfall 7)", () => {
   });
 
   it("(e) request from different origin does NOT receive WEB_ORIGIN allow-origin header", async () => {
-    const app = buildAuthApp();
+    const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/status", {
       method: "OPTIONS",
       headers: {
@@ -221,7 +257,7 @@ describe("CORS headers (SC-4 / T-08-AUTH3 / Pitfall 7)", () => {
   });
 
   it("CORS allow-origin is never '*' (T-08-AUTH3 EoP prohibition)", async () => {
-    const app = buildAuthApp();
+    const app = buildAuthApp(keys.localJwks);
     const res = await app.request("/api/status", {
       method: "OPTIONS",
       headers: {

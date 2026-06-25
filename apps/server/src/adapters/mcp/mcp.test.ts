@@ -31,8 +31,8 @@ const testConfig = {
   SCHWAB_MARKET_APP_KEY: "test-market-key",
   SCHWAB_MARKET_APP_SECRET: "test-market-secret",
   SCHWAB_MARKET_CALLBACK_URL: "https://127.0.0.1:8183",
-  // Phase 8 (08-07): Supabase Auth + CORS (D20 / SC-4 / AUTH-01)
-  SUPABASE_JWT_SECRET: "test-supabase-jwt-secret-32-chars-minimum-value",
+  // Phase 8 (D20 — updated): JWKS asymmetric verify — SUPABASE_URL replaces SUPABASE_JWT_SECRET
+  SUPABASE_URL: "https://cwcdcosxoaqyqbsfifsh.supabase.co",
   WEB_ORIGIN: "http://localhost:5173",
 } satisfies Config;
 
