@@ -10,4 +10,4 @@ COPY . .
 # MUST NOT use 0.0.0.0 (IPv4-only) — Railway private net uses IPv6 in legacy
 # environments; binding 0.0.0.0 causes ECONNREFUSED from apps/server (RESEARCH Pitfall 5).
 # PORT is set by Railway at deploy time.
-CMD ["uvicorn", "main:app", "--host", "::", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn main:app --host :: --port ${PORT:-8000}"]
