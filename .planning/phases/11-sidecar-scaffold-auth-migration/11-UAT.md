@@ -1,21 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 11-sidecar-scaffold-auth-migration
 source: [11-VERIFICATION.md]
 started: 2026-06-25T23:00:00Z
-updated: 2026-06-26T16:20:00Z
+updated: 2026-06-26T17:25:00Z
 ---
 
 ## Current Test
 
-number: 4
-name: Run the one-time Schwab OAuth dance to seed token_json
-expected: |
-  client_from_manual_flow seeds token_json for both trader + market app_id rows;
-  GET /sidecar/health returns {status:'ok', tokenFreshness:'fresh'}; token_json
-  IS NOT NULL for both rows. ORDERING: deploy the 11-06 worker cutover (retire
-  refresh-tokens) BEFORE seeding, to avoid the dual-refresher race.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -47,7 +40,14 @@ note: |
 
 ### 4. Run the one-time Schwab OAuth dance to seed token_json
 expected: `client_from_manual_flow` seeds `token_json` for both trader + market app_id rows; GET /sidecar/health (from inside the private network via server) returns `{status:'ok', tokenFreshness:'fresh'}`; `token_json IS NOT NULL` for both rows.
-result: [pending]
+result: pass
+note: |
+  Seeded both apps via schwab-py client_from_login_flow (local 127.0.0.1:8182 capture server,
+  no copy-paste) — operator did the Schwab browser login; the agent ran the flow + dual-write.
+  Supabase MCP confirms (2026-06-26): trader + market token_json NOT NULL, refresh_issued_at
+  anchored 17:22 (fresh 7-day TTL), access token fresh (expires 17:52). Sidecar redeployed to
+  re-init the Schwab clients (deadlock fix lets the redeploy succeed) → /sidecar/chain live.
+  Added a `login` mode to seed_token.py for this (commit chain).
 
 ### 5. Confirm sidecar is NOT publicly reachable
 expected: curl from outside the Railway private network times out / connection-refused; no public Railway domain exists for the sidecar service.
@@ -60,9 +60,9 @@ note: |
 ## Summary
 
 total: 5
-passed: 4
+passed: 5
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
