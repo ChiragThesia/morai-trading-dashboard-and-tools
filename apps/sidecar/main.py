@@ -51,12 +51,21 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
     #    health endpoint) stays responsive.
     lock_conn = None
     while lock_conn is None:
-        lock_conn = await loop.run_in_executor(
-            None, try_acquire_sidecar_lock, cfg.DATABASE_URL  # type: ignore[attr-defined]
-        )
+        try:
+            lock_conn = await loop.run_in_executor(
+                None, try_acquire_sidecar_lock, cfg.DATABASE_URL  # type: ignore[attr-defined]
+            )
+        except Exception as exc:  # noqa: BLE001
+            # A transient DB/pooler error must NOT kill the retry loop — keep trying so the
+            # instance still acquires the lock once the DB is reachable again.
+            logger.warning(
+                "sidecar: advisory-lock acquisition attempt errored (%s) — retrying in %ss",
+                type(exc).__name__, LOCK_RETRY_SECONDS,
+            )
+            lock_conn = None
         if lock_conn is None:
             logger.warning(
-                "sidecar: advisory lock held by another instance — retrying in %ss "
+                "sidecar: advisory lock not acquired — retrying in %ss "
                 "(serving /sidecar/health in degraded mode meanwhile)",
                 LOCK_RETRY_SECONDS,
             )
