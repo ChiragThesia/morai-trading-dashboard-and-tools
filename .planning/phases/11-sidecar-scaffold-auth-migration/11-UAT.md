@@ -3,7 +3,7 @@ status: testing
 phase: 11-sidecar-scaffold-auth-migration
 source: [11-VERIFICATION.md]
 started: 2026-06-25T23:00:00Z
-updated: 2026-06-26T14:15:00Z
+updated: 2026-06-26T16:20:00Z
 ---
 
 ## Current Test
@@ -68,17 +68,18 @@ blocked: 0
 
 ## Gaps
 
-- finding: "Advisory lock (GW-04) blocks Railway zero-downtime redeploys"
+- finding: "Advisory lock (GW-04) blocked Railway zero-downtime redeploys — FIXED"
   severity: major
-  status: open
+  status: resolved
   detail: |
-    Railway's rolling deploy starts the new sidecar instance while the old one still runs + holds the
-    Postgres advisory lock. The new instance's lifespan calls pg_try_advisory_lock → fails → SystemExit →
-    Hypercorn LifespanFailureError → deploy FAILED. The currently-running instance (42d9ce71) is healthy,
-    but ANY future sidecar redeploy fails this way until fixed.
+    Railway's rolling deploy started the new sidecar instance while the old one still ran + held the
+    Postgres advisory lock. The old lifespan called pg_try_advisory_lock → fail → SystemExit →
+    Hypercorn LifespanFailureError → deploy FAILED (caught when the PORT=8080 redeploy 51a8e10b failed).
   fix: |
-    Make the app serve /sidecar/health (degraded) WITHOUT holding the lock, and acquire the lock in a
-    background retry task. New instance becomes healthy lock-free → Railway stops old → old releases lock →
-    new acquires it. This breaks the rollover deadlock and revisits the GW-04 "fail-fast SystemExit on second
-    instance" contract for rolling deploys. Phase 12 (streaming) needs this — the lock matters most there.
-    Interim workaround to redeploy: stop/scale-down the running sidecar first (release the lock), then deploy.
+    Implemented (commit 9a99f0e): advisory_lock.try_acquire_sidecar_lock is now non-fatal (returns None
+    when held, no SystemExit); main.py acquires the lock in a BACKGROUND asyncio task so /sidecar/health
+    serves immediately, lock-free. New instance becomes healthy without the lock → Railway stops the old
+    one → old releases the lock → background task acquires it. Breaks the rollover deadlock and revises the
+    GW-04 fail-fast contract for rolling deploys. /sidecar/health now also reports hasLock. Sidecar pytest
+    lane 9/9 green. This is also what re-inits the Schwab clients after the OAuth seed (a redeploy/restart
+    now succeeds), activating /sidecar/chain.
