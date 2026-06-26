@@ -84,13 +84,22 @@ async def health(request: Request) -> JSONResponse:
     Return token freshness status without decrypting any token value.
 
     Response shape:
-      { "status": "ok" | "degraded", "tokenFreshness": "fresh" | "expired" | "not_seeded" | "unknown" }
+      { "status": "ok" | "degraded",
+        "tokenFreshness": "fresh" | "expired" | "not_seeded" | "unknown",
+        "hasLock": <bool> }
 
     "degraded" is returned when token_json is NULL (pre-OAuth dance) or DB is unreachable.
+    "hasLock" reports whether this instance holds the advisory lock (is the active writer);
+    a healthy instance may be lock-free transiently during a rolling-deploy rollover.
     The sidecar stays alive in degraded state; chain requests will return 503.
     """
     db_url: str = request.app.state.db_url
     app_id: str = getattr(request.app.state, "market_app_id", "market")
+    # has_lock: whether THIS instance holds the advisory lock (is the active writer).
+    # During a rolling-deploy rollover a new instance is healthy but lock-free until the
+    # old one releases — hasLock=False then, even with a fresh token. Informational; the
+    # chain endpoint independently 503s while no market client exists.
+    has_lock: bool = bool(getattr(request.app.state, "has_lock", False))
 
     freshness = _read_token_freshness(db_url, app_id)
 
@@ -98,9 +107,9 @@ async def health(request: Request) -> JSONResponse:
     # token means chain requests will succeed (WR-03).
     if freshness in ("not_seeded", "expired", "unknown"):
         return JSONResponse(
-            content={"status": "degraded", "tokenFreshness": freshness}
+            content={"status": "degraded", "tokenFreshness": freshness, "hasLock": has_lock}
         )
 
     return JSONResponse(
-        content={"status": "ok", "tokenFreshness": freshness}
+        content={"status": "ok", "tokenFreshness": freshness, "hasLock": has_lock}
     )
