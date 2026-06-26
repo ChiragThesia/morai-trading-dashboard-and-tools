@@ -1,41 +1,39 @@
 """
-One-time OAuth seed for the Schwab sidecar (D-03).
+One-time OAuth seed for the Schwab sidecar (D-03) — split into two non-interactive steps
+so an operator (or an agent) can drive it without a blocking input() prompt:
 
-Runs the interactive schwab-py manual OAuth flow for BOTH the trader and market
-apps and writes the resulting token into the live `broker_tokens` table:
+  Step A  `python seed_token.py authurl`
+      Prints the Schwab authorization URL for BOTH apps (trader, market) and saves the
+      per-app OAuth `state` to a temp file. No input, no DB write.
 
-  - token_json         JSONB  — full schwab-py wrapped blob (the sidecar reads this)
-  - access_token       BYTEA  — pgp_sym_encrypt(inner access token, key)  (D-01 TS trader reader)
-  - refresh_token      BYTEA  — pgp_sym_encrypt(inner refresh token, key)
-  - issued_at / expires_at / updated_at
-  - refresh_issued_at  = NOW  — the 7-day TTL anchor, set ONLY here at the initial dance.
-                                (token_store.token_write_func intentionally never touches it;
-                                 a fresh dance resets the clock — Phase 4 P02 / D-03.)
+  --- you open each URL, log into Schwab, authorize, and copy the FULL redirected URL ---
 
-This mirrors token_store.token_write_func's dual-write contract and adds the
-refresh_issued_at anchor + INSERT-or-UPDATE (the row may not exist yet).
+  Step B  `python seed_token.py exchange "<trader_redirect_url>" "<market_redirect_url>"`
+      Reconstructs each app's auth context (same state), exchanges the redirect URL for
+      tokens via schwab-py, and dual-writes the result into the live `broker_tokens` row:
+        - token_json        JSONB  — full schwab-py wrapped blob (the sidecar reads this)
+        - access_token      BYTEA  — pgp_sym_encrypt(inner access token, key)  (D-01 TS reader)
+        - refresh_token     BYTEA  — pgp_sym_encrypt(inner refresh token, key)
+        - issued_at / expires_at / updated_at
+        - refresh_issued_at = NOW  — the 7-day TTL anchor, set ONLY at the initial dance
+                                     (token_store.token_write_func never touches it; a fresh
+                                      dance resets the clock — Phase 4 P02 / D-03).
 
-WHY a separate script: the sidecar runtime only READS tokens (client_from_access_functions);
-it has no OAuth endpoint (lock-only + chain proxy). apps/auth (the old TS OAuth app) was
-retired in 11-07. This is the operator bootstrap.
+USAGE (run from the repo root so Railway resolves the project link; `railway run --service
+worker` injects the worker's env — DB + both apps' keys/secrets/callbacks — so no secret is
+read from .env):
 
-USAGE (run from the repo root so Railway resolves the project link):
+    railway run --service worker apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py authurl
+    # ...log in, copy both redirect URLs...
+    railway run --service worker apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py \\
+        exchange "<trader_redirect_url>" "<market_redirect_url>"
 
-    railway run --service worker \\
-      apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py
+ORDER: deploy the 11-06 worker cutover (retire refresh-tokens) BEFORE this, so the sidecar is
+the sole token writer (no dual-refresher race). After exchange, redeploy the sidecar
+(`railway up --service sidecar`) so it re-inits its Schwab clients and /sidecar/chain goes live.
 
-  `railway run --service worker` injects the worker service's env vars (DATABASE_URL,
-  TOKEN_ENCRYPTION_KEY, SCHWAB_TRADER/MARKET_APP_KEY/SECRET/CALLBACK_URL) — so no
-  secrets are read from .env. The venv supplies schwab-py + psycopg2. The flow is
-  interactive: for each app it prints a Schwab auth URL; log in, authorize, then paste
-  the FULL redirected URL back at the prompt.
-
-  ORDER: deploy the 11-06 worker cutover (retire refresh-tokens) BEFORE running this,
-  so the sidecar becomes the sole token writer (no dual-refresher race).
-
-SECURITY: the temp token file schwab-py writes is deleted in a finally block (tokens
-never linger on disk). The encryption key is only ever a bound %s parameter. No token
-value is printed.
+SECURITY: the OAuth `state` (not a secret) is the only thing persisted between steps. No token
+value is printed. The encryption key is only ever a bound %s parameter.
 """
 
 import datetime
@@ -51,15 +49,18 @@ try:
 except ImportError:
     sys.exit(
         "schwab-py not importable. Run via the sidecar venv:\n"
-        "  railway run --service worker apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py"
+        "  railway run --service worker apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py <authurl|exchange ...>"
     )
-
 
 # (app_id, key_env, secret_env, callback_env) — app_id is the broker_tokens PK.
 APPS = [
     ("trader", "SCHWAB_TRADER_APP_KEY", "SCHWAB_TRADER_APP_SECRET", "SCHWAB_TRADER_CALLBACK_URL"),
     ("market", "SCHWAB_MARKET_APP_KEY", "SCHWAB_MARKET_APP_SECRET", "SCHWAB_MARKET_CALLBACK_URL"),
 ]
+
+# Persisted between step A and step B (same machine; railway run is local). Holds only the
+# OAuth `state` per app — not a secret.
+STATE_FILE = os.path.join(tempfile.gettempdir(), "morai_seed_ctx.json")
 
 UPSERT_SQL = """
     INSERT INTO broker_tokens
@@ -85,29 +86,39 @@ def require_env(names: list[str]) -> dict[str, str]:
     missing = [n for n in names if not os.environ.get(n)]
     if missing:
         sys.exit(
-            "Missing required env vars: "
-            + ", ".join(missing)
-            + "\nRun via: railway run --service worker apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py"
+            "Missing required env vars: " + ", ".join(missing)
+            + "\nRun via: railway run --service worker apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py ..."
         )
     return {n: os.environ[n] for n in names}
 
 
-def seed_app(db_url: str, key: str, app_id: str, api_key: str, secret: str, callback: str) -> None:
-    """Run the manual OAuth dance for one app and dual-write its token to broker_tokens."""
-    with tempfile.NamedTemporaryFile("w+", suffix=f"-{app_id}.json", delete=False) as tf:
-        token_path = tf.name
-    try:
-        print(f"\n{'=' * 64}\n  OAuth dance — {app_id} app  (callback: {callback})\n{'=' * 64}")
-        # Interactive: prints the auth URL, then input() for the pasted redirect URL.
-        schwab.auth.client_from_manual_flow(api_key, secret, callback, token_path)
+def step_authurl() -> None:
+    """Print the Schwab authorization URL for each app; persist the per-app state."""
+    env = require_env([k for _, k, _, _ in APPS] + [c for _, _, _, c in APPS])
+    states: dict[str, str] = {}
+    print("\nOpen each URL below, log into Schwab, authorize, then copy the FULL redirected URL.\n")
+    for app_id, key_env, _secret_env, cb_env in APPS:
+        ctx = schwab.auth.get_auth_context(env[key_env], env[cb_env])
+        states[app_id] = ctx.state
+        print(f"--- {app_id} app -------------------------------------------------------")
+        print(ctx.authorization_url)
+        print()
+    with open(STATE_FILE, "w") as f:
+        json.dump(states, f)
+    print(f"(saved per-app OAuth state to {STATE_FILE})")
+    print(
+        "\nNext, re-run with the two redirect URLs in trader,market order:\n"
+        '  railway run --service worker apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py '
+        'exchange "<trader_redirect_url>" "<market_redirect_url>"'
+    )
 
-        with open(token_path) as f:
-            blob = json.load(f)
 
+def _make_seed_writer(db_url: str, key: str, app_id: str):
+    """Return a schwab-py write callback that UPSERTs the wrapped token blob + anchors TTL."""
+    def write(blob: dict, *_args, **_kwargs) -> None:
         inner = blob["token"]
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         expires = datetime.datetime.fromtimestamp(inner["expires_at"], tz=datetime.timezone.utc)
-
         conn = psycopg2.connect(db_url)
         try:
             with conn, conn.cursor() as cur:
@@ -125,24 +136,34 @@ def seed_app(db_url: str, key: str, app_id: str, api_key: str, secret: str, call
                 )
         finally:
             conn.close()
-        print(f"[{app_id}] token_json + discrete columns seeded; refresh_issued_at anchored to {now.isoformat()}.")
-    finally:
-        try:
-            os.remove(token_path)  # never leave a token file on disk
-        except OSError:
-            pass
+        print(f"[{app_id}] token_json + discrete columns written; refresh_issued_at anchored to {now.isoformat()}.")
+    return write
 
 
-def main() -> None:
+def step_exchange(trader_url: str, market_url: str) -> None:
+    """Exchange each redirect URL for tokens and dual-write to broker_tokens."""
     env = require_env(
         ["DATABASE_URL", "TOKEN_ENCRYPTION_KEY"]
         + [e for _, k, s, c in APPS for e in (k, s, c)]
     )
-    db_url = env["DATABASE_URL"]
-    key = env["TOKEN_ENCRYPTION_KEY"]
+    db_url, key = env["DATABASE_URL"], env["TOKEN_ENCRYPTION_KEY"]
 
+    if not os.path.exists(STATE_FILE):
+        sys.exit(f"State file {STATE_FILE} not found — run `seed_token.py authurl` first.")
+    with open(STATE_FILE) as f:
+        states = json.load(f)
+
+    received = {"trader": trader_url, "market": market_url}
     for app_id, key_env, secret_env, cb_env in APPS:
-        seed_app(db_url, key, app_id, env[key_env], env[secret_env], env[cb_env])
+        state = states.get(app_id)
+        if not state:
+            sys.exit(f"No saved state for {app_id} — re-run `seed_token.py authurl`.")
+        # Reconstruct the same auth context (state must match the redirect URL's state).
+        ctx = schwab.auth.get_auth_context(env[key_env], env[cb_env], state=state)
+        schwab.auth.client_from_received_url(
+            env[key_env], env[secret_env], ctx, received[app_id],
+            _make_seed_writer(db_url, key, app_id),
+        )
 
     # Verify: token_json NOT NULL for both rows (no token values read).
     conn = psycopg2.connect(db_url)
@@ -158,7 +179,30 @@ def main() -> None:
     print("\nVerification (token_json present):")
     for app_id, seeded in rows:
         print(f"  {app_id}: {'seeded' if seeded else 'MISSING'}")
-    print("\nDone. Check the sidecar: GET /sidecar/health should now report status=ok, tokenFreshness=fresh.")
+    try:
+        os.remove(STATE_FILE)
+    except OSError:
+        pass
+    print(
+        "\nDone. Now re-init the sidecar clients so /sidecar/chain goes live:\n"
+        "  railway up --service sidecar --detach"
+    )
+
+
+def main() -> None:
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    if mode == "authurl":
+        step_authurl()
+    elif mode == "exchange":
+        if len(sys.argv) != 4:
+            sys.exit('Usage: seed_token.py exchange "<trader_redirect_url>" "<market_redirect_url>"')
+        step_exchange(sys.argv[2], sys.argv[3])
+    else:
+        sys.exit(
+            "Usage:\n"
+            "  seed_token.py authurl\n"
+            '  seed_token.py exchange "<trader_redirect_url>" "<market_redirect_url>"'
+        )
 
 
 if __name__ == "__main__":
