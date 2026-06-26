@@ -41,6 +41,8 @@ import json
 import os
 import sys
 import tempfile
+import time
+import urllib.parse
 
 import psycopg2
 
@@ -114,9 +116,18 @@ def step_authurl() -> None:
 
 
 def _make_seed_writer(db_url: str, key: str, app_id: str):
-    """Return a schwab-py write callback that UPSERTs the wrapped token blob + anchors TTL."""
+    """Return a schwab-py write callback that UPSERTs the wrapped token blob + anchors TTL.
+
+    Tolerant of either shape schwab-py may hand the callback: the wrapped
+    {creation_timestamp, token:{...}} blob, or the raw token dict. token_json stores the
+    WRAPPED form (the sidecar's client_from_access_functions expects creation_timestamp).
+    """
     def write(blob: dict, *_args, **_kwargs) -> None:
-        inner = blob["token"]
+        if "token" in blob and isinstance(blob["token"], dict):
+            wrapped = blob
+        else:
+            wrapped = {"creation_timestamp": int(time.time()), "token": blob}
+        inner = wrapped["token"]
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         expires = datetime.datetime.fromtimestamp(inner["expires_at"], tz=datetime.timezone.utc)
         conn = psycopg2.connect(db_url)
@@ -126,7 +137,7 @@ def _make_seed_writer(db_url: str, key: str, app_id: str):
                     UPSERT_SQL,
                     {
                         "app_id": app_id,
-                        "token_json": json.dumps(blob),
+                        "token_json": json.dumps(wrapped),
                         "access": inner["access_token"],
                         "refresh": inner["refresh_token"],
                         "key": key,
@@ -148,24 +159,61 @@ def step_exchange(trader_url: str, market_url: str) -> None:
     )
     db_url, key = env["DATABASE_URL"], env["TOKEN_ENCRYPTION_KEY"]
 
-    if not os.path.exists(STATE_FILE):
-        sys.exit(f"State file {STATE_FILE} not found — run `seed_token.py authurl` first.")
-    with open(STATE_FILE) as f:
-        states = json.load(f)
-
     received = {"trader": trader_url, "market": market_url}
+    failures = []
     for app_id, key_env, secret_env, cb_env in APPS:
-        state = states.get(app_id)
-        if not state:
-            sys.exit(f"No saved state for {app_id} — re-run `seed_token.py authurl`.")
-        # Reconstruct the same auth context (state must match the redirect URL's state).
-        ctx = schwab.auth.get_auth_context(env[key_env], env[cb_env], state=state)
-        schwab.auth.client_from_received_url(
-            env[key_env], env[secret_env], ctx, received[app_id],
-            _make_seed_writer(db_url, key, app_id),
-        )
+        url = received[app_id]
+        # Use the state embedded in the redirect URL (operator tool — the pasted redirect is
+        # the trusted input; this also tolerates a trader/market URL mix-up). Schwab then
+        # validates the code against this app's client_id, so a wrong-app code fails loudly.
+        state = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("state", [None])[0]
+        try:
+            ctx = schwab.auth.get_auth_context(env[key_env], env[cb_env], state=state)
+            schwab.auth.client_from_received_url(
+                env[key_env], env[secret_env], ctx, url,
+                _make_seed_writer(db_url, key, app_id),
+            )
+        except Exception as exc:  # noqa: BLE001 — report per-app, keep going
+            failures.append(app_id)
+            print(f"[{app_id}] EXCHANGE FAILED: {type(exc).__name__}: {exc}")
 
-    # Verify: token_json NOT NULL for both rows (no token values read).
+    _verify_and_finish(db_url)
+
+
+def step_login() -> None:
+    """
+    One-shot local-server login (RECOMMENDED — run in your own terminal).
+
+    schwab-py opens your browser and runs a temporary HTTPS server on the 127.0.0.1:8182
+    callback that auto-catches the redirect and exchanges the code immediately — no copy-paste,
+    no 30s expiry race. Does both apps in sequence (trader, then market). Requires a browser on
+    this machine (so it can't run in a headless agent shell — run it yourself).
+    """
+    env = require_env(
+        ["DATABASE_URL", "TOKEN_ENCRYPTION_KEY"]
+        + [e for _, k, s, c in APPS for e in (k, s, c)]
+    )
+    db_url, key = env["DATABASE_URL"], env["TOKEN_ENCRYPTION_KEY"]
+
+    for app_id, key_env, secret_env, cb_env in APPS:
+        with tempfile.NamedTemporaryFile("w+", suffix=f"-{app_id}.json", delete=False) as tf:
+            token_path = tf.name
+        try:
+            print(f"\n{'=' * 64}\n  {app_id} app — opening browser; log into Schwab + authorize\n{'=' * 64}")
+            schwab.auth.client_from_login_flow(
+                env[key_env], env[secret_env], env[cb_env], token_path,
+                token_write_func=_make_seed_writer(db_url, key, app_id),
+            )
+        finally:
+            try:
+                os.remove(token_path)  # never leave a token file on disk
+            except OSError:
+                pass
+
+    _verify_and_finish(db_url)
+
+
+def _verify_and_finish(db_url: str) -> None:
     conn = psycopg2.connect(db_url)
     try:
         with conn.cursor() as cur:
@@ -179,10 +227,6 @@ def step_exchange(trader_url: str, market_url: str) -> None:
     print("\nVerification (token_json present):")
     for app_id, seeded in rows:
         print(f"  {app_id}: {'seeded' if seeded else 'MISSING'}")
-    try:
-        os.remove(STATE_FILE)
-    except OSError:
-        pass
     print(
         "\nDone. Now re-init the sidecar clients so /sidecar/chain goes live:\n"
         "  railway up --service sidecar --detach"
@@ -191,7 +235,9 @@ def step_exchange(trader_url: str, market_url: str) -> None:
 
 def main() -> None:
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
-    if mode == "authurl":
+    if mode == "login":
+        step_login()
+    elif mode == "authurl":
         step_authurl()
     elif mode == "exchange":
         if len(sys.argv) != 4:
@@ -200,7 +246,8 @@ def main() -> None:
     else:
         sys.exit(
             "Usage:\n"
-            "  seed_token.py authurl\n"
+            "  seed_token.py login                                          # recommended (browser auto-capture)\n"
+            "  seed_token.py authurl                                        # print auth URLs (agent two-step)\n"
             '  seed_token.py exchange "<trader_redirect_url>" "<market_redirect_url>"'
         )
 
