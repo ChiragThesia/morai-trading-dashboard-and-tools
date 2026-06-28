@@ -95,13 +95,20 @@ def make_token_callbacks(
         finally:
             conn.close()
 
-    def token_write_func(token: dict) -> None:
+    def token_write_func(token: dict, *args: object, **kwargs: object) -> None:
         """
         Dual-write the schwab-py token blob (GW-01, D-02).
 
         Writes token_json + decomposes access_token/refresh_token into encrypted discrete
         columns.  Never updates refresh_issued_at (Phase 4 P02).
         Logs only app_id + issued_at — never token values (V6).
+
+        On a real refresh, schwab-py/authlib invoke this as
+        ``update_token(token, refresh_token=..., access_token=...)`` (auth.py
+        wrapped_token_write_func passes its *args/**kwargs straight through). We extract
+        everything we need from ``token`` itself, so the extra positional/keyword args are
+        accepted and ignored — but they MUST be in the signature or every refresh raises
+        TypeError and aborts (chain + trader token rotation alike).
 
         Parameters
         ----------

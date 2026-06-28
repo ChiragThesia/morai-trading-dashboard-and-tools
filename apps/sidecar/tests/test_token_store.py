@@ -50,6 +50,26 @@ def test_token_round_trip(db_url: str, app_id: str, enc_key: str) -> None:
     assert result["token"]["access_token"] == SAMPLE_TOKEN["token"]["access_token"]
 
 
+def test_token_write_accepts_authlib_refresh_kwargs(db_url: str, app_id: str, enc_key: str) -> None:
+    """
+    On a real token refresh, schwab-py/authlib call the write callback as
+    update_token(token, refresh_token=..., access_token=...) — the wrapped writer passes those
+    extra args/kwargs straight through (auth.py wrapped_token_write_func). A callback that takes
+    only `token` raises TypeError and aborts EVERY refresh (chain + trader). This reproduces the
+    prod failure ("trader keep-alive ping failed (TypeError)"); the writer must accept + ignore them.
+    """
+    token_read_func, token_write_func = make_token_callbacks(db_url, app_id, enc_key)
+
+    # Mirror authlib's refresh-time call signature exactly — must not raise.
+    token_write_func(
+        SAMPLE_TOKEN,
+        refresh_token=SAMPLE_TOKEN["token"]["refresh_token"],
+        access_token=SAMPLE_TOKEN["token"]["access_token"],
+    )
+
+    assert token_read_func() == SAMPLE_TOKEN
+
+
 def test_refresh_issued_at_unchanged(db_url: str, app_id: str, enc_key: str) -> None:
     """
     GW-01 / Phase 4 P02 invariant: calling token_write_func MUST NOT update
