@@ -93,7 +93,13 @@ def _map_option_chain_to_response(raw: dict, root: str) -> ChainResponse:
         The underlying symbol (e.g. "SPX").
     """
     spot = float(raw.get("underlyingPrice", 0.0))
-    observed_at = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+    # Must end in literal "Z" (not "+00:00") — the TS consumer parses this with Zod's
+    # z.string().datetime(), which rejects an offset and would drop the chain to CBOE.
+    observed_at = (
+        datetime.datetime.now(tz=datetime.timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
     quotes: list[ChainQuote] = []
 

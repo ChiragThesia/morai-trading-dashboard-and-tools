@@ -7,6 +7,8 @@ Includes the manual-mirror contract test that pins the Python response shape to 
 TS SidecarChainResponseSchema in packages/adapters/src/sidecar/chain-adapter.ts (D-08).
 Both sides MUST be updated together if the shape changes.
 """
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -14,6 +16,12 @@ from fastapi.testclient import TestClient
 from main import app  # noqa: F401
 
 client = TestClient(app)
+
+# Mirror of Zod's `z.string().datetime()` (the TS consumer): date-T-time, optional
+# fractional seconds, MUST end in literal "Z" — a "+00:00" offset is rejected. The TS
+# adapter parses observedAt/expiry with this, so the Python sidecar MUST emit this exact
+# shape or the server drops the chain to CBOE fallback (D-08 contract).
+ZOD_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 
 # Canonical chain shape that the TS Zod schema at packages/adapters/src/sidecar/
 # chain-adapter.test.ts pins. Both sides must match (D-08 contract test).
@@ -136,9 +144,13 @@ def test_contract_chain_shape_pins_ts_schema() -> None:
         f"Contract: root must be a str, got {type(body['root']).__name__}"
     )
 
-    # ── observedAt must be an ISO-8601 datetime string ────────────────────────
+    # ── observedAt must satisfy Zod's z.string().datetime() (literal "Z", not +00:00) ──
     assert isinstance(body["observedAt"], str), (
         f"Contract: observedAt must be str, got {type(body['observedAt']).__name__}"
+    )
+    assert ZOD_DATETIME_RE.match(body["observedAt"]), (
+        f"Contract: observedAt must match Zod z.string().datetime() (end in 'Z', no offset); "
+        f"got {body['observedAt']!r} — a '+00:00' offset makes the server reject the chain"
     )
 
     # ── spot must be a number ─────────────────────────────────────────────────
