@@ -563,7 +563,13 @@ reconnect the sidecar reconciles current state via a REST pull so the live view 
   5. The stream contains no Postgres writes in the hot path; `SELECT count(*) FROM leg_observations` does not grow during a streaming-only session (STRM-04 regression gate).
   6. Entering an arbitrary OCC symbol in the ad-hoc lookup streams its live BSM greeks the same way as an open leg — the symbol is added to the subscription set (respecting the 500-symbol cap) and dropped when cleared; the result row is visually distinguished from owned positions (STRM-01 expanded, D-05; UI-SPEC Surface 4).
 
-**Plans**: TBD
+**Plans**: 6 plans (4 waves)
+- [ ] 12-01-PLAN.md — Stream contracts + core BSM recompute + ForReconcilingPositions port/twin + architecture docs (wave 1)
+- [ ] 12-02-PLAN.md — Sidecar streamer: trader StreamClient session, LEVELONE+ACCT_ACTIVITY, 490-cap LRU + reconcile diff (wave 2)
+- [ ] 12-04-PLAN.md — Server opaque-ticket store + SSE fan-out 1/sec coalescer + STRM-04 no-persist gate (wave 2)
+- [ ] 12-03-PLAN.md — Sidecar /sidecar/events SSE + /sidecar/positions reconcile + streamer task wiring (wave 3)
+- [ ] 12-05-PLAN.md — Server /api/stream/ticket + /api/stream fan-out (reconcile-first) + sidecar SSE consumer + SIDECAR_URL config (wave 3)
+- [ ] 12-06-PLAN.md — Web useLiveStream + LiveStatusBadge + Positions live overlay/stale + ad-hoc picker (wave 4)
 
 ### Phase 13: COT Adapter
 
