@@ -19,6 +19,7 @@ Read in order. Source of truth for how Morai works.
 | [mcp-and-plugins.md](architecture/mcp-and-plugins.md) | MCP server as inbound adapter, tool surface, plugin shape |
 | [testing-tdd.md](architecture/testing-tdd.md) | Red→green loop, test pyramid, calibration gates |
 | [deployment.md](architecture/deployment.md) | Railway topology, config, token persistence, observability |
+| [streaming-fanout.md](architecture/streaming-fanout.md) | SSE fan-out pipeline, opaque ticket auth (D-01), BSM recompute (D-02), STRM-04 display-only invariant, Z-suffix timestamp contract |
 
 ## Docs on Docs (`docs/docs-on-docs/`)
 

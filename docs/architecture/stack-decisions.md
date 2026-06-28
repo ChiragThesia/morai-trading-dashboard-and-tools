@@ -29,6 +29,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D19 | Web host + build order | **Vercel** for `apps/web`, **deferred**; backend + data layer built first | Low | UI work begins |
 | D21 | BSM kernel leaf | `packages/quant` — pure math leaf imported by both `core` and `web` (see D21 section) | Low (call sites + tsconfig refs + ESLint boundary) | — |
 | D22 | Python schwab-py sidecar | `apps/sidecar/` — FastAPI + schwab-py; sole Schwab auth + REST proxy + streamer; internal Railway network only | Medium (Python service + Railway topology) | TS stack fully covers Schwab streaming natively |
+| D23 | SSE fan-out + opaque ticket auth | In-process `Set<SSEStreamingApi>` fan-out in `apps/server`; single-use ~30s UUID ticket for `GET /api/stream` (EventSource cannot send `Authorization` headers — D-01) | Low (single server, in-memory state fits single Railway instance per D11) | Multi-user scale OR Supabase Realtime covers the use-case |
 
 ## D1 — Bun
 
@@ -340,3 +341,17 @@ GW-01 was carried into Phase 11 locked as "no schema change." D-02 pre-authorize
 **Column properties.** `token_json` is nullable. It is NULL until the first sidecar OAuth dance seeds it (D-03 one-time prod activation). The sidecar is the sole writer (GW-03). The column is strictly additive — no existing `broker_tokens` column is modified or dropped.
 
 **Cite:** GW-01 relaxation authorized by D-02 in 11-CONTEXT.md. Column added in Phase 11 plan 01; migration applied in Phase 11 plan 02.
+
+## D23 — SSE Fan-Out + Opaque Ticket Auth (Phase 12)
+
+**What**: In-process `Set<SSEStreamingApi>` fan-out in `apps/server`. A single-use, ~30-second opaque UUID ticket authenticates `GET /api/stream`.
+
+**Why the ticket pattern (D-01)**: `EventSource` cannot send `Authorization` headers. A JWT in the query string leaks into server access logs and browser history. A short-lived, single-use ticket carries no claims — if stolen from a URL, it expires in 30 seconds and cannot be reused.
+
+**Why in-process (not Redis pub-sub)**: One Railway instance for `apps/server` (D11). The in-memory `Set<SSEStreamingApi>` is sufficient at this scale. Adding Redis would introduce an infrastructure dependency for a single-operator system. The revisit trigger is multi-server deployment.
+
+**Swap cost**: Low. The fan-out logic sits in `apps/server/src/adapters/http/stream-fan-out.ts`. Replacing it with Redis pub-sub means writing a new adapter behind the same broadcast interface. The hexagonal port (`ForReconcilingPositions`) and stream contracts (`stream-events.ts`) are unchanged.
+
+**Revisit trigger**: Multi-instance deployment (Railway horizontal scaling) OR Supabase Realtime covers the use-case at lower complexity.
+
+**References**: Phase 12 CONTEXT.md D-01, D-07, D-08; `docs/architecture/streaming-fanout.md`.
