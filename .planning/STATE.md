@@ -5,10 +5,10 @@ milestone_name: — Real-Time Schwab Streaming
 current_phase: 11
 current_phase_name: sidecar-scaffold-auth-migration
 status: executing
-stopped_at: Phase 11 context gathered
-last_updated: "2026-06-25T22:34:54.113Z"
+stopped_at: Phase 12 context gathered
+last_updated: "2026-06-28T21:55:59.050Z"
 last_activity: 2026-06-25
-last_activity_desc: Phase 11 execution started
+last_activity_desc: "Phase 11 executed: schwab-py sidecar built (FastAPI lifespan + advisory lock + chain proxy), GW-03 cutover (refresh-tokens retired), apps/auth retired; 1221 TS + 9 py tests green; deploy/live-migrate/OAuth-seed deferred to go-live"
 progress:
   total_phases: 9
   completed_phases: 9
@@ -328,6 +328,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-25T22:34:47.782Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-sidecar-scaffold-auth-migration/11-CONTEXT.md
+Last session: 2026-06-28T21:55:59.038Z
+Stopped at: Phase 12 context gathered
+Resume file: .planning/phases/12-streaming-ts-fan-out/12-CONTEXT.md
