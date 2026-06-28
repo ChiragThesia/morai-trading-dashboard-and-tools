@@ -18,6 +18,7 @@ Prohibitions:
 import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager, suppress
 from typing import AsyncIterator, Optional
 
@@ -34,6 +35,61 @@ LOCK_RETRY_SECONDS = 5.0
 # advisory_lock.IDLE_SESSION_TIMEOUT_MS (60s) so the live holder keeps its session non-idle
 # and the server-side idle reaper (GW-04 zombie self-heal) only ever fires on a DEAD session.
 HEARTBEAT_SECONDS = 20.0
+
+# Trader-token keep-alive. The sidecar's trader client is never exercised (the chain uses the
+# market client), so without this the trader access token expires and the server's
+# positions/orders/transactions reads 401 — the server-side refresher was retired in the GW-03
+# cutover. The keep-alive wakes ~MARGIN before expiry and pings a cheap trader endpoint;
+# schwab-py refreshes within its 300s leeway (auth.py) and dual-writes the discrete access_token
+# the server reads (token_store.py). Market is refreshed by chain fetches, so trader-only here.
+TRADER_KEEPALIVE_MARGIN = 180.0    # refresh this many seconds before expiry (< schwab-py's 300s leeway)
+TRADER_KEEPALIVE_MIN_SLEEP = 30.0  # floor: refresh an already-expired token promptly without busy-looping
+TRADER_KEEPALIVE_RETRY = 60.0      # back-off after a failed keep-alive ping
+
+
+def _keepalive_sleep_seconds(
+    expires_at: float, now: float, margin: float, min_sleep: float
+) -> float:
+    """
+    Seconds until the next proactive trader-token refresh: wake `margin` before the access token
+    expires so the keep-alive ping lands inside schwab-py's refresh leeway. Floored at min_sleep
+    so an already-expired token refreshes promptly without busy-looping.
+    """
+    return max(min_sleep, expires_at - now - margin)
+
+
+async def _trader_token_keepalive(app: FastAPI) -> None:
+    """
+    Keep the trader access token fresh while this instance holds the lock (see TRADER_KEEPALIVE_*).
+    No-op when the trader client is not seeded. Pings get_account_numbers shortly before expiry so
+    schwab-py refreshes + dual-writes; a failed ping backs off but never kills the loop.
+    """
+    client = getattr(app.state, "trader_client", None)
+    if client is None:
+        return  # not seeded — nothing to keep alive
+
+    while True:
+        try:
+            expires_at = float(client.session.token.get("expires_at", 0.0))
+        except Exception:  # noqa: BLE001 — unexpected token shape → refresh promptly
+            expires_at = 0.0
+        await asyncio.sleep(
+            _keepalive_sleep_seconds(
+                expires_at, time.time(), TRADER_KEEPALIVE_MARGIN, TRADER_KEEPALIVE_MIN_SLEEP
+            )
+        )
+        try:
+            resp = await client.get_account_numbers()
+            logger.info(
+                "sidecar: trader token keep-alive ping (status=%s)",
+                getattr(resp, "status_code", "?"),
+            )
+        except Exception as exc:  # noqa: BLE001 — a failed ping must not kill the loop
+            logger.warning(
+                "sidecar: trader keep-alive ping failed (%s) — retry in %ss",
+                type(exc).__name__, TRADER_KEEPALIVE_RETRY,
+            )
+            await asyncio.sleep(TRADER_KEEPALIVE_RETRY)
 
 
 def _init_schwab_clients(app: FastAPI, cfg: object) -> None:
@@ -139,6 +195,11 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
         # 2. Init the two schwab-py clients (degrades gracefully if token_json not seeded).
         _init_schwab_clients(app, cfg)
 
+        # 2b. Keep the trader token fresh so server-direct positions/orders/transactions reads
+        #     don't 401 (the trader client is otherwise never exercised). Cancelled on lock
+        #     loss/shutdown in the finally below.
+        keepalive_task = asyncio.create_task(_trader_token_keepalive(app))
+
         # 3. Heartbeat the lock session so the server-side idle reaper never kills THIS live
         #    holder. A failed ping means the connection (and the lock) is gone — tear down and
         #    fall through to re-acquire.
@@ -148,16 +209,22 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
                 cur.fetchone()
 
         try:
-            while True:
-                await asyncio.sleep(HEARTBEAT_SECONDS)
-                await loop.run_in_executor(None, _ping)
-        except asyncio.CancelledError:
-            raise  # shutdown: propagate so the lifespan finally closes lock_conn
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "sidecar: lock heartbeat failed (%s) — lock lost; re-acquiring",
-                type(exc).__name__,
-            )
+            try:
+                while True:
+                    await asyncio.sleep(HEARTBEAT_SECONDS)
+                    await loop.run_in_executor(None, _ping)
+            except asyncio.CancelledError:
+                raise  # shutdown: propagate so the lifespan finally closes lock_conn
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "sidecar: lock heartbeat failed (%s) — lock lost; re-acquiring",
+                    type(exc).__name__,
+                )
+        finally:
+            # Stop the keep-alive whenever we leave the heartbeat — on lock loss OR shutdown.
+            keepalive_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await keepalive_task
 
         # Lost the lock: stop acting as the writer (GW-04 — a stale writer + a new holder = two
         # writers → Schwab invalid_grant), drop the dead connection, loop back to re-acquire.
