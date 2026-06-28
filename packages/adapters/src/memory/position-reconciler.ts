@@ -35,12 +35,12 @@ export type MemoryPositionReconciler = ForReconcilingPositions;
 export function makeMemoryPositionReconciler(
   seed: ReadonlyArray<ReconciledPosition>,
 ): MemoryPositionReconciler {
-  const frozen = Object.freeze([...seed]) as ReadonlyArray<ReconciledPosition>;
+  const frozenArr: ReadonlyArray<ReconciledPosition> = Object.freeze([...seed]);
 
   const reconcile: ForReconcilingPositions = (): Promise<
     Result<ReadonlyArray<ReconciledPosition>, StreamReconcileError>
   > => {
-    return Promise.resolve(ok(frozen));
+    return Promise.resolve(ok(frozenArr));
   };
 
   return reconcile;
