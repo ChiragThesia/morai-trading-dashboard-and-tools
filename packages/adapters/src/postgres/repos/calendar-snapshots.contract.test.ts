@@ -1,4 +1,4 @@
-import { describe, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, beforeAll, beforeEach, afterAll, it, expect } from "vitest";
 import { inject } from "vitest";
 import { runCalendarSnapshotsContractTests } from "../../__contract__/calendar-snapshots.contract.ts";
 import { makePostgresCalendarSnapshotsRepo } from "./calendar-snapshots.ts";
@@ -106,4 +106,53 @@ describe.skipIf(shouldSkip)("postgres calendar-snapshots adapter", () => {
       },
     }),
   );
+});
+
+/**
+ * Regression: resolveLegSnapshot must match the calendar underlying against the contract
+ * ROOT, not contracts.underlying.
+ *
+ * Real prod data: SPXW weekly options are stored with occ root "SPXW" but
+ * contracts.underlying = "SPX" (the index). Every calendar is tracked as "SPXW". The old
+ * resolver matched contracts.underlying = "SPXW" → 0 rows → null legs → every journal
+ * snapshot was spot 0 / NaN greeks. The leg data existed the whole time under root "SPXW".
+ */
+describe.skipIf(shouldSkip)("postgres resolveLegSnapshot — matches on contract root (SPXW weeklys)", () => {
+  let rdb: ReturnType<typeof makeDb>;
+
+  beforeAll(() => {
+    if (dbUrl) rdb = makeDb(dbUrl);
+  });
+
+  beforeEach(async () => {
+    if (rdb) await rdb.execute(sql`TRUNCATE TABLE leg_observations, contracts CASCADE`);
+  });
+
+  it("resolves a leg when calendar underlying is 'SPXW' but contracts.underlying is 'SPX' (root='SPXW')", async () => {
+    if (!rdb) return;
+    const occ = "SPXW  260807P07425000";
+    // underlying='SPX' (index), root='SPXW' (option root) — exactly how the chain stores weeklys.
+    await rdb.execute(
+      sql`INSERT INTO contracts (occ_symbol, underlying, root, contract_type, exercise_style, strike, expiration, multiplier)
+          VALUES (${occ}, 'SPX', 'SPXW', 'P', 'european', 7425000, '2026-08-07', 100)`,
+    );
+    await rdb.execute(
+      sql`INSERT INTO leg_observations (time, contract, bid, ask, mark, underlying_price, bsm_iv, bsm_delta, bsm_gamma, bsm_theta, bsm_vega, iv, open_interest, volume, source)
+          VALUES (NOW(), ${occ}, '0', '0', '169.4', '7381.12', '0.1564', NULL, NULL, NULL, NULL, '0.15', 0, 0, 'cboe')`,
+    );
+
+    const repo = makePostgresCalendarSnapshotsRepo(rdb);
+    const result = await repo.resolveLegSnapshot({
+      underlying: "SPXW", // calendar underlying = the option root
+      strike: 7425000,
+      optionType: "P",
+      expiry: "2026-08-07",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).not.toBeNull(); // RED before fix: resolver matched contracts.underlying ('SPX') → null
+    expect(result.value?.mark).toBeCloseTo(169.4, 2);
+    expect(result.value?.underlyingPrice).toBeCloseTo(7381.12, 2);
+  });
 });

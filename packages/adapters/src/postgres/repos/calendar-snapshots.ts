@@ -130,13 +130,17 @@ export function makePostgresCalendarSnapshotsRepo(
     readonly expiry: string; // YYYY-MM-DD
   }): Promise<Result<LegSnapshot | null, StorageError>> => {
     try {
-      // Step 1: find the OCC symbol via attribute match
+      // Step 1: find the OCC symbol via attribute match.
+      // Match on contracts.ROOT, not contracts.underlying: weekly options carry occ root
+      // "SPXW" while contracts.underlying is the index "SPX". Calendars are tracked by the
+      // root ("SPXW"), so matching underlying would never hit (→ null legs → 0/NaN snapshots).
+      // The root also disambiguates the SPX vs SPXW share of a strike/expiry (different settle).
       const contractRows = await db
         .select({ occSymbol: contracts.occSymbol })
         .from(contracts)
         .where(
           and(
-            eq(contracts.underlying, query.underlying),
+            eq(contracts.root, query.underlying),
             eq(contracts.strike, query.strike), // both ×1000 int
             eq(contracts.expiration, query.expiry),
             eq(contracts.contractType, query.optionType),
