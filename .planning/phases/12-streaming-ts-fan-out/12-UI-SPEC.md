@@ -47,7 +47,7 @@ created: 2026-06-28
 |-----------|------|-------------|
 | `Badge` | `components/ui/badge.tsx` | Connection status pill, stale badge, "AD HOC" label |
 | `Input` | `components/ui/input.tsx` | Ad-hoc OCC symbol text input |
-| `Button` | `components/ui/button.tsx` | "Stream" submit button |
+| `Button` | `components/ui/button.tsx` | "Stream Greeks" submit button |
 | `Skeleton` | `components/ui/skeleton.tsx` | Loading placeholder while reconcile pending |
 | `Tooltip` | `components/ui/tooltip.tsx` | Symbol cap warning, stale age timestamp |
 | `Separator` | `components/ui/separator.tsx` | Divider between owned positions and ad-hoc entry |
@@ -68,9 +68,10 @@ created: 2026-06-28
 | 2xl | 32px | Not used in Phase 12 surfaces |
 | 3xl | 48px | Not used in Phase 12 surfaces |
 
-**Phase 12 exceptions:** none. All new elements fit the existing 4-multiple scale.
+**Spacing Exception — 12px `md` token (inherited from Phase 9):**
+The `md` token maps to 12px (Tailwind `p-3`), which is NOT in the standard 8-point grid set {4, 8, 16, 24, 32, 48, 64}. This value is the shadcn/ui base-nova `card` component's default internal padding. Overriding it would require fighting the component's internal CSS and would create maintainability debt across all cards already shipped to morai.wtf. Exception approved — 12px is inherited from the Phase 9 approved design system (Phase 9 UI-SPEC, approved). Phase 12 introduces no additional non-grid spacing values.
 
-**Touch targets:** minimum 44×44px on the "Stream" button and the ad-hoc clear (×) button.
+**Touch targets:** minimum 44×44px on the "Stream Greeks" button and the ad-hoc clear (×) button.
 
 ---
 
@@ -84,6 +85,9 @@ created: 2026-06-28
 | `body` | JetBrains Mono | 12px | 400 | 1.45 | Live greek values in the per-leg table, ad-hoc result row, validation error message |
 | `subhead` | Space Grotesk | 14px | 700 | 1.1 | KPI values (Mark, Unreal) when updated with live data |
 | `display` | Space Grotesk | 24px | 700 | 1.0 | Not used in Phase 12 new surfaces |
+
+**Typography Exception — three weights active (400, 600, 700):**
+The standard contract maximum is two weights. Phase 12 uses three: 400 (body mono values and label mono), 600 (label Space Grotesk headings), and 700 (subhead KPI emphasis). Weight 700 is NOT introduced by Phase 12 — it is inherited directly from the approved Phase 9 contract (Phase 9 UI-SPEC, approved) where `subhead`-level cells (Mark, Unreal KPI values) carry weight 700 for numeric emphasis. The `display` token (24px / 700) is present in the type scale but is NOT used in any Phase 12 new surface; weight 700 enters Phase 12 exclusively through the `subhead` token. Phase 12 introduces no new font weights beyond those locked in Phase 9.
 
 **Typographic rules (inherited, applied to Phase 12 cells):**
 - `font-variant-numeric: tabular-nums` on every live greek value cell — value widths must not shift during updates (already set globally on `body`).
@@ -112,7 +116,10 @@ created: 2026-06-28
 | `violet` | `#a78bfa` | `--color-violet` | Value-changed flash highlight (brief); focus ring on ad-hoc input (existing ring token) |
 | `violetd` | `#241d40` | `--color-violetd` | Value-changed flash background — fades from this to transparent over 300ms |
 
-**60/30/10 breakdown:** unchanged from Phase 9.
+**60/30/10 breakdown:**
+- 60% dominant — page background (`--color-bg` #0a0e14) and card/panel gradient surfaces (`--color-panel` #0f1521, `--color-panel2` #0c111a). The dark navy shell fills most screen area.
+- 30% secondary — text and structure layer: body text (`--color-txt` #d6dbe4), muted labels (`--color-muted` #7b8696), dimmed values (`--color-dim` #566273), hover/flash backgrounds (`--color-raise` #161d2b), and separator lines (`--color-line` #1b2433).
+- 10% accent — violet for focus rings and value-change flash (`--color-violet` #a78bfa, `--color-violetd` #241d40); teal for live/connected/gain states (`--color-up` #26a69a); amber for stale/warning/degraded states (`--color-amber` #f0b429). Coral (`--color-down` #ef5350) is reserved for loss, risk, and validation errors.
 
 **Accent reserved for:** (unchanged from Phase 9) active tab indicator, selected position border, T+0 payoff curve, focus rings. Phase 12 additions: value-change flash (`--color-violetd` background fading to transparent).
 
@@ -210,6 +217,8 @@ source of truth — appears in one place only: the CardHeading badge slot of the
 
 **Tooltip on badge:** on hover/focus, show a `<Tooltip>` with the last-tick timestamp: "Last update: HH:mm:ss" (12px mono, `--color-muted`). If no tick has ever arrived: "No data received yet."
 
+**Primary visual focal point:** The connection-status badge dot in the Position CardHeading is the primary visual focal point for stream state — it is always visible regardless of which position is selected and provides an at-a-glance stream health signal without interrupting the data layout.
+
 **No global header element:** the connection status is local to the Positions screen. It does not appear in the sticky Shell header or the market strip. The status is position-data specific, not app-wide.
 
 ---
@@ -233,7 +242,7 @@ and picker appear immediately (the picker is always accessible, not conditional 
   - Height: 32px (h-8 from the Input component default).
   - Border color: `--color-line2` (#27313f) at rest; `--color-violet` (#a78bfa) on focus (focus ring — existing `ring` token).
   - Enter key submits. No separate submit button needed if the symbol is valid; the Enter key is the primary affordance.
-- Submit button: `<Button variant="secondary" size="sm">Stream</Button>` — appears to the right of the input as a `flex` row. 44px minimum height (touch target). Label: "Stream" (verb + implicit noun "live greeks").
+- Submit button: `<Button variant="secondary" size="sm">Stream Greeks</Button>` — appears to the right of the input as a `flex` row. 44px minimum height (touch target). Label: "Stream Greeks" (verb + noun).
 - Clear button: `×` (lucide `X` icon, 14px) — appears inside the input as a trailing icon when a symbol is entered. Clicking clears the input and removes the ad-hoc subscription. Accessible label: `aria-label="Clear ad-hoc symbol"`. Color: `--color-muted` (#7b8696) at rest; `--color-txt` (#d6dbe4) on hover.
 
 **Symbol validation:**
@@ -308,8 +317,8 @@ t=0ms   badge changes to "LIVE" with pulsing dot
 
 | State | Visible elements |
 |-------|-----------------|
-| Initial (no symbol entered) | Input (empty), "Stream" button (disabled or grayed), empty-state copy below |
-| Symbol entered, not submitted | Input (with text), "Stream" button (enabled), no error |
+| Initial (no symbol entered) | Input (empty), "Stream Greeks" button (disabled or grayed), empty-state copy below |
+| Symbol entered, not submitted | Input (with text), "Stream Greeks" button (enabled), no error |
 | Submit: valid symbol | Input (readonly or cleared), ad-hoc row appears below separator, live values start streaming |
 | Submit: invalid OCC | Input (text preserved), error message below in `--color-down`, no row added |
 | Symbol evicted (cap reached) | Transient notice replaces error slot: "Oldest ad-hoc symbol replaced." in `--color-muted`, 10px mono; disappears after 3s |
@@ -333,7 +342,7 @@ t=0ms   badge changes to "LIVE" with pulsing dot
 | Status tooltip (no data yet) | No data received yet. |
 | Ad-hoc section label | Ad-hoc lookup |
 | Ad-hoc input placeholder | SPX   260620C05000000 |
-| Ad-hoc submit button | Stream |
+| Ad-hoc submit button | Stream Greeks |
 | Ad-hoc clear button aria-label | Clear ad-hoc symbol |
 | Ad-hoc empty state | Enter any OCC symbol to stream live greeks. |
 | Ad-hoc validation error | Invalid OCC format — use 21-char Schwab format (e.g. SPX   260620C05000000) |
