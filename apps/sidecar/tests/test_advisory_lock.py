@@ -9,7 +9,11 @@ try_acquire_sidecar_lock is non-blocking and non-fatal:
 """
 import psycopg2
 
-from advisory_lock import try_acquire_sidecar_lock, SIDECAR_LOCK_KEY
+from advisory_lock import (
+    try_acquire_sidecar_lock,
+    SIDECAR_LOCK_KEY,
+    IDLE_SESSION_TIMEOUT_MS,
+)
 
 
 def test_second_instance_returns_none(db_url: str) -> None:
@@ -53,3 +57,26 @@ def test_first_instance_acquires(db_url: str) -> None:
     conn2 = try_acquire_sidecar_lock(db_url)
     assert conn2 is not None, "lock should be re-acquirable after the holder closed its conn"
     conn2.close()
+
+
+def test_lock_session_sets_idle_timeout(db_url: str) -> None:
+    """
+    GW-04 zombie self-heal: the lock-holding session sets idle_session_timeout so that an
+    ABANDONED holder (instance SIGKILLed mid rolling-deploy, OOM) is reaped server-side after
+    it goes idle — the advisory lock then auto-releases with no manual pg_terminate_backend.
+    The live holder keeps its session non-idle via a heartbeat (main.py), so the timeout only
+    ever fires on a genuinely dead session.
+    """
+    conn = try_acquire_sidecar_lock(db_url)
+    try:
+        assert conn is not None, "try_acquire_sidecar_lock must return a connection when free"
+        with conn.cursor() as cur:
+            # pg_settings.setting reports idle_session_timeout in its base unit (ms).
+            cur.execute("SELECT setting FROM pg_settings WHERE name = 'idle_session_timeout'")
+            setting = cur.fetchone()[0]
+        assert setting == str(IDLE_SESSION_TIMEOUT_MS), (
+            f"lock session must set idle_session_timeout={IDLE_SESSION_TIMEOUT_MS}ms for zombie "
+            f"self-heal; got {setting!r}"
+        )
+    finally:
+        conn.close()

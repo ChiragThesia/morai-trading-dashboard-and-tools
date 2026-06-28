@@ -49,6 +49,17 @@ logger = logging.getLogger(__name__)
 # Chosen to be unlikely to collide with any application-level advisory locks.
 SIDECAR_LOCK_KEY: int = 8876543210
 
+# ── Zombie self-heal (GW-04) ────────────────────────────────────────────────────
+# Server-side idle timeout applied to the lock-holding session. If the holding instance
+# dies ungracefully (SIGKILL mid rolling-deploy, OOM), its connection lingers on the
+# Supabase session pooler and would hold the advisory lock indefinitely (Railway has no
+# IPv6 egress, so the direct connection that would close cleanly is unreachable). With this
+# set, Postgres terminates the abandoned backend after it sits idle this long, auto-releasing
+# the lock — no manual pg_terminate_backend. The LIVE holder keeps its session non-idle via a
+# heartbeat (main.py HEARTBEAT_SECONDS, which must be < this), so the timeout only ever reaps a
+# genuinely dead session. Value in milliseconds (idle_session_timeout's base unit).
+IDLE_SESSION_TIMEOUT_MS: int = 60_000
+
 
 def try_acquire_sidecar_lock(
     direct_db_url: str,
@@ -91,6 +102,13 @@ def try_acquire_sidecar_lock(
             SIDECAR_LOCK_KEY,
         )
         return None
+
+    # Zombie self-heal (GW-04): bound how long an ABANDONED holder can keep the lock. If this
+    # instance later dies ungracefully, its session goes idle and Postgres terminates it after
+    # IDLE_SESSION_TIMEOUT_MS, releasing the lock. The live holder dodges this via a heartbeat
+    # (main.py). Applies to this session only; the held lock survives the SET (no tx boundary).
+    with conn.cursor() as cur:
+        cur.execute(f"SET idle_session_timeout = '{IDLE_SESSION_TIMEOUT_MS}ms'")
 
     logger.info("sidecar: advisory lock %s acquired", SIDECAR_LOCK_KEY)
     return conn  # caller holds reference; lock released on conn.close()

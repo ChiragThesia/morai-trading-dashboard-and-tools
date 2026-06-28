@@ -30,52 +30,20 @@ logger = logging.getLogger(__name__)
 # (e.g. during a Railway rolling-deploy rollover). Bounded so rollover completes quickly.
 LOCK_RETRY_SECONDS = 5.0
 
+# Seconds between lock-session heartbeats. MUST stay well below
+# advisory_lock.IDLE_SESSION_TIMEOUT_MS (60s) so the live holder keeps its session non-idle
+# and the server-side idle reaper (GW-04 zombie self-heal) only ever fires on a DEAD session.
+HEARTBEAT_SECONDS = 20.0
 
-async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
-    """
-    Background task: acquire the advisory lock (retrying), then init the schwab clients.
 
-    Runs concurrently with the app serving /sidecar/health. The app is healthy WITHOUT the
-    lock; this task acquires it once it frees up (GW-04 single-writer; breaks the
-    rolling-deploy rollover deadlock — see advisory_lock.py). Until the lock is held,
-    app.state.has_lock stays False and no Schwab clients exist, so /sidecar/chain returns
-    503 (caller falls back to CBOE).
+def _init_schwab_clients(app: FastAPI, cfg: object) -> None:
     """
-    from advisory_lock import try_acquire_sidecar_lock
+    Init the two schwab-py clients (D-05) on app.state. Degrades gracefully if token_json is
+    not seeded — logs the error TYPE only, never the token (CLAUDE.md). Called once per lock
+    acquisition (re-run on re-acquire after a lost lock).
+    """
     from token_store import make_token_callbacks
 
-    loop = asyncio.get_event_loop()
-
-    # 1. Acquire the advisory lock, retrying while another instance holds it.
-    #    psycopg2 is blocking → run in the default executor so the event loop (and the
-    #    health endpoint) stays responsive.
-    lock_conn = None
-    while lock_conn is None:
-        try:
-            lock_conn = await loop.run_in_executor(
-                None, try_acquire_sidecar_lock, cfg.DATABASE_URL  # type: ignore[attr-defined]
-            )
-        except Exception as exc:  # noqa: BLE001
-            # A transient DB/pooler error must NOT kill the retry loop — keep trying so the
-            # instance still acquires the lock once the DB is reachable again.
-            logger.warning(
-                "sidecar: advisory-lock acquisition attempt errored (%s) — retrying in %ss",
-                type(exc).__name__, LOCK_RETRY_SECONDS,
-            )
-            lock_conn = None
-        if lock_conn is None:
-            logger.warning(
-                "sidecar: advisory lock not acquired — retrying in %ss "
-                "(serving /sidecar/health in degraded mode meanwhile)",
-                LOCK_RETRY_SECONDS,
-            )
-            await asyncio.sleep(LOCK_RETRY_SECONDS)
-
-    app.state.lock_conn = lock_conn
-    app.state.has_lock = True
-    logger.info("sidecar: advisory lock acquired — this instance is the active writer")
-
-    # 2. Init two schwab-py clients (D-05). Degrade gracefully if token_json not seeded.
     trader_read, trader_write = make_token_callbacks(
         cfg.DATABASE_URL, "trader", cfg.TOKEN_ENCRYPTION_KEY  # type: ignore[attr-defined]
     )
@@ -116,6 +84,90 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
             "(token not seeded). /sidecar/chain returns 503 until token_json is seeded "
             "and this instance restarts."
         )
+
+
+async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
+    """
+    Supervisory background task: (re)acquire the advisory lock, init the schwab clients, then
+    heartbeat the lock session — looping back to re-acquire if the lock is ever lost.
+
+    Runs concurrently with the app serving /sidecar/health. The app is healthy WITHOUT the
+    lock; this task acquires it once it frees up (GW-04 single-writer; breaks the
+    rolling-deploy rollover deadlock — see advisory_lock.py). Until the lock is held,
+    app.state.has_lock stays False and no Schwab clients exist, so /sidecar/chain returns
+    503 (caller falls back to CBOE).
+
+    Heartbeat: the lock session sets a server-side idle_session_timeout (GW-04 zombie
+    self-heal) so an ABANDONED holder is reaped automatically. This task keeps the LIVE
+    holder's session non-idle by pinging every HEARTBEAT_SECONDS. If a ping fails the
+    session/lock is gone, so it drops to degraded and re-acquires — no manual intervention.
+    """
+    from advisory_lock import try_acquire_sidecar_lock
+
+    loop = asyncio.get_event_loop()
+
+    while True:
+        # 1. Acquire the advisory lock, retrying while another instance holds it.
+        #    psycopg2 is blocking → run in the default executor so the event loop (and the
+        #    health endpoint) stays responsive.
+        lock_conn = None
+        while lock_conn is None:
+            try:
+                lock_conn = await loop.run_in_executor(
+                    None, try_acquire_sidecar_lock, cfg.DATABASE_URL  # type: ignore[attr-defined]
+                )
+            except Exception as exc:  # noqa: BLE001
+                # A transient DB/pooler error must NOT kill the retry loop — keep trying so the
+                # instance still acquires the lock once the DB is reachable again.
+                logger.warning(
+                    "sidecar: advisory-lock acquisition attempt errored (%s) — retrying in %ss",
+                    type(exc).__name__, LOCK_RETRY_SECONDS,
+                )
+                lock_conn = None
+            if lock_conn is None:
+                logger.warning(
+                    "sidecar: advisory lock not acquired — retrying in %ss "
+                    "(serving /sidecar/health in degraded mode meanwhile)",
+                    LOCK_RETRY_SECONDS,
+                )
+                await asyncio.sleep(LOCK_RETRY_SECONDS)
+
+        app.state.lock_conn = lock_conn
+        app.state.has_lock = True
+        logger.info("sidecar: advisory lock acquired — this instance is the active writer")
+
+        # 2. Init the two schwab-py clients (degrades gracefully if token_json not seeded).
+        _init_schwab_clients(app, cfg)
+
+        # 3. Heartbeat the lock session so the server-side idle reaper never kills THIS live
+        #    holder. A failed ping means the connection (and the lock) is gone — tear down and
+        #    fall through to re-acquire.
+        def _ping() -> None:
+            with lock_conn.cursor() as cur:  # type: ignore[union-attr]
+                cur.execute("SELECT 1")
+                cur.fetchone()
+
+        try:
+            while True:
+                await asyncio.sleep(HEARTBEAT_SECONDS)
+                await loop.run_in_executor(None, _ping)
+        except asyncio.CancelledError:
+            raise  # shutdown: propagate so the lifespan finally closes lock_conn
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "sidecar: lock heartbeat failed (%s) — lock lost; re-acquiring",
+                type(exc).__name__,
+            )
+
+        # Lost the lock: stop acting as the writer (GW-04 — a stale writer + a new holder = two
+        # writers → Schwab invalid_grant), drop the dead connection, loop back to re-acquire.
+        app.state.has_lock = False
+        app.state.degraded = True
+        app.state.trader_client = None
+        app.state.market_client = None
+        with suppress(Exception):
+            lock_conn.close()  # type: ignore[union-attr]
+        app.state.lock_conn = None
 
 
 @asynccontextmanager
