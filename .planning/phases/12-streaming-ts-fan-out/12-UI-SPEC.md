@@ -1,7 +1,8 @@
 ---
 phase: 12
 slug: streaming-ts-fan-out
-status: draft
+status: approved
+reviewed_at: 2026-06-28
 shadcn_initialized: true
 preset: base-nova / neutral / base-ui
 created: 2026-06-28
