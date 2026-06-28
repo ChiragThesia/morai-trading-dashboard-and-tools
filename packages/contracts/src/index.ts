@@ -68,3 +68,18 @@ export type { TriggerableJob, TriggerJobPayload, TriggerJobResponse } from "./jo
 // GEX contracts (MCP-02: ONE schema source for GET /api/analytics/gex + get_gex MCP tool)
 export { gexWallEntry, gexSnapshotEntry, gexSnapshotResponse } from "./gex.ts";
 export type { GexWallEntry, GexSnapshotEntry, GexSnapshotResponse } from "./gex.ts";
+
+// Stream-events contracts (Phase 12 — MCP-02: sidecar→server→browser SSE payload schemas)
+export {
+  streamTicketResponse,
+  streamLiveGreekEvent,
+  streamReconcileEvent,
+  streamFillEvent,
+} from "./stream-events.ts";
+export type {
+  StreamTicketResponse,
+  StreamLiveGreekEvent,
+  StreamReconcilePosition,
+  StreamReconcileEvent,
+  StreamFillEvent,
+} from "./stream-events.ts";
