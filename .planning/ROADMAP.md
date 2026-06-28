@@ -543,12 +543,14 @@ Plans:
 ### Phase 12: Streaming + TS Fan-Out
 
 **Goal**: The sidecar streams live LEVELONE_OPTION data (marks, per-leg greeks, IV) and
-ACCT_ACTIVITY fill events for open position legs; `apps/server` multiplexes the sidecar's
+ACCT_ACTIVITY fill events for open position legs **and for ad-hoc instrument lookups** (any
+OCC symbol the user selects — scope expanded per CONTEXT D-05, 2026-06-28); live greeks/IV are
+recomputed via the BSM engine, not shown raw (D-02). `apps/server` multiplexes the sidecar's
 single SSE stream to N browser clients over an authed `GET /api/stream` endpoint, with a
-Supabase JWT verified at the server edge; on cold start or reconnect the sidecar reconciles
-current state via a REST pull so the live view has no gaps.
+Supabase JWT verified at the server edge (short-lived opaque ticket — D-01); on cold start or
+reconnect the sidecar reconciles current state via a REST pull so the live view has no gaps.
 **Depends on**: Phase 11 (stable sidecar with advisory lock and REST proxy)
-**Requirements**: STRM-01, STRM-02, STRM-03, STRM-04, STRM-05
+**Requirements**: STRM-01 (incl. ad-hoc lookup, expanded), STRM-02, STRM-03, STRM-04, STRM-05
 **Research flag**: ACCT_ACTIVITY `MESSAGE_TYPE` values are not publicly documented — discover empirically once the sidecar runs; do not hard-code from assumptions. EventSource JWT-as-query-param vs opaque-ticket security choice — prefer a short-lived ticket if cheap (query-param JWTs leak into server logs).
 **Cross-cutting**: Stream data is display-only — no per-tick Postgres writes; `sync-transactions` (REST) remains the authoritative fill source (STRM-04 constraint applies across all streaming code).
 **Success Criteria** (what must be TRUE):
@@ -558,6 +560,7 @@ current state via a REST pull so the live view has no gaps.
   3. `GET /api/stream` (with a valid Supabase JWT) delivers a well-formed SSE stream to a browser client; an unauthenticated request is rejected at the server edge before proxying to the sidecar (STRM-03).
   4. After a sidecar restart, `GET /sidecar/positions` is called and the resulting positions are reconciled so the first SSE event to reconnecting browsers reflects current state, not a stale pre-restart snapshot (STRM-05).
   5. The stream contains no Postgres writes in the hot path; `SELECT count(*) FROM leg_observations` does not grow during a streaming-only session (STRM-04 regression gate).
+  6. Entering an arbitrary OCC symbol in the ad-hoc lookup streams its live BSM greeks the same way as an open leg — the symbol is added to the subscription set (respecting the 500-symbol cap) and dropped when cleared; the result row is visually distinguished from owned positions (STRM-01 expanded, D-05; UI-SPEC Surface 4).
 
 **Plans**: TBD
 

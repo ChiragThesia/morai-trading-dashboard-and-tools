@@ -97,7 +97,7 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 
 ### Real-Time Streaming
 
-- [ ] **STRM-01**: The sidecar streams live LEVELONE_OPTION data (mark, bid/ask, delta/gamma/theta/vega/rho, IV) for open position legs only.
+- [ ] **STRM-01**: The sidecar streams live LEVELONE_OPTION data (mark, bid/ask, delta/gamma/theta/vega/rho, IV) for open position legs **and for ad-hoc instrument lookups** (any OCC symbol the user selects). Live greeks/IV are recomputed via the BSM engine, not taken raw. *(Scope expanded from open-legs-only per Phase 12 CONTEXT D-02/D-05, 2026-06-28.)*
 - [ ] **STRM-02**: The sidecar streams ACCT_ACTIVITY fill events.
 - [ ] **STRM-03**: `apps/server` fans the sidecar's single stream out to N browser clients over an authed `GET /api/stream`, with the Supabase JWT verified at the server edge.
 - [ ] **STRM-04**: Stream data is display-only — no per-tick persistence; `sync-transactions` (REST) remains the authoritative fill source.
