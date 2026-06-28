@@ -550,8 +550,8 @@ single SSE stream to N browser clients over an authed `GET /api/stream` endpoint
 Supabase JWT verified at the server edge (short-lived opaque ticket — D-01); on cold start or
 reconnect the sidecar reconciles current state via a REST pull so the live view has no gaps.
 **Depends on**: Phase 11 (stable sidecar with advisory lock and REST proxy)
-**Requirements**: STRM-01, STRM-02, STRM-03, STRM-04, STRM-05  <!-- STRM-01 expanded to include ad-hoc instrument lookup (CONTEXT D-05); see goal + criterion 6 -->
-**Scope note**: STRM-01 expanded beyond open-legs-only to include ad-hoc instrument lookup (any OCC symbol) — CONTEXT D-05, 2026-06-28.
+**Requirements**: STRM-01, STRM-02, STRM-03, STRM-04, STRM-05
+**Scope note**: STRM-01 expanded beyond open-legs-only to include ad-hoc instrument lookup (any OCC symbol) — CONTEXT D-05, 2026-06-28; see goal + criterion 6.
 **Research flag**: ACCT_ACTIVITY `MESSAGE_TYPE` values are not publicly documented — discover empirically once the sidecar runs; do not hard-code from assumptions. EventSource JWT-as-query-param vs opaque-ticket security choice — prefer a short-lived ticket if cheap (query-param JWTs leak into server logs).
 **Cross-cutting**: Stream data is display-only — no per-tick Postgres writes; `sync-transactions` (REST) remains the authoritative fill source (STRM-04 constraint applies across all streaming code).
 **Success Criteria** (what must be TRUE):
