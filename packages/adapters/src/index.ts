@@ -126,5 +126,9 @@ export type { PgBossJobQueue } from "./pgboss/job-queue.ts";
 export { makeMemoryJobQueue } from "./memory/job-queue.ts";
 export type { MemoryJobQueue, MemoryJobQueueEntry } from "./memory/job-queue.ts";
 
+// Phase 12 (12-01): in-memory position reconciler twin (ForReconcilingPositions port)
+export { makeMemoryPositionReconciler } from "./memory/position-reconciler.ts";
+export type { MemoryPositionReconciler } from "./memory/position-reconciler.ts";
+
 // Note: contract test harness in src/__contract__/ is excluded from tsconfig emit
 // (test-only code using vitest). Import directly from the file path in test code.

@@ -223,3 +223,15 @@ export type {
   ComputeGexSnapshotDeps,
   GetGexDeps,
 } from "./analytics/index.ts";
+
+// ─── Streaming bounded context (Phase 12) ─────────────────────────────────────
+// SSE fan-out pipeline domain types and BSM live-greek recompute (D-02, STRM-01)
+export type {
+  RawOptionTick,
+  LiveGreekTick,
+  ReconciledPosition,
+  StreamReconcileError,
+  ForReconcilingPositions,
+} from "./streaming/index.ts";
+export { recomputeLiveGreek } from "./streaming/index.ts";
+export type { LiveGreekSkip } from "./streaming/index.ts";
