@@ -248,3 +248,5 @@ export type {
 // COT use-case factories + driver ports (13-04)
 export { makeFetchCot } from "./journal/index.ts";
 export type { ForRunningFetchCot } from "./journal/index.ts";
+export { makeGetCotUseCase } from "./journal/index.ts";
+export type { ForRunningGetCot, CotEntry } from "./journal/index.ts";
