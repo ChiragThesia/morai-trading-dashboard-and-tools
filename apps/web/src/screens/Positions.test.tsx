@@ -54,6 +54,22 @@ vi.mock("../lib/supabase.ts", () => ({
   },
 }));
 
+// Phase 12: mock useLiveStream so Positions.test.tsx doesn't open a real EventSource
+vi.mock("../hooks/useLiveStream.ts", () => ({
+  useLiveStream: vi.fn(() => ({
+    greeks: new Map(),
+    status: "poll" as const,
+    lastTickAt: null,
+    subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+  })),
+  StreamMintError: class StreamMintError extends Error {
+    constructor(status: number) { super(String(status)); this.name = "StreamMintError"; }
+  },
+  StreamSubscribeError: class StreamSubscribeError extends Error {
+    constructor(status: number) { super(String(status)); this.name = "StreamSubscribeError"; }
+  },
+}));
+
 // ─── Import screen + mocks (AFTER vi.mock hoisting) ──────────────────────────
 import { Positions } from "./Positions.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
