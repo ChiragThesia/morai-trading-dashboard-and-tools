@@ -1,11 +1,12 @@
 // Worker composition root — pg-boss scheduling.
-// Boot: parse config → run migrations → boot pg-boss → register all 9 jobs via registerAllJobs.
+// Boot: parse config → run migrations → boot pg-boss → register all 10 jobs via registerAllJobs.
 //
 // Architecture law (architecture-boundaries.md):
 // - process.env read ONCE here via bootWorkerConfig; typed config flows inward.
 // - No business logic in this file; only composition.
 // - TDD exempt: pure wiring (tdd.md Scope).
 // 11-06 (GW-03/JRNL-02): refresh-tokens job retired; chain source swapped to sidecar adapter.
+// 13-05 (COT-01): fetch-cot job added — weekly CFTC COT report (Friday 17:00 ET, D-07).
 
 import { randomUUID, createHash } from "node:crypto";
 import { PgBoss } from "pg-boss";
@@ -31,6 +32,8 @@ import {
   makePostgresSkewObservationsRepo,
   makePostgresRiskReversalObservationsRepo,
   makePostgresGexSnapshotRepo,
+  makeCftcCotAdapter,
+  makePostgresCotObservationsRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -45,7 +48,9 @@ import {
   hashFillIds,
   makeRebuildJournalUseCase,
   selectChainSource,
+  makeFetchCot,
 } from "@morai/core";
+import { makeFetchCotHandler } from "./handlers/fetch-cot.ts";
 import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
 import { makeComputeBsmGreeksHandler } from "./handlers/compute-bsm-greeks.ts";
@@ -354,8 +359,21 @@ const rebuildJournalHandler = makeRebuildJournalHandler({
   now: () => new Date(),
 });
 
-// Register all 9 queues, 5 crons, and 9 work handlers via registerAllJobs (Plan 05-04 + 08-06).
-// 11-06 (GW-03): refresh-tokens retired — 9 queues, 5 scheduled jobs.
+// COT-01 (13-05): weekly CFTC Commitment of Traders report (Friday 17:00 ET, D-07).
+// CFTC Socrata endpoint — anonymous access, no auth required (landmine 7).
+// Idempotent: ON CONFLICT (contract_code, as_of) DO NOTHING in the repo (D-09).
+const fetchCotReport = makeCftcCotAdapter({ fetch: globalThis.fetch });
+const cotObsRepo = makePostgresCotObservationsRepo(db);
+const fetchCot = makeFetchCot({
+  fetchCotReport,
+  persistCotObservation: cotObsRepo.insertCotObservation,
+  now: () => new Date(),
+  contractCode: "13874A", // E-mini S&P 500 TFF futures-only contract code
+});
+const fetchCotHandler = makeFetchCotHandler({ fetchCot });
+
+// Register all 10 queues, 6 crons, and 10 work handlers via registerAllJobs (Plan 05-04 + 08-06 + 13-05).
+// 11-06 (GW-03): refresh-tokens retired. 13-05 (COT-01): fetch-cot added — 10 queues, 6 scheduled jobs.
 // Inline createQueue/schedule/work blocks removed — all scheduling logic is in schedule.ts.
 await registerAllJobs(boss, {
   fetchSchwabChain: fetchSchwabChainHandler,
@@ -367,8 +385,9 @@ await registerAllJobs(boss, {
   syncTransactions: syncTransactionsHandler,
   syncFills: syncFillsHandler,
   rebuildJournal: rebuildJournalHandler,
+  fetchCot: fetchCotHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 9 queues created, 5 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills); snapshot-calendars + compute-analytics + compute-gex-snapshot chain-triggered only; rebuild-journal on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 10 queues created, 6 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot); snapshot-calendars + compute-analytics + compute-gex-snapshot chain-triggered only; rebuild-journal on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );

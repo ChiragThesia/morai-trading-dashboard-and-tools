@@ -1,15 +1,16 @@
-// schedule.ts — registerAllJobs tests (Plan 05-04 Task 3; updated plan 05-13 for A4; updated 11-06 GW-03)
+// schedule.ts — registerAllJobs tests (Plan 05-04 Task 3; updated plan 05-13 for A4; updated 11-06 GW-03; 13-05 COT-01)
 //
 // Behaviors tested:
-//   - createQueue called for all 9 job names (refresh-tokens retired, GW-03)
-//   - schedule called for exactly 5 jobs (sync-transactions, sync-fills + existing 3; refresh-tokens RETIRED)
+//   - createQueue called for all 10 job names (refresh-tokens retired GW-03; fetch-cot added COT-01)
+//   - schedule called for exactly 6 jobs (sync-transactions, sync-fills + existing 3 + fetch-cot; refresh-tokens RETIRED)
 //   - snapshot-calendars NOT scheduled (chain-triggered only, D-03 / Pitfall 2)
 //   - compute-analytics NOT scheduled (chain-triggered by snapshot-calendars, 06-04)
 //   - rebuild-journal NOT scheduled (on-demand only)
 //   - refresh-tokens NOT scheduled (GW-03 sole-writer cutover: sidecar is sole refresher)
 //   - sync-fills cron is every 10 min RTH tz America/New_York
 //   - sync-transactions cron runs +5 min ahead of sync-fills (fills source before pairing)
-//   - work() registered for all 9 queues
+//   - fetch-cot cron is weekly Friday 17:00 ET tz America/New_York (COT-01, D-07)
+//   - work() registered for all 10 queues
 //   - createQueue calls precede schedule/work calls (CR-01 ordering)
 
 import { describe, it, expect, vi } from "vitest";
@@ -54,11 +55,12 @@ function makeFakeHandlers(): AllHandlers {
     syncTransactions: handler,
     syncFills: handler,
     rebuildJournal: handler,
+    fetchCot: handler,
   };
 }
 
-// GW-03: refresh-tokens retired from schedule — 9 queues, 5 crons
-const ALL_9_QUEUES = [
+// GW-03: refresh-tokens retired; 13-05 COT-01: fetch-cot added — 10 queues, 6 crons
+const ALL_10_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
@@ -68,31 +70,33 @@ const ALL_9_QUEUES = [
   "sync-transactions",
   "sync-fills",
   "rebuild-journal",
+  "fetch-cot",
 ];
 
-const SCHEDULED_5 = [
+const SCHEDULED_6 = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
   "sync-transactions",
   "sync-fills",
+  "fetch-cot",
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 9 job names (refresh-tokens retired, GW-03)", async () => {
+  it("calls createQueue for all 10 job names (refresh-tokens retired GW-03; fetch-cot added COT-01)", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_9_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_10_QUEUES.sort());
   });
 
-  it("calls schedule for exactly 5 jobs (refresh-tokens retired, GW-03)", async () => {
+  it("calls schedule for exactly 6 jobs (fetch-cot added COT-01; refresh-tokens retired GW-03)", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(scheduleCalls).toHaveLength(5);
+    expect(scheduleCalls).toHaveLength(6);
     const scheduledNames = scheduleCalls.map((c) => c.name).sort();
-    expect(scheduledNames).toEqual(SCHEDULED_5.sort());
+    expect(scheduledNames).toEqual(SCHEDULED_6.sort());
   });
 
   it("sync-transactions cron runs +5 min ahead of sync-fills, tz America/New_York", async () => {
@@ -147,11 +151,21 @@ describe("registerAllJobs", () => {
     expect(names).not.toContain("refresh-tokens");
   });
 
-  it("calls work() for all 9 queues (refresh-tokens retired, GW-03)", async () => {
+  it("calls work() for all 10 queues (refresh-tokens retired GW-03; fetch-cot added COT-01)", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_9_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_10_QUEUES.sort());
+  });
+
+  it("fetch-cot cron is '0 17 * * 5' tz America/New_York (COT-01, Friday 17:00 ET, D-07)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const fetchCot = scheduleCalls.find((c) => c.name === "fetch-cot");
+    expect(fetchCot).toBeDefined();
+    expect(fetchCot?.cron).toBe("0 17 * * 5");
+    expect(fetchCot?.tz).toBe("America/New_York");
   });
 
   it("does NOT schedule compute-gex-snapshot (chain-triggered only by compute-analytics, 08-06 D-01)", async () => {
