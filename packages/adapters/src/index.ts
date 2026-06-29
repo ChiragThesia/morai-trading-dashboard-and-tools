@@ -84,6 +84,8 @@ export type { SidecarChainAdapter } from "./sidecar/chain-adapter.ts";
 export { makeSidecarPositionReconciler } from "./sidecar/positions-reconciler.ts";
 export type { SidecarPositionReconcilerDeps } from "./sidecar/positions-reconciler.ts";
 export { makeFredRateAdapter } from "./http/fred.ts";
+// Phase 13 (13-02): CFTC Socrata TFF adapter — ForFetchingCotReport over gpe5-46if.json (COT-01)
+export { makeCftcCotAdapter } from "./http/cftc.ts";
 
 // In-memory adapters (test doubles; also usable in development)
 export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";
