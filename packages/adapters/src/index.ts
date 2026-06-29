@@ -86,6 +86,9 @@ export type { SidecarPositionReconcilerDeps } from "./sidecar/positions-reconcil
 export { makeFredRateAdapter } from "./http/fred.ts";
 // Phase 13 (13-02): CFTC Socrata TFF adapter — ForFetchingCotReport over gpe5-46if.json (COT-01)
 export { makeCftcCotAdapter } from "./http/cftc.ts";
+// Phase 13 (13-03): COT observations repo — ForPersistingCotObservation + ForReadingCotObservations
+export { makePostgresCotObservationsRepo } from "./postgres/repos/cot-observations.ts";
+export type { PostgresCotObservationsRepo } from "./postgres/repos/cot-observations.ts";
 
 // In-memory adapters (test doubles; also usable in development)
 export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";
