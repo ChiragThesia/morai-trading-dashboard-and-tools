@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { assertDefined } from "@morai/shared";
-import { pairPositionsIntoCalendars } from "./pair-calendars.ts";
+import { pairPositionsIntoCalendars, bookUnrealizedPnl } from "./pair-calendars.ts";
 import type { BrokerPositionResponse } from "@morai/contracts";
 
 /**
@@ -61,5 +61,25 @@ describe("pairPositionsIntoCalendars", () => {
     const single = out.singles[0];
     assertDefined(single, "single present");
     expect(single.occSymbol).toBe(orphan.occSymbol);
+  });
+});
+
+describe("bookUnrealizedPnl", () => {
+  // Regression: the header strip summed marketValue·(longQty−shortQty), which flips
+  // every short leg's sign and totals NOTIONAL magnitude (~+$38.9k for these two legs),
+  // not P&L. Correct book P&L = Σ legUnreal ≈ −$137 (the near-flat calendar).
+  it("sums unrealized P&L across legs (NOT notional magnitude)", () => {
+    const frontUnreal = -17875 - 127.0478 * (0 - 1) * 100; // short leg
+    const backUnreal = 20975 - 159.4222 * (1 - 0) * 100; // long leg
+    const expected = frontUnreal + backUnreal; // ≈ −137.44
+
+    expect(bookUnrealizedPnl([FRONT, BACK])).toBeCloseTo(expected, 2);
+    // Guard against the old bug: marketValue·netQty would give +38850.
+    expect(bookUnrealizedPnl([FRONT, BACK])).not.toBeCloseTo(38850, 0);
+  });
+
+  it("skips legs missing marks", () => {
+    const noMarks = leg({ occSymbol: "SPXW  260910C06000000", putCall: "C", longQty: 1, averagePrice: null, marketValue: null });
+    expect(bookUnrealizedPnl([noMarks])).toBe(0);
   });
 });

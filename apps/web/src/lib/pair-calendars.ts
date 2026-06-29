@@ -36,9 +36,25 @@ export type PairedPositions = {
 };
 
 /** Unrealized P&L for one leg, or null when marks are missing. */
-function legUnreal(p: BrokerPositionResponse): number | null {
+export function legUnreal(p: BrokerPositionResponse): number | null {
   if (p.marketValue === null || p.averagePrice === null) return null;
   return p.marketValue - p.averagePrice * (p.longQty - p.shortQty) * 100;
+}
+
+/**
+ * Total unrealized P&L across the whole book — Σ legUnreal over every leg with marks.
+ * This is the header "Book P&L". NOT `marketValue × netQty` (that flips short signs and
+ * sums notional magnitude — the bug this replaces).
+ */
+export function bookUnrealizedPnl(
+  positions: ReadonlyArray<BrokerPositionResponse>,
+): number {
+  let total = 0;
+  for (const p of positions) {
+    const u = legUnreal(p);
+    if (u !== null) total += u;
+  }
+  return total;
 }
 
 /** Whole calendar days from `now` to the leg's expiry. */

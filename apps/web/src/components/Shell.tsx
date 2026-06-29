@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useGex } from "../hooks/useGex.ts";
 import { usePositions } from "../hooks/usePositions.ts";
+import { bookUnrealizedPnl } from "../lib/pair-calendars.ts";
 import { AuthExpiredBanner } from "./AuthExpiredBanner.tsx";
 
 // ─── Screen registry ─────────────────────────────────────────────────────────
@@ -53,13 +54,9 @@ function MarketStrip(): React.ReactElement {
   const { data: gex } = useGex();
   const { data: positions } = usePositions();
 
-  // Book P&L: sum marketValue from all positions (best available without computed greeks)
-  const bookPnl = positions
-    ? positions.positions.reduce(
-        (sum, p) => sum + (p.marketValue ?? 0) * (p.longQty - p.shortQty),
-        0,
-      )
-    : null;
+  // Book P&L: total unrealized P&L across the book (Σ legUnreal). NOT marketValue·netQty
+  // — that flips short signs and sums notional magnitude (the bug this replaces).
+  const bookPnl = positions ? bookUnrealizedPnl(positions.positions) : null;
 
   const isNegativeGamma =
     gex !== undefined && gex.netGammaAtSpot < 0;
