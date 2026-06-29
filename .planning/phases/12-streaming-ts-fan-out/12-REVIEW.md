@@ -9,11 +9,18 @@ files_reviewed_list:
   - apps/web/src/screens/Overview.tsx
   - apps/web/src/screens/Overview.test.tsx
 findings:
-  critical: 1
-  warning: 2
+  critical: 0
+  warning: 1
   info: 2
-  total: 5
+  total: 3
 status: issues_found
+resolved:
+  - "CR-01 — net-greek ×netQty² scaling (magnitude + short-leg sign), fixed in 112d1b1 with 4 RED→GREEN lock-in tests"
+  - "WR-01 — multi-lot test gap, closed by the CR-01 regression fixtures"
+deferred:
+  - "WR-02 — lexicographic liveTs assumes uniform fractional-second precision (flash-key/stale only, not numbers)"
+  - "IN-01 — test-only as/! (eslint-disabled)"
+  - "IN-02 — partial-live calendar rows flash statically-sourced aggregate cells (wording mismatch, no numeric impact)"
 ---
 
 # Phase 12: Code Review Report
@@ -21,7 +28,7 @@ status: issues_found
 **Reviewed:** 2026-06-29T18:43:33Z
 **Depth:** standard
 **Files Reviewed:** 4
-**Status:** issues_found
+**Status:** issues_found (CR-01 + WR-01 resolved 2026-06-29 in `112d1b1`; WR-02 + 2 INFO deferred)
 
 ## Summary
 
