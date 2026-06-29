@@ -17,7 +17,7 @@ import type { StreamLiveGreekEvent } from "@morai/contracts";
 // Phase 12-07: mock useLiveStream BEFORE Overview import (intent: no real EventSource)
 vi.mock("../hooks/useLiveStream.ts", () => ({
   useLiveStream: vi.fn(() => ({
-    greeks: new Map() as ReadonlyMap<string, StreamLiveGreekEvent>,
+    greeks: new Map<string, StreamLiveGreekEvent>(),
     status: "poll" as const,
     lastTickAt: null,
     subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
