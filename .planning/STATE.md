@@ -6,7 +6,7 @@ current_phase: 13
 current_phase_name: cot-adapter
 status: executing
 stopped_at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
-last_updated: "2026-06-29T13:28:33.645Z"
+last_updated: "2026-06-29T13:38:49.702Z"
 last_activity: 2026-06-29
 last_activity_desc: Phase 13 execution started
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 13 (cot-adapter) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-06-29 — Phase 13 execution started
 
@@ -303,6 +303,7 @@ Recent decisions affecting current work:
 - [Phase ?]: GW-03: refresh-tokens TS job retired in single hard-cut release (11-06, D-06); Python sidecar is sole Schwab token writer
 - [Phase ?]: JRNL-02: worker chain source swapped from schwabMarketAdapter to sidecarAdapter; SIDECAR_URL added to worker config; CBOE fallback intact
 - [Phase ?]: Stale tsconfig refs cause TS5012 ENOENT lint failures after deletion
+- [Phase ?]: CFTC adapter + memory twin
 
 ### Pending Todos
 
@@ -329,6 +330,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-29T13:28:33.634Z
+Last session: 2026-06-29T13:38:43.575Z
 Stopped at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
 Resume file: .planning/phases/13-cot-adapter/13-01-PLAN.md

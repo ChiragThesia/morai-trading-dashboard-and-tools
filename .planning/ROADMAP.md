@@ -589,10 +589,10 @@ historical COT positioning series.
   1. After `fetch-cot` runs on a Friday, `cot_observations` gains one row per report week with `as_of` set to the preceding Tuesday and `published_at` set to the Friday fetch date; a second run for the same week is idempotent (0 duplicate rows) (COT-01).
   2. `GET /api/analytics/cot` returns a JSON array of COT series entries (as_of, net_noncommercial, net_commercial, open_interest, …) over the shared Zod contract; MCP `get_cot` returns the same data to Claude Code (COT-02, MCP-02).
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 
 - [x] 13-01-PLAN.md
-- [ ] 13-02-PLAN.md
+- [x] 13-02-PLAN.md
 - [ ] 13-03-PLAN.md
 - [ ] 13-04-PLAN.md
 - [ ] 13-05-PLAN.md
@@ -688,6 +688,6 @@ requires Phase 11 complete (sidecar health endpoint).
 | 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
 | 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
-| 13. COT Adapter | 1/6 | In Progress|  |
+| 13. COT Adapter | 2/6 | In Progress|  |
 | 14. FRED Expansion | 0/TBD | Not started | - |
 | 15. Re-Auth Smoothing | 0/TBD | Not started | - |
