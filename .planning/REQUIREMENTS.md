@@ -109,8 +109,8 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 
 ### COT Positioning
 
-- [ ] **COT-01**: A weekly `fetch-cot` job pulls CFTC COT data (E-mini S&P 500, TFF report) behind a port into a `cot_observations` table, storing `as_of` (Tuesday) separately from `published_at` (Friday); no auth.
-- [ ] **COT-02**: `GET /api/analytics/cot` and MCP `get_cot` return current and historical COT positioning series (MCP-02).
+- [x] **COT-01**: A weekly `fetch-cot` job pulls CFTC COT data (E-mini S&P 500, TFF report) behind a port into a `cot_observations` table, storing `as_of` (Tuesday) separately from `published_at` (Friday); no auth.
+- [x] **COT-02**: `GET /api/analytics/cot` and MCP `get_cot` return current and historical COT positioning series (MCP-02).
 
 ### FRED Macro
 
@@ -215,8 +215,8 @@ Explicitly excluded. Documented to prevent scope creep.
 | STRM-03 | Phase 12 | Pending |
 | STRM-04 | Phase 12 | Pending |
 | STRM-05 | Phase 12 | Pending |
-| COT-01 | Phase 13 | Pending |
-| COT-02 | Phase 13 | Pending |
+| COT-01 | Phase 13 | Complete |
+| COT-02 | Phase 13 | Complete |
 | MAC-01 | Phase 14 | Pending |
 | MAC-02 | Phase 14 | Pending |
 | AUTH-05 | Phase 15 | Pending |

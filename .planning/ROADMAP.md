@@ -564,6 +564,7 @@ reconnect the sidecar reconciles current state via a REST pull so the live view 
   6. Entering an arbitrary OCC symbol in the ad-hoc lookup streams its live BSM greeks the same way as an open leg — the symbol is added to the subscription set (respecting the 500-symbol cap) and dropped when cleared; the result row is visually distinguished from owned positions (STRM-01 expanded, D-05; UI-SPEC Surface 4).
 
 **Plans**: 6/6 complete (executed 2026-06-28; verification `human_needed` — code complete + all offline suites green [1321 TS + 60 py, typecheck + lint clean], but SC1/SC2 + ad-hoc live-tick timing are RTH-gated → live UAT pending market open; see 12-VERIFICATION.md)
+
 - [x] 12-01-PLAN.md — Stream contracts + core BSM recompute + ForReconcilingPositions port/twin + architecture docs (wave 1)
 - [x] 12-02-PLAN.md — Sidecar streamer: trader StreamClient session, LEVELONE+ACCT_ACTIVITY, 490-cap LRU + reconcile diff (wave 2)
 - [x] 12-04-PLAN.md — Server opaque-ticket store + SSE fan-out 1/sec coalescer + STRM-04 no-persist gate (wave 2)
@@ -588,7 +589,14 @@ historical COT positioning series.
   1. After `fetch-cot` runs on a Friday, `cot_observations` gains one row per report week with `as_of` set to the preceding Tuesday and `published_at` set to the Friday fetch date; a second run for the same week is idempotent (0 duplicate rows) (COT-01).
   2. `GET /api/analytics/cot` returns a JSON array of COT series entries (as_of, net_noncommercial, net_commercial, open_interest, …) over the shared Zod contract; MCP `get_cot` returns the same data to Claude Code (COT-02, MCP-02).
 
-**Plans**: 6/6 (planned 2026-06-29) — 01 contract+ports+migration · 02 cftc adapter · 03 repo · 04 use-cases · 05 fetch-cot job · 06 route+MCP
+**Plans**: 1/6 plans executed
+
+- [x] 13-01-PLAN.md
+- [ ] 13-02-PLAN.md
+- [ ] 13-03-PLAN.md
+- [ ] 13-04-PLAN.md
+- [ ] 13-05-PLAN.md
+- [ ] 13-06-PLAN.md
 
 ### Phase 14: FRED Expansion
 
@@ -680,6 +688,6 @@ requires Phase 11 complete (sidecar health endpoint).
 | 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
 | 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
-| 13. COT Adapter | 0/TBD | Not started | - |
+| 13. COT Adapter | 1/6 | In Progress|  |
 | 14. FRED Expansion | 0/TBD | Not started | - |
 | 15. Re-Auth Smoothing | 0/TBD | Not started | - |

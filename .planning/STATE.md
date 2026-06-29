@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
-current_phase: 12
-current_phase_name: streaming-ts-fan-out
+current_phase: 13
+current_phase_name: cot-adapter
 status: executing
 stopped_at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
-last_updated: "2026-06-29T13:11:13.182Z"
-last_activity: 2026-06-28
-last_activity_desc: Phase 12 execution started
+last_updated: "2026-06-29T13:28:33.645Z"
+last_activity: 2026-06-29
+last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 9
   completed_phases: 9
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 12 — streaming-ts-fan-out
+**Current focus:** Phase 13 — cot-adapter
 
 ## Current Position
 
-Phase: 12 (streaming-ts-fan-out) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 12
-Last activity: 2026-06-28 — Phase 12 execution started
+Phase: 13 (cot-adapter) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-06-29 — Phase 13 execution started
 
 ## Milestone v1.1 Summary
 
@@ -134,6 +134,7 @@ Regression gates (must survive every phase):
 | Phase 11 P05 | 8m | 2 tasks | 10 files |
 | Phase 11-sidecar-scaffold-auth-migration P06 | 6 | 1 tasks | 4 files |
 | Phase 11-sidecar-scaffold-auth-migration P07 | 3 | 2 tasks | 3 files |
+| Phase 13 P01 | 8 | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -328,6 +329,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-29T13:11:13.170Z
+Last session: 2026-06-29T13:28:33.634Z
 Stopped at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
 Resume file: .planning/phases/13-cot-adapter/13-01-PLAN.md
