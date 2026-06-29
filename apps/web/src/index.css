@@ -37,7 +37,7 @@
   --color-border: var(--color-line);
   --color-input: var(--color-line2);
   --color-ring: var(--color-violet);
-  --color-muted-foreground: var(--color-muted);
+  --color-muted-foreground: #7b8696; /* label-gray — explicit, independent of the bg-muted override below */
   --color-accent: var(--color-violetd);
   --color-accent-foreground: var(--color-violet);
   --color-destructive: var(--color-down);
@@ -69,7 +69,7 @@
   --secondary: var(--color-raise);
   --secondary-foreground: var(--color-txt);
   --muted: var(--color-panel2);
-  --muted-foreground: var(--color-muted);
+  --muted-foreground: #7b8696;
   --accent: var(--color-violetd);
   --accent-foreground: var(--color-violet);
   --destructive: var(--color-down);

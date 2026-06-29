@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useGex } from "../hooks/useGex.ts";
 import { usePositions } from "../hooks/usePositions.ts";
 import { bookUnrealizedPnl } from "../lib/pair-calendars.ts";
+import { MetricChip } from "./system/index.tsx";
+import { cn } from "@/lib/utils";
 import { AuthExpiredBanner } from "./AuthExpiredBanner.tsx";
 
 // ─── Screen registry ─────────────────────────────────────────────────────────
@@ -48,6 +50,12 @@ function fmtGamma(value: number): string {
   return `${sign}$${Math.abs(value).toFixed(2)}B`;
 }
 
+/** Tailwind sign-color class for a signed value (null → muted). */
+function signClass(value: number | null): string {
+  if (value === null) return "text-muted-foreground";
+  return value >= 0 ? "text-up" : "text-down";
+}
+
 // ─── MarketStrip ─────────────────────────────────────────────────────────────
 
 function MarketStrip(): React.ReactElement {
@@ -58,177 +66,37 @@ function MarketStrip(): React.ReactElement {
   // — that flips short signs and sums notional magnitude (the bug this replaces).
   const bookPnl = positions ? bookUnrealizedPnl(positions.positions) : null;
 
-  const isNegativeGamma =
-    gex !== undefined && gex.netGammaAtSpot < 0;
+  const isNegativeGamma = gex !== undefined && gex.netGammaAtSpot < 0;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        flexShrink: 0,
-      }}
-    >
-      {/* SPX spot */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          padding: "6px 12px",
-          background: "rgba(22,29,43,0.6)",
-          border: "1px solid #1b2433",
-          borderRadius: "6px",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "10px",
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.9px",
-            color: "#7b8696",
-          }}
-        >
-          SPX
-        </span>
-        <span
-          style={{
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 700,
-            fontSize: "16px",
-            color: "#5b9cf6",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {gex !== undefined ? fmtSpot(gex.spot) : "—"}
-        </span>
-      </div>
-
-      {/* net γ /1% */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          padding: "6px 12px",
-          background: isNegativeGamma ? "#180f10" : "rgba(22,29,43,0.6)",
-          border: `1px solid ${isNegativeGamma ? "#5a2b2e" : "#1b2433"}`,
-          borderRadius: "6px",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "10px",
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.9px",
-            color: "#7b8696",
-          }}
-        >
-          net γ /1%
-        </span>
-        <span
-          style={{
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 700,
-            fontSize: "16px",
-            color:
-              gex !== undefined
-                ? gex.netGammaAtSpot >= 0
-                  ? "#26a69a"
-                  : "#ef5350"
-                : "#7b8696",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {gex !== undefined ? fmtGamma(gex.netGammaAtSpot) : "—"}
-        </span>
-      </div>
-
-      {/* γ flip */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          padding: "6px 12px",
-          background: "rgba(22,29,43,0.6)",
-          border: "1px solid #1b2433",
-          borderRadius: "6px",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "10px",
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.9px",
-            color: "#7b8696",
-          }}
-        >
-          γ flip
-        </span>
-        <span
-          style={{
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 700,
-            fontSize: "16px",
-            color: "#f0b429",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {gex !== undefined && gex.flip !== null
-            ? fmtSpot(gex.flip)
-            : "—"}
-        </span>
-      </div>
-
-      {/* book P&L */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          padding: "6px 12px",
-          background: "rgba(22,29,43,0.6)",
-          border: "1px solid #1b2433",
-          borderRadius: "6px",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "10px",
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.9px",
-            color: "#7b8696",
-          }}
-        >
-          book P&amp;L
-        </span>
-        <span
-          style={{
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 700,
-            fontSize: "16px",
-            color:
-              bookPnl !== null
-                ? bookPnl >= 0
-                  ? "#26a69a"
-                  : "#ef5350"
-                : "#7b8696",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {bookPnl !== null ? fmtCompact(bookPnl, "$") : "—"}
-        </span>
-      </div>
+    <div className="flex shrink-0 items-center gap-2">
+      <MetricChip
+        label="SPX"
+        value={gex !== undefined ? fmtSpot(gex.spot) : "—"}
+        valueClassName="text-blue"
+      />
+      <MetricChip
+        label="net γ /1%"
+        value={gex !== undefined ? fmtGamma(gex.netGammaAtSpot) : "—"}
+        alert={isNegativeGamma}
+        valueClassName={
+          gex !== undefined
+            ? gex.netGammaAtSpot >= 0
+              ? "text-up"
+              : "text-down"
+            : "text-muted-foreground"
+        }
+      />
+      <MetricChip
+        label="γ flip"
+        value={gex !== undefined && gex.flip !== null ? fmtSpot(gex.flip) : "—"}
+        valueClassName="text-amber"
+      />
+      <MetricChip
+        label="book P&L"
+        value={bookPnl !== null ? fmtCompact(bookPnl, "$") : "—"}
+        valueClassName={signClass(bookPnl)}
+      />
     </div>
   );
 }
@@ -247,20 +115,13 @@ interface ShellProps {
 /**
  * Shell — the top-level layout shell for the authenticated Morai dashboard.
  *
- * Renders:
  *   - Sticky frosted-glass header (~48px) with the MORAI brand logotype, three
  *     locked nav tabs (Overview · Analyzer · Journal), and a right-aligned live
  *     market strip (SPX spot, net γ /1%, γ flip, book P&L).
  *   - The active screen in its content area (via `children` or internal switcher).
  *   - The fixed-bottom <AuthExpiredBanner> (always mounted when authenticated).
  *
- * Nav is implemented via `useState<ScreenName>` (lightweight screen switcher, no
- * router dependency at this stage). The Shell can be controlled (activeScreen +
- * onNavigate props) or uncontrolled (manages its own state). Vercel SPA rewrites
- * (vercel.json) support direct URL access; React Router can be added later without
- * changing this component's API.
- *
- * UI-SPEC: "Global — all screens" sticky header + market strip.
+ * Styling is design-system only (tokens + Tailwind), no inline color/font.
  */
 export function Shell({
   children,
@@ -275,48 +136,19 @@ export function Shell({
   return (
     <>
       {/* Sticky frosted-glass header */}
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "48px",
-          zIndex: 50,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "8px 16px",
-          background:
-            "linear-gradient(180deg, rgba(22,29,43,0.55), rgba(10,14,20,0))",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
-          borderBottom: "1px solid #1b2433",
-          boxSizing: "border-box",
-        }}
-      >
+      <header className="sticky top-0 right-0 left-0 z-50 box-border flex h-12 items-center justify-between border-b border-line bg-gradient-to-b from-raise/55 to-transparent px-4 backdrop-blur-md">
         {/* Left: Brand logotype + Nav tabs */}
-        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          {/* MOR-AI logotype (violet "AI") — Copywriting Contract: "MORAI" bold "AI" in violet */}
-          <div
-            style={{
-              fontFamily: "'Space Grotesk', system-ui, sans-serif",
-              fontWeight: 700,
-              fontSize: "16px",
-              color: "#d6dbe4",
-              letterSpacing: "-0.01em",
-              userSelect: "none",
-              flexShrink: 0,
-            }}
-          >
-            MOR<strong style={{ color: "#a78bfa" }}>AI</strong>
+        <div className="flex items-center gap-6">
+          {/* MOR-AI logotype (violet "AI") */}
+          <div className="shrink-0 font-display text-base font-bold tracking-[-0.01em] text-txt select-none">
+            MOR<strong className="text-violet">AI</strong>
           </div>
 
           {/* Nav tabs — locked order: Overview · Analyzer · Journal */}
           <nav
             role="tablist"
             aria-label="Dashboard navigation"
-            style={{ display: "flex", alignItems: "center", gap: "2px" }}
+            className="flex items-center gap-0.5"
           >
             {NAV_TABS.map((tab) => {
               const isActive = tab === currentScreen;
@@ -328,41 +160,12 @@ export function Shell({
                   onClick={() => {
                     handleNavigate(tab);
                   }}
-                  style={{
-                    background: isActive ? "#161d2b" : "transparent",
-                    border: "none",
-                    borderRadius: "6px",
-                    color: isActive ? "#d6dbe4" : "#7b8696",
-                    cursor: "pointer",
-                    fontFamily: "'Space Grotesk', system-ui, sans-serif",
-                    fontSize: "10px",
-                    fontWeight: 600,
-                    letterSpacing: "0.9px",
-                    padding: "6px 12px",
-                    textTransform: "uppercase",
-                    transition: "color 0.15s, background 0.15s",
-                    outline: "none",
-                    minHeight: "32px",
-                    minWidth: "44px",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.outline =
-                      "2px solid #a78bfa";
-                    e.currentTarget.style.outlineOffset = "2px";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.outline = "none";
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.color = "#d6dbe4";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.color = "#7b8696";
-                    }
-                  }}
+                  className={cn(
+                    "min-h-8 min-w-11 rounded-md px-3 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] uppercase transition-colors outline-none focus-visible:ring-2 focus-visible:ring-violet",
+                    isActive
+                      ? "bg-raise text-txt"
+                      : "text-muted-foreground hover:text-txt",
+                  )}
                 >
                   {tab}
                 </button>
@@ -376,7 +179,7 @@ export function Shell({
       </header>
 
       {/* Active screen content area */}
-      <main style={{ minHeight: "calc(100vh - 48px)" }}>{children}</main>
+      <main className="min-h-[calc(100vh-48px)]">{children}</main>
 
       {/* AUTH_EXPIRED banner — always mounted when authenticated, self-shows/hides */}
       <AuthExpiredBanner />
@@ -389,10 +192,6 @@ export function Shell({
 /**
  * ShellWithRouter — wraps Shell with its own internal screen state and renders
  * the active screen from the provided `screens` map.
- *
- * This is the primary export used by App.tsx to render the full authenticated layout.
- * The screen map is built in App.tsx so that lazy imports can be added later without
- * modifying this component.
  */
 interface ShellWithRouterProps {
   screens: Record<ScreenName, React.ReactNode>;
