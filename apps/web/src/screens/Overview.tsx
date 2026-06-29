@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePositions } from "../hooks/usePositions.ts";
 import { useGex } from "../hooks/useGex.ts";
 import { useStatus } from "../hooks/useStatus.ts";
@@ -135,14 +135,18 @@ function PositionsTable({
   spot: number;
 }): React.ReactElement {
   const rows = useMemo(() => buildRows(positions), [positions]);
+  // Excluded row keys — a position counts toward the Net total unless explicitly unchecked.
+  // Tracking exclusions (not inclusions) means new positions default to "included".
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
+
   const total = useMemo(() => {
-    const allLegs = rows.flatMap((r) => r.legs);
+    const legs = rows.filter((r) => !excluded.has(r.key)).flatMap((r) => r.legs);
     return {
-      val: netValue(allLegs),
-      unreal: netUnreal(allLegs),
-      greeks: netGreeksForLegs(allLegs, spot),
+      val: netValue(legs),
+      unreal: netUnreal(legs),
+      greeks: netGreeksForLegs(legs, spot),
     };
-  }, [rows, spot]);
+  }, [rows, excluded, spot]);
 
   if (rows.length === 0) {
     return (
@@ -152,10 +156,20 @@ function PositionsTable({
     );
   }
 
+  const includedCount = rows.filter((r) => !excluded.has(r.key)).length;
+  const toggle = (key: string): void =>
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   return (
     <table className="w-full border-collapse font-mono text-[11px] tabular-nums">
       <thead>
         <tr>
+          <th className="border-b border-line px-2 py-1" aria-label="Include in total" />
           {COLS.map((c, i) => (
             <th
               key={c}
@@ -171,11 +185,27 @@ function PositionsTable({
       </thead>
       <tbody>
         {rows.map((r) => {
+          const included = !excluded.has(r.key);
           const g = netGreeksForLegs(r.legs, spot);
           const val = netValue(r.legs);
           const unreal = netUnreal(r.legs);
           return (
-            <tr key={r.key} className="border-b border-line/50">
+            <tr
+              key={r.key}
+              className={cn(
+                "border-b border-line/50 transition-opacity hover:bg-raise/30",
+                !included && "opacity-40",
+              )}
+            >
+              <td className="px-2 py-1 text-center">
+                <input
+                  type="checkbox"
+                  checked={included}
+                  onChange={() => { toggle(r.key); }}
+                  aria-label={`Include ${r.label} in total`}
+                  className="accent-blue cursor-pointer"
+                />
+              </td>
               <td className="px-2 py-1 text-left text-txt">{r.label}</td>
               <td className="px-2 py-1 text-right text-muted-foreground">{r.dte}</td>
               <td className="px-2 py-1 text-right text-txt">{usd(val)}</td>
@@ -190,7 +220,10 @@ function PositionsTable({
           );
         })}
         <tr className="border-t border-line font-semibold">
-          <td className="px-2 py-1 text-left text-txt">Net</td>
+          <td className="px-2 py-1" />
+          <td className="px-2 py-1 text-left text-txt">
+            Net <span className="font-mono text-[10px] font-normal text-dim">· {includedCount}/{rows.length}</span>
+          </td>
           <td className="px-2 py-1" />
           <td className="px-2 py-1 text-right text-txt">{usd(total.val)}</td>
           <td className={cn("px-2 py-1 text-right", total.unreal === null ? "text-dim" : signClass(total.unreal))}>
