@@ -43,7 +43,7 @@ Cross-cutting regression gates (must never regress across any phase):
 
 - [x] **Phase 10: Stack Decisions Doc Update** - Record Python sidecar as 3rd Railway service; lift D17 (streaming deferred); supersede D16 (TS OAuth client) (completed 2026-06-25)
 - [x] **Phase 11: Sidecar Scaffold + Auth Migration** - schwab-py sidecar deployed; TS refresh-tokens job retired; sidecar is sole token owner; journal re-sourced through sidecar REST proxy (completed 2026-06-25)
-- [ ] **Phase 12: Streaming + TS Fan-Out** - LEVELONE_OPTION + ACCT_ACTIVITY ingestion; `GET /api/stream` with Supabase JWT edge; Zod stream contracts; cold-start reconcile
+- [x] **Phase 12: Streaming + TS Fan-Out** - LEVELONE_OPTION + ACCT_ACTIVITY ingestion; `GET /api/stream` with Supabase JWT edge; Zod stream contracts; cold-start reconcile (completed 2026-06-29)
 - [x] **Phase 13: COT Adapter** - Weekly `fetch-cot` job; `cot_observations` table; `GET /api/analytics/cot` + MCP `get_cot` (completed 2026-06-29)
 - [ ] **Phase 14: FRED Expansion** - Expanded macro series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS + VVIX via CBOE); prod FRED_API_KEY set; `GET /api/analytics/macro` + MCP `get_macro`
 - [ ] **Phase 15: Re-Auth Smoothing** - T-24h expiry alert; one-click/operator re-auth flow; operator runbook
@@ -563,7 +563,7 @@ reconnect the sidecar reconciles current state via a REST pull so the live view 
   5. The stream contains no Postgres writes in the hot path; `SELECT count(*) FROM leg_observations` does not grow during a streaming-only session (STRM-04 regression gate).
   6. Entering an arbitrary OCC symbol in the ad-hoc lookup streams its live BSM greeks the same way as an open leg — the symbol is added to the subscription set (respecting the 500-symbol cap) and dropped when cleared; the result row is visually distinguished from owned positions (STRM-01 expanded, D-05; UI-SPEC Surface 4).
 
-**Plans**: 7 plans (6 complete + 1 gap-closure). 6/6 executed 2026-06-28; UAT 2026-06-29 found a UI-wiring regression (the 5→3 redesign orphaned the live overlay onto the now-dead Positions.tsx; mounted Overview never streamed) → gap-closure plan 12-07 ports the overlay into Overview + removes the dead screen. SC1/SC2 + ad-hoc live-tick timing remain RTH-gated → live UAT pending market open; see 12-UAT.md.
+**Plans**: 7/7 plans complete
 
 - [x] 12-01-PLAN.md — Stream contracts + core BSM recompute + ForReconcilingPositions port/twin + architecture docs (wave 1)
 - [x] 12-02-PLAN.md — Sidecar streamer: trader StreamClient session, LEVELONE+ACCT_ACTIVITY, 490-cap LRU + reconcile diff (wave 2)
@@ -571,7 +571,7 @@ reconnect the sidecar reconciles current state via a REST pull so the live view 
 - [x] 12-03-PLAN.md — Sidecar /sidecar/events SSE + /sidecar/positions reconcile + streamer task wiring (wave 3)
 - [x] 12-05-PLAN.md — Server /api/stream/ticket + /api/stream fan-out (reconcile-first) + sidecar SSE consumer + SIDECAR_URL config (wave 3)
 - [x] 12-06-PLAN.md — Web useLiveStream + LiveStatusBadge + Positions live overlay/stale + ad-hoc picker (wave 4)
-- [ ] 12-07-PLAN.md — GAP CLOSURE: port live overlay + LiveStatusBadge into mounted Overview, extract tested live-greek resolver, delete orphaned Positions.tsx (gap-closure, wave 1)
+- [x] 12-07-PLAN.md — GAP CLOSURE: port live overlay + LiveStatusBadge into mounted Overview, extract tested live-greek resolver, delete orphaned Positions.tsx (gap-closure, wave 1)
 
 **Operator go-live items** (post-execution, pending market open): (1) set `SIDECAR_URL` on the Railway **server** service (match the sidecar's deployed port); (2) deploy sidecar + server + web; (3) RTH UAT for SC1/SC2 + ad-hoc live ticks per 12-VERIFICATION.md.
 
@@ -688,7 +688,7 @@ requires Phase 11 complete (sidecar health endpoint).
 |-------|----------------|--------|-----------|
 | 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
 | 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
-| 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
+| 12. Streaming + TS Fan-Out | 7/7 | Complete   | 2026-06-29 |
 | 13. COT Adapter | 6/6 | Complete    | 2026-06-29 |
 | 14. FRED Expansion | 0/TBD | Not started | - |
 | 15. Re-Auth Smoothing | 0/TBD | Not started | - |

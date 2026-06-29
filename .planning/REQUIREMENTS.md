@@ -97,11 +97,11 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 
 ### Real-Time Streaming
 
-- [ ] **STRM-01**: The sidecar streams live LEVELONE_OPTION data (mark, bid/ask, delta/gamma/theta/vega/rho, IV) for open position legs **and for ad-hoc instrument lookups** (any OCC symbol the user selects). Live greeks/IV are recomputed via the BSM engine, not taken raw. *(Scope expanded from open-legs-only per Phase 12 CONTEXT D-02/D-05, 2026-06-28.)*
+- [x] **STRM-01**: The sidecar streams live LEVELONE_OPTION data (mark, bid/ask, delta/gamma/theta/vega/rho, IV) for open position legs **and for ad-hoc instrument lookups** (any OCC symbol the user selects). Live greeks/IV are recomputed via the BSM engine, not taken raw. *(Scope expanded from open-legs-only per Phase 12 CONTEXT D-02/D-05, 2026-06-28.)*
 - [ ] **STRM-02**: The sidecar streams ACCT_ACTIVITY fill events.
 - [ ] **STRM-03**: `apps/server` fans the sidecar's single stream out to N browser clients over an authed `GET /api/stream`, with the Supabase JWT verified at the server edge.
 - [ ] **STRM-04**: Stream data is display-only — no per-tick persistence; `sync-transactions` (REST) remains the authoritative fill source.
-- [ ] **STRM-05**: On (re)connect and cold-start the sidecar reconciles current state via a REST pull so the live view and journal have no gaps.
+- [x] **STRM-05**: On (re)connect and cold-start the sidecar reconciles current state via a REST pull so the live view and journal have no gaps.
 
 ### Journal Re-Sourcing
 
@@ -210,11 +210,11 @@ Explicitly excluded. Documented to prevent scope creep.
 | GW-04 | Phase 11 | Complete |
 | GW-05 | Phase 11 | Complete |
 | JRNL-02 | Phase 11 | Complete |
-| STRM-01 | Phase 12 | Pending |
+| STRM-01 | Phase 12 | Complete |
 | STRM-02 | Phase 12 | Pending |
 | STRM-03 | Phase 12 | Pending |
 | STRM-04 | Phase 12 | Pending |
-| STRM-05 | Phase 12 | Pending |
+| STRM-05 | Phase 12 | Complete |
 | COT-01 | Phase 13 | Complete |
 | COT-02 | Phase 13 | Complete |
 | MAC-01 | Phase 14 | Pending |

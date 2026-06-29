@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
-current_phase: 13
-status: verifying
+current_phase: 12
+current_phase_name: streaming-ts-fan-out
+status: executing
 stopped_at: Phase 13 COMPLETE — 6/6 plans, verification 8/8 must-haves (COT-01/COT-02), code-review clean (WR-01/02/04 fixed TDD-first), full suite 1258 green
-last_updated: "2026-06-29T16:03:17.376Z"
+last_updated: "2026-06-29T18:36:45.508Z"
 last_activity: 2026-06-29
-last_activity_desc: Phase 13 complete
+last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 9
   completed_phases: 9
   total_plans: 74
   completed_plans: 76
   percent: 100
-current_phase_name: cot-adapter
 ---
 
 # Project State
@@ -24,14 +24,14 @@ current_phase_name: cot-adapter
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 13 — cot-adapter
+**Current focus:** Phase 12 — streaming-ts-fan-out
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-29 — Phase 13 complete
+Phase: 12 (streaming-ts-fan-out) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-06-29 — Phase 12 execution started
 
 ## Milestone v1.1 Summary
 
@@ -140,6 +140,7 @@ Regression gates (must survive every phase):
 | Phase 13-cot-adapter P04 | 415 | 3 tasks | 8 files |
 | Phase 13-cot-adapter P05 | 6 | 2 tasks | 5 files |
 | Phase 13 P06 | 9 | 2 tasks | 6 files |
+| Phase 12 P07 | 13m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -312,6 +313,8 @@ Recent decisions affecting current work:
 - [Phase ?]: CotEntry defined in getCot.ts (not imported from contracts) to keep hexagon pure
 - [Phase ?]: getCot.test.ts validates cotSeriesEntry shape inline — core tsconfig references only shared+quant
 - [Phase ?]: Direct cotResponse.parse: CotEntry already plain strings/ints
+- [Phase ?]: 12-07: Single positions table in Overview; live-overlay math in lib/live-position-greeks.ts
+- [Phase ?]: 12-07: AdHocPicker/SC6 stays on Analyzer (D-06 scope boundary enforced)
 
 ### Pending Todos
 
@@ -338,6 +341,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-29T14:30:38.551Z
+Last session: 2026-06-29T18:36:32.390Z
 Stopped at: Phase 13 COMPLETE — 6/6 plans verified + code-review-clean; full suite 1258 green
 Resume file: next — /gsd-discuss-phase 14 (FRED Expansion); note: Phase 12 executed but ROADMAP checkbox still unchecked — reconcile
