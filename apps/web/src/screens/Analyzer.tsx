@@ -79,7 +79,7 @@ function extractStrike(occSymbol: string): number {
 
 /** Build an AnalyzerPosition from a broker position */
 function brokerToAnalyzerPosition(
-  p: BrokerPositionResponse[number],
+  p: BrokerPositionResponse,
   spotForDte: number,
 ): AnalyzerPosition {
   const netQty = p.longQty - p.shortQty;
@@ -677,13 +677,12 @@ export function Analyzer(): React.ReactElement {
   const [fitY, setFitY] = useState(false);
   const [fitYConsumed, setFitYConsumed] = useState(false);
 
-  // Chart toggles
+  // Chart toggles — keys match PayoffChartToggles (the chart's contract)
   const [toggles, setToggles] = useState({
     showFan: true,
-    showExpiry: true,
-    showRoll: true,
-    showGex: true,
-    showZeroline: true,
+    showExpiration: true,
+    showWalls: true,
+    showProfitZone: true,
   });
 
   // ── Convert broker positions to AnalyzerPositions ─────────────────────────
@@ -849,7 +848,7 @@ export function Analyzer(): React.ReactElement {
 
   const rollPl = useMemo<number | null>(() => {
     if (rollResult === null) return null;
-    const point = rollResult.find((pt) => Math.abs(pt.spot - params.spot) < 0.5);
+    const point = rollResult.payoffCurve.find((pt) => Math.abs(pt.spot - params.spot) < 0.5);
     return point?.pl ?? 0;
   }, [rollResult, params.spot]);
 
@@ -948,10 +947,9 @@ export function Analyzer(): React.ReactElement {
               {(
                 [
                   { label: "Fan", key: "showFan" },
-                  { label: "Exp", key: "showExpiry" },
-                  { label: "Roll", key: "showRoll" },
-                  { label: "GEX", key: "showGex" },
-                  { label: "Zero", key: "showZeroline" },
+                  { label: "Exp", key: "showExpiration" },
+                  { label: "Walls", key: "showWalls" },
+                  { label: "Zone", key: "showProfitZone" },
                 ] as const
               ).map(({ label, key }) => {
                 const active = toggles[key];
@@ -983,7 +981,7 @@ export function Analyzer(): React.ReactElement {
             todayCurve={scenarioResult?.payoffCurve ?? []}
             fanCurves={scenarioResult?.fanCurves ?? []}
             expirationCurve={scenarioResult?.expirationCurve ?? []}
-            rollCurve={rollResult ?? null}
+            rollCurve={rollResult?.payoffCurve ?? null}
             gex={gexQuery.data ?? null}
             spot={params.spot}
             toggles={toggles}
