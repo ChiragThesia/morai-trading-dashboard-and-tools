@@ -100,6 +100,9 @@ export { makeMemorySidecarChainAdapter } from "./memory/sidecar-chain.ts";
 export type { MemorySidecarChainAdapter } from "./memory/sidecar-chain.ts";
 export { makeMemoryRateAdapter } from "./memory/rate.ts";
 export type { MemoryRateAdapter } from "./memory/rate.ts";
+// Phase 13 (13-02): in-memory twin for ForFetchingCotReport (COT-01, architecture-boundaries §8)
+export { makeMemoryCotReportAdapter } from "./memory/cot.ts";
+export type { MemoryCotReportAdapter } from "./memory/cot.ts";
 export { makeMemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
 export type { MemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
 
