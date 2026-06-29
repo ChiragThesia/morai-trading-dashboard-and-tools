@@ -79,6 +79,10 @@ export type { CboeChainAdapter } from "./http/cboe.ts";
 // Sidecar HTTP adapter (ForFetchingChain via Python sidecar — JRNL-02, D-08)
 export { makeSidecarChainAdapter, SidecarChainResponseSchema } from "./sidecar/chain-adapter.ts";
 export type { SidecarChainAdapter } from "./sidecar/chain-adapter.ts";
+
+// Phase 12 (12-05): real ForReconcilingPositions over GET /sidecar/positions (STRM-05)
+export { makeSidecarPositionReconciler } from "./sidecar/positions-reconciler.ts";
+export type { SidecarPositionReconcilerDeps } from "./sidecar/positions-reconciler.ts";
 export { makeFredRateAdapter } from "./http/fred.ts";
 
 // In-memory adapters (test doubles; also usable in development)
