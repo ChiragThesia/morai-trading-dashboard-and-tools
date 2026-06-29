@@ -20,24 +20,26 @@ export type MemoryCotReportAdapter = {
 };
 
 export function makeMemoryCotReportAdapter(): MemoryCotReportAdapter {
-  // Backing store: single CotReport (null = unseeded, unlike FRED which has a fallback)
-  let stored: CotReport | null = null;
+  // WR-04: keyed by contractCode so fetchReport returns only the report whose code
+  // matches the requested code (matches the real CFTC adapter's query-by-code behaviour).
+  // Landmine 4: missing key → err (no fabricated report, unlike makeMemoryRateAdapter).
+  const store = new Map<string, CotReport>();
 
   const fetchReport: ForFetchingCotReport = async (
-    _contractCode: string,
+    contractCode: string,
   ): Promise<Result<CotReport, FetchError>> => {
-    // Landmine 4: unseeded → err (no fabricated report, unlike makeMemoryRateAdapter)
-    if (stored === null) {
+    const report = store.get(contractCode);
+    if (report === undefined) {
       return err({
         kind: "fetch-error",
-        message: "MemoryCotReportAdapter: not seeded — call seed() first",
+        message: `MemoryCotReportAdapter: no report seeded for contractCode "${contractCode}" — call seed() first`,
       });
     }
-    return ok(stored);
+    return ok(report);
   };
 
   const seed = (report: CotReport): void => {
-    stored = report;
+    store.set(report.contractCode, report);
   };
 
   return { fetchReport, seed };
