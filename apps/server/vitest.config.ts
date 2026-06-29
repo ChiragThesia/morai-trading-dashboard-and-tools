@@ -26,6 +26,7 @@ export default defineConfig({
     },
   },
   test: {
+    name: "server",
     globals: false,
     testTimeout: 10_000,
     hookTimeout: 10_000,
