@@ -86,6 +86,17 @@ export function makeCftcCotAdapter(deps: {
   return async (
     contractCode: string,
   ): Promise<Result<CotReport, FetchError>> => {
+    // WR-01: guard contractCode against SoQL injection before building the $where clause.
+    // CFTC codes are alphanumeric plus optional '+' (e.g. "13874A", "13874+").
+    // Any other character (quotes, semicolons, spaces, SoQL operators) is rejected here —
+    // no URL is built and fetch is never called.
+    if (!/^[0-9A-Z+]+$/i.test(contractCode)) {
+      console.warn(
+        `CFTC: invalid contractCode format (rejected before fetch): ${contractCode}`,
+      );
+      return fetchError(`invalid contractCode format: ${contractCode}`);
+    }
+
     // Build query URL — no X-App-Token header (anonymous access, landmine 7)
     const url = new URL(CFTC_BASE_URL);
     url.searchParams.set(

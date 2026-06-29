@@ -90,6 +90,68 @@ describe("makeCftcCotAdapter", () => {
     });
   });
 
+  describe("WR-01: contractCode SoQL-injection guard", () => {
+    it("returns err and never calls fetch when contractCode contains SoQL metacharacters", async () => {
+      // RED test: "13874A' OR '1'='1" must be rejected before any URL is built or fetch is called.
+      // Before WR-01 fix the adapter builds the $where clause with the injected string and
+      // sends a request; the msw handler below would set fetchWasCalled = true.
+      let fetchWasCalled = false;
+      const mockFetch = async (
+        ..._args: Parameters<typeof globalThis.fetch>
+      ): Promise<Response> => {
+        fetchWasCalled = true;
+        return new Response(JSON.stringify([]), { status: 200 });
+      };
+      const adapter = makeCftcCotAdapter({ fetch: mockFetch });
+      const result = await adapter("13874A' OR '1'='1");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.kind).toBe("fetch-error");
+      expect(fetchWasCalled).toBe(false);
+    });
+
+    it("returns err and never calls fetch when contractCode contains a semicolon", async () => {
+      let fetchWasCalled = false;
+      const mockFetch = async (
+        ..._args: Parameters<typeof globalThis.fetch>
+      ): Promise<Response> => {
+        fetchWasCalled = true;
+        return new Response(JSON.stringify([]), { status: 200 });
+      };
+      const adapter = makeCftcCotAdapter({ fetch: mockFetch });
+      const result = await adapter("13874A; DROP TABLE reports;--");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.kind).toBe("fetch-error");
+      expect(fetchWasCalled).toBe(false);
+    });
+
+    it("accepts the default 13874A contract code (no guard false-positive)", async () => {
+      server.use(
+        http.get(CFTC_URL, () => HttpResponse.json(cotFixture)),
+      );
+      const adapter = makeAdapter();
+      const result = await adapter("13874A");
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts the combined E-mini code 13874+ (plus sign is valid in CFTC codes)", async () => {
+      server.use(
+        http.get(CFTC_URL, () => HttpResponse.json(cotFixture)),
+      );
+      const adapter = makeAdapter();
+      // 13874+ is the combined futures+options code — must not be rejected by the guard
+      const result = await adapter("13874+");
+      // The adapter calls fetch (code passes guard); result shape depends on fixture
+      // We only assert the guard itself did not fire (no early-err before fetch)
+      // — if the fixture doesn't match, the Zod parse will err, which is fine.
+      // Just confirm it is NOT the "invalid contractCode format" path.
+      if (!result.ok) {
+        expect(result.error.message).not.toContain("invalid contractCode");
+      }
+    });
+  });
+
   describe("URL contract — $where filter uses 13874A (landmine 2)", () => {
     it("sends $where=cftc_contract_market_code='13874A', $order=DESC, $limit=1", async () => {
       let capturedUrl: string | undefined;
