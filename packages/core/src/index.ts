@@ -235,3 +235,13 @@ export type {
 } from "./streaming/index.ts";
 export { recomputeLiveGreek } from "./streaming/index.ts";
 export type { LiveGreekSkip } from "./streaming/index.ts";
+
+// ─── COT bounded context (Phase 13) ───────────────────────────────────────────
+// CFTC COT positioning domain types + driven ports (COT-01, COT-02)
+export type {
+  CotReport,
+  CotObservationRow,
+  ForFetchingCotReport,
+  ForPersistingCotObservation,
+  ForReadingCotObservations,
+} from "./journal/index.ts";

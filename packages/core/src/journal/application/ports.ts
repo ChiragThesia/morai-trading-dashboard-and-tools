@@ -526,3 +526,66 @@ export type ForEnqueueingJob = (
   payload: Readonly<Record<string, unknown>>,
   dedupeKey: string | null,
 ) => Promise<Result<string | null, StorageError>>;
+
+// ─── Phase 13: COT (Commitments of Traders) ports ────────────────────────────
+// Mirrors the ForFetchingRate / ForPersistingRate / ForReadingRate trio (MKT-02).
+// CotReport: raw TFF long+short legs per class — NET is derived at the API layer (D-04).
+// CotObservationRow: the persisted row with publishedAt (fetch clock, D-07).
+
+/**
+ * CotReport — the raw CFTC TFF positioning data for one report week.
+ * All long/short values are raw position counts (integer contracts).
+ * `asOf` is the Tuesday report date from report_date_as_yyyy_mm_dd (D-08).
+ * NET values are derived at the use-case layer, not stored here (D-04).
+ */
+export type CotReport = {
+  readonly contractCode: string; // '13874A' for E-mini S&P 500
+  readonly asOf: string; // YYYY-MM-DD — Tuesday report date (from report's own field, D-08)
+  readonly openInterest: number;
+  readonly dealerLong: number;
+  readonly dealerShort: number;
+  readonly assetMgrLong: number;
+  readonly assetMgrShort: number;
+  readonly levMoneyLong: number;
+  readonly levMoneyShort: number;
+  readonly otherReptLong: number;
+  readonly otherReptShort: number;
+  readonly nonreptLong: number;
+  readonly nonreptShort: number;
+};
+
+/**
+ * CotObservationRow — the persisted row in cot_observations.
+ * Extends CotReport with publishedAt (the fetch timestamp, Friday, D-07).
+ * publishedAt is a Date stamped by the use-case at fetch time, not by the adapter.
+ */
+export type CotObservationRow = CotReport & {
+  readonly publishedAt: Date;
+};
+
+/**
+ * ForFetchingCotReport — fetch the latest TFF row for a CFTC contract code (COT-01).
+ * Implemented by the CFTC Socrata HTTP adapter and in-memory twin.
+ * No fabricated fallback: a missing/errored COT week returns err(FetchError) (landmine 4).
+ */
+export type ForFetchingCotReport = (
+  contractCode: string,
+) => Promise<Result<CotReport, FetchError>>;
+
+/**
+ * ForPersistingCotObservation — upsert one cot_observations row (COT-01).
+ * Idempotent: ON CONFLICT (contract_code, as_of) DO NOTHING (D-09).
+ * Implemented by the Postgres repo and in-memory twin.
+ */
+export type ForPersistingCotObservation = (
+  row: CotObservationRow,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingCotObservations — list cot_observations ordered by as_of DESC (COT-02).
+ * `limit` defaults to all rows when omitted. Returns empty array when no rows exist.
+ * Implemented by the Postgres repo and in-memory twin.
+ */
+export type ForReadingCotObservations = (
+  limit?: number,
+) => Promise<Result<ReadonlyArray<CotObservationRow>, StorageError>>;

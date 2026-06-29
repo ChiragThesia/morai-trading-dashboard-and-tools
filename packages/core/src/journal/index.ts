@@ -110,6 +110,14 @@ export {
   SCHWAB_TX_MAX_RANGE_DAYS,
 } from "./application/chunkDateRange.ts";
 export type { DateWindow, RangeError } from "./application/chunkDateRange.ts";
+// Phase 13: COT ports + domain types (COT-01, COT-02)
+export type {
+  CotReport,
+  CotObservationRow,
+  ForFetchingCotReport,
+  ForPersistingCotObservation,
+  ForReadingCotObservations,
+} from "./application/ports.ts";
 // Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
 export { hashFillIds } from "./domain/fill-pairing.ts";
 // Phase 5: rebuildJournal use-case factory + driver port
