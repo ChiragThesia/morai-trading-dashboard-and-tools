@@ -74,10 +74,10 @@ vi.mock("../hooks/useGex.ts", () => ({
 }));
 
 // apiFetch spy — must NOT be called during re-pricing (scenario is client-side)
-const apiFetchSpy = vi.fn();
+const mockApiFetch = vi.fn();
 vi.mock("../lib/rpc.ts", () => ({
   setAuthToken: vi.fn(),
-  apiFetch: apiFetchSpy,
+  apiFetch: mockApiFetch,
   rpc: {},
 }));
 
@@ -89,6 +89,22 @@ vi.mock("../lib/supabase.ts", () => ({
         data: { subscription: { unsubscribe: vi.fn() } },
       })),
     },
+  },
+}));
+
+// Ad-hoc lookup lives on Analyzer now — mock useLiveStream so the test opens no EventSource.
+vi.mock("../hooks/useLiveStream.ts", () => ({
+  useLiveStream: vi.fn(() => ({
+    greeks: new Map(),
+    status: "poll" as const,
+    lastTickAt: null,
+    subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+  })),
+  StreamMintError: class StreamMintError extends Error {
+    constructor(status: number) { super(String(status)); this.name = "StreamMintError"; }
+  },
+  StreamSubscribeError: class StreamSubscribeError extends Error {
+    constructor(status: number) { super(String(status)); this.name = "StreamSubscribeError"; }
   },
 }));
 
@@ -231,8 +247,8 @@ describe("Analyzer screen", () => {
 
     // Must not throw
     expect(() => renderWithProvider(<Analyzer />)).not.toThrow();
-    // Live position row must be visible
-    expect(screen.getByText(/●live|live/)).toBeTruthy();
+    // Live position row must be visible (●live marker — unique; the ad-hoc copy also says "live")
+    expect(screen.getByText("●live")).toBeTruthy();
   });
 
   // (a) Render with one live position → chart region + greek strips render
@@ -257,7 +273,7 @@ describe("Analyzer screen", () => {
     renderWithProvider(<Analyzer />);
 
     // Clear any calls from mount
-    apiFetchSpy.mockClear();
+    mockApiFetch.mockClear();
 
     // Find and move the spot slider
     const sliders = screen.getAllByRole("slider");
@@ -270,7 +286,7 @@ describe("Analyzer screen", () => {
     }
 
     // No API call should have fired for re-pricing
-    expect(apiFetchSpy).not.toHaveBeenCalled();
+    expect(mockApiFetch).not.toHaveBeenCalled();
   });
 
   // (c) "+ add from paste" with canonical TOS string → success message + new row

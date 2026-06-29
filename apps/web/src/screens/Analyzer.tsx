@@ -49,6 +49,10 @@ import type { LevelBarData } from "../components/LevelBar.tsx";
 import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import { Panel, SectionLabel } from "../components/system/index.tsx";
+import { AdHocPicker } from "../components/AdHocPicker.tsx";
+import { useLiveStream } from "../hooks/useLiveStream.ts";
+import { pairPositionsIntoCalendars } from "../lib/pair-calendars.ts";
+import type { CalendarGroup } from "../lib/pair-calendars.ts";
 import { cn } from "@/lib/utils";
 import type { BrokerPositionResponse } from "@morai/contracts";
 
@@ -101,6 +105,28 @@ function brokerToAnalyzerPosition(
     putCall: p.putCall,
     frontDte,
     backDte,
+    frontIv: DEFAULT_IV,
+    backIv: DEFAULT_IV,
+    qty,
+    included: true,
+  };
+}
+
+/**
+ * Build one AnalyzerPosition from a paired calendar (front = short/nearer, back = long/farther).
+ * This is the real calendar structure — front/back DTE come from the actual leg expiries, not
+ * the single-leg DEFAULT_FRONT/BACK_DTE fallback. IVs stay at DEFAULT_IV (broker has no IV).
+ */
+function calendarToAnalyzerPosition(cal: CalendarGroup): AnalyzerPosition {
+  const qty = Math.max(1, Math.abs(cal.back.longQty - cal.back.shortQty));
+  return {
+    id: cal.key,
+    name: `${cal.strike}${cal.optionType}`,
+    live: true,
+    occSymbol: cal.back.occSymbol, // AnalyzerPosition.occSymbol = BACK leg
+    putCall: cal.optionType,
+    frontDte: cal.dteFront,
+    backDte: cal.dteBack,
     frontIv: DEFAULT_IV,
     backIv: DEFAULT_IV,
     qty,
@@ -464,6 +490,14 @@ export function Analyzer(): React.ReactElement {
   // Selected position ID for roll simulator target
   const [selectedId, setSelectedId] = useState<string>("");
 
+  // Live stream for the ad-hoc greeks lookup (moved here from the Positions/Overview screen)
+  const {
+    greeks: liveGreeks,
+    status: liveStatus,
+    subscribeAdHoc,
+  } = useLiveStream();
+  const [adHocSymbol, setAdHocSymbol] = useState<string | null>(null);
+
   // Paste UI state
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [pasteSuccess, setPasteSuccess] = useState<string | null>(null);
@@ -484,7 +518,12 @@ export function Analyzer(): React.ReactElement {
 
   const livePositions = useMemo<ReadonlyArray<AnalyzerPosition>>(() => {
     const raw = positionsQuery.data?.positions ?? [];
-    return raw.map((p) => brokerToAnalyzerPosition(p, liveSpot));
+    // Pair legs into calendars (real front/back DTE) — not one fake calendar per leg.
+    const { calendars, singles } = pairPositionsIntoCalendars(raw, new Date());
+    return [
+      ...calendars.map(calendarToAnalyzerPosition),
+      ...singles.map((p) => brokerToAnalyzerPosition(p, liveSpot)),
+    ];
   }, [positionsQuery.data, liveSpot]);
 
   // ── Combined position list (live first, then synthetic) ───────────────────
@@ -700,6 +739,18 @@ export function Analyzer(): React.ReactElement {
               selectedPositionName={selectedPositionName}
               rollConfig={rollConfig}
               onChange={setRollConfig}
+            />
+          </Panel>
+        </div>
+        <div className="mt-2">
+          <Panel>
+            <AdHocPicker
+              subscribeAdHoc={subscribeAdHoc}
+              liveGreeks={liveGreeks}
+              liveStatus={liveStatus}
+              adHocSymbol={adHocSymbol}
+              onSetAdHocSymbol={(sym) => { setAdHocSymbol(sym); }}
+              onClearAdHoc={() => { setAdHocSymbol(null); }}
             />
           </Panel>
         </div>
