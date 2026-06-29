@@ -17,8 +17,12 @@ const CFTC_BASE_URL =
 // z.coerce.number() handles string→number coercion before any use.
 const CftcRowSchema = z.object({
   // Date field: ISO floating timestamp e.g. "2026-06-23T00:00:00.000"
-  // Take the date part (slice 0,10) for asOf — never use date-math (landmine 3).
-  report_date_as_yyyy_mm_dd: z.string(),
+  // Validate the YYYY-MM-DD prefix before slicing (WR-02: parse-don't-cast at trust boundary).
+  // A non-ISO value like "06/23/2026" or "garbage" fails here rather than producing a
+  // garbage asOf that only blows up at the route's cotResponse.parse() later.
+  report_date_as_yyyy_mm_dd: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/, "expected ISO date prefix YYYY-MM-DD"),
   cftc_contract_market_code: z.string(),
   open_interest_all: z.coerce.number(),
   dealer_positions_long_all: z.coerce.number(),

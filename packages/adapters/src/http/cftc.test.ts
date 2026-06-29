@@ -186,6 +186,98 @@ describe("makeCftcCotAdapter", () => {
     });
   });
 
+  describe("WR-02: malformed report_date_as_yyyy_mm_dd → err (parse boundary violation)", () => {
+    it("returns err when report_date_as_yyyy_mm_dd is a non-ISO date string (e.g. US-locale format)", async () => {
+      // RED test: today "06/23/2026" passes z.string() but must NOT pass the ISO-prefix guard.
+      // Before WR-02 fix this wrongly returns ok with asOf="06/23/202" (garbage).
+      server.use(
+        http.get(CFTC_URL, () =>
+          HttpResponse.json([
+            {
+              report_date_as_yyyy_mm_dd: "06/23/2026",
+              cftc_contract_market_code: "13874A",
+              open_interest_all: "2987456",
+              dealer_positions_long_all: "140230",
+              dealer_positions_short_all: "89560",
+              asset_mgr_positions_long_all: "1102340",
+              asset_mgr_positions_short_all: "654320",
+              lev_money_positions_long_all: "387650",
+              lev_money_positions_short_all: "523410",
+              other_rept_positions_long_all: "210870",
+              other_rept_positions_short_all: "198340",
+              nonrept_positions_long_all: "145000",
+              nonrept_positions_short_all: "132780",
+            },
+          ]),
+        ),
+      );
+      const adapter = makeAdapter();
+      const result = await adapter("13874A");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.kind).toBe("fetch-error");
+    });
+
+    it("returns err when report_date_as_yyyy_mm_dd is a plain garbage string", async () => {
+      server.use(
+        http.get(CFTC_URL, () =>
+          HttpResponse.json([
+            {
+              report_date_as_yyyy_mm_dd: "garbage",
+              cftc_contract_market_code: "13874A",
+              open_interest_all: "2987456",
+              dealer_positions_long_all: "140230",
+              dealer_positions_short_all: "89560",
+              asset_mgr_positions_long_all: "1102340",
+              asset_mgr_positions_short_all: "654320",
+              lev_money_positions_long_all: "387650",
+              lev_money_positions_short_all: "523410",
+              other_rept_positions_long_all: "210870",
+              other_rept_positions_short_all: "198340",
+              nonrept_positions_long_all: "145000",
+              nonrept_positions_short_all: "132780",
+            },
+          ]),
+        ),
+      );
+      const adapter = makeAdapter();
+      const result = await adapter("13874A");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.kind).toBe("fetch-error");
+    });
+
+    it("still returns ok when date has ISO timestamp suffix (normal Socrata format)", async () => {
+      // Regression guard: the normal "2026-06-23T00:00:00.000" must still succeed
+      server.use(
+        http.get(CFTC_URL, () =>
+          HttpResponse.json([
+            {
+              report_date_as_yyyy_mm_dd: "2026-06-23T00:00:00.000",
+              cftc_contract_market_code: "13874A",
+              open_interest_all: "2987456",
+              dealer_positions_long_all: "140230",
+              dealer_positions_short_all: "89560",
+              asset_mgr_positions_long_all: "1102340",
+              asset_mgr_positions_short_all: "654320",
+              lev_money_positions_long_all: "387650",
+              lev_money_positions_short_all: "523410",
+              other_rept_positions_long_all: "210870",
+              other_rept_positions_short_all: "198340",
+              nonrept_positions_long_all: "145000",
+              nonrept_positions_short_all: "132780",
+            },
+          ]),
+        ),
+      );
+      const adapter = makeAdapter();
+      const result = await adapter("13874A");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.asOf).toBe("2026-06-23");
+    });
+  });
+
   describe("malformed body → err (Zod parse failure, landmine 4)", () => {
     it("returns err when response body is not an array", async () => {
       server.use(
