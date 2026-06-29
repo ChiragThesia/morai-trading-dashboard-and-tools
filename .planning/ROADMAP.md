@@ -688,6 +688,6 @@ requires Phase 11 complete (sidecar health endpoint).
 | 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
 | 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
-| 13. COT Adapter | 6/6 | Complete   | 2026-06-29 |
+| 13. COT Adapter | 6/6 | Complete    | 2026-06-29 |
 | 14. FRED Expansion | 0/TBD | Not started | - |
 | 15. Re-Auth Smoothing | 0/TBD | Not started | - |
