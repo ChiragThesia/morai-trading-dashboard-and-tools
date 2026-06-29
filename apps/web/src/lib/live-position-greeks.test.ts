@@ -47,11 +47,12 @@ function netGreeksForLegs(
       shortQty: leg.shortQty,
     });
     if (!r.ok) continue;
-    const nq = (leg.longQty - leg.shortQty) * 100;
-    acc.delta += r.value.greeks.delta * nq;
-    acc.gamma += r.value.greeks.gamma * nq;
-    acc.theta += r.value.greeks.theta * nq;
-    acc.vega += r.value.greeks.vega * nq;
+    // Mirrors Overview.netGreeksForLegs: computePositionGreeks already applied netQty,
+    // so apply ONLY the ×100 contract multiplier (CR-01).
+    acc.delta += r.value.greeks.delta * 100;
+    acc.gamma += r.value.greeks.gamma * 100;
+    acc.theta += r.value.greeks.theta * 100;
+    acc.vega += r.value.greeks.vega * 100;
   }
   return acc;
 }
@@ -154,20 +155,19 @@ describe("resolveLivePositionRow", () => {
   });
 
   // 2. Single long leg WITH tick
-  it("single long leg WITH tick → greeks.delta = tick.bsmDelta × netQty × (netQty × 100), netVal and unreal live-sourced, liveTs = tick.ts", () => {
+  it("single long leg WITH tick → greeks.delta = tick.bsmDelta × netQty × 100, netVal and unreal live-sourced, liveTs = tick.ts", () => {
     const leg = makeLongLeg();
     const tick = makeTick(OCC_LONG, { bsmDelta: -0.40, mark: 22.0 });
     const liveGreeks = new Map([[OCC_LONG, tick]]);
 
     const netQty = leg.longQty - leg.shortQty; // 1
-    const nq = netQty * 100; // 100
 
     const result = resolveLivePositionRow([leg], SPOT, liveGreeks);
 
-    expect(result.greeks.delta).toBeCloseTo(tick.bsmDelta * netQty * nq, 8);
-    expect(result.greeks.gamma).toBeCloseTo(tick.bsmGamma * netQty * nq, 8);
-    expect(result.greeks.theta).toBeCloseTo(tick.bsmTheta * netQty * nq, 8);
-    expect(result.greeks.vega).toBeCloseTo(tick.bsmVega * netQty * nq, 8);
+    expect(result.greeks.delta).toBeCloseTo(tick.bsmDelta * netQty * 100, 8);
+    expect(result.greeks.gamma).toBeCloseTo(tick.bsmGamma * netQty * 100, 8);
+    expect(result.greeks.theta).toBeCloseTo(tick.bsmTheta * netQty * 100, 8);
+    expect(result.greeks.vega).toBeCloseTo(tick.bsmVega * netQty * 100, 8);
     expect(result.netVal).toBeCloseTo(tick.mark * netQty * 100, 8);
     expect(result.unreal).not.toBeNull();
     if (result.unreal !== null && leg.averagePrice !== null) {
@@ -201,12 +201,11 @@ describe("resolveLivePositionRow", () => {
 
     const result = resolveLivePositionRow([longLeg, shortLeg], SPOT, liveGreeks);
 
-    // Long leg contribution (live): tick.bsmDelta × 1 × 100
+    // Long leg contribution (live): tick.bsmDelta × netQty × 100
     const longNetQty = longLeg.longQty - longLeg.shortQty; // 1
-    const longNq = longNetQty * 100; // 100
-    const liveContrib = tick.bsmDelta * longNetQty * longNq;
+    const liveContrib = tick.bsmDelta * longNetQty * 100;
 
-    // Short leg contribution (static): computePositionGreeks().greeks.delta × (-100)
+    // Short leg contribution (static): computePositionGreeks() already × netQty, then ×100
     const shortR = computePositionGreeks({
       occSymbol: shortLeg.occSymbol,
       spot: SPOT,
@@ -216,8 +215,7 @@ describe("resolveLivePositionRow", () => {
       longQty: shortLeg.longQty,
       shortQty: shortLeg.shortQty,
     });
-    const shortNq = (shortLeg.longQty - shortLeg.shortQty) * 100; // -100
-    const staticContrib = shortR.ok ? shortR.value.greeks.delta * shortNq : 0;
+    const staticContrib = shortR.ok ? shortR.value.greeks.delta * 100 : 0;
 
     expect(result.greeks.delta).toBeCloseTo(liveContrib + staticContrib, 8);
     expect(result.liveTs).toBe(tick.ts);
@@ -286,5 +284,78 @@ describe("resolveLivePositionRow", () => {
         },
       ),
     );
+  });
+});
+
+// ─── CR-01 regression: greeks scale by netQty (×100), NOT netQty² (×nq) ────────
+//
+// computePositionGreeks already returns kernel × netQty (signed). The position greek
+// is kernel × netQty × 100, so the static path multiplies by 100 (not nq = netQty×100)
+// and the live path (raw per-share tick) multiplies by nq. Multiplying the static path
+// by nq double-applies netQty: it over-scales magnitude for |netQty|>1 AND — because
+// netQty² is always positive — drops the SIGN on short legs even at one lot.
+// Every other fixture uses netQty = ±1 (netQty² == |netQty|), which hid both faults.
+describe("resolveLivePositionRow — CR-01 net-qty scaling regression", () => {
+  function staticGreeks(occSymbol: string, longQty: number, shortQty: number, spot: number) {
+    const r = computePositionGreeks({
+      occSymbol,
+      spot,
+      iv: DEFAULT_IV,
+      rate: DEFAULT_RATE,
+      divYield: DEFAULT_DIV,
+      longQty,
+      shortQty,
+    });
+    if (!r.ok) throw new Error("fixture OCC parse failed");
+    return r.value.greeks; // already kernel × netQty
+  }
+
+  it("static 2-lot long leg: greeks scale by ×100, not ×nq (×200)", () => {
+    // OCC_SHORT is future-dated (Aug); OCC_LONG (Jun 12) is expired → zero greeks, vacuous.
+    const leg = makeShortLeg({ occSymbol: OCC_SHORT, longQty: 2, shortQty: 0 });
+    const expected = staticGreeks(OCC_SHORT, 2, 0, SPOT); // kernel × 2
+
+    const result = resolveLivePositionRow([leg], SPOT, new Map());
+
+    // position greek = (kernel × netQty) × 100. The bug computes × nq (= × 200).
+    expect(result.greeks.delta).toBeCloseTo(expected.delta * 100, 8);
+    expect(result.greeks.gamma).toBeCloseTo(expected.gamma * 100, 8);
+    expect(result.greeks.theta).toBeCloseTo(expected.theta * 100, 8);
+    expect(result.greeks.vega).toBeCloseTo(expected.vega * 100, 8);
+  });
+
+  it("live 2-lot long leg: greeks = tick.bsm* × netQty × 100, not × netQty² (×400)", () => {
+    const leg = makeLongLeg({ longQty: 2, shortQty: 0 });
+    const tick = makeTick(OCC_LONG);
+    const netQty = 2;
+
+    const result = resolveLivePositionRow([leg], SPOT, new Map([[OCC_LONG, tick]]));
+
+    expect(result.greeks.delta).toBeCloseTo(tick.bsmDelta * netQty * 100, 8);
+    expect(result.greeks.gamma).toBeCloseTo(tick.bsmGamma * netQty * 100, 8);
+    expect(result.greeks.theta).toBeCloseTo(tick.bsmTheta * netQty * 100, 8);
+    expect(result.greeks.vega).toBeCloseTo(tick.bsmVega * netQty * 100, 8);
+  });
+
+  it("static short 1-lot leg: greeks are signed by netQty (short put flips sign vs long)", () => {
+    const leg = makeShortLeg(); // netQty -1
+    const expected = staticGreeks(OCC_SHORT, 0, 1, SPOT); // kernel × (-1)
+
+    const result = resolveLivePositionRow([leg], SPOT, new Map());
+
+    // correct: expected × 100 (keeps short sign). The bug's × nq (= × -100) flips it.
+    expect(result.greeks.delta).toBeCloseTo(expected.delta * 100, 8);
+    expect(result.greeks.gamma).toBeCloseTo(expected.gamma * 100, 8);
+  });
+
+  it("live short 1-lot leg: greeks = tick.bsm* × netQty × 100 (signed by short netQty)", () => {
+    const leg = makeShortLeg(); // netQty -1
+    const tick = makeTick(OCC_SHORT);
+    const netQty = -1;
+
+    const result = resolveLivePositionRow([leg], SPOT, new Map([[OCC_SHORT, tick]]));
+
+    expect(result.greeks.delta).toBeCloseTo(tick.bsmDelta * netQty * 100, 8);
+    expect(result.greeks.vega).toBeCloseTo(tick.bsmVega * netQty * 100, 8);
   });
 });

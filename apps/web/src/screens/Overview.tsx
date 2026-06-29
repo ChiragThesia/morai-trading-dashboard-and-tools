@@ -56,11 +56,12 @@ function netGreeksForLegs(
       shortQty: leg.shortQty,
     });
     if (!r.ok) continue;
-    const nq = (leg.longQty - leg.shortQty) * 100;
-    acc.delta += r.value.greeks.delta * nq;
-    acc.gamma += r.value.greeks.gamma * nq;
-    acc.theta += r.value.greeks.theta * nq;
-    acc.vega += r.value.greeks.vega * nq;
+    // computePositionGreeks already scales by netQty; apply ONLY the ×100 contract
+    // multiplier — multiplying by netQty×100 double-applies netQty (CR-01).
+    acc.delta += r.value.greeks.delta * 100;
+    acc.gamma += r.value.greeks.gamma * 100;
+    acc.theta += r.value.greeks.theta * 100;
+    acc.vega += r.value.greeks.vega * 100;
   }
   return acc;
 }

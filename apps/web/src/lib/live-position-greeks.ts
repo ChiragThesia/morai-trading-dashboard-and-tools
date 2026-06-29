@@ -8,10 +8,11 @@
  *
  * Scale contract (D-06 — must match Overview's netGreeksForLegs exactly):
  *   computePositionGreeks returns greeks.{delta,…} = kernel_per_share × netQty.
- *   netGreeksForLegs then multiplies by nq = netQty × 100.
- *   Live tick.bsm{Delta,…} is RAW per-share (same layer as kernel_per_share).
- *   Therefore the live contribution uses the same downstream factors:
- *     contribution = tick.bsmDelta × netQty × nq  (= tick × netQty² × 100)
+ *   The position greek is kernel_per_share × netQty × 100, so the STATIC path applies
+ *   only the ×100 contract multiplier (computePositionGreeks already applied netQty).
+ *   Live tick.bsm{Delta,…} is RAW per-share, so the LIVE path applies nq = netQty × 100.
+ *   Both yield kernel_per_share × netQty × 100. Multiplying the static path by nq would
+ *   double-apply netQty — over-scaling magnitude and flipping short-leg signs (CR-01).
  *
  * No any / as / !.
  */
@@ -36,7 +37,7 @@ export type LiveRowResult = {
    * (tick.mark − averagePrice) × netQty × 100 live; Σ(marketValue − avg×netQty×100) static.
    */
   readonly unreal: number | null;
-  /** Net position greeks, scaled to position terms (per-share × netQty × nq). */
+  /** Net position greeks, scaled to position terms (per-share × netQty × 100). */
   readonly greeks: { delta: number; gamma: number; theta: number; vega: number };
   /**
    * ISO-8601 UTC timestamp of the latest tick among legs that had a tick (lexicographic max).
@@ -103,15 +104,15 @@ export function resolveLivePositionRow(
 
     // ── Greeks ───────────────────────────────────────────────────────────────
     if (tick !== undefined) {
-      // Live: substitute per-share tick values at the same layer as the kernel,
-      // then apply the identical downstream scale factors (netQty × nq)
-      greeks.delta += tick.bsmDelta * netQty * nq;
-      greeks.gamma += tick.bsmGamma * netQty * nq;
-      greeks.theta += tick.bsmTheta * netQty * nq;
-      greeks.vega += tick.bsmVega * netQty * nq;
+      // Live: tick.bsm* is RAW per-share (same layer as the kernel). Position greek =
+      // per-share × netQty × 100 = per-share × nq. One netQty only (CR-01).
+      greeks.delta += tick.bsmDelta * nq;
+      greeks.gamma += tick.bsmGamma * nq;
+      greeks.theta += tick.bsmTheta * nq;
+      greeks.vega += tick.bsmVega * nq;
     } else {
-      // Static: computePositionGreeks already scales by netQty;
-      // netGreeksForLegs in Overview then multiplies by nq — same here
+      // Static: computePositionGreeks already scales by netQty, so apply ONLY the ×100
+      // contract multiplier — using nq here would double-apply netQty (CR-01).
       const r = computePositionGreeks({
         occSymbol: leg.occSymbol,
         spot,
@@ -122,10 +123,10 @@ export function resolveLivePositionRow(
         shortQty: leg.shortQty,
       });
       if (!r.ok) continue; // skip leg on OCC parse error (matches netGreeksForLegs)
-      greeks.delta += r.value.greeks.delta * nq;
-      greeks.gamma += r.value.greeks.gamma * nq;
-      greeks.theta += r.value.greeks.theta * nq;
-      greeks.vega += r.value.greeks.vega * nq;
+      greeks.delta += r.value.greeks.delta * 100;
+      greeks.gamma += r.value.greeks.gamma * 100;
+      greeks.theta += r.value.greeks.theta * 100;
+      greeks.vega += r.value.greeks.vega * 100;
     }
 
     // ── liveTs: lexicographically greatest ts among ticked legs ──────────────
