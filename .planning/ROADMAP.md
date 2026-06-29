@@ -44,7 +44,7 @@ Cross-cutting regression gates (must never regress across any phase):
 - [x] **Phase 10: Stack Decisions Doc Update** - Record Python sidecar as 3rd Railway service; lift D17 (streaming deferred); supersede D16 (TS OAuth client) (completed 2026-06-25)
 - [x] **Phase 11: Sidecar Scaffold + Auth Migration** - schwab-py sidecar deployed; TS refresh-tokens job retired; sidecar is sole token owner; journal re-sourced through sidecar REST proxy (completed 2026-06-25)
 - [ ] **Phase 12: Streaming + TS Fan-Out** - LEVELONE_OPTION + ACCT_ACTIVITY ingestion; `GET /api/stream` with Supabase JWT edge; Zod stream contracts; cold-start reconcile
-- [ ] **Phase 13: COT Adapter** - Weekly `fetch-cot` job; `cot_observations` table; `GET /api/analytics/cot` + MCP `get_cot`
+- [x] **Phase 13: COT Adapter** - Weekly `fetch-cot` job; `cot_observations` table; `GET /api/analytics/cot` + MCP `get_cot` (completed 2026-06-29)
 - [ ] **Phase 14: FRED Expansion** - Expanded macro series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS + VVIX via CBOE); prod FRED_API_KEY set; `GET /api/analytics/macro` + MCP `get_macro`
 - [ ] **Phase 15: Re-Auth Smoothing** - T-24h expiry alert; one-click/operator re-auth flow; operator runbook
 
@@ -589,14 +589,14 @@ historical COT positioning series.
   1. After `fetch-cot` runs on a Friday, `cot_observations` gains one row per report week with `as_of` set to the preceding Tuesday and `published_at` set to the Friday fetch date; a second run for the same week is idempotent (0 duplicate rows) (COT-01).
   2. `GET /api/analytics/cot` returns a JSON array of COT series entries (as_of, net_noncommercial, net_commercial, open_interest, …) over the shared Zod contract; MCP `get_cot` returns the same data to Claude Code (COT-02, MCP-02).
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 - [x] 13-01-PLAN.md
 - [x] 13-02-PLAN.md
 - [x] 13-03-PLAN.md
 - [x] 13-04-PLAN.md
 - [x] 13-05-PLAN.md
-- [ ] 13-06-PLAN.md
+- [x] 13-06-PLAN.md
 
 ### Phase 14: FRED Expansion
 
@@ -688,6 +688,6 @@ requires Phase 11 complete (sidecar health endpoint).
 | 10. Stack Decisions Doc Update | 1/1 | Complete   | 2026-06-25 |
 | 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
 | 12. Streaming + TS Fan-Out | 0/TBD | Not started | - |
-| 13. COT Adapter | 5/6 | In Progress|  |
+| 13. COT Adapter | 6/6 | Complete   | 2026-06-29 |
 | 14. FRED Expansion | 0/TBD | Not started | - |
 | 15. Re-Auth Smoothing | 0/TBD | Not started | - |

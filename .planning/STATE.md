@@ -4,9 +4,9 @@ milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
 current_phase: 13
 current_phase_name: cot-adapter
-status: executing
+status: verifying
 stopped_at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
-last_updated: "2026-06-29T14:18:20.092Z"
+last_updated: "2026-06-29T14:30:44.374Z"
 last_activity: 2026-06-29
 last_activity_desc: Phase 13 execution started
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 Phase: 13 (cot-adapter) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-29 — Phase 13 execution started
 
 ## Milestone v1.1 Summary
@@ -138,6 +138,7 @@ Regression gates (must survive every phase):
 | Phase 13-cot-adapter P03 | 8 | 2 tasks | 6 files |
 | Phase 13-cot-adapter P04 | 415 | 3 tasks | 8 files |
 | Phase 13-cot-adapter P05 | 6 | 2 tasks | 5 files |
+| Phase 13 P06 | 9 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -309,6 +310,7 @@ Recent decisions affecting current work:
 - [Phase ?]: CFTC adapter + memory twin
 - [Phase ?]: CotEntry defined in getCot.ts (not imported from contracts) to keep hexagon pure
 - [Phase ?]: getCot.test.ts validates cotSeriesEntry shape inline — core tsconfig references only shared+quant
+- [Phase ?]: Direct cotResponse.parse: CotEntry already plain strings/ints
 
 ### Pending Todos
 
@@ -335,6 +337,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-29T14:18:20.081Z
+Last session: 2026-06-29T14:30:38.551Z
 Stopped at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
 Resume file: .planning/phases/13-cot-adapter/13-01-PLAN.md
