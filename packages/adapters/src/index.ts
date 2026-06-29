@@ -89,6 +89,9 @@ export { makeCftcCotAdapter } from "./http/cftc.ts";
 // Phase 13 (13-03): COT observations repo — ForPersistingCotObservation + ForReadingCotObservations
 export { makePostgresCotObservationsRepo } from "./postgres/repos/cot-observations.ts";
 export type { PostgresCotObservationsRepo } from "./postgres/repos/cot-observations.ts";
+// Phase 13 (13-03): in-memory twin for cot-observations (architecture-boundaries §8)
+export { makeMemoryCotObservationsRepo } from "./memory/cot-observations.ts";
+export type { MemoryCotObservationsRepo } from "./memory/cot-observations.ts";
 
 // In-memory adapters (test doubles; also usable in development)
 export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";

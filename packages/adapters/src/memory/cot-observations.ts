@@ -14,6 +14,10 @@ import type {
  * by `${contractCode}|${asOf}`. A second insert for the same key is a no-op, mirroring
  * onConflictDoNothing on (contract_code, as_of) — COT-01 idempotency (D-09).
  *
+ * Ordering: listCotObservations returns rows sorted by asOf DESC. YYYY-MM-DD strings
+ * compare lexicographically in the same order as chronologically, so localeCompare
+ * produces a correct descending sort.
+ *
  * Always returns ok(...) — no network or DB calls, no error paths.
  *
  * Architectural rule: every driven port change ships with its in-memory twin in the
@@ -31,23 +35,26 @@ export function makeMemoryCotObservationsRepo(): MemoryCotObservationsRepo {
   const keyOf = (row: CotObservationRow): string =>
     `${row.contractCode}|${row.asOf}`;
 
-  // STUB — RED phase: always returns ok(undefined) but does NOT write to the store
   const insertCotObservation: ForPersistingCotObservation = async (
-    _row: CotObservationRow,
+    row: CotObservationRow,
   ): Promise<Result<void, StorageError>> => {
-    // STUB: no-op — tests will fail because store stays empty
+    const key = keyOf(row);
+    if (!store.has(key)) {
+      store.set(key, row); // onConflictDoNothing: existing key → no-op
+    }
     return ok(undefined);
   };
 
   const listCotObservations: ForReadingCotObservations = async (
-    _limit?: number,
+    limit?: number,
   ): Promise<Result<ReadonlyArray<CotObservationRow>, StorageError>> => {
-    // STUB: always returns empty array
-    return ok([...store.values()]);
+    // Sort by asOf DESC — YYYY-MM-DD strings sort lexicographically = chronologically
+    const sorted = [...store.values()].sort((a, b) =>
+      b.asOf.localeCompare(a.asOf),
+    );
+    const result = limit !== undefined ? sorted.slice(0, limit) : sorted;
+    return ok(result);
   };
-
-  // Expose keyOf for GREEN implementation below (suppresses unused-var warning)
-  void keyOf;
 
   return { insertCotObservation, listCotObservations };
 }
