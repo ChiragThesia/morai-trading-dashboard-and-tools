@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import ReactECharts from "echarts-for-react";
-import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.tsx";
 import type { GexSnapshotEntry } from "@morai/contracts";
 
 /**
@@ -224,34 +224,29 @@ export function GexBars({
     [strikes, mode, spot, callWall, putWall],
   );
 
-  // base-ui ToggleGroup uses value: readonly string[] (not a single string)
-  const handleModeChange = (groupValue: string[]): void => {
-    const picked = groupValue[0];
-    if (picked === "gex" || picked === "oi" || picked === "volume") {
-      setMode(picked);
+  // base-ui Tabs.Root passes the new tab value (string); narrow to GexMode before set.
+  const handleModeChange = (value: string): void => {
+    if (value === "gex" || value === "oi" || value === "volume") {
+      setMode(value);
     }
-    // If groupValue is empty (user clicked the active button to deselect), keep current mode
   };
 
   return (
     <div style={{ width, display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* Toggle: GEX / OI wall / Volume */}
-      <ToggleGroup
-        value={[mode]}
-        onValueChange={handleModeChange}
-        aria-label="GEX chart mode"
-        style={{ justifyContent: "flex-start" }}
-      >
-        <ToggleGroupItem value="gex" aria-label="GEX mode" data-testid="toggle-gex">
-          GEX
-        </ToggleGroupItem>
-        <ToggleGroupItem value="oi" aria-label="OI wall mode" data-testid="toggle-oi">
-          OI wall
-        </ToggleGroupItem>
-        <ToggleGroupItem value="volume" aria-label="Volume mode" data-testid="toggle-volume">
-          Volume
-        </ToggleGroupItem>
-      </ToggleGroup>
+      {/* Metric tabs: GEX / OI wall / Volume */}
+      <Tabs value={mode} onValueChange={handleModeChange}>
+        <TabsList aria-label="GEX chart mode">
+          <TabsTrigger value="gex" aria-label="GEX mode" data-testid="toggle-gex">
+            GEX
+          </TabsTrigger>
+          <TabsTrigger value="oi" aria-label="OI wall mode" data-testid="toggle-oi">
+            OI wall
+          </TabsTrigger>
+          <TabsTrigger value="volume" aria-label="Volume mode" data-testid="toggle-volume">
+            Volume
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* ECharts bar chart — echarts-for-react owns resize/dispose */}
       <ReactECharts

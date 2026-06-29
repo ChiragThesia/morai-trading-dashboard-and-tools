@@ -101,7 +101,7 @@ describe("GexBars", () => {
     expect(stub.getAttribute("data-has-series")).toBe("true");
   });
 
-  it("the ToggleGroup options are reachable as interactive buttons", () => {
+  it("the metric options are reachable as tabs with GEX initially active", () => {
     render(
       <GexBars
         strikes={SAMPLE_STRIKES}
@@ -111,17 +111,21 @@ describe("GexBars", () => {
       />,
     );
 
-    // All 3 toggle options should be present as interactive buttons
-    const gexBtn = screen.getByRole("button", { name: "GEX mode" });
-    const oiBtn = screen.getByRole("button", { name: "OI wall mode" });
-    const volBtn = screen.getByRole("button", { name: "Volume mode" });
+    // All 3 options are now tabs (shadcn Tabs) rather than toggle buttons
+    const gexTab = screen.getByRole("tab", { name: "GEX mode" });
+    const oiTab = screen.getByRole("tab", { name: "OI wall mode" });
+    const volTab = screen.getByRole("tab", { name: "Volume mode" });
 
-    // All buttons should be in the DOM (not disabled)
-    expect(gexBtn.getAttribute("aria-disabled")).not.toBe("true");
-    expect(oiBtn.getAttribute("aria-disabled")).not.toBe("true");
-    expect(volBtn.getAttribute("aria-disabled")).not.toBe("true");
+    expect(gexTab.getAttribute("aria-disabled")).not.toBe("true");
+    expect(oiTab.getAttribute("aria-disabled")).not.toBe("true");
+    expect(volTab.getAttribute("aria-disabled")).not.toBe("true");
 
-    // The GEX button should be initially pressed
-    expect(gexBtn.getAttribute("aria-pressed")).toBe("true");
+    // GEX is the initial mode → its tab is the selected/active one (base-ui marks
+    // the active tab with aria-selected / data-selected / data-active).
+    const gexActive =
+      gexTab.getAttribute("aria-selected") === "true" ||
+      gexTab.hasAttribute("data-selected") ||
+      gexTab.hasAttribute("data-active");
+    expect(gexActive).toBe(true);
   });
 });
