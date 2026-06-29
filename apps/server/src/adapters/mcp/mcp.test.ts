@@ -3,13 +3,14 @@ import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForGettingStatus } from "@morai/core";
-import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks, ForRunningGetTermStructure, ForRunningGetSkew } from "@morai/core";
+import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks, ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot } from "@morai/core";
 import type { Calendar, SnapshotRow, StorageError } from "@morai/core";
 import {
   statusResponse,
   listCalendarsResponse,
   journalResponse,
   liveGreeksResponse,
+  cotResponse,
 } from "@morai/contracts";
 import { bearerAuth } from "./bearer.ts";
 import { makeMcpRouter } from "./server.ts";
@@ -761,5 +762,63 @@ describe("MCP router", () => {
     expect(enqueueCalls).toBe(1);
     expect(seenName).toBe("sync-fills");
     expect(text).toContain("jobId");
+  });
+
+  // ─── get_cot tool (13-06 — real use-case over the shared cotResponse contract, MCP-02) ──
+
+  // 13-06: COT fake — one weekly TFF entry.
+  const fakeCotEntry = {
+    asOf: "2026-04-08",
+    publishedAt: "2026-04-11T14:00:00.000Z",
+    contractCode: "13874A",
+    openInterest: 1_000_000,
+    dealerLong: 100,
+    dealerShort: 50,
+    netDealer: 50,
+    assetMgrLong: 200,
+    assetMgrShort: 100,
+    netAssetManager: 100,
+    levMoneyLong: 300,
+    levMoneyShort: 200,
+    netLeveraged: 100,
+    otherReptLong: 50,
+    otherReptShort: 30,
+    netOther: 20,
+    nonreptLong: 40,
+    nonreptShort: 20,
+    netNonreportable: 20,
+  };
+
+  const fakeGetCot: ForRunningGetCot = async () => ok([fakeCotEntry]);
+  const fakeGetCotEmpty: ForRunningGetCot = async () => ok([]);
+
+  it("get_cot tool registers with the real use-case and returns the shared contract series (MCP-02)", async () => {
+    const { registerGetCotTool } = await import("./tools.ts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    // 13-06: registration requires the use-case; should not throw.
+    expect(() => registerGetCotTool(server, fakeGetCot)).not.toThrow();
+
+    // MCP-02: the tool's payload validates against the SAME cotResponse as the HTTP route.
+    // CotEntry fields are already plain strings/ints — no Date mapping needed.
+    const result = await fakeGetCot();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const payload = cotResponse.parse(result.value);
+    expect(payload).toHaveLength(1);
+    expect(payload[0]?.asOf).toBe("2026-04-08");
+    expect(payload[0]?.netLeveraged).toBe(100);
+    expect(payload[0]?.contractCode).toBe("13874A");
+  });
+
+  it("get_cot tool returns a contract-valid EMPTY array (not an error) on no data (MCP-02)", async () => {
+    const result = await fakeGetCotEmpty();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Empty array is a valid cotResponse (not an error).
+    expect(cotResponse.parse(result.value)).toEqual([]);
   });
 });

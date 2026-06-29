@@ -266,6 +266,7 @@ app.route("/api", jobsGroup);
 
 // Mount MCP transport at /mcp (bearer-protected, stateless) — UNCHANGED (D-02 scope).
 // MCP-01: base tools + BRK-02 trader tools + MCP-02 trigger_job tool + GEX-02 get_gex tool.
+// COT-02 / MCP-02 (13-06): get_cot tool added here — same getCot use-case as the HTTP route.
 const mcpRouter = makeMcpRouter(
   config,
   getStatus,
@@ -275,6 +276,7 @@ const mcpRouter = makeMcpRouter(
   getTermStructure,
   getSkew,
   getGex,
+  getCot,
   getPositions,
   getTransactions,
   getOrders,

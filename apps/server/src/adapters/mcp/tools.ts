@@ -10,6 +10,7 @@ import {
   termStructureResponse,
   skewResponse,
   gexSnapshotResponse,
+  cotResponse,
   brokerageAuthExpiredPayload,
 } from "@morai/contracts";
 import type {
@@ -20,6 +21,7 @@ import type {
   ForRunningGetTermStructure,
   ForRunningGetSkew,
   ForRunningGetGex,
+  ForRunningGetCot,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -534,6 +536,51 @@ export function registerGetGexTool(
             : row.computedAt,
       });
 
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetCotTool — registers the get_cot MCP tool (COT-02 / MCP-02 / 13-06).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: call use-case → parse result through cotResponse schema → return content.
+ *
+ * MCP-02: the SAME cotResponse schema used by GET /api/analytics/cot is used here.
+ * A one-sided field rename fails `bun run typecheck`.
+ *
+ * CotEntry fields are already plain strings and ints (use-case serialises publishedAt
+ * to ISO; asOf is stored as YYYY-MM-DD), so cotResponse.parse(result.value) is direct.
+ *
+ * COT-02: returns a contract-valid EMPTY array (never an error) when no data exists.
+ * T-13-06-INJ: no user-controlled input; output validated against contract before return.
+ */
+export function registerGetCotTool(
+  server: McpServer,
+  getCot: ForRunningGetCot,
+): void {
+  server.registerTool(
+    "get_cot",
+    {
+      title: "Get COT",
+      description:
+        "Returns the CFTC Traders in Financial Futures (TFF) weekly net-per-class series for E-mini S&P 500 — dealer, asset manager, leveraged funds (headline), other reportable, and non-reportable. Same payload as GET /api/analytics/cot. Empty array when no data has been fetched yet.",
+      // No input parameters — returns the full stored series (public CFTC data, no filters).
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getCot();
+      if (!result.ok) {
+        // T-13-06-INJ: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      // Empty array on no data — never an error (COT-02 / MCP-02 stability).
+      // Direct parse: CotEntry fields already match cotSeriesEntry types.
+      const payload = cotResponse.parse(result.value);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
