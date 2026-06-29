@@ -69,14 +69,28 @@ function netUnreal(legs: ReadonlyArray<BrokerPositionResponse>): number | null {
   return total;
 }
 
-function signed(v: number, decimals = 0): string {
-  const s = v >= 0 ? "+" : "−";
-  return `${s}${Math.abs(v).toFixed(decimals)}`;
+/**
+ * Truncate a non-negative number to `dp` decimals WITHOUT rounding, padded to `dp` places.
+ * Round at dp+2 first (kills float noise like 186.5799999) then string-slice — so the
+ * displayed digits never round the value up.
+ */
+function truncFixed(absV: number, dp: number): string {
+  const s = absV.toFixed(dp + 2);
+  const dot = s.indexOf(".");
+  return dp === 0 ? s.slice(0, dot) : s.slice(0, dot + 1 + dp);
 }
 
-function signedUsd(v: number): string {
-  const s = v >= 0 ? "+" : "−";
-  return `${s}$${Math.abs(v).toFixed(0)}`;
+function signed(v: number, dp = 3): string {
+  return `${v >= 0 ? "+" : "−"}${truncFixed(Math.abs(v), dp)}`;
+}
+
+function signedUsd(v: number, dp = 3): string {
+  return `${v >= 0 ? "+" : "−"}$${truncFixed(Math.abs(v), dp)}`;
+}
+
+/** Dollar value without a forced + sign (negatives keep the − minus). */
+function usd(v: number, dp = 3): string {
+  return `${v < 0 ? "−" : ""}$${truncFixed(Math.abs(v), dp)}`;
 }
 
 function signClass(v: number): string {
@@ -164,12 +178,12 @@ function PositionsTable({
             <tr key={r.key} className="border-b border-line/50">
               <td className="px-2 py-1 text-left text-txt">{r.label}</td>
               <td className="px-2 py-1 text-right text-muted-foreground">{r.dte}</td>
-              <td className="px-2 py-1 text-right text-txt">${val.toFixed(0)}</td>
+              <td className="px-2 py-1 text-right text-txt">{usd(val)}</td>
               <td className={cn("px-2 py-1 text-right", unreal === null ? "text-dim" : signClass(unreal))}>
                 {unreal === null ? "—" : signedUsd(unreal)}
               </td>
               <td className={cn("px-2 py-1 text-right", signClass(g.delta))}>{signed(g.delta)}</td>
-              <td className="px-2 py-1 text-right text-muted-foreground">{g.gamma.toFixed(2)}</td>
+              <td className="px-2 py-1 text-right text-muted-foreground">{signed(g.gamma)}</td>
               <td className={cn("px-2 py-1 text-right", signClass(g.theta))}>{signedUsd(g.theta)}</td>
               <td className={cn("px-2 py-1 text-right", signClass(g.vega))}>{signedUsd(g.vega)}</td>
             </tr>
@@ -178,12 +192,12 @@ function PositionsTable({
         <tr className="border-t border-line font-semibold">
           <td className="px-2 py-1 text-left text-txt">Net</td>
           <td className="px-2 py-1" />
-          <td className="px-2 py-1 text-right text-txt">${total.val.toFixed(0)}</td>
+          <td className="px-2 py-1 text-right text-txt">{usd(total.val)}</td>
           <td className={cn("px-2 py-1 text-right", total.unreal === null ? "text-dim" : signClass(total.unreal))}>
             {total.unreal === null ? "—" : signedUsd(total.unreal)}
           </td>
           <td className={cn("px-2 py-1 text-right", signClass(total.greeks.delta))}>{signed(total.greeks.delta)}</td>
-          <td className="px-2 py-1 text-right text-muted-foreground">{total.greeks.gamma.toFixed(2)}</td>
+          <td className="px-2 py-1 text-right text-muted-foreground">{signed(total.greeks.gamma)}</td>
           <td className={cn("px-2 py-1 text-right", signClass(total.greeks.theta))}>{signedUsd(total.greeks.theta)}</td>
           <td className={cn("px-2 py-1 text-right", signClass(total.greeks.vega))}>{signedUsd(total.greeks.vega)}</td>
         </tr>
@@ -216,7 +230,7 @@ function BookSummary({
       <Stat label="Net Δ" value={signed(g.delta)} valueClassName={signClass(g.delta)} />
       <Stat label="Net Θ/day" value={signedUsd(g.theta)} valueClassName={signClass(g.theta)} />
       <Stat label="Net Vega" value={signedUsd(g.vega)} valueClassName={signClass(g.vega)} />
-      <Stat label="Net Γ" value={g.gamma.toFixed(2)} />
+      <Stat label="Net Γ" value={signed(g.gamma)} />
     </div>
   );
 }
