@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
-current_phase: 11
-current_phase_name: sidecar-scaffold-auth-migration
+current_phase: 12
+current_phase_name: streaming-ts-fan-out
 status: executing
-stopped_at: Phase 12 UI-SPEC approved
-last_updated: "2026-06-28T22:45:12.577Z"
-last_activity: 2026-06-25
-last_activity_desc: "Phase 11 executed: schwab-py sidecar built (FastAPI lifespan + advisory lock + chain proxy), GW-03 cutover (refresh-tokens retired), apps/auth retired; 1221 TS + 9 py tests green; deploy/live-migrate/OAuth-seed deferred to go-live"
+stopped_at: Phase 12 executed — code complete, RTH UAT pending (human_needed)
+last_updated: "2026-06-29T01:46:58.238Z"
+last_activity: 2026-06-28
+last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 9
   completed_phases: 9
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 11 — sidecar-scaffold-auth-migration
+**Current focus:** Phase 12 — streaming-ts-fan-out
 
 ## Current Position
 
-Phase: 11 (sidecar-scaffold-auth-migration) — CODE COMPLETE, awaiting go-live UAT
-Plan: 7 of 7 executed + code-review fixes (4 blockers + 4 warnings)
-Status: human_needed — 5 go-live operator items in 11-UAT.md (run /gsd-verify-work 11 at go-live)
-Last activity: 2026-06-25 — Phase 11 executed: schwab-py sidecar built (FastAPI lifespan + advisory lock + chain proxy), GW-03 cutover (refresh-tokens retired), apps/auth retired; 1221 TS + 9 py tests green; deploy/live-migrate/OAuth-seed deferred to go-live
+Phase: 12 (streaming-ts-fan-out) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 12
+Last activity: 2026-06-28 — Phase 12 execution started
 
 ## Milestone v1.1 Summary
 
@@ -328,6 +328,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-28T22:45:12.567Z
-Stopped at: Phase 12 UI-SPEC approved
-Resume file: .planning/phases/12-streaming-ts-fan-out/12-UI-SPEC.md
+Last session: 2026-06-29T01:46:58.229Z
+Stopped at: Phase 12 executed — code complete, RTH UAT pending (human_needed)
+Resume file: .planning/phases/12-streaming-ts-fan-out/12-VERIFICATION.md
