@@ -342,6 +342,8 @@ describe("useLiveStream", () => {
     });
 
     expect(caughtError).toBeInstanceOf(Error);
-    expect((caughtError as Error).name).toBe("StreamSubscribeError");
+    // Narrow with instanceof before accessing `.name` (no `as` — consistent-type-assertions rule).
+    if (!(caughtError instanceof Error)) throw new Error("Expected an Error instance");
+    expect(caughtError.name).toBe("StreamSubscribeError");
   });
 });

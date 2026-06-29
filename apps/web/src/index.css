@@ -106,3 +106,44 @@ body {
     }
   }
 }
+
+/* ─── Phase 12: Live stream animations (UI-SPEC Surface 1/2/3 Implementation Notes) ── */
+
+/* Surface 1: value-change flash — applied via React key/ref toggle on tick arrival.
+   Duration: 300ms ease-out per UI-SPEC. No directional color (neutral "value changed" signal). */
+@keyframes cell-flash {
+  0%   { background-color: var(--color-violetd); }
+  100% { background-color: transparent; }
+}
+
+.live-cell-flash {
+  animation: cell-flash 300ms ease-out forwards;
+}
+
+/* Surface 2: stale dimming — color transition (NOT opacity, per UI-SPEC + a11y constraint).
+   Applied to every live-sourced cell when stream is disconnected. Restores on reconcile.
+   500ms ease (slow drift) signals gradual stale, not instant loss. */
+.live-cell {
+  transition: color 500ms ease;
+}
+
+.live-cell.stale {
+  color: var(--color-dim);
+}
+
+/* Surface 3: LIVE dot pulse animation — 6px teal circle, 2s ease-in-out infinite.
+   scale 1.0→1.4→1.0 per UI-SPEC. Only visible when status is LIVE (.live-dot rendered). */
+@keyframes live-dot-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.4); opacity: 0.7; }
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-up);
+  animation: live-dot-pulse 2s ease-in-out infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
