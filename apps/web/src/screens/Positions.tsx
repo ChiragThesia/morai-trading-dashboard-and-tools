@@ -27,6 +27,7 @@ import { useGex } from "../hooks/useGex.ts";
 import { useLiveStream } from "../hooks/useLiveStream.ts";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { computePositionGreeks } from "../lib/position-greeks.ts";
+import { pairPositionsIntoCalendars } from "../lib/pair-calendars.ts";
 import { parseOccSymbol } from "@morai/shared";
 import { AttributionWaterfall } from "../components/AttributionWaterfall.tsx";
 import { LevelBar } from "../components/LevelBar.tsx";
@@ -169,6 +170,16 @@ function PositionsList({
   selectedIdx: number | null;
   onSelect: (idx: number) => void;
 }): React.ReactElement {
+  // Pair raw legs into calendar spreads (short front / long back, same underlying+strike+type).
+  // The list shows ONE row per calendar — not one row per leg. Orphan legs fall through to singles.
+  const now = useMemo(() => new Date(), []);
+  const { calendars, singles } = useMemo(
+    () => pairPositionsIntoCalendars(positions, now),
+    [positions, now],
+  );
+  const idxOf = (occSymbol: string): number =>
+    positions.findIndex((p) => p.occSymbol === occSymbol);
+
   return (
     <div>
       {positions.length === 0 ? (
@@ -183,61 +194,103 @@ function PositionsList({
           No open positions. Register a calendar via the API or paste a TOS order to analyze a scenario.
         </p>
       ) : (
-        positions.map((pos, idx) => {
-          const isSelected = idx === selectedIdx;
-          const dte = dteDays(pos.occSymbol);
-          const unreal =
-            pos.marketValue !== null && pos.averagePrice !== null
-              ? pos.marketValue - pos.averagePrice * (pos.longQty - pos.shortQty) * 100
-              : null;
-
-          return (
-            <button
-              key={pos.occSymbol}
-              onClick={() => { onSelect(idx); }}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                background: isSelected ? "#241d40" : "transparent",
-                border: isSelected ? "1px solid #a78bfa" : "1px solid transparent",
-                borderRadius: 4,
-                padding: "6px 8px",
-                marginBottom: 4,
-                cursor: "pointer",
-                boxSizing: "border-box",
-              }}
-            >
-              <div
+        <>
+          {calendars.map((cal) => {
+            const frontIdx = idxOf(cal.front.occSymbol);
+            const backIdx = idxOf(cal.back.occSymbol);
+            const isSelected = selectedIdx === frontIdx || selectedIdx === backIdx;
+            return (
+              <button
+                key={cal.key}
+                onClick={() => { onSelect(backIdx >= 0 ? backIdx : frontIdx); }}
                 style={{
-                  fontSize: 10,
-                  fontFamily: "JetBrains Mono, monospace",
-                  color: "#d6dbe4",
-                  marginBottom: 2,
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  background: isSelected ? "#241d40" : "transparent",
+                  border: isSelected ? "1px solid #a78bfa" : "1px solid transparent",
+                  borderRadius: 4,
+                  padding: "6px 8px",
+                  marginBottom: 4,
+                  cursor: "pointer",
+                  boxSizing: "border-box",
                 }}
               >
-                {legLabel(pos.occSymbol)}
-              </div>
-              <div
+                <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: "#d6dbe4", marginBottom: 2 }}>
+                  {cal.strike}{cal.optionType} calendar
+                </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#566273",
+                    fontFamily: "JetBrains Mono, monospace",
+                    display: "flex",
+                    gap: 8,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  <span>DTE {cal.dteFront}→{cal.dteBack}</span>
+                  {cal.netUnreal !== null && (
+                    <span style={{ color: cal.netUnreal >= 0 ? "#26a69a" : "#ef5350" }}>
+                      {cal.netUnreal >= 0 ? "+" : "−"}${Math.abs(cal.netUnreal).toFixed(0)}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 10, color: "#3f4a5a", fontFamily: "JetBrains Mono, monospace", marginTop: 1 }}>
+                  {legLabel(cal.front.occSymbol)} / {legLabel(cal.back.occSymbol)}
+                </div>
+              </button>
+            );
+          })}
+          {singles.map((pos) => {
+            const idx = idxOf(pos.occSymbol);
+            const isSelected = idx === selectedIdx;
+            const dte = dteDays(pos.occSymbol);
+            const unreal =
+              pos.marketValue !== null && pos.averagePrice !== null
+                ? pos.marketValue - pos.averagePrice * (pos.longQty - pos.shortQty) * 100
+                : null;
+            return (
+              <button
+                key={pos.occSymbol}
+                onClick={() => { onSelect(idx); }}
                 style={{
-                  fontSize: 10,
-                  color: "#566273",
-                  fontFamily: "JetBrains Mono, monospace",
-                  display: "flex",
-                  gap: 8,
-                  fontVariantNumeric: "tabular-nums",
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  background: isSelected ? "#241d40" : "transparent",
+                  border: isSelected ? "1px solid #a78bfa" : "1px solid transparent",
+                  borderRadius: 4,
+                  padding: "6px 8px",
+                  marginBottom: 4,
+                  cursor: "pointer",
+                  boxSizing: "border-box",
                 }}
               >
-                <span>DTE: {dte}</span>
-                {unreal !== null && (
-                  <span style={{ color: unreal >= 0 ? "#26a69a" : "#ef5350" }}>
-                    {unreal >= 0 ? "+" : "−"}${Math.abs(unreal).toFixed(0)}
-                  </span>
-                )}
-              </div>
-            </button>
-          );
-        })
+                <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: "#d6dbe4", marginBottom: 2 }}>
+                  {legLabel(pos.occSymbol)}
+                </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#566273",
+                    fontFamily: "JetBrains Mono, monospace",
+                    display: "flex",
+                    gap: 8,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  <span>DTE: {dte}</span>
+                  {unreal !== null && (
+                    <span style={{ color: unreal >= 0 ? "#26a69a" : "#ef5350" }}>
+                      {unreal >= 0 ? "+" : "−"}${Math.abs(unreal).toFixed(0)}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </>
       )}
     </div>
   );
