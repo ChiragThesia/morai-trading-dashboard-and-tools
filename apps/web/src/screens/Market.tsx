@@ -1,6 +1,5 @@
 import { useGex } from "../hooks/useGex.ts";
 import { classifyRegime } from "../lib/gex-regime.ts";
-import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import { MetricChip, Panel, PanelHeading } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
@@ -12,8 +11,7 @@ import { cn } from "@/lib/utils";
  *   - Regime strip: SPX spot (blue) / net γ /1% (coral when negative, blood-dark bg) /
  *     γ flip (amber) / AMPLIFY|DAMPEN via classifyRegime
  *   - 12-col grid:
- *       col-span-7: Net dealer gamma profile (GammaProfile visx, 720×230)
- *       col-span-5: GEX by strike (GexBars ECharts — GEX / OI wall / Volume tabs)
+ *       col-span-4 ×3: GEX / OI wall / Volume by strike (three locked GexBars, no picker)
  *       col-span-12: Key levels (pill row — call wall / γ flip / spot / put wall + distance)
  *
  * Data: useGex() only — no browser-side GEX recompute (D-01).
@@ -241,35 +239,37 @@ export function Market(): React.ReactElement {
         className="grid gap-3"
         style={{ gridTemplateColumns: "repeat(12, 1fr)" }}
       >
-        {/* Net dealer gamma profile (span 7) — visual anchor */}
-        <Card
-          heading="Net dealer gamma profile"
-          badge="full chain · $Bn / 1% vs spot"
-          colSpan={7}
-        >
-          <GammaProfile
-            profile={gex.profile}
-            spot={gex.spot}
-            flip={gex.flip}
-            width={720}
-            height={230}
-          />
-          {/* Callout block — GEX note text */}
-          <div className="mt-1 border-t border-line pt-1.5 font-mono text-[10px] text-dim">
-            {isAmplify
-              ? "Dealers are net short gamma — moves are amplified (positive feedback)."
-              : "Dealers are net long gamma — moves are dampened (mean-reversion force)."}
-          </div>
-        </Card>
-
-        {/* GEX by strike (span 5) */}
-        <Card heading="GEX by strike" badge="±260 · live" colSpan={5}>
+        {/* GEX / OI wall / Volume by strike — three separate locked charts (no tab picker) */}
+        <Card heading="GEX by strike" badge="$Bn · live" colSpan={4}>
           <GexBars
+            mode="gex"
             strikes={gex.strikes}
             spot={gex.spot}
             callWall={gex.callWall}
             putWall={gex.putWall}
-            height={260}
+            height={320}
+          />
+        </Card>
+
+        <Card heading="OI wall by strike" badge="call/put OI · live" colSpan={4}>
+          <GexBars
+            mode="oi"
+            strikes={gex.strikes}
+            spot={gex.spot}
+            callWall={gex.callWall}
+            putWall={gex.putWall}
+            height={320}
+          />
+        </Card>
+
+        <Card heading="Volume by strike" badge="contracts · live" colSpan={4}>
+          <GexBars
+            mode="volume"
+            strikes={gex.strikes}
+            spot={gex.spot}
+            callWall={gex.callWall}
+            putWall={gex.putWall}
+            height={320}
           />
         </Card>
 

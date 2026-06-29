@@ -36,6 +36,12 @@ interface GexBarsProps {
   width?: string | number;
   /** Chart height in pixels (default 260) */
   height?: number;
+  /**
+   * Locked metric. When set, the chart renders that one metric with NO tab picker
+   * (used to show GEX / OI wall / Volume as three separate charts). When omitted, the
+   * chart manages its own metric via the tab picker (default).
+   */
+  mode?: GexMode;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -216,8 +222,12 @@ export function GexBars({
   putWall,
   width = "100%",
   height = 260,
+  mode: modeProp,
 }: GexBarsProps): React.ReactElement {
-  const [mode, setMode] = useState<GexMode>("gex");
+  const [internalMode, setMode] = useState<GexMode>("gex");
+  // Locked when a mode prop is supplied (three-chart layout); otherwise tab-controlled.
+  const mode = modeProp ?? internalMode;
+  const showTabs = modeProp === undefined;
 
   const option = useMemo(
     () => buildOption(strikes, mode, spot, callWall, putWall),
@@ -233,20 +243,22 @@ export function GexBars({
 
   return (
     <div style={{ width, display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* Metric tabs: GEX / OI wall / Volume */}
-      <Tabs value={mode} onValueChange={handleModeChange}>
-        <TabsList aria-label="GEX chart mode">
-          <TabsTrigger value="gex" aria-label="GEX mode" data-testid="toggle-gex">
-            GEX
-          </TabsTrigger>
-          <TabsTrigger value="oi" aria-label="OI wall mode" data-testid="toggle-oi">
-            OI wall
-          </TabsTrigger>
-          <TabsTrigger value="volume" aria-label="Volume mode" data-testid="toggle-volume">
-            Volume
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* Metric tabs: GEX / OI wall / Volume — hidden when a single mode is locked */}
+      {showTabs && (
+        <Tabs value={mode} onValueChange={handleModeChange}>
+          <TabsList aria-label="GEX chart mode">
+            <TabsTrigger value="gex" aria-label="GEX mode" data-testid="toggle-gex">
+              GEX
+            </TabsTrigger>
+            <TabsTrigger value="oi" aria-label="OI wall mode" data-testid="toggle-oi">
+              OI wall
+            </TabsTrigger>
+            <TabsTrigger value="volume" aria-label="Volume mode" data-testid="toggle-volume">
+              Volume
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
 
       {/* ECharts bar chart — echarts-for-react owns resize/dispose */}
       <ReactECharts

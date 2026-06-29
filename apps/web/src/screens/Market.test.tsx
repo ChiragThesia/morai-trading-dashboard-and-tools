@@ -108,12 +108,14 @@ describe("Market", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the Net dealer gamma profile heading from live snapshot", () => {
+  it("renders the three by-strike charts (GEX / OI wall / Volume)", () => {
     mockGexWith(SAMPLE_SNAPSHOT);
     render(<Market />);
 
-    // Locked heading from UI-SPEC Copywriting Contract
-    expect(screen.getByText("Net dealer gamma profile")).toBeTruthy();
+    // All three are now separate locked charts (no tab picker)
+    expect(screen.getByText("GEX by strike")).toBeTruthy();
+    expect(screen.getByText("OI wall by strike")).toBeTruthy();
+    expect(screen.getByText("Volume by strike")).toBeTruthy();
   });
 
   it("renders the regime strip with AMPLIFY for negative net gamma", () => {
