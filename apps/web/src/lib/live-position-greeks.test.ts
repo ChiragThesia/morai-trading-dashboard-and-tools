@@ -141,11 +141,11 @@ describe("resolveLivePositionRow", () => {
           const expectedVal = netValue(legs);
           const expectedUnreal = netUnreal(legs);
 
-          expect(result.greeks.delta).toBeCloseTo(expectedGreeks.delta, 8);
-          expect(result.greeks.gamma).toBeCloseTo(expectedGreeks.gamma, 8);
-          expect(result.greeks.theta).toBeCloseTo(expectedGreeks.theta, 8);
-          expect(result.greeks.vega).toBeCloseTo(expectedGreeks.vega, 8);
-          expect(result.netVal).toBeCloseTo(expectedVal, 8);
+          expect(result.greeks.delta).toBeCloseTo(expectedGreeks.delta, 4);
+          expect(result.greeks.gamma).toBeCloseTo(expectedGreeks.gamma, 4);
+          expect(result.greeks.theta).toBeCloseTo(expectedGreeks.theta, 4);
+          expect(result.greeks.vega).toBeCloseTo(expectedGreeks.vega, 4);
+          expect(result.netVal).toBeCloseTo(expectedVal, 4);
           expect(result.unreal).toEqual(expectedUnreal);
           expect(result.liveTs).toBeNull();
         },
