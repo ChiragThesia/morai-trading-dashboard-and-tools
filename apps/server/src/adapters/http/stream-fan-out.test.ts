@@ -17,6 +17,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { z } from "zod";
 import {
   registerClient,
   unregisterClient,
@@ -27,6 +28,10 @@ import {
 } from "./stream-fan-out.ts";
 import type { SSEClient } from "./stream-fan-out.ts";
 import type { LiveGreekTick } from "@morai/core";
+
+// ─── Zod schemas for test assertions (parse-don't-cast) ──────────────────────
+const tickItem = z.object({ mark: z.number(), occSymbol: z.string() });
+const ticksPayload = z.array(tickItem);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -117,10 +122,9 @@ describe("stream-fan-out", () => {
       flushTicks();
       await Promise.resolve();
       expect(client.calls).toHaveLength(1);
-      const parsed = JSON.parse(client.calls[0]?.data ?? "[]") as unknown[];
+      const parsed = ticksPayload.parse(JSON.parse(client.calls[0]?.data ?? "[]"));
       expect(parsed).toHaveLength(1);
-      const first = parsed[0] as { mark: number; occSymbol: string };
-      expect(first.mark).toBe(200); // latest wins
+      expect(parsed[0]?.mark).toBe(200); // latest wins
     });
 
     it("different symbols are both present in flush payload", async () => {
@@ -131,7 +135,7 @@ describe("stream-fan-out", () => {
       flushTicks();
       await Promise.resolve();
       expect(client.calls).toHaveLength(1);
-      const parsed = JSON.parse(client.calls[0]?.data ?? "[]") as unknown[];
+      const parsed = ticksPayload.parse(JSON.parse(client.calls[0]?.data ?? "[]"));
       expect(parsed).toHaveLength(2);
     });
 

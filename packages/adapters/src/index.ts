@@ -9,6 +9,11 @@ export * from "./postgres/schema.ts";
 export { makeDb } from "./postgres/db.ts";
 export type { Db } from "./postgres/db.ts";
 
+// Drizzle sql tag — re-exported so integration tests in other packages (e.g. apps/server)
+// can run raw SQL queries against a makeDb instance without a direct drizzle-orm import.
+// drizzle-orm is confined to adapters (architecture rule) but tests need the sql tag.
+export { sql } from "drizzle-orm";
+
 // Migrator
 export { runMigrations } from "./postgres/migrate.ts";
 

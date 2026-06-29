@@ -28,7 +28,13 @@ export default defineConfig({
   test: {
     name: "server",
     globals: false,
+    // Default timeout for unit tests.
+    // STRM-04 regression test and any future contract tests use per-test overrides.
     testTimeout: 10_000,
     hookTimeout: 10_000,
+    // Shared globalSetup with packages/adapters: spins a Postgres testcontainer once
+    // and provides "dbUrl" via inject() for contract/regression tests.
+    // Tests that don't use inject("dbUrl") are unaffected.
+    globalSetup: ["../../packages/adapters/test/globalSetup.ts"],
   },
 });

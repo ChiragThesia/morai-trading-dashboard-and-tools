@@ -6,6 +6,7 @@
     "rootDir": "src"
   },
   "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/vitest.d.ts"],
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/adapters" },
