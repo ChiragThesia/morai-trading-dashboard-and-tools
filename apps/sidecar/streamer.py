@@ -293,6 +293,46 @@ async def _get_position_occ_symbols(app: object) -> list[str]:
         return []
 
 
+# ── Ad-hoc subscription coordinator (12-03, SC6) ─────────────────────────────
+
+
+async def request_ad_hoc_subscription(app: object, symbol: str) -> Optional[dict]:
+    """
+    Coordinator for POST /sidecar/subscribe (D-05, SC6).
+
+    Reads the live stream_client and subscription_manager from app.state (set by
+    start_streamer after login).  Returns None when the stream is not yet active
+    (not-streaming sentinel — the route handler maps this to 503 AUTH_EXPIRED).
+
+    When the stream is active, calls subscription_manager.request_ad_hoc(symbol)
+    to compute the incremental diff and applies it on the live StreamClient via:
+      - level_one_option_add(to_add)    when new symbols must be added
+      - level_one_option_unsubs(to_evict) when LRU-evicted symbols must be dropped
+
+    MUST NOT call level_one_option_subs — that resets the entire subscription set
+    and loses all existing position legs (Pitfall 11).
+
+    Returns:
+        {"subscribed": symbol, "evicted": to_evict}  on success
+        None                                          when stream is not active
+    """
+    stream_client = getattr(app.state, "stream_client", None)
+    subscription_manager = getattr(app.state, "subscription_manager", None)
+
+    if stream_client is None or subscription_manager is None:
+        return None  # not-streaming sentinel
+
+    to_add, to_evict = subscription_manager.request_ad_hoc(symbol)
+
+    # Apply the diff incrementally (Pitfall 11: NEVER level_one_option_subs here).
+    if to_add:
+        await stream_client.level_one_option_add(to_add)
+    if to_evict:
+        await stream_client.level_one_option_unsubs(to_evict)
+
+    return {"subscribed": symbol, "evicted": to_evict}
+
+
 # ── Background task ──────────────────────────────────────────────────────────
 
 
@@ -305,6 +345,9 @@ async def start_streamer(app: object) -> None:
     ensures only one session opens at a time (T-12-02-03 / Pattern 1).
 
     Degrades gracefully (logs warning, returns early) when trader_client is None.
+
+    Exposes the live StreamClient and SubscriptionManager on app.state after login
+    so POST /sidecar/subscribe can drive ad-hoc subscriptions (12-03 / SC6).
 
     Loop behavior (Pitfall 8):
       - CancelledError propagates cleanly (shutdown signal).
@@ -321,9 +364,19 @@ async def start_streamer(app: object) -> None:
     # Trader client only — never market_client (Pitfall 9 / T-12-02-03)
     stream_client = StreamClient(trader_client)
 
+    # SubscriptionManager: tracks subscribed OCC symbols with LRU for ad-hoc eviction.
+    # Created here (post-lock) and exposed on app.state for POST /sidecar/subscribe.
+    subscription_manager = SubscriptionManager()
+
     # login() calls /trader/v1/userPreference to get the WSS URL + credentials.
     # Must run AFTER the lock is held (Pattern 1 / T-12-02-03).
     await stream_client.login()
+
+    # Expose the live handles on app.state so POST /sidecar/subscribe can drive
+    # ad-hoc subscriptions via request_ad_hoc_subscription() (12-03 / SC6).
+    # These are set AFTER login() so the StreamClient is ready to receive commands.
+    app.state.stream_client = stream_client  # type: ignore[attr-defined]
+    app.state.subscription_manager = subscription_manager  # type: ignore[attr-defined]
 
     # Subscribe to LEVELONE_OPTIONS for any open position legs.
     initial_symbols = await _get_position_occ_symbols(app)
