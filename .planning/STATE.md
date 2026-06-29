@@ -5,8 +5,8 @@ milestone_name: — Real-Time Schwab Streaming
 current_phase: 12
 current_phase_name: streaming-ts-fan-out
 status: executing
-stopped_at: Phase 13 planned — 6/6 plans (research salvaged, plans 04-06 hand-finished after planner stall); plan-checker not yet run
-last_updated: "2026-06-29T12:58:18.593Z"
+stopped_at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
+last_updated: "2026-06-29T13:11:13.182Z"
 last_activity: 2026-06-28
 last_activity_desc: Phase 12 execution started
 progress:
@@ -328,6 +328,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-29T12:58:18.581Z
-Stopped at: Phase 13 planned — 6/6 plans (research salvaged, plans 04-06 hand-finished after planner stall); plan-checker not yet run
+Last session: 2026-06-29T13:11:13.170Z
+Stopped at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
 Resume file: .planning/phases/13-cot-adapter/13-01-PLAN.md
