@@ -6,7 +6,7 @@ current_phase: 13
 current_phase_name: cot-adapter
 status: executing
 stopped_at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
-last_updated: "2026-06-29T13:54:38.852Z"
+last_updated: "2026-06-29T14:08:57.145Z"
 last_activity: 2026-06-29
 last_activity_desc: Phase 13 execution started
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 13 (cot-adapter) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-06-29 — Phase 13 execution started
 
@@ -136,6 +136,7 @@ Regression gates (must survive every phase):
 | Phase 11-sidecar-scaffold-auth-migration P07 | 3 | 2 tasks | 3 files |
 | Phase 13 P01 | 8 | 3 tasks | 10 files |
 | Phase 13-cot-adapter P03 | 8 | 2 tasks | 6 files |
+| Phase 13-cot-adapter P04 | 415 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -305,6 +306,8 @@ Recent decisions affecting current work:
 - [Phase ?]: JRNL-02: worker chain source swapped from schwabMarketAdapter to sidecarAdapter; SIDECAR_URL added to worker config; CBOE fallback intact
 - [Phase ?]: Stale tsconfig refs cause TS5012 ENOENT lint failures after deletion
 - [Phase ?]: CFTC adapter + memory twin
+- [Phase ?]: CotEntry defined in getCot.ts (not imported from contracts) to keep hexagon pure
+- [Phase ?]: getCot.test.ts validates cotSeriesEntry shape inline — core tsconfig references only shared+quant
 
 ### Pending Todos
 
@@ -331,6 +334,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-29T13:54:32.107Z
+Last session: 2026-06-29T14:08:47.625Z
 Stopped at: Phase 13 PLANNED — 6/6 plans, plan-checker REVISE→fixed (2 cross-plan symbol blockers resolved + verified); ready to execute
 Resume file: .planning/phases/13-cot-adapter/13-01-PLAN.md
