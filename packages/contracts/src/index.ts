@@ -83,3 +83,7 @@ export type {
   StreamReconcileEvent,
   StreamFillEvent,
 } from "./stream-events.ts";
+
+// COT contracts (Phase 13 — MCP-02: ONE schema source for GET /api/analytics/cot + get_cot MCP tool)
+export { cotSeriesEntry, cotResponse } from "./cot.ts";
+export type { CotSeriesEntry, CotResponse } from "./cot.ts";
