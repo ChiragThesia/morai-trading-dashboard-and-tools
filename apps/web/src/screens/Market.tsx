@@ -38,6 +38,19 @@ function fmtDollar(v: number): string {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
+/** Human relative age for the GEX freshness badge. */
+function relAge(ms: number): string {
+  const m = Math.floor(ms / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+/** GEX freshness — green dot when computed within the last fetch cycle, amber when stale. */
+const GEX_FRESH_MS = 35 * 60 * 1000; // chain refreshes every 30 min during RTH
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 interface CardProps {
@@ -173,6 +186,17 @@ export function Market(): React.ReactElement {
   // Regime chip
   const regimeLabel = isAmplify ? "▼ AMPLIFY" : "▲ DAMPEN";
 
+  // GEX freshness — snapshot recomputes every 30 min during RTH; stale off-hours / on a feed gap.
+  const gexTs = new Date(gex.computedAt);
+  const gexAgeMs = Date.now() - gexTs.getTime();
+  const gexFresh = gexAgeMs < GEX_FRESH_MS;
+  const gexAsOf = gexTs.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
   // ── Layout ───────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto box-border flex max-w-[1480px] flex-col gap-3 p-[14px]">
@@ -200,6 +224,16 @@ export function Market(): React.ReactElement {
           alert={isAmplify}
           valueClassName={signClass}
         />
+        {/* GEX freshness — "as of <time> · <age>"; amber dot when stale (off-hours / feed gap) */}
+        <div
+          className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+          data-testid="gex-freshness"
+        >
+          <span className={cn("size-1.5 rounded-full", gexFresh ? "bg-up" : "bg-amber")} />
+          <span className="text-dim">GEX as of</span>
+          <span className="text-txt">{gexAsOf}</span>
+          <span className={gexFresh ? "text-up" : "text-amber"}>· {relAge(gexAgeMs)}</span>
+        </div>
       </div>
 
       {/* ── 12-column grid ── */}

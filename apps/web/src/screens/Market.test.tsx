@@ -133,6 +133,14 @@ describe("Market", () => {
     expect(screen.getByText("GEX by strike")).toBeTruthy();
   });
 
+  it("renders the GEX freshness badge from computedAt", () => {
+    mockGexWith(SAMPLE_SNAPSHOT);
+    render(<Market />);
+
+    expect(screen.getByTestId("gex-freshness")).toBeTruthy();
+    expect(screen.getByText("GEX as of")).toBeTruthy();
+  });
+
   it("renders the locked GEX unavailable copy when useGex returns no data", () => {
     mockGexWith(undefined);
     render(<Market />);
