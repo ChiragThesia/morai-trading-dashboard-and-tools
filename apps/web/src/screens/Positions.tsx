@@ -36,6 +36,8 @@ import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
 import { Separator } from "../components/ui/separator.tsx";
 import { Input } from "../components/ui/input.tsx";
 import { Button } from "../components/ui/button.tsx";
+import { Panel, PanelHeading, SectionLabel } from "../components/system/index.tsx";
+import { cn } from "@/lib/utils";
 import type { GreekStripData } from "../components/charts/GreekStrips.tsx";
 import type { BrokerPositionResponse } from "@morai/contracts";
 import type { StreamLiveGreekEvent } from "@morai/contracts";
@@ -94,32 +96,9 @@ function dteDays(occSymbol: string): number {
   return Math.floor((r.value.expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-// ─── Card shell ───────────────────────────────────────────────────────────────
+// ─── Card heading ───────────────────────────────────────────────────────────
 
-function Card({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}): React.ReactElement {
-  return (
-    <div
-      style={{
-        background: "linear-gradient(180deg, #0f1521, #0c111a)",
-        border: "1px solid #1b2433",
-        borderRadius: 8,
-        padding: 12,
-        boxSizing: "border-box",
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** Shared card heading style (UI-SPEC label token — uppercase, 10px, semibold) */
+/** Shared card heading (UI-SPEC label token — uppercase, 10px, semibold) + optional mono pill. */
 function CardHeading({
   text,
   badge,
@@ -128,34 +107,16 @@ function CardHeading({
   badge?: string;
 }): React.ReactElement {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: "0.9px",
-          textTransform: "uppercase",
-          color: "#7b8696",
-          fontFamily: "Space Grotesk, sans-serif",
-        }}
-      >
-        {text}
-      </span>
-      {badge !== undefined && (
-        <span
-          style={{
-            fontSize: 10,
-            color: "#566273",
-            fontFamily: "JetBrains Mono, monospace",
-            background: "#161d2b",
-            borderRadius: 3,
-            padding: "1px 5px",
-          }}
-        >
-          {badge}
-        </span>
-      )}
-    </div>
+    <PanelHeading
+      title={text}
+      badge={
+        badge !== undefined ? (
+          <span className="rounded-[3px] bg-raise px-[5px] py-px font-mono text-[10px] text-dim">
+            {badge}
+          </span>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -183,14 +144,7 @@ function PositionsList({
   return (
     <div>
       {positions.length === 0 ? (
-        <p
-          style={{
-            fontSize: 10,
-            color: "#566273",
-            fontFamily: "JetBrains Mono, monospace",
-            lineHeight: 1.5,
-          }}
-        >
+        <p className="font-mono text-[10px] leading-normal text-dim">
           No open positions. Register a calendar via the API or paste a TOS order to analyze a scenario.
         </p>
       ) : (
@@ -203,40 +157,25 @@ function PositionsList({
               <button
                 key={cal.key}
                 onClick={() => { onSelect(backIdx >= 0 ? backIdx : frontIdx); }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  background: isSelected ? "#241d40" : "transparent",
-                  border: isSelected ? "1px solid #a78bfa" : "1px solid transparent",
-                  borderRadius: 4,
-                  padding: "6px 8px",
-                  marginBottom: 4,
-                  cursor: "pointer",
-                  boxSizing: "border-box",
-                }}
+                className={cn(
+                  "mb-1 block w-full cursor-pointer rounded-[4px] border px-2 py-1.5 text-left",
+                  isSelected
+                    ? "border-violet bg-violetd"
+                    : "border-transparent bg-transparent",
+                )}
               >
-                <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: "#d6dbe4", marginBottom: 2 }}>
+                <div className="mb-0.5 font-mono text-[10px] text-txt">
                   {cal.strike}{cal.optionType} calendar
                 </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "#566273",
-                    fontFamily: "JetBrains Mono, monospace",
-                    display: "flex",
-                    gap: 8,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
+                <div className="flex gap-2 font-mono text-[10px] text-dim tabular-nums">
                   <span>DTE {cal.dteFront}→{cal.dteBack}</span>
                   {cal.netUnreal !== null && (
-                    <span style={{ color: cal.netUnreal >= 0 ? "#26a69a" : "#ef5350" }}>
+                    <span className={cal.netUnreal >= 0 ? "text-up" : "text-down"}>
                       {cal.netUnreal >= 0 ? "+" : "−"}${Math.abs(cal.netUnreal).toFixed(0)}
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 10, color: "#3f4a5a", fontFamily: "JetBrains Mono, monospace", marginTop: 1 }}>
+                <div className="mt-px font-mono text-[10px] text-faint">
                   {legLabel(cal.front.occSymbol)} / {legLabel(cal.back.occSymbol)}
                 </div>
               </button>
@@ -254,35 +193,20 @@ function PositionsList({
               <button
                 key={pos.occSymbol}
                 onClick={() => { onSelect(idx); }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  background: isSelected ? "#241d40" : "transparent",
-                  border: isSelected ? "1px solid #a78bfa" : "1px solid transparent",
-                  borderRadius: 4,
-                  padding: "6px 8px",
-                  marginBottom: 4,
-                  cursor: "pointer",
-                  boxSizing: "border-box",
-                }}
+                className={cn(
+                  "mb-1 block w-full cursor-pointer rounded-[4px] border px-2 py-1.5 text-left",
+                  isSelected
+                    ? "border-violet bg-violetd"
+                    : "border-transparent bg-transparent",
+                )}
               >
-                <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: "#d6dbe4", marginBottom: 2 }}>
+                <div className="mb-0.5 font-mono text-[10px] text-txt">
                   {legLabel(pos.occSymbol)}
                 </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "#566273",
-                    fontFamily: "JetBrains Mono, monospace",
-                    display: "flex",
-                    gap: 8,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
+                <div className="flex gap-2 font-mono text-[10px] text-dim tabular-nums">
                   <span>DTE: {dte}</span>
                   {unreal !== null && (
-                    <span style={{ color: unreal >= 0 ? "#26a69a" : "#ef5350" }}>
+                    <span className={unreal >= 0 ? "text-up" : "text-down"}>
                       {unreal >= 0 ? "+" : "−"}${Math.abs(unreal).toFixed(0)}
                     </span>
                   )}
@@ -426,8 +350,8 @@ function AdHocPicker({
       <CardHeading text="Ad-hoc lookup" />
 
       {/* Input row: OCC text field + "Stream Greeks" submit button */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-        <div style={{ position: "relative", flex: 1 }}>
+      <div className="mb-1.5 flex gap-1.5">
+        <div className="relative flex-1">
           <Input
             value={inputValue}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -438,7 +362,7 @@ function AdHocPicker({
               if (e.key === "Enter") { void handleSubmit(); }
             }}
             placeholder="SPX   260620C05000000"
-            style={{ paddingRight: inputValue.length > 0 ? 32 : undefined }}
+            className={inputValue.length > 0 ? "pr-8" : undefined}
           />
           {inputValue.length > 0 && (
             <button
@@ -446,24 +370,10 @@ function AdHocPicker({
               aria-label="Clear ad-hoc symbol"
               onMouseEnter={() => { setClearHovered(true); }}
               onMouseLeave={() => { setClearHovered(false); }}
-              style={{
-                position: "absolute",
-                right: 4,
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: clearHovered ? "#d6dbe4" : "#7b8696", // --color-txt on hover, --color-muted at rest
-                fontSize: 14,
-                padding: 0,
-                lineHeight: 1,
-                minHeight: 44,
-                minWidth: 44,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+              className={cn(
+                "absolute top-1/2 right-1 flex min-h-11 min-w-11 -translate-y-1/2 cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-sm leading-none",
+                clearHovered ? "text-txt" : "text-muted-foreground",
+              )}
             >
               ×
             </button>
@@ -474,7 +384,7 @@ function AdHocPicker({
           size="sm"
           onClick={() => { void handleSubmit(); }}
           disabled={isSubmitting}
-          style={{ minHeight: 44, alignSelf: "flex-start" }}
+          className="min-h-11 self-start"
         >
           Stream Greeks
         </Button>
@@ -482,84 +392,36 @@ function AdHocPicker({
 
       {/* Validation error (Surface 4 — --color-down, 12px mono, no red border on input) */}
       {validationError !== null && (
-        <p
-          style={{
-            fontSize: 12,
-            color: "#ef5350", // --color-down
-            fontFamily: "JetBrains Mono, monospace",
-            margin: "2px 0 6px",
-            lineHeight: 1.4,
-          }}
-        >
+        <p className="mt-0.5 mb-1.5 font-mono text-xs leading-[1.4] text-down">
           {validationError}
         </p>
       )}
 
       {/* Subscribe error */}
       {subscribeError !== null && (
-        <p
-          style={{
-            fontSize: 12,
-            color: "#ef5350", // --color-down
-            fontFamily: "JetBrains Mono, monospace",
-            margin: "2px 0 6px",
-            lineHeight: 1.4,
-          }}
-        >
+        <p className="mt-0.5 mb-1.5 font-mono text-xs leading-[1.4] text-down">
           {subscribeError}
         </p>
       )}
 
       {/* Empty state — no ad-hoc symbol active, no error */}
       {adHocSymbol === null && validationError === null && subscribeError === null && (
-        <p
-          style={{
-            fontSize: 10,
-            color: "#566273", // --color-dim
-            fontFamily: "JetBrains Mono, monospace",
-            margin: 0,
-          }}
-        >
+        <p className="m-0 font-mono text-[10px] text-dim">
           Enter any OCC symbol to stream live greeks.
         </p>
       )}
 
       {/* AD HOC row — distinct from owned positions (Surface 4) */}
       {adHocSymbol !== null && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            borderRadius: 4,
-            padding: "6px 8px",
-            marginTop: 4,
-            background: "transparent",
-            border: "1px solid transparent",
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="mt-1 flex items-start justify-between rounded-[4px] border border-transparent bg-transparent px-2 py-1.5">
+          <div className="min-w-0 flex-1">
             {/* Leg label */}
-            <div
-              style={{
-                fontSize: 10,
-                fontFamily: "JetBrains Mono, monospace",
-                color: "#d6dbe4",
-                marginBottom: 2,
-              }}
-            >
+            <div className="mb-0.5 font-mono text-[10px] text-txt">
               {legLabel(adHocSymbol)}
             </div>
 
             {/* DTE only — no P&L (no position basis for ad-hoc) */}
-            <div
-              style={{
-                fontSize: 10,
-                color: "#566273", // --color-dim
-                fontFamily: "JetBrains Mono, monospace",
-                marginBottom: 2,
-              }}
-            >
+            <div className="mb-0.5 font-mono text-[10px] text-dim">
               DTE: {dteDays(adHocSymbol)}
             </div>
 
@@ -567,55 +429,30 @@ function AdHocPicker({
             {adHocTick !== undefined ? (
               <div
                 key={`adhoc-vals-${adHocTickKey}`}
-                className={`live-cell-flash live-cell${isStale ? " stale" : ""}`}
-                style={{
-                  fontSize: 10,
-                  fontFamily: "JetBrains Mono, monospace",
-                  fontVariantNumeric: "tabular-nums",
-                  display: "flex",
-                  gap: 6,
-                  flexWrap: "wrap",
-                }}
+                className={cn(
+                  "live-cell-flash live-cell flex flex-wrap gap-1.5 font-mono text-[10px] tabular-nums",
+                  isStale && "stale",
+                )}
               >
-                <span style={{ color: adHocTick.bsmDelta >= 0 ? "#26a69a" : "#ef5350" }}>
+                <span className={adHocTick.bsmDelta >= 0 ? "text-up" : "text-down"}>
                   Δ {fmtGreek(adHocTick.bsmDelta)}
                 </span>
-                <span style={{ color: "#d6dbe4" }}>
+                <span className="text-txt">
                   IV {(adHocTick.bsmIv * 100).toFixed(1)}%
                 </span>
-                <span style={{ color: "#d6dbe4" }}>
+                <span className="text-txt">
                   ${adHocTick.mark.toFixed(2)}
                 </span>
               </div>
             ) : (
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "#566273", // --color-dim
-                  fontFamily: "JetBrains Mono, monospace",
-                }}
-              >
+              <div className="font-mono text-[10px] text-dim">
                 Waiting for stream data…
               </div>
             )}
           </div>
 
           {/* AD HOC badge — visually distinct from owned positions (Surface 4) */}
-          <span
-            style={{
-              fontSize: 10,
-              fontFamily: "JetBrains Mono, monospace",
-              textTransform: "uppercase",
-              background: "#161d2b", // --color-raise
-              color: "#566273", // --color-dim
-              border: "1px solid #1b2433", // --color-line
-              borderRadius: 3,
-              padding: "1px 5px",
-              flexShrink: 0,
-              marginLeft: 8,
-              marginTop: 2,
-            }}
-          >
+          <span className="mt-0.5 ml-2 shrink-0 rounded-[3px] border border-line bg-raise px-[5px] py-px font-mono text-[10px] text-dim uppercase">
             AD HOC
           </span>
         </div>
@@ -701,57 +538,22 @@ function PositionCard({
   return (
     <div>
       {/* Position heading — LiveStatusBadge replaces static "per spread" badge (Surface 3) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            letterSpacing: "0.9px",
-            textTransform: "uppercase",
-            color: "#7b8696",
-            fontFamily: "Space Grotesk, sans-serif",
-          }}
-        >
-          Position
-        </span>
-        <LiveStatusBadge status={liveStatus} lastTickAt={liveLastTickAt} />
-      </div>
+      <PanelHeading
+        title="Position"
+        badge={<LiveStatusBadge status={liveStatus} lastTickAt={liveLastTickAt} />}
+      />
 
       {/* 4-KPI grid — UI-SPEC locked labels: Mark · Debit · Unreal · DTE */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 6,
-          marginBottom: 12,
-        }}
-        data-testid="kpi-grid"
-      >
+      <div className="mb-3 grid grid-cols-4 gap-1.5" data-testid="kpi-grid">
         {/* Mark KPI — live mark when tick present, else polling value */}
         <div>
-          <div
-            style={{
-              fontSize: 10,
-              color: "#7b8696",
-              fontFamily: "Space Grotesk, sans-serif",
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              fontWeight: 600,
-              marginBottom: 2,
-            }}
-          >
-            Mark
-          </div>
+          <SectionLabel className="mb-0.5">Mark</SectionLabel>
           <div
             key={`kpi-mark-${tickKey}`}
-            className={tick !== undefined ? `live-cell-flash ${liveCellClass}` : undefined}
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "#d6dbe4",
-              fontFamily: "Space Grotesk, sans-serif",
-              fontVariantNumeric: "tabular-nums",
-            }}
+            className={cn(
+              "font-display text-sm font-bold text-txt tabular-nums",
+              tick !== undefined && `live-cell-flash ${liveCellClass}`,
+            )}
           >
             {displayMark}
           </div>
@@ -759,57 +561,21 @@ function PositionCard({
 
         {/* Debit — position cost basis, always from polling (no live source) */}
         <div>
-          <div
-            style={{
-              fontSize: 10,
-              color: "#7b8696",
-              fontFamily: "Space Grotesk, sans-serif",
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              fontWeight: 600,
-              marginBottom: 2,
-            }}
-          >
-            Debit
-          </div>
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "#d6dbe4",
-              fontFamily: "Space Grotesk, sans-serif",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
+          <SectionLabel className="mb-0.5">Debit</SectionLabel>
+          <div className="font-display text-sm font-bold text-txt tabular-nums">
             {fmtDollar(debit)}
           </div>
         </div>
 
         {/* Unreal — live-computed when tick present, else polling */}
         <div>
-          <div
-            style={{
-              fontSize: 10,
-              color: "#7b8696",
-              fontFamily: "Space Grotesk, sans-serif",
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              fontWeight: 600,
-              marginBottom: 2,
-            }}
-          >
-            Unreal
-          </div>
+          <SectionLabel className="mb-0.5">Unreal</SectionLabel>
           <div
             key={`kpi-unreal-${tickKey}`}
-            className={tick !== undefined ? `live-cell-flash ${liveCellClass}` : undefined}
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "#d6dbe4",
-              fontFamily: "Space Grotesk, sans-serif",
-              fontVariantNumeric: "tabular-nums",
-            }}
+            className={cn(
+              "font-display text-sm font-bold text-txt tabular-nums",
+              tick !== undefined && `live-cell-flash ${liveCellClass}`,
+            )}
           >
             {displayUnreal}
           </div>
@@ -817,28 +583,8 @@ function PositionCard({
 
         {/* DTE — from OCC symbol, static */}
         <div>
-          <div
-            style={{
-              fontSize: 10,
-              color: "#7b8696",
-              fontFamily: "Space Grotesk, sans-serif",
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              fontWeight: 600,
-              marginBottom: 2,
-            }}
-          >
-            DTE
-          </div>
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "#d6dbe4",
-              fontFamily: "Space Grotesk, sans-serif",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
+          <SectionLabel className="mb-0.5">DTE</SectionLabel>
+          <div className="font-display text-sm font-bold text-txt tabular-nums">
             {String(dte)}
           </div>
         </div>
@@ -847,27 +593,13 @@ function PositionCard({
       {/* Per-leg greeks table — UI-SPEC columns: Leg / Mark / Δ / Γ / Θ/d / Vega / IV
           Live cells: key changes per tick → .live-cell-flash animation re-triggers.
           Stale cells: .live-cell.stale → color transitions to --color-dim (Surface 2). */}
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: 10,
-          fontFamily: "JetBrains Mono, monospace",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
+      <table className="w-full border-collapse font-mono text-[10px] tabular-nums">
         <thead>
-          <tr style={{ borderBottom: "1px solid #1b2433" }}>
+          <tr className="border-b border-line">
             {["Leg", "Mark", "Δ", "Γ", "Θ/d", "Vega", "IV"].map((col) => (
               <th
                 key={col}
-                style={{
-                  textAlign: "right",
-                  color: "#7b8696",
-                  padding: "2px 4px",
-                  fontWeight: 600,
-                  letterSpacing: "0.5px",
-                }}
+                className="px-1 py-0.5 text-right font-semibold tracking-[0.5px] text-muted-foreground"
               >
                 {col}
               </th>
@@ -877,15 +609,17 @@ function PositionCard({
         <tbody>
           <tr>
             {/* Leg label — static, not live */}
-            <td style={{ padding: "3px 4px", color: "#d6dbe4", textAlign: "left" }}>
+            <td className="px-1 py-[3px] text-left text-txt">
               {legLabel(position.occSymbol)}
             </td>
 
             {/* Mark — live mark if tick present, else static */}
             <td
               key={`td-mark-${tickKey}`}
-              className={tick !== undefined ? `live-cell-flash ${liveCellClass}` : undefined}
-              style={{ padding: "3px 4px", textAlign: "right", color: "#d6dbe4" }}
+              className={cn(
+                "px-1 py-[3px] text-right text-txt",
+                tick !== undefined && `live-cell-flash ${liveCellClass}`,
+              )}
             >
               {tick !== undefined
                 ? `$${tick.mark.toFixed(2)}`
@@ -895,12 +629,11 @@ function PositionCard({
             {/* Δ — live bsmDelta if tick present, else static */}
             <td
               key={`td-delta-${tickKey}`}
-              className={tick !== undefined ? `live-cell-flash ${liveCellClass}` : undefined}
-              style={{
-                padding: "3px 4px",
-                textAlign: "right",
-                color: liveDelta >= 0 ? "#26a69a" : "#ef5350",
-              }}
+              className={cn(
+                "px-1 py-[3px] text-right",
+                liveDelta >= 0 ? "text-up" : "text-down",
+                tick !== undefined && `live-cell-flash ${liveCellClass}`,
+              )}
             >
               {fmtGreek(liveDelta)}
             </td>
@@ -908,8 +641,10 @@ function PositionCard({
             {/* Γ — live bsmGamma if tick present, else static */}
             <td
               key={`td-gamma-${tickKey}`}
-              className={tick !== undefined ? `live-cell-flash ${liveCellClass}` : undefined}
-              style={{ padding: "3px 4px", textAlign: "right", color: "#d6dbe4" }}
+              className={cn(
+                "px-1 py-[3px] text-right text-txt",
+                tick !== undefined && `live-cell-flash ${liveCellClass}`,
+              )}
             >
               {fmtGreek(liveGamma)}
             </td>
@@ -917,12 +652,11 @@ function PositionCard({
             {/* Θ/d — live bsmTheta if tick present, else static */}
             <td
               key={`td-theta-${tickKey}`}
-              className={tick !== undefined ? `live-cell-flash ${liveCellClass}` : undefined}
-              style={{
-                padding: "3px 4px",
-                textAlign: "right",
-                color: liveTheta < 0 ? "#ef5350" : "#26a69a",
-              }}
+              className={cn(
+                "px-1 py-[3px] text-right",
+                liveTheta < 0 ? "text-down" : "text-up",
+                tick !== undefined && `live-cell-flash ${liveCellClass}`,
+              )}
             >
               {fmtGreek(liveTheta)}
             </td>
@@ -930,8 +664,10 @@ function PositionCard({
             {/* Vega — live bsmVega if tick present, else static */}
             <td
               key={`td-vega-${tickKey}`}
-              className={tick !== undefined ? `live-cell-flash ${liveCellClass}` : undefined}
-              style={{ padding: "3px 4px", textAlign: "right", color: "#d6dbe4" }}
+              className={cn(
+                "px-1 py-[3px] text-right text-txt",
+                tick !== undefined && `live-cell-flash ${liveCellClass}`,
+              )}
             >
               {fmtGreek(liveVega)}
             </td>
@@ -939,8 +675,10 @@ function PositionCard({
             {/* IV — live bsmIv if tick present, else DEFAULT_IV */}
             <td
               key={`td-iv-${tickKey}`}
-              className={tick !== undefined ? `live-cell-flash ${liveCellClass}` : undefined}
-              style={{ padding: "3px 4px", textAlign: "right", color: "#566273" }}
+              className={cn(
+                "px-1 py-[3px] text-right text-dim",
+                tick !== undefined && `live-cell-flash ${liveCellClass}`,
+              )}
             >
               {(liveIv * 100).toFixed(1)}%
             </td>
@@ -1033,15 +771,7 @@ function StrikeVsStructure({
         data={{ putWall, callWall, gammaFlip: flip, strike, spot }}
         width="100%"
       />
-      <p
-        style={{
-          fontSize: 10,
-          color: "#566273",
-          fontFamily: "JetBrains Mono, monospace",
-          marginTop: 8,
-          lineHeight: 1.4,
-        }}
-      >
+      <p className="mt-2 font-mono text-[10px] leading-[1.4] text-dim">
         Strike {strike} vs gamma flip {flip} ({Math.abs(strike - flip).toFixed(0)} pts apart).
       </p>
     </div>
@@ -1053,12 +783,8 @@ function StrikeVsStructure({
 function Skeleton({ height = 80 }: { height?: number }): React.ReactElement {
   return (
     <div
-      style={{
-        background: "#1b2433",
-        borderRadius: 4,
-        height,
-        animation: "shimmer 1.5s infinite",
-      }}
+      className="rounded-[4px] bg-line"
+      style={{ height, animation: "shimmer 1.5s infinite" }}
       role="status"
       aria-label="Loading"
     />
@@ -1106,25 +832,11 @@ export function Positions(): React.ReactElement {
   }, [selected, spot]);
 
   return (
-    <div
-      style={{
-        maxWidth: 1480,
-        margin: "0 auto",
-        padding: 14,
-        boxSizing: "border-box",
-      }}
-    >
+    <div className="mx-auto max-w-[1480px] p-3.5">
       {/* Row 1: 12-column grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(12, 1fr)",
-          gap: 12,
-          marginBottom: 12,
-        }}
-      >
+      <div className="mb-3 grid grid-cols-12 gap-3">
         {/* Open positions list — span 3 */}
-        <Card style={{ gridColumn: "span 3" }}>
+        <Panel className="col-span-3">
           <CardHeading text="Open" badge="closed → Journal" />
           {posLoading ? (
             <Skeleton height={120} />
@@ -1137,7 +849,7 @@ export function Positions(): React.ReactElement {
           )}
 
           {/* Phase 12 Surface 4 — Ad-hoc picker below a separator */}
-          <Separator style={{ margin: "8px 0", borderColor: "#1b2433" }} />
+          <Separator className="my-2" />
           <AdHocPicker
             subscribeAdHoc={subscribeAdHoc}
             liveGreeks={liveGreeks}
@@ -1146,23 +858,17 @@ export function Positions(): React.ReactElement {
             onSetAdHocSymbol={(sym) => { setAdHocSymbol(sym); }}
             onClearAdHoc={() => { setAdHocSymbol(null); }}
           />
-        </Card>
+        </Panel>
 
         {/* Why it's moving — span 5 */}
-        <Card style={{ gridColumn: "span 5" }}>
+        <Panel className="col-span-5">
           {posLoading || selected === null ? (
             <>
               <CardHeading text="Why it's moving" badge="P&L since yesterday" />
               {posLoading ? (
                 <Skeleton height={120} />
               ) : (
-                <p
-                  style={{
-                    fontSize: 10,
-                    color: "#566273",
-                    fontFamily: "JetBrains Mono, monospace",
-                  }}
-                >
+                <p className="font-mono text-[10px] text-dim">
                   Select a position to see attribution.
                 </p>
               )}
@@ -1170,32 +876,21 @@ export function Positions(): React.ReactElement {
           ) : (
             <WhyItsMoving position={selected} spot={spot} />
           )}
-        </Card>
+        </Panel>
 
         {/* Position card — span 4 */}
-        <Card style={{ gridColumn: "span 4" }}>
+        <Panel className="col-span-4">
           {posLoading || selected === null ? (
             <>
               {/* Phase 12 Surface 3: LiveStatusBadge even in loading/empty state */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: "0.9px",
-                    textTransform: "uppercase",
-                    color: "#7b8696",
-                    fontFamily: "Space Grotesk, sans-serif",
-                  }}
-                >
-                  Position
-                </span>
-                <LiveStatusBadge status={liveStatus} lastTickAt={liveLastTickAt} />
-              </div>
+              <PanelHeading
+                title="Position"
+                badge={<LiveStatusBadge status={liveStatus} lastTickAt={liveLastTickAt} />}
+              />
               {posLoading ? (
                 <Skeleton height={120} />
               ) : (
-                <p style={{ fontSize: 10, color: "#566273", fontFamily: "JetBrains Mono, monospace" }}>
+                <p className="font-mono text-[10px] text-dim">
                   Select a position above.
                 </p>
               )}
@@ -1210,19 +905,13 @@ export function Positions(): React.ReactElement {
               liveLastTickAt={liveLastTickAt}
             />
           )}
-        </Card>
+        </Panel>
       </div>
 
       {/* Row 2: 12-column grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(12, 1fr)",
-          gap: 12,
-        }}
-      >
+      <div className="grid grid-cols-12 gap-3">
         {/* Greeks vs spot — span 8 */}
-        <Card style={{ gridColumn: "span 8" }}>
+        <Panel className="col-span-8">
           {posLoading || selected === null ? (
             <>
               <CardHeading text="Greeks vs spot" badge="net · current spot marked" />
@@ -1231,10 +920,10 @@ export function Positions(): React.ReactElement {
           ) : (
             <GreeksVsSpot position={selected} spot={spot} strike={selectedStrike} />
           )}
-        </Card>
+        </Panel>
 
         {/* Strike vs structure — span 4 */}
-        <Card style={{ gridColumn: "span 4" }}>
+        <Panel className="col-span-4">
           <StrikeVsStructure
             strike={selectedStrike}
             spot={spot}
@@ -1242,7 +931,7 @@ export function Positions(): React.ReactElement {
             callWall={callWall}
             putWall={putWall}
           />
-        </Card>
+        </Panel>
       </div>
     </div>
   );

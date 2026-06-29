@@ -48,6 +48,8 @@ import { LevelBar } from "../components/LevelBar.tsx";
 import type { LevelBarData } from "../components/LevelBar.tsx";
 import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
+import { Panel, SectionLabel } from "../components/system/index.tsx";
+import { cn } from "@/lib/utils";
 import type { BrokerPositionResponse } from "@morai/contracts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -121,48 +123,6 @@ function fmtDollar(v: number): string {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
-// ─── Card shell ───────────────────────────────────────────────────────────────
-
-function Card({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}): React.ReactElement {
-  return (
-    <div
-      style={{
-        background: "linear-gradient(180deg, #0f1521, #0c111a)",
-        border: "1px solid #1b2433",
-        borderRadius: 8,
-        padding: 12,
-        boxSizing: "border-box",
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function SectionLabel({ text }: { text: string }): React.ReactElement {
-  return (
-    <span
-      style={{
-        fontSize: 10,
-        fontWeight: 600,
-        letterSpacing: "0.9px",
-        textTransform: "uppercase",
-        color: "#7b8696",
-        fontFamily: "Space Grotesk, sans-serif",
-      }}
-    >
-      {text}
-    </span>
-  );
-}
-
 // ─── Positions panel ─────────────────────────────────────────────────────────
 
 interface PositionsPanelProps {
@@ -196,37 +156,25 @@ function PositionsPanel({
   }, [pasteText, onAddPasted]);
 
   return (
-    <Card>
-      <div style={{ marginBottom: 8 }}>
-        <SectionLabel text="Positions" />
+    <Panel>
+      <div className="mb-2">
+        <SectionLabel>Positions</SectionLabel>
       </div>
 
       {positions.length === 0 && (
-        <p
-          style={{
-            color: "#566273",
-            fontSize: 11,
-            fontFamily: "JetBrains Mono, monospace",
-            margin: "8px 0",
-          }}
-        >
+        <p className="my-2 font-mono text-[11px] text-dim">
           No open positions. Add from paste below.
         </p>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+      <div className="mb-2 flex flex-col gap-1">
         {positions.map((p) => (
           <div
             key={p.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "4px 6px",
-              borderRadius: 4,
-              background: selectedId === p.id ? "#141c2c" : "transparent",
-              cursor: "pointer",
-            }}
+            className={cn(
+              "flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1",
+              selectedId === p.id ? "bg-raise" : "bg-transparent",
+            )}
             onClick={() => onSelect(p.id)}
           >
             <input
@@ -234,40 +182,18 @@ function PositionsPanel({
               checked={p.included}
               onChange={() => onToggleInclude(p.id)}
               onClick={(e) => e.stopPropagation()}
-              style={{ accentColor: "#5b9cf6", cursor: "pointer" }}
+              className="cursor-pointer accent-blue"
             />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontFamily: "JetBrains Mono, monospace",
-                  color: "#c4cdd9",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-mono text-[11px] text-txt">
                 {p.name}
               </div>
-              <div
-                style={{
-                  fontSize: 9,
-                  color: "#566273",
-                  fontFamily: "JetBrains Mono, monospace",
-                }}
-              >
+              <div className="font-mono text-[9px] text-dim">
                 {`F${p.frontDte}d B${p.backDte}d IV${Math.round(p.frontIv * 100)}%`}
               </div>
             </div>
             {p.live ? (
-              <span
-                style={{
-                  fontSize: 9,
-                  color: "#26a69a",
-                  fontFamily: "JetBrains Mono, monospace",
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <span className="font-mono text-[9px] whitespace-nowrap text-up">
                 ●live
               </span>
             ) : (
@@ -276,15 +202,7 @@ function PositionsPanel({
                   e.stopPropagation();
                   onRemove(p.id);
                 }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#566273",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  padding: "0 2px",
-                  lineHeight: 1,
-                }}
+                className="cursor-pointer border-none bg-transparent px-0.5 text-xs leading-none text-dim"
                 aria-label={`Remove ${p.name}`}
               >
                 ×
@@ -295,82 +213,36 @@ function PositionsPanel({
       </div>
 
       {/* Paste input */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div className="flex flex-col gap-1">
         <input
           type="text"
           value={pasteText}
           onChange={(e) => setPasteText(e.target.value)}
           placeholder="Paste TOS order…"
-          style={{
-            background: "#0c111a",
-            border: "1px solid #27313f",
-            borderRadius: 4,
-            color: "#c4cdd9",
-            fontSize: 10,
-            fontFamily: "JetBrains Mono, monospace",
-            padding: "4px 7px",
-            width: "100%",
-            boxSizing: "border-box",
-          }}
+          className="w-full rounded border border-line2 bg-panel2 px-[7px] py-1 font-mono text-[10px] text-txt"
         />
         <button
           onClick={handleAdd}
-          style={{
-            background: "#141c2c",
-            border: "1px solid #27313f",
-            borderRadius: 4,
-            color: "#c4cdd9",
-            fontSize: 10,
-            fontFamily: "Space Grotesk, sans-serif",
-            padding: "4px 0",
-            cursor: "pointer",
-            textAlign: "center",
-          }}
+          className="cursor-pointer rounded border border-line2 bg-raise py-1 text-center font-display text-[10px] text-txt"
         >
           + add from paste
         </button>
 
         {pasteSuccess !== null && (
-          <p
-            style={{
-              fontSize: 9,
-              color: "#26a69a",
-              fontFamily: "JetBrains Mono, monospace",
-              margin: 0,
-            }}
-          >
-            {pasteSuccess}
-          </p>
+          <p className="m-0 font-mono text-[9px] text-up">{pasteSuccess}</p>
         )}
 
         {pasteError !== null && (
-          <p
-            style={{
-              fontSize: 9,
-              color: "#ef5350",
-              fontFamily: "JetBrains Mono, monospace",
-              margin: 0,
-            }}
-          >
-            {pasteError}
-          </p>
+          <p className="m-0 font-mono text-[9px] text-down">{pasteError}</p>
         )}
       </div>
 
-      <div
-        style={{
-          marginTop: 8,
-          paddingTop: 8,
-          borderTop: "1px solid #1b2433",
-          display: "flex",
-          justifyContent: "flex-end",
-        }}
-      >
-        <span style={{ fontSize: 9, color: "#566273", fontFamily: "JetBrains Mono, monospace" }}>
+      <div className="mt-2 flex justify-end border-t border-line pt-2">
+        <span className="font-mono text-[9px] text-dim">
           {`spot ${spot.toFixed(0)}`}
         </span>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -394,41 +266,22 @@ function ScenarioPanel({ params, onParamsChange, liveSpot }: ScenarioPanelProps)
   }, [liveSpot, onParamsChange]);
 
   return (
-    <Card style={{ marginTop: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <SectionLabel text="Scenario" />
+    <Panel className="mt-2">
+      <div className="mb-2 flex items-center justify-between">
+        <SectionLabel>Scenario</SectionLabel>
         <button
           onClick={reset}
-          style={{
-            background: "none",
-            border: "1px solid #27313f",
-            borderRadius: 3,
-            color: "#566273",
-            cursor: "pointer",
-            fontSize: 9,
-            padding: "2px 7px",
-            fontFamily: "JetBrains Mono, monospace",
-          }}
+          className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim"
         >
           Reset
         </button>
       </div>
 
       {/* Spot slider */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-          <span style={{ fontSize: 9, color: "#7b8696", fontFamily: "JetBrains Mono, monospace" }}>
-            Spot
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              fontFamily: "Space Grotesk, sans-serif",
-              fontWeight: 700,
-              color: "#5b9cf6",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
+      <div className="mb-2.5">
+        <div className="mb-[3px] flex justify-between">
+          <span className="font-mono text-[9px] text-muted-foreground">Spot</span>
+          <span className="font-display text-[11px] font-bold text-blue tabular-nums">
             {params.spot.toFixed(0)}
           </span>
         </div>
@@ -439,26 +292,16 @@ function ScenarioPanel({ params, onParamsChange, liveSpot }: ScenarioPanelProps)
           step={1}
           value={params.spot}
           onChange={(e) => onParamsChange({ ...params, spot: Number(e.target.value) })}
-          style={{ width: "100%" }}
+          className="w-full"
           aria-label="Spot price"
         />
       </div>
 
       {/* Days forward slider */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-          <span style={{ fontSize: 9, color: "#7b8696", fontFamily: "JetBrains Mono, monospace" }}>
-            Days fwd
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              fontFamily: "Space Grotesk, sans-serif",
-              fontWeight: 700,
-              color: "#c4cdd9",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
+      <div className="mb-2.5">
+        <div className="mb-[3px] flex justify-between">
+          <span className="font-mono text-[9px] text-muted-foreground">Days fwd</span>
+          <span className="font-display text-[11px] font-bold text-txt tabular-nums">
             {`+${params.daysForward}d`}
           </span>
         </div>
@@ -469,25 +312,20 @@ function ScenarioPanel({ params, onParamsChange, liveSpot }: ScenarioPanelProps)
           step={1}
           value={params.daysForward}
           onChange={(e) => onParamsChange({ ...params, daysForward: Number(e.target.value) })}
-          style={{ width: "100%" }}
+          className="w-full"
           aria-label="Days forward"
         />
       </div>
 
       {/* IV shift slider */}
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-          <span style={{ fontSize: 9, color: "#7b8696", fontFamily: "JetBrains Mono, monospace" }}>
-            IV shift
-          </span>
+        <div className="mb-[3px] flex justify-between">
+          <span className="font-mono text-[9px] text-muted-foreground">IV shift</span>
           <span
-            style={{
-              fontSize: 11,
-              fontFamily: "Space Grotesk, sans-serif",
-              fontWeight: 700,
-              color: params.ivShift >= 0 ? "#c4cdd9" : "#ef5350",
-              fontVariantNumeric: "tabular-nums",
-            }}
+            className={cn(
+              "font-display text-[11px] font-bold tabular-nums",
+              params.ivShift >= 0 ? "text-txt" : "text-down",
+            )}
           >
             {`${params.ivShift >= 0 ? "+" : ""}${params.ivShift.toFixed(1)}v`}
           </span>
@@ -499,11 +337,11 @@ function ScenarioPanel({ params, onParamsChange, liveSpot }: ScenarioPanelProps)
           step={0.5}
           value={params.ivShift}
           onChange={(e) => onParamsChange({ ...params, ivShift: Number(e.target.value) })}
-          style={{ width: "100%" }}
+          className="w-full"
           aria-label="IV shift"
         />
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -521,49 +359,32 @@ function BookGreeksTable({
   vega: number;
 }): React.ReactElement {
   const rows = [
-    { label: "Δ", value: delta, color: "#5b9cf6" },
-    { label: "Γ", value: gamma, color: "#22d3ee" },
-    { label: "Θ/d", value: theta, color: "#f0b429" },
-    { label: "Vega", value: vega, color: "#26a69a" },
+    { label: "Δ", value: delta, color: "text-blue" },
+    { label: "Γ", value: gamma, color: "text-cyan" },
+    { label: "Θ/d", value: theta, color: "text-amber" },
+    { label: "Vega", value: vega, color: "text-up" },
   ] as const;
 
   return (
-    <Card style={{ marginTop: 8 }}>
-      <div style={{ marginBottom: 8 }}>
-        <SectionLabel text="Book greeks" />
+    <Panel className="mt-2">
+      <div className="mb-2">
+        <SectionLabel>Book greeks</SectionLabel>
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table className="w-full border-collapse">
         <tbody>
           {rows.map((row) => (
             <tr key={row.label}>
-              <td
-                style={{
-                  fontSize: 10,
-                  fontFamily: "JetBrains Mono, monospace",
-                  color: row.color,
-                  padding: "3px 0",
-                  width: 40,
-                }}
-              >
+              <td className={cn("w-10 py-[3px] font-mono text-[10px]", row.color)}>
                 {row.label}
               </td>
-              <td
-                style={{
-                  fontSize: 12,
-                  fontFamily: "Space Grotesk, sans-serif",
-                  fontWeight: 700,
-                  color: "#c4cdd9",
-                  textAlign: "right",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
+              <td className="text-right font-display text-xs font-bold text-txt tabular-nums">
                 {fmtGreek(row.value)}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </Card>
+    </Panel>
   );
 }
 
@@ -579,55 +400,29 @@ function PlReadout({
   rollPl: number | null;
 }): React.ReactElement {
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 16,
-        padding: "6px 0",
-        fontFamily: "Space Grotesk, sans-serif",
-        fontVariantNumeric: "tabular-nums",
-      }}
-    >
+    <div className="flex gap-4 py-1.5 font-display tabular-nums">
       <div>
-        <div style={{ fontSize: 9, color: "#7b8696", textTransform: "uppercase", letterSpacing: "0.7px" }}>
+        <div className="text-[9px] tracking-[0.7px] text-muted-foreground uppercase">
           Today
         </div>
-        <div
-          style={{
-            fontSize: 15,
-            fontWeight: 700,
-            color: todayPl >= 0 ? "#26a69a" : "#ef5350",
-          }}
-        >
+        <div className={cn("text-[15px] font-bold", todayPl >= 0 ? "text-up" : "text-down")}>
           {fmtDollar(todayPl)}
         </div>
       </div>
       <div>
-        <div style={{ fontSize: 9, color: "#7b8696", textTransform: "uppercase", letterSpacing: "0.7px" }}>
+        <div className="text-[9px] tracking-[0.7px] text-muted-foreground uppercase">
           Expiry
         </div>
-        <div
-          style={{
-            fontSize: 15,
-            fontWeight: 700,
-            color: expiryPl >= 0 ? "#26a69a" : "#ef5350",
-          }}
-        >
+        <div className={cn("text-[15px] font-bold", expiryPl >= 0 ? "text-up" : "text-down")}>
           {fmtDollar(expiryPl)}
         </div>
       </div>
       {rollPl !== null && (
         <div>
-          <div style={{ fontSize: 9, color: "#f0b429", textTransform: "uppercase", letterSpacing: "0.7px" }}>
+          <div className="text-[9px] tracking-[0.7px] text-amber uppercase">
             Roll
           </div>
-          <div
-            style={{
-              fontSize: 15,
-              fontWeight: 700,
-              color: "#f0b429",
-            }}
-          >
+          <div className="text-[15px] font-bold text-amber">
             {fmtDollar(rollPl)}
           </div>
         </div>
@@ -878,19 +673,11 @@ export function Analyzer(): React.ReactElement {
 
   return (
     <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "236px 1fr 320px",
-        gap: 12,
-        padding: 11,
-        height: "100vh",
-        boxSizing: "border-box",
-        background: "#08111a",
-        overflowY: "auto",
-      }}
+      className="grid h-screen gap-3 overflow-y-auto bg-bg p-[11px]"
+      style={{ gridTemplateColumns: "236px 1fr 320px" }}
     >
       {/* ── Left column ─────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column" }}>
+      <div className="flex flex-col">
         <PositionsPanel
           positions={allPositions}
           selectedId={resolvedSelectedId}
@@ -907,39 +694,30 @@ export function Analyzer(): React.ReactElement {
           onParamsChange={setParams}
           liveSpot={liveSpot}
         />
-        <div style={{ marginTop: 8 }}>
-          <Card>
+        <div className="mt-2">
+          <Panel>
             <RollSimulator
               selectedPositionName={selectedPositionName}
               rollConfig={rollConfig}
               onChange={setRollConfig}
             />
-          </Card>
+          </Panel>
         </div>
       </div>
 
       {/* ── Center column ────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-        <Card>
+      <div className="flex min-w-0 flex-col gap-2">
+        <Panel>
           {/* Heading row */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <SectionLabel text="Risk profile" />
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="mb-1.5 flex items-center justify-between">
+            <SectionLabel>Risk profile</SectionLabel>
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => {
                   setFitY(true);
                   setFitYConsumed(false);
                 }}
-                style={{
-                  background: "none",
-                  border: "1px solid #27313f",
-                  borderRadius: 3,
-                  color: "#566273",
-                  cursor: "pointer",
-                  fontSize: 9,
-                  padding: "2px 7px",
-                  fontFamily: "JetBrains Mono, monospace",
-                }}
+                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim"
               >
                 Fit Y
               </button>
@@ -957,16 +735,12 @@ export function Analyzer(): React.ReactElement {
                   <button
                     key={label}
                     onClick={() => setToggles((prev) => ({ ...prev, [key]: !prev[key] }))}
-                    style={{
-                      background: active ? "#141c2c" : "none",
-                      border: `1px solid ${active ? "#27313f" : "#1b2433"}`,
-                      borderRadius: 3,
-                      color: active ? "#c4cdd9" : "#566273",
-                      cursor: "pointer",
-                      fontSize: 9,
-                      padding: "2px 6px",
-                      fontFamily: "JetBrains Mono, monospace",
-                    }}
+                    className={cn(
+                      "cursor-pointer rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px]",
+                      active
+                        ? "border-line2 bg-raise text-txt"
+                        : "border-line bg-transparent text-dim",
+                    )}
                   >
                     {label}
                   </button>
@@ -990,29 +764,29 @@ export function Analyzer(): React.ReactElement {
             positionSetSignature={positionSetSignature}
             baseExpirationCurve={scenarioResult?.expirationCurve ?? []}
           />
-        </Card>
+        </Panel>
 
-        <Card>
-          <div style={{ marginBottom: 8 }}>
-            <SectionLabel text="Book greeks" />
+        <Panel>
+          <div className="mb-2">
+            <SectionLabel>Book greeks</SectionLabel>
           </div>
           <GreekStrips data={greekStripData} panelWidth={180} panelHeight={80} />
-        </Card>
+        </Panel>
 
-        <Card>
+        <Panel>
           <PnlHeatmap positions={includedPositions} params={params} />
-        </Card>
+        </Panel>
       </div>
 
       {/* ── Right column ─────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="flex flex-col gap-2">
         {/* What's-moving */}
-        <Card>
-          <div style={{ marginBottom: 8 }}>
-            <SectionLabel text="What's moving" />
+        <Panel>
+          <div className="mb-2">
+            <SectionLabel>What's moving</SectionLabel>
           </div>
           {gexQuery.data !== null && gexQuery.data !== undefined ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="flex flex-col gap-2">
               <GammaProfile
                 profile={gexQuery.data.profile}
                 flip={gexQuery.data.flip}
@@ -1030,11 +804,11 @@ export function Analyzer(): React.ReactElement {
               />
             </div>
           ) : (
-            <p style={{ fontSize: 10, color: "#566273", fontFamily: "JetBrains Mono, monospace", margin: 0 }}>
+            <p className="m-0 font-mono text-[10px] text-dim">
               {gexQuery.isLoading ? "Loading GEX…" : "GEX unavailable"}
             </p>
           )}
-        </Card>
+        </Panel>
 
         <BookGreeksTable
           delta={bookGreeks.delta}
@@ -1043,12 +817,12 @@ export function Analyzer(): React.ReactElement {
           vega={bookGreeks.vega}
         />
 
-        <Card>
-          <div style={{ marginBottom: 8 }}>
-            <SectionLabel text="Attribution" />
+        <Panel>
+          <div className="mb-2">
+            <SectionLabel>Attribution</SectionLabel>
           </div>
           <AttributionWaterfall variant="analyzer" data={waterfallData} trackHeight={12} />
-        </Card>
+        </Panel>
       </div>
     </div>
   );

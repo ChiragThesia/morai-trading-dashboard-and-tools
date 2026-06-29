@@ -22,6 +22,7 @@ import { classifyTradeHistory } from "../lib/journal-history.ts";
 import { useJournal } from "../hooks/useJournal.ts";
 import { LifecycleChart } from "../components/LifecycleChart.tsx";
 import { RebuildButton } from "../components/RebuildButton.tsx";
+import { Panel, PanelHeading } from "../components/system/index.tsx";
 import type { SnapshotResponse } from "@morai/contracts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -74,6 +75,15 @@ function fmtSnapTime(iso: string): string {
   return `${month} ${day} ${hh}:${mm}`;
 }
 
+/** The fainter right-aligned descriptor pill used in panel headings. */
+function HeadingPill({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <span className="rounded-full border border-line2 px-[7px] py-px text-[9px] text-dim">
+      {children}
+    </span>
+  );
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 /** Snapshot table rows (right column) */
@@ -85,29 +95,15 @@ function SnapshotTable({
   selectedIndex: number;
 }): React.ReactElement {
   return (
-    <table
-      style={{
-        width: "100%",
-        borderCollapse: "collapse",
-        fontSize: 10.5,
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        fontVariantNumeric: "tabular-nums",
-      }}
-    >
+    <table className="w-full border-collapse font-mono text-[10.5px] tabular-nums">
       <thead>
         <tr>
           {["Time", "SPX", "Net", "P&L", "Θ", "Vega"].map((col) => (
             <th
               key={col}
-              style={{
-                textAlign: col === "Time" ? "left" : "right",
-                padding: "4px 5px",
-                borderBottom: "1px solid #0c111a",
-                color: "#566273",
-                fontSize: 9,
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}
+              className={`border-b border-panel2 px-[5px] py-1 text-[9px] font-medium uppercase text-dim ${
+                col === "Time" ? "text-left" : "text-right"
+              }`}
             >
               {col}
             </th>
@@ -117,39 +113,27 @@ function SnapshotTable({
       <tbody>
         {snapshots.map((s, i) => {
           const pnl = parseFloat(s.pnlOpen);
-          const pnlColor = pnl >= 0 ? "#26a69a" : "#ef5350";
+          const pnlClass = pnl >= 0 ? "text-up" : "text-down";
           const isSelected = i === selectedIndex;
 
           return (
-            <tr
-              key={s.time}
-              style={{
-                background: isSelected ? "rgba(22,32,48,0.27)" : undefined,
-              }}
-            >
-              <td
-                style={{
-                  textAlign: "left",
-                  padding: "4px 5px",
-                  borderBottom: "1px solid #0c111a",
-                  color: "#d6dbe4",
-                }}
-              >
+            <tr key={s.time} className={isSelected ? "bg-raise/27" : undefined}>
+              <td className="border-b border-panel2 px-[5px] py-1 text-left text-txt">
                 {fmtSnapTime(s.time)}
               </td>
-              <td style={{ textAlign: "right", padding: "4px 5px", borderBottom: "1px solid #0c111a", color: "#5b9cf6" }}>
+              <td className="border-b border-panel2 px-[5px] py-1 text-right text-blue">
                 {parseFloat(s.spot).toLocaleString()}
               </td>
-              <td style={{ textAlign: "right", padding: "4px 5px", borderBottom: "1px solid #0c111a", color: "#d6dbe4" }}>
+              <td className="border-b border-panel2 px-[5px] py-1 text-right text-txt">
                 {parseFloat(s.netMark).toFixed(2)}
               </td>
-              <td style={{ textAlign: "right", padding: "4px 5px", borderBottom: "1px solid #0c111a", color: pnlColor }}>
+              <td className={`border-b border-panel2 px-[5px] py-1 text-right ${pnlClass}`}>
                 {pnl >= 0 ? "+" : ""}${Math.abs(pnl).toFixed(2)}
               </td>
-              <td style={{ textAlign: "right", padding: "4px 5px", borderBottom: "1px solid #0c111a", color: "#f0b429" }}>
+              <td className="border-b border-panel2 px-[5px] py-1 text-right text-amber">
                 {parseFloat(s.netTheta).toFixed(1)}
               </td>
-              <td style={{ textAlign: "right", padding: "4px 5px", borderBottom: "1px solid #0c111a", color: "#26a69a" }}>
+              <td className="border-b border-panel2 px-[5px] py-1 text-right text-up">
                 {parseFloat(s.netVega).toFixed(0)}
               </td>
             </tr>
@@ -164,25 +148,11 @@ function SnapshotTable({
 function PreHistoryStub(): React.ReactElement {
   return (
     <div
-      style={{
-        border: "1px dashed #27313f",
-        borderRadius: 8,
-        padding: 16,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: 200,
-        color: "#566273",
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        fontSize: 11,
-        textAlign: "center",
-        gap: 8,
-      }}
+      className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line2 p-4 text-center font-mono text-[11px] text-dim"
       aria-label="no day-by-day (pre Jun-12)"
     >
       <span>no day-by-day (pre Jun-12)</span>
-      <span style={{ fontSize: 10, color: "#3a4453" }}>
+      <span className="text-[10px] text-faint">
         Chain history starts 2026-06-12. Only entry and exit events are available for this trade.
       </span>
     </div>
@@ -206,7 +176,7 @@ function LifecycleSection({
   });
 
   const pnlNum = parseFloat(trade.realizedPnl);
-  const pnlColor = pnlNum >= 0 ? "#26a69a" : "#ef5350";
+  const pnlClass = pnlNum >= 0 ? "text-up" : "text-down";
   const isOpen = trade.closedAt === null;
 
   // KPI calculations from snapshots
@@ -215,145 +185,65 @@ function LifecycleSection({
   const maxAdv = pnlValues.length > 0 ? Math.min(...pnlValues) : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="flex flex-col gap-3">
       {/* Trade header card */}
-      <div
-        style={{
-          background: "linear-gradient(180deg, #0f1521, #0c111a)",
-          border: "1px solid #1b2433",
-          borderRadius: 12,
-          padding: "10px 11px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            gap: 12,
-            marginBottom: 10,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "'Space Grotesk', system-ui, sans-serif",
-              fontWeight: 700,
-              fontSize: 16,
-              color: "#d6dbe4",
-            }}
-          >
+      <Panel>
+        <div className="mb-2.5 flex items-baseline gap-3">
+          <div className="font-display text-base font-bold text-txt">
             {trade.name}
           </div>
-          <div style={{ color: "#566273", fontSize: 11, fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
+          <div className="font-mono text-[11px] text-dim">
             {fmtDate(trade.openedAt)}
             {!isOpen ? ` → ${fmtDate(trade.closedAt ?? "")}` : " (open)"}
           </div>
           <div
-            style={{
-              marginLeft: "auto",
-              fontFamily: "'Space Grotesk', system-ui, sans-serif",
-              fontWeight: 700,
-              fontSize: 18,
-              color: isOpen ? "#5b9cf6" : pnlColor,
-            }}
+            className={`ml-auto font-display text-lg font-bold ${
+              isOpen ? "text-blue" : pnlClass
+            }`}
           >
             {isOpen ? "open" : fmtPnl(trade.realizedPnl)}
           </div>
         </div>
 
         {/* 3 KPIs */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-          <div
-            style={{
-              background: "#0c111a",
-              border: "1px solid #1b2433",
-              borderRadius: 9,
-              padding: "8px 9px",
-            }}
-          >
-            <div style={{ color: "#566273", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-md border border-line bg-panel2 px-[9px] py-2">
+            <div className="text-[9px] uppercase tracking-[0.5px] text-dim">
               Realized
             </div>
             <div
-              style={{
-                fontFamily: "'Space Grotesk', system-ui, sans-serif",
-                fontWeight: 700,
-                fontSize: 15,
-                marginTop: 1,
-                color: isOpen ? "#5b9cf6" : pnlColor,
-                fontVariantNumeric: "tabular-nums",
-              }}
+              className={`mt-px font-display text-[15px] font-bold tabular-nums ${
+                isOpen ? "text-blue" : pnlClass
+              }`}
             >
               {isOpen ? "open" : fmtPnl(trade.realizedPnl)}
             </div>
           </div>
 
-          <div
-            style={{
-              background: "#0c111a",
-              border: "1px solid #1b2433",
-              borderRadius: 9,
-              padding: "8px 9px",
-            }}
-          >
-            <div style={{ color: "#566273", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          <div className="rounded-md border border-line bg-panel2 px-[9px] py-2">
+            <div className="text-[9px] uppercase tracking-[0.5px] text-dim">
               Max favorable
             </div>
-            <div
-              style={{
-                fontFamily: "'Space Grotesk', system-ui, sans-serif",
-                fontWeight: 700,
-                fontSize: 15,
-                marginTop: 1,
-                color: "#26a69a",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
+            <div className="mt-px font-display text-[15px] font-bold tabular-nums text-up">
               {maxFav !== null ? `+$${maxFav.toFixed(2)}` : "—"}
             </div>
           </div>
 
-          <div
-            style={{
-              background: "#0c111a",
-              border: "1px solid #1b2433",
-              borderRadius: 9,
-              padding: "8px 9px",
-            }}
-          >
-            <div style={{ color: "#566273", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          <div className="rounded-md border border-line bg-panel2 px-[9px] py-2">
+            <div className="text-[9px] uppercase tracking-[0.5px] text-dim">
               Max adverse
             </div>
-            <div
-              style={{
-                fontFamily: "'Space Grotesk', system-ui, sans-serif",
-                fontWeight: 700,
-                fontSize: 15,
-                marginTop: 1,
-                color: "#ef5350",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
+            <div className="mt-px font-display text-[15px] font-bold tabular-nums text-down">
               {maxAdv !== null ? `−$${Math.abs(maxAdv).toFixed(2)}` : "—"}
             </div>
           </div>
         </div>
-      </div>
+      </Panel>
 
       {/* Lifecycle chart card */}
-      <div
-        style={{
-          background: "linear-gradient(180deg, #0f1521, #0c111a)",
-          border: "1px solid #1b2433",
-          borderRadius: 12,
-          padding: "10px 11px",
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 300,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ color: "#566273", fontSize: 10, fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
+      <Panel className="flex min-h-[300px] flex-1 flex-col">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="font-mono text-[10px] text-dim">
             {kind === "history" ? "30-min snapshots" : "entry/exit only"}
           </div>
           <RebuildButton calendarId={trade.calendarId} />
@@ -361,13 +251,7 @@ function LifecycleSection({
 
         {isPending && (
           <div
-            style={{
-              flex: 1,
-              background: "#1b2433",
-              borderRadius: 6,
-              opacity: 0.4,
-              minHeight: 200,
-            }}
+            className="min-h-[200px] flex-1 rounded-md bg-line opacity-40"
             aria-busy="true"
             aria-label="Loading lifecycle"
           />
@@ -382,11 +266,11 @@ function LifecycleSection({
         )}
 
         {!isPending && kind === "history" && snapshots.length <= 1 && (
-          <div style={{ color: "#566273", fontSize: 11, padding: 16, textAlign: "center" }}>
+          <div className="p-4 text-center text-[11px] text-dim">
             No snapshots yet. Snapshots are captured every 30 minutes during RTH.
           </div>
         )}
-      </div>
+      </Panel>
     </div>
   );
 }
@@ -408,83 +292,23 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
   // ── Empty state ─────────────────────────────────────────────────────────────
   if (trades.length === 0) {
     return (
-      <div
-        style={{
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#566273",
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 12,
-          gap: 8,
-        }}
-      >
+      <div className="flex h-full flex-col items-center justify-center gap-2 font-mono text-xs text-dim">
         <span>No journal history yet.</span>
-        <span style={{ fontSize: 10 }}>Trades before Jun 12 have entry/exit only.</span>
+        <span className="text-[10px]">Trades before Jun 12 have entry/exit only.</span>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "250px 1fr 290px",
-        gap: 12,
-        padding: 12,
-        height: "100%",
-        overflow: "hidden",
-      }}
-    >
+    <div className="grid h-full grid-cols-[250px_1fr_290px] gap-3 overflow-hidden p-3">
       {/* ── Left column — trade list ─────────────────────────────────────── */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          minHeight: 0,
-          overflowY: "auto",
-        }}
-      >
-        <div
-          style={{
-            background: "linear-gradient(180deg, #0f1521, #0c111a)",
-            border: "1px solid #1b2433",
-            borderRadius: 12,
-            padding: "10px 11px",
-          }}
-        >
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+        <Panel>
           {/* Heading */}
-          <h3
-            style={{
-              margin: "0 0 10px",
-              fontFamily: "'Space Grotesk', system-ui, sans-serif",
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              color: "#7b8696",
-              display: "flex",
-              gap: 7,
-              alignItems: "center",
-            }}
-          >
-            Trades
-            <span
-              style={{
-                marginLeft: "auto",
-                fontSize: 9,
-                color: "#566273",
-                border: "1px solid #27313f",
-                borderRadius: 999,
-                padding: "1px 7px",
-              }}
-            >
-              SPXW put calendars
-            </span>
-          </h3>
+          <PanelHeading
+            title="Trades"
+            action={<HeadingPill>SPXW put calendars</HeadingPill>}
+          />
 
           {/* Trade rows */}
           <div>
@@ -497,11 +321,11 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
                 hasSnapshots: trade.hasSnapshots,
               });
               const pnlNum = parseFloat(trade.realizedPnl);
-              const pnlColor = isOpen
-                ? "#5b9cf6"
+              const pnlClass = isOpen
+                ? "text-blue"
                 : pnlNum >= 0
-                  ? "#26a69a"
-                  : "#ef5350";
+                  ? "text-up"
+                  : "text-down";
 
               return (
                 <div
@@ -514,73 +338,40 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") setSelectedId(trade.id);
                   }}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    gap: 6,
-                    padding: "7px 9px",
-                    background: isSelected ? "#1b1733" : "#0c111a",
-                    border: `1px solid ${isSelected ? "#a78bfa" : "#1b2433"}`,
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    marginBottom: 5,
-                  }}
+                  className={`mb-[5px] grid cursor-pointer grid-cols-[1fr_auto] gap-1.5 rounded-lg border px-[9px] py-[7px] ${
+                    isSelected
+                      ? "border-violet bg-violetd"
+                      : "border-line bg-panel2"
+                  }`}
                 >
                   <div>
-                    <div
-                      style={{
-                        fontFamily: "'Space Grotesk', system-ui, sans-serif",
-                        fontSize: 12,
-                        color: "#d6dbe4",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
+                    <div className="flex items-center gap-1 font-display text-xs text-txt">
                       {trade.name}
                       {isOpen && (
-                        <span
-                          style={{
-                            fontSize: 8,
-                            padding: "0 5px",
-                            borderRadius: 3,
-                            border: "1px solid #1d3f47",
-                            color: "#22d3ee",
-                          }}
-                        >
+                        <span className="rounded-[3px] border border-cyan/30 px-[5px] text-[8px] text-cyan">
                           OPEN
                         </span>
                       )}
                     </div>
-                    <div style={{ color: "#566273", fontSize: 9 }}>
+                    <div className="text-[9px] text-dim">
                       {fmtDate(trade.openedAt)}
                       {trade.closedAt !== null ? ` → ${fmtDate(trade.closedAt)}` : ""}
                     </div>
                   </div>
 
-                  <div style={{ textAlign: "right" }}>
+                  <div className="text-right">
                     <div
-                      style={{
-                        fontFamily: "'Space Grotesk', system-ui, sans-serif",
-                        fontWeight: 700,
-                        fontSize: 12,
-                        color: pnlColor,
-                        fontVariantNumeric: "tabular-nums",
-                      }}
+                      className={`font-display text-xs font-bold tabular-nums ${pnlClass}`}
                     >
                       {isOpen ? "open" : fmtPnl(trade.realizedPnl)}
                     </div>
                     {/* History badge */}
                     <div
-                      style={{
-                        marginTop: 3,
-                        fontSize: 8,
-                        padding: "0 5px",
-                        borderRadius: 3,
-                        border: `1px solid ${kind === "history" ? "#1d3f47" : "#27313f"}`,
-                        color: kind === "history" ? "#22d3ee" : "#566273",
-                        display: "inline-block",
-                      }}
+                      className={`mt-[3px] inline-block rounded-[3px] border px-[5px] text-[8px] ${
+                        kind === "history"
+                          ? "border-cyan/30 text-cyan"
+                          : "border-line2 text-dim"
+                      }`}
                     >
                       {kind === "history" ? "history" : "entry/exit"}
                     </div>
@@ -589,19 +380,11 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
               );
             })}
           </div>
-        </div>
+        </Panel>
       </div>
 
       {/* ── Center column — lifecycle ─────────────────────────────────────── */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          minHeight: 0,
-          overflowY: "auto",
-        }}
-      >
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
         {selectedTrade !== null && (
           <LifecycleSection
             trade={selectedTrade}
@@ -612,164 +395,44 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
       </div>
 
       {/* ── Right column — snapshot table + notes ─────────────────────────── */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          minHeight: 0,
-          overflowY: "auto",
-        }}
-      >
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
         {/* Snapshot table card */}
-        <div
-          style={{
-            background: "linear-gradient(180deg, #0f1521, #0c111a)",
-            border: "1px solid #1b2433",
-            borderRadius: 12,
-            padding: "10px 11px",
-          }}
-        >
-          <h3
-            style={{
-              margin: "0 0 10px",
-              fontFamily: "'Space Grotesk', system-ui, sans-serif",
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              color: "#7b8696",
-              display: "flex",
-              gap: 7,
-              alignItems: "center",
-            }}
-          >
-            Lifecycle
-            <span
-              style={{
-                marginLeft: "auto",
-                fontSize: 9,
-                color: "#566273",
-                border: "1px solid #27313f",
-                borderRadius: 999,
-                padding: "1px 7px",
-              }}
-            >
-              per snapshot
-            </span>
-          </h3>
+        <Panel>
+          <PanelHeading
+            title="Lifecycle"
+            action={<HeadingPill>per snapshot</HeadingPill>}
+          />
 
           {snapshots.length > 0 ? (
             <SnapshotTable snapshots={snapshots} selectedIndex={snapshots.length - 1} />
           ) : (
-            <div
-              style={{
-                color: "#566273",
-                fontSize: 10,
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                padding: "8px 0",
-              }}
-            >
+            <div className="py-2 font-mono text-[10px] text-dim">
               {isPending ? "Loading…" : "No snapshots available."}
             </div>
           )}
-        </div>
+        </Panel>
 
         {/* Why it moved card */}
-        <div
-          style={{
-            background: "linear-gradient(180deg, #0f1521, #0c111a)",
-            border: "1px solid #1b2433",
-            borderRadius: 12,
-            padding: "10px 11px",
-          }}
-        >
-          <h3
-            style={{
-              margin: "0 0 10px",
-              fontFamily: "'Space Grotesk', system-ui, sans-serif",
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              color: "#7b8696",
-            }}
-          >
-            Why it moved
-          </h3>
-          <div
-            style={{
-              fontSize: 11,
-              background: "#0c111a",
-              border: "1px solid #1b2433",
-              borderLeft: "2px solid #a78bfa",
-              borderRadius: 6,
-              padding: "8px 10px",
-              color: "#566273",
-              lineHeight: 1.5,
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-            }}
-          >
+        <Panel>
+          <PanelHeading title="Why it moved" />
+          <div className="rounded-md border border-line border-l-2 border-l-violet bg-panel2 px-[10px] py-2 font-mono text-[11px] leading-normal text-dim">
             {snapshots.length > 0
               ? "For a calendar the headline driver is vega split + theta. Check front vs back vega to understand which leg drove the move."
               : "Select a trade with chain history to see the attribution narrative."}
           </div>
-        </div>
+        </Panel>
 
         {/* Notes card */}
-        <div
-          style={{
-            background: "linear-gradient(180deg, #0f1521, #0c111a)",
-            border: "1px solid #1b2433",
-            borderRadius: 12,
-            padding: "10px 11px",
-          }}
-        >
-          <h3
-            style={{
-              margin: "0 0 10px",
-              fontFamily: "'Space Grotesk', system-ui, sans-serif",
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              color: "#7b8696",
-              display: "flex",
-              gap: 7,
-              alignItems: "center",
-            }}
-          >
-            Notes
-            <span
-              style={{
-                marginLeft: "auto",
-                fontSize: 9,
-                color: "#566273",
-                border: "1px solid #27313f",
-                borderRadius: 999,
-                padding: "1px 7px",
-              }}
-            >
-              thesis · review
-            </span>
-          </h3>
+        <Panel>
+          <PanelHeading
+            title="Notes"
+            action={<HeadingPill>thesis · review</HeadingPill>}
+          />
           <textarea
             placeholder="Entry thesis, management, post-mortem…"
-            style={{
-              width: "100%",
-              background: "#0c111a",
-              border: "1px solid #27313f",
-              borderRadius: 7,
-              color: "#d6dbe4",
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              fontSize: 11,
-              padding: 8,
-              resize: "vertical",
-              minHeight: 60,
-              boxSizing: "border-box",
-            }}
+            className="box-border min-h-[60px] w-full resize-y rounded-md border border-line2 bg-panel2 p-2 font-mono text-[11px] text-txt"
           />
-        </div>
+        </Panel>
       </div>
     </div>
   );

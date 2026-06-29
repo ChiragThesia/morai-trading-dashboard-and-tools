@@ -4,6 +4,8 @@ import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import { GexByExpiry } from "../components/charts/GexByExpiry.tsx";
 import { ComingSoon } from "../components/stubs/ComingSoon.tsx";
+import { MetricChip, Panel, PanelHeading } from "../components/system/index.tsx";
+import { cn } from "@/lib/utils";
 
 /**
  * Market — Market structure screen (Plan 08).
@@ -24,6 +26,9 @@ import { ComingSoon } from "../components/stubs/ComingSoon.tsx";
  * No any/as/! — all types from GexSnapshotEntry.
  *
  * Visual anchor: Net Dealer Gamma Profile (span 7) — highest visual weight.
+ *
+ * Styling is design-system only (tokens + Tailwind), no inline color/font. Layout-only
+ * inline styles (grid span, fixed chart px) remain.
  */
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -40,61 +45,6 @@ function fmtDollar(v: number): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-interface RegimeChipProps {
-  label: string;
-  value: string;
-  valueColor: string;
-  bgColor?: string;
-  borderColor?: string;
-}
-
-/** Single regime strip chip */
-function RegimeChip({
-  label,
-  value,
-  valueColor,
-  bgColor,
-  borderColor,
-}: RegimeChipProps): React.ReactElement {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 12px",
-        borderRadius: 6,
-        border: `1px solid ${borderColor ?? "#27313f"}`,
-        background: bgColor ?? "transparent",
-      }}
-    >
-      <span
-        style={{
-          fontSize: 10,
-          fontFamily: "'Space Grotesk', system-ui, sans-serif",
-          fontWeight: 600,
-          letterSpacing: "0.9px",
-          textTransform: "uppercase",
-          color: "#7b8696",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: 12,
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontWeight: 700,
-          color: valueColor,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 interface CardProps {
   heading: string;
   badge?: string;
@@ -103,7 +53,10 @@ interface CardProps {
   minHeight?: number;
 }
 
-/** Card container per UI-SPEC (linear gradient, border) */
+/**
+ * Card container per UI-SPEC — Panel surface (gradient + ring) with a PanelHeading.
+ * Layout-only props (grid span, min height) stay as inline style.
+ */
 function Card({
   heading,
   badge,
@@ -112,50 +65,26 @@ function Card({
   minHeight,
 }: CardProps): React.ReactElement {
   return (
-    <div
+    <Panel
+      className="flex flex-col gap-2"
       style={{
         gridColumn: `span ${colSpan}`,
-        background: "linear-gradient(180deg, #0f1521, #0c111a)",
-        border: "1px solid #1b2433",
-        borderRadius: 8,
-        padding: 12,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
         minHeight: minHeight !== undefined ? `${minHeight}px` : undefined,
-        boxSizing: "border-box",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.9px",
-            color: "#7b8696",
-          }}
-        >
-          {heading}
-        </span>
-        {badge !== undefined && (
-          <span
-            style={{
-              fontSize: 10,
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              color: "#566273",
-              border: "1px solid #27313f",
-              borderRadius: 4,
-              padding: "1px 4px",
-            }}
-          >
-            {badge}
-          </span>
-        )}
-      </div>
+      <PanelHeading
+        className="mb-0"
+        title={heading}
+        badge={
+          badge !== undefined ? (
+            <span className="rounded-sm border border-line2 px-1 py-px font-mono text-[10px] text-dim">
+              {badge}
+            </span>
+          ) : undefined
+        }
+      />
       {children}
-    </div>
+    </Panel>
   );
 }
 
@@ -164,7 +93,7 @@ function Card({
 interface KeyLevel {
   label: string;
   value: number | null;
-  color: string;
+  colorClass: string;
 }
 
 interface KeyLevelsTableProps {
@@ -181,40 +110,30 @@ function KeyLevelsTable({
   putWall,
 }: KeyLevelsTableProps): React.ReactElement {
   const levels: ReadonlyArray<KeyLevel> = [
-    { label: "Call Wall", value: callWall, color: "#26a69a" },
-    { label: "γ flip", value: flip, color: "#f0b429" },
-    { label: "Spot", value: spot, color: "#5b9cf6" },
-    { label: "Put Wall", value: putWall, color: "#ef5350" },
+    { label: "Call Wall", value: callWall, colorClass: "text-up" },
+    { label: "γ flip", value: flip, colorClass: "text-amber" },
+    { label: "Spot", value: spot, colorClass: "text-blue" },
+    { label: "Put Wall", value: putWall, colorClass: "text-down" },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div className="flex flex-col gap-1">
       {levels.map((lvl) => {
-        const dist =
-          lvl.value !== null ? Math.round(lvl.value - spot) : null;
+        const dist = lvl.value !== null ? Math.round(lvl.value - spot) : null;
         const distStr =
-          dist !== null
-            ? `${dist >= 0 ? "+" : ""}${dist} pts`
-            : "—";
+          dist !== null ? `${dist >= 0 ? "+" : ""}${dist} pts` : "—";
         const valStr = lvl.value !== null ? lvl.value.toFixed(0) : "—";
 
         return (
           <div
             key={lvl.label}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              fontSize: 10,
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              fontVariantNumeric: "tabular-nums",
-              padding: "2px 0",
-              borderBottom: "1px solid #1b2433",
-            }}
+            className="flex items-center justify-between border-b border-line py-0.5 font-mono text-[10px] tabular-nums"
           >
-            <span style={{ color: lvl.color, fontWeight: 600 }}>{lvl.label}</span>
-            <span style={{ color: "#d6dbe4" }}>{valStr}</span>
-            <span style={{ color: "#566273" }}>{distStr}</span>
+            <span className={cn(lvl.colorClass, "font-semibold")}>
+              {lvl.label}
+            </span>
+            <span className="text-txt">{valStr}</span>
+            <span className="text-dim">{distStr}</span>
           </div>
         );
       })}
@@ -237,13 +156,7 @@ export function Market(): React.ReactElement {
   if (gex === undefined) {
     return (
       <div
-        style={{
-          padding: 32,
-          color: "#566273",
-          fontSize: 12,
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          textAlign: "center",
-        }}
+        className="p-8 text-center font-mono text-xs text-dim"
         data-testid="market-empty"
       >
         {/* Locked copy from UI-SPEC "Empty / loading / error states" */}
@@ -259,74 +172,45 @@ export function Market(): React.ReactElement {
   const netGammaLabel = fmtDollar(gex.netGammaAtSpot) + " /1%";
   const flipLabel = gex.flip !== null ? gex.flip.toFixed(0) : "—";
 
-  // Net gamma chip: blood-dark bg when negative (AMPLIFY)
-  const netGammaBg = isAmplify ? "#180f10" : "transparent";
-  const netGammaBorder = isAmplify ? "#5a2b2e" : "#27313f";
-  const netGammaColor = isAmplify ? "#ef5350" : "#26a69a";
+  // Sign-color class: coral (AMPLIFY / net short gamma) vs teal (DAMPEN / net long).
+  const signClass = isAmplify ? "text-down" : "text-up";
 
   // Regime chip
   const regimeLabel = isAmplify ? "▼ AMPLIFY" : "▲ DAMPEN";
-  const regimeColor = isAmplify ? "#ef5350" : "#26a69a";
 
   // ── Layout ───────────────────────────────────────────────────────────────────
   return (
-    <div
-      style={{
-        maxWidth: "1480px",
-        margin: "0 auto",
-        padding: "14px",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-      }}
-    >
+    <div className="mx-auto box-border flex max-w-[1480px] flex-col gap-3 p-[14px]">
       {/* ── Regime strip (4 chips, full width) ── */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-        }}
-        data-testid="regime-strip"
-      >
+      <div className="flex flex-wrap gap-2" data-testid="regime-strip">
         {/* SPX spot (blue) */}
-        <RegimeChip
+        <MetricChip
           label="SPX spot"
           value={gex.spot.toFixed(2)}
-          valueColor="#5b9cf6"
+          valueClassName="text-blue"
         />
         {/* net γ /1% (coral when negative with blood-dark bg) */}
-        <RegimeChip
+        <MetricChip
           label="net γ /1%"
           value={netGammaLabel}
-          valueColor={netGammaColor}
-          bgColor={netGammaBg}
-          borderColor={netGammaBorder}
+          alert={isAmplify}
+          valueClassName={signClass}
         />
         {/* γ flip (amber) */}
-        <RegimeChip
-          label="γ flip"
-          value={flipLabel}
-          valueColor="#f0b429"
-        />
+        <MetricChip label="γ flip" value={flipLabel} valueClassName="text-amber" />
         {/* Regime label: AMPLIFY or DAMPEN */}
-        <RegimeChip
+        <MetricChip
           label="regime"
           value={regimeLabel}
-          valueColor={regimeColor}
-          bgColor={isAmplify ? "#180f10" : "transparent"}
-          borderColor={isAmplify ? "#5a2b2e" : "#27313f"}
+          alert={isAmplify}
+          valueClassName={signClass}
         />
       </div>
 
       {/* ── 12-column grid ── */}
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(12, 1fr)",
-          gap: 12,
-        }}
+        className="grid gap-3"
+        style={{ gridTemplateColumns: "repeat(12, 1fr)" }}
       >
         {/* Net dealer gamma profile (span 7) — visual anchor */}
         <Card
@@ -342,16 +226,7 @@ export function Market(): React.ReactElement {
             height={230}
           />
           {/* Callout block — GEX note text */}
-          <div
-            style={{
-              fontSize: 10,
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              color: "#566273",
-              borderTop: "1px solid #1b2433",
-              paddingTop: 6,
-              marginTop: 4,
-            }}
-          >
+          <div className="mt-1 border-t border-line pt-1.5 font-mono text-[10px] text-dim">
             {isAmplify
               ? "Dealers are net short gamma — moves are amplified (positive feedback)."
               : "Dealers are net long gamma — moves are dampened (mean-reversion force)."}
@@ -359,11 +234,7 @@ export function Market(): React.ReactElement {
         </Card>
 
         {/* GEX by strike (span 5) */}
-        <Card
-          heading="GEX by strike"
-          badge="±260 · live"
-          colSpan={5}
-        >
+        <Card heading="GEX by strike" badge="±260 · live" colSpan={5}>
           <GexBars
             strikes={gex.strikes}
             spot={gex.spot}
@@ -374,11 +245,7 @@ export function Market(): React.ReactElement {
         </Card>
 
         {/* Key levels (span 4) */}
-        <Card
-          heading="Key levels"
-          badge="distance to spot"
-          colSpan={4}
-        >
+        <Card heading="Key levels" badge="distance to spot" colSpan={4}>
           <KeyLevelsTable
             spot={gex.spot}
             flip={gex.flip}
@@ -388,23 +255,12 @@ export function Market(): React.ReactElement {
         </Card>
 
         {/* GEX by expiry (span 4) */}
-        <Card
-          heading="GEX by expiration"
-          badge="$Bn · live"
-          colSpan={4}
-        >
-          <GexByExpiry
-            byExpiry={gex.byExpiry}
-            height={200}
-          />
+        <Card heading="GEX by expiration" badge="$Bn · live" colSpan={4}>
+          <GexByExpiry byExpiry={gex.byExpiry} height={200} />
         </Card>
 
         {/* Charm/Vanna coming-soon stub (span 4) — never omitted */}
-        <Card
-          heading="Charm / Vanna"
-          colSpan={4}
-          minHeight={140}
-        >
+        <Card heading="Charm / Vanna" colSpan={4} minHeight={140}>
           {/* Badge rendered inside ComingSoon — "○ next" per UI-SPEC */}
           <ComingSoon
             badge="○ next"
@@ -415,11 +271,7 @@ export function Market(): React.ReactElement {
         </Card>
 
         {/* Intraday flow coming-soon stub (span 4) — never omitted */}
-        <Card
-          heading="Intraday flow"
-          colSpan={4}
-          minHeight={140}
-        >
+        <Card heading="Intraday flow" colSpan={4} minHeight={140}>
           {/* Badge rendered inside ComingSoon — "○ needs denser snapshots" per UI-SPEC */}
           <ComingSoon
             badge="○ needs denser snapshots"
