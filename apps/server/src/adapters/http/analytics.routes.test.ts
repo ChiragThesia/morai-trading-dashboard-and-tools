@@ -1,35 +1,44 @@
 /**
- * analytics.routes.test.ts — ANLY-03 HTTP route tests for GET /api/analytics/term-structure.
+ * analytics.routes.test.ts — ANLY-03 HTTP route tests for GET /api/analytics/term-structure,
+ * GET /api/analytics/skew, and GET /api/analytics/cot.
  *
- * MCP-02: the SAME termStructureResponse schema is used here and in the get_term_structure MCP
- * tool. A one-sided field rename fails typecheck.
+ * MCP-02: the SAME termStructureResponse / skewResponse / cotResponse schemas are used here
+ * and in the corresponding MCP tools. A one-sided field rename fails typecheck.
  *
  * SPEC R5: empty array (not error) when no data; flat {error:"internal"} on storage error.
  */
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
-import type { ForRunningGetTermStructure, ForRunningGetSkew } from "@morai/core";
-import { termStructureResponse, skewResponse } from "@morai/contracts";
+import type { ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot } from "@morai/core";
+import { termStructureResponse, skewResponse, cotResponse } from "@morai/contracts";
 import { analyticsRoutes } from "./analytics.routes.ts";
 
 const CAL_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-// Default skew fake (empty) — overridable per test for the /skew cases.
+// Default fakes (empty) — overridable per test for the /skew and /cot cases.
 const skewEmpty: ForRunningGetSkew = async () => ok([]);
+const cotEmpty: ForRunningGetCot = async () => ok([]);
 
 function buildApp(
   getTermStructure: ForRunningGetTermStructure,
   getSkew: ForRunningGetSkew = skewEmpty,
+  getCot: ForRunningGetCot = cotEmpty,
 ) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(getTermStructure, getSkew));
+  app.route("/api", analyticsRoutes(getTermStructure, getSkew, getCot));
   return app;
 }
 
 function buildSkewApp(getSkew: ForRunningGetSkew) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, getSkew));
+  app.route("/api", analyticsRoutes(empty, getSkew, cotEmpty));
+  return app;
+}
+
+function buildCotApp(getCot: ForRunningGetCot) {
+  const app = new Hono();
+  app.route("/api", analyticsRoutes(empty, skewEmpty, getCot));
   return app;
 }
 
@@ -146,6 +155,67 @@ describe("GET /api/analytics/skew", () => {
   it("maps a storage error to a flat {error:'internal'} 500 (T-06-13)", async () => {
     const app = buildSkewApp(skewErrored);
     const res = await app.request("/api/analytics/skew");
+    expect(res.status).toBe(500);
+    const body: unknown = await res.json();
+    expect(body).toEqual({ error: "internal" });
+  });
+});
+
+// ─── COT (CFTC TFF weekly series) fakes ───────────────────────────────────────
+
+const cotEntry = {
+  asOf: "2026-04-08",
+  publishedAt: "2026-04-11T14:00:00.000Z",
+  contractCode: "13874A",
+  openInterest: 1_000_000,
+  dealerLong: 100,
+  dealerShort: 50,
+  netDealer: 50,
+  assetMgrLong: 200,
+  assetMgrShort: 100,
+  netAssetManager: 100,
+  levMoneyLong: 300,
+  levMoneyShort: 200,
+  netLeveraged: 100,
+  otherReptLong: 50,
+  otherReptShort: 30,
+  netOther: 20,
+  nonreptLong: 40,
+  nonreptShort: 20,
+  netNonreportable: 20,
+};
+
+const cotWithData: ForRunningGetCot = async () => ok([cotEntry]);
+
+const cotErrored: ForRunningGetCot = async () =>
+  err({ kind: "storage-error", message: "boom" });
+
+describe("GET /api/analytics/cot", () => {
+  it("returns a contract-valid array with ≥1 entry when data exists (MCP-02)", async () => {
+    const app = buildCotApp(cotWithData);
+    const res = await app.request("/api/analytics/cot");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    // Parsing must succeed — proves MCP-02 contract conformance.
+    const parsed = cotResponse.parse(body);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.asOf).toBe("2026-04-08");
+    expect(parsed[0]?.contractCode).toBe("13874A");
+    expect(parsed[0]?.netLeveraged).toBe(100);
+  });
+
+  it("returns a contract-valid EMPTY array (not an error) when there is no data", async () => {
+    const app = buildCotApp(cotEmpty);
+    const res = await app.request("/api/analytics/cot");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    const parsed = cotResponse.parse(body);
+    expect(parsed).toEqual([]);
+  });
+
+  it("maps a storage error to a flat {error:'internal'} 500 (T-13-06-INJ)", async () => {
+    const app = buildCotApp(cotErrored);
+    const res = await app.request("/api/analytics/cot");
     expect(res.status).toBe(500);
     const body: unknown = await res.json();
     expect(body).toEqual({ error: "internal" });

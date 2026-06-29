@@ -21,6 +21,7 @@ import {
   makePostgresTermStructureObservationsRepo,
   makePostgresRiskReversalObservationsRepo,
   makePostgresGexSnapshotRepo,
+  makePostgresCotObservationsRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -36,6 +37,7 @@ import {
   makeGetTermStructureUseCase,
   makeGetSkewUseCase,
   makeGetGexUseCase,
+  makeGetCotUseCase,
 } from "@morai/core";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
@@ -131,6 +133,13 @@ const getGex = makeGetGexUseCase({
   readGexSnapshot: gexSnapshotRepo.readGexSnapshot,
 });
 
+// COT-02 / MCP-02 (13-06): get-cot read use-case — shared by GET /api/analytics/cot + get_cot
+// MCP tool over the ONE cotResponse contract. Weekly CFTC TFF series (public data, no auth gate).
+const cotObservationsRepo = makePostgresCotObservationsRepo(db);
+const getCot = makeGetCotUseCase({
+  readCotObservations: cotObservationsRepo.listCotObservations,
+});
+
 // BRK-02: build trader adapters — reads from broker_tokens for the trader app.
 // getAccessToken closure reads broker_tokens at call time (on-demand refresh deferred to JOB-02).
 const USER_AGENT = "Morai-Server/1.0";
@@ -212,7 +221,8 @@ const apiRouter = new Hono()
   // BRK-02: positions, transactions, orders read endpoints
   .route("/", brokerageRoutes(getPositions, getTransactions, getOrders))
   // ANLY-03 (06-04/06-05): GET /api/analytics/term-structure + GET /api/analytics/skew
-  .route("/", analyticsRoutes(getTermStructure, getSkew))
+  // COT-02 (13-06): GET /api/analytics/cot — CFTC TFF weekly series (MCP-02)
+  .route("/", analyticsRoutes(getTermStructure, getSkew, getCot))
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex));
 
