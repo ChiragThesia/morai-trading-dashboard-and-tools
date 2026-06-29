@@ -563,7 +563,7 @@ reconnect the sidecar reconciles current state via a REST pull so the live view 
   5. The stream contains no Postgres writes in the hot path; `SELECT count(*) FROM leg_observations` does not grow during a streaming-only session (STRM-04 regression gate).
   6. Entering an arbitrary OCC symbol in the ad-hoc lookup streams its live BSM greeks the same way as an open leg — the symbol is added to the subscription set (respecting the 500-symbol cap) and dropped when cleared; the result row is visually distinguished from owned positions (STRM-01 expanded, D-05; UI-SPEC Surface 4).
 
-**Plans**: 6/6 complete (executed 2026-06-28; verification `human_needed` — code complete + all offline suites green [1321 TS + 60 py, typecheck + lint clean], but SC1/SC2 + ad-hoc live-tick timing are RTH-gated → live UAT pending market open; see 12-VERIFICATION.md)
+**Plans**: 7 plans (6 complete + 1 gap-closure). 6/6 executed 2026-06-28; UAT 2026-06-29 found a UI-wiring regression (the 5→3 redesign orphaned the live overlay onto the now-dead Positions.tsx; mounted Overview never streamed) → gap-closure plan 12-07 ports the overlay into Overview + removes the dead screen. SC1/SC2 + ad-hoc live-tick timing remain RTH-gated → live UAT pending market open; see 12-UAT.md.
 
 - [x] 12-01-PLAN.md — Stream contracts + core BSM recompute + ForReconcilingPositions port/twin + architecture docs (wave 1)
 - [x] 12-02-PLAN.md — Sidecar streamer: trader StreamClient session, LEVELONE+ACCT_ACTIVITY, 490-cap LRU + reconcile diff (wave 2)
@@ -571,6 +571,7 @@ reconnect the sidecar reconciles current state via a REST pull so the live view 
 - [x] 12-03-PLAN.md — Sidecar /sidecar/events SSE + /sidecar/positions reconcile + streamer task wiring (wave 3)
 - [x] 12-05-PLAN.md — Server /api/stream/ticket + /api/stream fan-out (reconcile-first) + sidecar SSE consumer + SIDECAR_URL config (wave 3)
 - [x] 12-06-PLAN.md — Web useLiveStream + LiveStatusBadge + Positions live overlay/stale + ad-hoc picker (wave 4)
+- [ ] 12-07-PLAN.md — GAP CLOSURE: port live overlay + LiveStatusBadge into mounted Overview, extract tested live-greek resolver, delete orphaned Positions.tsx (gap-closure, wave 1)
 
 **Operator go-live items** (post-execution, pending market open): (1) set `SIDECAR_URL` on the Railway **server** service (match the sidecar's deployed port); (2) deploy sidecar + server + web; (3) RTH UAT for SC1/SC2 + ad-hoc live ticks per 12-VERIFICATION.md.
 
