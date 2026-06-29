@@ -588,7 +588,7 @@ historical COT positioning series.
   1. After `fetch-cot` runs on a Friday, `cot_observations` gains one row per report week with `as_of` set to the preceding Tuesday and `published_at` set to the Friday fetch date; a second run for the same week is idempotent (0 duplicate rows) (COT-01).
   2. `GET /api/analytics/cot` returns a JSON array of COT series entries (as_of, net_noncommercial, net_commercial, open_interest, …) over the shared Zod contract; MCP `get_cot` returns the same data to Claude Code (COT-02, MCP-02).
 
-**Plans**: TBD
+**Plans**: 6/6 (planned 2026-06-29) — 01 contract+ports+migration · 02 cftc adapter · 03 repo · 04 use-cases · 05 fetch-cot job · 06 route+MCP
 
 ### Phase 14: FRED Expansion
 
