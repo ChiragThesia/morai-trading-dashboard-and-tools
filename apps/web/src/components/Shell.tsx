@@ -6,22 +6,15 @@ import { AuthExpiredBanner } from "./AuthExpiredBanner.tsx";
 // ─── Screen registry ─────────────────────────────────────────────────────────
 
 /**
- * ScreenName — the five nav tab identifiers in the locked order from the UI-SPEC
- * Copywriting Contract: Overview · Analyzer · Positions · Journal · Market.
+ * ScreenName — the three nav tab identifiers. Positions + Market fold into Overview
+ * (Overview composes both), so the home tab carries the book + market structure.
  */
-export type ScreenName =
-  | "Overview"
-  | "Analyzer"
-  | "Positions"
-  | "Journal"
-  | "Market";
+export type ScreenName = "Overview" | "Analyzer" | "Journal";
 
 const NAV_TABS: ReadonlyArray<ScreenName> = [
   "Overview",
   "Analyzer",
-  "Positions",
   "Journal",
-  "Market",
 ] as const;
 
 // ─── Compact number formatting ────────────────────────────────────────────────
@@ -258,9 +251,9 @@ interface ShellProps {
  * Shell — the top-level layout shell for the authenticated Morai dashboard.
  *
  * Renders:
- *   - Sticky frosted-glass header (~48px) with the MORAI brand logotype, five
- *     locked nav tabs (Overview · Analyzer · Positions · Journal · Market), and
- *     a right-aligned live market strip (SPX spot, net γ /1%, γ flip, book P&L).
+ *   - Sticky frosted-glass header (~48px) with the MORAI brand logotype, three
+ *     locked nav tabs (Overview · Analyzer · Journal), and a right-aligned live
+ *     market strip (SPX spot, net γ /1%, γ flip, book P&L).
  *   - The active screen in its content area (via `children` or internal switcher).
  *   - The fixed-bottom <AuthExpiredBanner> (always mounted when authenticated).
  *
@@ -322,7 +315,7 @@ export function Shell({
             MOR<strong style={{ color: "#a78bfa" }}>AI</strong>
           </div>
 
-          {/* Nav tabs — locked order: Overview · Analyzer · Positions · Journal · Market */}
+          {/* Nav tabs — locked order: Overview · Analyzer · Journal */}
           <nav
             role="tablist"
             aria-label="Dashboard navigation"

@@ -4,9 +4,7 @@ import { ShellWithRouter } from "./components/Shell.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 
 import { Overview } from "./screens/Overview.tsx";
-import { Market } from "./screens/Market.tsx";
 import { Analyzer } from "./screens/Analyzer.tsx";
-import { Positions } from "./screens/Positions.tsx";
 import { JournalContainer } from "./screens/JournalContainer.tsx";
 
 /**
@@ -15,7 +13,8 @@ import { JournalContainer } from "./screens/JournalContainer.tsx";
  * Three states (from useAuthSession):
  *   - `undefined` (loading): blank splash — show nothing while checking localStorage
  *   - `null` (no session): render <Login>
- *   - Session (authenticated): render <ShellWithRouter> with all five nav screens
+ *   - Session (authenticated): render <ShellWithRouter> with the three nav screens
+ *     (Overview composes Positions + Market; Analyzer; Journal)
  *
  * Security (T-09-03): client-side gate is defense-in-depth only.
  * Phase 8 server enforces 401 on every read endpoint — bypassing the SPA gate yields no data.
@@ -51,19 +50,9 @@ export function App(): React.ReactElement | null {
               <Analyzer />
             </ErrorBoundary>
           ),
-          Positions: (
-            <ErrorBoundary>
-              <Positions />
-            </ErrorBoundary>
-          ),
           Journal: (
             <ErrorBoundary>
               <JournalContainer />
-            </ErrorBoundary>
-          ),
-          Market: (
-            <ErrorBoundary>
-              <Market />
             </ErrorBoundary>
           ),
         }}
