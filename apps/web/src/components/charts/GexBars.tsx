@@ -42,6 +42,8 @@ interface GexBarsProps {
    * chart manages its own metric via the tab picker (default).
    */
   mode?: GexMode;
+  /** Strike window: ATM ± N strikes, or "all" (default). */
+  range?: StrikeRange;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -55,6 +57,34 @@ const ZERO_LINE = "#27313f";
 function fmtBn(v: number): string {
   const bn = v / 1_000_000_000;
   return `${bn.toFixed(1)}B`;
+}
+
+/** Strike-window range: ATM ± N strikes, or "all". */
+export type StrikeRange = number | "all";
+
+/**
+ * Window the strike list to the N strikes nearest to spot on each side (ATM ± N).
+ * "all" returns the full list. Keeps the rows nearest spot regardless of strike spacing.
+ */
+export function windowStrikes(
+  strikes: GexSnapshotEntry["strikes"],
+  spot: number,
+  range: StrikeRange,
+): GexSnapshotEntry["strikes"] {
+  if (range === "all" || strikes.length === 0) return strikes;
+  // Index of the strike closest to spot (ATM).
+  let atm = 0;
+  let best = Infinity;
+  strikes.forEach((s, i) => {
+    const d = Math.abs(s.k - spot);
+    if (d < best) {
+      best = d;
+      atm = i;
+    }
+  });
+  const lo = Math.max(0, atm - range);
+  const hi = Math.min(strikes.length, atm + range + 1);
+  return strikes.slice(lo, hi);
 }
 
 // ─── Build ECharts option per mode ───────────────────────────────────────────
@@ -223,16 +253,17 @@ export function GexBars({
   width = "100%",
   height = 260,
   mode: modeProp,
+  range = "all",
 }: GexBarsProps): React.ReactElement {
   const [internalMode, setMode] = useState<GexMode>("gex");
   // Locked when a mode prop is supplied (three-chart layout); otherwise tab-controlled.
   const mode = modeProp ?? internalMode;
   const showTabs = modeProp === undefined;
 
-  const option = useMemo(
-    () => buildOption(strikes, mode, spot, callWall, putWall),
-    [strikes, mode, spot, callWall, putWall],
-  );
+  const option = useMemo(() => {
+    const windowed = windowStrikes(strikes, spot, range);
+    return buildOption(windowed, mode, spot, callWall, putWall);
+  }, [strikes, mode, spot, callWall, putWall, range]);
 
   // base-ui Tabs.Root passes the new tab value (string); narrow to GexMode before set.
   const handleModeChange = (value: string): void => {

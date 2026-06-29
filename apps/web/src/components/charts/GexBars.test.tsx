@@ -40,7 +40,7 @@ vi.mock("echarts-for-react", () => ({
 
 // ─── Import AFTER mock registration ──────────────────────────────────────────
 
-import { GexBars } from "./GexBars.tsx";
+import { GexBars, windowStrikes } from "./GexBars.tsx";
 import type { GexWallEntry } from "@morai/contracts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -127,5 +127,30 @@ describe("GexBars", () => {
       gexTab.hasAttribute("data-selected") ||
       gexTab.hasAttribute("data-active");
     expect(gexActive).toBe(true);
+  });
+});
+
+describe("windowStrikes", () => {
+  // 7 strikes 100 apart; spot 7381 → ATM is 7400 (index 3).
+  const STRIKES: GexWallEntry[] = [7100, 7200, 7300, 7400, 7500, 7600, 7700].map((k) => ({
+    k,
+    gex: 0,
+    coi: 0,
+    poi: 0,
+    vol: 0,
+  }));
+
+  it("returns the full list for 'all'", () => {
+    expect(windowStrikes(STRIKES, 7381, "all")).toHaveLength(7);
+  });
+
+  it("keeps ATM ± N strikes (N=1 → 3 strikes around the nearest)", () => {
+    const out = windowStrikes(STRIKES, 7381, 1);
+    expect(out.map((s) => s.k)).toEqual([7300, 7400, 7500]);
+  });
+
+  it("clamps at the edges without going out of bounds", () => {
+    const out = windowStrikes(STRIKES, 7100, 2); // ATM=7100 (index 0)
+    expect(out.map((s) => s.k)).toEqual([7100, 7200, 7300]);
   });
 });

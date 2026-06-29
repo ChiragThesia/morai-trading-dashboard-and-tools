@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { useGex } from "../hooks/useGex.ts";
 import { classifyRegime } from "../lib/gex-regime.ts";
 import { GexBars } from "../components/charts/GexBars.tsx";
+import type { StrikeRange } from "../components/charts/GexBars.tsx";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs.tsx";
 import { MetricChip, Panel, PanelHeading } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
 
@@ -158,6 +161,12 @@ function KeyLevelsTable({
 export function Market(): React.ReactElement {
   const { data: gex } = useGex();
 
+  // Strike window shared by the three by-strike charts (ATM ± N strikes).
+  const [range, setRange] = useState<StrikeRange>(20);
+  const handleRange = (v: string): void => {
+    setRange(v === "all" ? "all" : Number(v));
+  };
+
   // ── Empty / error state ──────────────────────────────────────────────────────
   if (gex === undefined) {
     return (
@@ -234,6 +243,22 @@ export function Market(): React.ReactElement {
         </div>
       </div>
 
+      {/* ── Strike-window picker (shared by the three by-strike charts) ── */}
+      <div className="flex items-center gap-2">
+        <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+          Strike window
+        </span>
+        <Tabs value={String(range)} onValueChange={handleRange}>
+          <TabsList aria-label="Strike window around spot">
+            <TabsTrigger value="5">±5</TabsTrigger>
+            <TabsTrigger value="10">±10</TabsTrigger>
+            <TabsTrigger value="20">±20</TabsTrigger>
+            <TabsTrigger value="40">±40</TabsTrigger>
+            <TabsTrigger value="all">All</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       {/* ── 12-column grid ── */}
       <div
         className="grid gap-3"
@@ -243,6 +268,7 @@ export function Market(): React.ReactElement {
         <Card heading="GEX by strike" badge="$Bn · live" colSpan={4}>
           <GexBars
             mode="gex"
+            range={range}
             strikes={gex.strikes}
             spot={gex.spot}
             callWall={gex.callWall}
@@ -254,6 +280,7 @@ export function Market(): React.ReactElement {
         <Card heading="OI wall by strike" badge="call/put OI · live" colSpan={4}>
           <GexBars
             mode="oi"
+            range={range}
             strikes={gex.strikes}
             spot={gex.spot}
             callWall={gex.callWall}
@@ -265,6 +292,7 @@ export function Market(): React.ReactElement {
         <Card heading="Volume by strike" badge="contracts · live" colSpan={4}>
           <GexBars
             mode="volume"
+            range={range}
             strikes={gex.strikes}
             spot={gex.spot}
             callWall={gex.callWall}
