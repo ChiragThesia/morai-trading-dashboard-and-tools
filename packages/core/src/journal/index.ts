@@ -118,6 +118,9 @@ export type {
   ForPersistingCotObservation,
   ForReadingCotObservations,
 } from "./application/ports.ts";
+// Phase 13: COT use-cases (13-04)
+export { makeFetchCot } from "./application/fetchCot.ts";
+export type { ForRunningFetchCot } from "./application/fetchCot.ts";
 // Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
 export { hashFillIds } from "./domain/fill-pairing.ts";
 // Phase 5: rebuildJournal use-case factory + driver port

@@ -245,3 +245,6 @@ export type {
   ForPersistingCotObservation,
   ForReadingCotObservations,
 } from "./journal/index.ts";
+// COT use-case factories + driver ports (13-04)
+export { makeFetchCot } from "./journal/index.ts";
+export type { ForRunningFetchCot } from "./journal/index.ts";
