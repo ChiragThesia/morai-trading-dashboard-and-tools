@@ -200,6 +200,12 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
         #     loss/shutdown in the finally below.
         keepalive_task = asyncio.create_task(_trader_token_keepalive(app))
 
+        # 2c. Start the live Schwab stream — ONLY after the lock is held and clients are
+        #     initialised (Pattern 1 / T-12-03-04: login-after-lock). Cancelled alongside
+        #     keepalive_task in the finally block below.
+        from streamer import start_streamer  # noqa: PLC0415
+        streamer_task = asyncio.create_task(start_streamer(app))
+
         # 3. Heartbeat the lock session so the server-side idle reaper never kills THIS live
         #    holder. A failed ping means the connection (and the lock) is gone — tear down and
         #    fall through to re-acquire.
@@ -221,10 +227,14 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
                     type(exc).__name__,
                 )
         finally:
-            # Stop the keep-alive whenever we leave the heartbeat — on lock loss OR shutdown.
+            # Stop the keep-alive and streamer whenever we leave the heartbeat —
+            # on lock loss OR shutdown.
             keepalive_task.cancel()
             with suppress(asyncio.CancelledError):
                 await keepalive_task
+            streamer_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await streamer_task
 
         # Lost the lock: stop acting as the writer (GW-04 — a stale writer + a new holder = two
         # writers → Schwab invalid_grant), drop the dead connection, loop back to re-acquire.
@@ -309,6 +319,8 @@ app = FastAPI(
 # context manager).
 app.state.market_client = None
 app.state.trader_client = None
+app.state.stream_client = None
+app.state.subscription_manager = None
 app.state.degraded = True
 app.state.has_lock = False
 app.state.db_url = ""
@@ -318,9 +330,13 @@ app.state.market_app_id = "market"
 
 from health import router as health_router  # noqa: E402
 from chain_proxy import router as chain_router  # noqa: E402
+from stream_proxy import router as stream_router  # noqa: E402
+from positions_proxy import router as positions_router  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(chain_router)
+app.include_router(stream_router)
+app.include_router(positions_router)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

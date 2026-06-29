@@ -155,23 +155,36 @@ class TestStreamEvents:
 
 
 class TestRoutesMounted:
-    """Verify /sidecar/events and /sidecar/subscribe are mounted (not 404)."""
+    """Verify /sidecar/events, /sidecar/positions, and /sidecar/subscribe are mounted (not 404).
 
-    def test_events_route_mounted(self):
-        """GET /sidecar/events resolves (not 404); must return 200 + text/event-stream."""
+    Uses the no-lifespan test harness: TestClient(app) without the 'with' context so the
+    lifespan (which needs real env vars) is not triggered.  This matches the pattern used
+    by test_chain_proxy.py.
+    """
+
+    def test_events_route_registered_in_app(self):
+        """GET /sidecar/events must be resolvable via FastAPI's URL path table."""
+        from main import app
+
+        # url_path_for raises NoMatchFound if the route isn't registered.
+        url = app.url_path_for("stream_events")
+        assert str(url) == "/sidecar/events", (
+            f"Expected /sidecar/events, got {url!r}"
+        )
+
+    def test_positions_route_returns_503_not_404(self):
+        """GET /sidecar/positions returns 503 AUTH_EXPIRED (trader_client absent) — not 404."""
         from fastapi.testclient import TestClient
         from main import app
 
-        # Seed one event so the generator can yield before the test checks headers.
-        from streamer import event_queue
-        event_queue.put_nowait({"type": "test"})
-
-        with TestClient(app, raise_server_exceptions=False) as client:
-            with client.stream("GET", "/sidecar/events") as r:
-                assert r.status_code != 404, "GET /sidecar/events returned 404 — route not mounted"
-                assert r.status_code == 200
-                ct = r.headers.get("content-type", "")
-                assert "text/event-stream" in ct, f"Expected text/event-stream, got: {ct!r}"
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/sidecar/positions")
+        assert resp.status_code != 404, (
+            "GET /sidecar/positions returned 404 — route not mounted"
+        )
+        assert resp.status_code == 503, (
+            f"Expected 503 AUTH_EXPIRED (no trader_client), got {resp.status_code}"
+        )
 
     def test_subscribe_route_mounted(self):
         """POST /sidecar/subscribe resolves (not 404); body validation triggers 422."""
