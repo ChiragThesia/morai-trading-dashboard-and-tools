@@ -85,6 +85,13 @@
       "when": 1782423773522,
       "tag": "0011_broker_tokens_token_json",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782739500812,
+      "tag": "0012_cot_observations",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   date,
+  unique,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -378,6 +379,46 @@ export const gexSnapshots = pgTable("gex_snapshots", {
   // (the data-cycle anchor). Persisted so the dashboard can show true freshness.
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull(),
 }).enableRLS();
+
+// ─── 15. cot_observations — CFTC COT TFF positioning per week (Phase 13) ─────
+// One row per (contract_code, as_of) week. UNIQUE(contract_code, as_of) is the
+// COT-01 idempotency key (D-09): a second fetch of the same week inserts 0 rows.
+// NET values are NOT stored (D-04); derived at the API/use-case layer.
+// published_at = fetch timestamp (Friday, D-07); as_of = Tuesday report date (D-08).
+
+export const cotObservations = pgTable(
+  "cot_observations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** CFTC contract market code — '13874A' for E-mini S&P 500 TFF futures-only. */
+    contractCode: text("contract_code").notNull(),
+    /** Tuesday report date (from report_date_as_yyyy_mm_dd, D-08). */
+    asOf: date("as_of").notNull(),
+    /** Fetch timestamp (Friday ~17:00 ET, D-07); stamped by the use-case. */
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+    openInterest: integer("open_interest").notNull(),
+    // Dealer / Intermediary raw legs
+    dealerLong: integer("dealer_long").notNull(),
+    dealerShort: integer("dealer_short").notNull(),
+    // Asset Manager / Institutional raw legs
+    assetMgrLong: integer("asset_mgr_long").notNull(),
+    assetMgrShort: integer("asset_mgr_short").notNull(),
+    // Leveraged Funds raw legs (D-05 primary signal)
+    levMoneyLong: integer("lev_money_long").notNull(),
+    levMoneyShort: integer("lev_money_short").notNull(),
+    // Other Reportable raw legs
+    otherReptLong: integer("other_rept_long").notNull(),
+    otherReptShort: integer("other_rept_short").notNull(),
+    // Non-Reportable raw legs
+    nonreptLong: integer("nonrept_long").notNull(),
+    nonreptShort: integer("nonrept_short").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // COT-01 idempotency key (D-09): one row per contract+week; re-run inserts 0 rows
+    unique("cot_observations_contract_code_as_of_unique").on(table.contractCode, table.asOf),
+  ],
+).enableRLS();
 
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
