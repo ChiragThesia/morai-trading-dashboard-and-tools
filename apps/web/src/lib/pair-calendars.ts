@@ -10,7 +10,7 @@
  *   unreal = marketValue − averagePrice · (longQty − shortQty) · 100
  * The calendar's netUnreal sums both legs.
  */
-import { parseOccSymbol } from "@morai/shared";
+import { assertDefined, parseOccSymbol } from "@morai/shared";
 import type { BrokerPositionResponse } from "@morai/contracts";
 
 export type CalendarGroup = {
@@ -88,8 +88,10 @@ export function pairPositionsIntoCalendars(
     );
     let i = 0;
     for (; i + 1 < sorted.length; i += 2) {
-      const front = sorted[i]!;
-      const back = sorted[i + 1]!;
+      const front = sorted[i];
+      const back = sorted[i + 1];
+      assertDefined(front, "front leg in bounds");
+      assertDefined(back, "back leg in bounds");
       const frontParsed = parseOccSymbol(front.occSymbol);
       if (!frontParsed.ok) continue;
       const fu = legUnreal(front);
@@ -107,7 +109,11 @@ export function pairPositionsIntoCalendars(
       });
     }
     // Leftover odd leg (length was odd) → single.
-    if (i < sorted.length) singles.push(sorted[i]!);
+    if (i < sorted.length) {
+      const leftover = sorted[i];
+      assertDefined(leftover, "leftover leg in bounds");
+      singles.push(leftover);
+    }
   }
 
   return { calendars, singles };

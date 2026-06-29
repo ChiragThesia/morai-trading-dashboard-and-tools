@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { assertDefined } from "@morai/shared";
 import { pairPositionsIntoCalendars } from "./pair-calendars.ts";
 import type { BrokerPositionResponse } from "@morai/contracts";
 
@@ -30,7 +31,8 @@ describe("pairPositionsIntoCalendars", () => {
     const out = pairPositionsIntoCalendars([BACK, FRONT], NOW); // order-independent
     expect(out.calendars).toHaveLength(1);
     expect(out.singles).toHaveLength(0);
-    const cal = out.calendars[0]!;
+    const cal = out.calendars[0];
+    assertDefined(cal, "calendar present");
     expect(cal.strike).toBe(7425);
     expect(cal.optionType).toBe("P");
     expect(cal.front.occSymbol).toBe(FRONT.occSymbol); // Aug-07 is the front
@@ -40,7 +42,8 @@ describe("pairPositionsIntoCalendars", () => {
 
   it("nets unrealized P&L across both legs", () => {
     const out = pairPositionsIntoCalendars([FRONT, BACK], NOW);
-    const cal = out.calendars[0]!;
+    const cal = out.calendars[0];
+    assertDefined(cal, "calendar present");
     // unreal per leg = marketValue − averagePrice·(longQty−shortQty)·100
     const frontUnreal = -17875 - 127.0478 * (0 - 1) * 100; // = -17875 + 12704.78
     const backUnreal = 20975 - 159.4222 * (1 - 0) * 100; // = 20975 - 15942.22
@@ -55,6 +58,8 @@ describe("pairPositionsIntoCalendars", () => {
     const out = pairPositionsIntoCalendars([FRONT, BACK, nov7200Front, nov7200Back, orphan], NOW);
     expect(out.calendars).toHaveLength(2); // 7425P Aug + 7200P Nov
     expect(out.singles).toHaveLength(1);
-    expect(out.singles[0]!.occSymbol).toBe(orphan.occSymbol);
+    const single = out.singles[0];
+    assertDefined(single, "single present");
+    expect(single.occSymbol).toBe(orphan.occSymbol);
   });
 });
