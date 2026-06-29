@@ -165,7 +165,7 @@ describe("makeSidecarPositionReconciler", () => {
   it("calls GET /sidecar/positions (not any other path)", async () => {
     let capturedUrl = "";
     const captureFetch: typeof globalThis.fetch = async (input, _init) => {
-      capturedUrl = typeof input === "string" ? input : (input as Request).url;
+      capturedUrl = typeof input === "string" ? input : input instanceof Request ? input.url : "";
       return new Response(JSON.stringify(VALID_POSITIONS_BODY), {
         status: 200,
         headers: { "Content-Type": "application/json" },

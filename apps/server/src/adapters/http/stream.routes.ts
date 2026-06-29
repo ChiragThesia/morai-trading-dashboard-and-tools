@@ -80,28 +80,18 @@ export type StreamRouteDeps = {
 // ─── Route factory ────────────────────────────────────────────────────────────
 
 /**
- * streamRoutes — Hono factory returning the three streaming routes.
+ * streamRoutes — Hono factory returning ALL THREE streaming routes.
  *
- * Route placement (Pitfall 7 — CRITICAL):
- *   - POST /api/stream/ticket   → mount INSIDE authReadGroup in main.ts
- *   - POST /api/stream/subscribe → mount INSIDE authReadGroup in main.ts
- *   - GET /api/stream           → mount OUTSIDE authReadGroup in main.ts
+ * Route placement (Pitfall 7 — CRITICAL — enforced in main.ts):
+ *   - POST /api/stream/ticket   → mount INSIDE authReadGroup
+ *   - POST /api/stream/subscribe → mount INSIDE authReadGroup
+ *   - GET /api/stream           → mount OUTSIDE authReadGroup
  *
- * All three routes are returned from this single factory so the factory signature
- * is stable. main.ts splits them into the correct auth group by mounting the full
- * router at both levels (the router itself carries no JWT middleware — that lives
- * in main.ts's authReadGroup).
- *
- * Wait — that doesn't work since both would be at /api. Instead, main.ts should
- * mount: app.route("/api", ticketAndSubscribeRouter) inside authReadGroup, and
- * app.route("/api", sseRouter) outside. But since we return ONE router here, the
- * split must happen in main.ts by mounting the full factory ALSO on authReadGroup
- * with prefix filtering, OR by exporting separate factories.
- *
- * Simplest approach (matches PATTERNS.md): return ONE router; main.ts mounts the
- * SSE GET outside the group (app.route("/api", streamRoutes(…))) AND mounts the
- * ticket+subscribe POSTs inside the group (authReadGroup.route("/", streamRoutes(…))).
- * Hono matches the most specific path first, so both mounts coexist.
+ * In main.ts, use this factory INSIDE authReadGroup (for the two JWT-gated POSTs),
+ * and use makeStreamSseRouter() OUTSIDE authReadGroup (for the ticket-gated GET).
+ * This split is required because Hono's routing is first-match-wins: if streamRoutes
+ * were mounted outside authReadGroup, POST requests would also match there first and
+ * find no jwtPayload, returning 401 even for authenticated users.
  *
  * Tests: see stream.routes.test.ts — uses a fake auth middleware to simulate the
  * JWT group for the ticket and subscribe routes.
@@ -256,6 +246,76 @@ export function streamRoutes(deps: StreamRouteDeps) {
       },
       async (err, stream) => {
         // onError: log type only, unregister, do NOT re-throw (prevents 500 leaking).
+        const errName = err instanceof Error ? err.constructor.name : "UnknownError";
+        console.error(
+          `GET /api/stream SSE error: ${errName} (message redacted — user: ${userId})`,
+        );
+        const sseClient: SSEClient = stream;
+        unregisterClient(sseClient);
+      },
+    );
+  });
+
+  return router;
+}
+
+/**
+ * makeStreamSseRouter — GET /stream only, for mounting OUTSIDE authReadGroup.
+ *
+ * Pitfall 7 (CRITICAL): Hono routing is first-match-wins per method. If the full
+ * streamRoutes() factory were mounted on app (outside JWT group), POST requests to
+ * /stream/ticket and /stream/subscribe would also match there first — before the
+ * JWT middleware inside authReadGroup could set jwtPayload. Those handlers would
+ * always return 401 (missing sub), even for authenticated users.
+ *
+ * Solution: split at the mount level in main.ts:
+ *   app.route("/api", makeStreamSseRouter(deps));        // GET only, outside JWT
+ *   authReadGroup.route("/", streamRoutes(deps));         // all three, inside JWT
+ *
+ * GET /api/stream matches the outer router (no JWT needed — ticket auth only).
+ * POST /api/stream/ticket and POST /api/stream/subscribe do NOT match here (different
+ * method/path), so they fall through to the authReadGroup mount where JWT runs first.
+ */
+export function makeStreamSseRouter(deps: StreamRouteDeps) {
+  const router = new Hono<JwtEnv>();
+
+  // GET /stream — identical handler to the one registered in streamRoutes().
+  // Kept in sync manually; no shared closure to avoid coupling the two factories.
+  router.get("/stream", async (c) => {
+    const rawTicket = c.req.query("ticket") ?? "";
+    const userId = redeemTicket(rawTicket);
+    if (userId === null) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    return streamSSE(
+      c,
+      async (stream) => {
+        const sseClient: SSEClient = stream;
+        registerClient(sseClient);
+        stream.onAbort(() => {
+          unregisterClient(sseClient);
+        });
+
+        // STRM-05: reconcile-first.
+        const posResult = await deps.reconcilePositions();
+        const positions = posResult.ok ? Array.from(posResult.value) : [];
+        const asOf = new Date().toISOString();
+        await stream.writeSSE({
+          event: "reconcile",
+          data: JSON.stringify(streamReconcileEvent.parse({ positions, asOf })),
+        });
+
+        while (!stream.aborted) {
+          await stream.sleep(30_000);
+          if (!stream.aborted) {
+            await stream.writeSSE({ event: "ping", data: "" });
+          }
+        }
+
+        unregisterClient(sseClient);
+      },
+      async (err, stream) => {
         const errName = err instanceof Error ? err.constructor.name : "UnknownError";
         console.error(
           `GET /api/stream SSE error: ${errName} (message redacted — user: ${userId})`,

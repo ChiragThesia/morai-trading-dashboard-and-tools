@@ -163,7 +163,7 @@ function dispatchFrame(
   // JSON.parse — catch without type assertions (typescript.md: useUnknownInCatchVariables)
   let parsed: unknown;
   try {
-    parsed = JSON.parse(rawPayload) as unknown;
+    parsed = JSON.parse(rawPayload);
   } catch {
     // Malformed JSON — drop the frame silently (T-12-05-04).
     return;

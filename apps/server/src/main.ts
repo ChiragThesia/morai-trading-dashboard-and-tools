@@ -51,6 +51,11 @@ import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
 import { gexRoutes } from "./adapters/http/gex.routes.ts";
 import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
+import { streamRoutes, makeStreamSseRouter } from "./adapters/http/stream.routes.ts";
+import { startFlushInterval, bufferTick } from "./adapters/http/stream-fan-out.ts";
+import { connectToSidecarStream } from "./adapters/http/sidecar-sse.ts";
+import { recomputeLiveGreek } from "@morai/core";
+import { makeSidecarPositionReconciler } from "@morai/adapters";
 
 const config = bootConfig();
 
@@ -211,6 +216,22 @@ const apiRouter = new Hono()
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex));
 
+// Phase 12 (12-05): streaming — build shared deps before route mounts.
+const sidecarReconciler = makeSidecarPositionReconciler({
+  fetch: globalThis.fetch,
+  baseUrl: config.SIDECAR_URL,
+});
+const streamRouteDeps = {
+  reconcilePositions: sidecarReconciler,
+  sidecarUrl: config.SIDECAR_URL,
+};
+
+// GET /api/stream OUTSIDE authReadGroup — EventSource cannot send JWT headers (Pitfall 7, D-01).
+// makeStreamSseRouter() only registers GET /stream (no POST routes), so POST requests
+// are not matched here and fall through to the authReadGroup mount below.
+// MUST be mounted BEFORE app.route("/api", authReadGroup) — Hono first-match-wins.
+app.route("/api", makeStreamSseRouter(streamRouteDeps));
+
 // Wrap the data read router in a Supabase-Auth JWT group (asymmetric JWKS verify — ES256).
 // D20 / D-02 scope: /api/calendars + /api/journal + /api/positions + /api/analytics/* etc.
 // /api/status is intentionally EXCLUDED from this group (public healthcheck — see above).
@@ -219,6 +240,10 @@ const supabaseJwksUrl = new URL(`${config.SUPABASE_URL}/auth/v1/.well-known/jwks
 const authReadGroup = new Hono();
 authReadGroup.use("/*", makeSupabaseJwtAuth({ getKey: createRemoteJWKSet(supabaseJwksUrl) }));
 authReadGroup.route("/", apiRouter);
+// POST /api/stream/ticket + POST /api/stream/subscribe INSIDE JWT group (Pitfall 7).
+// GET /api/stream from streamRoutes() is also in the router but never matched here —
+// it is already served by the outer makeStreamSseRouter mount above.
+authReadGroup.route("/", streamRoutes(streamRouteDeps));
 app.route("/api", authReadGroup);
 
 // JOB-01 / MCP-02: on-demand job trigger — bearer-guarded (T-05-21, Security Domain).
@@ -246,6 +271,24 @@ const mcpRouter = makeMcpRouter(
   enqueueJob,
 );
 app.route("", mcpRouter);
+
+// Phase 12 (12-05): start streaming infrastructure at boot.
+
+// D-07: 1-second coalescing flush interval — runs indefinitely; no cleanup needed
+// (Railway SIGTERM kills the process). Returns NodeJS.Timer, not a Promise.
+startFlushInterval();
+
+// SSE consumer: reads the sidecar's /sidecar/events stream, recomputes BSM greeks (D-02),
+// and buffers ticks for the 1-second fan-out. void-ed per floating-promise rule (typescript.md);
+// reconnect/backoff is handled inside connectToSidecarStream.
+void connectToSidecarStream(config.SIDECAR_URL, {
+  fetch: globalThis.fetch,
+  recompute: recomputeLiveGreek,
+  bufferTick,
+  riskFreeRate: 0.045, // ponytail: SOFR proxy; add config field if FRED integration added
+  dividendYield: 0.013, // ponytail: SPX 12m trailing yield proxy
+  now: () => new Date(),
+});
 
 // Start server
 const port = config.PORT;

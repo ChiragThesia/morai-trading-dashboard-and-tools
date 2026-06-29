@@ -247,10 +247,11 @@ describe("GET /api/stream — reconcile-first (STRM-05)", () => {
 
     const res = await app.request(`/api/stream?ticket=${ticket}`);
     expect(res.status).toBe(200);
-    expect(res.body).toBeDefined();
+    const body1 = res.body;
+    if (!body1) throw new Error("expected body");
 
     // Read until we get the reconcile event
-    const rawSse = await readUntilEvent(res.body!, "reconcile");
+    const rawSse = await readUntilEvent(body1, "reconcile");
     expect(rawSse).toContain("event: reconcile");
   });
 
@@ -260,16 +261,17 @@ describe("GET /api/stream — reconcile-first (STRM-05)", () => {
     const { ticket } = streamTicketResponse.parse(await mintRes.json());
 
     const res = await app.request(`/api/stream?ticket=${ticket}`);
-    expect(res.body).toBeDefined();
+    const body2 = res.body;
+    if (!body2) throw new Error("expected body");
 
-    const rawSse = await readUntilEvent(res.body!, "reconcile");
+    const rawSse = await readUntilEvent(body2, "reconcile");
 
     // Extract the "data: ..." line from the first frame
     const dataLine = rawSse
       .split("\n")
       .find((l) => l.startsWith("data: "));
-    expect(dataLine).toBeDefined();
-    const raw: unknown = JSON.parse(dataLine!.slice("data: ".length));
+    if (!dataLine) throw new Error("expected data: line in SSE frame");
+    const raw: unknown = JSON.parse(dataLine.slice("data: ".length));
     const parsed = streamReconcileEvent.parse(raw);
     expect(parsed.positions).toHaveLength(1);
     expect(parsed.positions[0]?.occSymbol).toBe(VALID_OCC);
@@ -282,12 +284,13 @@ describe("GET /api/stream — reconcile-first (STRM-05)", () => {
     const { ticket } = streamTicketResponse.parse(await mintRes.json());
 
     const res = await app.request(`/api/stream?ticket=${ticket}`);
-    expect(res.body).toBeDefined();
+    const body3 = res.body;
+    if (!body3) throw new Error("expected body");
 
-    const rawSse = await readUntilEvent(res.body!, "reconcile");
+    const rawSse = await readUntilEvent(body3, "reconcile");
     const dataLine = rawSse.split("\n").find((l) => l.startsWith("data: "));
-    expect(dataLine).toBeDefined();
-    const raw: unknown = JSON.parse(dataLine!.slice("data: ".length));
+    if (!dataLine) throw new Error("expected data: line in SSE frame");
+    const raw: unknown = JSON.parse(dataLine.slice("data: ".length));
     const parsed = streamReconcileEvent.parse(raw);
     // Graceful degradation: stream still opens, reconcile sent with empty positions
     expect(parsed.positions).toHaveLength(0);
