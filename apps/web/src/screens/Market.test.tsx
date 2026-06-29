@@ -133,26 +133,6 @@ describe("Market", () => {
     expect(screen.getByText("GEX by strike")).toBeTruthy();
   });
 
-  it("renders the Charm/Vanna ComingSoon stub with '○ next' badge", () => {
-    mockGexWith(SAMPLE_SNAPSHOT);
-    render(<Market />);
-
-    // Coming-soon stub with "○ next" badge (UI-SPEC Coming-Soon Stubs Contract)
-    expect(screen.getByText("○ next")).toBeTruthy();
-    // Also assert the Charm/Vanna heading
-    expect(screen.getByText("Charm / Vanna")).toBeTruthy();
-  });
-
-  it("renders the Intraday flow ComingSoon stub with '○ needs denser snapshots' badge", () => {
-    mockGexWith(SAMPLE_SNAPSHOT);
-    render(<Market />);
-
-    // Intraday flow stub badge
-    expect(screen.getByText("○ needs denser snapshots")).toBeTruthy();
-    // Also assert the Intraday flow heading
-    expect(screen.getByText("Intraday flow")).toBeTruthy();
-  });
-
   it("renders the locked GEX unavailable copy when useGex returns no data", () => {
     mockGexWith(undefined);
     render(<Market />);

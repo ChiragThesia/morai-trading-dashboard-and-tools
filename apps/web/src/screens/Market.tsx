@@ -2,8 +2,6 @@ import { useGex } from "../hooks/useGex.ts";
 import { classifyRegime } from "../lib/gex-regime.ts";
 import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
-import { GexByExpiry } from "../components/charts/GexByExpiry.tsx";
-import { ComingSoon } from "../components/stubs/ComingSoon.tsx";
 import { MetricChip, Panel, PanelHeading } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
 
@@ -15,11 +13,8 @@ import { cn } from "@/lib/utils";
  *     γ flip (amber) / AMPLIFY|DAMPEN via classifyRegime
  *   - 12-col grid:
  *       col-span-7: Net dealer gamma profile (GammaProfile visx, 720×230)
- *       col-span-5: GEX by strike (GexBars ECharts)
- *       col-span-4: Key levels table
- *       col-span-4: GEX by expiry (GexByExpiry ECharts)
- *       col-span-4: Charm/Vanna coming-soon stub ("○ next")
- *       col-span-4: Intraday flow coming-soon stub ("○ needs denser snapshots")
+ *       col-span-5: GEX by strike (GexBars ECharts — GEX / OI wall / Volume tabs)
+ *       col-span-12: Key levels (pill row — call wall / γ flip / spot / put wall + distance)
  *
  * Data: useGex() only — no browser-side GEX recompute (D-01).
  * Empty state: "GEX data unavailable — run fetch-chain to populate." (locked copy).
@@ -117,7 +112,7 @@ function KeyLevelsTable({
   ];
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-wrap gap-2">
       {levels.map((lvl) => {
         const dist = lvl.value !== null ? Math.round(lvl.value - spot) : null;
         const distStr =
@@ -127,9 +122,9 @@ function KeyLevelsTable({
         return (
           <div
             key={lvl.label}
-            className="flex items-center justify-between border-b border-line py-0.5 font-mono text-[10px] tabular-nums"
+            className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] tabular-nums ring-1 ring-line"
           >
-            <span className={cn(lvl.colorClass, "font-semibold")}>
+            <span className={cn(lvl.colorClass, "font-display text-[10px] font-semibold tracking-[0.09em] uppercase")}>
               {lvl.label}
             </span>
             <span className="text-txt">{valStr}</span>
@@ -244,40 +239,13 @@ export function Market(): React.ReactElement {
           />
         </Card>
 
-        {/* Key levels (span 4) */}
-        <Card heading="Key levels" badge="distance to spot" colSpan={4}>
+        {/* Key levels — full-width pill row */}
+        <Card heading="Key levels" badge="distance to spot" colSpan={12}>
           <KeyLevelsTable
             spot={gex.spot}
             flip={gex.flip}
             callWall={gex.callWall}
             putWall={gex.putWall}
-          />
-        </Card>
-
-        {/* GEX by expiry (span 4) */}
-        <Card heading="GEX by expiration" badge="$Bn · live" colSpan={4}>
-          <GexByExpiry byExpiry={gex.byExpiry} height={200} />
-        </Card>
-
-        {/* Charm/Vanna coming-soon stub (span 4) — never omitted */}
-        <Card heading="Charm / Vanna" colSpan={4} minHeight={140}>
-          {/* Badge rendered inside ComingSoon — "○ next" per UI-SPEC */}
-          <ComingSoon
-            badge="○ next"
-            title="Charm & Vanna by strike"
-            body="computable from chain (Δ-drift from time & IV) — same per-strike bar pattern as GEX"
-            minHeight={100}
-          />
-        </Card>
-
-        {/* Intraday flow coming-soon stub (span 4) — never omitted */}
-        <Card heading="Intraday flow" colSpan={4} minHeight={140}>
-          {/* Badge rendered inside ComingSoon — "○ needs denser snapshots" per UI-SPEC */}
-          <ComingSoon
-            badge="○ needs denser snapshots"
-            title="HIRO-style net delta-flow"
-            body="Δ(delta-notional) between snapshots — 30-min cadence → coarse; finer feed later"
-            minHeight={100}
           />
         </Card>
       </div>
