@@ -58,6 +58,9 @@ class FakeEventSource {
   onerror: ((e: Event) => void) | null = null;
   onopen: ((e: Event) => void) | null = null;
   closed = false;
+  // Named-event listeners (addEventListener) — the server sends NAMED SSE events
+  // ("ticks", "reconcile", "ping"); the browser routes those here, NOT to onmessage.
+  readonly listeners = new Map<string, Set<(e: MessageEvent) => void>>();
 
   constructor(url: string) {
     this.url = url;
@@ -68,12 +71,30 @@ class FakeEventSource {
     this.closed = true;
   }
 
-  /** Test helper: dispatch a named message event. */
-  dispatchMessage(data: unknown): void {
-    const event = new MessageEvent("message", {
-      data: JSON.stringify(data),
-    });
-    this.onmessage?.(event);
+  addEventListener(type: string, handler: (e: MessageEvent) => void): void {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(handler);
+    this.listeners.set(type, set);
+  }
+
+  removeEventListener(type: string, handler: (e: MessageEvent) => void): void {
+    this.listeners.get(type)?.delete(handler);
+  }
+
+  /** Test helper: dispatch a NAMED SSE event (matches the server's event: "<name>"). */
+  dispatchNamedEvent(name: string, data: unknown): void {
+    const event = new MessageEvent(name, { data: JSON.stringify(data) });
+    this.listeners.get(name)?.forEach((h) => h(event));
+  }
+
+  /** Server sends event:"ticks" with a JSON ARRAY of live greek ticks. */
+  dispatchTicks(ticks: unknown[]): void {
+    this.dispatchNamedEvent("ticks", ticks);
+  }
+
+  /** Server sends event:"reconcile" with the positions snapshot. */
+  dispatchReconcile(reconcile: unknown): void {
+    this.dispatchNamedEvent("reconcile", reconcile);
   }
 
   /** Test helper: fire the onerror handler. */
@@ -199,7 +220,7 @@ describe("useLiveStream", () => {
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
 
     act(() => {
-      es0().dispatchMessage(SAMPLE_TICK);
+      es0().dispatchTicks([SAMPLE_TICK]);
     });
 
     await waitFor(() => expect(result.current.status).toBe("live"));
@@ -220,7 +241,7 @@ describe("useLiveStream", () => {
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
 
     // Advance to 'live' first
-    act(() => { es0().dispatchMessage(SAMPLE_TICK); });
+    act(() => { es0().dispatchTicks([SAMPLE_TICK]); });
     await waitFor(() => expect(result.current.status).toBe("live"));
 
     act(() => { es0().dispatchError(); });
@@ -235,7 +256,7 @@ describe("useLiveStream", () => {
 
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
 
-    act(() => { es0().dispatchMessage(SAMPLE_TICK); });
+    act(() => { es0().dispatchTicks([SAMPLE_TICK]); });
     await waitFor(() => expect(result.current.status).toBe("live"));
 
     act(() => { es0().dispatchError(); });
@@ -258,7 +279,7 @@ describe("useLiveStream", () => {
     await waitFor(() => expect(result.current.status).toBe("stale"));
 
     // Reconcile event restores to 'live'
-    act(() => { es0().dispatchMessage(SAMPLE_RECONCILE); });
+    act(() => { es0().dispatchReconcile(SAMPLE_RECONCILE); });
 
     await waitFor(() => expect(result.current.status).toBe("live"));
   });
@@ -270,18 +291,32 @@ describe("useLiveStream", () => {
 
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
 
-    act(() => { es0().dispatchMessage(SAMPLE_TICK); });
+    act(() => { es0().dispatchTicks([SAMPLE_TICK]); });
     await waitFor(() => expect(result.current.status).toBe("live"));
 
     const beforeSize = result.current.greeks.size;
 
     act(() => {
-      // Frame that does not match streamLiveGreekEvent or streamReconcileEvent
-      es0().dispatchMessage({ garbage: "data", shouldBeIgnored: true });
+      // "ticks" frame whose array entries do not match streamLiveGreekEvent
+      es0().dispatchTicks([{ garbage: "data", shouldBeIgnored: true }]);
     });
 
     expect(result.current.status).toBe("live");
     expect(result.current.greeks.size).toBe(beforeSize);
+  });
+
+  // ── 7b. Multiple ticks in one "ticks" frame (server sends a JSON array) ───────
+  it("applies every tick in a multi-tick 'ticks' array frame", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    const second = { ...SAMPLE_TICK, occSymbol: "SPX   260620P04800000", mark: 12.3 };
+    act(() => { es0().dispatchTicks([SAMPLE_TICK, second]); });
+
+    await waitFor(() => expect(result.current.status).toBe("live"));
+    expect(result.current.greeks.size).toBe(2);
+    expect(result.current.greeks.get(SAMPLE_TICK.occSymbol)).toMatchObject({ mark: 47.2 });
+    expect(result.current.greeks.get(second.occSymbol)).toMatchObject({ mark: 12.3 });
   });
 
   // ── 8. Unmount tears down EventSource ────────────────────────────────────

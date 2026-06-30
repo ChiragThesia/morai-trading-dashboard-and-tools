@@ -141,38 +141,48 @@ export function useLiveStream(): UseLiveStreamResult {
         setStatus("stale");
       };
 
-      // Process every unnamed SSE frame. Try both schemas; ignore if neither parses.
-      es.onmessage = (event: MessageEvent): void => {
+      // The server sends NAMED SSE events (stream.routes.ts + stream-fan-out.ts):
+      //   event:"ticks"     → JSON ARRAY of coalesced live greek ticks (~1/sec)
+      //   event:"reconcile" → positions snapshot (cold-start + after a reconnect)
+      //   event:"ping"      → keep-alive (ignored)
+      // EventSource delivers NAMED events to addEventListener — never to onmessage —
+      // so an onmessage-only consumer receives nothing and the badge never leaves
+      // 'poll' even on a healthy stream.
+      es.addEventListener("ticks", (event: Event): void => {
+        if (!(event instanceof MessageEvent)) return;
         let raw: unknown;
         try {
           raw = JSON.parse(event.data);
         } catch {
-          return; // malformed JSON — ignore
+          return; // malformed JSON — ignore (T-12-06-01)
         }
-
-        // Try as a live greeks tick first.
-        const tickResult = streamLiveGreekEvent.safeParse(raw);
-        if (tickResult.success) {
-          const tick = tickResult.data;
-          setGreeks((prev) => {
-            const next = new Map(prev);
+        // "ticks" carries a JSON array of ticks (coalescer batches per flush).
+        const parsed = streamLiveGreekEvent.array().safeParse(raw);
+        if (!parsed.success || parsed.data.length === 0) return;
+        const ticks = parsed.data;
+        setGreeks((prev) => {
+          const next = new Map(prev);
+          for (const tick of ticks) {
             next.set(tick.occSymbol, tick);
-            return next;
-          });
-          setStatus("live");
-          setLastTickAt(new Date());
+          }
+          return next;
+        });
+        setStatus("live");
+        setLastTickAt(new Date());
+      });
+
+      es.addEventListener("reconcile", (event: Event): void => {
+        if (!(event instanceof MessageEvent)) return;
+        let raw: unknown;
+        try {
+          raw = JSON.parse(event.data);
+        } catch {
           return;
         }
-
-        // Try as a reconcile event (sent on first connect and after reconnects).
-        const reconcileResult = streamReconcileEvent.safeParse(raw);
-        if (reconcileResult.success) {
-          setStatus("live"); // restore from stale/reconnecting
-          return;
-        }
-
-        // Frame matched neither schema — silently ignore (T-12-06-01).
-      };
+        // Only restore from stale/reconnecting on a well-formed snapshot (T-12-06-01).
+        if (!streamReconcileEvent.safeParse(raw).success) return;
+        setStatus("live");
+      });
     };
 
     void connect();
