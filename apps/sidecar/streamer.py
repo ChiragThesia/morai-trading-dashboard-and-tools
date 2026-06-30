@@ -417,7 +417,9 @@ async def start_streamer(app: object) -> None:
             subscription_manager.set_position_legs(set(initial_symbols))
             symbols = sorted(subscription_manager.all_subscribed)
             if symbols:
-                await stream_client.level_one_option_subs(symbols, REQUIRED_OPTION_FIELDS)
+                # `fields` is keyword-only on schwab-py's StreamClient (subs(symbols, *, fields));
+                # passing it positionally raised TypeError and killed every session.
+                await stream_client.level_one_option_subs(symbols, fields=REQUIRED_OPTION_FIELDS)
 
             # Subscribe to ACCT_ACTIVITY — account-scoped, no symbol arg (Pitfall 3)
             await stream_client.account_activity_sub()

@@ -496,6 +496,76 @@ class TestGetPositionOccSymbols:
         assert syms == []
 
 
+class TestStartStreamerSubscribesLegs:
+    """With open legs present, start_streamer subscribes them and passes `fields` as a
+    KEYWORD arg — schwab-py's level_one_option_subs(symbols, *, fields) is keyword-only;
+    positional raised TypeError and killed every session."""
+
+    def test_subscribes_legs_with_fields_keyword(self):
+        from streamer import start_streamer
+        from schwab.client.base import BaseClient
+
+        accounts = [
+            {
+                "securitiesAccount": {
+                    "positions": [
+                        {
+                            "instrument": {
+                                "assetType": "OPTION",
+                                "symbol": "SPXW  260807P07425000",
+                                "underlyingSymbol": "SPX",
+                            },
+                            "longQuantity": 1,
+                            "shortQuantity": 0,
+                            "marketValue": 1800,
+                        }
+                    ]
+                }
+            }
+        ]
+        resp = MagicMock()
+        resp.json = MagicMock(return_value=accounts)
+        trader = AsyncMock()
+        trader.Account = BaseClient.Account
+
+        async def _get_accounts(*, fields=None):
+            return resp
+
+        trader.get_accounts = _get_accounts
+        app = _make_fake_app(trader_client=trader)
+
+        sc = AsyncMock()
+
+        async def _handle_message():
+            raise asyncio.CancelledError()
+
+        sc.handle_message = _handle_message
+        sc.LevelOneOptionFields = MagicMock()
+        sc.add_level_one_option_handler = MagicMock()
+        sc.add_account_activity_handler = MagicMock()
+        sc.level_one_option_subs = AsyncMock()
+
+        with patch("streamer.StreamClient", return_value=sc), patch(
+            "streamer.asyncio.sleep", new=AsyncMock()
+        ):
+
+            async def _run():
+                try:
+                    await start_streamer(app)
+                except asyncio.CancelledError:
+                    pass
+
+            asyncio.run(_run())
+
+        call = sc.level_one_option_subs.call_args
+        assert call is not None, "level_one_option_subs must be called with the open legs"
+        assert call.args[0] == ["SPXW  260807P07425000"]
+        assert "fields" in call.kwargs, (
+            f"fields must be passed as a keyword (schwab signature is subs(symbols, *, fields)); "
+            f"got args={call.args!r} kwargs={call.kwargs!r}"
+        )
+
+
 class TestRequiredOptionFields:
     """LEVELONE subscription must include the REQUIRED_OPTION_FIELDS set."""
 
