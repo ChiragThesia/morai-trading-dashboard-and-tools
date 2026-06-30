@@ -330,6 +330,100 @@ class TestStartStreamerLoginBeforeSubs:
         assert login_idx < subs_idx, f"login must precede subs; order={call_order}"
 
 
+class TestStartStreamerReconnect:
+    """On ConnectionClosed the streamer re-establishes the session (re-login +
+    re-subscribe) instead of spinning the pump on a dead socket (the STALE bug)."""
+
+    def test_reconnects_after_connection_closed(self):
+        from streamer import start_streamer
+        from websockets.exceptions import ConnectionClosedOK
+
+        trader_mock = AsyncMock()
+        app = _make_fake_app(trader_client=trader_mock)
+
+        login_calls = []
+        state = {"n": 0}
+
+        async def _handle_message():
+            state["n"] += 1
+            if state["n"] == 1:
+                # Schwab WSS closed cleanly — the production symptom (token rotation)
+                raise ConnectionClosedOK(None, None)
+            # second session (post-reconnect) → terminate the loop cleanly
+            raise asyncio.CancelledError()
+
+        sc = AsyncMock()
+        sc.handle_message = _handle_message
+        sc.LevelOneOptionFields = MagicMock()
+        sc.add_level_one_option_handler = MagicMock()
+        sc.add_account_activity_handler = MagicMock()
+
+        async def _login():
+            login_calls.append(1)
+
+        sc.login = _login
+
+        with patch("streamer.StreamClient", return_value=sc), patch(
+            "streamer.asyncio.sleep", new=AsyncMock()
+        ):
+
+            async def _run():
+                try:
+                    await start_streamer(app)
+                except asyncio.CancelledError:
+                    pass
+
+            asyncio.run(_run())
+
+        assert len(login_calls) >= 2, (
+            f"streamer must re-login (reconnect) after ConnectionClosed; "
+            f"login called {len(login_calls)}x"
+        )
+
+    def test_transient_error_continues_without_reconnect(self):
+        """A non-ConnectionClosed error is transient: log + continue the pump, NOT reconnect."""
+        from streamer import start_streamer
+
+        trader_mock = AsyncMock()
+        app = _make_fake_app(trader_client=trader_mock)
+
+        login_calls = []
+        state = {"n": 0}
+
+        async def _handle_message():
+            state["n"] += 1
+            if state["n"] == 1:
+                raise ValueError("transient blip")  # not a ConnectionClosed
+            raise asyncio.CancelledError()
+
+        sc = AsyncMock()
+        sc.handle_message = _handle_message
+        sc.LevelOneOptionFields = MagicMock()
+        sc.add_level_one_option_handler = MagicMock()
+        sc.add_account_activity_handler = MagicMock()
+
+        async def _login():
+            login_calls.append(1)
+
+        sc.login = _login
+
+        with patch("streamer.StreamClient", return_value=sc), patch(
+            "streamer.asyncio.sleep", new=AsyncMock()
+        ):
+
+            async def _run():
+                try:
+                    await start_streamer(app)
+                except asyncio.CancelledError:
+                    pass
+
+            asyncio.run(_run())
+
+        assert len(login_calls) == 1, (
+            f"transient errors must NOT trigger a reconnect; login called {len(login_calls)}x"
+        )
+
+
 class TestRequiredOptionFields:
     """LEVELONE subscription must include the REQUIRED_OPTION_FIELDS set."""
 

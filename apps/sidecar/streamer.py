@@ -26,6 +26,7 @@ import asyncio
 import copy
 import datetime
 import logging
+import random
 from collections import OrderedDict
 from typing import Optional
 
@@ -57,6 +58,16 @@ def utc_now_z() -> str:
 # Import from the installed schwab-py so field values are authoritative.
 # Imported at module level so test_required_option_fields can verify enum values.
 from schwab.streaming import StreamClient  # noqa: E402 — after local defs
+
+# ConnectionClosed (and its ConnectionClosedOK/Error subclasses) is what
+# StreamClient.handle_message() raises when the Schwab WSS drops (e.g. on the
+# hourly token rotation). It is terminal for the socket → trigger a reconnect,
+# NOT a continue (the original keep-alive loop spun forever on a dead socket).
+from websockets.exceptions import ConnectionClosed  # noqa: E402
+
+# Reconnect backoff bounds for the streamer session loop.
+_RECONNECT_INITIAL_BACKOFF_S = 1.0
+_RECONNECT_MAX_BACKOFF_S = 30.0
 
 REQUIRED_OPTION_FIELDS = [
     StreamClient.LevelOneOptionFields.SYMBOL,
@@ -351,8 +362,12 @@ async def start_streamer(app: object) -> None:
 
     Loop behavior (Pitfall 8):
       - CancelledError propagates cleanly (shutdown signal).
-      - Any other exception in handle_message() is logged by type name only
-        (never token values) and the loop continues — keep-alive style resilience.
+      - ConnectionClosed (Schwab WSS dropped — e.g. hourly token rotation) breaks
+        the message pump and triggers a full reconnect (re-login + re-subscribe the
+        tracked symbol set) with exponential backoff + jitter. Continuing on a closed
+        socket only spins forever and delivers zero ticks.
+      - Any OTHER exception in handle_message() is transient: logged by type name
+        only (never token values) and the pump continues — keep-alive resilience.
     """
     trader_client = getattr(app.state, "trader_client", None)
     if trader_client is None:
@@ -361,50 +376,79 @@ async def start_streamer(app: object) -> None:
         )
         return
 
-    # Trader client only — never market_client (Pitfall 9 / T-12-02-03)
-    stream_client = StreamClient(trader_client)
-
     # SubscriptionManager: tracks subscribed OCC symbols with LRU for ad-hoc eviction.
-    # Created here (post-lock) and exposed on app.state for POST /sidecar/subscribe.
+    # Created ONCE outside the reconnect loop so ad-hoc subscriptions survive a
+    # reconnect. Exposed on app.state for POST /sidecar/subscribe (12-03 / SC6).
     subscription_manager = SubscriptionManager()
-
-    # login() calls /trader/v1/userPreference to get the WSS URL + credentials.
-    # Must run AFTER the lock is held (Pattern 1 / T-12-02-03).
-    await stream_client.login()
-
-    # Expose the live handles on app.state so POST /sidecar/subscribe can drive
-    # ad-hoc subscriptions via request_ad_hoc_subscription() (12-03 / SC6).
-    # These are set AFTER login() so the StreamClient is ready to receive commands.
-    app.state.stream_client = stream_client  # type: ignore[attr-defined]
     app.state.subscription_manager = subscription_manager  # type: ignore[attr-defined]
 
-    # Subscribe to LEVELONE_OPTIONS for any open position legs.
-    initial_symbols = await _get_position_occ_symbols(app)
-    if initial_symbols:
-        await stream_client.level_one_option_subs(initial_symbols, REQUIRED_OPTION_FIELDS)
-
-    # Subscribe to ACCT_ACTIVITY — account-scoped, no symbol arg (Pitfall 3)
-    await stream_client.account_activity_sub()
-
-    # Register handlers: synchronous callbacks that schedule the async coroutines.
-    # asyncio.ensure_future schedules on the running event loop without blocking.
-    stream_client.add_level_one_option_handler(
-        lambda msg: asyncio.ensure_future(_on_level_one_option(msg))
-    )
-    stream_client.add_account_activity_handler(
-        lambda msg: asyncio.ensure_future(_on_acct_activity(msg))
-    )
-
-    # Message loop — handle_message() is a single-message pump; must be in a while-True
-    # loop (Pitfall 8).  CancelledError propagates; all other exceptions are logged by
-    # type name only (T-12-02-02) and the loop continues.
+    # Reconnect loop — a ConnectionClosed re-establishes the whole session (re-login
+    # + re-subscribe) with exponential backoff + jitter. Without this, a closed WSS
+    # spun the message pump forever and delivered zero ticks (badge stuck STALE).
+    backoff = _RECONNECT_INITIAL_BACKOFF_S
     while True:
         try:
-            await stream_client.handle_message()
-        except asyncio.CancelledError:
-            raise  # clean shutdown
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "streamer: handle_message error (%s) — continuing",
-                type(exc).__name__,
+            # Trader client only — never market_client (Pitfall 9 / T-12-02-03)
+            stream_client = StreamClient(trader_client)
+
+            # login() calls /trader/v1/userPreference for the WSS URL + credentials.
+            # Must run AFTER the lock is held (Pattern 1 / T-12-02-03).
+            await stream_client.login()
+
+            # Expose the live client AFTER login so POST /sidecar/subscribe drives the
+            # current session; refreshed on each reconnect.
+            app.state.stream_client = stream_client  # type: ignore[attr-defined]
+
+            # (Re)subscribe the FULL tracked set: refresh position legs, then subscribe
+            # legs ∪ surviving ad-hoc so a reconnect restores prior subscriptions.
+            initial_symbols = await _get_position_occ_symbols(app)
+            subscription_manager.set_position_legs(set(initial_symbols))
+            symbols = sorted(subscription_manager.all_subscribed)
+            if symbols:
+                await stream_client.level_one_option_subs(symbols, REQUIRED_OPTION_FIELDS)
+
+            # Subscribe to ACCT_ACTIVITY — account-scoped, no symbol arg (Pitfall 3)
+            await stream_client.account_activity_sub()
+
+            # Register handlers: synchronous callbacks that schedule the async coroutines.
+            stream_client.add_level_one_option_handler(
+                lambda msg: asyncio.ensure_future(_on_level_one_option(msg))
             )
+            stream_client.add_account_activity_handler(
+                lambda msg: asyncio.ensure_future(_on_acct_activity(msg))
+            )
+
+            backoff = _RECONNECT_INITIAL_BACKOFF_S  # reset after a clean connect
+
+            # Message pump — single-message at a time (Pitfall 8). CancelledError =
+            # shutdown; ConnectionClosed → reconnect; anything else is transient.
+            while True:
+                try:
+                    await stream_client.handle_message()
+                except asyncio.CancelledError:
+                    raise  # clean shutdown
+                except ConnectionClosed:
+                    raise  # propagate to the reconnect loop below
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "streamer: handle_message error (%s) — continuing",
+                        type(exc).__name__,
+                    )
+        except asyncio.CancelledError:
+            raise  # clean shutdown — do not reconnect
+        except ConnectionClosed as exc:
+            logger.warning(
+                "streamer: stream closed (%s) — reconnecting in ~%.1fs",
+                type(exc).__name__,
+                backoff,
+            )
+        except Exception as exc:  # noqa: BLE001 — login/subscribe failures too
+            logger.error(
+                "streamer: session error (%s) — reconnecting in ~%.1fs",
+                type(exc).__name__,
+                backoff,
+            )
+
+        # Backoff + jitter before reconnecting (avoid hammering Schwab on a flap).
+        await asyncio.sleep(backoff + random.uniform(0, backoff))
+        backoff = min(backoff * 2, _RECONNECT_MAX_BACKOFF_S)
