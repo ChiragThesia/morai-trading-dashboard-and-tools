@@ -284,18 +284,27 @@ async def _on_acct_activity(msg: dict) -> None:
 
 async def _get_position_occ_symbols(app: object) -> list[str]:
     """
-    Get current open-position OCC symbols for the initial LEVELONE subscription.
+    Get current open-position OCC symbols for the initial/reconnect LEVELONE subscription.
 
-    Returns empty list on any error; the stream starts without initial symbols
-    and gets updated via ACCT_ACTIVITY + reconcile calls (D-03).
-    Phase 12-03 wires the full /sidecar/positions reconcile endpoint.
+    Fetches open OPTION legs via the trader client and reuses
+    positions_proxy._extract_positions — the SAME OPTION-filter mapping the
+    /sidecar/positions reconcile uses — so the streamer subscribes exactly the
+    legs the browser displays. Without this the streamer subscribed nothing and
+    no LEVELONE ticks ever flowed for open positions (badge stuck STALE).
+
+    Returns [] on any error or when the trader client is absent — the stream still
+    starts and picks legs up on the next reconnect.
     """
     try:
         trader_client = getattr(app.state, "trader_client", None)
         if trader_client is None:
             return []
-        # Placeholder: full position loading via positions_proxy arrives in 12-03.
-        return []
+        # Lazy import avoids a module-load cycle (positions_proxy pulls in FastAPI).
+        from positions_proxy import _extract_positions  # noqa: PLC0415
+
+        resp = await trader_client.get_accounts(fields=["positions"])
+        raw = resp.json()
+        return [item.occSymbol for item in _extract_positions(raw)]
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "streamer: could not fetch initial position symbols (%s) — starting with empty set",

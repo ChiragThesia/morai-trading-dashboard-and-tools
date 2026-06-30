@@ -424,6 +424,66 @@ class TestStartStreamerReconnect:
         )
 
 
+class TestGetPositionOccSymbols:
+    """_get_position_occ_symbols loads OPEN OPTION legs so the streamer subscribes them
+    at startup. Without it the streamer subscribes nothing → no LEVELONE ticks for the
+    open positions → the browser badge sits STALE."""
+
+    def test_returns_option_occ_symbols_filtering_non_option(self):
+        from streamer import _get_position_occ_symbols
+
+        accounts_json = [
+            {
+                "securitiesAccount": {
+                    "positions": [
+                        {
+                            "instrument": {
+                                "assetType": "OPTION",
+                                "symbol": "SPXW  260807P07425000",
+                                "underlyingSymbol": "SPX",
+                            },
+                            "longQuantity": 1,
+                            "shortQuantity": 0,
+                            "marketValue": 1800,
+                        },
+                        {
+                            "instrument": {"assetType": "EQUITY", "symbol": "AAPL"},
+                            "longQuantity": 10,
+                            "shortQuantity": 0,
+                        },
+                    ]
+                }
+            }
+        ]
+        resp = MagicMock()
+        resp.json = MagicMock(return_value=accounts_json)
+        trader = AsyncMock()
+        trader.get_accounts = AsyncMock(return_value=resp)
+        app = _make_fake_app(trader_client=trader)
+
+        syms = asyncio.run(_get_position_occ_symbols(app))
+        assert syms == ["SPXW  260807P07425000"], (
+            f"must return OPTION legs only (equity filtered out); got {syms}"
+        )
+
+    def test_returns_empty_on_fetch_error(self):
+        from streamer import _get_position_occ_symbols
+
+        trader = AsyncMock()
+        trader.get_accounts = AsyncMock(side_effect=RuntimeError("boom"))
+        app = _make_fake_app(trader_client=trader)
+
+        syms = asyncio.run(_get_position_occ_symbols(app))
+        assert syms == [], "must degrade to [] on fetch error (stream still starts)"
+
+    def test_returns_empty_when_trader_client_none(self):
+        from streamer import _get_position_occ_symbols
+
+        app = _make_fake_app(trader_client=None)
+        syms = asyncio.run(_get_position_occ_symbols(app))
+        assert syms == []
+
+
 class TestRequiredOptionFields:
     """LEVELONE subscription must include the REQUIRED_OPTION_FIELDS set."""
 
