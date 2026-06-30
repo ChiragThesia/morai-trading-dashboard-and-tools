@@ -91,11 +91,25 @@ export function useLiveStream(): UseLiveStreamResult {
   const hasEverDisconnectedRef = useRef(false);
 
   useEffect(() => {
-    // `cancelled` prevents state mutation after unmount if the async mint is still
-    // in flight when the component is torn down.
+    // `cancelled` prevents state mutation / reconnects after unmount.
     let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let backoffMs = 1000;
 
-    const connect = async (): Promise<void> => {
+    // Each connect() mints a FRESH single-use ticket. The browser's native
+    // EventSource reconnect would reuse the consumed ticket in the URL → 401
+    // (then EventSource gives up permanently), so on every error we close the
+    // EventSource and reconnect ourselves with exponential backoff.
+    const scheduleReconnect = (): void => {
+      if (cancelled || reconnectTimer !== undefined) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = undefined;
+        void connect();
+      }, backoffMs);
+      backoffMs = Math.min(backoffMs * 2, 30_000);
+    };
+
+    async function connect(): Promise<void> {
       let ticketBody: { ticket: string };
       try {
         const res = await apiFetch("/api/stream/ticket", {
@@ -115,6 +129,11 @@ export function useLiveStream(): UseLiveStreamResult {
             "useLiveStream: ticket mint failed —",
             err instanceof Error ? err.name : "UnknownError",
           );
+          // A mint failure is recoverable (e.g. a transient 401 during token refresh) —
+          // mark stale and retry with backoff so the stream self-heals.
+          hasEverDisconnectedRef.current = true;
+          setStatus("stale");
+          scheduleReconnect();
         }
         return;
       }
@@ -129,16 +148,21 @@ export function useLiveStream(): UseLiveStreamResult {
 
       // On (re)connect: if we've previously disconnected, move to 'reconnecting'.
       es.onopen = (): void => {
+        backoffMs = 1000; // reset backoff after a successful (re)connect
         if (hasEverDisconnectedRef.current) {
           setStatus("reconnecting");
         }
         // On the very first connect, stay in 'poll' until the first tick arrives.
       };
 
-      // On disconnect / error: freeze last values as stale.
+      // On disconnect / error: freeze last values as stale, then reconnect with a
+      // fresh ticket (the current one is single-use and now consumed).
       es.onerror = (): void => {
         hasEverDisconnectedRef.current = true;
         setStatus("stale");
+        es.close();
+        if (esRef.current === es) esRef.current = null;
+        scheduleReconnect();
       };
 
       // The server sends NAMED SSE events (stream.routes.ts + stream-fan-out.ts):
@@ -189,6 +213,10 @@ export function useLiveStream(): UseLiveStreamResult {
 
     return (): void => {
       cancelled = true;
+      if (reconnectTimer !== undefined) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
       if (esRef.current !== null) {
         esRef.current.close();
         esRef.current = null;

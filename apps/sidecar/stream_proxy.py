@@ -26,9 +26,12 @@ from streamer import event_queue
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Idle timeout before emitting a keep-alive ping (Assumption A4 — 25s in production).
-# Exposed as a module attribute so tests can monkeypatch it without 25s waits.
-_SSE_IDLE_TIMEOUT: float = 25.0
+# Idle timeout before emitting a keep-alive ping. MUST stay under ~10s: the TS server's
+# fetch over the Railway internal network (and Bun's 10s idle) resets the connection if no
+# bytes arrive within ~10s — the original 25s (Assumption A4) ECONNRESET the server↔sidecar
+# feed before any keep-alive, so no ticks reached the fan-out.
+# Exposed as a module attribute so tests can monkeypatch it without real waits.
+_SSE_IDLE_TIMEOUT: float = 5.0
 
 # OCC option symbol: 6-char root (space-padded) + 6-char YYMMDD + C/P + 8-char strike (x1000).
 # Example: "SPX   260620C05000000" (21 chars total).

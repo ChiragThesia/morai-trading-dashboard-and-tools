@@ -309,6 +309,11 @@ console.warn(`morai server listening on port ${port}`);
 export default {
   port,
   fetch: app.fetch,
+  // GET /api/stream holds a long-lived SSE connection. Bun's default idleTimeout is
+  // 10s, which closed idle SSE before the 30s keep-alive ping could fire (browser
+  // badge stuck STALE; "[Bun.serve]: request timed out after 10 seconds"). Max is
+  // 255s; the 30s ping keeps the connection warm well under it.
+  idleTimeout: 255,
 };
 
 // RPC-01 / SC-3: Export AppType for typed hc<AppType>() client inference.

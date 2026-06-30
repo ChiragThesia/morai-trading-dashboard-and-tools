@@ -284,6 +284,27 @@ describe("useLiveStream", () => {
     await waitFor(() => expect(result.current.status).toBe("live"));
   });
 
+  // ── 6b. Reconnect mints a FRESH ticket (no single-use ticket reuse) ──────────
+  it("reconnects with a fresh ticket after an error — does not reuse the single-use ticket", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    act(() => { es0().dispatchTicks([SAMPLE_TICK]); });
+    await waitFor(() => expect(result.current.status).toBe("live"));
+
+    // Error → stale. The browser's native EventSource reconnect would reuse the
+    // consumed single-use ticket → 401; the hook must instead close + mint a NEW ticket.
+    act(() => { es0().dispatchError(); });
+    await waitFor(() => expect(result.current.status).toBe("stale"));
+
+    // A new EventSource opens after the backoff, with a freshly-minted ticket.
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2), { timeout: 3000 });
+    const ticketMints = mockApiFetch.mock.calls.filter((c) => c[0] === "/api/stream/ticket");
+    expect(ticketMints.length).toBe(2);
+    // The first (errored) EventSource was closed before reconnecting.
+    expect(FakeEventSource.instances[0]?.closed).toBe(true);
+  });
+
   // ── 7. Malformed frames ignored ──────────────────────────────────────────
 
   it("ignores malformed frames — no throw, no state change, no cast", async () => {
