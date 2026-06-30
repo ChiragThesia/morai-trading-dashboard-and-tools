@@ -14,6 +14,8 @@ const BASE_VALID_ENV = {
   // Phase 8 (D20 — updated): JWKS asymmetric verify — no shared secret; SUPABASE_URL replaces SUPABASE_JWT_SECRET
   SUPABASE_URL: "https://cwcdcosxoaqyqbsfifsh.supabase.co",
   WEB_ORIGIN: "http://localhost:5173",
+  // Phase 12 (12-05): sidecar URL — required on server service for SSE + reconcile + subscribe proxy
+  SIDECAR_URL: "http://sidecar.railway.internal:8000",
 };
 
 describe("parseConfig", () => {
@@ -80,5 +82,21 @@ describe("parseConfig", () => {
     const config = parseConfig(BASE_VALID_ENV);
     expect(config.SUPABASE_URL).toBe("https://cwcdcosxoaqyqbsfifsh.supabase.co");
     expect(config.WEB_ORIGIN).toBe("http://localhost:5173");
+  });
+
+  // Phase 12 (12-05): SIDECAR_URL — required on the server service (not just worker)
+  it("throws a Zod error naming SIDECAR_URL when it is missing", () => {
+    const env = { ...BASE_VALID_ENV, SIDECAR_URL: undefined };
+    expect(() => parseConfig(env)).toThrow(/SIDECAR_URL/);
+  });
+
+  it("throws a Zod error when SIDECAR_URL is not a valid URL", () => {
+    const env = { ...BASE_VALID_ENV, SIDECAR_URL: "not-a-url" };
+    expect(() => parseConfig(env)).toThrow(/SIDECAR_URL/);
+  });
+
+  it("parses a valid SIDECAR_URL without throwing", () => {
+    const config = parseConfig(BASE_VALID_ENV);
+    expect(config.SIDECAR_URL).toBe("http://sidecar.railway.internal:8000");
   });
 });

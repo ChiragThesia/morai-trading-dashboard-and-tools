@@ -25,6 +25,12 @@ const configSchema = z.object({
   // Both SUPABASE_URL and WEB_ORIGIN are non-secret public values.
   SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
   WEB_ORIGIN: z.string().url("WEB_ORIGIN must be a valid URL"),
+  // Phase 12 (12-05): sidecar URL — server needs the sidecar base URL to reach
+  //   /sidecar/events (live tick stream) + /sidecar/positions (STRM-05 reconcile)
+  //   + /sidecar/subscribe (SC6 ad-hoc proxy via POST /api/stream/subscribe).
+  // e.g. "http://sidecar.railway.internal:8000" on Railway; "http://localhost:8000" locally.
+  // NOTE: Set this on the Railway server service (same value as the worker's SIDECAR_URL).
+  SIDECAR_URL: z.string().url("SIDECAR_URL must be a valid URL"),
 });
 
 export type Config = z.infer<typeof configSchema>;
