@@ -1,8 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "bun install",
-  "buildCommand": "rm -rf apps/web/dist apps/web/node_modules/.vite node_modules/.vite node_modules/.cache && bun run --filter @morai/web build",
+  "buildCommand": "bun run --filter @morai/web build",
   "outputDirectory": "apps/web/dist",
   "framework": null,
+  "build": { "env": { "VERCEL_FORCE_NO_BUILD_CACHE": "1" } },
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
