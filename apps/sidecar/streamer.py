@@ -302,7 +302,10 @@ async def _get_position_occ_symbols(app: object) -> list[str]:
         # Lazy import avoids a module-load cycle (positions_proxy pulls in FastAPI).
         from positions_proxy import _extract_positions  # noqa: PLC0415
 
-        resp = await trader_client.get_accounts(fields=["positions"])
+        # enforce_enums=True (schwab-py default) requires the enum member, not "positions".
+        resp = await trader_client.get_accounts(
+            fields=[trader_client.Account.Fields.POSITIONS]
+        )
         raw = resp.json()
         return [item.occSymbol for item in _extract_positions(raw)]
     except Exception as exc:  # noqa: BLE001

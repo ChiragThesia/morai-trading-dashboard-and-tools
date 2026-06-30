@@ -134,7 +134,10 @@ async def get_positions(request: Request) -> PositionsResponse | JSONResponse:
         return JSONResponse(status_code=503, content={"error": "AUTH_EXPIRED"})
 
     try:
-        resp = await client.get_accounts(fields=["positions"])
+        # schwab-py defaults to enforce_enums=True → the field MUST be the enum member,
+        # not the string "positions" (which raises ValueError and silently emptied the
+        # reconcile + leg subscription end-to-end).
+        resp = await client.get_accounts(fields=[client.Account.Fields.POSITIONS])
         raw = resp.json()
     except Exception as exc:  # noqa: BLE001
         logger.error(

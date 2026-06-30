@@ -455,15 +455,27 @@ class TestGetPositionOccSymbols:
                 }
             }
         ]
+        from schwab.client.base import BaseClient
+
         resp = MagicMock()
         resp.json = MagicMock(return_value=accounts_json)
+
         trader = AsyncMock()
-        trader.get_accounts = AsyncMock(return_value=resp)
+        # Real Account enum so the production code can read trader.Account.Fields.POSITIONS.
+        trader.Account = BaseClient.Account
+
+        # Mimic schwab-py enforce_enums=True: reject the string "positions", require the enum.
+        async def _get_accounts(*, fields=None):
+            if fields != [BaseClient.Account.Fields.POSITIONS]:
+                raise ValueError('expected type "Fields", got type "str"')
+            return resp
+
+        trader.get_accounts = _get_accounts
         app = _make_fake_app(trader_client=trader)
 
         syms = asyncio.run(_get_position_occ_symbols(app))
         assert syms == ["SPXW  260807P07425000"], (
-            f"must return OPTION legs only (equity filtered out); got {syms}"
+            f"must return OPTION legs via enum fields (string 'positions' raises); got {syms}"
         )
 
     def test_returns_empty_on_fetch_error(self):
