@@ -7,12 +7,12 @@
     "open_interest_all": "2987456",
     "dealer_positions_long_all": "140230",
     "dealer_positions_short_all": "89560",
-    "asset_mgr_positions_long_all": "1102340",
-    "asset_mgr_positions_short_all": "654320",
-    "lev_money_positions_long_all": "387650",
-    "lev_money_positions_short_all": "523410",
-    "other_rept_positions_long_all": "210870",
-    "other_rept_positions_short_all": "198340",
+    "asset_mgr_positions_long": "1102340",
+    "asset_mgr_positions_short": "654320",
+    "lev_money_positions_long": "387650",
+    "lev_money_positions_short": "523410",
+    "other_rept_positions_long": "210870",
+    "other_rept_positions_short": "198340",
     "nonrept_positions_long_all": "145000",
     "nonrept_positions_short_all": "132780"
   }
