@@ -72,11 +72,14 @@ await runMigrations(config.DATABASE_URL);
 // fall back to DATABASE_URL (direct connection). pg-boss creates its own pool.
 // NOTE: boss.start() creates the pgboss schema if it doesn't exist.
 const bossConnectionString = config.DATABASE_POOL_URL ?? config.DATABASE_URL;
-const boss = new PgBoss(bossConnectionString);
+// max:4 — bounded pool for the 10 low-frequency cron queues (30s polling). Keeps the
+// worker's pg-boss + Drizzle pools under the Supavisor session-pooler ceiling (see db.ts).
+const boss = new PgBoss({ connectionString: bossConnectionString, max: 4 });
 await boss.start();
 
-// Build Drizzle DB instance (direct connection for repos)
-const db = makeDb(config.DATABASE_URL);
+// Build Drizzle DB instance (direct connection for repos).
+// max:3 — job handlers run sequentially; a small pool is ample and bounds total usage.
+const db = makeDb(config.DATABASE_URL, { max: 3 });
 
 // Build repos
 const calendarsRepo = makePostgresCalendarsRepo(db);

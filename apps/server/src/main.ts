@@ -61,8 +61,10 @@ import { makeSidecarPositionReconciler } from "@morai/adapters";
 
 const config = bootConfig();
 
-// Build the Postgres pool + Drizzle instance
-const db = makeDb(config.DATABASE_URL);
+// Build the Postgres pool + Drizzle instance.
+// max:4 — bounded so server + worker pools fit under the Supavisor session-pooler
+// ceiling (see db.ts). Low-traffic read API needs only a few concurrent connections.
+const db = makeDb(config.DATABASE_URL, { max: 4 });
 
 // Build the calendars repo which also implements ForPingingDb
 const calendarsRepo = makePostgresCalendarsRepo(db);
@@ -182,7 +184,9 @@ const getOrders = makeGetOrdersUseCase({
 // JOB-01 / MCP-02: enqueueJob use-case — shared by HTTP route + MCP tool (trigger_job).
 // PgBoss instance for job enqueueing only (the worker is responsible for processing).
 // Uses DATABASE_URL (direct connection); pg-boss manages its own pool for enqueueing.
-const jobBoss = new PgBoss(config.DATABASE_URL);
+// max:2 — the server only enqueues (trigger_job); it never processes jobs, so a tiny
+// pool suffices and keeps the total under the Supavisor session-pooler ceiling.
+const jobBoss = new PgBoss({ connectionString: config.DATABASE_URL, max: 2 });
 await jobBoss.start();
 const pgBossJobQueue = makePgBossJobQueue(jobBoss);
 const enqueueJob = makeEnqueueJobUseCase({
