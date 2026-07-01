@@ -197,6 +197,20 @@ async def get_chain(
 
     try:
         resp = await client.get_option_chain(root)
+        if resp.status_code != 200:
+            # RC#2 (2026-07-01 debug session): a non-2xx response (e.g. a stale/invalid
+            # access token) must not be silently mapped to an empty chain. Schwab's error
+            # body has none of the keys _map_option_chain_to_response reads, so .get(...,
+            # default) previously produced a "successful" spot=0.0/quotes=[] response —
+            # zero data with no visible failure anywhere downstream.
+            logger.error(
+                "chain proxy: get_option_chain returned non-200 status %s",
+                resp.status_code,
+            )
+            return JSONResponse(
+                status_code=503,
+                content={"error": "AUTH_EXPIRED"},
+            )
         raw = resp.json()
     except Exception as exc:
         # Log only the exception type — never str(exc) which may contain response body

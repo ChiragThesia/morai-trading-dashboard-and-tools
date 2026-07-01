@@ -184,7 +184,10 @@ def _patch_app_state(monkeypatch: pytest.MonkeyPatch) -> None:
         return
 
     # Build a mock response object that supports .json() synchronously.
+    # status_code is set explicitly (real httpx.Response semantics) so chain_proxy.py's
+    # status-code check (RC#2 fix) sees a genuine 200 for the success-path tests.
     mock_resp = unittest.mock.MagicMock()
+    mock_resp.status_code = 200
     mock_resp.json.return_value = _make_mock_chain_response()
 
     # market_client is async (asyncio=True in schwab-py).

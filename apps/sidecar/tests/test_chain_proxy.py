@@ -8,6 +8,7 @@ TS SidecarChainResponseSchema in packages/adapters/src/sidecar/chain-adapter.ts 
 Both sides MUST be updated together if the shape changes.
 """
 import re
+import unittest.mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -85,6 +86,46 @@ def test_auth_expired() -> None:
     response = client.get("/sidecar/chain?root=SPX&_test_auth_expired=true")
     assert response.status_code == 503, (
         f"Expected 503 on AUTH_EXPIRED, got {response.status_code}: {response.text}"
+    )
+    body = response.json()
+    assert body == {"error": "AUTH_EXPIRED"}, (
+        f"Expected {{\"error\": \"AUTH_EXPIRED\"}}, got {body!r}"
+    )
+
+
+def test_non_2xx_schwab_response_returns_auth_expired_not_empty_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    RC#2 regression (2026-07-01 debug session): get_option_chain() returning a non-2xx
+    httpx Response (e.g. a stale/invalid access token) must NOT be silently mapped to an
+    empty-but-200 ChainResponse.
+
+    Bug: the route never checked resp.status_code before calling resp.json() and mapping
+    it via _map_option_chain_to_response(). A Schwab error body (no callExpDateMap/
+    putExpDateMap/underlyingPrice keys) parses fine as JSON, so .get(..., default) silently
+    produced spot=0.0, quotes=[] with HTTP 200 — "success" with zero data, invisible to the
+    TS caller (fetchChainUseCase treats an empty-but-ok chain as nothing to persist, and
+    nothing else ever surfaces the failure).
+
+    Fix: a non-2xx response must be treated the same as any other auth failure — 503
+    {"error": "AUTH_EXPIRED"} — so the TS layer sees an error instead of silent success.
+    """
+    from main import app
+
+    error_resp = unittest.mock.MagicMock()
+    error_resp.status_code = 401
+    error_resp.json.return_value = {"error": "Unauthorized"}  # no chain keys at all
+
+    mock_market_client = unittest.mock.AsyncMock()
+    mock_market_client.get_option_chain.return_value = error_resp
+    monkeypatch.setattr(app.state, "market_client", mock_market_client)
+
+    response = client.get("/sidecar/chain?root=SPX")
+
+    assert response.status_code == 503, (
+        f"Expected 503 on non-2xx Schwab response, got {response.status_code}: "
+        f"{response.text}"
     )
     body = response.json()
     assert body == {"error": "AUTH_EXPIRED"}, (
