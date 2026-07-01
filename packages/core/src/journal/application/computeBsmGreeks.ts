@@ -2,12 +2,20 @@
  * computeBsmGreeks use-case — batch BSM compute for pending leg_observations (BSM-03).
  *
  * Algorithm:
- *   1. Read all pending rows (bsm_iv IS NULL AND mark IS NOT NULL via partial index)
- *   2. For each row: get rate r from ForReadingRate; fall back to fallbackRate if null
+ *   1. Read all pending rows (bsm_iv IS NULL AND mark IS NOT NULL via partial index),
+ *      then bound the run to the first MAX_BATCH_SIZE rows (RC#1 — see below)
+ *   2. For each row: get rate r from ForReadingRate, memoized per observation date
+ *      (RC#1); fall back to fallbackRate if null
  *   3. Compute T = computeT(now(), expiry, root) — settlement-aware (D-04)
  *   4. Invert IV via invertIv; on IvError → stamp all five bsm_* as string 'NaN' (D-09)
  *   5. On ok IV → compute bsmGreeks; stamp five columns as String(value)
  *   6. Batch-write all writes in one call
+ *
+ * RC#1 (2026-07-01 debug session): a 56k-row single-day backlog timed out every run
+ * (>900s pg-boss handler limit) because readRate was awaited per row with no cache,
+ * and the all-or-nothing write at the end meant a mid-run timeout made zero forward
+ * progress — every retry redid the whole (growing) backlog. Fixed by memoizing
+ * readRate per date and bounding each run to MAX_BATCH_SIZE rows.
  *
  * D-12 double-scaling guard: bsmGreeks() already returns scaled values
  *   (vega per 1 vol point, theta per calendar day). Write directly — no further scaling.
@@ -34,6 +42,15 @@ import { computeT } from "../domain/dte.ts";
 
 // NaN sentinel string — always use this, never JS NaN (T-02-16, Pitfall 4)
 const NAN_STAMP = "NaN";
+
+// RC#1 fix: bound how many pending rows a single run processes. writeBsm persists
+// one row at a time inside a transaction (packages/adapters postgres repo), so an
+// unbounded backlog (e.g. 56k rows from one snapshot) makes the run's total DB round
+// trips grow without limit — a timeout mid-run makes zero forward progress (all-or-
+// nothing write), and every retry redoes the whole backlog. Bounding lets each run
+// finish well within the pg-boss handler timeout (900s) and make incremental progress;
+// rows beyond the bound stay pending (bsm_iv still NULL) for the next scheduled run.
+export const MAX_BATCH_SIZE = 2000;
 
 /**
  * makeComputeBsmGreeksUseCase — factory returning the batch BSM compute use-case.
@@ -67,6 +84,9 @@ export function makeComputeBsmGreeksUseCase(deps: {
       return ok(undefined);
     }
 
+    // RC#1: bound this run's work — remainder (if any) stays pending for the next run.
+    const batch = pending.length > MAX_BATCH_SIZE ? pending.slice(0, MAX_BATCH_SIZE) : pending;
+
     // CR-02 fix: deps.now is retained in the factory signature (preserves worker composition
     // root wiring in apps/worker/src/main.ts — owned by sibling plan 02-09). The local
     // binding is removed because T is now computed per-row from obs.time (see Step 3 below).
@@ -85,23 +105,36 @@ export function makeComputeBsmGreeksUseCase(deps: {
 
     const writes: WriteRow[] = [];
 
-    for (const obs of pending) {
-      // Step 2: get risk-free rate for this observation date
+    // RC#1: memoize readRate by observation date — a backlog drain is typically
+    // dominated by a handful of distinct dates (often just one), so this collapses what
+    // was N identical sequential DB round-trips down to one per distinct date.
+    const rateCache = new Map<string, number>();
+
+    for (const obs of batch) {
+      // Step 2: get risk-free rate for this observation date (memoized per date)
       const obsDateStr = obs.time.toISOString().slice(0, 10); // YYYY-MM-DD
-      const rateResult = await deps.readRate(obsDateStr);
+      const cachedRate = rateCache.get(obsDateStr);
 
       let r: number;
-      if (rateResult.ok) {
-        const rateStr = rateResult.value;
-        if (rateStr === null) {
-          r = deps.fallbackRate;
-        } else {
-          const parsed = parseFloat(rateStr);
-          r = isFinite(parsed) ? parsed : deps.fallbackRate;
-        }
+      if (cachedRate !== undefined) {
+        r = cachedRate;
       } else {
-        // Storage error on rate read → use fallback (D-02)
-        r = deps.fallbackRate;
+        const rateResult = await deps.readRate(obsDateStr);
+
+        if (rateResult.ok) {
+          const rateStr = rateResult.value;
+          if (rateStr === null) {
+            r = deps.fallbackRate;
+          } else {
+            const parsed = parseFloat(rateStr);
+            r = isFinite(parsed) ? parsed : deps.fallbackRate;
+          }
+        } else {
+          // Storage error on rate read → use fallback (D-02)
+          r = deps.fallbackRate;
+        }
+
+        rateCache.set(obsDateStr, r);
       }
 
       const q = deps.dividendYield;

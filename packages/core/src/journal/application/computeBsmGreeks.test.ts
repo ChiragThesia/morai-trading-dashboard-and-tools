@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from "vitest";
 import { ok, err, formatOccSymbol } from "@morai/shared";
-import { makeComputeBsmGreeksUseCase } from "./computeBsmGreeks.ts";
+import { makeComputeBsmGreeksUseCase, MAX_BATCH_SIZE } from "./computeBsmGreeks.ts";
 import type { ForReadingPendingObs, ForWritingBsmResults, ForReadingRate, PendingObs, StorageError } from "./ports.ts";
 import { bsmPrice } from "../domain/bsm.ts";
 
@@ -404,5 +404,80 @@ describe("makeComputeBsmGreeksUseCase", () => {
     // writeBsm failing should propagate as err
     const result = await useCase();
     expect(result.ok).toBe(false);
+  });
+
+  it("regression (RC#1): memoizes readRate per unique observation date instead of calling it per row", async () => {
+    // Bug: readRate(obsDateStr) was awaited inside the per-row loop with no cache.
+    // A 56k-row backlog from a single day made 56k identical sequential DB round-trips
+    // — the prime timeout suspect for the compute-bsm-greeks 900s death-loop.
+    const sameDay = "2026-06-11";
+    const rows = [
+      makePendingObs({ time: new Date(`${sameDay}T14:00:00Z`) }),
+      makePendingObs({ time: new Date(`${sameDay}T15:00:00Z`) }),
+      makePendingObs({ time: new Date(`${sameDay}T16:00:00Z`) }),
+    ];
+
+    const readPending: ForReadingPendingObs = async () => ok(rows);
+    const writeBsm: ForWritingBsmResults = async () => ok(undefined);
+    let readRateCalls = 0;
+    const readRate: ForReadingRate = async () => {
+      readRateCalls++;
+      return ok("0.05");
+    };
+
+    const useCase = makeComputeBsmGreeksUseCase({
+      readPending,
+      writeBsm,
+      readRate,
+      dividendYield: 0.013,
+      fallbackRate: 0.045,
+      now: () => new Date("2026-06-11T20:00:00Z"),
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    // 3 rows, same observation date → readRate must be memoized to a single call.
+    expect(readRateCalls).toBe(1);
+  });
+
+  it("regression (RC#1): bounds a single run to MAX_BATCH_SIZE rows, leaving the remainder pending", async () => {
+    // Bug: readPending() returns the ENTIRE backlog with no bound, and the use-case
+    // writes in one all-or-nothing batch at the end — a timeout mid-run makes zero
+    // forward progress, so every retry redoes the whole (growing) backlog.
+    const overflow = MAX_BATCH_SIZE + 250;
+    const rows: PendingObs[] = Array.from({ length: overflow }, (_, i) =>
+      makePendingObs({
+        contract: formatOccSymbol({
+          root: "SPXW",
+          expiry: new Date(2026, 5, 19),
+          type: "C",
+          strike: 5000 + i,
+        }),
+        time: new Date("2026-06-11T15:00:00Z"),
+      }),
+    );
+
+    const readPending: ForReadingPendingObs = async () => ok(rows);
+    const writtenRows: Array<Parameters<ForWritingBsmResults>[0][number]> = [];
+    const writeBsm: ForWritingBsmResults = async (ws) => {
+      writtenRows.push(...ws);
+      return ok(undefined);
+    };
+    const readRate: ForReadingRate = async () => ok("0.05");
+
+    const useCase = makeComputeBsmGreeksUseCase({
+      readPending,
+      writeBsm,
+      readRate,
+      dividendYield: 0.013,
+      fallbackRate: 0.045,
+      now: () => new Date("2026-06-11T20:00:00Z"),
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    // Only MAX_BATCH_SIZE rows processed this run — the rest stay pending (bsm_iv still
+    // NULL in the DB, since readPending's partial index scan is unaffected) for the next run.
+    expect(writtenRows).toHaveLength(MAX_BATCH_SIZE);
   });
 });
