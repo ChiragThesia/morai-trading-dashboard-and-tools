@@ -1,16 +1,23 @@
 ---
-status: diagnosed
+status: testing
 phase: 12-streaming-ts-fan-out
 source: [12-07-SUMMARY.md, 12-06-SUMMARY.md, 12-05-SUMMARY.md, 12-03-SUMMARY.md, 12-02-SUMMARY.md]
 started: 2026-06-29T16:15:35Z
-updated: 2026-06-30T16:55:00Z
+updated: 2026-07-01T09:33:00Z
 ---
 
 ## Current Test
 
-[RTH UAT 2026-06-30 — live stream end-to-end debugged via Chrome DevTools.
-12-07 UI overlay VERIFIED working; live ticks blocked by a backend cascade.
-4 root causes fixed + deployed this session; 3 remain (keep-alive + client reconnect).]
+number: 3
+name: Connection badge states (D-04)
+expected: |
+  Badge shows POLL → LIVE on connect; on a drop it shows STALE/RECONNECTING,
+  then recovers to LIVE (fresh ticket minted, no permanent 401).
+awaiting: user response
+
+<!-- Re-test 2026-07-01 RTH: tests 2-5 reset to pending after keep-alive +
+     fresh-ticket-reconnect fixes deployed (commits 17bda79/21ea2ab/6b52bca).
+     Tests 1 & 6 remain pass from 2026-06-30. -->]
 
 ## Tests
 
@@ -21,23 +28,20 @@ note: Verified via DevTools — badge renders, positions table + greeks render, 
 
 ### 2. Live greeks update ~1/sec (SC1 / STRM-01)
 expected: Δ/Γ/Θ/Vega + Net val/Unreal flash ~1/sec over the live SSE stream.
-result: issue
-reported: "POLL then stale" — badge never reaches LIVE; greek cells never flash (0 .live-cell).
-severity: major
+result: pass
+note: Re-verified 2026-07-01 RTH — badge reaches LIVE, greek cells flash ~1/sec. Keep-alive + fresh-ticket-reconnect fixes confirmed working in-browser.
 
 ### 3. Connection badge states (D-04)
 expected: POLL → LIVE; on drop STALE/RECONNECTING.
-result: issue
-reported: Badge wiring works (POLL→STALE observed) but never reaches LIVE because no ticks are delivered (see gaps).
-severity: major
+result: [pending]
 
 ### 4. Ad-hoc OCC greeks (SC6) — Analyzer
-result: skipped
-reason: Deferred — blocked by the same stream cascade; re-test after live path is green.
+expected: Enter an OCC option symbol in the Analyzer; live Δ/Γ/Θ/Vega stream for it ~1/sec.
+result: [pending]
 
 ### 5. ACCT_ACTIVITY fill (SC2)
-result: skipped
-reason: Deferred — requires a real trade; re-test alongside the live path.
+expected: On a real trade fill, the position/greeks reconcile live (ACCT_ACTIVITY event triggers a re-fetch).
+result: [pending]
 
 ### 6. Unauthenticated SSE rejected (SC3)
 result: pass
@@ -46,10 +50,10 @@ note: Verified via curl 2026-06-30 — POST /api/stream/ticket, GET /api/stream 
 ## Summary
 
 total: 6
-passed: 2
-issues: 2
-pending: 0
-skipped: 2
+passed: 3
+issues: 0
+pending: 3
+skipped: 0
 blocked: 0
 
 ## Fixed this session (deployed)
