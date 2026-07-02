@@ -4,10 +4,10 @@
 
 A self-hosted online trading system that collects SPX options data (Schwab + CBOE), keeps a
 per-calendar journal of 30-minute RTH snapshots (price, greeks, IV term structure), computes
-derived analytics (BSM greeks, skew, forward vol), and exposes all of it live through a typed HTTP
-API and an MCP server. The first consumer is Claude Code; a web UI comes later. It is for one
-trader (the author) running SPX calendar spreads who wants every trade's life recorded and
-queryable.
+derived analytics (BSM greeks, skew, forward vol, GEX), and exposes all of it through a typed
+HTTP API, an MCP server, and a live React dashboard (morai.wtf) with real-time streamed
+position greeks. It is for one trader (the author) running SPX calendar spreads who wants
+every trade's life recorded and queryable.
 
 ## Core Value
 
@@ -15,134 +15,125 @@ queryable.
 trade?" — collected automatically, never hand-edited, queryable by API and by Claude Code. If
 everything else fails, this must work.
 
-## Current Milestone: v1.1 Real-Time Schwab Streaming
+## Current State (post-v1.1, 2026-07-02)
 
-**Goal:** One Python schwab-py sidecar owns all Schwab data (REST + stream) behind a single
-auth and a single interface; live positions never go stale; the journal is re-sourced through
-the sidecar; COT positioning and an expanded FRED macro layer are added; everything is exposed
-via typed API + a live stream the future UI rebuild consumes.
+**Shipped:** v1.0 Backend + Data Layer (Phases 1–9, 2026-06-25) and v1.1 Real-Time Schwab
+Streaming (Phases 10–15, 2026-07-02). See `.planning/MILESTONES.md`.
 
-**Target features:**
-- **schwab-py sidecar = sole Schwab boundary** — OAuth, encrypted token store, auto-refresh,
-  REST (chain snapshots, transactions, gap-fill) + one streamer websocket. One auth, one weekly
-  re-auth.
-- **Kill 30-min access-token staleness** (schwab-py auto-refresh) + **real-time** marks /
-  per-leg greeks / fills via the stream.
-- **TS server fan-out** — one upstream Schwab session → authed SSE/WS to N browsers, Supabase
-  JWT at the edge.
-- **Schwab auth-ownership migration** — TS Schwab REST adapters swap token source
-  `broker_tokens → sidecar` (single refresher, no rotating-token race).
-- **Journal kept**, re-sourced through the sidecar; **CBOE** no-auth chain fallback retained for
-  the 7-day re-auth gap.
-- **CFTC COT** — new no-auth adapter + positioning analytic (data/API).
-- **FRED expanded** — macro series (rates curve / Fed funds / VIX / key indicators) + switch on
-  the unset prod key.
-- **7-day re-auth smoothing** — alert before expiry + one-click browser re-auth.
+- Three Railway services (server, worker, Python schwab-py sidecar) + Supabase Postgres +
+  Vercel web (morai-web.vercel.app / morai.wtf).
+- The sidecar is the sole Schwab boundary: OAuth + token ownership, auto-refresh, REST proxy,
+  one advisory-locked streamer session. TS never talks to Schwab directly.
+- Live LEVELONE_OPTION greeks (BSM-recomputed) + ACCT_ACTIVITY fills fan out over authed SSE
+  to N browsers; journal snapshots, COT, and 8-series FRED macro land on 30-min/weekly/twice-daily
+  crons; all surfaces ship HTTP + MCP pairs (MCP-02).
+- ~1,374 tests green; hexagon enforced by ESLint boundaries; TDD red→green throughout.
 
-**Key context:**
-- ONE auth burden: Schwab OAuth (weekly re-auth, Schwab server limit — unavoidable, sidecar
-  centralizes it). CBOE + COT are auth-free; FRED is a set-once free key.
-- Historical option chains/greeks are **not** sold by Schwab or cleanly free anywhere — the
-  journal self-collects them forward on the same sidecar/auth (already collecting since Jun-12).
-- Streaming is **additive** — does NOT replace the snapshot journal / GEX batch. Schwab allows
-  ~1 streamer session/account → sidecar owns it.
-- Reverses **D17** (websocket streaming deferred) for account/position data.
-- **UI panels (macro, COT, live positions) are a separate UI-rebuild milestone** that consumes
-  v1.1's endpoints — v1.1 ships data/backend/contracts only.
-- Stack change: **Python** in a TS monorepo + a **3rd Railway service** → requires
-  `docs/architecture/stack-decisions.md` update first (docs-before-code).
+**Known debt (v1.1 audit):** prod runs the pre-phase-15 image (T-24h re-auth alert not live
+until deploy; next re-auth window ~2026-07-09); no silent-stall watchdog on the live stream;
+`apps/web` has no typecheck gate in CI (4 pre-existing tsc failures).
+
+## Next Milestone Goals (candidates — define via /gsd-new-milestone)
+
+- **v1.2 Trade Picker / UI redesign** (researched 2026-07-02): calendar-candidate scoring
+  (`scoreCalendarCandidates` per `.planning/research/calendar-selection-criteria.md`, 8 criteria),
+  events adapter, API routes + web screen; Overview redesign variant B (payoff-center grid);
+  Analyzer calendar-picker redesign. Mockups in `mockups/`.
+- Deploy the phase-15 image (server+worker+web) — closes the largest v1.1 debt item.
+- Backlog candidates: strategy-rules engine (L4), event-triggered supplemental snapshot,
+  live-stream stall watchdog.
 
 ## Requirements
 
 ### Validated
 
-<!-- Shipped and confirmed valuable. -->
-
-- [x] **Re-auth smoothing (AUTH-05, AUTH-06)** — Validated in Phase 15: T-24h `refreshExpiresIn`
-      on both status surfaces + one-shot warning log + amber web banner; operator re-auth flow
-      (seed_token.py + runbook) executed live against prod 2026-07-02, both apps restored.
-- *(The v1.0 Active list below predates phases 1–9 and is pending full reconciliation at
-  `/gsd-complete-milestone`.)*
+- ✓ Monorepo + hexagon enforced (FND-01..05) — v1.0
+- ✓ Supabase Postgres + Drizzle idempotent migrations (DATA-01..04) — v1.0
+- ✓ Railway walking skeleton: `/api/status` + MCP in prod (DEPLOY-01..03) — v1.0
+- ✓ CBOE delayed SPX chain adapter, no auth (MKT-01..03) — v1.0
+- ✓ Schwab OAuth two-app client, tokens in Postgres, graceful AUTH_EXPIRED (AUTH-01..04) — v1.0
+- ✓ Own BSM engine: IV inversion + greeks, property-tested (BSM-01..03) — v1.0
+- ✓ Calendar registration + 30-min RTH snapshot job (CAL-01..05) — v1.0
+- ✓ Journal read surface: HTTP + MCP snapshot series (MVP anchor) — v1.0
+- ✓ Derived analytics: skew + term structure + GEX (ANLY-01..03) — v1.0
+- ✓ Journal rebuilt from Schwab fills, never hand-written (JRNL-01, JOB-01..03) — v1.0
+- ✓ Trade history: `get_transactions` + chunked idempotent backfill (BRK-03..04) — v1.0
+- ✓ Web dashboard: React SPA on typed Hono RPC + Supabase Auth (Phases 8–9) — v1.0
+- ✓ schwab-py sidecar = sole Schwab boundary, single refresher, advisory-locked streamer,
+  internal-only (GW-01..05) — v1.1
+- ✓ Live streaming: position + ad-hoc greeks (BSM-recomputed) + fills over authed SSE fan-out,
+  display-only, reconcile-on-connect (STRM-01..05) — v1.1
+- ✓ Journal re-sourced through sidecar with CBOE fallback (JRNL-02) — v1.1
+- ✓ COT positioning: weekly fetch + API/MCP series (COT-01..02) — v1.1
+- ✓ FRED macro expansion: 8 series twice daily + API/MCP + MacroCard (MAC-01..02) — v1.1
+- ✓ Re-auth smoothing: T-24h alert + operator re-auth without redeploy, proven live
+  (AUTH-05..06) — v1.1
 
 ### Active
 
-<!-- Current scope. Backend + data layer first; driven by APIs + MCP. -->
-
-- [ ] Monorepo scaffold (Bun workspaces) with the hexagon enforced: `core` imports only `shared`;
-      boundary rules fail the build when violated.
-- [ ] Supabase Postgres reachable; Drizzle schema + idempotent migrations run on boot.
-- [ ] Walking skeleton deployed to Railway: `GET /api/status` live in prod, MCP `get_status`
-      reachable by Claude Code.
-- [ ] CBOE adapter: pull a delayed SPX option chain behind a market-data port (no auth).
-- [ ] Schwab adapter: OAuth two-app client (vendored), tokens in Supabase, graceful AUTH_EXPIRED.
-- [ ] Own BSM engine: IV inversion + greeks, property-tested, calibrated against known values.
-- [ ] Calendar registration + `snapshot-calendars` job writes 30-min RTH `calendar_snapshots`.
-- [ ] Journal read surface: `GET /api/journal/:calendarId` + MCP `get_journal` return the snapshot
-      series for one calendar — the end-to-end MVP.
-- [ ] Derived analytics: skew + term-structure observations, exposed via API + MCP.
-- [ ] Journal rebuilt from Schwab fills (`sync-fills` / rebuild) — never hand-written.
+*(Empty — next milestone defines its requirements via `/gsd-new-milestone`.)*
 
 ### Out of Scope
 
-<!-- Explicit boundaries with reasoning. -->
-
-- **Web UI (`apps/web`)** — deferred (D19). Build a strong API/MCP backend first; UI later on Vercel.
-- **Supabase-native features (Realtime, Auth, RLS, auto-REST)** — deferred (D18). Supabase is used
-  as managed Postgres only, to keep the hexagon vendor-neutral and swap cost low.
-- **Live trade advice / regime scoring / entry-exit recommendations** — the separate `trade-advisor`
-  plugin owns live analysis. Morai owns *collected/historical* data. They may merge later.
-- **Market-data streaming (websockets)** — deferred (D17). 30-min snapshot cadence is covered by
-  scheduled pulls.
-- **Multi-user / auth on the API** — single user now; bearer token guards MCP. Revisit at multi-user.
+- **Supabase-native features beyond Auth (Realtime, RLS-as-authz, auto-REST)** — Supabase used
+  as managed Postgres + JWT issuer only; hexagon stays vendor-neutral (D18, softened by D20:
+  Supabase Auth JWT verifies web reads).
+- **Live trade advice / regime scoring** — the separate `trade-advisor` plugin owns live
+  analysis; Morai owns collected/historical data. Trade Picker (v1.2 candidate) scores
+  *structures*, not advice timing — boundary to re-check at v1.2 definition.
+- **Full-chain streaming** — ~500-symbol streamer cap makes it impossible; 30-min REST snapshot
+  stays. D17 lifted only for account/position legs + ad-hoc lookups (v1.1).
+- **Multi-user / public API versioning** — single user; bearer token + Supabase JWT suffice.
+- **Hand-edited journal entries** — journal is rebuilt from broker fills, source-of-truth
+  discipline.
 
 ## Context
 
-- **Backend shipped; architecture-complete.** Phases 1–8 are merged: hexagon scaffold,
-  Supabase/Drizzle, CBOE + Schwab adapters, own BSM engine, journal + 30-min snapshot jobs,
-  derived analytics, trade history, and the web-dashboard **backend** (GEX analytics endpoint +
-  scheduled snapshot job, typed Hono `AppType` RPC export, Supabase-Auth + CORS). The frontend
-  (`apps/web`) is Phase 9. A full hand-authored architecture doc set remains the source of truth:
-  `docs/architecture/` (read `overview.md` first) + STRICT working rules in `.claude/rules/`. This
-  PROJECT.md sits on top of those — it does not restate them.
-- **Prior art to port, not invent.** A working `trade-advisor` plugin already implements Schwab
-  OAuth (`auth.ts`: setup/refresh/status/doctor), a BSM engine, CBOE pulls, OCC symbol parsing,
-  and journal-rebuild-from-fills. Inventory: `docs/trade-advisor-inventory.md`. These are
-  reference implementations to re-home into the hexagon, not greenfield problems.
-- **Known domain gotchas already documented.** Schwab-vs-TOS IV discrepancy + own-solver decision
-  (`docs/iv-engine-discrepancy-and-solver.md`); GEX taxonomy + put-sign bug, regime thresholds
-  (`docs/tos-studies-learnings.md`); SPX OI=0 quirk (SPY proxy scaled ~10.048×).
-- **Synthesized trading knowledge** lives read-only in `knowledge-base/` (calendar mechanics,
-  greeks, vol). Reference, never edited by code tasks.
+- **Architecture docs are the source of truth**: `docs/architecture/` (start `overview.md`) +
+  STRICT rules in `.claude/rules/`. This PROJECT.md sits on top; it does not restate them.
+- **Codebase**: Bun/TS monorepo (packages: core, adapters, contracts, shared, quant) + Python
+  sidecar (`apps/sidecar`, FastAPI + schwab-py). ~45k lines added in v1.1 alone.
+- **Domain gotchas documented**: Schwab-vs-TOS IV discrepancy (`docs/iv-engine-discrepancy-and-solver.md`);
+  GEX put-sign + regime thresholds (`docs/tos-studies-learnings.md`); SPX OI=0 → SPY proxy
+  ×10.048; CBOE timestamps are UTC; 65,534-param insert limit (chunk ≤2,000 rows).
+- **Operator surface**: `docs/operations/schwab-reauth-runbook.md` — weekly Schwab re-auth via
+  `seed_token.py login` + `railway redeploy --service sidecar`.
+- **Synthesized trading knowledge** lives read-only in `knowledge-base/`.
 
 ## Constraints
 
 - **Tech stack** (locked, see `docs/architecture/stack-decisions.md`): Bun · Hono (+RPC, Zod) ·
-  Supabase Postgres 16 + Drizzle · pg-boss · Vitest (+fast-check, testcontainers, msw). Hosting:
-  Railway (server + worker), Supabase (DB), Vercel (web, deferred). MCP over streamable HTTP.
-- **Hexagonal law**: dependencies point inward; `core` is framework-free; vendors live in adapters;
-  every driven port has an in-memory adapter. Enforced by ESLint boundaries + tsconfig refs.
-- **TDD red→green is mandatory** — no production code without a failing test run first; commit at
-  green only. `.claude/rules/tdd.md`.
+  Supabase Postgres 16 + Drizzle · pg-boss · Vitest (+fast-check, testcontainers, msw) ·
+  React/Vite/Tailwind/shadcn (`apps/web`) · FastAPI + schwab-py (`apps/sidecar`). Hosting:
+  Railway (server + worker + sidecar), Supabase (DB), Vercel (web). MCP over streamable HTTP.
+- **Hexagonal law**: dependencies point inward; `core` is framework-free; vendors live in
+  adapters; every driven port has an in-memory adapter.
+- **TDD red→green mandatory**; commit at green only. `.claude/rules/tdd.md`.
 - **Strict TypeScript** — no `any`, no `as`, no `!`; Zod at every boundary; `Result<T,E>`.
-- **Docs before architecture changes** — significant decisions update `stack-decisions.md` first.
-- **Supabase connection**: pg-boss + migrations use the direct/session URL (`LISTEN/NOTIFY` +
-  advisory locks); never the transaction pooler.
-- **Schwab weekly re-auth**: refresh tokens hard-expire 7 days after issuance. Jobs must degrade
-  gracefully (pause Schwab pulls, flag AUTH_EXPIRED) — one app failing never blocks the other.
+- **Docs before architecture changes** — update `stack-decisions.md` first.
+- **Supabase connection**: pg-boss + migrations use the direct/session URL; never the
+  transaction pooler. Railway has no IPv6 → session pooler for the sidecar.
+- **Schwab weekly re-auth**: refresh tokens hard-expire after 7 days. One streamer session per
+  account. Jobs degrade gracefully (AUTH_EXPIRED + CBOE fallback); one app failing never blocks
+  the other.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Hexagonal + DDD-lite | Swap brokers/queue/host as one-directory changes, not rewrites | — Pending |
-| Database = Supabase (D18) | Managed Postgres, zero infra; DB independent of compute host | — Pending |
-| Supabase as "just Postgres" | Avoid vendor coupling; keep swap cost low; drive via own API | — Pending |
-| Hosting split: Railway compute / Supabase DB / Vercel web (D11, D19) | Each provider a swap boundary | — Pending |
-| Backend + data first, UI deferred (D19) | "Drive most things with APIs"; UI is a later API consumer | — Pending |
-| MVP = one calendar's journal end-to-end | Anchors Phase work on the core value | — Pending |
-| CBOE + Schwab both in foundation | Real chain data early (CBOE no-auth) + real positions (Schwab) | — Pending |
-| Own BSM engine over vendor greeks | Vendor greeks are black-box; ours are consistent + attributable | — Pending |
-| Spec-driven workflow (interactive GSD) | Write spec → review → approve → build; docs kept current | — Pending |
+| Hexagonal + DDD-lite | Swap brokers/queue/host as one-directory changes | ✓ Good — sidecar swap (D22) touched only adapters + composition roots |
+| Database = Supabase (D18) | Managed Postgres, zero infra | ✓ Good — pooler/IPv6 quirks documented, no regrets |
+| Supabase as "just Postgres" | Avoid vendor coupling | ✓ Good — softened by D20 (Supabase Auth JWT for web) deliberately |
+| Hosting split: Railway / Supabase / Vercel (D11, D19) | Each provider a swap boundary | ✓ Good — 3rd Railway service added without friction |
+| Backend + data first, UI deferred (D19) | UI is a later API consumer | ✓ Good — UI landed Phase 9 on a stable API |
+| MVP = one calendar's journal end-to-end | Anchors work on the core value | ✓ Good — journal collecting since Jun-12 |
+| Own BSM engine over vendor greeks | Consistent + attributable | ✓ Good — reused for live-stream recompute (D-02, v1.1) |
+| Spec-driven workflow (interactive GSD) | Spec → review → build; docs current | ✓ Good — 15 phases, 2 milestones shipped |
+| D22: Python schwab-py sidecar as 3rd service (supersedes D16 TS OAuth) | Dual-refresher race + one-streamer ownership need single-process auth | ✓ Good — live in prod, re-auth proven 2026-07-02 |
+| D17 lifted for legs-only streaming | 500-symbol cap blocks full chain; positions need freshness | ✓ Good — live ticks verified in UAT |
+| Opaque ticket for SSE auth (Phase 12 D-01) | Query-param JWTs leak into logs | ✓ Good |
+| Stream is display-only; REST stays fill authority (STRM-04) | No per-tick writes; journal integrity | ✓ Good — regression-gated |
+| Restart-only sidecar token pickup (15-02) | Sidecar reads token at construction; `railway redeploy` beats a reload endpoint | ✓ Good — documented in runbook |
 
 ## Evolution
 
@@ -162,4 +153,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 — Phase 15 (re-auth smoothing) complete; v1.1 milestone code-complete. Prod deploy of the phase-15 image pending.*
+*Last updated: 2026-07-02 after v1.1 milestone*
