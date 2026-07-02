@@ -10,6 +10,7 @@ import type {
   ForRunningGetSkew,
   ForRunningGetGex,
   ForRunningGetCot,
+  ForRunningGetMacro,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -25,6 +26,7 @@ import {
   registerGetSkewTool,
   registerGetGexTool,
   registerGetCotTool,
+  registerGetMacroTool,
   registerGetPositionsTool,
   registerGetTransactionsTool,
   registerGetOrdersTool,
@@ -53,6 +55,8 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  *         GET /api/analytics/gex; injected as optional for backward compat with existing call sites.
  * COT-02 / MCP-02: get_cot registered here (Phase 13, 13-06) — shares cotResponse with
  *         GET /api/analytics/cot; injected as optional for backward compat with existing call sites.
+ * MAC-02 / MCP-02: get_macro registered here (Phase 14, 14-06) — shares macroResponse with
+ *         GET /api/analytics/macro; injected as optional for backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -64,6 +68,7 @@ export function makeMcpRouter(
   getSkew: ForRunningGetSkew,
   getGex?: ForRunningGetGex,
   getCot?: ForRunningGetCot,
+  getMacro?: ForRunningGetMacro,
   getPositions?: ForGettingPositions,
   getTransactions?: ForGettingTransactions,
   getOrders?: ForGettingOrders,
@@ -94,6 +99,10 @@ export function makeMcpRouter(
     // COT-02 / MCP-02: get_cot tool — optional, wired when getCot use-case is available (Phase 13)
     if (getCot !== undefined) {
       registerGetCotTool(server, getCot);
+    }
+    // MAC-02 / MCP-02: get_macro tool — optional, wired when getMacro use-case is available (Phase 14)
+    if (getMacro !== undefined) {
+      registerGetMacroTool(server, getMacro);
     }
     // BRK-02 / MCP-02: trader data tools (optional — wired when trader adapters are available)
     if (getPositions !== undefined) {

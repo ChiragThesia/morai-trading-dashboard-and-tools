@@ -12,6 +12,8 @@ import {
   gexSnapshotResponse,
   cotResponse,
   brokerageAuthExpiredPayload,
+  macroResponse,
+  macroQuery,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -22,6 +24,7 @@ import type {
   ForRunningGetSkew,
   ForRunningGetGex,
   ForRunningGetCot,
+  ForRunningGetMacro,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -581,6 +584,68 @@ export function registerGetCotTool(
       // Empty array on no data — never an error (COT-02 / MCP-02 stability).
       // Direct parse: CotEntry fields already match cotSeriesEntry types.
       const payload = cotResponse.parse(result.value);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetMacroTool — registers the get_macro MCP tool (MAC-02 / MCP-02 / 14-06).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: validate args → call use-case → parse result through macroResponse schema → return content.
+ *
+ * MCP-02: the SAME macroResponse schema used by GET /api/analytics/macro is used here.
+ * A one-sided field rename fails `bun run typecheck`.
+ *
+ * T-14-01: unlike get_cot, get_macro takes user-controlled input ({days?,series?}) — validated
+ * via the SAME macroQuery schema the HTTP route uses (parity), rejected before the use-case runs.
+ *
+ * MAC-02: returns a contract-valid EMPTY map (never an error) when no data exists.
+ */
+export function registerGetMacroTool(
+  server: McpServer,
+  getMacro: ForRunningGetMacro,
+): void {
+  server.registerTool(
+    "get_macro",
+    {
+      title: "Get Macro",
+      description:
+        "Returns the macro backdrop series (7 FRED series — DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS — plus VVIX via CBOE), keyed by series id, ascending by date. Same payload as GET /api/analytics/macro. Optional days (max 1825) and series (CSV of known ids) filters; defaults to the last 90 days of all series.",
+      inputSchema: {
+        days: z.number().int().positive().max(1825).optional(),
+        series: z.string().optional(),
+      },
+    },
+    async (args) => {
+      // T-14-01: validate through the SAME macroQuery schema the HTTP route uses — never
+      // throw on invalid input, and never call the use-case on a rejected value.
+      const parsed = macroQuery.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid params" }) },
+          ],
+        };
+      }
+      // exactOptionalPropertyTypes: omit absent keys rather than assigning `undefined`
+      // (mirrors the /analytics/macro HTTP route's query-building).
+      const query = {
+        ...(parsed.data.days === undefined ? {} : { days: parsed.data.days }),
+        ...(parsed.data.series === undefined ? {} : { series: parsed.data.series }),
+      };
+
+      const result = await getMacro(query);
+      if (!result.ok) {
+        // T-14-14: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      // Empty map on no data — never an error (MAC-02 / MCP-02 stability).
+      const payload = macroResponse.parse(result.value);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
