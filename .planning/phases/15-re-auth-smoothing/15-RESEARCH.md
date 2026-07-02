@@ -472,7 +472,19 @@ tagged `[ASSUMED]`** — they are `[VERIFIED]` via direct reading of
 (`site-packages/schwab/auth.py`), `git diff`, and the locally-installed `railway` CLI
 (`v4.11.0`) plus its official docs.
 
-## Open Questions
+## Open Questions (ALL RESOLVED at planning, 2026-07-02)
+
+> Resolutions (provisional, user-reviewable at plan review):
+> **Q1 → RESOLVED** in 15-04-PLAN.md: `withRefreshExpiryWarning` getStatus decorator with
+> in-process per-app latch (fires on first T-24h crossing, re-arms when `refreshExpiresIn`
+> returns to null), wired once in the composition root for both HTTP and MCP.
+> **Q2 → RESOLVED** in 15-05-PLAN.md: amber banner checks BOTH apps (worst-case);
+> existing red banner's trader-only check fixed only if it is the same 1–2 lines in the
+> same component.
+> **Q3 → RESOLVED** in 15-02-PLAN.md + ROADMAP note: restart-only via
+> `railway redeploy --service sidecar -y` (no code rebuild) accepted as satisfying
+> AUTH-06's "without a Railway redeploy"; no new sidecar reload endpoint (D-02
+> minimal-attack-surface). Highest-impact provisional decision — flagged for user review.
 
 1. **Where exactly does the T-24h warning-log side effect live?**
    - What we know: it must be an adapter-level (or composition-root) concern, not core;

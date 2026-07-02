@@ -650,9 +650,14 @@ new tokens on its next auto-refresh cycle.
   2. The operator can run a local re-auth flow (manual-flow → `token_write` callback → Postgres) that writes a new refresh token to `broker_tokens`; the sidecar picks up the new token on its next auto-refresh cycle without a Railway redeploy; `GET /api/status` reports token freshness restored (AUTH-06).
 
 **Plans**: 5 plans (Wave 1: 15-01, 15-02, 15-03 · Wave 2: 15-04, 15-05)
+**Wave 1**
+
 - [ ] 15-01-PLAN.md — AUTH-05: refreshExpiresIn domain computation + type/contract/DTO threading (T-24h status field)
 - [ ] 15-02-PLAN.md — AUTH-06: seed_token.py hardening (commit diff, `railway redeploy`) + operator re-auth runbook
 - [ ] 15-03-PLAN.md — D-04: remove retired `refresh-tokens` from the `trigger_job` surface
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 15-04-PLAN.md — AUTH-05: T-24h warning-log side effect (getStatus decorator, wired for HTTP + MCP)
 - [ ] 15-05-PLAN.md — AUTH-05: amber pre-expiry banner (extends AuthExpiredBanner, both apps)
 

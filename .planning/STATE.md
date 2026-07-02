@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
-current_phase: 14
-status: ready_to_plan
-stopped_at: Phase 15 context gathered (provisional decisions — user AFK)
+current_phase: 15
+status: ready_to_execute
+stopped_at: Phase 15 planned (5 plans, 2 waves) — provisional decisions pending user plan review
 last_updated: "2026-07-02T17:59:19.382Z"
 last_activity: 2026-07-02
-last_activity_desc: Phase 14 complete
+last_activity_desc: Phase 15 planned (5 plans, verification passed)
 progress:
-  total_phases: 9
-  completed_phases: 9
-  total_plans: 74
-  completed_plans: 76
-  percent: 100
-current_phase_name: fred-expansion
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 33
+  completed_plans: 28
+  percent: 85
+current_phase_name: re-auth-smoothing
 ---
 
 # Project State
@@ -24,15 +24,15 @@ current_phase_name: fred-expansion
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 14 — fred-expansion
+**Current focus:** Phase 15 — re-auth-smoothing
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
-Status: Ready for phase verification + prod UAT (FRED_API_KEY operator step pending, D-13)
-Phases 10-13 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 13 COT shipped + FE wired.
-Last activity: 2026-07-02 — Phase 14 complete
+Phase: 15
+Plan: 0/5 (planned, not started)
+Status: Ready to execute — 5 plans, 2 waves; provisional decisions D-01..D-04 + AUTH-06 restart-only interpretation pending user plan review
+Phases 10-14 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 14 FRED live (2026-07-02).
+Last activity: 2026-07-02 — Phase 15 planned
 
 ## Milestone v1.1 Summary
 
