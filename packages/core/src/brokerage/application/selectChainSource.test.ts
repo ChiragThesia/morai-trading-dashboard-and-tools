@@ -80,8 +80,8 @@ describe("selectChainSource", () => {
 
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok({
-        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null },
-        market: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null },
+        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
+        market: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
       });
 
     const selected = await selectChainSource({
@@ -103,8 +103,8 @@ describe("selectChainSource", () => {
 
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok({
-        trader: { status: "stale", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null },
-        market: { status: "stale", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null },
+        trader: { status: "stale", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
+        market: { status: "stale", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
       });
 
     const selected = await selectChainSource({
@@ -125,8 +125,8 @@ describe("selectChainSource", () => {
 
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok({
-        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null },
-        market: { status: "AUTH_EXPIRED", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null },
+        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
+        market: { status: "AUTH_EXPIRED", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null, refreshExpiresIn: null },
       });
 
     const selected = await selectChainSource({
@@ -147,8 +147,8 @@ describe("selectChainSource", () => {
 
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       ok({
-        trader: { status: "none_yet", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null },
-        market: { status: "none_yet", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null },
+        trader: { status: "none_yet", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null, refreshExpiresIn: null },
+        market: { status: "none_yet", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null, refreshExpiresIn: null },
       });
 
     const selected = await selectChainSource({

@@ -40,12 +40,18 @@ export type SchwabTokenRow = {
  * lastRefreshError (D-14 flag-only): non-null when the most recent refresh attempt
  * for this app failed. Cleared to null on a successful refresh. Surfaced by
  * GET /api/status so operators can see per-app refresh failures without a new table.
+ *
+ * refreshExpiresIn (AUTH-05): seconds until the 7-day refresh-token hard cutoff,
+ * non-null only inside the T-24h proactive warning window; null otherwise (the
+ * field IS the alert signal, not a general countdown). Computed once in
+ * toAppTokenStatus and reused by both the Postgres repo and the memory twin.
  */
 export type AppTokenStatus = {
   readonly status: "fresh" | "stale" | "AUTH_EXPIRED" | "none_yet";
   readonly expiresAt: Date | null;
   readonly refreshIssuedAt: Date | null;
   readonly lastRefreshError: string | null;
+  readonly refreshExpiresIn: number | null;
 };
 
 /**

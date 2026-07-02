@@ -21,6 +21,7 @@ function serializeApp(app: AppTokenStatus) {
     refreshIssuedAt:
       app.refreshIssuedAt === null ? null : app.refreshIssuedAt.toISOString(),
     lastRefreshError: app.lastRefreshError,
+    refreshExpiresIn: app.refreshExpiresIn,
   };
 }
 

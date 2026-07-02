@@ -78,8 +78,8 @@ describe("makeFetchSchwabChainHandler", () => {
     // readTokenFreshness returns market AUTH_EXPIRED
     const readTokenFreshnessFn = vi.fn().mockResolvedValue(
       ok({
-        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date() },
-        market: { status: "AUTH_EXPIRED", expiresAt: null, refreshIssuedAt: null },
+        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), refreshExpiresIn: null },
+        market: { status: "AUTH_EXPIRED", expiresAt: null, refreshIssuedAt: null, refreshExpiresIn: null },
       }),
     );
 

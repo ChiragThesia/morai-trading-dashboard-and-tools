@@ -103,6 +103,7 @@ export function makeMemoryBrokerTokensRepo(
           expiresAt: null,
           refreshIssuedAt: null,
           lastRefreshError: traderLastError,
+          refreshExpiresIn: null,
         },
         market: marketStatusRow !== null
           ? toAppTokenStatus(marketStatusRow, now)
@@ -111,6 +112,7 @@ export function makeMemoryBrokerTokensRepo(
               expiresAt: null,
               refreshIssuedAt: null,
               lastRefreshError: marketLastError ?? null,
+              refreshExpiresIn: null,
             },
       };
       return ok(freshnessMap);
@@ -125,12 +127,14 @@ export function makeMemoryBrokerTokensRepo(
               expiresAt: null,
               refreshIssuedAt: null,
               lastRefreshError: traderLastError ?? null,
+              refreshExpiresIn: null,
             },
         market: {
           status: "none_yet",
           expiresAt: null,
           refreshIssuedAt: null,
           lastRefreshError: marketLastError,
+          refreshExpiresIn: null,
         },
       };
       return ok(freshnessMap);
@@ -145,12 +149,14 @@ export function makeMemoryBrokerTokensRepo(
           expiresAt: null,
           refreshIssuedAt: null,
           lastRefreshError: traderLastError ?? null,
+          refreshExpiresIn: null,
         },
         market: {
           status: "none_yet",
           expiresAt: null,
           refreshIssuedAt: null,
           lastRefreshError: marketLastError ?? null,
+          refreshExpiresIn: null,
         },
       };
       return ok(freshnessMap);

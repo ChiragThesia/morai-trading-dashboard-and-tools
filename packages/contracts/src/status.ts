@@ -22,6 +22,10 @@ export const appTokenStatus = z.object({
   refreshIssuedAt: z.string().datetime().nullable(),
   // D-14 (05-05): per-app refresh failure flag; non-null when last refresh failed
   lastRefreshError: z.string().nullable(),
+  // AUTH-05: seconds until the 7-day refresh-token cutoff; non-null only inside
+  // the T-24h proactive warning window (a required key — null when far from expiry,
+  // never omitted, so the wire shape stays stable).
+  refreshExpiresIn: z.number().int().nonnegative().nullable(),
 });
 
 export type AppTokenStatus = z.infer<typeof appTokenStatus>;

@@ -86,7 +86,13 @@ export function toAppTokenStatus(
   now: Date,
 ): AppTokenStatus {
   if (row === null) {
-    return { status: "none_yet", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null };
+    return {
+      status: "none_yet",
+      expiresAt: null,
+      refreshIssuedAt: null,
+      lastRefreshError: null,
+      refreshExpiresIn: null,
+    };
   }
 
   if (isTokenExpired(row.refreshIssuedAt, now)) {
@@ -95,6 +101,7 @@ export function toAppTokenStatus(
       expiresAt: row.expiresAt,
       refreshIssuedAt: row.refreshIssuedAt,
       lastRefreshError: row.lastRefreshError,
+      refreshExpiresIn: refreshExpiresInSeconds(row.refreshIssuedAt, now),
     };
   }
 
@@ -104,6 +111,7 @@ export function toAppTokenStatus(
       expiresAt: row.expiresAt,
       refreshIssuedAt: row.refreshIssuedAt,
       lastRefreshError: row.lastRefreshError,
+      refreshExpiresIn: refreshExpiresInSeconds(row.refreshIssuedAt, now),
     };
   }
 
@@ -112,5 +120,6 @@ export function toAppTokenStatus(
     expiresAt: row.expiresAt,
     refreshIssuedAt: row.refreshIssuedAt,
     lastRefreshError: row.lastRefreshError,
+    refreshExpiresIn: refreshExpiresInSeconds(row.refreshIssuedAt, now),
   };
 }

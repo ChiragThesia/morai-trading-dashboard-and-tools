@@ -42,12 +42,14 @@ function makeFreshnessMap(opts: {
       expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
       refreshIssuedAt: traderIssued,
       lastRefreshError: null,
+      refreshExpiresIn: null,
     },
     market: {
       status: "fresh",
       expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
       refreshIssuedAt: marketIssued,
       lastRefreshError: null,
+      refreshExpiresIn: null,
     },
   };
 }

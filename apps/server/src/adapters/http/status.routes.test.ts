@@ -63,12 +63,14 @@ const dateFreshnessGetStatus: ForGettingStatus = async () =>
         expiresAt: new Date("2026-06-22T15:30:00.000Z"),
         refreshIssuedAt: new Date("2026-06-20T09:00:00.000Z"),
         lastRefreshError: null,
+        refreshExpiresIn: null,
       },
       market: {
         status: "AUTH_EXPIRED" as const,
         expiresAt: new Date("2026-06-15T15:30:00.000Z"),
         refreshIssuedAt: new Date("2026-06-08T09:00:00.000Z"),
         lastRefreshError: "invalid_grant",
+        refreshExpiresIn: 0,
       },
     },
     lastJobRuns: "none yet" as const,
@@ -90,6 +92,47 @@ describe("GET /api/status", () => {
       expect(tf.trader.refreshIssuedAt).toBe("2026-06-20T09:00:00.000Z");
       expect(tf.market.status).toBe("AUTH_EXPIRED");
       expect(tf.market.lastRefreshError).toBe("invalid_grant");
+      // AUTH-05: far-from-expiry app round-trips null; past-cutoff app round-trips 0
+      expect(tf.trader.refreshExpiresIn).toBeNull();
+      expect(tf.market.refreshExpiresIn).toBe(0);
+    }
+  });
+
+  // AUTH-05: near-expiry payload round-trips a non-null integer refreshExpiresIn
+  it("round-trips a non-null integer refreshExpiresIn for a near-expiry app (AUTH-05)", async () => {
+    const nearExpiryGetStatus: ForGettingStatus = async () =>
+      ok({
+        db: "ok" as const,
+        tokenFreshness: {
+          trader: {
+            status: "fresh" as const,
+            expiresAt: new Date("2026-06-22T15:30:00.000Z"),
+            refreshIssuedAt: new Date("2026-06-20T09:00:00.000Z"),
+            lastRefreshError: null,
+            refreshExpiresIn: 3600,
+          },
+          market: {
+            status: "none_yet" as const,
+            expiresAt: null,
+            refreshIssuedAt: null,
+            lastRefreshError: null,
+            refreshExpiresIn: null,
+          },
+        },
+        lastJobRuns: "none yet" as const,
+        version: "0.0.1",
+        uptime: 100,
+      });
+    const app = buildTestApp(nearExpiryGetStatus);
+    const res = await app.request("/api/status");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    const parsed = statusResponse.parse(body);
+    const tf = parsed.tokenFreshness;
+    expect(tf).not.toBe("none yet");
+    if (tf !== "none yet") {
+      expect(tf.trader.refreshExpiresIn).toBe(3600);
+      expect(tf.market.refreshExpiresIn).toBeNull();
     }
   });
 
