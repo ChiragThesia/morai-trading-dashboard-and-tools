@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
 current_phase: 14
 current_phase_name: fred-expansion
-status: ready_to_execute
+status: executing
 stopped_at: Phase 14 planned (7 plans, 4 waves)
-last_updated: "2026-07-02T01:15:37.040Z"
-last_activity: 2026-07-01
-last_activity_desc: Phase 14 planned
+last_updated: "2026-07-02T01:56:13.828Z"
+last_activity: 2026-07-02
+last_activity_desc: Phase 14 execution started
 progress:
-  total_phases: 6
-  completed_phases: 4
-  total_plans: 28
-  completed_plans: 21
-  percent: 67
+  total_phases: 9
+  completed_phases: 9
+  total_plans: 74
+  completed_plans: 76
+  percent: 100
 ---
 
 # Project State
@@ -24,13 +24,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 14 — fred-expansion (next up; Phase 15 re-auth smoothing after)
+**Current focus:** Phase 14 — fred-expansion
 
 ## Current Position
 
-Phase: 14 (fred-expansion) — PLANNED, ready to execute (7 plans, 4 waves)
+Phase: 14 (fred-expansion) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
 Phases 10-13 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 13 COT shipped + FE wired.
-Last activity: 2026-07-01 — Phase 14 planned
+Last activity: 2026-07-02 — Phase 14 execution started
 
 ## Milestone v1.1 Summary
 
@@ -140,6 +142,7 @@ Regression gates (must survive every phase):
 | Phase 13-cot-adapter P05 | 6 | 2 tasks | 5 files |
 | Phase 13 P06 | 9 | 2 tasks | 6 files |
 | Phase 12 P07 | 13m | 3 tasks | 6 files |
+| Phase 14 P01 | 18min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -314,6 +317,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Direct cotResponse.parse: CotEntry already plain strings/ints
 - [Phase ?]: 12-07: Single positions table in Overview; live-overlay math in lib/live-position-greeks.ts
 - [Phase ?]: 12-07: AdHocPicker/SC6 stays on Analyzer (D-06 scope boundary enforced)
+- [Phase ?]: [Phase 14 P01]: macroQuery.series uses z.string().transform(split).pipe(z.array(macroSeriesId)).optional() to validate CSV tokens against MACRO_SERIES_IDS at the boundary
+- [Phase ?]: [Phase 14 P01]: MacroObservationRow + 4 macro ports added as a parallel port trio beside existing rate ports; ForFetchingRate/ForPersistingRate/ForReadingRate/RateObservation left untouched (D-02)
 
 ### Pending Todos
 
@@ -340,6 +345,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-02T01:15:37.027Z
+Last session: 2026-07-02T01:56:08.204Z
 Stopped at: Phase 14 context gathered
 Resume file: .planning/phases/14-fred-expansion/14-CONTEXT.md

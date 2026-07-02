@@ -114,8 +114,8 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 
 ### FRED Macro
 
-- [ ] **MAC-01**: The `fetch-rates` job is extended to an expanded FRED series set (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) with the prod `FRED_API_KEY` set; VVIX is sourced via the existing CBOE adapter.
-- [ ] **MAC-02**: `GET /api/analytics/macro` and MCP `get_macro` return the macro series (MCP-02).
+- [x] **MAC-01**: The `fetch-rates` job is extended to an expanded FRED series set (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) with the prod `FRED_API_KEY` set; VVIX is sourced via the existing CBOE adapter.
+- [x] **MAC-02**: `GET /api/analytics/macro` and MCP `get_macro` return the macro series (MCP-02).
 
 ### Re-Auth Smoothing
 
@@ -217,8 +217,8 @@ Explicitly excluded. Documented to prevent scope creep.
 | STRM-05 | Phase 12 | Complete |
 | COT-01 | Phase 13 | Complete |
 | COT-02 | Phase 13 | Complete |
-| MAC-01 | Phase 14 | Pending |
-| MAC-02 | Phase 14 | Pending |
+| MAC-01 | Phase 14 | Complete |
+| MAC-02 | Phase 14 | Complete |
 | AUTH-05 | Phase 15 | Pending |
 | AUTH-06 | Phase 15 | Pending |
 
