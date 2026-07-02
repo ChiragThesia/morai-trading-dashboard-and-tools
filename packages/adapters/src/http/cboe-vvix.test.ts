@@ -39,7 +39,7 @@ function makeAdapter() {
 }
 
 describe("makeCboeVvixAdapter", () => {
-  it("returns ok with seriesId VVIX, RAW value, source cboe, and UTC-derived date", async () => {
+  it("returns ok with seriesId VVIX, RAW value, source cboe, and ET-trading-day date", async () => {
     server.use(
       http.get(VVIX_URL, () => HttpResponse.json(vvixResponse({}))),
     );
@@ -50,8 +50,9 @@ describe("makeCboeVvixAdapter", () => {
     expect(result.value.seriesId).toBe("VVIX");
     expect(result.value.value).toBe(89.0);
     expect(result.value.source).toBe("cboe");
-    // timestamp "2026-07-02 01:00:55" UTC → date 2026-07-02
-    expect(result.value.date).toBe("2026-07-02");
+    // Review WR-02: timestamp "2026-07-02 01:00:55" UTC is 21:00:55 ET on July 1 —
+    // the row must carry the ET trading day (2026-07-01), not the UTC calendar day.
+    expect(result.value.date).toBe("2026-07-01");
   });
 
   it("falls through current_price → close when current_price is null", async () => {
@@ -137,11 +138,11 @@ describe("makeCboeVvixAdapter", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("derives date from the UTC top-level timestamp, not last_trade_time (Pitfall 6)", async () => {
+  it("derives date from the UTC top-level timestamp (ET-converted), not last_trade_time (Pitfall 6)", async () => {
     server.use(
       http.get(VVIX_URL, () =>
         HttpResponse.json({
-          timestamp: "2026-07-01 23:30:00", // UTC — still 2026-07-01
+          timestamp: "2026-07-01 23:30:00", // UTC = 19:30 ET July 1 → ET date 2026-07-01
           data: {
             current_price: 90.2,
             close: 89.0,

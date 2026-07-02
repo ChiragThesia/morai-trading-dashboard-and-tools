@@ -32,7 +32,9 @@ const CboeVvixResponseSchema = z.object({
  *
  * Spot resolution: current_price ?? close ?? prev_day_close (cboe.ts precedent).
  * date is derived from the top-level UTC timestamp — NOT last_trade_time, whose
- * timezone is unverified (RESEARCH Pitfall 6).
+ * timezone is unverified (RESEARCH Pitfall 6) — converted to the America/New_York
+ * calendar day so late-evening ET runs label the row with the correct trading day
+ * (review WR-02: 20:00–24:00 ET is already tomorrow in UTC).
  * Returns the RAW value (no /100, D-14). No fallback — any failure returns err.
  */
 export function makeCboeVvixAdapter(deps: {
@@ -91,9 +93,19 @@ export function makeCboeVvixAdapter(deps: {
       });
     }
 
+    // Review WR-02: label the row with the ET trading day, not the UTC calendar day.
+    // Between 20:00 ET and midnight ET the UTC date is already tomorrow — a UTC slice
+    // would store the session's VVIX under the next day. en-CA formats as "YYYY-MM-DD".
+    const etDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(observedAt);
+
     return ok({
       seriesId: "VVIX",
-      date: observedAt.toISOString().slice(0, 10),
+      date: etDate,
       value: spot,
       source: "cboe",
     });
