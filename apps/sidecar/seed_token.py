@@ -3,13 +3,14 @@ One-time OAuth seed for the Schwab sidecar (D-03) — split into two non-interac
 so an operator (or an agent) can drive it without a blocking input() prompt:
 
   Step A  `python seed_token.py authurl`
-      Prints the Schwab authorization URL for BOTH apps (trader, market) and saves the
-      per-app OAuth `state` to a temp file. No input, no DB write.
+      Prints the Schwab authorization URL for BOTH apps (trader, market). No input,
+      no DB write.
 
   --- you open each URL, log into Schwab, authorize, and copy the FULL redirected URL ---
 
   Step B  `python seed_token.py exchange "<trader_redirect_url>" "<market_redirect_url>"`
-      Reconstructs each app's auth context (same state), exchanges the redirect URL for
+      Reconstructs each app's auth context (state taken from the pasted redirect URL),
+      exchanges the redirect URL for
       tokens via schwab-py, and dual-writes the result into the live `broker_tokens` row:
         - token_json        JSONB  — full schwab-py wrapped blob (the sidecar reads this)
         - access_token      BYTEA  — pgp_sym_encrypt(inner access token, key)  (D-01 TS reader)
@@ -33,8 +34,8 @@ the sole token writer (no dual-refresher race). After exchange, restart the side
 (`railway redeploy --service sidecar -y`) so it re-inits its Schwab clients and /sidecar/chain
 goes live. This restarts the existing deployment image only — no rebuild.
 
-SECURITY: the OAuth `state` (not a secret) is the only thing persisted between steps. No token
-value is printed. The encryption key is only ever a bound %s parameter.
+SECURITY: nothing is persisted between steps (step B takes the OAuth `state` from the pasted
+redirect URL). No token value is printed. The encryption key is only ever a bound %s parameter.
 """
 
 import datetime
@@ -60,10 +61,6 @@ APPS = [
     ("trader", "SCHWAB_TRADER_APP_KEY", "SCHWAB_TRADER_APP_SECRET", "SCHWAB_TRADER_CALLBACK_URL"),
     ("market", "SCHWAB_MARKET_APP_KEY", "SCHWAB_MARKET_APP_SECRET", "SCHWAB_MARKET_CALLBACK_URL"),
 ]
-
-# Persisted between step A and step B (same machine; railway run is local). Holds only the
-# OAuth `state` per app — not a secret.
-STATE_FILE = os.path.join(tempfile.gettempdir(), "morai_seed_ctx.json")
 
 UPSERT_SQL = """
     INSERT INTO broker_tokens
@@ -96,19 +93,15 @@ def require_env(names: list[str]) -> dict[str, str]:
 
 
 def step_authurl() -> None:
-    """Print the Schwab authorization URL for each app; persist the per-app state."""
+    """Print the Schwab authorization URL for each app. Nothing is persisted —
+    step B takes the OAuth `state` from the pasted redirect URL."""
     env = require_env([k for _, k, _, _ in APPS] + [c for _, _, _, c in APPS])
-    states: dict[str, str] = {}
     print("\nOpen each URL below, log into Schwab, authorize, then copy the FULL redirected URL.\n")
     for app_id, key_env, _secret_env, cb_env in APPS:
         ctx = schwab.auth.get_auth_context(env[key_env], env[cb_env])
-        states[app_id] = ctx.state
         print(f"--- {app_id} app -------------------------------------------------------")
         print(ctx.authorization_url)
         print()
-    with open(STATE_FILE, "w") as f:
-        json.dump(states, f)
-    print(f"(saved per-app OAuth state to {STATE_FILE})")
     print(
         "\nNext, re-run with the two redirect URLs in trader,market order:\n"
         '  railway run --service worker apps/sidecar/.venv/bin/python apps/sidecar/seed_token.py '
