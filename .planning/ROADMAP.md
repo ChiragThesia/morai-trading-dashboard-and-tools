@@ -611,7 +611,7 @@ full macro series.
 **Cross-cutting**: MCP-02 applies — `get_macro` and `GET /api/analytics/macro` ship in the same change; Zod contract in `packages/contracts`.
 **Success Criteria** (what must be TRUE):
 
-  1. After `fetch-rates` runs with the prod `FRED_API_KEY` set, `rate_observations` contains rows for all seven FRED series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) plus VVIX sourced via the CBOE adapter; a second run for the same observation date is idempotent (MAC-01).
+  1. After `fetch-rates` runs with the prod `FRED_API_KEY` set, `macro_observations` (new table, per 14-CONTEXT D-01 — `rate_observations` stays single-series for BSM) contains rows for all seven FRED series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) plus VVIX sourced via the CBOE adapter; a second run for the same observation date is idempotent (MAC-01).
   2. `GET /api/analytics/macro` returns a JSON object keyed by series ID, each containing a time-ordered array of `{ time, value }` entries over the shared Zod contract; MCP `get_macro` returns the same payload to Claude Code (MAC-02, MCP-02).
 
 **Plans**: TBD

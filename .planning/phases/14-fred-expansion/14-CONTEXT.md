@@ -64,14 +64,40 @@ a new `macro_observations` table. Expose the set over `GET /api/analytics/macro`
   before UAT. Plans must treat "prod key set" as a blocking operator checklist item and
   pause/verify before the live-fetch UAT step.
 
+### Post-Research Addendum (2026-07-01, reconciled vs 14-RESEARCH.md)
+- **D-14 (units):** store values in `macro_observations` RAW as reported by the source
+  (DFF 4.33 = percent, VIXCLS 18.9 = index level, VVIX 89.0 = index level). NO `/100`
+  division — that convention belongs only to the legacy DGS3MO→BSM decimal-fraction path
+  (untouched per D-02). Research found `/100` applied blindly would silently corrupt
+  VIXCLS/VVIX.
+- **D-15 (VVIX source, verified live via raw curl):**
+  `https://cdn.cboe.com/api/global/delayed_quotes/quotes/_VVIX.json` — same
+  `{timestamp, data: {current_price, close, prev_day_close}}` shape as the existing SPX
+  chain adapter; reuse its spot-resolution fallback (`current_price ?? close ??
+  prev_day_close`) and UTC-timestamp handling. Row date = trade date derived from the
+  UTC timestamp.
+- **Conflict resolution (planner: this is LOCKED):** 14-RESEARCH.md §recommendation
+  proposes widening `rate_observations` because ROADMAP MAC-01 wording named that table.
+  That wording predated this discussion and has been corrected in ROADMAP.md — the USER
+  explicitly chose the new `macro_observations` table (D-01) with the widen-option
+  presented and rejected. Planner must follow D-01; research's widen-table sections are
+  superseded. (Side benefit: the drizzle-kit PK-widening migration risk research flagged
+  is moot — no PK change on any existing table.)
+- **Docs-first item:** `docs/architecture/jobs.md` says fetch-rates cron `0 7 * * 1-5`;
+  actual registered cron is `0 9 * * 1-5`. Fix in the Wave-1 docs pass together with the
+  new two-run cadence (D-06) and `macro_observations` schema docs.
+- **BSM proxy stays DGS3MO** — expanded series availability is NOT a reason to revisit
+  the risk-free-rate choice (confirmed out of scope).
+
 ### Claude's Discretion
 - MacroCard content/design: tiles vs tiles+sparklines — pick what fits Overview density
   (dataviz + frontend-design skills apply). Series top billing suggestion: DFF, SOFR,
   T10Y2Y, VIXCLS, VVIX primary (matches the stub's promise); DGS1MO/DGS3MO/T10Y3M
   secondary — but final layout is Claude's call.
-- VVIX row-date semantics: researcher confirms the exact CBOE field for the daily close
-  date; store the CBOE trade date as the `(series_id, date)` key (UTC-parse internally
-  per the Phase 2 CBOE-timestamps-are-UTC lesson). Lock at planning after research.
+- Optional `source` column (`'fred' | 'cboe'`) on `macro_observations` for provenance —
+  cheap, matches existing convention; include if it doesn't complicate the contract.
+- `macroSeriesPoint.time` is the `YYYY-MM-DD` date string (locked in D-10; matches COT
+  `asOf` + FRED native granularity).
 - Error taxonomy, adapter port naming (`ForFetchingMacroSeries` style), route/handler file
   layout — follow existing hexagonal patterns.
 
