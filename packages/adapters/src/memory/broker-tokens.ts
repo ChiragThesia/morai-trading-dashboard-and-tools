@@ -2,6 +2,7 @@ import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type {
   AppId,
+  AppTokenStatus,
   SchwabTokenRow,
   TokenFreshnessMap,
   ForReadingTokens,
@@ -11,6 +12,19 @@ import type {
   StorageError,
 } from "@morai/core";
 import { toAppTokenStatus } from "@morai/core";
+
+// Synthesized status for an app with no token row — carries the recorded
+// lastRefreshError so the flag is surfaced even before any token is persisted
+// (e.g. recordRefreshOutcome called on a first-run failure before writeTokens).
+function noneYetStatus(lastRefreshError: string | null): AppTokenStatus {
+  return {
+    status: "none_yet",
+    expiresAt: null,
+    refreshIssuedAt: null,
+    lastRefreshError,
+    refreshExpiresIn: null,
+  };
+}
 
 /**
  * MemoryBrokerTokensRepo — in-memory twin of the Postgres broker-tokens repo.
@@ -97,85 +111,22 @@ export function makeMemoryBrokerTokensRepo(
 
     const traderStatusRow: SchwabTokenRow | null =
       traderRow !== undefined
-        ? { ...traderRow, lastRefreshError: traderLastError ?? null }
+        ? { ...traderRow, lastRefreshError: traderLastError }
         : null;
     const marketStatusRow: SchwabTokenRow | null =
       marketRow !== undefined
-        ? { ...marketRow, lastRefreshError: marketLastError ?? null }
+        ? { ...marketRow, lastRefreshError: marketLastError }
         : null;
 
-    // If no token rows but we have refresh errors recorded, synthesize minimal status rows
-    // so the error flag is surfaced (handles the case where recordRefreshOutcome is called
-    // without a prior writeTokens — e.g., first-run failure before any token is persisted).
-    if (traderStatusRow === null && traderLastError !== null && traderLastError !== undefined) {
-      const freshnessMap: TokenFreshnessMap = {
-        trader: {
-          status: "none_yet",
-          expiresAt: null,
-          refreshIssuedAt: null,
-          lastRefreshError: traderLastError,
-          refreshExpiresIn: null,
-        },
-        market: marketStatusRow !== null
-          ? toAppTokenStatus(marketStatusRow, now)
-          : {
-              status: "none_yet",
-              expiresAt: null,
-              refreshIssuedAt: null,
-              lastRefreshError: marketLastError ?? null,
-              refreshExpiresIn: null,
-            },
-      };
-      return ok(freshnessMap);
-    }
-
-    if (marketStatusRow === null && marketLastError !== null && marketLastError !== undefined) {
-      const freshnessMap: TokenFreshnessMap = {
-        trader: traderStatusRow !== null
-          ? toAppTokenStatus(traderStatusRow, now)
-          : {
-              status: "none_yet",
-              expiresAt: null,
-              refreshIssuedAt: null,
-              lastRefreshError: traderLastError ?? null,
-              refreshExpiresIn: null,
-            },
-        market: {
-          status: "none_yet",
-          expiresAt: null,
-          refreshIssuedAt: null,
-          lastRefreshError: marketLastError,
-          refreshExpiresIn: null,
-        },
-      };
-      return ok(freshnessMap);
-    }
-
-    // If both rows are absent (but we reached here because refreshErrors.size > 0)
-    if (traderStatusRow === null && marketStatusRow === null) {
-      // We have refresh errors but no token rows — return a map with error flags
-      const freshnessMap: TokenFreshnessMap = {
-        trader: {
-          status: "none_yet",
-          expiresAt: null,
-          refreshIssuedAt: null,
-          lastRefreshError: traderLastError ?? null,
-          refreshExpiresIn: null,
-        },
-        market: {
-          status: "none_yet",
-          expiresAt: null,
-          refreshIssuedAt: null,
-          lastRefreshError: marketLastError ?? null,
-          refreshExpiresIn: null,
-        },
-      };
-      return ok(freshnessMap);
-    }
-
     const freshnessMap: TokenFreshnessMap = {
-      trader: toAppTokenStatus(traderStatusRow, now),
-      market: toAppTokenStatus(marketStatusRow, now),
+      trader:
+        traderStatusRow !== null
+          ? toAppTokenStatus(traderStatusRow, now)
+          : noneYetStatus(traderLastError),
+      market:
+        marketStatusRow !== null
+          ? toAppTokenStatus(marketStatusRow, now)
+          : noneYetStatus(marketLastError),
     };
 
     return ok(freshnessMap);
