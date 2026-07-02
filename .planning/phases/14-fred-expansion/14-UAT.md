@@ -1,9 +1,9 @@
 ---
-status: testing
+status: passed
 phase: 14-fred-expansion
 source: [14-VERIFICATION.md]
 started: 2026-07-01T21:55:00Z
-updated: 2026-07-01T21:55:00Z
+updated: 2026-07-02T04:05:00Z
 ---
 
 ## Current Test
@@ -31,8 +31,9 @@ result: |
   SOFR 3.68, T10Y2Y 0.31, T10Y3M 0.63, VIXCLS 16.45 all source=fred; VVIX 89.04
   source=cboe). Raw units confirmed (no /100). VVIX dated 07-01 ET while UTC was
   07-02 03:36 — WR-02 tz fix verified in prod. Run 2 completed → still 8 rows,
-  0 duplicate (date,series_id) pairs — idempotent. REMAINING: user visual confirm
-  of MacroCard on prod Overview. Local .env append still pending (permission-gated).
+  0 duplicate (date,series_id) pairs — idempotent. PASSED 2026-07-02: user visually
+  confirmed MacroCard renders live values on prod Overview. Local .env append still
+  pending (permission-gated; operator one-liner documented).
 
 ### 2. One-time prod pgboss schedule cleanup
 expected: |
@@ -49,9 +50,9 @@ result: |
 ## Summary
 
 total: 2
-passed: 1
+passed: 2
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 

@@ -709,5 +709,5 @@ requires Phase 11 complete (sidecar health endpoint).
 | 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
 | 12. Streaming + TS Fan-Out | 7/7 | Complete   | 2026-06-29 |
 | 13. COT Adapter | 6/6 | Complete    | 2026-06-29 |
-| 14. FRED Expansion | 7/7 | Complete   | 2026-07-02 |
+| 14. FRED Expansion | 7/7 | Complete    | 2026-07-02 |
 | 15. Re-Auth Smoothing | 0/TBD | Not started | - |

@@ -1,8 +1,8 @@
 ---
 phase: 14-fred-expansion
 verified: 2026-07-02T22:26:00Z
-status: human_needed
-score: 10/10 code-level must-haves verified
+status: passed
+score: 10/10 code-level must-haves verified; 2/2 human verification items passed 2026-07-02 (evidence in 14-UAT.md)
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
@@ -22,7 +22,7 @@ production `FRED_API_KEY` is set; `GET /api/analytics/macro` and MCP `get_macro`
 macro series.
 
 **Verified:** 2026-07-02T22:26:00Z
-**Status:** human_needed
+**Status:** passed — human verification completed 2026-07-02: FRED_API_KEY set on Railway worker, fetch-rates ran twice (8 series populated, idempotent, VVIX 89.04 sane), pgboss stale row deleted (morning/evening rows verified), user visually confirmed MacroCard on prod Overview. Evidence: 14-UAT.md.
 **Re-verification:** No — initial verification
 
 ## Goal Achievement

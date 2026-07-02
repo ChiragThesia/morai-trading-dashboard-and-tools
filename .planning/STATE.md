@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
-current_phase: 14
-current_phase_name: fred-expansion
-status: executing
-stopped_at: Completed 14-07-PLAN.md
-last_updated: "2026-07-02T02:57:47.266Z"
+current_phase: 15
+status: ready_to_plan
+stopped_at: Phase 14 complete + UAT passed (prod live); Phase 15 (re-auth smoothing) not yet planned
+last_updated: "2026-07-02T04:15:00.000Z"
 last_activity: 2026-07-02
-last_activity_desc: Phase 14 execution — plan 07 (MacroCard web wiring) complete; all 7 plans done
+last_activity_desc: Phase 14 complete — verified, UAT passed, prod live
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 28
   completed_plans: 28
-  percent: 100
+  percent: 83
+current_phase_name: fred-expansion
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
-Phase: 14 (fred-expansion) — EXECUTING (all 7 plans complete)
-Plan: 7 of 7 complete
+Phase: 14
+Plan: Not started
 Status: Ready for phase verification + prod UAT (FRED_API_KEY operator step pending, D-13)
 Phases 10-13 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 13 COT shipped + FE wired.
-Last activity: 2026-07-02 — Phase 14 execution — plan 07 (MacroCard web wiring) complete
+Last activity: 2026-07-02 — Phase 14 complete
 
 ## Milestone v1.1 Summary
 
@@ -73,6 +73,7 @@ Regression gates (must survive every phase):
 | 02 | 12 | - | - |
 | 08 | 8 | - | - |
 | 13 | 6 | - | - |
+| 14 | 7 | - | - |
 
 **Recent Trend:**
 
