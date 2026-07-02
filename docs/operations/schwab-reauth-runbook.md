@@ -50,10 +50,14 @@ it's consumed by this command.
 The command prints a verification line per app (`seeded` or `MISSING`) and anchors
 `refresh_issued_at` to the current time — the fresh start of the next 7-day clock.
 
-**Alternative: one-shot login.** If you're at a terminal with a browser (not a
-headless agent shell), `seed_token.py login` does both apps back-to-back with no
-copy-paste: it opens your browser and auto-catches each redirect on a local
-callback server. Same restart step follows either way.
+**Prefer one-shot login when you have a browser at hand.** Schwab's
+authorization code expires around 30 seconds after you copy it. Logging into
+both apps first and pasting both URLs afterward risks losing that race for
+whichever app you authorized first. `seed_token.py login` avoids this: it
+opens your browser and auto-catches each redirect on a local callback server
+as soon as you authorize, one app at a time. Use two-step `exchange` only from
+a headless agent shell with no local browser. Same restart step follows
+either way.
 
 ## Step 3: Restart the Sidecar (Mandatory)
 
