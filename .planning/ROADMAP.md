@@ -614,7 +614,7 @@ full macro series.
   1. After `fetch-rates` runs with the prod `FRED_API_KEY` set, `macro_observations` (new table, per 14-CONTEXT D-01 — `rate_observations` stays single-series for BSM) contains rows for all seven FRED series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) plus VVIX sourced via the CBOE adapter; a second run for the same observation date is idempotent (MAC-01).
   2. `GET /api/analytics/macro` returns a JSON object keyed by series ID, each containing a time-ordered array of `{ time, value }` entries over the shared Zod contract; MCP `get_macro` returns the same payload to Claude Code (MAC-02, MCP-02).
 
-**Plans**: 4/7 plans executed
+**Plans**: 5/7 plans executed
 Plans:
 **Wave 1**
 
@@ -628,7 +628,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 14-05-PLAN.md — Worker: fetch-rates handler extend + 2× daily cron (D-06) + composition wiring (MAC-01)
+- [x] 14-05-PLAN.md — Worker: fetch-rates handler extend + 2× daily cron (D-06) + composition wiring (MAC-01)
 - [ ] 14-06-PLAN.md — Server: GET /api/analytics/macro + get_macro MCP tool + composition wiring (MAC-02, MCP-02)
 
 **Wave 4** *(blocked on Wave 3)*
@@ -709,5 +709,5 @@ requires Phase 11 complete (sidecar health endpoint).
 | 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
 | 12. Streaming + TS Fan-Out | 7/7 | Complete   | 2026-06-29 |
 | 13. COT Adapter | 6/6 | Complete    | 2026-06-29 |
-| 14. FRED Expansion | 4/7 | In Progress|  |
+| 14. FRED Expansion | 5/7 | In Progress|  |
 | 15. Re-Auth Smoothing | 0/TBD | Not started | - |
