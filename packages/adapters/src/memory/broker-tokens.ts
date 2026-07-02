@@ -46,9 +46,14 @@ export function makeMemoryBrokerTokensRepo(
   ): Promise<Result<SchwabTokenRow | null, StorageError>> => {
     const row = store.get(appId);
     if (row === undefined) return ok(null);
-    // Merge the lastRefreshError from the separate store into the row view
-    const lastRefreshError = refreshErrors.get(appId) ?? row.lastRefreshError;
-    return ok({ ...row, lastRefreshError: lastRefreshError ?? null });
+    // Merge the lastRefreshError from the separate store into the row view.
+    // has()-based merge (WR-04): a recorded explicit null means "last refresh
+    // succeeded — clear the flag" and must win over the row's stale value; a
+    // plain `??` would treat the stored null as absent.
+    const lastRefreshError = refreshErrors.has(appId)
+      ? (refreshErrors.get(appId) ?? null)
+      : row.lastRefreshError;
+    return ok({ ...row, lastRefreshError });
   };
 
   const writeTokens: ForWritingTokens = async (
@@ -80,9 +85,15 @@ export function makeMemoryBrokerTokensRepo(
 
     const now = getNow();
 
-    // Merge lastRefreshError from the errors store into each row (or null-row path)
-    const traderLastError = refreshErrors.get("trader") ?? (traderRow?.lastRefreshError ?? null);
-    const marketLastError = refreshErrors.get("market") ?? (marketRow?.lastRefreshError ?? null);
+    // Merge lastRefreshError from the errors store into each row (or null-row path).
+    // has()-based merge (WR-04): an explicit recorded null clears the flag and must
+    // win over the row's stale value — `??` would swallow it.
+    const traderLastError = refreshErrors.has("trader")
+      ? (refreshErrors.get("trader") ?? null)
+      : (traderRow?.lastRefreshError ?? null);
+    const marketLastError = refreshErrors.has("market")
+      ? (refreshErrors.get("market") ?? null)
+      : (marketRow?.lastRefreshError ?? null);
 
     const traderStatusRow: SchwabTokenRow | null =
       traderRow !== undefined
