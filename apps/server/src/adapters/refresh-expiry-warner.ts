@@ -53,8 +53,12 @@ function latchAndWarn(
   }
   warned.set(appId, true);
   try {
+    // 0 means the 7-day cutoff has already passed — "0s remaining ... before
+    // expiry" would mislead an operator grepping logs during an outage.
     warn(
-      `Schwab app "${appId}" nearing 7-day re-auth cutoff — ${refreshExpiresIn}s remaining, re-auth required before expiry`,
+      refreshExpiresIn === 0
+        ? `Schwab app "${appId}" refresh token EXPIRED — 7-day re-auth cutoff passed, re-auth now`
+        : `Schwab app "${appId}" nearing 7-day re-auth cutoff — ${refreshExpiresIn}s remaining, re-auth required before expiry`,
     );
   } catch {
     // guarded: a throwing warn sink must never break the status response.
