@@ -29,8 +29,9 @@ read from .env):
         exchange "<trader_redirect_url>" "<market_redirect_url>"
 
 ORDER: deploy the 11-06 worker cutover (retire refresh-tokens) BEFORE this, so the sidecar is
-the sole token writer (no dual-refresher race). After exchange, redeploy the sidecar
-(`railway up --service sidecar`) so it re-inits its Schwab clients and /sidecar/chain goes live.
+the sole token writer (no dual-refresher race). After exchange, restart the sidecar
+(`railway redeploy --service sidecar -y`) so it re-inits its Schwab clients and /sidecar/chain
+goes live. This restarts the existing deployment image only — no rebuild.
 
 SECURITY: the OAuth `state` (not a secret) is the only thing persisted between steps. No token
 value is printed. The encryption key is only ever a bound %s parameter.
@@ -230,8 +231,9 @@ def _verify_and_finish(db_url: str) -> None:
     for app_id, seeded in rows:
         print(f"  {app_id}: {'seeded' if seeded else 'MISSING'}")
     print(
-        "\nDone. Now re-init the sidecar clients so /sidecar/chain goes live:\n"
-        "  railway up --service sidecar --detach"
+        "\nDone. Now restart the sidecar so it re-inits its Schwab clients and\n"
+        "/sidecar/chain goes live (restarts the existing image, no rebuild):\n"
+        "  railway redeploy --service sidecar -y"
     )
 
 
