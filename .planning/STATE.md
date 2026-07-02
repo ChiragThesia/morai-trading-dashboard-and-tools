@@ -5,16 +5,16 @@ milestone_name: — Real-Time Schwab Streaming
 current_phase: 14
 current_phase_name: fred-expansion
 status: executing
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-07-02T02:14:29.260Z"
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-07-02T02:23:47.693Z"
 last_activity: 2026-07-02
-last_activity_desc: Phase 14 execution — plan 03 (macro adapters) complete
+last_activity_desc: Phase 14 execution — plan 04 (macro use-cases) complete
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 28
-  completed_plans: 24
-  percent: 86
+  completed_plans: 25
+  percent: 89
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 14 (fred-expansion) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Phases 10-13 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 13 COT shipped + FE wired.
-Last activity: 2026-07-02 — Phase 14 execution started
+Last activity: 2026-07-02 — Phase 14 execution — plan 04 (macro use-cases) complete
 
 ## Milestone v1.1 Summary
 
@@ -145,6 +145,7 @@ Regression gates (must survive every phase):
 | Phase 14 P01 | 18min | 3 tasks | 8 files |
 | Phase 14 P02 | 12min | 1 tasks | 4 files |
 | Phase 14 P03 | 15min | 3 tasks | 10 files |
+| Phase 14 P04 | 10min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -324,6 +325,8 @@ Recent decisions affecting current work:
 - [Phase 14-02]: macro_observations composite PK (date, series_id) time-leading — the D-05 upsert idempotency key; source text column ('fred'|'cboe') included per Claude's Discretion — DATA-01 time-leading rule; provenance matches codebase source-tagging convention
 - [Phase 14]: 14-03: shared FRED fetch helper returns internal discriminated result, not Result<T,E>, so makeFredRateAdapter/makeFredSeriesAdapter map to distinct fallback-vs-err semantics without duplicating fetch/parse/filter logic
 - [Phase 14]: 14-03: macro_observations source text column read via ternary narrow (not 'as' cast) since it is plain text, not a pgEnum
+- [Phase ?]: 14-04: fetch task try/catch converts rejections into Result.err before Promise.allSettled resolves, collapsing rejected/err into one accounting path in fetchMacroSeries
+- [Phase ?]: 14-04: getMacro cutoffDateString compares now-minus-days as YYYY-MM-DD strings (toISOString().slice(0,10)) — no date-library dependency
 
 ### Pending Todos
 
@@ -350,6 +353,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-02T02:14:29.250Z
-Stopped at: Completed 14-03-PLAN.md
+Last session: 2026-07-02T02:23:12.715Z
+Stopped at: Completed 14-04-PLAN.md
 Resume file: None
