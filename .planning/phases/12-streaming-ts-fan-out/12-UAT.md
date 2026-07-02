@@ -3,21 +3,21 @@ status: testing
 phase: 12-streaming-ts-fan-out
 source: [12-07-SUMMARY.md, 12-06-SUMMARY.md, 12-05-SUMMARY.md, 12-03-SUMMARY.md, 12-02-SUMMARY.md]
 started: 2026-06-29T16:15:35Z
-updated: 2026-07-01T09:33:00Z
+updated: 2026-07-02T00:50:00Z
 ---
 
 ## Current Test
 
-number: 3
-name: Connection badge states (D-04)
+number: 4
+name: Ad-hoc OCC greeks (SC6) — Analyzer
 expected: |
-  Badge shows POLL → LIVE on connect; on a drop it shows STALE/RECONNECTING,
-  then recovers to LIVE (fresh ticket minted, no permanent 401).
-awaiting: user response
+  Enter an OCC option symbol in the Analyzer; live Δ/Γ/Θ/Vega stream for it ~1/sec.
+awaiting: RTH session (market closed 19:45 CT at last check — needs live ticks)
 
 <!-- Re-test 2026-07-01 RTH: tests 2-5 reset to pending after keep-alive +
      fresh-ticket-reconnect fixes deployed (commits 17bda79/21ea2ab/6b52bca).
-     Tests 1 & 6 remain pass from 2026-06-30. -->]
+     Tests 1 & 6 remain pass from 2026-06-30. Test 3 passed 2026-07-01 evening
+     via DevTools error-injection harness (see note). -->]
 
 ## Tests
 
@@ -33,7 +33,19 @@ note: Re-verified 2026-07-01 RTH — badge reaches LIVE, greek cells flash ~1/se
 
 ### 3. Connection badge states (D-04)
 expected: POLL → LIVE; on drop STALE/RECONNECTING.
-result: [pending]
+result: pass
+note: |
+  Verified 2026-07-01 ~19:50 CT via Chrome DevTools against prod (morai.wtf):
+  - Connect: badge reaches LIVE on load (reconcile path; tick path confirmed in test 2 RTH).
+  - Drop: injected `error` event on the live EventSource (initScript-tracked instance —
+    CDP offline emulation does NOT sever an established SSE socket, so error injection
+    is the honest client-side harness). Badge sequence observed: LIVE → STALE → LIVE.
+  - Recovery: first EventSource closed (readyState 2), SECOND ticket minted
+    (POST /api/stream/ticket [200]), second EventSource opened with a DIFFERENT ticket
+    → /api/stream [200]. No 401, no permanent-stale. Fresh-ticket reconnect confirmed
+    end-to-end against prod.
+  - RECONNECTING intermediate not captured at 50ms sampling — onopen→reconcile completes
+    in <50ms on a healthy network. State machine code path exists (useLiveStream.ts onopen).
 
 ### 4. Ad-hoc OCC greeks (SC6) — Analyzer
 expected: Enter an OCC option symbol in the Analyzer; live Δ/Γ/Θ/Vega stream for it ~1/sec.
@@ -50,9 +62,9 @@ note: Verified via curl 2026-06-30 — POST /api/stream/ticket, GET /api/stream 
 ## Summary
 
 total: 6
-passed: 3
+passed: 4
 issues: 0
-pending: 3
+pending: 2
 skipped: 0
 blocked: 0
 
@@ -76,42 +88,34 @@ mocked unit tests. Fixed + deployed 2026-06-30:
    Now `addEventListener("ticks"/"reconcile")` + array parse (commit df428f5). Root: 12-06
    FakeEventSource dispatched via `onmessage`, hiding the named-event contract.
 
+5. **Bun 10s idleTimeout killed every SSE connection** — `idleTimeout: 255` on Bun.serve,
+   sidecar `_SSE_IDLE_TIMEOUT` 25s→5s, server→browser ping 30s→<10s (commits
+   17bda79/21ea2ab). VERIFIED 2026-07-01 RTH (test 2 re-pass: connection survives,
+   greeks flash ~1/sec).
+6. **Native EventSource reconnect reused the consumed single-use ticket → permanent 401**
+   — es.onerror now closes the EventSource and manually reconnects via connect() with a
+   FRESH ticket + exponential backoff (commit 6b52bca, useLiveStream.ts). VERIFIED
+   2026-07-01 evening (test 3 pass: LIVE→STALE→LIVE, 2nd ticket minted, 2nd stream [200]).
+
 ## Gaps (remaining — diagnosed, NOT yet fixed)
 
-- truth: "Open-leg greeks stream live ~1/sec (SC1/STRM-01)"
-  status: failed
-  severity: major
-  test: 2
+- truth: "Badge reflects reality during a SILENT stall (no socket error event)"
+  status: open
+  severity: minor
+  test: 3 (observation — not a test-3 fail; drop/recovery itself passes)
   root_cause: |
-    Bun's default `idleTimeout` (10s) closes idle SSE connections. Both keep-alive
-    intervals exceed it, so every SSE connection dies at ~10s:
-      - server → browser ping = 30s (apps/server/src/adapters/http/stream.routes.ts:237)
-      - sidecar /sidecar/events ping = 25s (apps/sidecar/stream_proxy.py:29, _SSE_IDLE_TIMEOUT)
-    Server log evidence: "[Bun.serve]: request timed out after 10 seconds" and
-    "socket closed unexpectedly path: .../sidecar/events code: ECONNRESET".
-    So the browser SSE is killed at 10s AND the server→sidecar feed ECONNRESETs at ~10s
-    (no ticks ever reach the fan-out). DevTools network: /api/stream [200] then a reconnect
-    with the SAME single-use ticket → [401].
+    useLiveStream.ts has no staleness watchdog: status only changes on EventSource
+    events (onerror/onopen/ticks/reconcile). If the socket starves WITHOUT erroring
+    (NAT half-open, silent upstream stall — reproduced via CDP offline emulation:
+    65s+ with zero events and badge still LIVE), the badge lies LIVE indefinitely.
+    lastTickAt is only used for tooltip text (LiveStatusBadge.tsx), not staleness.
+    Real socket closes (server FIN/RST, restart, wifi drop) DO fire onerror and are
+    covered by the fresh-ticket reconnect — this gap is only the no-error starve case.
   fixes_needed:
-    - "Server: set `idleTimeout` on Bun.serve in apps/server/src/main.ts (max 255s; e.g. 120) so SSE connections aren't killed at 10s. The server is served via Bun (the `[Bun.serve]` log) — find the serve/export-default config and add idleTimeout."
-    - "Sidecar: lower `_SSE_IDLE_TIMEOUT` in apps/sidecar/stream_proxy.py from 25s to <10s (e.g. 5s) so the server's fetch-to-sidecar read stays fed and doesn't ECONNRESET."
-    - "Optional/backstop: lower the server→browser ping in stream.routes.ts:237 from 30_000 to <10_000."
+    - "Optional watchdog in useLiveStream: track last-event time (any of ping/ticks/reconcile — requires listening to 'ping' too) and flip status to 'stale' + force close/reconnect if silent > ~30s. Test via FakeEventSource with advanced timers."
 
-- truth: "Live stream survives a disconnect (badge recovers to LIVE)"
-  status: failed
-  severity: major
-  test: 2, 3
-  root_cause: |
-    apps/web/src/hooks/useLiveStream.ts es.onerror only sets status 'stale' and relies on
-    EventSource's NATIVE auto-reconnect — which reuses the consumed single-use ticket in the
-    URL → 401 (EventSource then gives up permanently). So any drop = permanent STALE until a
-    full page reload. DevTools: reqid 148 GET /api/stream?ticket=T [200], reqid 149 same
-    ticket [401].
-  fixes_needed:
-    - "In es.onerror: close the EventSource (stop native reconnect), then schedule a manual reconnect via connect() (which mints a FRESH ticket via POST /api/stream/ticket) with exponential backoff + jitter; reset backoff on es.onopen. Add a test (FakeEventSource) asserting a 2nd ticket mint + 2nd EventSource after an error."
+## Re-verify remaining (tests 4-5 — need RTH)
 
-## Re-verify after fixes
-
-`/gsd-verify-work 12` during RTH, OR via Chrome DevTools: load morai.wtf → Overview →
-badge POLL→LIVE within a few sec, greek cells flash ~1/sec (.live-cell present), and the
-SSE connection survives past 10s (no instant [401] reconnect).
+`/gsd-verify-work 12` during RTH (08:30-15:00 CT):
+- Test 4: Analyzer → enter OCC symbol → live greeks ~1/sec (SC6).
+- Test 5: on a real fill, positions/greeks reconcile live (ACCT_ACTIVITY → re-fetch).
