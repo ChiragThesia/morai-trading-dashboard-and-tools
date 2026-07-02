@@ -34,6 +34,7 @@ vi.mock("../hooks/usePositions.ts", () => ({ usePositions: vi.fn() }));
 vi.mock("../hooks/useGex.ts", () => ({ useGex: vi.fn(() => ({ data: { spot: 7381 } })) }));
 vi.mock("../hooks/useStatus.ts", () => ({ useStatus: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useCot.ts", () => ({ useCot: vi.fn(() => ({ data: undefined })) }));
+vi.mock("../hooks/useMacro.ts", () => ({ useMacro: vi.fn(() => ({ data: undefined, isPending: false })) }));
 vi.mock("./Market.tsx", () => ({ Market: (): React.ReactElement => <div data-testid="market-screen" /> }));
 
 import { Overview } from "./Overview.tsx";
@@ -111,14 +112,15 @@ describe("Overview screen", () => {
     expect(screen.getByText("Book & system")).toBeDefined();
   });
 
-  it("renders the live COT card and keeps FRED as a 'needs feed' stub", () => {
+  it("renders the live COT card and the live MacroCard — no more 'FRED macro' stub", () => {
     setPositions([]);
     render(<Overview />);
-    // COT is now a wired card (Phase 13), not a stub — its heading is present.
+    // COT is a wired card (Phase 13) — its heading is present.
     expect(screen.getByText(/CFTC COT/)).toBeDefined();
-    // FRED remains the only "needs feed" stub until Phase 14.
-    expect(screen.getByText("FRED macro")).toBeDefined();
-    expect(screen.getAllByText("○ needs feed").length).toBe(1);
+    // FRED macro is now a wired card (Phase 14, D-12) — the "needs feed" stub is gone.
+    expect(screen.queryByText("FRED macro")).toBeNull();
+    expect(screen.queryByText("○ needs feed")).toBeNull();
+    expect(screen.getByTestId("macro-empty")).toBeDefined();
   });
 
   it("embeds the live Market (GEX/OI/Volume) section", () => {
