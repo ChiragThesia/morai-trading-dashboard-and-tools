@@ -28,11 +28,6 @@ describe("triggerJobBodyFor — WR-04 rebuild-journal requires calendarId", () =
     expect(result.success).toBe(true);
   });
 
-  it("refresh-tokens WITHOUT calendarId passes (optional)", () => {
-    const result = triggerJobBodyFor("refresh-tokens").safeParse({});
-    expect(result.success).toBe(true);
-  });
-
   it("compute-bsm-greeks WITHOUT calendarId passes (optional)", () => {
     const result = triggerJobBodyFor("compute-bsm-greeks").safeParse({});
     expect(result.success).toBe(true);

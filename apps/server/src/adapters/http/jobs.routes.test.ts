@@ -136,8 +136,7 @@ describe("jobsRoutes", () => {
     // If a new job is added to contracts but not imported in the route, this test document the contract.
     expect(TRIGGERABLE_JOBS).toContain("rebuild-journal");
     expect(TRIGGERABLE_JOBS).toContain("sync-fills");
-    expect(TRIGGERABLE_JOBS).toContain("refresh-tokens");
     expect(TRIGGERABLE_JOBS).toContain("compute-bsm-greeks");
-    expect(TRIGGERABLE_JOBS).toHaveLength(4);
+    expect(TRIGGERABLE_JOBS).toHaveLength(3);
   });
 });

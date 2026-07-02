@@ -12,7 +12,6 @@ import { z } from "zod";
 export const TRIGGERABLE_JOBS = [
   "rebuild-journal",
   "sync-fills",
-  "refresh-tokens",
   "compute-bsm-greeks",
 ] as const;
 
