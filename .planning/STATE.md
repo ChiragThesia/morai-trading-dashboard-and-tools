@@ -6,15 +6,15 @@ current_phase: 15
 current_phase_name: re-auth-smoothing
 status: executing
 stopped_at: Phase 15 planned (5 plans, 2 waves) — provisional decisions pending user plan review
-last_updated: "2026-07-02T19:10:48.881Z"
+last_updated: "2026-07-02T19:19:53.667Z"
 last_activity: 2026-07-02
-last_activity_desc: Phase 15 execution started
+last_activity_desc: Phase 15 Plan 01 complete
 progress:
-  total_phases: 6
-  completed_phases: 5
-  total_plans: 33
-  completed_plans: 29
-  percent: 88
+  total_phases: 9
+  completed_phases: 9
+  total_plans: 74
+  completed_plans: 76
+  percent: 100
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 15 (re-auth-smoothing) — EXECUTING
-Plan: 2 of 5 (Plan 01 complete)
-Status: Executing Phase 15 — refreshExpiresIn status-surface backbone (AUTH-05) shipped
+Plan: 3 of 5 (Plan 01 complete)
+Status: Ready to execute
 Phases 10-14 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 14 FRED live (2026-07-02).
 Last activity: 2026-07-02 — Phase 15 Plan 01 complete
 
@@ -151,6 +151,7 @@ Regression gates (must survive every phase):
 | Phase 14 P06 | 15min | 3 tasks | 6 files |
 | Phase 14 P07 | 15min | 3 tasks tasks | 6 files files |
 | Phase 15 P01 | 8min | 2 tasks | 13 files |
+| Phase 15-re-auth-smoothing P03 | 7min | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -340,6 +341,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 14 P07]: MacroCard = plain value tiles (5 primary + 3 secondary), no sparklines — fits Overview half-width density; UnauthorizedError redeclared locally (all 6 sibling hooks do, no shared export)
 - [Phase ?]: 15-01: refreshExpiresIn is a required (non-optional) key on both AppTokenStatus and appTokenStatus — null when far from expiry, never omitted, so the wire shape stays stable
 - [Phase ?]: 15-01: AUTH_EXPIRED branch of toAppTokenStatus computes refreshExpiresInSeconds(...) instead of hardcoding 0 — one code path for near-expiry and past-cutoff
+- [Phase 15 P03]: D-04: removed retired refresh-tokens entry from TRIGGERABLE_JOBS (3-job contract: rebuild-journal, sync-fills, compute-bsm-greeks); trigger_job MCP description updated to match; job-runs.ts historical reads and worker schedule left untouched
 
 ### Pending Todos
 
@@ -366,6 +368,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-02T19:09:31.258Z
+Last session: 2026-07-02T19:19:53.655Z
 Stopped at: Phase 15 context gathered (provisional decisions — user AFK)
 Resume file: .planning/phases/15-re-auth-smoothing/15-CONTEXT.md
