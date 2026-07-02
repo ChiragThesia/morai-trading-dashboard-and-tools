@@ -117,6 +117,12 @@ export type { MemoryRateAdapter } from "./memory/rate.ts";
 // Phase 13 (13-02): in-memory twin for ForFetchingCotReport (COT-01, architecture-boundaries §8)
 export { makeMemoryCotReportAdapter } from "./memory/cot.ts";
 export type { MemoryCotReportAdapter } from "./memory/cot.ts";
+// Phase 14 (review WR-03): in-memory twins for ForFetchingFredSeries + ForFetchingVvixQuote
+// (MAC-01, architecture-boundaries §8 — every driven port ships its memory twin)
+export { makeMemoryFredSeriesAdapter } from "./memory/fred-series.ts";
+export type { MemoryFredSeriesAdapter } from "./memory/fred-series.ts";
+export { makeMemoryVvixAdapter } from "./memory/vvix.ts";
+export type { MemoryVvixAdapter } from "./memory/vvix.ts";
 export { makeMemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
 export type { MemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
 

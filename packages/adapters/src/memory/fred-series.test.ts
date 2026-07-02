@@ -1,0 +1,71 @@
+import { describe, it, expect } from "vitest";
+import { makeMemoryFredSeriesAdapter } from "./fred-series.ts";
+import type { MacroObservationRow } from "@morai/core";
+
+/**
+ * Tests for the in-memory ForFetchingFredSeries twin (review WR-03,
+ * architecture-boundaries §8). No Docker, no network — runs always.
+ *
+ * D-09 parity with makeFredSeriesAdapter: no fabricated fallback —
+ * an unseeded seriesId returns err(FetchError), never a fake value.
+ */
+
+const dffRow: MacroObservationRow = {
+  seriesId: "DFF",
+  date: "2026-06-30",
+  value: 4.33,
+  source: "fred",
+};
+
+describe("makeMemoryFredSeriesAdapter", () => {
+  it("returns err(fetch-error) for an unseeded seriesId (D-09 — no fabricated fallback)", async () => {
+    const adapter = makeMemoryFredSeriesAdapter();
+    const result = await adapter.fetchFredSeries("DFF");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe("fetch-error");
+  });
+
+  it("returns ok with the exact seeded row for its seriesId", async () => {
+    const adapter = makeMemoryFredSeriesAdapter();
+    adapter.seed(dffRow);
+    const result = await adapter.fetchFredSeries("DFF");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual(dffRow);
+  });
+
+  it("resolves multiple seeded series independently; unseeded ids still err", async () => {
+    const adapter = makeMemoryFredSeriesAdapter();
+    const vixRow: MacroObservationRow = {
+      seriesId: "VIXCLS",
+      date: "2026-06-30",
+      value: 18.9,
+      source: "fred",
+    };
+    adapter.seed(dffRow);
+    adapter.seed(vixRow);
+
+    const dff = await adapter.fetchFredSeries("DFF");
+    expect(dff.ok).toBe(true);
+    if (dff.ok) expect(dff.value.value).toBe(4.33);
+
+    const vix = await adapter.fetchFredSeries("VIXCLS");
+    expect(vix.ok).toBe(true);
+    if (vix.ok) expect(vix.value.value).toBe(18.9);
+
+    const sofr = await adapter.fetchFredSeries("SOFR");
+    expect(sofr.ok).toBe(false);
+  });
+
+  it("re-seeding a seriesId replaces the stored row (upsert semantics)", async () => {
+    const adapter = makeMemoryFredSeriesAdapter();
+    adapter.seed(dffRow);
+    adapter.seed({ ...dffRow, date: "2026-07-01", value: 4.35 });
+    const result = await adapter.fetchFredSeries("DFF");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.date).toBe("2026-07-01");
+    expect(result.value.value).toBe(4.35);
+  });
+});
