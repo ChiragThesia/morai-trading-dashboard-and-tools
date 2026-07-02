@@ -9,7 +9,7 @@ import {
 } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import { makeFredRateAdapter } from "./fred.ts";
+import { makeFredRateAdapter, makeFredSeriesAdapter } from "./fred.ts";
 
 const FRED_URL =
   "https://api.stlouisfed.org/fred/series/observations";
@@ -184,5 +184,137 @@ describe("makeFredRateAdapter", () => {
       if (!result.ok) return;
       expect(result.value.rate).toBe(0.045);
     });
+  });
+});
+
+// ─── makeFredSeriesAdapter — parameterized, no-fallback, raw value (MAC-01) ───
+
+function makeSeriesAdapter(apiKey: string | undefined = "test-api-key") {
+  return makeFredSeriesAdapter({
+    fetch: globalThis.fetch,
+    apiKey,
+  });
+}
+
+describe("makeFredSeriesAdapter", () => {
+  it("returns ok with the RAW value (no /100) and seriesId/source set", async () => {
+    server.use(
+      http.get(FRED_URL, () =>
+        HttpResponse.json(fredResponse([{ date: "2026-06-30", value: "18.9" }])),
+      ),
+    );
+    const adapter = makeSeriesAdapter();
+    const result = await adapter("VIXCLS");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // RAW — NOT 0.189
+    expect(result.value.value).toBe(18.9);
+    expect(result.value.seriesId).toBe("VIXCLS");
+    expect(result.value.source).toBe("fred");
+    expect(result.value.date).toBe("2026-06-30");
+  });
+
+  it("filters '.' rows and takes the most-recent non-'.' observation (sort_order=desc)", async () => {
+    server.use(
+      http.get(FRED_URL, () =>
+        HttpResponse.json(
+          fredResponse([
+            { date: "2026-06-30", value: "." },
+            { date: "2026-06-29", value: "18.5" },
+          ]),
+        ),
+      ),
+    );
+    const adapter = makeSeriesAdapter();
+    const result = await adapter("VIXCLS");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.value).toBe(18.5);
+    expect(result.value.date).toBe("2026-06-29");
+  });
+
+  it("returns err when apiKey is undefined (D-09 — no fabricated fallback)", async () => {
+    const fetchSpy: typeof fetch = vi.fn<typeof fetch>();
+    const adapter = makeFredSeriesAdapter({ fetch: fetchSpy, apiKey: undefined });
+    const result = await adapter("VIXCLS");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe("fetch-error");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns err when apiKey is empty string (D-09)", async () => {
+    const fetchSpy: typeof fetch = vi.fn<typeof fetch>();
+    const adapter = makeFredSeriesAdapter({ fetch: fetchSpy, apiKey: "" });
+    const result = await adapter("VIXCLS");
+    expect(result.ok).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns err on non-2xx (D-09 — no fallback)", async () => {
+    server.use(
+      http.get(FRED_URL, () => new HttpResponse(null, { status: 500 })),
+    );
+    const adapter = makeSeriesAdapter();
+    const result = await adapter("VIXCLS");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe("fetch-error");
+  });
+
+  it("returns err on network throw (D-09)", async () => {
+    server.use(
+      http.get(FRED_URL, () => {
+        throw new TypeError("network error");
+      }),
+    );
+    const adapter = makeSeriesAdapter();
+    const result = await adapter("VIXCLS");
+    expect(result.ok).toBe(false);
+  });
+
+  it("returns err on Zod parse failure (D-09)", async () => {
+    server.use(
+      http.get(FRED_URL, () => HttpResponse.json({ not: "the expected shape" })),
+    );
+    const adapter = makeSeriesAdapter();
+    const result = await adapter("VIXCLS");
+    expect(result.ok).toBe(false);
+  });
+
+  it("returns err when all rows are '.' (D-09)", async () => {
+    server.use(
+      http.get(FRED_URL, () =>
+        HttpResponse.json(
+          fredResponse([
+            { date: "2026-06-30", value: "." },
+            { date: "2026-06-29", value: "." },
+          ]),
+        ),
+      ),
+    );
+    const adapter = makeSeriesAdapter();
+    const result = await adapter("VIXCLS");
+    expect(result.ok).toBe(false);
+  });
+
+  it("never logs the apiKey value in a warn message (static warn text)", async () => {
+    server.use(
+      http.get(FRED_URL, () => new HttpResponse(null, { status: 500 })),
+    );
+    const loggedMessages: unknown[] = [];
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation((...args) => {
+        loggedMessages.push(...args);
+      });
+    const adapter = makeFredSeriesAdapter({
+      fetch: globalThis.fetch,
+      apiKey: "SUPER_SECRET_KEY_123",
+    });
+    await adapter("VIXCLS");
+    warnSpy.mockRestore();
+    const loggedStr = loggedMessages.map(String).join(" ");
+    expect(loggedStr).not.toContain("SUPER_SECRET_KEY_123");
   });
 });
