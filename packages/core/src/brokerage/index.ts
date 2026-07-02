@@ -42,14 +42,6 @@ export type { ForRefreshingToken as ForRefreshingBrokerageToken } from "./applic
 // D-14 (05-05): per-app refresh outcome recording port
 export type { ForRecordingRefreshOutcome } from "./application/ports.ts";
 
-// Phase 5: refreshTokens use-case (JOB-02, D-13/D-14)
-export { makeRefreshTokensUseCase } from "./application/refreshTokens.ts";
-export type {
-  RefreshTokensResult,
-  AppRefreshOutcome,
-  RefreshTokensDeps,
-} from "./application/refreshTokens.ts";
-
 // BRK-01: Schwab-primary / CBOE-fallback chain source selector (D-07/D-08)
 export { selectChainSource } from "./application/selectChainSource.ts";
 
