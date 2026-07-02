@@ -15,9 +15,9 @@ function vvixResponse(overrides: {
   return {
     timestamp: overrides.timestamp ?? "2026-07-02 01:00:55",
     data: {
-      current_price: overrides.current_price ?? 89.0,
-      close: overrides.close ?? 88.1,
-      prev_day_close: overrides.prev_day_close ?? 87.5,
+      current_price: "current_price" in overrides ? overrides.current_price : 89.0,
+      close: "close" in overrides ? overrides.close : 88.1,
+      prev_day_close: "prev_day_close" in overrides ? overrides.prev_day_close : 87.5,
     },
   };
 }
