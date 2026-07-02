@@ -58,7 +58,11 @@ via typed API + a live stream the future UI rebuild consumes.
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — pre-code; ship to validate.)
+- [x] **Re-auth smoothing (AUTH-05, AUTH-06)** — Validated in Phase 15: T-24h `refreshExpiresIn`
+      on both status surfaces + one-shot warning log + amber web banner; operator re-auth flow
+      (seed_token.py + runbook) executed live against prod 2026-07-02, both apps restored.
+- *(The v1.0 Active list below predates phases 1–9 and is pending full reconciliation at
+  `/gsd-complete-milestone`.)*
 
 ### Active
 
@@ -158,4 +162,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-25 — started milestone v1.1 (Real-Time Schwab Streaming: schwab-py sidecar, single-auth gateway, live stream, COT + expanded FRED).*
+*Last updated: 2026-07-02 — Phase 15 (re-auth smoothing) complete; v1.1 milestone code-complete. Prod deploy of the phase-15 image pending.*
