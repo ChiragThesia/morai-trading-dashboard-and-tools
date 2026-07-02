@@ -30,8 +30,13 @@ function setStatusData(data: StatusResponse | undefined) {
   mockUseStatus.mockReturnValue({ data } as ReturnType<typeof useStatus>);
 }
 
-// Helper: create a mock status data object with tokenFreshness in the trader slot
-function makeStatusData(freshness: "AUTH_EXPIRED" | "fresh" | "stale" | "none_yet"): StatusResponse {
+// Helper: create a mock status data object with tokenFreshness in the trader slot.
+// refreshExpiresIn is parametrized per-app (both default to null) so amber-state
+// tests can drive trader and/or market into the near-expiry window independently.
+function makeStatusData(
+  freshness: "AUTH_EXPIRED" | "fresh" | "stale" | "none_yet",
+  refreshExpiresIn: { trader?: number | null; market?: number | null } = {},
+): StatusResponse {
   return {
     db: "ok",
     tokenFreshness: {
@@ -40,14 +45,14 @@ function makeStatusData(freshness: "AUTH_EXPIRED" | "fresh" | "stale" | "none_ye
         expiresAt: null,
         refreshIssuedAt: null,
         lastRefreshError: null,
-        refreshExpiresIn: null,
+        refreshExpiresIn: refreshExpiresIn.trader ?? null,
       },
       market: {
         status: "fresh",
         expiresAt: null,
         refreshIssuedAt: null,
         lastRefreshError: null,
-        refreshExpiresIn: null,
+        refreshExpiresIn: refreshExpiresIn.market ?? null,
       },
     },
     lastJobRuns: "none yet",
@@ -111,6 +116,58 @@ describe("AuthExpiredBanner", () => {
 
     render(<AuthExpiredBanner />);
     // No close/dismiss button exists per spec
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+});
+
+describe("AuthExpiredBanner amber pre-expiry state (AUTH-05)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders an amber alert when trader is near-expiry and no app is AUTH_EXPIRED", () => {
+    setStatusData(makeStatusData("fresh", { trader: 3600 }));
+
+    render(<AuthExpiredBanner />);
+
+    expect(screen.getByRole("alert")).toBeDefined();
+    expect(screen.getByText(/expires soon/i)).toBeDefined();
+  });
+
+  it("renders an amber alert for market-only near-expiry (trader fresh)", () => {
+    setStatusData(makeStatusData("fresh", { market: 3600 }));
+
+    render(<AuthExpiredBanner />);
+
+    expect(screen.getByRole("alert")).toBeDefined();
+    expect(screen.getByText(/expires soon/i)).toBeDefined();
+  });
+
+  it("renders the red banner (precedence) when AUTH_EXPIRED and near-expiry are both true", () => {
+    setStatusData(makeStatusData("AUTH_EXPIRED", { trader: 3600 }));
+
+    render(<AuthExpiredBanner />);
+
+    // Red copy wins — no amber "expires soon" text present.
+    expect(screen.getByText(/Schwab auth expired/)).toBeDefined();
+    expect(screen.queryByText(/expires soon/i)).toBeNull();
+  });
+
+  it("renders nothing when both apps are fresh with refreshExpiresIn null", () => {
+    setStatusData(makeStatusData("fresh"));
+
+    const { container } = render(<AuthExpiredBanner />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("renders no dismiss/close button in the amber state", () => {
+    setStatusData(makeStatusData("fresh", { trader: 3600 }));
+
+    render(<AuthExpiredBanner />);
     expect(screen.queryByRole("button")).toBeNull();
   });
 });
