@@ -56,6 +56,21 @@ export function isNearExpiry(refreshIssuedAt: Date, now: Date): boolean {
 }
 
 /**
+ * refreshExpiresInSeconds — seconds remaining until the 7-day refresh-token
+ * hard cutoff, non-null only inside the proactive warning window (T-24h).
+ *
+ * Returns null when NOT isNearExpiry (the field IS the alert signal, not a
+ * general countdown). Returns a non-negative integer of seconds inside the
+ * window; clamps to 0 once the cutoff has already passed.
+ * Pure function: no I/O, clock injected as `now` parameter.
+ */
+export function refreshExpiresInSeconds(refreshIssuedAt: Date, now: Date): number | null {
+  if (!isNearExpiry(refreshIssuedAt, now)) return null;
+  const ageMs = now.getTime() - refreshIssuedAt.getTime();
+  return Math.max(0, Math.round((SEVEN_DAYS_MS - ageMs) / 1000));
+}
+
+/**
  * toAppTokenStatus — derive the freshness classification for a single app.
  *
  * Priority:

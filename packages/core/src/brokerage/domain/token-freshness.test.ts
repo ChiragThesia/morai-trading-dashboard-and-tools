@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { toAppTokenStatus, isTokenExpired, isTokenStale, isNearExpiry } from "./token-freshness.ts";
+import {
+  toAppTokenStatus,
+  isTokenExpired,
+  isTokenStale,
+  isNearExpiry,
+  refreshExpiresInSeconds,
+} from "./token-freshness.ts";
 import type { SchwabTokenRow } from "../application/ports.ts";
 
 // Helper to build a SchwabTokenRow for a given appId with specified times
@@ -127,5 +133,44 @@ describe("isNearExpiry", () => {
     const now = new Date("2026-06-19T12:00:00Z");
     const justOver = new Date(now.getTime() - (6 * 24 * 60 * 60 * 1000 + 60 * 1000));
     expect(isNearExpiry(justOver, now)).toBe(true);
+  });
+});
+
+// ─── refreshExpiresInSeconds (AUTH-05 status-surface backbone) ────────────────
+// null outside the T-24h warn window; non-negative integer seconds-until-7d-cutoff inside it.
+
+describe("refreshExpiresInSeconds", () => {
+  it("returns null when refreshIssuedAt is 5 days old (well within safe window)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+    expect(refreshExpiresInSeconds(fiveDaysAgo, now)).toBeNull();
+  });
+
+  it("returns a non-null integer of seconds when exactly 6 days old (enters warn window)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const result = refreshExpiresInSeconds(sixDaysAgo, now);
+    expect(result).not.toBeNull();
+    expect(result).toBe(24 * 60 * 60); // 1 day remaining, in seconds
+  });
+
+  it("returns null when refreshIssuedAt is 5 days and 59 minutes old (just under threshold)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const justUnder = new Date(now.getTime() - (6 * 24 * 60 * 60 * 1000 - 60 * 1000));
+    expect(refreshExpiresInSeconds(justUnder, now)).toBeNull();
+  });
+
+  it("returns a non-null integer of seconds when 6 days and 1 minute old (just past threshold)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const justOver = new Date(now.getTime() - (6 * 24 * 60 * 60 * 1000 + 60 * 1000));
+    const result = refreshExpiresInSeconds(justOver, now);
+    expect(result).not.toBeNull();
+    expect(result).toBe(24 * 60 * 60 - 60); // 1 day minus 1 minute remaining
+  });
+
+  it("returns 0 when refreshIssuedAt is 8 days old (past the hard cutoff)", () => {
+    const now = new Date("2026-06-19T12:00:00Z");
+    const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
+    expect(refreshExpiresInSeconds(eightDaysAgo, now)).toBe(0);
   });
 });
