@@ -4,9 +4,9 @@ milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
 current_phase: 15
 current_phase_name: re-auth-smoothing
-status: executing
+status: verifying
 stopped_at: Completed 15-05-PLAN.md
-last_updated: "2026-07-02T19:40:20.815Z"
+last_updated: "2026-07-02T21:06:16.814Z"
 last_activity: 2026-07-02
 last_activity_desc: Phase 15 Plan 01 complete
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 Phase: 15 (re-auth-smoothing) — EXECUTING
 Plan: 5 of 5 (Plan 01 complete)
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Phases 10-14 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 14 FRED live (2026-07-02).
 Last activity: 2026-07-02 — Phase 15 Plan 01 complete
 
@@ -154,6 +154,7 @@ Regression gates (must survive every phase):
 | Phase 15-re-auth-smoothing P03 | 7min | 1 tasks | 4 files |
 | Phase 15 P04 | 10min | 2 tasks | 3 files |
 | Phase 15-re-auth-smoothing P05 | 8min | 1 tasks | 2 files |
+| Phase 15-re-auth-smoothing P02 | 25min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -348,6 +349,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 15-04: single composition-root wiring (statusPort) shared by GET /api/status and MCP get_status; warning message avoids the literal word token
 - [Phase 15-re-auth-smoothing]: 15-05: amber gate checks both trader and market refreshExpiresIn (worst-case); red gate stays trader-only (residual gap, documented)
 - [Phase 15-re-auth-smoothing]: 15-05: amber palette (#231a08/#5a4a1f/#ffb74d) distinct from red, references schwab-reauth-runbook.md per D-02b
+- [Phase ?]: railway redeploy --service sidecar -y (restart-only, no rebuild) satisfies AUTH-06's roadmap wording once reinterpreted as no code ship; no sidecar reload endpoint added (D-02)
+- [Phase ?]: seed_token.py login (browser auto-capture) preferred over two-step exchange when a browser is available - two-step loses Schwab's ~30s code-expiry race across two apps
 
 ### Pending Todos
 
@@ -374,6 +377,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-02T19:40:20.803Z
+Last session: 2026-07-02T21:05:20.217Z
 Stopped at: Completed 15-05-PLAN.md
 Resume file: None

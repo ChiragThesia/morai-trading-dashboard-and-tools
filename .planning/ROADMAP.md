@@ -46,7 +46,7 @@ Cross-cutting regression gates (must never regress across any phase):
 - [x] **Phase 12: Streaming + TS Fan-Out** - LEVELONE_OPTION + ACCT_ACTIVITY ingestion; `GET /api/stream` with Supabase JWT edge; Zod stream contracts; cold-start reconcile (completed 2026-06-29)
 - [x] **Phase 13: COT Adapter** - Weekly `fetch-cot` job; `cot_observations` table; `GET /api/analytics/cot` + MCP `get_cot` (completed 2026-06-29)
 - [x] **Phase 14: FRED Expansion** - Expanded macro series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS + VVIX via CBOE); prod FRED_API_KEY set; `GET /api/analytics/macro` + MCP `get_macro` (completed 2026-07-02)
-- [ ] **Phase 15: Re-Auth Smoothing** - T-24h expiry alert; one-click/operator re-auth flow; operator runbook
+- [x] **Phase 15: Re-Auth Smoothing** - T-24h expiry alert; one-click/operator re-auth flow; operator runbook (completed 2026-07-02)
 
 ## Phase Details
 
@@ -649,11 +649,11 @@ new tokens on its next auto-refresh cycle.
   1. When the Schwab refresh token is within 24 hours of its 7-day expiry, `GET /api/status` includes a non-null `refreshExpiresIn` field and the status surface logs a warning; the alert fires before the token expires (AUTH-05).
   2. The operator can run a local re-auth flow (manual-flow → `token_write` callback → Postgres) that writes a new refresh token to `broker_tokens`; the sidecar picks up the new token on its next auto-refresh cycle without a Railway redeploy; `GET /api/status` reports token freshness restored (AUTH-06).
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 **Wave 1**
 
 - [x] 15-01-PLAN.md — AUTH-05: refreshExpiresIn domain computation + type/contract/DTO threading (T-24h status field)
-- [ ] 15-02-PLAN.md — AUTH-06: seed_token.py hardening (commit diff, `railway redeploy`) + operator re-auth runbook
+- [x] 15-02-PLAN.md — AUTH-06: seed_token.py hardening (commit diff, `railway redeploy`) + operator re-auth runbook
 - [x] 15-03-PLAN.md — D-04: remove retired `refresh-tokens` from the `trigger_job` surface
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -726,4 +726,4 @@ requires Phase 11 complete (sidecar health endpoint).
 | 12. Streaming + TS Fan-Out | 7/7 | Complete   | 2026-06-29 |
 | 13. COT Adapter | 6/6 | Complete    | 2026-06-29 |
 | 14. FRED Expansion | 7/7 | Complete    | 2026-07-02 |
-| 15. Re-Auth Smoothing | 4/5 | In Progress|  |
+| 15. Re-Auth Smoothing | 5/5 | Complete   | 2026-07-02 |

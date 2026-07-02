@@ -163,3 +163,7 @@ Verified 2026-07-02 by the operator against production:
 ---
 *Phase: 15-re-auth-smoothing*
 *Completed: 2026-07-02*
+
+## Self-Check: PASSED
+
+All created/modified files confirmed present; all commit hashes (a00a89a, 351fc2a, 437a063, d8cacd4, f0f73fb, 662cb05) confirmed in git log.
