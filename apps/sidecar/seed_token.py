@@ -178,7 +178,7 @@ def step_exchange(trader_url: str, market_url: str) -> None:
             failures.append(app_id)
             print(f"[{app_id}] EXCHANGE FAILED: {type(exc).__name__}: {exc}")
 
-    _verify_and_finish(db_url)
+    _verify_and_finish(db_url, failures)
 
 
 def step_login() -> None:
@@ -216,20 +216,29 @@ def step_login() -> None:
     _verify_and_finish(db_url)
 
 
-def _verify_and_finish(db_url: str) -> None:
+def _verify_and_finish(db_url: str, failures: list[str] | None = None) -> None:
+    # Freshness check, not mere presence: on a re-auth the STALE row from the previous
+    # seed still has token_json, so `IS NOT NULL` would report "seeded" even when every
+    # exchange failed. A row only counts if THIS run anchored refresh_issued_at.
     conn = psycopg2.connect(db_url)
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT app_id, token_json IS NOT NULL FROM broker_tokens "
+                "SELECT app_id, refresh_issued_at > now() - interval '5 minutes' "
+                "FROM broker_tokens "
                 "WHERE app_id IN ('trader', 'market') ORDER BY app_id"
             )
             rows = cur.fetchall()
     finally:
         conn.close()
-    print("\nVerification (token_json present):")
-    for app_id, seeded in rows:
-        print(f"  {app_id}: {'seeded' if seeded else 'MISSING'}")
+    print("\nVerification (refresh_issued_at anchored within the last 5 minutes):")
+    for app_id, fresh in rows:
+        print(f"  {app_id}: {'seeded' if fresh else 'STALE — not written by this run'}")
+    if failures:
+        sys.exit(
+            "\nExchange FAILED for: " + ", ".join(failures)
+            + " — do NOT restart the sidecar; re-run authurl/exchange for the failed app(s)."
+        )
     print(
         "\nDone. Now restart the sidecar so it re-inits its Schwab clients and\n"
         "/sidecar/chain goes live (restarts the existing image, no rebuild):\n"
