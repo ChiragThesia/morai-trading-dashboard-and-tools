@@ -48,6 +48,7 @@ import { createRemoteJWKSet } from "jose";
 import { makeSupabaseJwtAuth } from "./adapters/http/supabase-auth.ts";
 import { bearerAuth } from "./adapters/mcp/bearer.ts";
 import { statusRoutes } from "./adapters/http/status.routes.ts";
+import { withRefreshExpiryWarning } from "./adapters/refresh-expiry-warner.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
@@ -94,6 +95,12 @@ const getStatus = makeGetStatusUseCase({
   version,
   startedAt,
 });
+
+// AUTH-05: single composition-root choke point for the T-24h warning-log side
+// effect — wrap getStatus ONCE and inject the wrapped port into both
+// statusRoutes and makeMcpRouter below, so the warning fires once per crossing
+// regardless of transport (RESEARCH Anti-Pattern: no per-adapter duplication).
+const statusPort = withRefreshExpiryWarning(getStatus);
 
 // Build the calendar use-cases
 const registerCalendar = makeRegisterCalendarUseCase({
@@ -222,7 +229,7 @@ app.use(
 // PUBLIC: /api/status — no JWT required.
 // Railway's healthcheckPath = "/api/status" hits this endpoint without any auth token;
 // mounting it outside the JWT group ensures healthchecks pass and deploys are not rejected.
-app.route("/api", statusRoutes(getStatus));
+app.route("/api", statusRoutes(statusPort));
 
 // SC-4 / AUTH-01 / RPC-01: Chain all data read routes into one sub-router so hc<AppType>()
 // inference works (RESEARCH A5 / Pattern 6). The chained form is REQUIRED for AppType;
@@ -284,7 +291,7 @@ app.route("/api", jobsGroup);
 // MAC-02 / MCP-02 (14-06): get_macro tool added here — same getMacro use-case as the HTTP route.
 const mcpRouter = makeMcpRouter(
   config,
-  getStatus,
+  statusPort,
   listCalendars,
   getJournal,
   getLiveGreeks,
