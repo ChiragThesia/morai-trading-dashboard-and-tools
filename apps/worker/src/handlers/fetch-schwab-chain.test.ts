@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Job } from "pg-boss";
 import { ok, err } from "@morai/shared";
+import type { ForReadingTokenFreshness } from "@morai/core";
 import { makeFetchSchwabChainHandler } from "./fetch-schwab-chain.ts";
 import type { BossForChainHandler } from "./fetch-cboe-chain.ts";
 
@@ -75,13 +76,13 @@ describe("makeFetchSchwabChainHandler", () => {
     const fetchChainUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss = makeBossStub();
 
-    // readTokenFreshness returns market AUTH_EXPIRED
-    const readTokenFreshnessFn = vi.fn().mockResolvedValue(
+    // readTokenFreshness returns market AUTH_EXPIRED — typed as the port (like the
+    // selectChainSource tests) so the fixture cannot drift from AppTokenStatus.
+    const readTokenFreshnessFn: ForReadingTokenFreshness = async () =>
       ok({
-        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), refreshExpiresIn: null },
-        market: { status: "AUTH_EXPIRED", expiresAt: null, refreshIssuedAt: null, refreshExpiresIn: null },
-      }),
-    );
+        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
+        market: { status: "AUTH_EXPIRED", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null, refreshExpiresIn: null },
+      });
 
     const handler = makeFetchSchwabChainHandler({
       fetchChainUseCase,
