@@ -81,6 +81,32 @@ discipline as the trade-advisor plugin's `rebuild-journal`.
 ```
 date PK, rate numeric          -- fallback 4.5% if FRED unreachable (rho impact tiny)
 ```
+Unchanged by Phase 14 (D-02) — stays the single-series BSM risk-free-rate path. `readRate` /
+`computeBsmGreeks.ts` keep reading this table exactly as before.
+
+### `macro_observations` — expanded FRED + VVIX series (Phase 14, MAC-01)
+
+NEW table (D-01) — not a widening of `rate_observations`. Backs `GET /api/analytics/macro`
+and MCP `get_macro` (MAC-02).
+
+```
+date        date NOT NULL      ┐ PK (date, series_id) — time-leading (DATA-01)
+series_id   text NOT NULL      ┘
+value       numeric NOT NULL   -- RAW as reported by the source, NO /100 (D-14): DFF stored
+                                -- as 4.33 (percent), VIXCLS/VVIX stored as index levels (~18.9,
+                                -- ~89.0) — this is a display-only table, no cross-series
+                                -- arithmetic requiring normalization
+source      text                -- 'fred' | 'cboe' (provenance)
+```
+
+Eight series land here: `DFF`, `DGS1MO`, `DGS3MO`, `SOFR`, `T10Y2Y`, `T10Y3M`, `VIXCLS`
+(source `fred`) and `VVIX` (source `cboe`, via the existing CBOE index-quote adapter).
+DGS3MO is double-written — once here (raw, source `fred`) and once in `rate_observations`
+(decimal-fraction, unchanged BSM path, D-02).
+
+**RLS enabled**, mirroring `cot_observations`. Idempotent upsert on `(date, series_id)` — a
+second run for the same date is a no-op for unchanged values (D-05 self-healing incremental
+fetch). ENABLE ROW LEVEL SECURITY per the standard observation-table convention.
 
 ### Analytics tables (analytics context, Phase 6)
 

@@ -25,7 +25,7 @@ handlers are thin inbound adapters calling application use-cases.
 | `compute-bsm-greeks` | every 1 min (drains pending) | Scan `leg_observations WHERE bsm_iv IS NULL` → IV invert → BSM → upsert |
 | `sync-fills` | `*/10 9-16 * * 1-5` (every 10 min RTH) | Schwab transactions → `fills`/`orders`; pair into calendar OPEN/CLOSE/ROLL events |
 | `refresh-tokens` | `0 4 * * *` (04:00 ET, NO RTH gate) | Refresh both Schwab apps independently; proactive 7-day expiry warning; alert on failure |
-| `fetch-rates` | `0 7 * * 1-5` | FRED DGS3MO daily |
+| `fetch-rates` | `0 9 * * 1-5` + `30 18 * * 1-5` | FRED DGS3MO daily (BSM rate) + expanded macro fetch (Phase 14) |
 | `compute-analytics` | chain-triggered only (NO cron) | Reads `leg_observations` + `calendar_snapshots`; writes `skew_observations`, `risk_reversal_observations`, `term_structure_observations` |
 | `rebuild-journal` | on-demand only (no schedule) | Reconstructs OPEN/CLOSE/ROLL events for one calendar from fills; idempotent delete-then-reinsert |
 
@@ -37,6 +37,32 @@ Notes carried from old dashboard:
   extend the refresh token: Schwab refresh tokens hard-expire 7 days after issuance →
   weekly interactive re-auth is mandatory (`deployment.md` + `stack-decisions.md` D22).
   On `invalid_grant`, Schwab jobs pause gracefully and status flags AUTH_EXPIRED.
+
+## fetch-rates (Phase 2 + Phase 14 macro expansion, MAC-01)
+
+**Schedule:** TWO daily runs, Mon-Fri, `America/New_York` — `0 9 * * 1-5` (09:00 ET) and
+`30 18 * * 1-5` (18:30 ET). The evening run catches same-day VIXCLS/treasury publications;
+the morning run catches SOFR's next-morning (T+1) publication lag. Both runs share the same
+handler and NYSE-holiday gate.
+
+**Two independent responsibilities in one run:**
+1. **DGS3MO → `rate_observations`** (unchanged, Phase 2) — the BSM risk-free rate. `readRate`
+   and `computeBsmGreeks.ts` keep reading this path exactly as before (D-02 — untouched).
+2. **Expanded macro fetch → `macro_observations`** (new, Phase 14) — 7 FRED series (DFF,
+   DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) plus VVIX via the existing CBOE adapter.
+   DGS3MO is double-written: the legacy single-row BSM pipeline AND a `macro_observations`
+   row for the macro API (MAC-02).
+
+**Failure policy (D-07):** best-effort per series, fail-loud finish. Every series is fetched
+independently; every successful fetch persists regardless of the others' outcome. If ANY of
+the 8 series failed, the handler throws after persisting all successes, naming the failed
+series — pg-boss marks the run failed and `/api/status` surfaces `lastErr`. No silent data
+holes. The next run (twice-daily cadence) self-heals any gap by fetching from
+`max(date)+1` per series (D-05).
+
+**Hard requirement (D-09):** the macro fetch requires `FRED_API_KEY` — missing key fails
+loud, no silent skip. This is the OPPOSITE of the legacy DGS3MO adapter's lenient 4.5%
+fallback (D-13), which stays unchanged for the BSM path.
 
 ## sync-fills (Phase 5, JOB-01 / JRNL-01)
 
