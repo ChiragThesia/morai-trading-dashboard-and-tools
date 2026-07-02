@@ -119,7 +119,7 @@ separate UI-rebuild milestone. Reverses **D17** (streaming deferred) for account
 
 ### Re-Auth Smoothing
 
-- [ ] **AUTH-05**: Status surfaces the Schwab refresh-token expiry and an alert fires at T-24h before the 7-day cutoff.
+- [x] **AUTH-05**: Status surfaces the Schwab refresh-token expiry and an alert fires at T-24h before the 7-day cutoff.
 - [ ] **AUTH-06**: A one-click/operator re-auth flow (manual-flow → `token_write` to Postgres) restores Schwab auth without a redeploy.
 
 ### Docs
@@ -219,7 +219,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | COT-02 | Phase 13 | Complete |
 | MAC-01 | Phase 14 | Complete |
 | MAC-02 | Phase 14 | Complete |
-| AUTH-05 | Phase 15 | Pending |
+| AUTH-05 | Phase 15 | Complete |
 | AUTH-06 | Phase 15 | Pending |
 
 **Coverage:**

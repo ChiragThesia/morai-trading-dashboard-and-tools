@@ -143,3 +143,7 @@ None - no external service configuration required. The warning is a passive log 
 ---
 *Phase: 15-re-auth-smoothing*
 *Completed: 2026-07-02*
+
+## Self-Check: PASSED
+
+All created files verified present on disk; all 4 commits (18486b5, f947c3f, 657c32c, 83f94d9) verified present in git log.

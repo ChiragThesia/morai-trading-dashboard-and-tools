@@ -649,7 +649,7 @@ new tokens on its next auto-refresh cycle.
   1. When the Schwab refresh token is within 24 hours of its 7-day expiry, `GET /api/status` includes a non-null `refreshExpiresIn` field and the status surface logs a warning; the alert fires before the token expires (AUTH-05).
   2. The operator can run a local re-auth flow (manual-flow → `token_write` callback → Postgres) that writes a new refresh token to `broker_tokens`; the sidecar picks up the new token on its next auto-refresh cycle without a Railway redeploy; `GET /api/status` reports token freshness restored (AUTH-06).
 
-**Plans**: 2/5 plans executed
+**Plans**: 3/5 plans executed
 **Wave 1**
 
 - [x] 15-01-PLAN.md — AUTH-05: refreshExpiresIn domain computation + type/contract/DTO threading (T-24h status field)
@@ -658,7 +658,7 @@ new tokens on its next auto-refresh cycle.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 15-04-PLAN.md — AUTH-05: T-24h warning-log side effect (getStatus decorator, wired for HTTP + MCP)
+- [x] 15-04-PLAN.md — AUTH-05: T-24h warning-log side effect (getStatus decorator, wired for HTTP + MCP)
 - [ ] 15-05-PLAN.md — AUTH-05: amber pre-expiry banner (extends AuthExpiredBanner, both apps)
 
 **Plan-review note (provisional decisions — user was AFK)**: AUTH-06's "without a Railway
@@ -726,4 +726,4 @@ requires Phase 11 complete (sidecar health endpoint).
 | 12. Streaming + TS Fan-Out | 7/7 | Complete   | 2026-06-29 |
 | 13. COT Adapter | 6/6 | Complete    | 2026-06-29 |
 | 14. FRED Expansion | 7/7 | Complete    | 2026-07-02 |
-| 15. Re-Auth Smoothing | 2/5 | In Progress|  |
+| 15. Re-Auth Smoothing | 3/5 | In Progress|  |
