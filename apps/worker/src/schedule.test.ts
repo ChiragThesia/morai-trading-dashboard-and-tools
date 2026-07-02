@@ -10,6 +10,7 @@
 //   - sync-fills cron is every 10 min RTH tz America/New_York
 //   - sync-transactions cron runs +5 min ahead of sync-fills (fills source before pairing)
 //   - fetch-cot cron is weekly Friday 17:00 ET tz America/New_York (COT-01, D-07)
+//   - fetch-rates is scheduled TWICE (09:00 ET + 18:30 ET, Mon-Fri, D-06/14-05)
 //   - work() registered for all 10 queues
 //   - createQueue calls precede schedule/work calls (CR-01 ordering)
 
@@ -90,13 +91,27 @@ describe("registerAllJobs", () => {
     expect(createQueueCalls.sort()).toEqual(ALL_10_QUEUES.sort());
   });
 
-  it("calls schedule for exactly 6 jobs (fetch-cot added COT-01; refresh-tokens retired GW-03)", async () => {
+  it("calls schedule 7 times — 6 jobs, fetch-rates scheduled twice (14-05, D-06)", async () => {
     const { boss, scheduleCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(scheduleCalls).toHaveLength(6);
-    const scheduledNames = scheduleCalls.map((c) => c.name).sort();
+    expect(scheduleCalls).toHaveLength(7);
+    const scheduledNames = [...new Set(scheduleCalls.map((c) => c.name))].sort();
     expect(scheduledNames).toEqual(SCHEDULED_6.sort());
+  });
+
+  it("schedules fetch-rates TWICE — 09:00 ET and 18:30 ET, Mon-Fri (D-06, 14-05)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const fetchRatesCrons = scheduleCalls.filter((c) => c.name === "fetch-rates");
+    expect(fetchRatesCrons).toHaveLength(2);
+    expect(fetchRatesCrons.map((c) => c.cron).sort()).toEqual(
+      ["0 9 * * 1-5", "30 18 * * 1-5"].sort(),
+    );
+    for (const c of fetchRatesCrons) {
+      expect(c.tz).toBe("America/New_York");
+    }
   });
 
   it("sync-transactions cron runs +5 min ahead of sync-fills, tz America/New_York", async () => {
