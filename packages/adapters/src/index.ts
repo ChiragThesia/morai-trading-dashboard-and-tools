@@ -83,7 +83,9 @@ export type { SidecarChainAdapter } from "./sidecar/chain-adapter.ts";
 // Phase 12 (12-05): real ForReconcilingPositions over GET /sidecar/positions (STRM-05)
 export { makeSidecarPositionReconciler } from "./sidecar/positions-reconciler.ts";
 export type { SidecarPositionReconcilerDeps } from "./sidecar/positions-reconciler.ts";
-export { makeFredRateAdapter } from "./http/fred.ts";
+export { makeFredRateAdapter, makeFredSeriesAdapter } from "./http/fred.ts";
+// Phase 14 (14-03): CBOE VVIX index-quote adapter — ForFetchingVvixQuote (MAC-01, D-15)
+export { makeCboeVvixAdapter } from "./http/cboe-vvix.ts";
 // Phase 13 (13-02): CFTC Socrata TFF adapter — ForFetchingCotReport over gpe5-46if.json (COT-01)
 export { makeCftcCotAdapter } from "./http/cftc.ts";
 // Phase 13 (13-03): COT observations repo — ForPersistingCotObservation + ForReadingCotObservations
@@ -92,6 +94,12 @@ export type { PostgresCotObservationsRepo } from "./postgres/repos/cot-observati
 // Phase 13 (13-03): in-memory twin for cot-observations (architecture-boundaries §8)
 export { makeMemoryCotObservationsRepo } from "./memory/cot-observations.ts";
 export type { MemoryCotObservationsRepo } from "./memory/cot-observations.ts";
+// Phase 14 (14-03): macro-observations repo — ForPersistingMacroObservation + ForReadingMacroObservations (MAC-01)
+export { makePostgresMacroObservationsRepo } from "./postgres/repos/macro-observations.ts";
+export type { PostgresMacroObservationsRepo } from "./postgres/repos/macro-observations.ts";
+// Phase 14 (14-03): in-memory twin for macro-observations (architecture-boundaries §8)
+export { makeMemoryMacroObservationsRepo } from "./memory/macro-observations.ts";
+export type { MemoryMacroObservationsRepo } from "./memory/macro-observations.ts";
 
 // In-memory adapters (test doubles; also usable in development)
 export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";
