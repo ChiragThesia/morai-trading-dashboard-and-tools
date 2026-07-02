@@ -4,15 +4,15 @@ milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
 current_phase: 14
 current_phase_name: fred-expansion
-status: ready_to_plan
-stopped_at: Phase 14 context gathered
+status: ready_to_execute
+stopped_at: Phase 14 planned (7 plans, 4 waves)
 last_updated: "2026-07-02T01:15:37.040Z"
 last_activity: 2026-07-01
-last_activity_desc: Phase 12 UAT closed
+last_activity_desc: Phase 14 planned
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 21
+  total_plans: 28
   completed_plans: 21
   percent: 67
 ---
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
-Phase: 14 (fred-expansion) — READY TO PLAN
+Phase: 14 (fred-expansion) — PLANNED, ready to execute (7 plans, 4 waves)
 Phases 10-13 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 13 COT shipped + FE wired.
-Last activity: 2026-07-01 — Phase 12 UAT closed
+Last activity: 2026-07-01 — Phase 14 planned
 
 ## Milestone v1.1 Summary
 
