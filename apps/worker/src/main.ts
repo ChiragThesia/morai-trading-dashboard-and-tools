@@ -34,6 +34,9 @@ import {
   makePostgresGexSnapshotRepo,
   makeCftcCotAdapter,
   makePostgresCotObservationsRepo,
+  makeFredSeriesAdapter,
+  makeCboeVvixAdapter,
+  makePostgresMacroObservationsRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -49,6 +52,7 @@ import {
   makeRebuildJournalUseCase,
   selectChainSource,
   makeFetchCot,
+  makeFetchMacroSeries,
 } from "@morai/core";
 import { makeFetchCotHandler } from "./handlers/fetch-cot.ts";
 import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
@@ -145,6 +149,24 @@ const fetchRateUseCase = makeFetchRateUseCase({
   persistRate: rateObsRepo.persistRate,
 });
 
+// MAC-01 (14-05): macro fetch — 7 FRED series (parameterized, no-fallback adapter) + VVIX
+// (CBOE) into macro_observations. D-02: fully additive — does NOT touch fredAdapter/
+// fetchRateUseCase/rateObsRepo above (DGS3MO→rate_observations/BSM path stays untouched).
+const fetchFredSeries = makeFredSeriesAdapter({
+  fetch: globalThis.fetch,
+  apiKey: config.FRED_API_KEY,
+});
+const fetchVvixQuote = makeCboeVvixAdapter({
+  fetch: globalThis.fetch,
+  userAgent: USER_AGENT,
+});
+const macroObsRepo = makePostgresMacroObservationsRepo(db);
+const fetchMacroSeriesUseCase = makeFetchMacroSeries({
+  fetchFredSeries,
+  fetchVvixQuote,
+  persistMacroObservation: macroObsRepo.insertMacroObservation,
+});
+
 const computeBsmGreeksUseCase = makeComputeBsmGreeksUseCase({
   readPending: legObsRepo.readPendingObs,
   writeBsm: legObsRepo.writeBsmResults,
@@ -204,6 +226,7 @@ const fetchSchwabChainHandler = makeFetchSchwabChainHandler({
 
 const fetchRatesHandler = makeFetchRatesHandler({
   fetchRateUseCase,
+  fetchMacroSeriesUseCase,
   now: () => new Date(),
 });
 
