@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
-current_phase: 15
+current_phase: 14
 status: ready_to_plan
-stopped_at: Phase 14 complete + UAT passed (prod live); Phase 15 (re-auth smoothing) not yet planned
-last_updated: "2026-07-02T04:15:00.000Z"
+stopped_at: Phase 15 context gathered (provisional decisions — user AFK)
+last_updated: "2026-07-02T17:59:19.382Z"
 last_activity: 2026-07-02
-last_activity_desc: Phase 14 complete — verified, UAT passed, prod live
+last_activity_desc: Phase 14 complete
 progress:
-  total_phases: 6
-  completed_phases: 5
-  total_plans: 28
-  completed_plans: 28
-  percent: 83
+  total_phases: 9
+  completed_phases: 9
+  total_plans: 74
+  completed_plans: 76
+  percent: 100
 current_phase_name: fred-expansion
 ---
 
@@ -363,6 +363,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-02T02:57:37.668Z
-Stopped at: Completed 14-07-PLAN.md — Phase 14 plans 7/7 done; prod UAT (FRED_API_KEY) pending
-Resume file: None
+Last session: 2026-07-02T17:59:19.368Z
+Stopped at: Phase 15 context gathered (provisional decisions — user AFK)
+Resume file: .planning/phases/15-re-auth-smoothing/15-CONTEXT.md
