@@ -2,9 +2,18 @@ import { useStatus } from "../hooks/useStatus.ts";
 
 /**
  * AuthExpiredBanner — UI-02: fixed bottom banner when Schwab auth has expired.
+ * AUTH-05: also renders an amber sibling banner inside the T-24h pre-expiry window.
  *
- * Renders on all authenticated screens when GET /api/status returns
- * tokenFreshness.trader.status === "AUTH_EXPIRED".
+ * Renders on all authenticated screens based on GET /api/status tokenFreshness:
+ * - RED when trader.status === "AUTH_EXPIRED" (red takes precedence).
+ * - AMBER when neither app is AUTH_EXPIRED and at least one app (trader OR market)
+ *   has a non-null refreshExpiresIn (inside the T-24h warning window).
+ * - Nothing otherwise.
+ *
+ * Residual gap (surgical-changes rule, 15-05 plan note): the red gate stays
+ * trader-only, matching the pre-existing behavior — a market-only AUTH_EXPIRED
+ * does not show the red banner. Extending red to both apps was out of scope for
+ * this plan (not a one-or-two-line change without touching the locked red copy path).
  *
  * Visual spec (09-UI-SPEC.md AUTH_EXPIRED status banner section):
  * - position: fixed; bottom: 0; left: 0; right: 0; z-index: 100
@@ -17,53 +26,102 @@ import { useStatus } from "../hooks/useStatus.ts";
  *
  * Copy (locked by UI-SPEC copywriting contract):
  * "Schwab auth expired. Run `auth setup` to reconnect. Live data may be stale."
+ *
+ * Amber copy/styling (Claude's Discretion, CONTEXT.md D-03): follows the same
+ * role="alert" + fixed-bottom + JetBrains Mono precedent with an amber palette,
+ * distinct from the red tones above. References the operator re-auth runbook.
  */
 export function AuthExpiredBanner() {
   const { data } = useStatus();
 
-  // Determine if AUTH_EXPIRED is active on the trader app.
-  // tokenFreshness is either "none yet" (string) or a {trader, market} map.
-  // Only render when we have the map AND trader.status is AUTH_EXPIRED.
-  const isExpired =
-    data !== undefined &&
-    data.tokenFreshness !== "none yet" &&
-    data.tokenFreshness.trader.status === "AUTH_EXPIRED";
-
-  if (!isExpired) {
+  // tokenFreshness is either "none yet" (string, pre-setup) or a {trader, market} map.
+  if (data === undefined || data.tokenFreshness === "none yet") {
     return null;
   }
 
-  return (
-    <div
-      role="alert"
-      style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 100,
-        backgroundColor: "#180f10",
-        borderTop: "1px solid #5a2b2e",
-        padding: "8px 16px",
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        fontSize: "12px",
-        lineHeight: 1.45,
-        color: "#ef5350",
-      }}
-    >
-      Schwab auth expired. Run{" "}
-      <code
-        role="code"
+  const { trader, market } = data.tokenFreshness;
+
+  // Red gate: trader-only, unchanged from the pre-existing behavior (see doc comment above).
+  const isExpired = trader.status === "AUTH_EXPIRED";
+
+  // Amber gate: BOTH apps considered (worst-case) — neither app AUTH_EXPIRED, and at
+  // least one app's refreshExpiresIn is non-null (inside the T-24h warning window).
+  const isNearExpiry =
+    !isExpired &&
+    market.status !== "AUTH_EXPIRED" &&
+    (trader.refreshExpiresIn !== null || market.refreshExpiresIn !== null);
+
+  if (isExpired) {
+    return (
+      <div
+        role="alert"
         style={{
-          fontFamily: "inherit",
-          backgroundColor: "#3e1f23",
-          padding: "1px 4px",
-          borderRadius: "3px",
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          backgroundColor: "#180f10",
+          borderTop: "1px solid #5a2b2e",
+          padding: "8px 16px",
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          fontSize: "12px",
+          lineHeight: 1.45,
+          color: "#ef5350",
         }}
       >
-        auth setup
-      </code>{" "}
-      to reconnect. Live data may be stale.
-    </div>
-  );
+        Schwab auth expired. Run{" "}
+        <code
+          role="code"
+          style={{
+            fontFamily: "inherit",
+            backgroundColor: "#3e1f23",
+            padding: "1px 4px",
+            borderRadius: "3px",
+          }}
+        >
+          auth setup
+        </code>{" "}
+        to reconnect. Live data may be stale.
+      </div>
+    );
+  }
+
+  if (isNearExpiry) {
+    return (
+      <div
+        role="alert"
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          backgroundColor: "#231a08",
+          borderTop: "1px solid #5a4a1f",
+          padding: "8px 16px",
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          fontSize: "12px",
+          lineHeight: 1.45,
+          color: "#ffb74d",
+        }}
+      >
+        Schwab auth expires soon. Re-auth within 24 hours to avoid an outage. See{" "}
+        <code
+          role="code"
+          style={{
+            fontFamily: "inherit",
+            backgroundColor: "#3e2f0f",
+            padding: "1px 4px",
+            borderRadius: "3px",
+          }}
+        >
+          docs/operations/schwab-reauth-runbook.md
+        </code>
+        .
+      </div>
+    );
+  }
+
+  return null;
 }
