@@ -5,16 +5,16 @@ milestone_name: — Real-Time Schwab Streaming
 current_phase: 14
 current_phase_name: fred-expansion
 status: executing
-stopped_at: Completed 14-06-PLAN.md
-last_updated: "2026-07-02T02:43:31.366Z"
+stopped_at: Completed 14-07-PLAN.md
+last_updated: "2026-07-02T02:57:47.266Z"
 last_activity: 2026-07-02
-last_activity_desc: Phase 14 execution — plan 06 (macro HTTP route + MCP tool) complete
+last_activity_desc: Phase 14 execution — plan 07 (MacroCard web wiring) complete; all 7 plans done
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 28
-  completed_plans: 27
-  percent: 96
+  completed_plans: 28
+  percent: 100
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 
 ## Current Position
 
-Phase: 14 (fred-expansion) — EXECUTING
-Plan: 6 of 7 complete
-Status: Ready to execute plan 07
+Phase: 14 (fred-expansion) — EXECUTING (all 7 plans complete)
+Plan: 7 of 7 complete
+Status: Ready for phase verification + prod UAT (FRED_API_KEY operator step pending, D-13)
 Phases 10-13 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 13 COT shipped + FE wired.
-Last activity: 2026-07-02 — Phase 14 execution — plan 06 (macro HTTP route + MCP tool) complete
+Last activity: 2026-07-02 — Phase 14 execution — plan 07 (MacroCard web wiring) complete
 
 ## Milestone v1.1 Summary
 
@@ -148,6 +148,7 @@ Regression gates (must survive every phase):
 | Phase 14 P04 | 10min | 2 tasks | 6 files |
 | Phase 14 P05 | 20min | 3 tasks | 5 files |
 | Phase 14 P06 | 15min | 3 tasks | 6 files |
+| Phase 14 P07 | 15min | 3 tasks tasks | 6 files files |
 
 ## Accumulated Context
 
@@ -333,6 +334,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 14-05: second fetch-rates schedule() call reuses the same queue/handler (no new queue) for the twice-daily D-06 cadence
 - [Phase 14]: [Phase 14 P06]: exactOptionalPropertyTypes requires rebuilding macroQuery.safeParse output into a conditionally-spread object before calling getMacro (mirrors term-structure/skew route pattern)
 - [Phase 14]: [Phase 14 P06]: get_macro MCP tool reuses macroQuery.safeParse directly on args (not a re-declared schema) - HTTP route and MCP tool share ONE validation schema, not just one response schema
+- [Phase ?]: [Phase 14 P07]: useMacro refetch 30min/staleTime 15min — tighter than COT hourly since macro publishes twice daily (D-06)
+- [Phase ?]: [Phase 14 P07]: MacroCard = plain value tiles (5 primary + 3 secondary), no sparklines — fits Overview half-width density; UnauthorizedError redeclared locally (all 6 sibling hooks do, no shared export)
 
 ### Pending Todos
 
@@ -359,6 +362,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-02T02:43:31.355Z
-Stopped at: Completed 14-06-PLAN.md
+Last session: 2026-07-02T02:57:37.668Z
+Stopped at: Completed 14-07-PLAN.md — Phase 14 plans 7/7 done; prod UAT (FRED_API_KEY) pending
 Resume file: None

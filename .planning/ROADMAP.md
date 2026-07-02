@@ -45,7 +45,7 @@ Cross-cutting regression gates (must never regress across any phase):
 - [x] **Phase 11: Sidecar Scaffold + Auth Migration** - schwab-py sidecar deployed; TS refresh-tokens job retired; sidecar is sole token owner; journal re-sourced through sidecar REST proxy (completed 2026-06-25)
 - [x] **Phase 12: Streaming + TS Fan-Out** - LEVELONE_OPTION + ACCT_ACTIVITY ingestion; `GET /api/stream` with Supabase JWT edge; Zod stream contracts; cold-start reconcile (completed 2026-06-29)
 - [x] **Phase 13: COT Adapter** - Weekly `fetch-cot` job; `cot_observations` table; `GET /api/analytics/cot` + MCP `get_cot` (completed 2026-06-29)
-- [ ] **Phase 14: FRED Expansion** - Expanded macro series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS + VVIX via CBOE); prod FRED_API_KEY set; `GET /api/analytics/macro` + MCP `get_macro`
+- [x] **Phase 14: FRED Expansion** - Expanded macro series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS + VVIX via CBOE); prod FRED_API_KEY set; `GET /api/analytics/macro` + MCP `get_macro` (completed 2026-07-02)
 - [ ] **Phase 15: Re-Auth Smoothing** - T-24h expiry alert; one-click/operator re-auth flow; operator runbook
 
 ## Phase Details
@@ -614,7 +614,7 @@ full macro series.
   1. After `fetch-rates` runs with the prod `FRED_API_KEY` set, `macro_observations` (new table, per 14-CONTEXT D-01 — `rate_observations` stays single-series for BSM) contains rows for all seven FRED series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) plus VVIX sourced via the CBOE adapter; a second run for the same observation date is idempotent (MAC-01).
   2. `GET /api/analytics/macro` returns a JSON object keyed by series ID, each containing a time-ordered array of `{ time, value }` entries over the shared Zod contract; MCP `get_macro` returns the same payload to Claude Code (MAC-02, MCP-02).
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans complete
 Plans:
 **Wave 1**
 
@@ -633,7 +633,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 14-07-PLAN.md — Frontend: useMacro + MacroCard + Overview wire-in (D-12), human-verify (MAC-02)
+- [x] 14-07-PLAN.md — Frontend: useMacro + MacroCard + Overview wire-in (D-12), human-verify (MAC-02)
 
 ### Phase 15: Re-Auth Smoothing
 
@@ -709,5 +709,5 @@ requires Phase 11 complete (sidecar health endpoint).
 | 11. Sidecar Scaffold + Auth Migration | 7/7 | Complete   | 2026-06-25 |
 | 12. Streaming + TS Fan-Out | 7/7 | Complete   | 2026-06-29 |
 | 13. COT Adapter | 6/6 | Complete    | 2026-06-29 |
-| 14. FRED Expansion | 6/7 | In Progress|  |
+| 14. FRED Expansion | 7/7 | Complete   | 2026-07-02 |
 | 15. Re-Auth Smoothing | 0/TBD | Not started | - |
