@@ -33,9 +33,12 @@ function setStatusData(data: StatusResponse | undefined) {
 // Helper: create a mock status data object with tokenFreshness in the trader slot.
 // refreshExpiresIn is parametrized per-app (both default to null) so amber-state
 // tests can drive trader and/or market into the near-expiry window independently.
+// marketStatus is parametrized (default "fresh") so market-expiry tests can drive
+// the market app to AUTH_EXPIRED independently of trader.
 function makeStatusData(
   freshness: "AUTH_EXPIRED" | "fresh" | "stale" | "none_yet",
   refreshExpiresIn: { trader?: number | null; market?: number | null } = {},
+  marketStatus: "AUTH_EXPIRED" | "fresh" | "stale" | "none_yet" = "fresh",
 ): StatusResponse {
   return {
     db: "ok",
@@ -48,7 +51,7 @@ function makeStatusData(
         refreshExpiresIn: refreshExpiresIn.trader ?? null,
       },
       market: {
-        status: "fresh",
+        status: marketStatus,
         expiresAt: null,
         refreshIssuedAt: null,
         lastRefreshError: null,
@@ -169,5 +172,25 @@ describe("AuthExpiredBanner amber pre-expiry state (AUTH-05)", () => {
 
     render(<AuthExpiredBanner />);
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("shows a banner when market is AUTH_EXPIRED and trader is fresh", () => {
+    setStatusData(makeStatusData("fresh", {}, "AUTH_EXPIRED"));
+
+    render(<AuthExpiredBanner />);
+
+    // A market-only expiry must NOT go silent (review WR-02) — the amber
+    // surface stays up with market-expiry copy pointing at the runbook.
+    expect(screen.getByRole("alert")).toBeDefined();
+    expect(screen.getByText(/market app auth expired/i)).toBeDefined();
+  });
+
+  it("renders the red banner (precedence) when trader and market are both AUTH_EXPIRED", () => {
+    setStatusData(makeStatusData("AUTH_EXPIRED", {}, "AUTH_EXPIRED"));
+
+    render(<AuthExpiredBanner />);
+
+    expect(screen.getByText(/Schwab auth expired/)).toBeDefined();
+    expect(screen.queryByText(/market app auth expired/i)).toBeNull();
   });
 });

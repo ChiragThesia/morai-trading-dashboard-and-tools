@@ -6,14 +6,17 @@ import { useStatus } from "../hooks/useStatus.ts";
  *
  * Renders on all authenticated screens based on GET /api/status tokenFreshness:
  * - RED when trader.status === "AUTH_EXPIRED" (red takes precedence).
- * - AMBER when neither app is AUTH_EXPIRED and at least one app (trader OR market)
- *   has a non-null refreshExpiresIn (inside the T-24h warning window).
+ * - AMBER when trader is not AUTH_EXPIRED and either:
+ *   - market.status === "AUTH_EXPIRED" (market-expiry copy — chain pulls have
+ *     fallen back to CBOE; review WR-02), or
+ *   - at least one app (trader OR market) has a non-null refreshExpiresIn
+ *     (inside the T-24h warning window).
  * - Nothing otherwise.
  *
  * Residual gap (surgical-changes rule, 15-05 plan note): the red gate stays
  * trader-only, matching the pre-existing behavior — a market-only AUTH_EXPIRED
- * does not show the red banner. Extending red to both apps was out of scope for
- * this plan (not a one-or-two-line change without touching the locked red copy path).
+ * shows the amber banner (WR-02), not the red one. Extending red to both apps was
+ * out of scope (not a one-or-two-line change without touching the locked red copy path).
  *
  * Visual spec (09-UI-SPEC.md AUTH_EXPIRED status banner section):
  * - position: fixed; bottom: 0; left: 0; right: 0; z-index: 100
@@ -44,11 +47,15 @@ export function AuthExpiredBanner() {
   // Red gate: trader-only, unchanged from the pre-existing behavior (see doc comment above).
   const isExpired = trader.status === "AUTH_EXPIRED";
 
+  // Market-expired gate (review WR-02): a market-only expiry must not go silent —
+  // the amber banner stays up with accurate copy (chain pulls have fallen back to CBOE).
+  const isMarketExpired = !isExpired && market.status === "AUTH_EXPIRED";
+
   // Amber gate: BOTH apps considered (worst-case) — neither app AUTH_EXPIRED, and at
   // least one app's refreshExpiresIn is non-null (inside the T-24h warning window).
   const isNearExpiry =
     !isExpired &&
-    market.status !== "AUTH_EXPIRED" &&
+    !isMarketExpired &&
     (trader.refreshExpiresIn !== null || market.refreshExpiresIn !== null);
 
   if (isExpired) {
@@ -87,7 +94,7 @@ export function AuthExpiredBanner() {
     );
   }
 
-  if (isNearExpiry) {
+  if (isMarketExpired || isNearExpiry) {
     return (
       <div
         role="alert"
@@ -106,7 +113,9 @@ export function AuthExpiredBanner() {
           color: "#ffb74d",
         }}
       >
-        Schwab auth expires soon. Re-auth within 24 hours to avoid an outage. See{" "}
+        {isMarketExpired
+          ? "Schwab market app auth expired — chain data fell back to CBOE. Re-auth per "
+          : "Schwab auth expires soon. Re-auth within 24 hours to avoid an outage. See "}
         <code
           role="code"
           style={{
