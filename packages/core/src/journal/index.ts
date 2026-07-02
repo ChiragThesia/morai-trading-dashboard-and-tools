@@ -134,6 +134,13 @@ export type {
 // Phase 14: fetchMacroSeries use-case (14-04, Task 1)
 export { makeFetchMacroSeries, DEFAULT_FRED_SERIES_IDS } from "./application/fetchMacroSeries.ts";
 export type { ForRunningFetchMacroSeries } from "./application/fetchMacroSeries.ts";
+// Phase 14: getMacro use-case (14-04, Task 2)
+export { makeGetMacroUseCase } from "./application/getMacro.ts";
+export type {
+  ForRunningGetMacro,
+  MacroSeriesQuery,
+  MacroSeriesPointOut,
+} from "./application/getMacro.ts";
 // Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
 export { hashFillIds } from "./domain/fill-pairing.ts";
 // Phase 5: rebuildJournal use-case factory + driver port
