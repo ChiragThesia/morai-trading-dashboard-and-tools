@@ -420,6 +420,27 @@ export const cotObservations = pgTable(
   ],
 ).enableRLS();
 
+// ─── 16. macro_observations — FRED/CBOE macro series (Phase 14) ──────────────
+// One row per (date, series_id). Composite time-leading PK is the MAC-01
+// idempotency key (D-05) — a second same-day fetch upserts, never duplicates.
+// value stored RAW as reported by the source (D-14) — no unit conversion here.
+// NOT a widening of rate_observations (D-02) — that table + readRate/BSM stay untouched.
+
+export const macroObservations = pgTable(
+  "macro_observations",
+  {
+    date: date("date").notNull(),
+    seriesId: text("series_id").notNull(),
+    value: numeric("value").notNull(),
+    // Provenance: 'fred' | 'cboe' (VVIX)
+    source: text("source").notNull(),
+  },
+  (table) => [
+    // Time-leading composite PK — (date, series_id)
+    primaryKey({ columns: [table.date, table.seriesId] }),
+  ],
+).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };

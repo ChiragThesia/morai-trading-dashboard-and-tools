@@ -92,6 +92,13 @@
       "when": 1782739500812,
       "tag": "0012_cot_observations",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782957489717,
+      "tag": "0013_macro_observations",
+      "breakpoints": true
     }
   ]
 }
