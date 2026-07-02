@@ -22,6 +22,7 @@ import {
   makePostgresRiskReversalObservationsRepo,
   makePostgresGexSnapshotRepo,
   makePostgresCotObservationsRepo,
+  makePostgresMacroObservationsRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -38,6 +39,7 @@ import {
   makeGetSkewUseCase,
   makeGetGexUseCase,
   makeGetCotUseCase,
+  makeGetMacroUseCase,
 } from "@morai/core";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
@@ -142,6 +144,13 @@ const getCot = makeGetCotUseCase({
   readCotObservations: cotObservationsRepo.listCotObservations,
 });
 
+// MAC-02 / MCP-02 (14-06): get-macro read use-case — shared by GET /api/analytics/macro + get_macro
+// MCP tool over the ONE macroResponse contract. rate_observations/readRate/BSM path untouched (D-02).
+const macroObservationsRepo = makePostgresMacroObservationsRepo(db);
+const getMacro = makeGetMacroUseCase({
+  readMacroObservations: macroObservationsRepo.readMacroObservations,
+});
+
 // BRK-02: build trader adapters — reads from broker_tokens for the trader app.
 // getAccessToken closure reads broker_tokens at call time (on-demand refresh deferred to JOB-02).
 const USER_AGENT = "Morai-Server/1.0";
@@ -226,7 +235,8 @@ const apiRouter = new Hono()
   .route("/", brokerageRoutes(getPositions, getTransactions, getOrders))
   // ANLY-03 (06-04/06-05): GET /api/analytics/term-structure + GET /api/analytics/skew
   // COT-02 (13-06): GET /api/analytics/cot — CFTC TFF weekly series (MCP-02)
-  .route("/", analyticsRoutes(getTermStructure, getSkew, getCot))
+  // MAC-02 (14-06): GET /api/analytics/macro — FRED + VVIX series (MCP-02)
+  .route("/", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro))
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex));
 
@@ -271,6 +281,7 @@ app.route("/api", jobsGroup);
 // Mount MCP transport at /mcp (bearer-protected, stateless) — UNCHANGED (D-02 scope).
 // MCP-01: base tools + BRK-02 trader tools + MCP-02 trigger_job tool + GEX-02 get_gex tool.
 // COT-02 / MCP-02 (13-06): get_cot tool added here — same getCot use-case as the HTTP route.
+// MAC-02 / MCP-02 (14-06): get_macro tool added here — same getMacro use-case as the HTTP route.
 const mcpRouter = makeMcpRouter(
   config,
   getStatus,
@@ -281,6 +292,7 @@ const mcpRouter = makeMcpRouter(
   getSkew,
   getGex,
   getCot,
+  getMacro,
   getPositions,
   getTransactions,
   getOrders,
