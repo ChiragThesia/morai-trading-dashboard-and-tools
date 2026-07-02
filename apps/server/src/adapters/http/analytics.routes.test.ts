@@ -10,35 +10,43 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
-import type { ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot } from "@morai/core";
-import { termStructureResponse, skewResponse, cotResponse } from "@morai/contracts";
+import type { ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot, ForRunningGetMacro } from "@morai/core";
+import { termStructureResponse, skewResponse, cotResponse, macroResponse } from "@morai/contracts";
 import { analyticsRoutes } from "./analytics.routes.ts";
 
 const CAL_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-// Default fakes (empty) — overridable per test for the /skew and /cot cases.
+// Default fakes (empty) — overridable per test for the /skew, /cot, and /macro cases.
 const skewEmpty: ForRunningGetSkew = async () => ok([]);
 const cotEmpty: ForRunningGetCot = async () => ok([]);
+const macroEmpty: ForRunningGetMacro = async () => ok({});
 
 function buildApp(
   getTermStructure: ForRunningGetTermStructure,
   getSkew: ForRunningGetSkew = skewEmpty,
   getCot: ForRunningGetCot = cotEmpty,
+  getMacro: ForRunningGetMacro = macroEmpty,
 ) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(getTermStructure, getSkew, getCot));
+  app.route("/api", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro));
   return app;
 }
 
 function buildSkewApp(getSkew: ForRunningGetSkew) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, getSkew, cotEmpty));
+  app.route("/api", analyticsRoutes(empty, getSkew, cotEmpty, macroEmpty));
   return app;
 }
 
 function buildCotApp(getCot: ForRunningGetCot) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, skewEmpty, getCot));
+  app.route("/api", analyticsRoutes(empty, skewEmpty, getCot, macroEmpty));
+  return app;
+}
+
+function buildMacroApp(getMacro: ForRunningGetMacro) {
+  const app = new Hono();
+  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, getMacro));
   return app;
 }
 
@@ -216,6 +224,87 @@ describe("GET /api/analytics/cot", () => {
   it("maps a storage error to a flat {error:'internal'} 500 (T-13-06-INJ)", async () => {
     const app = buildCotApp(cotErrored);
     const res = await app.request("/api/analytics/cot");
+    expect(res.status).toBe(500);
+    const body: unknown = await res.json();
+    expect(body).toEqual({ error: "internal" });
+  });
+});
+
+// ─── Macro (FRED + VVIX series, MAC-02) ────────────────────────────────────────
+
+const macroWithData: ForRunningGetMacro = async () =>
+  ok({
+    DFF: [{ time: "2026-04-01", value: 4.33 }],
+    VVIX: [{ time: "2026-04-01", value: 89.0 }],
+  });
+
+const macroErrored: ForRunningGetMacro = async () =>
+  err({ kind: "storage-error", message: "boom" });
+
+describe("GET /api/analytics/macro", () => {
+  it("returns a contract-valid map with the default window when no query params are given", async () => {
+    const app = buildMacroApp(macroWithData);
+    const res = await app.request("/api/analytics/macro");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    // Parsing must succeed — proves MCP-02 contract conformance.
+    const parsed = macroResponse.parse(body);
+    expect(parsed.DFF).toHaveLength(1);
+    expect(parsed.DFF?.[0]?.value).toBe(4.33);
+    expect(parsed.VVIX?.[0]?.value).toBe(89.0);
+  });
+
+  it("returns a contract-valid EMPTY map (not an error) when there is no data", async () => {
+    const app = buildMacroApp(macroEmpty);
+    const res = await app.request("/api/analytics/macro");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(macroResponse.parse(body)).toEqual({});
+  });
+
+  it("parses ?days=365&series=DFF,VVIX via macroQuery and forwards them to the use-case", async () => {
+    let received: { days?: number; series?: ReadonlyArray<string> } | undefined;
+    const spy: ForRunningGetMacro = async (query) => {
+      received = query;
+      return ok({ DFF: [{ time: "2026-04-01", value: 4.33 }] });
+    };
+    const app = buildMacroApp(spy);
+    const res = await app.request("/api/analytics/macro?days=365&series=DFF,VVIX");
+    expect(res.status).toBe(200);
+    expect(received?.days).toBe(365);
+    expect(received?.series).toEqual(["DFF", "VVIX"]);
+    const body: unknown = await res.json();
+    const parsed = macroResponse.parse(body);
+    expect(Object.keys(parsed)).toEqual(["DFF"]);
+  });
+
+  it("rejects an invalid days param with 400 and never calls the use-case (T-14-01)", async () => {
+    let calls = 0;
+    const spy: ForRunningGetMacro = async () => {
+      calls += 1;
+      return ok({});
+    };
+    const app = buildMacroApp(spy);
+    const res = await app.request("/api/analytics/macro?days=99999");
+    expect(res.status).toBe(400);
+    expect(calls).toBe(0);
+  });
+
+  it("rejects an invalid series param with 400 and never calls the use-case (T-14-01)", async () => {
+    let calls = 0;
+    const spy: ForRunningGetMacro = async () => {
+      calls += 1;
+      return ok({});
+    };
+    const app = buildMacroApp(spy);
+    const res = await app.request("/api/analytics/macro?series=BOGUS");
+    expect(res.status).toBe(400);
+    expect(calls).toBe(0);
+  });
+
+  it("maps a storage error to a flat {error:'internal'} 500 (T-14-14)", async () => {
+    const app = buildMacroApp(macroErrored);
+    const res = await app.request("/api/analytics/macro");
     expect(res.status).toBe(500);
     const body: unknown = await res.json();
     expect(body).toEqual({ error: "internal" });
