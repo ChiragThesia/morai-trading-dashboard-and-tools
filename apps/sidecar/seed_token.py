@@ -203,6 +203,8 @@ def step_login() -> None:
             schwab.auth.client_from_login_flow(
                 env[key_env], env[secret_env], env[cb_env], token_path,
                 token_write_func=_make_seed_writer(db_url, key, app_id),
+                interactive=False,  # auto-open browser, no input() prompt (runnable headlessly)
+                callback_timeout=float(os.environ.get("SEED_CALLBACK_TIMEOUT", "600")),
             )
         finally:
             try:
