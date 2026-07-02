@@ -63,12 +63,14 @@ export type AllHandlers = {
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
 
 /**
- * registerAllJobs — create 10 queues, schedule 6 crons, register 10 handlers.
+ * registerAllJobs — create 10 queues, schedule 7 crons (6 jobs, fetch-rates twice), register 10 handlers.
  *
- * Order: createQueue (all 10) → schedule (6 crons) → work (all 10).
+ * Order: createQueue (all 10) → schedule (7 crons) → work (all 10).
  * The createQueue phase must complete before schedule/work — pg-boss FK constraint (CR-01).
  * GW-03: refresh-tokens queue/cron/handler retired — sidecar is sole Schwab token writer.
  * COT-01: fetch-cot added — weekly Friday 17:00 ET cron (D-07).
+ * 14-05 (D-06): fetch-rates scheduled TWICE (09:00 ET + 18:30 ET, Mon-Fri) — single queue,
+ * two cron registrations serving the same handler.
  */
 export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers): Promise<void> {
   // ── Phase 1: create queues (idempotent — safe on every boot) ──────────────────
@@ -95,7 +97,16 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   );
   await boss.schedule(
     "fetch-rates",
-    "0 9 * * 1-5", // daily 09:00 ET Mon-Fri
+    "0 9 * * 1-5", // daily 09:00 ET Mon-Fri (morning — catches SOFR's T+1 lag)
+    null,
+    { tz: "America/New_York" },
+  );
+  // 14-05 (D-06): second daily fetch-rates run — evening catches same-day VIXCLS/treasury
+  // prints. Idempotent (self-healing upsert, D-05); safe on every boot. Same queue, no
+  // new handler — registerAllJobs still creates exactly one fetch-rates queue.
+  await boss.schedule(
+    "fetch-rates",
+    "30 18 * * 1-5", // daily 18:30 ET Mon-Fri (evening)
     null,
     { tz: "America/New_York" },
   );
