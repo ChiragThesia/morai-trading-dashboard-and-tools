@@ -24,7 +24,7 @@ handlers are thin inbound adapters calling application use-cases.
 | `snapshot-calendars` | chain-triggered only (NO cron) | For each open calendar: fetch chain → compute marks/IV/greeks/term-slope → store `calendar_snapshots` row |
 | `compute-bsm-greeks` | every 1 min (drains pending) | Scan `leg_observations WHERE bsm_iv IS NULL` → IV invert → BSM → upsert |
 | `sync-fills` | `*/10 9-16 * * 1-5` (every 10 min RTH) | Schwab transactions → `fills`/`orders`; pair into calendar OPEN/CLOSE/ROLL events |
-| `refresh-tokens` | `0 4 * * *` (04:00 ET, NO RTH gate) | Refresh both Schwab apps independently; proactive 7-day expiry warning; alert on failure |
+| `refresh-tokens` | RETIRED (GW-03) | Token refresh moved to the schwab-py sidecar (Phase 11 cutover); removed from the trigger surface in Phase 15 — see section below |
 | `fetch-rates` | `0 9 * * 1-5` + `30 18 * * 1-5` | FRED DGS3MO daily (BSM rate) + expanded macro fetch (Phase 14) |
 | `compute-analytics` | chain-triggered only (NO cron) | Reads `leg_observations` + `calendar_snapshots`; writes `skew_observations`, `risk_reversal_observations`, `term_structure_observations` |
 | `rebuild-journal` | on-demand only (no schedule) | Reconstructs OPEN/CLOSE/ROLL events for one calendar from fills; idempotent delete-then-reinsert |
@@ -33,10 +33,11 @@ Notes carried from old dashboard:
 - **All crons in `America/New_York`** — DST-safe market alignment.
 - **Holiday handling**: market-hours check must consult an NYSE holiday calendar (old dashboard
   TODO — fixed here from day one). Jobs no-op gracefully on holidays.
-- **Token refresh at 04:00 ET** — keeps access tokens fresh outside market hours. Does NOT
-  extend the refresh token: Schwab refresh tokens hard-expire 7 days after issuance →
-  weekly interactive re-auth is mandatory (`deployment.md` + `stack-decisions.md` D22).
-  On `invalid_grant`, Schwab jobs pause gracefully and status flags AUTH_EXPIRED.
+- **Token refresh is NOT a worker job** (GW-03) — the schwab-py sidecar refreshes access
+  tokens in-process. Refreshing does NOT extend the refresh token: Schwab refresh tokens
+  hard-expire 7 days after issuance → weekly interactive re-auth is mandatory
+  (`deployment.md` + `stack-decisions.md` D22). On `invalid_grant`, Schwab jobs pause
+  gracefully and status flags AUTH_EXPIRED.
 
 ## fetch-rates (Phase 2 + Phase 14 macro expansion, MAC-01)
 
@@ -158,25 +159,16 @@ that job already gates on RTH and NYSE holidays.
 **Surfaced in status:** added to `TRACKED_JOBS` so its last success/error appears in
 `GET /api/status` `lastJobRuns`.
 
-## refresh-tokens (Phase 5, JOB-02)
+## refresh-tokens (RETIRED — GW-03)
 
-**Schedule:** `0 4 * * *` — 04:00 ET daily (America/New_York).
+**Status:** retired. Built in Phase 5 (JOB-02) as an 04:00 ET daily cron; retired at the
+Phase 11 sidecar cutover (the worker handler and cron registration were removed), and removed
+from the `TRIGGERABLE_JOBS` surface (HTTP trigger + MCP `trigger_job`) in Phase 15.
 
-**No RTH gate.** Runs every day regardless of market hours or NYSE holidays (D-13). It runs
-at 04:00 ET specifically because that is outside RTH — a deliberate design choice.
-
-**Per-app independence (D-13):** Both the `trader` and `market` Schwab apps are refreshed via
-`Promise.allSettled`. One app failing does not block the other. Per-app failures surface in
-`/api/status` and `console.warn`. The handler does not throw on per-app failure.
-
-**Proactive expiry warning (D-14):** After each refresh, the job checks whether the refresh
-token is within 1 day of its 7-day hard expiry. This is computed from `refreshIssuedAt` (set
-during the initial auth-code exchange and never updated by the refresh job itself — D-14 /
-Pitfall 3 in RESEARCH.md). When the check fires, a warning is emitted to `console.warn` and
-the `/api/status` response includes a token-freshness flag.
-
-**Dedupe key:** Not applicable — only one run per day. pg-boss schedule provides natural
-deduplication.
+The schwab-py sidecar is the sole token refresher: it refreshes access tokens in-process and
+writes them back to `broker_tokens`. The 7-day refresh-token hard expiry still stands —
+weekly interactive re-auth per `docs/operations/schwab-reauth-runbook.md`, surfaced by the
+T-24h `refreshExpiresIn` warning (AUTH-05) and the AUTH_EXPIRED status flag.
 
 ## rebuild-journal (Phase 5, JRNL-01)
 
