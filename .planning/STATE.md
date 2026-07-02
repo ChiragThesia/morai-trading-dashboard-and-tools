@@ -5,8 +5,8 @@ milestone_name: — Real-Time Schwab Streaming
 current_phase: 15
 current_phase_name: re-auth-smoothing
 status: executing
-stopped_at: Phase 15 planned (5 plans, 2 waves) — provisional decisions pending user plan review
-last_updated: "2026-07-02T19:34:01.853Z"
+stopped_at: Completed 15-05-PLAN.md
+last_updated: "2026-07-02T19:40:20.815Z"
 last_activity: 2026-07-02
 last_activity_desc: Phase 15 Plan 01 complete
 progress:
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-25)
 ## Current Position
 
 Phase: 15 (re-auth-smoothing) — EXECUTING
-Plan: 4 of 5 (Plan 01 complete)
+Plan: 5 of 5 (Plan 01 complete)
 Status: Ready to execute
 Phases 10-14 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 14 FRED live (2026-07-02).
 Last activity: 2026-07-02 — Phase 15 Plan 01 complete
@@ -153,6 +153,7 @@ Regression gates (must survive every phase):
 | Phase 15 P01 | 8min | 2 tasks | 13 files |
 | Phase 15-re-auth-smoothing P03 | 7min | 1 tasks | 4 files |
 | Phase 15 P04 | 10min | 2 tasks | 3 files |
+| Phase 15-re-auth-smoothing P05 | 8min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -345,6 +346,8 @@ Recent decisions affecting current work:
 - [Phase 15 P03]: D-04: removed retired refresh-tokens entry from TRIGGERABLE_JOBS (3-job contract: rebuild-journal, sync-fills, compute-bsm-greeks); trigger_job MCP description updated to match; job-runs.ts historical reads and worker schedule left untouched
 - [Phase ?]: 15-04: dedup semantics locked — warn only on refreshExpiresIn null->non-null crossing, silent while latched, re-arm on return to null (per-app latch)
 - [Phase ?]: 15-04: single composition-root wiring (statusPort) shared by GET /api/status and MCP get_status; warning message avoids the literal word token
+- [Phase 15-re-auth-smoothing]: 15-05: amber gate checks both trader and market refreshExpiresIn (worst-case); red gate stays trader-only (residual gap, documented)
+- [Phase 15-re-auth-smoothing]: 15-05: amber palette (#231a08/#5a4a1f/#ffb74d) distinct from red, references schwab-reauth-runbook.md per D-02b
 
 ### Pending Todos
 
@@ -371,6 +374,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-02T19:33:56.491Z
-Stopped at: Phase 15 context gathered (provisional decisions — user AFK)
-Resume file: .planning/phases/15-re-auth-smoothing/15-CONTEXT.md
+Last session: 2026-07-02T19:40:20.803Z
+Stopped at: Completed 15-05-PLAN.md
+Resume file: None
