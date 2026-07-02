@@ -56,9 +56,11 @@ when UI work begins (D19), so it is a distinct origin (CORS configured on the AP
 - **Weekly re-auth is mandatory and designed in** (see `stack-decisions.md` D22):
   - On `invalid_grant`: Schwab-dependent jobs pause gracefully, status flags AUTH_EXPIRED,
     UI banner + MCP `get_status` surface it. One app failing must not block the other.
-  - Re-auth = one command run locally (interactive browser OAuth, port of trade-advisor
-    `auth.ts setup`), which writes the fresh token row to Postgres. Server recovers on next
-    call — no deploy, no SSH.
+  - Re-auth = one command run locally (`apps/sidecar/seed_token.py`, see
+    `docs/operations/schwab-reauth-runbook.md`), which writes the fresh token row to
+    Postgres. The sidecar holds its Schwab token in memory and only re-reads Postgres on
+    restart, so recovery requires `railway redeploy --service sidecar -y` — no code
+    rebuild, no SSH, but a restart is mandatory.
   - `doctor`-style diagnostics in the CLI: env completeness, callback-URL exact match against
     the dev-portal field, live refresh-grant test.
 

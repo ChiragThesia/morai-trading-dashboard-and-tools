@@ -21,6 +21,14 @@ Read in order. Source of truth for how Morai works.
 | [deployment.md](architecture/deployment.md) | Railway topology, config, token persistence, observability |
 | [streaming-fanout.md](architecture/streaming-fanout.md) | SSE fan-out pipeline, opaque ticket auth (D-01), BSM recompute (D-02), STRM-04 display-only invariant, Z-suffix timestamp contract |
 
+## Operations (`docs/operations/`)
+
+Operator-facing runbooks for manual, non-automatable procedures.
+
+| Doc | Contents |
+|---|---|
+| [schwab-reauth-runbook.md](operations/schwab-reauth-runbook.md) | Weekly Schwab re-auth: when to run it, the two-step OAuth exchange, the mandatory sidecar restart, post-restart verification |
+
 ## Docs on Docs (`docs/docs-on-docs/`)
 
 How to write and maintain documentation.
