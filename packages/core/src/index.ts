@@ -260,3 +260,6 @@ export type {
   ForPersistingMacroObservation,
   ForReadingMacroObservations,
 } from "./journal/index.ts";
+// Phase 14: fetchMacroSeries use-case (14-04, Task 1)
+export { makeFetchMacroSeries, DEFAULT_FRED_SERIES_IDS } from "./journal/index.ts";
+export type { ForRunningFetchMacroSeries } from "./journal/index.ts";
