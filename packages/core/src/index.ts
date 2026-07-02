@@ -250,3 +250,13 @@ export { makeFetchCot } from "./journal/index.ts";
 export type { ForRunningFetchCot } from "./journal/index.ts";
 export { makeGetCotUseCase } from "./journal/index.ts";
 export type { ForRunningGetCot, CotEntry } from "./journal/index.ts";
+
+// ─── Phase 14: FRED macro expansion ports + domain type (MAC-01, MAC-02) ──────
+// New macro_observations table (D-01); rate/BSM ports above stay untouched (D-02).
+export type {
+  MacroObservationRow,
+  ForFetchingFredSeries,
+  ForFetchingVvixQuote,
+  ForPersistingMacroObservation,
+  ForReadingMacroObservations,
+} from "./journal/index.ts";

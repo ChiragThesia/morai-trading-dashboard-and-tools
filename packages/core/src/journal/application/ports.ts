@@ -589,3 +589,58 @@ export type ForPersistingCotObservation = (
 export type ForReadingCotObservations = (
   limit?: number,
 ) => Promise<Result<ReadonlyArray<CotObservationRow>, StorageError>>;
+
+// ─── Phase 14: FRED macro expansion ports (MAC-01, MAC-02) ───────────────────
+// New macro_observations table (D-01) — does NOT touch ForFetchingRate/ForPersistingRate/
+// ForReadingRate/RateObservation above, which stay pinned to the DGS3MO→BSM path (D-02).
+// MacroObservationRow: one (seriesId, date) row. `value` is stored RAW as reported by the
+// source — NO /100 division (D-14); DFF is a percent (~4.33), VIXCLS/VVIX are index levels
+// (~18.9, ~89.0). VVIX is sourced via CBOE (D-03), the other seven via FRED.
+
+/**
+ * MacroObservationRow — one macro_observations row (MAC-01).
+ * `value` is the raw source value — no unit normalization (D-14).
+ */
+export type MacroObservationRow = {
+  readonly seriesId: string;
+  readonly date: string; // YYYY-MM-DD
+  readonly value: number;
+  readonly source: "fred" | "cboe";
+};
+
+/**
+ * ForFetchingFredSeries — fetch one FRED series by id (MAC-01).
+ * Parameterized, no-fallback: any failure (missing key, network, non-2xx, parse fail, all
+ * '.'-sentinel rows) returns err(FetchError) — never a fabricated value (D-09). Implemented
+ * by the FRED HTTP adapter (distinct from the existing DGS3MO-only ForFetchingRate, which
+ * keeps its lenient fallback per D-02).
+ */
+export type ForFetchingFredSeries = (
+  seriesId: string,
+) => Promise<Result<MacroObservationRow, FetchError>>;
+
+/**
+ * ForFetchingVvixQuote — fetch the current VVIX quote via CBOE (MAC-01, D-03).
+ * Returns a MacroObservationRow with seriesId 'VVIX' and source 'cboe'. No fallback — any
+ * failure returns err(FetchError).
+ */
+export type ForFetchingVvixQuote = () => Promise<Result<MacroObservationRow, FetchError>>;
+
+/**
+ * ForPersistingMacroObservation — upsert one macro_observations row (MAC-01, D-05).
+ * Idempotent on (date, series_id) — a second same-day run for an unchanged value is a no-op;
+ * a revised value updates in place (FRED sometimes revises preliminary data).
+ * Implemented by the Postgres repo and in-memory twin.
+ */
+export type ForPersistingMacroObservation = (
+  row: MacroObservationRow,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingMacroObservations — bulk, unfiltered read of all macro_observations rows
+ * (MAC-02). Grouping by seriesId and windowing (days/series params, D-11) happens in
+ * getMacro.ts (plan 14-04), not here. Returns empty array when no rows exist.
+ */
+export type ForReadingMacroObservations = () => Promise<
+  Result<ReadonlyArray<MacroObservationRow>, StorageError>
+>;

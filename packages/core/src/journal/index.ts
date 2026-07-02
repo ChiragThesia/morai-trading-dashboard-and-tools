@@ -123,6 +123,14 @@ export { makeFetchCot } from "./application/fetchCot.ts";
 export type { ForRunningFetchCot } from "./application/fetchCot.ts";
 export { makeGetCotUseCase } from "./application/getCot.ts";
 export type { ForRunningGetCot, CotEntry } from "./application/getCot.ts";
+// Phase 14: FRED macro expansion ports + domain type (MAC-01, MAC-02)
+export type {
+  MacroObservationRow,
+  ForFetchingFredSeries,
+  ForFetchingVvixQuote,
+  ForPersistingMacroObservation,
+  ForReadingMacroObservations,
+} from "./application/ports.ts";
 // Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
 export { hashFillIds } from "./domain/fill-pairing.ts";
 // Phase 5: rebuildJournal use-case factory + driver port
