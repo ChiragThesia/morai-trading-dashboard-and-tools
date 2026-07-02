@@ -86,8 +86,10 @@ None. The dual-writer race window (T-11-06-01) is closed: both `schedule.ts` and
 
 ## Self-Check: PASSED
 
-- `apps/worker/src/schedule.ts` — exists, refresh-tokens only in comments, 9 queues/5 crons.
-- `apps/worker/src/schedule.test.ts` — exists, ALL_9_QUEUES, SCHEDULED_5, 11 tests green.
-- `apps/worker/src/main.ts` — exists, sidecarAdapter wired, makeSchwabChainAdapter absent.
-- `apps/worker/src/config.ts` — exists, SIDECAR_URL present, SCHWAB_MARKET_* absent.
-- Commit `ce91509` exists in git log.
+- `apps/worker/src/schedule.ts` — FOUND; refresh-tokens only in block comments, no functional calls.
+- `apps/worker/src/schedule.test.ts` — FOUND; ALL_9_QUEUES, SCHEDULED_5, 11/11 tests green.
+- `apps/worker/src/main.ts` — FOUND; sidecarAdapter wired, makeSchwabChainAdapter absent.
+- `apps/worker/src/config.ts` — FOUND; SIDECAR_URL present, SCHWAB_MARKET_* absent.
+- `.planning/phases/11-sidecar-scaffold-auth-migration/11-06-SUMMARY.md` — FOUND.
+- Commit `ce91509` — FOUND in git log.
+- Commit `c314d90` — FOUND in git log.
