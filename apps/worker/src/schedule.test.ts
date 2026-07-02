@@ -10,7 +10,8 @@
 //   - sync-fills cron is every 10 min RTH tz America/New_York
 //   - sync-transactions cron runs +5 min ahead of sync-fills (fills source before pairing)
 //   - fetch-cot cron is weekly Friday 17:00 ET tz America/New_York (COT-01, D-07)
-//   - fetch-rates is scheduled TWICE (09:00 ET + 18:30 ET, Mon-Fri, D-06/14-05)
+//   - fetch-rates is scheduled TWICE with distinct keys and BOTH rows survive the
+//     pg-boss (name, key) upsert (09:00 ET + 18:30 ET, Mon-Fri, D-06/14-05, review CR-01)
 //   - work() registered for all 10 queues
 //   - createQueue calls precede schedule/work calls (CR-01 ordering)
 
@@ -19,10 +20,17 @@ import { registerAllJobs } from "./schedule.ts";
 import type { AllHandlers, JobScheduler, PgBossHandler } from "./schedule.ts";
 import type { WorkOptions } from "pg-boss";
 
-// Fake boss that records all method calls — typed to satisfy JobScheduler (no as-casts needed)
+// Fake boss that records all method calls — typed to satisfy JobScheduler (no as-casts needed).
+// schedule() also models pg-boss v12 semantics: schedules are UPSERTED on (name, key) with
+// key defaulting to '' (dist/plans.js ON CONFLICT (name, key) DO UPDATE). Two keyless calls
+// for the same name leave ONE surviving row — the exact bug from review CR-01. Assertions
+// about what production ends up with must read `scheduleStore`, not `scheduleCalls`.
 function makeFakeBoss() {
   const createQueueCalls: string[] = [];
-  const scheduleCalls: Array<{ name: string; cron: string; tz: string }> = [];
+  const scheduleCalls: Array<{ name: string; cron: string; tz: string; key: string }> = [];
+  // Surviving schedule rows after upserts — keyed by `${name}:${key}` like pg-boss's
+  // (name, key) primary key. This is the state the pgboss.schedule table actually holds.
+  const scheduleStore = new Map<string, { name: string; cron: string; tz: string; key: string }>();
   const workCalls: string[] = [];
   const callOrder: string[] = [];
 
@@ -31,17 +39,27 @@ function makeFakeBoss() {
       createQueueCalls.push(name);
       callOrder.push(`createQueue:${name}`);
     }),
-    schedule: vi.fn(async (name: string, cron: string, _data: null, opts: { tz: string }): Promise<void> => {
-      scheduleCalls.push({ name, cron, tz: opts.tz });
-      callOrder.push(`schedule:${name}`);
-    }),
+    schedule: vi.fn(
+      async (
+        name: string,
+        cron: string,
+        _data: null,
+        opts: { tz: string; key?: string },
+      ): Promise<void> => {
+        const key = opts.key ?? ""; // pg-boss default: timekeeper.js `key = ''`
+        const row = { name, cron, tz: opts.tz, key };
+        scheduleCalls.push(row);
+        scheduleStore.set(`${name}:${key}`, row); // upsert — second same-key call overwrites
+        callOrder.push(`schedule:${name}`);
+      },
+    ),
     work: vi.fn(async (name: string, _opts: WorkOptions, _handler: PgBossHandler): Promise<void> => {
       workCalls.push(name);
       callOrder.push(`work:${name}`);
     }),
   };
 
-  return { boss, createQueueCalls, scheduleCalls, workCalls, callOrder };
+  return { boss, createQueueCalls, scheduleCalls, scheduleStore, workCalls, callOrder };
 }
 
 function makeFakeHandlers(): AllHandlers {
@@ -91,26 +109,31 @@ describe("registerAllJobs", () => {
     expect(createQueueCalls.sort()).toEqual(ALL_10_QUEUES.sort());
   });
 
-  it("calls schedule 7 times — 6 jobs, fetch-rates scheduled twice (14-05, D-06)", async () => {
-    const { boss, scheduleCalls } = makeFakeBoss();
+  it("calls schedule 7 times — 6 jobs, fetch-rates scheduled twice; all 7 rows survive the (name, key) upsert (14-05, D-06, CR-01)", async () => {
+    const { boss, scheduleCalls, scheduleStore } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
     expect(scheduleCalls).toHaveLength(7);
+    // Surviving rows must equal calls made — a keyless duplicate name would collapse to 6.
+    expect(scheduleStore.size).toBe(7);
     const scheduledNames = [...new Set(scheduleCalls.map((c) => c.name))].sort();
     expect(scheduledNames).toEqual(SCHEDULED_6.sort());
   });
 
-  it("schedules fetch-rates TWICE — 09:00 ET and 18:30 ET, Mon-Fri (D-06, 14-05)", async () => {
-    const { boss, scheduleCalls } = makeFakeBoss();
+  it("schedules fetch-rates TWICE with distinct keys — both rows SURVIVE the pg-boss (name, key) upsert (D-06, 14-05, review CR-01)", async () => {
+    const { boss, scheduleStore } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    const fetchRatesCrons = scheduleCalls.filter((c) => c.name === "fetch-rates");
-    expect(fetchRatesCrons).toHaveLength(2);
-    expect(fetchRatesCrons.map((c) => c.cron).sort()).toEqual(
+    // Read the surviving store, NOT the call log: pg-boss upserts on (name, key), so two
+    // keyless schedule() calls leave one row and the 09:00 ET run never fires (CR-01).
+    const surviving = [...scheduleStore.values()].filter((s) => s.name === "fetch-rates");
+    expect(surviving).toHaveLength(2);
+    expect(new Set(surviving.map((s) => s.key)).size).toBe(2);
+    expect(surviving.map((s) => s.cron).sort()).toEqual(
       ["0 9 * * 1-5", "30 18 * * 1-5"].sort(),
     );
-    for (const c of fetchRatesCrons) {
-      expect(c.tz).toBe("America/New_York");
+    for (const s of surviving) {
+      expect(s.tz).toBe("America/New_York");
     }
   });
 

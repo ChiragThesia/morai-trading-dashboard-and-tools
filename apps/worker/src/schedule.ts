@@ -37,7 +37,12 @@ export type PgBossHandler = (jobs: ReadonlyArray<Job | undefined>) => Promise<vo
  */
 export type JobScheduler = {
   createQueue(name: string): Promise<unknown>;
-  schedule(name: string, cron: string, data: null, opts: { tz: string }): Promise<unknown>;
+  schedule(
+    name: string,
+    cron: string,
+    data: null,
+    opts: { tz: string; key?: string },
+  ): Promise<unknown>;
   work(name: string, opts: WorkOptions, handler: PgBossHandler): Promise<unknown>;
 };
 
@@ -95,20 +100,27 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
     null,
     { tz: "America/New_York" },
   );
+  // Review CR-01: pg-boss v12 UPSERTS schedules on (name, key) with key defaulting to ''
+  // (timekeeper.js `key = ''`; plans.js ON CONFLICT (name, key) DO UPDATE). The two
+  // fetch-rates crons MUST carry distinct keys or the second call silently overwrites the
+  // first and only the 18:30 ET run ever fires (D-06 broken).
+  // NOTE (prod cleanup): the pre-fix keyless ("fetch-rates", '') row is NOT removed by this
+  // code and will keep firing at whatever cron it last held. Delete it once at deploy:
+  //   DELETE FROM pgboss.schedule WHERE name = 'fetch-rates' AND key = '';
   await boss.schedule(
     "fetch-rates",
     "0 9 * * 1-5", // daily 09:00 ET Mon-Fri (morning — catches SOFR's T+1 lag)
     null,
-    { tz: "America/New_York" },
+    { tz: "America/New_York", key: "morning" },
   );
   // 14-05 (D-06): second daily fetch-rates run — evening catches same-day VIXCLS/treasury
-  // prints. Idempotent (self-healing upsert, D-05); safe on every boot. Same queue, no
-  // new handler — registerAllJobs still creates exactly one fetch-rates queue.
+  // prints. Idempotent (same-key re-schedule upserts in place); safe on every boot. Same
+  // queue, no new handler — registerAllJobs still creates exactly one fetch-rates queue.
   await boss.schedule(
     "fetch-rates",
     "30 18 * * 1-5", // daily 18:30 ET Mon-Fri (evening)
     null,
-    { tz: "America/New_York" },
+    { tz: "America/New_York", key: "evening" },
   );
   await boss.schedule(
     "compute-bsm-greeks",
