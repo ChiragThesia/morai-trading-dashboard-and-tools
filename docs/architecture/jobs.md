@@ -56,9 +56,14 @@ handler and NYSE-holiday gate.
 **Failure policy (D-07):** best-effort per series, fail-loud finish. Every series is fetched
 independently; every successful fetch persists regardless of the others' outcome. If ANY of
 the 8 series failed, the handler throws after persisting all successes, naming the failed
-series — pg-boss marks the run failed and `/api/status` surfaces `lastErr`. No silent data
-holes. The next run (twice-daily cadence) self-heals any gap by fetching from
-`max(date)+1` per series (D-05).
+series — pg-boss marks the run failed and `/api/status` surfaces `lastErr`. No silent
+failures.
+
+**Gap behavior:** each run persists only the LATEST observation per series (the most recent
+non-`'.'` row). The `(series_id, date)` upsert makes re-runs idempotent (D-05), but it does
+NOT backfill days missed while the worker or a source was down — those dates stay empty.
+Historical backfill is not implemented; if a multi-day outage leaves holes that matter,
+build a `max(date)+1` incremental fetch as a follow-up.
 
 **Hard requirement (D-09):** the macro fetch requires `FRED_API_KEY` — missing key fails
 loud, no silent skip. This is the OPPOSITE of the legacy DGS3MO adapter's lenient 4.5%
