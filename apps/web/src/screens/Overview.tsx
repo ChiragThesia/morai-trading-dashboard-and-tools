@@ -10,9 +10,9 @@ import { pairPositionsIntoCalendars } from "../lib/pair-calendars.ts";
 import { parseOccSymbol } from "@morai/shared";
 import { Market } from "./Market.tsx";
 import { CotCard } from "../components/CotCard.tsx";
+import { MacroCard } from "../components/MacroCard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
 import { Panel, SectionLabel, Stat } from "../components/system/index.tsx";
-import { ComingSoon } from "../components/stubs/ComingSoon.tsx";
 import { cn } from "@/lib/utils";
 import type { BrokerPositionResponse } from "@morai/contracts";
 import type { StreamLiveGreekEvent } from "@morai/contracts";
@@ -22,7 +22,7 @@ import type { StreamLiveGreekEvent } from "@morai/contracts";
  *   1. Open positions — a TOS-style table of every position + net greeks.
  *      Phase 12-07: live SSE overlay (STRM-01) + LiveStatusBadge (D-04, Surface 3).
  *   2. Market — dealer positioning (live GEX/OI/Volume) + live CFTC COT (Phase 13)
- *      + FRED macro ("needs feed" stub until Phase 14 ships the ingestion).
+ *      + live FRED macro (Phase 14, D-12).
  *   3. Book & system — larger, easy-to-read summary boxes.
  *
  * Greeks use the BSM engine at a flat DEFAULT_IV (no per-contract chain IV here) — the
@@ -435,15 +435,10 @@ export function Overview(): React.ReactElement {
         <SectionLabel className="mb-2">Market · what the big guys are doing & macro</SectionLabel>
         {/* Dealer positioning — live GEX / OI wall / Volume for SPX */}
         <Market />
-        {/* CFTC COT (Phase 13 — live) + FRED macro (Phase 14 — still a stub) */}
+        {/* CFTC COT (Phase 13 — live) + FRED macro (Phase 14 — live) */}
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
           <CotCard />
-          <ComingSoon
-            badge="○ needs feed"
-            title="FRED macro"
-            body="Rates, curves & vol regime (DFF · SOFR · T10Y2Y · VIX · VVIX). The macro backdrop. Wired in Phase 14."
-            minHeight={120}
-          />
+          <MacroCard />
         </div>
       </section>
 
