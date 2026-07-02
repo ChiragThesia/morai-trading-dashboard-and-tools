@@ -1,23 +1,20 @@
 ---
-status: testing
+status: complete
 phase: 12-streaming-ts-fan-out
 source: [12-07-SUMMARY.md, 12-06-SUMMARY.md, 12-05-SUMMARY.md, 12-03-SUMMARY.md, 12-02-SUMMARY.md]
 started: 2026-06-29T16:15:35Z
-updated: 2026-07-02T00:50:00Z
+updated: 2026-07-02T01:00:00Z
 ---
 
 ## Current Test
 
-number: 4
-name: Ad-hoc OCC greeks (SC6) — Analyzer
-expected: |
-  Enter an OCC option symbol in the Analyzer; live Δ/Γ/Θ/Vega stream for it ~1/sec.
-awaiting: RTH session (market closed 19:45 CT at last check — needs live ticks)
+none — UAT complete (6/6 pass, 2026-07-01)
 
 <!-- Re-test 2026-07-01 RTH: tests 2-5 reset to pending after keep-alive +
      fresh-ticket-reconnect fixes deployed (commits 17bda79/21ea2ab/6b52bca).
      Tests 1 & 6 remain pass from 2026-06-30. Test 3 passed 2026-07-01 evening
-     via DevTools error-injection harness (see note). -->]
+     via DevTools error-injection harness. Tests 4-5 accepted by user based on
+     live RTH usage 2026-07-01. -->]
 
 ## Tests
 
@@ -49,11 +46,13 @@ note: |
 
 ### 4. Ad-hoc OCC greeks (SC6) — Analyzer
 expected: Enter an OCC option symbol in the Analyzer; live Δ/Γ/Θ/Vega stream for it ~1/sec.
-result: [pending]
+result: pass
+note: User-verified during live RTH usage 2026-07-01; accepted 2026-07-01 evening.
 
 ### 5. ACCT_ACTIVITY fill (SC2)
 expected: On a real trade fill, the position/greeks reconcile live (ACCT_ACTIVITY event triggers a re-fetch).
-result: [pending]
+result: pass
+note: User-verified during live RTH usage 2026-07-01; accepted 2026-07-01 evening.
 
 ### 6. Unauthenticated SSE rejected (SC3)
 result: pass
@@ -62,9 +61,9 @@ note: Verified via curl 2026-06-30 — POST /api/stream/ticket, GET /api/stream 
 ## Summary
 
 total: 6
-passed: 4
+passed: 6
 issues: 0
-pending: 2
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -114,8 +113,9 @@ mocked unit tests. Fixed + deployed 2026-06-30:
   fixes_needed:
     - "Optional watchdog in useLiveStream: track last-event time (any of ping/ticks/reconcile — requires listening to 'ping' too) and flip status to 'stale' + force close/reconnect if silent > ~30s. Test via FakeEventSource with advanced timers."
 
-## Re-verify remaining (tests 4-5 — need RTH)
+## Closed
 
-`/gsd-verify-work 12` during RTH (08:30-15:00 CT):
-- Test 4: Analyzer → enter OCC symbol → live greeks ~1/sec (SC6).
-- Test 5: on a real fill, positions/greeks reconcile live (ACCT_ACTIVITY → re-fetch).
+UAT complete 2026-07-01 — 6/6 pass. Tests 1/6 via DevTools+curl (06-30), tests 2/3
+re-verified post-fix (07-01), tests 4/5 accepted on user's live RTH usage (07-01).
+Remaining minor gap (silent-stall watchdog) tracked above — optional enhancement,
+not a Phase 12 blocker.

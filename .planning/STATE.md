@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Real-Time Schwab Streaming
-current_phase: 12
-current_phase_name: streaming-ts-fan-out
-status: executing
-stopped_at: Phase 13 COMPLETE — 6/6 plans, verification 8/8 must-haves (COT-01/COT-02), code-review clean (WR-01/02/04 fixed TDD-first), full suite 1258 green
-last_updated: "2026-06-29T18:36:45.508Z"
-last_activity: 2026-06-29
-last_activity_desc: Phase 12 execution started
+current_phase: 14
+current_phase_name: fred-expansion
+status: ready_to_plan
+stopped_at: Phase 12 UAT COMPLETE (6/6 pass, 2026-07-01) — STRM-01..05 done; Phase 13 COT done + FE wired; next Phase 14 (MAC-01..02)
+last_updated: "2026-07-02T01:00:00Z"
+last_activity: 2026-07-01
+last_activity_desc: Phase 12 UAT closed (badge drop/recovery verified vs prod; tests 4-5 user-accepted)
 progress:
-  total_phases: 9
-  completed_phases: 9
-  total_plans: 74
-  completed_plans: 76
-  percent: 100
+  total_phases: 6
+  completed_phases: 4
+  total_plans: 21
+  completed_plans: 21
+  percent: 67
 ---
 
 # Project State
@@ -24,14 +24,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-25)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 12 — streaming-ts-fan-out
+**Current focus:** Phase 14 — fred-expansion (next up; Phase 15 re-auth smoothing after)
 
 ## Current Position
 
-Phase: 12 (streaming-ts-fan-out) — EXECUTING
-Plan: 2 of 7
-Status: Ready to execute
-Last activity: 2026-06-29 — Phase 12 execution started
+Phase: 14 (fred-expansion) — READY TO PLAN
+Phases 10-13 complete. Phase 12 UAT closed 6/6 (2026-07-01); Phase 13 COT shipped + FE wired.
+Last activity: 2026-07-01 — Phase 12 UAT closed
 
 ## Milestone v1.1 Summary
 
