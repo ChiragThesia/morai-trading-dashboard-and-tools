@@ -9,6 +9,7 @@ import { resolveLivePositionRow } from "../lib/live-position-greeks.ts";
 import { pairPositionsIntoCalendars } from "../lib/pair-calendars.ts";
 import { parseOccSymbol } from "@morai/shared";
 import { Market } from "./Market.tsx";
+import { CotCard } from "../components/CotCard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
 import { Panel, SectionLabel, Stat } from "../components/system/index.tsx";
 import { ComingSoon } from "../components/stubs/ComingSoon.tsx";
@@ -20,8 +21,8 @@ import type { StreamLiveGreekEvent } from "@morai/contracts";
  * Overview — the home dashboard, three sections (UI directive 2026-06-28):
  *   1. Open positions — a TOS-style table of every position + net greeks.
  *      Phase 12-07: live SSE overlay (STRM-01) + LiveStatusBadge (D-04, Surface 3).
- *   2. Market — dealer positioning (live GEX/OI/Volume) + CFTC COT + FRED macro
- *      (COT/FRED are "needs feed" stubs until Phases 13/14 ship the ingestion).
+ *   2. Market — dealer positioning (live GEX/OI/Volume) + live CFTC COT (Phase 13)
+ *      + FRED macro ("needs feed" stub until Phase 14 ships the ingestion).
  *   3. Book & system — larger, easy-to-read summary boxes.
  *
  * Greeks use the BSM engine at a flat DEFAULT_IV (no per-contract chain IV here) — the
@@ -434,14 +435,9 @@ export function Overview(): React.ReactElement {
         <SectionLabel className="mb-2">Market · what the big guys are doing & macro</SectionLabel>
         {/* Dealer positioning — live GEX / OI wall / Volume for SPX */}
         <Market />
-        {/* CFTC COT + FRED macro — separated, awaiting ingestion (Phases 13/14) */}
+        {/* CFTC COT (Phase 13 — live) + FRED macro (Phase 14 — still a stub) */}
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <ComingSoon
-            badge="○ needs feed"
-            title="CFTC COT — dealer & spec positioning"
-            body="Weekly Commitments of Traders (E-mini S&P 500). Net non-commercial vs commercial positioning — what the big guys hold. Wired in Phase 13."
-            minHeight={120}
-          />
+          <CotCard />
           <ComingSoon
             badge="○ needs feed"
             title="FRED macro"
