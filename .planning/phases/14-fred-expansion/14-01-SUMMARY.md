@@ -166,6 +166,10 @@ is tracked for 14-05, per D-13).
 - No blockers. `rate_observations`/BSM path verified unchanged (D-02) — Phase 14 waves 2+ can
   proceed in parallel per the roadmap's wave plan.
 
+## Self-Check: PASSED
+
+All key files verified present on disk; all 5 task/summary commit hashes verified in git log.
+
 ---
 *Phase: 14-fred-expansion*
 *Completed: 2026-07-02*
