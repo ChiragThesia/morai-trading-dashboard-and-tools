@@ -156,6 +156,7 @@ Each task was committed as a single green commit (see Deviations — this repo's
 
 ## Issues Encountered
 - `bun run typecheck` at the repo root does not cover `apps/web` (it is not in the root `tsconfig.json` project references — only `packages/*` and `apps/server`/`apps/worker` are). Resolved by running `apps/web`'s own `tsc --noEmit` directly. This is a pre-existing gap in the workspace typecheck script, not introduced by this plan; flagging here for awareness in future phases touching `apps/web` fixtures.
+- `gsd-tools query requirements.mark-complete AUTH-05` marked AUTH-05 fully "Complete" in `REQUIREMENTS.md` after this plan alone. AUTH-05 ("Status surfaces the Schwab refresh-token expiry **and an alert fires at T-24h**") is declared in the frontmatter of three plans in this phase (15-01, 15-04, 15-05) — this plan only ships the status-surface half (SC1); the T-24h alert (15-04) and amber banner (15-05) are still pending. Reverted the checkbox and traceability-table row back to `[ ]` / "Pending" in `.planning/REQUIREMENTS.md` so the doc doesn't claim the requirement is done before it actually is. `requirements-completed: [AUTH-05]` in this SUMMARY's frontmatter is left as-is per template instruction (verbatim copy of the plan's own `requirements:` field, not a completion claim) — 15-05's SUMMARY should be the one that flips AUTH-05 to Complete.
 
 ## User Setup Required
 
