@@ -225,8 +225,13 @@ def _verify_and_finish(db_url: str, failures: list[str] | None = None) -> None:
     finally:
         conn.close()
     print("\nVerification (refresh_issued_at anchored within the last 5 minutes):")
-    for app_id, fresh in rows:
-        print(f"  {app_id}: {'seeded' if fresh else 'STALE — not written by this run'}")
+    fresh_by_app = dict(rows)
+    for app_id in ("trader", "market"):
+        if app_id not in fresh_by_app:
+            # First-ever seed failure: no row was written at all.
+            print(f"  {app_id}: MISSING — no broker_tokens row")
+        else:
+            print(f"  {app_id}: {'seeded' if fresh_by_app[app_id] else 'STALE — not written by this run'}")
     if failures:
         sys.exit(
             "\nExchange FAILED for: " + ", ".join(failures)
