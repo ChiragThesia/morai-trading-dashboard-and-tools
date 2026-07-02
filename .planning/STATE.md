@@ -10,11 +10,11 @@ last_updated: "2026-07-02T01:15:37.040Z"
 last_activity: 2026-07-01
 last_activity_desc: Phase 12 UAT closed
 progress:
-  total_phases: 9
-  completed_phases: 9
-  total_plans: 74
-  completed_plans: 76
-  percent: 100
+  total_phases: 6
+  completed_phases: 4
+  total_plans: 21
+  completed_plans: 21
+  percent: 67
 ---
 
 # Project State
