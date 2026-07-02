@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForGettingStatus } from "@morai/core";
-import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks, ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot } from "@morai/core";
+import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks, ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot, ForRunningGetMacro } from "@morai/core";
 import type { Calendar, SnapshotRow, StorageError } from "@morai/core";
 import {
   statusResponse,
@@ -11,6 +11,7 @@ import {
   journalResponse,
   liveGreeksResponse,
   cotResponse,
+  macroResponse,
 } from "@morai/contracts";
 import { bearerAuth } from "./bearer.ts";
 import { makeMcpRouter } from "./server.ts";
@@ -820,5 +821,121 @@ describe("MCP router", () => {
     if (!result.ok) return;
     // Empty array is a valid cotResponse (not an error).
     expect(cotResponse.parse(result.value)).toEqual([]);
+  });
+
+  // ─── get_macro tool (14-06 — real use-case over the shared macroResponse contract, MCP-02) ──
+
+  const fakeGetMacro: ForRunningGetMacro = async (query) => {
+    if (query?.series !== undefined) {
+      return ok({ DFF: [{ time: "2026-04-01", value: 4.33 }] });
+    }
+    return ok({
+      DFF: [{ time: "2026-04-01", value: 4.33 }],
+      VVIX: [{ time: "2026-04-01", value: 89.0 }],
+    });
+  };
+  const fakeGetMacroEmpty: ForRunningGetMacro = async () => ok({});
+  const fakeGetMacroError: ForRunningGetMacro = async () =>
+    err<StorageError>({ kind: "storage-error", message: "boom" });
+
+  async function getGetMacroHandler(
+    getMacro: ForRunningGetMacro,
+  ): Promise<(args: unknown) => Promise<unknown>> {
+    const { registerGetMacroTool } = await import("./tools.ts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    registerGetMacroTool(server, getMacro);
+
+    const toolsMap: unknown = Reflect.get(server, "_registeredTools");
+    if (typeof toolsMap !== "object" || toolsMap === null) {
+      throw new Error("_registeredTools not found on McpServer instance");
+    }
+    const toolEntry: unknown = Reflect.get(toolsMap, "get_macro");
+    if (typeof toolEntry !== "object" || toolEntry === null) {
+      throw new Error("get_macro tool not registered");
+    }
+    const handler: unknown = Reflect.get(toolEntry, "handler");
+    if (typeof handler !== "function") {
+      throw new Error("get_macro handler is not a function");
+    }
+    return async (args: unknown): Promise<unknown> =>
+      Reflect.apply(handler, undefined, [args]);
+  }
+
+  function firstContentTextMacro(result: unknown): string {
+    if (typeof result !== "object" || result === null) {
+      throw new Error("handler did not return an object");
+    }
+    const content: unknown = Reflect.get(result, "content");
+    if (!Array.isArray(content) || content.length === 0) {
+      throw new Error("handler result has no content");
+    }
+    const first: unknown = content[0];
+    if (typeof first !== "object" || first === null) {
+      throw new Error("first content item is not an object");
+    }
+    const text: unknown = Reflect.get(first, "text");
+    if (typeof text !== "string") {
+      throw new Error("content text is not a string");
+    }
+    return text;
+  }
+
+  it("get_macro tool registers with the real use-case without throwing", async () => {
+    const { registerGetMacroTool } = await import("./tools.ts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    expect(() => registerGetMacroTool(server, fakeGetMacro)).not.toThrow();
+  });
+
+  it("get_macro tool with no args returns the full default-window macroResponse payload (MCP-02)", async () => {
+    const handler = await getGetMacroHandler(fakeGetMacro);
+    const result = await handler({});
+    const text = firstContentTextMacro(result);
+    const payload: unknown = JSON.parse(text);
+    const parsed = macroResponse.parse(payload);
+    expect(parsed.DFF).toHaveLength(1);
+    expect(parsed.VVIX).toHaveLength(1);
+  });
+
+  it("get_macro tool with {days,series} filters the payload identically to the HTTP route (parity)", async () => {
+    const handler = await getGetMacroHandler(fakeGetMacro);
+    const result = await handler({ days: 365, series: "DFF" });
+    const text = firstContentTextMacro(result);
+    const payload: unknown = JSON.parse(text);
+    const parsed = macroResponse.parse(payload);
+    expect(Object.keys(parsed)).toEqual(["DFF"]);
+  });
+
+  it("get_macro tool rejects invalid args via macroQuery without calling the use-case (T-14-01)", async () => {
+    let calls = 0;
+    const spy: ForRunningGetMacro = async () => {
+      calls += 1;
+      return ok({});
+    };
+    const handler = await getGetMacroHandler(spy);
+    const result = await handler({ series: "BOGUS" });
+    const text = firstContentTextMacro(result);
+    expect(text.toLowerCase()).toContain("invalid");
+    expect(calls).toBe(0);
+  });
+
+  it("get_macro tool returns a contract-valid EMPTY map (not an error) on no data", async () => {
+    const handler = await getGetMacroHandler(fakeGetMacroEmpty);
+    const result = await handler({});
+    const text = firstContentTextMacro(result);
+    const payload: unknown = JSON.parse(text);
+    expect(macroResponse.parse(payload)).toEqual({});
+  });
+
+  it("get_macro tool returns flat internal-error content on a StorageError (no DB internals)", async () => {
+    const handler = await getGetMacroHandler(fakeGetMacroError);
+    const result = await handler({});
+    const text = firstContentTextMacro(result);
+    expect(text).toContain("internal error");
   });
 });
