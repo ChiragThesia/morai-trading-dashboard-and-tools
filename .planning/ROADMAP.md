@@ -649,7 +649,18 @@ new tokens on its next auto-refresh cycle.
   1. When the Schwab refresh token is within 24 hours of its 7-day expiry, `GET /api/status` includes a non-null `refreshExpiresIn` field and the status surface logs a warning; the alert fires before the token expires (AUTH-05).
   2. The operator can run a local re-auth flow (manual-flow → `token_write` callback → Postgres) that writes a new refresh token to `broker_tokens`; the sidecar picks up the new token on its next auto-refresh cycle without a Railway redeploy; `GET /api/status` reports token freshness restored (AUTH-06).
 
-**Plans**: TBD
+**Plans**: 5 plans (Wave 1: 15-01, 15-02, 15-03 · Wave 2: 15-04, 15-05)
+- [ ] 15-01-PLAN.md — AUTH-05: refreshExpiresIn domain computation + type/contract/DTO threading (T-24h status field)
+- [ ] 15-02-PLAN.md — AUTH-06: seed_token.py hardening (commit diff, `railway redeploy`) + operator re-auth runbook
+- [ ] 15-03-PLAN.md — D-04: remove retired `refresh-tokens` from the `trigger_job` surface
+- [ ] 15-04-PLAN.md — AUTH-05: T-24h warning-log side effect (getStatus decorator, wired for HTTP + MCP)
+- [ ] 15-05-PLAN.md — AUTH-05: amber pre-expiry banner (extends AuthExpiredBanner, both apps)
+
+**Plan-review note (provisional decisions — user was AFK)**: AUTH-06's "without a Railway
+redeploy … picks up on next auto-refresh cycle" is verified inaccurate (RESEARCH Summary):
+the running sidecar reads its token once at construction and only re-reads Postgres on
+restart. Resolved as restart-only via `railway redeploy --service sidecar -y` (no code
+rebuild). AUTH-05's status field is unaffected (reads Postgres directly). See 15-02.
 
 ## Backlog / Future Enhancements
 
