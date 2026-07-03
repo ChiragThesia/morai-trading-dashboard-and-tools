@@ -29,9 +29,10 @@ Streaming (Phases 10–15, 2026-07-02). See `.planning/MILESTONES.md`.
   crons; all surfaces ship HTTP + MCP pairs (MCP-02).
 - ~1,374 tests green; hexagon enforced by ESLint boundaries; TDD red→green throughout.
 
-**Known debt (v1.1 audit):** prod runs the pre-phase-15 image (T-24h re-auth alert not live
-until deploy; next re-auth window ~2026-07-09); no silent-stall watchdog on the live stream;
-`apps/web` has no typecheck gate in CI (4 pre-existing tsc failures).
+**Known debt (v1.1 audit):** no silent-stall watchdog on the live stream; `apps/web` has no
+typecheck gate in CI (4 pre-existing tsc failures). *(Phase 16, 2026-07-03: prod now runs the
+phase-15 image on server+worker+web — T-24h re-auth alert surface (`refreshExpiresIn` +
+AuthExpiredBanner) live; DEPLOY-04 validated. Next re-auth window ~2026-07-09.)*
 
 ## Current Milestone: v1.2 Trade Picker & Dashboard Redesign
 
@@ -169,4 +170,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 — v1.2 milestone start*
+*Last updated: 2026-07-03 — Phase 16 complete (phase-15 image deployed, DEPLOY-04 validated)*
