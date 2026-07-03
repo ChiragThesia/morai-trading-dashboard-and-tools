@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 17
-current_phase_name: Overview v2 Redesign + IV Calibration Fix
+current_phase_name: overview-v2-redesign-iv-calibration-fix
 status: executing
 stopped_at: Phase 17 UI-SPEC approved
-last_updated: "2026-07-03T21:24:55.588Z"
+last_updated: "2026-07-03T22:11:21.099Z"
 last_activity: 2026-07-03
-last_activity_desc: Phase 16 complete, transitioned to Phase 17
+last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 7
+  completed_plans: 4
   percent: 20
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 16 — Deploy Phase-15 Image
+**Current focus:** Phase 17 — overview-v2-redesign-iv-calibration-fix
 
 ## Current Position
 
-Phase: 17 — Overview v2 Redesign + IV Calibration Fix
-Plan: Not started
+Phase: 17 (overview-v2-redesign-iv-calibration-fix) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-07-03 — Phase 16 complete, transitioned to Phase 17
+Last activity: 2026-07-03 — Phase 17 execution started
 
 ## Milestone v1.2 Summary
 
@@ -176,6 +176,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 16 P16-01 | 14 | 3 tasks | 1 files |
 | Phase 16 P16-02 | 20 | 2 tasks | 1 files |
 | Phase 16 P16-03 | 12 | 2 tasks | 1 files |
+| Phase 17-overview-v2-redesign-iv-calibration-fix P01 | 10min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -200,6 +201,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: Phase 16: NEVER run 'railway domain' against the sidecar — it creates-on-first-use even with --service (re-broke GW-05 during 16-01 verify); verify sidecar domain state via Railway dashboard/GraphQL only
 - [Phase ?]: Phase 16: railway up gives commitHash null — prove deploy identity by createdAt timestamp correlation, not git sha (Pitfall 1)
 - [Phase ?]: Phase 16: worker liveness judged by CRON jobs firing post-deploy; chain-triggered/on-demand/retired jobs staying idle is expected baseline, not a regression
+- [Phase ?]: Phase 17-01: apps/web now depends on @morai/core (package.json + tsconfig + vitest alias) to import the frozen invertIv solver from its package root per D-01 — core is hexagon-pure so this is browser-bundle-safe
+- [Phase ?]: Phase 17-01: OQ1 resolved — packages/core/.../bsm.ts is a re-export shim of @morai/quant's bsmPrice; the two BSM 'engines' are the same function, no reconciliation needed
 
 ### Pending Todos
 
@@ -244,7 +247,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T20:50:25.037Z
+Last session: 2026-07-03T22:11:16.226Z
 Stopped at: Phase 17 UI-SPEC approved
 Resume file: .planning/phases/17-overview-v2-redesign-iv-calibration-fix/17-UI-SPEC.md
 

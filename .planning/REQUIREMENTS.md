@@ -25,7 +25,7 @@ tail.
   (gamma profile, GEX bars, level bar, net book greeks), pill header (SPX · netγ+regime ·
   flip · VIX · VVIX · DFF · 10y2y · COT · book P&L)
 
-- [ ] **OVW-02**: Payoff T+0 curve uses per-position IV calibrated to the live mark
+- [x] **OVW-02**: Payoff T+0 curve uses per-position IV calibrated to the live mark
   (bisection via the core IV-inversion module, tagged non-convergence result — never a flat
   DEFAULT_IV guess); stale GEX displays its snapshot timestamp
 
@@ -113,7 +113,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | DEPLOY-04 | Phase 16 | Complete |
 | OVW-01 | Phase 17 | Pending |
-| OVW-02 | Phase 17 | Pending |
+| OVW-02 | Phase 17 | Complete |
 | ANLZ-01 | Phase 18 | Pending |
 | ANLZ-02 | Phase 18 | Pending |
 | ANLZ-03 | Phase 18 | Pending |
