@@ -2,9 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
+current_phase: 16
+current_phase_name: Deploy Phase-15 Image
 status: planning
-last_updated: "2026-07-03T18:00:00.000Z"
+stopped_at: Phase 16 context gathered
+last_updated: "2026-07-03T18:06:25.187Z"
 last_activity: 2026-07-03
+last_activity_desc: ROADMAP.md created for v1.2 (Phases 16-20, 12/12 requirements mapped)
 progress:
   total_phases: 5
   completed_phases: 0
@@ -44,14 +48,19 @@ Key risks carried into planning:
 1. Re-auth window ~2026-07-09 — Phase 16 must ship before then or the T-24h alert isn't live.
 2. Stale/mis-sourced chain data silently feeding picker scores — `observedAt`/`source` required
    at the port signature (Phase 19), not caught later in QA.
+
 3. FwdIV radicand goes negative under term-structure inversion — tagged `Result` variant required,
    never a silent `NaN` (Phase 19).
+
 4. Economic-event dates stored as fixed UTC instead of America/New_York + IANA tz — same bug class
    as the CBOE-UTC lesson, inverted direction (Phase 19).
+
 5. IV-calibration bisection hanging/garbage on deep-ITM/illiquid legs — tagged non-convergence
    result required (Phase 17).
+
 6. Stream watchdog crying wolf on quiet markets or staying silent during a real stall — needs a
    three-state (LIVE/QUIET/STALLED) RTH-aware state machine (Phase 20).
+
 7. Strategy-rules (RULE-01) scope creeping into a rules-evaluation DSL — explicitly a thin
    recording layer; needs its own discuss-phase before planning (Phase 20).
 
@@ -227,9 +236,9 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T18:00:00.000Z
-Stopped at: ROADMAP.md created for v1.2 (Phases 16-20, 12/12 requirements mapped, coverage validated)
-Resume file: None
+Last session: 2026-07-03T18:06:25.177Z
+Stopped at: Phase 16 context gathered
+Resume file: .planning/phases/16-deploy-phase-15-image/16-CONTEXT.md
 
 ## Operator Next Steps
 
