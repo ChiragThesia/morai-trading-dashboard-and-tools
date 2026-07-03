@@ -14,7 +14,7 @@ import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { bsmGreeks } from "@morai/quant";
 import { computePositionGreeks } from "./position-greeks.ts";
-import { repriceScenario, rollScenario, t0ExcludedPositions } from "./scenario-engine.ts";
+import { repriceScenario, rollScenario, t0ExcludedPositions, buildScenarioStrip } from "./scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams } from "./scenario-engine.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -78,6 +78,34 @@ const BACK_NON_CONVERGENT_POS: AnalyzerPosition = {
   frontIvStatus: "ok",
   backIvStatus: "non-convergent",
 };
+
+/**
+ * Build a valid 21-char OCC symbol encoding `strike` at positions 13-20
+ * (thousandths of a dollar), matching extractStrike()'s parsing.
+ */
+function occSymbolForStrike(strike: number): string {
+  const thousandths = Math.round(strike * 1000)
+    .toString()
+    .padStart(8, "0");
+  return `SPX   260808P${thousandths}`;
+}
+
+/** Minimal AnalyzerPosition fixture for buildScenarioStrip tests (strike + frontDte only matter). */
+function makeStripPosition(id: string, strike: number, frontDte: number, included = true): AnalyzerPosition {
+  return {
+    id,
+    name: id,
+    live: false,
+    occSymbol: occSymbolForStrike(strike),
+    putCall: "P",
+    frontDte,
+    backDte: frontDte + 24,
+    frontIv: 0.15,
+    backIv: 0.15,
+    qty: 1,
+    included,
+  };
+}
 
 // ─── (a) Kernel-parity test — D-01 cross-screen consistency ───────────────────
 
@@ -320,5 +348,83 @@ describe("bookPL/bookPLAtExpiry — leg-level non-convergence exclusion (Pitfall
     const excluded = t0ExcludedPositions([CONTROL_POS, uncheckedPos]);
     expect(excluded.count).toBe(0);
     expect(excluded.ids).not.toContain("unchecked-1");
+  });
+});
+
+// ─── (f) buildScenarioStrip — bounded key-level set + front-expiry header (D-06 / D-07) ─
+
+describe("buildScenarioStrip — bounded key-level set (D-06 / D-07)", () => {
+  it("caps overflowing position strikes to the 4 closest to spot", () => {
+    const levels = { putWall: 7300, flip: 7350, callWall: 7500 };
+    const spot = 7400;
+    const positions = [
+      makeStripPosition("p1", 7050, 45), // |dist| 350 — dropped
+      makeStripPosition("p2", 7150, 45), // |dist| 250 — kept
+      makeStripPosition("p3", 7250, 45), // |dist| 150 — kept
+      makeStripPosition("p4", 7600, 45), // |dist| 200 — kept
+      makeStripPosition("p5", 7700, 45), // |dist| 300 — kept
+      makeStripPosition("p6", 7800, 45), // |dist| 400 — dropped
+    ];
+
+    const strip = buildScenarioStrip(levels, positions, spot);
+
+    expect(strip.levels.length).toBe(8);
+    expect(strip.levels).toEqual([7150, 7250, 7300, 7350, 7400, 7500, 7600, 7700]);
+    expect(strip.levels).not.toContain(7050);
+    expect(strip.levels).not.toContain(7800);
+  });
+
+  it("dedupes a position strike equal to a GEX level", () => {
+    const levels = { putWall: 7300, flip: null, callWall: null };
+    const spot: number = 7300; // spot also equal to putWall — collapses further
+    const positions = [makeStripPosition("p1", 7300, 45)];
+
+    const strip = buildScenarioStrip(levels, positions, spot);
+
+    expect(strip.levels).toEqual([7300]);
+  });
+
+  it("output is sorted strictly ascending", () => {
+    const levels = { putWall: 7500, flip: 7300, callWall: 7600 };
+    const spot = 7400;
+    const positions = [makeStripPosition("p1", 7200, 45), makeStripPosition("p2", 7700, 45)];
+
+    const strip = buildScenarioStrip(levels, positions, spot);
+
+    for (let i = 1; i < strip.levels.length; i++) {
+      const prev = strip.levels[i - 1];
+      const cur = strip.levels[i];
+      expect(prev).toBeDefined();
+      expect(cur).toBeDefined();
+      if (prev !== undefined && cur !== undefined) {
+        expect(cur).toBeGreaterThan(prev);
+      }
+    }
+  });
+
+  it("omits a null put/call wall instead of rendering it as 0", () => {
+    const levels = { putWall: null, flip: 7350, callWall: null };
+    const spot = 7400;
+
+    const strip = buildScenarioStrip(levels, [], spot);
+
+    expect(strip.levels).toEqual([7350, 7400]);
+    expect(strip.levels).not.toContain(0);
+  });
+
+  it("front-expiry label equals the earliest included frontDte, formatted month/day", () => {
+    const levels = { putWall: null, flip: null, callWall: null };
+    const spot = 7400;
+    const positions = [
+      makeStripPosition("p1", 7400, 30),
+      makeStripPosition("p2", 7400, 10), // earliest included — governs the label
+      makeStripPosition("p3", 7400, 1, false), // excluded — must not govern the label
+    ];
+
+    const strip = buildScenarioStrip(levels, positions, spot);
+
+    const expectedDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    const expectedLabel = expectedDate.toLocaleString(undefined, { month: "short", day: "numeric" });
+    expect(strip.expiryLabel).toBe(expectedLabel);
   });
 });
