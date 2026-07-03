@@ -14,7 +14,7 @@ import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { bsmGreeks } from "@morai/quant";
 import { computePositionGreeks } from "./position-greeks.ts";
-import { repriceScenario, rollScenario } from "./scenario-engine.ts";
+import { repriceScenario, rollScenario, t0ExcludedPositions } from "./scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams } from "./scenario-engine.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -49,6 +49,34 @@ const BASE_PARAMS: ScenarioParams = {
   ivShift: 0,
   rate: R,
   divYield: Q,
+};
+
+/**
+ * Fixtures for leg-level non-convergence exclusion (Pitfall 1 / D-02).
+ * Same shape as LIVE_POS, differing only in id/name/frontIvStatus/backIvStatus.
+ */
+const CONTROL_POS: AnalyzerPosition = {
+  ...LIVE_POS,
+  id: "control-1",
+  name: "Control (both legs ok)",
+  frontIvStatus: "ok",
+  backIvStatus: "ok",
+};
+
+const FRONT_NON_CONVERGENT_POS: AnalyzerPosition = {
+  ...LIVE_POS,
+  id: "front-nc-1",
+  name: "Front leg non-convergent",
+  frontIvStatus: "non-convergent",
+  backIvStatus: "ok",
+};
+
+const BACK_NON_CONVERGENT_POS: AnalyzerPosition = {
+  ...LIVE_POS,
+  id: "back-nc-1",
+  name: "Back leg non-convergent",
+  frontIvStatus: "ok",
+  backIvStatus: "non-convergent",
 };
 
 // ─── (a) Kernel-parity test — D-01 cross-screen consistency ───────────────────
@@ -216,5 +244,81 @@ describe("rollScenario", () => {
       }
     }
     expect(differs).toBe(true);
+  });
+});
+
+// ─── (e) Leg-level non-convergence exclusion — Pitfall 1 / D-02 ───────────────
+
+describe("bookPL/bookPLAtExpiry — leg-level non-convergence exclusion (Pitfall 1 / D-02)", () => {
+  it("front-leg-non-convergent position: excluded from T+0, still contributes to @exp", () => {
+    const controlOnly = repriceScenario([CONTROL_POS], BASE_PARAMS);
+    const withFrontNc = repriceScenario([CONTROL_POS, FRONT_NON_CONVERGENT_POS], BASE_PARAMS);
+
+    // T+0: the front-non-convergent position must contribute nothing — payoff curve unchanged.
+    for (let i = 0; i < controlOnly.payoffCurve.length; i++) {
+      const a = controlOnly.payoffCurve[i];
+      const b = withFrontNc.payoffCurve[i];
+      expect(a).toBeDefined();
+      expect(b).toBeDefined();
+      if (a !== undefined && b !== undefined) {
+        expect(b.pl).toBeCloseTo(a.pl, 6);
+      }
+    }
+
+    // @exp: the front-non-convergent position STILL contributes — curve must differ.
+    let differs = false;
+    for (let i = 0; i < controlOnly.expirationCurve.length; i++) {
+      const a = controlOnly.expirationCurve[i];
+      const b = withFrontNc.expirationCurve[i];
+      if (a !== undefined && b !== undefined && Math.abs(a.pl - b.pl) > 0.01) {
+        differs = true;
+        break;
+      }
+    }
+    expect(differs).toBe(true);
+  });
+
+  it("back-leg-non-convergent position: excluded from BOTH T+0 and @exp", () => {
+    const controlOnly = repriceScenario([CONTROL_POS], BASE_PARAMS);
+    const withBackNc = repriceScenario([CONTROL_POS, BACK_NON_CONVERGENT_POS], BASE_PARAMS);
+
+    for (let i = 0; i < controlOnly.payoffCurve.length; i++) {
+      const a = controlOnly.payoffCurve[i];
+      const b = withBackNc.payoffCurve[i];
+      if (a !== undefined && b !== undefined) {
+        expect(b.pl).toBeCloseTo(a.pl, 6);
+      }
+    }
+
+    for (let i = 0; i < controlOnly.expirationCurve.length; i++) {
+      const a = controlOnly.expirationCurve[i];
+      const b = withBackNc.expirationCurve[i];
+      if (a !== undefined && b !== undefined) {
+        expect(b.pl).toBeCloseTo(a.pl, 6);
+      }
+    }
+  });
+
+  it("all-ok control position: matches pre-change behavior (contributes to both curves)", () => {
+    const result = repriceScenario([CONTROL_POS], BASE_PARAMS);
+    expect(result.payoffCurve.length).toBeGreaterThan(50);
+    const hasNonZero = result.payoffCurve.some((p) => Math.abs(p.pl) > 0.01);
+    expect(hasNonZero).toBe(true);
+  });
+
+  it("t0ExcludedPositions reports the count and ids of positions dropped from T+0", () => {
+    const book = [CONTROL_POS, FRONT_NON_CONVERGENT_POS, BACK_NON_CONVERGENT_POS];
+    const excluded = t0ExcludedPositions(book);
+    expect(excluded.count).toBe(2);
+    expect(excluded.ids).toContain("front-nc-1");
+    expect(excluded.ids).toContain("back-nc-1");
+    expect(excluded.ids).not.toContain("control-1");
+  });
+
+  it("t0ExcludedPositions ignores positions already excluded via `included: false`", () => {
+    const uncheckedPos: AnalyzerPosition = { ...CONTROL_POS, id: "unchecked-1", included: false };
+    const excluded = t0ExcludedPositions([CONTROL_POS, uncheckedPos]);
+    expect(excluded.count).toBe(0);
+    expect(excluded.ids).not.toContain("unchecked-1");
   });
 });
