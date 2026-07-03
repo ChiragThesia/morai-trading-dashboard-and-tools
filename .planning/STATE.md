@@ -5,15 +5,15 @@ milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 17
 current_phase_name: overview-v2-redesign-iv-calibration-fix
 status: executing
-stopped_at: Phase 17 UI-SPEC approved
-last_updated: "2026-07-03T22:22:48.314Z"
+stopped_at: Completed 17-03-PLAN.md
+last_updated: "2026-07-03T22:31:08.928Z"
 last_activity: 2026-07-03
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 20
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 17 (overview-v2-redesign-iv-calibration-fix) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-07-03 — Phase 17 execution started
 
@@ -178,6 +178,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 16 P16-03 | 12 | 2 tasks | 1 files |
 | Phase 17-overview-v2-redesign-iv-calibration-fix P01 | 10min | 2 tasks | 5 files |
 | Phase 17-overview-v2-redesign-iv-calibration-fix P02 | 15min | 2 tasks | 2 files |
+| Phase 17-overview-v2-redesign-iv-calibration-fix P03 | 10min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -207,6 +208,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 17-02]: frontIvStatus/backIvStatus made OPTIONAL on AnalyzerPosition (default 'ok') so Analyzer.tsx's 3 existing construction sites (owned by Plan 04) don't need out-of-scope edits in this plan
 - [Phase 17-02]: bookPL excludes on EITHER frontIvStatus OR backIvStatus non-convergence (not just front) via a shared includedForT0 predicate — required by the plan's own behavior spec and T-17-03 threat mitigation, not just the action text's front-only shorthand
 - [Phase 17-02]: 'each position's short/long strikes' (D-06) collapses to ONE strike per position in buildScenarioStrip — calendarNetPrice prices both calendar legs at the same extractStrike(pos) value; no separate front-strike field exists today
+- [Phase ?]: [Phase 17-03]: highlightActive derived purely from highlightedPositionId !== null (curves/count independent optional props) so dimming can apply even before Plan 04 wires overlay curve data
+- [Phase ?]: [Phase 17-03]: T0 exclusion note rendered as an HTML div inside PayoffChart's own wrapper (not SVG text), since PayoffChart doesn't own the page-level legend row — Overview.tsx owns that, out of this plan's file scope
+- [Phase ?]: [Phase 17-03]: only the two net-book curve LinePath elements (T+0, @exp) get the stroke-opacity 0.3 dim — breakeven marker lines and fan curves untouched, matching acceptance criteria's literal scope
 
 ### Pending Todos
 
@@ -251,9 +255,9 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T22:21:16.929Z
-Stopped at: Phase 17 UI-SPEC approved
-Resume file: .planning/phases/17-overview-v2-redesign-iv-calibration-fix/17-UI-SPEC.md
+Last session: 2026-07-03T22:31:08.919Z
+Stopped at: Completed 17-03-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
