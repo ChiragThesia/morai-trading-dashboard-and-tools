@@ -11,8 +11,9 @@
  *   - .live-cell class applied to greek cells when liveTs is not null (STRM-01)
  *   - .live-cell.stale applied when status is 'stale' (Surface 2 color-dim, not opacity)
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { ok, err } from "@morai/shared";
 import type { StreamLiveGreekEvent } from "@morai/contracts";
 
 // Phase 12-07: mock useLiveStream BEFORE Overview import (intent: no real EventSource)
@@ -30,6 +31,11 @@ vi.mock("../hooks/useLiveStream.ts", () => ({
     constructor(status: number) { super(String(status)); this.name = "StreamSubscribeError"; }
   },
 }));
+
+// 17-04 Task 2: mock resolveLegIv so calibration outcomes (ok/non-convergent/no-price) are
+// deterministic per test — the wrapper's own math is already covered by 17-01's tests;
+// this file tests Overview's WIRING of the Result into badges/exclusion/curves.
+vi.mock("../lib/iv-calibration.ts", () => ({ resolveLegIv: vi.fn() }));
 
 // Full GexSnapshotEntry fixture — 17-04's GEX rail (GammaProfile/GexBars/key levels/staleness
 // badge) reads profile/strikes/computedAt/callWall/putWall/flip, not just spot.
@@ -62,9 +68,11 @@ vi.mock("../hooks/useMacro.ts", () => ({ useMacro: vi.fn(() => ({ data: undefine
 import { Overview } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
 import { useLiveStream } from "../hooks/useLiveStream.ts";
+import { resolveLegIv } from "../lib/iv-calibration.ts";
 
 const mockUsePositions = vi.mocked(usePositions);
 const mockUseLiveStream = vi.mocked(useLiveStream);
+const mockResolveLegIv = vi.mocked(resolveLegIv);
 
 function setPositions(positions: unknown): void {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -94,6 +102,28 @@ const POS = {
   marketValue: -17875,
   underlyingSymbol: "$SPX",
 };
+
+/** Calendar pair fixture: short 7425P front (near expiry) / long 7425P back (far expiry). */
+const CAL_FRONT = {
+  occSymbol: "SPXW  301120P07425000",
+  putCall: "P" as const,
+  longQty: 0,
+  shortQty: 1,
+  averagePrice: 50,
+  marketValue: -5000,
+  underlyingSymbol: "$SPX",
+};
+const CAL_BACK = {
+  occSymbol: "SPXW  301130P07425000",
+  putCall: "P" as const,
+  longQty: 1,
+  shortQty: 0,
+  averagePrice: 60,
+  marketValue: 6000,
+  underlyingSymbol: "$SPX",
+};
+/** Matches pair-calendars.ts's key format: `${underlyingSymbol}|${strike}|${type}`. */
+const CAL_ROW_KEY = "$SPX|7425|P";
 
 /** A realistic live tick for the fixture position. */
 function makeTick(): StreamLiveGreekEvent {
@@ -206,5 +236,78 @@ describe("Overview screen", () => {
     expect(screen.getByText("STALE")).toBeDefined();
     // Both live-cell AND stale class present — .live-cell.stale dims by color (never opacity)
     expect(container.querySelector(".live-cell.stale")).not.toBeNull();
+  });
+
+  // ── 17-04 Task 2: calibrated IV + staleness badges + row-highlight ───────────
+
+  describe("calibrated IV, staleness badges, row-highlight (17-04 D-01..D-07)", () => {
+    beforeEach(() => {
+      // Default: every leg resolves ok (converged) — individual tests override per-occSymbol.
+      mockResolveLegIv.mockImplementation(() => ok(0.2));
+    });
+
+    it("a non-convergent leg renders an 'IV n/a' badge on its row and the net-book T+0 exclusion note", () => {
+      mockResolveLegIv.mockImplementation((occSymbol: string) => {
+        if (occSymbol === CAL_FRONT.occSymbol) return err({ kind: "below-intrinsic" });
+        return ok(0.2);
+      });
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      expect(screen.getByText("IV n/a")).toBeDefined();
+      expect(screen.getByTestId("t0-exclusion-note")).toBeDefined();
+      expect(screen.getByText(/T\+0 excludes 1 position: IV n\/a/)).toBeDefined();
+    });
+
+    it("a cold-start leg (no tick, marketValue===null) does NOT render an 'IV n/a' badge (Pitfall 2 / T-17-09)", () => {
+      mockResolveLegIv.mockImplementation((occSymbol: string) => {
+        if (occSymbol === CAL_FRONT.occSymbol) return err({ kind: "no-price" });
+        return ok(0.2);
+      });
+      setPositions([
+        { ...CAL_FRONT, marketValue: null },
+        CAL_BACK,
+      ]);
+      render(<Overview />);
+      expect(screen.queryByText("IV n/a")).toBeNull();
+      expect(screen.queryByTestId("t0-exclusion-note")).toBeNull();
+    });
+
+    it("renders the GEX 'as of' staleness badge (amber — the fixture snapshot is stale)", () => {
+      setPositions([]);
+      const { container } = render(<Overview />);
+      const badge = screen.getByTestId("gex-freshness");
+      expect(badge.textContent).toContain("GEX as of");
+      expect(container.querySelector('[data-testid="gex-freshness"] .bg-amber')).not.toBeNull();
+    });
+
+    it("renders the live-mark badge amber when the last tick is older than 5 minutes", () => {
+      mockUseLiveStream.mockReturnValue({
+        greeks: new Map(),
+        status: "live",
+        lastTickAt: new Date(Date.now() - 6 * 60 * 1000),
+        subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+      });
+      setPositions([]);
+      const { container } = render(<Overview />);
+      const badge = screen.getByTestId("live-mark-freshness");
+      expect(badge.textContent).toContain("mark as of");
+      expect(container.querySelector('[data-testid="live-mark-freshness"] .bg-amber')).not.toBeNull();
+    });
+
+    it("selecting a docked-table row highlights that position's curve in PayoffChart (dims the net book)", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      const { container } = render(<Overview />);
+      const row = screen.getByTestId(`position-row-${CAL_ROW_KEY}`);
+      fireEvent.click(row);
+      expect(container.querySelector('[data-testid="highlighted-t0-curve"]')).not.toBeNull();
+      const netBookCurve = container.querySelector('[data-testid="net-book-t0-curve"]');
+      expect(netBookCurve?.getAttribute("stroke-opacity")).toBe("0.3");
+    });
+
+    it("the scenario-strip @exp column header names the front expiry date (D-07)", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      expect(screen.getByText(/@ exp \(/)).toBeDefined();
+    });
   });
 });
