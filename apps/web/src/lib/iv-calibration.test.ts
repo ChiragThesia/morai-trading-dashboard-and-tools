@@ -70,14 +70,18 @@ describe("resolveLegIv — round-trip property (REST-fallback path)", () => {
 
           const mark = bsmPrice(S, K, T, sigma, R, Q, type);
 
-          // REST fallback: netQty=1, restMarketValue=mark*100 so price = |mark*100|/(1*100) = mark.
+          // REST fallback: netQty=1, restMarketValue=mark*100 so price = |mark*100|/(1*100) ≈ mark
+          // (up to float round-trip noise from the *100/100 division — the wrapper's own guard math).
           const wrapped = resolveLegIv(occSymbol, S, R, Q, null, mark * 100, 1, NOW);
           const direct = invertIv(mark, S, K, T, R, Q, type);
 
           if (!direct.ok) return true; // degenerate tuple — invertIv itself declines; not this wrapper's concern
           if (!wrapped.ok) return false; // wrapper diverged where invertIv converged — bug
 
-          return Math.abs(wrapped.value - direct.value) < 1e-9;
+          // Compare via repricing (matches iv-inversion.test.ts's own round-trip tolerance,
+          // 1e-6) rather than raw sigma equality — robust to the *100/100 float round-trip noise.
+          const repriced = bsmPrice(S, K, T, wrapped.value, R, Q, type);
+          return Math.abs(repriced - mark) <= 1e-6;
         },
       ),
       { numRuns: 500 },

@@ -40,6 +40,19 @@ export type CalibrationError = IvError | { readonly kind: "no-price" };
 
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
 
+/**
+ * BSM cross-engine parity tolerance (Task 2 / Open Question 1) — absolute price
+ * tolerance for comparing an `invertIv`-recovered sigma re-priced through
+ * `@morai/quant`'s `bsmPrice` against the original mark.
+ *
+ * OQ1 resolved: `packages/core/src/journal/domain/bsm.ts` (the module `invertIv`
+ * calls internally) is a re-export shim of `@morai/quant`'s `bsmPrice` — the two
+ * "engines" are the same function. This tolerance only needs to absorb floating-point
+ * noise from the REST-fallback price round-trip (`mark * 100` then `/ 100`), not any
+ * genuine cross-engine divergence.
+ */
+export const BSM_PARITY_TOLERANCE = 1e-6;
+
 // ─── resolveLegIv ─────────────────────────────────────────────────────────────
 
 /**
