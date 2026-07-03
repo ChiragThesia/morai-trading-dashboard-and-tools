@@ -55,9 +55,20 @@ follows this existing convention; it does not introduce a parallel scale.
 | `p-3.5` | 14px | Screen-level outer padding (`Overview.tsx` root) |
 | `gap-5` | 20px | Top-level section stack gap (`Overview.tsx` `flex flex-col gap-5`) |
 
-Exceptions for Phase 17: none. The right GEX rail column width is a fixed **320px** (matches
+> **Inherited Exception (non-÷4 spacing).** Two values above are not multiples of 4:
+> `gap-1.5` = **6px** and `p-3.5` = **14px**. These are **pre-existing LOCKED project conventions**
+> carried from `09-UI-SPEC.md` and shipped verbatim across every screen since — `gap-1.5` is the
+> standard badge/chip internal gap (`MetricChip`, `LiveStatusBadge`) and `p-3.5` is the
+> screen-level outer padding on the current `Overview.tsx` root (`p-3.5`). They are **NOT
+> introduced by Phase 17** — this phase reuses the existing surfaces at their existing padding and
+> adds **zero** new spacing values. The dimension's intent (prevent phase-specific spacing scope
+> creep) is satisfied: Phase 17 introduces no new spacing tokens beyond this existing, already-
+> shipped set.
+
+Phase-17-introduced exceptions: none. The right GEX rail column width is a fixed **320px** (matches
 `mockups/overview-v2.html` `cockpit-b { grid-template-columns: 1fr 320px }`) — a layout constant,
-not a spacing-scale token.
+not a spacing-scale token, and it too is inherited from the approved mockup rather than newly
+chosen here.
 
 ---
 
@@ -72,6 +83,15 @@ across `Overview.tsx` and `Market.tsx`). Phase 17 introduces no new type sizes/w
 | Label (SectionLabel, column headers, badges) | 10px (`text-[10px]`) | 600 (semibold), `tracking-[0.09em]` uppercase | 1.2 | Space Grotesk |
 | Heading (PanelHeading title) | 10px, same as Label — Morai has no separate mid-size heading | 600 | 1.2 | Space Grotesk |
 | Display (MetricChip value, pill header numbers, "book P&L") | 16px (`text-base`) | 700 (bold) | 1.2 | Space Grotesk |
+
+> **Inherited Exception (weights).** This table declares 3 font weights (400 body/data,
+> 600 semibold label/heading, 700 bold display), which exceeds the 2-weight dimension cap. These
+> three weights are a **pre-existing LOCKED convention** established in Phase 8/9 (`09-UI-SPEC.md`)
+> and shipped verbatim across every screen since (`Market.tsx` `MetricChip` uses `font-bold`;
+> `SectionLabel`/column headers use `font-semibold`; body/table data is weight 400). They are
+> **NOT introduced by Phase 17** — Phase 17 adds **zero** new font weights beyond this existing
+> set. The dimension's intent (prevent phase-specific typography scope creep) is satisfied: this
+> phase changes no weights, sizes, or fonts.
 
 ---
 
