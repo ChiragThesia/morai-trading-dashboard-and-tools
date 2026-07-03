@@ -68,7 +68,10 @@ current (not stale) prod baseline to build on.
   2. The T-24h re-auth alert surface — amber banner, warn log, `refreshExpiresIn` — is visible on
      both status surfaces (HTTP `/api/status` and web) in prod.
   3. Existing live-stream, journal, COT, and FRED functionality shows no regression post-deploy.
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 16-01-PLAN.md — Security remediation (remove accidental sidecar public domain, GW-05) + pre-deploy ground truth (baseline, migration parity, tree/test sanity)
+- [ ] 16-02-PLAN.md — Force-deploy stale server + worker, verify web current; build-proof via key-presence + deploy-timestamp correlation (D-01)
+- [ ] 16-03-PLAN.md — Regression smoke checklist (D-04) + T-24h alert-surface checkpoint 1 (D-02); records deferred ~07-08 + RTH follow-ups
 
 ### Phase 17: Overview v2 Redesign + IV Calibration Fix
 **Goal**: Users see a payoff-centered Overview (variant B "TOS dock") whose T+0 scenario curve is
@@ -170,7 +173,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 13. COT Adapter | v1.1 | 6/6 | Complete | 2026-06-29 |
 | 14. FRED Expansion | v1.1 | 7/7 | Complete | 2026-07-02 |
 | 15. Re-Auth Smoothing | v1.1 | 5/5 | Complete | 2026-07-02 |
-| 16. Deploy Phase-15 Image | v1.2 | 0/TBD | Not started | - |
+| 16. Deploy Phase-15 Image | v1.2 | 0/3 | Not started | - |
 | 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 0/TBD | Not started | - |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 0/TBD | Not started | - |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |
