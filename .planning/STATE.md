@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 17
 current_phase_name: overview-v2-redesign-iv-calibration-fix
-status: executing
-stopped_at: Completed 17-03-PLAN.md
-last_updated: "2026-07-03T22:31:08.928Z"
+status: verifying
+stopped_at: Completed 17-04-PLAN.md
+last_updated: "2026-07-03T22:57:44.657Z"
 last_activity: 2026-07-03
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
-  percent: 20
+  completed_plans: 7
+  percent: 40
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 17 (overview-v2-redesign-iv-calibration-fix) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-03 — Phase 17 execution started
 
 ## Milestone v1.2 Summary
@@ -179,6 +179,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 17-overview-v2-redesign-iv-calibration-fix P01 | 10min | 2 tasks | 5 files |
 | Phase 17-overview-v2-redesign-iv-calibration-fix P02 | 15min | 2 tasks | 2 files |
 | Phase 17-overview-v2-redesign-iv-calibration-fix P03 | 10min | 1 tasks | 2 files |
+| Phase 17-overview-v2-redesign-iv-calibration-fix P04 | 40min | 2 tasks tasks | 3 files files |
 
 ## Accumulated Context
 
@@ -211,6 +212,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: [Phase 17-03]: highlightActive derived purely from highlightedPositionId !== null (curves/count independent optional props) so dimming can apply even before Plan 04 wires overlay curve data
 - [Phase ?]: [Phase 17-03]: T0 exclusion note rendered as an HTML div inside PayoffChart's own wrapper (not SVG text), since PayoffChart doesn't own the page-level legend row — Overview.tsx owns that, out of this plan's file scope
 - [Phase ?]: [Phase 17-03]: only the two net-book curve LinePath elements (T+0, @exp) get the stroke-opacity 0.3 dim — breakeven marker lines and fan curves untouched, matching acceptance criteria's literal scope
+- [Phase 17-04]: Cold-start (no-price) legs excluded from T+0/@exp pricing (never a guessed IV) but do NOT show the 'IV n/a' badge — only a genuine IvError does (AnalyzerPosition status is 2-state, no 'no-data-yet' variant)
+- [Phase 17-04]: Payoff hero prices calendars only (pairPositionsIntoCalendars) — singles remain table-only rows; prod book has 0 singles today, documented scoping decision not a silent gap
+- [Phase 17-04]: Market.tsx: exported relAge/GEX_FRESH_MS (pure additive) so Overview.tsx reuses them verbatim per the plan's own interface contract
 
 ### Pending Todos
 
@@ -255,8 +259,8 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T22:31:08.919Z
-Stopped at: Completed 17-03-PLAN.md
+Last session: 2026-07-03T22:57:44.648Z
+Stopped at: Completed 17-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

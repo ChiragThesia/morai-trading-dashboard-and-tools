@@ -46,7 +46,7 @@ the picker with the real scoring engine, while clearing v1.1 operational debt.
 - [x] **Phase 16: Deploy Phase-15 Image** - Prod runs server+worker+web on the already-merged (completed 2026-07-03)
   phase-15 code before the ~2026-07-09 re-auth window
 
-- [ ] **Phase 17: Overview v2 Redesign + IV Calibration Fix** - Payoff-centered "TOS dock"
+- [x] **Phase 17: Overview v2 Redesign + IV Calibration Fix** - Payoff-centered "TOS dock" (completed 2026-07-03)
   Overview live on prod, with per-position IV-calibrated T+0 scenario curves
 
 - [ ] **Phase 18: Analyzer → Picker UI Redesign** - Ranked-cards picker UI built contract-first
@@ -112,7 +112,7 @@ calibrated to each position's live-mark IV instead of a flat default guess.
 
   4. Stale GEX data displays its snapshot timestamp so the user can tell it apart from live data.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 **UI hint**: yes
 
 **Wave 1** *(parallel — no file overlap)*
@@ -128,7 +128,7 @@ calibrated to each position's live-mark IV instead of a flat default guess.
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 17-04-PLAN.md — Overview TOS-dock rewrite + wire calibrated IV, two-channel staleness badges,
+- [x] 17-04-PLAN.md — Overview TOS-dock rewrite + wire calibrated IV, two-channel staleness badges,
   row-highlight; records the BookSummary DEFAULT_IV deferral (OVW-01, OVW-02)
 
 ### Phase 18: Analyzer → Picker UI Redesign
@@ -226,7 +226,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 14. FRED Expansion | v1.1 | 7/7 | Complete | 2026-07-02 |
 | 15. Re-Auth Smoothing | v1.1 | 5/5 | Complete | 2026-07-02 |
 | 16. Deploy Phase-15 Image | v1.2 | 3/3 | Complete    | 2026-07-03 |
-| 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 3/4 | In Progress|  |
+| 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 4/4 | Complete   | 2026-07-03 |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 0/TBD | Not started | - |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |
 | 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |
