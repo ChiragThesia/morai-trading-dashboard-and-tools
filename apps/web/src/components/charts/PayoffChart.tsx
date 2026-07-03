@@ -68,6 +68,23 @@ export interface PayoffChartProps {
   positionSetSignature: string;
   /** Expiration curve for y-axis lock baseline (0-IV, position-set-only) */
   baseExpirationCurve: ReadonlyArray<PayoffPoint>;
+  /**
+   * D-05 row-highlight: id of the docked-table row currently hovered/selected.
+   * When set, the net-book T+0/@exp curves dim to stroke-opacity 0.3 (chart-layer,
+   * distinct from PositionsTable's opacity-40 row-exclusion class) and the single
+   * highlighted position's own T+0/@exp curves render at full emphasis.
+   */
+  highlightedPositionId?: string | null;
+  /** Single-position T+0 curve to draw at full emphasis when highlighted. */
+  highlightedTodayCurve?: ReadonlyArray<PayoffPoint> | null;
+  /** Single-position @exp curve to draw at full emphasis when highlighted. */
+  highlightedExpirationCurve?: ReadonlyArray<PayoffPoint> | null;
+  /**
+   * D-02 net-book self-flag: count of positions excluded from the T+0 aggregate
+   * because their front leg's IV did not converge. Renders an amber
+   * "T+0 excludes {n} position(s): IV n/a" note; omitted when 0/absent.
+   */
+  excludedFromT0Count?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -172,7 +189,23 @@ export function PayoffChart({
   onFitYConsumed,
   positionSetSignature,
   baseExpirationCurve,
+  highlightedPositionId = null,
+  highlightedTodayCurve = null,
+  highlightedExpirationCurve = null,
+  excludedFromT0Count = 0,
 }: PayoffChartProps): React.ReactElement {
+  // D-05: a highlight is active whenever a row id is supplied. The net-book
+  // curves dim (chart-layer stroke-opacity) — never removed, never the
+  // PositionsTable opacity-40 row-exclusion class.
+  const highlightActive = highlightedPositionId !== null;
+  const netBookStrokeOpacity = highlightActive ? 0.3 : 1;
+
+  // D-02: net-book T+0 self-flag note, computed above the return (no IIFE in JSX).
+  const exclusionNoteText =
+    excludedFromT0Count > 0
+      ? `T+0 excludes ${excludedFromT0Count} position${excludedFromT0Count === 1 ? "" : "s"}: IV n/a`
+      : null;
+
   // TOS-stable y-domain: computed once per position-set change
   const [yDomainSig, setYDomainSig] = useState<string>("");
   const [yDomain, setYDomain] = useState<{ lo: number; hi: number }>({ lo: -500, hi: 500 });
@@ -273,6 +306,16 @@ export function PayoffChart({
 
   return (
     <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 300 }}>
+      {/* D-02: net-book T+0 self-flag note — placed near the legend row position */}
+      {exclusionNoteText !== null && (
+        <div
+          data-testid="t0-exclusion-note"
+          className="pointer-events-none absolute right-2 top-1 text-[10px] text-amber"
+        >
+          {exclusionNoteText}
+        </div>
+      )}
+
       {/* SVG chart */}
       <svg
         ref={svgRef}
@@ -403,6 +446,7 @@ export function PayoffChart({
           {/* ── Layer 4: Expiration tent dashed ──────────────────────────── */}
           {toggles.showExpiration && expirationCurve.length > 0 && (
             <LinePath
+              data-testid="net-book-exp-curve"
               data={[...expirationCurve]}
               x={getX}
               y={clampY}
@@ -411,6 +455,7 @@ export function PayoffChart({
               strokeWidth={1.4}
               strokeDasharray="5 4"
               opacity={0.7}
+              strokeOpacity={netBookStrokeOpacity}
             />
           )}
 
@@ -557,6 +602,7 @@ export function PayoffChart({
           {/* ── Layer 2 (on top): T+0 curve violet #a78bfa ───────────────── */}
           {todayCurve.length > 0 && (
             <LinePath
+              data-testid="net-book-t0-curve"
               data={[...todayCurve]}
               x={getX}
               y={clampY}
@@ -564,8 +610,40 @@ export function PayoffChart({
               stroke={VIOLET}
               strokeWidth={2.6}
               filter="url(#payoff-glow)"
+              strokeOpacity={netBookStrokeOpacity}
             />
           )}
+
+          {/* ── Highlighted single-position curves (D-05) — same stroke tokens
+               as the net-book curves above, drawn at full emphasis on top ──── */}
+          {highlightActive &&
+            highlightedExpirationCurve !== null &&
+            highlightedExpirationCurve.length > 0 && (
+              <LinePath
+                data-testid="highlighted-exp-curve"
+                data={[...highlightedExpirationCurve]}
+                x={getX}
+                y={clampY}
+                curve={curveMonotoneX}
+                stroke={GRAY_MUTED}
+                strokeWidth={1.4}
+                strokeDasharray="5 4"
+              />
+            )}
+          {highlightActive &&
+            highlightedTodayCurve !== null &&
+            highlightedTodayCurve.length > 0 && (
+              <LinePath
+                data-testid="highlighted-t0-curve"
+                data={[...highlightedTodayCurve]}
+                x={getX}
+                y={clampY}
+                curve={curveMonotoneX}
+                stroke={VIOLET}
+                strokeWidth={2.6}
+                filter="url(#payoff-glow)"
+              />
+            )}
 
           {/* ── Layer 9: Spot vertical blue line + dot ────────────────────── */}
           <line
