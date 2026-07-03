@@ -4,15 +4,15 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 16
 current_phase_name: Deploy Phase-15 Image
-status: planning
-stopped_at: Phase 16 context gathered
-last_updated: "2026-07-03T18:06:25.187Z"
+status: planned
+stopped_at: Phase 16 planned (3 plans, 3 waves)
+last_updated: "2026-07-03T18:37:30.082Z"
 last_activity: 2026-07-03
-last_activity_desc: ROADMAP.md created for v1.2 (Phases 16-20, 12/12 requirements mapped)
+last_activity_desc: Phase 16 planned (3 plans, 3 waves, verification passed)
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** v1.2 Trade Picker & Dashboard Redesign — roadmap created (Phases 16-20), ready to plan Phase 16
+**Current focus:** v1.2 Trade Picker & Dashboard Redesign — Phase 16 planned, ready to execute
 
 ## Current Position
 
 Phase: 16 of 20 (Deploy Phase-15 Image)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-07-03 — ROADMAP.md created for v1.2 (Phases 16-20, 12/12 requirements mapped)
+Plan: 3 plans in 3 waves (16-01 → 16-02 → 16-03, sequential)
+Status: Ready to execute
+Last activity: 2026-07-03 — Phase 16 planned (3 plans, verification passed)
 
 ## Milestone v1.2 Summary
 

@@ -431,9 +431,13 @@ deploy phases, not just this one.
 | A1 | The Vercel production deployment created at 2026-07-02T22:12:01Z was built from commit `220719f` (correlated by timestamp proximity to the git push, not an explicit git-sha field returned by `vercel inspect --format=json`) | Summary, Architecture Patterns | If wrong, web could still be serving a slightly older phase-15 commit (though still almost certainly post the AuthExpiredBanner amber-state work, which landed hours earlier at 19:37:41Z) — low practical risk, but the planner should have the executor cross-check the Vercel dashboard's "Source" panel (which does show the commit sha visually) before marking web as "no redeploy needed." |
 | A2 | No other commit touching `apps/web` landed between the last confirmed Vercel build time (~22:12Z) and now (2026-07-03, research time) | Summary | Checked via commit message inspection of all commits in that window — none touch `apps/web`; risk is low but not re-verified via file-level diff in this research pass. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does the Vercel dashboard's "Source" panel confirm commit `220719f` (or later) for the live
+> Both questions are resolved by concrete plan tasks: Q1 → Plan 16-02 Task 1 (executor reads the
+> Vercel dashboard commit sha before declaring web done), Q2 → Plans 16-01/16-03 (both errors
+> captured as pre-deploy baseline and excluded from regression judgment per Pitfall 5).
+
+1. **(RESOLVED — Plan 16-02 Task 1)** **Does the Vercel dashboard's "Source" panel confirm commit `220719f` (or later) for the live
    production deployment?**
    - What we know: `vercel inspect <url> --format=json` returned build config but no explicit
      git-commit field for this deployment; the CLI's plain-text `created` timestamp closely
@@ -444,7 +448,7 @@ deploy phases, not just this one.
      the commit sha directly (30 seconds), rather than trusting the timestamp correlation alone,
      before declaring web done with zero redeploy.
 
-2. **Are the two live `lastJobRuns` errors (`fetch-schwab-chain` AUTH_EXPIRED, `sync-fills`
+2. **(RESOLVED — Plans 16-01/16-03, baseline-and-exclude)** **Are the two live `lastJobRuns` errors (`fetch-schwab-chain` AUTH_EXPIRED, `sync-fills`
    payload-shape error) safe to ignore for this phase, or worth a quick look?**
    - What we know: both are timestamped today, both are unrelated to any phase-15/16 change, and
      `tokenFreshness` for both Schwab apps currently reports `"fresh"` (contradicting a literal
