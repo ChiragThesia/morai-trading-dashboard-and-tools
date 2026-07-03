@@ -18,10 +18,20 @@ findings:
   warning: 5
   info: 4
   total: 10
-status: issues_found
+status: partially_resolved
+resolved: [CR-01, WR-01]
+resolution_commit: e4a0efe
+open: [WR-02, WR-03, WR-04, WR-05, IN-01, IN-02, IN-03, IN-04]
 ---
 
 # Phase 17: Code Review Report
+
+> **Resolution (commit `e4a0efe`):** CR-01 (wrong @exp P&L on IV-n/a rows) and WR-01
+> (masking fixture) are FIXED — `includedForExpiry` now excludes any leg-non-convergent
+> position, and the regression fixtures model the production `frontIv/backIv=0` state.
+> A failing regression test (an ~$18.2k book-P&L error) drove the fix red→green.
+> WR-02 through WR-05 and IN-01..04 remain OPEN (tracked follow-ups; none on the Overview
+> surface, none blocking human verification).
 
 **Reviewed:** 2026-07-03T23:05:12Z
 **Depth:** standard
