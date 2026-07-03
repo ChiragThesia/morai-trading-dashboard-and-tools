@@ -1,189 +1,295 @@
 # Project Research Summary
 
-**Project:** Morai — Trading Dashboard & Tools
-**Domain:** Real-time brokerage data integration (Schwab options) for a self-hosted trading journal
-**Researched:** 2026-06-25
-**Confidence:** MEDIUM
+**Project:** Morai Trading Dashboard & Tools — v1.2 Trade Picker & Dashboard Redesign
+**Domain:** Single-user, self-hosted SPX options trading system — dashboard redesign +
+candidate-scoring engine added onto an existing hexagonal (ports & adapters) production app
+**Researched:** 2026-07-03
+**Confidence:** MEDIUM-HIGH
 
 ## Executive Summary
 
-Milestone v1.1 makes a single Python **schwab-py sidecar** the sole Schwab boundary — it owns
-OAuth, the token lifecycle, all Schwab REST calls, and the one allowed streamer websocket. This
-fixes the 30-min access-token staleness (schwab-py auto-refreshes), adds a real-time live-positions
-feed (marks, per-leg greeks, fills), and re-sources the existing 30-min snapshot journal through the
-sidecar. COT positioning and an expanded FRED macro layer are added as auth-free TS adapters. UI
-panels are deferred to a separate UI-rebuild milestone — v1.1 ships data/backend/contracts + a live
-stream the future UI consumes.
+v1.2 is a subsequent-milestone integration, not a greenfield build: six new capabilities
+(economic-events calendar, dashboard redesign, IV-calibration fix, trade-picker scoring engine,
+strategy-rules recording, stream watchdog, event-triggered snapshot) land on top of a shipped
+Bun/Hono/Supabase/Drizzle/pg-boss hexagonal system. The headline finding across all four research
+tracks is convergent: nothing here needs a new dependency or a new architectural pattern. Every
+feature maps onto an existing precedent already in the codebase — the FRED adapter shape, the
+`iv-inversion.ts` bisection, the Drizzle-migration-per-context pattern, the pg-boss ad-hoc
+`send()`, three already-installed chart libraries (or plain SVG, per the approved mockups), and
+the D21 `packages/quant` extraction precedent. The job is disciplined reuse and correct sequencing,
+not technology selection.
 
-The keystone finding: schwab-py v1.5.1 exposes `client_from_access_functions` with custom
-token read/write callbacks, so the sidecar reads and writes the **existing `broker_tokens` Postgres
-row** — no schema change, no token file volume, and a clean single-owner of Schwab auth. This
-directly resolves the user's hard constraint ("I don't want two things to maintain for auth"):
-there is exactly **one** auth burden (Schwab's weekly OAuth re-login, a server-side hard limit no
-client escapes). CBOE and COT are auth-free; FRED is a set-once free key. No external data vendor
-(and no second auth) is introduced.
+The recommended approach mirrors the user's own decided build order, which the architecture
+research independently confirms is dependency-correct: (1) ship the pending phase-15 image so v1.2
+isn't built on a stale prod baseline, (2) Overview v2 + the IV-calibration fix together (both
+independent of the picker, and the IV fix is a repeat of the already-proven D21
+core→quant-extraction pattern), (3) Analyzer→picker UI built contract-first against Zod-typed
+fixtures (decouples UX risk from scoring-correctness risk), (4) the picker engine + economic-events
+adapter wire real data in (events adapter first, since picker criteria 3/4 depend on it), and (5)
+three independent tail items (stall watchdog, event-triggered snapshot, strategy-rules L4) ordered
+cheapest/most-isolated first.
 
-The main risks are all sequencing/ops, not feasibility: the **dual-refresher rotating-token race**
-(Schwab invalidates the old refresh token on each refresh, so the TS daily job must be retired
-*before* the sidecar goes active), the **7-day headless re-auth** (no browser on Railway — needs an
-operator manual-flow workflow + a T-24h alert or it's a silent weekly outage), and the **one-session
--per-account** streamer limit (a second login kills the first — needs a Postgres advisory lock to
-survive Railway redeploys). The full SPX chain **cannot** be streamed (~500-symbol cap vs
-2,000–5,000 contracts), so streaming is scoped to position legs only and GEX/journal stay
-REST-snapshot jobs.
+The key risk is not "will this work" but "will it silently produce wrong numbers or scope-creep."
+Pitfalls research surfaces five correctness traps that must be closed at the type level, not caught
+in QA: stale/mis-sourced chain data flowing into scores with no visible staleness signal; the
+FwdIV formula's radicand going negative under term-structure inversion (bare `Math.sqrt` → silent
+`NaN` propagating into rankings); economic-event dates stored as fixed UTC instead of
+America/New_York-with-DST (mirror image of the already-learned CBOE-UTC lesson); the IV-calibration
+bisection hanging or converging to garbage on deep-ITM/illiquid legs; and a naive stream watchdog
+that either cries wolf during quiet markets or stays silent during a real stall. A sixth,
+process risk — big-bang UI rewrites breaking a screen in daily personal trading use — is already
+mitigated by the user's own contract-first/staged sequencing, provided execution doesn't collapse
+it back into one PR under schedule pressure. A seventh — the strategy-rules engine ballooning into
+a generic rules DSL nobody asked for — is a scope-discipline risk to flag explicitly at plan time,
+not a technical one.
 
 ## Key Findings
 
 ### Recommended Stack
 
-A minimal Python sidecar (`apps/sidecar/`) wrapping schwab-py, deployed as a 3rd Railway service via
-its own Dockerfile. It exposes a REST proxy + an SSE stream to the TS server only (never
-internet-reachable). COT and FRED stay in the existing TS hexagon. Detail: `STACK.md`.
+Zero new npm/pip dependencies for all six v1.2 capabilities. Economic events (FOMC/CPI/NFP) reuse
+the already-live `FRED_API_KEY` and the existing `fred.ts` adapter shape for CPI/NFP release
+dates, plus a small hand-maintained static table for FOMC (no JSON/ICS feed exists federally, and
+FOMC dates are announced ~12 months ahead and essentially never move). Dashboard redesign charts
+reuse one of three already-installed chart libraries (`@visx/*`, `echarts`, `uplot`) or plain
+hand-rolled SVG — the approved mockups (`playground-v4.html`, `overview-v2.html`) already prove
+plain SVG suffices and is what should be ported. IV calibration extends the existing
+`iv-inversion.ts` bisection rather than adding a numerical/root-finding package. Strategy-rules
+persistence and the economic-events table both reuse Drizzle + Postgres migrations, the same
+pattern as `macro_observations`. The stall watchdog and event-triggered snapshot are standard-
+library `setInterval`/pg-boss `send()` usage — no new tooling.
 
-**Core technologies:**
-- **schwab-py v1.5.1** (Python ≥3.10, MIT, actively maintained): Schwab OAuth + REST + StreamClient — the reason to go Python; hand-rolling the streamer in TS is the pain we're avoiding.
-- **`client_from_access_functions` + Postgres token callbacks**: sidecar reads/writes the existing `broker_tokens` row — sole token owner, no schema change.
-- **FastAPI + uvicorn + sse-starlette**: minimal async sidecar that can bridge schwab-py's asyncio StreamClient to SSE (Flask cannot without threading hacks).
-- **`cot-reports` v0.1.3** (no auth): CFTC COT fetch, TFF report, E-mini S&P 500 filter — a weekly TS worker job, not a sidecar concern.
-- **FRED (existing TS adapter)**: expand series only (DFF, DGS3MO, DGS1MO, SOFR, T10Y2Y, T10Y3M, VIXCLS) + set the unset prod key. VVIX is NOT on FRED → source from the existing CBOE adapter.
+**Core technologies (all pre-existing, being extended not replaced):**
+- FRED `releases/dates` API: CPI/NFP scheduled dates — already-keyed, free, JSON, no scraping
+- `packages/core/src/journal/domain/iv-inversion.ts`: bisection to extend for per-position calibration
+- Drizzle + Postgres migrations: `economic_events`, `strategy_rules`/`rule_firings` tables
+- Existing `@visx`/`echarts`/`uplot` or plain SVG: redesign charts, matches decided mockups exactly
+- pg-boss `send()` (ad-hoc, alongside existing `schedule()`): event-triggered snapshot
 
 ### Expected Features
 
-Detail: `FEATURES.md`.
+**Must have (table stakes, matches every comparable screener — TOS, OptionStrat, ONE):**
+- Ranked candidate list sorted by composite score, with a per-candidate "why-panel" score breakdown
+- Visible "as of" chain-snapshot timestamp + staleness indicator distinct from "no data"
+- Payoff diagram per candidate, one click away (BSM engine already shipped)
+- DTE range and delta-target filters
+- Economic-event flag per candidate leg, shown as day-count/icon not raw data
+- Stream connection badge (LIVE/STALE/DISCONNECTED) — closes an already-flagged v1.1 gap
+- Rule-fired tag recorded at entry, structured (enum), not free text
 
-**Must have (table stakes):**
-- Live positions feed — marks + per-leg greeks (LEVELONE_OPTION fields 28–32) + IV (VOLATILITY field 10) + fills (ACCT_ACTIVITY), streamed for position legs only.
-- Journal re-sourced through the sidecar (REST chain snapshot job, unchanged cadence ~30 min — chain can't stream).
-- One Schwab auth, weekly re-auth smoothed (alert + one-click/operator re-auth).
+**Should have (differentiators — no mainstream retail tool does these):**
+- Forward-IV (not raw IV diff) as the primary edge metric — a genuine analytical edge, verified in
+  `calendar-selection-criteria.md`
+- GEX-fit folded directly into the picker score, not a separate dashboard tab
+- Event-premium-aware baseline (strip event-spanning expiries before computing "clean" forward vol)
+- Event-triggered supplemental snapshot on large SPX moves — no comparable tool does off-cadence capture
 
-**Should have (competitive):**
-- COT weekly positioning context (regime, not a timing signal; store `as_of` Tue separately from `published_at` Fri).
-- Expanded FRED macro layer (short rate / curve spread / VIX) for an SPX options trader.
-- Event-triggered supplemental journal snapshot on large underlying moves (P2 — depends on the live stream).
-
-**Defer (v2+ / separate milestone):**
-- All visual UI panels (macro, COT, live positions) — separate UI-rebuild milestone.
-- External historical-options vendor feed — **rejected**: paid + a second auth; self-collection wins.
-
-**Definitive verdict — historical option data:** Schwab offers **NO** historical option chains/greeks
-(the chain endpoint's fromDate/toDate filters *expirations*, not observation dates; price-history is
-equities/indices only). Every external vendor (ORATS $99+/mo, Polygon $29+/mo, CBOE DataShop ~$380/mo
-+ separate SPX license, Databento $199/mo with no greeks) is paid and a separate auth. **Self-collection
-forward (journal, since Jun-12) is the chosen answer** — zero incremental cost, and vendor greeks
-wouldn't match Morai's own BSM anyway. No closed trade needs backfill.
+**Defer (v1.2.x / v2+):**
+- Rule-fired → outcome correlation report (needs a population of tagged trades first)
+- Event-premium magnitude weighting (binary flag is the v1.2 scope)
+- Full backtesting engine, auto-execution, multi-underlying screener — all explicitly out of scope
+  per PROJECT.md boundaries (trade-advisor plugin territory, SPX-only constraint D17)
 
 ### Architecture Approach
 
-The hexagon is untouched: all six brokerage ports (`ForFetchingChain`, `ForFetchingPositions`,
-`ForFetchingTransactions`, `ForFetchingOrders`, `ForResolvingAccountHash`, `ForReadingTokens`) keep
-their signatures; only the TS adapter implementations change — the sidecar becomes the HTTP target.
-Detail: `ARCHITECTURE.md`.
+Standard hexagonal extension: each new capability gets its own bounded context under
+`packages/core/src/` (`picker/`, `economic-events/`, `strategy-rules/`) following the
+domain/application split, with driven adapters in `packages/adapters/` and driving adapters
+(HTTP route + MCP tool, paired per rule 9) in `apps/server`. The picker's scoring function itself
+needs no new port — it's a pure domain function over already-resolved inputs, tested the same way
+as `bsmGreeks`. The IV-calibration fix is a D21-style extraction into `packages/quant` (the one
+sanctioned `web`-importable pure-leaf package), not a fix inline in `apps/web` or a reach across
+the `web→core` boundary. UI redesign work is contract-first: `packages/contracts/src/picker.ts` is
+authored before any UI code, and the Analyzer redesign builds against Zod-typed fixtures so the
+eventual swap to a live route is a one-line change.
 
 **Major components:**
-1. **Python sidecar (`apps/sidecar/`)** — sole Schwab auth owner; full-proxy of Schwab REST (issues the call itself, eliminating the stale-token window); one streamer websocket; SSE stream + REST proxy to the TS server only.
-2. **TS server fan-out (`apps/server`)** — consumes the sidecar's single SSE stream and multiplexes to N browsers over `GET /api/stream` (Hono `streamSSE`); Supabase JWT (JWKS ES256) verified at this edge; browser passes JWT as an EventSource query param.
-3. **TS Schwab adapters (`packages/adapters`)** — become thin HTTP clients to the sidecar's REST proxy; existing REST-snapshot jobs (chain/journal) call the sidecar instead of Schwab.
-4. **COT + FRED adapters (`packages/adapters/src/http`)** — auth-free; COT = new `fetch-cot` weekly job (Fri 18:00 ET) + `cot_observations` table; FRED = extend `fetch-rates` series list.
-
-**Stream vs journal are parallel paths:** the stream is **display-only** (no per-tick Postgres writes,
-in-memory last-known-value); `sync-transactions` (REST) stays the authoritative fill source; the
-journal stays a REST-snapshot job. Cold-start/gap-fill = REST reconcile on (re)connect.
+1. `packages/core/src/picker/` (NEW) — pure `scoreCalendarCandidates` domain logic + `buildScoredCandidates` use-case, composing existing chain/GEX/rate ports plus the new events port
+2. `packages/core/src/economic-events/` (NEW) — FOMC/CPI/NFP fetch, upsert (revisable schedule, not append-only observation), and windowed read
+3. `packages/quant` (extended) — IV-inversion solver moved here from `core/journal/domain`, `apps/web`'s scenario-engine calls it directly
+4. `apps/web` Overview/Analyzer (modified) — component extraction (`PositionsTable`, `MarketStrip`, etc. become real files) + picker UI built against contract-typed fixtures
+5. `packages/core/src/strategy-rules/` (NEW, tail) — closed-enum rule recording + firing ledger over the existing `entry_thesis` attach point
 
 ### Critical Pitfalls
 
-Top items from `PITFALLS.md`:
+1. **Stale/partial chain data silently feeds scoring** — require an explicit `observedAt` +
+   `source` on every chain snapshot the scoring port consumes; reject/flag rather than score
+   silently against stale or CBOE-fallback data; surface age on every ranked card.
+2. **FwdIV radicand goes negative under term-structure inversion** — `Math.sqrt(negative)` is a
+   silent `NaN` that still sorts; use a tagged `Result` variant for the inverted case, decided once
+   at spec time, and property-test against inverted-curve fixtures.
+3. **Economic-event dates stored as fixed UTC instead of `America/New_York` + IANA tz** — same bug
+   class as the CBOE-UTC lesson, inverted direction; also needs an annual re-seed process and a
+   startup staleness-warning check so the calendar doesn't silently go stale after year-end.
+4. **IV-calibration bisection hangs/garbage on deep-ITM or illiquid legs** — cap iterations, return
+   a tagged non-convergence result (never the last iterate), use mid price per the existing
+   discrepancy-doc convention, and property-test ATM/deep-ITM/deep-OTM/near-zero-vega fixtures.
+5. **Stream watchdog false-positives on quiet markets or silence during a real stall** — decouple
+   from data cadence with a transport-level heartbeat; three-state badge (LIVE/QUIET/STALLED), not
+   two; replay-test both a known-quiet period and a simulated RTH stall.
 
-1. **Dual-refresher rotating-token race** — Schwab invalidates the old refresh token on each refresh; the TS daily job + sidecar racing → `invalid_grant` within one 30-min cycle. **Avoid:** a dedicated auth-migration phase that removes the TS refresh job *before* the sidecar goes active. One owner, always.
-2. **7-day headless re-auth** — no browser on Railway. **Avoid:** operator runs `client_from_manual_flow` locally, the token_write callback persists to Postgres, the sidecar picks it up; add a T-24h expiry alert + a `/sidecar/reauth` endpoint or the first weekly expiry is a silent outage. Confirm CBOE fallback works before go-live.
-3. **One streamer session per account** — a second `login()` (restart, retry, redeploy overlap) instantly kills the first. **Avoid:** a Postgres advisory lock so only one sidecar instance streams.
-4. **Streaming the full chain** — ~500-symbol cap → silent drops. **Avoid:** stream position legs only (2–30 symbols); GEX stays a REST-snapshot batch job.
-5. **Don't regress 4 known Morai gotchas** — SPX OI=0/SPY proxy (~10.048×), CBOE UTC timestamps, GEX put-sign, 65,534-param insert chunking — keep their property tests as non-negotiable regression gates.
+Two additional risks worth carrying into planning even though they didn't make the top five:
+big-bang UI rewrites breaking a screen in daily personal use (mitigated by the already-decided
+contract-first staging — don't collapse it under schedule pressure), and the strategy-rules engine
+scope-creeping into a generic rules DSL (constrain to closed-enum-plus-free-text explicitly in that
+phase's plan).
 
 ## Implications for Roadmap
 
-Suggested phase structure (continues numbering from v1.0 → **Phase 10+**):
+The user has already decided the build order; research confirms it is dependency-correct and
+should be used as-is rather than re-derived. Below, mapped to phase language for roadmap creation.
 
-### Phase 10: Stack-Decisions Doc Update
-**Rationale:** Docs-before-code rule — adding Python is an architecture change. Unblocks everything.
-**Delivers:** `stack-decisions.md` entries: D16 (TS OAuth client) superseded, D17 (streaming deferred) lifted, new decision for the Python sidecar as a 3rd Railway service.
-**Avoids:** undocumented architecture drift (workflow rule violation).
+### Phase 1: Deploy phase-15 image (prod baseline)
+**Rationale:** Hard prerequisite — v1.1's re-auth alert isn't live in prod until this ships; every
+subsequent phase should be built/tested against a current, not stale, prod surface. Zero
+architectural coupling to the rest of v1.2.
+**Delivers:** Server+worker+web running the already-merged phase-15 code in prod.
+**Addresses:** N/A (ops/deploy only).
+**Avoids:** Building v1.2 on top of an untested pre-15 baseline.
 
-### Phase 11: Sidecar Scaffold + Auth Migration
-**Rationale:** Everything depends on the sidecar being the sole Schwab gateway; the auth migration is blocking and must precede streaming. Hardest phase.
-**Delivers:** `apps/sidecar/` (FastAPI + schwab-py + Postgres token callbacks), Python CI lanes, Railway service; TS refresh job retired FIRST, sidecar refresher second; advisory lock; reconnect policy; CBOE fallback confirmed.
-**Uses:** schwab-py `client_from_access_functions`, existing `broker_tokens` table.
-**Avoids:** dual-refresher race (#2 above).
+### Phase 2: Overview v2 redesign + scenario-engine IV calibration fix
+**Rationale:** Both are independent of the picker track, so bundling them first is safe and
+delivers visible value early. The IV fix is a repeat of the proven D21 extraction pattern
+(`packages/quant`), not a new architectural decision. Component extraction from
+`Overview.tsx`/`Shell.tsx` here establishes the "components are files" pattern the Analyzer
+redesign leans on next.
+**Delivers:** TOS-dock Overview layout live in prod; IV-calibration solver moved to
+`@morai/quant` with a convergence-failure result type; extracted `PositionsTable`/`BookSummary`/
+`SystemHealth`/`MarketStrip` as real components.
+**Uses:** `packages/quant` extension (Feature 5 in ARCHITECTURE.md), existing 3 chart libraries or
+plain-SVG port from `overview-v2.html`.
+**Implements:** D21-style shim pattern; docs-first `stack-decisions.md` entry (next D-number)
+before the `packages/quant` move, per the project's docs-before-architecture rule.
+**Avoids:** Pitfall 4 (bisection non-convergence/deep-ITM garbage) and Pitfall 6 (big-bang rewrite
+— keep this phase UI-and-solver-fix only, no picker engine work mixed in).
 
-### Phase 12: Streaming + TS Server Fan-Out
-**Rationale:** Requires a stable sidecar. Adds the live feed.
-**Delivers:** LEVELONE_OPTION (position legs) + ACCT_ACTIVITY ingestion, StreamManager + SSE fan-out, `GET /api/stream` with JWT at the edge, Zod stream contracts, backpressure + write-amplification guard.
-**Implements:** components 1–2 above.
+### Phase 3: Analyzer → picker UI redesign, contract-first against fixtures
+**Rationale:** The picker engine's two open decisions (DTE-range filter shape, delta-target strike
+enumeration) are UX-shaping; resolving them by building the UI against the mockup first, before the
+engine's enumeration logic locks in, decouples UX risk from scoring-correctness risk. Zero backend
+dependency once the contract exists.
+**Delivers:** Ranked-cards rail UI matching `playground-v4.html`, wired to
+`packages/contracts/src/picker.ts` (authored first, before any UI code) and a typed
+`picker-fixtures.ts` stub.
+**Addresses:** Ranked candidate list + why-panel, staleness indicator, DTE/delta filters, payoff
+diagram (table-stakes features from FEATURES.md).
+**Avoids:** Pitfall 6 (big-bang rewrite) by keeping engine work explicitly out of this phase.
 
-### Phase 13: COT Adapter
-**Rationale:** Independent of the sidecar — parallel-able with Phase 14.
-**Delivers:** `cot-reports` fetch, `cot_observations` table (as_of vs published_at), weekly `fetch-cot` job, API/MCP read surface.
+### Phase 4: Picker engine + economic-events adapter (real data wired in)
+**Rationale:** Picker scoring criteria 3/4 (event flags, event-penalty) depend on the events
+adapter, so it must land first within this phase, not the other way around. Internal order:
+events context → picker domain (pure scoring, tested against verified/refuted criteria) →
+picker application (wires in existing chain/GEX/rate ports) → route/MCP → swap the fixture import
+for the live call.
+**Delivers:** `packages/core/src/economic-events/` (FOMC/CPI/NFP, upsertable table,
+weekly cron), `packages/core/src/picker/` (pure `scoreCalendarCandidates` + `buildScoredCandidates`
+use-case), `GET /api/picker/candidates` route + `get_picker_candidates` MCP tool.
+**Addresses:** Economic-event flag, forward-IV differentiator, GEX-fit differentiator,
+event-premium-aware baseline (FEATURES.md differentiators).
+**Avoids:** Pitfall 1 (stale-chain scoring — `observedAt`/`source` required at the port signature),
+Pitfall 2 (FwdIV radicand — property-test inverted-curve fixtures, tagged result not `NaN`),
+Pitfall 3 (event-date timezone/staleness — IANA tz storage, startup staleness check). REFUTED
+scoring criteria (IV-rank gates, raw IV-diff band, 25-40% debit band) must be encoded as regression
+assertions, not just doc notes.
 
-### Phase 14: FRED Expansion
-**Rationale:** Independent of the sidecar — parallel-able with Phase 13. Minimal effort.
-**Delivers:** set prod `FRED_API_KEY`, add series (DFF/DGS3MO/DGS1MO/SOFR/T10Y2Y/T10Y3M/VIXCLS), VVIX via CBOE adapter.
-
-### Phase 15: 7-Day Re-Auth Smoothing
-**Rationale:** Depends on the sidecar (`/health`, `/sidecar/reauth`).
-**Delivers:** T-24h expiry alert, one-click/operator re-auth flow, operator runbook.
+### Phase 5: Tail — stall watchdog → event-triggered snapshot → strategy-rules (L4)
+**Rationale:** Ordered cheapest/most-isolated-and-lowest-risk first. Watchdog is pure transport
+plumbing with no core changes. Event-triggered snapshot reuses the existing `ForEnqueueingJob`
+port and touches the same ACCT_ACTIVITY handler the watchdog work just modified (context stays
+warm). Strategy-rules is last because it has the most open scope questions and is most likely to
+need its own discuss-phase before planning.
+**Delivers:** Three-state stream badge (LIVE/QUIET/STALLED) with heartbeat decoupled from data
+cadence; debounced ad-hoc `snapshot-calendars` job triggered off ACCT_ACTIVITY reconcile; closed-
+enum `strategy_rules`/`rule_firings` tables recording which rule fired against `entry_thesis`.
+**Addresses:** Stream badge and rule-tag table-stakes features; closes the documented v1.1
+"badge lies LIVE" gap.
+**Avoids:** Pitfall 5 (watchdog false-positives/missed-stall — RTH-vs-quiet state machine, replay
+tests both directions) and Pitfall 7 (rules-engine scope creep — closed enum + free text, explicit
+non-goal statement in the phase plan, no generic condition grammar, no rule-editor UI).
 
 ### Phase Ordering Rationale
 
-- Docs → sidecar/auth → streaming is a strict dependency chain (each needs the prior).
-- COT (13) and FRED (14) have zero sidecar dependency and can run in parallel with each other / the streaming work.
-- Re-auth smoothing (15) is last because it consumes the sidecar's health + reauth endpoints.
-- The auth migration is isolated into its own phase precisely so the dual-refresher race is closed before any streaming work begins.
+- Dependencies flow one direction: events adapter → picker scoring → picker UI-with-real-data;
+  nothing later in the sequence is a blocking dependency for anything earlier.
+- Grouping follows blast-radius: prod-deploy (zero app-logic risk) → independent UI+solver fixes →
+  UI-only redesign against stubs → real engine wiring → fully independent tail items. Risk and
+  scope-ambiguity increase through the sequence, which is also the safest order to build public-
+  API/schema decisions on top of increasingly-stable ground.
+- This ordering directly avoids Pitfall 6 (big-bang rewrite) by construction — UI and engine are
+  different phases — and surfaces Pitfall 3/1/2 at the one phase (4) where the events/scoring
+  contracts are actually being designed, which is the only point those guards can be added cheaply.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 11:** Railway private networking config for sidecar↔server (private network vs public URL).
-- **Phase 12:** ACCT_ACTIVITY `MESSAGE_TYPE` values (empirical — not publicly documented); EventSource JWT-query-param vs opaque-ticket/cookie security choice.
-- **Phase 13:** exact CFTC COT DataFrame column names for the schema.
+Phases likely needing deeper research during planning (`--research-phase`):
+- **Phase 4 (Picker engine + economic-events adapter):** BLS/Fed release-id lookups still need
+  confirming (Employment Situation `release_id` not nailed down in this pass — resolve via
+  `fred/releases?search_text=Employment+Situation`); the DTE-range/delta-target enumeration
+  decisions are explicitly still open and need to be resolved during this phase's discuss-phase.
+- **Phase 5, strategy-rules (L4) sub-item:** scope boundary (rule DSL shape vs. closed enum,
+  firing-vs-execution boundary, how `entry_thesis` gets populated) is the most open-ended item in
+  the milestone and should get its own discuss-phase before planning, per PITFALLS.md.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 10** (doc edit), **Phase 14** (FRED series add + env var), **Phase 15** (alert + endpoint — established patterns).
+- **Phase 1 (deploy):** pure ops, already-merged code, no research needed.
+- **Phase 2 (Overview v2 + IV fix):** D21 extraction is a proven in-repo precedent; mockups already
+  decided.
+- **Phase 3 (Analyzer UI, contract-first):** UI work against an already-approved mockup and a
+  Zod-schema-first fixture pattern already used elsewhere in the codebase.
+- **Phase 5, watchdog and event-triggered-snapshot sub-items:** both are `setInterval`/pg-boss
+  `send()` usage over existing infrastructure — standard, no external research needed.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | MEDIUM | schwab-py version/methods/streamer fields verified vs PyPI + readthedocs + source; 500-symbol cap from community ref, not official portal |
-| Features | HIGH | Historical-options verdict definitive from official docs; vendor pricing from marketing pages (MEDIUM); COT/FRED structural facts HIGH |
-| Architecture | MEDIUM | Hexagon boundary HIGH (codebase read); auth-migration sequence + gap-fill are first-principles/industry-standard, no schwab-py-specific prior art |
-| Pitfalls | HIGH | Auth/token mechanics + streamer session limit confirmed across docs + multiple community integrations; Morai gotchas are first-party history |
+| Stack | HIGH | Verdict is "zero new dependencies" grounded directly in existing `package.json`/codebase inspection, not external survey; the two external facts (FRED endpoint param, no FOMC JSON feed) are cross-checked against official docs |
+| Features | MEDIUM-HIGH | Comparable-tool behavior (TOS, OptionStrat, ONE, Edgewonk, SpotGamma) is well-documented via official docs/guides; the single-user scope judgment call is this project's own explicit constraint (PROJECT.md), not externally sourced |
+| Architecture | HIGH | Grounded directly in `docs/architecture/*`, existing `ports.ts` files, and existing directory shapes — an internal-fit question, not an ecosystem survey |
+| Pitfalls | MEDIUM | Project-specific pitfalls (chain staleness, CBOE-UTC precedent, IV-discrepancy doc, watchdog gap) are HIGH — grounded in this project's own docs/incidents; external domain pitfalls (Newton-Raphson near-zero-vega, watchdog heartbeat patterns, strangler-fig rewrite risk, YAGNI) are MEDIUM — cross-checked across multiple sources but no single official-docs citation |
 
-**Overall confidence:** MEDIUM
+**Overall confidence:** HIGH — this milestone is dominated by internal-architecture-fit questions
+where the codebase itself is the primary source, not external technology research.
 
 ### Gaps to Address
 
-- **500-symbol streamer cap exact source:** confirm on the Schwab Developer Portal during Phase 11; scope subscriptions to legs-only regardless (safe under any cap).
-- **ACCT_ACTIVITY message-type values:** discover empirically once the sidecar runs (Phase 12); don't hard-code from assumption.
-- **Railway private networking:** verify at Phase 11 infra setup (prefer private network, no egress cost).
-- **EventSource JWT-as-query-param vs opaque ticket:** security decision in Phase 12 (query-param JWTs leak into logs — prefer a short-lived ticket if cheap).
-- **CFTC COT column names:** confirm before writing the `cot_observations` schema (Phase 13).
+- FRED release_id for "Employment Situation" (NFP) was not confirmed in this research pass —
+  resolve via a one-off API query during Phase 4 before hardcoding the constant.
+- DTE-range-as-filter vs. fixed-rule, and delta-target strike enumeration, are both still open
+  product decisions (noted in PROJECT.md) — deliberately deferred to Phase 4's discuss-phase so the
+  Phase 3 UI can inform them; do not resolve prematurely in Phase 3.
+- Strategy-rules (L4) scope (rule DSL shape, firing-vs-execution boundary, `entry_thesis` population
+  mechanism) is unresolved by design — needs its own discuss-phase before Phase 5's rules sub-item
+  is planned.
+- Vasquez slope signal's transfer to SPX (criterion 2 in `calendar-selection-criteria.md`) is
+  flagged there as needing a separate in-house backtest — explicitly out of v1.2 scope, tracked as
+  a P2/P3 backlog item, not a gap this milestone must close.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- schwab-py readthedocs (auth, client, streaming) — token callbacks, REST methods, LEVELONE_OPTION field numbers, historical-options limitation
-- CFTC publicreporting.cftc.gov + official COT schedule — report types, E-mini S&P code, Tue-data/Fri-release lag
-- fred.stlouisfed.org — series existence (DFF/DGS*/SOFR/T10Y2Y/T10Y3M/VIXCLS); VVIX absence
-- Morai codebase (brokerage ports, broker_tokens schema, existing jobs) + project history (Phase 2 lessons, tos-studies, MEMORY.md)
+- In-repo: `docs/architecture/{overview,hexagonal-ddd,data-model,jobs,api-design,mcp-and-plugins,streaming-fanout,stack-decisions}.md`
+- In-repo: `packages/core/src/{journal,analytics,brokerage,streaming}/**`, `packages/quant/src/**`
+- In-repo: `packages/adapters/src/http/fred.ts`, `packages/adapters/src/postgres/migrations/0013_macro_observations.sql`
+- In-repo: `apps/web/src/{screens/Overview.tsx,screens/Analyzer.tsx,components/Shell.tsx,lib/scenario-engine.ts}`, `apps/web/package.json`
+- `.planning/research/calendar-selection-criteria.md` (adversarially verified scoring criteria — canonical, not re-derived)
+- `.planning/PROJECT.md`, `.planning/ROADMAP.md` (scope, constraints, decided build order)
+- `docs/iv-engine-discrepancy-and-solver.md` (mid-price convention, solver design precedent)
+- FRED API docs: `fred/releases/dates` — https://fred.stlouisfed.org/docs/api/fred/releases_dates.html
+- FRED release id 10 = Consumer Price Index — https://fred.stlouisfed.org/release?rid=10
+- thinkorswim Spread Hacker / Scan manual (official docs), OptionNet Explorer official site/User Guide
 
 ### Secondary (MEDIUM confidence)
-- schwab-client-js DeveloperReference — 500-symbol streamer cap
-- QuantConnect / Schwabdev community integrations — one-session-per-account behavior
-- Vendor marketing pages (ORATS, Polygon, CBOE DataShop, Databento) — historical-options pricing tiers
-- FastAPI docs + sse-starlette PyPI; Hono `streamSSE` docs — SSE topology
+- Federal Reserve Board FOMC meeting calendars (HTML only, no feed) — federalreserve.gov
+- BLS schedule of releases (HTML only; subject to delay, e.g. Oct 2025 shutdown) — bls.gov/schedule
+- Edgewonk, OptionStrat, SpotGamma feature pages; Forex Factory calendar conventions
+- Interactive Brokers Quant News / HyperVolatility — Newton-Raphson near-zero-vega non-convergence
+- websocket.org, oneuptime.com — heartbeat/ping-pong watchdog best practices
+- Strangler Fig pattern write-ups (algomaster.io, Future Processing) — incremental vs. big-bang rewrite risk
 
 ### Tertiary (LOW confidence)
-- Community code examples — COT DataFrame filter strings, ACCT_ACTIVITY message structure (validate empirically)
+- None flagged — all research converged on codebase-grounded or officially-documented answers.
 
 ---
-*Research completed: 2026-06-25*
+*Research completed: 2026-07-03*
 *Ready for roadmap: yes*
