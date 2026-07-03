@@ -39,8 +39,13 @@ function fmtDollar(v: number): string {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
-/** Human relative age for the GEX freshness badge. */
-function relAge(ms: number): string {
+/**
+ * Human relative age for the GEX freshness badge.
+ * Exported for reuse verbatim by Overview.tsx's staleness badges (17-04, D-03) —
+ * the live-mark badge follows the same visual grammar/format, never a second
+ * reimplementation of the same relative-age logic.
+ */
+export function relAge(ms: number): string {
   const m = Math.floor(ms / 60_000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
@@ -49,8 +54,11 @@ function relAge(ms: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-/** GEX freshness — green dot when computed within the last fetch cycle, amber when stale. */
-const GEX_FRESH_MS = 35 * 60 * 1000; // chain refreshes every 30 min during RTH
+/**
+ * GEX freshness — green dot when computed within the last fetch cycle, amber when stale.
+ * Exported for reuse verbatim by Overview.tsx's GEX "as of" badge (17-04, D-03).
+ */
+export const GEX_FRESH_MS = 35 * 60 * 1000; // chain refreshes every 30 min during RTH
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 

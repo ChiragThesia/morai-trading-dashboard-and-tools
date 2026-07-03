@@ -9,17 +9,32 @@ import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { computePositionGreeks } from "../lib/position-greeks.ts";
 import { resolveLivePositionRow } from "../lib/live-position-greeks.ts";
 import { pairPositionsIntoCalendars, bookUnrealizedPnl } from "../lib/pair-calendars.ts";
+import type { CalendarGroup } from "../lib/pair-calendars.ts";
 import { parseOccSymbol } from "@morai/shared";
 import { classifyRegime } from "../lib/gex-regime.ts";
-import { repriceScenario } from "../lib/scenario-engine.ts";
-import type { AnalyzerPosition, ScenarioParams } from "../lib/scenario-engine.ts";
+import { resolveLegIv } from "../lib/iv-calibration.ts";
+import type { LiveTick } from "../lib/iv-calibration.ts";
+import {
+  repriceScenario,
+  t0ExcludedPositions,
+  buildScenarioStrip,
+} from "../lib/scenario-engine.ts";
+import type { AnalyzerPosition, ScenarioParams, PayoffPoint } from "../lib/scenario-engine.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
+import { relAge, GEX_FRESH_MS } from "./Market.tsx";
 import { CotCard } from "../components/CotCard.tsx";
 import { MacroCard } from "../components/MacroCard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
 import { Panel, PanelHeading, SectionLabel, Stat, MetricChip } from "../components/system/index.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip.tsx";
 import { cn } from "@/lib/utils";
 import type { BrokerPositionResponse, GexSnapshotEntry, MacroResponse, MacroSeriesId } from "@morai/contracts";
 import type { StreamLiveGreekEvent } from "@morai/contracts";
@@ -50,8 +65,99 @@ import type { StreamLiveGreekEvent } from "@morai/contracts";
 const DEFAULT_IV = 0.18;
 const DEFAULT_RATE = 0.045;
 const DEFAULT_DIV = 0.013;
+/** Live-mark badge freshness threshold (D-03) — independent of LiveStatusBadge's
+ *  connection state; a reconnected stream can still have a >5min-old last tick. */
+const LIVE_MARK_FRESH_MS = 5 * 60 * 1000;
 
 type NetGreeks = { delta: number; gamma: number; theta: number; vega: number };
+
+// ─── Per-leg IV calibration (OVW-02, D-01/D-02) ───────────────────────────────
+
+type LegIvResolution = {
+  readonly iv: number;
+  readonly status: "ok" | "non-convergent";
+  /** True only for a genuine invertIv non-convergence — NOT the wrapper's own
+   *  "no-price" cold-start state (Pitfall 2 / T-17-09). Drives the "IV n/a" badge. */
+  readonly ivNa: boolean;
+};
+
+/**
+ * Resolve one leg's IV via `resolveLegIv` (17-01): trusts an already-converged live
+ * tick's `bsmIv` when present, else calibrates from the REST-fallback price. Both a
+ * genuine `IvError` AND the wrapper's "no-price" state exclude the leg from the
+ * payoff-hero pricing (status "non-convergent") — the hero never substitutes a
+ * guessed IV either way (T-17-05). Only a genuine `IvError` renders the "IV n/a"
+ * badge; "no-price" (cold start / outside RTH) does not (Pitfall 2 / T-17-09).
+ */
+function resolveLeg(
+  leg: BrokerPositionResponse,
+  spot: number,
+  liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>,
+  now: Date,
+): LegIvResolution {
+  const netQty = leg.longQty - leg.shortQty;
+  const tick = liveGreeks.get(leg.occSymbol);
+  const liveTick: LiveTick | null = tick === undefined ? null : { mark: tick.mark, bsmIv: tick.bsmIv };
+  const result = resolveLegIv(
+    leg.occSymbol,
+    spot,
+    DEFAULT_RATE,
+    DEFAULT_DIV,
+    liveTick,
+    leg.marketValue,
+    netQty,
+    now,
+  );
+  if (result.ok) {
+    return { iv: result.value, status: "ok", ivNa: false };
+  }
+  return { iv: 0, status: "non-convergent", ivNa: result.error.kind !== "no-price" };
+}
+
+type CalendarPositionBuild = {
+  readonly position: AnalyzerPosition;
+  /** Either leg genuinely non-convergent (not just no-price) — drives the row badge. */
+  readonly ivNa: boolean;
+};
+
+/** Build one AnalyzerPosition from a paired calendar, calibrating both legs' IV. */
+function buildCalendarPosition(
+  cal: CalendarGroup,
+  spot: number,
+  liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>,
+  now: Date,
+): CalendarPositionBuild {
+  const front = resolveLeg(cal.front, spot, liveGreeks, now);
+  const back = resolveLeg(cal.back, spot, liveGreeks, now);
+  return {
+    position: {
+      id: cal.key,
+      name: `${cal.strike}${cal.optionType}`,
+      live: true,
+      occSymbol: cal.back.occSymbol,
+      putCall: cal.optionType,
+      frontDte: cal.dteFront,
+      backDte: cal.dteBack,
+      frontIv: front.iv,
+      backIv: back.iv,
+      qty: Math.max(1, Math.abs(cal.back.longQty - cal.back.shortQty)),
+      included: true,
+      frontIvStatus: front.status,
+      backIvStatus: back.status,
+    },
+    ivNa: front.ivNa || back.ivNa,
+  };
+}
+
+/** Nearest-point lookup on a payoff curve — used by the scenario strip (D-06/D-07)
+ *  to read T+0/@exp values at GEX/strike levels without re-exporting bookPL. */
+function nearestCurveValue(curve: ReadonlyArray<PayoffPoint>, level: number): number {
+  let best: PayoffPoint | null = null;
+  for (const p of curve) {
+    if (best === null || Math.abs(p.spot - level) < Math.abs(best.spot - level)) best = p;
+  }
+  return best?.pl ?? 0;
+}
 
 /** Sum position greeks across legs, scaled to position terms (per-share × netQty × 100).
  *  Used for the static BookSummary section AND the GEX rail's Net book greeks tile —
@@ -167,11 +273,21 @@ function PositionsTable({
   spot,
   liveGreeks,
   liveStatus,
+  ivNaByRowKey,
+  highlightedRowKey,
+  onHoverRow,
+  onSelectRow,
 }: {
   positions: ReadonlyArray<BrokerPositionResponse>;
   spot: number;
   liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>;
   liveStatus: LiveStreamStatus;
+  /** Rows whose calendar leg(s) genuinely did not converge (D-02) — renders "IV n/a". */
+  ivNaByRowKey: ReadonlyMap<string, boolean>;
+  /** The docked-table row currently hovered/selected (D-05) — null when none. */
+  highlightedRowKey: string | null;
+  onHoverRow: (key: string | null) => void;
+  onSelectRow: (key: string) => void;
 }): React.ReactElement {
   const rows = useMemo(() => buildRows(positions), [positions]);
   // Excluded row keys — a position counts toward the Net total unless explicitly unchecked.
@@ -235,15 +351,24 @@ function PositionsTable({
           const { netVal: val, unreal, greeks: g, liveTs } = resolved;
           const rowLive = liveCellCn(liveTs);
           const flashCn = liveTs !== null ? `live-cell-flash ${rowLive}` : "";
+          const ivNa = ivNaByRowKey.get(r.key) === true;
           return (
             <tr
               key={r.key}
+              data-testid={`position-row-${r.key}`}
+              onMouseEnter={() => { onHoverRow(r.key); }}
+              onMouseLeave={() => { onHoverRow(null); }}
+              onClick={() => { onSelectRow(r.key); }}
               className={cn(
-                "border-b border-line/50 transition-opacity hover:bg-raise/30",
+                "cursor-pointer border-b border-line/50 transition-opacity hover:bg-raise/30",
                 !included && "opacity-40",
+                highlightedRowKey === r.key && "bg-raise/20",
               )}
             >
-              <td className="px-2 py-1 text-center">
+              <td
+                className="px-2 py-1 text-center"
+                onClick={(e) => { e.stopPropagation(); }}
+              >
                 <input
                   type="checkbox"
                   checked={included}
@@ -253,7 +378,38 @@ function PositionsTable({
                 />
               </td>
               {/* Position — static, no live-cell */}
-              <td className="px-2 py-1 text-left text-txt">{r.label}</td>
+              <td className="px-2 py-1 text-left text-txt">
+                {r.label}
+                {ivNa && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger
+                        style={{
+                          display: "inline-flex",
+                          marginLeft: 6,
+                          verticalAlign: "middle",
+                          cursor: "default",
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                        }}
+                      >
+                        <Badge
+                          variant="outline"
+                          className="border-amber/50 px-1 py-0 font-mono text-[9px] text-amber"
+                        >
+                          IV n/a
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          IV n/a — did not converge. @exp shown; excluded from T+0.
+                        </span>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </td>
               {/* DTE — static, no live-cell */}
               <td className="px-2 py-1 text-right text-muted-foreground">{r.dte}</td>
               {/* Net val — live-sourced when tick present */}
@@ -578,25 +734,20 @@ export function Overview(): React.ReactElement {
     [positions],
   );
 
-  // NOTE: placeholder flat DEFAULT_IV — 17-04 Task 2 replaces this with per-leg
-  // calibrated IV via resolveLegIv (OVW-02). Do not extend this shape; it is
-  // superseded in the same plan, same file.
+  // Per-leg calibrated IV (OVW-02, D-01/D-02) — resolveLegIv per leg, never DEFAULT_IV
+  // on this path (T-17-05). DEFAULT_IV remains only for netGreeksForLegs/BookSummary
+  // (OQ2, recorded deferral).
+  const calendarBuild = useMemo(
+    () => calendars.map((cal) => buildCalendarPosition(cal, spot, liveGreeks, new Date())),
+    [calendars, spot, liveGreeks],
+  );
   const calendarPositions = useMemo<ReadonlyArray<AnalyzerPosition>>(
-    () =>
-      calendars.map((cal) => ({
-        id: cal.key,
-        name: `${cal.strike}${cal.optionType}`,
-        live: true,
-        occSymbol: cal.back.occSymbol,
-        putCall: cal.optionType,
-        frontDte: cal.dteFront,
-        backDte: cal.dteBack,
-        frontIv: DEFAULT_IV,
-        backIv: DEFAULT_IV,
-        qty: Math.max(1, Math.abs(cal.back.longQty - cal.back.shortQty)),
-        included: true,
-      })),
-    [calendars],
+    () => calendarBuild.map((b) => b.position),
+    [calendarBuild],
+  );
+  const ivNaByRowKey = useMemo(
+    () => new Map(calendarBuild.map((b) => [b.position.id, b.ivNa])),
+    [calendarBuild],
   );
 
   const scenario = useMemo(() => {
@@ -610,7 +761,9 @@ export function Overview(): React.ReactElement {
     return repriceScenario(calendarPositions, params);
   }, [calendarPositions, spot]);
 
-  const positionSetSignature = calendarPositions.map((p) => p.id).join("|");
+  const positionSetSignature = calendarPositions
+    .map((p) => `${p.id}:${p.frontIvStatus ?? "ok"}:${p.backIvStatus ?? "ok"}`)
+    .join("|");
 
   const noop = useCallback((): void => {}, []);
 
@@ -622,6 +775,58 @@ export function Overview(): React.ReactElement {
   const bookPnl = useMemo(() => bookUnrealizedPnl(positions), [positions]);
   const cotLev = cot?.[0]?.netLeveraged ?? null;
 
+  // ── Row highlight (D-05) — transient hover id + persisted click-toggle id,
+  // mirroring AdHocPicker's clearHovered pattern. ──────────────────────────────
+  const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
+  const highlightedRowKey = hoveredRowKey ?? selectedRowKey;
+
+  const handleHoverRow = useCallback((key: string | null): void => { setHoveredRowKey(key); }, []);
+  const handleSelectRow = useCallback((key: string): void => {
+    setSelectedRowKey((prev) => (prev === key ? null : key));
+  }, []);
+
+  const highlightedPosition = calendarPositions.find((p) => p.id === highlightedRowKey) ?? null;
+  const highlightedScenario = useMemo(() => {
+    if (highlightedPosition === null) return null;
+    const params: ScenarioParams = {
+      spot,
+      daysForward: 0,
+      ivShift: 0,
+      rate: DEFAULT_RATE,
+      divYield: DEFAULT_DIV,
+    };
+    return repriceScenario([highlightedPosition], params);
+  }, [highlightedPosition, spot]);
+
+  const excludedFromT0 = t0ExcludedPositions(calendarPositions);
+
+  const scenarioStrip = useMemo(
+    () =>
+      buildScenarioStrip(
+        { putWall: gex?.putWall ?? null, flip: gex?.flip ?? null, callWall: gex?.callWall ?? null },
+        calendarPositions,
+        spot,
+      ),
+    [calendarPositions, spot, gex],
+  );
+
+  // ── Staleness (D-03/D-04) — two independent channels, same visual grammar. ──
+  const gexTs = gex !== undefined ? new Date(gex.computedAt) : null;
+  const gexAgeMs = gexTs !== null ? Date.now() - gexTs.getTime() : null;
+  const gexFresh = gexAgeMs !== null && gexAgeMs < GEX_FRESH_MS;
+  const gexAsOf =
+    gexTs !== null
+      ? gexTs.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "—";
+
+  const markAgeMs = liveLastTickAt !== null ? Date.now() - liveLastTickAt.getTime() : null;
+  const markFresh = markAgeMs !== null && markAgeMs <= LIVE_MARK_FRESH_MS;
+  const markAsOf =
+    liveLastTickAt !== null
+      ? liveLastTickAt.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "—";
+
   return (
     <div className="mx-auto flex max-w-[1480px] flex-col gap-5 p-3.5">
       <PillHeader gex={gex} cotLev={cotLev} macro={macro} bookPnl={bookPnl} />
@@ -632,7 +837,33 @@ export function Overview(): React.ReactElement {
           {/* Payoff hero */}
           <Panel>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <SectionLabel>Risk profile — combined book</SectionLabel>
+              <div className="flex flex-wrap items-center gap-2">
+                <SectionLabel>Risk profile — combined book</SectionLabel>
+                {gex !== undefined && (
+                  <div
+                    className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+                    data-testid="gex-freshness"
+                  >
+                    <span className={cn("size-1.5 rounded-full", gexFresh ? "bg-up" : "bg-amber")} />
+                    <span className="text-dim">GEX as of</span>
+                    <span className="text-txt">{gexAsOf}</span>
+                    {gexAgeMs !== null && (
+                      <span className={gexFresh ? "text-up" : "text-amber"}>· {relAge(gexAgeMs)}</span>
+                    )}
+                  </div>
+                )}
+                <div
+                  className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+                  data-testid="live-mark-freshness"
+                >
+                  <span className={cn("size-1.5 rounded-full", markFresh ? "bg-up" : "bg-amber")} />
+                  <span className="text-dim">mark as of</span>
+                  <span className="text-txt">{markAsOf}</span>
+                  {markAgeMs !== null && (
+                    <span className={markFresh ? "text-up" : "text-amber"}>· {relAge(markAgeMs)}</span>
+                  )}
+                </div>
+              </div>
               <span className="font-mono text-[10px] text-dim">view-only · Analyzer →</span>
             </div>
             <div className="mb-1 flex flex-wrap gap-3 font-mono text-[10px] text-muted-foreground">
@@ -665,7 +896,42 @@ export function Overview(): React.ReactElement {
               onFitYConsumed={noop}
               positionSetSignature={positionSetSignature}
               baseExpirationCurve={scenario.expirationCurve}
+              highlightedPositionId={highlightedRowKey}
+              highlightedTodayCurve={highlightedScenario?.payoffCurve ?? null}
+              highlightedExpirationCurve={highlightedScenario?.expirationCurve ?? null}
+              excludedFromT0Count={excludedFromT0.count}
             />
+            {scenarioStrip.levels.length > 0 && (
+              <div
+                className="mt-2 grid items-center gap-1 text-right font-mono text-[10px]"
+                style={{ gridTemplateColumns: `70px repeat(${scenarioStrip.levels.length}, 1fr)` }}
+              >
+                <span className="text-left text-dim">SPX →</span>
+                {scenarioStrip.levels.map((lvl) => (
+                  <span key={`lvl-${lvl}`} className="text-dim">{Math.round(lvl)}</span>
+                ))}
+                <span className="text-left text-dim">T+0</span>
+                {scenarioStrip.levels.map((lvl) => {
+                  const v = nearestCurveValue(scenario.payoffCurve, lvl);
+                  return (
+                    <span key={`t0-${lvl}`} className={cn("rounded-sm bg-raise px-1.5 py-0.5", signClass(v))}>
+                      {signedUsd(v, 0)}
+                    </span>
+                  );
+                })}
+                <span className="text-left text-dim">
+                  {scenarioStrip.expiryLabel !== "" ? `@ exp (${scenarioStrip.expiryLabel})` : "@ exp"}
+                </span>
+                {scenarioStrip.levels.map((lvl) => {
+                  const v = nearestCurveValue(scenario.expirationCurve, lvl);
+                  return (
+                    <span key={`exp-${lvl}`} className={cn("rounded-sm bg-raise px-1.5 py-0.5", signClass(v))}>
+                      {signedUsd(v, 0)}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </Panel>
 
           {/* Docked positions table */}
@@ -679,6 +945,10 @@ export function Overview(): React.ReactElement {
               spot={spot}
               liveGreeks={liveGreeks}
               liveStatus={liveStatus}
+              ivNaByRowKey={ivNaByRowKey}
+              highlightedRowKey={highlightedRowKey}
+              onHoverRow={handleHoverRow}
+              onSelectRow={handleSelectRow}
             />
           </Panel>
         </div>

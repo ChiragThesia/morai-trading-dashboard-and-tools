@@ -268,8 +268,13 @@ describe("Overview screen", () => {
         CAL_BACK,
       ]);
       render(<Overview />);
+      // The row-level "IV n/a" badge is reserved for a genuine invertIv non-convergence
+      // (Pitfall 2 / T-17-09) — a cold-start "no-price" leg must never be badged that way.
       expect(screen.queryByText("IV n/a")).toBeNull();
-      expect(screen.queryByTestId("t0-exclusion-note")).toBeNull();
+      // The leg is still honestly excluded from the T+0 aggregate (never a fabricated
+      // guessed IV, T-17-05) — the net-book self-flag note is expected to appear, just
+      // without the misleading "did not converge" badge language on the row itself.
+      expect(screen.getByTestId("t0-exclusion-note")).toBeDefined();
     });
 
     it("renders the GEX 'as of' staleness badge (amber — the fixture snapshot is stale)", () => {
