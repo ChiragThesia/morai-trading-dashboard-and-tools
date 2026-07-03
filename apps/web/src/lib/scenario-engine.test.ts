@@ -63,10 +63,14 @@ const CONTROL_POS: AnalyzerPosition = {
   backIvStatus: "ok",
 };
 
+// Non-convergent fixtures mirror what Overview.resolveLeg actually produces in
+// production: a "non-convergent" leg carries iv:0 (Overview.tsx:114), NOT a valid IV.
+// Modeling frontIv/backIv:0 here is what exposes CR-01 — a valid IV masked it (WR-01).
 const FRONT_NON_CONVERGENT_POS: AnalyzerPosition = {
   ...LIVE_POS,
   id: "front-nc-1",
   name: "Front leg non-convergent",
+  frontIv: 0,
   frontIvStatus: "non-convergent",
   backIvStatus: "ok",
 };
@@ -75,6 +79,7 @@ const BACK_NON_CONVERGENT_POS: AnalyzerPosition = {
   ...LIVE_POS,
   id: "back-nc-1",
   name: "Back leg non-convergent",
+  backIv: 0,
   frontIvStatus: "ok",
   backIvStatus: "non-convergent",
 };
@@ -278,7 +283,13 @@ describe("rollScenario", () => {
 // ─── (e) Leg-level non-convergence exclusion — Pitfall 1 / D-02 ───────────────
 
 describe("bookPL/bookPLAtExpiry — leg-level non-convergence exclusion (Pitfall 1 / D-02)", () => {
-  it("front-leg-non-convergent position: excluded from T+0, still contributes to @exp", () => {
+  it("front-leg-non-convergent position (prod frontIv=0): excluded from BOTH T+0 and @exp (CR-01)", () => {
+    // CR-01: the @exp *net* at frontT=0 needs no front IV (front is intrinsic there), but the
+    // entry cost basis (entryNetPrice) reprices the front leg at frontT>0, which DOES need it.
+    // In production frontIv=0 for a non-convergent leg, so that entry basis drops the front
+    // leg's real time value (or yields NaN when S===K and r===q) → a wrong @exp number for
+    // exactly the "IV n/a" rows. A front-non-convergent position therefore has no trustworthy
+    // @exp basis and must be excluded from @exp too, not just T+0.
     const controlOnly = repriceScenario([CONTROL_POS], BASE_PARAMS);
     const withFrontNc = repriceScenario([CONTROL_POS, FRONT_NON_CONVERGENT_POS], BASE_PARAMS);
 
@@ -293,17 +304,18 @@ describe("bookPL/bookPLAtExpiry — leg-level non-convergence exclusion (Pitfall
       }
     }
 
-    // @exp: the front-non-convergent position STILL contributes — curve must differ.
-    let differs = false;
+    // @exp: the front-non-convergent position must ALSO contribute nothing — curve unchanged
+    // and free of NaN (no wrong / NaN number rendered for an "IV n/a" row).
     for (let i = 0; i < controlOnly.expirationCurve.length; i++) {
       const a = controlOnly.expirationCurve[i];
       const b = withFrontNc.expirationCurve[i];
-      if (a !== undefined && b !== undefined && Math.abs(a.pl - b.pl) > 0.01) {
-        differs = true;
-        break;
+      expect(a).toBeDefined();
+      expect(b).toBeDefined();
+      if (a !== undefined && b !== undefined) {
+        expect(Number.isNaN(b.pl)).toBe(false);
+        expect(b.pl).toBeCloseTo(a.pl, 6);
       }
     }
-    expect(differs).toBe(true);
   });
 
   it("back-leg-non-convergent position: excluded from BOTH T+0 and @exp", () => {

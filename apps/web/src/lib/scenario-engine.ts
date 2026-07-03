@@ -226,16 +226,21 @@ function extractStrike(pos: AnalyzerPosition): number {
 }
 
 /**
- * Leg-level IV non-convergence exclusion (Pitfall 1 / D-02).
+ * Leg-level IV non-convergence exclusion (Pitfall 1 / D-02, corrected per CR-01).
  *
  * The system's instrument is always a two-leg calendar, so "non-convergent" must be
- * tracked and excluded per leg, not per position:
- *   - Front leg non-convergent → the T+0 curve is unsafe (needs the front leg's live
- *     IV to price its remaining time value), but @exp is still safe (at the position's
- *     own front expiry the front leg is intrinsic — bsmPrice's T<=0 branch needs no IV).
- *   - Back leg non-convergent → BOTH curves are unsafe. Even at T+0 the net price needs
- *     the back leg's IV; at @exp the back leg still has real remaining time value
- *     (backT = max((backDte - frontDte)/365, 1e-6)), so its IV is needed there too.
+ * tracked and excluded per leg, not per position. Both the T+0 and the @exp aggregates
+ * are computed as `net − entry`, and `entry` (entryNetPrice) re-prices BOTH legs at
+ * T+0 (frontT = frontDte/365 > 0). So a usable IV on a leg is required to form the
+ * entry basis even for @exp, where the *net* term alone would not need it:
+ *   - Front leg non-convergent → T+0 net needs the front IV, AND the @exp entry basis
+ *     re-prices the front leg at frontT>0 which also needs it. In production a
+ *     non-convergent leg carries frontIv=0 (Overview.resolveLeg), so pricing it drops
+ *     the front leg's entry time value (bsmPrice with sigma=0 → forward-intrinsic, or
+ *     0/0=NaN when S===K and r===q) → a wrong @exp number. Exclude from BOTH curves.
+ *   - Back leg non-convergent → BOTH curves are unsafe (the back leg has real remaining
+ *     time value at every horizon: backT = max((backDte - daysForward)/365, 1e-6) > 0).
+ * Net: any leg non-convergent → excluded from BOTH T+0 and @exp.
  */
 function isIvExcludedFromT0(pos: AnalyzerPosition): boolean {
   return pos.frontIvStatus === "non-convergent" || pos.backIvStatus === "non-convergent";
@@ -246,7 +251,7 @@ function includedForT0(pos: AnalyzerPosition): boolean {
 }
 
 function includedForExpiry(pos: AnalyzerPosition): boolean {
-  return pos.included && pos.backIvStatus !== "non-convergent";
+  return pos.included && !isIvExcludedFromT0(pos);
 }
 
 /**
