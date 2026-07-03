@@ -4,9 +4,9 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 17
 current_phase_name: Overview v2 Redesign + IV Calibration Fix
-status: verifying
-stopped_at: Phase 17 context gathered
-last_updated: "2026-07-03T20:34:03.647Z"
+status: executing
+stopped_at: Phase 17 UI-SPEC approved
+last_updated: "2026-07-03T21:24:55.588Z"
 last_activity: 2026-07-03
 last_activity_desc: Phase 16 complete, transitioned to Phase 17
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 17 — Overview v2 Redesign + IV Calibration Fix
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-07-03 — Phase 16 complete, transitioned to Phase 17
 
 ## Milestone v1.2 Summary
@@ -244,9 +244,9 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T20:34:03.638Z
-Stopped at: Phase 17 context gathered
-Resume file: .planning/phases/17-overview-v2-redesign-iv-calibration-fix/17-CONTEXT.md
+Last session: 2026-07-03T20:50:25.037Z
+Stopped at: Phase 17 UI-SPEC approved
+Resume file: .planning/phases/17-overview-v2-redesign-iv-calibration-fix/17-UI-SPEC.md
 
 ## Operator Next Steps
 
