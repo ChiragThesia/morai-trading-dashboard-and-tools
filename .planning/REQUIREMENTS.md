@@ -105,24 +105,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEPLOY-04 | — | Pending |
-| OVW-01 | — | Pending |
-| OVW-02 | — | Pending |
-| ANLZ-01 | — | Pending |
-| ANLZ-02 | — | Pending |
-| ANLZ-03 | — | Pending |
-| PICK-01 | — | Pending |
-| PICK-02 | — | Pending |
-| PICK-03 | — | Pending |
-| WATCH-01 | — | Pending |
-| SNAP-01 | — | Pending |
-| RULE-01 | — | Pending |
+| DEPLOY-04 | Phase 16 | Pending |
+| OVW-01 | Phase 17 | Pending |
+| OVW-02 | Phase 17 | Pending |
+| ANLZ-01 | Phase 18 | Pending |
+| ANLZ-02 | Phase 18 | Pending |
+| ANLZ-03 | Phase 18 | Pending |
+| PICK-01 | Phase 19 | Pending |
+| PICK-02 | Phase 19 | Pending |
+| PICK-03 | Phase 19 | Pending |
+| WATCH-01 | Phase 20 | Pending |
+| SNAP-01 | Phase 20 | Pending |
+| RULE-01 | Phase 20 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 12 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12/12 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-03*
-*Last updated: 2026-07-03 after initial definition*
+*Last updated: 2026-07-03 — roadmap created, Phases 16-20 (v1.2)*

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 status: planning
-last_updated: "2026-07-03T17:02:11.110Z"
+last_updated: "2026-07-03T18:00:00.000Z"
 last_activity: 2026-07-03
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,37 +20,49 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** v1.2 Trade Picker & Dashboard Redesign — defining requirements
+**Current focus:** v1.2 Trade Picker & Dashboard Redesign — roadmap created (Phases 16-20), ready to plan Phase 16
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-03 — Milestone v1.2 started
+Phase: 16 of 20 (Deploy Phase-15 Image)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-07-03 — ROADMAP.md created for v1.2 (Phases 16-20, 12/12 requirements mapped)
 
-## Milestone v1.1 Summary
+## Milestone v1.2 Summary
 
-**6 phases, 18 requirements (GW-01..05, STRM-01..05, JRNL-02, COT-01..02, MAC-01..02, AUTH-05..06, DOC-01)**
+**5 phases, 12 requirements (DEPLOY-04, OVW-01..02, ANLZ-01..03, PICK-01..03, WATCH-01, SNAP-01, RULE-01)**
 
-Strict dependency chain:
+User-decided build order (confirmed, research-validated as dependency-correct):
 
-- Phase 10 (DOC-01) → Phase 11 (GW-01..05, JRNL-02) → Phase 12 (STRM-01..05) → Phase 15 (AUTH-05..06)
-- Phases 13 (COT-01..02) and 14 (MAC-01..02) are independent; can run parallel with 12 and each other.
+- Phase 16 (DEPLOY-04) → Phase 17 (OVW-01..02) → Phase 18 (ANLZ-01..03) → Phase 19 (PICK-01..03) → Phase 20 (WATCH-01, SNAP-01, RULE-01)
+- Strictly sequential — each phase is a prerequisite prod baseline or contract for the next
+  (deploy → dashboard live → UI contract-first → engine wires in real data → independent tail).
 
 Key risks carried into planning:
 
-1. Dual-refresher rotating-token race — Phase 11 must retire TS refresh job BEFORE sidecar goes active.
-2. One-streamer-per-account limit — Postgres advisory lock required before any streaming work.
-3. 7-day headless re-auth gap — CBOE fallback must be confirmed live before Phase 12 go-live.
-4. ACCT_ACTIVITY message types undocumented — discover empirically in Phase 12; do not hard-code.
+1. Re-auth window ~2026-07-09 — Phase 16 must ship before then or the T-24h alert isn't live.
+2. Stale/mis-sourced chain data silently feeding picker scores — `observedAt`/`source` required
+   at the port signature (Phase 19), not caught later in QA.
+3. FwdIV radicand goes negative under term-structure inversion — tagged `Result` variant required,
+   never a silent `NaN` (Phase 19).
+4. Economic-event dates stored as fixed UTC instead of America/New_York + IANA tz — same bug class
+   as the CBOE-UTC lesson, inverted direction (Phase 19).
+5. IV-calibration bisection hanging/garbage on deep-ITM/illiquid legs — tagged non-convergence
+   result required (Phase 17).
+6. Stream watchdog crying wolf on quiet markets or staying silent during a real stall — needs a
+   three-state (LIVE/QUIET/STALLED) RTH-aware state machine (Phase 20).
+7. Strategy-rules (RULE-01) scope creeping into a rules-evaluation DSL — explicitly a thin
+   recording layer; needs its own discuss-phase before planning (Phase 20).
 
-Regression gates (must survive every phase):
+Regression gates (must survive every phase, carried from v1.0/v1.1):
 
 - SPX OI=0 / SPY proxy (~10.048×)
 - CBOE timestamps are UTC (not ET)
 - GEX put-sign (negative gamma for puts)
 - 65,534-param insert limit (chunk at ≤2,000 rows)
+- REFUTED picker criteria (IV-rank gates, −1..−3% IV-diff band, debit-%-of-back band) must never
+  be encoded — regression-assert their absence in Phase 19
 
 ## Performance Metrics
 
@@ -158,11 +170,19 @@ Regression gates (must survive every phase):
 
 - Phase 8 added (2026-06-23): Web Dashboard — React/Vite/Tailwind/shadcn frontend (apps/web) on Hono RPC + new GEX analytics endpoint. 5 screens prototyped as HTML mockups in `mockups/` (overview, analyzer, positions, journal, market).
 - Phases 10-15 added (2026-06-25): Milestone v1.1 — Real-Time Schwab Streaming. schwab-py sidecar as sole Schwab boundary; live stream; COT + expanded FRED.
+- Phases 16-20 added (2026-07-03): Milestone v1.2 — Trade Picker & Dashboard Redesign. Deploy
+  phase-15 image → Overview v2 + IV-calibration fix → Analyzer→picker UI (contract-first against
+  fixtures) → picker engine + economic-events adapter (real data) → tail (stream watchdog,
+  event-triggered snapshot, strategy-rules L4 recording layer). Backlog items "strategy rules"
+  and "event-triggered snapshot" (previously in ROADMAP.md Backlog section) are now scheduled in
+  Phase 20 as RULE-01 and SNAP-01.
 
 ### Decisions
 
 Cleared at v1.1 close — full log in PROJECT.md Key Decisions table; per-plan decisions in
-`.planning/milestones/v1.1-ROADMAP.md` and phase SUMMARY files.
+`.planning/milestones/v1.1-ROADMAP.md` and phase SUMMARY files. v1.2 research (dependencies,
+pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
+`.planning/research/calendar-selection-criteria.md`.
 
 ### Pending Todos
 
@@ -172,7 +192,8 @@ None yet.
 
 - **Phase-15 image not deployed**: prod runs the pre-phase-15 image — T-24h re-auth alert
   surface (refreshExpiresIn, amber banner, warn log) not live until server+worker+web deploy.
-  Next re-auth window ~2026-07-09. (v1.0 db-down/FRED_API_KEY blockers resolved during v1.1.)
+  Next re-auth window ~2026-07-09. This is now Phase 16 of the v1.2 roadmap — the milestone's
+  first and most time-sensitive phase.
 
 ## Deferred Items
 
@@ -184,9 +205,11 @@ None yet.
 | Multi-user | API auth beyond single bearer token | v2 | Architecture |
 | Test isolation | Postgres leg-observations contract tests have cross-test contamination (re-persist/large-batch idempotency failures are flaky) | future | Phase 03 P06 |
 | Realized P&L | IN-A2 — real per-leg commission/fees + intraday filledAt: BrokerTransaction domain type carries no time/commission/fees fields; needs docs-first brokerage domain + Schwab adapter change. Realized P&L stays fee-blind until a dedicated plan. | future | Phase 05 P14 |
-| Event-triggered snapshot | Supplemental out-of-cycle snapshot on large underlying moves (via stream) | v1.2 | SUMMARY.md |
 | Go-live: migration 0011 | `bun run migrate` (direct DATABASE_URL 5432) to apply token_json to live Supabase — file committed, testcontainer-applied; live apply pending prod-up | go-live UAT | Phase 11 P02 |
 | Go-live: sidecar deploy | Create Railway sidecar service (railway.sidecar.toml, NO public domain GW-05), set 6 env vars + SIDECAR_URL on server/worker, run one-time Schwab OAuth dance to seed token_json, verify /sidecar/health ok + not public | go-live UAT | Phase 11 P05 |
+| Picker | PICK-04 — term-slope signal backtest over `leg_observations` (validate Vasquez cross-sectional finding on SPX time-series) | v1.2.x backlog | REQUIREMENTS.md Future Requirements |
+| Picker | PICK-05 — event-premium weighting by surprise magnitude | v1.2.x backlog | REQUIREMENTS.md Future Requirements |
+| Strategy Rules | RULE-02 — rule-fired → outcome correlation report (needs RULE-01 data accumulated) | v1.2.x backlog | REQUIREMENTS.md Future Requirements |
 
 Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
@@ -204,10 +227,10 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-02T21:05:20.217Z
-Stopped at: Completed 15-05-PLAN.md
+Last session: 2026-07-03T18:00:00.000Z
+Stopped at: ROADMAP.md created for v1.2 (Phases 16-20, 12/12 requirements mapped, coverage validated)
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan the first v1.2 phase: `/gsd-plan-phase 16`
