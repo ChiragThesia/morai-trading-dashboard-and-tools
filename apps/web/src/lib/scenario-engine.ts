@@ -74,6 +74,21 @@ export type ScenarioParams = {
   readonly divYield: number;
 };
 
+/** GEX key levels feeding the scenario strip (D-06). Any may be absent (null). */
+export type ScenarioStripLevels = {
+  readonly putWall: number | null;
+  readonly flip: number | null;
+  readonly callWall: number | null;
+};
+
+/** The bounded, deduped, sorted key-level set for the T+0/@exp scenario strip (D-06/D-07). */
+export type ScenarioStrip = {
+  /** Strike levels, ascending, capped at SCENARIO_STRIP_MAX_LEVELS. */
+  readonly levels: ReadonlyArray<number>;
+  /** The @exp column header label (e.g. "Nov 20") — the book's front expiry (D-07). */
+  readonly expiryLabel: string;
+};
+
 /** Roll configuration for the roll overlay */
 export type RollConfig = {
   /** Extra days added to the front leg's DTE (0, 7, 14, or 21) */
@@ -132,6 +147,12 @@ const SPOT_GRID_MIN = 6900;
 const SPOT_GRID_MAX = 7900;
 const SPOT_GRID_STEPS = 170;
 const HEATMAP_DAYS = [0, 5, 10, 15, 20, 30] as const;
+
+/** Scenario-strip level cap (D-06): 4 GEX/spot levels + up to 4 position-strike columns. */
+const SCENARIO_STRIP_MAX_LEVELS = 8;
+const SCENARIO_STRIP_MAX_POSITION_STRIKES = 4;
+/** Two strikes within this tolerance (dollars) are treated as the same column. */
+const SCENARIO_STRIP_DEDUP_EPSILON = 1e-6;
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
@@ -549,4 +570,70 @@ export function buildHeatmapCells(
     }
   }
   return cells;
+}
+
+/** Two strikes closer than SCENARIO_STRIP_DEDUP_EPSILON collapse to the same column. */
+function isNearDuplicateStrike(a: number, b: number): boolean {
+  return Math.abs(a - b) < SCENARIO_STRIP_DEDUP_EPSILON;
+}
+
+/**
+ * buildScenarioStrip — the bounded T+0/@exp key-level set (D-06) and front-expiry
+ * header label (D-07).
+ *
+ * Level set, left to right conceptually (final output is sorted ascending): put wall,
+ * γ flip, spot, call wall (any GEX level may be null — omitted, never rendered as 0),
+ * plus each included position's strike. Duplicates (a position strike matching a GEX
+ * level, or two positions sharing a strike) collapse to one column. Capped at 8 total:
+ * if more than 4 unique position strikes remain after dedup, keep the 4 closest to
+ * spot and drop the rest (no overflow affordance — single-user, small-book scale).
+ *
+ * The @exp header label is the earliest front expiry across included positions,
+ * formatted short month/day (matches Market.tsx's gexAsOf convention).
+ */
+export function buildScenarioStrip(
+  levels: ScenarioStripLevels,
+  positions: ReadonlyArray<AnalyzerPosition>,
+  spot: number,
+): ScenarioStrip {
+  const baseLevels: number[] = [];
+  for (const level of [levels.putWall, levels.flip, spot, levels.callWall]) {
+    if (level === null) continue;
+    if (!baseLevels.some((existing) => isNearDuplicateStrike(existing, level))) {
+      baseLevels.push(level);
+    }
+  }
+
+  const includedPositions = positions.filter((pos) => pos.included);
+  const positionStrikes: number[] = [];
+  for (const pos of includedPositions) {
+    const strike = extractStrike(pos);
+    const isDuplicate =
+      baseLevels.some((existing) => isNearDuplicateStrike(existing, strike)) ||
+      positionStrikes.some((existing) => isNearDuplicateStrike(existing, strike));
+    if (!isDuplicate) positionStrikes.push(strike);
+  }
+
+  const keptPositionStrikes =
+    positionStrikes.length > SCENARIO_STRIP_MAX_POSITION_STRIKES
+      ? [...positionStrikes]
+          .sort((a, b) => Math.abs(a - spot) - Math.abs(b - spot))
+          .slice(0, SCENARIO_STRIP_MAX_POSITION_STRIKES)
+      : positionStrikes;
+
+  const mergedLevels = [...baseLevels, ...keptPositionStrikes]
+    .sort((a, b) => a - b)
+    .slice(0, SCENARIO_STRIP_MAX_LEVELS);
+
+  const frontDtes = includedPositions.map((pos) => pos.frontDte);
+  const minFrontDte = frontDtes.length > 0 ? Math.min(...frontDtes) : null;
+  const expiryLabel =
+    minFrontDte === null
+      ? ""
+      : new Date(Date.now() + minFrontDte * 24 * 60 * 60 * 1000).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+        });
+
+  return { levels: mergedLevels, expiryLabel };
 }
