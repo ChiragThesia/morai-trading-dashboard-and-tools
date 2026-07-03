@@ -6,14 +6,14 @@ current_phase: 16
 current_phase_name: Deploy Phase-15 Image
 status: executing
 stopped_at: Phase 16 planned (3 plans, 3 waves)
-last_updated: "2026-07-03T19:14:44.114Z"
+last_updated: "2026-07-03T20:03:07.769Z"
 last_activity: 2026-07-03
 last_activity_desc: Phase 16 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 16 (Deploy Phase-15 Image) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-03 — Phase 16 execution started
 
@@ -173,6 +173,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 15-re-auth-smoothing P05 | 8min | 1 tasks | 2 files |
 | Phase 15-re-auth-smoothing P02 | 25min | 3 tasks | 4 files |
 | Phase 16 P16-01 | 14 | 3 tasks | 1 files |
+| Phase 16 P16-02 | 20 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -195,6 +196,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 `.planning/research/calendar-selection-criteria.md`.
 
 - [Phase ?]: Phase 16: NEVER run 'railway domain' against the sidecar — it creates-on-first-use even with --service (re-broke GW-05 during 16-01 verify); verify sidecar domain state via Railway dashboard/GraphQL only
+- [Phase ?]: Phase 16: railway up gives commitHash null — prove deploy identity by createdAt timestamp correlation, not git sha (Pitfall 1)
+- [Phase ?]: Phase 16: worker liveness judged by CRON jobs firing post-deploy; chain-triggered/on-demand/retired jobs staying idle is expected baseline, not a regression
 
 ### Pending Todos
 
@@ -239,7 +242,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T19:14:17.628Z
+Last session: 2026-07-03T20:02:54.306Z
 Stopped at: Phase 16 context gathered
 Resume file: .planning/phases/16-deploy-phase-15-image/16-CONTEXT.md
 
