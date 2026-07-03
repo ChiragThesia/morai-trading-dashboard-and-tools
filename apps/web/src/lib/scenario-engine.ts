@@ -50,6 +50,14 @@ export type AnalyzerPosition = {
   readonly qty: number;
   /** Whether this position is included in the combined book */
   readonly included: boolean;
+  /**
+   * Front-leg IV convergence status (Pitfall 1 / D-02). Optional — callers that
+   * haven't wired the calibration result yet (e.g. existing Analyzer construction
+   * sites) omit it, which is treated as "ok" (pre-change behavior).
+   */
+  readonly frontIvStatus?: "ok" | "non-convergent";
+  /** Back-leg IV convergence status (Pitfall 1 / D-02). Same default-"ok" contract. */
+  readonly backIvStatus?: "ok" | "non-convergent";
 };
 
 /** Scenario slider values */
@@ -197,6 +205,43 @@ function extractStrike(pos: AnalyzerPosition): number {
 }
 
 /**
+ * Leg-level IV non-convergence exclusion (Pitfall 1 / D-02).
+ *
+ * The system's instrument is always a two-leg calendar, so "non-convergent" must be
+ * tracked and excluded per leg, not per position:
+ *   - Front leg non-convergent → the T+0 curve is unsafe (needs the front leg's live
+ *     IV to price its remaining time value), but @exp is still safe (at the position's
+ *     own front expiry the front leg is intrinsic — bsmPrice's T<=0 branch needs no IV).
+ *   - Back leg non-convergent → BOTH curves are unsafe. Even at T+0 the net price needs
+ *     the back leg's IV; at @exp the back leg still has real remaining time value
+ *     (backT = max((backDte - frontDte)/365, 1e-6)), so its IV is needed there too.
+ */
+function isIvExcludedFromT0(pos: AnalyzerPosition): boolean {
+  return pos.frontIvStatus === "non-convergent" || pos.backIvStatus === "non-convergent";
+}
+
+function includedForT0(pos: AnalyzerPosition): boolean {
+  return pos.included && !isIvExcludedFromT0(pos);
+}
+
+function includedForExpiry(pos: AnalyzerPosition): boolean {
+  return pos.included && pos.backIvStatus !== "non-convergent";
+}
+
+/**
+ * The positions the T+0 aggregate drops due to IV non-convergence (front or back leg),
+ * so the UI can self-flag "T+0 excludes {n} position(s): IV n/a" (D-02).
+ * Does NOT count positions excluded via the user's own `included: false` toggle —
+ * only IV-driven exclusions.
+ */
+export function t0ExcludedPositions(
+  positions: ReadonlyArray<AnalyzerPosition>,
+): { readonly count: number; readonly ids: ReadonlyArray<string> } {
+  const ids = positions.filter((pos) => pos.included && isIvExcludedFromT0(pos)).map((pos) => pos.id);
+  return { count: ids.length, ids };
+}
+
+/**
  * Combined book P&L at a given spot.
  *
  * Sums over all included positions: (posNet − entryNet) × 100 × qty
@@ -212,7 +257,7 @@ function bookPL(
 ): number {
   let total = 0;
   for (const pos of positions) {
-    if (!pos.included) continue;
+    if (!includedForT0(pos)) continue;
     const net = calendarNetPrice(pos, S, daysForward, ivShift, rate, divYield);
     const entry = entryNetPrice(pos, liveSpot, rate, divYield);
     total += (net - entry) * 100 * pos.qty;
@@ -235,7 +280,7 @@ function bookPLAtExpiry(
 ): number {
   let total = 0;
   for (const pos of positions) {
-    if (!pos.included) continue;
+    if (!includedForExpiry(pos)) continue;
     const net = calendarNetPrice(pos, S, pos.frontDte, 0, rate, divYield);
     const entry = entryNetPrice(pos, liveSpot, rate, divYield);
     total += (net - entry) * 100 * pos.qty;
