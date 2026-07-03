@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 16
 current_phase_name: Deploy Phase-15 Image
-status: executing
+status: verifying
 stopped_at: Phase 16 planned (3 plans, 3 waves)
-last_updated: "2026-07-03T20:03:07.769Z"
+last_updated: "2026-07-03T20:15:08.348Z"
 last_activity: 2026-07-03
 last_activity_desc: Phase 16 execution started
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 20
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 16 (Deploy Phase-15 Image) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-03 — Phase 16 execution started
 
 ## Milestone v1.2 Summary
@@ -174,6 +174,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 15-re-auth-smoothing P02 | 25min | 3 tasks | 4 files |
 | Phase 16 P16-01 | 14 | 3 tasks | 1 files |
 | Phase 16 P16-02 | 20 | 2 tasks | 1 files |
+| Phase 16 P16-03 | 12 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -242,7 +243,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T20:02:54.306Z
+Last session: 2026-07-03T20:14:56.784Z
 Stopped at: Phase 16 context gathered
 Resume file: .planning/phases/16-deploy-phase-15-image/16-CONTEXT.md
 

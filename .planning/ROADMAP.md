@@ -43,7 +43,7 @@ Full phase details for both shipped milestones: [milestones/v1.1-ROADMAP.md](mil
 **Milestone Goal:** Ship the redesigned dashboard (Overview + Analyzer) to prod first, then power
 the picker with the real scoring engine, while clearing v1.1 operational debt.
 
-- [ ] **Phase 16: Deploy Phase-15 Image** - Prod runs server+worker+web on the already-merged
+- [x] **Phase 16: Deploy Phase-15 Image** - Prod runs server+worker+web on the already-merged (completed 2026-07-03)
   phase-15 code before the ~2026-07-09 re-auth window
 
 - [ ] **Phase 17: Overview v2 Redesign + IV Calibration Fix** - Payoff-centered "TOS dock"
@@ -77,7 +77,7 @@ current (not stale) prod baseline to build on.
 
   3. Existing live-stream, journal, COT, and FRED functionality shows no regression post-deploy.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 **Wave 1**
 
 - [x] 16-01-PLAN.md — Security remediation (remove accidental sidecar public domain, GW-05) + pre-deploy ground truth (baseline, migration parity, tree/test sanity)
@@ -88,7 +88,7 @@ current (not stale) prod baseline to build on.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 16-03-PLAN.md — Regression smoke checklist (D-04) + T-24h alert-surface checkpoint 1 (D-02); records deferred ~07-08 + RTH follow-ups
+- [x] 16-03-PLAN.md — Regression smoke checklist (D-04) + T-24h alert-surface checkpoint 1 (D-02); records deferred ~07-08 + RTH follow-ups
 
 ### Phase 17: Overview v2 Redesign + IV Calibration Fix
 
@@ -209,7 +209,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 13. COT Adapter | v1.1 | 6/6 | Complete | 2026-06-29 |
 | 14. FRED Expansion | v1.1 | 7/7 | Complete | 2026-07-02 |
 | 15. Re-Auth Smoothing | v1.1 | 5/5 | Complete | 2026-07-02 |
-| 16. Deploy Phase-15 Image | v1.2 | 2/3 | In Progress|  |
+| 16. Deploy Phase-15 Image | v1.2 | 3/3 | Complete   | 2026-07-03 |
 | 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 0/TBD | Not started | - |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 0/TBD | Not started | - |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |

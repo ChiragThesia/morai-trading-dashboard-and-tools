@@ -13,7 +13,7 @@ tail.
 
 ### Deploy
 
-- [ ] **DEPLOY-04**: Prod runs the phase-15 image on server, worker, and web; the T-24h
+- [x] **DEPLOY-04**: Prod runs the phase-15 image on server, worker, and web; the T-24h
   re-auth alert surface (amber banner, warn log, `refreshExpiresIn` on both status surfaces)
   is verifiably live before the ~2026-07-09 re-auth window
 
@@ -24,6 +24,7 @@ tail.
   spot / call wall / strikes), positions table docked below the graph, GEX rail right
   (gamma profile, GEX bars, level bar, net book greeks), pill header (SPX · netγ+regime ·
   flip · VIX · VVIX · DFF · 10y2y · COT · book P&L)
+
 - [ ] **OVW-02**: Payoff T+0 curve uses per-position IV calibrated to the live mark
   (bisection via the core IV-inversion module, tagged non-convergence result — never a flat
   DEFAULT_IV guess); stale GEX displays its snapshot timestamp
@@ -33,8 +34,10 @@ tail.
 - [ ] **ANLZ-01**: User sees a ranked candidate-cards rail with per-criterion score-breakdown
   bars, rendered from contract-typed fixtures until the engine lands (contract-first:
   `packages/contracts` picker schema defined in this phase)
+
 - [ ] **ANLZ-02**: User can overlay a candidate on the payoff center (⊕ compare) with
   expected-move band and scenario strip
+
 - [ ] **ANLZ-03**: User sees a why-panel per candidate: term structure with leg dots +
   forward-vol bracket + event markers, and an entry/exit plan card (+25% / −17.5% defaults)
 
@@ -47,8 +50,10 @@ tail.
   close-by-front-expiry, exit defaults); REFUTED criteria (IV-rank gates, −1..−3% IV-diff band,
   debit-%-of-back band) are absent; FwdIV radicand<0 returns a tagged guard result; the scoring
   contract carries `observedAt`/`source` staleness fields
+
 - [ ] **PICK-02**: User can query scored candidates via HTTP route + MCP tool; the Analyzer UI
   swaps fixtures for real data; chain-snapshot staleness ("as of") is visible on every surface
+
 - [ ] **PICK-03**: Economic-events context provides FOMC/CPI/NFP dates (FRED `releases/dates`
   for CPI/NFP + static hand-refreshed FOMC seed), stored with IANA timezone, refreshed by cron;
   per-leg event-window flags feed scoring and ride in the candidates payload (internal-only —
@@ -79,6 +84,7 @@ Deferred to a later milestone. Tracked but not in the current roadmap.
 
 - **PICK-04**: Term-slope signal backtest over `leg_observations` (validate Vasquez
   cross-sectional finding on SPX time-series)
+
 - **PICK-05**: Event-premium weighting by surprise magnitude (open question in research)
 
 ### Strategy Rules
@@ -105,7 +111,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEPLOY-04 | Phase 16 | Pending |
+| DEPLOY-04 | Phase 16 | Complete |
 | OVW-01 | Phase 17 | Pending |
 | OVW-02 | Phase 17 | Pending |
 | ANLZ-01 | Phase 18 | Pending |
@@ -119,6 +125,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RULE-01 | Phase 20 | Pending |
 
 **Coverage:**
+
 - v1.2 requirements: 12 total
 - Mapped to phases: 12/12 ✓
 - Unmapped: 0
