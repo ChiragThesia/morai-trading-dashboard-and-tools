@@ -33,15 +33,29 @@ Streaming (Phases 10–15, 2026-07-02). See `.planning/MILESTONES.md`.
 until deploy; next re-auth window ~2026-07-09); no silent-stall watchdog on the live stream;
 `apps/web` has no typecheck gate in CI (4 pre-existing tsc failures).
 
-## Next Milestone Goals (candidates — define via /gsd-new-milestone)
+## Current Milestone: v1.2 Trade Picker & Dashboard Redesign
 
-- **v1.2 Trade Picker / UI redesign** (researched 2026-07-02): calendar-candidate scoring
-  (`scoreCalendarCandidates` per `.planning/research/calendar-selection-criteria.md`, 8 criteria),
-  events adapter, API routes + web screen; Overview redesign variant B (payoff-center grid);
-  Analyzer calendar-picker redesign. Mockups in `mockups/`.
-- Deploy the phase-15 image (server+worker+web) — closes the largest v1.1 debt item.
-- Backlog candidates: strategy-rules engine (L4), event-triggered supplemental snapshot,
-  live-stream stall watchdog.
+**Goal:** Ship the redesigned dashboard (Overview + Analyzer) to prod first, then power the
+picker with the real scoring engine — while clearing v1.1 operational debt.
+
+**Target features (build order):**
+1. Phase-15 image deploy (server+worker+web) — re-auth window ~2026-07-09
+2. Overview v2 redesign (variant B "TOS dock") + scenario-engine IV calibration fix — live on
+   prod before picker work starts
+3. Analyzer → picker redesign (playground-v4 variant B, ranked-cards rail) against
+   candidate-contract fixtures/stubs (contract-first; engine fills it later)
+4. Picker engine: `scoreCalendarCandidates` (8 verified criteria per
+   `.planning/research/calendar-selection-criteria.md`) + NEW economic-events adapter
+   (FOMC/CPI/NFP) + API/MCP routes — wires real data into the picker UI
+5. Tail: live-stream stall watchdog · event-triggered supplemental snapshot ·
+   strategy-rules engine (L4: record enter/exit/roll rules + which rule fired; attach point
+   `entry_thesis`, D-07)
+
+**Key context:** research + mockups already decided (`calendar-selection-criteria.md`,
+`mockups/playground-v4.html`, `mockups/overview-v2.html`). REFUTED criteria (IV-rank gates,
+−1..−3% IV-diff band, debit-%-of-back band) must NOT be encoded. Open discuss-phase decisions:
+DTE range as user filter (live book 141-DTE ≠ stated 21–30 rule), strike enumeration by delta
+target.
 
 ## Requirements
 
@@ -71,7 +85,9 @@ until deploy; next re-auth window ~2026-07-09); no silent-stall watchdog on the 
 
 ### Active
 
-*(Empty — next milestone defines its requirements via `/gsd-new-milestone`.)*
+v1.2 scope — REQ-IDs defined in `.planning/REQUIREMENTS.md`: phase-15 deploy, Overview v2
+redesign + IV calibration fix, Analyzer picker redesign, picker engine + events adapter,
+stall watchdog, event-triggered snapshot, strategy-rules engine (L4).
 
 ### Out of Scope
 
@@ -153,4 +169,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 after v1.1 milestone*
+*Last updated: 2026-07-03 — v1.2 milestone start*

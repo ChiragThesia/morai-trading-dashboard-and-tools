@@ -1,37 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: — Real-Time Schwab Streaming
-current_phase: 15
-status: Awaiting next milestone
-stopped_at: Milestone v1.1 archived
-last_updated: "2026-07-02T22:04:49.089Z"
-last_activity: 2026-07-02
-last_activity_desc: Milestone v1.1 completed and archived
+milestone: v1.2
+milestone_name: Trade Picker & Dashboard Redesign
+status: planning
+last_updated: "2026-07-03T17:02:11.110Z"
+last_activity: 2026-07-03
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 33
-  completed_plans: 33
-  percent: 100
-current_phase_name: re-auth-smoothing
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-02)
+See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Planning next milestone (v1.2 — run /gsd-new-milestone)
+**Current focus:** v1.2 Trade Picker & Dashboard Redesign — defining requirements
 
 ## Current Position
 
-Phase: Milestone v1.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-02 — Milestone v1.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-03 — Milestone v1.2 started
 
 ## Milestone v1.1 Summary
 
