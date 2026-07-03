@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
-current_phase: 16
-current_phase_name: Deploy Phase-15 Image
+current_phase: 17
+current_phase_name: Overview v2 Redesign + IV Calibration Fix
 status: verifying
-stopped_at: Phase 16 planned (3 plans, 3 waves)
-last_updated: "2026-07-03T20:15:08.348Z"
+stopped_at: Phase 16 context gathered
+last_updated: "2026-07-03T20:21:18.635Z"
 last_activity: 2026-07-03
-last_activity_desc: Phase 16 execution started
+last_activity_desc: Phase 16 complete, transitioned to Phase 17
 progress:
   total_phases: 5
   completed_phases: 1
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 16 (Deploy Phase-15 Image) — EXECUTING
-Plan: 3 of 3
+Phase: 17 — Overview v2 Redesign + IV Calibration Fix
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-03 — Phase 16 execution started
+Last activity: 2026-07-03 — Phase 16 complete, transitioned to Phase 17
 
 ## Milestone v1.2 Summary
 
@@ -91,6 +91,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 13 | 6 | - | - |
 | 14 | 7 | - | - |
 | 15 | 5 | - | - |
+| 16 | 3 | - | - |
 
 **Recent Trend:**
 
