@@ -19,7 +19,7 @@ tail.
 
 ### Overview Redesign
 
-- [ ] **OVW-01**: User sees a payoff-centered Overview (variant B "TOS dock"): full-width
+- [x] **OVW-01**: User sees a payoff-centered Overview (variant B "TOS dock"): full-width
   payoff hero with breakevens + T+0/@exp scenario strip at key levels (put wall / flip /
   spot / call wall / strikes), positions table docked below the graph, GEX rail right
   (gamma profile, GEX bars, level bar, net book greeks), pill header (SPX · netγ+regime ·
@@ -112,7 +112,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DEPLOY-04 | Phase 16 | Complete |
-| OVW-01 | Phase 17 | Pending |
+| OVW-01 | Phase 17 | Complete |
 | OVW-02 | Phase 17 | Complete |
 | ANLZ-01 | Phase 18 | Pending |
 | ANLZ-02 | Phase 18 | Pending |

@@ -112,7 +112,7 @@ calibrated to each position's live-mark IV instead of a flat default guess.
 
   4. Stale GEX data displays its snapshot timestamp so the user can tell it apart from live data.
 
-**Plans**: 1/4 plans executed
+**Plans**: 2/4 plans executed
 **UI hint**: yes
 
 **Wave 1** *(parallel — no file overlap)*
@@ -120,7 +120,7 @@ calibrated to each position's live-mark IV instead of a flat default guess.
 - [x] 17-01-PLAN.md — IV calibration module: `resolveLegIv` thin caller over the frozen `invertIv`
   (tagged non-convergence, REST-fallback price guard, cold-start ≠ non-conv) + BSM parity smoke test (OVW-02)
 
-- [ ] 17-02-PLAN.md — Scenario-engine: leg-level (front vs back) non-convergence exclusion +
+- [x] 17-02-PLAN.md — Scenario-engine: leg-level (front vs back) non-convergence exclusion +
   bounded scenario-strip key-level set with front-expiry header (OVW-01, OVW-02)
 
 - [ ] 17-03-PLAN.md — PayoffChart dual-curve highlight mode (dim net-book to 0.3, emphasize one
@@ -226,7 +226,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 14. FRED Expansion | v1.1 | 7/7 | Complete | 2026-07-02 |
 | 15. Re-Auth Smoothing | v1.1 | 5/5 | Complete | 2026-07-02 |
 | 16. Deploy Phase-15 Image | v1.2 | 3/3 | Complete    | 2026-07-03 |
-| 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 1/4 | In Progress|  |
+| 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 2/4 | In Progress|  |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 0/TBD | Not started | - |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |
 | 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |

@@ -6,14 +6,14 @@ current_phase: 17
 current_phase_name: overview-v2-redesign-iv-calibration-fix
 status: executing
 stopped_at: Phase 17 UI-SPEC approved
-last_updated: "2026-07-03T22:11:21.099Z"
+last_updated: "2026-07-03T22:22:48.314Z"
 last_activity: 2026-07-03
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
   percent: 20
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 17 (overview-v2-redesign-iv-calibration-fix) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-07-03 — Phase 17 execution started
 
@@ -177,6 +177,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 16 P16-02 | 20 | 2 tasks | 1 files |
 | Phase 16 P16-03 | 12 | 2 tasks | 1 files |
 | Phase 17-overview-v2-redesign-iv-calibration-fix P01 | 10min | 2 tasks | 5 files |
+| Phase 17-overview-v2-redesign-iv-calibration-fix P02 | 15min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -203,6 +204,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: Phase 16: worker liveness judged by CRON jobs firing post-deploy; chain-triggered/on-demand/retired jobs staying idle is expected baseline, not a regression
 - [Phase ?]: Phase 17-01: apps/web now depends on @morai/core (package.json + tsconfig + vitest alias) to import the frozen invertIv solver from its package root per D-01 — core is hexagon-pure so this is browser-bundle-safe
 - [Phase ?]: Phase 17-01: OQ1 resolved — packages/core/.../bsm.ts is a re-export shim of @morai/quant's bsmPrice; the two BSM 'engines' are the same function, no reconciliation needed
+- [Phase 17-02]: frontIvStatus/backIvStatus made OPTIONAL on AnalyzerPosition (default 'ok') so Analyzer.tsx's 3 existing construction sites (owned by Plan 04) don't need out-of-scope edits in this plan
+- [Phase 17-02]: bookPL excludes on EITHER frontIvStatus OR backIvStatus non-convergence (not just front) via a shared includedForT0 predicate — required by the plan's own behavior spec and T-17-03 threat mitigation, not just the action text's front-only shorthand
+- [Phase 17-02]: 'each position's short/long strikes' (D-06) collapses to ONE strike per position in buildScenarioStrip — calendarNetPrice prices both calendar legs at the same extractStrike(pos) value; no separate front-strike field exists today
 
 ### Pending Todos
 
@@ -247,7 +251,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T22:11:16.226Z
+Last session: 2026-07-03T22:21:16.929Z
 Stopped at: Phase 17 UI-SPEC approved
 Resume file: .planning/phases/17-overview-v2-redesign-iv-calibration-fix/17-UI-SPEC.md
 
