@@ -13,6 +13,9 @@
  *      from non-convergence (Pitfall 2).
  *   5. netQty === 0 REST fallback — err({kind:"no-price"}), never NaN/Infinity (Pitfall 3).
  *   6. Expired leg (T <= 0) — err({kind:"expired"}).
+ *   7. BSM cross-engine parity smoke test (Pitfall 5 / Open Question 1) — a liquid
+ *      invertIv-recovered sigma reprices through @morai/quant's bsmPrice within
+ *      BSM_PARITY_TOLERANCE of the original mark.
  */
 
 import { describe, it, expect } from "vitest";
@@ -20,7 +23,7 @@ import fc from "fast-check";
 import { invertIv } from "@morai/core";
 import { bsmPrice } from "@morai/quant";
 import { parseOccSymbol, formatOccSymbol } from "@morai/shared";
-import { resolveLegIv } from "./iv-calibration.ts";
+import { resolveLegIv, BSM_PARITY_TOLERANCE } from "./iv-calibration.ts";
 
 // ─────────────────────────────────────────────────────────────
 // Constants (mirror packages/core/src/journal/domain/iv-inversion.test.ts)
@@ -166,5 +169,38 @@ describe("resolveLegIv — expired leg", () => {
     if (!result.ok) {
       expect(result.error.kind).toBe("expired");
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// 7. BSM cross-engine parity smoke test (Pitfall 5 / Open Question 1)
+// ─────────────────────────────────────────────────────────────
+describe("resolveLegIv — BSM cross-engine parity smoke test (OQ1)", () => {
+  it("an invertIv-recovered sigma reprices via @morai/quant bsmPrice within BSM_PARITY_TOLERANCE of the mark", () => {
+    // Liquid, well-conditioned ATM SPX-like tuple: ~45 DTE, sigma 0.18.
+    const S = 7550;
+    const K = 7550;
+    const sigma = 0.18;
+    const expiry = new Date(NOW.getTime() + (45 / 365.25) * MS_PER_YEAR);
+    const occSymbol = buildOcc(K, expiry, "C");
+
+    const parsed = parseOccSymbol(occSymbol);
+    if (!parsed.ok) throw new Error("test setup: OCC symbol failed to parse");
+    const { strike, expiry: parsedExpiry } = parsed.value;
+    const T = (parsedExpiry.getTime() - NOW.getTime()) / MS_PER_YEAR;
+
+    // invertIv's own solver uses core-internal bsmPrice (packages/core/.../bsm.ts) —
+    // resolveLegIv is the wrapper under test; feed it the exact mark via REST fallback.
+    const mark = bsmPrice(S, strike, T, sigma, R, Q, "C");
+    const resolved = resolveLegIv(occSymbol, S, R, Q, null, mark * 100, 1, NOW);
+
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+
+    // Re-price the recovered sigma through @morai/quant's bsmPrice — "the other engine"
+    // per RESEARCH.md Pitfall 5 (scenario-engine.ts's display-payoff BSM).
+    const repriced = bsmPrice(S, strike, T, resolved.value, R, Q, "C");
+
+    expect(Math.abs(repriced - mark)).toBeLessThanOrEqual(BSM_PARITY_TOLERANCE);
   });
 });
