@@ -1,10 +1,11 @@
 /**
- * Overview screen tests — the 3-section dashboard:
- *   1. Open positions table (+ net greeks + live overlay), 2. Market (live GEX + COT/FRED stubs),
- *   3. Book & system summary.
- * Market is mocked to a sentinel (its charts pull heavy deps); data hooks are mocked.
+ * Overview screen tests — TOS-dock layout (Phase 17 redesign):
+ *   1. Pill header, 2. payoff hero + docked positions table (left) / GEX rail (right),
+ *   3. Positioning & macro detail (CotCard + MacroCard), 4. Book & system.
+ * Data hooks are mocked; GEX rail uses a full GexSnapshotEntry fixture (GAMMAProfile/GexBars
+ * need profile/strikes/computedAt, not just spot).
  *
- * Phase 12-07 additions (gap-closure STRM-01 + D-04):
+ * Phase 12-07 additions (gap-closure STRM-01 + D-04), preserved through the 17-04 rewrite:
  *   - useLiveStream mock placed before Overview import (vitest hoists all vi.mock calls)
  *   - LiveStatusBadge renders POLL by default; LIVE/STALE when stream active
  *   - .live-cell class applied to greek cells when liveTs is not null (STRM-01)
@@ -30,12 +31,33 @@ vi.mock("../hooks/useLiveStream.ts", () => ({
   },
 }));
 
+// Full GexSnapshotEntry fixture — 17-04's GEX rail (GammaProfile/GexBars/key levels/staleness
+// badge) reads profile/strikes/computedAt/callWall/putWall/flip, not just spot.
+const GEX_FIXTURE = {
+  spot: 7381.12,
+  flip: 7350,
+  callWall: 7450,
+  putWall: 7300,
+  netGammaAtSpot: 12.5,
+  profile: [
+    { spot: 7300, gamma: -10 },
+    { spot: 7350, gamma: 0 },
+    { spot: 7400, gamma: 15 },
+    { spot: 7450, gamma: 20 },
+  ],
+  strikes: [
+    { k: 7300, gex: -1_000_000_000, coi: 100, poi: 200, vol: 50 },
+    { k: 7400, gex: 1_000_000_000, coi: 150, poi: 90, vol: 80 },
+  ],
+  byExpiry: [],
+  computedAt: "2026-06-29T14:00:00.000Z",
+};
+
 vi.mock("../hooks/usePositions.ts", () => ({ usePositions: vi.fn() }));
-vi.mock("../hooks/useGex.ts", () => ({ useGex: vi.fn(() => ({ data: { spot: 7381 } })) }));
+vi.mock("../hooks/useGex.ts", () => ({ useGex: vi.fn(() => ({ data: GEX_FIXTURE })) }));
 vi.mock("../hooks/useStatus.ts", () => ({ useStatus: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useCot.ts", () => ({ useCot: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useMacro.ts", () => ({ useMacro: vi.fn(() => ({ data: undefined, isPending: false })) }));
-vi.mock("./Market.tsx", () => ({ Market: (): React.ReactElement => <div data-testid="market-screen" /> }));
 
 import { Overview } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
@@ -104,11 +126,17 @@ describe("Overview screen", () => {
 
   // ── Existing tests (unchanged assertions) ─────────────────────────────────────
 
-  it("renders the three section headers", () => {
+  it("renders the TOS-dock section headers", () => {
     setPositions([]);
     render(<Overview />);
-    expect(screen.getByText("Open positions · greeks")).toBeDefined();
-    expect(screen.getByText(/Market · what the big guys are doing/)).toBeDefined();
+    expect(screen.getByText("Risk profile — combined book")).toBeDefined();
+    // "Positions" also appears as a BookSummary Stat label — assert the docked-table
+    // panel heading (an <h3>) specifically.
+    expect(screen.getByRole("heading", { name: "Positions" })).toBeDefined();
+    expect(screen.getByText("Dealer γ profile")).toBeDefined();
+    expect(screen.getByText("GEX by strike")).toBeDefined();
+    expect(screen.getByText("Key levels")).toBeDefined();
+    expect(screen.getByText("Net book greeks")).toBeDefined();
     expect(screen.getByText("Book & system")).toBeDefined();
   });
 
@@ -123,10 +151,10 @@ describe("Overview screen", () => {
     expect(screen.getByTestId("macro-empty")).toBeDefined();
   });
 
-  it("embeds the live Market (GEX/OI/Volume) section", () => {
+  it("renders the payoff hero risk profile chart (visx SVG) for the combined book", () => {
     setPositions([]);
-    render(<Overview />);
-    expect(screen.getByTestId("market-screen")).toBeDefined();
+    const { container } = render(<Overview />);
+    expect(container.querySelector('svg[aria-label="Risk profile payoff chart"]')).not.toBeNull();
   });
 
   it("renders the positions table with a row per position", () => {

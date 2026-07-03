@@ -1,36 +1,50 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { usePositions } from "../hooks/usePositions.ts";
 import { useGex } from "../hooks/useGex.ts";
 import { useStatus } from "../hooks/useStatus.ts";
+import { useCot } from "../hooks/useCot.ts";
+import { useMacro } from "../hooks/useMacro.ts";
 import { useLiveStream } from "../hooks/useLiveStream.ts";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { computePositionGreeks } from "../lib/position-greeks.ts";
 import { resolveLivePositionRow } from "../lib/live-position-greeks.ts";
-import { pairPositionsIntoCalendars } from "../lib/pair-calendars.ts";
+import { pairPositionsIntoCalendars, bookUnrealizedPnl } from "../lib/pair-calendars.ts";
 import { parseOccSymbol } from "@morai/shared";
-import { Market } from "./Market.tsx";
+import { classifyRegime } from "../lib/gex-regime.ts";
+import { repriceScenario } from "../lib/scenario-engine.ts";
+import type { AnalyzerPosition, ScenarioParams } from "../lib/scenario-engine.ts";
+import { PayoffChart } from "../components/charts/PayoffChart.tsx";
+import { GammaProfile } from "../components/charts/GammaProfile.tsx";
+import { GexBars } from "../components/charts/GexBars.tsx";
 import { CotCard } from "../components/CotCard.tsx";
 import { MacroCard } from "../components/MacroCard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
-import { Panel, SectionLabel, Stat } from "../components/system/index.tsx";
+import { Panel, PanelHeading, SectionLabel, Stat, MetricChip } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
-import type { BrokerPositionResponse } from "@morai/contracts";
+import type { BrokerPositionResponse, GexSnapshotEntry, MacroResponse, MacroSeriesId } from "@morai/contracts";
 import type { StreamLiveGreekEvent } from "@morai/contracts";
 
 /**
- * Overview — the home dashboard, three sections (UI directive 2026-06-28):
- *   1. Open positions — a TOS-style table of every position + net greeks.
- *      Phase 12-07: live SSE overlay (STRM-01) + LiveStatusBadge (D-04, Surface 3).
- *   2. Market — dealer positioning (live GEX/OI/Volume) + live CFTC COT (Phase 13)
- *      + live FRED macro (Phase 14, D-12).
- *   3. Book & system — larger, easy-to-read summary boxes.
+ * Overview — the home dashboard, TOS-dock layout (Phase 17 redesign, OVW-01/OVW-02):
+ *   1. Pill header — SPX spot, net γ/1% + regime, γ flip, VIX, VVIX, Fed funds, 10y−2y,
+ *      COT lev, book P&L.
+ *   2. Two-column body: left = payoff hero ("Risk profile — combined book") + docked
+ *      positions table; right = 320px GEX rail (dealer γ profile, GEX by strike,
+ *      key levels, net book greeks).
+ *   3. Positioning & macro detail row (CotCard + MacroCard, unchanged).
+ *   4. Book & system row (BookSummary + SystemHealth, unchanged).
  *
- * Greeks use the BSM engine at a flat DEFAULT_IV (no per-contract chain IV here) — the
- * same approximation the Positions deep-dive uses. Live spot comes from the GEX snapshot.
+ * The payoff hero uses `repriceScenario` over calendar positions built from
+ * `pairPositionsIntoCalendars`. Task 17-04/2 replaces the placeholder flat IV below
+ * with per-leg calibrated IV via `resolveLegIv` (OVW-02) — do not read this DEFAULT_IV
+ * as final; it is superseded by the calibration wiring in the same plan.
+ *
+ * `netGreeksForLegs`/`BookSummary` stay on flat DEFAULT_IV permanently (OQ2 deferral,
+ * recorded in 17-04-SUMMARY.md) — that path is NOT the payoff-hero calibration path.
  *
  * D-06 constraint: exactly one live-stream consumer on this surface. useLiveStream()
- * is called here and threaded into PositionsTable — NOT into BookSummary or any other
- * section. AdHocPicker / SC6 stays on Analyzer (already wired + functional).
+ * is called here and threaded into the payoff hero + docked positions table — NOT into
+ * BookSummary or any other section. AdHocPicker / SC6 stays on Analyzer.
  */
 
 const DEFAULT_IV = 0.18;
@@ -40,7 +54,8 @@ const DEFAULT_DIV = 0.013;
 type NetGreeks = { delta: number; gamma: number; theta: number; vega: number };
 
 /** Sum position greeks across legs, scaled to position terms (per-share × netQty × 100).
- *  Used for the static BookSummary section — NOT for the live-overlaid PositionsTable. */
+ *  Used for the static BookSummary section AND the GEX rail's Net book greeks tile —
+ *  NOT for the calibrated payoff-hero curve (OQ2 deferral). */
 function netGreeksForLegs(
   legs: ReadonlyArray<BrokerPositionResponse>,
   spot: number,
@@ -106,7 +121,7 @@ function signClass(v: number): string {
   return v >= 0 ? "text-up" : "text-down";
 }
 
-// ─── Section 1: positions table ───────────────────────────────────────────────
+// ─── Positions table (docked, TOS-style) ──────────────────────────────────────
 
 type Row = {
   key: string;
@@ -137,9 +152,9 @@ function buildRows(positions: ReadonlyArray<BrokerPositionResponse>): Row[] {
 const COLS = ["Position", "DTE", "Net val", "Unreal", "Δ", "Γ", "Θ/d", "Vega"] as const;
 
 /**
- * PositionsTable — TOS-style positions table with live BSM greek overlay.
+ * PositionsTable — TOS-style docked positions table with live BSM greek overlay.
  *
- * Phase 12-07 extensions (STRM-01 / D-04 / Surface 2):
+ * Phase 12-07 extensions (STRM-01 / D-04 / Surface 2, kept unmodified — Pitfall 6):
  *   - resolveLivePositionRow overlays live SSE ticks per row + Net total.
  *   - .live-cell applied to live-sourced cells (Net val, Unreal, Δ, Γ, Θ/d, Vega).
  *   - .live-cell.stale applied when status is 'stale'/'reconnecting' (color dim, not opacity).
@@ -341,7 +356,7 @@ function PositionsTable({
   );
 }
 
-// ─── Section 3: book summary ──────────────────────────────────────────────────
+// ─── Book summary (unchanged — OQ2: stays on flat DEFAULT_IV) ────────────────
 
 function BookSummary({
   positions,
@@ -393,16 +408,161 @@ function SystemHealth(): React.ReactElement {
   );
 }
 
+// ─── GEX rail (320px, right column) ───────────────────────────────────────────
+
+function keyLevelsFor(
+  gex: GexSnapshotEntry,
+): ReadonlyArray<{ label: string; value: number | null; colorClass: string }> {
+  return [
+    { label: "Call Wall", value: gex.callWall, colorClass: "text-up" },
+    { label: "γ flip", value: gex.flip, colorClass: "text-amber" },
+    { label: "Spot", value: gex.spot, colorClass: "text-blue" },
+    { label: "Put Wall", value: gex.putWall, colorClass: "text-down" },
+  ];
+}
+
+function GexRail({
+  gex,
+  railGreeks,
+}: {
+  gex: GexSnapshotEntry | undefined;
+  railGreeks: NetGreeks;
+}): React.ReactElement {
+  if (gex === undefined) {
+    return (
+      <Panel className="p-8 text-center font-mono text-xs text-dim" data-testid="gex-rail-empty">
+        GEX data unavailable — run fetch-chain to populate.
+      </Panel>
+    );
+  }
+
+  return (
+    <>
+      <Panel>
+        <PanelHeading title="Dealer γ profile" />
+        <GammaProfile profile={gex.profile} spot={gex.spot} flip={gex.flip} compact />
+      </Panel>
+      <Panel>
+        <PanelHeading title="GEX by strike" />
+        <GexBars
+          mode="gex"
+          strikes={gex.strikes}
+          spot={gex.spot}
+          callWall={gex.callWall}
+          putWall={gex.putWall}
+          height={200}
+          range={10}
+        />
+      </Panel>
+      <Panel>
+        <PanelHeading title="Key levels" />
+        <div className="flex flex-col gap-1.5">
+          {keyLevelsFor(gex).map((lvl) => (
+            <div
+              key={lvl.label}
+              className="flex items-center justify-between gap-2 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+            >
+              <span className={cn(lvl.colorClass, "font-display font-semibold tracking-[0.09em] uppercase")}>
+                {lvl.label}
+              </span>
+              <span className="text-txt">{lvl.value !== null ? lvl.value.toFixed(0) : "—"}</span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel>
+        <PanelHeading title="Net book greeks" />
+        <div className="grid grid-cols-2 gap-2">
+          <Stat label="Net Δ" value={signed(railGreeks.delta)} valueClassName={signClass(railGreeks.delta)} />
+          <Stat label="Net Γ" value={signed(railGreeks.gamma)} />
+          <Stat label="Net Θ/d" value={signedUsd(railGreeks.theta)} valueClassName={signClass(railGreeks.theta)} />
+          <Stat label="Net Vega" value={signedUsd(railGreeks.vega)} valueClassName={signClass(railGreeks.vega)} />
+        </div>
+      </Panel>
+    </>
+  );
+}
+
+// ─── Pill header ───────────────────────────────────────────────────────────────
+
+function fmtGammaCompact(v: number): string {
+  return `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(1)}B`;
+}
+
+function latestMacroValue(data: MacroResponse | undefined, id: MacroSeriesId): number | null {
+  if (data === undefined) return null;
+  const points = data[id];
+  if (points === undefined || points.length === 0) return null;
+  const latest = points[points.length - 1];
+  return latest?.value ?? null;
+}
+
+function PillHeader({
+  gex,
+  cotLev,
+  macro,
+  bookPnl,
+}: {
+  gex: GexSnapshotEntry | undefined;
+  cotLev: number | null;
+  macro: MacroResponse | undefined;
+  bookPnl: number;
+}): React.ReactElement {
+  const regime = gex !== undefined ? classifyRegime(gex.netGammaAtSpot) : null;
+  const vix = latestMacroValue(macro, "VIXCLS");
+  const vvix = latestMacroValue(macro, "VVIX");
+  const dff = latestMacroValue(macro, "DFF");
+  const curveSlope = latestMacroValue(macro, "T10Y2Y");
+
+  return (
+    <div className="sticky top-0 z-10 -mx-3.5 flex flex-wrap items-center gap-2 border-b border-line bg-bg/90 px-3.5 py-2 backdrop-blur">
+      <MetricChip label="SPX" value={gex !== undefined ? gex.spot.toFixed(1) : "—"} valueClassName="text-blue" />
+      <MetricChip
+        label="net γ /1%"
+        value={gex !== undefined ? fmtGammaCompact(gex.netGammaAtSpot) : "—"}
+        alert={regime === "AMPLIFY"}
+        valueClassName={regime === null ? "text-muted-foreground" : regime === "AMPLIFY" ? "text-down" : "text-up"}
+      />
+      <MetricChip
+        label="γ flip"
+        value={gex !== undefined && gex.flip !== null ? gex.flip.toFixed(0) : "—"}
+        valueClassName="text-amber"
+      />
+      <MetricChip label="VIX" value={vix !== null ? vix.toFixed(2) : "—"} />
+      <MetricChip label="VVIX" value={vvix !== null ? vvix.toFixed(1) : "—"} />
+      <MetricChip label="Fed funds" value={dff !== null ? `${dff.toFixed(2)}%` : "—"} />
+      <MetricChip
+        label="10y−2y"
+        value={curveSlope !== null ? `${curveSlope >= 0 ? "+" : ""}${curveSlope.toFixed(2)}` : "—"}
+        valueClassName={curveSlope !== null ? signClass(curveSlope) : "text-muted-foreground"}
+      />
+      <MetricChip
+        label="COT lev"
+        value={cotLev !== null ? signed(cotLev, 0) : "—"}
+        valueClassName={cotLev !== null ? signClass(cotLev) : "text-muted-foreground"}
+      />
+      <MetricChip
+        label="book"
+        value={signedUsd(bookPnl, 0)}
+        valueClassName={signClass(bookPnl)}
+        className="ml-auto"
+      />
+    </div>
+  );
+}
+
 // ─── Overview ─────────────────────────────────────────────────────────────────
 
 export function Overview(): React.ReactElement {
   const { data: posData } = usePositions();
   const { data: gex } = useGex();
+  const { data: cot } = useCot();
+  const { data: macro } = useMacro();
   const positions = posData?.positions ?? [];
   const spot = gex?.spot ?? 5800;
 
   // Phase 12-07: live stream hook (D-06 — this surface only).
-  // useLiveStream() is called once here and threaded into PositionsTable.
+  // useLiveStream() is called once here and threaded into the payoff hero + docked table.
   // Overview and Analyzer never mount simultaneously (ShellWithRouter renders one screen)
   // so no second EventSource opens.
   const {
@@ -411,38 +571,134 @@ export function Overview(): React.ReactElement {
     lastTickAt: liveLastTickAt,
   } = useLiveStream();
 
+  // ── Payoff hero positions (calendars only — the scenario engine models calendar
+  // spreads; singles remain table-only rows) ──────────────────────────────────
+  const { calendars } = useMemo(
+    () => pairPositionsIntoCalendars(positions, new Date()),
+    [positions],
+  );
+
+  // NOTE: placeholder flat DEFAULT_IV — 17-04 Task 2 replaces this with per-leg
+  // calibrated IV via resolveLegIv (OVW-02). Do not extend this shape; it is
+  // superseded in the same plan, same file.
+  const calendarPositions = useMemo<ReadonlyArray<AnalyzerPosition>>(
+    () =>
+      calendars.map((cal) => ({
+        id: cal.key,
+        name: `${cal.strike}${cal.optionType}`,
+        live: true,
+        occSymbol: cal.back.occSymbol,
+        putCall: cal.optionType,
+        frontDte: cal.dteFront,
+        backDte: cal.dteBack,
+        frontIv: DEFAULT_IV,
+        backIv: DEFAULT_IV,
+        qty: Math.max(1, Math.abs(cal.back.longQty - cal.back.shortQty)),
+        included: true,
+      })),
+    [calendars],
+  );
+
+  const scenario = useMemo(() => {
+    const params: ScenarioParams = {
+      spot,
+      daysForward: 0,
+      ivShift: 0,
+      rate: DEFAULT_RATE,
+      divYield: DEFAULT_DIV,
+    };
+    return repriceScenario(calendarPositions, params);
+  }, [calendarPositions, spot]);
+
+  const positionSetSignature = calendarPositions.map((p) => p.id).join("|");
+
+  const noop = useCallback((): void => {}, []);
+
+  const railGreeks = useMemo(() => {
+    const allLegs = buildRows(positions).flatMap((r) => r.legs);
+    return netGreeksForLegs(allLegs, spot);
+  }, [positions, spot]);
+
+  const bookPnl = useMemo(() => bookUnrealizedPnl(positions), [positions]);
+  const cotLev = cot?.[0]?.netLeveraged ?? null;
+
   return (
     <div className="mx-auto flex max-w-[1480px] flex-col gap-5 p-3.5">
-      {/* ── Section 1: Open positions ── */}
-      <section>
-        {/* Surface 3 (D-04): LiveStatusBadge beside the section header — one place only. */}
-        <div className="mb-2 flex items-center gap-2">
-          <SectionLabel>Open positions · greeks</SectionLabel>
-          <LiveStatusBadge status={liveStatus} lastTickAt={liveLastTickAt} />
-        </div>
-        <Panel>
-          <PositionsTable
-            positions={positions}
-            spot={spot}
-            liveGreeks={liveGreeks}
-            liveStatus={liveStatus}
-          />
-        </Panel>
-      </section>
+      <PillHeader gex={gex} cotLev={cotLev} macro={macro} bookPnl={bookPnl} />
 
-      {/* ── Section 2: Market — positioning & macro ── */}
+      {/* ── Two-column body: payoff hero + docked table (left) / GEX rail (right) ── */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 320px" }}>
+        <div className="flex flex-col gap-3">
+          {/* Payoff hero */}
+          <Panel>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <SectionLabel>Risk profile — combined book</SectionLabel>
+              <span className="font-mono text-[10px] text-dim">view-only · Analyzer →</span>
+            </div>
+            <div className="mb-1 flex flex-wrap gap-3 font-mono text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-violet" />
+                T+0
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-muted-foreground" />
+                @ exp
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-amber" />
+                γ flip
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-up" />
+                walls
+              </span>
+            </div>
+            <PayoffChart
+              todayCurve={scenario.payoffCurve}
+              fanCurves={[]}
+              expirationCurve={scenario.expirationCurve}
+              rollCurve={null}
+              gex={gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null}
+              spot={spot}
+              toggles={{ showFan: false, showExpiration: true, showWalls: true, showProfitZone: true }}
+              fitY={false}
+              onFitYConsumed={noop}
+              positionSetSignature={positionSetSignature}
+              baseExpirationCurve={scenario.expirationCurve}
+            />
+          </Panel>
+
+          {/* Docked positions table */}
+          <Panel>
+            <div className="mb-2 flex items-center gap-2">
+              <SectionLabel>Positions</SectionLabel>
+              <LiveStatusBadge status={liveStatus} lastTickAt={liveLastTickAt} />
+            </div>
+            <PositionsTable
+              positions={positions}
+              spot={spot}
+              liveGreeks={liveGreeks}
+              liveStatus={liveStatus}
+            />
+          </Panel>
+        </div>
+
+        {/* GEX rail */}
+        <div className="flex flex-col gap-3">
+          <GexRail gex={gex} railGreeks={railGreeks} />
+        </div>
+      </div>
+
+      {/* ── Positioning & macro detail (unchanged) ── */}
       <section>
-        <SectionLabel className="mb-2">Market · what the big guys are doing & macro</SectionLabel>
-        {/* Dealer positioning — live GEX / OI wall / Volume for SPX */}
-        <Market />
-        {/* CFTC COT (Phase 13 — live) + FRED macro (Phase 14 — live) */}
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <SectionLabel className="mb-2">Positioning & macro detail</SectionLabel>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <CotCard />
           <MacroCard />
         </div>
       </section>
 
-      {/* ── Section 3: Book & system — larger, easy-to-read ── */}
+      {/* ── Book & system (unchanged) ── */}
       <section>
         <SectionLabel className="mb-2">Book & system</SectionLabel>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
