@@ -7,6 +7,7 @@
     "@base-ui/react": "^1.6.0",
     "@fontsource-variable/geist": "^5.2.9",
     "@morai/contracts": "workspace:*",
+    "@morai/core": "workspace:*",
     "@morai/quant": "workspace:*",
     "@morai/shared": "workspace:*",
     "@supabase/supabase-js": "^2.108.2",

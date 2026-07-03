@@ -17,6 +17,7 @@
   "include": ["src", "vite-env.d.ts"],
   "references": [
     { "path": "../../packages/contracts" },
+    { "path": "../../packages/core" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/quant" },
     { "path": "../server" }

@@ -14,6 +14,7 @@ export default defineConfig({
     alias: {
       "@": resolve(__dirname, "src"),
       "@morai/contracts": resolve(__dirname, "../../packages/contracts/src/index.ts"),
+      "@morai/core": resolve(__dirname, "../../packages/core/src/index.ts"),
       "@morai/quant": resolve(__dirname, "../../packages/quant/src/index.ts"),
       "@morai/shared": resolve(__dirname, "../../packages/shared/src/index.ts"),
     },
