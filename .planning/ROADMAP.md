@@ -77,10 +77,10 @@ current (not stale) prod baseline to build on.
 
   3. Existing live-stream, journal, COT, and FRED functionality shows no regression post-deploy.
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 **Wave 1**
 
-- [ ] 16-01-PLAN.md — Security remediation (remove accidental sidecar public domain, GW-05) + pre-deploy ground truth (baseline, migration parity, tree/test sanity)
+- [x] 16-01-PLAN.md — Security remediation (remove accidental sidecar public domain, GW-05) + pre-deploy ground truth (baseline, migration parity, tree/test sanity)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -209,7 +209,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 13. COT Adapter | v1.1 | 6/6 | Complete | 2026-06-29 |
 | 14. FRED Expansion | v1.1 | 7/7 | Complete | 2026-07-02 |
 | 15. Re-Auth Smoothing | v1.1 | 5/5 | Complete | 2026-07-02 |
-| 16. Deploy Phase-15 Image | v1.2 | 0/3 | Not started | - |
+| 16. Deploy Phase-15 Image | v1.2 | 1/3 | In Progress|  |
 | 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 0/TBD | Not started | - |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 0/TBD | Not started | - |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |

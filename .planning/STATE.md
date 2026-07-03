@@ -4,16 +4,16 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 16
 current_phase_name: Deploy Phase-15 Image
-status: planned
+status: executing
 stopped_at: Phase 16 planned (3 plans, 3 waves)
-last_updated: "2026-07-03T18:37:30.082Z"
+last_updated: "2026-07-03T19:14:44.114Z"
 last_activity: 2026-07-03
-last_activity_desc: Phase 16 planned (3 plans, 3 waves, verification passed)
+last_activity_desc: Phase 16 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** v1.2 Trade Picker & Dashboard Redesign — Phase 16 planned, ready to execute
+**Current focus:** Phase 16 — Deploy Phase-15 Image
 
 ## Current Position
 
-Phase: 16 of 20 (Deploy Phase-15 Image)
-Plan: 3 plans in 3 waves (16-01 → 16-02 → 16-03, sequential)
+Phase: 16 (Deploy Phase-15 Image) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-03 — Phase 16 planned (3 plans, verification passed)
+Last activity: 2026-07-03 — Phase 16 execution started
 
 ## Milestone v1.2 Summary
 
@@ -172,6 +172,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 15 P04 | 10min | 2 tasks | 3 files |
 | Phase 15-re-auth-smoothing P05 | 8min | 1 tasks | 2 files |
 | Phase 15-re-auth-smoothing P02 | 25min | 3 tasks | 4 files |
+| Phase 16 P16-01 | 14 | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -192,6 +193,8 @@ Cleared at v1.1 close — full log in PROJECT.md Key Decisions table; per-plan d
 `.planning/milestones/v1.1-ROADMAP.md` and phase SUMMARY files. v1.2 research (dependencies,
 pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 `.planning/research/calendar-selection-criteria.md`.
+
+- [Phase ?]: Phase 16: NEVER run 'railway domain' against the sidecar — it creates-on-first-use even with --service (re-broke GW-05 during 16-01 verify); verify sidecar domain state via Railway dashboard/GraphQL only
 
 ### Pending Todos
 
@@ -236,7 +239,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-03T18:06:25.177Z
+Last session: 2026-07-03T19:14:17.628Z
 Stopped at: Phase 16 context gathered
 Resume file: .planning/phases/16-deploy-phase-15-image/16-CONTEXT.md
 
