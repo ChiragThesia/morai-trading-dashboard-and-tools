@@ -245,7 +245,7 @@ decided build order)
   4. Economic-events context (FOMC/CPI/NFP dates, stored with IANA timezone, refreshed by cron)
      feeds per-leg event-window flags into scoring; no separate events HTTP/MCP surface exists —
      flags ride inside the candidates payload only.
-**Plans**: 5/9 plans executed
+**Plans**: 6/9 plans executed
 
 Plans:
 **Wave 1**
@@ -264,7 +264,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 19-06-PLAN.md — computePickerSnapshot + getPicker use-cases (D-17 degraded-context tagging)
+- [x] 19-06-PLAN.md — computePickerSnapshot + getPicker use-cases (D-17 degraded-context tagging)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -325,7 +325,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 4/4 | Complete   | 2026-07-03 |
 | 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 5/5 | Complete    | 2026-07-04 |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 5/5 | Complete    | 2026-07-04 |
-| 19. Picker Engine + Economic Events | v1.2 | 5/9 | In Progress|  |
+| 19. Picker Engine + Economic Events | v1.2 | 6/9 | In Progress|  |
 | 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |
 
 ## Backlog / Future Enhancements

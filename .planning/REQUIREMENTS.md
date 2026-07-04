@@ -57,7 +57,7 @@ tail.
 
 ### Picker Engine
 
-- [ ] **PICK-01**: `scoreCalendarCandidates` (core domain) scores put-calendar candidates over
+- [x] **PICK-01**: `scoreCalendarCandidates` (core domain) scores put-calendar candidates over
   the latest chain snapshot using the 8 verified criteria from
   `.planning/research/calendar-selection-criteria.md` (FwdIV forward-variance edge, term-slope,
   per-leg event flags with front-event penalty, net θ>0, GEX fit, debit=max-loss,
@@ -135,7 +135,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ANLZ-01 | Phase 18 | Complete |
 | ANLZ-02 | Phase 18 | Complete |
 | ANLZ-03 | Phase 18 | Complete |
-| PICK-01 | Phase 19 | Pending |
+| PICK-01 | Phase 19 | Complete |
 | PICK-02 | Phase 19 | Complete |
 | PICK-03 | Phase 19 | Pending |
 | WATCH-01 | Phase 20 | Pending |
