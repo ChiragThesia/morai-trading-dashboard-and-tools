@@ -245,7 +245,18 @@ decided build order)
   4. Economic-events context (FOMC/CPI/NFP dates, stored with IANA timezone, refreshed by cron)
      feeds per-leg event-window flags into scoring; no separate events HTTP/MCP surface exists —
      flags ride inside the candidates payload only.
-**Plans**: TBD
+**Plans**: 9 plans
+
+Plans:
+- [ ] 19-01-PLAN.md — Additive contract fields (source/context-status) + core picker port/type foundation
+- [ ] 19-02-PLAN.md — FwdIV guard + calendar-breakevens numeric primitives (fast-check)
+- [ ] 19-03-PLAN.md — Scoring + candidate-selection domain (port buildCandidates, real beVsEm)
+- [ ] 19-04-PLAN.md — Economic-events data path (FRED release/dates CPI/NFP + FOMC seed, memory+Postgres)
+- [ ] 19-05-PLAN.md — picker_snapshot append-history + chain read + [BLOCKING] migrate apply
+- [ ] 19-06-PLAN.md — computePickerSnapshot + getPicker use-cases (D-17 degraded-context tagging)
+- [ ] 19-07-PLAN.md — Server: GET /api/picker/candidates route + get_picker_candidates MCP tool
+- [ ] 19-08-PLAN.md — Worker: compute-picker chain job + fetch-economic-events weekly cron
+- [ ] 19-09-PLAN.md — Web: usePicker hook + Analyzer fixture→live swap + staleness/context tags
 **UI hint**: yes
 
 ### Phase 20: Stream Watchdog, Event Snapshot & Strategy Rules
