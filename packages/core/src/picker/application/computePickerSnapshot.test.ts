@@ -155,10 +155,13 @@ function baseDeps(overrides: {
   readonly events?: ReadonlyArray<EconomicEvent>;
 }) {
   const { persistPickerSnapshot, rows } = makeRecordingPersist();
+  // Note: `??` would coalesce an explicit `null` (missing-GEX fixture) back to the default --
+  // `gexContext` must be distinguished by presence-of-key, not nullishness.
+  const gexContext = "gexContext" in overrides ? (overrides.gexContext ?? null) : GEX_CONTEXT_FRESH;
   return {
     deps: {
       readChainForPicker: fakeReadChain(overrides.chain ?? realCandidateChain()),
-      readGexContext: fakeReadGexContext(overrides.gexContext ?? GEX_CONTEXT_FRESH),
+      readGexContext: fakeReadGexContext(gexContext),
       readEconomicEvents: fakeReadEvents(overrides.events ?? FUTURE_EVENTS),
       persistPickerSnapshot,
       rate: R,
