@@ -327,7 +327,7 @@ function bookGreekAt(
   const ivShiftDecimal = ivShift / 100;
 
   for (const pos of positions) {
-    if (!pos.included) continue;
+    if (!includedForT0(pos)) continue; // D-02: also drop non-convergent legs (WR-01)
     const K = extractStrike(pos);
     const backT = Math.max((pos.backDte - daysForward) / 365, 1e-6);
     const frontT = Math.max((pos.frontDte - daysForward) / 365, 0);
@@ -438,7 +438,10 @@ export function repriceScenario(
   }));
 
   // ── Per-position greeks at current spot ──────────────────────────────────
-  const positionGreeks: PositionGreeks[] = includedPositions.map((pos) =>
+  // D-02 (WR-01): drop non-convergent legs so a sigma=0 leg never reaches bsmGreeks
+  // and produces NaN per-position greeks for an "IV n/a" row.
+  const greekIncluded = positions.filter(includedForT0);
+  const positionGreeks: PositionGreeks[] = greekIncluded.map((pos) =>
     positionGreeksAt(pos, spot, daysForward, ivShift, rate, divYield),
   );
 

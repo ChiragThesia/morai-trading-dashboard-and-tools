@@ -339,6 +339,42 @@ describe("bookPL/bookPLAtExpiry — leg-level non-convergence exclusion (Pitfall
     }
   });
 
+  it("greek strips + per-position greeks also exclude a non-convergent leg (no NaN) — WR-01", () => {
+    // The P&L curves already drop a non-convergent leg (frontIv=0 in prod). The greek
+    // producers (bookGreekStrips, positionGreeks) must apply the SAME exclusion, or a
+    // sigma=0 leg reaches bsmGreeks and yields NaN/Infinity strips for the very "IV n/a"
+    // rows the P&L path just guarded.
+    const controlOnly = repriceScenario([CONTROL_POS], BASE_PARAMS);
+    const withFrontNc = repriceScenario([CONTROL_POS, FRONT_NON_CONVERGENT_POS], BASE_PARAMS);
+
+    const greekKeys = ["delta", "gamma", "theta", "vega"] as const;
+    for (const key of greekKeys) {
+      const control = controlOnly.bookGreekStrips[key];
+      const withNc = withFrontNc.bookGreekStrips[key];
+      expect(withNc.length).toBe(control.length);
+      for (let i = 0; i < control.length; i++) {
+        const a = control[i];
+        const b = withNc[i];
+        expect(a).toBeDefined();
+        expect(b).toBeDefined();
+        if (a !== undefined && b !== undefined) {
+          expect(Number.isNaN(b)).toBe(false);
+          expect(b).toBeCloseTo(a, 6);
+        }
+      }
+    }
+
+    // The non-convergent leg must not appear in positionGreeks, and every remaining
+    // per-position greek must be finite.
+    expect(withFrontNc.positionGreeks.find((g) => g.id === "front-nc-1")).toBeUndefined();
+    for (const g of withFrontNc.positionGreeks) {
+      expect(Number.isFinite(g.delta)).toBe(true);
+      expect(Number.isFinite(g.gamma)).toBe(true);
+      expect(Number.isFinite(g.theta)).toBe(true);
+      expect(Number.isFinite(g.vega)).toBe(true);
+    }
+  });
+
   it("all-ok control position: matches pre-change behavior (contributes to both curves)", () => {
     const result = repriceScenario([CONTROL_POS], BASE_PARAMS);
     expect(result.payoffCurve.length).toBeGreaterThan(50);
