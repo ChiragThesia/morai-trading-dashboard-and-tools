@@ -142,13 +142,24 @@ function findZeroCrossings(curve: ReadonlyArray<PayoffPoint>): ReadonlyArray<num
   );
 }
 
-/** Compute y-domain from the expiration profile (TOS-stable y-axis logic) */
-function computeYDomain(baseExpCurve: ReadonlyArray<PayoffPoint>): { lo: number; hi: number } {
-  if (baseExpCurve.length === 0) return { lo: -500, hi: 500 };
+/**
+ * Compute y-domain from BOTH the today/date curve and the @exp curve
+ * (TOS-stable y-axis logic) — combined so a near-flat today curve is never
+ * squashed against a tall @exp tent (OVW-04).
+ */
+function computeYDomain(
+  todayCurve: ReadonlyArray<PayoffPoint>,
+  expCurve: ReadonlyArray<PayoffPoint>,
+): { lo: number; hi: number } {
+  if (todayCurve.length === 0 && expCurve.length === 0) return { lo: -500, hi: 500 };
 
   let lo = Infinity;
   let hi = -Infinity;
-  for (const p of baseExpCurve) {
+  for (const p of todayCurve) {
+    if (p.pl < lo) lo = p.pl;
+    if (p.pl > hi) hi = p.pl;
+  }
+  for (const p of expCurve) {
     if (p.pl < lo) lo = p.pl;
     if (p.pl > hi) hi = p.pl;
   }
@@ -161,6 +172,22 @@ function computeYDomain(baseExpCurve: ReadonlyArray<PayoffPoint>): { lo: number;
   if (hi < 0) hi = 0;
 
   return { lo, hi };
+}
+
+/**
+ * Derive evenly-spaced round-number x-axis ticks from the live domain
+ * (OVW-04) — replaces a hardcoded literal tick array that can drift out of
+ * sync with X_MIN/X_MAX.
+ */
+function buildXTicks(min: number, max: number, targetCount = 5): ReadonlyArray<number> {
+  const rawStep = (max - min) / targetCount;
+  const roundSteps = [25, 50, 100, 200, 250, 500, 1000];
+  const step = roundSteps.find((s) => s >= rawStep) ?? roundSteps[roundSteps.length - 1];
+  const snappedStep = step ?? rawStep;
+  const first = Math.ceil(min / snappedStep) * snappedStep;
+  const ticks: number[] = [];
+  for (let v = first; v <= max; v += snappedStep) ticks.push(v);
+  return ticks;
 }
 
 /** Format a P&L value compactly */
@@ -213,18 +240,18 @@ export function PayoffChart({
   // Recompute y-domain when position set changes
   useMemo(() => {
     if (positionSetSignature !== yDomainSig) {
-      setYDomain(computeYDomain(baseExpirationCurve));
+      setYDomain(computeYDomain(todayCurve, baseExpirationCurve));
       setYDomainSig(positionSetSignature);
     }
-  }, [positionSetSignature, yDomainSig, baseExpirationCurve]);
+  }, [positionSetSignature, yDomainSig, todayCurve, baseExpirationCurve]);
 
   // Handle "fit Y" request
   useMemo(() => {
     if (fitY) {
-      setYDomain(computeYDomain(baseExpirationCurve));
+      setYDomain(computeYDomain(todayCurve, baseExpirationCurve));
       onFitYConsumed();
     }
-  }, [fitY, baseExpirationCurve, onFitYConsumed]);
+  }, [fitY, todayCurve, baseExpirationCurve, onFitYConsumed]);
 
   const xScale = useMemo(() => buildXScale(INNER_W), []);
   const yScale = useMemo(() => buildYScale(yDomain.lo, yDomain.hi, INNER_H), [yDomain]);
@@ -304,6 +331,10 @@ export function PayoffChart({
     return lines;
   }, [yDomain, yScale]);
 
+  // X-axis ticks: derived round numbers from the live domain (OVW-04) —
+  // replaces a hardcoded literal array that could drift from X_MIN/X_MAX.
+  const xTicks = useMemo(() => buildXTicks(X_MIN, X_MAX), []);
+
   return (
     <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 300 }}>
       {/* D-02: net-book T+0 self-flag note — placed near the legend row position */}
@@ -382,7 +413,7 @@ export function PayoffChart({
           ))}
 
           {/* X-axis strike labels */}
-          {[7000, 7200, 7400, 7600, 7800].map((s) => (
+          {xTicks.map((s) => (
             <text
               key={s}
               x={xScale(s)}
@@ -813,7 +844,7 @@ function buildFillPath(
 }
 
 // Re-export for testing
-export { findZeroCrossings, computeYDomain };
+export { findZeroCrossings, computeYDomain, buildXTicks };
 
 // AreaClosed/AreaStack imported for potential future gradient-fill usage per visx pattern
 // (referenced in the import list above — removing would lose access to these visx APIs)
