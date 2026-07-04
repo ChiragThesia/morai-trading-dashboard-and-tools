@@ -99,6 +99,19 @@ export interface PayoffChartProps {
    * overlay.
    */
   expirationCurveColor?: string;
+  /**
+   * ANLZ-02 ⊕-compare overlay: single dashed amber front-expiry curve for a
+   * second candidate. Defaults to null (absent-safe; Overview.tsx's call
+   * site omits this prop entirely and is unaffected).
+   */
+  compareCurve?: ReadonlyArray<PayoffPoint> | null;
+  /** ANLZ-02: stroke color for the compareCurve overlay. Defaults to the AMBER module constant. */
+  compareCurveColor?: string;
+  /**
+   * ANLZ-02 ±1σ expected-move band: two tick marks + a horizontal connector
+   * at the zero-P&L line. Defaults to null (absent-safe).
+   */
+  expectedMoveBand?: { spot: number; em: number } | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -236,6 +249,9 @@ export function PayoffChart({
   excludedFromT0Count = 0,
   todayCurveColor = VIOLET,
   expirationCurveColor = GRAY_MUTED,
+  compareCurve = null,
+  compareCurveColor = AMBER,
+  expectedMoveBand = null,
 }: PayoffChartProps): React.ReactElement {
   // D-05: a highlight is active whenever a row id is supplied. The net-book
   // curves dim (chart-layer stroke-opacity) — never removed, never the
@@ -522,6 +538,21 @@ export function PayoffChart({
               curve={curveMonotoneX}
               stroke={AMBER}
               strokeWidth={2}
+            />
+          )}
+
+          {/* ── ⊕-compare overlay: single dashed amber front-expiry curve for a
+               second candidate (ANLZ-02) — own layer, distinct from rollCurve ── */}
+          {compareCurve !== null && compareCurve.length > 0 && (
+            <LinePath
+              data-testid="compare-curve"
+              data={[...compareCurve]}
+              x={getX}
+              y={clampY}
+              curve={curveMonotoneX}
+              stroke={compareCurveColor}
+              strokeWidth={1.6}
+              strokeDasharray="5 4"
             />
           )}
 

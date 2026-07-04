@@ -160,6 +160,59 @@ describe("PayoffChart — D-02 T+0 exclusion note", () => {
   });
 });
 
+describe("PayoffChart — compareCurve overlay (ANLZ-02)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const COMPARE_CURVE: PayoffPoint[] = [
+    { spot: 6900, pl: -200 },
+    { spot: 7400, pl: 50 },
+    { spot: 7900, pl: 250 },
+  ];
+
+  it("renders no extra path when compareCurve is null or omitted (Overview regression guard)", () => {
+    const { container: baselineContainer } = render(<PayoffChart {...baseProps()} />);
+    const baselineCount = baselineContainer.querySelectorAll("path").length;
+    cleanup();
+
+    const { container } = render(<PayoffChart {...baseProps()} compareCurve={null} />);
+    expect(container.querySelectorAll("path").length).toBe(baselineCount);
+    expect(screen.queryByTestId("compare-curve")).toBeNull();
+
+    cleanup();
+    render(<PayoffChart {...baseProps()} />);
+    expect(screen.queryByTestId("compare-curve")).toBeNull();
+  });
+
+  it("renders exactly one dashed-amber path when compareCurve is supplied (no T+0 twin)", () => {
+    const { container: baselineContainer } = render(<PayoffChart {...baseProps()} />);
+    const baselineCount = baselineContainer.querySelectorAll("path").length;
+    cleanup();
+
+    const { container } = render(
+      <PayoffChart {...baseProps()} compareCurve={COMPARE_CURVE} />,
+    );
+    const compare = screen.getByTestId("compare-curve");
+    expect(compare.tagName.toLowerCase()).toBe("path");
+    expect(compare.getAttribute("stroke")).toBe("#f0b429");
+    expect(compare.getAttribute("stroke-dasharray")).not.toBeNull();
+    expect(container.querySelectorAll('[data-testid="compare-curve"]').length).toBe(1);
+    expect(container.querySelectorAll("path").length).toBe(baselineCount + 1);
+  });
+
+  it("honors a compareCurveColor override", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        compareCurve={COMPARE_CURVE}
+        compareCurveColor="#00ffaa"
+      />,
+    );
+    expect(screen.getByTestId("compare-curve").getAttribute("stroke")).toBe("#00ffaa");
+  });
+});
+
 describe("computeYDomain — combined-curve y-axis (OVW-04)", () => {
   it("returns the fallback domain when both curves are empty", () => {
     expect(computeYDomain([], [])).toEqual({ lo: -500, hi: 500 });
