@@ -19,12 +19,53 @@
  *     fixture without module-mocking gymnastics, so the empty-state branch is unit-tested on
  *     the extracted rail component directly.
  *
- * Task 3 (payoff center) test cases are appended below Task 2's.
+ * Task 3 (payoff center) behaviors under test:
+ *   - Selecting a candidate feeds candidateToAnalyzerPosition -> repriceScenario into
+ *     PayoffChart with the picker's curve colors (todayCurveColor blue, expirationCurveColor
+ *     violet) and rollCurve={null} (single payoff path, D-02).
+ *   - ⊕-compare loads a non-null amber compareCurve; toggling it off clears it to null.
+ *   - expectedMoveBand is passed as { spot: fixtureSpot, em: selected.expectedMove }.
+ *   - ScenarioStrip renders the buildScenarioStrip-derived key levels for the selected
+ *     candidate (put wall / γ flip / spot / call wall / candidate strike, deduped).
+ *
+ * 17.1-03/Overview.test.tsx precedent: spy-wrap PayoffChart (importOriginal) so tests can
+ * inspect the exact props Analyzer hands it — the real component still renders.
  */
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
+import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
+
+vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../components/charts/PayoffChart.tsx")>();
+  return { ...actual, PayoffChart: vi.fn(actual.PayoffChart) };
+});
+
 import { Analyzer, CandidateRail } from "./Analyzer.tsx";
+import { PayoffChart } from "../components/charts/PayoffChart.tsx";
+import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
+import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
+import { repriceScenario, buildScenarioStrip } from "../lib/scenario-engine.ts";
+import type { ScenarioParams } from "../lib/scenario-engine.ts";
+
+const mockPayoffChart = vi.mocked(PayoffChart);
+
+/** Props of the most recent PayoffChart render (throws if it never rendered). */
+function latestPayoffChartProps(): PayoffChartProps {
+  const call = mockPayoffChart.mock.calls.at(-1);
+  assertDefined(call, "PayoffChart rendered at least once");
+  return call[0];
+}
+
+/** Matches Analyzer.tsx's fixed scenario params (D-02: no scenario sliders on this
+ * fixture-only, view-only screen — spot/rate/divYield are the frozen snapshot constants). */
+const PARAMS: ScenarioParams = {
+  spot: pickerSnapshotFixture.spot,
+  daysForward: 0,
+  ivShift: 0,
+  rate: 0.045,
+  divYield: 0.013,
+};
 
 const SORTED_CANDIDATES = [...pickerSnapshotFixture.candidates].sort((a, b) => b.score - a.score);
 const TOP = SORTED_CANDIDATES[0];
@@ -37,6 +78,7 @@ if (TOP === undefined || SECOND === undefined) {
 describe("Analyzer — ranked candidate rail (Task 2)", () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
   });
 
   it("renders one CandidateCard per fixture candidate, ordered score-descending", () => {
@@ -73,6 +115,7 @@ describe("Analyzer — ranked candidate rail (Task 2)", () => {
 describe("Analyzer — scoring methodology panel (Task 2, locked copy)", () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
   });
 
   it("renders the locked summary label", () => {
@@ -91,6 +134,7 @@ describe("Analyzer — scoring methodology panel (Task 2, locked copy)", () => {
 describe("CandidateRail — empty state (Task 2)", () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
   });
 
   it("renders the locked empty-state copy when given zero candidates", () => {
@@ -123,5 +167,127 @@ describe("CandidateRail — empty state (Task 2)", () => {
       />,
     );
     expect(container.querySelectorAll('[data-testid^="candidate-card-"]').length).toBe(0);
+  });
+});
+
+describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("feeds candidateToAnalyzerPosition(selected) into repriceScenario and passes the picker curve colors", () => {
+    render(<Analyzer />);
+
+    const expected = repriceScenario([candidateToAnalyzerPosition(TOP)], PARAMS);
+    const props = latestPayoffChartProps();
+
+    expect(props.todayCurve).toEqual(expected.payoffCurve);
+    expect(props.expirationCurve).toEqual(expected.expirationCurve);
+    expect(props.todayCurveColor).toBe("#5b9cf6");
+    expect(props.expirationCurveColor).toBe("#a78bfa");
+    expect(props.rollCurve).toBeNull();
+  });
+
+  it("re-prices against the newly-selected candidate when a different card is clicked", () => {
+    render(<Analyzer />);
+
+    fireEvent.click(screen.getByTestId(`candidate-card-${SECOND.id}`));
+
+    const expected = repriceScenario([candidateToAnalyzerPosition(SECOND)], PARAMS);
+    const props = latestPayoffChartProps();
+    expect(props.todayCurve).toEqual(expected.payoffCurve);
+  });
+
+  it("passes expectedMoveBand as { spot: fixtureSpot, em: selected.expectedMove }", () => {
+    render(<Analyzer />);
+    const props = latestPayoffChartProps();
+    expect(props.expectedMoveBand).toEqual({ spot: pickerSnapshotFixture.spot, em: TOP.expectedMove });
+  });
+
+  it("compareCurve is null/absent before any ⊕-compare candidate is loaded", () => {
+    render(<Analyzer />);
+    expect(latestPayoffChartProps().compareCurve ?? null).toBeNull();
+  });
+
+  it("⊕-compare loads a non-null amber compareCurve (the compare candidate's expiration P&L)", () => {
+    render(<Analyzer />);
+
+    const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
+    fireEvent.click(within(secondCard).getByText("⊕ Compare"));
+
+    const expectedCompare = repriceScenario([candidateToAnalyzerPosition(SECOND)], PARAMS);
+    const props = latestPayoffChartProps();
+    expect(props.compareCurve).toEqual(expectedCompare.expirationCurve);
+    expect(props.compareCurveColor).toBe("#f0b429");
+  });
+
+  it("toggling the same ⊕-compare candidate off clears compareCurve back to null", () => {
+    render(<Analyzer />);
+
+    const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
+    fireEvent.click(within(secondCard).getByText("⊕ Compare"));
+    fireEvent.click(within(secondCard).getByText("✕ Remove compare"));
+
+    expect(latestPayoffChartProps().compareCurve ?? null).toBeNull();
+  });
+
+  it("shows the amber compare-title suffix 'vs {compareName} (dashed)' once a compare candidate is loaded", () => {
+    render(<Analyzer />);
+
+    const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
+    fireEvent.click(within(secondCard).getByText("⊕ Compare"));
+
+    expect(screen.getByText(`vs ${SECOND.name} (dashed)`)).toBeTruthy();
+  });
+});
+
+describe("Analyzer — ScenarioStrip (Task 3, ANLZ-02/D-06)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders exactly the buildScenarioStrip-derived key levels for the selected candidate", () => {
+    render(<Analyzer />);
+
+    const position = candidateToAnalyzerPosition(TOP);
+    const levels = {
+      putWall: pickerSnapshotFixture.gex.putWall,
+      flip: pickerSnapshotFixture.gex.flip,
+      callWall: pickerSnapshotFixture.gex.callWall,
+    };
+    const expectedStrip = buildScenarioStrip(levels, [position], pickerSnapshotFixture.spot);
+
+    const strip = screen.getByTestId("scenario-strip");
+    for (const lvl of expectedStrip.levels) {
+      expect(within(strip).getByTestId(`scenario-strip-level-${lvl}`)).toBeTruthy();
+    }
+    expect(strip.querySelectorAll('[data-testid^="scenario-strip-level-"]').length).toBe(
+      expectedStrip.levels.length,
+    );
+  });
+
+  it("T+0/@exp cell values come from the SAME repriceScenario curves the payoff chart drew (no second pricing path)", () => {
+    render(<Analyzer />);
+
+    const position = candidateToAnalyzerPosition(TOP);
+    const expected = repriceScenario([position], PARAMS);
+    const levels = {
+      putWall: pickerSnapshotFixture.gex.putWall,
+      flip: pickerSnapshotFixture.gex.flip,
+      callWall: pickerSnapshotFixture.gex.callWall,
+    };
+    const expectedStrip = buildScenarioStrip(levels, [position], pickerSnapshotFixture.spot);
+    const firstLevel = expectedStrip.levels[0];
+    if (firstLevel === undefined) throw new Error("expected at least one scenario-strip level");
+
+    const nearestT0 = expected.payoffCurve.reduce((best, p) =>
+      Math.abs(p.spot - firstLevel) < Math.abs(best.spot - firstLevel) ? p : best,
+    );
+
+    const cell = screen.getByTestId(`scenario-strip-t0-${firstLevel}`);
+    const sign = nearestT0.pl >= 0 ? "+" : "−";
+    expect(cell.textContent).toBe(`${sign}$${Math.abs(nearestT0.pl).toFixed(0)}`);
   });
 });

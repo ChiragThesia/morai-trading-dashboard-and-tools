@@ -23,7 +23,12 @@ import { useCallback, useMemo, useState } from "react";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { PickerCandidate } from "@morai/contracts";
 import { CandidateCard } from "../components/picker/CandidateCard.tsx";
+import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
+import { PayoffChart } from "../components/charts/PayoffChart.tsx";
+import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
+import { repriceScenario } from "../lib/scenario-engine.ts";
+import type { ScenarioParams } from "../lib/scenario-engine.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -32,6 +37,29 @@ import { Panel, PanelHeading } from "../components/system/index.tsx";
 const SORTED_CANDIDATES: ReadonlyArray<PickerCandidate> = [...pickerSnapshotFixture.candidates].sort(
   (a, b) => b.score - a.score,
 );
+
+const DEFAULT_RATE = 0.045;
+const DEFAULT_DIV = 0.013;
+
+/** Fixed scenario params (D-02b: no scenario sliders on this fixture-only, view-only screen —
+ * spot/rate/divYield are the frozen snapshot constants, matching Overview.tsx's defaults). */
+const PARAMS: ScenarioParams = {
+  spot: pickerSnapshotFixture.spot,
+  daysForward: 0,
+  ivShift: 0,
+  rate: DEFAULT_RATE,
+  divYield: DEFAULT_DIV,
+};
+
+const PAYOFF_TOGGLES = { showFan: false, showExpiration: true, showWalls: true, showProfitZone: true };
+
+/** ANLZ-02 picker curve colors (UI-SPEC Color table — distinct from both Overview's TOS
+ * override and the old Analyzer's own defaults). */
+const TODAY_CURVE_COLOR = "#5b9cf6";
+const EXPIRATION_CURVE_COLOR = "#a78bfa";
+const COMPARE_CURVE_COLOR = "#f0b429";
+
+function noop(): void {}
 
 // ─── Suggested calendars rail ──────────────────────────────────────────────────
 
@@ -165,6 +193,24 @@ export function Analyzer(): React.ReactElement {
     setCompareId((prev) => (prev === candidate.id ? null : candidate.id));
   }, []);
 
+  // ── Payoff center (ANLZ-02, D-02): one engine, one adapter — repriceScenario is the sole
+  // pricing path for both the selected candidate and the ⊕-compare overlay. ─────────────────
+
+  const selectedPosition = useMemo(
+    () => (selected === null ? null : candidateToAnalyzerPosition(selected)),
+    [selected],
+  );
+
+  const scenarioResult = useMemo(
+    () => (selectedPosition === null ? null : repriceScenario([selectedPosition], PARAMS)),
+    [selectedPosition],
+  );
+
+  const compareScenarioResult = useMemo(() => {
+    if (compareCandidate === null) return null;
+    return repriceScenario([candidateToAnalyzerPosition(compareCandidate)], PARAMS);
+  }, [compareCandidate]);
+
   return (
     <div
       className="grid gap-4 bg-bg p-3"
@@ -196,7 +242,43 @@ export function Analyzer(): React.ReactElement {
               )}
             </p>
           )}
-          {/* Task 3: PayoffChart + ScenarioStrip wiring lands here. */}
+          {selected !== null && selectedPosition !== null && scenarioResult !== null && (
+            <>
+              <PayoffChart
+                todayCurve={scenarioResult.payoffCurve}
+                fanCurves={[]}
+                expirationCurve={scenarioResult.expirationCurve}
+                rollCurve={null}
+                gex={{
+                  callWall: pickerSnapshotFixture.gex.callWall,
+                  putWall: pickerSnapshotFixture.gex.putWall,
+                  flip: pickerSnapshotFixture.gex.flip,
+                }}
+                spot={PARAMS.spot}
+                toggles={PAYOFF_TOGGLES}
+                fitY={false}
+                onFitYConsumed={noop}
+                positionSetSignature={selected.id}
+                baseExpirationCurve={scenarioResult.expirationCurve}
+                todayCurveColor={TODAY_CURVE_COLOR}
+                expirationCurveColor={EXPIRATION_CURVE_COLOR}
+                compareCurve={compareScenarioResult?.expirationCurve ?? null}
+                compareCurveColor={COMPARE_CURVE_COLOR}
+                expectedMoveBand={{ spot: PARAMS.spot, em: selected.expectedMove }}
+              />
+              <ScenarioStrip
+                position={selectedPosition}
+                levels={{
+                  putWall: pickerSnapshotFixture.gex.putWall,
+                  flip: pickerSnapshotFixture.gex.flip,
+                  callWall: pickerSnapshotFixture.gex.callWall,
+                }}
+                spot={PARAMS.spot}
+                todayCurve={scenarioResult.payoffCurve}
+                expirationCurve={scenarioResult.expirationCurve}
+              />
+            </>
+          )}
         </Panel>
 
         <ScoringMethodologyPanel />
