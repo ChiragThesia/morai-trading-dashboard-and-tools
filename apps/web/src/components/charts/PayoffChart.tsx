@@ -309,6 +309,7 @@ export function PayoffChart({
     x: number;
     spot: number;
     pl: number;
+    renderedWidth: number;
   } | null>(null);
 
   const handlePointerMove = useCallback(
@@ -336,7 +337,7 @@ export function PayoffChart({
       }, null);
       const pl = nearest?.pl ?? 0;
 
-      setCrosshair({ x: logicalX, spot: hoveredSpot, pl });
+      setCrosshair({ x: logicalX, spot: hoveredSpot, pl, renderedWidth: svgRect.width });
     },
     [todayCurve],
   );
@@ -739,7 +740,14 @@ export function PayoffChart({
           style={{
             position: "absolute",
             top: 8,
-            left: Math.min(crosshair.x + 14, SVG_W - 180),
+            // crosshair.x is in viewBox units [0, SVG_W]; the tooltip is an HTML
+            // element positioned in CSS pixels within the container, which fills
+            // the rendered SVG width. Map viewBox → rendered px so the tooltip
+            // tracks the crosshair line at any SVG render width (WR-03).
+            left: Math.min(
+              (crosshair.x / SVG_W) * crosshair.renderedWidth + 14,
+              crosshair.renderedWidth - 180,
+            ),
             pointerEvents: "none",
             background: "rgba(8,11,16,0.97)",
             border: "1px solid #27313f",
