@@ -80,20 +80,24 @@ consistent with every prior phase's scope).
 
 ## Typography
 
-> **INHERITED / FROZEN.** Exactly the same 4-tier scale as Phases 9/17/17.1 — this phase
-> introduces zero new sizes and zero new weights.
+> **INHERITED / FROZEN.** Exactly the same 4-size scale as Phases 9/17/17.1 — this phase
+> introduces zero new sizes. **Exactly 2 weights: 400 (regular) and 700 (bold).**
 
 | Role | Size | Weight | Line Height | Font | New elements using it |
 |------|------|--------|-------------|------|--------------------------|
-| Micro (label / badge / axis tick / breakdown-bar caption) | 9px | 400 (section labels 600) | default | JetBrains Mono; section labels Space Grotesk `tracking-[0.09em] uppercase` | Card sub-line (DTE/debit/θ/vega), breakdown-bar labels (`slope`/`fwd edge`/`GEX fit`/`event adj`), event tags (`FOMC◂f`), term-structure axis labels |
+| Micro (label / badge / axis tick / breakdown-bar caption / section label) | 9px | 400 | default | JetBrains Mono; section labels Space Grotesk `tracking-[0.09em] uppercase` (distinction is font-family + tracking + uppercase, NOT weight) | Card sub-line (DTE/debit/θ/vega), breakdown-bar labels (`slope`/`fwd edge`/`GEX fit`/`event adj`), event tags (`FOMC◂f`), term-structure axis labels, panel section labels |
 | Table / row data | 11px | 400 | default | JetBrains Mono, `tabular-nums` | Scenario-strip cell values, plan-row values (debit/target/stop/manage-by dates) |
 | Body / data base | 12px | 400 | 1.45 | JetBrains Mono (`body` default) | Why-panel prose sentences, methodology list items |
-| Emphasis value | 14px | 700 | default | Space Grotesk | Card score number, why-panel stat values (Fwd IV / Slope / Net θ / θ:vega) |
+| Emphasis value | 14px | 700 | default | Space Grotesk | Card header name (`7500P Aug 8 / Sep 12`), card score number, why-panel stat values (Fwd IV / Slope / Net θ / θ:vega) |
 
-No third weight, no third size introduced. Card `head` name (e.g. `7500P Aug 8 / Sep 12`) uses
-the existing 13px/600 "card title" convention already present in `PositionsTable` row names —
-if the planner needs a 5th bucket for this, merge it into the 14px emphasis tier rather than
-declaring a new size (same "absorb into nearest tier" rule Phase 17.1 used).
+**Exactly two weights: 400 and 700.** No 600 anywhere in this spec. Section labels get their
+visual distinction from the Space Grotesk font-family + `tracking-[0.09em] uppercase` treatment
+at weight 400 — never a heavier weight. The card header name folds into the **700 emphasis tier**
+(it is a primary identifier alongside the score number, not a body label), rather than the
+inherited `PositionsTable` 600 convention — this spec declares 700 for it. 700 is reserved
+exclusively for the emphasis tier (card header name, card score, why-panel stat values); every
+other element — breakdown-bar labels, card sub-line, plan-row labels/values, why-panel prose,
+methodology, event tags, scenario-strip values — is weight 400.
 
 ---
 
