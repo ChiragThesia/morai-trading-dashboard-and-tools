@@ -82,4 +82,24 @@ describe("TermStructureChart — guard case (fwdIv null, T-18-10)", () => {
     expect(screen.getByTestId("term-structure-leg-dot-back")).toBeTruthy();
     expect(screen.getByTestId("term-structure-line")).toBeTruthy();
   });
+
+  it("renders the guard tag ON-canvas (not clipped above the viewport) — WR-02", () => {
+    // The guard candidate's front IV (0.155) sits at the very top of the IV axis, so
+    // Math.min(frontY, backY) - 18 pushes the tag above y=0 and the SVG viewport clips
+    // it — the one cue the guard branch exists to show. The tag must stay in [0, H].
+    const H = 150;
+    render(<TermStructureChart termStructure={termStructure} events={events} candidate={GUARD} />);
+    const tag = screen.getByTestId("term-structure-guard-tag");
+    const rect = tag.querySelector("rect");
+    const text = tag.querySelector("text");
+    expect(rect).not.toBeNull();
+    expect(text).not.toBeNull();
+    const rectY = Number(rect?.getAttribute("y"));
+    const rectH = Number(rect?.getAttribute("height"));
+    const textY = Number(text?.getAttribute("y"));
+    expect(rectY).toBeGreaterThanOrEqual(0);
+    expect(rectY + rectH).toBeLessThanOrEqual(H);
+    expect(textY).toBeGreaterThanOrEqual(0);
+    expect(textY).toBeLessThanOrEqual(H);
+  });
 });

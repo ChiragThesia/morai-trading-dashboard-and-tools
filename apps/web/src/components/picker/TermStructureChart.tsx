@@ -81,7 +81,10 @@ export function TermStructureChart({
   const backY = yScale(candidate.backLeg.iv);
   const fwdIv = candidate.fwdIv;
   const bracketMidX = (frontX + backX) / 2;
-  const guardTagY = Math.min(frontY, backY) - 18;
+  // Clamp into the drawable band so the guard tag never clips above the SVG viewport
+  // (WR-02): when the higher leg dot sits near the top (front IV == IV_MAX), the raw
+  // `min(frontY, backY) - 18` goes negative and the default viewport clipping hides it.
+  const guardTagY = Math.max(PAD.top, Math.min(frontY, backY) - 18);
 
   return (
     <div className="flex flex-col gap-1">
