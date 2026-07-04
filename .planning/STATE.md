@@ -5,15 +5,15 @@ milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 18
 current_phase_name: analyzer-picker-ui-redesign
 status: executing
-stopped_at: Phase 18 UI-SPEC approved
-last_updated: "2026-07-04T04:46:56.873Z"
+stopped_at: Completed 18-03-PLAN.md
+last_updated: "2026-07-04T04:59:49.254Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 17
-  completed_plans: 14
+  completed_plans: 15
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 18 (analyzer-picker-ui-redesign) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 18 execution started
 
@@ -188,6 +188,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 17.1 P05 | 12min | 2 tasks | 2 files |
 | Phase 18 P01 | 25min | 2 tasks | 4 files |
 | Phase 18 P02 | 7min | 2 tasks | 2 files |
+| Phase 18 P03 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -238,6 +239,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 18-02: expectedMoveBand reuses the existing Zero-line layer's zeroY value (not recomputed) and is placed before all curve layers in JSX source order so it can never occlude T+0/@exp
 - [Phase ?]: 18-02: buildXScale/INNER_W added to PayoffChart.tsx's existing test-only re-export line (test infra, no behavior change) so tests assert exact spot±em pixel positions
 - [Phase ?]: 18-02: NOT marking ANLZ-02 complete — this plan ships only PayoffChart chart primitives; the user-facing overlay capability ANLZ-02 describes lands in 18-04's picker screen
+- [Phase 18]: 18-03: TOLERANCE=2500 for the debit=max-loss invariant is a genuine BSM-model constant (deep-ITM European put with r>0 can price below intrinsic on repriceScenario's fixed 6900-7900 grid), empirically derived via probe scripts, not a fudge factor
+- [Phase 18]: 18-03: fast-check property test's candidate debit is computed via the same bsmPrice formula scenario-engine.ts's private entryNetPrice uses, not an arbitrary number - proves the same debit-vs-worst-case relationship as the fixture example test
+- [Phase 18]: 18-03: Task 1 (adapter+mapping) and Task 2 (debit invariant) landed in one commit since both share candidate-to-position.test.ts, authored in a single TDD RED->GREEN cycle (matches 17.1-01 precedent)
 
 ### Pending Todos
 
@@ -282,9 +286,9 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T04:46:14.831Z
-Stopped at: Phase 18 UI-SPEC approved
-Resume file: .planning/phases/18-analyzer-picker-ui-redesign/18-UI-SPEC.md
+Last session: 2026-07-04T04:59:49.244Z
+Stopped at: Completed 18-03-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
