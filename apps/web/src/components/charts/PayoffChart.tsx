@@ -476,6 +476,52 @@ export function PayoffChart({
             strokeWidth={1.1}
           />
 
+          {/* ── ±1σ expected-move band: ticks + connector at the zero-P&L
+               line (ANLZ-02) — placed before all curve layers so it never
+               occludes the T+0/@exp curves (UI-SPEC z-order). ────────────── */}
+          {expectedMoveBand !== null && (
+            <g data-testid="em-band">
+              <line
+                data-testid="em-band-tick-lower"
+                x1={xScale(expectedMoveBand.spot - expectedMoveBand.em)}
+                y1={zeroY - 6}
+                x2={xScale(expectedMoveBand.spot - expectedMoveBand.em)}
+                y2={zeroY + 6}
+                stroke={BLUE}
+                strokeWidth={1.2}
+              />
+              <line
+                data-testid="em-band-tick-upper"
+                x1={xScale(expectedMoveBand.spot + expectedMoveBand.em)}
+                y1={zeroY - 6}
+                x2={xScale(expectedMoveBand.spot + expectedMoveBand.em)}
+                y2={zeroY + 6}
+                stroke={BLUE}
+                strokeWidth={1.2}
+              />
+              <line
+                data-testid="em-band-connector"
+                x1={xScale(expectedMoveBand.spot - expectedMoveBand.em)}
+                y1={zeroY}
+                x2={xScale(expectedMoveBand.spot + expectedMoveBand.em)}
+                y2={zeroY}
+                stroke={BLUE}
+                strokeWidth={1}
+              />
+              <text
+                data-testid="em-band-label"
+                x={xScale(expectedMoveBand.spot)}
+                y={zeroY - 9}
+                fill={BLUE}
+                fontSize={9}
+                textAnchor="middle"
+                fontFamily="JetBrains Mono, monospace"
+              >
+                {"±1σ EM"}
+              </text>
+            </g>
+          )}
+
           {/* ── Layer 1: Profit zone fill (teal, 4.5% opacity) ───────────── */}
           {toggles.showProfitZone && todayCurve.length > 0 && (
             <path
@@ -905,7 +951,7 @@ function buildFillPath(
 }
 
 // Re-export for testing
-export { findZeroCrossings, computeYDomain, buildXTicks };
+export { findZeroCrossings, computeYDomain, buildXTicks, buildXScale, INNER_W };
 
 // AreaClosed/AreaStack imported for potential future gradient-fill usage per visx pattern
 // (referenced in the import list above — removing would lose access to these visx APIs)

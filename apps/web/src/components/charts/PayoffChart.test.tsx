@@ -2,7 +2,7 @@ import { useState } from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
-import { PayoffChart, computeYDomain, buildXTicks } from "./PayoffChart.tsx";
+import { PayoffChart, computeYDomain, buildXTicks, buildXScale, INNER_W } from "./PayoffChart.tsx";
 import type { PayoffChartToggles, PayoffChartProps } from "./PayoffChart.tsx";
 import type { PayoffPoint } from "../../lib/scenario-engine.ts";
 
@@ -210,6 +210,65 @@ describe("PayoffChart — compareCurve overlay (ANLZ-02)", () => {
       />,
     );
     expect(screen.getByTestId("compare-curve").getAttribute("stroke")).toBe("#00ffaa");
+  });
+});
+
+describe("PayoffChart — expectedMoveBand (ANLZ-02)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const EM_BAND = { spot: 7381, em: 120 };
+
+  it("renders no band elements when expectedMoveBand is null or omitted", () => {
+    render(<PayoffChart {...baseProps()} />);
+    expect(screen.queryByTestId("em-band")).toBeNull();
+
+    cleanup();
+    render(<PayoffChart {...baseProps()} expectedMoveBand={null} />);
+    expect(screen.queryByTestId("em-band")).toBeNull();
+  });
+
+  it("renders two ticks at spot±em (via xScale) and a connector at the existing zero-P&L y", () => {
+    const { container } = render(
+      <PayoffChart {...baseProps()} expectedMoveBand={EM_BAND} />,
+    );
+
+    const xScale = buildXScale(INNER_W);
+    const expectedLowerX = xScale(EM_BAND.spot - EM_BAND.em);
+    const expectedUpperX = xScale(EM_BAND.spot + EM_BAND.em);
+
+    // The existing "Zero line" layer's own <line> is the source of truth for
+    // zeroY (reused, not recomputed) — its stroke color is the ZERO_LINE constant.
+    const zeroLine = container.querySelector('line[stroke="#46556a"]');
+    expect(zeroLine).not.toBeNull();
+    const zeroY = zeroLine?.getAttribute("y1") ?? null;
+    expect(zeroY).not.toBeNull();
+
+    const lowerTick = screen.getByTestId("em-band-tick-lower");
+    const upperTick = screen.getByTestId("em-band-tick-upper");
+    const connector = screen.getByTestId("em-band-connector");
+
+    expect(Number(lowerTick.getAttribute("x1"))).toBeCloseTo(expectedLowerX, 6);
+    expect(Number(upperTick.getAttribute("x1"))).toBeCloseTo(expectedUpperX, 6);
+    expect(connector.getAttribute("y1")).toBe(zeroY);
+    expect(connector.getAttribute("y2")).toBe(zeroY);
+  });
+
+  it("places the EM-band group before the T+0/@exp curve layers in SVG source order (never occludes a curve)", () => {
+    render(<PayoffChart {...baseProps()} expectedMoveBand={EM_BAND} />);
+
+    const band = screen.getByTestId("em-band");
+    const expCurve = screen.getByTestId("net-book-exp-curve");
+    const t0Curve = screen.getByTestId("net-book-t0-curve");
+
+    // DOCUMENT_POSITION_FOLLOWING on the target means `band` precedes it in source order.
+    expect(
+      band.compareDocumentPosition(expCurve) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      band.compareDocumentPosition(t0Curve) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 
