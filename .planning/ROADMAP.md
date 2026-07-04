@@ -131,6 +131,40 @@ calibrated to each position's live-mark IV instead of a flat default guess.
 - [x] 17-04-PLAN.md — Overview TOS-dock rewrite + wire calibrated IV, two-channel staleness badges,
   row-highlight; records the BookSummary DEFAULT_IV deferral (OVW-01, OVW-02)
 
+### Phase 17.1: Overview Payoff — TOS-Fidelity Graph + Interactivity
+
+**Goal**: Users get a Thinkorswim-grade payoff experience on the Overview: the combined risk-profile
+graph visually matches TOS's Analyze → Risk Profile chart, a date picker projects the curve to a
+chosen future date, individual real-book calendars can be toggled on/off in the graph, and the
+positions box shows each calendar's leg expiration dates + DTEs + days-between. View-only — NO
+simulated/example trades (that stays in the Analyzer).
+**Depends on**: Phase 17 (extends the shipped Overview payoff hero + `repriceScenario` engine; the
+Analyzer already implements date-forward projection + per-position include toggles over the SAME
+engine — this ports a trimmed, view-only version onto the Overview).
+**Requirements**: OVW-03, OVW-04, OVW-05, OVW-06
+**Success Criteria** (what must be TRUE):
+
+  1. (OVW-03) Each positions-box row shows both leg **expiration dates**, both **DTEs**, and the
+     **days between** the two expiries (the calendar width) — not just today's `Nd → Nd`.
+
+  2. (OVW-04) The Overview combined payoff graph **visually emulates the TOS Risk Profile combined
+     chart** (ref: user TOS screenshots — smooth today/date curve + @exp curve, TOS-style axis ticks
+     and scaling); the current wonky rendering (mixed round/key-level x-ticks, @exp dwarfing a
+     near-flat T+0) is resolved.
+
+  3. (OVW-05) A **date picker** (TOS "Date:" style) lets the user project the payoff curve to a
+     chosen future date; the projection feeds the existing `daysForward` path of `repriceScenario`.
+
+  4. (OVW-06) The user can **pick/choose which real-book calendars** are drawn on the graph
+     (per-calendar series toggle, wired from the positions rows). No simulated/example calendars are
+     ever added on the Overview (view-only).
+
+**Design references**: user-provided TOS Analyze → Risk Profile screenshots (combined-graph shape +
+date-picker widget) — save into `mockups/` during discuss-phase. `apps/web/src/screens/Analyzer.tsx`
+is the working in-repo analog (days-forward slider + include checkboxes over the same engine).
+**Plans**: TBD
+**UI hint**: yes
+
 ### Phase 18: Analyzer → Picker UI Redesign
 
 **Goal**: Users see the ranked-cards picker experience end-to-end against typed fixtures, with the
@@ -227,6 +261,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 15. Re-Auth Smoothing | v1.1 | 5/5 | Complete | 2026-07-02 |
 | 16. Deploy Phase-15 Image | v1.2 | 3/3 | Complete    | 2026-07-03 |
 | 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 4/4 | Complete   | 2026-07-03 |
+| 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 0/TBD | Not started | - |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 0/TBD | Not started | - |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |
 | 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |
