@@ -15,6 +15,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { ok, err, assertDefined } from "@morai/shared";
 import type { StreamLiveGreekEvent } from "@morai/contracts";
+import { toDateInputValue } from "../lib/date-projection.ts";
 
 // 17.1-03 (OVW-06): spy-wrap PayoffChart so tests can inspect the exact curve/signature
 // props Overview hands it — the real component still renders (importOriginal), this only
@@ -442,6 +443,77 @@ describe("Overview screen", () => {
 
       expect(withNonConvergent.todayCurve).toEqual(convergentOnly.todayCurve);
       expect(withNonConvergent.expirationCurve).toEqual(convergentOnly.expirationCurve);
+    });
+  });
+
+  // ── 17.1-04 (OVW-05): TOS-style date picker projects the today curve ────────
+
+  describe("OVW-05: date picker projects the today/date curve via daysForward", () => {
+    beforeEach(() => {
+      mockResolveLegIv.mockImplementation(() => ok(0.2));
+    });
+
+    it("shows the Date: label and Previous day / Next day / Today controls with min/max on the native input", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+
+      expect(screen.getByText("Date:")).toBeDefined();
+      expect(screen.getByRole("button", { name: "Previous day" })).toBeDefined();
+      expect(screen.getByRole("button", { name: "Next day" })).toBeDefined();
+      expect(screen.getByRole("button", { name: "Today" })).toBeDefined();
+
+      const input = screen.getByTestId("date-picker-input");
+      expect(input.getAttribute("min")).not.toBeNull();
+      expect(input.getAttribute("max")).not.toBeNull();
+      expect(input.style.colorScheme).toBe("dark");
+    });
+
+    it("picking a future date moves the today curve but leaves the expiration curve fixed (D-01)", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      const before = latestPayoffChartProps();
+
+      const future = new Date();
+      future.setDate(future.getDate() + 5);
+      const input = screen.getByTestId("date-picker-input");
+      fireEvent.change(input, { target: { value: toDateInputValue(future) } });
+
+      const after = latestPayoffChartProps();
+      expect(after.todayCurve).not.toEqual(before.todayCurve);
+      expect(after.expirationCurve).toEqual(before.expirationCurve);
+    });
+
+    it("clicking › steps the projected date forward by one day, moving the today curve", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      const before = latestPayoffChartProps().todayCurve;
+
+      fireEvent.click(screen.getByRole("button", { name: "Next day" }));
+
+      expect(latestPayoffChartProps().todayCurve).not.toEqual(before);
+    });
+
+    it("clicking ‹ at the today baseline is clamped — the today curve does not change", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      const baseline = latestPayoffChartProps().todayCurve;
+
+      fireEvent.click(screen.getByRole("button", { name: "Previous day" }));
+
+      expect(latestPayoffChartProps().todayCurve).toEqual(baseline);
+    });
+
+    it("clicking Today resets the projected date back to daysForward 0", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      const baseline = latestPayoffChartProps().todayCurve;
+
+      fireEvent.click(screen.getByRole("button", { name: "Next day" }));
+      fireEvent.click(screen.getByRole("button", { name: "Next day" }));
+      expect(latestPayoffChartProps().todayCurve).not.toEqual(baseline);
+
+      fireEvent.click(screen.getByRole("button", { name: "Today" }));
+      expect(latestPayoffChartProps().todayCurve).toEqual(baseline);
     });
   });
 });

@@ -14,6 +14,7 @@ import { parseOccSymbol } from "@morai/shared";
 import { classifyRegime } from "../lib/gex-regime.ts";
 import { resolveLegIv } from "../lib/iv-calibration.ts";
 import type { LiveTick } from "../lib/iv-calibration.ts";
+import { resolveDaysForward, computeProjectionBounds, toDateInputValue } from "../lib/date-projection.ts";
 import {
   repriceScenario,
   t0ExcludedPositions,
@@ -773,16 +774,47 @@ export function Overview(): React.ReactElement {
     [calendarBuild],
   );
 
+  // OVW-05: TOS-style date picker — projects the today/date curve to a chosen future
+  // date via the scenario engine's existing `daysForward` path. The @exp curve stays
+  // fixed (D-01): `bookPLAtExpiry` structurally ignores `daysForward`, so no engine
+  // change is needed here (locked by a characterization test in scenario-engine.test.ts).
+  // A single stable `today` reference keeps re-renders/tests deterministic.
+  const today = useMemo(() => new Date(), []);
+  const [dateInputValue, setDateInputValue] = useState<string>(() => toDateInputValue(today));
+  const bounds = useMemo(
+    () =>
+      computeProjectionBounds(
+        calendarPositions.filter((p) => p.included).map((p) => p.frontDte),
+        today,
+      ),
+    [calendarPositions, today],
+  );
+  const daysForward = resolveDaysForward(dateInputValue, today, bounds.maxDaysForward);
+  const handleStepDate = useCallback(
+    (delta: number): void => {
+      setDateInputValue((prev) => {
+        const current = resolveDaysForward(prev, today, bounds.maxDaysForward);
+        const next = Math.max(0, Math.min(current + delta, bounds.maxDaysForward));
+        const nextDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + next);
+        return toDateInputValue(nextDate);
+      });
+    },
+    [today, bounds.maxDaysForward],
+  );
+  const handleResetDate = useCallback((): void => {
+    setDateInputValue(toDateInputValue(today));
+  }, [today]);
+
   const scenario = useMemo(() => {
     const params: ScenarioParams = {
       spot,
-      daysForward: 0,
+      daysForward,
       ivShift: 0,
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
     return repriceScenario(calendarPositions, params);
-  }, [calendarPositions, spot]);
+  }, [calendarPositions, spot, daysForward]);
 
   const positionSetSignature = calendarPositions
     .map((p) => `${p.id}:${p.frontIvStatus ?? "ok"}:${p.backIvStatus ?? "ok"}:${p.included}`)
@@ -888,6 +920,46 @@ export function Overview(): React.ReactElement {
                 </div>
               </div>
               <span className="font-mono text-[10px] text-dim">view-only · Analyzer →</span>
+            </div>
+            {/* OVW-05: date picker — projects scenario.payoffCurve (today/date curve) via
+                daysForward; the @exp curve is unaffected (D-01). Step-arrow/reset buttons
+                reuse the Analyzer's Reset button class string verbatim — no new spacing
+                tokens for this phase (UI-SPEC). */}
+            <div className="mb-2 flex flex-wrap items-center gap-2 font-mono text-[9px] text-dim">
+              <span>Date:</span>
+              <button
+                type="button"
+                onClick={() => { handleStepDate(-1); }}
+                aria-label="Previous day"
+                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim"
+              >
+                ‹
+              </button>
+              <input
+                type="date"
+                data-testid="date-picker-input"
+                min={bounds.minIso}
+                max={bounds.maxIso}
+                value={dateInputValue}
+                onChange={(e) => { setDateInputValue(e.target.value); }}
+                style={{ colorScheme: "dark" }}
+                className="rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[11px] text-txt"
+              />
+              <button
+                type="button"
+                onClick={() => { handleStepDate(1); }}
+                aria-label="Next day"
+                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim"
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                onClick={handleResetDate}
+                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim"
+              >
+                Today
+              </button>
             </div>
             <div className="mb-1 flex flex-wrap gap-3 font-mono text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1.5">
