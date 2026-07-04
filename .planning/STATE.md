@@ -6,14 +6,14 @@ current_phase: 18
 current_phase_name: analyzer-picker-ui-redesign
 status: executing
 stopped_at: Phase 18 UI-SPEC approved
-last_updated: "2026-07-04T04:38:23.970Z"
+last_updated: "2026-07-04T04:46:56.873Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 17
-  completed_plans: 13
+  completed_plans: 14
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 18 (analyzer-picker-ui-redesign) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 18 execution started
 
@@ -187,6 +187,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 17.1 P04 | 8min | 3 tasks | 3 files |
 | Phase 17.1 P05 | 12min | 2 tasks | 2 files |
 | Phase 18 P01 | 25min | 2 tasks | 4 files |
+| Phase 18 P02 | 7min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -233,6 +234,10 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 18-01: guard-case candidate (7450-guard-inverted) is a constructed data point (front IV 15.5% > back IV 10.5% at 21/45 DTE), not a literal mockup row
 - [Phase ?]: 18-01: guard-case debit computes to -802.82 (a credit) — accepted as the mathematically honest BSM output under term-structure inversion, not an authoring error
 - [Phase ?]: 18-01: NOT marking ANLZ-01/02/03 complete despite them appearing in this plan's requirements frontmatter — 18-01 only ships the contract/fixture foundation; 18-02..18-05 still list the same IDs as their own scope (actual UI delivery). Marking complete now would be a false-positive signal; defer to the plan(s) that actually ship the rendered feature.
+- [Phase ?]: 18-02: compareCurve is a separate conditional layer next to (not inside) the retired rollCurve block, not a repurposing
+- [Phase ?]: 18-02: expectedMoveBand reuses the existing Zero-line layer's zeroY value (not recomputed) and is placed before all curve layers in JSX source order so it can never occlude T+0/@exp
+- [Phase ?]: 18-02: buildXScale/INNER_W added to PayoffChart.tsx's existing test-only re-export line (test infra, no behavior change) so tests assert exact spot±em pixel positions
+- [Phase ?]: 18-02: NOT marking ANLZ-02 complete — this plan ships only PayoffChart chart primitives; the user-facing overlay capability ANLZ-02 describes lands in 18-04's picker screen
 
 ### Pending Todos
 
@@ -277,7 +282,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T04:36:07.077Z
+Last session: 2026-07-04T04:46:14.831Z
 Stopped at: Phase 18 UI-SPEC approved
 Resume file: .planning/phases/18-analyzer-picker-ui-redesign/18-UI-SPEC.md
 
