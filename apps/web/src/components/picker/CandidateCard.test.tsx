@@ -18,6 +18,14 @@ function leg(strike: number, iv: number, dte: number): PickerCandidate["frontLeg
   return { strike, putCall: "P", dte, iv };
 }
 
+/** Snapshot-level fields (D-15/D-16/D-17) — identical across every card in a fetch. */
+const SNAPSHOT_PROPS = {
+  asOf: "2026-07-02",
+  source: "schwab" as const,
+  gexContextStatus: "ok" as const,
+  eventsContextStatus: "ok" as const,
+};
+
 function makeCandidate(overrides: {
   id: string;
   breakdown: BreakdownEntry[];
@@ -87,6 +95,7 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
         candidate={candidate}
         selected={false}
         combined={false}
+        {...SNAPSHOT_PROPS}
         onSelect={() => {}}
         onToggleCombine={() => {}}
         copied={false}
@@ -113,6 +122,7 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
         candidate={candidate}
         selected={false}
         combined={false}
+        {...SNAPSHOT_PROPS}
         onSelect={() => {}}
         onToggleCombine={() => {}}
         copied={false}
@@ -139,6 +149,7 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
           candidate={candidate}
           selected={false}
           combined={false}
+        {...SNAPSHOT_PROPS}
           onSelect={() => {}}
           onToggleCombine={() => {}}
           copied={false}
@@ -174,6 +185,7 @@ describe("CandidateCard — click delegation", () => {
         candidate={candidate}
         selected={false}
         combined={false}
+        {...SNAPSHOT_PROPS}
         onSelect={onSelect}
         onToggleCombine={onToggleCombine}
         copied={false}
@@ -202,6 +214,7 @@ describe("CandidateCard — click delegation", () => {
         candidate={candidate}
         selected={false}
         combined={false}
+        {...SNAPSHOT_PROPS}
         onSelect={onSelect}
         onToggleCombine={onToggleCombine}
         copied={false}
@@ -230,6 +243,7 @@ describe("CandidateCard — click delegation", () => {
         candidate={candidate}
         selected={false}
         combined={false}
+        {...SNAPSHOT_PROPS}
         onSelect={onSelect}
         onToggleCombine={() => {}}
         copied={false}
@@ -256,6 +270,7 @@ describe("CandidateCard — click delegation", () => {
         candidate={candidate}
         selected={false}
         combined={false}
+        {...SNAPSHOT_PROPS}
         onSelect={() => {}}
         onToggleCombine={() => {}}
         copied
@@ -279,6 +294,7 @@ describe("CandidateCard — click delegation", () => {
         candidate={candidate}
         selected={false}
         combined
+        {...SNAPSHOT_PROPS}
         onSelect={() => {}}
         onToggleCombine={() => {}}
         copied={false}
@@ -287,5 +303,195 @@ describe("CandidateCard — click delegation", () => {
     );
 
     expect(screen.getByText("✓ Combined")).toBeTruthy();
+  });
+});
+
+describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-16)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders 'as of {HH:MM} · {source}' with a fresh (bg-up) dot for a just-computed snapshot", () => {
+    const nowIso = new Date().toISOString();
+    const candidate = makeCandidate({
+      id: "fresh-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    const { container } = render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        asOf={nowIso}
+        source="cboe"
+        gexContextStatus="ok"
+        eventsContextStatus="ok"
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    const expectedHhmm = new Date(nowIso).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    expect(screen.getByText(`as of ${expectedHhmm} · cboe`)).toBeTruthy();
+    expect(container.querySelector(".bg-up")).not.toBeNull();
+  });
+
+  it("renders an amber (bg-amber) dot when the snapshot is older than the freshness window", () => {
+    const staleIso = new Date(Date.now() - 90 * 60 * 1000).toISOString();
+    const candidate = makeCandidate({
+      id: "stale-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        asOf={staleIso}
+        source="schwab"
+        gexContextStatus="ok"
+        eventsContextStatus="ok"
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    const expectedHhmm = new Date(staleIso).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const tag = screen.getByText(`as of ${expectedHhmm} · schwab`);
+    expect(tag.parentElement?.querySelector(".bg-amber")).not.toBeNull();
+  });
+
+  it("renders 'as of —' (em-dash), never 'Invalid Date', when asOf fails to parse", () => {
+    const candidate = makeCandidate({
+      id: "bad-asof-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    const { container } = render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        asOf="not-a-real-date"
+        source="schwab"
+        gexContextStatus="ok"
+        eventsContextStatus="ok"
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("as of — · schwab")).toBeTruthy();
+    expect(container.innerHTML.includes("Invalid Date")).toBe(false);
+  });
+
+  it("shows a 'GEX unavailable' tag and zeroes the gexFit bar when gexContextStatus !== 'ok'", () => {
+    const candidate = makeCandidate({
+      id: "gex-unavailable-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        asOf="2026-07-02T14:32:00.000Z"
+        source="schwab"
+        gexContextStatus="stale"
+        eventsContextStatus="ok"
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("GEX unavailable")).toBeTruthy();
+    expect(screen.queryByText("events unavailable")).toBeNull();
+    const gexBar = screen.getByTestId("breakdown-bar-fill-gexFit");
+    expect(gexBar.style.width).toBe("0%");
+  });
+
+  it("shows an 'events unavailable' tag and zeroes the eventAdjustment bar when eventsContextStatus !== 'ok'", () => {
+    const candidate = makeCandidate({
+      id: "events-unavailable-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        asOf="2026-07-02T14:32:00.000Z"
+        source="schwab"
+        gexContextStatus="ok"
+        eventsContextStatus="missing"
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("events unavailable")).toBeTruthy();
+    expect(screen.queryByText("GEX unavailable")).toBeNull();
+    const eventBar = screen.getByTestId("breakdown-bar-fill-eventAdjustment");
+    expect(eventBar.style.width).toBe("0%");
+  });
+
+  it("shows both context tags simultaneously when both statuses are degraded", () => {
+    const candidate = makeCandidate({
+      id: "both-unavailable-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        asOf="2026-07-02T14:32:00.000Z"
+        source="schwab"
+        gexContextStatus="missing"
+        eventsContextStatus="stale"
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("GEX unavailable")).toBeTruthy();
+    expect(screen.getByText("events unavailable")).toBeTruthy();
   });
 });

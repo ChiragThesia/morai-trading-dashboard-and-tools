@@ -8,14 +8,22 @@
  * eventAdjustment. The 5th breakdown entry (`beVsEm`) is present in the data but intentionally
  * never rendered as a card bar (D-05) — it surfaces only in the why-panel/scenario strip (18-05).
  *
- * Guard case (fwdIv === null, D-01a/D-06): the fwd-edge bar renders zero-width with an "n/a"
- * caption instead of a NaN/throw, regardless of what `contribution` the guard candidate carries.
+ * Guard cases (never NaN/throw, always zero-width + "n/a" caption):
+ *   - `fwdEdge` when `candidate.fwdIv === null` (D-01a/D-06, term-structure inversion).
+ *   - `gexFit` when `gexContextStatus !== "ok"` (Phase 19, D-17 — degraded GEX context).
+ *   - `eventAdjustment` when `eventsContextStatus !== "ok"` (Phase 19, D-17 — degraded events
+ *     context). Reuses the exact fwdEdge guard-bar visual — never a new zero-state (19-UI-SPEC).
+ *
+ * Per-card staleness+source tag (Phase 19, D-15/D-16, PICK-02 success criterion 3): every card
+ * is self-contained, repeating the snapshot-level `asOf`/`source` fields so a stale/degraded
+ * snapshot never reads as fresh/clean (T-19-21).
  *
  * Hand-rolled bar fills (bg-violet/bg-blue/bg-up/bg-amber Tailwind tokens, no hardcoded hex)
  * mirror PayoffChart.tsx's existing hand-rolled precedent (UI-SPEC Registry Safety).
  */
 import { cn } from "@/lib/utils";
 import type { PickerCandidate, BreakdownEntry } from "@morai/contracts";
+import { GEX_FRESH_MS } from "../../screens/Market.tsx";
 
 const BAR_ORDER = ["slope", "fwdEdge", "gexFit", "eventAdjustment"] as const;
 type BarCriterion = (typeof BAR_ORDER)[number];
@@ -49,11 +57,31 @@ function formatBreakdownCaption(entry: BreakdownEntry): string {
   }
 }
 
+/**
+ * formatAsOf — "as of {HH:MM}" (24h) + freshness, guarded against an unparseable `asOf`.
+ * Never renders "Invalid Date" — an unparseable/NaN timestamp falls back to "as of —" and is
+ * treated as stale (the safe direction per T-19-21: never claim freshness you can't prove).
+ */
+function formatAsOf(asOf: string): { readonly label: string; readonly fresh: boolean } {
+  const ts = new Date(asOf).getTime();
+  if (Number.isNaN(ts)) {
+    return { label: "as of —", fresh: false };
+  }
+  const ageMs = Date.now() - ts;
+  const hhmm = new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  return { label: `as of ${hhmm}`, fresh: ageMs >= 0 && ageMs < GEX_FRESH_MS };
+}
+
 export interface CandidateCardProps {
   readonly candidate: PickerCandidate;
   readonly selected: boolean;
   readonly combined: boolean;
   readonly copied: boolean;
+  /** Snapshot-level fields (D-15/D-16/D-17) — identical across every card in a given fetch. */
+  readonly asOf: string;
+  readonly source: "schwab" | "cboe";
+  readonly gexContextStatus: "ok" | "stale" | "missing";
+  readonly eventsContextStatus: "ok" | "stale" | "missing";
   readonly onSelect: (candidate: PickerCandidate) => void;
   readonly onToggleCombine: (candidate: PickerCandidate) => void;
   readonly onCopy: (candidate: PickerCandidate) => void;
@@ -64,12 +92,19 @@ export function CandidateCard({
   selected,
   combined,
   copied,
+  asOf,
+  source,
+  gexContextStatus,
+  eventsContextStatus,
   onSelect,
   onToggleCombine,
   onCopy,
 }: CandidateCardProps): React.ReactElement {
   const guardFwdEdge = candidate.fwdIv === null;
+  const guardGexFit = gexContextStatus !== "ok";
+  const guardEventAdjustment = eventsContextStatus !== "ok";
   const hasEvents = candidate.frontEvents.length > 0 || candidate.backEvents.length > 0;
+  const staleness = formatAsOf(asOf);
 
   return (
     <div
@@ -100,13 +135,26 @@ export function CandidateCard({
         {!hasEvents && (
           <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-dim">clean</span>
         )}
+        <span className="ml-1 flex items-center gap-1 rounded-sm bg-raise px-1 py-0.5">
+          <span className={cn("size-1.5 rounded-full", staleness.fresh ? "bg-up" : "bg-amber")} />
+          {`${staleness.label} · ${source}`}
+        </span>
+        {guardGexFit && (
+          <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">GEX unavailable</span>
+        )}
+        {guardEventAdjustment && (
+          <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">events unavailable</span>
+        )}
       </div>
 
       <div className="mt-1.5 flex flex-col gap-1">
         {BAR_ORDER.map((criterion) => {
           const entry = candidate.breakdown.find((b) => b.criterion === criterion);
           if (entry === undefined) return null;
-          const isGuardBar = criterion === "fwdEdge" && guardFwdEdge;
+          const isGuardBar =
+            (criterion === "fwdEdge" && guardFwdEdge) ||
+            (criterion === "gexFit" && guardGexFit) ||
+            (criterion === "eventAdjustment" && guardEventAdjustment);
           const width = isGuardBar ? 0 : Math.min(100, Math.max(0, entry.contribution));
           const caption = isGuardBar ? "n/a" : formatBreakdownCaption(entry);
           return (
