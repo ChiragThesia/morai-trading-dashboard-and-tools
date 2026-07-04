@@ -517,23 +517,26 @@ describe("Overview screen", () => {
     });
   });
 
-  // ── 17.1-04 (OVW-04): TOS magenta/cyan curve colors + legend swatches ───────
+  // ── OVW-04: MORAI default curve palette (violet/gray) — TOS behavior, MORAI look ──
 
-  describe("OVW-04: TOS-fidelity curve colors (Overview hero only, D-03a)", () => {
-    it("renders the today curve in TOS magenta and the @exp curve in cyan", () => {
+  describe("OVW-04: Overview hero uses the MORAI default curve palette (matches Analyzer)", () => {
+    it("renders the today curve in MORAI violet and the @exp curve in gray (no TOS override)", () => {
       setPositions([CAL_FRONT, CAL_BACK]);
       const { container } = render(<Overview />);
       const t0Curve = container.querySelector('[data-testid="net-book-t0-curve"]');
       const expCurve = container.querySelector('[data-testid="net-book-exp-curve"]');
-      expect(t0Curve?.getAttribute("stroke")).toBe("var(--color-tos-magenta)");
-      expect(expCurve?.getAttribute("stroke")).toBe("var(--color-cyan)");
+      // PayoffChart defaults (VIOLET / GRAY_MUTED) — Overview passes no color override.
+      expect(t0Curve?.getAttribute("stroke")).toBe("#a78bfa");
+      expect(expCurve?.getAttribute("stroke")).toBe("#7b8696");
     });
 
-    it("legend swatches use bg-tos-magenta (T+0) and bg-cyan (@ exp)", () => {
+    it("legend swatches use bg-violet (T+0) and bg-muted-foreground (@ exp), not TOS neon", () => {
       setPositions([CAL_FRONT, CAL_BACK]);
       const { container } = render(<Overview />);
-      expect(container.querySelector(".bg-tos-magenta")).not.toBeNull();
-      expect(container.querySelector(".bg-cyan")).not.toBeNull();
+      expect(container.querySelector(".bg-violet")).not.toBeNull();
+      expect(container.querySelector(".bg-muted-foreground")).not.toBeNull();
+      expect(container.querySelector(".bg-tos-magenta")).toBeNull();
+      expect(container.querySelector(".bg-cyan")).toBeNull();
     });
   });
 

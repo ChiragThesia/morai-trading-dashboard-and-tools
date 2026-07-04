@@ -1038,11 +1038,11 @@ export function Overview(): React.ReactElement {
             </div>
             <div className="mb-1 flex flex-wrap gap-3 font-mono text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-0.5 w-3.5 rounded-full bg-tos-magenta" />
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-violet" />
                 T+0
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-0.5 w-3.5 rounded-full bg-cyan" />
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-muted-foreground" />
                 @ exp
               </span>
               <span className="flex items-center gap-1.5">
@@ -1054,10 +1054,10 @@ export function Overview(): React.ReactElement {
                 walls
               </span>
             </div>
-            {/* TOS-fidelity curve colors (OVW-04, D-03a) — [ASSUMED] hex values pending the
-                end-of-phase human pixel-check against the re-dropped TOS reference
-                screenshots (RESEARCH A1); scoped to this Overview instance only — the
-                Analyzer's PayoffChart passes neither prop and keeps violet/gray. */}
+            {/* MORAI default curve palette (violet T+0 / gray @exp) — same as the Analyzer's
+                PayoffChart, which passes neither color prop. The TOS graph *logic* (combined
+                curve, date projection, axis scaling) is emulated; the TOS neon palette is
+                intentionally not (OVW-04, user decision — MORAI look, TOS behavior). */}
             <PayoffChart
               todayCurve={scenario.payoffCurve}
               fanCurves={[]}
@@ -1074,8 +1074,6 @@ export function Overview(): React.ReactElement {
               highlightedTodayCurve={highlightedScenario?.payoffCurve ?? null}
               highlightedExpirationCurve={highlightedScenario?.expirationCurve ?? null}
               excludedFromT0Count={excludedFromT0.count}
-              todayCurveColor="var(--color-tos-magenta)"
-              expirationCurveColor="var(--color-cyan)"
             />
             {scenarioStrip.levels.length > 0 && (
               <div
