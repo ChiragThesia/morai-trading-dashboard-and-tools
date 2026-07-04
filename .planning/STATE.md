@@ -5,15 +5,15 @@ milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 19
 current_phase_name: picker-engine-economic-events
 status: executing
-stopped_at: Completed 19-05-PLAN.md
-last_updated: "2026-07-04T22:57:45.406Z"
+stopped_at: Completed 19-07-PLAN.md
+last_updated: "2026-07-04T23:14:37.353Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 26
-  completed_plans: 23
+  completed_plans: 24
   percent: 67
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 19 (picker-engine-economic-events) — EXECUTING
-Plan: 7 of 9
+Plan: 8 of 9
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 19 execution started
 
@@ -198,6 +198,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 19 P04 | 15min | 3 tasks | 13 files |
 | Phase 19 P19-05 | 22min | 3 tasks tasks | 14 files files |
 | Phase 19 P06 | 15min | 2 tasks | 4 files |
+| Phase 19 P07 | 18min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -273,6 +274,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 19-05: migrations 0014+0015 applied+verified LIVE — economic_events.event_date=date, picker_snapshot.observed_at=timestamptz, snapshot=jsonb
 - [Phase ?]: PICKER_TOP_N=8 matches the mockup's own top.slice(0,8) cap (D-03)
 - [Phase ?]: GEX degraded-context zeroing reuses scoring.ts's null-passthrough; events zeroing is a post-scoring breakdown override + score recompute (EconomicEvent has no fetchedAt, so events staleness = now() minus furthest known event date exceeding a 14-day window)
+- [Phase 19]: 19-07: added getPicker optional param to makeMcpRouter (server.ts) between getMacro and getPositions -- MCP tool registration happens in server.ts's per-request closure, not main.ts, so touching server.ts was required plumbing not itemized in the plan's files_modified list
+- [Phase 19]: 19-07: exported ForRunningGetPicker/makeGetPickerUseCase (@morai/core) and makePostgresPickerSnapshotRepo/makeMemoryPickerSnapshotRepo (@morai/adapters) -- built in 19-05/19-06 but never re-exported through the package barrels
+- [Phase 19]: 19-07: get_picker_candidates MCP tool tested via a real McpServer + InMemoryTransport-linked Client (genuine handler invocation) rather than only calling the use-case directly, avoiding the weaker existing get_status test precedent
 
 ### Pending Todos
 
@@ -317,8 +321,8 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T22:56:52.230Z
-Stopped at: Completed 19-05-PLAN.md
+Last session: 2026-07-04T23:14:37.344Z
+Stopped at: Completed 19-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
