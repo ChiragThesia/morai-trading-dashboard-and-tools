@@ -15,4 +15,9 @@ export type {
   PickerSnapshotRow,
   ForPersistingPickerSnapshot,
   ForReadingPickerSnapshot,
+  ForRunningGetPicker,
 } from "./application/ports.ts";
+
+// PICK-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
+// get_picker_candidates MCP tool over the ONE pickerSnapshotResponse contract (MCP-02).
+export { makeGetPickerUseCase } from "./application/getPicker.ts";
