@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 18
 current_phase_name: analyzer-picker-ui-redesign
-status: executing
-stopped_at: Completed 18-03-PLAN.md
-last_updated: "2026-07-04T14:58:23.762Z"
+status: verifying
+stopped_at: Completed 18-05-PLAN.md
+last_updated: "2026-07-04T15:20:28.360Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 17
-  completed_plans: 16
-  percent: 50
+  completed_plans: 17
+  percent: 67
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 18 (analyzer-picker-ui-redesign) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-04 — Phase 18 execution started
 
 ## Milestone v1.2 Summary
@@ -190,6 +190,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 18 P02 | 7min | 2 tasks | 2 files |
 | Phase 18 P03 | 12min | 2 tasks | 2 files |
 | Phase 18 P04 | 40min | 3 tasks | 5 files |
+| Phase 18 P05 | 25min | 3 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -246,6 +247,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 18-04: Breakdown-bar captions per criterion (vol-pts v / percent / ok-minus) are an authored formatting choice mirroring the mockup — UI-SPEC only locks the fwd-edge guard-case n/a caption
 - [Phase ?]: 18-04: CandidateRail extracted+exported from Analyzer.tsx so the empty-state branch is directly unit-testable without module-mocking @morai/contracts (Analyzer is fixture-only, zero props, D-02b)
 - [Phase ?]: 18-04: ScenarioStrip shows numeric-only level headers (no put-wall/flip semantic labels), matching Overview.tsx's buildScenarioStrip reuse precedent
+- [Phase ?]: EntryExitPlan target/stop use |debit|x pct with a fixed +/- sign (never propagates a negative debit's raw sign) to avoid a double-negative on the guard candidate
+- [Phase ?]: TermStructureChart converts event ISO dates to DTE via a fixed, fixture-verified reference date (2026-07-02) - no explicit asOf field exists in the fixture
+- [Phase ?]: Deleted the now-orphaned RollConfig type alongside rollScenario (delete-if-orphaned, D-04a, one level deeper than the plan's explicit list)
 
 ### Pending Todos
 
@@ -290,8 +294,8 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T14:56:46.847Z
-Stopped at: Completed 18-03-PLAN.md
+Last session: 2026-07-04T15:20:28.351Z
+Stopped at: Completed 18-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

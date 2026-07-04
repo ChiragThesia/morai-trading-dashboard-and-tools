@@ -49,7 +49,7 @@ the picker with the real scoring engine, while clearing v1.1 operational debt.
 - [x] **Phase 17: Overview v2 Redesign + IV Calibration Fix** - Payoff-centered "TOS dock" (completed 2026-07-03)
   Overview live on prod, with per-position IV-calibrated T+0 scenario curves
 
-- [ ] **Phase 18: Analyzer → Picker UI Redesign** - Ranked-cards picker UI built contract-first
+- [x] **Phase 18: Analyzer → Picker UI Redesign** - Ranked-cards picker UI built contract-first (completed 2026-07-04)
   against typed fixtures, matching the approved mockup
 
 - [ ] **Phase 19: Picker Engine + Economic Events** - Real `scoreCalendarCandidates` scoring wired
@@ -198,7 +198,7 @@ starts)
 
   3. User sees a why-panel per candidate: term structure with leg dots + forward-vol bracket +
      event markers, plus an entry/exit plan card with +25% / −17.5% defaults.
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -216,7 +216,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 18-05-PLAN.md — Why-panel + term-structure + entry/exit plan + old-Analyzer retirement (ANLZ-03)
+- [x] 18-05-PLAN.md — Why-panel + term-structure + entry/exit plan + old-Analyzer retirement (ANLZ-03)
 
 **UI hint**: yes
 
@@ -295,7 +295,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 16. Deploy Phase-15 Image | v1.2 | 3/3 | Complete    | 2026-07-03 |
 | 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 4/4 | Complete   | 2026-07-03 |
 | 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 5/5 | Complete    | 2026-07-04 |
-| 18. Analyzer → Picker UI Redesign | v1.2 | 4/5 | In Progress|  |
+| 18. Analyzer → Picker UI Redesign | v1.2 | 5/5 | Complete   | 2026-07-04 |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |
 | 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |
 

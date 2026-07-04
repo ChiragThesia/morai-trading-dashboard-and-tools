@@ -52,7 +52,7 @@ tail.
 - [x] **ANLZ-02**: User can overlay a candidate on the payoff center (⊕ compare) with
   expected-move band and scenario strip
 
-- [ ] **ANLZ-03**: User sees a why-panel per candidate: term structure with leg dots +
+- [x] **ANLZ-03**: User sees a why-panel per candidate: term structure with leg dots +
   forward-vol bracket + event markers, and an entry/exit plan card (+25% / −17.5% defaults)
 
 ### Picker Engine
@@ -134,7 +134,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OVW-06 | Phase 17.1 | Complete |
 | ANLZ-01 | Phase 18 | Complete |
 | ANLZ-02 | Phase 18 | Complete |
-| ANLZ-03 | Phase 18 | Pending |
+| ANLZ-03 | Phase 18 | Complete |
 | PICK-01 | Phase 19 | Pending |
 | PICK-02 | Phase 19 | Pending |
 | PICK-03 | Phase 19 | Pending |
