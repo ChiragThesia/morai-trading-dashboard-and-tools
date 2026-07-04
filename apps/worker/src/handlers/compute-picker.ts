@@ -19,7 +19,7 @@ type ComputePickerHandlerDeps = {
  *   context is available). No cron — this queue is never scheduled by schedule.ts.
  * RTH + NYSE holiday gate mirrors compute-gex-snapshot's T-08-11 discipline so a holiday/off-RTH
  *   enqueue (a stale send or manual trigger) never writes a picker snapshot.
- * Terminal job — no further boss.send (compute-picker is the last step in the analytics chain).
+ * Terminal job — no further enqueue (compute-picker is the last step in the analytics chain).
  * T-02-18: array-guard for pg-boss v12 undefined element (Pitfall 2).
  */
 export function makeComputePickerHandler(
@@ -41,6 +41,6 @@ export function makeComputePickerHandler(
       // Throw to signal failure to pg-boss — marks job as failed for retry/alerting
       throw new Error(result.error.message);
     }
-    // Terminal job — no boss.send (compute-picker is the new terminal job — D-04).
+    // Terminal job — no further enqueue (compute-picker is the new terminal job — D-04).
   };
 }
