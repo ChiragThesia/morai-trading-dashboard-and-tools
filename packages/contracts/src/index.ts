@@ -91,3 +91,26 @@ export type { CotSeriesEntry, CotResponse } from "./cot.ts";
 // Macro contracts (Phase 14 — MCP-02: ONE schema source for GET /api/analytics/macro + get_macro MCP tool)
 export { macroSeriesPoint, macroResponse, macroQuery, MACRO_SERIES_IDS, macroSeriesId } from "./macro.ts";
 export type { MacroSeriesPoint, MacroResponse, MacroQuery, MacroSeriesId } from "./macro.ts";
+
+// Picker contracts (Phase 18 — D-01; MCP-02: ONE schema source for the Phase-19
+// /api/picker/candidates + get_picker_candidates MCP tool)
+export {
+  pickerCandidateLeg,
+  breakdownEntry,
+  exitPlan,
+  pickerCandidate,
+  termStructurePoint,
+  pickerGexContext,
+  pickerEvent,
+  pickerSnapshotResponse,
+} from "./picker.ts";
+export type {
+  PickerCandidateLeg,
+  BreakdownEntry,
+  ExitPlan,
+  PickerCandidate,
+  TermStructurePoint,
+  PickerGexContext,
+  PickerEvent,
+  PickerSnapshotResponse,
+} from "./picker.ts";
