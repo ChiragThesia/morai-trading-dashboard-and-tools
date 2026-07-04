@@ -1,10 +1,11 @@
 ---
 phase: 19
 slug: picker-engine-economic-events
-status: draft
+status: approved
 shadcn_initialized: true
 preset: base-nova
 created: 2026-07-04
+reviewed_at: 2026-07-04
 ---
 
 # Phase 19 — UI Design Contract
