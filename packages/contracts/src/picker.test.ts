@@ -8,7 +8,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { breakdownEntry, pickerCandidate } from "./picker.ts";
+import { breakdownEntry, pickerCandidate, pickerSnapshotResponse } from "./picker.ts";
+import { pickerSnapshotFixture } from "./__fixtures__/picker-candidates.fixture.ts";
 
 // Oracle payload — one real candidate from mockups/playground-v4.html buildCandidates()
 // OUTPUT (top-scored: 7500P Jul 23 / Aug 14, score 47).
@@ -93,5 +94,52 @@ describe("breakdownEntry.criterion (closed enum, structurally excludes REFUTED c
 
   it("rejects any other out-of-enum criterion string", () => {
     expect(() => breakdownEntry.parse({ ...base, criterion: "ivDiffBand" })).toThrow();
+  });
+});
+
+describe("pickerSnapshotFixture (frozen fixture — D-03)", () => {
+  it("parses the frozen pickerSnapshotFixture clean", () => {
+    expect(() => pickerSnapshotResponse.parse(pickerSnapshotFixture)).not.toThrow();
+  });
+
+  it("contains exactly ONE guard-case candidate (fwdIv null + fwdIvGuard 'inverted')", () => {
+    const guardCandidates = pickerSnapshotFixture.candidates.filter(
+      (c) => c.fwdIv === null && c.fwdIvGuard === "inverted",
+    );
+    expect(guardCandidates).toHaveLength(1);
+  });
+
+  it("every non-guard candidate has fwdIv !== null and fwdIvGuard === 'ok'", () => {
+    const nonGuard = pickerSnapshotFixture.candidates.filter((c) => c.fwdIvGuard !== "inverted");
+    expect(nonGuard.every((c) => c.fwdIv !== null && c.fwdIvGuard === "ok")).toBe(true);
+  });
+
+  it("the guard-case candidate's expectedMove/theta/vega/score are all finite non-null numbers (Pitfall 3)", () => {
+    const guard = pickerSnapshotFixture.candidates.find((c) => c.fwdIvGuard === "inverted");
+    expect(guard).toBeDefined();
+    expect(Number.isFinite(guard?.expectedMove)).toBe(true);
+    expect(Number.isFinite(guard?.theta)).toBe(true);
+    expect(Number.isFinite(guard?.vega)).toBe(true);
+    expect(Number.isFinite(guard?.score)).toBe(true);
+  });
+
+  it("every candidate's breakdown array contains all five criteria exactly once", () => {
+    const allCriteria = ["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm"].sort();
+    for (const candidate of pickerSnapshotFixture.candidates) {
+      const criteria = candidate.breakdown.map((entry) => entry.criterion).sort();
+      expect(criteria).toEqual(allCriteria);
+    }
+  });
+
+  it("has between 6 and 8 non-guard candidates plus exactly 1 guard-case candidate", () => {
+    const nonGuardCount = pickerSnapshotFixture.candidates.filter(
+      (c) => c.fwdIvGuard !== "inverted",
+    ).length;
+    const guardCount = pickerSnapshotFixture.candidates.filter(
+      (c) => c.fwdIvGuard === "inverted",
+    ).length;
+    expect(nonGuardCount).toBeGreaterThanOrEqual(6);
+    expect(nonGuardCount).toBeLessThanOrEqual(8);
+    expect(guardCount).toBe(1);
   });
 });
