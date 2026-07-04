@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 17.1
 current_phase_name: overview-payoff-tos-fidelity-graph-interactivity
-status: executing
+status: verifying
 stopped_at: Completed 17.1-04-PLAN.md
-last_updated: "2026-07-04T02:10:26.000Z"
+last_updated: "2026-07-04T02:24:07.129Z"
 last_activity: 2026-07-04
 last_activity_desc: Completed 17.1-04-PLAN.md (date picker + TOS colors)
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 12
-  completed_plans: 11
-  percent: 33
+  completed_plans: 12
+  percent: 50
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 17.1 (overview-payoff-tos-fidelity-graph-interactivity) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-04 — Completed 17.1-04-PLAN.md (date picker + TOS colors)
 
 ## Milestone v1.2 Summary
@@ -184,6 +184,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 17.1 P02 | 9min | 3 tasks | 3 files |
 | Phase 17.1 P03 | 3min | 3 tasks | 2 files |
 | Phase 17.1 P04 | 8min | 3 tasks | 3 files |
+| Phase 17.1 P05 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -225,6 +226,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 17.1-04: ‹/› step handlers clamp via resolveDaysForward(prev, today, maxDaysForward) BEFORE incrementing (not raw date+delta on the stored ISO string) — avoids drift past the bound on repeated clicks
 - [Phase ?]: 17.1-04: daysForward feeds ONLY the main scenario useMemo (net-book curves) — the row-highlight overlay scenario intentionally stays on daysForward:0, matching the plan's explicit scope
 - [Phase ?]: 17.1-04: TOS magenta/cyan hex values remain [ASSUMED] (RESEARCH A1) pending an end-of-phase human pixel-check against reference screenshots not yet re-dropped to mockups/tos-reference/ — not a blocker for this plan
+- [Phase ?]: 17.1-05: formatExpiryCell takes a discriminated-union input (calendar/single) rather than CalendarGroup/BrokerPositionResponse directly — decoupled from pair-calendars.ts types, trivially unit-testable with literal values
+- [Phase ?]: 17.1-05: single-leg parse-failure DTE now defaults to 0 (was whole-cell dash) — consistent with pair-calendars.ts's own dte() helper default; no test asserted old behavior, no unparseable occSymbols in current book
 
 ### Pending Todos
 
@@ -269,7 +272,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T02:10:26.000Z
+Last session: 2026-07-04T02:23:26.052Z
 Stopped at: Completed 17.1-04-PLAN.md
 Resume file: None
 

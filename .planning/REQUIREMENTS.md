@@ -29,7 +29,7 @@ tail.
   (bisection via the core IV-inversion module, tagged non-convergence result — never a flat
   DEFAULT_IV guess); stale GEX displays its snapshot timestamp
 
-- [ ] **OVW-03**: Each positions-box row shows both leg expiration dates + both DTEs + the
+- [x] **OVW-03**: Each positions-box row shows both leg expiration dates + both DTEs + the
   days between the two expiries (the calendar width), not just today's `Nd → Nd`
 
 - [x] **OVW-04**: The Overview payoff graph visually emulates the TOS Analyze → Risk Profile
@@ -128,7 +128,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPLOY-04 | Phase 16 | Complete |
 | OVW-01 | Phase 17 | Complete |
 | OVW-02 | Phase 17 | Complete |
-| OVW-03 | Phase 17.1 | Pending |
+| OVW-03 | Phase 17.1 | Complete |
 | OVW-04 | Phase 17.1 | Complete |
 | OVW-05 | Phase 17.1 | Complete |
 | OVW-06 | Phase 17.1 | Complete |
