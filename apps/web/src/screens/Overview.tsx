@@ -379,7 +379,7 @@ function PositionsTable({
                   type="checkbox"
                   checked={included}
                   onChange={() => { onToggleExcluded(r.key); }}
-                  aria-label={`Include ${r.label} in total`}
+                  aria-label={`Include ${r.label} in risk profile & total`}
                   className="accent-blue cursor-pointer"
                 />
               </td>

@@ -370,7 +370,7 @@ describe("Overview screen", () => {
       const beforeTodayCurve = before.todayCurve;
       const beforeExpirationCurve = before.expirationCurve;
 
-      const checkbox = screen.getByRole("checkbox", { name: "Include 7425P in total" });
+      const checkbox = screen.getByRole("checkbox", { name: "Include 7425P in risk profile & total" });
       fireEvent.click(checkbox);
 
       const after = latestPayoffChartProps();
@@ -395,6 +395,28 @@ describe("Overview screen", () => {
       const props = latestPayoffChartProps();
       expect(props.todayCurve.length).toBeGreaterThan(0);
       expect(props.positionSetSignature).toContain(`${CAL_ROW_KEY}:ok:ok:true`);
+    });
+
+    it("checkbox accessible name matches the UI-SPEC copywriting contract", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      expect(screen.getByRole("checkbox", { name: "Include 7425P in risk profile & total" })).toBeDefined();
+    });
+
+    it("one checkbox click updates BOTH the Net included/total count AND the chart curve props from a single interaction", () => {
+      setPositions([CAL_FRONT, CAL_BACK, CAL2_FRONT, CAL2_BACK]);
+      render(<Overview />);
+
+      // Net · 2/2 before any toggle
+      expect(screen.getByText(/2\/2/)).toBeDefined();
+      const beforeCurve = latestPayoffChartProps().todayCurve;
+
+      fireEvent.click(screen.getByRole("checkbox", { name: "Include 7425P in risk profile & total" }));
+
+      // Same interaction updates the table total...
+      expect(screen.getByText(/1\/2/)).toBeDefined();
+      // ...and the chart curve, in one click.
+      expect(latestPayoffChartProps().todayCurve).not.toEqual(beforeCurve);
     });
   });
 });
