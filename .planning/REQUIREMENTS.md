@@ -32,7 +32,7 @@ tail.
 - [ ] **OVW-03**: Each positions-box row shows both leg expiration dates + both DTEs + the
   days between the two expiries (the calendar width), not just today's `Nd → Nd`
 
-- [ ] **OVW-04**: The Overview payoff graph visually emulates the TOS Analyze → Risk Profile
+- [x] **OVW-04**: The Overview payoff graph visually emulates the TOS Analyze → Risk Profile
   combined chart (magenta today/date curve + cyan @exp, TOS axis ticks + auto-scaling); the
   prior wonky rendering (mixed round/key-level x-ticks, @exp dwarfing a near-flat T+0) is resolved
 
@@ -129,7 +129,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OVW-01 | Phase 17 | Complete |
 | OVW-02 | Phase 17 | Complete |
 | OVW-03 | Phase 17.1 | Pending |
-| OVW-04 | Phase 17.1 | Pending |
+| OVW-04 | Phase 17.1 | Complete |
 | OVW-05 | Phase 17.1 | Complete |
 | OVW-06 | Phase 17.1 | Pending |
 | ANLZ-01 | Phase 18 | Pending |
