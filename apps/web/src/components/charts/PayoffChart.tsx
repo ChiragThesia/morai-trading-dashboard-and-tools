@@ -375,7 +375,68 @@ export function PayoffChart({
   const xTicks = useMemo(() => buildXTicks(X_MIN, X_MAX), []);
 
   return (
-    <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 300 }}>
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", flex: 1, minHeight: 300 }}>
+      {/* Breakeven pills — readable readouts above the chart (violet = today, gray = @exp),
+          so the values never overlap inside the plot. The in-chart markers are the red bars. */}
+      {(beToday.length > 0 || (toggles.showExpiration && beExp.length > 0)) && (
+        <div
+          data-testid="be-pills"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 6,
+            fontFamily: "JetBrains Mono, monospace",
+            fontSize: 10,
+          }}
+        >
+          {beToday.length > 0 && (
+            <>
+              <span style={{ color: todayCurveColor, opacity: 0.85 }}>BE today</span>
+              {beToday.map((x) => (
+                <span
+                  key={`pill-t0-${x}`}
+                  data-testid="be-pill-t0"
+                  style={{
+                    color: todayCurveColor,
+                    border: `1px solid ${todayCurveColor}80`,
+                    background: `${todayCurveColor}14`,
+                    borderRadius: 4,
+                    padding: "1px 6px",
+                  }}
+                >
+                  {Math.round(x)}
+                </span>
+              ))}
+            </>
+          )}
+          {toggles.showExpiration && beExp.length > 0 && (
+            <>
+              <span style={{ color: expirationCurveColor, opacity: 0.85, marginLeft: beToday.length > 0 ? 4 : 0 }}>
+                BE @exp
+              </span>
+              {beExp.map((x) => (
+                <span
+                  key={`pill-exp-${x}`}
+                  data-testid="be-pill-exp"
+                  style={{
+                    color: expirationCurveColor,
+                    border: `1px solid ${expirationCurveColor}80`,
+                    background: `${expirationCurveColor}14`,
+                    borderRadius: 4,
+                    padding: "1px 6px",
+                  }}
+                >
+                  {Math.round(x)}
+                </span>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 0 }}>
       {/* D-02: net-book T+0 self-flag note — placed near the legend row position */}
       {exclusionNoteText !== null && (
         <div
@@ -677,57 +738,34 @@ export function PayoffChart({
             </>
           )}
 
-          {/* ── Layer 7: Expiration BE dashed lines (gray) ───────────────── */}
+          {/* ── Breakeven markers: short red vertical bars at the zero line (TOS-style).
+              The values are labeled in the pill row above the chart, so there is no
+              in-chart text to overlap when strikes sit close together. ── */}
           {toggles.showExpiration &&
             beExp.map((x) => (
-              <g key={`be-exp-${x}`}>
-                <line
-                  x1={xScale(x)}
-                  y1={0}
-                  x2={xScale(x)}
-                  y2={INNER_H}
-                  stroke={expirationCurveColor}
-                  strokeWidth={1}
-                  strokeDasharray="4 3"
-                  opacity={0.55}
-                />
-                <text
-                  x={xScale(x)}
-                  y={INNER_H - 4}
-                  fill={expirationCurveColor}
-                  fontSize={9}
-                  textAnchor="middle"
-                  fontFamily="JetBrains Mono, monospace"
-                >
-                  {`BE ${Math.round(x)}`}
-                </text>
-              </g>
-            ))}
-
-          {/* ── Layer 8: T+0 BE dashed lines (violet) ────────────────────── */}
-          {beToday.map((x) => (
-            <g key={`be-t0-${x}`}>
               <line
+                key={`be-exp-${x}`}
+                data-testid="be-marker-exp"
                 x1={xScale(x)}
-                y1={0}
+                y1={zeroY - 9}
                 x2={xScale(x)}
-                y2={INNER_H}
-                stroke={todayCurveColor}
-                strokeWidth={1}
-                strokeDasharray="2 3"
-                opacity={0.55}
+                y2={zeroY + 9}
+                stroke={CORAL}
+                strokeWidth={2}
               />
-              <text
-                x={xScale(x)}
-                y={24}
-                fill={todayCurveColor}
-                fontSize={9}
-                textAnchor="middle"
-                fontFamily="JetBrains Mono, monospace"
-              >
-                {`BE·T0 ${Math.round(x)}`}
-              </text>
-            </g>
+            ))}
+          {beToday.map((x) => (
+            <line
+              key={`be-t0-${x}`}
+              data-testid="be-marker-t0"
+              x1={xScale(x)}
+              y1={zeroY - 9}
+              x2={xScale(x)}
+              y2={zeroY + 9}
+              stroke={CORAL}
+              strokeWidth={2}
+              opacity={0.75}
+            />
           ))}
 
           {/* ── Layer 2 (on top): T+0 curve violet #a78bfa ───────────────── */}
@@ -870,6 +908,7 @@ export function PayoffChart({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

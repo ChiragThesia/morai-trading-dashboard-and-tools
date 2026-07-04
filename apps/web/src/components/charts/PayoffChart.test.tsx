@@ -460,3 +460,37 @@ describe("PayoffChart — curve-color props (OVW-04, D-03 scoped brand override)
     expect(exp.getAttribute("stroke")).toBe("#7b8696");
   });
 });
+
+describe("PayoffChart — breakeven pills + red markers (TOS-style)", () => {
+  afterEach(cleanup);
+
+  it("renders BE pills above the chart with the today and @exp breakeven strikes", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    expect(container.querySelector('[data-testid="be-pills"]')).not.toBeNull();
+    const t0 = [...container.querySelectorAll('[data-testid="be-pill-t0"]')].map((e) => e.textContent);
+    const exp = [...container.querySelectorAll('[data-testid="be-pill-exp"]')].map((e) => e.textContent);
+    expect(t0).toContain("7400"); // TODAY_CURVE crosses zero at 7400
+    expect(exp).toContain("7400"); // EXP_CURVE crosses zero at 7400
+  });
+
+  it("draws short red vertical BE markers in the chart (CORAL stroke, not full-height dashed text)", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    const markers = container.querySelectorAll(
+      '[data-testid="be-marker-t0"], [data-testid="be-marker-exp"]',
+    );
+    expect(markers.length).toBeGreaterThan(0);
+    expect(markers[0]?.getAttribute("stroke")).toBe("#ef5350");
+    // No more in-chart "BE·T0" text labels (moved to the pills).
+    expect(container.textContent).not.toContain("BE·T0");
+  });
+
+  it("hides @exp BE pills + markers when showExpiration is off", () => {
+    const { container } = render(
+      <PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showExpiration: false }} />,
+    );
+    expect(container.querySelectorAll('[data-testid="be-pill-exp"]').length).toBe(0);
+    expect(container.querySelectorAll('[data-testid="be-marker-exp"]').length).toBe(0);
+    // today BEs still shown
+    expect(container.querySelectorAll('[data-testid="be-pill-t0"]').length).toBeGreaterThan(0);
+  });
+});
