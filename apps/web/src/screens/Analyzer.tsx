@@ -27,6 +27,7 @@ import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
+import { AdHocCalendarAnalysis } from "../components/picker/AdHocCalendarAnalysis.tsx";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
@@ -270,10 +271,20 @@ export function Analyzer(): React.ReactElement {
   }, [compareCandidate, params]);
 
   return (
-    <div
-      className="grid gap-4 bg-bg p-3"
-      style={{ gridTemplateColumns: "300px 1fr 330px" }}
-    >
+    <div className="flex flex-col gap-4 bg-bg p-3">
+      {/* ── Top: paste-to-analyze a new calendar (payoff only; scoring is Phase 19) ─── */}
+      <AdHocCalendarAnalysis
+        today={today}
+        spot={PARAMS.spot}
+        rate={DEFAULT_RATE}
+        gex={{
+          putWall: pickerSnapshotFixture.gex.putWall,
+          flip: pickerSnapshotFixture.gex.flip,
+          callWall: pickerSnapshotFixture.gex.callWall,
+        }}
+      />
+
+      <div className="grid gap-4" style={{ gridTemplateColumns: "300px 1fr 330px" }}>
       {/* ── Left column: ranked rail ─────────────────────────────────── */}
       <div className="flex flex-col">
         <CandidateRail
@@ -367,6 +378,7 @@ export function Analyzer(): React.ReactElement {
 
       {/* ── Right column: why-panel / term-structure / entry-exit-plan ─── */}
       <RightColumn candidate={selected} />
+      </div>
     </div>
   );
 }

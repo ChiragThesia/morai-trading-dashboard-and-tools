@@ -347,6 +347,19 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
   });
 });
 
+describe("Analyzer — ad-hoc paste panel (paste-in)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("mounts the paste-to-analyze panel at the top", () => {
+    render(<Analyzer />);
+    expect(screen.getByTestId("adhoc-input")).toBeTruthy();
+    expect(screen.getByTestId("adhoc-analyze")).toBeTruthy();
+  });
+});
+
 describe("Analyzer — copy TOS order (copy-out)", () => {
   afterEach(() => {
     cleanup();
