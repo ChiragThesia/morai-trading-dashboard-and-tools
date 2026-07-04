@@ -275,7 +275,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 15. Re-Auth Smoothing | v1.1 | 5/5 | Complete | 2026-07-02 |
 | 16. Deploy Phase-15 Image | v1.2 | 3/3 | Complete    | 2026-07-03 |
 | 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 4/4 | Complete   | 2026-07-03 |
-| 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 5/5 | Complete   | 2026-07-04 |
+| 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 5/5 | Complete    | 2026-07-04 |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 0/TBD | Not started | - |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |
 | 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
-current_phase: 17.1
-current_phase_name: overview-payoff-tos-fidelity-graph-interactivity
+current_phase: 18
+current_phase_name: Analyzer → Picker UI Redesign
 status: verifying
 stopped_at: Completed 17.1-04-PLAN.md
-last_updated: "2026-07-04T02:24:07.129Z"
+last_updated: "2026-07-04T02:55:57.438Z"
 last_activity: 2026-07-04
-last_activity_desc: Completed 17.1-04-PLAN.md (date picker + TOS colors)
+last_activity_desc: Phase 17.1 complete, transitioned to Phase 18
 progress:
   total_phases: 6
   completed_phases: 3
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 17.1 (overview-payoff-tos-fidelity-graph-interactivity) — EXECUTING
-Plan: 5 of 5
+Phase: 18 — Analyzer → Picker UI Redesign
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-04 — Completed 17.1-04-PLAN.md (date picker + TOS colors)
+Last activity: 2026-07-04 — Phase 17.1 complete, transitioned to Phase 18
 
 ## Milestone v1.2 Summary
 
@@ -92,6 +92,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 14 | 7 | - | - |
 | 15 | 5 | - | - |
 | 16 | 3 | - | - |
+| 17.1 | 5 | - | - |
 
 **Recent Trend:**
 
