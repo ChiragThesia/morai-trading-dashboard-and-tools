@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 19
 current_phase_name: picker-engine-economic-events
-status: executing
-stopped_at: Completed 19-07-PLAN.md
-last_updated: "2026-07-04T23:32:32.596Z"
+status: verifying
+stopped_at: Completed 19-09-PLAN.md (final plan of Phase 19)
+last_updated: "2026-07-04T23:58:26.137Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 26
-  completed_plans: 25
-  percent: 67
+  completed_plans: 26
+  percent: 83
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 19 (picker-engine-economic-events) — EXECUTING
 Plan: 9 of 9
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-04 — Phase 19 execution started
 
 ## Milestone v1.2 Summary
@@ -200,6 +200,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 19 P06 | 15min | 2 tasks | 4 files |
 | Phase 19 P07 | 18min | 3 tasks | 9 files |
 | Phase 19 P08 | 20min | 3 tasks | 12 files |
+| Phase 19 P09 | ~20min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -280,6 +281,10 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 19]: 19-07: get_picker_candidates MCP tool tested via a real McpServer + InMemoryTransport-linked Client (genuine handler invocation) rather than only calling the use-case directly, avoiding the weaker existing get_status test precedent
 - [Phase 19-08]: absGammaStrike derived at the composition root from GexSnapshotRow.strikes (max abs-gex strike) since GexSnapshotRow has no such field
 - [Phase 19-08]: reworded compute-picker terminal-job comments from 'no boss.send' to 'no further enqueue' so the plan's own literal-grep acceptance criterion passes
+- [Phase 19-09]: usePicker's queryFn returns null (not a thrown Error) on a 404 -- the cold-start no-snapshot response is honest 'nothing computed yet', distinct from a real fetch failure, so Analyzer can render 'Picker warming up' instead of the generic error state
+- [Phase 19-09]: Analyzer.tsx collapses usePicker's data (PickerSnapshotResponse | null | undefined) into one snapshot: PickerSnapshotResponse | null local via data ?? null, simplifying every downstream guard to a single snapshot !== null check
+- [Phase 19-09]: AdHocCalendarAnalysis's non-nullable gex prop falls back to 0 for a null putWall/flip/callWall (best-effort ad-hoc panel, never scored) -- also fixed 3 pre-existing typecheck errors on the exact lines this task rewrote
+- [Phase 19-09]: CandidateCard's staleness tag reads pickerSnapshotResponse.asOf (a date-only string) literally per the plan's own task text, NOT the picker_snapshot row's observedAt timestamp (which the HTTP route currently discards) -- flagged as a known limitation/follow-up, safe failure direction (never falsely reads fresh)
 
 ### Pending Todos
 
@@ -324,9 +329,9 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T23:30:25.175Z
-Stopped at: Completed 19-07-PLAN.md
-Resume file: None
+Last session: 2026-07-04T23:58:26.127Z
+Stopped at: Completed 19-09-PLAN.md (final plan of Phase 19)
+Resume file: 
 
 ## Operator Next Steps
 
