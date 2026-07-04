@@ -37,16 +37,44 @@
  *   - Selecting the guard candidate (fwdIv null) shows the guard sentence and the term
  *     structure's omitted-bracket + guard tag (T-18-10) — the right column is fully re-wired
  *     per selection, not stuck on the default candidate.
+ *
+ * 19-09-PLAN.md (Task 2, PICK-02 fixture→live swap): Analyzer now sources its data from
+ * `usePicker()` instead of the synchronous `pickerSnapshotFixture` import. `usePicker` is
+ * mocked so the fixture-driven suites above are unaffected (the default mock resolves
+ * `pickerSnapshotFixture` as `data`, matching the frozen Phase-18 behavior byte-for-byte) —
+ * new suites at the bottom of this file cover the D-18/D-19 loading/error/cold-start/
+ * zero-filtered states the synchronous fixture never needed.
  */
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
+import type { UseQueryResult } from "@tanstack/react-query";
+import type { PickerSnapshotResponse } from "@morai/contracts";
 
 vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../components/charts/PayoffChart.tsx")>();
   return { ...actual, PayoffChart: vi.fn(actual.PayoffChart) };
 });
+
+const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
+vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
+
+/** Loose shape covering only the fields Analyzer.tsx actually reads off the query result. */
+type MockPickerResult = Pick<
+  UseQueryResult<PickerSnapshotResponse | null>,
+  "data" | "isPending" | "isError" | "refetch"
+>;
+
+function mockUsePickerReturn(overrides: Partial<MockPickerResult>): void {
+  mockUsePicker.mockReturnValue({
+    data: pickerSnapshotFixture,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+    ...overrides,
+  });
+}
 
 import { Analyzer, CandidateRail } from "./Analyzer.tsx";
 import { buildTosCalendarOrder } from "../lib/tos-order.ts";
@@ -87,6 +115,13 @@ const GUARD = pickerSnapshotFixture.candidates.find((c) => c.fwdIv === null);
 if (GUARD === undefined) {
   throw new Error("pickerSnapshotFixture must carry a guard (fwdIv null) candidate for this suite");
 }
+
+// Default usePicker() mock for every test in this file: a settled, populated fetch equal to
+// the frozen Phase-18 fixture — every pre-existing fixture-driven suite below is unaffected.
+// Individual tests in the "live-data states" suite override this per-test.
+beforeEach(() => {
+  mockUsePickerReturn({});
+});
 
 describe("Analyzer — ranked candidate rail (Task 2)", () => {
   afterEach(() => {
@@ -154,16 +189,20 @@ describe("Analyzer — per-candidate scoring checklist", () => {
   });
 });
 
-describe("CandidateRail — empty state (Task 2)", () => {
+describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D-18)", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("renders the locked empty-state copy when given zero candidates", () => {
+  it("renders the locked empty-state copy (with the live asOf) when given zero candidates", () => {
     render(
       <CandidateRail
         candidates={[]}
+        asOf="2026-07-02"
+        source="schwab"
+        gexContextStatus="ok"
+        eventsContextStatus="ok"
         selectedId=""
         combinedIds={new Set()}
         copiedId={null}
@@ -173,11 +212,10 @@ describe("CandidateRail — empty state (Task 2)", () => {
       />,
     );
 
+    expect(screen.getByTestId("picker-empty-filtered")).toBeTruthy();
     expect(screen.getByText("No candidates in this snapshot")).toBeTruthy();
     expect(
-      screen.getByText(
-        "The picker found no calendars meeting the DTE and theta screen for today's chain. Check back after the next 30-minute snapshot.",
-      ),
+      screen.getByText("No put calendars meet net-θ>0 over the 2026-07-02 snapshot."),
     ).toBeTruthy();
   });
 
@@ -185,6 +223,10 @@ describe("CandidateRail — empty state (Task 2)", () => {
     const { container } = render(
       <CandidateRail
         candidates={[]}
+        asOf="2026-07-02"
+        source="schwab"
+        gexContextStatus="ok"
+        eventsContextStatus="ok"
         selectedId=""
         combinedIds={new Set()}
         copiedId={null}
@@ -438,5 +480,89 @@ describe("Analyzer — payoff controls (shared date projection + series toggles)
 
     expect(latestPayoffChartProps().toggles.showExpiration).toBe(false);
     expect(latestPayoffChartProps().toggles.showWalls).toBe(true);
+  });
+});
+
+describe("Analyzer — live-data states (Task 2, 19-09-PLAN.md, D-18/D-19)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("loading: shows text-only 'Loading candidates…' when isPending && data === undefined", () => {
+    mockUsePickerReturn({ data: undefined, isPending: true, isError: false });
+
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("picker-loading").textContent).toBe("Loading candidates…");
+    expect(screen.queryByTestId("picker-error")).toBeNull();
+    expect(screen.queryByTestId("picker-empty-cold-start")).toBeNull();
+    expect(screen.queryByTestId("picker-empty-filtered")).toBeNull();
+    expect(screen.queryByText("Suggested calendars")).toBeTruthy();
+    // No shadcn Skeleton pulse (D-19) — text-only.
+    expect(document.querySelector(".animate-pulse")).toBeNull();
+  });
+
+  it("error: shows 'Couldn't load candidates.' + a Retry button that calls refetch()", () => {
+    const refetch = vi.fn();
+    mockUsePickerReturn({ data: undefined, isPending: false, isError: true, refetch });
+
+    render(<Analyzer />);
+
+    const errorBlock = screen.getByTestId("picker-error");
+    expect(errorBlock.textContent).toContain("Couldn't load candidates.");
+    expect(screen.queryByTestId("picker-loading")).toBeNull();
+
+    fireEvent.click(screen.getByText("Retry"));
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  it("cold-start: settled with no snapshot (404 -> null) shows 'Picker warming up'", () => {
+    mockUsePickerReturn({ data: null, isPending: false, isError: false });
+
+    render(<Analyzer />);
+
+    const coldStart = screen.getByTestId("picker-empty-cold-start");
+    expect(coldStart.textContent).toContain("Picker warming up");
+    expect(coldStart.textContent).toContain(
+      "First scoring run pending — check back after the next chain snapshot.",
+    );
+    expect(screen.queryByTestId("picker-empty-filtered")).toBeNull();
+  });
+
+  it("zero-candidates-passed-filter: settled with a snapshot whose candidates array is empty", () => {
+    mockUsePickerReturn({ data: { ...pickerSnapshotFixture, candidates: [] }, isPending: false, isError: false });
+
+    render(<Analyzer />);
+
+    const emptyFiltered = screen.getByTestId("picker-empty-filtered");
+    expect(emptyFiltered.textContent).toContain("No candidates in this snapshot");
+    expect(emptyFiltered.textContent).toContain(
+      `No put calendars meet net-θ>0 over the ${pickerSnapshotFixture.asOf} snapshot.`,
+    );
+    expect(screen.queryByTestId("picker-empty-cold-start")).toBeNull();
+  });
+
+  it("populated: renders the ranked rail from live data (no layout change from the fixture path)", () => {
+    render(<Analyzer />);
+
+    const cards = screen.getAllByTestId(/^candidate-card-/);
+    expect(cards.length).toBe(pickerSnapshotFixture.candidates.length);
+    expect(screen.queryByTestId("picker-loading")).toBeNull();
+    expect(screen.queryByTestId("picker-error")).toBeNull();
+    expect(screen.queryByTestId("picker-empty-cold-start")).toBeNull();
+    expect(screen.queryByTestId("picker-empty-filtered")).toBeNull();
+  });
+
+  it("state precedence: loading wins over isError being simultaneously true", () => {
+    // isPending && data===undefined is checked first — a query that is somehow both isPending
+    // and isError (e.g. stale error state mid-refetch) must still show the loading text, not two
+    // states at once.
+    mockUsePickerReturn({ data: undefined, isPending: true, isError: true });
+
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("picker-loading")).toBeTruthy();
+    expect(screen.queryByTestId("picker-error")).toBeNull();
   });
 });

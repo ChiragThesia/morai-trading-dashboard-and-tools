@@ -1,18 +1,21 @@
 /**
  * Analyzer — ranked-cards calendar PICKER (Phase 18, D-04 — full replacement of the
- * position-analyzer cockpit).
+ * position-analyzer cockpit). Phase 19 (PICK-02) swaps the frozen fixture for live data.
  *
  * UI-SPEC "Ranked candidate cards" / "Payoff center": 3-col grid (300px/1fr/330px, stacking
  * below 1280px in DOM order):
- *   Left (300px)  — "Suggested calendars": ranked CandidateCard rail (ANLZ-01, D-01/D-05).
+ *   Left (300px)  — "Suggested calendars": ranked CandidateCard rail (ANLZ-01, D-01/D-05),
+ *                   now sourced from usePicker() with loading/error/cold-start/zero-filtered
+ *                   states (19-UI-SPEC "Rail live-data states", D-18/D-19).
  *   Center (1fr)  — "Risk profile" (payoff center, wired in Task 3) + "Scoring methodology"
  *                   collapsible panel (locked reference copy, not fixture-driven).
  *   Right (330px) — "Why this calendar" / "Term structure + your legs" / "Entry / exit plan"
  *                   panel shells — content lands in 18-05 (out of this plan's scope).
  *
- * D-02b: 100% fixture-driven — consumes `pickerSnapshotFixture` (@morai/contracts, 18-01) only.
- * NO usePositions/useGex/useLiveStream hooks, NO pairPositionsIntoCalendars/CalendarGroup —
- * the picker is view-only against a frozen snapshot, never live broker data.
+ * PICK-02 "no layout change": the 3-column grid, card anatomy, breakdown bars, why-panel,
+ * term-structure, and entry/exit plan are UNCHANGED from Phase 18 — this is an import-only
+ * data-source swap (`usePicker().data` replaces the Phase-18 frozen fixture import) plus the
+ * additive rail states the synchronous fixture never needed.
  *
  * Keeps the exact `export function Analyzer(): React.ReactElement` name/signature so
  * `App.tsx`'s route wiring needs zero changes.
@@ -20,8 +23,7 @@
  * No any/as/!.
  */
 import { useCallback, useMemo, useState } from "react";
-import { pickerSnapshotFixture } from "@morai/contracts";
-import type { PickerCandidate, BreakdownEntry } from "@morai/contracts";
+import type { PickerCandidate, BreakdownEntry, PickerGexContext } from "@morai/contracts";
 import { cn } from "@/lib/utils";
 import { CandidateCard } from "../components/picker/CandidateCard.tsx";
 import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
@@ -39,32 +41,20 @@ import { repriceScenario } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
 import { computeProjectionBounds } from "../lib/date-projection.ts";
 import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
+import { usePicker } from "../hooks/usePicker.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Fixture candidates, defensively sorted score-descending (D-01: fixture is already sorted,
- * this guards against future fixture edits going out of order). */
-const SORTED_CANDIDATES: ReadonlyArray<PickerCandidate> = [...pickerSnapshotFixture.candidates].sort(
-  (a, b) => b.score - a.score,
-);
-
 const DEFAULT_RATE = 0.045;
 const DEFAULT_DIV = 0.013;
-
-/** Fixed scenario params (D-02b: no scenario sliders on this fixture-only, view-only screen —
- * spot/rate/divYield are the frozen snapshot constants, matching Overview.tsx's defaults). */
-const PARAMS: ScenarioParams = {
-  spot: pickerSnapshotFixture.spot,
-  daysForward: 0,
-  ivShift: 0,
-  rate: DEFAULT_RATE,
-  divYield: DEFAULT_DIV,
-};
 
 /** ANLZ-02 picker curve colors (UI-SPEC Color table — distinct from both Overview's TOS
  * override and the old Analyzer's own defaults). */
 const TODAY_CURVE_COLOR = "#5b9cf6";
 const EXPIRATION_CURVE_COLOR = "#a78bfa";
+
+const RETRY_BUTTON =
+  "cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2 py-0.5 font-mono text-[9px] text-dim hover:text-txt";
 
 function noop(): void {}
 
@@ -72,6 +62,10 @@ function noop(): void {}
 
 export interface CandidateRailProps {
   readonly candidates: ReadonlyArray<PickerCandidate>;
+  readonly asOf: string;
+  readonly source: "schwab" | "cboe";
+  readonly gexContextStatus: "ok" | "stale" | "missing";
+  readonly eventsContextStatus: "ok" | "stale" | "missing";
   readonly selectedId: string;
   readonly combinedIds: ReadonlySet<string>;
   readonly copiedId: string | null;
@@ -81,13 +75,20 @@ export interface CandidateRailProps {
 }
 
 /**
- * CandidateRail — the "Suggested calendars" panel: ranked CandidateCard rail + locked
- * empty-state copy. Exported (like Overview.tsx's `formatExpiryCell`) so the empty-state
- * branch is directly unit-testable without needing to swap the fixture-only Analyzer's data
- * source via module mocking (Analyzer takes zero props, D-02b).
+ * CandidateRail — the "Suggested calendars" panel: ranked CandidateCard rail + the
+ * zero-candidates-passed-filter empty state (D-18). Exported (like Overview.tsx's
+ * `formatExpiryCell`) so the empty-state branch is directly unit-testable.
+ *
+ * Only handles the "settled response" states (populated / zero-candidates) — the
+ * loading/error/cold-start states (D-18/D-19) live one level up in Analyzer(), since they
+ * replace this panel's body entirely before a `PickerSnapshotResponse` even exists.
  */
 export function CandidateRail({
   candidates,
+  asOf,
+  source,
+  gexContextStatus,
+  eventsContextStatus,
   selectedId,
   combinedIds,
   copiedId,
@@ -108,11 +109,10 @@ export function CandidateRail({
         </p>
       )}
       {candidates.length === 0 ? (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-testid="picker-empty-filtered">
           <p className="m-0 font-display text-sm font-bold text-txt">No candidates in this snapshot</p>
           <p className="m-0 font-mono text-[11px] text-dim">
-            The picker found no calendars meeting the DTE and theta screen for today&apos;s chain.
-            Check back after the next 30-minute snapshot.
+            {`No put calendars meet net-θ>0 over the ${asOf} snapshot.`}
           </p>
         </div>
       ) : (
@@ -124,6 +124,10 @@ export function CandidateRail({
               selected={candidate.id === selectedId}
               combined={combinedIds.has(candidate.id)}
               copied={candidate.id === copiedId}
+              asOf={asOf}
+              source={source}
+              gexContextStatus={gexContextStatus}
+              eventsContextStatus={eventsContextStatus}
               onSelect={onSelect}
               onToggleCombine={onToggleCombine}
               onCopy={onCopy}
@@ -208,19 +212,20 @@ function ScoringMethodologyPanel({ candidate }: ScoringMethodologyPanelProps): R
 
 export interface RightColumnProps {
   readonly candidate: PickerCandidate | null;
+  readonly gex: PickerGexContext | null;
 }
 
 /**
  * RightColumn — the "Why this calendar" / "Entry / exit plan" stack for the currently-selected
  * candidate. The term-structure chart moved to the center column (stacked under the payoff graph);
- * reads the fixture's static GEX context (never live — this screen scores against the D-03 snapshot).
+ * reads the live snapshot's GEX context (Phase 19: never the frozen fixture).
  */
-function RightColumn({ candidate }: RightColumnProps): React.ReactElement {
+function RightColumn({ candidate, gex }: RightColumnProps): React.ReactElement {
   return (
     <div className="flex flex-col gap-3">
       <Panel>
         <PanelHeading title="Why this calendar" />
-        {candidate !== null && <WhyPanel candidate={candidate} gex={pickerSnapshotFixture.gex} />}
+        {candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />}
       </Panel>
       <Panel>
         <PanelHeading title="Entry / exit plan" />
@@ -236,15 +241,27 @@ function RightColumn({ candidate }: RightColumnProps): React.ReactElement {
  * Analyzer — exported named export (D-04: full replacement, same export name/signature).
  */
 export function Analyzer(): React.ReactElement {
-  const [selectedId, setSelectedId] = useState<string>(SORTED_CANDIDATES[0]?.id ?? "");
+  const { data, isPending, isError, refetch } = usePicker();
+  // Unify `undefined` (never-settled) and `null` (404 cold start) into one `null` sentinel —
+  // downstream logic only needs to distinguish "no snapshot" from "a real snapshot".
+  const snapshot = data ?? null;
+
+  const sortedCandidates = useMemo<ReadonlyArray<PickerCandidate>>(() => {
+    if (snapshot === null) return [];
+    return [...snapshot.candidates].sort((a, b) => b.score - a.score);
+  }, [snapshot]);
+
+  const spot = snapshot?.spot ?? 0;
+
+  const [selectedId, setSelectedId] = useState<string>("");
   // Combined-book multi-select: extra calendars ⊕-Combine'd with the selected one and summed
   // into one net payoff (see bookCandidates/combinedPositions below).
   const [combinedIds, setCombinedIds] = useState<ReadonlySet<string>>(new Set());
 
   const selected = useMemo<PickerCandidate | null>(() => {
-    const found = SORTED_CANDIDATES.find((c) => c.id === selectedId);
-    return found ?? SORTED_CANDIDATES[0] ?? null;
-  }, [selectedId]);
+    const found = sortedCandidates.find((c) => c.id === selectedId);
+    return found ?? sortedCandidates[0] ?? null;
+  }, [selectedId, sortedCandidates]);
 
   const handleSelect = useCallback((candidate: PickerCandidate) => {
     setSelectedId(candidate.id);
@@ -290,22 +307,25 @@ export function Analyzer(): React.ReactElement {
   // Copy-out: the selected candidate as a paste-ready TOS calendar order. copiedId tracks the
   // last-copied candidate so the button reads "Copied ✓" until a different candidate is selected.
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const handleCopyCandidate = useCallback((candidate: PickerCandidate): void => {
-    void navigator.clipboard?.writeText(buildTosCalendarOrder(candidate, pickerSnapshotFixture.asOf));
-    setCopiedId(candidate.id);
-  }, []);
+  const handleCopyCandidate = useCallback(
+    (candidate: PickerCandidate): void => {
+      void navigator.clipboard?.writeText(buildTosCalendarOrder(candidate, snapshot?.asOf ?? ""));
+      setCopiedId(candidate.id);
+    },
+    [snapshot],
+  );
 
   const params = useMemo<ScenarioParams>(
-    () => ({ ...PARAMS, daysForward: dateControl.daysForward }),
-    [dateControl.daysForward],
+    () => ({ spot, daysForward: dateControl.daysForward, ivShift: 0, rate: DEFAULT_RATE, divYield: DEFAULT_DIV }),
+    [spot, dateControl.daysForward],
   );
 
   // The combined book = the selected candidate (always) + any ⊕-Combine'd calendars.
   const bookCandidates = useMemo<ReadonlyArray<PickerCandidate>>(() => {
     if (selected === null) return [];
-    const extra = SORTED_CANDIDATES.filter((c) => combinedIds.has(c.id) && c.id !== selected.id);
+    const extra = sortedCandidates.filter((c) => combinedIds.has(c.id) && c.id !== selected.id);
     return [selected, ...extra];
-  }, [selected, combinedIds]);
+  }, [selected, sortedCandidates, combinedIds]);
 
   const combinedPositions = useMemo(
     () => bookCandidates.map(candidateToAnalyzerPosition),
@@ -324,32 +344,90 @@ export function Analyzer(): React.ReactElement {
   const bookVega = bookCandidates.reduce((sum, c) => sum + c.vega, 0);
   const positionSetSignature = combinedPositions.map((p) => p.id).join("|");
 
+  // ── Rail body: five mutually-exclusive states (D-18/D-19), precedence
+  // loading → error → cold-start → zero-filtered (inside CandidateRail) → populated. ──
+  let railBody: React.ReactElement;
+  if (isPending && data === undefined) {
+    railBody = (
+      <Panel>
+        <PanelHeading title="Suggested calendars" />
+        <div
+          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
+          data-testid="picker-loading"
+        >
+          Loading candidates…
+        </div>
+      </Panel>
+    );
+  } else if (isError) {
+    railBody = (
+      <Panel>
+        <PanelHeading title="Suggested calendars" />
+        <div className="flex flex-col items-center gap-2 p-4 text-center" data-testid="picker-error">
+          <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load candidates.</p>
+          <button
+            type="button"
+            className={RETRY_BUTTON}
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </Panel>
+    );
+  } else if (snapshot === null) {
+    railBody = (
+      <Panel>
+        <PanelHeading title="Suggested calendars" />
+        <div className="flex flex-col gap-1.5 p-4" data-testid="picker-empty-cold-start">
+          <p className="m-0 font-display text-sm font-bold text-txt">Picker warming up</p>
+          <p className="m-0 font-mono text-[11px] text-dim">
+            First scoring run pending — check back after the next chain snapshot.
+          </p>
+        </div>
+      </Panel>
+    );
+  } else {
+    railBody = (
+      <CandidateRail
+        candidates={sortedCandidates}
+        asOf={snapshot.asOf}
+        source={snapshot.source}
+        gexContextStatus={snapshot.gexContextStatus}
+        eventsContextStatus={snapshot.eventsContextStatus}
+        selectedId={selectedId}
+        combinedIds={combinedIds}
+        copiedId={copiedId}
+        onSelect={handleSelect}
+        onToggleCombine={handleToggleCombine}
+        onCopy={handleCopyCandidate}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 bg-bg p-3">
       {/* ── Top: paste-to-analyze a new calendar (payoff only; scoring is Phase 19) ─── */}
       <AdHocCalendarAnalysis
         today={today}
-        spot={PARAMS.spot}
+        spot={spot}
         rate={DEFAULT_RATE}
         gex={{
-          putWall: pickerSnapshotFixture.gex.putWall,
-          flip: pickerSnapshotFixture.gex.flip,
-          callWall: pickerSnapshotFixture.gex.callWall,
+          // AdHocCalendarAnalysis needs concrete numeric levels — 0 fallback when the
+          // snapshot hasn't loaded yet or a wall/flip is genuinely absent (nullable per
+          // pickerGexContext); the panel is best-effort/ad-hoc, never scored.
+          putWall: snapshot?.gex.putWall ?? 0,
+          flip: snapshot?.gex.flip ?? 0,
+          callWall: snapshot?.gex.callWall ?? 0,
         }}
       />
 
       <div className="grid gap-4" style={{ gridTemplateColumns: "300px 1fr 330px" }}>
       {/* ── Left column: ranked rail + the scoring matrix (how any calendar is scored) ── */}
       <div className="flex flex-col gap-3">
-        <CandidateRail
-          candidates={SORTED_CANDIDATES}
-          selectedId={selectedId}
-          combinedIds={combinedIds}
-          copiedId={copiedId}
-          onSelect={handleSelect}
-          onToggleCombine={handleToggleCombine}
-          onCopy={handleCopyCandidate}
-        />
+        {railBody}
         <ScoringMethodologyPanel candidate={selected} />
       </div>
 
@@ -401,11 +479,11 @@ export function Analyzer(): React.ReactElement {
                 expirationCurve={scenarioResult.expirationCurve}
                 rollCurve={null}
                 gex={{
-                  callWall: pickerSnapshotFixture.gex.callWall,
-                  putWall: pickerSnapshotFixture.gex.putWall,
-                  flip: pickerSnapshotFixture.gex.flip,
+                  callWall: snapshot?.gex.callWall ?? null,
+                  putWall: snapshot?.gex.putWall ?? null,
+                  flip: snapshot?.gex.flip ?? null,
                 }}
-                spot={PARAMS.spot}
+                spot={spot}
                 toggles={toggles}
                 fitY={false}
                 onFitYConsumed={noop}
@@ -413,16 +491,16 @@ export function Analyzer(): React.ReactElement {
                 baseExpirationCurve={scenarioResult.expirationCurve}
                 todayCurveColor={TODAY_CURVE_COLOR}
                 expirationCurveColor={EXPIRATION_CURVE_COLOR}
-                expectedMoveBand={{ spot: PARAMS.spot, em: selected.expectedMove }}
+                expectedMoveBand={{ spot, em: selected.expectedMove }}
               />
               <ScenarioStrip
                 position={selectedPosition}
                 levels={{
-                  putWall: pickerSnapshotFixture.gex.putWall,
-                  flip: pickerSnapshotFixture.gex.flip,
-                  callWall: pickerSnapshotFixture.gex.callWall,
+                  putWall: snapshot?.gex.putWall ?? null,
+                  flip: snapshot?.gex.flip ?? null,
+                  callWall: snapshot?.gex.callWall ?? null,
                 }}
-                spot={PARAMS.spot}
+                spot={spot}
                 todayCurve={scenarioResult.payoffCurve}
                 expirationCurve={scenarioResult.expirationCurve}
               />
@@ -432,11 +510,11 @@ export function Analyzer(): React.ReactElement {
 
         <Panel>
           <PanelHeading title="Term structure + your legs" />
-          {selected !== null && (
+          {selected !== null && snapshot !== null && (
             <TermStructureChart
-              termStructure={pickerSnapshotFixture.termStructure}
-              events={pickerSnapshotFixture.events}
-              asOf={pickerSnapshotFixture.asOf}
+              termStructure={snapshot.termStructure}
+              events={snapshot.events}
+              asOf={snapshot.asOf}
               candidate={selected}
             />
           )}
@@ -444,7 +522,7 @@ export function Analyzer(): React.ReactElement {
       </div>
 
       {/* ── Right column: why-panel / entry-exit-plan ─── */}
-      <RightColumn candidate={selected} />
+      <RightColumn candidate={selected} gex={snapshot?.gex ?? null} />
       </div>
     </div>
   );
