@@ -162,8 +162,22 @@ engine — this ports a trimmed, view-only version onto the Overview).
 **Design references**: user-provided TOS Analyze → Risk Profile screenshots (combined-graph shape +
 date-picker widget) — save into `mockups/` during discuss-phase. `apps/web/src/screens/Analyzer.tsx`
 is the working in-repo analog (days-forward slider + include checkboxes over the same engine).
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
+
+**Wave 1** *(parallel — no file overlap)*
+
+- [ ] 17.1-01-PLAN.md — Timezone-safe date-projection lib (parse/day-math/clamp, NaN guard) (OVW-05)
+- [ ] 17.1-02-PLAN.md — PayoffChart TOS restyle: two-curve y-domain, derived x-ticks, prop-scoped curve colors + magenta token, WR-03 fix (OVW-04)
+- [ ] 17.1-03-PLAN.md — OVW-06 per-calendar chart wiring: lift `excluded` to single source, thread `included`, extend signature, CR-01 guard (OVW-06)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 17.1-04-PLAN.md — OVW-05 date picker (native input + ‹›/Today) + `daysForward` wiring + TOS color application on the hero (OVW-05, OVW-04)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 17.1-05-PLAN.md — OVW-03 positions-box expiry/DTE/width reformat (`Aug 8 → Sep 5` / `32d/59d · 27d wide`) (OVW-03)
 
 ### Phase 18: Analyzer → Picker UI Redesign
 
@@ -261,7 +275,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 15. Re-Auth Smoothing | v1.1 | 5/5 | Complete | 2026-07-02 |
 | 16. Deploy Phase-15 Image | v1.2 | 3/3 | Complete    | 2026-07-03 |
 | 17. Overview v2 Redesign + IV Calibration Fix | v1.2 | 4/4 | Complete   | 2026-07-03 |
-| 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 0/TBD | Not started | - |
+| 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 0/5 | Planned | - |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 0/TBD | Not started | - |
 | 19. Picker Engine + Economic Events | v1.2 | 0/TBD | Not started | - |
 | 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |
