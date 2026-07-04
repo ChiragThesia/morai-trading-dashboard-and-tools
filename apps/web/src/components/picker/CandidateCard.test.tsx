@@ -1,0 +1,228 @@
+/**
+ * CandidateCard.test.tsx — TDD RED→GREEN for the picker's ranked-card component (ANLZ-01, D-05).
+ *
+ * Behaviors under test (18-04-PLAN.md Task 1):
+ *   - Data-driven breakdown bars: 4 bars, looked up BY criterion name — never a hard-coded
+ *     array index (proven via a shuffled-order breakdown array).
+ *   - The 5th `beVsEm` breakdown entry is present in the data but NEVER rendered as a card bar.
+ *   - Guard case (fwdIv === null): the fwd-edge bar renders zero-width + caption "n/a", never NaN.
+ *   - Click delegation: whole-card click fires onSelect; ⊕ click fires onCompareToggle only
+ *     (stopPropagation — onSelect must NOT also fire).
+ */
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import type { PickerCandidate, BreakdownEntry } from "@morai/contracts";
+import { CandidateCard } from "./CandidateCard.tsx";
+
+function leg(strike: number, iv: number, dte: number): PickerCandidate["frontLeg"] {
+  return { strike, putCall: "P", dte, iv };
+}
+
+function makeCandidate(overrides: {
+  id: string;
+  breakdown: BreakdownEntry[];
+  fwdIv: number | null;
+  fwdIvGuard: "ok" | "inverted";
+}): PickerCandidate {
+  return {
+    id: overrides.id,
+    name: "7500P Jul 23 / Aug 14",
+    score: 47,
+    breakdown: overrides.breakdown,
+    debit: 4627.55,
+    theta: 45.9,
+    vega: 305.3,
+    delta: 1.2,
+    fwdIv: overrides.fwdIv,
+    fwdIvGuard: overrides.fwdIvGuard,
+    slope: 0.253841,
+    fwdEdge: -0.028487,
+    expectedMove: 224.657,
+    frontEvents: ["NFP", "CPI"],
+    backEvents: ["FOMC"],
+    frontLeg: leg(7500, 0.1249, 21),
+    backLeg: leg(7500, 0.1402, 43),
+    exitPlan: {
+      profitTargetPct: 0.25,
+      stopPct: 0.175,
+      manageShortDte: 21,
+      closeByExpiry: "2026-07-23",
+    },
+  };
+}
+
+// Shuffled order (not slope→fwdEdge→gexFit→eventAdjustment→beVsEm) — proves the component
+// looks entries up BY criterion name, never a hard-coded array index.
+const SHUFFLED_BREAKDOWN: BreakdownEntry[] = [
+  { criterion: "eventAdjustment", weight: 10, rawValue: 0.5, contribution: 50 },
+  { criterion: "beVsEm", weight: 10, rawValue: 0.5329, contribution: 53.29 },
+  { criterion: "gexFit", weight: 15, rawValue: 1, contribution: 100 },
+  { criterion: "slope", weight: 40, rawValue: 0.253841, contribution: 42.31 },
+  { criterion: "fwdEdge", weight: 25, rawValue: 0.1, contribution: 30 },
+];
+
+const GUARD_BREAKDOWN: BreakdownEntry[] = [
+  { criterion: "slope", weight: 40, rawValue: -0.760417, contribution: 0 },
+  { criterion: "fwdEdge", weight: 25, rawValue: 0, contribution: 0 },
+  { criterion: "gexFit", weight: 15, rawValue: 0.6, contribution: 60 },
+  { criterion: "eventAdjustment", weight: 10, rawValue: 0.5, contribution: 50 },
+  { criterion: "beVsEm", weight: 10, rawValue: 0, contribution: 0 },
+];
+
+describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("maps each of the 4 bars to its criterion by name, independent of the breakdown array's order", () => {
+    const candidate = makeCandidate({
+      id: "shuffled-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        compared={false}
+        onSelect={() => {}}
+        onCompareToggle={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId("breakdown-bar-fill-slope").style.width).toBe("42.31%");
+    expect(screen.getByTestId("breakdown-bar-fill-fwdEdge").style.width).toBe("30%");
+    expect(screen.getByTestId("breakdown-bar-fill-gexFit").style.width).toBe("100%");
+    expect(screen.getByTestId("breakdown-bar-fill-eventAdjustment").style.width).toBe("50%");
+  });
+
+  it("never renders a 5th bar for the beVsEm breakdown entry, even though it's present in the data", () => {
+    const candidate = makeCandidate({
+      id: "shuffled-2",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    const { container } = render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        compared={false}
+        onSelect={() => {}}
+        onCompareToggle={() => {}}
+      />,
+    );
+
+    expect(screen.queryByTestId("breakdown-bar-fill-beVsEm")).toBeNull();
+    expect(container.querySelectorAll('[data-testid^="breakdown-bar-fill-"]').length).toBe(4);
+  });
+
+  it("guard case (fwdIv null): fwd-edge bar renders zero-width + caption n/a, never NaN or a throw", () => {
+    const candidate = makeCandidate({
+      id: "guard-1",
+      breakdown: GUARD_BREAKDOWN,
+      fwdIv: null,
+      fwdIvGuard: "inverted",
+    });
+
+    let container: HTMLElement | undefined;
+    expect(() => {
+      ({ container } = render(
+        <CandidateCard
+          candidate={candidate}
+          selected={false}
+          compared={false}
+          onSelect={() => {}}
+          onCompareToggle={() => {}}
+        />,
+      ));
+    }).not.toThrow();
+
+    const fwdEdgeBar = screen.getByTestId("breakdown-bar-fill-fwdEdge");
+    expect(fwdEdgeBar.style.width).toBe("0%");
+    expect(screen.getByText("n/a")).toBeTruthy();
+    expect(container?.innerHTML.includes("NaN")).toBe(false);
+  });
+});
+
+describe("CandidateCard — click delegation", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("whole-card click fires onSelect(candidate)", () => {
+    const candidate = makeCandidate({
+      id: "click-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+    const onSelect = vi.fn();
+    const onCompareToggle = vi.fn();
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        compared={false}
+        onSelect={onSelect}
+        onCompareToggle={onCompareToggle}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("candidate-card-click-1"));
+
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(candidate);
+    expect(onCompareToggle).not.toHaveBeenCalled();
+  });
+
+  it("⊕ click fires onCompareToggle(candidate) only — does NOT also fire onSelect", () => {
+    const candidate = makeCandidate({
+      id: "click-2",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+    const onSelect = vi.fn();
+    const onCompareToggle = vi.fn();
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        compared={false}
+        onSelect={onSelect}
+        onCompareToggle={onCompareToggle}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("⊕ Compare"));
+
+    expect(onCompareToggle).toHaveBeenCalledExactlyOnceWith(candidate);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("shows '✕ Remove compare' when compared=true", () => {
+    const candidate = makeCandidate({
+      id: "click-3",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        compared
+        onSelect={() => {}}
+        onCompareToggle={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("✕ Remove compare")).toBeTruthy();
+  });
+});
