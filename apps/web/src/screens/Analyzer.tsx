@@ -21,7 +21,8 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import { pickerSnapshotFixture } from "@morai/contracts";
-import type { PickerCandidate } from "@morai/contracts";
+import type { PickerCandidate, BreakdownEntry } from "@morai/contracts";
+import { cn } from "@/lib/utils";
 import { CandidateCard } from "../components/picker/CandidateCard.tsx";
 import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
@@ -134,54 +135,70 @@ export function CandidateRail({
   );
 }
 
-// ─── Scoring methodology panel (locked reference copy, not fixture-driven) ─────
+// ─── Scoring checklist (per-candidate: how THIS calendar scores on the picking rubric) ─────
+//
+// Driven by the selected candidate's `breakdown` contributions, so it changes per calendar.
+// Thresholds here are placeholders (contribution ≥55 = pass, ≥25 = partial) — the real
+// pass/fail rubric lands with the Phase-19 engine; this just renders whatever the data says.
 
-function ScoringMethodologyPanel(): React.ReactElement {
+interface ScoringMethodologyPanelProps {
+  readonly candidate: PickerCandidate | null;
+}
+
+const CHECK_ITEMS: ReadonlyArray<{ readonly key: BreakdownEntry["criterion"]; readonly label: string }> = [
+  { key: "fwdEdge", label: "Forward-vol edge" },
+  { key: "slope", label: "Term-structure slope" },
+  { key: "eventAdjustment", label: "Event exposure" },
+  { key: "gexFit", label: "GEX fit" },
+  { key: "beVsEm", label: "Breakeven vs EM" },
+];
+
+function scoreStatus(contribution: number): { readonly icon: string; readonly cls: string } {
+  if (contribution >= 55) return { icon: "✓", cls: "text-up" };
+  if (contribution >= 25) return { icon: "~", cls: "text-amber" };
+  return { icon: "✗", cls: "text-down" };
+}
+
+function ScoringMethodologyPanel({ candidate }: ScoringMethodologyPanelProps): React.ReactElement {
   return (
     <Panel>
-      <details>
-        <summary className="cursor-pointer font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase">
-          Scoring methodology — verified &amp; refuted
-        </summary>
-        <ul className="mt-2 flex list-none flex-col gap-2.5 pl-0 font-mono text-[11px] leading-[1.5] text-txt">
-          <li>
-            <b>Scored</b> — each of these earns points toward the 0–100:
-            <ul className="mt-1 flex list-none flex-col gap-1 pl-3 text-dim">
-              <li>
-                <span className="text-txt">Forward-vol edge</span> — is the back leg&apos;s implied
-                vol richer than the front&apos;s, measured properly (a forward-variance calc, not a
-                naive front−back IV subtraction).
+      <PanelHeading title="Scoring checklist" />
+      <p className="mb-2 font-mono text-[9px] text-dim">How this calendar scores on the picking rubric.</p>
+      {candidate === null ? (
+        <p className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</p>
+      ) : (
+        <ul className="flex list-none flex-col gap-1.5 pl-0 font-mono text-[10px]" data-testid="scoring-checklist">
+          {CHECK_ITEMS.map((item) => {
+            const entry = candidate.breakdown.find((b) => b.criterion === item.key);
+            const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
+            const contribution = entry?.contribution ?? 0;
+            const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(contribution);
+            return (
+              <li key={item.key} className="flex items-center gap-2" data-testid={`checklist-${item.key}`}>
+                <span className={cn("w-3 shrink-0 text-center", st.cls)}>{st.icon}</span>
+                <span className="flex-1 text-txt">{item.label}</span>
+                <span className="text-dim">{guard ? "n/a" : `${Math.round(contribution)}%`}</span>
               </li>
-              <li>
-                <span className="text-txt">Term-structure slope</span> — the main long-vol driver;
-                steeper up = more tailwind.
-              </li>
-              <li>
-                <span className="text-txt">Event exposure</span> — front legs spanning NFP / CPI /
-                FOMC carry event premium and spike risk, so they lose points.
-              </li>
-              <li>
-                <span className="text-txt">Positive daily theta</span> — the trade must earn carry
-                (θ &gt; 0); this also caps how far out-of-the-money the strike can sit.
-              </li>
-              <li>
-                <span className="text-txt">GEX fit</span> — is the strike near a gamma wall / pin in
-                today&apos;s dealer positioning.
-              </li>
-            </ul>
-            <span className="text-dim">Debit = your max loss (closed as a spread by front expiry) — used for sizing, not scored.</span>
-          </li>
-          <li>
-            <b>Deliberately NOT scored</b> — we tested these and the evidence didn&apos;t hold:
-            IV-rank / percentile entry gates · a fixed &quot;ideal IV-difference band&quot; ·
-            &quot;fair debit = X% of the back premium&quot;.
-          </li>
-          <li>
-            <b>Needs in-house backtest</b> before we trust them: whether the slope signal actually
-            predicts SPX moves (we have the history since 2026-06-12) · BE-vs-EM and θ/vega
-            thresholds · VVIX / COT as entry timing — shown as context only.
+            );
+          })}
+          <li className="flex items-center gap-2" data-testid="checklist-theta">
+            <span className={cn("w-3 shrink-0 text-center", candidate.theta >= 0 ? "text-up" : "text-down")}>
+              {candidate.theta >= 0 ? "✓" : "✗"}
+            </span>
+            <span className="flex-1 text-txt">Positive daily theta</span>
+            <span className="text-dim">{`${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}</span>
           </li>
         </ul>
+      )}
+      <details className="mt-2.5">
+        <summary className="cursor-pointer font-display text-[9px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+          What we don&apos;t score
+        </summary>
+        <p className="mt-1.5 font-mono text-[10px] leading-[1.5] text-dim">
+          <span className="text-txt">Deliberately NOT scored</span> (evidence didn&apos;t hold): IV-rank
+          gates · fixed IV-difference band · debit-%-of-back. <span className="text-txt">Needs a backtest</span>:
+          slope→SPX predictive test · BE-vs-EM &amp; θ/vega thresholds · VVIX / COT timing.
+        </p>
       </details>
     </Panel>
   );
@@ -333,7 +350,7 @@ export function Analyzer(): React.ReactElement {
           onToggleCombine={handleToggleCombine}
           onCopy={handleCopyCandidate}
         />
-        <ScoringMethodologyPanel />
+        <ScoringMethodologyPanel candidate={selected} />
       </div>
 
       {/* ── Center column: payoff graph + term structure (both charts, stacked) ── */}

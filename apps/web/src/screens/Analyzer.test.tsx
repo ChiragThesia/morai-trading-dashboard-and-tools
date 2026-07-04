@@ -125,22 +125,25 @@ describe("Analyzer — ranked candidate rail (Task 2)", () => {
   });
 });
 
-describe("Analyzer — scoring methodology panel (Task 2, locked copy)", () => {
+describe("Analyzer — per-candidate scoring checklist", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("renders the locked summary label", () => {
-    render(<Analyzer />);
-    expect(screen.getByText("Scoring methodology — verified & refuted")).toBeTruthy();
+  it("renders a checklist row per rubric factor plus the theta constraint for the selected calendar", () => {
+    const { container } = render(<Analyzer />);
+    expect(container.querySelector('[data-testid="scoring-checklist"]')).not.toBeNull();
+    for (const key of ["fwdEdge", "slope", "eventAdjustment", "gexFit", "beVsEm"]) {
+      expect(container.querySelector(`[data-testid="checklist-${key}"]`)).not.toBeNull();
+    }
+    expect(container.querySelector('[data-testid="checklist-theta"]')).not.toBeNull();
   });
 
-  it("renders the 3-item list verbatim (scored / deliberately-not-scored / needs-backtest)", () => {
-    const { container } = render(<Analyzer />);
-    expect(container.textContent).toContain("Scored");
-    expect(container.textContent).toContain("Deliberately NOT scored");
-    expect(container.textContent).toContain("Needs in-house backtest");
+  it("changes per calendar — the guard candidate (fwdIv null) shows forward-vol edge as n/a", () => {
+    render(<Analyzer />);
+    fireEvent.click(screen.getByTestId(`candidate-card-${GUARD.id}`));
+    expect(screen.getByTestId("checklist-fwdEdge").textContent).toContain("n/a");
   });
 
   it("renders the rail legend explaining the shorthand (θ / vega / event tags)", () => {
