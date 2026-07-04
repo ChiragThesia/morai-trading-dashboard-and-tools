@@ -6,7 +6,7 @@
  *     array index (proven via a shuffled-order breakdown array).
  *   - The 5th `beVsEm` breakdown entry is present in the data but NEVER rendered as a card bar.
  *   - Guard case (fwdIv === null): the fwd-edge bar renders zero-width + caption "n/a", never NaN.
- *   - Click delegation: whole-card click fires onSelect; ⊕ click fires onCompareToggle only
+ *   - Click delegation: whole-card click fires onSelect; ⊕ click fires onToggleCombine only
  *     (stopPropagation — onSelect must NOT also fire).
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -86,9 +86,9 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
       <CandidateCard
         candidate={candidate}
         selected={false}
-        compared={false}
+        combined={false}
         onSelect={() => {}}
-        onCompareToggle={() => {}}
+        onToggleCombine={() => {}}
         copied={false}
         onCopy={() => {}}
       />,
@@ -112,9 +112,9 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
       <CandidateCard
         candidate={candidate}
         selected={false}
-        compared={false}
+        combined={false}
         onSelect={() => {}}
-        onCompareToggle={() => {}}
+        onToggleCombine={() => {}}
         copied={false}
         onCopy={() => {}}
       />,
@@ -138,9 +138,9 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
         <CandidateCard
           candidate={candidate}
           selected={false}
-          compared={false}
+          combined={false}
           onSelect={() => {}}
-          onCompareToggle={() => {}}
+          onToggleCombine={() => {}}
           copied={false}
           onCopy={() => {}}
         />,
@@ -167,15 +167,15 @@ describe("CandidateCard — click delegation", () => {
       fwdIvGuard: "ok",
     });
     const onSelect = vi.fn();
-    const onCompareToggle = vi.fn();
+    const onToggleCombine = vi.fn();
 
     render(
       <CandidateCard
         candidate={candidate}
         selected={false}
-        compared={false}
+        combined={false}
         onSelect={onSelect}
-        onCompareToggle={onCompareToggle}
+        onToggleCombine={onToggleCombine}
         copied={false}
         onCopy={() => {}}
       />,
@@ -184,10 +184,10 @@ describe("CandidateCard — click delegation", () => {
     fireEvent.click(screen.getByTestId("candidate-card-click-1"));
 
     expect(onSelect).toHaveBeenCalledExactlyOnceWith(candidate);
-    expect(onCompareToggle).not.toHaveBeenCalled();
+    expect(onToggleCombine).not.toHaveBeenCalled();
   });
 
-  it("⊕ click fires onCompareToggle(candidate) only — does NOT also fire onSelect", () => {
+  it("⊕ click fires onToggleCombine(candidate) only — does NOT also fire onSelect", () => {
     const candidate = makeCandidate({
       id: "click-2",
       breakdown: SHUFFLED_BREAKDOWN,
@@ -195,23 +195,23 @@ describe("CandidateCard — click delegation", () => {
       fwdIvGuard: "ok",
     });
     const onSelect = vi.fn();
-    const onCompareToggle = vi.fn();
+    const onToggleCombine = vi.fn();
 
     render(
       <CandidateCard
         candidate={candidate}
         selected={false}
-        compared={false}
+        combined={false}
         onSelect={onSelect}
-        onCompareToggle={onCompareToggle}
+        onToggleCombine={onToggleCombine}
         copied={false}
         onCopy={() => {}}
       />,
     );
 
-    fireEvent.click(screen.getByText("⊕ Compare"));
+    fireEvent.click(screen.getByText("⊕ Combine"));
 
-    expect(onCompareToggle).toHaveBeenCalledExactlyOnceWith(candidate);
+    expect(onToggleCombine).toHaveBeenCalledExactlyOnceWith(candidate);
     expect(onSelect).not.toHaveBeenCalled();
   });
 
@@ -229,9 +229,9 @@ describe("CandidateCard — click delegation", () => {
       <CandidateCard
         candidate={candidate}
         selected={false}
-        compared={false}
+        combined={false}
         onSelect={onSelect}
-        onCompareToggle={() => {}}
+        onToggleCombine={() => {}}
         copied={false}
         onCopy={onCopy}
       />,
@@ -255,9 +255,9 @@ describe("CandidateCard — click delegation", () => {
       <CandidateCard
         candidate={candidate}
         selected={false}
-        compared={false}
+        combined={false}
         onSelect={() => {}}
-        onCompareToggle={() => {}}
+        onToggleCombine={() => {}}
         copied
         onCopy={() => {}}
       />,
@@ -266,7 +266,7 @@ describe("CandidateCard — click delegation", () => {
     expect(screen.getByTestId("copy-tos-copy-2").textContent).toContain("Copied");
   });
 
-  it("shows '✕ Remove compare' when compared=true", () => {
+  it("shows '✓ Combined' when combined=true", () => {
     const candidate = makeCandidate({
       id: "click-3",
       breakdown: SHUFFLED_BREAKDOWN,
@@ -278,14 +278,14 @@ describe("CandidateCard — click delegation", () => {
       <CandidateCard
         candidate={candidate}
         selected={false}
-        compared
+        combined
         onSelect={() => {}}
-        onCompareToggle={() => {}}
+        onToggleCombine={() => {}}
         copied={false}
         onCopy={() => {}}
       />,
     );
 
-    expect(screen.getByText("✕ Remove compare")).toBeTruthy();
+    expect(screen.getByText("✓ Combined")).toBeTruthy();
   });
 });

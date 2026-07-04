@@ -23,7 +23,7 @@
  *   - Selecting a candidate feeds candidateToAnalyzerPosition -> repriceScenario into
  *     PayoffChart with the picker's curve colors (todayCurveColor blue, expirationCurveColor
  *     violet) and rollCurve={null} (single payoff path, D-02).
- *   - ⊕-compare loads a non-null amber compareCurve; toggling it off clears it to null.
+ *   - ⊕ Combine sums the selected + combined calendars into one net payoff; toggling off reverts.
  *   - expectedMoveBand is passed as { spot: fixtureSpot, em: selected.expectedMove }.
  *   - ScenarioStrip renders the buildScenarioStrip-derived key levels for the selected
  *     candidate (put wall / γ flip / spot / call wall / candidate strike, deduped).
@@ -162,9 +162,11 @@ describe("CandidateRail — empty state (Task 2)", () => {
       <CandidateRail
         candidates={[]}
         selectedId=""
-        compareId={null}
+        combinedIds={new Set()}
+        copiedId={null}
         onSelect={() => {}}
-        onCompareToggle={() => {}}
+        onToggleCombine={() => {}}
+        onCopy={() => {}}
       />,
     );
 
@@ -181,9 +183,11 @@ describe("CandidateRail — empty state (Task 2)", () => {
       <CandidateRail
         candidates={[]}
         selectedId=""
-        compareId={null}
+        combinedIds={new Set()}
+        copiedId={null}
         onSelect={() => {}}
-        onCompareToggle={() => {}}
+        onToggleCombine={() => {}}
+        onCopy={() => {}}
       />,
     );
     expect(container.querySelectorAll('[data-testid^="candidate-card-"]').length).toBe(0);
@@ -225,40 +229,45 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
     expect(props.expectedMoveBand).toEqual({ spot: pickerSnapshotFixture.spot, em: TOP.expectedMove });
   });
 
-  it("compareCurve is null/absent before any ⊕-compare candidate is loaded", () => {
-    render(<Analyzer />);
-    expect(latestPayoffChartProps().compareCurve ?? null).toBeNull();
-  });
-
-  it("⊕-compare loads a non-null amber compareCurve (the compare candidate's expiration P&L)", () => {
+  it("⊕ Combine SUMS the selected + combined calendar into one net payoff curve", () => {
     render(<Analyzer />);
 
     const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
-    fireEvent.click(within(secondCard).getByText("⊕ Compare"));
+    fireEvent.click(within(secondCard).getByText("⊕ Combine"));
 
-    const expectedCompare = repriceScenario([candidateToAnalyzerPosition(SECOND)], PARAMS);
+    // Combined book = [selected TOP, combined SECOND], summed by the one engine (Overview's path).
+    const expected = repriceScenario(
+      [candidateToAnalyzerPosition(TOP), candidateToAnalyzerPosition(SECOND)],
+      PARAMS,
+    );
     const props = latestPayoffChartProps();
-    expect(props.compareCurve).toEqual(expectedCompare.expirationCurve);
-    expect(props.compareCurveColor).toBe("#f0b429");
+    expect(props.todayCurve).toEqual(expected.payoffCurve);
+    expect(props.expirationCurve).toEqual(expected.expirationCurve);
+    // No single dashed overlay any more — the combine path sums instead.
+    expect(props.compareCurve ?? null).toBeNull();
   });
 
-  it("toggling the same ⊕-compare candidate off clears compareCurve back to null", () => {
+  it("toggling ⊕ Combine off returns to the selected-only curve", () => {
     render(<Analyzer />);
 
     const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
-    fireEvent.click(within(secondCard).getByText("⊕ Compare"));
-    fireEvent.click(within(secondCard).getByText("✕ Remove compare"));
+    fireEvent.click(within(secondCard).getByText("⊕ Combine"));
+    fireEvent.click(within(secondCard).getByText("✓ Combined"));
 
-    expect(latestPayoffChartProps().compareCurve ?? null).toBeNull();
+    const selectedOnly = repriceScenario([candidateToAnalyzerPosition(TOP)], PARAMS);
+    expect(latestPayoffChartProps().todayCurve).toEqual(selectedOnly.payoffCurve);
   });
 
-  it("shows the amber compare-title suffix 'vs {compareName} (dashed)' once a compare candidate is loaded", () => {
+  it("shows the combined-book summary (debit = sum) once 2+ calendars are combined", () => {
     render(<Analyzer />);
+    expect(screen.queryByTestId("combined-book-summary")).toBeNull();
 
     const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
-    fireEvent.click(within(secondCard).getByText("⊕ Compare"));
+    fireEvent.click(within(secondCard).getByText("⊕ Combine"));
 
-    expect(screen.getByText(`vs ${SECOND.name} (dashed)`)).toBeTruthy();
+    const summary = screen.getByTestId("combined-book-summary");
+    expect(summary.textContent).toContain("+ 1 more");
+    expect(summary.textContent).toContain(`$${(TOP.debit + SECOND.debit).toFixed(0)}`);
   });
 });
 

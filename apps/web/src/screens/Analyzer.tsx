@@ -64,7 +64,6 @@ const PARAMS: ScenarioParams = {
  * override and the old Analyzer's own defaults). */
 const TODAY_CURVE_COLOR = "#5b9cf6";
 const EXPIRATION_CURVE_COLOR = "#a78bfa";
-const COMPARE_CURVE_COLOR = "#f0b429";
 
 function noop(): void {}
 
@@ -73,10 +72,10 @@ function noop(): void {}
 export interface CandidateRailProps {
   readonly candidates: ReadonlyArray<PickerCandidate>;
   readonly selectedId: string;
-  readonly compareId: string | null;
+  readonly combinedIds: ReadonlySet<string>;
   readonly copiedId: string | null;
   readonly onSelect: (candidate: PickerCandidate) => void;
-  readonly onCompareToggle: (candidate: PickerCandidate) => void;
+  readonly onToggleCombine: (candidate: PickerCandidate) => void;
   readonly onCopy: (candidate: PickerCandidate) => void;
 }
 
@@ -89,10 +88,10 @@ export interface CandidateRailProps {
 export function CandidateRail({
   candidates,
   selectedId,
-  compareId,
+  combinedIds,
   copiedId,
   onSelect,
-  onCompareToggle,
+  onToggleCombine,
   onCopy,
 }: CandidateRailProps): React.ReactElement {
   return (
@@ -122,10 +121,10 @@ export function CandidateRail({
               key={candidate.id}
               candidate={candidate}
               selected={candidate.id === selectedId}
-              compared={candidate.id === compareId}
+              combined={combinedIds.has(candidate.id)}
               copied={candidate.id === copiedId}
               onSelect={onSelect}
-              onCompareToggle={onCompareToggle}
+              onToggleCombine={onToggleCombine}
               onCopy={onCopy}
             />
           ))}
@@ -232,28 +231,31 @@ function RightColumn({ candidate }: RightColumnProps): React.ReactElement {
  */
 export function Analyzer(): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string>(SORTED_CANDIDATES[0]?.id ?? "");
-  const [compareId, setCompareId] = useState<string | null>(null);
+  // Combined-book multi-select: extra calendars ⊕-Combine'd with the selected one and summed
+  // into one net payoff (see bookCandidates/combinedPositions below).
+  const [combinedIds, setCombinedIds] = useState<ReadonlySet<string>>(new Set());
 
   const selected = useMemo<PickerCandidate | null>(() => {
     const found = SORTED_CANDIDATES.find((c) => c.id === selectedId);
     return found ?? SORTED_CANDIDATES[0] ?? null;
   }, [selectedId]);
 
-  const compareCandidate = useMemo<PickerCandidate | null>(() => {
-    if (compareId === null) return null;
-    return SORTED_CANDIDATES.find((c) => c.id === compareId) ?? null;
-  }, [compareId]);
-
   const handleSelect = useCallback((candidate: PickerCandidate) => {
     setSelectedId(candidate.id);
   }, []);
 
-  const handleCompareToggle = useCallback((candidate: PickerCandidate) => {
-    setCompareId((prev) => (prev === candidate.id ? null : candidate.id));
+  const handleToggleCombine = useCallback((candidate: PickerCandidate) => {
+    setCombinedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(candidate.id)) next.delete(candidate.id);
+      else next.add(candidate.id);
+      return next;
+    });
   }, []);
 
   // ── Payoff center (ANLZ-02, D-02): one engine, one adapter — repriceScenario is the sole
-  // pricing path for both the selected candidate and the ⊕-compare overlay. ─────────────────
+  // pricing path. The selected candidate plus any ⊕-Combine'd ones are SUMMED into a net
+  // combined-book payoff (the same array-of-positions path Overview uses for the live book). ──
 
   const selectedPosition = useMemo(
     () => (selected === null ? null : candidateToAnalyzerPosition(selected)),
@@ -292,15 +294,29 @@ export function Analyzer(): React.ReactElement {
     [dateControl.daysForward],
   );
 
-  const scenarioResult = useMemo(
-    () => (selectedPosition === null ? null : repriceScenario([selectedPosition], params)),
-    [selectedPosition, params],
+  // The combined book = the selected candidate (always) + any ⊕-Combine'd calendars.
+  const bookCandidates = useMemo<ReadonlyArray<PickerCandidate>>(() => {
+    if (selected === null) return [];
+    const extra = SORTED_CANDIDATES.filter((c) => combinedIds.has(c.id) && c.id !== selected.id);
+    return [selected, ...extra];
+  }, [selected, combinedIds]);
+
+  const combinedPositions = useMemo(
+    () => bookCandidates.map(candidateToAnalyzerPosition),
+    [bookCandidates],
   );
 
-  const compareScenarioResult = useMemo(() => {
-    if (compareCandidate === null) return null;
-    return repriceScenario([candidateToAnalyzerPosition(compareCandidate)], params);
-  }, [compareCandidate, params]);
+  const scenarioResult = useMemo(
+    () => (combinedPositions.length === 0 ? null : repriceScenario(combinedPositions, params)),
+    [combinedPositions, params],
+  );
+
+  // Book totals (sum of debits/greeks) for the header summary when 2+ calendars are combined.
+  const bookCount = bookCandidates.length;
+  const bookDebit = bookCandidates.reduce((sum, c) => sum + c.debit, 0);
+  const bookTheta = bookCandidates.reduce((sum, c) => sum + c.theta, 0);
+  const bookVega = bookCandidates.reduce((sum, c) => sum + c.vega, 0);
+  const positionSetSignature = combinedPositions.map((p) => p.id).join("|");
 
   return (
     <div className="flex flex-col gap-4 bg-bg p-3">
@@ -322,10 +338,10 @@ export function Analyzer(): React.ReactElement {
         <CandidateRail
           candidates={SORTED_CANDIDATES}
           selectedId={selectedId}
-          compareId={compareId}
+          combinedIds={combinedIds}
           copiedId={copiedId}
           onSelect={handleSelect}
-          onCompareToggle={handleCompareToggle}
+          onToggleCombine={handleToggleCombine}
           onCopy={handleCopyCandidate}
         />
       </div>
@@ -353,8 +369,10 @@ export function Analyzer(): React.ReactElement {
                 {selected.name}
               </span>
               {` · debit $${selected.debit.toFixed(0)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(0)}`}
-              {compareCandidate !== null && (
-                <span className="ml-2 text-amber">{`vs ${compareCandidate.name} (dashed)`}</span>
+              {bookCount > 1 && (
+                <span className="ml-2 text-amber" data-testid="combined-book-summary">
+                  {`+ ${bookCount - 1} more → combined debit $${bookDebit.toFixed(0)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(0)}`}
+                </span>
               )}
             </p>
           )}
@@ -384,12 +402,10 @@ export function Analyzer(): React.ReactElement {
                 toggles={toggles}
                 fitY={false}
                 onFitYConsumed={noop}
-                positionSetSignature={selected.id}
+                positionSetSignature={positionSetSignature}
                 baseExpirationCurve={scenarioResult.expirationCurve}
                 todayCurveColor={TODAY_CURVE_COLOR}
                 expirationCurveColor={EXPIRATION_CURVE_COLOR}
-                compareCurve={compareScenarioResult?.expirationCurve ?? null}
-                compareCurveColor={COMPARE_CURVE_COLOR}
                 expectedMoveBand={{ spot: PARAMS.spot, em: selected.expectedMove }}
               />
               <ScenarioStrip

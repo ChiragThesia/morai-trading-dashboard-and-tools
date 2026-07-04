@@ -52,20 +52,20 @@ function formatBreakdownCaption(entry: BreakdownEntry): string {
 export interface CandidateCardProps {
   readonly candidate: PickerCandidate;
   readonly selected: boolean;
-  readonly compared: boolean;
+  readonly combined: boolean;
   readonly copied: boolean;
   readonly onSelect: (candidate: PickerCandidate) => void;
-  readonly onCompareToggle: (candidate: PickerCandidate) => void;
+  readonly onToggleCombine: (candidate: PickerCandidate) => void;
   readonly onCopy: (candidate: PickerCandidate) => void;
 }
 
 export function CandidateCard({
   candidate,
   selected,
-  compared,
+  combined,
   copied,
   onSelect,
-  onCompareToggle,
+  onToggleCombine,
   onCopy,
 }: CandidateCardProps): React.ReactElement {
   const guardFwdEdge = candidate.fwdIv === null;
@@ -128,16 +128,18 @@ export function CandidateCard({
       <div className="mt-1.5 flex items-center gap-1.5">
         <button
           type="button"
+          data-testid={`combine-${candidate.id}`}
+          title="Add this calendar to the combined-book payoff"
           onClick={(e) => {
             e.stopPropagation();
-            onCompareToggle(candidate);
+            onToggleCombine(candidate);
           }}
           className={cn(
             "cursor-pointer rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px]",
-            compared ? "border-amber/60 bg-amber/10 text-amber" : "border-line2 bg-transparent text-dim",
+            combined ? "border-amber/60 bg-amber/10 text-amber" : "border-line2 bg-transparent text-dim",
           )}
         >
-          {compared ? "✕ Remove compare" : "⊕ Compare"}
+          {combined ? "✓ Combined" : "⊕ Combine"}
         </button>
         <button
           type="button"
