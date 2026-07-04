@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 19
-current_phase_name: Picker Engine + Economic Events
+current_phase_name: picker-engine-economic-events
 status: executing
 stopped_at: Phase 19 UI-SPEC approved
-last_updated: "2026-07-04T21:17:57.932Z"
+last_updated: "2026-07-04T21:29:08.004Z"
 last_activity: 2026-07-04
-last_activity_desc: Phase 18 complete, transitioned to Phase 19
+last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 26
+  completed_plans: 18
   percent: 67
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 18 — analyzer-picker-ui-redesign
+**Current focus:** Phase 19 — picker-engine-economic-events
 
 ## Current Position
 
-Phase: 19 — Picker Engine + Economic Events
-Plan: Not started
+Phase: 19 (picker-engine-economic-events) — EXECUTING
+Plan: 2 of 9
 Status: Ready to execute
-Last activity: 2026-07-04 — Phase 18 complete, transitioned to Phase 19
+Last activity: 2026-07-04 — Phase 19 execution started
 
 ## Milestone v1.2 Summary
 
@@ -192,6 +192,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 18 P03 | 12min | 2 tasks | 2 files |
 | Phase 18 P04 | 40min | 3 tasks | 5 files |
 | Phase 18 P05 | 25min | 3 tasks | 20 files |
+| Phase 19 P01 | ~12min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -251,6 +252,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: EntryExitPlan target/stop use |debit|x pct with a fixed +/- sign (never propagates a negative debit's raw sign) to avoid a double-negative on the guard candidate
 - [Phase ?]: TermStructureChart converts event ISO dates to DTE via a fixed, fixture-verified reference date (2026-07-02) - no explicit asOf field exists in the fixture
 - [Phase ?]: Deleted the now-orphaned RollConfig type alongside rollScenario (delete-if-orphaned, D-04a, one level deeper than the plan's explicit list)
+- [Phase ?]: 19-01: Task 1+2 combined into one commit (shared picker.test.ts suite, tdd.md commit-at-green-only rule) — matches 17.1-01/18-03 precedent
+- [Phase ?]: 19-01: ports.ts exports 9 ForVerbingNoun ports not 8 — plan's own action text + downstream needs (19-PATTERNS.md) list 9; acceptance criteria count was a plan authoring bug
 
 ### Pending Todos
 
@@ -295,7 +298,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T20:41:36.165Z
+Last session: 2026-07-04T21:28:45.747Z
 Stopped at: Phase 19 UI-SPEC approved
 Resume file: .planning/phases/19-picker-engine-economic-events/19-UI-SPEC.md
 
