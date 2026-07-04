@@ -418,5 +418,30 @@ describe("Overview screen", () => {
       // ...and the chart curve, in one click.
       expect(latestPayoffChartProps().todayCurve).not.toEqual(beforeCurve);
     });
+
+    it("CR-01 regression: a non-convergent calendar contributes nothing to EITHER curve even with its checkbox left checked", () => {
+      // CAL2's front leg genuinely fails to converge (a real IvError, not "no-price") —
+      // includedForT0 = pos.included && !isIvExcludedFromT0 must still drop it, proving
+      // the lifted `included` wiring composes with the pre-existing CR-01 guard rather
+      // than bypassing it.
+      mockResolveLegIv.mockImplementation((occSymbol: string) => {
+        if (occSymbol === CAL2_FRONT.occSymbol) return err({ kind: "below-intrinsic" });
+        return ok(0.2);
+      });
+      setPositions([CAL_FRONT, CAL_BACK, CAL2_FRONT, CAL2_BACK]);
+      render(<Overview />);
+
+      // Neither checkbox was touched — both calendars stay `included: true`.
+      const withNonConvergent = latestPayoffChartProps();
+
+      cleanup();
+      mockResolveLegIv.mockImplementation(() => ok(0.2));
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      const convergentOnly = latestPayoffChartProps();
+
+      expect(withNonConvergent.todayCurve).toEqual(convergentOnly.todayCurve);
+      expect(withNonConvergent.expirationCurve).toEqual(convergentOnly.expirationCurve);
+    });
   });
 });
