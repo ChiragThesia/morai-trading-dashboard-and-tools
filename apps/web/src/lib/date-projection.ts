@@ -44,3 +44,31 @@ export function daysBetween(from: Date, to: Date): number {
   const toMidnight = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime();
   return Math.round((toMidnight - fromMidnight) / 86_400_000);
 }
+
+/**
+ * The single entry point the date picker calls: parse the raw input value and clamp it
+ * into a whole-day `daysForward` in `[0, maxDaysForward]`. Empty/malformed input resolves
+ * to `0` (today) — never `NaN` (D-01a NaN guard, V5 Input Validation).
+ */
+export function resolveDaysForward(value: string, today: Date, maxDaysForward: number): number {
+  const picked = parseLocalDateInput(value);
+  if (picked === null) return 0;
+  const raw = daysBetween(today, picked);
+  return Math.max(0, Math.min(raw, maxDaysForward));
+}
+
+/**
+ * Derives the native `<input type="date">` min/max attributes and the `maxDaysForward`
+ * clamp bound (D-01a) from the included front-expiry DTEs: a calendar can never be
+ * projected past its own front expiry.
+ */
+export function computeProjectionBounds(
+  includedFrontDtes: ReadonlyArray<number>,
+  today: Date,
+): { readonly minIso: string; readonly maxIso: string; readonly maxDaysForward: number } {
+  const maxDaysForward = includedFrontDtes.length > 0 ? Math.min(...includedFrontDtes) : 0;
+  const minIso = toDateInputValue(today);
+  const maxDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + maxDaysForward);
+  const maxIso = toDateInputValue(maxDate);
+  return { minIso, maxIso, maxDaysForward };
+}
