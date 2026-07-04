@@ -96,6 +96,17 @@ describe("WhyPanel — stat grid (ANLZ-03)", () => {
       (NORMAL.theta / NORMAL.vega).toFixed(3),
     );
   });
+
+  it("renders θ:vega as the no-value fallback when vega is 0 (never 'Infinity'/'NaN') — WR-05", () => {
+    // pickerCandidate.vega is z.number() — 0 is valid. The panel's own contract promises a
+    // guard-safe value, never a fabricated number, so division by zero must render '—'.
+    const zeroVega: PickerCandidate = { ...NORMAL, id: "synthetic-zero-vega", theta: 45.9, vega: 0 };
+    render(<WhyPanel candidate={zeroVega} gex={GEX} />);
+    const value = screen.getByTestId("whypanel-stat-thetavega-value").textContent ?? "";
+    expect(value).toBe("—");
+    expect(value).not.toContain("Infinity");
+    expect(value).not.toContain("NaN");
+  });
 });
 
 describe("WhyPanel — forward-edge sentence (3-way branch)", () => {

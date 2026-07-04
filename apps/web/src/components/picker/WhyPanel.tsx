@@ -133,7 +133,7 @@ export function WhyPanel({ candidate, gex }: WhyPanelProps): React.ReactElement 
         <WhyStat
           testIdBase="whypanel-stat-thetavega"
           label="θ/vega"
-          value={(candidate.theta / candidate.vega).toFixed(3)}
+          value={candidate.vega === 0 ? "—" : (candidate.theta / candidate.vega).toFixed(3)}
           subCaption="carry per vol-$"
         />
       </div>
