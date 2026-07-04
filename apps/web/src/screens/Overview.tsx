@@ -921,13 +921,13 @@ export function Overview(): React.ReactElement {
     if (highlightedPosition === null) return null;
     const params: ScenarioParams = {
       spot,
-      daysForward: 0,
+      daysForward,
       ivShift: 0,
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
     return repriceScenario([highlightedPosition], params);
-  }, [highlightedPosition, spot]);
+  }, [highlightedPosition, spot, daysForward]);
 
   const excludedFromT0 = t0ExcludedPositions(calendarPositions);
 
