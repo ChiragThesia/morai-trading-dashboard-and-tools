@@ -6,14 +6,14 @@ current_phase: 18
 current_phase_name: analyzer-picker-ui-redesign
 status: executing
 stopped_at: Completed 18-03-PLAN.md
-last_updated: "2026-07-04T04:59:49.254Z"
+last_updated: "2026-07-04T14:58:23.762Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 17
-  completed_plans: 15
+  completed_plans: 16
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 18 (analyzer-picker-ui-redesign) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 18 execution started
 
@@ -189,6 +189,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 18 P01 | 25min | 2 tasks | 4 files |
 | Phase 18 P02 | 7min | 2 tasks | 2 files |
 | Phase 18 P03 | 12min | 2 tasks | 2 files |
+| Phase 18 P04 | 40min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -242,6 +243,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 18]: 18-03: TOLERANCE=2500 for the debit=max-loss invariant is a genuine BSM-model constant (deep-ITM European put with r>0 can price below intrinsic on repriceScenario's fixed 6900-7900 grid), empirically derived via probe scripts, not a fudge factor
 - [Phase 18]: 18-03: fast-check property test's candidate debit is computed via the same bsmPrice formula scenario-engine.ts's private entryNetPrice uses, not an arbitrary number - proves the same debit-vs-worst-case relationship as the fixture example test
 - [Phase 18]: 18-03: Task 1 (adapter+mapping) and Task 2 (debit invariant) landed in one commit since both share candidate-to-position.test.ts, authored in a single TDD RED->GREEN cycle (matches 17.1-01 precedent)
+- [Phase ?]: 18-04: Breakdown-bar captions per criterion (vol-pts v / percent / ok-minus) are an authored formatting choice mirroring the mockup — UI-SPEC only locks the fwd-edge guard-case n/a caption
+- [Phase ?]: 18-04: CandidateRail extracted+exported from Analyzer.tsx so the empty-state branch is directly unit-testable without module-mocking @morai/contracts (Analyzer is fixture-only, zero props, D-02b)
+- [Phase ?]: 18-04: ScenarioStrip shows numeric-only level headers (no put-wall/flip semantic labels), matching Overview.tsx's buildScenarioStrip reuse precedent
 
 ### Pending Todos
 
@@ -286,7 +290,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T04:59:49.244Z
+Last session: 2026-07-04T14:56:46.847Z
 Stopped at: Completed 18-03-PLAN.md
 Resume file: None
 

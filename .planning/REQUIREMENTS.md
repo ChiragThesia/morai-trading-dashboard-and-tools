@@ -45,11 +45,11 @@ tail.
 
 ### Analyzer → Picker Redesign
 
-- [ ] **ANLZ-01**: User sees a ranked candidate-cards rail with per-criterion score-breakdown
+- [x] **ANLZ-01**: User sees a ranked candidate-cards rail with per-criterion score-breakdown
   bars, rendered from contract-typed fixtures until the engine lands (contract-first:
   `packages/contracts` picker schema defined in this phase)
 
-- [ ] **ANLZ-02**: User can overlay a candidate on the payoff center (⊕ compare) with
+- [x] **ANLZ-02**: User can overlay a candidate on the payoff center (⊕ compare) with
   expected-move band and scenario strip
 
 - [ ] **ANLZ-03**: User sees a why-panel per candidate: term structure with leg dots +
@@ -132,8 +132,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OVW-04 | Phase 17.1 | Complete |
 | OVW-05 | Phase 17.1 | Complete |
 | OVW-06 | Phase 17.1 | Complete |
-| ANLZ-01 | Phase 18 | Pending |
-| ANLZ-02 | Phase 18 | Pending |
+| ANLZ-01 | Phase 18 | Complete |
+| ANLZ-02 | Phase 18 | Complete |
 | ANLZ-03 | Phase 18 | Pending |
 | PICK-01 | Phase 19 | Pending |
 | PICK-02 | Phase 19 | Pending |
