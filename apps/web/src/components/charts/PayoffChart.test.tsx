@@ -277,33 +277,34 @@ describe("computeYDomain — combined-curve y-axis (OVW-04)", () => {
     expect(computeYDomain([], [])).toEqual({ lo: -500, hi: 500 });
   });
 
-  it("combines both curves so a near-flat today curve is not squashed by a tall @exp tent", () => {
-    const nearFlatToday: PayoffPoint[] = [
-      { spot: 6900, pl: -5 },
+  it("scans the today curve so a tall today curve is not dropped in favor of a small @exp tent", () => {
+    // WR-04: the today curve carries the MORE extreme values here (exp is ±100), so every
+    // assertion below can ONLY pass if computeYDomain actually scans its first argument.
+    // The previous version had exp dwarf today, so a regression that ignored todayCurve
+    // still passed — vacuous. Making today the extreme makes the scan load-bearing.
+    const tallToday: PayoffPoint[] = [
+      { spot: 6900, pl: -20_000 },
       { spot: 7400, pl: 0 },
-      { spot: 7900, pl: 5 },
+      { spot: 7900, pl: 20_000 },
     ];
-    const tallExp: PayoffPoint[] = [
-      { spot: 6900, pl: -10_000 },
+    const smallExp: PayoffPoint[] = [
+      { spot: 6900, pl: -100 },
       { spot: 7400, pl: 0 },
-      { spot: 7900, pl: 10_000 },
+      { spot: 7900, pl: 100 },
     ];
 
-    const { lo, hi } = computeYDomain(nearFlatToday, tallExp);
-    const totalRange = hi - lo;
+    const { lo, hi } = computeYDomain(tallToday, smallExp);
 
-    // Domain must cover both curves' extremes.
-    expect(lo).toBeLessThanOrEqual(-10_000);
-    expect(hi).toBeGreaterThanOrEqual(10_000);
+    // Only satisfiable if the today curve IS scanned (exp alone spans ±100).
+    expect(lo).toBeLessThanOrEqual(-20_000);
+    expect(hi).toBeGreaterThanOrEqual(20_000);
 
-    // computeYDomain is combined-curve, not exp-only: the domain derived from
-    // BOTH curves' min/max is identical to the domain derived from the exp
-    // curve alone here (exp dwarfs today), proving today's points are folded
-    // into the same scan rather than silently dropped or exp-only.
-    const expOnly = computeYDomain(tallExp, tallExp);
-    expect(lo).toBeCloseTo(expOnly.lo, 6);
-    expect(hi).toBeCloseTo(expOnly.hi, 6);
-    expect(totalRange).toBeGreaterThan(0);
+    // And the combined domain must equal the today-only scan (today dwarfs exp),
+    // proving the exp curve did not silently replace the today scan.
+    const todayOnly = computeYDomain(tallToday, tallToday);
+    expect(lo).toBeCloseTo(todayOnly.lo, 6);
+    expect(hi).toBeCloseTo(todayOnly.hi, 6);
+    expect(hi - lo).toBeGreaterThan(0);
   });
 });
 
