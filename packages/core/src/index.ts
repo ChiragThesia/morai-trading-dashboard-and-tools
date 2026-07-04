@@ -269,11 +269,18 @@ export type {
 } from "./journal/index.ts";
 
 // ─── Picker bounded context (Phase 19) ────────────────────────────────────────
-// Economic-events driven ports + row domain type (PICK-03). StorageError/FetchError already
-// exported above (journal) share the same shape and are intentionally not re-exported here.
+// Economic-events + picker-snapshot + chain-read driven ports and row domain types
+// (PICK-02/PICK-03). StorageError/FetchError already exported above (journal) share the
+// same shape and are intentionally not re-exported here.
 export type {
   EconomicEvent,
   ForFetchingEconomicEvents,
   ForReadingEconomicEvents,
   ForPersistingEconomicEvents,
+  ChainQuoteForPicker,
+  ForReadingChainForPicker,
+  PickerSnapshot,
+  PickerSnapshotRow,
+  ForPersistingPickerSnapshot,
+  ForReadingPickerSnapshot,
 } from "./picker/index.ts";

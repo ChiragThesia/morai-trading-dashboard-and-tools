@@ -461,6 +461,18 @@ export const economicEvents = pgTable(
   ],
 ).enableRLS();
 
+// ─── 18. picker_snapshot — append-history picker snapshot blob (Phase 19, PICK-02) ──
+// One row per observedAt (a real timestamptz instant, D-06) — INSERT only, never
+// onConflictDoUpdate (D-06 append-history keeps every computed snapshot for PICK-04's
+// future slope backtest). snapshot is the WHOLE pickerSnapshotResponse as one JSONB blob
+// (D-05) — validated through pickerSnapshotResponse.parse at the adapter boundary on
+// write AND read (T-19-10), never trusted as loosely-typed JSON.
+
+export const pickerSnapshots = pgTable("picker_snapshot", {
+  observedAt: timestamp("observed_at", { withTimezone: true }).primaryKey(),
+  snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+}).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };
