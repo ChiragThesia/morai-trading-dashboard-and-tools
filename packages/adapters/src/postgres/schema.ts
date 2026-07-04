@@ -441,6 +441,26 @@ export const macroObservations = pgTable(
   ],
 ).enableRLS();
 
+// ─── 17. economic_events — FOMC/CPI/NFP forward calendar (Phase 19, PICK-03) ──
+// One row per (event_date, event_name). event_date is a plain `date`, NEVER timestamptz
+// (Pitfall 3, mirrors the CBOE-UTC lesson in reverse — the release day IS the ET calendar day
+// as published, no conversion needed). Composite PK is the idempotency key: a re-fetch of the
+// same (date, name) upserts, never duplicates.
+
+export const economicEvents = pgTable(
+  "economic_events",
+  {
+    eventDate: date("event_date").notNull(),
+    // 'FOMC' | 'CPI' | 'NFP'
+    eventName: text("event_name").notNull(),
+    // 'fred' | 'seed'
+    source: text("source").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.eventDate, table.eventName] }),
+  ],
+).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };

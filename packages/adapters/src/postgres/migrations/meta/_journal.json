@@ -99,6 +99,13 @@
       "when": 1782957489717,
       "tag": "0013_macro_observations",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783203088312,
+      "tag": "0014_economic_events",
+      "breakpoints": true
     }
   ]
 }
