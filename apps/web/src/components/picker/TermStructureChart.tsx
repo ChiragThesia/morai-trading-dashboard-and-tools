@@ -10,9 +10,11 @@
  */
 import type { PickerCandidate, PickerEvent, TermStructurePoint } from "@morai/contracts";
 
-const W = 310;
-const H = 150;
-const PAD = { left: 30, right: 8, top: 10, bottom: 20 };
+// Native viewBox sized for the center-column panel; the container caps its width (below) so it
+// renders at ~these px instead of ballooning when stretched across the full column.
+const W = 760;
+const H = 230;
+const PAD = { left: 50, right: 22, top: 30, bottom: 40 };
 
 const DTE_MIN = 0;
 const DTE_MAX = 82;
@@ -86,10 +88,10 @@ export function TermStructureChart({
   // Clamp into the drawable band so the guard tag never clips above the SVG viewport
   // (WR-02): when the higher leg dot sits near the top (front IV == IV_MAX), the raw
   // `min(frontY, backY) - 18` goes negative and the default viewport clipping hides it.
-  const guardTagY = Math.max(PAD.top, Math.min(frontY, backY) - 18);
+  const guardTagY = Math.max(PAD.top, Math.min(frontY, backY) - 22);
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="mx-auto flex w-full max-w-[760px] flex-col gap-1.5">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         style={{ width: "100%", display: "block" }}
@@ -108,10 +110,10 @@ export function TermStructureChart({
               strokeWidth={1}
             />
             <text
-              x={PAD.left - 4}
-              y={yScale(iv) + 3}
+              x={PAD.left - 8}
+              y={yScale(iv) + 4}
               fill={AXIS_LABEL}
-              fontSize={8}
+              fontSize={12}
               textAnchor="end"
               fontFamily="JetBrains Mono, monospace"
             >
@@ -133,16 +135,18 @@ export function TermStructureChart({
                 x2={x}
                 y2={H - PAD.bottom}
                 stroke={AMBER}
-                strokeWidth={0.8}
-                strokeDasharray="2 3"
+                strokeWidth={1}
+                strokeDasharray="2 5"
+                opacity={0.3}
               />
               <text
                 x={x}
-                y={PAD.top + 7}
+                y={PAD.top - 4}
                 fill={AMBER}
-                fontSize={6.5}
+                fontSize={10}
                 textAnchor="middle"
                 fontFamily="JetBrains Mono, monospace"
+                opacity={0.75}
               >
                 {ev.name}
               </text>
@@ -155,8 +159,10 @@ export function TermStructureChart({
           data-testid="term-structure-line"
           d={buildTermLinePath(termStructure)}
           stroke={TERM_LINE}
-          strokeWidth={1.6}
+          strokeWidth={2.4}
           fill="none"
+          strokeLinejoin="round"
+          strokeLinecap="round"
         />
 
         {/* X-axis DTE labels */}
@@ -164,9 +170,9 @@ export function TermStructureChart({
           <text
             key={t}
             x={xScale(t)}
-            y={H - 6}
+            y={H - 12}
             fill={AXIS_LABEL}
-            fontSize={7.5}
+            fontSize={12}
             textAnchor="middle"
             fontFamily="JetBrains Mono, monospace"
           >
@@ -180,14 +186,14 @@ export function TermStructureChart({
             <path
               d={`M${frontX} ${yScale(fwdIv)}H${backX}`}
               stroke={BLUE}
-              strokeWidth={1.2}
-              strokeDasharray="3 2"
+              strokeWidth={1.8}
+              strokeDasharray="4 3"
             />
             <text
               x={bracketMidX}
-              y={yScale(fwdIv) - 4}
+              y={yScale(fwdIv) + 16}
               fill={BLUE}
-              fontSize={7.5}
+              fontSize={12}
               textAnchor="middle"
               fontFamily="JetBrains Mono, monospace"
             >
@@ -197,20 +203,20 @@ export function TermStructureChart({
         ) : (
           <g data-testid="term-structure-guard-tag">
             <rect
-              x={bracketMidX - 15}
+              x={bracketMidX - 24}
               y={guardTagY}
-              width={30}
-              height={10}
-              rx={2}
+              width={48}
+              height={17}
+              rx={3}
               fill="rgba(240,180,41,0.14)"
               stroke={AMBER}
               strokeWidth={1}
             />
             <text
               x={bracketMidX}
-              y={guardTagY + 7.5}
+              y={guardTagY + 12}
               fill={AMBER}
-              fontSize={6.5}
+              fontSize={11}
               textAnchor="middle"
               fontFamily="JetBrains Mono, monospace"
             >
@@ -220,32 +226,32 @@ export function TermStructureChart({
         )}
 
         {/* Leg dots — front (coral/down), back (teal/up) */}
-        <circle data-testid="term-structure-leg-dot-front" cx={frontX} cy={frontY} r={3.5} fill={CORAL} />
+        <circle data-testid="term-structure-leg-dot-front" cx={frontX} cy={frontY} r={5.5} fill={CORAL} />
         <text
           x={frontX}
-          y={frontY - 7}
+          y={frontY - 11}
           fill={CORAL}
-          fontSize={7.5}
+          fontSize={12}
           textAnchor="middle"
           fontFamily="JetBrains Mono, monospace"
         >
           short f
         </text>
-        <circle data-testid="term-structure-leg-dot-back" cx={backX} cy={backY} r={3.5} fill={TEAL} />
+        <circle data-testid="term-structure-leg-dot-back" cx={backX} cy={backY} r={5.5} fill={TEAL} />
         <text
           x={backX}
-          y={backY - 7}
+          y={backY - 11}
           fill={TEAL}
-          fontSize={7.5}
+          fontSize={12}
           textAnchor="middle"
           fontFamily="JetBrains Mono, monospace"
         >
           long b
         </text>
       </svg>
-      <p className="m-0 font-mono text-[9px] leading-[1.5] text-dim">
-        Amber = FOMC/CPI/NFP. Note the kink into event dates — event premium, stripped before
-        scoring.
+      <p className="m-0 font-mono text-[10px] leading-[1.5] text-dim">
+        ATM implied vol by expiry. Amber lines = FOMC / CPI / NFP; the kink into those dates is
+        event premium, stripped before scoring. Your two legs: <span className="text-[#ef5350]">short front</span> / <span className="text-[#26a69a]">long back</span>.
       </p>
     </div>
   );
