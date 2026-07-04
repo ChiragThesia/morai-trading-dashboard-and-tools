@@ -85,6 +85,20 @@ export interface PayoffChartProps {
    * "T+0 excludes {n} position(s): IV n/a" note; omitted when 0/absent.
    */
   excludedFromT0Count?: number;
+  /**
+   * D-03 TOS-fidelity override seam: net-book T+0 curve + BE stroke color.
+   * Defaults to the Analyzer's violet brand color; the Overview hero injects
+   * TOS magenta here without affecting the Analyzer (which passes neither
+   * color prop). Does not affect the highlighted single-position overlay.
+   */
+  todayCurveColor?: string;
+  /**
+   * D-03 TOS-fidelity override seam: net-book @exp curve + BE stroke color.
+   * Defaults to the Analyzer's gray-muted brand color; the Overview hero
+   * injects TOS cyan here. Does not affect the highlighted single-position
+   * overlay.
+   */
+  expirationCurveColor?: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -220,6 +234,8 @@ export function PayoffChart({
   highlightedTodayCurve = null,
   highlightedExpirationCurve = null,
   excludedFromT0Count = 0,
+  todayCurveColor = VIOLET,
+  expirationCurveColor = GRAY_MUTED,
 }: PayoffChartProps): React.ReactElement {
   // D-05: a highlight is active whenever a row id is supplied. The net-book
   // curves dim (chart-layer stroke-opacity) — never removed, never the
@@ -488,7 +504,7 @@ export function PayoffChart({
               x={getX}
               y={clampY}
               curve={curveMonotoneX}
-              stroke={GRAY_MUTED}
+              stroke={expirationCurveColor}
               strokeWidth={1.4}
               strokeDasharray="5 4"
               opacity={0.7}
@@ -592,7 +608,7 @@ export function PayoffChart({
                   y1={0}
                   x2={xScale(x)}
                   y2={INNER_H}
-                  stroke={GRAY_MUTED}
+                  stroke={expirationCurveColor}
                   strokeWidth={1}
                   strokeDasharray="4 3"
                   opacity={0.55}
@@ -600,7 +616,7 @@ export function PayoffChart({
                 <text
                   x={xScale(x)}
                   y={INNER_H - 4}
-                  fill={GRAY_MUTED}
+                  fill={expirationCurveColor}
                   fontSize={9}
                   textAnchor="middle"
                   fontFamily="JetBrains Mono, monospace"
@@ -618,7 +634,7 @@ export function PayoffChart({
                 y1={0}
                 x2={xScale(x)}
                 y2={INNER_H}
-                stroke={VIOLET}
+                stroke={todayCurveColor}
                 strokeWidth={1}
                 strokeDasharray="2 3"
                 opacity={0.55}
@@ -626,7 +642,7 @@ export function PayoffChart({
               <text
                 x={xScale(x)}
                 y={24}
-                fill={VIOLET}
+                fill={todayCurveColor}
                 fontSize={9}
                 textAnchor="middle"
                 fontFamily="JetBrains Mono, monospace"
@@ -644,7 +660,7 @@ export function PayoffChart({
               x={getX}
               y={clampY}
               curve={curveMonotoneX}
-              stroke={VIOLET}
+              stroke={todayCurveColor}
               strokeWidth={2.6}
               filter="url(#payoff-glow)"
               strokeOpacity={netBookStrokeOpacity}

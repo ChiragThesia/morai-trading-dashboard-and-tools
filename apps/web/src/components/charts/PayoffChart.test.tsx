@@ -302,3 +302,48 @@ describe("PayoffChart — WR-03 y-domain lock + fitY without render-phase side e
     errorSpy.mockRestore();
   });
 });
+
+describe("PayoffChart — curve-color props (OVW-04, D-03 scoped brand override)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("with no color props, the T+0 curve stroke is violet and the @exp curve stroke is gray-muted (Analyzer default preserved)", () => {
+    render(<PayoffChart {...baseProps()} />);
+    const t0 = screen.getByTestId("net-book-t0-curve");
+    const exp = screen.getByTestId("net-book-exp-curve");
+    expect(t0.getAttribute("stroke")).toBe("#a78bfa");
+    expect(exp.getAttribute("stroke")).toBe("#7b8696");
+  });
+
+  it("passing todayCurveColor/expirationCurveColor sets those strokes on the respective LinePaths", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        todayCurveColor="#e91e8c"
+        expirationCurveColor="#22d3ee"
+      />,
+    );
+    const t0 = screen.getByTestId("net-book-t0-curve");
+    const exp = screen.getByTestId("net-book-exp-curve");
+    expect(t0.getAttribute("stroke")).toBe("#e91e8c");
+    expect(exp.getAttribute("stroke")).toBe("#22d3ee");
+  });
+
+  it("does not change the highlighted single-position overlay curve colors when curve-color props are passed", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        todayCurveColor="#e91e8c"
+        expirationCurveColor="#22d3ee"
+        highlightedPositionId="pos-1"
+        highlightedTodayCurve={HIGHLIGHT_TODAY_CURVE}
+        highlightedExpirationCurve={HIGHLIGHT_EXP_CURVE}
+      />,
+    );
+    const t0 = screen.getByTestId("highlighted-t0-curve");
+    const exp = screen.getByTestId("highlighted-exp-curve");
+    expect(t0.getAttribute("stroke")).toBe("#a78bfa");
+    expect(exp.getAttribute("stroke")).toBe("#7b8696");
+  });
+});
