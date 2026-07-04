@@ -32,6 +32,7 @@ import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
+import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { repriceScenario } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
 import { computeProjectionBounds } from "../lib/date-projection.ts";
@@ -244,6 +245,15 @@ export function Analyzer(): React.ReactElement {
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  // Copy-out: the selected candidate as a paste-ready TOS calendar order. copiedId tracks the
+  // last-copied candidate so the button reads "Copied ✓" until a different candidate is selected.
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const handleCopyOrder = useCallback((): void => {
+    if (selected === null) return;
+    void navigator.clipboard?.writeText(buildTosCalendarOrder(selected, pickerSnapshotFixture.asOf));
+    setCopiedId(selected.id);
+  }, [selected]);
+
   const params = useMemo<ScenarioParams>(
     () => ({ ...PARAMS, daysForward: dateControl.daysForward }),
     [dateControl.daysForward],
@@ -278,7 +288,20 @@ export function Analyzer(): React.ReactElement {
       {/* ── Center column: payoff center + methodology ───────────────── */}
       <div className="flex min-w-0 flex-col gap-3">
         <Panel>
-          <PanelHeading title="Risk profile" />
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <PanelHeading title="Risk profile" />
+            {selected !== null && (
+              <button
+                type="button"
+                data-testid="copy-tos-order"
+                onClick={handleCopyOrder}
+                title="Copy this calendar as a Thinkorswim order"
+                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2 py-0.5 font-mono text-[9px] text-dim hover:text-txt"
+              >
+                {copiedId === selected.id ? "Copied ✓" : "⧉ Copy TOS order"}
+              </button>
+            )}
+          </div>
           {selected !== null && (
             <p className="mb-1.5 font-mono text-[10px] text-dim">
               <span className="text-violet" data-testid="risk-profile-selected-name">

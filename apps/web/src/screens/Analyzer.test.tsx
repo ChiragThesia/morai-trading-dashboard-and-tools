@@ -49,6 +49,7 @@ vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
 });
 
 import { Analyzer, CandidateRail } from "./Analyzer.tsx";
+import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
@@ -343,6 +344,24 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
     );
     expect(screen.queryByTestId("term-structure-fwd-bracket")).toBeNull();
     expect(screen.getByTestId("term-structure-guard-tag")).toBeTruthy();
+  });
+});
+
+describe("Analyzer — copy TOS order (copy-out)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("copies the selected candidate's TOS calendar order to the clipboard", () => {
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+
+    render(<Analyzer />);
+    fireEvent.click(screen.getByTestId("copy-tos-order"));
+
+    expect(writeText).toHaveBeenCalledWith(buildTosCalendarOrder(TOP, pickerSnapshotFixture.asOf));
+    expect(screen.getByTestId("copy-tos-order").textContent).toContain("Copied");
   });
 });
 
