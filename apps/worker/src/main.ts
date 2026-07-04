@@ -1,5 +1,5 @@
 // Worker composition root — pg-boss scheduling.
-// Boot: parse config → run migrations → boot pg-boss → register all 10 jobs via registerAllJobs.
+// Boot: parse config → run migrations → boot pg-boss → register all 12 jobs via registerAllJobs.
 //
 // Architecture law (architecture-boundaries.md):
 // - process.env read ONCE here via bootWorkerConfig; typed config flows inward.
@@ -7,9 +7,12 @@
 // - TDD exempt: pure wiring (tdd.md Scope).
 // 11-06 (GW-03/JRNL-02): refresh-tokens job retired; chain source swapped to sidecar adapter.
 // 13-05 (COT-01): fetch-cot job added — weekly CFTC COT report (Friday 17:00 ET, D-07).
+// 19-08 (PICK-01/PICK-03): compute-picker (chain-triggered by compute-gex-snapshot, D-04) +
+// fetch-economic-events (weekly cron, D-14) jobs added.
 
 import { randomUUID, createHash } from "node:crypto";
 import { PgBoss } from "pg-boss";
+import { ok } from "@morai/shared";
 import { bootWorkerConfig } from "./config.ts";
 import {
   runMigrations,
@@ -37,6 +40,11 @@ import {
   makeFredSeriesAdapter,
   makeCboeVvixAdapter,
   makePostgresMacroObservationsRepo,
+  makeEconomicEventsAdapter,
+  FOMC_SEED,
+  makePostgresEconomicEventsRepo,
+  makePostgresPickerChainRepo,
+  makePostgresPickerSnapshotRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -53,7 +61,9 @@ import {
   selectChainSource,
   makeFetchCot,
   makeFetchMacroSeries,
+  makeComputePickerSnapshotUseCase,
 } from "@morai/core";
+import type { GexContextForPicker, GexSnapshotRow } from "@morai/core";
 import { makeFetchCotHandler } from "./handlers/fetch-cot.ts";
 import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
@@ -64,6 +74,8 @@ import { makeComputeGexSnapshotHandler } from "./handlers/compute-gex-snapshot.t
 import { makeSyncFillsHandler } from "./handlers/sync-fills.ts";
 import { makeSyncTransactionsHandler } from "./handlers/sync-transactions.ts";
 import { makeRebuildJournalHandler } from "./handlers/rebuild-journal.ts";
+import { makeComputePickerHandler } from "./handlers/compute-picker.ts";
+import { makeFetchEconomicEventsHandler } from "./handlers/fetch-economic-events.ts";
 import { registerAllJobs } from "./schedule.ts";
 
 const config = bootWorkerConfig();
@@ -251,8 +263,11 @@ const computeAnalyticsHandler = makeComputeAnalyticsHandler({
   now: () => new Date(),
 });
 
+// 19-08 (D-04): compute-gex-snapshot chain-triggers compute-picker on success — boss dep added
+// here (mirrors computeAnalyticsHandler adding boss in 08-06).
 const computeGexSnapshotHandler = makeComputeGexSnapshotHandler({
   computeGexSnapshotUseCase,
+  boss,
   now: () => new Date(),
 });
 
@@ -398,8 +413,68 @@ const fetchCot = makeFetchCot({
 });
 const fetchCotHandler = makeFetchCotHandler({ fetchCot });
 
-// Register all 10 queues, 6 crons, and 10 work handlers via registerAllJobs (Plan 05-04 + 08-06 + 13-05).
-// 11-06 (GW-03): refresh-tokens retired. 13-05 (COT-01): fetch-cot added — 10 queues, 6 scheduled jobs.
+// PICK-01/PICK-03 (19-08): picker engine + economic-events wiring.
+// compute-picker is chain-triggered by compute-gex-snapshot (D-04) — it needs the GEX context
+// (criterion 7) computed just before it runs. fetch-economic-events refreshes economic_events
+// weekly (D-14) from the unified FRED CPI/NFP + FOMC-seed adapter (19-04).
+const economicEventsAdapter = makeEconomicEventsAdapter({
+  fetch: globalThis.fetch,
+  apiKey: config.FRED_API_KEY,
+  fomcSeed: FOMC_SEED,
+});
+const economicEventsRepo = makePostgresEconomicEventsRepo(db);
+const pickerChainRepo = makePostgresPickerChainRepo(db);
+const pickerSnapshotRepo = makePostgresPickerSnapshotRepo(db);
+
+// gex-context adapter — maps GexSnapshotRow → GexContextForPicker at the composition root,
+// keeping the picker core free of an analytics-context import (architecture-boundaries §7:
+// cross bounded contexts through application ports only). absGammaStrike is derived here from
+// the persisted per-strike gex profile — the strike with the largest |gex| magnitude.
+function toAbsGammaStrike(row: GexSnapshotRow): number | null {
+  if (row.strikes.length === 0) return null;
+  const strongest = row.strikes.reduce((max, s) => (Math.abs(s.gex) > Math.abs(max.gex) ? s : max));
+  return strongest.k;
+}
+
+const readGexContextForPicker = async () => {
+  const result = await gexRepo.readGexSnapshot();
+  if (!result.ok) return result;
+  if (result.value === null) return ok(null);
+  const row = result.value;
+  const context: GexContextForPicker = {
+    flip: row.flip,
+    callWall: row.callWall,
+    putWall: row.putWall,
+    netGammaAtSpot: row.netGammaAtSpot,
+    absGammaStrike: toAbsGammaStrike(row),
+    computedAt: row.computedAt,
+  };
+  return ok(context);
+};
+
+const computePickerSnapshotUseCase = makeComputePickerSnapshotUseCase({
+  readChainForPicker: pickerChainRepo.readChainForPicker,
+  readGexContext: readGexContextForPicker,
+  readEconomicEvents: economicEventsRepo.readEconomicEvents,
+  persistPickerSnapshot: pickerSnapshotRepo.insertPickerSnapshot,
+  rate: config.BSM_RATE_FALLBACK,
+  dividendYield: config.BSM_DIVIDEND_YIELD,
+  now: () => new Date(),
+});
+
+const computePickerHandler = makeComputePickerHandler({
+  computePickerUseCase: computePickerSnapshotUseCase,
+  now: () => new Date(),
+});
+
+const fetchEconomicEventsHandler = makeFetchEconomicEventsHandler({
+  fetchEconomicEvents: economicEventsAdapter,
+  persistEconomicEvents: economicEventsRepo.persistEconomicEvents,
+});
+
+// Register all 12 queues, 8 crons, and 12 work handlers via registerAllJobs (Plan 05-04 + 08-06 + 13-05 + 19-08).
+// 11-06 (GW-03): refresh-tokens retired. 13-05 (COT-01): fetch-cot added. 19-08: compute-picker +
+// fetch-economic-events added — 12 queues, 7 scheduled jobs.
 // Inline createQueue/schedule/work blocks removed — all scheduling logic is in schedule.ts.
 await registerAllJobs(boss, {
   fetchSchwabChain: fetchSchwabChainHandler,
@@ -412,8 +487,10 @@ await registerAllJobs(boss, {
   syncFills: syncFillsHandler,
   rebuildJournal: rebuildJournalHandler,
   fetchCot: fetchCotHandler,
+  computePicker: computePickerHandler,
+  fetchEconomicEvents: fetchEconomicEventsHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 10 queues created, 6 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot); snapshot-calendars + compute-analytics + compute-gex-snapshot chain-triggered only; rebuild-journal on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 12 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker chain-triggered only; rebuild-journal on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );
