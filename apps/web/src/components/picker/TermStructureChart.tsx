@@ -35,16 +35,6 @@ const GRID_TICKS: ReadonlyArray<{ readonly iv: number; readonly label: string }>
 
 const X_TICKS: ReadonlyArray<number> = [0, 20, 40, 60, 80];
 
-/**
- * The fixed reference "today" the frozen fixture's DTE fields are computed against — verified
- * against the fixture's own leg-dte / exitPlan.closeByExpiry pairs (e.g. the top candidate's
- * front leg carries `dte: 21` and its `closeByExpiry` is "2026-07-23"; 2026-07-02 + 21 days is
- * exactly 2026-07-23). Events carry absolute ISO dates (D-01) while the term-structure points and
- * leg dots are already DTE-relative, so this constant is what puts events on the same x-axis.
- * Fixture-fixed, never re-derived at runtime — matches this chart's "not auto-scaled" contract.
- */
-const FIXTURE_REFERENCE_DATE_MS = Date.UTC(2026, 6, 2); // 2026-07-02
-
 export function xScale(dte: number): number {
   return PAD.left + ((dte - DTE_MIN) / (DTE_MAX - DTE_MIN)) * (W - PAD.left - PAD.right);
 }
@@ -53,11 +43,19 @@ export function yScale(iv: number): number {
   return PAD.top + ((IV_MAX - iv) / (IV_MAX - IV_MIN)) * (H - PAD.top - PAD.bottom);
 }
 
-/** Convert an event's absolute ISO date into a DTE relative to `FIXTURE_REFERENCE_DATE_MS`. */
-function eventDte(iso: string): number {
+/** Parse an ISO 8601 date (YYYY-MM-DD) into a UTC-midnight epoch-ms value. */
+function isoDateToUtcMs(iso: string): number {
   const [y, m, d] = iso.split("-").map(Number);
-  const eventMs = Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1);
-  return Math.round((eventMs - FIXTURE_REFERENCE_DATE_MS) / 86_400_000);
+  return Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+}
+
+/**
+ * Convert an event's absolute ISO date into a DTE relative to the snapshot's `asOf` reference.
+ * Events carry absolute ISO dates (D-01) while the term-structure points and leg dots are
+ * DTE-relative, so `referenceMs` (the snapshot's asOf) is what puts events on the same x-axis.
+ */
+function eventDte(iso: string, referenceMs: number): number {
+  return Math.round((isoDateToUtcMs(iso) - referenceMs) / 86_400_000);
 }
 
 function buildTermLinePath(points: ReadonlyArray<TermStructurePoint>): string {
@@ -67,14 +65,18 @@ function buildTermLinePath(points: ReadonlyArray<TermStructurePoint>): string {
 export interface TermStructureChartProps {
   readonly termStructure: ReadonlyArray<TermStructurePoint>;
   readonly events: ReadonlyArray<PickerEvent>;
+  /** ISO 8601 snapshot reference date the DTE fields are relative to (WR-03). */
+  readonly asOf: string;
   readonly candidate: PickerCandidate;
 }
 
 export function TermStructureChart({
   termStructure,
   events,
+  asOf,
   candidate,
 }: TermStructureChartProps): React.ReactElement {
+  const referenceMs = isoDateToUtcMs(asOf);
   const frontX = xScale(candidate.frontLeg.dte);
   const backX = xScale(candidate.backLeg.dte);
   const frontY = yScale(candidate.frontLeg.iv);
@@ -120,7 +122,7 @@ export function TermStructureChart({
 
         {/* Event markers */}
         {events.map((ev) => {
-          const dte = eventDte(ev.date);
+          const dte = eventDte(ev.date, referenceMs);
           if (dte < DTE_MIN || dte > DTE_MAX) return null;
           const x = xScale(dte);
           return (

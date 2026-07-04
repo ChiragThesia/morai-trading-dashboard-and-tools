@@ -146,8 +146,16 @@ export type PickerEvent = z.infer<typeof pickerEvent>;
  * pickerSnapshotResponse — the HTTP GET /api/picker/candidates + get_picker_candidates
  * MCP tool response shape (MCP-02). Both the Phase-18 frozen fixture and the Phase-19 live
  * response must satisfy this schema with zero shape change.
+ *
+ * `asOf` completes the Phase-19 import-only-swap contract: the termStructure points and
+ * per-leg DTE fields are all relative to this reference date, while `events` carry absolute
+ * ISO dates. Without it a live snapshot taken on any date other than the frozen fixture's
+ * would mis-place event markers on the DTE axis. It strengthens the promise (the shape now
+ * carries everything the UI needs to render any snapshot), it does not break it.
  */
 export const pickerSnapshotResponse = z.object({
+  /** ISO 8601 snapshot reference date the termStructure/leg DTE fields are relative to. */
+  asOf: z.string(),
   spot: z.number(),
   termStructure: z.array(termStructurePoint),
   gex: pickerGexContext,

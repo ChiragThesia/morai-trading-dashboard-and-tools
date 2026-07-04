@@ -175,6 +175,7 @@ function RightColumn({ candidate }: RightColumnProps): React.ReactElement {
           <TermStructureChart
             termStructure={pickerSnapshotFixture.termStructure}
             events={pickerSnapshotFixture.events}
+            asOf={pickerSnapshotFixture.asOf}
             candidate={candidate}
           />
         )}

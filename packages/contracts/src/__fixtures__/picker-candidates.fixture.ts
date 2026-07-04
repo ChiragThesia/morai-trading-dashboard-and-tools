@@ -15,6 +15,7 @@ import type { PickerSnapshotResponse } from "../picker.ts";
 // radicand negative, exercising the fwdIv-null/fwdIvGuard-"inverted" schema branch. Its
 // expectedMove/theta/vega/score are all normal finite values (Pitfall 3 — never nulled out).
 export const pickerSnapshotFixture: PickerSnapshotResponse = {
+  asOf: "2026-07-02",
   spot: 7498.85,
   gex: {
     flip: 7472.65,

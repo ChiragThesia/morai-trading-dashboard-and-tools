@@ -102,6 +102,15 @@ describe("pickerSnapshotFixture (frozen fixture — D-03)", () => {
     expect(() => pickerSnapshotResponse.parse(pickerSnapshotFixture)).not.toThrow();
   });
 
+  it("carries an asOf reference date the DTE fields are relative to (WR-03)", () => {
+    expect(typeof pickerSnapshotFixture.asOf).toBe("string");
+  });
+
+  it("REJECTS a snapshot missing asOf (the DTE/event x-axis needs a reference date — WR-03)", () => {
+    const { asOf: _omit, ...withoutAsOf } = pickerSnapshotFixture;
+    expect(() => pickerSnapshotResponse.parse(withoutAsOf)).toThrow();
+  });
+
   it("contains exactly ONE guard-case candidate (fwdIv null + fwdIvGuard 'inverted')", () => {
     const guardCandidates = pickerSnapshotFixture.candidates.filter(
       (c) => c.fwdIv === null && c.fwdIvGuard === "inverted",
