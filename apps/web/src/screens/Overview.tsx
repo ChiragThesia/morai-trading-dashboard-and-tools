@@ -290,7 +290,7 @@ export function formatExpiryCell(input: ExpiryCellInput): ExpiryCell {
 type Row = {
   key: string;
   label: string;
-  dte: string;
+  expiry: ExpiryCell;
   legs: ReadonlyArray<BrokerPositionResponse>;
 };
 
@@ -299,21 +299,32 @@ function buildRows(positions: ReadonlyArray<BrokerPositionResponse>): Row[] {
   const calRows: Row[] = calendars.map((c) => ({
     key: c.key,
     label: `${c.strike}${c.optionType}`,
-    dte: `${c.dteFront}d → ${c.dteBack}d`,
+    expiry: formatExpiryCell({
+      kind: "calendar",
+      frontOccSymbol: c.front.occSymbol,
+      backOccSymbol: c.back.occSymbol,
+      dteFront: c.dteFront,
+      dteBack: c.dteBack,
+    }),
     legs: [c.front, c.back],
   }));
   const singleRows: Row[] = singles.map((p) => {
     const parsed = parseOccSymbol(p.occSymbol);
     const label = parsed.ok ? `${parsed.value.strike}${parsed.value.type}` : p.occSymbol.trim();
     const dte = parsed.ok
-      ? `${Math.max(0, Math.ceil((parsed.value.expiry.getTime() - Date.now()) / 86_400_000))}d`
-      : "—";
-    return { key: p.occSymbol, label, dte, legs: [p] };
+      ? Math.max(0, Math.ceil((parsed.value.expiry.getTime() - Date.now()) / 86_400_000))
+      : 0;
+    return {
+      key: p.occSymbol,
+      label,
+      expiry: formatExpiryCell({ kind: "single", occSymbol: p.occSymbol, dte }),
+      legs: [p],
+    };
   });
   return [...calRows, ...singleRows];
 }
 
-const COLS = ["Position", "DTE", "Net val", "Unreal", "Δ", "Γ", "Θ/d", "Vega"] as const;
+const COLS = ["Position", "Expiry / DTE", "Net val", "Unreal", "Δ", "Γ", "Θ/d", "Vega"] as const;
 
 /**
  * PositionsTable — TOS-style docked positions table with live BSM greek overlay.
@@ -469,8 +480,13 @@ function PositionsTable({
                   </TooltipProvider>
                 )}
               </td>
-              {/* DTE — static, no live-cell */}
-              <td className="px-2 py-1 text-right text-muted-foreground">{r.dte}</td>
+              {/* Expiry / DTE — static, no live-cell */}
+              <td className="px-2 py-1 text-right">
+                <div className="flex flex-col items-end">
+                  <span className="text-[11px] text-muted-foreground">{r.expiry.line1}</span>
+                  <span className="text-[9px] text-dim">{r.expiry.line2}</span>
+                </div>
+              </td>
               {/* Net val — live-sourced when tick present */}
               <td
                 key={`${r.key}-netval-${liveTs ?? ""}`}

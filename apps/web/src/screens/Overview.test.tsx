@@ -570,4 +570,29 @@ describe("Overview screen", () => {
       expect(cell.line1).toBe("—");
     });
   });
+
+  describe("positions-box expiry/DTE cell + header (OVW-03)", () => {
+    it("the column header reads 'Expiry / DTE'", () => {
+      setPositions([POS]);
+      render(<Overview />);
+      expect(screen.getByText("Expiry / DTE")).toBeDefined();
+      expect(screen.queryByText("DTE")).toBeNull();
+    });
+
+    it("a calendar row shows both leg expiries and the calendar width", () => {
+      // CAL_FRONT expires Nov 20 2030, CAL_BACK Nov 30 2030 — a fixed 10-day-wide calendar.
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      expect(screen.getByText("Nov 20 → Nov 30")).toBeDefined();
+      expect(screen.getByText(/10d wide/)).toBeDefined();
+    });
+
+    it("a single-leg row shows its one expiry and DTE, no calendar width", () => {
+      // POS expires Aug 7 2026 — a single leg (no pair).
+      setPositions([POS]);
+      render(<Overview />);
+      expect(screen.getByText("Aug 7")).toBeDefined();
+      expect(screen.getByText(/^\d+d$/)).toBeDefined();
+    });
+  });
 });
