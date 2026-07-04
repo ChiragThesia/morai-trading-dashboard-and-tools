@@ -5,15 +5,15 @@ milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 19
 current_phase_name: picker-engine-economic-events
 status: executing
-stopped_at: Completed 19-03-PLAN.md
-last_updated: "2026-07-04T22:04:33.720Z"
+stopped_at: Completed 19-04-PLAN.md
+last_updated: "2026-07-04T22:19:15.556Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 26
-  completed_plans: 20
+  completed_plans: 21
   percent: 67
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 19 (picker-engine-economic-events) — EXECUTING
-Plan: 4 of 9
+Plan: 5 of 9
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 19 execution started
 
@@ -195,6 +195,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 19 P01 | ~12min | 3 tasks | 4 files |
 | Phase 19 P02 | 15min | 2 tasks | 4 files |
 | Phase 19 P03 | 16min | 2 tasks | 5 files |
+| Phase 19 P04 | 15min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -262,6 +263,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 19]: 19-03: dedupe-by-construction (nearest qualifying back expiry per deltaRung+frontExpiry) instead of a post-hoc score-based dedupe, since selection has no score
 - [Phase 19]: 19-03: inverted term structure zeroes the fwdEdge score contribution outright (not merely fwdEdge=0 through the normal window), never rewarding an inverted structure
 - [Phase 19]: 19-03: NOT marking PICK-01/PICK-03 complete -- this plan ships selectCandidates/scoreCalendarCandidates only; compute-picker use-case, HTTP/MCP wiring, and the economic-events adapter land in 19-04..19-09
+- [Phase ?]: 19-04: added packages/core/src/picker/index.ts barrel (Rule 3) so EconomicEvent/ForFetchingEconomicEvents/etc. reach @morai/adapters via @morai/core -- no prior 19-01..03 plan needed cross-package consumption
+- [Phase ?]: 19-04: FOMC_SEED dates authored from training-knowledge recall of the Fed's published 2025/2026 schedule (no live FRED_API_KEY/web access this session) -- documented as needing periodic refresh
+- [Phase ?]: 19-04: NOT marking PICK-03 complete -- this plan ships only the adapter/repo data path; cron wiring (19-08) and scoring/candidates-payload integration land in later plans
 
 ### Pending Todos
 
@@ -306,8 +310,8 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T22:04:33.710Z
-Stopped at: Completed 19-03-PLAN.md
+Last session: 2026-07-04T22:19:15.547Z
+Stopped at: Completed 19-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
