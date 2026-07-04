@@ -6,14 +6,14 @@ current_phase: 17.1
 current_phase_name: overview-payoff-tos-fidelity-graph-interactivity
 status: executing
 stopped_at: Completed 17.1-02-PLAN.md
-last_updated: "2026-07-04T01:48:03.652Z"
+last_updated: "2026-07-04T02:01:54.558Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 17.1 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
   percent: 33
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 17.1 (overview-payoff-tos-fidelity-graph-interactivity) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 17.1 execution started
 
@@ -182,6 +182,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 17-overview-v2-redesign-iv-calibration-fix P04 | 40min | 2 tasks tasks | 3 files files |
 | Phase 17.1 P01 | 12min | 2 tasks | 2 files |
 | Phase 17.1 P02 | 9min | 3 tasks | 3 files |
+| Phase 17.1 P03 | 3min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -219,6 +220,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 17-04]: Market.tsx: exported relAge/GEX_FRESH_MS (pure additive) so Overview.tsx reuses them verbatim per the plan's own interface contract
 - [Phase ?]: 17.1-01: single commit per task at green (project tdd.md rule) instead of separate RED/GREEN commits
 - [Phase ?]: 17.1-02: buildXTicks step formula uses (max-min)/targetCount not /(targetCount-1) — the plan's own acceptance criteria (step 200, matching today's hardcoded ticks) override RESEARCH.md's worked example, which snapped to step 250
+- [Phase ?]: 17.1-03: excludedCalendars controlled-component wiring landed in Task 1's commit (not Task 2) since Task 1's own RED test requires the checkbox to functionally reach the chart curve
 
 ### Pending Todos
 
@@ -263,7 +265,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T01:48:03.643Z
+Last session: 2026-07-04T02:00:34.219Z
 Stopped at: Completed 17.1-02-PLAN.md
 Resume file: None
 
