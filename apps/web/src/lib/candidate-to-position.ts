@@ -20,7 +20,7 @@ import type { PickerCandidate } from "@morai/contracts";
  * extractStrike reads. The date field is zeroed out since this symbol never represents a real,
  * tradable broker contract (D-02b) — never a real broker symbol.
  */
-function occSymbolForStrike(strike: number, putCall: "C" | "P"): string {
+export function occSymbolForStrike(strike: number, putCall: "C" | "P"): string {
   const thousandths = Math.round(strike * 1000).toString().padStart(8, "0");
   return `SPX   000000${putCall}${thousandths}`;
 }
