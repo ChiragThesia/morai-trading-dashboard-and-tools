@@ -5,9 +5,11 @@
  *   (a) kernel-parity: repriceScenario per-position greeks === direct bsmGreeks === Plan-06 computePositionGreeks (D-01)
  *   (b) payoff-shape: calendar payoff peaks near the strike
  *   (c) fast-check property: heatmap cell P&L symmetry + monotonicity (numRuns:1000)
- *   (d) roll-overlay example: rollScenario returns a curve
  *
  * RED commit: all tests fail on import error before scenario-engine.ts exists.
+ *
+ * 18-05 (D-04/D-04a): `rollScenario` and its describe block were removed here — the old
+ * Analyzer's RollSimulator was its only caller, and that component is retired with this plan.
  */
 
 import { describe, it, expect } from "vitest";
@@ -15,7 +17,7 @@ import * as fc from "fast-check";
 import { bsmGreeks } from "@morai/quant";
 import { parseOccSymbol } from "@morai/shared";
 import { computePositionGreeks } from "./position-greeks.ts";
-import { repriceScenario, rollScenario, t0ExcludedPositions, buildScenarioStrip } from "./scenario-engine.ts";
+import { repriceScenario, t0ExcludedPositions, buildScenarioStrip } from "./scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams } from "./scenario-engine.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -275,43 +277,6 @@ describe("repriceScenario — heatmap fast-check property (numRuns:1000)", () =>
       ),
       { numRuns: 1000 },
     );
-  });
-});
-
-// ─── (d) rollScenario example ─────────────────────────────────────────────────
-
-describe("rollScenario", () => {
-  it("returns a payoff curve when roll days=7 and strike offset=0", () => {
-    const rollResult = rollScenario([LIVE_POS], "live-1", BASE_PARAMS, {
-      rollDays: 7,
-      strikeOffset: 0,
-    });
-
-    expect(rollResult.payoffCurve.length).toBeGreaterThan(50);
-    // Roll curve should have all finite P&L values
-    for (const point of rollResult.payoffCurve) {
-      expect(Number.isFinite(point.pl)).toBe(true);
-    }
-  });
-
-  it("roll curve differs from base curve when roll is active", () => {
-    const base = repriceScenario([LIVE_POS], BASE_PARAMS);
-    const rolled = rollScenario([LIVE_POS], "live-1", BASE_PARAMS, {
-      rollDays: 14,
-      strikeOffset: 100,
-    });
-
-    // The rolled curve should differ from the base curve at some point
-    let differs = false;
-    for (let i = 0; i < base.payoffCurve.length && i < rolled.payoffCurve.length; i++) {
-      const bp = base.payoffCurve[i];
-      const rp = rolled.payoffCurve[i];
-      if (bp !== undefined && rp !== undefined && Math.abs(bp.pl - rp.pl) > 0.01) {
-        differs = true;
-        break;
-      }
-    }
-    expect(differs).toBe(true);
   });
 });
 

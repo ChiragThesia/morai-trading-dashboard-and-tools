@@ -10,7 +10,6 @@
  *   - bookPL(S, day, ivsh): sum over included positions: (posNet − entry) × 100 × qty
  *   - Greek strips: book net delta/gamma/theta/vega vs spot (back − front per position)
  *   - P&L heatmap: spot × date grid over [T+0, +5, +10, +15, +20, +30d]
- *   - Roll overlay: posNet with rolled front DTE + strike offset
  *
  * Reuses Plan-06 computePositionGreeks for per-position greeks (single code path — D-01).
  *
@@ -87,14 +86,6 @@ export type ScenarioStrip = {
   readonly levels: ReadonlyArray<number>;
   /** The @exp column header label (e.g. "Nov 20") — the book's front expiry (D-07). */
   readonly expiryLabel: string;
-};
-
-/** Roll configuration for the roll overlay */
-export type RollConfig = {
-  /** Extra days added to the front leg's DTE (0, 7, 14, or 21) */
-  readonly rollDays: number;
-  /** Strike offset applied to the front leg (−100, 0, or +100) */
-  readonly strikeOffset: number;
 };
 
 /** A single point on a payoff curve */
@@ -491,58 +482,6 @@ export function repriceScenario(
     bookGreekStrips,
     heatmapCells,
   };
-}
-
-/**
- * rollScenario — compute the amber roll overlay curve.
- *
- * Applies the roll to the selected position:
- *   - Front leg DTE += rollDays (rolling out the front)
- *   - Front leg strike += strikeOffset (diagonal roll)
- *
- * Returns the book P&L curve with the selected position rolled.
- */
-export function rollScenario(
-  positions: ReadonlyArray<AnalyzerPosition>,
-  selectedPositionId: string,
-  params: ScenarioParams,
-  rollConfig: RollConfig,
-): { readonly payoffCurve: ReadonlyArray<PayoffPoint> } {
-  const { spot, daysForward, ivShift, rate, divYield } = params;
-  const { rollDays, strikeOffset } = rollConfig;
-  const liveSpot = spot;
-
-  const spots = buildSpotGrid();
-
-  const payoffCurve: PayoffPoint[] = spots.map((S) => {
-    let total = 0;
-    for (const pos of positions) {
-      if (!pos.included) continue;
-      let net: number;
-      if (pos.id === selectedPositionId && (rollDays > 0 || strikeOffset !== 0)) {
-        // Roll this position: front DTE is extended by rollDays
-        // Strike offset applied to the front leg strike (diagonal roll)
-        const baseStrike = extractStrike(pos);
-        const rolledFrontStrike = baseStrike + strikeOffset;
-        const rolledFrontDte = pos.frontDte + rollDays;
-
-        const ivShiftDecimal = ivShift / 100;
-        const backT = Math.max((pos.backDte - daysForward) / 365, 1e-6);
-        const rolledFrontT = Math.max((rolledFrontDte - daysForward) / 365, 0);
-
-        const backPrice = bsmPrice(S, baseStrike, backT, pos.backIv + ivShiftDecimal, rate, divYield, pos.putCall);
-        const rolledFrontPrice = bsmPrice(S, rolledFrontStrike, rolledFrontT, pos.frontIv + ivShiftDecimal, rate, divYield, pos.putCall);
-        net = backPrice - rolledFrontPrice;
-      } else {
-        net = calendarNetPrice(pos, S, daysForward, ivShift, rate, divYield);
-      }
-      const entry = entryNetPrice(pos, liveSpot, rate, divYield);
-      total += (net - entry) * 100 * pos.qty;
-    }
-    return { spot: S, pl: total };
-  });
-
-  return { payoffCurve };
 }
 
 /**
