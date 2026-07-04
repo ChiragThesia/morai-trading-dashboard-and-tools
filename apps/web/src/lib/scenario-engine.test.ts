@@ -201,6 +201,27 @@ describe("repriceScenario — payoff shape", () => {
   });
 });
 
+// ─── 17.1-04 (OVW-05, D-01): @exp curve invariant across daysForward ───────────
+
+describe("repriceScenario — expirationCurve is invariant across daysForward (D-01)", () => {
+  it("expirationCurve is point-for-point identical for daysForward:0 vs daysForward:20", () => {
+    const atToday = repriceScenario([LIVE_POS], { ...BASE_PARAMS, daysForward: 0 });
+    const atPlus20 = repriceScenario([LIVE_POS], { ...BASE_PARAMS, daysForward: 20 });
+
+    expect(atPlus20.expirationCurve.length).toBe(atToday.expirationCurve.length);
+    for (let i = 0; i < atToday.expirationCurve.length; i++) {
+      const a = atToday.expirationCurve[i];
+      const b = atPlus20.expirationCurve[i];
+      expect(a).toBeDefined();
+      expect(b).toBeDefined();
+      if (a !== undefined && b !== undefined) {
+        expect(a.spot).toBe(b.spot);
+        expect(b.pl).toBeCloseTo(a.pl, 10);
+      }
+    }
+  });
+});
+
 // ─── (c) fast-check: heatmap cell P&L symmetry + monotonicity ───────────────
 
 describe("repriceScenario — heatmap fast-check property (numRuns:1000)", () => {
