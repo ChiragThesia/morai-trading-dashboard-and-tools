@@ -194,9 +194,9 @@ export interface RightColumnProps {
 }
 
 /**
- * RightColumn — the "Why this calendar" / "Term structure + your legs" / "Entry / exit plan"
- * stack for the currently-selected candidate. Reads the fixture's static term-structure/events/
- * GEX context (never live — this screen scores against the frozen D-03 snapshot).
+ * RightColumn — the "Why this calendar" / "Entry / exit plan" stack for the currently-selected
+ * candidate. The term-structure chart moved to the center column (stacked under the payoff graph);
+ * reads the fixture's static GEX context (never live — this screen scores against the D-03 snapshot).
  */
 function RightColumn({ candidate }: RightColumnProps): React.ReactElement {
   return (
@@ -204,17 +204,6 @@ function RightColumn({ candidate }: RightColumnProps): React.ReactElement {
       <Panel>
         <PanelHeading title="Why this calendar" />
         {candidate !== null && <WhyPanel candidate={candidate} gex={pickerSnapshotFixture.gex} />}
-      </Panel>
-      <Panel>
-        <PanelHeading title="Term structure + your legs" />
-        {candidate !== null && (
-          <TermStructureChart
-            termStructure={pickerSnapshotFixture.termStructure}
-            events={pickerSnapshotFixture.events}
-            asOf={pickerSnapshotFixture.asOf}
-            candidate={candidate}
-          />
-        )}
       </Panel>
       <Panel>
         <PanelHeading title="Entry / exit plan" />
@@ -333,8 +322,8 @@ export function Analyzer(): React.ReactElement {
       />
 
       <div className="grid gap-4" style={{ gridTemplateColumns: "300px 1fr 330px" }}>
-      {/* ── Left column: ranked rail ─────────────────────────────────── */}
-      <div className="flex flex-col">
+      {/* ── Left column: ranked rail + the scoring matrix (how any calendar is scored) ── */}
+      <div className="flex flex-col gap-3">
         <CandidateRail
           candidates={SORTED_CANDIDATES}
           selectedId={selectedId}
@@ -344,9 +333,10 @@ export function Analyzer(): React.ReactElement {
           onToggleCombine={handleToggleCombine}
           onCopy={handleCopyCandidate}
         />
+        <ScoringMethodologyPanel />
       </div>
 
-      {/* ── Center column: payoff center + methodology ───────────────── */}
+      {/* ── Center column: payoff graph + term structure (both charts, stacked) ── */}
       <div className="flex min-w-0 flex-col gap-3">
         <Panel>
           <div className="mb-1 flex items-center justify-between gap-2">
@@ -423,10 +413,20 @@ export function Analyzer(): React.ReactElement {
           )}
         </Panel>
 
-        <ScoringMethodologyPanel />
+        <Panel>
+          <PanelHeading title="Term structure + your legs" />
+          {selected !== null && (
+            <TermStructureChart
+              termStructure={pickerSnapshotFixture.termStructure}
+              events={pickerSnapshotFixture.events}
+              asOf={pickerSnapshotFixture.asOf}
+              candidate={selected}
+            />
+          )}
+        </Panel>
       </div>
 
-      {/* ── Right column: why-panel / term-structure / entry-exit-plan ─── */}
+      {/* ── Right column: why-panel / entry-exit-plan ─── */}
       <RightColumn candidate={selected} />
       </div>
     </div>
