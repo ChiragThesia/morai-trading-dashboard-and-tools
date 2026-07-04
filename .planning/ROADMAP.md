@@ -198,7 +198,14 @@ starts)
 
   3. User sees a why-panel per candidate: term structure with leg dots + forward-vol bracket +
      event markers, plus an entry/exit plan card with +25% / −17.5% defaults.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — Picker Zod contract (pickerCandidate/pickerSnapshotResponse) + frozen playground-v4 fixture + guard case (ANLZ-01)
+- [ ] 18-02-PLAN.md — PayoffChart additive props: compareCurve + expectedMoveBand (ANLZ-02)
+- [ ] 18-03-PLAN.md — candidateToAnalyzerPosition adapter + debit=max-loss invariant (ANLZ-02)
+- [ ] 18-04-PLAN.md — Picker screen: ranked cards rail + payoff center (compare/EM band/scenario strip) (ANLZ-01/02)
+- [ ] 18-05-PLAN.md — Why-panel + term-structure + entry/exit plan + old-Analyzer retirement (ANLZ-03)
 **UI hint**: yes
 
 ### Phase 19: Picker Engine + Economic Events
