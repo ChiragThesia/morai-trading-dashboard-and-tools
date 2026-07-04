@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
-current_phase: 18
-current_phase_name: analyzer-picker-ui-redesign
+current_phase: 19
+current_phase_name: Picker Engine + Economic Events
 status: verifying
 stopped_at: Completed 18-05-PLAN.md
-last_updated: "2026-07-04T15:20:28.360Z"
+last_updated: "2026-07-04T16:03:58.693Z"
 last_activity: 2026-07-04
-last_activity_desc: Phase 18 execution started
+last_activity_desc: Phase 18 complete, transitioned to Phase 19
 progress:
   total_phases: 6
   completed_phases: 4
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 18 (analyzer-picker-ui-redesign) — EXECUTING
-Plan: 5 of 5
+Phase: 19 — Picker Engine + Economic Events
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-04 — Phase 18 execution started
+Last activity: 2026-07-04 — Phase 18 complete, transitioned to Phase 19
 
 ## Milestone v1.2 Summary
 
@@ -93,6 +93,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 15 | 5 | - | - |
 | 16 | 3 | - | - |
 | 17.1 | 5 | - | - |
+| 18 | 5 | - | - |
 
 **Recent Trend:**
 
