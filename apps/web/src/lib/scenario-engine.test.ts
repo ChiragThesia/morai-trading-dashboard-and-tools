@@ -13,6 +13,7 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { bsmGreeks } from "@morai/quant";
+import { parseOccSymbol } from "@morai/shared";
 import { computePositionGreeks } from "./position-greeks.ts";
 import { repriceScenario, rollScenario, t0ExcludedPositions, buildScenarioStrip } from "./scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams } from "./scenario-engine.ts";
@@ -148,24 +149,37 @@ describe("repriceScenario — kernel parity (D-01)", () => {
     expect(scenarioPosGreeks.theta).toBeCloseTo(expectedTheta, 4);
     expect(scenarioPosGreeks.vega).toBeCloseTo(expectedVega, 4);
 
-    // Also check Plan-06 computePositionGreeks consistency
-    // computePositionGreeks uses the same bsmGreeks kernel, but operates on a single leg
-    // For this test: use a non-calendar (single-leg) approach via the helper for back leg
+    // Plan-06 computePositionGreeks parity (WR-02): assert the helper's OUTPUT
+    // actually equals a direct bsmGreeks call on the SAME inputs the helper uses —
+    // a real parity check, not a value compared to itself. computePositionGreeks
+    // derives T from the OCC expiry (parseOccSymbol + Date.now(), 365.25-day year),
+    // NOT from backDte/365, so we reprice with that same expiry-derived T and strike.
+    const netQty = 1;
     const pgResult = computePositionGreeks({
       occSymbol: LIVE_POS.occSymbol,
       spot: SPOT,
       iv: IV,
       rate: R,
       divYield: Q,
-      longQty: 0, // not used for the parity check — we check delta from direct call
+      longQty: netQty,
       shortQty: 0,
     });
 
-    // Regardless of the helper's qty interpretation, the underlying bsmGreeks call
-    // must return the same values (same kernel, same inputs) — D-01 guarantee
-    // We verify the kernel itself is the same by comparing directGreeks
-    expect(directGreeks.delta).toBeCloseTo(directGreeks.delta, 10);
-    expect(typeof pgResult).toBe("object"); // helper returns ok or err; either way, same kernel
+    expect(pgResult.ok).toBe(true);
+    const parsed = parseOccSymbol(LIVE_POS.occSymbol);
+    expect(parsed.ok).toBe(true);
+    if (pgResult.ok && parsed.ok) {
+      const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+      const helperT = (parsed.value.expiry.getTime() - Date.now()) / MS_PER_YEAR;
+      const helperKernel = bsmGreeks(SPOT, parsed.value.strike, helperT, IV, R, Q, parsed.value.type);
+
+      // Same kernel, same inputs, scaled by netQty — the D-01 parity guarantee.
+      expect(pgResult.value.netQty).toBe(netQty);
+      expect(pgResult.value.greeks.delta).toBeCloseTo(helperKernel.delta * netQty, 6);
+      expect(pgResult.value.greeks.gamma).toBeCloseTo(helperKernel.gamma * netQty, 6);
+      expect(pgResult.value.greeks.theta).toBeCloseTo(helperKernel.theta * netQty, 6);
+      expect(pgResult.value.greeks.vega).toBeCloseTo(helperKernel.vega * netQty, 6);
+    }
   });
 });
 
