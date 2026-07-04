@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
-current_phase: 17
-current_phase_name: overview-v2-redesign-iv-calibration-fix
+current_phase: 17.1
+current_phase_name: overview-payoff-tos-fidelity-graph-interactivity
 status: executing
-stopped_at: Phase 17.1 UI-SPEC approved
-last_updated: "2026-07-04T01:26:30.889Z"
-last_activity: 2026-07-03
-last_activity_desc: Phase 17 execution started
+stopped_at: Completed 17.1-01-PLAN.md
+last_updated: "2026-07-04T01:36:38.015Z"
+last_activity: 2026-07-04
+last_activity_desc: Phase 17.1 execution started
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 12
+  completed_plans: 8
   percent: 33
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 17 — overview-v2-redesign-iv-calibration-fix
+**Current focus:** Phase 17.1 — overview-payoff-tos-fidelity-graph-interactivity
 
 ## Current Position
 
-Phase: 17 (overview-v2-redesign-iv-calibration-fix) — EXECUTING
-Plan: 4 of 4
+Phase: 17.1 (overview-payoff-tos-fidelity-graph-interactivity) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-07-03 — Phase 17 execution started
+Last activity: 2026-07-04 — Phase 17.1 execution started
 
 ## Milestone v1.2 Summary
 
@@ -180,6 +180,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 17-overview-v2-redesign-iv-calibration-fix P02 | 15min | 2 tasks | 2 files |
 | Phase 17-overview-v2-redesign-iv-calibration-fix P03 | 10min | 1 tasks | 2 files |
 | Phase 17-overview-v2-redesign-iv-calibration-fix P04 | 40min | 2 tasks tasks | 3 files files |
+| Phase 17.1 P01 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -215,6 +216,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 17-04]: Cold-start (no-price) legs excluded from T+0/@exp pricing (never a guessed IV) but do NOT show the 'IV n/a' badge — only a genuine IvError does (AnalyzerPosition status is 2-state, no 'no-data-yet' variant)
 - [Phase 17-04]: Payoff hero prices calendars only (pairPositionsIntoCalendars) — singles remain table-only rows; prod book has 0 singles today, documented scoping decision not a silent gap
 - [Phase 17-04]: Market.tsx: exported relAge/GEX_FRESH_MS (pure additive) so Overview.tsx reuses them verbatim per the plan's own interface contract
+- [Phase ?]: 17.1-01: single commit per task at green (project tdd.md rule) instead of separate RED/GREEN commits
 
 ### Pending Todos
 
@@ -259,9 +261,9 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T00:38:38.737Z
-Stopped at: Phase 17.1 UI-SPEC approved
-Resume file: .planning/phases/17.1-overview-payoff-tos-fidelity-graph-interactivity/17.1-UI-SPEC.md
+Last session: 2026-07-04T01:36:38.005Z
+Stopped at: Completed 17.1-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

@@ -36,7 +36,7 @@ tail.
   combined chart (magenta today/date curve + cyan @exp, TOS axis ticks + auto-scaling); the
   prior wonky rendering (mixed round/key-level x-ticks, @exp dwarfing a near-flat T+0) is resolved
 
-- [ ] **OVW-05**: A TOS-style date picker (calendar + day-step arrows) projects the payoff curve
+- [x] **OVW-05**: A TOS-style date picker (calendar + day-step arrows) projects the payoff curve
   to a chosen future date via the scenario-engine `daysForward` path; the @exp curve stays fixed
 
 - [ ] **OVW-06**: The user can pick/choose which real-book calendars are drawn on the graph
@@ -130,7 +130,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OVW-02 | Phase 17 | Complete |
 | OVW-03 | Phase 17.1 | Pending |
 | OVW-04 | Phase 17.1 | Pending |
-| OVW-05 | Phase 17.1 | Pending |
+| OVW-05 | Phase 17.1 | Complete |
 | OVW-06 | Phase 17.1 | Pending |
 | ANLZ-01 | Phase 18 | Pending |
 | ANLZ-02 | Phase 18 | Pending |
