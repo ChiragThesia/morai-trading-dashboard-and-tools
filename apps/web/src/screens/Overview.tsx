@@ -852,7 +852,14 @@ export function Overview(): React.ReactElement {
   const bounds = useMemo(
     () =>
       computeProjectionBounds(
-        calendarPositions.filter((p) => p.included).map((p) => p.frontDte),
+        calendarPositions
+          .filter(
+            (p) =>
+              p.included &&
+              p.frontIvStatus !== "non-convergent" &&
+              p.backIvStatus !== "non-convergent",
+          )
+          .map((p) => p.frontDte),
         today,
       ),
     [calendarPositions, today],
