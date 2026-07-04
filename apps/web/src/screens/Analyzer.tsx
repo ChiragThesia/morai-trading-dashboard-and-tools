@@ -98,6 +98,15 @@ export function CandidateRail({
   return (
     <Panel>
       <PanelHeading title="Suggested calendars" />
+      {candidates.length > 0 && (
+        <p className="mb-2 font-mono text-[9px] leading-[1.5] text-dim" data-testid="rail-legend">
+          {"θ = daily $ decay · vega = $ per vol-pt · "}
+          <span className="text-amber">◂f</span>
+          {"/"}
+          <span className="text-amber">◂b</span>
+          {" = event on front / back leg · bars = scored factors (higher = better)"}
+        </p>
+      )}
       {candidates.length === 0 ? (
         <div className="flex flex-col gap-1.5">
           <p className="m-0 font-display text-sm font-bold text-txt">No candidates in this snapshot</p>
@@ -135,25 +144,43 @@ function ScoringMethodologyPanel(): React.ReactElement {
         <summary className="cursor-pointer font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase">
           Scoring methodology — verified &amp; refuted
         </summary>
-        <ul className="mt-2 flex list-none flex-col gap-2 pl-0 font-mono text-[11px] leading-[1.45] text-txt">
+        <ul className="mt-2 flex list-none flex-col gap-2.5 pl-0 font-mono text-[11px] leading-[1.5] text-txt">
           <li>
-            <b>Scored</b> (verified): forward-IV edge via √[(T₂σ₂²−T₁σ₁²)/(T₂−T₁)] — never raw
-            front−back IV subtraction (SpotGamma; no-arb identity) · term-structure slope,
-            dominant long-vol driver (Vasquez JFQA 2017, 16.5%/mo decile spread) · event flags
-            per leg with front-event penalty (arXiv 2606.12872: FOMC/CPI premia) · net θ &gt; 0
-            constraint bounds OTM distance (live greeks, not fixed %) · GEX regime + abs-γ-strike
-            proximity (SpotGamma; pinning literature) · debit = max loss for sizing, close by
-            front expiry.
+            <b>Scored</b> — each of these earns points toward the 0–100:
+            <ul className="mt-1 flex list-none flex-col gap-1 pl-3 text-dim">
+              <li>
+                <span className="text-txt">Forward-vol edge</span> — is the back leg&apos;s implied
+                vol richer than the front&apos;s, measured properly (a forward-variance calc, not a
+                naive front−back IV subtraction).
+              </li>
+              <li>
+                <span className="text-txt">Term-structure slope</span> — the main long-vol driver;
+                steeper up = more tailwind.
+              </li>
+              <li>
+                <span className="text-txt">Event exposure</span> — front legs spanning NFP / CPI /
+                FOMC carry event premium and spike risk, so they lose points.
+              </li>
+              <li>
+                <span className="text-txt">Positive daily theta</span> — the trade must earn carry
+                (θ &gt; 0); this also caps how far out-of-the-money the strike can sit.
+              </li>
+              <li>
+                <span className="text-txt">GEX fit</span> — is the strike near a gamma wall / pin in
+                today&apos;s dealer positioning.
+              </li>
+            </ul>
+            <span className="text-dim">Debit = your max loss (closed as a spread by front expiry) — used for sizing, not scored.</span>
           </li>
           <li>
-            <b>Deliberately NOT scored</b> (refuted 3-vote adversarial): IV-rank/percentile entry
-            gates (0-3) · &quot;−1 to −3% IV differential ideal band&quot; (0-3, fabricated
-            source) · &quot;fair debit = 25-40% of back premium&quot; (0-3).
+            <b>Deliberately NOT scored</b> — we tested these and the evidence didn&apos;t hold:
+            IV-rank / percentile entry gates · a fixed &quot;ideal IV-difference band&quot; ·
+            &quot;fair debit = X% of the back premium&quot;.
           </li>
           <li>
-            <b>Needs in-house backtest</b>: slope-signal transfer to SPX time-series
-            (leg_observations has the history since 2026-06-12) · BE-vs-EM and θ/vega thresholds
-            · VVIX/COT as entry timing (no verified evidence — shown as context only).
+            <b>Needs in-house backtest</b> before we trust them: whether the slope signal actually
+            predicts SPX moves (we have the history since 2026-06-12) · BE-vs-EM and θ/vega
+            thresholds · VVIX / COT as entry timing — shown as context only.
           </li>
         </ul>
       </details>

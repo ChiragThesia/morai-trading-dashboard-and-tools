@@ -142,6 +142,13 @@ describe("Analyzer — scoring methodology panel (Task 2, locked copy)", () => {
     expect(container.textContent).toContain("Deliberately NOT scored");
     expect(container.textContent).toContain("Needs in-house backtest");
   });
+
+  it("renders the rail legend explaining the shorthand (θ / vega / event tags)", () => {
+    render(<Analyzer />);
+    const legend = screen.getByTestId("rail-legend");
+    expect(legend.textContent).toContain("daily $ decay");
+    expect(legend.textContent).toContain("event on front");
+  });
 });
 
 describe("CandidateRail — empty state (Task 2)", () => {
