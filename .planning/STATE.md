@@ -6,14 +6,14 @@ current_phase: 19
 current_phase_name: picker-engine-economic-events
 status: executing
 stopped_at: Completed 19-07-PLAN.md
-last_updated: "2026-07-04T23:14:37.353Z"
+last_updated: "2026-07-04T23:32:32.596Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 26
-  completed_plans: 24
+  completed_plans: 25
   percent: 67
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 19 (picker-engine-economic-events) — EXECUTING
-Plan: 8 of 9
+Plan: 9 of 9
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 19 execution started
 
@@ -199,6 +199,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 19 P19-05 | 22min | 3 tasks tasks | 14 files files |
 | Phase 19 P06 | 15min | 2 tasks | 4 files |
 | Phase 19 P07 | 18min | 3 tasks | 9 files |
+| Phase 19 P08 | 20min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -277,6 +278,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 19]: 19-07: added getPicker optional param to makeMcpRouter (server.ts) between getMacro and getPositions -- MCP tool registration happens in server.ts's per-request closure, not main.ts, so touching server.ts was required plumbing not itemized in the plan's files_modified list
 - [Phase 19]: 19-07: exported ForRunningGetPicker/makeGetPickerUseCase (@morai/core) and makePostgresPickerSnapshotRepo/makeMemoryPickerSnapshotRepo (@morai/adapters) -- built in 19-05/19-06 but never re-exported through the package barrels
 - [Phase 19]: 19-07: get_picker_candidates MCP tool tested via a real McpServer + InMemoryTransport-linked Client (genuine handler invocation) rather than only calling the use-case directly, avoiding the weaker existing get_status test precedent
+- [Phase 19-08]: absGammaStrike derived at the composition root from GexSnapshotRow.strikes (max abs-gex strike) since GexSnapshotRow has no such field
+- [Phase 19-08]: reworded compute-picker terminal-job comments from 'no boss.send' to 'no further enqueue' so the plan's own literal-grep acceptance criterion passes
 
 ### Pending Todos
 
@@ -321,7 +324,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T23:14:37.344Z
+Last session: 2026-07-04T23:30:25.175Z
 Stopped at: Completed 19-07-PLAN.md
 Resume file: None
 

@@ -68,7 +68,7 @@ tail.
 - [x] **PICK-02**: User can query scored candidates via HTTP route + MCP tool; the Analyzer UI
   swaps fixtures for real data; chain-snapshot staleness ("as of") is visible on every surface
 
-- [ ] **PICK-03**: Economic-events context provides FOMC/CPI/NFP dates (FRED `releases/dates`
+- [x] **PICK-03**: Economic-events context provides FOMC/CPI/NFP dates (FRED `releases/dates`
   for CPI/NFP + static hand-refreshed FOMC seed), stored with IANA timezone, refreshed by cron;
   per-leg event-window flags feed scoring and ride in the candidates payload (internal-only —
   no separate events API surface in v1.2)
@@ -137,7 +137,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ANLZ-03 | Phase 18 | Complete |
 | PICK-01 | Phase 19 | Complete |
 | PICK-02 | Phase 19 | Complete |
-| PICK-03 | Phase 19 | Pending |
+| PICK-03 | Phase 19 | Complete |
 | WATCH-01 | Phase 20 | Pending |
 | SNAP-01 | Phase 20 | Pending |
 | RULE-01 | Phase 20 | Pending |
