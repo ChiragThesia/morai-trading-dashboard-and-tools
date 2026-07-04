@@ -23,6 +23,7 @@ import {
   makePostgresGexSnapshotRepo,
   makePostgresCotObservationsRepo,
   makePostgresMacroObservationsRepo,
+  makePostgresPickerSnapshotRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -40,6 +41,7 @@ import {
   makeGetGexUseCase,
   makeGetCotUseCase,
   makeGetMacroUseCase,
+  makeGetPickerUseCase,
 } from "@morai/core";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
@@ -54,6 +56,7 @@ import { journalRoutes } from "./adapters/http/journal.routes.ts";
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
 import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
 import { gexRoutes } from "./adapters/http/gex.routes.ts";
+import { pickerRoutes } from "./adapters/http/picker.routes.ts";
 import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
 import { streamRoutes, makeStreamSseRouter } from "./adapters/http/stream.routes.ts";
@@ -158,6 +161,14 @@ const getMacro = makeGetMacroUseCase({
   readMacroObservations: macroObservationsRepo.readMacroObservations,
 });
 
+// PICK-02 / MCP-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
+// get_picker_candidates MCP tool over the ONE pickerSnapshotResponse contract. Pure stored-row
+// read (D-04) — never recomputed on read.
+const pickerSnapshotRepo = makePostgresPickerSnapshotRepo(db);
+const getPicker = makeGetPickerUseCase({
+  readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
+});
+
 // BRK-02: build trader adapters — reads from broker_tokens for the trader app.
 // getAccessToken closure reads broker_tokens at call time (on-demand refresh deferred to JOB-02).
 const USER_AGENT = "Morai-Server/1.0";
@@ -245,7 +256,9 @@ const apiRouter = new Hono()
   // MAC-02 (14-06): GET /api/analytics/macro — FRED + VVIX series (MCP-02)
   .route("/", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro))
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
-  .route("/analytics", gexRoutes(getGex));
+  .route("/analytics", gexRoutes(getGex))
+  // PICK-02 (19-07): GET /api/picker/candidates — stored-row read (D-04, never recomputed)
+  .route("/", pickerRoutes(getPicker));
 
 // Phase 12 (12-05): streaming — build shared deps before route mounts.
 const sidecarReconciler = makeSidecarPositionReconciler({
@@ -289,6 +302,8 @@ app.route("/api", jobsGroup);
 // MCP-01: base tools + BRK-02 trader tools + MCP-02 trigger_job tool + GEX-02 get_gex tool.
 // COT-02 / MCP-02 (13-06): get_cot tool added here — same getCot use-case as the HTTP route.
 // MAC-02 / MCP-02 (14-06): get_macro tool added here — same getMacro use-case as the HTTP route.
+// PICK-02 / MCP-02 (19-07): get_picker_candidates tool added here — same getPicker use-case
+// as the HTTP route.
 const mcpRouter = makeMcpRouter(
   config,
   statusPort,
@@ -300,6 +315,7 @@ const mcpRouter = makeMcpRouter(
   getGex,
   getCot,
   getMacro,
+  getPicker,
   getPositions,
   getTransactions,
   getOrders,

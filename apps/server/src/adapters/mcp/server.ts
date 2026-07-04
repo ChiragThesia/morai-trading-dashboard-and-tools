@@ -11,6 +11,7 @@ import type {
   ForRunningGetGex,
   ForRunningGetCot,
   ForRunningGetMacro,
+  ForRunningGetPicker,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -27,6 +28,7 @@ import {
   registerGetGexTool,
   registerGetCotTool,
   registerGetMacroTool,
+  registerGetPickerCandidatesTool,
   registerGetPositionsTool,
   registerGetTransactionsTool,
   registerGetOrdersTool,
@@ -57,6 +59,9 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  *         GET /api/analytics/cot; injected as optional for backward compat with existing call sites.
  * MAC-02 / MCP-02: get_macro registered here (Phase 14, 14-06) — shares macroResponse with
  *         GET /api/analytics/macro; injected as optional for backward compat with existing call sites.
+ * PICK-02 / MCP-02 (Phase 19, 19-07): get_picker_candidates registered here — shares
+ *         pickerSnapshotResponse with GET /api/picker/candidates; injected as optional for
+ *         backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -69,6 +74,7 @@ export function makeMcpRouter(
   getGex?: ForRunningGetGex,
   getCot?: ForRunningGetCot,
   getMacro?: ForRunningGetMacro,
+  getPicker?: ForRunningGetPicker,
   getPositions?: ForGettingPositions,
   getTransactions?: ForGettingTransactions,
   getOrders?: ForGettingOrders,
@@ -103,6 +109,11 @@ export function makeMcpRouter(
     // MAC-02 / MCP-02: get_macro tool — optional, wired when getMacro use-case is available (Phase 14)
     if (getMacro !== undefined) {
       registerGetMacroTool(server, getMacro);
+    }
+    // PICK-02 / MCP-02: get_picker_candidates tool — optional, wired when getPicker use-case
+    // is available (Phase 19)
+    if (getPicker !== undefined) {
+      registerGetPickerCandidatesTool(server, getPicker);
     }
     // BRK-02 / MCP-02: trader data tools (optional — wired when trader adapters are available)
     if (getPositions !== undefined) {

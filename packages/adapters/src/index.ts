@@ -101,6 +101,12 @@ export type { PostgresMacroObservationsRepo } from "./postgres/repos/macro-obser
 export { makeMemoryMacroObservationsRepo } from "./memory/macro-observations.ts";
 export type { MemoryMacroObservationsRepo } from "./memory/macro-observations.ts";
 
+// Phase 19 (19-07): picker-snapshot repo — postgres + in-memory twin (architecture-boundaries §8)
+export { makePostgresPickerSnapshotRepo } from "./postgres/repos/picker-snapshot.ts";
+export type { PostgresPickerSnapshotRepo } from "./postgres/repos/picker-snapshot.ts";
+export { makeMemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
+export type { MemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
+
 // In-memory adapters (test doubles; also usable in development)
 export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";
 export { makeMemoryCalendarSnapshotsRepo } from "./memory/calendar-snapshots.ts";
