@@ -6,7 +6,7 @@ current_phase: 19
 current_phase_name: picker-engine-economic-events
 status: executing
 stopped_at: Completed 19-04-PLAN.md
-last_updated: "2026-07-04T22:19:15.556Z"
+last_updated: "2026-07-04T22:37:14.613Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 19 execution started
 progress:
@@ -278,6 +278,13 @@ None yet.
   Next re-auth window ~2026-07-09. This is now Phase 16 of the v1.2 roadmap — the milestone's
   first and most time-sensitive phase.
 
+- **19-05 Task 3 [BLOCKING]**: `bun run migrate` must be run manually against the LIVE schema
+  to apply migrations 0014 (economic_events) + 0015 (picker_snapshot). Requires the full worker
+  env (DATABASE_URL/DIRECT connection + SIDECAR_URL etc — `bun run migrate` validates the
+  complete worker config). Tasks 1-2 of 19-05 are committed; resume by running the migration
+  and confirming both tables exist live with correct column types (event_date `date`,
+  snapshot `jsonb`).
+
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
@@ -310,7 +317,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T22:19:15.547Z
+Last session: 2026-07-04T22:36:07.720Z
 Stopped at: Completed 19-04-PLAN.md
 Resume file: None
 
