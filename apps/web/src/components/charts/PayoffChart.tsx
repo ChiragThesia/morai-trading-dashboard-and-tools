@@ -583,11 +583,15 @@ export function PayoffChart({
             </g>
           )}
 
-          {/* ── Layer 1: Profit zone fill (teal, 4.5% opacity) ───────────── */}
-          {toggles.showProfitZone && todayCurve.length > 0 && (
+          {/* ── Layer 1: Profit zone fill — the profitable-at-expiration region (teal).
+               Uses the @exp curve, not T+0: a calendar's T+0 curve sits at ~$0 so its
+               profit band is an invisible sliver near spot; the @exp tent's positive area
+               (between the @exp breakevens) is the meaningful "where you make money" zone. ── */}
+          {toggles.showProfitZone && expirationCurve.length > 0 && (
             <path
-              d={buildProfitZonePath(todayCurve, xScale, zeroY, clampY)}
-              fill={`rgba(38,166,154,0.045)`}
+              data-testid="profit-zone"
+              d={buildProfitZonePath(expirationCurve, xScale, zeroY, clampY)}
+              fill={`rgba(38,166,154,0.13)`}
             />
           )}
 

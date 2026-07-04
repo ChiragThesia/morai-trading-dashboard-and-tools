@@ -494,3 +494,24 @@ describe("PayoffChart — breakeven pills + red markers (TOS-style)", () => {
     expect(container.querySelectorAll('[data-testid="be-pill-t0"]').length).toBeGreaterThan(0);
   });
 });
+
+describe("PayoffChart — profit zone toggle", () => {
+  afterEach(cleanup);
+
+  it("renders a non-empty @exp profit-zone fill when showProfitZone is on", () => {
+    const { container } = render(
+      <PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showProfitZone: true }} />,
+    );
+    const zone = container.querySelector('[data-testid="profit-zone"]');
+    expect(zone).not.toBeNull();
+    // Path must actually describe a region (EXP_CURVE is profitable above 7400).
+    expect((zone?.getAttribute("d") ?? "").length).toBeGreaterThan(0);
+  });
+
+  it("removes the profit-zone fill when showProfitZone is off", () => {
+    const { container } = render(
+      <PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showProfitZone: false }} />,
+    );
+    expect(container.querySelector('[data-testid="profit-zone"]')).toBeNull();
+  });
+});
