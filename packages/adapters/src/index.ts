@@ -107,6 +107,19 @@ export type { PostgresPickerSnapshotRepo } from "./postgres/repos/picker-snapsho
 export { makeMemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
 export type { MemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
 
+// Phase 19 (19-04/19-08): economic-events adapter (FRED+FOMC seed) + repo — postgres + in-memory twin
+export { makeEconomicEventsAdapter, FOMC_SEED } from "./http/economic-events.ts";
+export { makePostgresEconomicEventsRepo } from "./postgres/repos/economic-events.ts";
+export type { PostgresEconomicEventsRepo } from "./postgres/repos/economic-events.ts";
+export { makeMemoryEconomicEventsRepo } from "./memory/economic-events.ts";
+export type { MemoryEconomicEventsRepo } from "./memory/economic-events.ts";
+
+// Phase 19 (19-05/19-08): picker-chain repo (ForReadingChainForPicker) — postgres + in-memory twin
+export { makePostgresPickerChainRepo } from "./postgres/repos/picker-chain.ts";
+export type { PostgresPickerChainRepo } from "./postgres/repos/picker-chain.ts";
+export { makeMemoryPickerChainRepo } from "./memory/picker-chain.ts";
+export type { MemoryPickerChainRepo } from "./memory/picker-chain.ts";
+
 // In-memory adapters (test doubles; also usable in development)
 export { makeMemoryCalendarsRepo } from "./memory/calendars.ts";
 export { makeMemoryCalendarSnapshotsRepo } from "./memory/calendar-snapshots.ts";

@@ -11,13 +11,20 @@ export type {
   ForPersistingEconomicEvents,
   ChainQuoteForPicker,
   ForReadingChainForPicker,
+  GexContextForPicker,
+  ForReadingGexContext,
   PickerSnapshot,
   PickerSnapshotRow,
   ForPersistingPickerSnapshot,
   ForReadingPickerSnapshot,
+  ForRunningComputePicker,
   ForRunningGetPicker,
 } from "./application/ports.ts";
 
 // PICK-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
 // get_picker_candidates MCP tool over the ONE pickerSnapshotResponse contract (MCP-02).
 export { makeGetPickerUseCase } from "./application/getPicker.ts";
+
+// PICK-01/PICK-03 (19-08): compute-picker use-case — chain-triggered by compute-gex-snapshot
+// (D-04); reads chain+GEX+events, scores candidates, persists exactly one snapshot row.
+export { makeComputePickerSnapshotUseCase } from "./application/computePickerSnapshot.ts";
