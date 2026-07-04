@@ -516,4 +516,24 @@ describe("Overview screen", () => {
       expect(latestPayoffChartProps().todayCurve).toEqual(baseline);
     });
   });
+
+  // ── 17.1-04 (OVW-04): TOS magenta/cyan curve colors + legend swatches ───────
+
+  describe("OVW-04: TOS-fidelity curve colors (Overview hero only, D-03a)", () => {
+    it("renders the today curve in TOS magenta and the @exp curve in cyan", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      const { container } = render(<Overview />);
+      const t0Curve = container.querySelector('[data-testid="net-book-t0-curve"]');
+      const expCurve = container.querySelector('[data-testid="net-book-exp-curve"]');
+      expect(t0Curve?.getAttribute("stroke")).toBe("var(--color-tos-magenta)");
+      expect(expCurve?.getAttribute("stroke")).toBe("var(--color-cyan)");
+    });
+
+    it("legend swatches use bg-tos-magenta (T+0) and bg-cyan (@ exp)", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      const { container } = render(<Overview />);
+      expect(container.querySelector(".bg-tos-magenta")).not.toBeNull();
+      expect(container.querySelector(".bg-cyan")).not.toBeNull();
+    });
+  });
 });
