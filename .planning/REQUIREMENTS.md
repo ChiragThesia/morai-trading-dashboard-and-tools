@@ -29,6 +29,20 @@ tail.
   (bisection via the core IV-inversion module, tagged non-convergence result — never a flat
   DEFAULT_IV guess); stale GEX displays its snapshot timestamp
 
+- [ ] **OVW-03**: Each positions-box row shows both leg expiration dates + both DTEs + the
+  days between the two expiries (the calendar width), not just today's `Nd → Nd`
+
+- [ ] **OVW-04**: The Overview payoff graph visually emulates the TOS Analyze → Risk Profile
+  combined chart (magenta today/date curve + cyan @exp, TOS axis ticks + auto-scaling); the
+  prior wonky rendering (mixed round/key-level x-ticks, @exp dwarfing a near-flat T+0) is resolved
+
+- [ ] **OVW-05**: A TOS-style date picker (calendar + day-step arrows) projects the payoff curve
+  to a chosen future date via the scenario-engine `daysForward` path; the @exp curve stays fixed
+
+- [ ] **OVW-06**: The user can pick/choose which real-book calendars are drawn on the graph
+  (per-calendar selection following TOS's Risk Profile include behavior); no simulated/example
+  calendars are ever added on the Overview (view-only)
+
 ### Analyzer → Picker Redesign
 
 - [ ] **ANLZ-01**: User sees a ranked candidate-cards rail with per-criterion score-breakdown
@@ -114,6 +128,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPLOY-04 | Phase 16 | Complete |
 | OVW-01 | Phase 17 | Complete |
 | OVW-02 | Phase 17 | Complete |
+| OVW-03 | Phase 17.1 | Pending |
+| OVW-04 | Phase 17.1 | Pending |
+| OVW-05 | Phase 17.1 | Pending |
+| OVW-06 | Phase 17.1 | Pending |
 | ANLZ-01 | Phase 18 | Pending |
 | ANLZ-02 | Phase 18 | Pending |
 | ANLZ-03 | Phase 18 | Pending |
