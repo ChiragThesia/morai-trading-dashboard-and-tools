@@ -376,6 +376,17 @@ describe("Analyzer — copy TOS order (copy-out)", () => {
     expect(writeText).toHaveBeenCalledWith(buildTosCalendarOrder(TOP, pickerSnapshotFixture.asOf));
     expect(screen.getByTestId("copy-tos-order").textContent).toContain("Copied");
   });
+
+  it("a rail card's ⧉ Copy copies that specific candidate — not the selected one", () => {
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+
+    render(<Analyzer />);
+    // SECOND is not the default selection (TOP is), so this proves per-card wiring.
+    fireEvent.click(screen.getByTestId(`copy-tos-${SECOND.id}`));
+
+    expect(writeText).toHaveBeenCalledWith(buildTosCalendarOrder(SECOND, pickerSnapshotFixture.asOf));
+  });
 });
 
 describe("Analyzer — payoff controls (shared date projection + series toggles)", () => {

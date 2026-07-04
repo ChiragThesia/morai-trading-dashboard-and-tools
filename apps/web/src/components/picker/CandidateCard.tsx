@@ -53,16 +53,20 @@ export interface CandidateCardProps {
   readonly candidate: PickerCandidate;
   readonly selected: boolean;
   readonly compared: boolean;
+  readonly copied: boolean;
   readonly onSelect: (candidate: PickerCandidate) => void;
   readonly onCompareToggle: (candidate: PickerCandidate) => void;
+  readonly onCopy: (candidate: PickerCandidate) => void;
 }
 
 export function CandidateCard({
   candidate,
   selected,
   compared,
+  copied,
   onSelect,
   onCompareToggle,
+  onCopy,
 }: CandidateCardProps): React.ReactElement {
   const guardFwdEdge = candidate.fwdIv === null;
   const hasEvents = candidate.frontEvents.length > 0 || candidate.backEvents.length > 0;
@@ -121,19 +125,36 @@ export function CandidateCard({
         })}
       </div>
 
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onCompareToggle(candidate);
-        }}
-        className={cn(
-          "mt-1.5 cursor-pointer rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px]",
-          compared ? "border-amber/60 bg-amber/10 text-amber" : "border-line2 bg-transparent text-dim",
-        )}
-      >
-        {compared ? "✕ Remove compare" : "⊕ Compare"}
-      </button>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCompareToggle(candidate);
+          }}
+          className={cn(
+            "cursor-pointer rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px]",
+            compared ? "border-amber/60 bg-amber/10 text-amber" : "border-line2 bg-transparent text-dim",
+          )}
+        >
+          {compared ? "✕ Remove compare" : "⊕ Compare"}
+        </button>
+        <button
+          type="button"
+          data-testid={`copy-tos-${candidate.id}`}
+          title="Copy this calendar as a Thinkorswim order"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopy(candidate);
+          }}
+          className={cn(
+            "cursor-pointer rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px]",
+            copied ? "border-violet/60 bg-violet/10 text-txt" : "border-line2 bg-transparent text-dim",
+          )}
+        >
+          {copied ? "Copied ✓" : "⧉ Copy"}
+        </button>
+      </div>
     </div>
   );
 }

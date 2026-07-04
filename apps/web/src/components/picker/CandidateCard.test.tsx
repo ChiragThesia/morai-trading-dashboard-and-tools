@@ -89,6 +89,8 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
         compared={false}
         onSelect={() => {}}
         onCompareToggle={() => {}}
+        copied={false}
+        onCopy={() => {}}
       />,
     );
 
@@ -113,6 +115,8 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
         compared={false}
         onSelect={() => {}}
         onCompareToggle={() => {}}
+        copied={false}
+        onCopy={() => {}}
       />,
     );
 
@@ -137,6 +141,8 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
           compared={false}
           onSelect={() => {}}
           onCompareToggle={() => {}}
+          copied={false}
+          onCopy={() => {}}
         />,
       ));
     }).not.toThrow();
@@ -170,6 +176,8 @@ describe("CandidateCard — click delegation", () => {
         compared={false}
         onSelect={onSelect}
         onCompareToggle={onCompareToggle}
+        copied={false}
+        onCopy={() => {}}
       />,
     );
 
@@ -196,6 +204,8 @@ describe("CandidateCard — click delegation", () => {
         compared={false}
         onSelect={onSelect}
         onCompareToggle={onCompareToggle}
+        copied={false}
+        onCopy={() => {}}
       />,
     );
 
@@ -203,6 +213,57 @@ describe("CandidateCard — click delegation", () => {
 
     expect(onCompareToggle).toHaveBeenCalledExactlyOnceWith(candidate);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("⧉ Copy click fires onCopy(candidate) only — does NOT also fire onSelect", () => {
+    const candidate = makeCandidate({
+      id: "copy-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+    const onSelect = vi.fn();
+    const onCopy = vi.fn();
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        compared={false}
+        onSelect={onSelect}
+        onCompareToggle={() => {}}
+        copied={false}
+        onCopy={onCopy}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("copy-tos-copy-1"));
+
+    expect(onCopy).toHaveBeenCalledExactlyOnceWith(candidate);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("shows 'Copied ✓' when copied=true", () => {
+    const candidate = makeCandidate({
+      id: "copy-2",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        compared={false}
+        onSelect={() => {}}
+        onCompareToggle={() => {}}
+        copied
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId("copy-tos-copy-2").textContent).toContain("Copied");
   });
 
   it("shows '✕ Remove compare' when compared=true", () => {
@@ -220,6 +281,8 @@ describe("CandidateCard — click delegation", () => {
         compared
         onSelect={() => {}}
         onCompareToggle={() => {}}
+        copied={false}
+        onCopy={() => {}}
       />,
     );
 

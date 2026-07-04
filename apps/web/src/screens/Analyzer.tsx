@@ -74,8 +74,10 @@ export interface CandidateRailProps {
   readonly candidates: ReadonlyArray<PickerCandidate>;
   readonly selectedId: string;
   readonly compareId: string | null;
+  readonly copiedId: string | null;
   readonly onSelect: (candidate: PickerCandidate) => void;
   readonly onCompareToggle: (candidate: PickerCandidate) => void;
+  readonly onCopy: (candidate: PickerCandidate) => void;
 }
 
 /**
@@ -88,8 +90,10 @@ export function CandidateRail({
   candidates,
   selectedId,
   compareId,
+  copiedId,
   onSelect,
   onCompareToggle,
+  onCopy,
 }: CandidateRailProps): React.ReactElement {
   return (
     <Panel>
@@ -110,8 +114,10 @@ export function CandidateRail({
               candidate={candidate}
               selected={candidate.id === selectedId}
               compared={candidate.id === compareId}
+              copied={candidate.id === copiedId}
               onSelect={onSelect}
               onCompareToggle={onCompareToggle}
+              onCopy={onCopy}
             />
           ))}
         </div>
@@ -249,11 +255,10 @@ export function Analyzer(): React.ReactElement {
   // Copy-out: the selected candidate as a paste-ready TOS calendar order. copiedId tracks the
   // last-copied candidate so the button reads "Copied ✓" until a different candidate is selected.
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const handleCopyOrder = useCallback((): void => {
-    if (selected === null) return;
-    void navigator.clipboard?.writeText(buildTosCalendarOrder(selected, pickerSnapshotFixture.asOf));
-    setCopiedId(selected.id);
-  }, [selected]);
+  const handleCopyCandidate = useCallback((candidate: PickerCandidate): void => {
+    void navigator.clipboard?.writeText(buildTosCalendarOrder(candidate, pickerSnapshotFixture.asOf));
+    setCopiedId(candidate.id);
+  }, []);
 
   const params = useMemo<ScenarioParams>(
     () => ({ ...PARAMS, daysForward: dateControl.daysForward }),
@@ -291,8 +296,10 @@ export function Analyzer(): React.ReactElement {
           candidates={SORTED_CANDIDATES}
           selectedId={selectedId}
           compareId={compareId}
+          copiedId={copiedId}
           onSelect={handleSelect}
           onCompareToggle={handleCompareToggle}
+          onCopy={handleCopyCandidate}
         />
       </div>
 
@@ -305,7 +312,7 @@ export function Analyzer(): React.ReactElement {
               <button
                 type="button"
                 data-testid="copy-tos-order"
-                onClick={handleCopyOrder}
+                onClick={() => { handleCopyCandidate(selected); }}
                 title="Copy this calendar as a Thinkorswim order"
                 className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2 py-0.5 font-mono text-[9px] text-dim hover:text-txt"
               >
