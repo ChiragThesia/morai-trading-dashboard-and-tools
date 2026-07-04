@@ -120,12 +120,17 @@ type CalendarPositionBuild = {
   readonly ivNa: boolean;
 };
 
-/** Build one AnalyzerPosition from a paired calendar, calibrating both legs' IV. */
+/** Build one AnalyzerPosition from a paired calendar, calibrating both legs' IV.
+ *  `included` (OVW-06) is the row checkbox state lifted from PositionsTable — the single
+ *  source of truth for whether this calendar contributes to the payoff curves AND the
+ *  table total. It is NOT the IV-convergence gate (frontIvStatus/backIvStatus below,
+ *  which the scenario engine applies independently via includedForT0/includedForExpiry). */
 function buildCalendarPosition(
   cal: CalendarGroup,
   spot: number,
   liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>,
   now: Date,
+  included: boolean,
 ): CalendarPositionBuild {
   const front = resolveLeg(cal.front, spot, liveGreeks, now);
   const back = resolveLeg(cal.back, spot, liveGreeks, now);
@@ -141,7 +146,7 @@ function buildCalendarPosition(
       frontIv: front.iv,
       backIv: back.iv,
       qty: Math.max(1, Math.abs(cal.back.longQty - cal.back.shortQty)),
-      included: true,
+      included,
       frontIvStatus: front.status,
       backIvStatus: back.status,
     },
@@ -277,6 +282,8 @@ function PositionsTable({
   highlightedRowKey,
   onHoverRow,
   onSelectRow,
+  excluded,
+  onToggleExcluded,
 }: {
   positions: ReadonlyArray<BrokerPositionResponse>;
   spot: number;
@@ -288,11 +295,17 @@ function PositionsTable({
   highlightedRowKey: string | null;
   onHoverRow: (key: string | null) => void;
   onSelectRow: (key: string) => void;
+  /**
+   * Excluded row keys (OVW-06) — controlled by `Overview`, the single lifted source of
+   * truth. A position counts toward the Net total unless explicitly unchecked here.
+   * Tracking exclusions (not inclusions) means new positions default to "included".
+   * For calendar rows this SAME Set also drives the payoff-chart curves via
+   * `buildCalendarPosition`'s `included` param — there is no second Set in this file.
+   */
+  excluded: ReadonlySet<string>;
+  onToggleExcluded: (key: string) => void;
 }): React.ReactElement {
   const rows = useMemo(() => buildRows(positions), [positions]);
-  // Excluded row keys — a position counts toward the Net total unless explicitly unchecked.
-  // Tracking exclusions (not inclusions) means new positions default to "included".
-  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
 
   const isStale = liveStatus === "stale" || liveStatus === "reconnecting";
 
@@ -318,13 +331,6 @@ function PositionsTable({
   }
 
   const includedCount = rows.filter((r) => !excluded.has(r.key)).length;
-  const toggle = (key: string): void =>
-    setExcluded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
 
   return (
     <table className="w-full border-collapse font-mono text-[11px] tabular-nums">
@@ -372,7 +378,7 @@ function PositionsTable({
                 <input
                   type="checkbox"
                   checked={included}
-                  onChange={() => { toggle(r.key); }}
+                  onChange={() => { onToggleExcluded(r.key); }}
                   aria-label={`Include ${r.label} in total`}
                   className="accent-blue cursor-pointer"
                 />
@@ -734,12 +740,29 @@ export function Overview(): React.ReactElement {
     [positions],
   );
 
+  // OVW-06: single lifted source of truth for row inclusion. Feeds BOTH the payoff
+  // chart (via buildCalendarPosition's `included` param below) AND PositionsTable's
+  // checkbox/total/opacity (passed down as a controlled prop) — no second Set, no
+  // syncing useEffect. Tracks EXCLUDED keys so new positions default to "included".
+  const [excludedCalendars, setExcludedCalendars] = useState<ReadonlySet<string>>(new Set());
+  const handleToggleExcludedCalendar = useCallback((key: string): void => {
+    setExcludedCalendars((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   // Per-leg calibrated IV (OVW-02, D-01/D-02) — resolveLegIv per leg, never DEFAULT_IV
   // on this path (T-17-05). DEFAULT_IV remains only for netGreeksForLegs/BookSummary
   // (OQ2, recorded deferral).
   const calendarBuild = useMemo(
-    () => calendars.map((cal) => buildCalendarPosition(cal, spot, liveGreeks, new Date())),
-    [calendars, spot, liveGreeks],
+    () =>
+      calendars.map((cal) =>
+        buildCalendarPosition(cal, spot, liveGreeks, new Date(), !excludedCalendars.has(cal.key)),
+      ),
+    [calendars, spot, liveGreeks, excludedCalendars],
   );
   const calendarPositions = useMemo<ReadonlyArray<AnalyzerPosition>>(
     () => calendarBuild.map((b) => b.position),
@@ -762,7 +785,7 @@ export function Overview(): React.ReactElement {
   }, [calendarPositions, spot]);
 
   const positionSetSignature = calendarPositions
-    .map((p) => `${p.id}:${p.frontIvStatus ?? "ok"}:${p.backIvStatus ?? "ok"}`)
+    .map((p) => `${p.id}:${p.frontIvStatus ?? "ok"}:${p.backIvStatus ?? "ok"}:${p.included}`)
     .join("|");
 
   const noop = useCallback((): void => {}, []);
@@ -949,6 +972,8 @@ export function Overview(): React.ReactElement {
               highlightedRowKey={highlightedRowKey}
               onHoverRow={handleHoverRow}
               onSelectRow={handleSelectRow}
+              excluded={excludedCalendars}
+              onToggleExcluded={handleToggleExcludedCalendar}
             />
           </Panel>
         </div>

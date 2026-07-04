@@ -13,8 +13,16 @@
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { ok, err } from "@morai/shared";
+import { ok, err, assertDefined } from "@morai/shared";
 import type { StreamLiveGreekEvent } from "@morai/contracts";
+
+// 17.1-03 (OVW-06): spy-wrap PayoffChart so tests can inspect the exact curve/signature
+// props Overview hands it — the real component still renders (importOriginal), this only
+// records calls. Needed to prove a checkbox toggle reaches BOTH curves, not just the total.
+vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../components/charts/PayoffChart.tsx")>();
+  return { ...actual, PayoffChart: vi.fn(actual.PayoffChart) };
+});
 
 // Phase 12-07: mock useLiveStream BEFORE Overview import (intent: no real EventSource)
 vi.mock("../hooks/useLiveStream.ts", () => ({
@@ -69,10 +77,19 @@ import { Overview } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
 import { useLiveStream } from "../hooks/useLiveStream.ts";
 import { resolveLegIv } from "../lib/iv-calibration.ts";
+import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 
 const mockUsePositions = vi.mocked(usePositions);
 const mockUseLiveStream = vi.mocked(useLiveStream);
 const mockResolveLegIv = vi.mocked(resolveLegIv);
+const mockPayoffChart = vi.mocked(PayoffChart);
+
+/** Props of the most recent PayoffChart render (throws if it never rendered). */
+function latestPayoffChartProps(): import("../components/charts/PayoffChart.tsx").PayoffChartProps {
+  const call = mockPayoffChart.mock.calls.at(-1);
+  assertDefined(call, "PayoffChart rendered at least once");
+  return call[0];
+}
 
 function setPositions(positions: unknown): void {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -124,6 +141,27 @@ const CAL_BACK = {
 };
 /** Matches pair-calendars.ts's key format: `${underlyingSymbol}|${strike}|${type}`. */
 const CAL_ROW_KEY = "$SPX|7425|P";
+
+/** A second, distinct calendar pair fixture (different strike) — used to prove that
+ *  excluding ONE calendar leaves the OTHER's contribution on the chart curves (OVW-06). */
+const CAL2_FRONT = {
+  occSymbol: "SPXW  301120P07500000",
+  putCall: "P" as const,
+  longQty: 0,
+  shortQty: 1,
+  averagePrice: 45,
+  marketValue: -4500,
+  underlyingSymbol: "$SPX",
+};
+const CAL2_BACK = {
+  occSymbol: "SPXW  301130P07500000",
+  putCall: "P" as const,
+  longQty: 1,
+  shortQty: 0,
+  averagePrice: 55,
+  marketValue: 5500,
+  underlyingSymbol: "$SPX",
+};
 
 /** A realistic live tick for the fixture position. */
 function makeTick(): StreamLiveGreekEvent {
@@ -313,6 +351,50 @@ describe("Overview screen", () => {
       setPositions([CAL_FRONT, CAL_BACK]);
       render(<Overview />);
       expect(screen.getByText(/@ exp \(/)).toBeDefined();
+    });
+  });
+
+  // ── 17.1-03 (OVW-06): lifted calendar inclusion drives BOTH chart curves ────
+
+  describe("OVW-06: unified calendar inclusion (single lifted source of truth)", () => {
+    beforeEach(() => {
+      mockResolveLegIv.mockImplementation(() => ok(0.2));
+    });
+
+    it("unchecking a calendar row removes its contribution from BOTH payoff curves and moves positionSetSignature", () => {
+      setPositions([CAL_FRONT, CAL_BACK, CAL2_FRONT, CAL2_BACK]);
+      render(<Overview />);
+
+      const before = latestPayoffChartProps();
+      const beforeSignature = before.positionSetSignature;
+      const beforeTodayCurve = before.todayCurve;
+      const beforeExpirationCurve = before.expirationCurve;
+
+      const checkbox = screen.getByRole("checkbox", { name: "Include 7425P in total" });
+      fireEvent.click(checkbox);
+
+      const after = latestPayoffChartProps();
+      expect(after.positionSetSignature).not.toBe(beforeSignature);
+      expect(after.todayCurve).not.toEqual(beforeTodayCurve);
+      expect(after.expirationCurve).not.toEqual(beforeExpirationCurve);
+
+      // The remaining curve after excluding the 7425P calendar must match the
+      // 7500P-only scenario exactly — proof the exclusion reaches the chart, not
+      // just the table total (the literal decoupling gap this requirement closes).
+      cleanup();
+      setPositions([CAL2_FRONT, CAL2_BACK]);
+      render(<Overview />);
+      const singleOnly = latestPayoffChartProps();
+      expect(after.todayCurve).toEqual(singleOnly.todayCurve);
+      expect(after.expirationCurve).toEqual(singleOnly.expirationCurve);
+    });
+
+    it("default state (nothing excluded) reproduces the untouched two-calendar chart — no regression", () => {
+      setPositions([CAL_FRONT, CAL_BACK, CAL2_FRONT, CAL2_BACK]);
+      render(<Overview />);
+      const props = latestPayoffChartProps();
+      expect(props.todayCurve.length).toBeGreaterThan(0);
+      expect(props.positionSetSignature).toContain(`${CAL_ROW_KEY}:ok:ok:true`);
     });
   });
 });
