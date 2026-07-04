@@ -14,6 +14,7 @@ import {
   brokerageAuthExpiredPayload,
   macroResponse,
   macroQuery,
+  pickerSnapshotResponse,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -28,6 +29,7 @@ import type {
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
+  ForRunningGetPicker,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -538,6 +540,63 @@ export function registerGetGexTool(
             ? row.computedAt.toISOString()
             : row.computedAt,
       });
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetPickerCandidatesTool — registers the get_picker_candidates MCP tool (PICK-02 / MCP-02).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: call use-case → map Result → parse through pickerSnapshotResponse → return content.
+ *
+ * MCP-02: the SAME pickerSnapshotResponse schema used by GET /api/picker/candidates is used
+ * here. A one-sided field rename fails `bun run typecheck`.
+ *
+ * D-04 / T-19-17: no recompute — getPicker reads the stored snapshot row only.
+ * No-snapshot case → structured {error:"no-snapshot"} payload (never throws, never a
+ * 404-equivalent crash).
+ */
+export function registerGetPickerCandidatesTool(
+  server: McpServer,
+  getPicker: ForRunningGetPicker,
+): void {
+  server.registerTool(
+    "get_picker_candidates",
+    {
+      title: "Get Picker Candidates",
+      description:
+        "Returns the latest scored calendar-spread picker candidates — term structure, GEX context, scheduled economic events, and per-candidate score breakdowns. Returns {error:'no-snapshot'} when no snapshot has been computed yet.",
+      // No input parameters — returns the latest stored snapshot (no filters).
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getPicker();
+
+      if (!result.ok) {
+        // T-19-16: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      if (result.value === null) {
+        // No snapshot yet — structured payload, never throw (MCP-02 stability).
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ error: "no-snapshot" }),
+            },
+          ],
+        };
+      }
+
+      // Direct blob parse (D-05) — the SAME contract as the HTTP route (MCP-02).
+      const row = result.value;
+      const payload = pickerSnapshotResponse.parse(row.snapshot);
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
