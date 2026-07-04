@@ -1,21 +1,25 @@
 /**
- * schedule.ts — registerAllJobs (Plan 05-04 Task 3, JOB-01/D-12; updated 11-06 GW-03; 13-05 COT-01).
+ * schedule.ts — registerAllJobs (Plan 05-04 Task 3, JOB-01/D-12; updated 11-06 GW-03; 13-05
+ * COT-01; 19-08 PICK-01/PICK-03).
  *
  * Extracts all pg-boss createQueue / schedule / work calls from main.ts into a single
  * exported function. main.ts imports and calls registerAllJobs; inline blocks removed.
  *
- * Registers all 10 queues (GW-03: refresh-tokens retired — sidecar is sole token writer):
+ * Registers all 12 queues (GW-03: refresh-tokens retired — sidecar is sole token writer):
  *   fetch-schwab-chain, fetch-rates, compute-bsm-greeks, snapshot-calendars (no cron — D-03),
  *   compute-analytics (no cron — chain-triggered by snapshot-calendars, 06-04),
  *   compute-gex-snapshot (no cron — chain-triggered by compute-analytics, 08-06 D-01),
  *   sync-transactions (every 10 min RTH, +5 min ahead of sync-fills), sync-fills (every 10 min RTH),
  *   rebuild-journal (no cron — on-demand only),
- *   fetch-cot (weekly Friday 17:00 ET — COT-01/D-07)
+ *   fetch-cot (weekly Friday 17:00 ET — COT-01/D-07),
+ *   compute-picker (no cron — chain-triggered by compute-gex-snapshot, 19-08 D-04),
+ *   fetch-economic-events (weekly Friday 17:00 ET — 19-08 D-14)
  *
  * CRITICAL (RESEARCH Pitfall 2):
  *   snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
  *   compute-analytics: NO schedule — chain-triggered only by snapshot-calendars (06-04)
  *   compute-gex-snapshot: NO schedule — chain-triggered only by compute-analytics (08-06 D-01)
+ *   compute-picker: NO schedule — chain-triggered only by compute-gex-snapshot (19-08 D-04)
  *   rebuild-journal: NO schedule — on-demand via trigger_job
  *   refresh-tokens: RETIRED (GW-03) — Python sidecar is the sole Schwab token refresher
  *
@@ -27,7 +31,7 @@
 
 import type { PgBoss, Job, WorkOptions } from "pg-boss";
 
-/** Handler type shared by all 10 job queues (pg-boss v12 array pattern) */
+/** Handler type shared by all 12 job queues (pg-boss v12 array pattern) */
 export type PgBossHandler = (jobs: ReadonlyArray<Job | undefined>) => Promise<void>;
 
 /**
@@ -47,10 +51,12 @@ export type JobScheduler = {
 };
 
 /**
- * AllHandlers — typed handler map for all 10 queues.
+ * AllHandlers — typed handler map for all 12 queues.
  * Plans 05-05/05-07/05-08 wire the original handlers; 08-06 adds computeGexSnapshot.
  * 11-06 (GW-03): refreshTokens removed — sidecar is sole token writer.
  * 13-05 (COT-01): fetchCot added — weekly CFTC COT report (Friday 17:00 ET).
+ * 19-08 (PICK-01/PICK-03): computePicker (chain-triggered, D-04) + fetchEconomicEvents
+ * (weekly cron, D-14) added.
  */
 export type AllHandlers = {
   readonly fetchSchwabChain: PgBossHandler;
@@ -63,23 +69,27 @@ export type AllHandlers = {
   readonly syncFills: PgBossHandler;
   readonly rebuildJournal: PgBossHandler;
   readonly fetchCot: PgBossHandler;
+  readonly computePicker: PgBossHandler;
+  readonly fetchEconomicEvents: PgBossHandler;
 };
 
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
 
 /**
- * registerAllJobs — create 10 queues, schedule 7 crons (6 jobs, fetch-rates twice), register 10 handlers.
+ * registerAllJobs — create 12 queues, schedule 8 crons (7 jobs, fetch-rates twice), register 12 handlers.
  *
- * Order: createQueue (all 10) → schedule (7 crons) → work (all 10).
+ * Order: createQueue (all 12) → schedule (8 crons) → work (all 12).
  * The createQueue phase must complete before schedule/work — pg-boss FK constraint (CR-01).
  * GW-03: refresh-tokens queue/cron/handler retired — sidecar is sole Schwab token writer.
  * COT-01: fetch-cot added — weekly Friday 17:00 ET cron (D-07).
  * 14-05 (D-06): fetch-rates scheduled TWICE (09:00 ET + 18:30 ET, Mon-Fri) — single queue,
  * two cron registrations serving the same handler.
+ * 19-08: compute-picker added (chain-triggered only, no cron, D-04); fetch-economic-events
+ * added (weekly Friday 17:00 ET cron, D-14).
  */
 export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers): Promise<void> {
   // ── Phase 1: create queues (idempotent — safe on every boot) ──────────────────
-  // Order matters: all createQueue calls must precede schedule/work (CR-01). 10 queues.
+  // Order matters: all createQueue calls must precede schedule/work (CR-01). 12 queues.
   await boss.createQueue("fetch-schwab-chain");
   await boss.createQueue("fetch-rates");
   await boss.createQueue("compute-bsm-greeks");
@@ -90,6 +100,8 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("sync-fills");
   await boss.createQueue("rebuild-journal"); // on-demand only; no cron
   await boss.createQueue("fetch-cot"); // COT-01: weekly CFTC COT report (Friday 17:00 ET, D-07)
+  await boss.createQueue("compute-picker"); // 19-08: chain-triggered by compute-gex-snapshot; no cron (D-04)
+  await boss.createQueue("fetch-economic-events"); // 19-08: weekly FRED+FOMC events refresh (D-14)
   // refresh-tokens: RETIRED (GW-03) — sidecar auto-refreshes both Schwab apps; no TS refresher
 
   // ── Phase 2: schedules (idempotent — safe on every boot) ─────────────────────
@@ -153,14 +165,26 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
     { tz: "America/New_York" },
   );
 
+  // 19-08 (D-14): weekly economic-events refresh (FRED CPI/NFP release dates + FOMC seed) —
+  // identical cron/tz to fetch-cot (own queue name, own handler; CR-01 distinct-key discipline
+  // n/a here since this is the ONLY schedule() call for this queue name).
+  await boss.schedule(
+    "fetch-economic-events",
+    "0 17 * * 5", // weekly Friday 17:00 ET (D-14 default, matches fetch-cot's slot)
+    null,
+    { tz: "America/New_York" },
+  );
+
   // snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
   // compute-analytics: NO schedule — chain-triggered only by snapshot-calendars (06-04)
   // compute-gex-snapshot: NO schedule — chain-triggered only by compute-analytics (08-06 D-01)
+  // compute-picker: NO schedule — chain-triggered only by compute-gex-snapshot (19-08 D-04)
   // rebuild-journal: NO schedule — on-demand via trigger_job
   // refresh-tokens: RETIRED (GW-03) — sidecar handles Schwab token refresh; no TS scheduled job
 
   // ── Phase 3: register handlers (work) ─────────────────────────────────────────
-  // 10 handlers (GW-03: refresh-tokens retired; 13-05: fetchCot added)
+  // 12 handlers (GW-03: refresh-tokens retired; 13-05: fetchCot added; 19-08: computePicker +
+  // fetchEconomicEvents added)
   await boss.work("fetch-schwab-chain", POLLING_INTERVAL, handlers.fetchSchwabChain);
   await boss.work("fetch-rates", POLLING_INTERVAL, handlers.fetchRates);
   await boss.work("compute-bsm-greeks", POLLING_INTERVAL, handlers.computeBsmGreeks);
@@ -171,4 +195,6 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("sync-fills", POLLING_INTERVAL, handlers.syncFills);
   await boss.work("rebuild-journal", POLLING_INTERVAL, handlers.rebuildJournal);
   await boss.work("fetch-cot", POLLING_INTERVAL, handlers.fetchCot);
+  await boss.work("compute-picker", POLLING_INTERVAL, handlers.computePicker);
+  await boss.work("fetch-economic-events", POLLING_INTERVAL, handlers.fetchEconomicEvents);
 }

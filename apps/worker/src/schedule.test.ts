@@ -75,11 +75,14 @@ function makeFakeHandlers(): AllHandlers {
     syncFills: handler,
     rebuildJournal: handler,
     fetchCot: handler,
+    computePicker: handler,
+    fetchEconomicEvents: handler,
   };
 }
 
-// GW-03: refresh-tokens retired; 13-05 COT-01: fetch-cot added — 10 queues, 6 crons
-const ALL_10_QUEUES = [
+// GW-03: refresh-tokens retired; 13-05 COT-01: fetch-cot added; 19-08: compute-picker +
+// fetch-economic-events added — 12 queues, 7 crons
+const ALL_12_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
@@ -90,34 +93,37 @@ const ALL_10_QUEUES = [
   "sync-fills",
   "rebuild-journal",
   "fetch-cot",
+  "compute-picker",
+  "fetch-economic-events",
 ];
 
-const SCHEDULED_6 = [
+const SCHEDULED_7 = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
   "sync-transactions",
   "sync-fills",
   "fetch-cot",
+  "fetch-economic-events",
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 10 job names (refresh-tokens retired GW-03; fetch-cot added COT-01)", async () => {
+  it("calls createQueue for all 12 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08)", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_10_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_12_QUEUES.sort());
   });
 
-  it("calls schedule 7 times — 6 jobs, fetch-rates scheduled twice; all 7 rows survive the (name, key) upsert (14-05, D-06, CR-01)", async () => {
+  it("calls schedule 8 times — 7 jobs, fetch-rates scheduled twice; all 8 rows survive the (name, key) upsert (14-05, D-06, CR-01)", async () => {
     const { boss, scheduleCalls, scheduleStore } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(scheduleCalls).toHaveLength(7);
-    // Surviving rows must equal calls made — a keyless duplicate name would collapse to 6.
-    expect(scheduleStore.size).toBe(7);
+    expect(scheduleCalls).toHaveLength(8);
+    // Surviving rows must equal calls made — a keyless duplicate name would collapse to 7.
+    expect(scheduleStore.size).toBe(8);
     const scheduledNames = [...new Set(scheduleCalls.map((c) => c.name))].sort();
-    expect(scheduledNames).toEqual(SCHEDULED_6.sort());
+    expect(scheduledNames).toEqual(SCHEDULED_7.sort());
   });
 
   it("schedules fetch-rates TWICE with distinct keys — both rows SURVIVE the pg-boss (name, key) upsert (D-06, 14-05, review CR-01)", async () => {
@@ -189,11 +195,29 @@ describe("registerAllJobs", () => {
     expect(names).not.toContain("refresh-tokens");
   });
 
-  it("calls work() for all 10 queues (refresh-tokens retired GW-03; fetch-cot added COT-01)", async () => {
+  it("calls work() for all 12 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08)", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_10_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_12_QUEUES.sort());
+  });
+
+  it("does NOT schedule compute-picker (chain-triggered only by compute-gex-snapshot, 19-08 D-04)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const names = scheduleCalls.map((c) => c.name);
+    expect(names).not.toContain("compute-picker");
+  });
+
+  it("fetch-economic-events cron is '0 17 * * 5' tz America/New_York (19-08, weekly Friday 17:00 ET, D-14)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const fetchEvents = scheduleCalls.find((c) => c.name === "fetch-economic-events");
+    expect(fetchEvents).toBeDefined();
+    expect(fetchEvents?.cron).toBe("0 17 * * 5");
+    expect(fetchEvents?.tz).toBe("America/New_York");
   });
 
   it("fetch-cot cron is '0 17 * * 5' tz America/New_York (COT-01, Friday 17:00 ET, D-07)", async () => {
