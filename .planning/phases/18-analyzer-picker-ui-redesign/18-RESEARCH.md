@@ -573,9 +573,14 @@ entry — do not port the literal mockup formula for that one term (see Summary 
 
 **If this table is empty:** N/A — see rows above; all four are LOW-to-MEDIUM risk, non-blocking style/naming choices explicitly deferred to the planner by CONTEXT.md, except A3 which the planner should read carefully before authoring the fixture.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should the picker screen keep any read from `usePositions`/`useGex` at all?**
+> Both questions were decided during planning and carried into the plans (18-04 forbids live
+> hooks; 18-05 leaves the unused output fields untouched). Retained here for provenance.
+
+1. **RESOLVED — Should the picker screen keep any read from `usePositions`/`useGex` at all?**
+   Decision: **zero live-data hooks** — the picker screen is 100% fixture-driven. Encoded in
+   `18-04-PLAN.md` `<prohibitions>` (no `usePositions`/`useGex`/`useLiveStream` imports).
    - What we know: D-02b says candidates are hypothetical/view-only with no broker positions. The
      UI-SPEC's GEX-fit why-panel sentence references "the fixture's static GEX snapshot... NOT
      re-fetched live" — implying the picker's GEX numbers come from the frozen fixture, not
@@ -589,8 +594,11 @@ entry — do not port the literal mockup formula for that one term (see Summary 
      calendar," "Term structure + your legs," "Entry / exit plan" — no live GEX rail is named,
      supporting zero live hooks).
 
-2. **Does `bookGreekStrips`/`heatmapCells` staying unused in `repriceScenario`'s output for the
-   picker's single-position case need any pruning?**
+2. **RESOLVED — Does `bookGreekStrips`/`heatmapCells` staying unused in `repriceScenario`'s output
+   for the picker's single-position case need any pruning?**
+   Decision: **leave them** — no second `repriceScenario` entry point (D-02 "no second payoff code
+   path"). Encoded in `18-05-PLAN.md` (deletion task leaves `bookGreekStrips`/`heatmapCells`
+   untouched).
    - What we know: D-02/D-04a say "no second payoff code path" and "delete-if-orphaned only" for
      shared helpers, not for output fields within a still-used function.
    - What's unclear: Whether leaving `bookGreekStrips`/`heatmapCells` computed-but-unrendered in

@@ -97,7 +97,7 @@ Out of scope (Phase 19+):
   `CMP`); multi-overlay only if trivially free.
 - **Exact contract field names / Zod structure** and the fixture module location under
   `packages/contracts` — planner's call within D-01.
-- **D-06 fixture guard values** — the specific inverted-structure numbers for the guard-case
+- **D-06:** fixture guard values — the specific inverted-structure numbers for the guard-case
   candidate are the planner's to pick, provided `fwdIV` resolves to the null/guard branch.
 
 </decisions>

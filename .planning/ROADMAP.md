@@ -201,11 +201,23 @@ starts)
 **Plans**: 5 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 18-01-PLAN.md — Picker Zod contract (pickerCandidate/pickerSnapshotResponse) + frozen playground-v4 fixture + guard case (ANLZ-01)
 - [ ] 18-02-PLAN.md — PayoffChart additive props: compareCurve + expectedMoveBand (ANLZ-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 18-03-PLAN.md — candidateToAnalyzerPosition adapter + debit=max-loss invariant (ANLZ-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 18-04-PLAN.md — Picker screen: ranked cards rail + payoff center (compare/EM band/scenario strip) (ANLZ-01/02)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 18-05-PLAN.md — Why-panel + term-structure + entry/exit plan + old-Analyzer retirement (ANLZ-03)
+
 **UI hint**: yes
 
 ### Phase 19: Picker Engine + Economic Events
