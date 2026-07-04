@@ -134,3 +134,7 @@ None - no external service configuration required.
 ---
 *Phase: 18-analyzer-picker-ui-redesign*
 *Completed: 2026-07-04*
+
+## Self-Check: PASSED
+
+All created files confirmed on disk (`picker.ts`, `picker.test.ts`, `__fixtures__/picker-candidates.fixture.ts`, `index.ts`, this SUMMARY). All 3 commit hashes (`49efed5`, `f3781bd`, `028330d`) confirmed in `git log`.

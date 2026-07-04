@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 18
-current_phase_name: Analyzer → Picker UI Redesign
+current_phase_name: analyzer-picker-ui-redesign
 status: executing
 stopped_at: Phase 18 UI-SPEC approved
-last_updated: "2026-07-04T04:08:37.059Z"
+last_updated: "2026-07-04T04:38:23.970Z"
 last_activity: 2026-07-04
-last_activity_desc: Phase 17.1 complete, transitioned to Phase 18
+last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 17
+  completed_plans: 13
   percent: 50
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 17.1 — overview-payoff-tos-fidelity-graph-interactivity
+**Current focus:** Phase 18 — analyzer-picker-ui-redesign
 
 ## Current Position
 
-Phase: 18 — Analyzer → Picker UI Redesign
-Plan: Not started
+Phase: 18 (analyzer-picker-ui-redesign) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-07-04 — Phase 17.1 complete, transitioned to Phase 18
+Last activity: 2026-07-04 — Phase 18 execution started
 
 ## Milestone v1.2 Summary
 
@@ -186,6 +186,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 17.1 P03 | 3min | 3 tasks | 2 files |
 | Phase 17.1 P04 | 8min | 3 tasks | 3 files |
 | Phase 17.1 P05 | 12min | 2 tasks | 2 files |
+| Phase 18 P01 | 25min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -229,6 +230,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 17.1-04: TOS magenta/cyan hex values remain [ASSUMED] (RESEARCH A1) pending an end-of-phase human pixel-check against reference screenshots not yet re-dropped to mockups/tos-reference/ — not a blocker for this plan
 - [Phase ?]: 17.1-05: formatExpiryCell takes a discriminated-union input (calendar/single) rather than CalendarGroup/BrokerPositionResponse directly — decoupled from pair-calendars.ts types, trivially unit-testable with literal values
 - [Phase ?]: 17.1-05: single-leg parse-failure DTE now defaults to 0 (was whole-cell dash) — consistent with pair-calendars.ts's own dte() helper default; no test asserted old behavior, no unparseable occSymbols in current book
+- [Phase ?]: 18-01: guard-case candidate (7450-guard-inverted) is a constructed data point (front IV 15.5% > back IV 10.5% at 21/45 DTE), not a literal mockup row
+- [Phase ?]: 18-01: guard-case debit computes to -802.82 (a credit) — accepted as the mathematically honest BSM output under term-structure inversion, not an authoring error
+- [Phase ?]: 18-01: NOT marking ANLZ-01/02/03 complete despite them appearing in this plan's requirements frontmatter — 18-01 only ships the contract/fixture foundation; 18-02..18-05 still list the same IDs as their own scope (actual UI delivery). Marking complete now would be a false-positive signal; defer to the plan(s) that actually ship the rendered feature.
 
 ### Pending Todos
 
@@ -273,7 +277,7 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T03:27:02.109Z
+Last session: 2026-07-04T04:36:07.077Z
 Stopped at: Phase 18 UI-SPEC approved
 Resume file: .planning/phases/18-analyzer-picker-ui-redesign/18-UI-SPEC.md
 
