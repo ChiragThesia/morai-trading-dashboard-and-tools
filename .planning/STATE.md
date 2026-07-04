@@ -5,15 +5,15 @@ milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 19
 current_phase_name: picker-engine-economic-events
 status: executing
-stopped_at: Completed 19-04-PLAN.md
-last_updated: "2026-07-04T22:37:14.613Z"
+stopped_at: Completed 19-05-PLAN.md
+last_updated: "2026-07-04T22:42:37.454Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 26
-  completed_plans: 21
+  completed_plans: 22
   percent: 67
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 19 (picker-engine-economic-events) — EXECUTING
-Plan: 5 of 9
+Plan: 6 of 9
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 19 execution started
 
@@ -196,6 +196,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 19 P02 | 15min | 2 tasks | 4 files |
 | Phase 19 P03 | 16min | 2 tasks | 5 files |
 | Phase 19 P04 | 15min | 3 tasks | 13 files |
+| Phase 19 P19-05 | 22min | 3 tasks tasks | 14 files files |
 
 ## Accumulated Context
 
@@ -266,6 +267,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 19-04: added packages/core/src/picker/index.ts barrel (Rule 3) so EconomicEvent/ForFetchingEconomicEvents/etc. reach @morai/adapters via @morai/core -- no prior 19-01..03 plan needed cross-package consumption
 - [Phase ?]: 19-04: FOMC_SEED dates authored from training-knowledge recall of the Fed's published 2025/2026 schedule (no live FRED_API_KEY/web access this session) -- documented as needing periodic refresh
 - [Phase ?]: 19-04: NOT marking PICK-03 complete -- this plan ships only the adapter/repo data path; cron wiring (19-08) and scoring/candidates-payload integration land in later plans
+- [Phase ?]: 19-05: picker_snapshot uses observed_at as PK (instant uniqueness IS the append-idempotency guard, no surrogate uuid); INSERT-only, never onConflictDoUpdate (D-06 append-history)
+- [Phase ?]: 19-05: JSONB blob validated through pickerSnapshotResponse on BOTH write and read (T-19-10) — bad blob rejected before insert (0 rows), corrupted stored row surfaces StorageError on read
+- [Phase ?]: 19-05: migrations 0014+0015 applied+verified LIVE — economic_events.event_date=date, picker_snapshot.observed_at=timestamptz, snapshot=jsonb
 
 ### Pending Todos
 
@@ -278,12 +282,6 @@ None yet.
   Next re-auth window ~2026-07-09. This is now Phase 16 of the v1.2 roadmap — the milestone's
   first and most time-sensitive phase.
 
-- **19-05 Task 3 [BLOCKING]**: `bun run migrate` must be run manually against the LIVE schema
-  to apply migrations 0014 (economic_events) + 0015 (picker_snapshot). Requires the full worker
-  env (DATABASE_URL/DIRECT connection + SIDECAR_URL etc — `bun run migrate` validates the
-  complete worker config). Tasks 1-2 of 19-05 are committed; resume by running the migration
-  and confirming both tables exist live with correct column types (event_date `date`,
-  snapshot `jsonb`).
 
 ## Deferred Items
 
@@ -317,8 +315,8 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T22:36:07.720Z
-Stopped at: Completed 19-04-PLAN.md
+Last session: 2026-07-04T22:42:20.395Z
+Stopped at: Completed 19-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

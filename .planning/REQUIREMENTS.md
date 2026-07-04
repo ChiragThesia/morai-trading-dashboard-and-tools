@@ -65,7 +65,7 @@ tail.
   debit-%-of-back band) are absent; FwdIV radicand<0 returns a tagged guard result; the scoring
   contract carries `observedAt`/`source` staleness fields
 
-- [ ] **PICK-02**: User can query scored candidates via HTTP route + MCP tool; the Analyzer UI
+- [x] **PICK-02**: User can query scored candidates via HTTP route + MCP tool; the Analyzer UI
   swaps fixtures for real data; chain-snapshot staleness ("as of") is visible on every surface
 
 - [ ] **PICK-03**: Economic-events context provides FOMC/CPI/NFP dates (FRED `releases/dates`
@@ -136,7 +136,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ANLZ-02 | Phase 18 | Complete |
 | ANLZ-03 | Phase 18 | Complete |
 | PICK-01 | Phase 19 | Pending |
-| PICK-02 | Phase 19 | Pending |
+| PICK-02 | Phase 19 | Complete |
 | PICK-03 | Phase 19 | Pending |
 | WATCH-01 | Phase 20 | Pending |
 | SNAP-01 | Phase 20 | Pending |
