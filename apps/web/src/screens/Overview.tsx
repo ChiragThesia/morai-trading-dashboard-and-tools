@@ -14,7 +14,8 @@ import { parseOccSymbol } from "@morai/shared";
 import { classifyRegime } from "../lib/gex-regime.ts";
 import { resolveLegIv } from "../lib/iv-calibration.ts";
 import type { LiveTick } from "../lib/iv-calibration.ts";
-import { resolveDaysForward, computeProjectionBounds, toDateInputValue } from "../lib/date-projection.ts";
+import { computeProjectionBounds } from "../lib/date-projection.ts";
+import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
 import {
   repriceScenario,
   t0ExcludedPositions,
@@ -22,6 +23,8 @@ import {
 } from "../lib/scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams, PayoffPoint } from "../lib/scenario-engine.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
+import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
+import { PayoffControls } from "../components/charts/PayoffControls.tsx";
 import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import { relAge, GEX_FRESH_MS } from "./Market.tsx";
@@ -848,7 +851,6 @@ export function Overview(): React.ReactElement {
   // change is needed here (locked by a characterization test in scenario-engine.test.ts).
   // A single stable `today` reference keeps re-renders/tests deterministic.
   const today = useMemo(() => new Date(), []);
-  const [dateInputValue, setDateInputValue] = useState<string>(() => toDateInputValue(today));
   const bounds = useMemo(
     () =>
       computeProjectionBounds(
@@ -864,32 +866,31 @@ export function Overview(): React.ReactElement {
       ),
     [calendarPositions, today],
   );
-  const daysForward = resolveDaysForward(dateInputValue, today, bounds.maxDaysForward);
-  const handleStepDate = useCallback(
-    (delta: number): void => {
-      setDateInputValue((prev) => {
-        const current = resolveDaysForward(prev, today, bounds.maxDaysForward);
-        const next = Math.max(0, Math.min(current + delta, bounds.maxDaysForward));
-        const nextDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + next);
-        return toDateInputValue(nextDate);
-      });
-    },
-    [today, bounds.maxDaysForward],
-  );
-  const handleResetDate = useCallback((): void => {
-    setDateInputValue(toDateInputValue(today));
-  }, [today]);
+  // Forward date projection now lives in the shared hook (same behavior as the prior inline glue).
+  const dateControl = usePayoffDateControl(today, bounds.maxDaysForward);
+
+  // Series-visibility toggles — were a hardcoded const + static legend; now driven by the shared
+  // PayoffControls chips. Defaults preserve the prior render exactly (fan off, the rest on).
+  const [toggles, setToggles] = useState<PayoffChartToggles>({
+    showFan: false,
+    showExpiration: true,
+    showWalls: true,
+    showProfitZone: true,
+  });
+  const handleToggle = useCallback((key: keyof PayoffChartToggles): void => {
+    setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   const scenario = useMemo(() => {
     const params: ScenarioParams = {
       spot,
-      daysForward,
+      daysForward: dateControl.daysForward,
       ivShift: 0,
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
     return repriceScenario(calendarPositions, params);
-  }, [calendarPositions, spot, daysForward]);
+  }, [calendarPositions, spot, dateControl.daysForward]);
 
   const positionSetSignature = calendarPositions
     .map((p) => `${p.id}:${p.frontIvStatus ?? "ok"}:${p.backIvStatus ?? "ok"}:${p.included}`)
@@ -921,13 +922,13 @@ export function Overview(): React.ReactElement {
     if (highlightedPosition === null) return null;
     const params: ScenarioParams = {
       spot,
-      daysForward,
+      daysForward: dateControl.daysForward,
       ivShift: 0,
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
     return repriceScenario([highlightedPosition], params);
-  }, [highlightedPosition, spot, daysForward]);
+  }, [highlightedPosition, spot, dateControl.daysForward]);
 
   const excludedFromT0 = t0ExcludedPositions(calendarPositions);
 
@@ -996,46 +997,22 @@ export function Overview(): React.ReactElement {
               </div>
               <span className="font-mono text-[10px] text-dim">view-only · Analyzer →</span>
             </div>
-            {/* OVW-05: date picker — projects scenario.payoffCurve (today/date curve) via
-                daysForward; the @exp curve is unaffected (D-01). Step-arrow/reset buttons
-                reuse the Analyzer's Reset button class string verbatim — no new spacing
-                tokens for this phase (UI-SPEC). */}
-            <div className="mb-2 flex flex-wrap items-center gap-2 font-mono text-[9px] text-dim">
-              <span>Date:</span>
-              <button
-                type="button"
-                onClick={() => { handleStepDate(-1); }}
-                aria-label="Previous day"
-                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim"
-              >
-                ‹
-              </button>
-              <input
-                type="date"
-                data-testid="date-picker-input"
-                min={bounds.minIso}
-                max={bounds.maxIso}
-                value={dateInputValue}
-                onChange={(e) => { setDateInputValue(e.target.value); }}
-                style={{ colorScheme: "dark" }}
-                className="rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[11px] text-txt"
-              />
-              <button
-                type="button"
-                onClick={() => { handleStepDate(1); }}
-                aria-label="Next day"
-                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim"
-              >
-                ›
-              </button>
-              <button
-                type="button"
-                onClick={handleResetDate}
-                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim"
-              >
-                Today
-              </button>
-            </div>
+            {/* OVW-05 + follow-on: shared control strip — forward date projection (projects
+                scenario.payoffCurve via daysForward; @exp unaffected, D-01) + series toggles.
+                The static legend it replaced is now the interactive toggle chips. */}
+            <PayoffControls
+              dateInputValue={dateControl.dateInputValue}
+              minIso={bounds.minIso}
+              maxIso={bounds.maxIso}
+              onDateChange={dateControl.setDate}
+              onStepDate={dateControl.stepDate}
+              onResetDate={dateControl.resetDate}
+              toggles={toggles}
+              onToggle={handleToggle}
+            />
+            {/* Curve-color key (T+0 / @exp / γ flip / walls) — MORAI violet/gray palette,
+                not TOS neon (OVW-04). The toggle chips above control visibility; this maps
+                color → meaning. */}
             <div className="mb-1 flex flex-wrap gap-3 font-mono text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-0.5 w-3.5 rounded-full bg-violet" />
@@ -1065,7 +1042,7 @@ export function Overview(): React.ReactElement {
               rollCurve={null}
               gex={gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null}
               spot={spot}
-              toggles={{ showFan: false, showExpiration: true, showWalls: true, showProfitZone: true }}
+              toggles={toggles}
               fitY={false}
               onFitYConsumed={noop}
               positionSetSignature={positionSetSignature}

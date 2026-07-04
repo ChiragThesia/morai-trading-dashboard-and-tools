@@ -517,6 +517,31 @@ describe("Overview screen", () => {
     });
   });
 
+  // ── Shared PayoffControls series toggles (follow-on) — chip click flips PayoffChart visibility ──
+
+  describe("series toggles (shared PayoffControls)", () => {
+    it("clicking the @ exp toggle flips PayoffChart toggles.showExpiration off (others unaffected)", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      expect(latestPayoffChartProps().toggles.showExpiration).toBe(true);
+
+      fireEvent.click(screen.getByTestId("toggle-showExpiration"));
+
+      expect(latestPayoffChartProps().toggles.showExpiration).toBe(false);
+      expect(latestPayoffChartProps().toggles.showWalls).toBe(true);
+    });
+
+    it("clicking the Fan toggle turns the fan on (default off)", () => {
+      setPositions([CAL_FRONT, CAL_BACK]);
+      render(<Overview />);
+      expect(latestPayoffChartProps().toggles.showFan).toBe(false);
+
+      fireEvent.click(screen.getByTestId("toggle-showFan"));
+
+      expect(latestPayoffChartProps().toggles.showFan).toBe(true);
+    });
+  });
+
   // ── OVW-04: MORAI default curve palette (violet/gray) — TOS behavior, MORAI look ──
 
   describe("OVW-04: Overview hero uses the MORAI default curve palette (matches Analyzer)", () => {
