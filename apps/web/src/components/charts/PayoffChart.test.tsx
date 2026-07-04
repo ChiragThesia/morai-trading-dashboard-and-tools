@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { useState } from "react";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
 import { PayoffChart, computeYDomain, buildXTicks } from "./PayoffChart.tsx";
@@ -42,6 +43,19 @@ const HIGHLIGHT_EXP_CURVE: PayoffPoint[] = [
   { spot: 7400, pl: 0 },
   { spot: 7900, pl: 150 },
 ];
+
+const HUGE_EXP_CURVE: PayoffPoint[] = [
+  { spot: 6900, pl: -50_000 },
+  { spot: 7400, pl: 0 },
+  { spot: 7900, pl: 50_000 },
+];
+
+/** Grid-line y-axis labels only (text-anchor="end" is unique to them). */
+function getGridLabels(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll('text[text-anchor="end"]')).map(
+    (el) => el.textContent ?? "",
+  );
+}
 
 function baseProps(): PayoffChartProps {
   return {
@@ -202,5 +216,89 @@ describe("buildXTicks — derived round-number x-axis ticks (OVW-04)", () => {
         expect(curr).toBeGreaterThan(prev);
       }
     }
+  });
+});
+
+describe("PayoffChart — WR-03 y-domain lock + fitY without render-phase side effects", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("locks the y-domain on mount and does NOT rescale when curves change but positionSetSignature is unchanged", () => {
+    const { container, rerender } = render(<PayoffChart {...baseProps()} />);
+    const initialTopLabel = getGridLabels(container)[5];
+
+    rerender(
+      <PayoffChart
+        {...baseProps()}
+        expirationCurve={HUGE_EXP_CURVE}
+        baseExpirationCurve={HUGE_EXP_CURVE}
+      />,
+    );
+
+    expect(getGridLabels(container)[5]).toBe(initialTopLabel);
+  });
+
+  it("recomputes the y-domain when positionSetSignature changes (lock-on-signature still works)", () => {
+    const { container, rerender } = render(<PayoffChart {...baseProps()} />);
+    const initialTopLabel = getGridLabels(container)[5];
+
+    rerender(
+      <PayoffChart
+        {...baseProps()}
+        expirationCurve={HUGE_EXP_CURVE}
+        baseExpirationCurve={HUGE_EXP_CURVE}
+        positionSetSignature="sig-2"
+      />,
+    );
+
+    expect(getGridLabels(container)[5]).not.toBe(initialTopLabel);
+  });
+
+  it("fitY forces a refit even when positionSetSignature is unchanged, and calls onFitYConsumed exactly once", () => {
+    const onFitYConsumed = vi.fn();
+    const { container, rerender } = render(
+      <PayoffChart {...baseProps()} onFitYConsumed={onFitYConsumed} />,
+    );
+    const initialTopLabel = getGridLabels(container)[5];
+
+    rerender(
+      <PayoffChart
+        {...baseProps()}
+        onFitYConsumed={onFitYConsumed}
+        expirationCurve={HUGE_EXP_CURVE}
+        baseExpirationCurve={HUGE_EXP_CURVE}
+        fitY
+      />,
+    );
+
+    expect(onFitYConsumed).toHaveBeenCalledTimes(1);
+    expect(getGridLabels(container)[5]).not.toBe(initialTopLabel);
+  });
+
+  it("does not trigger a 'Cannot update a component while rendering a different component' warning when fitY fires the parent callback", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    function Harness(): React.ReactElement {
+      const [, setConsumed] = useState(false);
+      return (
+        <PayoffChart
+          {...baseProps()}
+          fitY
+          onFitYConsumed={() => setConsumed(true)}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    const warnedAboutRenderPhaseUpdate = errorSpy.mock.calls.some((call) =>
+      call.some(
+        (arg) => typeof arg === "string" && arg.includes("Cannot update a component"),
+      ),
+    );
+    expect(warnedAboutRenderPhaseUpdate).toBe(false);
+
+    errorSpy.mockRestore();
   });
 });

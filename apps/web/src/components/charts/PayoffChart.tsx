@@ -21,7 +21,7 @@
  * No any/as/!.
  */
 
-import { useMemo, useCallback, useRef, useState } from "react";
+import { useMemo, useCallback, useEffect, useRef, useState } from "react";
 import { LinePath } from "@visx/shape";
 import { curveMonotoneX } from "@visx/curve";
 import { scaleLinear } from "@visx/scale";
@@ -237,16 +237,22 @@ export function PayoffChart({
   const [yDomainSig, setYDomainSig] = useState<string>("");
   const [yDomain, setYDomain] = useState<{ lo: number; hi: number }>({ lo: -500, hi: 500 });
 
-  // Recompute y-domain when position set changes
-  useMemo(() => {
+  // Recompute y-domain when position set changes (lock-on-signature).
+  // WR-03: this is a side effect (setState), so it belongs in useEffect —
+  // never in useMemo's render-phase body.
+  useEffect(() => {
     if (positionSetSignature !== yDomainSig) {
       setYDomain(computeYDomain(todayCurve, baseExpirationCurve));
       setYDomainSig(positionSetSignature);
     }
   }, [positionSetSignature, yDomainSig, todayCurve, baseExpirationCurve]);
 
-  // Handle "fit Y" request
-  useMemo(() => {
+  // Handle "fit Y" request.
+  // WR-03: onFitYConsumed is a parent state setter — calling it from useMemo
+  // during this component's render triggers React's "Cannot update a
+  // component while rendering a different component" error. useEffect runs
+  // after commit, so the parent update happens outside PayoffChart's render.
+  useEffect(() => {
     if (fitY) {
       setYDomain(computeYDomain(todayCurve, baseExpirationCurve));
       onFitYConsumed();
