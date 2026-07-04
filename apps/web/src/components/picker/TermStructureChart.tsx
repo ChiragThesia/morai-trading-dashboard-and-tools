@@ -29,6 +29,8 @@ const GRID_LINE = "#222839";
 const TERM_LINE = "#9aa3b8";
 const AXIS_LABEL = "#67708a";
 
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
 const GRID_TICKS: ReadonlyArray<{ readonly iv: number; readonly label: string }> = [
   { iv: 0.09, label: "9" },
   { iv: 0.12, label: "12" },
@@ -90,6 +92,27 @@ export function TermStructureChart({
   // `min(frontY, backY) - 18` goes negative and the default viewport clipping hides it.
   const guardTagY = Math.max(PAD.top, Math.min(frontY, backY) - 22);
 
+  // Dated event legend below the chart — each scheduled event with its calendar date, tagged by
+  // which leg spans it (classified by DTE: front ≤ front expiry, back ≤ back expiry, else later).
+  // Fixture data today; a live economic calendar arrives with the Phase-19 picker engine.
+  const frontDte = candidate.frontLeg.dte;
+  const backDte = candidate.backLeg.dte;
+  const legendEvents = events
+    .map((ev) => {
+      const [, moStr, dayStr] = ev.date.split("-");
+      const dte = eventDte(ev.date, referenceMs);
+      const leg: "front" | "back" | "later" = dte <= frontDte ? "front" : dte <= backDte ? "back" : "later";
+      return {
+        key: `${ev.date}-${ev.name}`,
+        name: ev.name,
+        label: `${MON[(Number(moStr) || 1) - 1]} ${Number(dayStr) || 1}`,
+        dte,
+        leg,
+      };
+    })
+    .filter((e) => e.dte >= DTE_MIN && e.dte <= DTE_MAX)
+    .sort((a, b) => a.dte - b.dte);
+
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-1.5">
       <svg
@@ -139,17 +162,9 @@ export function TermStructureChart({
                 strokeDasharray="2 5"
                 opacity={0.3}
               />
-              <text
-                x={x}
-                y={PAD.top - 4}
-                fill={AMBER}
-                fontSize={10}
-                textAnchor="middle"
-                fontFamily="JetBrains Mono, monospace"
-                opacity={0.75}
-              >
-                {ev.name}
-              </text>
+              {/* Event names + dates live in the dated legend below the chart, not on-canvas
+                  (they overlapped when events clustered). A small amber dot marks the line. */}
+              <circle cx={x} cy={PAD.top} r={2.4} fill={AMBER} opacity={0.7} />
             </g>
           );
         })}
@@ -249,9 +264,30 @@ export function TermStructureChart({
           long b
         </text>
       </svg>
+      <div className="flex flex-wrap items-center gap-1.5" data-testid="term-structure-legend">
+        {legendEvents.map((e) => {
+          const color = e.leg === "front" ? CORAL : e.leg === "back" ? TEAL : AXIS_LABEL;
+          const tag = e.leg === "front" ? " ◂f" : e.leg === "back" ? " ◂b" : "";
+          return (
+            <span
+              key={e.key}
+              className="rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px]"
+              style={{
+                color,
+                borderColor: `${color}66`,
+                background: `${color}12`,
+                opacity: e.leg === "later" ? 0.6 : 1,
+              }}
+            >
+              {`${e.label} ${e.name}${tag}`}
+            </span>
+          );
+        })}
+      </div>
       <p className="m-0 font-mono text-[10px] leading-[1.5] text-dim">
-        ATM implied vol by expiry. Amber lines = FOMC / CPI / NFP; the kink into those dates is
-        event premium, stripped before scoring. Your two legs: <span className="text-[#ef5350]">short front</span> / <span className="text-[#26a69a]">long back</span>.
+        ATM implied vol by expiry. <span style={{ color: CORAL }}>◂f</span> = event before front expiry ·{" "}
+        <span style={{ color: TEAL }}>◂b</span> = before back expiry · the IV kink into those dates is
+        event premium, stripped before scoring.
       </p>
     </div>
   );

@@ -37,6 +37,16 @@ describe("TermStructureChart — term line + event markers + leg dots", () => {
     expect(markers.length).toBe(events.length);
   });
 
+  it("renders a dated event legend, tagged by leg (front ◂f / back ◂b)", () => {
+    render(<TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />);
+    const legend = screen.getByTestId("term-structure-legend");
+    // Each event shows its calendar date + name (e.g. "Jul 3 NFP").
+    expect(legend.textContent).toMatch(/[A-Z][a-z]{2} \d+ (NFP|CPI|FOMC)/);
+    // NORMAL's front leg (21 DTE) spans early events, back leg (43 DTE) spans mid events.
+    expect(legend.textContent).toContain("◂f");
+    expect(legend.textContent).toContain("◂b");
+  });
+
   it("renders the front leg dot at the correct x/y (coral, DTE/IV-scaled)", () => {
     render(<TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />);
     const dot = screen.getByTestId("term-structure-leg-dot-front");
