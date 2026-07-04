@@ -248,15 +248,33 @@ decided build order)
 **Plans**: 9 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 19-01-PLAN.md — Additive contract fields (source/context-status) + core picker port/type foundation
 - [ ] 19-02-PLAN.md — FwdIV guard + calendar-breakevens numeric primitives (fast-check)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 19-03-PLAN.md — Scoring + candidate-selection domain (port buildCandidates, real beVsEm)
 - [ ] 19-04-PLAN.md — Economic-events data path (FRED release/dates CPI/NFP + FOMC seed, memory+Postgres)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 19-05-PLAN.md — picker_snapshot append-history + chain read + [BLOCKING] migrate apply
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 19-06-PLAN.md — computePickerSnapshot + getPicker use-cases (D-17 degraded-context tagging)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 19-07-PLAN.md — Server: GET /api/picker/candidates route + get_picker_candidates MCP tool
 - [ ] 19-08-PLAN.md — Worker: compute-picker chain job + fetch-economic-events weekly cron
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 19-09-PLAN.md — Web: usePicker hook + Analyzer fixture→live swap + staleness/context tags
+
 **UI hint**: yes
 
 ### Phase 20: Stream Watchdog, Event Snapshot & Strategy Rules
