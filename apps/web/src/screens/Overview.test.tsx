@@ -74,7 +74,7 @@ vi.mock("../hooks/useStatus.ts", () => ({ useStatus: vi.fn(() => ({ data: undefi
 vi.mock("../hooks/useCot.ts", () => ({ useCot: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useMacro.ts", () => ({ useMacro: vi.fn(() => ({ data: undefined, isPending: false })) }));
 
-import { Overview } from "./Overview.tsx";
+import { Overview, formatExpiryCell } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
 import { useLiveStream } from "../hooks/useLiveStream.ts";
 import { resolveLegIv } from "../lib/iv-calibration.ts";
@@ -534,6 +534,40 @@ describe("Overview screen", () => {
       const { container } = render(<Overview />);
       expect(container.querySelector(".bg-tos-magenta")).not.toBeNull();
       expect(container.querySelector(".bg-cyan")).not.toBeNull();
+    });
+  });
+
+  // ── 17.1-05 (OVW-03): positions-box expiry/DTE reformat ─────────────────────
+
+  describe("formatExpiryCell (OVW-03)", () => {
+    it("formats a calendar row: two expiry dates + both DTEs + calendar width", () => {
+      const cell = formatExpiryCell({
+        kind: "calendar",
+        frontOccSymbol: "SPXW  260808P07425000",
+        backOccSymbol: "SPXW  260905P07425000",
+        dteFront: 32,
+        dteBack: 59,
+      });
+      expect(cell.line1).toBe("Aug 8 → Sep 5");
+      expect(cell.line2).toBe("32d/59d · 27d wide");
+    });
+
+    it("formats a single-leg row: one expiry date + its DTE, no calendar width", () => {
+      const cell = formatExpiryCell({
+        kind: "single",
+        occSymbol: "SPXW  260808P07425000",
+        dte: 32,
+      });
+      expect(cell.line1).toBe("Aug 8");
+      expect(cell.line2).toBe("32d");
+    });
+
+    it("falls back to '—' for line1 without throwing when parseOccSymbol fails", () => {
+      expect(() =>
+        formatExpiryCell({ kind: "single", occSymbol: "not-a-valid-occ-symbol", dte: 10 }),
+      ).not.toThrow();
+      const cell = formatExpiryCell({ kind: "single", occSymbol: "not-a-valid-occ-symbol", dte: 10 });
+      expect(cell.line1).toBe("—");
     });
   });
 });

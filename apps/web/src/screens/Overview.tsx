@@ -235,6 +235,58 @@ function signClass(v: number): string {
 
 // ─── Positions table (docked, TOS-style) ──────────────────────────────────────
 
+/** Structured expiry/DTE cell (OVW-03). */
+type ExpiryCell = {
+  readonly line1: string;
+  readonly line2: string;
+};
+
+type ExpiryCellInput =
+  | {
+      readonly kind: "calendar";
+      readonly frontOccSymbol: string;
+      readonly backOccSymbol: string;
+      readonly dteFront: number;
+      readonly dteBack: number;
+    }
+  | {
+      readonly kind: "single";
+      readonly occSymbol: string;
+      readonly dte: number;
+    };
+
+/** Short month/day, e.g. "Aug 8" — matches the existing `gexAsOf` convention. */
+function formatExpiryDate(d: Date): string {
+  return d.toLocaleString("en-US", { month: "short", day: "numeric" });
+}
+
+/**
+ * Structured expiry/DTE cell for a positions-table row (OVW-03): a calendar shows both
+ * leg expiries + both DTEs + the calendar width (days between); a single leg shows its
+ * one expiry + DTE. Pure — takes already-computed DTEs (`CalendarGroup.dteFront/dteBack`,
+ * or the caller's own single-leg DTE) rather than re-deriving "now" itself. Guards the
+ * `parseOccSymbol` Result and falls back to "—" for line1 on a parse failure.
+ */
+export function formatExpiryCell(input: ExpiryCellInput): ExpiryCell {
+  if (input.kind === "single") {
+    const parsed = parseOccSymbol(input.occSymbol);
+    return {
+      line1: parsed.ok ? formatExpiryDate(parsed.value.expiry) : "—",
+      line2: `${input.dte}d`,
+    };
+  }
+  const front = parseOccSymbol(input.frontOccSymbol);
+  const back = parseOccSymbol(input.backOccSymbol);
+  const line1 =
+    front.ok && back.ok
+      ? `${formatExpiryDate(front.value.expiry)} → ${formatExpiryDate(back.value.expiry)}`
+      : "—";
+  return {
+    line1,
+    line2: `${input.dteFront}d/${input.dteBack}d · ${input.dteBack - input.dteFront}d wide`,
+  };
+}
+
 type Row = {
   key: string;
   label: string;
