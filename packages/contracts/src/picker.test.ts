@@ -152,3 +152,54 @@ describe("pickerSnapshotFixture (frozen fixture — D-03)", () => {
     expect(guardCount).toBe(1);
   });
 });
+
+describe("pickerSnapshotResponse.source / gexContextStatus / eventsContextStatus (Phase 19, D-15/D-17)", () => {
+  const basePayload = {
+    asOf: "2026-07-02",
+    spot: 7498.85,
+    source: "schwab",
+    gexContextStatus: "ok",
+    eventsContextStatus: "ok",
+    termStructure: [],
+    gex: { flip: null, callWall: null, putWall: null, netGammaAtSpot: 0, absGammaStrike: null },
+    events: [],
+    candidates: [],
+  };
+
+  it("parses a payload carrying source/gexContextStatus/eventsContextStatus", () => {
+    expect(() => pickerSnapshotResponse.parse(basePayload)).not.toThrow();
+  });
+
+  it("REJECTS a payload missing source", () => {
+    const { source: _omit, ...withoutSource } = basePayload;
+    expect(() => pickerSnapshotResponse.parse(withoutSource)).toThrow();
+  });
+
+  it("REJECTS a payload missing gexContextStatus", () => {
+    const { gexContextStatus: _omit, ...withoutGexStatus } = basePayload;
+    expect(() => pickerSnapshotResponse.parse(withoutGexStatus)).toThrow();
+  });
+
+  it("REJECTS a payload missing eventsContextStatus", () => {
+    const { eventsContextStatus: _omit, ...withoutEventsStatus } = basePayload;
+    expect(() => pickerSnapshotResponse.parse(withoutEventsStatus)).toThrow();
+  });
+
+  it("REJECTS an out-of-enum source value", () => {
+    expect(() =>
+      pickerSnapshotResponse.parse({ ...basePayload, source: "vendor" }),
+    ).toThrow();
+  });
+
+  it("REJECTS an out-of-enum gexContextStatus value", () => {
+    expect(() =>
+      pickerSnapshotResponse.parse({ ...basePayload, gexContextStatus: "fresh" }),
+    ).toThrow();
+  });
+
+  it("REJECTS an out-of-enum eventsContextStatus value", () => {
+    expect(() =>
+      pickerSnapshotResponse.parse({ ...basePayload, eventsContextStatus: "fresh" }),
+    ).toThrow();
+  });
+});

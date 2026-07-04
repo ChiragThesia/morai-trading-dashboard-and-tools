@@ -157,6 +157,12 @@ export const pickerSnapshotResponse = z.object({
   /** ISO 8601 snapshot reference date the termStructure/leg DTE fields are relative to. */
   asOf: z.string(),
   spot: z.number(),
+  /** Chain vendor this snapshot was computed from (D-15). */
+  source: z.enum(["schwab", "cboe"]),
+  /** Freshness of the GEX context used to score candidates (D-17); never silent. */
+  gexContextStatus: z.enum(["ok", "stale", "missing"]),
+  /** Freshness of the economic-events context used to score candidates (D-17); never silent. */
+  eventsContextStatus: z.enum(["ok", "stale", "missing"]),
   termStructure: z.array(termStructurePoint),
   gex: pickerGexContext,
   events: z.array(pickerEvent),

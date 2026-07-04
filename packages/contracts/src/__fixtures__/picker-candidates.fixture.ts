@@ -17,6 +17,9 @@ import type { PickerSnapshotResponse } from "../picker.ts";
 export const pickerSnapshotFixture: PickerSnapshotResponse = {
   asOf: "2026-07-02",
   spot: 7498.85,
+  source: "schwab",
+  gexContextStatus: "ok",
+  eventsContextStatus: "ok",
   gex: {
     flip: 7472.65,
     callWall: 7525,
