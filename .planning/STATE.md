@@ -5,15 +5,15 @@ milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 17.1
 current_phase_name: overview-payoff-tos-fidelity-graph-interactivity
 status: executing
-stopped_at: Completed 17.1-02-PLAN.md
-last_updated: "2026-07-04T02:01:54.558Z"
+stopped_at: Completed 17.1-04-PLAN.md
+last_updated: "2026-07-04T02:10:26.000Z"
 last_activity: 2026-07-04
-last_activity_desc: Phase 17.1 execution started
+last_activity_desc: Completed 17.1-04-PLAN.md (date picker + TOS colors)
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 33
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 17.1 (overview-payoff-tos-fidelity-graph-interactivity) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
-Last activity: 2026-07-04 — Phase 17.1 execution started
+Last activity: 2026-07-04 — Completed 17.1-04-PLAN.md (date picker + TOS colors)
 
 ## Milestone v1.2 Summary
 
@@ -95,7 +95,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 
 **Recent Trend:**
 
-- Last 5 plans: P01 (~20 min), P02 (~8 min), P03 (~12 min), P04 (~8 min)
+- Last 5 plans: 17-P04 (~40 min), 17.1-P01 (~12 min), 17.1-P02 (~9 min), 17.1-P03 (~3 min), 17.1-P04 (~8 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -183,6 +183,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 17.1 P01 | 12min | 2 tasks | 2 files |
 | Phase 17.1 P02 | 9min | 3 tasks | 3 files |
 | Phase 17.1 P03 | 3min | 3 tasks | 2 files |
+| Phase 17.1 P04 | 8min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -221,6 +222,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 17.1-01: single commit per task at green (project tdd.md rule) instead of separate RED/GREEN commits
 - [Phase ?]: 17.1-02: buildXTicks step formula uses (max-min)/targetCount not /(targetCount-1) — the plan's own acceptance criteria (step 200, matching today's hardcoded ticks) override RESEARCH.md's worked example, which snapped to step 250
 - [Phase ?]: 17.1-03: excludedCalendars controlled-component wiring landed in Task 1's commit (not Task 2) since Task 1's own RED test requires the checkbox to functionally reach the chart curve
+- [Phase ?]: 17.1-04: ‹/› step handlers clamp via resolveDaysForward(prev, today, maxDaysForward) BEFORE incrementing (not raw date+delta on the stored ISO string) — avoids drift past the bound on repeated clicks
+- [Phase ?]: 17.1-04: daysForward feeds ONLY the main scenario useMemo (net-book curves) — the row-highlight overlay scenario intentionally stays on daysForward:0, matching the plan's explicit scope
+- [Phase ?]: 17.1-04: TOS magenta/cyan hex values remain [ASSUMED] (RESEARCH A1) pending an end-of-phase human pixel-check against reference screenshots not yet re-dropped to mockups/tos-reference/ — not a blocker for this plan
 
 ### Pending Todos
 
@@ -265,10 +269,11 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T02:00:34.219Z
-Stopped at: Completed 17.1-02-PLAN.md
+Last session: 2026-07-04T02:10:26.000Z
+Stopped at: Completed 17.1-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan the first v1.2 phase: `/gsd-plan-phase 16`
+- Execute the last Phase 17.1 plan: `/gsd-execute-phase 17.1` (17.1-05-PLAN.md — OVW-03 positions-box expiry/DTE reformat)
+- Re-drop the two TOS reference screenshots into `mockups/tos-reference/` before the end-of-phase human pixel-check on the magenta/cyan curve colors
