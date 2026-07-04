@@ -29,9 +29,13 @@ import { TermStructureChart } from "../components/picker/TermStructureChart.tsx"
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
+import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
+import { PayoffControls } from "../components/charts/PayoffControls.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
 import { repriceScenario } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
+import { computeProjectionBounds } from "../lib/date-projection.ts";
+import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -53,8 +57,6 @@ const PARAMS: ScenarioParams = {
   rate: DEFAULT_RATE,
   divYield: DEFAULT_DIV,
 };
-
-const PAYOFF_TOGGLES = { showFan: false, showExpiration: true, showWalls: true, showProfitZone: true };
 
 /** ANLZ-02 picker curve colors (UI-SPEC Color table — distinct from both Overview's TOS
  * override and the old Analyzer's own defaults). */
@@ -223,15 +225,39 @@ export function Analyzer(): React.ReactElement {
     [selected],
   );
 
+  // Forward date projection + series toggles (shared with Overview via PayoffControls /
+  // usePayoffDateControl). The T+0 curve projects up to the selected candidate's front expiry;
+  // the @exp curve is unaffected (D-01, bookPLAtExpiry ignores daysForward).
+  const today = useMemo(() => new Date(), []);
+  const bounds = useMemo(
+    () => computeProjectionBounds(selectedPosition === null ? [] : [selectedPosition.frontDte], today),
+    [selectedPosition, today],
+  );
+  const dateControl = usePayoffDateControl(today, bounds.maxDaysForward);
+  const [toggles, setToggles] = useState<PayoffChartToggles>({
+    showFan: false,
+    showExpiration: true,
+    showWalls: true,
+    showProfitZone: true,
+  });
+  const handleToggle = useCallback((key: keyof PayoffChartToggles): void => {
+    setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const params = useMemo<ScenarioParams>(
+    () => ({ ...PARAMS, daysForward: dateControl.daysForward }),
+    [dateControl.daysForward],
+  );
+
   const scenarioResult = useMemo(
-    () => (selectedPosition === null ? null : repriceScenario([selectedPosition], PARAMS)),
-    [selectedPosition],
+    () => (selectedPosition === null ? null : repriceScenario([selectedPosition], params)),
+    [selectedPosition, params],
   );
 
   const compareScenarioResult = useMemo(() => {
     if (compareCandidate === null) return null;
-    return repriceScenario([candidateToAnalyzerPosition(compareCandidate)], PARAMS);
-  }, [compareCandidate]);
+    return repriceScenario([candidateToAnalyzerPosition(compareCandidate)], params);
+  }, [compareCandidate, params]);
 
   return (
     <div
@@ -266,6 +292,16 @@ export function Analyzer(): React.ReactElement {
           )}
           {selected !== null && selectedPosition !== null && scenarioResult !== null && (
             <>
+              <PayoffControls
+                dateInputValue={dateControl.dateInputValue}
+                minIso={bounds.minIso}
+                maxIso={bounds.maxIso}
+                onDateChange={dateControl.setDate}
+                onStepDate={dateControl.stepDate}
+                onResetDate={dateControl.resetDate}
+                toggles={toggles}
+                onToggle={handleToggle}
+              />
               <PayoffChart
                 todayCurve={scenarioResult.payoffCurve}
                 fanCurves={[]}
@@ -277,7 +313,7 @@ export function Analyzer(): React.ReactElement {
                   flip: pickerSnapshotFixture.gex.flip,
                 }}
                 spot={PARAMS.spot}
-                toggles={PAYOFF_TOGGLES}
+                toggles={toggles}
                 fitY={false}
                 onFitYConsumed={noop}
                 positionSetSignature={selected.id}

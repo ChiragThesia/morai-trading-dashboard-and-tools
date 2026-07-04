@@ -345,3 +345,36 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
     expect(screen.getByTestId("term-structure-guard-tag")).toBeTruthy();
   });
 });
+
+describe("Analyzer — payoff controls (shared date projection + series toggles)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders the shared date-projection picker", () => {
+    render(<Analyzer />);
+    expect(screen.getByTestId("date-picker-input")).not.toBeNull();
+  });
+
+  it("stepping the date forward moves the T+0 curve but leaves @exp fixed (D-01)", () => {
+    render(<Analyzer />);
+    const before = latestPayoffChartProps();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next day" }));
+
+    const after = latestPayoffChartProps();
+    expect(after.todayCurve).not.toEqual(before.todayCurve);
+    expect(after.expirationCurve).toEqual(before.expirationCurve);
+  });
+
+  it("clicking the @ exp toggle flips PayoffChart toggles.showExpiration off (others unaffected)", () => {
+    render(<Analyzer />);
+    expect(latestPayoffChartProps().toggles.showExpiration).toBe(true);
+
+    fireEvent.click(screen.getByTestId("toggle-showExpiration"));
+
+    expect(latestPayoffChartProps().toggles.showExpiration).toBe(false);
+    expect(latestPayoffChartProps().toggles.showWalls).toBe(true);
+  });
+});
