@@ -30,6 +30,13 @@
  *
  * 17.1-03/Overview.test.tsx precedent: spy-wrap PayoffChart (importOriginal) so tests can
  * inspect the exact props Analyzer hands it — the real component still renders.
+ *
+ * Task 2 (18-05-PLAN.md) right-column behaviors under test:
+ *   - Selecting a candidate renders WhyPanel/TermStructureChart/EntryExitPlan under the three
+ *     locked right-column headings, wired to that candidate's own fixture data.
+ *   - Selecting the guard candidate (fwdIv null) shows the guard sentence and the term
+ *     structure's omitted-bracket + guard tag (T-18-10) — the right column is fully re-wired
+ *     per selection, not stuck on the default candidate.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
@@ -73,6 +80,11 @@ const SECOND = SORTED_CANDIDATES[1];
 
 if (TOP === undefined || SECOND === undefined) {
   throw new Error("pickerSnapshotFixture must carry at least 2 candidates for this suite");
+}
+
+const GUARD = pickerSnapshotFixture.candidates.find((c) => c.fwdIv === null);
+if (GUARD === undefined) {
+  throw new Error("pickerSnapshotFixture must carry a guard (fwdIv null) candidate for this suite");
 }
 
 describe("Analyzer — ranked candidate rail (Task 2)", () => {
@@ -289,5 +301,47 @@ describe("Analyzer — ScenarioStrip (Task 3, ANLZ-02/D-06)", () => {
     const cell = screen.getByTestId(`scenario-strip-t0-${firstLevel}`);
     const sign = nearestT0.pl >= 0 ? "+" : "−";
     expect(cell.textContent).toBe(`${sign}$${Math.abs(nearestT0.pl).toFixed(0)}`);
+  });
+});
+
+describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders the three locked right-column headings", () => {
+    render(<Analyzer />);
+    expect(screen.getByText("Why this calendar")).toBeTruthy();
+    expect(screen.getByText("Term structure + your legs")).toBeTruthy();
+    expect(screen.getByText("Entry / exit plan")).toBeTruthy();
+  });
+
+  it("wires WhyPanel/TermStructureChart/EntryExitPlan to the default (top-ranked) candidate", () => {
+    render(<Analyzer />);
+    expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toContain(
+      `Front IV ${(TOP.frontLeg.iv * 100).toFixed(1)}%`,
+    );
+    expect(screen.getByTestId("term-structure-leg-dot-front")).toBeTruthy();
+    expect(screen.getByTestId("entryexit-value-debit")).toBeTruthy();
+  });
+
+  it("re-wires the right column to the newly-selected candidate when a different card is clicked", () => {
+    render(<Analyzer />);
+    fireEvent.click(screen.getByTestId(`candidate-card-${SECOND.id}`));
+    expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toContain(
+      `Front IV ${(SECOND.frontLeg.iv * 100).toFixed(1)}%`,
+    );
+  });
+
+  it("selecting the guard candidate shows the guard sentence and the term-structure's omitted bracket + guard tag", () => {
+    render(<Analyzer />);
+    fireEvent.click(screen.getByTestId(`candidate-card-${GUARD.id}`));
+
+    expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toBe(
+      "Forward IV is undefined here — the term structure between these two legs is inverted (back-leg variance implies a negative forward radicand). This candidate is ranked on slope, GEX fit, and event adjustment only; the forward-edge criterion contributes 0.",
+    );
+    expect(screen.queryByTestId("term-structure-fwd-bracket")).toBeNull();
+    expect(screen.getByTestId("term-structure-guard-tag")).toBeTruthy();
   });
 });

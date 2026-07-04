@@ -24,6 +24,9 @@ import { pickerSnapshotFixture } from "@morai/contracts";
 import type { PickerCandidate } from "@morai/contracts";
 import { CandidateCard } from "../components/picker/CandidateCard.tsx";
 import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
+import { WhyPanel } from "../components/picker/WhyPanel.tsx";
+import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
+import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
@@ -148,19 +151,37 @@ function ScoringMethodologyPanel(): React.ReactElement {
   );
 }
 
-// ─── Right column: 18-05 placeholder shells ────────────────────────────────────
+// ─── Right column: why-panel / term-structure / entry-exit-plan (ANLZ-03, D-01b) ──
 
-function RightColumnPlaceholders(): React.ReactElement {
+export interface RightColumnProps {
+  readonly candidate: PickerCandidate | null;
+}
+
+/**
+ * RightColumn — the "Why this calendar" / "Term structure + your legs" / "Entry / exit plan"
+ * stack for the currently-selected candidate. Reads the fixture's static term-structure/events/
+ * GEX context (never live — this screen scores against the frozen D-03 snapshot).
+ */
+function RightColumn({ candidate }: RightColumnProps): React.ReactElement {
   return (
     <div className="flex flex-col gap-3">
       <Panel>
         <PanelHeading title="Why this calendar" />
+        {candidate !== null && <WhyPanel candidate={candidate} gex={pickerSnapshotFixture.gex} />}
       </Panel>
       <Panel>
         <PanelHeading title="Term structure + your legs" />
+        {candidate !== null && (
+          <TermStructureChart
+            termStructure={pickerSnapshotFixture.termStructure}
+            events={pickerSnapshotFixture.events}
+            candidate={candidate}
+          />
+        )}
       </Panel>
       <Panel>
         <PanelHeading title="Entry / exit plan" />
+        {candidate !== null && <EntryExitPlan candidate={candidate} />}
       </Panel>
     </div>
   );
@@ -284,8 +305,8 @@ export function Analyzer(): React.ReactElement {
         <ScoringMethodologyPanel />
       </div>
 
-      {/* ── Right column: 18-05 placeholder shells ────────────────────── */}
-      <RightColumnPlaceholders />
+      {/* ── Right column: why-panel / term-structure / entry-exit-plan ─── */}
+      <RightColumn candidate={selected} />
     </div>
   );
 }
