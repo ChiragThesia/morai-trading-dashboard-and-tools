@@ -5,15 +5,15 @@ milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 19
 current_phase_name: picker-engine-economic-events
 status: executing
-stopped_at: Phase 19 UI-SPEC approved
-last_updated: "2026-07-04T21:45:31.534Z"
+stopped_at: Completed 19-03-PLAN.md
+last_updated: "2026-07-04T22:04:33.720Z"
 last_activity: 2026-07-04
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 26
-  completed_plans: 19
+  completed_plans: 20
   percent: 67
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 19 (picker-engine-economic-events) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
 Last activity: 2026-07-04 — Phase 19 execution started
 
@@ -194,6 +194,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 18 P05 | 25min | 3 tasks | 20 files |
 | Phase 19 P01 | ~12min | 3 tasks | 4 files |
 | Phase 19 P02 | 15min | 2 tasks | 4 files |
+| Phase 19 P03 | 16min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -258,6 +259,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 19-02]: computeFwdIv guards on radicand<0 (not literal rad>0) -- resolves plan-text contradiction, matches truths/behavior/CONTEXT.md
 - [Phase 19-02]: findBreakevens uses separate frontStrike/backStrike fields matching PickerCandidateDomain leg shape from 19-01
 - [Phase 19-02]: breakevens fast-check property domain bounded to near-ATM strikes (90-110% spot) + 8% IV floor -- wider bounds hit bsmPrice floating-point noise on deep-OTM/near-zero-IV combos, not a real market condition
+- [Phase 19]: 19-03: dedupe-by-construction (nearest qualifying back expiry per deltaRung+frontExpiry) instead of a post-hoc score-based dedupe, since selection has no score
+- [Phase 19]: 19-03: inverted term structure zeroes the fwdEdge score contribution outright (not merely fwdEdge=0 through the normal window), never rewarding an inverted structure
+- [Phase 19]: 19-03: NOT marking PICK-01/PICK-03 complete -- this plan ships selectCandidates/scoreCalendarCandidates only; compute-picker use-case, HTTP/MCP wiring, and the economic-events adapter land in 19-04..19-09
 
 ### Pending Todos
 
@@ -302,9 +306,9 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-04T21:44:43.202Z
-Stopped at: Phase 19 UI-SPEC approved
-Resume file: .planning/phases/19-picker-engine-economic-events/19-UI-SPEC.md
+Last session: 2026-07-04T22:04:33.710Z
+Stopped at: Completed 19-03-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
