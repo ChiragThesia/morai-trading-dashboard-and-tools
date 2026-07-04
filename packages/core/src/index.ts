@@ -267,3 +267,13 @@ export type {
   MacroSeriesQuery,
   MacroSeriesPointOut,
 } from "./journal/index.ts";
+
+// ─── Picker bounded context (Phase 19) ────────────────────────────────────────
+// Economic-events driven ports + row domain type (PICK-03). StorageError/FetchError already
+// exported above (journal) share the same shape and are intentionally not re-exported here.
+export type {
+  EconomicEvent,
+  ForFetchingEconomicEvents,
+  ForReadingEconomicEvents,
+  ForPersistingEconomicEvents,
+} from "./picker/index.ts";
