@@ -37,14 +37,21 @@ result: [pending]
 
 ### 3. FRED live-shape + FOMC-seed accuracy
 expected: With FRED_API_KEY set, the FRED release/dates response parses to the assumed shape; CPI/NFP dates populate; FOMC seed dates are accurate; eventsContextStatus reflects the real fetch outcome; FOMC seed present even if FRED fails (WR-05 fix).
-result: [pending]
+result: pass
+source: railway run --service worker (live FRED key) + local run (no key)
+note: |
+  Live FRED fetch returned 1836 events = 1820 fred (CPI/NFP release/dates parse to assumed
+  shape, source="fred") + 16 FOMC seed (source="seed"). economic_events populated. WR-05
+  confirmed separately: with FRED key absent (local), the 16 FOMC seed still returned + persisted
+  (never dropped). Note IN-02 (review): FRED history spans 1949→2026 unfiltered — picker reads
+  are unbounded; cosmetic/perf follow-up, not blocking.
 
 ## Summary
 
 total: 3
-passed: 1
+passed: 2
 issues: 0
-pending: 2
+pending: 1
 skipped: 0
 blocked: 0
 
