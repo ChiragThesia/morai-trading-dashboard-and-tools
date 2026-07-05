@@ -37,4 +37,16 @@ describe("triggerJobBodyFor — WR-04 rebuild-journal requires calendarId", () =
     // The MCP tool reads triggerJobPayload.shape.calendarId — keep it intact.
     expect(triggerJobPayload.shape.calendarId).toBeDefined();
   });
+
+  // JRNL-01 pnl-unit-mismatch fix: recompute-snapshot-pnl mirrors rebuild-journal — it is
+  // meaningless without a calendarId, so it MUST require it at the same boundary (WR-04).
+  it("recompute-snapshot-pnl WITHOUT calendarId fails parse", () => {
+    const result = triggerJobBodyFor("recompute-snapshot-pnl").safeParse({});
+    expect(result.success).toBe(false);
+  });
+
+  it("recompute-snapshot-pnl WITH calendarId passes", () => {
+    const result = triggerJobBodyFor("recompute-snapshot-pnl").safeParse({ calendarId });
+    expect(result.success).toBe(true);
+  });
 });

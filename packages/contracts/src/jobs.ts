@@ -13,6 +13,7 @@ export const TRIGGERABLE_JOBS = [
   "rebuild-journal",
   "sync-fills",
   "compute-bsm-greeks",
+  "recompute-snapshot-pnl",
 ] as const;
 
 export type TriggerableJob = (typeof TRIGGERABLE_JOBS)[number];
@@ -36,16 +37,18 @@ export type TriggerJobPayload = z.infer<typeof triggerJobPayload>;
  *
  *   - rebuild-journal ⇒ calendarId REQUIRED. An empty body fails parse, the route
  *     returns 400, and a null-keyed rebuild is never enqueued (no queue flood).
+ *   - recompute-snapshot-pnl ⇒ calendarId REQUIRED (JRNL-01 pnl-unit-mismatch fix) — same
+ *     rationale as rebuild-journal: meaningless without a target calendar.
  *   - all other jobs ⇒ calendarId stays optional (unchanged).
  *
  * triggerJobPayload itself is untouched so the MCP tool's
  * `triggerJobPayload.shape.calendarId` reference (MCP-02) stays stable.
  */
 export function triggerJobBodyFor(name: string): z.ZodType<TriggerJobPayload> {
-  if (name === "rebuild-journal") {
+  if (name === "rebuild-journal" || name === "recompute-snapshot-pnl") {
     return triggerJobPayload.refine(
       (body) => body.calendarId !== undefined,
-      { path: ["calendarId"], message: "calendarId is required for rebuild-journal" },
+      { path: ["calendarId"], message: `calendarId is required for ${name}` },
     );
   }
   return triggerJobPayload;
