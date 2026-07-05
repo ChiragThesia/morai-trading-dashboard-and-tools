@@ -22,12 +22,13 @@ import type {
   ForReadingJournal,
   ForResolvingLegSnapshot,
   ForReadingCalendarSnapshotsForCycle,
+  ForReadingLatestSnapshotTime,
   SnapshotRow,
   LegSnapshot,
   CalendarSnapshotForCycle,
   StorageError,
 } from "@morai/core";
-import { eq, and, lte, desc, asc } from "drizzle-orm";
+import { eq, and, lte, desc, asc, max } from "drizzle-orm";
 import { calendarSnapshots, legObservations, contracts, calendars } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -36,6 +37,7 @@ export type PostgresCalendarSnapshotsRepo = {
   readonly readJournal: ForReadingJournal;
   readonly resolveLegSnapshot: ForResolvingLegSnapshot;
   readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
+  readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
 };
 
 export function makePostgresCalendarSnapshotsRepo(
@@ -70,6 +72,9 @@ export function makePostgresCalendarSnapshotsRepo(
           dteBack: row.dteBack,
           pnlOpen: row.pnlOpen,
           source: row.source,
+          // SNAP-01 / D-12: provenance marker. Undefined/absent -> stored as NULL,
+          // read back as "scheduled" (mapSnapshotRow default).
+          trigger: row.trigger ?? null,
         })
         .onConflictDoNothing();
       return ok(undefined);
@@ -243,7 +248,25 @@ export function makePostgresCalendarSnapshotsRepo(
     }
   };
 
-  return { persistSnapshot, readJournal, resolveLegSnapshot, readSnapshotsForCycle };
+  // ─── ForReadingLatestSnapshotTime (20-05, SNAP-01 Pattern 2) ─────────────────
+  // SELECT MAX(time) — index-only scan (time leads the composite PK). Null on
+  // cold start (no rows). Never throws — DB errors map to StorageError.
+  const readLatestSnapshotTime: ForReadingLatestSnapshotTime = async (): Promise<
+    Result<Date | null, StorageError>
+  > => {
+    try {
+      const rows = await db
+        .select({ latest: max(calendarSnapshots.time) })
+        .from(calendarSnapshots);
+      const latest = rows[0]?.latest;
+      return ok(latest !== null && latest !== undefined ? latest : null);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  return { persistSnapshot, readJournal, resolveLegSnapshot, readSnapshotsForCycle, readLatestSnapshotTime };
 }
 
 // ─── Row mapper ─────────────────────────────────────────────────────────────
@@ -257,6 +280,10 @@ function mapSnapshotRow(row: RawSnapshotRow): SnapshotRow | null {
   // coerced. (No implicit as-cast per typescript.md.)
   if (row.source !== "cboe") return null;
   const source = row.source; // narrowed to "cboe"
+  // SNAP-01 / D-12: NULL (legacy rows, pre-0016) and any unexpected value default to
+  // "scheduled" — the only other valid value is "event-move".
+  const trigger: "scheduled" | "event-move" =
+    row.trigger === "event-move" ? "event-move" : "scheduled";
   return {
     time: row.time,
     calendarId: row.calendarId,
@@ -277,5 +304,6 @@ function mapSnapshotRow(row: RawSnapshotRow): SnapshotRow | null {
     dteBack: row.dteBack,
     pnlOpen: row.pnlOpen,
     source,
+    trigger,
   };
 }

@@ -20,6 +20,7 @@ import type {
   ForReadingJournal,
   ForResolvingLegSnapshot,
   ForReadingCalendarSnapshotsForCycle,
+  ForReadingLatestSnapshotTime,
   SnapshotRow,
   LegSnapshot,
   StorageError,
@@ -37,6 +38,8 @@ export type CalendarSnapshotsRepo = {
   readonly countSnapshots: (calendarId: string) => Promise<number>;
   /** 06-04: read the most recent snapshot cycle on or before a time (term-slope passthrough) */
   readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
+  /** 20-05: read MAX(time) across all calendar_snapshots rows (SNAP-01 cooldown ground truth) */
+  readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -364,6 +367,78 @@ export function runCalendarSnapshotsContractTests(
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.value).toEqual([]);
+      });
+    });
+
+    describe("trigger provenance — round-trip (SNAP-01, D-12, 20-05)", () => {
+      it("persists and reads back an 'event-move' trigger", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T19:00:00Z");
+        await repo.persistSnapshot(makeSnapshotRow(time, CAL_ID, { trigger: "event-move" }));
+
+        const result = await repo.readJournal(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const rows = result.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows[0]?.trigger).toBe("event-move");
+      });
+
+      it("persists and reads back a 'scheduled' trigger", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T19:30:00Z");
+        await repo.persistSnapshot(makeSnapshotRow(time, CAL_ID, { trigger: "scheduled" }));
+
+        const result = await repo.readJournal(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const rows = result.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows[0]?.trigger).toBe("scheduled");
+      });
+
+      it("reads a legacy/absent trigger as 'scheduled'", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T20:00:00Z");
+        // No trigger override — makeSnapshotRow's default has no trigger key set.
+        await repo.persistSnapshot(makeSnapshotRow(time, CAL_ID));
+
+        const result = await repo.readJournal(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const rows = result.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows[0]?.trigger).toBe("scheduled");
+      });
+    });
+
+    describe("readLatestSnapshotTime — MAX(time) cooldown ground truth (SNAP-01, Pattern 2, 20-05)", () => {
+      it("returns null on a cold start (no snapshots at all)", async () => {
+        const result = await repo.readLatestSnapshotTime();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toBeNull();
+      });
+
+      it("returns the max time across all calendars after inserts", async () => {
+        await seed.seedCalendar(CAL_ID);
+        await seed.seedCalendar(CAL_ID_EMPTY);
+        const t1 = new Date("2026-07-01T19:00:00Z");
+        const t2 = new Date("2026-07-01T19:30:00Z");
+        const t3 = new Date("2026-07-01T20:00:00Z");
+
+        await repo.persistSnapshot(makeSnapshotRow(t1, CAL_ID));
+        await repo.persistSnapshot(makeSnapshotRow(t3, CAL_ID_EMPTY));
+        await repo.persistSnapshot(makeSnapshotRow(t2, CAL_ID));
+
+        const result = await repo.readLatestSnapshotTime();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).not.toBeNull();
+        expect(result.value?.getTime()).toBe(t3.getTime());
       });
     });
   });

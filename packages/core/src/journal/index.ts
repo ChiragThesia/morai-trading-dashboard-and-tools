@@ -36,6 +36,7 @@ export type {
   ForResolvingLegSnapshot,
   SnapshotRow,
   ForPersistingSnapshot,
+  ForReadingLatestSnapshotTime,
   ForReadingJournal,
   ForReadingLatestLegObs,
 } from "./application/ports.ts";

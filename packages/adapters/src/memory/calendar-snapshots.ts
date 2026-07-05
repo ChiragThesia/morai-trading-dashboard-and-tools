@@ -25,6 +25,7 @@ import type {
   ForReadingJournal,
   ForResolvingLegSnapshot,
   ForReadingCalendarSnapshotsForCycle,
+  ForReadingLatestSnapshotTime,
   SnapshotRow,
   LegSnapshot,
   CalendarSnapshotForCycle,
@@ -36,6 +37,7 @@ export type MemoryCalendarSnapshotsRepo = {
   readonly readJournal: ForReadingJournal;
   readonly resolveLegSnapshot: ForResolvingLegSnapshot;
   readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
+  readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
   /**
    * seedCalendar — register a calendarId as known so readJournal returns
    * ok([]) (not ok(null)) for it. Mirrors the FK enforced by the Postgres
@@ -83,7 +85,8 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     if (!knownIds.has(calendarId)) return ok(null);
     const rows = [...store.values()]
       .filter((r) => r.calendarId === calendarId)
-      .sort((a, b) => a.time.getTime() - b.time.getTime());
+      .sort((a, b) => a.time.getTime() - b.time.getTime())
+      .map(withDefaultTrigger);
     return ok(rows);
   };
 
@@ -120,6 +123,16 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok(mapped);
   };
 
+  // 20-05 (SNAP-01, Pattern 2) twin: max `time` across all stored rows, null when empty.
+  // Mirrors the Postgres MAX(time) read — never throws.
+  const readLatestSnapshotTime: ForReadingLatestSnapshotTime = async (): Promise<
+    Result<Date | null, StorageError>
+  > => {
+    if (store.size === 0) return ok(null);
+    const latestMs = Math.max(...[...store.values()].map((r) => r.time.getTime()));
+    return ok(new Date(latestMs));
+  };
+
   const seedCalendar = (id: string): void => {
     knownIds.add(id);
   };
@@ -135,5 +148,19 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     legStore.set(key, leg);
   };
 
-  return { persistSnapshot, readJournal, resolveLegSnapshot, readSnapshotsForCycle, seedCalendar, seedLegSnapshot };
+  return {
+    persistSnapshot,
+    readJournal,
+    resolveLegSnapshot,
+    readSnapshotsForCycle,
+    readLatestSnapshotTime,
+    seedCalendar,
+    seedLegSnapshot,
+  };
+}
+
+// SNAP-01 / D-12 (twin parity with Postgres mapSnapshotRow): absent trigger reads as
+// "scheduled" — the only other valid value is "event-move".
+function withDefaultTrigger(row: SnapshotRow): SnapshotRow {
+  return row.trigger === "event-move" ? row : { ...row, trigger: "scheduled" };
 }

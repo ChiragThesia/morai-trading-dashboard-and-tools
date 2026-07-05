@@ -44,6 +44,7 @@ export type {
   ForResolvingLegSnapshot,
   SnapshotRow,
   ForPersistingSnapshot,
+  ForReadingLatestSnapshotTime,
   ForReadingJournal,
   ForReadingLatestLegObs,
 } from "./journal/index.ts";
