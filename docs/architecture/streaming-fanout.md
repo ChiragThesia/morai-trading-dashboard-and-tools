@@ -81,6 +81,15 @@ Ad-hoc symbol lookups (D-05) are added to the set with LRU eviction when the 490
 
 `D-08`: The Schwab stream stays open during RTH even when zero browser clients are connected. The first client gets live data immediately — no cold-start latency.
 
+## Ping Heartbeat Carries `isRth` (WATCH-01, D-03)
+
+The `ping` heartbeat now carries `{ isRth: boolean }`, schema `streamPingEvent` in
+`@morai/contracts`. The server computes `isRth` from `isWithinRth`/`isNyseHoliday` —
+the same predicate the snapshot job's RTH gate uses — so the badge and the snapshot
+job can never disagree on market state. The client consumes it to drive the 3-state
+stream badge. This is additive: prior consumers ignored the empty ping and are
+unaffected.
+
 ## Reconnect and Stale State (D-04, STRM-05)
 
 On first connect and every reconnect:
