@@ -134,3 +134,6 @@ None - no external service configuration required.
 ---
 *Phase: 20-stream-watchdog-event-snapshot-strategy-rules*
 *Completed: 2026-07-05*
+
+## Self-Check: PASSED
+All created/modified files found on disk; all commit hashes (6e5690f, 37dc8d5, b981332) found in git log.
