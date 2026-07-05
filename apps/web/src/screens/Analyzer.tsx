@@ -427,7 +427,7 @@ export function Analyzer(): React.ReactElement {
       return;
     }
     setPasteError(null);
-    setPastedCandidate(parsedCalendarToPickerCandidate(parsed));
+    setPastedCandidate(parsedCalendarToPickerCandidate(parsed, PASTED_ID));
     setSelectedId(PASTED_ID);
   }, [pasteText, today, spot]);
 

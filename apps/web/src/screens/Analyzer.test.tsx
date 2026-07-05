@@ -463,7 +463,7 @@ describe("Analyzer — pasted calendar (paste redesign)", () => {
 
     const parsed = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
     if (parsed === null) throw new Error("expected PASTE_EXAMPLE to parse");
-    const pastedCandidate = parsedCalendarToPickerCandidate(parsed);
+    const pastedCandidate = parsedCalendarToPickerCandidate(parsed, "pasted");
     const expected = repriceScenario([candidateToAnalyzerPosition(pastedCandidate)], PARAMS);
 
     const props = latestPayoffChartProps();
