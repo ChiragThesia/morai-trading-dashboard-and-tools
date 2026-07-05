@@ -196,3 +196,6 @@ export type {
 // extracted from apps/server/src/main.ts into a testable unit.
 export { makeSpotObserver } from "./application/observeSpot.ts";
 export type { SpotObserverDeps, ForObservingSpot } from "./application/observeSpot.ts";
+// JRNL-01 (22-01): forward-vol domain fn — the distinct-edge series (D-02/D-07), never NaN.
+export { computeForwardVol } from "./domain/fwd-vol.ts";
+export type { ForwardVolResult } from "./domain/fwd-vol.ts";
