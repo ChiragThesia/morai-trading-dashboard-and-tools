@@ -211,6 +211,15 @@ The "delete-then-reinsert" pattern is safe because `calendar_events` is purely d
 `fills`, which are the source of truth (JRNL-01). Re-running against the same fills produces
 identical output due to `fill_ids_hash` determinism.
 
+### One-off: fix-pnl-reingest (journal-pnl-opennetdebit-units round 3)
+
+`bun run apps/worker/src/fix-pnl-reingest.ts` (not a pg-boss job, run once via `railway run`) —
+use this ONLY when a `fills.side`-signing fix has shipped and calendars backfilled BEFORE that
+fix need their historical P&L corrected. It wipes `fills`/`calendar_events`/`orphan_fills`,
+re-ingests from Schwab with the fixed adapter, then runs `rebuild-journal` +
+`recompute-snapshot-pnl` for every calendar. See
+`.planning/debug/journal-pnl-opennetdebit-units.md` for the incident this was built for.
+
 ## The JobQueue Port
 
 ```ts
