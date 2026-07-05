@@ -35,6 +35,19 @@ import { calendarDte } from "../domain/dte.ts";
 // NaN sentinel — always use this string, never JS NaN (D-06, T-03-13)
 export const NAN_STAMP = "NaN";
 
+/**
+ * computeSnapshotPnl — D-05 pnl_open formula, exported so the JRNL-01 data-correction path
+ * (recomputeSnapshotPnl.ts) re-derives historical pnl_open with the EXACT same formula the
+ * live snapshot writer uses below — no formula drift between the two call sites.
+ */
+export function computeSnapshotPnl(
+  netMark: number,
+  openNetDebit: number,
+  qty: number,
+): number {
+  return (netMark - openNetDebit) * qty * 100;
+}
+
 export type SnapshotCalendarsDeps = {
   readonly getOpenCalendars: ForGettingOpenCalendars;
   readonly resolveLegs: ForResolvingLegSnapshot;
@@ -85,7 +98,7 @@ function buildSnapshotRow(
     : String(parseFloat(backIv) - parseFloat(frontIv));
 
   // pnl_open uses marks (not greeks) — always computable regardless of NaN (D-06)
-  const pnlOpen = String((netMark - cal.openNetDebit) * cal.qty * 100);
+  const pnlOpen = String(computeSnapshotPnl(netMark, cal.openNetDebit, cal.qty));
 
   // spot from underlyingPrice — prefer back leg, fall back to front, else "0"
   const spot = String(
