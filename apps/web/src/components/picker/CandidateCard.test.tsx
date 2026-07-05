@@ -165,6 +165,116 @@ describe("CandidateCard — data-driven breakdown bars (D-05)", () => {
   });
 });
 
+describe("CandidateCard — pasted variant (paste-redesign)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function makePastedCandidate(): PickerCandidate {
+    return {
+      id: "pasted",
+      name: "7450P · pasted",
+      score: 0,
+      breakdown: [],
+      debit: 4585,
+      theta: 0,
+      vega: 0,
+      delta: 0,
+      fwdIv: null,
+      fwdIvGuard: "ok",
+      slope: 0,
+      fwdEdge: 0,
+      expectedMove: 0,
+      frontEvents: [],
+      backEvents: [],
+      frontLeg: leg(7450, 0.17, 30),
+      backLeg: leg(7450, 0.17, 58),
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "" },
+    };
+  }
+
+  it("renders a 'PASTED' pill instead of the numeric score when pasted=true", () => {
+    render(
+      <CandidateCard
+        candidate={makePastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("PASTED")).toBeTruthy();
+    expect(screen.queryByText("0")).toBeNull();
+  });
+
+  it("sub-line shows DTE f/b · debit $X · IV Y% and no theta/vega", () => {
+    render(
+      <CandidateCard
+        candidate={makePastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("DTE 30/58 · debit $4585 · IV 17.0%")).toBeTruthy();
+    expect(screen.queryByText(/θ/)).toBeNull();
+    expect(screen.queryByText(/vega/)).toBeNull();
+  });
+
+  it("suppresses freshness/GEX/events tags for the pasted card", () => {
+    render(
+      <CandidateCard
+        candidate={makePastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        observedAt="2026-07-02T14:32:00.000Z"
+        source="schwab"
+        gexContextStatus="missing"
+        eventsContextStatus="missing"
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.queryByText(/as of/)).toBeNull();
+    expect(screen.queryByText("GEX unavailable")).toBeNull();
+    expect(screen.queryByText("events unavailable")).toBeNull();
+    expect(screen.queryByText("clean")).toBeNull();
+  });
+
+  it("renders no breakdown bars for the pasted card", () => {
+    const { container } = render(
+      <CandidateCard
+        candidate={makePastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(container.querySelectorAll('[data-testid^="breakdown-bar-fill-"]').length).toBe(0);
+  });
+});
+
 describe("CandidateCard — click delegation", () => {
   afterEach(() => {
     cleanup();
