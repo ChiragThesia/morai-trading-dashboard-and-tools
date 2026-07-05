@@ -1,4 +1,4 @@
-import { describe, beforeAll, beforeEach } from "vitest";
+import { describe, beforeAll, beforeEach, it, expect } from "vitest";
 import { inject } from "vitest";
 import { runFillsContractTests } from "../../__contract__/fills.contract.ts";
 import type { SeedCalendar, SeedEvent, SeedOrphan } from "../../__contract__/fills.contract.ts";
@@ -25,9 +25,12 @@ describe.skipIf(shouldSkip)("postgres fills adapter", () => {
 
   beforeEach(async () => {
     if (!db) return;
-    // Truncate in FK-safe order (calendar_events references calendars by id logically)
+    // Truncate in FK-safe order (calendar_events references calendars by id logically).
+    // calendar_snapshots included so the wipeDerivedFills postgres-only test (below) starts
+    // from a clean slate across runs — it seeds one directly to prove wipeDerivedFills never
+    // touches it.
     await db.execute(
-      sql`TRUNCATE TABLE fills, calendar_events, orphan_fills, calendars CASCADE`,
+      sql`TRUNCATE TABLE fills, calendar_events, orphan_fills, calendars, calendar_snapshots CASCADE`,
     );
   });
 
@@ -43,6 +46,7 @@ describe.skipIf(shouldSkip)("postgres fills adapter", () => {
         recomputeCalendarAmounts: repo.recomputeCalendarAmounts,
         markFillsProcessed: repo.markFillsProcessed,
         writeFills: repo.writeFills,
+        wipeDerivedFills: repo.wipeDerivedFills,
       };
     },
     () => ({
@@ -121,6 +125,79 @@ describe.skipIf(shouldSkip)("postgres fills adapter", () => {
         }
         return ids;
       },
+      countEvents: async (): Promise<number> => {
+        if (!db) throw new Error("db not initialized");
+        const rows = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM calendar_events`);
+        return readCount(rows[0]);
+      },
+      countOrphans: async (): Promise<number> => {
+        if (!db) throw new Error("db not initialized");
+        const rows = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM orphan_fills`);
+        return readCount(rows[0]);
+      },
     }),
   );
+
+  // journal-pnl-opennetdebit-units (round 3): wipeDerivedFills must NEVER touch calendars or
+  // calendar_snapshots — those are not derived-fills caches (calendars.openNetDebit is fixed
+  // by rebuild-journal; calendar_snapshots.pnl_open by recompute-snapshot-pnl). The shared
+  // fills contract above only has a seed/read surface for calendars.open_net_debit — this
+  // postgres-only test additionally proves calendar_snapshots rows survive untouched, since
+  // that table lives outside the fills repo's normal scope.
+  describe.skipIf(shouldSkip)(
+    "wipeDerivedFills — calendars + calendar_snapshots survive (postgres-only, direct table check)",
+    () => {
+      it("leaves an existing calendars row and calendar_snapshots row untouched", async () => {
+        if (!db) throw new Error("db not initialized");
+        const calId = "33333333-3333-4333-8333-333333333333";
+        await db.execute(
+          sql`INSERT INTO calendars (id, underlying, strike, option_type, front_expiry, back_expiry, qty, status, opened_at, open_net_debit)
+              VALUES (${calId}::uuid, 'SPX', 7100000, 'P', '2026-06-20', '2026-09-19', 1, 'open', NOW(), '15.5')`,
+        );
+        await db.execute(
+          sql`INSERT INTO calendar_snapshots (time, calendar_id, spot, net_mark, front_mark, back_mark, front_iv, back_iv, front_iv_raw, back_iv_raw, net_delta, net_gamma, net_theta, net_vega, term_slope, dte_front, dte_back, pnl_open, source)
+              VALUES (NOW(), ${calId}::uuid, '5000', '10', '20', '30', '0.2', '0.25', '0.2', '0.25', '0', '0', '0', '0', '0.05', 30, 90, '100', 'cboe')`,
+        );
+
+        const repo = makePostgresFillsRepo(db);
+        await repo.writeFills([
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            orderId: "ORD-WIPE",
+            occSymbol: "SPX   260620P07100000",
+            side: "buy",
+            qty: 1,
+            price: 10,
+            filledAt: new Date(),
+            commission: null,
+            fees: null,
+          },
+        ]);
+
+        const result = await repo.wipeDerivedFills();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.fillsDeleted).toBe(1);
+
+        const calRows = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM calendars WHERE id = ${calId}::uuid`,
+        );
+        const snapRows = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM calendar_snapshots WHERE calendar_id = ${calId}::uuid`,
+        );
+        expect(readCount(calRows[0])).toBe(1);
+        expect(readCount(snapRows[0])).toBe(1);
+      });
+    },
+  );
 });
+
+// Small helper shared by the count-style seed helpers above and the postgres-only test.
+function readCount(row: unknown): number {
+  if (row === undefined || row === null) return 0;
+  const rec: { [key: string]: unknown } = Object.fromEntries(Object.entries(row));
+  const cnt = rec["cnt"];
+  if (typeof cnt === "number") return cnt;
+  if (typeof cnt === "string") return Number(cnt);
+  return 0;
+}

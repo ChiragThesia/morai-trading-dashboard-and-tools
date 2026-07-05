@@ -162,6 +162,7 @@ export type {
   ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   ForEnqueueingJob,
+  ForWipingDerivedFills,
 } from "./journal/index.ts";
 export { makeSyncFillsUseCase, makeSyncFillsForCalendarUseCase } from "./journal/index.ts";
 export type {
@@ -200,6 +201,13 @@ export type {
 // Phase 5: enqueueJob use-case factory (JOB-01 — MCP-02 trigger surface)
 export { makeEnqueueJobUseCase } from "./journal/index.ts";
 export type { EnqueueJobDeps } from "./journal/index.ts";
+// journal-pnl-opennetdebit-units (round 3): wipeDerivedFills use-case (account-wide
+// fills-side-correction follow-up)
+export { makeWipeDerivedFillsUseCase } from "./journal/index.ts";
+export type {
+  ForRunningWipeDerivedFills,
+  WipeDerivedFillsDeps,
+} from "./journal/index.ts";
 // D-14 (05-05): per-app refresh outcome recording port
 export type { ForRecordingRefreshOutcome } from "./brokerage/index.ts";
 // BRK-02: trader data use-cases (positions, transactions, orders)

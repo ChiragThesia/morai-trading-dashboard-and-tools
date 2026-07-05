@@ -1,11 +1,12 @@
 /**
  * schedule.ts — registerAllJobs (Plan 05-04 Task 3, JOB-01/D-12; updated 11-06 GW-03; 13-05
- * COT-01; 19-08 PICK-01/PICK-03; JRNL-01 pnl-unit-mismatch fix).
+ * COT-01; 19-08 PICK-01/PICK-03; JRNL-01 pnl-unit-mismatch fix; journal-pnl-opennetdebit-units
+ * round 3: wipe-derived-fills).
  *
  * Extracts all pg-boss createQueue / schedule / work calls from main.ts into a single
  * exported function. main.ts imports and calls registerAllJobs; inline blocks removed.
  *
- * Registers all 13 queues (GW-03: refresh-tokens retired — sidecar is sole token writer):
+ * Registers all 14 queues (GW-03: refresh-tokens retired — sidecar is sole token writer):
  *   fetch-schwab-chain, fetch-rates, compute-bsm-greeks, snapshot-calendars (no cron — D-03),
  *   compute-analytics (no cron — chain-triggered by snapshot-calendars, 06-04),
  *   compute-gex-snapshot (no cron — chain-triggered by compute-analytics, 08-06 D-01),
@@ -14,7 +15,8 @@
  *   fetch-cot (weekly Friday 17:00 ET — COT-01/D-07),
  *   compute-picker (no cron — chain-triggered by compute-gex-snapshot, 19-08 D-04),
  *   fetch-economic-events (weekly Friday 17:00 ET — 19-08 D-14),
- *   recompute-snapshot-pnl (no cron — on-demand only, JRNL-01 data-correction path)
+ *   recompute-snapshot-pnl (no cron — on-demand only, JRNL-01 data-correction path),
+ *   wipe-derived-fills (no cron — on-demand only, account-wide fills-side-correction follow-up)
  *
  * CRITICAL (RESEARCH Pitfall 2):
  *   snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
@@ -23,6 +25,7 @@
  *   compute-picker: NO schedule — chain-triggered only by compute-gex-snapshot (19-08 D-04)
  *   rebuild-journal: NO schedule — on-demand via trigger_job
  *   recompute-snapshot-pnl: NO schedule — on-demand via trigger_job (JRNL-01)
+ *   wipe-derived-fills: NO schedule — on-demand via trigger_job (destructive account-wide op)
  *   refresh-tokens: RETIRED (GW-03) — Python sidecar is the sole Schwab token refresher
  *
  * createQueue → schedule → work order enforced (CR-01: FK constraint on pg-boss schedule table).
@@ -53,7 +56,7 @@ export type JobScheduler = {
 };
 
 /**
- * AllHandlers — typed handler map for all 13 queues.
+ * AllHandlers — typed handler map for all 14 queues.
  * Plans 05-05/05-07/05-08 wire the original handlers; 08-06 adds computeGexSnapshot.
  * 11-06 (GW-03): refreshTokens removed — sidecar is sole token writer.
  * 13-05 (COT-01): fetchCot added — weekly CFTC COT report (Friday 17:00 ET).
@@ -61,6 +64,8 @@ export type JobScheduler = {
  * (weekly cron, D-14) added.
  * JRNL-01 (pnl-unit-mismatch fix): recomputeSnapshotPnl added (on-demand only, mirrors
  * rebuildJournal — re-derives frozen historical pnl_open after an openNetDebit correction).
+ * journal-pnl-opennetdebit-units round 3: wipeDerivedFills added (on-demand only,
+ * account-wide — deletes fills/calendar_events/orphan_fills so a re-ingest writes fresh data).
  */
 export type AllHandlers = {
   readonly fetchSchwabChain: PgBossHandler;
@@ -76,14 +81,15 @@ export type AllHandlers = {
   readonly computePicker: PgBossHandler;
   readonly fetchEconomicEvents: PgBossHandler;
   readonly recomputeSnapshotPnl: PgBossHandler;
+  readonly wipeDerivedFills: PgBossHandler;
 };
 
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
 
 /**
- * registerAllJobs — create 13 queues, schedule 8 crons (7 jobs, fetch-rates twice), register 13 handlers.
+ * registerAllJobs — create 14 queues, schedule 8 crons (7 jobs, fetch-rates twice), register 14 handlers.
  *
- * Order: createQueue (all 13) → schedule (8 crons) → work (all 13).
+ * Order: createQueue (all 14) → schedule (8 crons) → work (all 14).
  * The createQueue phase must complete before schedule/work — pg-boss FK constraint (CR-01).
  * GW-03: refresh-tokens queue/cron/handler retired — sidecar is sole Schwab token writer.
  * COT-01: fetch-cot added — weekly Friday 17:00 ET cron (D-07).
@@ -93,10 +99,13 @@ const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
  * added (weekly Friday 17:00 ET cron, D-14).
  * JRNL-01 (pnl-unit-mismatch fix): recompute-snapshot-pnl added (on-demand only, no cron —
  * mirrors rebuild-journal).
+ * journal-pnl-opennetdebit-units round 3: wipe-derived-fills added (on-demand only, no cron,
+ * account-wide — deletes fills/calendar_events/orphan_fills for the fills-side-correction
+ * follow-up).
  */
 export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers): Promise<void> {
   // ── Phase 1: create queues (idempotent — safe on every boot) ──────────────────
-  // Order matters: all createQueue calls must precede schedule/work (CR-01). 13 queues.
+  // Order matters: all createQueue calls must precede schedule/work (CR-01). 14 queues.
   await boss.createQueue("fetch-schwab-chain");
   await boss.createQueue("fetch-rates");
   await boss.createQueue("compute-bsm-greeks");
@@ -110,6 +119,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("compute-picker"); // 19-08: chain-triggered by compute-gex-snapshot; no cron (D-04)
   await boss.createQueue("fetch-economic-events"); // 19-08: weekly FRED+FOMC events refresh (D-14)
   await boss.createQueue("recompute-snapshot-pnl"); // JRNL-01 pnl-unit-mismatch fix: on-demand only; no cron
+  await boss.createQueue("wipe-derived-fills"); // journal-pnl-opennetdebit-units round 3: on-demand only, account-wide; no cron
   // refresh-tokens: RETIRED (GW-03) — sidecar auto-refreshes both Schwab apps; no TS refresher
 
   // ── Phase 2: schedules (idempotent — safe on every boot) ─────────────────────
@@ -189,6 +199,8 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   // compute-picker: NO schedule — chain-triggered only by compute-gex-snapshot (19-08 D-04)
   // rebuild-journal: NO schedule — on-demand via trigger_job
   // recompute-snapshot-pnl: NO schedule — on-demand via trigger_job (JRNL-01, mirrors rebuild-journal)
+  // wipe-derived-fills: NO schedule — on-demand via trigger_job (journal-pnl-opennetdebit-units
+  //   round 3; destructive account-wide op — must never run on a cron)
   // refresh-tokens: RETIRED (GW-03) — sidecar handles Schwab token refresh; no TS scheduled job
 
   // ── Phase 3: register handlers (work) ─────────────────────────────────────────
@@ -207,4 +219,5 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("compute-picker", POLLING_INTERVAL, handlers.computePicker);
   await boss.work("fetch-economic-events", POLLING_INTERVAL, handlers.fetchEconomicEvents);
   await boss.work("recompute-snapshot-pnl", POLLING_INTERVAL, handlers.recomputeSnapshotPnl);
+  await boss.work("wipe-derived-fills", POLLING_INTERVAL, handlers.wipeDerivedFills);
 }

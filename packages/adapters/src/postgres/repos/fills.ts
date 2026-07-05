@@ -36,6 +36,7 @@ import type {
   ForMarkingFillsProcessed,
   ForResettingFillsProcessedForCalendar,
   ForWritingFills,
+  ForWipingDerivedFills,
   RawFill,
   CalendarLegEntry,
   StorageError,
@@ -53,6 +54,7 @@ export type PostgresFillsRepo = {
   readonly markFillsProcessed: ForMarkingFillsProcessed;
   readonly resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar;
   readonly writeFills: ForWritingFills;
+  readonly wipeDerivedFills: ForWipingDerivedFills;
 };
 
 // Map a calendar's status to the positionEffect carried on its legs.
@@ -354,6 +356,44 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
     }
   };
 
+  // ─── wipeDerivedFills (ForWipingDerivedFills — journal-pnl-opennetdebit-units round 3) ──
+  // Account-wide DELETE of the 3 derived trade tables inside ONE transaction (all-or-nothing
+  // — money-path atomicity, mirrors recomputeSnapshotPnl's transaction wrap). calendar_events
+  // and orphan_fills are deleted before fills (defensive ordering — no FK is declared on any
+  // of the three tables today, but this ordering stays safe if one is ever added). Does NOT
+  // touch calendars or calendar_snapshots — see ports.ts for the full rationale.
+  const wipeDerivedFills: ForWipingDerivedFills = async (): Promise<
+    Result<
+      {
+        readonly fillsDeleted: number;
+        readonly eventsDeleted: number;
+        readonly orphansDeleted: number;
+      },
+      StorageError
+    >
+  > => {
+    try {
+      const counts = await db.transaction(async (tx) => {
+        const deletedEvents = await tx
+          .delete(calendarEvents)
+          .returning({ id: calendarEvents.id });
+        const deletedOrphans = await tx
+          .delete(orphanFills)
+          .returning({ fillId: orphanFills.fillId });
+        const deletedFills = await tx.delete(fills).returning({ id: fills.id });
+        return {
+          fillsDeleted: deletedFills.length,
+          eventsDeleted: deletedEvents.length,
+          orphansDeleted: deletedOrphans.length,
+        };
+      });
+      return ok(counts);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   return {
     readUnprocessedFills,
     readUnprocessedFillsForCalendar,
@@ -363,5 +403,6 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
     markFillsProcessed,
     resetFillsProcessedForCalendar,
     writeFills,
+    wipeDerivedFills,
   };
 }

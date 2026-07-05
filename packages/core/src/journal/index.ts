@@ -87,6 +87,7 @@ export type {
   ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   ForEnqueueingJob,
+  ForWipingDerivedFills,
 } from "./application/ports.ts";
 // Phase 5: syncFills use-case factories + driver ports
 export {
@@ -159,6 +160,14 @@ export type {
 // Phase 5: enqueueJob use-case factory (JOB-01 — dedup + port delegation)
 export { makeEnqueueJobUseCase } from "./application/enqueueJob.ts";
 export type { EnqueueJobDeps } from "./application/enqueueJob.ts";
+// journal-pnl-opennetdebit-units (round 3): wipeDerivedFills use-case — account-wide
+// DELETE of fills/calendar_events/orphan_fills, the missing piece for correcting
+// already-backfilled calendars' fills.side data end-to-end (see wipeDerivedFills.ts).
+export { makeWipeDerivedFillsUseCase } from "./application/wipeDerivedFills.ts";
+export type {
+  ForRunningWipeDerivedFills,
+  WipeDerivedFillsDeps,
+} from "./application/wipeDerivedFills.ts";
 
 // Domain re-exports (Plan 02/03/06) — BSM engine and IV inversion
 export { bsmPrice, bsmGreeks, bsmVega } from "./domain/bsm.ts";

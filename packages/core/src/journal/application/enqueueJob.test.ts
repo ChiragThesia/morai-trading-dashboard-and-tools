@@ -169,6 +169,27 @@ describe("makeEnqueueJobUseCase", () => {
     expect(q.getAll().length).toBe(2);
   });
 
+  // journal-pnl-opennetdebit-units (round 3): wipe-derived-fills is account-wide (no
+  // calendarId) — it falls into the default scheduledDedupeKey branch, which is itself a
+  // valuable safety property here: it prevents a second accidental trigger of this
+  // destructive account-wide delete within the same 10-min window.
+  it("wipe-derived-fills uses scheduledDedupeKey (window-based, account-wide — no calendarId)", async () => {
+    const q = makeTestJobQueue();
+    const enqueueJob = makeEnqueueJobUseCase({
+      jobQueue: q.enqueue,
+      now: () => BASE_TIME,
+    });
+
+    const result = await enqueueJob("wipe-derived-fills", {});
+    expect(result.ok).toBe(true);
+    // Same 10-min window → same dedupeKey → no duplicate trigger
+    const result2 = await enqueueJob("wipe-derived-fills", {});
+    if (result.ok && result2.ok) {
+      expect(result2.value).toBe(result.value);
+    }
+    expect(q.getAll().length).toBe(1);
+  });
+
   it("different scheduled job names produce different entries", async () => {
     const q = makeTestJobQueue();
     const enqueueJob = makeEnqueueJobUseCase({

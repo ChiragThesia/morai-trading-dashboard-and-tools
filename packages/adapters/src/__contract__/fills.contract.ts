@@ -31,6 +31,7 @@ import type {
   ForRecomputingCalendarAmounts,
   ForMarkingFillsProcessed,
   ForWritingFills,
+  ForWipingDerivedFills,
   RawFill,
   StorageError,
 } from "@morai/core";
@@ -81,6 +82,10 @@ export type FillsSeedContext = {
   readonly countFills: () => Promise<number>;
   /** WR-A2: read the ids of fills whose processed_at is set (assert mark-processed). */
   readonly readProcessedFillIds: () => Promise<ReadonlyArray<string>>;
+  /** Count calendar_events rows (wipeDerivedFills assertion). */
+  readonly countEvents: () => Promise<number>;
+  /** Count orphan_fills rows (wipeDerivedFills assertion). */
+  readonly countOrphans: () => Promise<number>;
 };
 
 export type FillsRepo = {
@@ -91,6 +96,7 @@ export type FillsRepo = {
   readonly recomputeCalendarAmounts: ForRecomputingCalendarAmounts;
   readonly markFillsProcessed: ForMarkingFillsProcessed;
   readonly writeFills: ForWritingFills;
+  readonly wipeDerivedFills: ForWipingDerivedFills;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -472,6 +478,66 @@ export function runFillsContractTests(
         expect(other.openNetDebit).toBeCloseTo(99, 5);
         const target = await seed.readCalendarAmounts(CAL_ID);
         expect(target.openNetDebit).toBeCloseTo(12, 5);
+      });
+    });
+
+    // journal-pnl-opennetdebit-units (round 3): account-wide fills-side-correction follow-up.
+    // Already-backfilled calendars carry fills.side rows written by the OLD
+    // (positionEffect-derived) logic — wrong for any sold-to-open/bought-to-close leg. The
+    // fills table stores no raw broker JSON, so the true sign is unrecoverable from stored
+    // fills alone. Correcting this requires deleting fills/calendar_events/orphan_fills so a
+    // subsequent backfill-transactions re-ingest (fixed adapter) writes fresh, correctly-signed
+    // fills instead of no-op'ing against the existing wrong-side rows (writeFills is
+    // onConflictDoNothing on the fill id PK).
+    describe("wipeDerivedFills — account-wide delete of the 3 derived trade tables", () => {
+      it("deletes all fills, calendar_events, and orphan_fills rows and returns their counts", async () => {
+        await seed.seedCalendar(calendar());
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC),
+          makeFill(FILL_ID_2, BACK_OCC),
+        ]);
+        await seed.seedEvent({
+          calendarId: CAL_ID,
+          eventType: "OPEN",
+          fillIdsHash: "a".repeat(64),
+          legOccSymbol: FRONT_OCC,
+          netAmount: 15.5,
+        });
+        await seed.seedOrphan({ fillId: FILL_ID_3 });
+
+        const result = await repo.wipeDerivedFills();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toEqual({
+          fillsDeleted: 2,
+          eventsDeleted: 1,
+          orphansDeleted: 1,
+        });
+
+        expect(await seed.countFills()).toBe(0);
+        expect(await seed.countEvents()).toBe(0);
+        expect(await seed.countOrphans()).toBe(0);
+      });
+
+      it("does NOT touch calendars.open_net_debit — only the 3 derived tables are wiped", async () => {
+        await seed.seedCalendar(calendar({ openNetDebit: 15.5 }));
+        await repo.writeFills([makeFill(FILL_ID_1, FRONT_OCC)]);
+
+        const wipeResult = await repo.wipeDerivedFills();
+        expect(wipeResult.ok).toBe(true);
+
+        const amounts = await seed.readCalendarAmounts(CAL_ID);
+        expect(amounts.openNetDebit).toBeCloseTo(15.5, 5);
+      });
+
+      it("is idempotent — a second run on already-empty tables returns zero counts", async () => {
+        await repo.writeFills([makeFill(FILL_ID_1, FRONT_OCC)]);
+        await repo.wipeDerivedFills();
+
+        const second = await repo.wipeDerivedFills();
+        expect(second.ok).toBe(true);
+        if (!second.ok) return;
+        expect(second.value).toEqual({ fillsDeleted: 0, eventsDeleted: 0, orphansDeleted: 0 });
       });
     });
   });

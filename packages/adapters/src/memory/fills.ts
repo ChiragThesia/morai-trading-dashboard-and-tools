@@ -23,6 +23,7 @@ import type {
   ForMarkingFillsProcessed,
   ForResettingFillsProcessedForCalendar,
   ForWritingFills,
+  ForWipingDerivedFills,
   RawFill,
   CalendarLegEntry,
   StorageError,
@@ -74,6 +75,7 @@ export type MemoryFillsRepo = {
   readonly markFillsProcessed: ForMarkingFillsProcessed;
   readonly resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar;
   readonly writeFills: ForWritingFills;
+  readonly wipeDerivedFills: ForWipingDerivedFills;
   // ─── Test seed helpers (mirror the Postgres contract harness) ──────────────
   readonly seedCalendar: (cal: MemorySeedCalendar) => void;
   readonly seedEvent: (event: MemorySeedEvent) => void;
@@ -83,6 +85,8 @@ export type MemoryFillsRepo = {
   ) => { openNetDebit: number | null; closeNetCredit: number | null };
   readonly countFills: () => number;
   readonly readProcessedFillIds: () => ReadonlyArray<string>;
+  readonly countEvents: () => number;
+  readonly countOrphans: () => number;
 };
 
 function statusToPositionEffect(
@@ -238,6 +242,31 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
     return ok(undefined);
   };
 
+  // ─── wipeDerivedFills (ForWipingDerivedFills) ───────────────────────────────
+  // Account-wide delete of the 3 derived trade tables (fills/calendar_events/orphan_fills).
+  // Mirrors the Postgres adapter's transactional 3-table DELETE — in-memory there is no
+  // transaction to wrap, but the same "clear all three, touch nothing else" semantics apply.
+  // Does NOT touch calendarStore (calendars) — matches the Postgres adapter exactly.
+  const wipeDerivedFills: ForWipingDerivedFills = async (): Promise<
+    Result<
+      {
+        readonly fillsDeleted: number;
+        readonly eventsDeleted: number;
+        readonly orphansDeleted: number;
+      },
+      StorageError
+    >
+  > => {
+    const fillsDeleted = fillStore.size;
+    const eventsDeleted = eventStore.length;
+    const orphansDeleted = orphanIds.size;
+    fillStore.clear();
+    eventStore.length = 0;
+    orphanIds.clear();
+    processedIds.clear(); // processed_at lives on the fill row — gone with it in real Postgres
+    return ok({ fillsDeleted, eventsDeleted, orphansDeleted });
+  };
+
   // ─── Test seed helpers ──────────────────────────────────────────────────────
   const seedCalendar = (cal: MemorySeedCalendar): void => {
     if (!calendarStore.has(cal.id)) {
@@ -259,6 +288,8 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
   };
   const countFills = (): number => fillStore.size;
   const readProcessedFillIds = (): ReadonlyArray<string> => [...processedIds];
+  const countEvents = (): number => eventStore.length;
+  const countOrphans = (): number => orphanIds.size;
 
   return {
     readUnprocessedFills,
@@ -269,11 +300,14 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
     markFillsProcessed,
     resetFillsProcessedForCalendar,
     writeFills,
+    wipeDerivedFills,
     seedCalendar,
     seedEvent,
     seedOrphan,
     readCalendarAmounts,
     countFills,
     readProcessedFillIds,
+    countEvents,
+    countOrphans,
   };
 }

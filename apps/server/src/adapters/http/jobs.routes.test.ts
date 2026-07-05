@@ -69,6 +69,23 @@ describe("jobsRoutes", () => {
     expect(enqueueJob).toHaveBeenCalledWith("sync-fills", expect.any(Object));
   });
 
+  // journal-pnl-opennetdebit-units (round 3): account-wide fills-side-correction follow-up —
+  // no calendarId, mirrors sync-fills' full-sweep trigger.
+  it("POST /jobs/wipe-derived-fills/trigger without calendarId → 202 { jobId }", async () => {
+    const { app, enqueueJob } = await setupApp();
+
+    const res = await app.request("/jobs/wipe-derived-fills/trigger", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(202);
+    const body = triggerJobResponse.parse(await res.json());
+    expect(body.jobId).toBe("job-123");
+    expect(enqueueJob).toHaveBeenCalledWith("wipe-derived-fills", expect.any(Object));
+  });
+
   it("WR-04: rebuild-journal trigger WITHOUT calendarId → 400 and enqueueJob NOT called", async () => {
     const { app, enqueueJob } = await setupApp();
 
@@ -138,6 +155,7 @@ describe("jobsRoutes", () => {
     expect(TRIGGERABLE_JOBS).toContain("sync-fills");
     expect(TRIGGERABLE_JOBS).toContain("compute-bsm-greeks");
     expect(TRIGGERABLE_JOBS).toContain("recompute-snapshot-pnl");
-    expect(TRIGGERABLE_JOBS).toHaveLength(4);
+    expect(TRIGGERABLE_JOBS).toContain("wipe-derived-fills");
+    expect(TRIGGERABLE_JOBS).toHaveLength(5);
   });
 });

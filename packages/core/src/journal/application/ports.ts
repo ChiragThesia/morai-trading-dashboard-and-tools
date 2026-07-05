@@ -544,6 +544,31 @@ export type ForResettingFillsProcessedForCalendar = (
 ) => Promise<Result<void, StorageError>>;
 
 /**
+ * ForWipingDerivedFills — account-wide DELETE of every row in the three derived
+ * trade-ledger tables (fills, calendar_events, orphan_fills) inside a SINGLE transaction
+ * (all-or-nothing — money-path atomicity, mirrors ForRecomputingSnapshotPnl's transaction
+ * wrap). Used to correct already-ingested data end-to-end: writeFills is idempotent
+ * (onConflictDoNothing on the fill id PK), so re-running backfill-transactions over
+ * EXISTING wrong-side fills is a no-op — the stale rows must be deleted first so the
+ * re-ingest actually writes fresh, correctly-signed fills.
+ *
+ * Does NOT touch `calendars` or `calendar_snapshots` — those are not caches rebuildable
+ * from the fills feed the same way (calendars.openNetDebit is corrected by rebuild-journal;
+ * calendar_snapshots.pnl_open by recompute-snapshot-pnl). occSymbols are shared across
+ * calendars, so there is no clean per-calendar fill scope — the correction is account-wide.
+ */
+export type ForWipingDerivedFills = () => Promise<
+  Result<
+    {
+      readonly fillsDeleted: number;
+      readonly eventsDeleted: number;
+      readonly orphansDeleted: number;
+    },
+    StorageError
+  >
+>;
+
+/**
  * NewId — injected unique-id minter (C1 — fixes CR-01). Core stays pure: the adapter
  * supplies `() => randomUUID()` from node:crypto (plan 05-13). The use-case calls
  * `deps.newId()` instead of importing crypto.

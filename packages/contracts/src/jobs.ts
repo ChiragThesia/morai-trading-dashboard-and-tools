@@ -14,6 +14,7 @@ export const TRIGGERABLE_JOBS = [
   "sync-fills",
   "compute-bsm-greeks",
   "recompute-snapshot-pnl",
+  "wipe-derived-fills",
 ] as const;
 
 export type TriggerableJob = (typeof TRIGGERABLE_JOBS)[number];
@@ -39,6 +40,9 @@ export type TriggerJobPayload = z.infer<typeof triggerJobPayload>;
  *     returns 400, and a null-keyed rebuild is never enqueued (no queue flood).
  *   - recompute-snapshot-pnl ⇒ calendarId REQUIRED (JRNL-01 pnl-unit-mismatch fix) — same
  *     rationale as rebuild-journal: meaningless without a target calendar.
+ *   - wipe-derived-fills ⇒ calendarId stays optional/unused (journal-pnl-opennetdebit-units
+ *     round 3) — this job is account-wide by design: occSymbols are shared across calendars,
+ *     so there is no clean per-calendar fill scope to require.
  *   - all other jobs ⇒ calendarId stays optional (unchanged).
  *
  * triggerJobPayload itself is untouched so the MCP tool's

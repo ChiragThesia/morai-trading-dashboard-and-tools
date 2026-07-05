@@ -59,6 +59,7 @@ import {
   hashFillIds,
   makeRebuildJournalUseCase,
   makeRecomputeSnapshotPnlUseCase,
+  makeWipeDerivedFillsUseCase,
   selectChainSource,
   makeFetchCot,
   makeFetchMacroSeries,
@@ -76,6 +77,7 @@ import { makeSyncFillsHandler } from "./handlers/sync-fills.ts";
 import { makeSyncTransactionsHandler } from "./handlers/sync-transactions.ts";
 import { makeRebuildJournalHandler } from "./handlers/rebuild-journal.ts";
 import { makeRecomputeSnapshotPnlHandler } from "./handlers/recompute-snapshot-pnl.ts";
+import { makeWipeDerivedFillsHandler } from "./handlers/wipe-derived-fills.ts";
 import { makeComputePickerHandler } from "./handlers/compute-picker.ts";
 import { makeFetchEconomicEventsHandler } from "./handlers/fetch-economic-events.ts";
 import { registerAllJobs } from "./schedule.ts";
@@ -415,6 +417,19 @@ const recomputeSnapshotPnlHandler = makeRecomputeSnapshotPnlHandler({
   now: () => new Date(),
 });
 
+// journal-pnl-opennetdebit-units round 3 (fills-side-correction follow-up): wipeDerivedFills
+// use-case — account-wide DELETE of fills/calendar_events/orphan_fills so a subsequent
+// backfill-transactions re-ingest writes fresh, correctly-signed fills. Does NOT touch
+// calendars or calendar_snapshots.
+const wipeDerivedFillsUseCase = makeWipeDerivedFillsUseCase({
+  wipeDerivedFills: fillsRepo.wipeDerivedFills,
+});
+
+const wipeDerivedFillsHandler = makeWipeDerivedFillsHandler({
+  wipeDerivedFillsUseCase,
+  now: () => new Date(),
+});
+
 // COT-01 (13-05): weekly CFTC Commitment of Traders report (Friday 17:00 ET, D-07).
 // CFTC Socrata endpoint — anonymous access, no auth required (landmine 7).
 // Idempotent: ON CONFLICT (contract_code, as_of) DO NOTHING in the repo (D-09).
@@ -505,8 +520,9 @@ await registerAllJobs(boss, {
   computePicker: computePickerHandler,
   fetchEconomicEvents: fetchEconomicEventsHandler,
   recomputeSnapshotPnl: recomputeSnapshotPnlHandler,
+  wipeDerivedFills: wipeDerivedFillsHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 13 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker chain-triggered only; rebuild-journal + recompute-snapshot-pnl on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 14 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );
