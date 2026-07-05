@@ -61,6 +61,10 @@ the picker with the real scoring engine, while clearing v1.1 operational debt.
 - [x] **Phase 21: Control Affordance & Button System** - Shared `<Button>` primitive + filled-vs-outline
   states applied app-wide so controls read active/inactive at a glance (completed 2026-07-05)
 
+- [ ] **Phase 22: Journal Calendar-Lifecycle Graph** - Per-calendar time-series showing how one
+  trade evolved over its life: P&L attribution (hero), vol term-structure (forward vol), signed
+  greeks, price vs strike — over already-collected snapshot data (JRNL-01)
+
 ## Phase Details
 
 ### Phase 16: Deploy Phase-15 Image
@@ -412,3 +416,38 @@ Plans:
 - [x] 21-03 CandidateCard Combine (amber) / Copy (green) / × (destructive)
 - [x] 21-04 Analyzer Analyze (primary) / Clear-all / Retry / Copy-TOS
 - [x] 21-05 Shell nav tabs — strengthened active state
+
+### Phase 22: Journal Calendar-Lifecycle Graph
+
+**Goal**: The Journal shows how ONE calendar trade evolved over its holding period (entry → now/exit)
+as a stacked column of time-aligned panels, so a trader can read "how did this play out, and why" at
+a glance. Read-only visualization over the already-collected per-calendar snapshot series
+(`get_journal` / `leg_observations`) — no new data collection.
+**Depends on**: Phase 20 (SNAP-01 event snapshots enrich the same series; soft, not a hard blocker)
+**Requirements**: JRNL-01
+**Success Criteria** (what must be TRUE):
+
+  1. Selecting a calendar renders its lifecycle as TIME-on-x panels from entry to now/exit, sharing
+     one date axis and a synced crosshair.
+
+  2. The HERO panel is P&L ATTRIBUTION over time — theta / vega / delta-gamma buckets plus an
+     explicit unexplained residual — making the gamma-vs-theta collision near front expiry visible
+     (a calendar is "theta accrues, then one late move bites it").
+
+  3. The vol panel plots front IV, back IV, and implied FORWARD vol as distinct series, with forward
+     vol surfaced as the edge — the naive front-minus-back spread is NOT presented as the edge
+     (adversarially refuted 0-3 in research).
+
+  4. Greeks are shown SIGNED, each on its own small-multiple panel (delta / gamma / theta / vega),
+     surfacing the long-vega / short-gamma / +theta signature and the theta/gamma sign-flip.
+
+  5. Feed gaps (spot=0 / NaN snapshots) render as line breaks, never interpolated; the attribution
+     residual is always shown, never hidden.
+
+**Design reference**: `mockups/journal-lifecycle-v3.html` (approved sketch). Research: deep-research
+task wzp28eyel; conclusions in memory `morai-journal-lifecycle-graph`.
+**Note**: Read-only FE + a read use-case/route over existing snapshot data. The two computed additions
+are implied FORWARD vol (σ_fwd = sqrt((σ_back²·tB − σ_front²·tF)/(tB−tF))) and per-interval greek-P&L
+attribution (theta/vega/delta-gamma + residual). Placement — default Journal view vs per-calendar
+drill-down — is an open UI question for the ui-phase.
+**UI hint**: yes

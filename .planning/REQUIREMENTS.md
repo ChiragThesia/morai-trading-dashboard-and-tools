@@ -84,6 +84,15 @@ tail.
 - [ ] **SNAP-01**: A large SPX move detected on the live stream triggers a supplemental
   out-of-cycle journal snapshot (existing snapshot job, ad-hoc enqueue)
 
+- [ ] **JRNL-01**: Per-calendar lifecycle graph — the Journal shows how ONE calendar trade
+  evolved over its holding period (entry → now/exit) as time-aligned stacked panels driven by
+  the existing per-calendar snapshot series (`get_journal` / `leg_observations`): P&L
+  ATTRIBUTION (theta / vega / delta-gamma buckets + explicit unexplained residual) as the hero,
+  the VOL term structure (front IV, back IV, and implied FORWARD vol — the real edge, NOT the
+  naive front-minus-back spread), SIGNED greeks as small-multiples, and price vs strike. Feed
+  gaps (spot=0 / NaN) render as breaks, never interpolated. Read-only visualization over
+  already-collected data (no new collection)
+
 ### Strategy Rules
 
 - [ ] **RULE-01**: User can record enter/exit/roll rules per trade and which rule fired
@@ -141,6 +150,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WATCH-01 | Phase 20 | Pending |
 | SNAP-01 | Phase 20 | Pending |
 | RULE-01 | Phase 20 | Pending |
+| JRNL-01 | Phase 22 | Pending |
 
 **Coverage:**
 
