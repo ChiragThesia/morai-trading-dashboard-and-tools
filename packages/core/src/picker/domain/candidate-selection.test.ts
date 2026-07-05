@@ -214,4 +214,25 @@ describe("selectCandidates", () => {
     expect(keys.length).toBe(uniqueKeys.size);
     expect(keys.length).toBeLessThanOrEqual(DELTA_RUNGS.length);
   });
+
+  it("WR-04: two different delta rungs resolving to the SAME strike (sparse chain) never produce a duplicate candidate id", () => {
+    const iv = 0.15;
+    const chain: ChainQuoteForPicker[] = [];
+    // Only ONE strike available on the whole chain -- every delta rung (ATM/30D/20D/10D)
+    // must resolve to this same strike. The module's dedupe-by-construction (Pitfall 5) only
+    // guarantees one candidate per (rung, frontExpiry); it does NOT prevent two DIFFERENT
+    // rungs from colliding on the same resolved strike when the chain is this sparse (WR-04).
+    for (const expiration of ["2026-07-31", "2026-08-26"]) {
+      chain.push(chainQuote(7500, expiration, iv));
+    }
+    const candidates = selectCandidates(chain, [], { r: R, q: Q });
+    const frontThirty = candidates.filter((c) => c.frontLeg.expiration === "2026-07-31");
+
+    // Sanity: confirm the sparse setup actually triggers the strike collision under test.
+    expect(frontThirty.length).toBeGreaterThan(1);
+    expect(new Set(frontThirty.map((c) => c.frontLeg.strike)).size).toBe(1);
+
+    const ids = frontThirty.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length); // no duplicate ids despite the strike collision
+  });
 });

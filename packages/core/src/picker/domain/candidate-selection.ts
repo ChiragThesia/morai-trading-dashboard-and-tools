@@ -237,7 +237,11 @@ export function selectCandidates(
       const backEvents = backEventsAll.filter((name) => !frontEvents.includes(name));
 
       candidates.push({
-        id: `${K}-${fe}-${be}`,
+        // WR-04: include the delta rung -- a resolved strike is a pure function of (rung,
+        // frontExpiry), but a sparse chain can make TWO DIFFERENT rungs resolve to the SAME
+        // strike for the same front expiry, which would otherwise collide on `${K}-${fe}-${be}`
+        // (React key collision + combined-book double-toggle downstream).
+        id: `${rung.label}-${K}-${fe}-${be}`,
         name: `${K}P ${fe} / ${be}`,
         frontLeg: { strike: K, putCall: "P", expiration: fe, dte: tf, iv: ivF },
         backLeg: { strike: K, putCall: "P", expiration: be, dte: tb, iv: ivB },
