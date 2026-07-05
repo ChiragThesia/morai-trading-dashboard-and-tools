@@ -19,6 +19,9 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+export { Button, buttonClass } from "./Button.tsx";
+export type { ButtonProps, ButtonVariant, ButtonTone, ButtonSize } from "./Button.tsx";
+
 // ─── Atoms (Morai-specific, beyond shadcn) ────────────────────────────────────
 
 /**

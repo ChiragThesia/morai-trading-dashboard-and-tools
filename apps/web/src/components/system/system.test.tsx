@@ -117,7 +117,8 @@ describe("Button — shared control-affordance primitive (Phase 21)", () => {
   it("disabled dims the control and blocks pointer events", () => {
     render(<Button disabled>Loading</Button>);
     const el = screen.getByText("Loading");
-    expect(el).toBeDisabled();
+    if (!(el instanceof HTMLButtonElement)) throw new Error("expected a button element");
+    expect(el.disabled).toBe(true);
     expect(el.className).toContain("disabled:opacity-40");
     expect(el.className).toContain("disabled:pointer-events-none");
   });
