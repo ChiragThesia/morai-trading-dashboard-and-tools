@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
-current_phase: 20
-current_phase_name: stream-watchdog-event-snapshot-strategy-rules
-status: executing
-stopped_at: Phase 22 UI-SPEC approved
-last_updated: "2026-07-05T17:29:26.975Z"
+current_phase: 22
+current_phase_name: journal-calendar-lifecycle-graph
+status: awaiting-uat
+stopped_at: Phase 22 executed + verified (human_needed — 2 visual UAT items)
+last_updated: "2026-07-05T18:10:26.792Z"
 last_activity: 2026-07-05
-last_activity_desc: Completed 20-01 (WATCH-01 foundation primitives)
+last_activity_desc: Phase 22 executed (6/6 plans) + strike-line gap fix + verification (human_needed)
 progress:
   total_phases: 8
-  completed_phases: 6
-  total_plans: 37
-  completed_plans: 37
-  percent: 75
+  completed_phases: 7
+  total_plans: 43
+  completed_plans: 43
+  percent: 88
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 20 — stream-watchdog-event-snapshot-strategy-rules
+**Current focus:** Phase 22 — journal-calendar-lifecycle-graph
 
 ## Current Position
 
-Phase: 20 (stream-watchdog-event-snapshot-strategy-rules) — EXECUTING
-Plan: 2 of 11
-Status: Ready to execute
-Last activity: 2026-07-05 — Completed 20-01 (WATCH-01 foundation primitives)
+Phase: 22 (journal-calendar-lifecycle-graph) — EXECUTED, AWAITING UAT
+Plan: 6 of 6 complete
+Status: Verification human_needed — 2 visual UAT items pending (live crosshair→P&L-bridge sync; D-08 visual fidelity vs mockup with prod data). Run `/gsd-verify-work 22`.
+Last activity: 2026-07-05 — Phase 22 executed (6/6 plans, 23 commits) + strike-line gap fix (cd387e6); goal verified, 2 items routed to human UAT
 
 ## Milestone v1.2 Summary
 

@@ -61,7 +61,7 @@ the picker with the real scoring engine, while clearing v1.1 operational debt.
 - [x] **Phase 21: Control Affordance & Button System** - Shared `<Button>` primitive + filled-vs-outline
   states applied app-wide so controls read active/inactive at a glance (completed 2026-07-05)
 
-- [ ] **Phase 22: Journal Calendar-Lifecycle Graph** - Per-calendar time-series showing how one
+- [x] **Phase 22: Journal Calendar-Lifecycle Graph** - Per-calendar time-series showing how one (completed 2026-07-05)
   trade evolved over its life: P&L attribution (hero), vol term-structure (forward vol), signed
   greeks, price vs strike — over already-collected snapshot data (JRNL-01)
 
@@ -425,23 +425,23 @@ a glance. Read-only visualization over the already-collected per-calendar snapsh
 (`get_journal` / `leg_observations`) — no new data collection.
 **Depends on**: Phase 20 (SNAP-01 event snapshots enrich the same series; soft, not a hard blocker)
 **Requirements**: JRNL-01
-**Plans:** 6 plans (3 waves)
+**Plans:** 6/6 plans complete
 
 Plans:
 **Wave 1**
 
-- [ ] 22-01-PLAN.md — Forward-vol domain fn (never-NaN tagged guard) + additive lifecycle Zod contract [wave 1]
-- [ ] 22-02-PLAN.md — Attribution domain fn (per-interval buckets + residual, exact accumulation identity, honest gaps) [wave 1]
+- [x] 22-01-PLAN.md — Forward-vol domain fn (never-NaN tagged guard) + additive lifecycle Zod contract [wave 1]
+- [x] 22-02-PLAN.md — Attribution domain fn (per-interval buckets + residual, exact accumulation identity, honest gaps) [wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 22-03-PLAN.md — getCalendarLifecycle use-case + JWT-gated GET /api/journal/:calendarId/lifecycle route + get_journal_lifecycle MCP tool [wave 2]
-- [ ] 22-04-PLAN.md — useLifecycle hook (enabled guard) + rail cards (Masthead / Edge / GreeksNow / PnlBridge / Beats) [wave 2]
-- [ ] 22-05-PLAN.md — LifecycleChart rewrite: D-08 stacked panels, forward-vol edge, signed greeks, honest gaps, shared crosshair [wave 2]
+- [x] 22-03-PLAN.md — getCalendarLifecycle use-case + JWT-gated GET /api/journal/:calendarId/lifecycle route + get_journal_lifecycle MCP tool [wave 2]
+- [x] 22-04-PLAN.md — useLifecycle hook (enabled guard) + rail cards (Masthead / Edge / GreeksNow / PnlBridge / Beats) [wave 2]
+- [x] 22-05-PLAN.md — LifecycleChart rewrite: D-08 stacked panels, forward-vol edge, signed greeks, honest gaps, shared crosshair [wave 2]
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 22-06-PLAN.md — Journal.tsx integration: masthead + chart + reactive rail, honest states, relocated Notes [wave 3]
+- [x] 22-06-PLAN.md — Journal.tsx integration: masthead + chart + reactive rail, honest states, relocated Notes [wave 3]
 
 **Success Criteria** (what must be TRUE):
 
