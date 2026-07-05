@@ -374,4 +374,59 @@ describe("makeRebuildJournalUseCase", () => {
     if (result.ok) return;
     expect(result.error.message).toBe("recompute failed");
   });
+
+  // ─── RULE-01: annotations survive rebuild (D-09 regression guard, plan 20-08) ──
+
+  it("RULE-01/D-09: a fillIdsHash annotation survives a full delete-then-reinsert rebuild cycle unchanged", async () => {
+    const { makeRebuildJournalUseCase } = await import("./rebuildJournal.ts");
+
+    const FILL_IDS_HASH = "d".repeat(64);
+
+    // Simulates calendar_events: one OPEN event keyed by FILL_IDS_HASH.
+    const events = new Map<string, { fillIdsHash: string }>([
+      [FILL_IDS_HASH, { fillIdsHash: FILL_IDS_HASH }],
+    ]);
+
+    // Simulates calendar_event_annotations — a SEPARATE store. rebuildJournal's dependency
+    // type (RebuildJournalDeps) has no field capable of reaching it (D-09/D24: no FK, no
+    // coupling). One rule tag is recorded against the SAME fillIdsHash as the event above.
+    const annotations = new Map<string, { ruleTags: string[]; otherNote: string | null }>([
+      [FILL_IDS_HASH, { ruleTags: ["iv-skew-favorable"], otherNote: null }],
+    ]);
+
+    const deleteCalendarEvents: ForDeletingCalendarEvents = async () => {
+      events.clear(); // Step 1: delete ALL calendar_events for the calendar
+      return ok(undefined);
+    };
+    const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
+    const syncFillsForCalendar = async (): Promise<Result<void, StorageError>> => {
+      // Step 4: re-derive the SAME event from the same fills — fillIdsHash determinism
+      // means the reinsert reproduces the identical hash (RESEARCH Pitfall 3).
+      events.set(FILL_IDS_HASH, { fillIdsHash: FILL_IDS_HASH });
+      return ok(undefined);
+    };
+
+    const rebuildJournal = makeRebuildJournalUseCase({
+      deleteCalendarEvents,
+      resetCalendarAmounts,
+      resetFillsProcessedForCalendar: noopResetProcessed,
+      syncFillsForCalendar,
+      recomputeCalendarAmounts: noopRecompute,
+      now: () => new Date("2026-06-15T14:00:00Z"),
+    });
+
+    const result = await rebuildJournal("cal-rule-01");
+    expect(result.ok).toBe(true);
+
+    // Confirms the delete-then-reinsert cycle actually ran against the events store.
+    expect(events.has(FILL_IDS_HASH)).toBe(true);
+
+    // D-09: rebuildJournal has no dependency capable of reaching the annotations store —
+    // it is untouched by the rebuild. Same row count, same content.
+    expect(annotations.size).toBe(1);
+    expect(annotations.get(FILL_IDS_HASH)).toEqual({
+      ruleTags: ["iv-skew-favorable"],
+      otherNote: null,
+    });
+  });
 });
