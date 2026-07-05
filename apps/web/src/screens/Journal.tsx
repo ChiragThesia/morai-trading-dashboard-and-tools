@@ -42,6 +42,8 @@ import type { EventWithRulesEntry, LifecycleResponse } from "@morai/contracts";
 export interface TradeSummary {
   readonly id: string;
   readonly calendarId: string;
+  /** Calendar strike in points (e.g. 7375), for the chart's price-panel reference line. */
+  readonly strike: number;
   readonly name: string;
   readonly openedAt: string;
   readonly closedAt: string | null;
@@ -361,7 +363,11 @@ function LifecycleSection({
         {!isPending && !isError && kind === "entry-exit-only" && <PreHistoryStub />}
 
         {!isPending && !isError && kind === "history" && snapshots.length > 1 && (
-          <LifecycleChart snapshots={snapshots} onCrosshairChange={onCrosshairChange} />
+          <LifecycleChart
+            snapshots={snapshots}
+            strike={trade.strike}
+            onCrosshairChange={onCrosshairChange}
+          />
         )}
 
         {!isPending && !isError && kind === "history" && snapshots.length <= 1 && (

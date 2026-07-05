@@ -116,6 +116,7 @@ function makePreJun12Trade() {
   return {
     id: "trade-pre-jun12",
     calendarId: "550e8400-e29b-41d4-a716-446655440001",
+    strike: 7375,
     name: "7375P (pre-Jun-12)",
     openedAt: "2026-05-01T14:00:00.000Z",
     closedAt: "2026-06-01T20:00:00.000Z",
@@ -129,6 +130,7 @@ function makeHistoryTrade() {
   return {
     id: "trade-history",
     calendarId: "550e8400-e29b-41d4-a716-446655440002",
+    strike: 7375,
     name: "7375P (Jun-12+)",
     openedAt: "2026-06-12T14:00:00.000Z",
     closedAt: "2026-06-15T20:00:00.000Z",
@@ -175,6 +177,7 @@ function emptyRuleTagsResult(): UseRuleTagsResult {
 function renderJournal(trades?: ReadonlyArray<{
   id: string;
   calendarId: string;
+  strike: number;
   name: string;
   openedAt: string;
   closedAt: string | null;
@@ -271,6 +274,9 @@ describe("Journal screen", () => {
     expect(screen.getByText("The edge")).toBeDefined();
     expect(screen.getByText("Greeks · now")).toBeDefined();
     expect(screen.getByText("The beats")).toBeDefined();
+
+    // The calendar strike is wired through to the chart's price-panel reference line (D-08)
+    expect(screen.getByTestId("price-line-strike")).toBeDefined();
 
     // The honest-caveats footer is always visible; the mockup SKETCH tag never ships
     expect(screen.getByText(/Attribution is a 2nd-order approximation/)).toBeDefined();

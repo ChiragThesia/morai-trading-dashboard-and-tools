@@ -55,6 +55,8 @@ function toTradeSummary(c: CalendarResponse): TradeSummary {
   return {
     id: c.id,
     calendarId: c.id,
+    // ×1000 int → points (e.g. 7425000 → 7425), matching the chart's price-panel unit.
+    strike: c.strike / 1000,
     name: calendarName(c),
     openedAt: c.openedAt,
     closedAt: c.closedAt,
