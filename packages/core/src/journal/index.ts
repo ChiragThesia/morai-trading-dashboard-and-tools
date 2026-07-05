@@ -192,3 +192,7 @@ export type {
   SetRuleTagsDeps,
   ForRunningSetRuleTags,
 } from "./application/setRuleTags.ts";
+// SNAP-01 (REVIEW CR-01/WR-04): event-move observe→detect→cooldown→enqueue orchestration,
+// extracted from apps/server/src/main.ts into a testable unit.
+export { makeSpotObserver } from "./application/observeSpot.ts";
+export type { SpotObserverDeps, ForObservingSpot } from "./application/observeSpot.ts";

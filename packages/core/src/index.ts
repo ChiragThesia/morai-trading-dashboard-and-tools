@@ -61,6 +61,9 @@ export type {
   SetRuleTagsDeps,
   ForRunningSetRuleTags,
 } from "./journal/index.ts";
+// SNAP-01 (REVIEW CR-01/WR-04): testable event-move orchestration — wired in main.ts.
+export { makeSpotObserver } from "./journal/index.ts";
+export type { SpotObserverDeps, ForObservingSpot } from "./journal/index.ts";
 // Phase 3 calendar domain types and ports
 export type {
   CalendarNotFound,
