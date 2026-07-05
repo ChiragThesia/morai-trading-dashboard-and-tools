@@ -186,7 +186,26 @@ calendar. Uses pg-boss `singletonKey`.
 3. Re-runs the `sync-fills` pairing logic scoped to that calendar's fills.
 
 This reconstructs the entire event/position layer (OPEN/CLOSE/ROLL + P&L) from fills (D-10).
-It does NOT re-derive the 30-min greeks in `calendar_snapshots` — fills carry no greeks.
+It does NOT re-derive the 30-min greeks in `calendar_snapshots` — fills carry no greeks. It also
+does NOT re-derive `calendar_snapshots.pnl_open` — see recompute-snapshot-pnl below.
+
+## recompute-snapshot-pnl (JRNL-01 pnl-unit-mismatch fix)
+
+**Schedule:** None — on-demand only. Triggered via `POST /api/jobs/recompute-snapshot-pnl/trigger`
+or the `trigger_job` MCP tool.
+
+**Dedupe key:** `recompute-snapshot-pnl:{calendarId}` — calendar-scoped, mirrors rebuild-journal
+(a window-based key would wrongly collapse two different calendars triggered in the same window).
+
+**Payload:** `{ calendarId: string }` — Zod-parsed at the handler boundary.
+
+**What it does:** re-derives `pnl_open` on every stored `calendar_snapshots` row for the calendar
+from its CURRENT `open_net_debit` + `qty` (D-05: `pnl_open = (net_mark - open_net_debit) * qty *
+100`). `pnl_open` is frozen at snapshot-write time — if `open_net_debit` is corrected after the
+fact (e.g. rebuild-journal fixes a unit-mismatch — dollars stored where points were expected),
+every historical row still carries the stale value until this job runs. Re-derives purely from
+each row's already-stored `net_mark` — no online fetch, no broker call. Run this AFTER any
+`open_net_debit` correction on the calendar.
 
 The "delete-then-reinsert" pattern is safe because `calendar_events` is purely derived from
 `fills`, which are the source of truth (JRNL-01). Re-running against the same fills produces
