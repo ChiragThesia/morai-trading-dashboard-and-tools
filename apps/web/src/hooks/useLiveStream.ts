@@ -129,6 +129,10 @@ export function useLiveStream(): UseLiveStreamResult {
   const backoffMsRef = useRef(1000);
   const cancelledRef = useRef(false);
   const reconnectInFlightRef = useRef(false);
+  // WR-05: a single in-flight guard shared by BOTH the timer-driven scheduleReconnect
+  // path and the manual reconnectNow path, so a manual reconnect fired while a backoff
+  // timer's connect() is already mid-mint cannot open a second concurrent EventSource.
+  const connectInFlightRef = useRef(false);
   // Set inside the effect below so reconnectNow() can trigger a fresh connect() from
   // outside the effect's closure without duplicating the ticket-mint/EventSource logic.
   const connectRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -150,102 +154,112 @@ export function useLiveStream(): UseLiveStreamResult {
     };
 
     async function connect(): Promise<void> {
-      let ticketBody: { ticket: string };
+      // WR-05: bail if a connect() from either path is already mid-flight, so a manual
+      // reconnect and a timer-driven reconnect can never both mint a ticket + open an
+      // EventSource concurrently. Cleared in the finally once this attempt finishes
+      // setting up (or failing to set up) its EventSource.
+      if (connectInFlightRef.current) return;
+      connectInFlightRef.current = true;
       try {
-        const res = await apiFetch("/api/stream/ticket", {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
-
-        if (!res.ok) {
-          throw new StreamMintError(res.status);
-        }
-
-        ticketBody = streamTicketResponse.parse(await res.json());
-      } catch (err) {
-        if (!cancelledRef.current) {
-          // Log error name only — never log the message (may contain PII or token data).
-          console.error(
-            "useLiveStream: ticket mint failed —",
-            err instanceof Error ? err.name : "UnknownError",
-          );
-          // A mint failure is recoverable (e.g. a transient 401 during token refresh) —
-          // retry with backoff so the stream self-heals. Status is never set directly
-          // here (Pitfall 1) — the shared interval will reflect the resulting silence.
-          scheduleReconnect();
-        }
-        return;
-      }
-
-      if (cancelledRef.current) return; // component unmounted while mint was in flight
-
-      // A fresh connection attempt resets the elapsed-time anchor — it starts its own
-      // ~20s cold-start grace window (D-11), same as a resumed tick would.
-      lastTickOrConnectAtRef.current = Date.now();
-
-      // Construct the EventSource URL. VITE_API_BASE_URL is "" in dev (relative path)
-      // and "https://..." in production (cross-origin to Railway API).
-      const base = import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "");
-      const es = new EventSource(`${base}/api/stream?ticket=${ticketBody.ticket}`);
-      esRef.current = es;
-
-      es.onopen = (): void => {
-        backoffMsRef.current = 1000; // reset backoff after a successful (re)connect
-      };
-
-      // On disconnect / error: close and reconnect with a fresh ticket (the current one
-      // is single-use and now consumed). Status is deliberately NOT set here (Pitfall 1) —
-      // a transient reconnect stops the tick clock, and the shared interval decides
-      // LIVE/QUIET/STALLED from how long that silence has lasted, not from this handler.
-      es.onerror = (): void => {
-        es.close();
-        if (esRef.current === es) esRef.current = null;
-        scheduleReconnect();
-      };
-
-      // The server sends NAMED SSE events (stream.routes.ts + stream-fan-out.ts):
-      //   event:"ticks" → JSON ARRAY of coalesced live greek ticks (~1/sec)
-      //   event:"ping"  → keep-alive carrying server-authoritative { isRth } (D-03)
-      // EventSource delivers NAMED events to addEventListener — never to onmessage —
-      // so an onmessage-only consumer receives nothing.
-      es.addEventListener("ping", (event: Event): void => {
-        if (!(event instanceof MessageEvent)) return;
-        let raw: unknown;
+        let ticketBody: { ticket: string };
         try {
-          raw = JSON.parse(event.data);
-        } catch {
-          return; // malformed JSON — drop, retain last-known-good isRth (T-20-02)
-        }
-        const parsed = streamPingEvent.safeParse(raw);
-        if (!parsed.success) return; // malformed shape — drop, retain last-known-good isRth
-        isRthRef.current = parsed.data.isRth;
-        setIsRth(parsed.data.isRth);
-      });
+          const res = await apiFetch("/api/stream/ticket", {
+            method: "POST",
+            body: JSON.stringify({}),
+          });
 
-      es.addEventListener("ticks", (event: Event): void => {
-        if (!(event instanceof MessageEvent)) return;
-        let raw: unknown;
-        try {
-          raw = JSON.parse(event.data);
-        } catch {
-          return; // malformed JSON — ignore (T-12-06-01)
-        }
-        // "ticks" carries a JSON array of ticks (coalescer batches per flush).
-        const parsed = streamLiveGreekEvent.array().safeParse(raw);
-        if (!parsed.success || parsed.data.length === 0) return;
-        const ticks = parsed.data;
-        setGreeks((prev) => {
-          const next = new Map(prev);
-          for (const tick of ticks) {
-            next.set(tick.occSymbol, tick);
+          if (!res.ok) {
+            throw new StreamMintError(res.status);
           }
-          return next;
-        });
-        hasReceivedFirstTickRef.current = true;
-        setHasReceivedFirstTick(true);
+
+          ticketBody = streamTicketResponse.parse(await res.json());
+        } catch (err) {
+          if (!cancelledRef.current) {
+            // Log error name only — never log the message (may contain PII or token data).
+            console.error(
+              "useLiveStream: ticket mint failed —",
+              err instanceof Error ? err.name : "UnknownError",
+            );
+            // A mint failure is recoverable (e.g. a transient 401 during token refresh) —
+            // retry with backoff so the stream self-heals. Status is never set directly
+            // here (Pitfall 1) — the shared interval will reflect the resulting silence.
+            scheduleReconnect();
+          }
+          return;
+        }
+
+        if (cancelledRef.current) return; // component unmounted while mint was in flight
+
+        // A fresh connection attempt resets the elapsed-time anchor — it starts its own
+        // ~20s cold-start grace window (D-11), same as a resumed tick would.
         lastTickOrConnectAtRef.current = Date.now();
-        setLastTickAt(new Date());
-      });
+
+        // Construct the EventSource URL. VITE_API_BASE_URL is "" in dev (relative path)
+        // and "https://..." in production (cross-origin to Railway API).
+        const base = import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "");
+        const es = new EventSource(`${base}/api/stream?ticket=${ticketBody.ticket}`);
+        esRef.current = es;
+
+        es.onopen = (): void => {
+          backoffMsRef.current = 1000; // reset backoff after a successful (re)connect
+        };
+
+        // On disconnect / error: close and reconnect with a fresh ticket (the current one
+        // is single-use and now consumed). Status is deliberately NOT set here (Pitfall 1) —
+        // a transient reconnect stops the tick clock, and the shared interval decides
+        // LIVE/QUIET/STALLED from how long that silence has lasted, not from this handler.
+        es.onerror = (): void => {
+          es.close();
+          if (esRef.current === es) esRef.current = null;
+          scheduleReconnect();
+        };
+
+        // The server sends NAMED SSE events (stream.routes.ts + stream-fan-out.ts):
+        //   event:"ticks" → JSON ARRAY of coalesced live greek ticks (~1/sec)
+        //   event:"ping"  → keep-alive carrying server-authoritative { isRth } (D-03)
+        // EventSource delivers NAMED events to addEventListener — never to onmessage —
+        // so an onmessage-only consumer receives nothing.
+        es.addEventListener("ping", (event: Event): void => {
+          if (!(event instanceof MessageEvent)) return;
+          let raw: unknown;
+          try {
+            raw = JSON.parse(event.data);
+          } catch {
+            return; // malformed JSON — drop, retain last-known-good isRth (T-20-02)
+          }
+          const parsed = streamPingEvent.safeParse(raw);
+          if (!parsed.success) return; // malformed shape — drop, retain last-known-good isRth
+          isRthRef.current = parsed.data.isRth;
+          setIsRth(parsed.data.isRth);
+        });
+
+        es.addEventListener("ticks", (event: Event): void => {
+          if (!(event instanceof MessageEvent)) return;
+          let raw: unknown;
+          try {
+            raw = JSON.parse(event.data);
+          } catch {
+            return; // malformed JSON — ignore (T-12-06-01)
+          }
+          // "ticks" carries a JSON array of ticks (coalescer batches per flush).
+          const parsed = streamLiveGreekEvent.array().safeParse(raw);
+          if (!parsed.success || parsed.data.length === 0) return;
+          const ticks = parsed.data;
+          setGreeks((prev) => {
+            const next = new Map(prev);
+            for (const tick of ticks) {
+              next.set(tick.occSymbol, tick);
+            }
+            return next;
+          });
+          hasReceivedFirstTickRef.current = true;
+          setHasReceivedFirstTick(true);
+          lastTickOrConnectAtRef.current = Date.now();
+          setLastTickAt(new Date());
+        });
+      } finally {
+        connectInFlightRef.current = false;
+      }
     }
 
     connectRef.current = connect;

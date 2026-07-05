@@ -426,6 +426,48 @@ describe("useLiveStream", () => {
     }
   });
 
+  it("reconnectNow does not open a 2nd EventSource while a timer-driven connect is mid-mint (WR-05)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useLiveStream());
+      await act(async () => { await flushMicrotasks(); });
+      expect(FakeEventSource.instances).toHaveLength(1);
+
+      // The NEXT ticket mint (the timer-driven reconnect's connect) hangs mid-flight,
+      // so its connect() holds the shared in-flight guard while awaiting the mint.
+      let resolveMint: (value: TicketResponse) => void = () => {};
+      mockApiFetch.mockImplementationOnce(
+        () => new Promise<TicketResponse>((resolve) => { resolveMint = resolve; }),
+      );
+
+      // Error schedules the backoff timer; advancing it fires connect(), which stalls
+      // on the hanging mint. No new EventSource yet.
+      act(() => { es0().dispatchError(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+      expect(FakeEventSource.instances).toHaveLength(1);
+
+      // User clicks "Reconnect now" WHILE the timer's connect is mid-mint. Without the
+      // shared guard this second connect() would mint another ticket and open a 2nd
+      // concurrent EventSource, leaking the first. It must be a no-op instead.
+      await act(async () => {
+        result.current.reconnectNow();
+        await flushMicrotasks();
+      });
+      expect(FakeEventSource.instances).toHaveLength(1);
+
+      // Resolve the original hanging mint — exactly ONE new EventSource opens.
+      await act(async () => {
+        resolveMint(makeTicketResponse());
+        await flushMicrotasks();
+      });
+      expect(FakeEventSource.instances).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+      mockApiFetch.mockResolvedValue(makeTicketResponse());
+    }
+  });
+
   it("reconnectNow is re-entrancy-safe — a second call while one is in flight is a no-op", async () => {
     const { result } = renderHook(() => useLiveStream());
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
