@@ -101,6 +101,10 @@ export const calendarSnapshots = pgTable(
     dteBack: integer("dte_back").notNull(),
     pnlOpen: numeric("pnl_open").notNull(),
     source: snapshotSourceEnum("source").notNull(),
+    // SNAP-01 / D-12 (0016, additive nullable): provenance marker — 'scheduled'
+    // (worker cron cadence) vs 'event-move' (server-side large-move detector).
+    // NULL for pre-existing rows; the repo maps NULL to "scheduled" at read time.
+    trigger: text("trigger"),
   },
   (table) => [
     // Time-leading composite PK — (time, calendar_id)

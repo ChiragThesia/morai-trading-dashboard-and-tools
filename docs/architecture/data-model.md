@@ -49,8 +49,14 @@ term_slope      numeric        -- back_iv - front_iv (forward vol signal)
 dte_front, dte_back            int
 pnl_open        numeric        -- net_mark vs open_net_debit
 source          enum: schwab_chain | cboe | computed_only
+trigger         text NULL      -- provenance (SNAP-01/D-12): scheduled | event-move
 ```
 13 rows/day/calendar. Answers: "how did price and greeks move over this trade's life?"
+
+`trigger` (migration 0016, additive nullable) records why a snapshot fired: `scheduled`
+is the normal 30-min worker cron cadence; `event-move` is a mid-cycle snapshot fired by
+the server-side SPX move detector. Existing rows are NULL and read as `scheduled` — the
+column adds no NOT NULL constraint and backfills nothing.
 
 ### `leg_observations` — raw per-contract quotes (audit + recompute source)
 ```
