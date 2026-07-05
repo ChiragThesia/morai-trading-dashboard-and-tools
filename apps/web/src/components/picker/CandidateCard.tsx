@@ -24,6 +24,7 @@
  */
 import { cn } from "@/lib/utils";
 import type { PickerCandidate, BreakdownEntry } from "@morai/contracts";
+import { Button } from "../system/index.tsx";
 import { GEX_FRESH_MS } from "../../screens/Market.tsx";
 
 const BAR_ORDER = ["slope", "fwdEdge", "gexFit", "eventAdjustment"] as const;
@@ -148,18 +149,18 @@ export function CandidateCard({
               PASTED
             </span>
             {onRemove !== undefined && (
-              <button
-                type="button"
+              <Button
+                variant="destructive"
                 data-testid={`remove-pasted-${candidate.id}`}
                 title="Remove this pasted calendar"
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemove(candidate);
                 }}
-                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-1 font-mono text-[10px] leading-none text-dim hover:text-txt"
+                className="px-1 text-[10px] leading-none"
               >
                 {"×"}
-              </button>
+              </Button>
             )}
           </span>
         ) : (
@@ -227,36 +228,34 @@ export function CandidateCard({
       </div>
 
       <div className="mt-1.5 flex items-center gap-1.5">
-        <button
-          type="button"
+        <Button
+          variant="toggle"
+          tone="amber"
+          active={combined}
           data-testid={`combine-${candidate.id}`}
           title="Add this calendar to the combined-book payoff"
           onClick={(e) => {
             e.stopPropagation();
             onToggleCombine(candidate);
           }}
-          className={cn(
-            "cursor-pointer rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px]",
-            combined ? "border-amber/60 bg-amber/10 text-amber" : "border-line2 bg-transparent text-dim",
-          )}
+          className="px-1.5"
         >
           {combined ? "✓ Combined" : "⊕ Combine"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="toggle"
+          tone="up"
+          active={copied}
           data-testid={`copy-tos-${candidate.id}`}
           title="Copy this calendar as a Thinkorswim order"
           onClick={(e) => {
             e.stopPropagation();
             onCopy(candidate);
           }}
-          className={cn(
-            "cursor-pointer rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px]",
-            copied ? "border-violet/60 bg-violet/10 text-txt" : "border-line2 bg-transparent text-dim",
-          )}
+          className="px-1.5"
         >
           {copied ? "Copied ✓" : "⧉ Copy"}
-        </button>
+        </Button>
       </div>
     </div>
   );
