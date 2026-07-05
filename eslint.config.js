@@ -59,7 +59,11 @@ export default tseslint.config(
           // shared: may only import from within shared itself (relative intra-package imports)
           { from: "shared",    allow: ["shared"] },
           // contracts: shared + intra-package relative imports (same pattern as shared→shared)
-          { from: "contracts", allow: ["shared", "contracts"] },
+          // + core (RULE-01, Phase 20 D-07 narrow carve-out): contracts derives its rule-tag
+          // enums from core's pure value modules so the vocabulary is single-sourced — see
+          // docs/architecture/monorepo-layout.md "Narrow carve-out" note. Import only core's
+          // plain Zod value/enum exports here, never ports/use-cases/domain-logic types.
+          { from: "contracts", allow: ["shared", "contracts", "core"] },
           // quant: pure math leaf — imports nothing (self-only for intra-package relative imports)
           { from: "quant",     allow: ["quant"] },
           // core: shared + quant (BSM kernel leaf) + intra-package relative imports

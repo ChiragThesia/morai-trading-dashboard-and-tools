@@ -22,6 +22,19 @@ export type {
 export { snapshotResponse, journalResponse } from "./journal.ts";
 export type { SnapshotResponse, JournalResponse } from "./journal.ts";
 
+// Strategy-rule recording contracts (RULE-01, 20-07: single-sourced from @morai/core D-07)
+export {
+  setRuleTagsRequest,
+  setRuleTagsResponse,
+  getEventsWithRulesResponse,
+} from "./journal-rules.ts";
+export type {
+  SetRuleTagsRequest,
+  SetRuleTagsResponse,
+  EventWithRulesEntry,
+  GetEventsWithRulesResponse,
+} from "./journal-rules.ts";
+
 // Live greeks contracts (MCP-02: reused by get_live_greeks MCP tool in plan 07)
 export { liveGreeksResponse } from "./live-greeks.ts";
 export type { LegGreeks, LiveGreeksResponse } from "./live-greeks.ts";

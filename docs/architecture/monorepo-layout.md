@@ -29,6 +29,7 @@ morai-trading-dashboard-and-tools/
 
 ```
 apps/web ────────▶ packages/contracts ──▶ packages/shared
+                 │                     ─▶ packages/core (values only, see carve-out below)
                  ▶ packages/quant  ◀─────────────────────────────────────────┐
 apps/server ─────▶ packages/core ▲ packages/adapters ▲ packages/contracts    │
 apps/worker ─────▶ packages/core │ packages/adapters │                        │
@@ -42,6 +43,14 @@ Rules:
   builtins beyond pure-computation safe ones.
 - `web` never imports `core` or `adapters` — it speaks HTTP via `contracts` types
   (Hono RPC client) and uses `quant` for client-side BSM math (D21).
+- **Narrow carve-out (RULE-01, Phase 20 D-07):** `contracts` may import `core`'s pure Zod
+  **value/enum modules** (e.g. `rule-tags.ts`'s `enterRuleTag`/`exitRuleTag`/`rollRuleTag`)
+  so a recording vocabulary that becomes both a DB-boundary constraint and an HTTP/MCP
+  contract is defined exactly once — the alternative (hand-copying the same string literals
+  into both packages) drifts silently the first time one side is edited. This does **not**
+  open the door to importing core ports, use-cases, or any domain type carrying business
+  logic into `contracts` — only plain value-holding Zod schemas. Enforced narrowly by the
+  `boundaries/dependencies` rule in `eslint.config.js` (`contracts → core` edge, same file).
 - `quant` is a pure math leaf — it imports nothing. Both `core` and `web` may import it.
   The `web → quant` edge does NOT reach `core`; the hexagon stays intact.
 - `apps/*` are composition roots — the only places where core meets adapters.

@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "private": true,
   "dependencies": {
+    "@morai/core": "workspace:*",
     "@morai/shared": "workspace:*",
     "zod": "^4.4.3"
   },

@@ -131,6 +131,7 @@
       "name": "@morai/contracts",
       "version": "0.0.1",
       "dependencies": {
+        "@morai/core": "workspace:*",
         "@morai/shared": "workspace:*",
         "zod": "^4.4.3",
       },
