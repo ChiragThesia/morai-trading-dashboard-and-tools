@@ -62,7 +62,10 @@ function noop(): void {}
 
 export interface CandidateRailProps {
   readonly candidates: ReadonlyArray<PickerCandidate>;
+  /** Date-only reference date for the empty-state message (DTE/event x-axis anchor). */
   readonly asOf: string;
+  /** Full-ISO real instant (WR-03) — threaded to each CandidateCard's staleness dot. */
+  readonly observedAt: string;
   readonly source: "schwab" | "cboe";
   readonly gexContextStatus: "ok" | "stale" | "missing";
   readonly eventsContextStatus: "ok" | "stale" | "missing";
@@ -86,6 +89,7 @@ export interface CandidateRailProps {
 export function CandidateRail({
   candidates,
   asOf,
+  observedAt,
   source,
   gexContextStatus,
   eventsContextStatus,
@@ -124,7 +128,7 @@ export function CandidateRail({
               selected={candidate.id === selectedId}
               combined={combinedIds.has(candidate.id)}
               copied={candidate.id === copiedId}
-              asOf={asOf}
+              observedAt={observedAt}
               source={source}
               gexContextStatus={gexContextStatus}
               eventsContextStatus={eventsContextStatus}
@@ -394,6 +398,7 @@ export function Analyzer(): React.ReactElement {
       <CandidateRail
         candidates={sortedCandidates}
         asOf={snapshot.asOf}
+        observedAt={snapshot.observedAt}
         source={snapshot.source}
         gexContextStatus={snapshot.gexContextStatus}
         eventsContextStatus={snapshot.eventsContextStatus}

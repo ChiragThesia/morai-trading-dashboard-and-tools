@@ -186,6 +186,9 @@ describe("makeComputePickerSnapshotUseCase", () => {
     if (row === undefined) return;
 
     expect(row.observedAt).toEqual(new Date("2026-07-01T14:30:00.000Z"));
+    // WR-03: the snapshot's own observedAt field mirrors the row's instant exactly (full ISO,
+    // not date-only asOf) — the UI freshness dot needs the real instant, not the calendar day.
+    expect(row.snapshot.observedAt).toBe(row.observedAt.toISOString());
     expect(row.snapshot.source).toBe("schwab");
     expect(row.snapshot.gexContextStatus).toBe("ok");
     expect(row.snapshot.eventsContextStatus).toBe("ok");

@@ -304,6 +304,7 @@ export function makeComputePickerSnapshotUseCase(
 
     const snapshot: PickerSnapshot = {
       asOf: asOfIso,
+      observedAt: latestTime.toISOString(), // WR-03: real instant, mirrors row.observedAt
       spot,
       source,
       gexContextStatus,

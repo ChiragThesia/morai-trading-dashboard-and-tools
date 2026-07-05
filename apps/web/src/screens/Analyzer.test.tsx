@@ -200,6 +200,7 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
       <CandidateRail
         candidates={[]}
         asOf="2026-07-02"
+        observedAt="2026-07-02T14:32:00.000Z"
         source="schwab"
         gexContextStatus="ok"
         eventsContextStatus="ok"
@@ -224,6 +225,7 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
       <CandidateRail
         candidates={[]}
         asOf="2026-07-02"
+        observedAt="2026-07-02T14:32:00.000Z"
         source="schwab"
         gexContextStatus="ok"
         eventsContextStatus="ok"

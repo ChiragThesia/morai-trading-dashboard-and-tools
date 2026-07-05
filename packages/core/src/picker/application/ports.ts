@@ -106,6 +106,8 @@ export type PickerCandidateDomain = {
 /** PickerSnapshot — readonly domain mirror of contracts' pickerSnapshotResponse. */
 export type PickerSnapshot = {
   readonly asOf: string; // YYYY-MM-DD reference date
+  /** Full ISO 8601 instant the cohort was observed at (WR-03) — drives the UI freshness dot. */
+  readonly observedAt: string;
   readonly spot: number;
   readonly source: "schwab" | "cboe";
   readonly gexContextStatus: "ok" | "stale" | "missing";

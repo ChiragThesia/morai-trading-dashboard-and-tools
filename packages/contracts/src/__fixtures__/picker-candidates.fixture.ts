@@ -16,6 +16,7 @@ import type { PickerSnapshotResponse } from "../picker.ts";
 // expectedMove/theta/vega/score are all normal finite values (Pitfall 3 — never nulled out).
 export const pickerSnapshotFixture: PickerSnapshotResponse = {
   asOf: "2026-07-02",
+  observedAt: "2026-07-02T14:32:00.000Z", // WR-03: real instant the cohort was observed at
   spot: 7498.85,
   source: "schwab",
   gexContextStatus: "ok",

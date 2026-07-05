@@ -15,8 +15,9 @@
  *     context). Reuses the exact fwdEdge guard-bar visual — never a new zero-state (19-UI-SPEC).
  *
  * Per-card staleness+source tag (Phase 19, D-15/D-16, PICK-02 success criterion 3): every card
- * is self-contained, repeating the snapshot-level `asOf`/`source` fields so a stale/degraded
- * snapshot never reads as fresh/clean (T-19-21).
+ * is self-contained, repeating the snapshot-level `observedAt`/`source` fields so a stale/degraded
+ * snapshot never reads as fresh/clean (T-19-21). `observedAt` is the full-ISO real instant
+ * (WR-03), not the date-only `asOf` reference date.
  *
  * Hand-rolled bar fills (bg-violet/bg-blue/bg-up/bg-amber Tailwind tokens, no hardcoded hex)
  * mirror PayoffChart.tsx's existing hand-rolled precedent (UI-SPEC Registry Safety).
@@ -60,12 +61,16 @@ function formatBreakdownCaption(entry: BreakdownEntry): string {
 }
 
 /**
- * formatAsOf — "as of {HH:MM}" (24h) + freshness, guarded against an unparseable `asOf`.
+ * formatAsOf — "as of {HH:MM}" (24h) + freshness, guarded against an unparseable `observedAt`.
  * Never renders "Invalid Date" — an unparseable/NaN timestamp falls back to "as of —" and is
  * treated as stale (the safe direction per T-19-21: never claim freshness you can't prove).
+ *
+ * WR-03: takes the snapshot's full-ISO `observedAt` instant, NOT the date-only `asOf` reference
+ * date — a date-only value made the dot always amber and the HH:MM label a constant
+ * timezone-offset artifact of UTC midnight, never the real snapshot instant.
  */
-function formatAsOf(asOf: string): { readonly label: string; readonly fresh: boolean } {
-  const ts = new Date(asOf).getTime();
+function formatAsOf(observedAt: string): { readonly label: string; readonly fresh: boolean } {
+  const ts = new Date(observedAt).getTime();
   if (Number.isNaN(ts)) {
     return { label: "as of —", fresh: false };
   }
@@ -79,8 +84,11 @@ export interface CandidateCardProps {
   readonly selected: boolean;
   readonly combined: boolean;
   readonly copied: boolean;
-  /** Snapshot-level fields (D-15/D-16/D-17) — identical across every card in a given fetch. */
-  readonly asOf: string;
+  /**
+   * Snapshot-level fields (D-15/D-16/D-17) — identical across every card in a given fetch.
+   * `observedAt` (WR-03) is the full-ISO real instant, not the date-only `asOf` reference date.
+   */
+  readonly observedAt: string;
   readonly source: "schwab" | "cboe";
   readonly gexContextStatus: "ok" | "stale" | "missing";
   readonly eventsContextStatus: "ok" | "stale" | "missing";
@@ -94,7 +102,7 @@ export function CandidateCard({
   selected,
   combined,
   copied,
-  asOf,
+  observedAt,
   source,
   gexContextStatus,
   eventsContextStatus,
@@ -106,7 +114,7 @@ export function CandidateCard({
   const guardGexFit = gexContextStatus !== "ok";
   const guardEventAdjustment = eventsContextStatus !== "ok";
   const hasEvents = candidate.frontEvents.length > 0 || candidate.backEvents.length > 0;
-  const staleness = formatAsOf(asOf);
+  const staleness = formatAsOf(observedAt);
 
   return (
     <div

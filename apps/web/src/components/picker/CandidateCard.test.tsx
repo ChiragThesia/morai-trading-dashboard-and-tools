@@ -20,7 +20,7 @@ function leg(strike: number, iv: number, dte: number): PickerCandidate["frontLeg
 
 /** Snapshot-level fields (D-15/D-16/D-17) — identical across every card in a fetch. */
 const SNAPSHOT_PROPS = {
-  asOf: "2026-07-02",
+  observedAt: "2026-07-02T14:32:00.000Z",
   source: "schwab" as const,
   gexContextStatus: "ok" as const,
   eventsContextStatus: "ok" as const,
@@ -325,7 +325,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
         candidate={candidate}
         selected={false}
         combined={false}
-        asOf={nowIso}
+        observedAt={nowIso}
         source="cboe"
         gexContextStatus="ok"
         eventsContextStatus="ok"
@@ -359,7 +359,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
         candidate={candidate}
         selected={false}
         combined={false}
-        asOf={staleIso}
+        observedAt={staleIso}
         source="schwab"
         gexContextStatus="ok"
         eventsContextStatus="ok"
@@ -379,7 +379,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
     expect(tag.parentElement?.querySelector(".bg-amber")).not.toBeNull();
   });
 
-  it("renders 'as of —' (em-dash), never 'Invalid Date', when asOf fails to parse", () => {
+  it("renders 'as of —' (em-dash), never 'Invalid Date', when observedAt fails to parse", () => {
     const candidate = makeCandidate({
       id: "bad-asof-1",
       breakdown: SHUFFLED_BREAKDOWN,
@@ -392,7 +392,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
         candidate={candidate}
         selected={false}
         combined={false}
-        asOf="not-a-real-date"
+        observedAt="not-a-real-date"
         source="schwab"
         gexContextStatus="ok"
         eventsContextStatus="ok"
@@ -420,7 +420,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
         candidate={candidate}
         selected={false}
         combined={false}
-        asOf="2026-07-02T14:32:00.000Z"
+        observedAt="2026-07-02T14:32:00.000Z"
         source="schwab"
         gexContextStatus="stale"
         eventsContextStatus="ok"
@@ -450,7 +450,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
         candidate={candidate}
         selected={false}
         combined={false}
-        asOf="2026-07-02T14:32:00.000Z"
+        observedAt="2026-07-02T14:32:00.000Z"
         source="schwab"
         gexContextStatus="ok"
         eventsContextStatus="missing"
@@ -480,7 +480,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
         candidate={candidate}
         selected={false}
         combined={false}
-        asOf="2026-07-02T14:32:00.000Z"
+        observedAt="2026-07-02T14:32:00.000Z"
         source="schwab"
         gexContextStatus="missing"
         eventsContextStatus="stale"

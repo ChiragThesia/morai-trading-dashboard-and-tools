@@ -18,6 +18,7 @@ const ROW: PickerSnapshotRow = {
   observedAt: new Date("2026-07-01T14:30:00.000Z"),
   snapshot: {
     asOf: "2026-07-01",
+    observedAt: "2026-07-01T14:30:00.000Z",
     spot: 7500,
     source: "schwab",
     gexContextStatus: "ok",

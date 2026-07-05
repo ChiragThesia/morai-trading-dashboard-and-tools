@@ -153,9 +153,40 @@ describe("pickerSnapshotFixture (frozen fixture — D-03)", () => {
   });
 });
 
+describe("pickerSnapshotResponse.observedAt (WR-03 — real instant, not date-only asOf)", () => {
+  const basePayload = {
+    asOf: "2026-07-02",
+    observedAt: "2026-07-02T14:32:00.000Z",
+    spot: 7498.85,
+    source: "schwab",
+    gexContextStatus: "ok",
+    eventsContextStatus: "ok",
+    termStructure: [],
+    gex: { flip: null, callWall: null, putWall: null, netGammaAtSpot: 0, absGammaStrike: null },
+    events: [],
+    candidates: [],
+  };
+
+  it("parses a payload carrying a full-ISO observedAt instant", () => {
+    expect(() => pickerSnapshotResponse.parse(basePayload)).not.toThrow();
+  });
+
+  it("REJECTS a snapshot missing observedAt (the freshness dot needs the real instant, not date-only asOf)", () => {
+    const { observedAt: _omit, ...withoutObservedAt } = basePayload;
+    expect(() => pickerSnapshotResponse.parse(withoutObservedAt)).toThrow();
+  });
+
+  it("REJECTS a date-only observedAt (must be a full ISO datetime, not YYYY-MM-DD)", () => {
+    expect(() =>
+      pickerSnapshotResponse.parse({ ...basePayload, observedAt: "2026-07-02" }),
+    ).toThrow();
+  });
+});
+
 describe("pickerSnapshotResponse.source / gexContextStatus / eventsContextStatus (Phase 19, D-15/D-17)", () => {
   const basePayload = {
     asOf: "2026-07-02",
+    observedAt: "2026-07-02T14:32:00.000Z",
     spot: 7498.85,
     source: "schwab",
     gexContextStatus: "ok",

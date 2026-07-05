@@ -30,6 +30,7 @@ import { usePicker } from "./usePicker.ts";
 
 const SNAPSHOT: PickerSnapshotResponse = {
   asOf: "2026-07-02",
+  observedAt: "2026-07-02T14:32:00.000Z",
   spot: 7498.85,
   source: "schwab",
   gexContextStatus: "ok",

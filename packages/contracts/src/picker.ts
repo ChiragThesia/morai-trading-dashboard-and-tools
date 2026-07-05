@@ -152,10 +152,18 @@ export type PickerEvent = z.infer<typeof pickerEvent>;
  * ISO dates. Without it a live snapshot taken on any date other than the frozen fixture's
  * would mis-place event markers on the DTE axis. It strengthens the promise (the shape now
  * carries everything the UI needs to render any snapshot), it does not break it.
+ *
+ * `observedAt` (WR-03, additive) carries the real full-ISO instant the cohort was observed at
+ * — distinct from `asOf`'s date-only reference date. The UI's staleness dot / "as of HH:MM"
+ * label needs a real instant to compute age against; a date-only `asOf` made the dot always
+ * amber and the HH:MM label a constant timezone-offset artifact. Stamped from the same
+ * `latestTime` `asOf` derives from (computePickerSnapshot.ts), so the two are always in sync.
  */
 export const pickerSnapshotResponse = z.object({
   /** ISO 8601 snapshot reference date the termStructure/leg DTE fields are relative to. */
   asOf: z.string(),
+  /** Full ISO 8601 instant the cohort was observed at (WR-03) — drives the UI freshness dot. */
+  observedAt: z.string().datetime(),
   spot: z.number(),
   /** Chain vendor this snapshot was computed from (D-15). */
   source: z.enum(["schwab", "cboe"]),

@@ -61,6 +61,7 @@ describe.skipIf(shouldSkip)("postgres picker-snapshot adapter", () => {
 
     const baseSnapshot = {
       asOf: "2026-07-01",
+      observedAt: "2026-07-01T14:00:00.000Z",
       spot: 7381,
       source: "schwab" as const,
       gexContextStatus: "ok" as const,
@@ -109,6 +110,7 @@ describe.skipIf(shouldSkip)("postgres picker-snapshot adapter", () => {
       observedAt: new Date("2026-07-02T14:00:00Z"),
       snapshot: {
         asOf: "2026-07-02",
+        observedAt: "2026-07-02T14:00:00.000Z",
         spot: 7381,
         source: "schwab",
         gexContextStatus: "ok",

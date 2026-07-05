@@ -33,6 +33,7 @@ const T2 = new Date("2026-07-01T14:30:00Z"); // later observation
 function makeSnapshot(overrides: Partial<PickerSnapshot> = {}): PickerSnapshot {
   return {
     asOf: "2026-07-01",
+    observedAt: "2026-07-01T14:00:00.000Z",
     spot: 7381,
     source: "schwab",
     gexContextStatus: "ok",
@@ -55,7 +56,10 @@ function makeRow(
   observedAt: Date,
   overrides: Partial<PickerSnapshot> = {},
 ): PickerSnapshotRow {
-  return { observedAt, snapshot: makeSnapshot(overrides) };
+  return {
+    observedAt,
+    snapshot: makeSnapshot({ observedAt: observedAt.toISOString(), ...overrides }),
+  };
 }
 
 export function runPickerSnapshotContractTests(
