@@ -343,3 +343,21 @@ for the hexagon core). Revisit TS client adoption behind ports, version-pinned, 
 
 **Note:** Strategy rules (L4) and event-triggered supplemental snapshot, previously tracked here,
 are now scheduled in Phase 20 (RULE-01, SNAP-01) — see Phase Details above.
+
+### Phase 21: Control Affordance & Button System
+
+**Goal:** Every interactive control reads its state at a glance — active vs inactive vs hover
+vs focus vs disabled — via a small shared button/control system built on the existing accent
+palette (violet primary, blue/amber/up/down accents) instead of the flat gray
+(`text-dim`/`border-line2`/`bg-transparent`) that makes active and inactive indistinguishable.
+Applied app-wide: rail Combine/Copy/× , PASTED cards, payoff toggles (@exp/Walls/Profit
+zone/Fan), date controls, Analyze/Clear-all, nav tabs, retry, TOS copy. Accessible: visible
+focus ring, WCAG-AA contrast, adequate hit targets. Frontend-only (`apps/web`); no backend or
+contract change.
+**Requirements**: UI/UX polish (no new backend requirements)
+**Depends on:** Phase 19 (the picker/Analyzer UI this restyles)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 21 to break down)
