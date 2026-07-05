@@ -18,12 +18,14 @@
  */
 
 import { useState } from "react";
+import { enterRuleTag, exitRuleTag, rollRuleTag } from "@morai/core";
 import { classifyTradeHistory } from "../lib/journal-history.ts";
 import { useJournal } from "../hooks/useJournal.ts";
+import { useRuleTags } from "../hooks/useRuleTags.ts";
 import { LifecycleChart } from "../components/LifecycleChart.tsx";
 import { RebuildButton } from "../components/RebuildButton.tsx";
-import { Panel, PanelHeading } from "../components/system/index.tsx";
-import type { SnapshotResponse } from "@morai/contracts";
+import { Panel, PanelHeading, SectionLabel, Button } from "../components/system/index.tsx";
+import type { SnapshotResponse, EventWithRulesEntry } from "@morai/contracts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +83,160 @@ function HeadingPill({ children }: { children: React.ReactNode }): React.ReactEl
     <span className="rounded-full border border-line2 px-[7px] py-px text-[9px] text-dim">
       {children}
     </span>
+  );
+}
+
+// ─── RULE-01: rule-tag control ─────────────────────────────────────────────────
+
+/** Enum values per event type (D-07: OPEN→enter, CLOSE→exit, ROLL→roll). */
+const ENTER_OPTIONS: ReadonlyArray<string> = enterRuleTag.options;
+const EXIT_OPTIONS: ReadonlyArray<string> = exitRuleTag.options;
+const ROLL_OPTIONS: ReadonlyArray<string> = rollRuleTag.options;
+
+/** Title-case human-readable chip/pill labels (20-UI-SPEC Copywriting Contract). */
+const RULE_TAG_LABELS: Readonly<Record<string, string>> = {
+  "iv-skew-favorable": "IV skew favorable",
+  "term-structure-edge": "Term-structure edge",
+  "event-window-play": "Event-window play",
+  "gex-fit": "GEX fit",
+  "profit-target": "Profit target",
+  "max-loss": "Max loss",
+  "time-stop": "Time stop",
+  "thesis-invalidated": "Thesis invalidated",
+  "defend-tested-side": "Defend tested side",
+  "roll-for-duration": "Roll for duration",
+  other: "Other",
+};
+
+function tagLabel(tag: string): string {
+  return RULE_TAG_LABELS[tag] ?? tag;
+}
+
+/**
+ * RuleTagChips — the multi-select toggle-chip row for ONE calendar event (D-14: list-shaped,
+ * multi-select). Non-optimistic (T-20-17): a chip's `active` prop is derived purely from
+ * `activeTags` (server-confirmed) — clicking never flips it locally before `onSave` resolves.
+ *
+ * OTHER (D-21): activating it only reveals the required inline note — no save is attempted
+ * until the note is confirmed (blur/Enter) with non-empty content; deactivating it needs no
+ * note and saves immediately.
+ */
+function RuleTagChips({
+  fillIdsHash,
+  options,
+  activeTags,
+  otherNote,
+  error,
+  onSave,
+  onRetry,
+}: {
+  fillIdsHash: string;
+  options: ReadonlyArray<string>;
+  activeTags: ReadonlyArray<string>;
+  otherNote: string | null;
+  error: string | undefined;
+  onSave: (tags: ReadonlyArray<string>, otherNote?: string) => void;
+  onRetry: () => void;
+}): React.ReactElement {
+  const [pendingOther, setPendingOther] = useState(activeTags.includes("other"));
+  const [noteDraft, setNoteDraft] = useState(otherNote ?? "");
+  const [noteError, setNoteError] = useState(false);
+
+  const showOtherInput = activeTags.includes("other") || pendingOther;
+
+  function confirmNote(): void {
+    if (noteDraft.trim().length === 0) {
+      setNoteError(true);
+      return;
+    }
+    setNoteError(false);
+    const nextTags = activeTags.includes("other") ? activeTags : [...activeTags, "other"];
+    onSave(nextTags, noteDraft);
+  }
+
+  function handleToggle(tag: string): void {
+    const isActive = activeTags.includes(tag);
+    const nextTags = isActive ? activeTags.filter((t) => t !== tag) : [...activeTags, tag];
+
+    if (tag === "other") {
+      if (isActive) {
+        setPendingOther(false);
+        setNoteError(false);
+        onSave(nextTags);
+      } else {
+        setPendingOther(true);
+      }
+      return;
+    }
+
+    if (nextTags.includes("other")) {
+      if (noteDraft.trim().length === 0) {
+        setNoteError(true);
+        return;
+      }
+      onSave(nextTags, noteDraft);
+      return;
+    }
+
+    onSave(nextTags);
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap gap-1" data-fill-ids-hash={fillIdsHash}>
+        {options.map((tag) => (
+          <Button
+            key={tag}
+            variant="toggle"
+            tone="violet"
+            size="xs"
+            active={activeTags.includes(tag)}
+            onClick={() => {
+              handleToggle(tag);
+            }}
+          >
+            {tagLabel(tag)}
+          </Button>
+        ))}
+      </div>
+
+      {showOtherInput && (
+        <div className="flex flex-col gap-0.5">
+          <input
+            type="text"
+            value={noteDraft}
+            placeholder={'Note for "Other"…'}
+            onChange={(e) => {
+              setNoteDraft(e.target.value);
+            }}
+            onBlur={confirmNote}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmNote();
+            }}
+            className="box-border w-full rounded-md border border-line2 bg-panel2 px-2 py-1 font-mono text-[10px] text-txt"
+          />
+          {noteError && (
+            <span className="font-mono text-[10px] text-down">
+              Add a short note for &quot;Other.&quot;
+            </span>
+          )}
+        </div>
+      )}
+
+      {error !== undefined && (
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-[10px] text-down">{error}</span>
+          <Button
+            size="xs"
+            onClick={() => {
+              onRetry();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -287,7 +443,25 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
 
   const { data, isPending } = useJournal(selectedTrade?.calendarId ?? "");
 
+  const {
+    events: ruleEvents,
+    isPending: rulesPending,
+    errors: ruleErrors,
+    save: saveRuleTags,
+    retry: retryRuleTags,
+  } = useRuleTags(selectedTrade?.calendarId ?? "");
+
   const snapshots: ReadonlyArray<SnapshotResponse> = data?.snapshots ?? [];
+
+  const openEvent = ruleEvents.find((e) => e.eventType === "OPEN");
+  const closeEvent = ruleEvents.find((e) => e.eventType === "CLOSE");
+  const rollEvents = ruleEvents.filter((e) => e.eventType === "ROLL");
+
+  // D-22: aggregate all recorded tags across the selected trade's events, for the
+  // trade-list read-view pill (comma-joined, truncated — neutral, not violet).
+  const selectedTradeTagLabels = Array.from(
+    new Set(ruleEvents.flatMap((e: EventWithRulesEntry) => e.tags)),
+  ).map(tagLabel);
 
   // ── Empty state ─────────────────────────────────────────────────────────────
   if (trades.length === 0) {
@@ -375,6 +549,17 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
                     >
                       {kind === "history" ? "history" : "entry/exit"}
                     </div>
+                    {/* Rule-tag read-view pill (D-22) — only known for the selected trade
+                        (useRuleTags fetches one calendar's tags at a time); neutral, not violet. */}
+                    {isSelected && selectedTradeTagLabels.length > 0 && (
+                      <div
+                        data-testid="rule-tags-pill"
+                        title={selectedTradeTagLabels.join(", ")}
+                        className="mt-[3px] block max-w-[110px] truncate rounded-[3px] border border-line2 px-[5px] text-[8px] text-dim"
+                      >
+                        {selectedTradeTagLabels.join(", ")}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -428,6 +613,77 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
             title="Notes"
             action={<HeadingPill>thesis · review</HeadingPill>}
           />
+
+          {/* RULE-01: enter/exit/roll rule-tag control (D-07/D-10) — ABOVE the free-text
+              textarea, which stays untouched. Editable anytime; no read-only lock. */}
+          {!rulesPending && (
+            <div className="mb-2 flex flex-col gap-2">
+              {openEvent !== undefined && (
+                <div className="flex flex-col gap-1">
+                  <SectionLabel tone="dim">ENTER</SectionLabel>
+                  <RuleTagChips
+                    fillIdsHash={openEvent.fillIdsHash}
+                    options={ENTER_OPTIONS}
+                    activeTags={openEvent.tags}
+                    otherNote={openEvent.otherNote}
+                    error={ruleErrors[openEvent.fillIdsHash]}
+                    onSave={(tags, otherNote) => {
+                      void saveRuleTags(openEvent.fillIdsHash, tags, otherNote);
+                    }}
+                    onRetry={() => {
+                      retryRuleTags(openEvent.fillIdsHash);
+                    }}
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1">
+                <SectionLabel tone="dim">EXIT</SectionLabel>
+                {closeEvent === undefined ? (
+                  <span className="font-mono text-[10px] text-dim">Available at close.</span>
+                ) : (
+                  <RuleTagChips
+                    fillIdsHash={closeEvent.fillIdsHash}
+                    options={EXIT_OPTIONS}
+                    activeTags={closeEvent.tags}
+                    otherNote={closeEvent.otherNote}
+                    error={ruleErrors[closeEvent.fillIdsHash]}
+                    onSave={(tags, otherNote) => {
+                      void saveRuleTags(closeEvent.fillIdsHash, tags, otherNote);
+                    }}
+                    onRetry={() => {
+                      retryRuleTags(closeEvent.fillIdsHash);
+                    }}
+                  />
+                )}
+              </div>
+
+              {rollEvents.map((rollEvent) => (
+                <div key={rollEvent.fillIdsHash} className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <SectionLabel tone="dim">ROLL</SectionLabel>
+                    <span className="font-mono text-[9px] text-dim">
+                      {fmtDate(rollEvent.eventedAt)}
+                    </span>
+                  </div>
+                  <RuleTagChips
+                    fillIdsHash={rollEvent.fillIdsHash}
+                    options={ROLL_OPTIONS}
+                    activeTags={rollEvent.tags}
+                    otherNote={rollEvent.otherNote}
+                    error={ruleErrors[rollEvent.fillIdsHash]}
+                    onSave={(tags, otherNote) => {
+                      void saveRuleTags(rollEvent.fillIdsHash, tags, otherNote);
+                    }}
+                    onRetry={() => {
+                      retryRuleTags(rollEvent.fillIdsHash);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           <textarea
             placeholder="Entry thesis, management, post-mortem…"
             className="box-border min-h-[60px] w-full resize-y rounded-md border border-line2 bg-panel2 p-2 font-mono text-[11px] text-txt"
