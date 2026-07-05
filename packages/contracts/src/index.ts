@@ -75,6 +75,7 @@ export {
   streamLiveGreekEvent,
   streamReconcileEvent,
   streamFillEvent,
+  streamPingEvent,
 } from "./stream-events.ts";
 export type {
   StreamTicketResponse,
@@ -82,6 +83,7 @@ export type {
   StreamReconcilePosition,
   StreamReconcileEvent,
   StreamFillEvent,
+  StreamPingEvent,
 } from "./stream-events.ts";
 
 // COT contracts (Phase 13 — MCP-02: ONE schema source for GET /api/analytics/cot + get_cot MCP tool)

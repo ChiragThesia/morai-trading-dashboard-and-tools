@@ -33,7 +33,12 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { JWTPayload } from "jose";
 import { parseOccSymbol } from "@morai/shared";
-import { streamTicketResponse, streamReconcileEvent } from "@morai/contracts";
+import {
+  streamTicketResponse,
+  streamReconcileEvent,
+  streamPingEvent,
+} from "@morai/contracts";
+import { isWithinRth, isNyseHoliday } from "@morai/core";
 import type { ForReconcilingPositions } from "@morai/core";
 import { mintTicket, redeemTicket } from "./ticket-store.ts";
 import { registerClient, unregisterClient } from "./stream-fan-out.ts";
@@ -236,7 +241,15 @@ export function streamRoutes(deps: StreamRouteDeps) {
         while (!stream.aborted) {
           await stream.sleep(30_000);
           if (!stream.aborted) {
-            await stream.writeSSE({ event: "ping", data: "" });
+            const now = new Date();
+            await stream.writeSSE({
+              event: "ping",
+              data: JSON.stringify(
+                streamPingEvent.parse({
+                  isRth: isWithinRth(now) && !isNyseHoliday(now),
+                }),
+              ),
+            });
           }
         }
 
@@ -309,7 +322,15 @@ export function makeStreamSseRouter(deps: StreamRouteDeps) {
         while (!stream.aborted) {
           await stream.sleep(30_000);
           if (!stream.aborted) {
-            await stream.writeSSE({ event: "ping", data: "" });
+            const now = new Date();
+            await stream.writeSSE({
+              event: "ping",
+              data: JSON.stringify(
+                streamPingEvent.parse({
+                  isRth: isWithinRth(now) && !isNyseHoliday(now),
+                }),
+              ),
+            });
           }
         }
 

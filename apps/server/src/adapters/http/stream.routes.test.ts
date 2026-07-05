@@ -12,11 +12,15 @@
  * Auth group enforcement (Pitfall 7) is wired in main.ts (Task 3).
  * These tests use a fake auth middleware to simulate the JWT group for ticket/subscribe routes.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
 import type { ForReconcilingPositions, ReconciledPosition } from "@morai/core";
-import { streamTicketResponse, streamReconcileEvent } from "@morai/contracts";
+import {
+  streamTicketResponse,
+  streamReconcileEvent,
+  streamPingEvent,
+} from "@morai/contracts";
 import type { JWTPayload } from "jose";
 import { resetForTesting } from "./stream-fan-out.ts";
 import { streamRoutes } from "./stream.routes.ts";
@@ -294,6 +298,76 @@ describe("GET /api/stream — reconcile-first (STRM-05)", () => {
     const parsed = streamReconcileEvent.parse(raw);
     // Graceful degradation: stream still opens, reconcile sent with empty positions
     expect(parsed.positions).toHaveLength(0);
+  });
+});
+
+// ─── Task 1 (20-02): GET /api/stream — ping heartbeat carries isRth (WATCH-01, D-03) ──
+
+/**
+ * Extracts the JSON-parsed data payload of the first frame for the given SSE event
+ * from raw accumulated SSE text (helper local to this describe block).
+ */
+function extractEventData(rawSse: string, targetEvent: string): unknown {
+  const frames = rawSse.split("\n\n");
+  const frame = frames.find((f) => f.includes(`event: ${targetEvent}`));
+  if (frame === undefined) throw new Error(`expected an "${targetEvent}" frame`);
+  const dataLine = frame.split("\n").find((l) => l.startsWith("data: "));
+  if (!dataLine) throw new Error(`expected a data: line in the "${targetEvent}" frame`);
+  return JSON.parse(dataLine.slice("data: ".length));
+}
+
+describe("GET /api/stream — ping heartbeat carries isRth (WATCH-01, D-03)", () => {
+  it("emits a ping frame whose data parses via streamPingEvent with isRth true under an open-market clock", async () => {
+    vi.useFakeTimers();
+    try {
+      // Monday 2026-07-06, 11:00 ET (15:00 UTC, EDT) — within RTH, not a holiday.
+      vi.setSystemTime(new Date("2026-07-06T15:00:00.000Z"));
+
+      const app = buildApp();
+      const mintRes = await app.request("/api/stream/ticket", { method: "POST" });
+      const { ticket } = streamTicketResponse.parse(await mintRes.json());
+
+      const res = await app.request(`/api/stream?ticket=${ticket}`);
+      const body = res.body;
+      if (!body) throw new Error("expected body");
+
+      const readPromise = readUntilEvent(body, "ping");
+      await vi.advanceTimersByTimeAsync(30_000);
+      const rawSse = await readPromise;
+
+      const raw = extractEventData(rawSse, "ping");
+      const parsed = streamPingEvent.parse(raw);
+      expect(parsed.isRth).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("emits a ping frame with isRth false under a holiday clock (RTH hours, NYSE closed)", async () => {
+    vi.useFakeTimers();
+    try {
+      // Thursday 2026-01-01 (New Year's Day), 10:00 ET (15:00 UTC, EST) — RTH hours,
+      // but a full NYSE closure day. isRth must be false (AND of both predicates).
+      vi.setSystemTime(new Date("2026-01-01T15:00:00.000Z"));
+
+      const app = buildApp();
+      const mintRes = await app.request("/api/stream/ticket", { method: "POST" });
+      const { ticket } = streamTicketResponse.parse(await mintRes.json());
+
+      const res = await app.request(`/api/stream?ticket=${ticket}`);
+      const body = res.body;
+      if (!body) throw new Error("expected body");
+
+      const readPromise = readUntilEvent(body, "ping");
+      await vi.advanceTimersByTimeAsync(30_000);
+      const rawSse = await readPromise;
+
+      const raw = extractEventData(rawSse, "ping");
+      const parsed = streamPingEvent.parse(raw);
+      expect(parsed.isRth).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
