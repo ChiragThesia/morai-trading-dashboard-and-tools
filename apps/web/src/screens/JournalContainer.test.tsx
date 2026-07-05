@@ -11,7 +11,7 @@
  *
  * Mocks:
  *   - useCalendars: controlled data (no real API calls)
- *   - useJournal: mock (Journal makes per-calendar calls on selection)
+ *   - useLifecycle: mock (Journal makes per-calendar calls on selection)
  *   - useRebuildJournal: mock
  *   - rpc.ts / supabase.ts: prevent real network calls
  */
@@ -26,8 +26,13 @@ import React from "react";
 vi.mock("./hooks/useCalendars.ts", () => ({ useCalendars: vi.fn() }));
 vi.mock("../hooks/useCalendars.ts", () => ({ useCalendars: vi.fn() }));
 
-vi.mock("../hooks/useJournal.ts", () => ({
-  useJournal: vi.fn(() => ({ data: undefined, isPending: true })),
+vi.mock("../hooks/useLifecycle.ts", () => ({
+  useLifecycle: vi.fn(() => ({
+    data: undefined,
+    isPending: true,
+    isError: false,
+    refetch: vi.fn(),
+  })),
 }));
 
 vi.mock("../hooks/useRebuildJournal.ts", () => ({

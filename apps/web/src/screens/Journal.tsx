@@ -1,15 +1,18 @@
 /**
- * Journal screen — trade lifecycle + per-calendar rebuild (JOURNAL-01 + REBUILD-01)
+ * Journal screen — trade lifecycle + per-calendar rebuild (JOURNAL-01 + REBUILD-01 + JRNL-01)
  *
  * UI-SPEC "Journal screen" 3-column layout:
  *   Left  (250px) — trade list: sorted newest-open-first, then closed reverse-chron.
  *                   history/entry-exit/OPEN badges; selected row = violet border.
- *   Center (1fr)  — lifecycle: trade header + 3 KPIs + LifecycleChart (for history trades)
- *                   OR dashed pre-history stub + "no day-by-day (pre Jun-12)" (for entry/exit-only).
- *                   RebuildButton is present and wired to the selected calendar.
- *   Right (290px) — snapshot table (Time/SPX/Net/P&L/Θ/Vega) + "Why it moved" callout + Notes.
+ *   Center (1fr)  — lifecycle: LifecycleMasthead (verdict headline + read + net P&L) +
+ *                   the D-08 stacked-panel LifecycleChart (for history trades) OR dashed
+ *                   pre-history stub + "no day-by-day (pre Jun-12)" (for entry/exit-only)
+ *                   OR "Building the lifecycle." (too-new) OR an error state + Retry.
+ *                   RebuildButton and the always-visible honest-caveats footer are present.
+ *   Right (290px) — reactive rail: P&L bridge (crosshair-synced) → the edge → greeks · now
+ *                   → the beats → relocated Notes (RULE-01, unchanged).
  *
- * Data: useJournal(calendarId) per selected trade (60s poll, parse via journalResponse).
+ * Data: useLifecycle(calendarId) per selected trade (60s poll, parse via lifecycleResponse).
  * Empty state: locked "No journal history yet…" copy (JOURNAL-01).
  * Pre-Jun-12 trades: graceful stub — NEVER error, NEVER blank (JOURNAL-01 invariant).
  * Rebuild: RebuildButton triggers POST /api/jobs/rebuild-journal/trigger (REBUILD-01).
@@ -20,12 +23,18 @@
 import { useState } from "react";
 import { enterRuleTag, exitRuleTag, rollRuleTag } from "@morai/core";
 import { classifyTradeHistory } from "../lib/journal-history.ts";
-import { useJournal } from "../hooks/useJournal.ts";
+import { useLifecycle } from "../hooks/useLifecycle.ts";
 import { useRuleTags } from "../hooks/useRuleTags.ts";
 import { LifecycleChart } from "../components/LifecycleChart.tsx";
+import { LifecycleMasthead } from "../components/LifecycleMasthead.tsx";
+import { PnlBridgeCard } from "../components/PnlBridgeCard.tsx";
+import { EdgeCard } from "../components/EdgeCard.tsx";
+import { GreeksNowCard } from "../components/GreeksNowCard.tsx";
+import { BeatsCard } from "../components/BeatsCard.tsx";
+import type { Beat } from "../components/BeatsCard.tsx";
 import { RebuildButton } from "../components/RebuildButton.tsx";
 import { Panel, PanelHeading, SectionLabel, Button } from "../components/system/index.tsx";
-import type { SnapshotResponse, EventWithRulesEntry } from "@morai/contracts";
+import type { EventWithRulesEntry, LifecycleResponse } from "@morai/contracts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -242,76 +251,46 @@ function RuleTagChips({
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/** Snapshot table rows (right column) */
-function SnapshotTable({
-  snapshots,
-  selectedIndex,
+/** Dashed-border placeholder box shared by the pre-history and too-new honest states. */
+function DashedStub({
+  ariaLabel,
+  heading,
+  sub,
 }: {
-  snapshots: ReadonlyArray<SnapshotResponse>;
-  selectedIndex: number;
+  ariaLabel: string;
+  heading: string;
+  sub: string;
 }): React.ReactElement {
-  return (
-    <table className="w-full border-collapse font-mono text-[10.5px] tabular-nums">
-      <thead>
-        <tr>
-          {["Time", "SPX", "Net", "P&L", "Θ", "Vega"].map((col) => (
-            <th
-              key={col}
-              className={`border-b border-panel2 px-[5px] py-1 text-[9px] font-medium uppercase text-dim ${
-                col === "Time" ? "text-left" : "text-right"
-              }`}
-            >
-              {col}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {snapshots.map((s, i) => {
-          const pnl = parseFloat(s.pnlOpen);
-          const pnlClass = pnl >= 0 ? "text-up" : "text-down";
-          const isSelected = i === selectedIndex;
-
-          return (
-            <tr key={s.time} className={isSelected ? "bg-raise/27" : undefined}>
-              <td className="border-b border-panel2 px-[5px] py-1 text-left text-txt">
-                {fmtSnapTime(s.time)}
-              </td>
-              <td className="border-b border-panel2 px-[5px] py-1 text-right text-blue">
-                {parseFloat(s.spot).toLocaleString()}
-              </td>
-              <td className="border-b border-panel2 px-[5px] py-1 text-right text-txt">
-                {parseFloat(s.netMark).toFixed(2)}
-              </td>
-              <td className={`border-b border-panel2 px-[5px] py-1 text-right ${pnlClass}`}>
-                {pnl >= 0 ? "+" : ""}${Math.abs(pnl).toFixed(2)}
-              </td>
-              <td className="border-b border-panel2 px-[5px] py-1 text-right text-amber">
-                {parseFloat(s.netTheta).toFixed(1)}
-              </td>
-              <td className="border-b border-panel2 px-[5px] py-1 text-right text-up">
-                {parseFloat(s.netVega).toFixed(0)}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-/** Pre-Jun-12 graceful stub — dashed border placeholder (JOURNAL-01) */
-function PreHistoryStub(): React.ReactElement {
   return (
     <div
       className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line2 p-4 text-center font-mono text-[11px] text-dim"
-      aria-label="no day-by-day (pre Jun-12)"
+      aria-label={ariaLabel}
     >
-      <span>no day-by-day (pre Jun-12)</span>
-      <span className="text-[10px] text-faint">
-        Chain history starts 2026-06-12. Only entry and exit events are available for this trade.
-      </span>
+      <span>{heading}</span>
+      <span className="text-[10px] text-faint">{sub}</span>
     </div>
+  );
+}
+
+/** Pre-Jun-12 graceful stub — dashed border placeholder (JOURNAL-01), unchanged copy. */
+function PreHistoryStub(): React.ReactElement {
+  return (
+    <DashedStub
+      ariaLabel="no day-by-day (pre Jun-12)"
+      heading="no day-by-day (pre Jun-12)"
+      sub="Chain history starts 2026-06-12. Only entry and exit events are available for this trade."
+    />
+  );
+}
+
+/** Too-new stub (0-1 usable snapshots, NOT pre-history) — new copy variant per D-05. */
+function BuildingLifecycleStub(): React.ReactElement {
+  return (
+    <DashedStub
+      ariaLabel="Building the lifecycle"
+      heading="Building the lifecycle."
+      sub="Check back after the next snapshot — captured every 30 minutes during RTH."
+    />
   );
 }
 
@@ -320,10 +299,16 @@ function LifecycleSection({
   trade,
   snapshots,
   isPending,
+  isError,
+  onRetry,
+  onCrosshairChange,
 }: {
   trade: TradeSummary;
-  snapshots: ReadonlyArray<SnapshotResponse>;
+  snapshots: LifecycleResponse["snapshots"];
   isPending: boolean;
+  isError: boolean;
+  onRetry: () => void;
+  onCrosshairChange: (index: number | null) => void;
 }): React.ReactElement {
   const kind = classifyTradeHistory({
     openedAt: trade.openedAt,
@@ -331,70 +316,15 @@ function LifecycleSection({
     hasSnapshots: snapshots.length > 0,
   });
 
-  const pnlNum = parseFloat(trade.realizedPnl);
-  const pnlClass = pnlNum >= 0 ? "text-up" : "text-down";
-  const isOpen = trade.closedAt === null;
-
-  // KPI calculations from snapshots
-  const pnlValues = snapshots.map((s) => parseFloat(s.pnlOpen));
-  const maxFav = pnlValues.length > 0 ? Math.max(...pnlValues) : null;
-  const maxAdv = pnlValues.length > 0 ? Math.min(...pnlValues) : null;
+  const eyebrow = `${trade.name} · ${fmtDate(trade.openedAt)}${
+    trade.closedAt !== null ? ` → ${fmtDate(trade.closedAt)}` : " (open)"
+  }`;
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Trade header card */}
-      <Panel>
-        <div className="mb-2.5 flex items-baseline gap-3">
-          <div className="font-display text-base font-bold text-txt">
-            {trade.name}
-          </div>
-          <div className="font-mono text-[11px] text-dim">
-            {fmtDate(trade.openedAt)}
-            {!isOpen ? ` → ${fmtDate(trade.closedAt ?? "")}` : " (open)"}
-          </div>
-          <div
-            className={`ml-auto font-display text-lg font-bold ${
-              isOpen ? "text-blue" : pnlClass
-            }`}
-          >
-            {isOpen ? "open" : fmtPnl(trade.realizedPnl)}
-          </div>
-        </div>
-
-        {/* 3 KPIs */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-md border border-line bg-panel2 px-[9px] py-2">
-            <div className="text-[9px] uppercase tracking-[0.5px] text-dim">
-              Realized
-            </div>
-            <div
-              className={`mt-px font-display text-[15px] font-bold tabular-nums ${
-                isOpen ? "text-blue" : pnlClass
-              }`}
-            >
-              {isOpen ? "open" : fmtPnl(trade.realizedPnl)}
-            </div>
-          </div>
-
-          <div className="rounded-md border border-line bg-panel2 px-[9px] py-2">
-            <div className="text-[9px] uppercase tracking-[0.5px] text-dim">
-              Max favorable
-            </div>
-            <div className="mt-px font-display text-[15px] font-bold tabular-nums text-up">
-              {maxFav !== null ? `+$${maxFav.toFixed(2)}` : "—"}
-            </div>
-          </div>
-
-          <div className="rounded-md border border-line bg-panel2 px-[9px] py-2">
-            <div className="text-[9px] uppercase tracking-[0.5px] text-dim">
-              Max adverse
-            </div>
-            <div className="mt-px font-display text-[15px] font-bold tabular-nums text-down">
-              {maxAdv !== null ? `−$${Math.abs(maxAdv).toFixed(2)}` : "—"}
-            </div>
-          </div>
-        </div>
-      </Panel>
+      {!isPending && !isError && kind === "history" && (
+        <LifecycleMasthead snapshots={snapshots} eyebrow={eyebrow} />
+      )}
 
       {/* Lifecycle chart card */}
       <Panel className="flex min-h-[300px] flex-1 flex-col">
@@ -413,20 +343,42 @@ function LifecycleSection({
           />
         )}
 
-        {!isPending && kind === "history" && snapshots.length > 1 && (
-          <LifecycleChart snapshots={snapshots} />
-        )}
-
-        {!isPending && kind === "entry-exit-only" && (
-          <PreHistoryStub />
-        )}
-
-        {!isPending && kind === "history" && snapshots.length <= 1 && (
-          <div className="p-4 text-center text-[11px] text-dim">
-            No snapshots yet. Snapshots are captured every 30 minutes during RTH.
+        {!isPending && isError && (
+          <div className="flex min-h-[200px] flex-1 flex-col items-center justify-center gap-2 p-4 text-center font-mono text-[11px] text-dim">
+            <span>Couldn&apos;t load this calendar&apos;s lifecycle.</span>
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={() => {
+                onRetry();
+              }}
+            >
+              Retry
+            </Button>
           </div>
         )}
+
+        {!isPending && !isError && kind === "entry-exit-only" && <PreHistoryStub />}
+
+        {!isPending && !isError && kind === "history" && snapshots.length > 1 && (
+          <LifecycleChart snapshots={snapshots} onCrosshairChange={onCrosshairChange} />
+        )}
+
+        {!isPending && !isError && kind === "history" && snapshots.length <= 1 && (
+          <BuildingLifecycleStub />
+        )}
       </Panel>
+
+      {/* Honest-caveats footer (always visible, not dismissible — D-05) */}
+      <div className="flex flex-col gap-1 px-1 font-mono text-[9.5px] leading-[1.3] text-dim">
+        <span>
+          Attribution is a 2nd-order approximation — the faint residual band is the
+          unexplained part, never hidden.
+        </span>
+        <span>
+          Line breaks are real feed gaps (spot=0 / NaN), drawn as gaps, never interpolated.
+        </span>
+      </div>
     </div>
   );
 }
@@ -441,7 +393,16 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
 
   const selectedTrade = trades.find((t) => t.id === selectedId) ?? trades[0] ?? null;
 
-  const { data, isPending } = useJournal(selectedTrade?.calendarId ?? "");
+  // Shared crosshair state: fed by LifecycleChart.onCrosshairChange (center), consumed by
+  // PnlBridgeCard (rail) so hovering the hero chart re-renders the bridge "as of {day}".
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const {
+    data,
+    isPending,
+    isError,
+    refetch,
+  } = useLifecycle(selectedTrade?.calendarId ?? "");
 
   const {
     events: ruleEvents,
@@ -451,7 +412,7 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
     retry: retryRuleTags,
   } = useRuleTags(selectedTrade?.calendarId ?? "");
 
-  const snapshots: ReadonlyArray<SnapshotResponse> = data?.snapshots ?? [];
+  const snapshots: LifecycleResponse["snapshots"] = data?.snapshots ?? [];
 
   const openEvent = ruleEvents.find((e) => e.eventType === "OPEN");
   const closeEvent = ruleEvents.find((e) => e.eventType === "CLOSE");
@@ -462,6 +423,31 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
   const selectedTradeTagLabels = Array.from(
     new Set(ruleEvents.flatMap((e: EventWithRulesEntry) => e.tags)),
   ).map(tagLabel);
+
+  // "The beats" (BeatsCard, rail): entry (openedAt) → event-move snapshots → close
+  // (closedAt, when closed). Never fabricated — an empty selection yields no beats.
+  const beats: ReadonlyArray<Beat> =
+    selectedTrade === null
+      ? []
+      : [
+          { date: fmtDate(selectedTrade.openedAt), kind: "entry", label: "Entered the trade." },
+          ...snapshots
+            .filter((s) => s.trigger === "event-move")
+            .map((s) => ({
+              date: fmtSnapTime(s.time),
+              kind: "event" as const,
+              label: `Event-driven move — net P&L ${fmtPnl(s.pnlOpen)}.`,
+            })),
+          ...(selectedTrade.closedAt !== null
+            ? [
+                {
+                  date: fmtDate(selectedTrade.closedAt),
+                  kind: "close" as const,
+                  label: `Closed — ${fmtPnl(selectedTrade.realizedPnl)}.`,
+                },
+              ]
+            : []),
+        ];
 
   // ── Empty state ─────────────────────────────────────────────────────────────
   if (trades.length === 0) {
@@ -575,39 +561,23 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
             trade={selectedTrade}
             snapshots={snapshots}
             isPending={isPending}
+            isError={isError}
+            onRetry={() => {
+              void refetch();
+            }}
+            onCrosshairChange={setHoveredIndex}
           />
         )}
       </div>
 
-      {/* ── Right column — snapshot table + notes ─────────────────────────── */}
+      {/* ── Right column — reactive rail + notes ──────────────────────────── */}
       <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-        {/* Snapshot table card */}
-        <Panel>
-          <PanelHeading
-            title="Lifecycle"
-            action={<HeadingPill>per snapshot</HeadingPill>}
-          />
+        <PnlBridgeCard snapshots={snapshots} hoveredIndex={hoveredIndex} />
+        <EdgeCard snapshots={snapshots} />
+        <GreeksNowCard snapshots={snapshots} />
+        <BeatsCard beats={beats} />
 
-          {snapshots.length > 0 ? (
-            <SnapshotTable snapshots={snapshots} selectedIndex={snapshots.length - 1} />
-          ) : (
-            <div className="py-2 font-mono text-[10px] text-dim">
-              {isPending ? "Loading…" : "No snapshots available."}
-            </div>
-          )}
-        </Panel>
-
-        {/* Why it moved card */}
-        <Panel>
-          <PanelHeading title="Why it moved" />
-          <div className="rounded-md border border-line border-l-2 border-l-violet bg-panel2 px-[10px] py-2 font-mono text-[11px] leading-normal text-dim">
-            {snapshots.length > 0
-              ? "For a calendar the headline driver is vega split + theta. Check front vs back vega to understand which leg drove the move."
-              : "Select a trade with chain history to see the attribution narrative."}
-          </div>
-        </Panel>
-
-        {/* Notes card */}
+        {/* Notes card (RULE-01) — relocated to the bottom of the rail, unchanged */}
         <Panel>
           <PanelHeading
             title="Notes"

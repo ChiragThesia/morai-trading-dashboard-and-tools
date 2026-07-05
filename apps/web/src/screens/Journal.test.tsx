@@ -9,7 +9,7 @@
  *   4. RebuildButton is present in the Journal screen.
  *
  * Mocks:
- *   - useJournal: mock hook (no real API calls)
+ *   - useLifecycle: mock hook (no real API calls)
  *   - useRebuildJournal: mock hook
  *   - usePositions: mock (for market-strip if any)
  *   - rpc.ts / supabase.ts: prevent real network calls
@@ -19,8 +19,8 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ─── Mock hooks + infra ──────────────────────────────────────────────────────
-vi.mock("../hooks/useJournal.ts", () => ({
-  useJournal: vi.fn(),
+vi.mock("../hooks/useLifecycle.ts", () => ({
+  useLifecycle: vi.fn(),
 }));
 
 vi.mock("../hooks/useRebuildJournal.ts", () => ({
@@ -55,21 +55,30 @@ vi.mock("../lib/supabase.ts", () => ({
 
 // ─── Import screen + mocks (AFTER vi.mock hoisting) ──────────────────────────
 import { Journal } from "./Journal.tsx";
-import { useJournal } from "../hooks/useJournal.ts";
+import { useLifecycle } from "../hooks/useLifecycle.ts";
 import { useRuleTags } from "../hooks/useRuleTags.ts";
 import type { UseRuleTagsResult } from "../hooks/useRuleTags.ts";
 import { fireEvent } from "@testing-library/react";
 import type { EventWithRulesEntry } from "@morai/contracts";
 
-const mockUseJournal = vi.mocked(useJournal);
+const mockUseLifecycle = vi.mocked(useLifecycle);
 const mockUseRuleTags = vi.mocked(useRuleTags);
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
+/** Enriched lifecycle snapshot fixture (JRNL-01: isGap + forward vol + attribution buckets). */
 function makeSnapshot(overrides?: {
   time?: string;
   pnlOpen?: string;
   spot?: string;
+  isGap?: boolean;
+  cumTheta?: number | null;
+  cumVega?: number | null;
+  cumDeltaGamma?: number | null;
+  cumResidual?: number | null;
+  forwardVol?: number | null;
+  forwardVolGuard?: "ok" | "inverted";
+  trigger?: "scheduled" | "event-move";
 }) {
   return {
     time: overrides?.time ?? "2026-06-12T15:00:00.000Z",
@@ -91,6 +100,14 @@ function makeSnapshot(overrides?: {
     dteBack: 49,
     pnlOpen: overrides?.pnlOpen ?? "0.00",
     source: "cboe" as const,
+    isGap: overrides?.isGap ?? false,
+    forwardVol: overrides?.forwardVol ?? 15.0,
+    forwardVolGuard: overrides?.forwardVolGuard ?? ("ok" as const),
+    cumTheta: overrides?.cumTheta ?? 10,
+    cumVega: overrides?.cumVega ?? 5,
+    cumDeltaGamma: overrides?.cumDeltaGamma ?? -2,
+    cumResidual: overrides?.cumResidual ?? 0.5,
+    ...(overrides?.trigger !== undefined ? { trigger: overrides.trigger } : {}),
   };
 }
 
@@ -184,10 +201,12 @@ describe("Journal screen", () => {
 
   it("renders the locked empty state when no trades exist", () => {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    mockUseJournal.mockReturnValue({
+    mockUseLifecycle.mockReturnValue({
       data: { snapshots: [] },
       isPending: false,
-    } as unknown as ReturnType<typeof useJournal>);
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
 
     renderJournal([]);
 
@@ -199,10 +218,12 @@ describe("Journal screen", () => {
 
   it("renders entry/exit-only badge and 'no day-by-day (pre Jun-12)' stub for a pre-Jun-12 trade (JOURNAL-01)", () => {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    mockUseJournal.mockReturnValue({
+    mockUseLifecycle.mockReturnValue({
       data: { snapshots: [] },
       isPending: false,
-    } as unknown as ReturnType<typeof useJournal>);
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
 
     const trade = makePreJun12Trade();
     renderJournal([trade]);
@@ -221,7 +242,7 @@ describe("Journal screen", () => {
     expect(screen.queryByText(/error/i)).toBeNull();
   });
 
-  it("renders the lifecycle chart region and snapshot table for a history-eligible trade", () => {
+  it("renders the lifecycle masthead + chart + reactive rail for a history-eligible trade", () => {
     const snapshots = [
       makeSnapshot({ time: "2026-06-12T15:00:00.000Z", pnlOpen: "0.00" }),
       makeSnapshot({ time: "2026-06-12T16:30:00.000Z", pnlOpen: "70.00" }),
@@ -229,10 +250,12 @@ describe("Journal screen", () => {
     ];
 
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    mockUseJournal.mockReturnValue({
+    mockUseLifecycle.mockReturnValue({
       data: { snapshots },
       isPending: false,
-    } as unknown as ReturnType<typeof useJournal>);
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
 
     const trade = makeHistoryTrade();
     renderJournal([trade]);
@@ -240,21 +263,28 @@ describe("Journal screen", () => {
     // "history" badge should appear for this trade
     expect(screen.getByText("history")).toBeDefined();
 
-    // The lifecycle section heading (Lifecycle per snapshot)
-    expect(screen.getByText("Lifecycle")).toBeDefined();
+    // The masthead's net-P&L stat label
+    expect(screen.getByText("Net P&L")).toBeDefined();
 
-    // Snapshot table column headers
-    expect(screen.getByText("Time")).toBeDefined();
-    expect(screen.getByText("SPX")).toBeDefined();
-    expect(screen.getByText("Net")).toBeDefined();
+    // The reactive rail cards (JRNL-01)
+    expect(screen.getByText("P&L bridge · entry → now")).toBeDefined();
+    expect(screen.getByText("The edge")).toBeDefined();
+    expect(screen.getByText("Greeks · now")).toBeDefined();
+    expect(screen.getByText("The beats")).toBeDefined();
+
+    // The honest-caveats footer is always visible; the mockup SKETCH tag never ships
+    expect(screen.getByText(/Attribution is a 2nd-order approximation/)).toBeDefined();
+    expect(screen.queryByText(/SKETCH/)).toBeNull();
   });
 
   it("renders the RebuildButton in the journal screen", () => {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    mockUseJournal.mockReturnValue({
+    mockUseLifecycle.mockReturnValue({
       data: { snapshots: [] },
       isPending: false,
-    } as unknown as ReturnType<typeof useJournal>);
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
 
     const trade = makeHistoryTrade();
     renderJournal([trade]);
@@ -262,13 +292,37 @@ describe("Journal screen", () => {
     // The rebuild button trigger text
     expect(screen.getByText(/Rebuild journal/i)).toBeDefined();
   });
+
+  it("shows the error state with a working Retry button when the lifecycle fetch fails", () => {
+    const mockRefetch = vi.fn();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    mockUseLifecycle.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      refetch: mockRefetch,
+    } as unknown as ReturnType<typeof useLifecycle>);
+
+    const trade = makeHistoryTrade();
+    renderJournal([trade]);
+
+    expect(screen.getByText("Couldn't load this calendar's lifecycle.")).toBeDefined();
+
+    fireEvent.click(screen.getByText("Retry"));
+    expect(mockRefetch).toHaveBeenCalled();
+  });
 });
 
 describe("Journal screen — rule-tag control (RULE-01)", () => {
   beforeEach(() => {
-    mockUseJournal.mockReturnValue(
+    mockUseLifecycle.mockReturnValue(
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      { data: { snapshots: [] }, isPending: false } as unknown as ReturnType<typeof useJournal>,
+      {
+        data: { snapshots: [] },
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      } as unknown as ReturnType<typeof useLifecycle>,
     );
   });
 
