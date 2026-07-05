@@ -136,6 +136,39 @@ describe("makeEnqueueJobUseCase", () => {
     expect(q.getAll().length).toBe(2);
   });
 
+  // JRNL-01 pnl-unit-mismatch fix: recompute-snapshot-pnl mirrors rebuild-journal's
+  // calendar-scoped dedup — a window-based key would wrongly collapse two DIFFERENT
+  // calendars triggered in the same 10-min window into one entry.
+  it("recompute-snapshot-pnl uses recomputeSnapshotPnlDedupeKey (calendar-scoped)", async () => {
+    const q = makeTestJobQueue();
+    const enqueueJob = makeEnqueueJobUseCase({
+      jobQueue: q.enqueue,
+      now: () => BASE_TIME,
+    });
+
+    const calendarId = "550e8400-e29b-41d4-a716-446655440002";
+    const result = await enqueueJob("recompute-snapshot-pnl", { calendarId });
+    expect(result.ok).toBe(true);
+    // Same calendarId → same dedupeKey → no-op on re-enqueue
+    const result2 = await enqueueJob("recompute-snapshot-pnl", { calendarId });
+    if (result.ok && result2.ok) {
+      expect(result2.value).toBe(result.value);
+    }
+    expect(q.getAll().length).toBe(1); // only one entry
+  });
+
+  it("recompute-snapshot-pnl with different calendarIds produces different entries", async () => {
+    const q = makeTestJobQueue();
+    const enqueueJob = makeEnqueueJobUseCase({
+      jobQueue: q.enqueue,
+      now: () => BASE_TIME,
+    });
+
+    await enqueueJob("recompute-snapshot-pnl", { calendarId: "cal-aaa" });
+    await enqueueJob("recompute-snapshot-pnl", { calendarId: "cal-bbb" });
+    expect(q.getAll().length).toBe(2);
+  });
+
   it("different scheduled job names produce different entries", async () => {
     const q = makeTestJobQueue();
     const enqueueJob = makeEnqueueJobUseCase({

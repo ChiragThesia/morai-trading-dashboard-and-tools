@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { scheduledDedupeKey, rebuildDedupeKey } from "./dedupe-key.ts";
+import { scheduledDedupeKey, rebuildDedupeKey, recomputeSnapshotPnlDedupeKey } from "./dedupe-key.ts";
 
 describe("scheduledDedupeKey", () => {
   it("formats as '{jobName}:{windowStart.toISOString()}'", () => {
@@ -65,5 +65,21 @@ describe("rebuildDedupeKey", () => {
 
   it("different calendarIds produce different keys", () => {
     expect(rebuildDedupeKey("id-1")).not.toBe(rebuildDedupeKey("id-2"));
+  });
+});
+
+// JRNL-01 pnl-unit-mismatch fix: recompute-snapshot-pnl is calendar-scoped like
+// rebuild-journal — the 10-min window scheduledDedupeKey would wrongly collapse two
+// DIFFERENT calendars triggered in the same window into one dedupe key.
+describe("recomputeSnapshotPnlDedupeKey", () => {
+  it("formats as 'recompute-snapshot-pnl:{calendarId}'", () => {
+    const id = "550e8400-e29b-41d4-a716-446655440000";
+    expect(recomputeSnapshotPnlDedupeKey(id)).toBe(`recompute-snapshot-pnl:${id}`);
+  });
+
+  it("different calendarIds produce different keys", () => {
+    expect(recomputeSnapshotPnlDedupeKey("id-1")).not.toBe(
+      recomputeSnapshotPnlDedupeKey("id-2"),
+    );
   });
 });

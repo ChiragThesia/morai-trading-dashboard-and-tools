@@ -79,6 +79,7 @@ export type {
   ForPersistingSnapshot,
   ForReadingLatestSnapshotTime,
   ForReadingJournal,
+  ForRecomputingSnapshotPnl,
   ForReadingLatestLegObs,
 } from "./journal/index.ts";
 // Phase 3 calendar use-case factories
@@ -87,6 +88,7 @@ export {
   makeListCalendarsUseCase,
   makeCloseCalendarUseCase,
   makeSnapshotCalendarsUseCase,
+  computeSnapshotPnl,
   makeGetJournalUseCase,
   makeGetLiveGreeksUseCase,
 } from "./journal/index.ts";
@@ -189,6 +191,12 @@ export type {
 export { hashFillIds } from "./journal/index.ts";
 export { makeRebuildJournalUseCase } from "./journal/index.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./journal/index.ts";
+// JRNL-01 (pnl-unit-mismatch fix): recomputeSnapshotPnl use-case (data-correction path)
+export { makeRecomputeSnapshotPnlUseCase } from "./journal/index.ts";
+export type {
+  ForRunningRecomputeSnapshotPnl,
+  RecomputeSnapshotPnlDeps,
+} from "./journal/index.ts";
 // Phase 5: enqueueJob use-case factory (JOB-01 — MCP-02 trigger surface)
 export { makeEnqueueJobUseCase } from "./journal/index.ts";
 export type { EnqueueJobDeps } from "./journal/index.ts";

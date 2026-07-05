@@ -38,6 +38,7 @@ export type {
   ForPersistingSnapshot,
   ForReadingLatestSnapshotTime,
   ForReadingJournal,
+  ForRecomputingSnapshotPnl,
   ForReadingLatestLegObs,
 } from "./application/ports.ts";
 export type { ForGettingStatus, StatusPayload, StatusError } from "./application/getStatus.ts";
@@ -47,7 +48,7 @@ export type { ForRunningFetchChain, FetchChainDeps } from "./application/fetchCh
 export { makeFetchRateUseCase } from "./application/fetchRate.ts";
 export { makeComputeBsmGreeksUseCase } from "./application/computeBsmGreeks.ts";
 // Snapshot use-case (Phase 3, plan 05)
-export { makeSnapshotCalendarsUseCase } from "./application/snapshotCalendars.ts";
+export { makeSnapshotCalendarsUseCase, computeSnapshotPnl } from "./application/snapshotCalendars.ts";
 export type { ForRunningSnapshotCalendars, SnapshotCalendarsDeps } from "./application/snapshotCalendars.ts";
 // Journal read + live-greeks use-cases (Phase 3, plan 06)
 export { makeGetJournalUseCase } from "./application/getJournal.ts";
@@ -148,6 +149,13 @@ export { hashFillIds } from "./domain/fill-pairing.ts";
 // Phase 5: rebuildJournal use-case factory + driver port
 export { makeRebuildJournalUseCase } from "./application/rebuildJournal.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./application/rebuildJournal.ts";
+// JRNL-01 (pnl-unit-mismatch fix): recomputeSnapshotPnl use-case — re-derive frozen historical
+// pnl_open from a corrected openNetDebit (data-correction path, see recomputeSnapshotPnl.ts).
+export { makeRecomputeSnapshotPnlUseCase } from "./application/recomputeSnapshotPnl.ts";
+export type {
+  ForRunningRecomputeSnapshotPnl,
+  RecomputeSnapshotPnlDeps,
+} from "./application/recomputeSnapshotPnl.ts";
 // Phase 5: enqueueJob use-case factory (JOB-01 — dedup + port delegation)
 export { makeEnqueueJobUseCase } from "./application/enqueueJob.ts";
 export type { EnqueueJobDeps } from "./application/enqueueJob.ts";

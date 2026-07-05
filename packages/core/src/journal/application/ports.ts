@@ -244,6 +244,22 @@ export type ForReadingJournal = (
 ) => Promise<Result<ReadonlyArray<SnapshotRow> | null, StorageError>>;
 
 /**
+ * ForRecomputingSnapshotPnl — re-derive AND write pnl_open on every stored calendar_snapshots
+ * row for a calendar, given the CURRENT openNetDebit + qty (D-05: pnl_open = (net_mark -
+ * openNetDebit) * qty * 100). One-time data-correction step (JRNL-01): if openNetDebit is
+ * corrected after the fact (e.g. a unit-mismatch bug — dollars stored where points were
+ * expected — fixed via rebuild-journal), every historical snapshot row still carries the
+ * pnl_open computed from the STALE value. Re-derives purely from each row's already-stored
+ * net_mark — no online fetch, no broker call. rowsUpdated = 0 (not an error) when the
+ * calendar has no snapshot rows.
+ */
+export type ForRecomputingSnapshotPnl = (
+  calendarId: string,
+  openNetDebit: number,
+  qty: number,
+) => Promise<Result<{ readonly rowsUpdated: number }, StorageError>>;
+
+/**
  * ForReadingLatestLegObs — latest leg_observation for an OCC symbol (CAL-06).
  * Backs get_live_greeks MCP tool. Returns null when no observation exists.
  */

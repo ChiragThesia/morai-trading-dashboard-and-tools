@@ -40,3 +40,15 @@ export function scheduledDedupeKey(
 export function rebuildDedupeKey(calendarId: string): string {
   return `rebuild-journal:${calendarId}`;
 }
+
+/**
+ * recomputeSnapshotPnlDedupeKey — calendar-scoped key for on-demand recompute-snapshot-pnl
+ * jobs (JRNL-01 pnl-unit-mismatch fix). Returns "recompute-snapshot-pnl:{calendarId}".
+ *
+ * Mirrors rebuildDedupeKey: without a calendar-scoped key, the scheduledDedupeKey window
+ * strategy would collapse two DIFFERENT calendars triggered in the same 10-min window into
+ * one dedupe key, silently no-oping the second calendar's recompute.
+ */
+export function recomputeSnapshotPnlDedupeKey(calendarId: string): string {
+  return `recompute-snapshot-pnl:${calendarId}`;
+}
