@@ -1,5 +1,5 @@
 // Worker composition root — pg-boss scheduling.
-// Boot: parse config → run migrations → boot pg-boss → register all 12 jobs via registerAllJobs.
+// Boot: parse config → run migrations → boot pg-boss → register all 13 jobs via registerAllJobs.
 //
 // Architecture law (architecture-boundaries.md):
 // - process.env read ONCE here via bootWorkerConfig; typed config flows inward.
@@ -58,6 +58,7 @@ import {
   makeSyncTransactionsUseCase,
   hashFillIds,
   makeRebuildJournalUseCase,
+  makeRecomputeSnapshotPnlUseCase,
   selectChainSource,
   makeFetchCot,
   makeFetchMacroSeries,
@@ -74,6 +75,7 @@ import { makeComputeGexSnapshotHandler } from "./handlers/compute-gex-snapshot.t
 import { makeSyncFillsHandler } from "./handlers/sync-fills.ts";
 import { makeSyncTransactionsHandler } from "./handlers/sync-transactions.ts";
 import { makeRebuildJournalHandler } from "./handlers/rebuild-journal.ts";
+import { makeRecomputeSnapshotPnlHandler } from "./handlers/recompute-snapshot-pnl.ts";
 import { makeComputePickerHandler } from "./handlers/compute-picker.ts";
 import { makeFetchEconomicEventsHandler } from "./handlers/fetch-economic-events.ts";
 import { registerAllJobs } from "./schedule.ts";
@@ -400,6 +402,19 @@ const rebuildJournalHandler = makeRebuildJournalHandler({
   now: () => new Date(),
 });
 
+// JRNL-01 (pnl-unit-mismatch fix): recomputeSnapshotPnl use-case — re-derives the frozen
+// historical pnl_open on every calendar_snapshots row for a calendar from its CURRENT
+// openNetDebit + qty (data-correction path, run after an openNetDebit correction).
+const recomputeSnapshotPnlUseCase = makeRecomputeSnapshotPnlUseCase({
+  getCalendarById: calendarsRepo.getCalendarById,
+  recomputeSnapshotPnl: calendarSnapshotsRepo.recomputeSnapshotPnl,
+});
+
+const recomputeSnapshotPnlHandler = makeRecomputeSnapshotPnlHandler({
+  recomputeSnapshotPnlUseCase,
+  now: () => new Date(),
+});
+
 // COT-01 (13-05): weekly CFTC Commitment of Traders report (Friday 17:00 ET, D-07).
 // CFTC Socrata endpoint — anonymous access, no auth required (landmine 7).
 // Idempotent: ON CONFLICT (contract_code, as_of) DO NOTHING in the repo (D-09).
@@ -489,8 +504,9 @@ await registerAllJobs(boss, {
   fetchCot: fetchCotHandler,
   computePicker: computePickerHandler,
   fetchEconomicEvents: fetchEconomicEventsHandler,
+  recomputeSnapshotPnl: recomputeSnapshotPnlHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 12 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker chain-triggered only; rebuild-journal on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 13 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker chain-triggered only; rebuild-journal + recompute-snapshot-pnl on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );

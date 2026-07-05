@@ -77,12 +77,14 @@ function makeFakeHandlers(): AllHandlers {
     fetchCot: handler,
     computePicker: handler,
     fetchEconomicEvents: handler,
+    recomputeSnapshotPnl: handler,
   };
 }
 
 // GW-03: refresh-tokens retired; 13-05 COT-01: fetch-cot added; 19-08: compute-picker +
-// fetch-economic-events added — 12 queues, 7 crons
-const ALL_12_QUEUES = [
+// fetch-economic-events added; JRNL-01 pnl-unit-mismatch fix: recompute-snapshot-pnl added
+// (on-demand only, mirrors rebuild-journal) — 13 queues, 7 crons
+const ALL_13_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
@@ -95,6 +97,7 @@ const ALL_12_QUEUES = [
   "fetch-cot",
   "compute-picker",
   "fetch-economic-events",
+  "recompute-snapshot-pnl",
 ];
 
 const SCHEDULED_7 = [
@@ -108,11 +111,11 @@ const SCHEDULED_7 = [
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 12 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08)", async () => {
+  it("calls createQueue for all 13 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01)", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_12_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_13_QUEUES.sort());
   });
 
   it("calls schedule 8 times — 7 jobs, fetch-rates scheduled twice; all 8 rows survive the (name, key) upsert (14-05, D-06, CR-01)", async () => {
@@ -195,11 +198,19 @@ describe("registerAllJobs", () => {
     expect(names).not.toContain("refresh-tokens");
   });
 
-  it("calls work() for all 12 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08)", async () => {
+  it("calls work() for all 13 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01)", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_12_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_13_QUEUES.sort());
+  });
+
+  it("does NOT schedule recompute-snapshot-pnl (on-demand only, mirrors rebuild-journal — JRNL-01)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const names = scheduleCalls.map((c) => c.name);
+    expect(names).not.toContain("recompute-snapshot-pnl");
   });
 
   it("does NOT schedule compute-picker (chain-triggered only by compute-gex-snapshot, 19-08 D-04)", async () => {
