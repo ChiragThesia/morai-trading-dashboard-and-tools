@@ -4,6 +4,10 @@
   "module": "src/index.ts",
   "main": "src/index.ts",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rule-tags": "./src/journal/domain/rule-tags.ts"
+  },
   "private": true,
   "dependencies": {
     "@morai/quant": "workspace:*",

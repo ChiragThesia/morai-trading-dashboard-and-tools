@@ -44,6 +44,12 @@ export default tseslint.config(
       "boundaries/elements": [
         { type: "shared",    pattern: "**/packages/shared/src/**",    mode: "full" },
         { type: "contracts", pattern: "**/packages/contracts/src/**", mode: "full" },
+        // RULE-01 / D-07 (REVIEW WR-03): the rule-tags value module is its OWN element,
+        // declared BEFORE the generic `core` element so it wins the first-match. This lets
+        // the contracts→core carve-out be scoped to JUST this file (values only) instead of
+        // the whole @morai/core barrel — a future `import { makeXUseCase } from "@morai/core"`
+        // in contracts is then blocked at lint time, not merely by comment.
+        { type: "core-rule-tags", pattern: "**/packages/core/src/journal/domain/rule-tags.ts", mode: "full" },
         { type: "core",      pattern: "**/packages/core/src/**",      mode: "full" },
         { type: "adapters",  pattern: "**/packages/adapters/src/**",  mode: "full" },
         { type: "quant",     pattern: "**/packages/quant/src/**",     mode: "full" },
@@ -59,23 +65,28 @@ export default tseslint.config(
           // shared: may only import from within shared itself (relative intra-package imports)
           { from: "shared",    allow: ["shared"] },
           // contracts: shared + intra-package relative imports (same pattern as shared→shared)
-          // + core (RULE-01, Phase 20 D-07 narrow carve-out): contracts derives its rule-tag
-          // enums from core's pure value modules so the vocabulary is single-sourced — see
-          // docs/architecture/monorepo-layout.md "Narrow carve-out" note. Import only core's
-          // plain Zod value/enum exports here, never ports/use-cases/domain-logic types.
-          { from: "contracts", allow: ["shared", "contracts", "core"] },
+          // + core-rule-tags ONLY (RULE-01, Phase 20 D-07 narrow carve-out): contracts derives
+          // its rule-tag enums from core's pure value module (imported via the @morai/core/rule-tags
+          // subpath) so the vocabulary is single-sourced — see docs/architecture/monorepo-layout.md
+          // "Narrow carve-out" note. The carve-out is now scoped to the rule-tags module only
+          // (REVIEW WR-03); importing anything else from @morai/core (ports/use-cases) fails lint.
+          { from: "contracts", allow: ["shared", "contracts", "core-rule-tags"] },
           // quant: pure math leaf — imports nothing (self-only for intra-package relative imports)
           { from: "quant",     allow: ["quant"] },
-          // core: shared + quant (BSM kernel leaf) + intra-package relative imports
+          // core-rule-tags: the rule-tags value module — may reach the rest of core (it imports
+          // CalendarEventType) + shared/quant, same as any other core file.
+          { from: "core-rule-tags", allow: ["shared", "quant", "core", "core-rule-tags"] },
+          // core: shared + quant (BSM kernel leaf) + intra-package relative imports (incl. the
+          // rule-tags value module, which the journal barrel + setRuleTags re-import)
           // External vendor imports (hono, drizzle, etc.) are blocked by no-restricted-imports below
-          { from: "core",      allow: ["shared", "quant", "core"] },
+          { from: "core",      allow: ["shared", "quant", "core", "core-rule-tags"] },
           // adapters: core ports + shared + intra-package relative imports (same pattern as core→core)
           // Contract test files (*.contract.test.ts) additionally import from contracts to assert
           // the adapter output satisfies the published contract schema (cross-boundary test-only).
-          { from: "adapters",  allow: ["contracts", "core", "shared", "adapters"] },
+          { from: "adapters",  allow: ["contracts", "core", "core-rule-tags", "shared", "adapters"] },
           // apps: composition roots — can import everything + intra-package relative imports
           // apps/web imports quant for client-side BSM live re-pricing (D21)
-          { from: "apps",      allow: ["adapters", "core", "contracts", "shared", "quant", "apps"] },
+          { from: "apps",      allow: ["adapters", "core", "core-rule-tags", "contracts", "shared", "quant", "apps"] },
         ],
       }],
     },

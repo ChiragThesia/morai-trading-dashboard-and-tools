@@ -14,6 +14,9 @@ export default defineConfig({
     alias: {
       "@": resolve(__dirname, "src"),
       "@morai/contracts": resolve(__dirname, "../../packages/contracts/src/index.ts"),
+      // More-specific subpath alias MUST precede the bare @morai/core alias (Vite matches
+      // in order) so the @morai/core/rule-tags subpath (WR-03) resolves to the value module.
+      "@morai/core/rule-tags": resolve(__dirname, "../../packages/core/src/journal/domain/rule-tags.ts"),
       "@morai/core": resolve(__dirname, "../../packages/core/src/index.ts"),
       "@morai/quant": resolve(__dirname, "../../packages/quant/src/index.ts"),
       "@morai/shared": resolve(__dirname, "../../packages/shared/src/index.ts"),

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { enterRuleTag, exitRuleTag, rollRuleTag } from "@morai/core";
+// D-07 narrow carve-out (REVIEW WR-03): import the rule-tag enums from the scoped
+// @morai/core/rule-tags subpath — NOT the @morai/core barrel — so the ESLint boundary
+// can mechanically restrict contracts to core's values-only module (never ports/use-cases).
+import { enterRuleTag, exitRuleTag, rollRuleTag } from "@morai/core/rule-tags";
 
 // RULE-01: strategy-rule recording contracts (D-14 list-shaped, D-21 OTHER-requires-note).
 // MCP-02: ONE schema source for the HTTP route and the MCP tool (plan 20-10).

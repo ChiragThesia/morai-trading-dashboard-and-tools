@@ -15,6 +15,12 @@ export default defineConfig({
         "../../packages/contracts/src/index.ts",
         import.meta.url,
       ).pathname,
+      // More-specific subpath alias MUST precede the bare @morai/core alias (Vite matches
+      // in order) so the @morai/core/rule-tags subpath (WR-03) resolves to the value module.
+      "@morai/core/rule-tags": new URL(
+        "../../packages/core/src/journal/domain/rule-tags.ts",
+        import.meta.url,
+      ).pathname,
       "@morai/core": new URL(
         "../../packages/core/src/index.ts",
         import.meta.url,
