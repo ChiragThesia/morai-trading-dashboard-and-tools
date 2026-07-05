@@ -772,20 +772,6 @@ export function LifecycleChart({
           )}
         </div>
       )}
-
-      {/* Honest-caveats footer (always visible below the chart) */}
-      <div
-        style={{
-          marginTop: 8,
-          fontSize: 10,
-          color: COLOR_DIM,
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        }}
-      >
-        Attribution is a 2nd-order approximation — the faint residual band is the
-        unexplained part, never hidden. Line breaks are real feed gaps (spot=0 / NaN),
-        drawn as gaps, never interpolated.
-      </div>
     </div>
   );
 }
