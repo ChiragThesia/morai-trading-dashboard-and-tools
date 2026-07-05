@@ -266,6 +266,131 @@ describe("connectToSidecarStream", () => {
     expect(calls).toHaveLength(2);
   });
 
+  // ─── observeSpot hook (SNAP-01, 20-06, Pattern 2) ────────────────────────────
+
+  it("invokes observeSpot(price, ts) for a valid tick with underlyingPrice > 0", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+    const observeSpotCalls: Array<{ spot: number; ts: string }> = [];
+    const observeSpot = (spot: number, ts: string) => {
+      observeSpotCalls.push({ spot, ts });
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_TICK_PAYLOAD)),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      observeSpot,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(observeSpotCalls).toEqual([
+      { spot: VALID_TICK_PAYLOAD.underlyingPrice, ts: VALID_TICK_PAYLOAD.ts },
+    ]);
+  });
+
+  it("invokes observeSpot even when recomputeLiveGreek returns a skip result", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    // recompute returns null → skip result — observeSpot must still fire.
+    const { spy: recompute } = makeRecomputeSpy(null);
+    const observeSpotCalls: Array<{ spot: number; ts: string }> = [];
+    const observeSpot = (spot: number, ts: string) => {
+      observeSpotCalls.push({ spot, ts });
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_TICK_PAYLOAD)),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      observeSpot,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(observeSpotCalls).toHaveLength(1);
+  });
+
+  it("does NOT invoke observeSpot when underlyingPrice is null", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+    const observeSpotCalls: Array<{ spot: number; ts: string }> = [];
+    const observeSpot = (spot: number, ts: string) => {
+      observeSpotCalls.push({ spot, ts });
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify({ ...VALID_TICK_PAYLOAD, underlyingPrice: null })),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      observeSpot,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(observeSpotCalls).toHaveLength(0);
+  });
+
+  it("does NOT invoke observeSpot when underlyingPrice is <= 0", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+    const observeSpotCalls: Array<{ spot: number; ts: string }> = [];
+    const observeSpot = (spot: number, ts: string) => {
+      observeSpotCalls.push({ spot, ts });
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify({ ...VALID_TICK_PAYLOAD, underlyingPrice: 0 })),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      observeSpot,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(observeSpotCalls).toHaveLength(0);
+  });
+
+  it("does not throw when observeSpot is not provided", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_TICK_PAYLOAD)),
+    ]);
+
+    await expect(
+      connectToSidecarStream("http://sidecar.test.internal:8000", {
+        fetch: fakeFetch,
+        recompute,
+        bufferTick,
+        riskFreeRate: 0.045,
+        dividendYield: 0.013,
+        now: () => new Date("2026-06-10T10:00:00.000Z"),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it("throws when the sidecar fetch returns a non-200 status", async () => {
     const { spy: bufferTick } = makeBufferTickSpy();
     const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);

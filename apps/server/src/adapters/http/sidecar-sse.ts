@@ -67,6 +67,13 @@ export type ConnectToSidecarStreamDeps = {
   readonly recompute: RecomputeFn;
   /** Fan-out tick buffer (coalescer) — wraps bufferTick from stream-fan-out.ts. */
   readonly bufferTick: (tick: LiveGreekTick) => void;
+  /**
+   * SNAP-01 (20-06, Pattern 2): fires on every valid underlying tick — independent
+   * of recompute success/failure. This is the only place the SPX spot exists
+   * server-side without a new data source; the caller (main.ts) wires this to the
+   * event-snapshot detector (RTH gate → detectLargeMove → cooldown → enqueue).
+   */
+  readonly observeSpot?: (spot: number, ts: string) => void;
   /** Risk-free rate (decimal). Caller caches from rate_observations; refresh every 30 min. */
   readonly riskFreeRate: number;
   /** Continuous dividend yield (decimal). Typical: BSM_DIVIDEND_YIELD = 0.013. */
@@ -177,6 +184,13 @@ function dispatchFrame(
   }
 
   const rawTick: RawOptionTick = tickResult.data;
+
+  // SNAP-01 (20-06): feed the event-snapshot detector on every valid tick with a
+  // priced underlying — independent of the recompute outcome below (a bad option
+  // contract does not mean the spot is bad).
+  if (rawTick.underlyingPrice !== null && rawTick.underlyingPrice > 0) {
+    deps.observeSpot?.(rawTick.underlyingPrice, rawTick.ts);
+  }
 
   // BSM recompute (D-02) — skip result on no-price, bad-symbol, expired, iv-failed.
   const recomputeResult = deps.recompute(
