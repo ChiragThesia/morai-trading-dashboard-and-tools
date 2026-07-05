@@ -83,6 +83,8 @@ import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
 import { repriceScenario, buildScenarioStrip } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
+import { parseTosOrder } from "../lib/tos-parser.ts";
+import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candidate.ts";
 
 const mockPayoffChart = vi.mocked(PayoffChart);
 
@@ -199,6 +201,9 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
     render(
       <CandidateRail
         candidates={[]}
+        pastedCandidate={null}
+        pasteText=""
+        pasteError={null}
         asOf="2026-07-02"
         observedAt="2026-07-02T14:32:00.000Z"
         source="schwab"
@@ -210,6 +215,9 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
         onSelect={() => {}}
         onToggleCombine={() => {}}
         onCopy={() => {}}
+        onPasteTextChange={() => {}}
+        onPasteAnalyze={() => {}}
+        onPasteClear={() => {}}
       />,
     );
 
@@ -224,6 +232,9 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
     const { container } = render(
       <CandidateRail
         candidates={[]}
+        pastedCandidate={null}
+        pasteText=""
+        pasteError={null}
         asOf="2026-07-02"
         observedAt="2026-07-02T14:32:00.000Z"
         source="schwab"
@@ -235,6 +246,9 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
         onSelect={() => {}}
         onToggleCombine={() => {}}
         onCopy={() => {}}
+        onPasteTextChange={() => {}}
+        onPasteAnalyze={() => {}}
+        onPasteClear={() => {}}
       />,
     );
     expect(container.querySelectorAll('[data-testid^="candidate-card-"]').length).toBe(0);
@@ -410,16 +424,87 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
   });
 });
 
-describe("Analyzer — ad-hoc paste panel (paste-in)", () => {
+describe("Analyzer — pasted calendar (paste redesign)", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("mounts the paste-to-analyze panel at the top", () => {
+  // Dates far in the future so this suite never goes stale relative to "today".
+  const PASTE_EXAMPLE =
+    "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7450 PUT @45.85 LMT GTC";
+
+  it("mounts the paste-to-analyze input at the top of the Suggested calendars panel (no separate top chart)", () => {
     render(<Analyzer />);
-    expect(screen.getByTestId("adhoc-input")).toBeTruthy();
-    expect(screen.getByTestId("adhoc-analyze")).toBeTruthy();
+    const panel = screen.getByText("Suggested calendars").closest("div")?.parentElement;
+    expect(panel).toBeTruthy();
+    expect(within(assertDefined(panel, "panel")).getByTestId("picker-paste-input")).toBeTruthy();
+    expect(within(assertDefined(panel, "panel")).getByTestId("picker-paste-analyze")).toBeTruthy();
+    // Only one PayoffChart instance total — no separate ad-hoc chart above the grid.
+    expect(mockPayoffChart.mock.calls.length).toBe(1);
+  });
+
+  it("Analyze on a valid paste pins a PASTED card at the top of the rail and auto-selects it", () => {
+    render(<Analyzer />);
+
+    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
+    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+
+    const cards = screen.getAllByTestId(/^candidate-card-/);
+    expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted");
+    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
+    within(screen.getByTestId("candidate-card-pasted")).getByText("PASTED");
+  });
+
+  it("the pasted candidate drives the shared center Risk-profile chart via the same candidate→position→repriceScenario path", () => {
+    render(<Analyzer />);
+
+    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
+    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+
+    const parsed = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
+    if (parsed === null) throw new Error("expected PASTE_EXAMPLE to parse");
+    const pastedCandidate = parsedCalendarToPickerCandidate(parsed);
+    const expected = repriceScenario([candidateToAnalyzerPosition(pastedCandidate)], PARAMS);
+
+    const props = latestPayoffChartProps();
+    expect(props.todayCurve).toEqual(expected.payoffCurve);
+    expect(props.expirationCurve).toEqual(expected.expirationCurve);
+  });
+
+  it("shows the parse-error copy when the pasted text doesn't parse", () => {
+    render(<Analyzer />);
+
+    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: "not an order" } });
+    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+
+    expect(screen.getByTestId("picker-paste-error")).toBeTruthy();
+    expect(screen.queryByTestId("candidate-card-pasted")).toBeNull();
+  });
+
+  it("Clear removes the pasted card and re-selects the top-ranked scored candidate", () => {
+    render(<Analyzer />);
+
+    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
+    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+    expect(screen.getByTestId("candidate-card-pasted")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("picker-paste-clear"));
+
+    expect(screen.queryByTestId("candidate-card-pasted")).toBeNull();
+    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
+  });
+
+  it("Why / Scoring checklist / Entry-exit show a 'not engine-scored' note when the pasted candidate is selected", () => {
+    render(<Analyzer />);
+
+    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
+    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+
+    expect(screen.getAllByText("Pasted calendar — not engine-scored.").length).toBe(3);
+    expect(screen.queryByTestId("scoring-checklist")).toBeNull();
+    expect(screen.queryByTestId("entryexit-value-debit")).toBeNull();
+    expect(screen.queryByTestId("whypanel-forward-edge-sentence")).toBeNull();
   });
 });
 
