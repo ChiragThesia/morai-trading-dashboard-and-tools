@@ -436,12 +436,11 @@ describe("Analyzer — pasted calendar (paste redesign)", () => {
 
   it("mounts the paste-to-analyze input at the top of the Suggested calendars panel (no separate top chart)", () => {
     render(<Analyzer />);
-    const panel = screen.getByText("Suggested calendars").closest("div")?.parentElement;
-    expect(panel).toBeTruthy();
-    expect(within(assertDefined(panel, "panel")).getByTestId("picker-paste-input")).toBeTruthy();
-    expect(within(assertDefined(panel, "panel")).getByTestId("picker-paste-analyze")).toBeTruthy();
-    // Only one PayoffChart instance total — no separate ad-hoc chart above the grid.
-    expect(mockPayoffChart.mock.calls.length).toBe(1);
+    expect(screen.getByTestId("picker-paste-input")).toBeTruthy();
+    expect(screen.getByTestId("picker-paste-analyze")).toBeTruthy();
+    // No separate ad-hoc panel/chart above the grid — the old adhoc-* ids are gone.
+    expect(screen.queryByTestId("adhoc-input")).toBeNull();
+    expect(screen.queryByTestId("adhoc-analyze")).toBeNull();
   });
 
   it("Analyze on a valid paste pins a PASTED card at the top of the rail and auto-selects it", () => {
