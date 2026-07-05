@@ -25,7 +25,7 @@ export function registerTriggerJobTool(
     {
       title: "Trigger Job",
       description:
-        "Manually trigger a background job by name. Returns { jobId } on success; jobId is null when the job was already queued (dedup no-op). Supported jobs: rebuild-journal, sync-fills, compute-bsm-greeks.",
+        "Manually trigger a background job by name. Returns { jobId } on success; jobId is null when the job was already queued (dedup no-op). Supported jobs: rebuild-journal, sync-fills, compute-bsm-greeks, recompute-snapshot-pnl.",
       inputSchema: {
         name: z.enum(TRIGGERABLE_JOBS),
         // triggerJobPayload.shape.calendarId — MCP-02: same schema as HTTP body
@@ -62,7 +62,7 @@ export function registerTriggerJobTool(
             {
               type: "text" as const,
               text: JSON.stringify({
-                error: "calendarId is required for rebuild-journal",
+                error: `calendarId is required for ${name}`,
               }),
             },
           ],

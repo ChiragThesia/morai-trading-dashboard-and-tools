@@ -137,6 +137,7 @@ describe("jobsRoutes", () => {
     expect(TRIGGERABLE_JOBS).toContain("rebuild-journal");
     expect(TRIGGERABLE_JOBS).toContain("sync-fills");
     expect(TRIGGERABLE_JOBS).toContain("compute-bsm-greeks");
-    expect(TRIGGERABLE_JOBS).toHaveLength(3);
+    expect(TRIGGERABLE_JOBS).toContain("recompute-snapshot-pnl");
+    expect(TRIGGERABLE_JOBS).toHaveLength(4);
   });
 });
