@@ -8,12 +8,25 @@
 
 import { describe, it, expect } from "vitest";
 import { ok, err } from "@morai/shared";
-import type { ForRunningGetPicker, PickerSnapshotRow } from "@morai/core";
-import { pickerSnapshotResponse } from "@morai/contracts";
+import type {
+  ForRunningGetPicker,
+  PickerSnapshotRow,
+  ForRunningGetCalendarEventsWithRules,
+  ForRunningSetRuleTags,
+  CalendarEvent,
+  CalendarEventAnnotation,
+  ValidationError,
+  CalendarNotFound,
+} from "@morai/core";
+import { pickerSnapshotResponse, getEventsWithRulesResponse, setRuleTagsResponse } from "@morai/contracts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { registerGetPickerCandidatesTool } from "./tools.ts";
+import {
+  registerGetPickerCandidatesTool,
+  registerGetRuleTagsTool,
+  registerSetRuleTagsTool,
+} from "./tools.ts";
 
 // ── Test doubles ──────────────────────────────────────────────────────────────
 
@@ -81,5 +94,189 @@ describe("get_picker_candidates MCP tool", () => {
     const text = await callGetPickerCandidates(getPickerErr);
     expect(text).toBe("internal error");
     expect(text).not.toContain("db connection failed");
+  });
+});
+
+// ── get_rule_tags / set_rule_tags MCP tools (RULE-01, plan 20-10) ──────────────
+
+const CALENDAR_ID = "550e8400-e29b-41d4-a716-446655440001";
+const HASH = "a".repeat(64);
+
+function makeEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    calendarId: CALENDAR_ID,
+    eventType: "OPEN",
+    eventedAt: new Date("2026-06-01T14:00:00Z"),
+    fillIdsHash: HASH,
+    legOccSymbol: "SPXW260321C07100000",
+    rolledFromOccSymbol: null,
+    qty: 1,
+    avgPrice: 15.0,
+    netAmount: 300,
+    realizedPnl: null,
+    legBreakdown: null,
+    entryThesis: null,
+    rollOpenDebit: null,
+    rollCloseCredit: null,
+    ...overrides,
+  };
+}
+
+function makeAnnotation(overrides: Partial<CalendarEventAnnotation> = {}): CalendarEventAnnotation {
+  return {
+    fillIdsHash: HASH,
+    ruleTags: ["gex-fit"],
+    otherNote: null,
+    updatedAt: new Date("2026-06-01T15:00:00Z"),
+    ...overrides,
+  };
+}
+
+/** Generic real-transport tool caller — server registers ONE tool via `register`. */
+async function callTool(
+  register: (server: McpServer) => void,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const server = new McpServer({ name: "test", version: "0.0.1" });
+  register(server);
+
+  const client = new Client({ name: "test-client", version: "0.0.1" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+
+  const result = await client.callTool({ name: toolName, arguments: args });
+  const first = result.content[0];
+  if (first === undefined || first.type !== "text") {
+    throw new Error(`expected text content from ${toolName}`);
+  }
+  return first.text;
+}
+
+describe("get_rule_tags MCP tool", () => {
+  it("returns getEventsWithRulesResponse-valid content for a known calendar", async () => {
+    const getEventsWithRules: ForRunningGetCalendarEventsWithRules = async () =>
+      ok([{ event: makeEvent(), tags: ["gex-fit"], otherNote: null }]);
+
+    const text = await callTool(
+      (server) => registerGetRuleTagsTool(server, getEventsWithRules),
+      "get_rule_tags",
+      { calendarId: CALENDAR_ID },
+    );
+
+    const parsed = getEventsWithRulesResponse.parse(JSON.parse(text));
+    expect(parsed.events).toHaveLength(1);
+    expect(parsed.events[0]).toMatchObject({ fillIdsHash: HASH, tags: ["gex-fit"] });
+  });
+
+  it("returns an error content payload for an invalid calendarId, never throws", async () => {
+    const getEventsWithRules: ForRunningGetCalendarEventsWithRules = async () => ok([]);
+
+    const text = await callTool(
+      (server) => registerGetRuleTagsTool(server, getEventsWithRules),
+      "get_rule_tags",
+      { calendarId: "not-a-uuid" },
+    );
+
+    expect(JSON.parse(text)).toMatchObject({ error: "invalid calendarId" });
+  });
+
+  it("returns 'internal error' text on a storage error (never throws)", async () => {
+    const getEventsWithRules: ForRunningGetCalendarEventsWithRules = async () =>
+      err({ kind: "storage-error" as const, message: "db down" });
+
+    const text = await callTool(
+      (server) => registerGetRuleTagsTool(server, getEventsWithRules),
+      "get_rule_tags",
+      { calendarId: CALENDAR_ID },
+    );
+
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db down");
+  });
+});
+
+describe("set_rule_tags MCP tool", () => {
+  it("returns setRuleTagsResponse-valid content on a valid write", async () => {
+    const saved = makeAnnotation({ ruleTags: ["gex-fit"] });
+    const setRuleTags: ForRunningSetRuleTags = async () => ok(saved);
+
+    const text = await callTool(
+      (server) => registerSetRuleTagsTool(server, setRuleTags),
+      "set_rule_tags",
+      { fillIdsHash: HASH, tags: ["gex-fit"] },
+    );
+
+    const parsed = setRuleTagsResponse.parse(JSON.parse(text));
+    expect(parsed).toMatchObject({ fillIdsHash: HASH, tags: ["gex-fit"], otherNote: null });
+  });
+
+  it("rejects OTHER without a note as an error content payload, never throws (D-21)", async () => {
+    const setRuleTags: ForRunningSetRuleTags = async () => ok(makeAnnotation());
+
+    const text = await callTool(
+      (server) => registerSetRuleTagsTool(server, setRuleTags),
+      "set_rule_tags",
+      { fillIdsHash: HASH, tags: ["other"] },
+    );
+
+    expect(JSON.parse(text)).toMatchObject({ error: expect.any(String) });
+  });
+
+  it("returns an error content payload for an invalid fillIdsHash, never throws", async () => {
+    const setRuleTags: ForRunningSetRuleTags = async () => ok(makeAnnotation());
+
+    const text = await callTool(
+      (server) => registerSetRuleTagsTool(server, setRuleTags),
+      "set_rule_tags",
+      { fillIdsHash: "too-short", tags: ["gex-fit"] },
+    );
+
+    expect(JSON.parse(text)).toMatchObject({ error: expect.any(String) });
+  });
+
+  it("returns a 'not found' error content payload for an unknown fillIdsHash", async () => {
+    const setRuleTags: ForRunningSetRuleTags = async () => {
+      const e: CalendarNotFound = { kind: "not-found" };
+      return err(e);
+    };
+
+    const text = await callTool(
+      (server) => registerSetRuleTagsTool(server, setRuleTags),
+      "set_rule_tags",
+      { fillIdsHash: HASH, tags: ["gex-fit"] },
+    );
+
+    expect(JSON.parse(text)).toMatchObject({ error: "not found" });
+  });
+
+  it("surfaces a validation-error message content payload for a cross-type tag", async () => {
+    const setRuleTags: ForRunningSetRuleTags = async () => {
+      const e: ValidationError = { kind: "validation-error", message: "cross-type tag" };
+      return err(e);
+    };
+
+    const text = await callTool(
+      (server) => registerSetRuleTagsTool(server, setRuleTags),
+      "set_rule_tags",
+      { fillIdsHash: HASH, tags: ["gex-fit"] },
+    );
+
+    expect(JSON.parse(text)).toMatchObject({ error: "cross-type tag" });
+  });
+
+  it("returns 'internal error' text on a storage error (never throws)", async () => {
+    const setRuleTags: ForRunningSetRuleTags = async () =>
+      err({ kind: "storage-error" as const, message: "db down" });
+
+    const text = await callTool(
+      (server) => registerSetRuleTagsTool(server, setRuleTags),
+      "set_rule_tags",
+      { fillIdsHash: HASH, tags: ["gex-fit"] },
+    );
+
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db down");
   });
 });
