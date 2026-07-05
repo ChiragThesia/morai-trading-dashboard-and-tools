@@ -1,0 +1,10 @@
+# Local tooling / indexes — never ship to Railway (and .codegraph holds a unix
+# socket that breaks the upload tar). The service Dockerfiles COPY only what they need.
+.codegraph/
+graphify-out/
+.planning/
+mockups/
+plans/
+plan-blocks.md
+.git/
+node_modules/
