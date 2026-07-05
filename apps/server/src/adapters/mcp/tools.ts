@@ -15,6 +15,9 @@ import {
   macroResponse,
   macroQuery,
   pickerSnapshotResponse,
+  getEventsWithRulesResponse,
+  setRuleTagsRequest,
+  setRuleTagsResponse,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -30,6 +33,8 @@ import type {
   ForGettingTransactions,
   ForGettingOrders,
   ForRunningGetPicker,
+  ForRunningGetCalendarEventsWithRules,
+  ForRunningSetRuleTags,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -705,6 +710,144 @@ export function registerGetMacroTool(
 
       // Empty map on no data — never an error (MAC-02 / MCP-02 stability).
       const payload = macroResponse.parse(result.value);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetRuleTagsTool — registers the get_rule_tags MCP tool (RULE-01 / MCP-02 / 20-10).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: safeParse args → call use-case → map Result → parse through
+ * getEventsWithRulesResponse → return content.
+ *
+ * MCP-02: the SAME getEventsWithRulesResponse schema used by
+ * GET /api/journal/:calendarId/rules is used here.
+ */
+export function registerGetRuleTagsTool(
+  server: McpServer,
+  getEventsWithRules: ForRunningGetCalendarEventsWithRules,
+): void {
+  server.registerTool(
+    "get_rule_tags",
+    {
+      title: "Get Rule Tags",
+      description:
+        "Returns the combined OPEN/CLOSE/ROLL events + recorded rule-tag annotations for a calendar. Same payload as GET /api/journal/:calendarId/rules.",
+      inputSchema: { calendarId: z.string().uuid() },
+    },
+    async (args) => {
+      // safeParse at boundary — never throw on invalid input (existing tool precedent).
+      const parsed = z.object({ calendarId: z.string().uuid() }).safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid calendarId" }) },
+          ],
+        };
+      }
+      const { calendarId } = parsed.data;
+      const result = await getEventsWithRules(calendarId);
+      if (!result.ok) {
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      // Parse through the SAME contract as journalRulesRoutes' GET route (MCP-02).
+      const payload = getEventsWithRulesResponse.parse({
+        events: result.value.map(({ event, tags, otherNote }) => ({
+          id: event.id,
+          eventType: event.eventType,
+          eventedAt: event.eventedAt.toISOString(),
+          fillIdsHash: event.fillIdsHash,
+          legOccSymbol: event.legOccSymbol,
+          tags,
+          otherNote,
+        })),
+      });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerSetRuleTagsTool — registers the set_rule_tags MCP tool (RULE-01 / MCP-02 / 20-10).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: safeParse args (fillIdsHash + the SAME setRuleTagsRequest schema used by the PUT
+ * route, incl. D-21 OTHER-requires-note refine) → call use-case → map Result → parse through
+ * setRuleTagsResponse → return content.
+ *
+ * Addressed by fillIdsHash alone (plan 20-10 fix) — no calendarId needed, matching
+ * PUT /api/journal/events/:hash/rules.
+ */
+export function registerSetRuleTagsTool(
+  server: McpServer,
+  setRuleTags: ForRunningSetRuleTags,
+): void {
+  server.registerTool(
+    "set_rule_tags",
+    {
+      title: "Set Rule Tags",
+      description:
+        "Sets the rule-tag annotation for a calendar event, addressed by fillIdsHash. Same validation (incl. OTHER-requires-note) as PUT /api/journal/events/:hash/rules.",
+      inputSchema: {
+        fillIdsHash: z.string().length(64),
+        tags: z.array(z.string()).max(5),
+        otherNote: z.string().max(280).optional(),
+      },
+    },
+    async (args) => {
+      // safeParse at boundary — never throw on invalid input (existing tool precedent).
+      const hashParsed = z.object({ fillIdsHash: z.string().length(64) }).safeParse(args);
+      if (!hashParsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid fillIdsHash" }) },
+          ],
+        };
+      }
+      // Reuse the SAME setRuleTagsRequest schema as the HTTP route body (MCP-02) — the
+      // D-21 OTHER-requires-note refine runs here identically to the PUT route.
+      const bodyParsed = setRuleTagsRequest.safeParse(args);
+      if (!bodyParsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "invalid params" }) }],
+        };
+      }
+
+      const result = await setRuleTags({
+        fillIdsHash: hashParsed.data.fillIdsHash,
+        tags: bodyParsed.data.tags,
+        otherNote: bodyParsed.data.otherNote ?? null,
+      });
+
+      if (!result.ok) {
+        if (result.error.kind === "not-found") {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "not found" }) }],
+          };
+        }
+        if (result.error.kind === "validation-error") {
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify({ error: result.error.message }) },
+            ],
+          };
+        }
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      const saved = result.value;
+      const payload = setRuleTagsResponse.parse({
+        fillIdsHash: saved.fillIdsHash,
+        tags: saved.ruleTags,
+        otherNote: saved.otherNote,
+        updatedAt: saved.updatedAt.toISOString(),
+      });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };

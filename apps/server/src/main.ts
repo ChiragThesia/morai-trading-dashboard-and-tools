@@ -349,6 +349,8 @@ const mcpRouter = makeMcpRouter(
   getTransactions,
   getOrders,
   enqueueJob,
+  getEventsWithRules,
+  setRuleTags,
 );
 app.route("", mcpRouter);
 

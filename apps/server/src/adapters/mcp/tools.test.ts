@@ -154,6 +154,54 @@ async function callTool(
   return first.text;
 }
 
+/**
+ * callToolHandlerDirect — invokes a registered tool's handler directly via Reflect,
+ * bypassing the McpServer SDK's own inputSchema-shape validation (which would otherwise
+ * reject a malformed arg like a non-UUID string BEFORE the handler's internal safeParse
+ * ever runs). Mirrors the existing mcp.test.ts CR-02 pattern for exercising the handler's
+ * OWN safeParse-at-boundary fallback. No 'as' casts — every lookup is Reflect.get/apply
+ * on `unknown`, narrowed via typeof/Array.isArray guards.
+ */
+async function callToolHandlerDirect(
+  register: (server: McpServer) => void,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const server = new McpServer({ name: "test", version: "0.0.1" });
+  register(server);
+
+  const toolsMap: unknown = Reflect.get(server, "_registeredTools");
+  if (typeof toolsMap !== "object" || toolsMap === null) {
+    throw new Error("_registeredTools not found on McpServer instance");
+  }
+  const toolEntry: unknown = Reflect.get(toolsMap, toolName);
+  if (typeof toolEntry !== "object" || toolEntry === null) {
+    throw new Error(`${toolName} tool not registered`);
+  }
+  const handler: unknown = Reflect.get(toolEntry, "handler");
+  if (typeof handler !== "function") {
+    throw new Error(`${toolName} handler is not a function`);
+  }
+
+  const result: unknown = await Reflect.apply(handler, undefined, [args]);
+  if (typeof result !== "object" || result === null) {
+    throw new Error(`${toolName} handler did not return an object`);
+  }
+  const content: unknown = Reflect.get(result, "content");
+  if (!Array.isArray(content) || content.length === 0) {
+    throw new Error(`${toolName} handler returned no content`);
+  }
+  const first: unknown = content[0];
+  if (typeof first !== "object" || first === null) {
+    throw new Error(`${toolName} first content item is not an object`);
+  }
+  const text: unknown = Reflect.get(first, "text");
+  if (typeof text !== "string") {
+    throw new Error(`${toolName} first content item has no text`);
+  }
+  return text;
+}
+
 describe("get_rule_tags MCP tool", () => {
   it("returns getEventsWithRulesResponse-valid content for a known calendar", async () => {
     const getEventsWithRules: ForRunningGetCalendarEventsWithRules = async () =>
@@ -171,9 +219,12 @@ describe("get_rule_tags MCP tool", () => {
   });
 
   it("returns an error content payload for an invalid calendarId, never throws", async () => {
+    // Reflect-direct call: the MCP SDK's own inputSchema (z.string().uuid()) would
+    // reject "not-a-uuid" at the transport layer before the handler ever runs — this
+    // exercises the handler's OWN internal safeParse fallback (existing tool precedent).
     const getEventsWithRules: ForRunningGetCalendarEventsWithRules = async () => ok([]);
 
-    const text = await callTool(
+    const text = await callToolHandlerDirect(
       (server) => registerGetRuleTagsTool(server, getEventsWithRules),
       "get_rule_tags",
       { calendarId: "not-a-uuid" },
@@ -225,9 +276,11 @@ describe("set_rule_tags MCP tool", () => {
   });
 
   it("returns an error content payload for an invalid fillIdsHash, never throws", async () => {
+    // Reflect-direct call: the MCP SDK's own inputSchema (z.string().length(64)) would
+    // reject "too-short" at the transport layer before the handler ever runs.
     const setRuleTags: ForRunningSetRuleTags = async () => ok(makeAnnotation());
 
-    const text = await callTool(
+    const text = await callToolHandlerDirect(
       (server) => registerSetRuleTagsTool(server, setRuleTags),
       "set_rule_tags",
       { fillIdsHash: "too-short", tags: ["gex-fit"] },

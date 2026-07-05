@@ -15,6 +15,8 @@ import type {
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
+  ForRunningGetCalendarEventsWithRules,
+  ForRunningSetRuleTags,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -33,6 +35,8 @@ import {
   registerGetTransactionsTool,
   registerGetOrdersTool,
   registerTriggerJobTool,
+  registerGetRuleTagsTool,
+  registerSetRuleTagsTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -62,6 +66,9 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  * PICK-02 / MCP-02 (Phase 19, 19-07): get_picker_candidates registered here — shares
  *         pickerSnapshotResponse with GET /api/picker/candidates; injected as optional for
  *         backward compat with existing call sites.
+ * RULE-01 / MCP-02 (Phase 20, 20-10): get_rule_tags + set_rule_tags registered here — share
+ *         getEventsWithRulesResponse/setRuleTagsRequest/setRuleTagsResponse with GET/PUT
+ *         /api/journal/*rules; injected as optional for backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -79,6 +86,8 @@ export function makeMcpRouter(
   getTransactions?: ForGettingTransactions,
   getOrders?: ForGettingOrders,
   enqueueJob?: ForTriggeringJob,
+  getEventsWithRules?: ForRunningGetCalendarEventsWithRules,
+  setRuleTags?: ForRunningSetRuleTags,
 ): Hono {
   const router = new Hono();
 
@@ -128,6 +137,14 @@ export function makeMcpRouter(
     // MCP-02: trigger_job tool — optional, wired when enqueueJob is available (Phase 5)
     if (enqueueJob !== undefined) {
       registerTriggerJobTool(server, enqueueJob);
+    }
+    // RULE-01 / MCP-02: get_rule_tags + set_rule_tags tools — optional, wired when the
+    // RULE-01 use-cases are available (Phase 20, 20-10)
+    if (getEventsWithRules !== undefined) {
+      registerGetRuleTagsTool(server, getEventsWithRules);
+    }
+    if (setRuleTags !== undefined) {
+      registerSetRuleTagsTool(server, setRuleTags);
     }
     return { server, transport };
   }
