@@ -28,7 +28,7 @@
  *             are rejected by the group before reaching the sidecar subscribe proxy.
  */
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { JWTPayload } from "jose";
@@ -81,6 +81,106 @@ export type StreamRouteDeps = {
   readonly sidecarUrl: string;
   readonly fetch?: typeof globalThis.fetch;
 };
+
+// ─── Shared GET /stream SSE handler ─────────────────────────────────────────
+
+/**
+ * handleStreamSse — the single ticket-gated SSE handler for GET /stream.
+ *
+ * Used by BOTH streamRoutes() (mounted INSIDE authReadGroup) and
+ * makeStreamSseRouter() (mounted OUTSIDE authReadGroup — the copy that actually
+ * serves production GET /api/stream, wired in main.ts). Extracted so the
+ * reconcile → immediate-ping → 30s ping loop is defined ONCE and cannot drift
+ * between the two mounts (WR-01-dup).
+ *
+ * EventSource cannot send Authorization headers, so auth is via a short-lived
+ * single-use opaque ticket (D-01). The ticket was minted by POST /api/stream/ticket
+ * with a valid Supabase JWT. The ticket carries no claim — just a UUID bound to a userId.
+ *
+ * T-12-05-01: redeemTicket enforces: UUID exists + not used + not expired.
+ * T-12-05-02: the JWT never appears in query params (no logs/history leak).
+ * STRM-05: reconcile event is sent FIRST — browser always has a cold-start baseline.
+ */
+function handleStreamSse(c: Context<JwtEnv>, deps: StreamRouteDeps) {
+  const rawTicket = c.req.query("ticket") ?? "";
+  const userId = redeemTicket(rawTicket);
+  if (userId === null) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  return streamSSE(
+    c,
+    async (stream) => {
+      // Register with the fan-out hub. The structural SSEClient type in stream-fan-out.ts
+      // matches SSEStreamingApi (writeSSE + aborted + onAbort) — no cast needed.
+      const sseClient: SSEClient = stream;
+      registerClient(sseClient);
+
+      // Clean-disconnect path: onAbort fires when the EventSource closes cleanly.
+      stream.onAbort(() => {
+        unregisterClient(sseClient);
+      });
+
+      // STRM-05: reconcile-first — send current positions BEFORE any live ticks.
+      // Graceful degradation: if the sidecar reconcile fails, send empty positions
+      // so the stream still opens (the browser shows "stale" badge per D-04).
+      const posResult = await deps.reconcilePositions();
+      const positions = posResult.ok ? Array.from(posResult.value) : [];
+      const asOf = new Date().toISOString();
+      await stream.writeSSE({
+        event: "reconcile",
+        data: JSON.stringify(streamReconcileEvent.parse({ positions, asOf })),
+      });
+
+      // WR-01: emit one isRth ping IMMEDIATELY after reconcile. The reconcile event
+      // carries no isRth, so without this the client's isRth stays null for the full
+      // first 30s and the badge wrongly renders "QUIET / Market closed" during RTH at
+      // connect. The 30s loop below then keeps it fresh.
+      if (!stream.aborted) {
+        const nowAtConnect = new Date();
+        await stream.writeSSE({
+          event: "ping",
+          data: JSON.stringify(
+            streamPingEvent.parse({
+              isRth: isWithinRth(nowAtConnect) && !isNyseHoliday(nowAtConnect),
+            }),
+          ),
+        });
+      }
+
+      // Keep-alive ping loop — sends a no-op "ping" every 30 seconds until abort.
+      // The browser EventSource does NOT need to handle pings; they prevent
+      // Railway / nginx from closing idle connections.
+      while (!stream.aborted) {
+        await stream.sleep(30_000);
+        if (!stream.aborted) {
+          const now = new Date();
+          await stream.writeSSE({
+            event: "ping",
+            data: JSON.stringify(
+              streamPingEvent.parse({
+                isRth: isWithinRth(now) && !isNyseHoliday(now),
+              }),
+            ),
+          });
+        }
+      }
+
+      // Dead-connection path: also unregister after the loop exits (covers cases
+      // where onAbort did not fire, e.g. a broken TCP without RST — Pitfall 6).
+      unregisterClient(sseClient);
+    },
+    async (err, stream) => {
+      // onError: log type only, unregister, do NOT re-throw (prevents 500 leaking).
+      const errName = err instanceof Error ? err.constructor.name : "UnknownError";
+      console.error(
+        `GET /api/stream SSE error: ${errName} (message redacted — user: ${userId})`,
+      );
+      const sseClient: SSEClient = stream;
+      unregisterClient(sseClient);
+    },
+  );
+}
 
 // ─── Route factory ────────────────────────────────────────────────────────────
 
@@ -196,94 +296,10 @@ export function streamRoutes(deps: StreamRouteDeps) {
   // ─── GET /api/stream ───────────────────────────────────────────────────────
   // Must be mounted OUTSIDE authReadGroup (main.ts). Pitfall 7.
   //
-  // EventSource cannot send Authorization headers, so auth is via a short-lived
-  // single-use opaque ticket (D-01). The ticket was minted by POST /api/stream/ticket
-  // with a valid Supabase JWT. The ticket carries no claim — just a UUID bound to a userId.
-  //
-  // T-12-05-01: redeemTicket enforces: UUID exists + not used + not expired.
-  // T-12-05-02: the JWT never appears in query params (no logs/history leak).
-  // STRM-05: reconcile event is sent FIRST — browser always has a cold-start baseline.
-
-  router.get("/stream", async (c) => {
-    const rawTicket = c.req.query("ticket") ?? "";
-    const userId = redeemTicket(rawTicket);
-    if (userId === null) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-
-    return streamSSE(
-      c,
-      async (stream) => {
-        // Register with the fan-out hub. The structural SSEClient type in stream-fan-out.ts
-        // matches SSEStreamingApi (writeSSE + aborted + onAbort) — no cast needed.
-        const sseClient: SSEClient = stream;
-        registerClient(sseClient);
-
-        // Clean-disconnect path: onAbort fires when the EventSource closes cleanly.
-        stream.onAbort(() => {
-          unregisterClient(sseClient);
-        });
-
-        // STRM-05: reconcile-first — send current positions BEFORE any live ticks.
-        // Graceful degradation: if the sidecar reconcile fails, send empty positions
-        // so the stream still opens (the browser shows "stale" badge per D-04).
-        const posResult = await deps.reconcilePositions();
-        const positions = posResult.ok ? Array.from(posResult.value) : [];
-        const asOf = new Date().toISOString();
-        await stream.writeSSE({
-          event: "reconcile",
-          data: JSON.stringify(streamReconcileEvent.parse({ positions, asOf })),
-        });
-
-        // WR-01: emit one isRth ping IMMEDIATELY after reconcile. The reconcile event
-        // carries no isRth, so without this the client's isRth stays null for the full
-        // first 30s and the badge wrongly renders "QUIET / Market closed" during RTH at
-        // connect. The 30s loop below then keeps it fresh.
-        if (!stream.aborted) {
-          const nowAtConnect = new Date();
-          await stream.writeSSE({
-            event: "ping",
-            data: JSON.stringify(
-              streamPingEvent.parse({
-                isRth: isWithinRth(nowAtConnect) && !isNyseHoliday(nowAtConnect),
-              }),
-            ),
-          });
-        }
-
-        // Keep-alive ping loop — sends a no-op "ping" every 30 seconds until abort.
-        // The browser EventSource does NOT need to handle pings; they prevent
-        // Railway / nginx from closing idle connections.
-        while (!stream.aborted) {
-          await stream.sleep(30_000);
-          if (!stream.aborted) {
-            const now = new Date();
-            await stream.writeSSE({
-              event: "ping",
-              data: JSON.stringify(
-                streamPingEvent.parse({
-                  isRth: isWithinRth(now) && !isNyseHoliday(now),
-                }),
-              ),
-            });
-          }
-        }
-
-        // Dead-connection path: also unregister after the loop exits (covers cases
-        // where onAbort did not fire, e.g. a broken TCP without RST — Pitfall 6).
-        unregisterClient(sseClient);
-      },
-      async (err, stream) => {
-        // onError: log type only, unregister, do NOT re-throw (prevents 500 leaking).
-        const errName = err instanceof Error ? err.constructor.name : "UnknownError";
-        console.error(
-          `GET /api/stream SSE error: ${errName} (message redacted — user: ${userId})`,
-        );
-        const sseClient: SSEClient = stream;
-        unregisterClient(sseClient);
-      },
-    );
-  });
+  // Delegates to the shared handleStreamSse handler (single source of truth).
+  // In production this GET copy is never matched — makeStreamSseRouter serves it —
+  // but it is kept here so the full factory is self-contained for tests.
+  router.get("/stream", (c) => handleStreamSse(c, deps));
 
   return router;
 }
@@ -308,75 +324,10 @@ export function streamRoutes(deps: StreamRouteDeps) {
 export function makeStreamSseRouter(deps: StreamRouteDeps) {
   const router = new Hono<JwtEnv>();
 
-  // GET /stream — identical handler to the one registered in streamRoutes().
-  // Kept in sync manually; no shared closure to avoid coupling the two factories.
-  router.get("/stream", async (c) => {
-    const rawTicket = c.req.query("ticket") ?? "";
-    const userId = redeemTicket(rawTicket);
-    if (userId === null) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-
-    return streamSSE(
-      c,
-      async (stream) => {
-        const sseClient: SSEClient = stream;
-        registerClient(sseClient);
-        stream.onAbort(() => {
-          unregisterClient(sseClient);
-        });
-
-        // STRM-05: reconcile-first.
-        const posResult = await deps.reconcilePositions();
-        const positions = posResult.ok ? Array.from(posResult.value) : [];
-        const asOf = new Date().toISOString();
-        await stream.writeSSE({
-          event: "reconcile",
-          data: JSON.stringify(streamReconcileEvent.parse({ positions, asOf })),
-        });
-
-        // WR-01: emit one isRth ping IMMEDIATELY after reconcile so the badge reflects
-        // true market state at connect instead of QUIET for up to 30s (kept in sync with
-        // streamRoutes above).
-        if (!stream.aborted) {
-          const nowAtConnect = new Date();
-          await stream.writeSSE({
-            event: "ping",
-            data: JSON.stringify(
-              streamPingEvent.parse({
-                isRth: isWithinRth(nowAtConnect) && !isNyseHoliday(nowAtConnect),
-              }),
-            ),
-          });
-        }
-
-        while (!stream.aborted) {
-          await stream.sleep(30_000);
-          if (!stream.aborted) {
-            const now = new Date();
-            await stream.writeSSE({
-              event: "ping",
-              data: JSON.stringify(
-                streamPingEvent.parse({
-                  isRth: isWithinRth(now) && !isNyseHoliday(now),
-                }),
-              ),
-            });
-          }
-        }
-
-        unregisterClient(sseClient);
-      },
-      async (err, stream) => {
-        const errName = err instanceof Error ? err.constructor.name : "UnknownError";
-        console.error(
-          `GET /api/stream SSE error: ${errName} (message redacted — user: ${userId})`,
-        );
-        const sseClient: SSEClient = stream;
-        unregisterClient(sseClient);
-      },
-    );
-  });
+  // GET /stream — delegates to the shared handleStreamSse handler, the single
+  // source of truth also used by streamRoutes(). No duplicated handler body, so
+  // the two mounts cannot drift (WR-01-dup).
+  router.get("/stream", (c) => handleStreamSse(c, deps));
 
   return router;
 }

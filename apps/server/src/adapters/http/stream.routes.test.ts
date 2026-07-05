@@ -23,7 +23,7 @@ import {
 } from "@morai/contracts";
 import type { JWTPayload } from "jose";
 import { resetForTesting } from "./stream-fan-out.ts";
-import { streamRoutes } from "./stream.routes.ts";
+import { streamRoutes, makeStreamSseRouter } from "./stream.routes.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -123,6 +123,26 @@ function buildApp(
       reconcilePositions,
       sidecarUrl: DUMMY_SIDECAR_URL,
       fetch: fetchImpl,
+    }),
+  );
+  return app;
+}
+
+/**
+ * Build a test app that mounts ONLY makeStreamSseRouter — the GET /api/stream
+ * copy main.ts actually serves in production (OUTSIDE authReadGroup, so no JWT
+ * middleware). Tickets are held in module-level state (ticket-store.ts), so a
+ * ticket minted via buildApp()'s POST /api/stream/ticket is redeemable here.
+ */
+function buildProdApp(
+  reconcilePositions: ForReconcilingPositions = emptyReconciler,
+) {
+  const app = new Hono();
+  app.route(
+    "/api",
+    makeStreamSseRouter({
+      reconcilePositions,
+      sidecarUrl: DUMMY_SIDECAR_URL,
     }),
   );
   return app;
@@ -390,6 +410,45 @@ describe("GET /api/stream — ping heartbeat carries isRth (WATCH-01, D-03)", ()
       const raw = extractEventData(rawSse, "ping");
       const parsed = streamPingEvent.parse(raw);
       expect(parsed.isRth).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ─── WR-01-dup: GET /api/stream via makeStreamSseRouter (production mount) ────
+
+/**
+ * The production GET /api/stream is served by makeStreamSseRouter (wired OUTSIDE
+ * authReadGroup in main.ts), NOT by streamRoutes()'s GET copy. handleStreamSse is
+ * now the single source of truth both mounts delegate to, so this test guards the
+ * prod-serving path directly against drift (WR-01-dup).
+ */
+describe("GET /api/stream via makeStreamSseRouter (prod mount, WR-01-dup)", () => {
+  it("emits an isRth ping IMMEDIATELY after reconcile on the production GET path", async () => {
+    vi.useFakeTimers();
+    try {
+      // Monday 2026-07-06, 11:00 ET (15:00 UTC, EDT) — within RTH, not a holiday.
+      vi.setSystemTime(new Date("2026-07-06T15:00:00.000Z"));
+
+      // Mint a ticket via the JWT-gated route (shared module-level ticket store).
+      const mintApp = buildApp();
+      const mintRes = await mintApp.request("/api/stream/ticket", { method: "POST" });
+      const { ticket } = streamTicketResponse.parse(await mintRes.json());
+
+      // Redeem it against the PRODUCTION router — the copy main.ts serves.
+      const prodApp = buildProdApp();
+      const res = await prodApp.request(`/api/stream?ticket=${ticket}`);
+      expect(res.status).toBe(200);
+      const body = res.body;
+      if (!body) throw new Error("expected body");
+
+      // Do NOT advance timers: the immediate ping must be present at connect,
+      // before the 30s loop — so the badge is never wrongly QUIET during RTH.
+      const rawSse = await readUntilEvent(body, "ping");
+      const raw = extractEventData(rawSse, "ping");
+      const parsed = streamPingEvent.parse(raw);
+      expect(parsed.isRth).toBe(true);
     } finally {
       vi.useRealTimers();
     }
