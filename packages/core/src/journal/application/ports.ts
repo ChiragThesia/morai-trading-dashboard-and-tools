@@ -208,6 +208,12 @@ export type SnapshotRow = {
   readonly dteBack: number; // integer calendar days
   readonly pnlOpen: string;
   readonly source: "cboe" | "schwab_chain";
+  /**
+   * Provenance marker (SNAP-01, D-12) — 'scheduled' (default, worker cron cadence) vs
+   * 'event-move' (server-side large-move detector). Optional/additive: existing callers
+   * that don't set it are unaffected; the use-case layer resolves the default.
+   */
+  readonly trigger?: "scheduled" | "event-move";
 };
 
 /**
@@ -217,6 +223,16 @@ export type SnapshotRow = {
 export type ForPersistingSnapshot = (
   row: SnapshotRow,
 ) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingLatestSnapshotTime — read the latest calendar_snapshots time (SNAP-01, Pattern 2).
+ * MAX(time) across all snapshot rows; null on cold start (no snapshots yet), never throws.
+ * This is the ground-truth read the SNAP-01 cooldown check (isWithinCooldown) needs to
+ * reconcile state written by two separate OS processes (apps/worker cron chain vs the
+ * apps/server event-move detector) — see Pitfall 2. Internal driven port feeding an
+ * existing job trigger, not a user-facing driver port — no HTTP/MCP surface.
+ */
+export type ForReadingLatestSnapshotTime = () => Promise<Result<Date | null, StorageError>>;
 
 /**
  * ForReadingJournal — ordered snapshot series for a calendar (CAL-02).

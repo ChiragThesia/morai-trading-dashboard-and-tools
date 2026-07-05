@@ -44,7 +44,10 @@ export type SnapshotCalendarsDeps = {
 };
 
 /** Driver port returned by the factory */
-export type ForRunningSnapshotCalendars = () => Promise<Result<void, StorageError>>;
+export type ForRunningSnapshotCalendars = (args?: {
+  /** SNAP-01, D-12: provenance to stamp on every row this run. Defaults to 'scheduled'. */
+  readonly trigger?: "scheduled" | "event-move";
+}) => Promise<Result<void, StorageError>>;
 
 /**
  * buildSnapshotRow — compute a full 18-column SnapshotRow per D-05 / D-06.
@@ -58,6 +61,7 @@ function buildSnapshotRow(
   cal: Calendar,
   front: LegSnapshot | null,
   back: LegSnapshot | null,
+  trigger: "scheduled" | "event-move",
 ): SnapshotRow {
   // Marks default to 0 when a leg is missing (NaN row will indicate the issue)
   const frontMark = front?.mark ?? 0;
@@ -123,6 +127,7 @@ function buildSnapshotRow(
     dteBack: calendarDte(now, new Date(cal.backExpiry)),
     pnlOpen,
     source,
+    trigger,
   };
 }
 
@@ -137,7 +142,10 @@ function buildSnapshotRow(
 export function makeSnapshotCalendarsUseCase(
   deps: SnapshotCalendarsDeps,
 ): ForRunningSnapshotCalendars {
-  return async (): Promise<Result<void, StorageError>> => {
+  return async (
+    args?: { readonly trigger?: "scheduled" | "event-move" },
+  ): Promise<Result<void, StorageError>> => {
+    const trigger = args?.trigger ?? "scheduled";
     const now = deps.now();
 
     const calendarsResult = await deps.getOpenCalendars();
@@ -162,7 +170,7 @@ export function makeSnapshotCalendarsUseCase(
       });
       const back = backResult.ok ? backResult.value : null;
 
-      const row = buildSnapshotRow(now, calendar, front, back);
+      const row = buildSnapshotRow(now, calendar, front, back, trigger);
 
       const persistResult = await deps.persistSnapshot(row);
       if (!persistResult.ok) return err(persistResult.error);

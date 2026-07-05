@@ -425,6 +425,39 @@ describe("makeSnapshotCalendarsUseCase", () => {
     });
   });
 
+  describe("trigger provenance (D-12)", () => {
+    it("defaults trigger to 'scheduled' when the use-case is called with no args", async () => {
+      const capture = makePersistCapture();
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ persistSnapshot: capture.persistSnapshot }),
+      );
+      await useCase();
+
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
+      expect(row.trigger).toBe("scheduled");
+    });
+
+    it("stamps every row with 'event-move' when called with { trigger: 'event-move' }", async () => {
+      const cal1 = makeCalendar({ id: "cal-001" });
+      const cal2 = makeCalendar({ id: "cal-002" });
+      const capture = makePersistCapture();
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({
+          getOpenCalendars: async () => ok([cal1, cal2]),
+          persistSnapshot: capture.persistSnapshot,
+        }),
+      );
+
+      await useCase({ trigger: "event-move" });
+
+      expect(capture.calledTimes()).toBe(2);
+      for (const row of capture.rows) {
+        expect(row.trigger).toBe("event-move");
+      }
+    });
+  });
+
   describe("fast-check property: pnlOpen formula invariant", () => {
     it("pnlOpen = (netMark - openNetDebit) * qty * 100 for arbitrary inputs", async () => {
       await fc.assert(
