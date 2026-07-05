@@ -145,6 +145,7 @@
       "dependencies": {
         "@morai/quant": "workspace:*",
         "@morai/shared": "workspace:*",
+        "zod": "^4.4.3",
       },
       "devDependencies": {
         "@types/bun": "latest",

@@ -162,3 +162,13 @@ export { isNyseHoliday } from "./domain/nyse-holidays.ts";
 // SNAP-01 (20-04/20-06): cross-process cooldown predicate — composed in apps/server's
 // onSpotObserved wiring (Pattern 2, Pitfall 2).
 export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./domain/snapshot-cooldown.ts";
+// RULE-01 (20-07): event-keyed strategy-rule recording enums + resolver (D-07/D-08).
+// packages/contracts derives its request/response schemas from these so the DB-boundary
+// and HTTP/MCP vocabularies can never diverge.
+export {
+  enterRuleTag,
+  exitRuleTag,
+  rollRuleTag,
+  ruleTagEnumForEventType,
+} from "./domain/rule-tags.ts";
+export type { EnterRuleTag, ExitRuleTag, RollRuleTag } from "./domain/rule-tags.ts";

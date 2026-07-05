@@ -33,6 +33,15 @@ export { bsmPrice, bsmGreeks, bsmVega, invertIv, computeT, isThirdFriday, isWith
 // SNAP-01 (20-04/20-06): cooldown predicate — composed in apps/server's onSpotObserved wiring.
 export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";
+// RULE-01 (20-07): strategy-rule recording enums + resolver (D-07/D-08) — single-sourced
+// for packages/contracts (journal-rules.ts).
+export {
+  enterRuleTag,
+  exitRuleTag,
+  rollRuleTag,
+  ruleTagEnumForEventType,
+} from "./journal/index.ts";
+export type { EnterRuleTag, ExitRuleTag, RollRuleTag } from "./journal/index.ts";
 // Phase 3 calendar domain types and ports
 export type {
   CalendarNotFound,
