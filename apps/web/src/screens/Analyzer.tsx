@@ -30,7 +30,7 @@ import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
-import { Panel, PanelHeading } from "../components/system/index.tsx";
+import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
@@ -54,9 +54,6 @@ const DEFAULT_DIV = 0.013;
 const TODAY_CURVE_COLOR = "#5b9cf6";
 const EXPIRATION_CURVE_COLOR = "#a78bfa";
 
-const RETRY_BUTTON =
-  "cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2 py-0.5 font-mono text-[9px] text-dim hover:text-txt";
-
 /** Id prefix for a user-pasted calendar (multi-paste redesign: several can coexist, each with a
  * unique `pasted-${n}` id assigned in paste order). */
 const PASTED_ID_PREFIX = "pasted-";
@@ -72,9 +69,6 @@ const PASTED_NOT_SCORED_NOTE = "Pasted calendar — not engine-scored.";
 
 const PASTE_ERROR_COPY =
   "Couldn't read that. Paste a TOS calendar order, e.g. BUY +1 CALENDAR SPX 100 18 SEP 26 [AM]/14 AUG 26 7425 PUT @48.75 LMT GTC";
-
-const PASTE_BTN =
-  "cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2.5 py-1 font-mono text-[10px] text-dim hover:text-txt";
 
 function noop(): void {}
 
@@ -144,9 +138,9 @@ export function CandidateRail({
       <div className="mb-2 flex items-center justify-between gap-2">
         <PanelHeading title="Suggested calendars" />
         {pastedCandidates.length > 0 && (
-          <button type="button" data-testid="picker-paste-clear-all" onClick={onClearAllPasted} className={PASTE_BTN}>
+          <Button variant="ghost" data-testid="picker-paste-clear-all" onClick={onClearAllPasted}>
             Clear all
-          </button>
+          </Button>
         )}
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -158,9 +152,9 @@ export function CandidateRail({
           placeholder="Paste a TOS calendar order…"
           className="min-w-0 flex-1 rounded-[3px] border border-line2 bg-transparent px-2 py-1 font-mono text-[10px] text-txt"
         />
-        <button type="button" data-testid="picker-paste-analyze" onClick={onPasteAnalyze} className={PASTE_BTN}>
+        <Button variant="primary" size="sm" data-testid="picker-paste-analyze" onClick={onPasteAnalyze}>
           Analyze
-        </button>
+        </Button>
       </div>
       {pasteError !== null && (
         <p data-testid="picker-paste-error" className="mb-2 font-mono text-[9px] text-down">
@@ -523,15 +517,13 @@ export function Analyzer(): React.ReactElement {
         <PanelHeading title="Suggested calendars" />
         <div className="flex flex-col items-center gap-2 p-4 text-center" data-testid="picker-error">
           <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load candidates.</p>
-          <button
-            type="button"
-            className={RETRY_BUTTON}
+          <Button
             onClick={() => {
               void refetch();
             }}
           >
             Retry
-          </button>
+          </Button>
         </div>
       </Panel>
     );
@@ -588,15 +580,16 @@ export function Analyzer(): React.ReactElement {
           <div className="mb-1 flex items-center justify-between gap-2">
             <PanelHeading title="Risk profile" />
             {selected !== null && (
-              <button
-                type="button"
+              <Button
+                variant="toggle"
+                tone="up"
+                active={copiedId === selected.id}
                 data-testid="copy-tos-order"
                 onClick={() => { handleCopyCandidate(selected); }}
                 title="Copy this calendar as a Thinkorswim order"
-                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2 py-0.5 font-mono text-[9px] text-dim hover:text-txt"
               >
                 {copiedId === selected.id ? "Copied ✓" : "⧉ Copy TOS order"}
-              </button>
+              </Button>
             )}
           </div>
           {selected !== null && (
