@@ -20,12 +20,16 @@
 
 import { ok } from "@morai/shared";
 import type { Result } from "@morai/shared";
+import {
+  computeSnapshotPnl,
+} from "@morai/core";
 import type {
   ForPersistingSnapshot,
   ForReadingJournal,
   ForResolvingLegSnapshot,
   ForReadingCalendarSnapshotsForCycle,
   ForReadingLatestSnapshotTime,
+  ForRecomputingSnapshotPnl,
   SnapshotRow,
   LegSnapshot,
   CalendarSnapshotForCycle,
@@ -38,6 +42,7 @@ export type MemoryCalendarSnapshotsRepo = {
   readonly resolveLegSnapshot: ForResolvingLegSnapshot;
   readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
   readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
+  readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
   /**
    * seedCalendar — register a calendarId as known so readJournal returns
    * ok([]) (not ok(null)) for it. Mirrors the FK enforced by the Postgres
@@ -133,6 +138,25 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok(new Date(latestMs));
   };
 
+  // JRNL-01 pnl-unit-mismatch fix: re-derive pnl_open on every stored row for a calendar from
+  // the given openNetDebit/qty (D-05 formula), sharing the exact snapshotCalendars.ts formula
+  // via computeSnapshotPnl — no online fetch, re-derives purely from each row's netMark.
+  const recomputeSnapshotPnl: ForRecomputingSnapshotPnl = async (
+    calendarId: string,
+    openNetDebit: number,
+    qty: number,
+  ): Promise<Result<{ readonly rowsUpdated: number }, StorageError>> => {
+    let rowsUpdated = 0;
+    for (const [key, row] of store) {
+      if (row.calendarId !== calendarId) continue;
+      const netMark = parseFloat(row.netMark);
+      const pnlOpen = String(computeSnapshotPnl(netMark, openNetDebit, qty));
+      store.set(key, { ...row, pnlOpen });
+      rowsUpdated += 1;
+    }
+    return ok({ rowsUpdated });
+  };
+
   const seedCalendar = (id: string): void => {
     knownIds.add(id);
   };
@@ -154,6 +178,7 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     resolveLegSnapshot,
     readSnapshotsForCycle,
     readLatestSnapshotTime,
+    recomputeSnapshotPnl,
     seedCalendar,
     seedLegSnapshot,
   };

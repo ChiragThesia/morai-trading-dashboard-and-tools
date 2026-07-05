@@ -17,12 +17,14 @@
 
 import { ok, err, parseOccSymbol, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
+import { computeSnapshotPnl } from "@morai/core";
 import type {
   ForPersistingSnapshot,
   ForReadingJournal,
   ForResolvingLegSnapshot,
   ForReadingCalendarSnapshotsForCycle,
   ForReadingLatestSnapshotTime,
+  ForRecomputingSnapshotPnl,
   SnapshotRow,
   LegSnapshot,
   CalendarSnapshotForCycle,
@@ -38,6 +40,7 @@ export type PostgresCalendarSnapshotsRepo = {
   readonly resolveLegSnapshot: ForResolvingLegSnapshot;
   readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
   readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
+  readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
 };
 
 export function makePostgresCalendarSnapshotsRepo(
@@ -266,7 +269,58 @@ export function makePostgresCalendarSnapshotsRepo(
     }
   };
 
-  return { persistSnapshot, readJournal, resolveLegSnapshot, readSnapshotsForCycle, readLatestSnapshotTime };
+  // ─── recomputeSnapshotPnl (JRNL-01 pnl-unit-mismatch fix) ────────────────────
+  // Re-derives pnl_open on every stored row for a calendar from the given openNetDebit/qty,
+  // using the SAME D-05 formula the live snapshot writer uses (computeSnapshotPnl) — no
+  // formula drift. No online fetch: re-derives purely from each row's stored net_mark.
+  //
+  // Atomicity (money path): the SELECT + per-row UPDATEs run inside one transaction, so a
+  // mid-loop failure rolls back the whole batch rather than leaving a calendar's snapshots
+  // half-corrected. rowsUpdated therefore reflects a single committed all-or-nothing batch.
+  const recomputeSnapshotPnl: ForRecomputingSnapshotPnl = async (
+    calendarId: string,
+    openNetDebit: number,
+    qty: number,
+  ): Promise<Result<{ readonly rowsUpdated: number }, StorageError>> => {
+    try {
+      const rowsUpdated = await db.transaction(async (tx) => {
+        const rows = await tx
+          .select({ time: calendarSnapshots.time, netMark: calendarSnapshots.netMark })
+          .from(calendarSnapshots)
+          .where(eq(calendarSnapshots.calendarId, calendarId));
+
+        for (const row of rows) {
+          const netMark = parseFloat(row.netMark);
+          const pnlOpen = String(computeSnapshotPnl(netMark, openNetDebit, qty));
+          await tx
+            .update(calendarSnapshots)
+            .set({ pnlOpen })
+            .where(
+              and(
+                eq(calendarSnapshots.calendarId, calendarId),
+                eq(calendarSnapshots.time, row.time),
+              ),
+            );
+        }
+
+        return rows.length;
+      });
+
+      return ok({ rowsUpdated });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  return {
+    persistSnapshot,
+    readJournal,
+    resolveLegSnapshot,
+    readSnapshotsForCycle,
+    readLatestSnapshotTime,
+    recomputeSnapshotPnl,
+  };
 }
 
 // ─── Row mapper ─────────────────────────────────────────────────────────────

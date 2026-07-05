@@ -21,6 +21,7 @@ import type {
   ForResolvingLegSnapshot,
   ForReadingCalendarSnapshotsForCycle,
   ForReadingLatestSnapshotTime,
+  ForRecomputingSnapshotPnl,
   SnapshotRow,
   LegSnapshot,
   StorageError,
@@ -40,6 +41,8 @@ export type CalendarSnapshotsRepo = {
   readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
   /** 20-05: read MAX(time) across all calendar_snapshots rows (SNAP-01 cooldown ground truth) */
   readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
+  /** JRNL-01 pnl-unit-mismatch fix: re-derive pnl_open on every row from openNetDebit/qty */
+  readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -439,6 +442,90 @@ export function runCalendarSnapshotsContractTests(
         if (!result.ok) return;
         expect(result.value).not.toBeNull();
         expect(result.value?.getTime()).toBe(t3.getTime());
+      });
+    });
+
+    describe("recomputeSnapshotPnl — JRNL-01 pnl-unit-mismatch data-correction path", () => {
+      it("re-derives pnl_open on every row from the given openNetDebit/qty (D-05 formula)", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const t1 = new Date("2026-07-01T19:00:00Z");
+        const t2 = new Date("2026-07-01T19:30:00Z");
+        // Both rows persisted with a STALE pnl_open (as if computed from the wrong-scale
+        // openNetDebit=3235 $ instead of the corrected 32.35 pts) — mirrors the real bug.
+        await repo.persistSnapshot(
+          makeSnapshotRow(t1, CAL_ID, { netMark: "36.5", pnlOpen: "-319850" }),
+        );
+        await repo.persistSnapshot(
+          makeSnapshotRow(t2, CAL_ID, { netMark: "40", pnlOpen: "-319500" }),
+        );
+
+        const result = await repo.recomputeSnapshotPnl(CAL_ID, 32.35, 1);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.rowsUpdated).toBe(2);
+
+        const journalResult = await repo.readJournal(CAL_ID);
+        expect(journalResult.ok).toBe(true);
+        if (!journalResult.ok) return;
+        const rows = journalResult.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows).toHaveLength(2);
+        // (36.5 - 32.35) * 1 * 100 = 415
+        expect(parseFloat(rows[0]?.pnlOpen ?? "NaN")).toBeCloseTo(415, 5);
+        // (40 - 32.35) * 1 * 100 = 765
+        expect(parseFloat(rows[1]?.pnlOpen ?? "NaN")).toBeCloseTo(765, 5);
+      });
+
+      it("scales by qty (D-05: * qty * 100)", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const t1 = new Date("2026-07-01T19:00:00Z");
+        await repo.persistSnapshot(
+          makeSnapshotRow(t1, CAL_ID, { netMark: "10", pnlOpen: "0" }),
+        );
+
+        const result = await repo.recomputeSnapshotPnl(CAL_ID, 5, 3);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.rowsUpdated).toBe(1);
+
+        const journalResult = await repo.readJournal(CAL_ID);
+        expect(journalResult.ok).toBe(true);
+        if (!journalResult.ok) return;
+        const rows = journalResult.value;
+        if (rows === null) return;
+        // (10 - 5) * 3 * 100 = 1500
+        expect(parseFloat(rows[0]?.pnlOpen ?? "NaN")).toBeCloseTo(1500, 5);
+      });
+
+      it("returns rowsUpdated: 0 (not an error) for a calendar with no snapshot rows", async () => {
+        await seed.seedCalendar(CAL_ID_EMPTY);
+        const result = await repo.recomputeSnapshotPnl(CAL_ID_EMPTY, 10, 1);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.rowsUpdated).toBe(0);
+      });
+
+      it("does not touch a different calendar's rows", async () => {
+        await seed.seedCalendar(CAL_ID);
+        await seed.seedCalendar(CAL_ID_EMPTY);
+        const t1 = new Date("2026-07-01T19:00:00Z");
+        await repo.persistSnapshot(
+          makeSnapshotRow(t1, CAL_ID, { netMark: "36.5", pnlOpen: "-319850" }),
+        );
+        await repo.persistSnapshot(
+          makeSnapshotRow(t1, CAL_ID_EMPTY, { netMark: "36.5", pnlOpen: "-319850" }),
+        );
+
+        await repo.recomputeSnapshotPnl(CAL_ID, 32.35, 1);
+
+        const otherResult = await repo.readJournal(CAL_ID_EMPTY);
+        expect(otherResult.ok).toBe(true);
+        if (!otherResult.ok) return;
+        const otherRows = otherResult.value;
+        if (otherRows === null) return;
+        // Untouched: still the stale value.
+        expect(parseFloat(otherRows[0]?.pnlOpen ?? "NaN")).toBeCloseTo(-319850, 5);
       });
     });
   });
