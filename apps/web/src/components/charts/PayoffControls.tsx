@@ -9,7 +9,7 @@
  * usePayoffDateControl + a useState<PayoffChartToggles>) and feeds daysForward into its own
  * scenario engine — this component never touches the engine or the date-projection lib.
  */
-import { cn } from "@/lib/utils";
+import { Button } from "../system/index.tsx";
 import type { PayoffChartToggles } from "./PayoffChart.tsx";
 
 /** Chip order + labels. Keyed by the exact PayoffChartToggles field so clicks emit the key,
@@ -20,9 +20,6 @@ const TOGGLE_META: ReadonlyArray<{ readonly key: keyof PayoffChartToggles; reado
   { key: "showWalls", label: "Walls" },
   { key: "showProfitZone", label: "Profit zone" },
 ];
-
-const STEP_BTN =
-  "cursor-pointer rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[9px] text-dim";
 
 export interface PayoffControlsProps {
   /** Local YYYY-MM-DD value for the native date input (from usePayoffDateControl). */
@@ -56,14 +53,9 @@ export function PayoffControls({
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2 font-mono text-[9px] text-dim">
       <span>Date:</span>
-      <button
-        type="button"
-        onClick={() => { onStepDate(-1); }}
-        aria-label="Previous day"
-        className={STEP_BTN}
-      >
+      <Button onClick={() => { onStepDate(-1); }} aria-label="Previous day">
         ‹
-      </button>
+      </Button>
       <input
         type="date"
         data-testid="date-picker-input"
@@ -72,40 +64,28 @@ export function PayoffControls({
         value={dateInputValue}
         onChange={(e) => { onDateChange(e.target.value); }}
         style={{ colorScheme: "dark" }}
-        className="rounded-[3px] border border-line2 bg-transparent px-[7px] py-0.5 font-mono text-[11px] text-txt"
+        className="rounded-[3px] border border-line2 bg-raise px-[7px] py-0.5 font-mono text-[11px] text-txt focus-visible:border-violet focus-visible:ring-2 focus-visible:ring-violet/40 focus-visible:outline-none"
       />
-      <button
-        type="button"
-        onClick={() => { onStepDate(1); }}
-        aria-label="Next day"
-        className={STEP_BTN}
-      >
+      <Button onClick={() => { onStepDate(1); }} aria-label="Next day">
         ›
-      </button>
-      <button type="button" onClick={onResetDate} className={STEP_BTN}>
-        Today
-      </button>
+      </Button>
+      <Button onClick={onResetDate}>Today</Button>
 
       <span className="mx-0.5 h-3 w-px bg-line2" aria-hidden="true" />
 
       {TOGGLE_META.map(({ key, label }) => {
         const on = toggles[key];
         return (
-          <button
+          <Button
             key={key}
-            type="button"
+            variant="toggle"
+            active={on}
             data-testid={`toggle-${key}`}
             aria-pressed={on}
             onClick={() => { onToggle(key); }}
-            className={cn(
-              "cursor-pointer rounded-[3px] border px-[7px] py-0.5 font-mono text-[9px]",
-              on
-                ? "border-violet/60 bg-violet/10 text-txt"
-                : "border-line2 bg-transparent text-dim line-through",
-            )}
           >
             {label}
-          </button>
+          </Button>
         );
       })}
     </div>
