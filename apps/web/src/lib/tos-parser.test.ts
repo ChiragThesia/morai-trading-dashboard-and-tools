@@ -323,6 +323,30 @@ describe("parseTosOrder: Rule 9 — call and put calendars", () => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Real-world paste regression — user's exact clipboard paste
+// (Weeklys) tag + single-digit day with no leading zero
+// ─────────────────────────────────────────────────────────────
+describe("parseTosOrder: real-world paste regression", () => {
+  it("parses a (Weeklys)-tagged paste with a single-digit day (no leading zero)", () => {
+    const r = parseTosOrder(
+      "BUY +1 CALENDAR SPX 100 (Weeklys) 31 AUG 26/3 AUG 26 7450 PUT @45.85 LMT GTC",
+      TODAY,
+      SPOT,
+      RATE,
+    );
+    expect(r).not.toBeNull();
+    if (!r) return;
+    expect(r.strike).toBe(7450);
+    expect(r.type).toBe("P");
+    expect(r.debit).toBe(45.85);
+    expect(r.underlying).toBe("SPX");
+    // front = 3 AUG 26 (earlier), back = 31 AUG 26 (later)
+    expect(r.frontDte).toBeLessThan(r.backDte);
+    expect(r.frontDte).toBeGreaterThan(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
 // Failure cases: returns null
 // ─────────────────────────────────────────────────────────────
 describe("parseTosOrder: null-on-failure cases", () => {
