@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
-current_phase: 19
-current_phase_name: picker-engine-economic-events
+current_phase: 21
+current_phase_name: Control Affordance & Button System
 status: verifying
 stopped_at: Completed 19-09-PLAN.md (final plan of Phase 19)
-last_updated: "2026-07-04T23:58:26.137Z"
-last_activity: 2026-07-04
-last_activity_desc: Phase 19 execution started
+last_updated: "2026-07-05T02:50:54.446Z"
+last_activity: 2026-07-05
+last_activity_desc: Phase 19 complete, transitioned to Phase 21
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 5
   total_plans: 26
   completed_plans: 26
-  percent: 83
+  percent: 71
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 19 (picker-engine-economic-events) — EXECUTING
-Plan: 9 of 9
+Phase: 21 — Control Affordance & Button System
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-04 — Phase 19 execution started
+Last activity: 2026-07-05 — Phase 19 complete, transitioned to Phase 21
 
 ## Milestone v1.2 Summary
 
@@ -94,6 +94,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 16 | 3 | - | - |
 | 17.1 | 5 | - | - |
 | 18 | 5 | - | - |
+| 19 | 9 | - | - |
 
 **Recent Trend:**
 

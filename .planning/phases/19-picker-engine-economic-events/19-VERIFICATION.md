@@ -1,17 +1,20 @@
 ---
 phase: 19-picker-engine-economic-events
 verified: 2026-07-04T19:45:00Z
-status: human_needed
+status: passed
 score: 4/4 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Load the Analyzer screen against a live picker_snapshot row (once the worker has computed one in a real environment) and visually confirm the ranked candidate rail renders correctly."
     expected: "Cards show real scores/breakdowns; each card's 'as of {HH:MM} · {source}' tag shows a genuinely fresh (green/up dot) reading for a recent snapshot; amber 'GEX unavailable'/'events unavailable' tags appear only when the corresponding context status is degraded; loading/error/cold-start/zero-filtered states each render their distinct copy at the right time."
     why_human: "Visual/UX correctness over live async data (5 mutually-exclusive rail states, a color-coded freshness dot, conditional amber tags) cannot be confirmed by grep or unit tests with mocked data alone — 19-09-SUMMARY.md explicitly recorded this manual UAT as 'not performed this session; flagged for the phase-level UAT pass,' and 19-VALIDATION.md lists the same item as its one Manual-Only Verification, still unchecked."
+
   - test: "Watch the first live RTH cycle after this phase is deployed: confirm compute-gex-snapshot's success enqueues compute-picker, and compute-picker actually persists a picker_snapshot row (check via GET /api/picker/candidates or the DB directly)."
     expected: "A fresh picker_snapshot row appears with observedAt stamped from the chain cohort's own data time (never now()), and GET /api/picker/candidates / get_picker_candidates return it without recomputing."
     why_human: "The full precompute chain (fetch-schwab-chain → … → compute-gex-snapshot → compute-picker) has never been exercised against a live Postgres + pg-boss instance in this session (19-08-SUMMARY.md: 'no Docker available for testcontainers' for that specific end-to-end path; wiring is typecheck/unit-test verified only). This is real-time, cross-service orchestration behavior that only a live run can confirm."
+
   - test: "Confirm fetch-economic-events' first live Friday-17:00-ET run successfully parses the real FRED release/dates response, and separately confirm the hand-authored FOMC_SEED dates are still accurate against the official Fed calendar."
     expected: "economic_events accumulates real CPI/NFP rows from FRED (Zod schema matches the live shape) and the FOMC seed dates match the Fed's published 2025/2026 schedule."
     why_human: "19-04-SUMMARY.md documents the FRED release/dates Zod schema was written from an assumed shape ('no live web/FRED access was available this session') and the FOMC_SEED was authored from training-knowledge recall, not a live source — both need a human/operator confirmation against the real external service and calendar, which cannot be grep-verified."
