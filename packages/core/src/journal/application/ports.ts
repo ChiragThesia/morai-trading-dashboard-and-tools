@@ -660,3 +660,53 @@ export type ForPersistingMacroObservation = (
 export type ForReadingMacroObservations = () => Promise<
   Result<ReadonlyArray<MacroObservationRow>, StorageError>
 >;
+
+// ─── Phase 20: RULE-01 annotation ports (calendar_event_annotations) ──────────
+// Canonical core ports for the calendar_event_annotations storage layer shipped in plan
+// 20-08. The Postgres repo and in-memory twin (packages/adapters) already implement
+// function shapes matching these exactly (method names included) — 20-08's local,
+// pre-core port types were a placeholder pending this plan; wiring is a type-only swap,
+// no adapter logic change (see 20-08-SUMMARY.md "Next Phase Readiness").
+
+/**
+ * CalendarEventAnnotation — a recorded rule-tag annotation, keyed by fillIdsHash.
+ * D-09/D24: NO foreign key to calendar_events — a rebuild that deletes/reinserts events
+ * must never cascade-wipe or block on an annotation row (calendar-event-annotations.ts).
+ */
+export type CalendarEventAnnotation = {
+  readonly fillIdsHash: string;
+  readonly ruleTags: ReadonlyArray<string>;
+  readonly otherNote: string | null;
+  readonly updatedAt: Date;
+};
+
+// Input to an upsert — the caller supplies the tags/note; updatedAt is stamped by the adapter.
+export type UpsertAnnotationInput = {
+  readonly fillIdsHash: string;
+  readonly ruleTags: ReadonlyArray<string>;
+  readonly otherNote: string | null;
+};
+
+/**
+ * ForWritingAnnotations — upsert one calendar_event_annotations row by fillIdsHash
+ * (RULE-01, D-10). Annotations are editable anytime — onConflictDoUpdate at the adapter,
+ * never onConflictDoNothing.
+ */
+export type ForWritingAnnotations = (
+  input: UpsertAnnotationInput,
+) => Promise<Result<CalendarEventAnnotation, StorageError>>;
+
+/**
+ * ForReadingAnnotations — read one annotation by hash, or the subset matching a hash set
+ * (RULE-01). readAnnotation returns null on miss; readAnnotationsByHashes returns only the
+ * matching rows (empty array when none match) — feeds getCalendarEventsWithRules' in-memory
+ * join against calendar_events (no FK, so the join happens in the use-case, not SQL).
+ */
+export type ForReadingAnnotations = {
+  readonly readAnnotation: (
+    fillIdsHash: string,
+  ) => Promise<Result<CalendarEventAnnotation | null, StorageError>>;
+  readonly readAnnotationsByHashes: (
+    hashes: ReadonlyArray<string>,
+  ) => Promise<Result<ReadonlyArray<CalendarEventAnnotation>, StorageError>>;
+};
