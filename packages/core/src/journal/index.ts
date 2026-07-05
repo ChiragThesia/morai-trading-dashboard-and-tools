@@ -172,3 +172,22 @@ export {
   ruleTagEnumForEventType,
 } from "./domain/rule-tags.ts";
 export type { EnterRuleTag, ExitRuleTag, RollRuleTag } from "./domain/rule-tags.ts";
+// RULE-01 (20-09): annotation ports + read/write use-cases (D-09/D-10/D-21).
+export type {
+  CalendarEventAnnotation,
+  UpsertAnnotationInput,
+  ForWritingAnnotations,
+  ForReadingAnnotations,
+} from "./application/ports.ts";
+export { makeGetCalendarEventsWithRulesUseCase } from "./application/getCalendarEventsWithRules.ts";
+export type {
+  CalendarEventWithRules,
+  GetCalendarEventsWithRulesDeps,
+  ForRunningGetCalendarEventsWithRules,
+} from "./application/getCalendarEventsWithRules.ts";
+export { makeSetRuleTagsUseCase } from "./application/setRuleTags.ts";
+export type {
+  SetRuleTagsInput,
+  SetRuleTagsDeps,
+  ForRunningSetRuleTags,
+} from "./application/setRuleTags.ts";

@@ -42,6 +42,25 @@ export {
   ruleTagEnumForEventType,
 } from "./journal/index.ts";
 export type { EnterRuleTag, ExitRuleTag, RollRuleTag } from "./journal/index.ts";
+// RULE-01 (20-09): annotation ports + read/write use-cases (D-09/D-10/D-21).
+export type {
+  CalendarEventAnnotation,
+  UpsertAnnotationInput,
+  ForWritingAnnotations,
+  ForReadingAnnotations,
+} from "./journal/index.ts";
+export { makeGetCalendarEventsWithRulesUseCase } from "./journal/index.ts";
+export type {
+  CalendarEventWithRules,
+  GetCalendarEventsWithRulesDeps,
+  ForRunningGetCalendarEventsWithRules,
+} from "./journal/index.ts";
+export { makeSetRuleTagsUseCase } from "./journal/index.ts";
+export type {
+  SetRuleTagsInput,
+  SetRuleTagsDeps,
+  ForRunningSetRuleTags,
+} from "./journal/index.ts";
 // Phase 3 calendar domain types and ports
 export type {
   CalendarNotFound,
