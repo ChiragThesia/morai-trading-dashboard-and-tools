@@ -303,7 +303,49 @@ cheapest/most-isolated first per research.
 **Note**: The RULE-01 sub-item is the most open-ended item in the milestone (rule taxonomy,
 firing-vs-execution boundary, how `entry_thesis` gets populated). Per research, it should get its
 own discuss-phase before planning, scoped explicitly to "recording layer, not a DSL."
-**Plans**: TBD
+**Plans**: 11 plans
+**UI hint**: yes
+
+Sequenced cheapest-first, three independent deploy+UAT cycles (D-18): WATCH-01 → SNAP-01 → RULE-01.
+
+Plans:
+**Wave 1**
+
+- [ ] 20-01-PLAN.md — WATCH-01 foundation: streamPingEvent contract + deriveStreamStatus pure fn (TDD) (WATCH-01)
+
+**Wave 2** *(WATCH-01 server + client, parallel — no file overlap)*
+
+- [ ] 20-02-PLAN.md — WATCH-01 server: emit isRth on both SSE ping sites + streaming doc (WATCH-01)
+- [ ] 20-03-PLAN.md — WATCH-01 client: useLiveStream ping+timer 3-state derivation + LiveStatusBadge alarm restyle + force-reconnect (WATCH-01) — *WATCH-01 ships*
+
+**Wave 3** *(SNAP-01 core)*
+
+- [ ] 20-04-PLAN.md — SNAP-01 core: detectLargeMove + isWithinCooldown + ForReadingLatestSnapshotTime port + SnapshotRow.trigger (TDD) (SNAP-01)
+
+**Wave 4** *(SNAP-01 adapters)*
+
+- [ ] 20-05-PLAN.md — SNAP-01 adapters: migration 0016 trigger column + persist + MAX(time) read + contract parity (SNAP-01)
+
+**Wave 5** *(SNAP-01 wiring)*
+
+- [ ] 20-06-PLAN.md — SNAP-01 wiring: observeSpot hook + main.ts detect→cooldown→jobBoss.send + worker trigger payload (SNAP-01) — *SNAP-01 ships*
+
+**Wave 6** *(RULE-01 vocabulary + storage, parallel — no file overlap)*
+
+- [ ] 20-07-PLAN.md — RULE-01 domain+contract: event-keyed enums (D-08 user-trim checkpoint) + list-shaped OTHER-requires-note contract (RULE-01)
+- [ ] 20-08-PLAN.md — RULE-01 storage: docs-first no-FK annotations table (migration 0017) + repo + twin + rebuild-survival guard (RULE-01)
+
+**Wave 7** *(RULE-01 use-cases)*
+
+- [ ] 20-09-PLAN.md — RULE-01 use-cases: ForReading/WritingAnnotations ports + getCalendarEventsWithRules (new read surface) + setRuleTags (RULE-01)
+
+**Wave 8** *(RULE-01 adapter surface)*
+
+- [ ] 20-10-PLAN.md — RULE-01 surface: JWT-gated GET/PUT rule routes + get_rule_tags/set_rule_tags MCP tools (RULE-01)
+
+**Wave 9** *(RULE-01 web UI)*
+
+- [ ] 20-11-PLAN.md — RULE-01 UI: useRuleTags hook + Journal rule control (ENTER/EXIT/ROLL toggle chips + OTHER note) + read-view pill (RULE-01) — *RULE-01 ships*
 
 ## Progress
 
@@ -329,7 +371,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 5/5 | Complete    | 2026-07-04 |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 5/5 | Complete    | 2026-07-04 |
 | 19. Picker Engine + Economic Events | v1.2 | 9/9 | Complete    | 2026-07-04 |
-| 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |
+| 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/11 | Planned | - |
 | 21. Control Affordance & Button System | v1.2 | 6/6 | Complete | 2026-07-05 |
 
 ## Backlog / Future Enhancements
