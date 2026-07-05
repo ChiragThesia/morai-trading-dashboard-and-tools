@@ -102,6 +102,12 @@ export interface CandidateCardProps {
   readonly onSelect: (candidate: PickerCandidate) => void;
   readonly onToggleCombine: (candidate: PickerCandidate) => void;
   readonly onCopy: (candidate: PickerCandidate) => void;
+  /**
+   * Removes this pasted card from the rail (multi-paste redesign — each pasted card manages
+   * itself independently). Only rendered when `pasted` is true AND this is provided; a
+   * scored/engine candidate is never removable.
+   */
+  readonly onRemove?: (candidate: PickerCandidate) => void;
 }
 
 export function CandidateCard({
@@ -117,6 +123,7 @@ export function CandidateCard({
   onSelect,
   onToggleCombine,
   onCopy,
+  onRemove,
 }: CandidateCardProps): React.ReactElement {
   const guardFwdEdge = candidate.fwdIv === null;
   const guardGexFit = gexContextStatus !== "ok";
@@ -136,8 +143,24 @@ export function CandidateCard({
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-display text-sm font-bold text-txt">{candidate.name}</span>
         {pasted ? (
-          <span className="rounded-sm bg-violet/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-violet">
-            PASTED
+          <span className="flex items-center gap-1">
+            <span className="rounded-sm bg-violet/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-violet">
+              PASTED
+            </span>
+            {onRemove !== undefined && (
+              <button
+                type="button"
+                data-testid={`remove-pasted-${candidate.id}`}
+                title="Remove this pasted calendar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(candidate);
+                }}
+                className="cursor-pointer rounded-[3px] border border-line2 bg-transparent px-1 font-mono text-[10px] leading-none text-dim hover:text-txt"
+              >
+                {"×"}
+              </button>
+            )}
           </span>
         ) : (
           <span className="font-display text-sm font-bold text-violet">{candidate.score}</span>

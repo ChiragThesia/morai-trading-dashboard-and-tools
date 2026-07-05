@@ -57,10 +57,15 @@ const EXPIRATION_CURVE_COLOR = "#a78bfa";
 const RETRY_BUTTON =
   "cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2 py-0.5 font-mono text-[9px] text-dim hover:text-txt";
 
-/** Stable id for the single user-pasted calendar (D-02: only one at a time). */
-const PASTED_ID = "pasted";
+/** Id prefix for a user-pasted calendar (multi-paste redesign: several can coexist, each with a
+ * unique `pasted-${n}` id assigned in paste order). */
+const PASTED_ID_PREFIX = "pasted-";
 
-/** Honest copy shown wherever engine-scored content would otherwise render for the pasted
+function isPastedId(id: string): boolean {
+  return id.startsWith(PASTED_ID_PREFIX);
+}
+
+/** Honest copy shown wherever engine-scored content would otherwise render for a pasted
  * candidate — a paste is never scored/ranked, so this replaces WhyPanel/ScoringMethodologyPanel/
  * EntryExitPlan content rather than fabricate scored-looking numbers for it. */
 const PASTED_NOT_SCORED_NOTE = "Pasted calendar — not engine-scored.";
@@ -77,8 +82,8 @@ function noop(): void {}
 
 export interface CandidateRailProps {
   readonly candidates: ReadonlyArray<PickerCandidate>;
-  /** The single pasted calendar (D-02), pinned above `candidates` — null when none pasted. */
-  readonly pastedCandidate: PickerCandidate | null;
+  /** User-pasted calendars (multi-paste redesign), pinned above `candidates` in paste order. */
+  readonly pastedCandidates: ReadonlyArray<PickerCandidate>;
   /** Controlled paste-input text (Analyzer owns the state). */
   readonly pasteText: string;
   /** Parse-failure copy, or null when the last Analyze succeeded / hasn't run yet. */
@@ -98,7 +103,10 @@ export interface CandidateRailProps {
   readonly onCopy: (candidate: PickerCandidate) => void;
   readonly onPasteTextChange: (text: string) => void;
   readonly onPasteAnalyze: () => void;
-  readonly onPasteClear: () => void;
+  /** Removes one pasted card (its own × button) — leaves other pasted cards untouched. */
+  readonly onRemovePasted: (candidate: PickerCandidate) => void;
+  /** Removes every pasted card at once. */
+  readonly onClearAllPasted: () => void;
 }
 
 /**
@@ -112,7 +120,7 @@ export interface CandidateRailProps {
  */
 export function CandidateRail({
   candidates,
-  pastedCandidate,
+  pastedCandidates,
   pasteText,
   pasteError,
   asOf,
@@ -128,15 +136,16 @@ export function CandidateRail({
   onCopy,
   onPasteTextChange,
   onPasteAnalyze,
-  onPasteClear,
+  onRemovePasted,
+  onClearAllPasted,
 }: CandidateRailProps): React.ReactElement {
   return (
     <Panel>
       <div className="mb-2 flex items-center justify-between gap-2">
         <PanelHeading title="Suggested calendars" />
-        {pastedCandidate !== null && (
-          <button type="button" data-testid="picker-paste-clear" onClick={onPasteClear} className={PASTE_BTN}>
-            Clear
+        {pastedCandidates.length > 0 && (
+          <button type="button" data-testid="picker-paste-clear-all" onClick={onClearAllPasted} className={PASTE_BTN}>
+            Clear all
           </button>
         )}
       </div>
@@ -167,7 +176,7 @@ export function CandidateRail({
           {" = event on front / back leg · bars = scored factors (higher = better)"}
         </p>
       )}
-      {candidates.length === 0 && pastedCandidate === null ? (
+      {candidates.length === 0 && pastedCandidates.length === 0 ? (
         <div className="flex flex-col gap-1.5" data-testid="picker-empty-filtered">
           <p className="m-0 font-display text-sm font-bold text-txt">No candidates in this snapshot</p>
           <p className="m-0 font-mono text-[11px] text-dim">
@@ -176,14 +185,14 @@ export function CandidateRail({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {pastedCandidate !== null && (
+          {pastedCandidates.map((candidate) => (
             <CandidateCard
-              key={pastedCandidate.id}
-              candidate={pastedCandidate}
+              key={candidate.id}
+              candidate={candidate}
               pasted
-              selected={pastedCandidate.id === selectedId}
-              combined={combinedIds.has(pastedCandidate.id)}
-              copied={pastedCandidate.id === copiedId}
+              selected={candidate.id === selectedId}
+              combined={combinedIds.has(candidate.id)}
+              copied={candidate.id === copiedId}
               observedAt={observedAt}
               source={source}
               gexContextStatus={gexContextStatus}
@@ -191,8 +200,9 @@ export function CandidateRail({
               onSelect={onSelect}
               onToggleCombine={onToggleCombine}
               onCopy={onCopy}
+              onRemove={onRemovePasted}
             />
-          )}
+          ))}
           {candidates.map((candidate) => (
             <CandidateCard
               key={candidate.id}
@@ -246,7 +256,7 @@ function ScoringMethodologyPanel({ candidate }: ScoringMethodologyPanelProps): R
       <p className="mb-2 font-mono text-[9px] text-dim">How this calendar scores on the picking rubric.</p>
       {candidate === null ? (
         <p className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</p>
-      ) : candidate.id === PASTED_ID ? (
+      ) : isPastedId(candidate.id) ? (
         <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
       ) : (
         <ul className="flex list-none flex-col gap-1.5 pl-0 font-mono text-[10px]" data-testid="scoring-checklist">
@@ -299,7 +309,7 @@ export interface RightColumnProps {
  * reads the live snapshot's GEX context (Phase 19: never the frozen fixture).
  */
 function RightColumn({ candidate, gex }: RightColumnProps): React.ReactElement {
-  const isPasted = candidate?.id === PASTED_ID;
+  const isPasted = candidate !== null && isPastedId(candidate.id);
   return (
     <div className="flex flex-col gap-3">
       <Panel>
@@ -345,22 +355,25 @@ export function Analyzer(): React.ReactElement {
   // into one net payoff (see bookCandidates/combinedPositions below).
   const [combinedIds, setCombinedIds] = useState<ReadonlySet<string>>(new Set());
 
-  // ── Pasted calendar (paste redesign, D-02): a "PASTED"-badged card pinned atop the rail —
-  // only one at a time (stable id "pasted"); a new Analyze replaces it, Clear removes it. It
-  // drives the SAME candidate→position→repriceScenario payoff path as every scored candidate. ──
-  const [pastedCandidate, setPastedCandidate] = useState<PickerCandidate | null>(null);
+  // ── Pasted calendars (multi-paste redesign): any number of "PASTED"-badged cards pinned atop
+  // the rail in paste order, each with a unique `pasted-${n}` id from the monotonic `pastedSeq`
+  // counter. Each Analyze ADDS a card; each card's own × (onRemovePasted) or "Clear all"
+  // (onClearAllPasted) removes it. Every pasted card drives the SAME
+  // candidate→position→repriceScenario payoff path as every scored candidate. ──
+  const [pastedCandidates, setPastedCandidates] = useState<ReadonlyArray<PickerCandidate>>([]);
+  const [pastedSeq, setPastedSeq] = useState(0);
   const [pasteText, setPasteText] = useState<string>("");
   const [pasteError, setPasteError] = useState<string | null>(null);
 
   const railCandidates = useMemo<ReadonlyArray<PickerCandidate>>(
-    () => (pastedCandidate === null ? sortedCandidates : [pastedCandidate, ...sortedCandidates]),
-    [pastedCandidate, sortedCandidates],
+    () => [...pastedCandidates, ...sortedCandidates],
+    [pastedCandidates, sortedCandidates],
   );
 
   const selected = useMemo<PickerCandidate | null>(() => {
     const found = railCandidates.find((c) => c.id === selectedId);
-    return found ?? sortedCandidates[0] ?? null;
-  }, [selectedId, railCandidates, sortedCandidates]);
+    return found ?? railCandidates[0] ?? null;
+  }, [selectedId, railCandidates]);
 
   const handleSelect = useCallback((candidate: PickerCandidate) => {
     setSelectedId(candidate.id);
@@ -423,20 +436,45 @@ export function Analyzer(): React.ReactElement {
     const parsed = parseTosOrder(pasteText, today, spot, DEFAULT_RATE);
     if (parsed === null) {
       setPasteError(PASTE_ERROR_COPY);
-      setPastedCandidate(null);
       return;
     }
     setPasteError(null);
-    setPastedCandidate(parsedCalendarToPickerCandidate(parsed, PASTED_ID));
-    setSelectedId(PASTED_ID);
-  }, [pasteText, today, spot]);
-
-  const handlePasteClear = useCallback((): void => {
+    const nextSeq = pastedSeq + 1;
+    const id = `${PASTED_ID_PREFIX}${nextSeq}`;
+    const candidate = parsedCalendarToPickerCandidate(parsed, id);
+    setPastedCandidates((prev) => [...prev, candidate]);
+    setPastedSeq(nextSeq);
+    setSelectedId(id);
     setPasteText("");
-    setPastedCandidate(null);
-    setPasteError(null);
-    setSelectedId((prev) => (prev === PASTED_ID ? "" : prev));
+  }, [pasteText, today, spot, pastedSeq]);
+
+  const handleRemovePasted = useCallback((candidate: PickerCandidate): void => {
+    setPastedCandidates((prev) => prev.filter((c) => c.id !== candidate.id));
+    setCombinedIds((prev) => {
+      if (!prev.has(candidate.id)) return prev;
+      const next = new Set(prev);
+      next.delete(candidate.id);
+      return next;
+    });
+    setSelectedId((prev) => (prev === candidate.id ? "" : prev));
   }, []);
+
+  const handleClearAllPasted = useCallback((): void => {
+    const removedIds = new Set(pastedCandidates.map((c) => c.id));
+    if (removedIds.size === 0) return;
+    setPastedCandidates([]);
+    setCombinedIds((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const id of removedIds) {
+        if (next.delete(id)) changed = true;
+      }
+      return changed ? next : prev;
+    });
+    setSelectedId((prev) => (removedIds.has(prev) ? "" : prev));
+    setPasteText("");
+    setPasteError(null);
+  }, [pastedCandidates]);
 
   // The combined book = the selected candidate (always) + any ⊕-Combine'd calendars — pooled
   // over railCandidates so a ⊕-Combine'd pasted card is included even when a scored candidate
@@ -513,7 +551,7 @@ export function Analyzer(): React.ReactElement {
     railBody = (
       <CandidateRail
         candidates={sortedCandidates}
-        pastedCandidate={pastedCandidate}
+        pastedCandidates={pastedCandidates}
         pasteText={pasteText}
         pasteError={pasteError}
         asOf={snapshot.asOf}
@@ -529,7 +567,8 @@ export function Analyzer(): React.ReactElement {
         onCopy={handleCopyCandidate}
         onPasteTextChange={setPasteText}
         onPasteAnalyze={handlePasteAnalyze}
-        onPasteClear={handlePasteClear}
+        onRemovePasted={handleRemovePasted}
+        onClearAllPasted={handleClearAllPasted}
       />
     );
   }
@@ -565,7 +604,7 @@ export function Analyzer(): React.ReactElement {
               <span className="text-violet" data-testid="risk-profile-selected-name">
                 {selected.name}
               </span>
-              {selected.id === PASTED_ID
+              {isPastedId(selected.id)
                 ? ` · debit $${selected.debit.toFixed(0)}`
                 : ` · debit $${selected.debit.toFixed(0)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(0)}`}
               {bookCount > 1 && (
