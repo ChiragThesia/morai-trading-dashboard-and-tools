@@ -30,7 +30,6 @@ import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
-import { AdHocCalendarAnalysis } from "../components/picker/AdHocCalendarAnalysis.tsx";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
@@ -42,6 +41,8 @@ import type { ScenarioParams } from "../lib/scenario-engine.ts";
 import { computeProjectionBounds } from "../lib/date-projection.ts";
 import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
 import { usePicker } from "../hooks/usePicker.ts";
+import { parseTosOrder } from "../lib/tos-parser.ts";
+import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candidate.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -56,12 +57,32 @@ const EXPIRATION_CURVE_COLOR = "#a78bfa";
 const RETRY_BUTTON =
   "cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2 py-0.5 font-mono text-[9px] text-dim hover:text-txt";
 
+/** Stable id for the single user-pasted calendar (D-02: only one at a time). */
+const PASTED_ID = "pasted";
+
+/** Honest copy shown wherever engine-scored content would otherwise render for the pasted
+ * candidate — a paste is never scored/ranked, so this replaces WhyPanel/ScoringMethodologyPanel/
+ * EntryExitPlan content rather than fabricate scored-looking numbers for it. */
+const PASTED_NOT_SCORED_NOTE = "Pasted calendar — not engine-scored.";
+
+const PASTE_ERROR_COPY =
+  "Couldn't read that. Paste a TOS calendar order, e.g. BUY +1 CALENDAR SPX 100 18 SEP 26 [AM]/14 AUG 26 7425 PUT @48.75 LMT GTC";
+
+const PASTE_BTN =
+  "cursor-pointer rounded-[3px] border border-line2 bg-transparent px-2.5 py-1 font-mono text-[10px] text-dim hover:text-txt";
+
 function noop(): void {}
 
 // ─── Suggested calendars rail ──────────────────────────────────────────────────
 
 export interface CandidateRailProps {
   readonly candidates: ReadonlyArray<PickerCandidate>;
+  /** The single pasted calendar (D-02), pinned above `candidates` — null when none pasted. */
+  readonly pastedCandidate: PickerCandidate | null;
+  /** Controlled paste-input text (Analyzer owns the state). */
+  readonly pasteText: string;
+  /** Parse-failure copy, or null when the last Analyze succeeded / hasn't run yet. */
+  readonly pasteError: string | null;
   /** Date-only reference date for the empty-state message (DTE/event x-axis anchor). */
   readonly asOf: string;
   /** Full-ISO real instant (WR-03) — threaded to each CandidateCard's staleness dot. */
@@ -75,6 +96,9 @@ export interface CandidateRailProps {
   readonly onSelect: (candidate: PickerCandidate) => void;
   readonly onToggleCombine: (candidate: PickerCandidate) => void;
   readonly onCopy: (candidate: PickerCandidate) => void;
+  readonly onPasteTextChange: (text: string) => void;
+  readonly onPasteAnalyze: () => void;
+  readonly onPasteClear: () => void;
 }
 
 /**
@@ -88,6 +112,9 @@ export interface CandidateRailProps {
  */
 export function CandidateRail({
   candidates,
+  pastedCandidate,
+  pasteText,
+  pasteError,
   asOf,
   observedAt,
   source,
@@ -99,10 +126,38 @@ export function CandidateRail({
   onSelect,
   onToggleCombine,
   onCopy,
+  onPasteTextChange,
+  onPasteAnalyze,
+  onPasteClear,
 }: CandidateRailProps): React.ReactElement {
   return (
     <Panel>
-      <PanelHeading title="Suggested calendars" />
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <PanelHeading title="Suggested calendars" />
+        {pastedCandidate !== null && (
+          <button type="button" data-testid="picker-paste-clear" onClick={onPasteClear} className={PASTE_BTN}>
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <input
+          type="text"
+          data-testid="picker-paste-input"
+          value={pasteText}
+          onChange={(e) => { onPasteTextChange(e.target.value); }}
+          placeholder="Paste a TOS calendar order…"
+          className="min-w-0 flex-1 rounded-[3px] border border-line2 bg-transparent px-2 py-1 font-mono text-[10px] text-txt"
+        />
+        <button type="button" data-testid="picker-paste-analyze" onClick={onPasteAnalyze} className={PASTE_BTN}>
+          Analyze
+        </button>
+      </div>
+      {pasteError !== null && (
+        <p data-testid="picker-paste-error" className="mb-2 font-mono text-[9px] text-down">
+          {pasteError}
+        </p>
+      )}
       {candidates.length > 0 && (
         <p className="mb-2 font-mono text-[9px] leading-[1.5] text-dim" data-testid="rail-legend">
           {"θ = daily $ decay · vega = $ per vol-pt · "}
@@ -112,7 +167,7 @@ export function CandidateRail({
           {" = event on front / back leg · bars = scored factors (higher = better)"}
         </p>
       )}
-      {candidates.length === 0 ? (
+      {candidates.length === 0 && pastedCandidate === null ? (
         <div className="flex flex-col gap-1.5" data-testid="picker-empty-filtered">
           <p className="m-0 font-display text-sm font-bold text-txt">No candidates in this snapshot</p>
           <p className="m-0 font-mono text-[11px] text-dim">
@@ -121,6 +176,23 @@ export function CandidateRail({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
+          {pastedCandidate !== null && (
+            <CandidateCard
+              key={pastedCandidate.id}
+              candidate={pastedCandidate}
+              pasted
+              selected={pastedCandidate.id === selectedId}
+              combined={combinedIds.has(pastedCandidate.id)}
+              copied={pastedCandidate.id === copiedId}
+              observedAt={observedAt}
+              source={source}
+              gexContextStatus={gexContextStatus}
+              eventsContextStatus={eventsContextStatus}
+              onSelect={onSelect}
+              onToggleCombine={onToggleCombine}
+              onCopy={onCopy}
+            />
+          )}
           {candidates.map((candidate) => (
             <CandidateCard
               key={candidate.id}
@@ -174,6 +246,8 @@ function ScoringMethodologyPanel({ candidate }: ScoringMethodologyPanelProps): R
       <p className="mb-2 font-mono text-[9px] text-dim">How this calendar scores on the picking rubric.</p>
       {candidate === null ? (
         <p className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</p>
+      ) : candidate.id === PASTED_ID ? (
+        <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
       ) : (
         <ul className="flex list-none flex-col gap-1.5 pl-0 font-mono text-[10px]" data-testid="scoring-checklist">
           {CHECK_ITEMS.map((item) => {
@@ -225,15 +299,24 @@ export interface RightColumnProps {
  * reads the live snapshot's GEX context (Phase 19: never the frozen fixture).
  */
 function RightColumn({ candidate, gex }: RightColumnProps): React.ReactElement {
+  const isPasted = candidate?.id === PASTED_ID;
   return (
     <div className="flex flex-col gap-3">
       <Panel>
         <PanelHeading title="Why this calendar" />
-        {candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />}
+        {isPasted ? (
+          <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+        ) : (
+          candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />
+        )}
       </Panel>
       <Panel>
         <PanelHeading title="Entry / exit plan" />
-        {candidate !== null && <EntryExitPlan candidate={candidate} />}
+        {isPasted ? (
+          <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+        ) : (
+          candidate !== null && <EntryExitPlan candidate={candidate} />
+        )}
       </Panel>
     </div>
   );
@@ -262,10 +345,22 @@ export function Analyzer(): React.ReactElement {
   // into one net payoff (see bookCandidates/combinedPositions below).
   const [combinedIds, setCombinedIds] = useState<ReadonlySet<string>>(new Set());
 
+  // ── Pasted calendar (paste redesign, D-02): a "PASTED"-badged card pinned atop the rail —
+  // only one at a time (stable id "pasted"); a new Analyze replaces it, Clear removes it. It
+  // drives the SAME candidate→position→repriceScenario payoff path as every scored candidate. ──
+  const [pastedCandidate, setPastedCandidate] = useState<PickerCandidate | null>(null);
+  const [pasteText, setPasteText] = useState<string>("");
+  const [pasteError, setPasteError] = useState<string | null>(null);
+
+  const railCandidates = useMemo<ReadonlyArray<PickerCandidate>>(
+    () => (pastedCandidate === null ? sortedCandidates : [pastedCandidate, ...sortedCandidates]),
+    [pastedCandidate, sortedCandidates],
+  );
+
   const selected = useMemo<PickerCandidate | null>(() => {
-    const found = sortedCandidates.find((c) => c.id === selectedId);
+    const found = railCandidates.find((c) => c.id === selectedId);
     return found ?? sortedCandidates[0] ?? null;
-  }, [selectedId, sortedCandidates]);
+  }, [selectedId, railCandidates, sortedCandidates]);
 
   const handleSelect = useCallback((candidate: PickerCandidate) => {
     setSelectedId(candidate.id);
@@ -324,12 +419,33 @@ export function Analyzer(): React.ReactElement {
     [spot, dateControl.daysForward],
   );
 
-  // The combined book = the selected candidate (always) + any ⊕-Combine'd calendars.
+  const handlePasteAnalyze = useCallback((): void => {
+    const parsed = parseTosOrder(pasteText, today, spot, DEFAULT_RATE);
+    if (parsed === null) {
+      setPasteError(PASTE_ERROR_COPY);
+      setPastedCandidate(null);
+      return;
+    }
+    setPasteError(null);
+    setPastedCandidate(parsedCalendarToPickerCandidate(parsed));
+    setSelectedId(PASTED_ID);
+  }, [pasteText, today, spot]);
+
+  const handlePasteClear = useCallback((): void => {
+    setPasteText("");
+    setPastedCandidate(null);
+    setPasteError(null);
+    setSelectedId((prev) => (prev === PASTED_ID ? "" : prev));
+  }, []);
+
+  // The combined book = the selected candidate (always) + any ⊕-Combine'd calendars — pooled
+  // over railCandidates so a ⊕-Combine'd pasted card is included even when a scored candidate
+  // is the one selected.
   const bookCandidates = useMemo<ReadonlyArray<PickerCandidate>>(() => {
     if (selected === null) return [];
-    const extra = sortedCandidates.filter((c) => combinedIds.has(c.id) && c.id !== selected.id);
+    const extra = railCandidates.filter((c) => combinedIds.has(c.id) && c.id !== selected.id);
     return [selected, ...extra];
-  }, [selected, sortedCandidates, combinedIds]);
+  }, [selected, railCandidates, combinedIds]);
 
   const combinedPositions = useMemo(
     () => bookCandidates.map(candidateToAnalyzerPosition),
@@ -397,6 +513,9 @@ export function Analyzer(): React.ReactElement {
     railBody = (
       <CandidateRail
         candidates={sortedCandidates}
+        pastedCandidate={pastedCandidate}
+        pasteText={pasteText}
+        pasteError={pasteError}
         asOf={snapshot.asOf}
         observedAt={snapshot.observedAt}
         source={snapshot.source}
@@ -408,27 +527,15 @@ export function Analyzer(): React.ReactElement {
         onSelect={handleSelect}
         onToggleCombine={handleToggleCombine}
         onCopy={handleCopyCandidate}
+        onPasteTextChange={setPasteText}
+        onPasteAnalyze={handlePasteAnalyze}
+        onPasteClear={handlePasteClear}
       />
     );
   }
 
   return (
     <div className="flex flex-col gap-4 bg-bg p-3">
-      {/* ── Top: paste-to-analyze a new calendar (payoff only; scoring is Phase 19) ─── */}
-      <AdHocCalendarAnalysis
-        today={today}
-        spot={spot}
-        rate={DEFAULT_RATE}
-        gex={{
-          // AdHocCalendarAnalysis needs concrete numeric levels — 0 fallback when the
-          // snapshot hasn't loaded yet or a wall/flip is genuinely absent (nullable per
-          // pickerGexContext); the panel is best-effort/ad-hoc, never scored.
-          putWall: snapshot?.gex.putWall ?? 0,
-          flip: snapshot?.gex.flip ?? 0,
-          callWall: snapshot?.gex.callWall ?? 0,
-        }}
-      />
-
       <div className="grid gap-4" style={{ gridTemplateColumns: "300px 1fr 330px" }}>
       {/* ── Left column: ranked rail + the scoring matrix (how any calendar is scored) ── */}
       <div className="flex flex-col gap-3">
@@ -458,7 +565,9 @@ export function Analyzer(): React.ReactElement {
               <span className="text-violet" data-testid="risk-profile-selected-name">
                 {selected.name}
               </span>
-              {` · debit $${selected.debit.toFixed(0)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(0)}`}
+              {selected.id === PASTED_ID
+                ? ` · debit $${selected.debit.toFixed(0)}`
+                : ` · debit $${selected.debit.toFixed(0)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(0)}`}
               {bookCount > 1 && (
                 <span className="ml-2 text-amber" data-testid="combined-book-summary">
                   {`+ ${bookCount - 1} more → combined debit $${bookDebit.toFixed(0)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(0)}`}
@@ -496,7 +605,7 @@ export function Analyzer(): React.ReactElement {
                 baseExpirationCurve={scenarioResult.expirationCurve}
                 todayCurveColor={TODAY_CURVE_COLOR}
                 expirationCurveColor={EXPIRATION_CURVE_COLOR}
-                expectedMoveBand={{ spot, em: selected.expectedMove }}
+                expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
               />
               <ScenarioStrip
                 position={selectedPosition}
