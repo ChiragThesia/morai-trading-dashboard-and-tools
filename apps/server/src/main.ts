@@ -24,6 +24,8 @@ import {
   makePostgresCotObservationsRepo,
   makePostgresMacroObservationsRepo,
   makePostgresPickerSnapshotRepo,
+  makePostgresCalendarEventsRepo,
+  makePostgresCalendarEventAnnotationsRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -42,6 +44,8 @@ import {
   makeGetCotUseCase,
   makeGetMacroUseCase,
   makeGetPickerUseCase,
+  makeGetCalendarEventsWithRulesUseCase,
+  makeSetRuleTagsUseCase,
   isWithinRth,
   isNyseHoliday,
   detectLargeMove,
@@ -61,6 +65,7 @@ import { statusRoutes } from "./adapters/http/status.routes.ts";
 import { withRefreshExpiryWarning } from "./adapters/refresh-expiry-warner.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
+import { journalRulesRoutes } from "./adapters/http/journal-rules.routes.ts";
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
 import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
 import { gexRoutes } from "./adapters/http/gex.routes.ts";
@@ -177,6 +182,20 @@ const getPicker = makeGetPickerUseCase({
   readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
 });
 
+// RULE-01 / MCP-02 (20-10): get-events-with-rules read use-case + set-rule-tags write
+// use-case — shared by GET/PUT /api/journal/*/rules and the get_rule_tags/set_rule_tags
+// MCP tools over the ONE journal-rules contract schema set (D-13).
+const calendarEventsRepo = makePostgresCalendarEventsRepo(db);
+const calendarEventAnnotationsRepo = makePostgresCalendarEventAnnotationsRepo(db);
+const getEventsWithRules = makeGetCalendarEventsWithRulesUseCase({
+  readCalendarEvents: calendarEventsRepo.readCalendarEvents,
+  readAnnotations: calendarEventAnnotationsRepo,
+});
+const setRuleTags = makeSetRuleTagsUseCase({
+  readEventByHash: calendarEventsRepo.readCalendarEventByHash,
+  writeAnnotations: calendarEventAnnotationsRepo.upsertAnnotation,
+});
+
 // BRK-02: build trader adapters — reads from broker_tokens for the trader app.
 // getAccessToken closure reads broker_tokens at call time (on-demand refresh deferred to JOB-02).
 const USER_AGENT = "Morai-Server/1.0";
@@ -257,6 +276,8 @@ app.route("/api", statusRoutes(statusPort));
 const apiRouter = new Hono()
   .route("/", calendarRoutes(registerCalendar, listCalendars, closeCalendar))
   .route("/", journalRoutes(getJournal))
+  // RULE-01 (20-10): GET/PUT /api/journal/*/rules — event read + rule-tag write (D-13)
+  .route("/", journalRulesRoutes(calendarsRepo.getCalendarById, getEventsWithRules, setRuleTags))
   // BRK-02: positions, transactions, orders read endpoints
   .route("/", brokerageRoutes(getPositions, getTransactions, getOrders))
   // ANLY-03 (06-04/06-05): GET /api/analytics/term-structure + GET /api/analytics/skew

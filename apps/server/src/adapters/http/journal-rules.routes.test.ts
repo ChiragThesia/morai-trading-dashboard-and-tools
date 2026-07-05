@@ -13,6 +13,7 @@ import type {
   ValidationError,
   CalendarNotFound,
 } from "@morai/core";
+import { getEventsWithRulesResponse, setRuleTagsResponse } from "@morai/contracts";
 import { journalRulesRoutes } from "./journal-rules.routes.ts";
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -93,9 +94,10 @@ describe("GET /api/journal/:calendarId/rules", () => {
     const res = await app.request(`/api/journal/${CALENDAR_ID}/rules`);
     expect(res.status).toBe(200);
 
-    const body = (await res.json()) as { events: ReadonlyArray<Record<string, unknown>> };
-    expect(body.events).toHaveLength(1);
-    expect(body.events[0]).toMatchObject({
+    const body: unknown = await res.json();
+    const parsed = getEventsWithRulesResponse.parse(body);
+    expect(parsed.events).toHaveLength(1);
+    expect(parsed.events[0]).toMatchObject({
       fillIdsHash: HASH,
       eventType: "OPEN",
       tags: ["gex-fit"],
@@ -110,8 +112,9 @@ describe("GET /api/journal/:calendarId/rules", () => {
 
     const res = await app.request(`/api/journal/${CALENDAR_ID}/rules`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { events: ReadonlyArray<unknown> };
-    expect(body.events).toHaveLength(0);
+    const body: unknown = await res.json();
+    const parsed = getEventsWithRulesResponse.parse(body);
+    expect(parsed.events).toHaveLength(0);
   });
 
   it("returns 404 when the calendar is unknown", async () => {
@@ -121,7 +124,7 @@ describe("GET /api/journal/:calendarId/rules", () => {
 
     const res = await app.request(`/api/journal/${CALENDAR_ID}/rules`);
     expect(res.status).toBe(404);
-    const body = (await res.json()) as { error: string };
+    const body: unknown = await res.json();
     expect(body).toMatchObject({ error: "not found" });
   });
 
@@ -144,7 +147,7 @@ describe("GET /api/journal/:calendarId/rules", () => {
 
     const res = await app.request(`/api/journal/${CALENDAR_ID}/rules`);
     expect(res.status).toBe(500);
-    const body = (await res.json()) as { error: string };
+    const body: unknown = await res.json();
     expect(body).toMatchObject({ error: "internal" });
   });
 });
@@ -163,8 +166,9 @@ describe("PUT /api/journal/events/:hash/rules", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
-    expect(body).toMatchObject({ fillIdsHash: HASH, tags: ["gex-fit"], otherNote: null });
+    const body: unknown = await res.json();
+    const parsed = setRuleTagsResponse.parse(body);
+    expect(parsed).toMatchObject({ fillIdsHash: HASH, tags: ["gex-fit"], otherNote: null });
   });
 
   it("passes the :hash param and body through to the use-case", async () => {
@@ -214,7 +218,7 @@ describe("PUT /api/journal/events/:hash/rules", () => {
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
+    const body: unknown = await res.json();
     expect(body).toMatchObject({ error: "cross-type tag" });
   });
 
@@ -233,7 +237,7 @@ describe("PUT /api/journal/events/:hash/rules", () => {
     });
 
     expect(res.status).toBe(404);
-    const body = (await res.json()) as { error: string };
+    const body: unknown = await res.json();
     expect(body).toMatchObject({ error: "not found" });
   });
 
@@ -250,7 +254,7 @@ describe("PUT /api/journal/events/:hash/rules", () => {
     });
 
     expect(res.status).toBe(500);
-    const body = (await res.json()) as { error: string };
+    const body: unknown = await res.json();
     expect(body).toMatchObject({ error: "internal" });
     expect(JSON.stringify(body)).not.toContain("DB down");
   });
