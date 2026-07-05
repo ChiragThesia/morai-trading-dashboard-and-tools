@@ -343,6 +343,31 @@ describe("GET /api/stream — ping heartbeat carries isRth (WATCH-01, D-03)", ()
     }
   });
 
+  it("emits an isRth ping IMMEDIATELY after reconcile without waiting 30s (WR-01)", async () => {
+    vi.useFakeTimers();
+    try {
+      // Monday 2026-07-06, 11:00 ET (15:00 UTC, EDT) — within RTH, not a holiday.
+      vi.setSystemTime(new Date("2026-07-06T15:00:00.000Z"));
+
+      const app = buildApp();
+      const mintRes = await app.request("/api/stream/ticket", { method: "POST" });
+      const { ticket } = streamTicketResponse.parse(await mintRes.json());
+
+      const res = await app.request(`/api/stream?ticket=${ticket}`);
+      const body = res.body;
+      if (!body) throw new Error("expected body");
+
+      // Deliberately do NOT advance timers: the ping must already be present at connect
+      // (before the 30s loop) so the badge is never wrongly QUIET during RTH.
+      const rawSse = await readUntilEvent(body, "ping");
+      const raw = extractEventData(rawSse, "ping");
+      const parsed = streamPingEvent.parse(raw);
+      expect(parsed.isRth).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("emits a ping frame with isRth false under a holiday clock (RTH hours, NYSE closed)", async () => {
     vi.useFakeTimers();
     try {

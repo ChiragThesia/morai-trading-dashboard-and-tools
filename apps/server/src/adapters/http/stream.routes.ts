@@ -235,6 +235,22 @@ export function streamRoutes(deps: StreamRouteDeps) {
           data: JSON.stringify(streamReconcileEvent.parse({ positions, asOf })),
         });
 
+        // WR-01: emit one isRth ping IMMEDIATELY after reconcile. The reconcile event
+        // carries no isRth, so without this the client's isRth stays null for the full
+        // first 30s and the badge wrongly renders "QUIET / Market closed" during RTH at
+        // connect. The 30s loop below then keeps it fresh.
+        if (!stream.aborted) {
+          const nowAtConnect = new Date();
+          await stream.writeSSE({
+            event: "ping",
+            data: JSON.stringify(
+              streamPingEvent.parse({
+                isRth: isWithinRth(nowAtConnect) && !isNyseHoliday(nowAtConnect),
+              }),
+            ),
+          });
+        }
+
         // Keep-alive ping loop — sends a no-op "ping" every 30 seconds until abort.
         // The browser EventSource does NOT need to handle pings; they prevent
         // Railway / nginx from closing idle connections.
@@ -318,6 +334,21 @@ export function makeStreamSseRouter(deps: StreamRouteDeps) {
           event: "reconcile",
           data: JSON.stringify(streamReconcileEvent.parse({ positions, asOf })),
         });
+
+        // WR-01: emit one isRth ping IMMEDIATELY after reconcile so the badge reflects
+        // true market state at connect instead of QUIET for up to 30s (kept in sync with
+        // streamRoutes above).
+        if (!stream.aborted) {
+          const nowAtConnect = new Date();
+          await stream.writeSSE({
+            event: "ping",
+            data: JSON.stringify(
+              streamPingEvent.parse({
+                isRth: isWithinRth(nowAtConnect) && !isNyseHoliday(nowAtConnect),
+              }),
+            ),
+          });
+        }
 
         while (!stream.aborted) {
           await stream.sleep(30_000);
