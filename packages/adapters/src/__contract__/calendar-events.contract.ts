@@ -18,6 +18,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import type {
   ForStoringCalendarEvent,
   ForReadingCalendarEvents,
+  ForReadingCalendarEventByHash,
   ForDeletingCalendarEvents,
   StorageError,
 } from "@morai/core";
@@ -28,6 +29,7 @@ import type { CalendarEvent } from "@morai/core";
 export type CalendarEventsRepo = {
   readonly storeCalendarEvent: ForStoringCalendarEvent;
   readonly readCalendarEvents: ForReadingCalendarEvents;
+  readonly readCalendarEventByHash: ForReadingCalendarEventByHash;
   readonly deleteCalendarEvents: ForDeletingCalendarEvents;
   /** Count rows in calendar_events for the given calendarId */
   readonly countEvents: (calendarId: string) => Promise<number>;
@@ -180,6 +182,29 @@ export function runCalendarEventsContractTests(
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.value).toHaveLength(0);
+      });
+    });
+
+    describe("readCalendarEventByHash — global hash lookup (plan 20-10)", () => {
+      it("returns the event matching the given fillIdsHash, no calendarId needed", async () => {
+        await seed.seedCalendar(CAL_A);
+        await repo.storeCalendarEvent(makeCalendarEvent(CAL_A, HASH_1));
+
+        const result = await repo.readCalendarEventByHash(HASH_1);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value?.fillIdsHash).toBe(HASH_1);
+        expect(result.value?.calendarId).toBe(CAL_A);
+      });
+
+      it("returns null for an unknown fillIdsHash", async () => {
+        await seed.seedCalendar(CAL_A);
+        await repo.storeCalendarEvent(makeCalendarEvent(CAL_A, HASH_1));
+
+        const result = await repo.readCalendarEventByHash(HASH_3);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toBeNull();
       });
     });
 

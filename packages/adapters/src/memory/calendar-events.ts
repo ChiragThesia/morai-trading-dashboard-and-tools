@@ -20,6 +20,7 @@ import type { Result } from "@morai/shared";
 import type {
   ForStoringCalendarEvent,
   ForReadingCalendarEvents,
+  ForReadingCalendarEventByHash,
   ForDeletingCalendarEvents,
   CalendarEvent,
   StorageError,
@@ -28,6 +29,7 @@ import type {
 export type MemoryCalendarEventsRepo = {
   readonly storeCalendarEvent: ForStoringCalendarEvent;
   readonly readCalendarEvents: ForReadingCalendarEvents;
+  readonly readCalendarEventByHash: ForReadingCalendarEventByHash;
   readonly deleteCalendarEvents: ForDeletingCalendarEvents;
   /** countEvents — test helper: count events for a calendarId */
   readonly countEvents: (calendarId: string) => Promise<number>;
@@ -57,6 +59,13 @@ export function makeMemoryCalendarEventsRepo(): MemoryCalendarEventsRepo {
     return ok(rows);
   };
 
+  // Store is keyed on fillIdsHash (the DB UNIQUE constraint) — a direct lookup (plan 20-10).
+  const readCalendarEventByHash: ForReadingCalendarEventByHash = async (
+    fillIdsHash: string,
+  ): Promise<Result<CalendarEvent | null, StorageError>> => {
+    return ok(store.get(fillIdsHash) ?? null);
+  };
+
   const deleteCalendarEvents: ForDeletingCalendarEvents = async (
     calendarId: string,
   ): Promise<Result<void, StorageError>> => {
@@ -76,5 +85,12 @@ export function makeMemoryCalendarEventsRepo(): MemoryCalendarEventsRepo {
     // No FK constraint in the in-memory adapter; no-op for contract test parity.
   };
 
-  return { storeCalendarEvent, readCalendarEvents, deleteCalendarEvents, countEvents, seedCalendar };
+  return {
+    storeCalendarEvent,
+    readCalendarEvents,
+    readCalendarEventByHash,
+    deleteCalendarEvents,
+    countEvents,
+    seedCalendar,
+  };
 }

@@ -14,6 +14,7 @@ import type { Result } from "@morai/shared";
 import type {
   ForStoringCalendarEvent,
   ForReadingCalendarEvents,
+  ForReadingCalendarEventByHash,
   ForDeletingCalendarEvents,
   CalendarEvent,
   StorageError,
@@ -25,6 +26,7 @@ import type { Db } from "../db.ts";
 export type PostgresCalendarEventsRepo = {
   readonly storeCalendarEvent: ForStoringCalendarEvent;
   readonly readCalendarEvents: ForReadingCalendarEvents;
+  readonly readCalendarEventByHash: ForReadingCalendarEventByHash;
   readonly deleteCalendarEvents: ForDeletingCalendarEvents;
 };
 
@@ -106,6 +108,46 @@ export function makePostgresCalendarEventsRepo(db: Db): PostgresCalendarEventsRe
     }
   };
 
+  // ─── readCalendarEventByHash (ForReadingCalendarEventByHash) ─────────────────
+  // Looks up a single event by its globally UNIQUE fill_ids_hash (plan 20-10) — no
+  // calendarId needed, since fill_ids_hash is already the DB idempotency key.
+  const readCalendarEventByHash: ForReadingCalendarEventByHash = async (
+    fillIdsHash: string,
+  ): Promise<Result<CalendarEvent | null, StorageError>> => {
+    try {
+      const rows = await db
+        .select()
+        .from(calendarEvents)
+        .where(eq(calendarEvents.fillIdsHash, fillIdsHash))
+        .limit(1);
+
+      const row = rows[0];
+      if (row === undefined) return ok(null);
+
+      return ok({
+        id: row.id,
+        calendarId: row.calendarId,
+        eventType: row.eventType,
+        eventedAt: row.eventedAt,
+        fillIdsHash: row.fillIdsHash,
+        legOccSymbol: row.legOccSymbol,
+        rolledFromOccSymbol: row.rolledFromOccSymbol ?? null,
+        qty: row.qty,
+        avgPrice: parseFloat(row.avgPrice),
+        netAmount: parseFloat(row.netAmount),
+        realizedPnl: row.realizedPnl !== null ? parseFloat(row.realizedPnl) : null,
+        rollOpenDebit: row.rollOpenDebit !== null ? parseFloat(row.rollOpenDebit) : null,
+        rollCloseCredit:
+          row.rollCloseCredit !== null ? parseFloat(row.rollCloseCredit) : null,
+        legBreakdown: row.legBreakdown ?? null,
+        entryThesis: row.entryThesis ?? null,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   // ─── deleteCalendarEvents (ForDeletingCalendarEvents) ────────────────────────
   // Removes ALL calendar_events rows for a calendarId.
   // Used by rebuild-journal (D-10) before re-running sync-fills for a calendar.
@@ -123,5 +165,5 @@ export function makePostgresCalendarEventsRepo(db: Db): PostgresCalendarEventsRe
     }
   };
 
-  return { storeCalendarEvent, readCalendarEvents, deleteCalendarEvents };
+  return { storeCalendarEvent, readCalendarEvents, readCalendarEventByHash, deleteCalendarEvents };
 }

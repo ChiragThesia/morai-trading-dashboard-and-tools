@@ -430,6 +430,19 @@ export type ForReadingUnprocessedFills = () => Promise<
 >;
 
 /**
+ * ForReadingCalendarEventByHash — look up a single calendar_events row by its globally
+ * unique fillIdsHash (RULE-01, plan 20-10). fill_ids_hash is the DB UNIQUE idempotency key
+ * (see calendar_events schema), so an event can be addressed by hash alone, with no
+ * calendarId — matching how ForReadingAnnotations/ForWritingAnnotations already address
+ * annotations by fillIdsHash alone (D-09: no FK, hash is the only key). Returns null when
+ * no event has that hash. Feeds setRuleTags, whose HTTP route
+ * (PUT /api/journal/events/:hash/rules) never receives a calendarId.
+ */
+export type ForReadingCalendarEventByHash = (
+  fillIdsHash: string,
+) => Promise<Result<CalendarEvent | null, StorageError>>;
+
+/**
  * ForReadingCalendarLegs — find calendar legs matching a given OCC symbol (JRNL-01, D-01).
  * Returns all (calendarId, legOccSymbol, positionEffect) entries whose leg matches the symbol.
  * Returns empty array when no calendar has this symbol as a leg.

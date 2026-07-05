@@ -145,6 +145,7 @@ export type {
   OrphanFillInput,
   ForStoringCalendarEvent,
   ForReadingCalendarEvents,
+  ForReadingCalendarEventByHash,
   ForDeletingCalendarEvents,
   ForReadingUnprocessedFills,
   ForReadingUnprocessedFillsForCalendar,

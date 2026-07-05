@@ -4,9 +4,16 @@
  * Recording layer only (T-20-12): this use-case records exactly the tags the caller
  * supplied. It never infers or evaluates which rule "should" fire.
  *
+ * Addressed by fillIdsHash alone (plan 20-10): the HTTP route is
+ * PUT /api/journal/events/:hash/rules — no calendarId in the path. fill_ids_hash is the
+ * DB UNIQUE idempotency key on calendar_events, so a target event can be looked up by hash
+ * alone (ForReadingCalendarEventByHash), matching how ForReadingAnnotations/
+ * ForWritingAnnotations already address annotations by fillIdsHash alone (D-09).
+ *
  * Validation order (fails closed — no upsert on any failure):
- *   1. The target event must exist in the calendar (unknown fillIdsHash → validation-error,
- *      never a blind write — T-20-14).
+ *   1. The target event must exist (unknown fillIdsHash → not-found, never a blind write —
+ *      T-20-14). Returned as CalendarNotFound (kind: "not-found"), distinct from the
+ *      validation-error kind below, so the HTTP route can map it to 404 vs 400.
  *   2. Every supplied tag must belong to that event's CalendarEventType enum
  *      (ruleTagEnumForEventType) — a cross-type tag is rejected (T-20-11 defense-in-depth
  *      beyond the contract's Zod refine, since a route/MCP caller could bypass the contract).
@@ -21,41 +28,36 @@ import { ruleTagEnumForEventType } from "../domain/rule-tags.ts";
 import type { ValidationError } from "./registerCalendar.ts";
 import type {
   CalendarEventAnnotation,
-  ForReadingCalendarEvents,
+  CalendarNotFound,
+  ForReadingCalendarEventByHash,
   ForWritingAnnotations,
   StorageError,
 } from "./ports.ts";
 
 export type SetRuleTagsInput = {
-  readonly calendarId: string;
   readonly fillIdsHash: string;
   readonly tags: ReadonlyArray<string>;
   readonly otherNote: string | null;
 };
 
 export type SetRuleTagsDeps = {
-  readonly readCalendarEvents: ForReadingCalendarEvents;
+  readonly readEventByHash: ForReadingCalendarEventByHash;
   readonly writeAnnotations: ForWritingAnnotations;
 };
 
 /** Driver port returned by the factory. */
 export type ForRunningSetRuleTags = (
   input: SetRuleTagsInput,
-) => Promise<Result<CalendarEventAnnotation, StorageError | ValidationError>>;
+) => Promise<Result<CalendarEventAnnotation, StorageError | ValidationError | CalendarNotFound>>;
 
 export function makeSetRuleTagsUseCase(deps: SetRuleTagsDeps): ForRunningSetRuleTags {
   return async (input) => {
-    const eventsResult = await deps.readCalendarEvents(input.calendarId);
-    if (!eventsResult.ok) return err(eventsResult.error);
+    const eventResult = await deps.readEventByHash(input.fillIdsHash);
+    if (!eventResult.ok) return err(eventResult.error);
 
-    const targetEvent = eventsResult.value.find(
-      (event) => event.fillIdsHash === input.fillIdsHash,
-    );
-    if (targetEvent === undefined) {
-      return err<ValidationError>({
-        kind: "validation-error",
-        message: `Unknown fillIdsHash: no event in calendar ${input.calendarId} matches ${input.fillIdsHash}`,
-      });
+    const targetEvent = eventResult.value;
+    if (targetEvent === null) {
+      return err<CalendarNotFound>({ kind: "not-found" });
     }
 
     const tagEnum = ruleTagEnumForEventType(targetEvent.eventType);

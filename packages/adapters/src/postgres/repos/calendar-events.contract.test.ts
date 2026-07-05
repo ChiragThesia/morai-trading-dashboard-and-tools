@@ -40,6 +40,7 @@ describe.skipIf(shouldSkip)("postgres calendar-events adapter", () => {
       return {
         storeCalendarEvent: repo.storeCalendarEvent,
         readCalendarEvents: repo.readCalendarEvents,
+        readCalendarEventByHash: repo.readCalendarEventByHash,
         deleteCalendarEvents: repo.deleteCalendarEvents,
         countEvents: async (calendarId: string): Promise<number> => {
           const rows = await db.execute(

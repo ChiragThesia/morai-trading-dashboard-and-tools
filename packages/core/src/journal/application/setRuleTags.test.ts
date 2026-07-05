@@ -39,18 +39,18 @@ describe("makeSetRuleTagsUseCase", () => {
   it("upserts when the supplied tags are valid for the event's type (OPEN → enter tags)", async () => {
     const event = makeEvent({ eventType: "OPEN", fillIdsHash: "hash-1" });
     const saved = makeSavedAnnotation({ ruleTags: ["gex-fit"] });
-    const readCalendarEvents = vi.fn().mockResolvedValue(ok([event]));
+    const readEventByHash = vi.fn().mockResolvedValue(ok(event));
     const writeAnnotations = vi.fn().mockResolvedValue(ok(saved));
 
-    const use = makeSetRuleTagsUseCase({ readCalendarEvents, writeAnnotations });
+    const use = makeSetRuleTagsUseCase({ readEventByHash, writeAnnotations });
     const result = await use({
-      calendarId: "cal-1",
       fillIdsHash: "hash-1",
       tags: ["gex-fit"],
       otherNote: null,
     });
 
     expect(result).toEqual(ok(saved));
+    expect(readEventByHash).toHaveBeenCalledWith("hash-1");
     expect(writeAnnotations).toHaveBeenCalledWith({
       fillIdsHash: "hash-1",
       ruleTags: ["gex-fit"],
@@ -60,12 +60,11 @@ describe("makeSetRuleTagsUseCase", () => {
 
   it("rejects a cross-type tag (CLOSE tag on an OPEN event) without writing", async () => {
     const event = makeEvent({ eventType: "OPEN", fillIdsHash: "hash-1" });
-    const readCalendarEvents = vi.fn().mockResolvedValue(ok([event]));
+    const readEventByHash = vi.fn().mockResolvedValue(ok(event));
     const writeAnnotations = vi.fn();
 
-    const use = makeSetRuleTagsUseCase({ readCalendarEvents, writeAnnotations });
+    const use = makeSetRuleTagsUseCase({ readEventByHash, writeAnnotations });
     const result = await use({
-      calendarId: "cal-1",
       fillIdsHash: "hash-1",
       tags: ["profit-target"], // exit-only tag, event is OPEN
       otherNote: null,
@@ -78,12 +77,11 @@ describe("makeSetRuleTagsUseCase", () => {
 
   it("rejects OTHER without a note, without writing (D-21)", async () => {
     const event = makeEvent({ eventType: "OPEN", fillIdsHash: "hash-1" });
-    const readCalendarEvents = vi.fn().mockResolvedValue(ok([event]));
+    const readEventByHash = vi.fn().mockResolvedValue(ok(event));
     const writeAnnotations = vi.fn();
 
-    const use = makeSetRuleTagsUseCase({ readCalendarEvents, writeAnnotations });
+    const use = makeSetRuleTagsUseCase({ readEventByHash, writeAnnotations });
     const result = await use({
-      calendarId: "cal-1",
       fillIdsHash: "hash-1",
       tags: ["other"],
       otherNote: null,
@@ -96,12 +94,11 @@ describe("makeSetRuleTagsUseCase", () => {
 
   it("rejects OTHER with a whitespace-only note, without writing (D-21)", async () => {
     const event = makeEvent({ eventType: "OPEN", fillIdsHash: "hash-1" });
-    const readCalendarEvents = vi.fn().mockResolvedValue(ok([event]));
+    const readEventByHash = vi.fn().mockResolvedValue(ok(event));
     const writeAnnotations = vi.fn();
 
-    const use = makeSetRuleTagsUseCase({ readCalendarEvents, writeAnnotations });
+    const use = makeSetRuleTagsUseCase({ readEventByHash, writeAnnotations });
     const result = await use({
-      calendarId: "cal-1",
       fillIdsHash: "hash-1",
       tags: ["other"],
       otherNote: "   ",
@@ -115,12 +112,11 @@ describe("makeSetRuleTagsUseCase", () => {
   it("accepts OTHER with a non-empty note", async () => {
     const event = makeEvent({ eventType: "CLOSE", fillIdsHash: "hash-1" });
     const saved = makeSavedAnnotation({ ruleTags: ["other"], otherNote: "unusual exit" });
-    const readCalendarEvents = vi.fn().mockResolvedValue(ok([event]));
+    const readEventByHash = vi.fn().mockResolvedValue(ok(event));
     const writeAnnotations = vi.fn().mockResolvedValue(ok(saved));
 
-    const use = makeSetRuleTagsUseCase({ readCalendarEvents, writeAnnotations });
+    const use = makeSetRuleTagsUseCase({ readEventByHash, writeAnnotations });
     const result = await use({
-      calendarId: "cal-1",
       fillIdsHash: "hash-1",
       tags: ["other"],
       otherNote: "unusual exit",
@@ -134,32 +130,31 @@ describe("makeSetRuleTagsUseCase", () => {
     });
   });
 
-  it("rejects an unknown fillIdsHash (no matching event) without a blind write", async () => {
-    const event = makeEvent({ eventType: "OPEN", fillIdsHash: "hash-1" });
-    const readCalendarEvents = vi.fn().mockResolvedValue(ok([event]));
+  it("rejects an unknown fillIdsHash (no matching event) without a blind write, as not-found", async () => {
+    const readEventByHash = vi.fn().mockResolvedValue(ok(null));
     const writeAnnotations = vi.fn();
 
-    const use = makeSetRuleTagsUseCase({ readCalendarEvents, writeAnnotations });
+    const use = makeSetRuleTagsUseCase({ readEventByHash, writeAnnotations });
     const result = await use({
-      calendarId: "cal-1",
       fillIdsHash: "hash-unknown",
       tags: ["gex-fit"],
       otherNote: null,
     });
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe("validation-error");
+    // not-found (not validation-error) so the HTTP route can map it to 404, distinct
+    // from the 400s produced by cross-type-tag / OTHER-without-note.
+    if (!result.ok) expect(result.error.kind).toBe("not-found");
     expect(writeAnnotations).not.toHaveBeenCalled();
   });
 
-  it("propagates StorageError from readCalendarEvents", async () => {
+  it("propagates StorageError from readEventByHash", async () => {
     const storageError: StorageError = { kind: "storage-error", message: "boom" };
-    const readCalendarEvents = vi.fn().mockResolvedValue(err(storageError));
+    const readEventByHash = vi.fn().mockResolvedValue(err(storageError));
     const writeAnnotations = vi.fn();
 
-    const use = makeSetRuleTagsUseCase({ readCalendarEvents, writeAnnotations });
+    const use = makeSetRuleTagsUseCase({ readEventByHash, writeAnnotations });
     const result = await use({
-      calendarId: "cal-1",
       fillIdsHash: "hash-1",
       tags: ["gex-fit"],
       otherNote: null,
@@ -172,12 +167,11 @@ describe("makeSetRuleTagsUseCase", () => {
   it("propagates StorageError from writeAnnotations", async () => {
     const event = makeEvent({ eventType: "OPEN", fillIdsHash: "hash-1" });
     const storageError: StorageError = { kind: "storage-error", message: "boom" };
-    const readCalendarEvents = vi.fn().mockResolvedValue(ok([event]));
+    const readEventByHash = vi.fn().mockResolvedValue(ok(event));
     const writeAnnotations = vi.fn().mockResolvedValue(err(storageError));
 
-    const use = makeSetRuleTagsUseCase({ readCalendarEvents, writeAnnotations });
+    const use = makeSetRuleTagsUseCase({ readEventByHash, writeAnnotations });
     const result = await use({
-      calendarId: "cal-1",
       fillIdsHash: "hash-1",
       tags: ["gex-fit"],
       otherNote: null,
