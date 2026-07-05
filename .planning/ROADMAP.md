@@ -55,8 +55,8 @@ the picker with the real scoring engine, while clearing v1.1 operational debt.
 - [x] **Phase 19: Picker Engine + Economic Events** - Real `scoreCalendarCandidates` scoring wired (completed 2026-07-04)
   into the picker UI, backed by a new FOMC/CPI/NFP economic-events context
 
-- [ ] **Phase 20: Stream Watchdog, Event Snapshot & Strategy Rules** - Three independent tail
-  items: honest stream-health badge, event-triggered journal snapshot, rule-firing recording
+- [ ] **Phase 20: Stream Watchdog, Event Snapshot & Strategy Rules** (1/11 plans) - Three independent
+  tail items: honest stream-health badge, event-triggered journal snapshot, rule-firing recording
 
 - [x] **Phase 21: Control Affordance & Button System** - Shared `<Button>` primitive + filled-vs-outline
   states applied app-wide so controls read active/inactive at a glance (completed 2026-07-05)
@@ -311,7 +311,7 @@ Sequenced cheapest-first, three independent deploy+UAT cycles (D-18): WATCH-01 �
 Plans:
 **Wave 1**
 
-- [ ] 20-01-PLAN.md — WATCH-01 foundation: streamPingEvent contract + deriveStreamStatus pure fn (TDD) (WATCH-01)
+- [x] 20-01-PLAN.md — WATCH-01 foundation: streamPingEvent contract + deriveStreamStatus pure fn (TDD) (WATCH-01) — completed 2026-07-05
 
 **Wave 2** *(WATCH-01 server + client, parallel — no file overlap)*
 

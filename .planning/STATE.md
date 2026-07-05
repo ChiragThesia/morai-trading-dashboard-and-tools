@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
-current_phase: 21
-current_phase_name: Control Affordance & Button System
+current_phase: 20
+current_phase_name: stream-watchdog-event-snapshot-strategy-rules
 status: executing
-stopped_at: Phase 20 UI-SPEC approved
-last_updated: "2026-07-05T04:39:10.764Z"
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-07-05T05:08:08Z"
 last_activity: 2026-07-05
-last_activity_desc: Phase 19 complete, transitioned to Phase 21
+last_activity_desc: Completed 20-01 (WATCH-01 foundation primitives)
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 26
-  completed_plans: 26
-  percent: 71
+  total_plans: 37
+  completed_plans: 27
+  percent: 73
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 19 — picker-engine-economic-events
+**Current focus:** Phase 20 — stream-watchdog-event-snapshot-strategy-rules
 
 ## Current Position
 
-Phase: 21 — Control Affordance & Button System
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-05 — Phase 19 complete, transitioned to Phase 21
+Phase: 20 (stream-watchdog-event-snapshot-strategy-rules) — EXECUTING
+Plan: 2 of 11
+Status: Executing Phase 20
+Last activity: 2026-07-05 — Completed 20-01 (WATCH-01 foundation primitives)
 
 ## Milestone v1.2 Summary
 
@@ -202,6 +202,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 19 P07 | 18min | 3 tasks | 9 files |
 | Phase 19 P08 | 20min | 3 tasks | 12 files |
 | Phase 19 P09 | ~20min | 3 tasks | 6 files |
+| Phase 20 P01 | 15min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -286,6 +287,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 19-09]: Analyzer.tsx collapses usePicker's data (PickerSnapshotResponse | null | undefined) into one snapshot: PickerSnapshotResponse | null local via data ?? null, simplifying every downstream guard to a single snapshot !== null check
 - [Phase 19-09]: AdHocCalendarAnalysis's non-nullable gex prop falls back to 0 for a null putWall/flip/callWall (best-effort ad-hoc panel, never scored) -- also fixed 3 pre-existing typecheck errors on the exact lines this task rewrote
 - [Phase 19-09]: CandidateCard's staleness tag reads pickerSnapshotResponse.asOf (a date-only string) literally per the plan's own task text, NOT the picker_snapshot row's observedAt timestamp (which the HTTP route currently discards) -- flagged as a known limitation/follow-up, safe failure direction (never falsely reads fresh)
+- [Phase 20-01]: deriveStreamStatus placed in apps/web/src/lib (not hooks/) so it carries zero React import and is unit-testable standalone, mirroring rth-window.ts's caller-passes-now purity idiom
+- [Phase 20-01]: dropped an automated "no Date.now()/no React import" source-text purity test (import.meta.url did not resolve to file:// scheme in this repo's Vitest config) — verified the same property manually via grep instead
+- [Phase 20-01]: NOT marking WATCH-01 complete in REQUIREMENTS.md despite it appearing in this plan's requirements frontmatter — 20-01 ships only the contract schema + pure derivation foundation; the user-facing three-state badge ships in 20-03 per ROADMAP.md ("WATCH-01 ships" annotation), matching the 18-01/19-04 precedent
 
 ### Pending Todos
 
@@ -330,11 +334,8 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-05T03:42:52.556Z
-Stopped at: Phase 20 UI-SPEC approved
-Resume file: 
+Last session: 2026-07-05T05:08:08Z
+Stopped at: Completed 20-01-PLAN.md
+Resume file: None
 
-.planning/phases/20-stream-watchdog-event-snapshot-strategy-rules/20-UI-SPEC.md
-
-- Execute the last Phase 17.1 plan: `/gsd-execute-phase 17.1` (17.1-05-PLAN.md — OVW-03 positions-box expiry/DTE reformat)
-- Re-drop the two TOS reference screenshots into `mockups/tos-reference/` before the end-of-phase human pixel-check on the magenta/cyan curve colors
+- Next: execute 20-02-PLAN.md (server-side ping emitter wiring, WATCH-01)
