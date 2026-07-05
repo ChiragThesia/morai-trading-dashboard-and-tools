@@ -1,34 +1,45 @@
 /**
- * useLiveStream — EventSource hook for the live BSM greeks stream (Plan 12-06, D-04/D-05/STRM-03)
+ * useLiveStream — EventSource hook for the live BSM greeks stream.
  *
  * On mount: mints a short-lived ticket via POST /api/stream/ticket (Supabase-authed,
  * through apiFetch), then opens an EventSource at /api/stream?ticket=<ticket>.
  *
- * Every incoming frame is Zod-parsed (streamLiveGreekEvent / streamReconcileEvent).
- * Malformed frames are silently dropped — never cast into state (T-12-06-01).
+ * Every incoming frame is Zod-parsed (streamLiveGreekEvent / streamPingEvent).
+ * Malformed frames are silently dropped — never cast into state (T-12-06-01 / T-20-02).
  *
- * D-04 state machine:
- *   poll → live    (first valid tick or reconcile event)
- *   live → stale   (EventSource error / disconnect)
- *   stale → reconnecting  (EventSource reopens after a disconnect — onopen fires again)
- *   reconnecting → live   (reconcile event received over the re-opened EventSource)
+ * WATCH-01 3-state model (D-01/D-02/D-03/D-11, Phase 20 — replaces the old
+ * live/stale/reconnecting/poll machine):
+ *   - The server pushes `{ isRth }` on every `ping` heartbeat (D-03) — the client has no
+ *     local RTH clock and never computes market-open itself.
+ *   - A shared interval re-evaluates `deriveStreamStatus` (apps/web/src/lib) every
+ *     STATUS_INTERVAL_MS against a single anchor timestamp — "time of the last valid
+ *     tick, or connection-attempt start if none yet" — combined with the last known
+ *     `isRth`. This is the ONLY place status is set.
+ *   - `es.onerror`/`es.onopen` never set status directly (Pitfall 1) — they only manage
+ *     the EventSource lifecycle + exponential-backoff reconnect; disconnection just stops
+ *     the tick clock and lets the shared interval notice the resulting silence.
+ *   - The public `status` is 3-valued ("live"|"quiet"|"stalled"). `deriveStreamStatus`'s
+ *     "connecting" branch collapses into "quiet" here — CONNECTING is a copy-only
+ *     condition the badge derives itself from `(status, isRth, hasReceivedFirstTick)`,
+ *     not a 4th enum member (D-01).
+ *
+ * `reconnectNow` (D-17): a manual force-reconnect action for the STALLED badge state.
+ * Cancels the pending exponential-backoff timer BEFORE reconnecting (double-connect
+ * guard) and is re-entrancy-safe (a second call while one is in flight is a no-op).
  *
  * subscribeAdHoc(symbol): POSTs { symbol } to POST /api/stream/subscribe via apiFetch
  * (Supabase-authed). On 200, the server activates the symbol on the already-open
  * stream — no second EventSource is opened. Throws StreamSubscribeError on non-2xx.
  * This is NOT a no-op (SC6 / D-05 / STRM-01 expanded).
  *
- * Teardown: EventSource is closed on unmount.
+ * Teardown: EventSource + the status interval are closed/cleared on unmount.
  */
 
-import { useState, useEffect, useRef } from "react";
-import {
-  streamLiveGreekEvent,
-  streamReconcileEvent,
-  streamTicketResponse,
-} from "@morai/contracts";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { streamLiveGreekEvent, streamPingEvent, streamTicketResponse } from "@morai/contracts";
 import type { StreamLiveGreekEvent } from "@morai/contracts";
 import { apiFetch } from "../lib/rpc.ts";
+import { deriveStreamStatus } from "../lib/deriveStreamStatus.ts";
 
 // ─── Error types ──────────────────────────────────────────────────────────────
 
@@ -57,16 +68,28 @@ export class StreamSubscribeError extends Error {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-/** Live stream connection status (D-04 state machine, UI-SPEC Surface 3). */
-export type LiveStreamStatus = "live" | "stale" | "reconnecting" | "poll";
+/** Live stream connection status (WATCH-01 3-state model, D-01). */
+export type LiveStreamStatus = "live" | "quiet" | "stalled";
 
 export type UseLiveStreamResult = {
   /** Latest Zod-parsed tick per OCC symbol. Keyed by occSymbol. */
   greeks: ReadonlyMap<string, StreamLiveGreekEvent>;
-  /** Current EventSource connection state. */
+  /** Current 3-state stream status, derived from elapsed time + server-pushed isRth. */
   status: LiveStreamStatus;
   /** Timestamp of the most recently processed tick (null until first tick). */
   lastTickAt: Date | null;
+  /** Server-pushed RTH truth from the last well-formed ping (null until the first ping). */
+  isRth: boolean | null;
+  /** True once at least one valid "ticks" frame has been processed. */
+  hasReceivedFirstTick: boolean;
+  /** True while a manual reconnectNow() call is in flight. */
+  isReconnecting: boolean;
+  /**
+   * Manual force-reconnect (D-17, STALLED badge action). Cancels the pending
+   * exponential-backoff timer, then reconnects immediately with a fresh ticket.
+   * Re-entrancy-safe — a call while one is already in flight is a no-op.
+   */
+  reconnectNow: () => void;
   /**
    * POST /api/stream/subscribe with { symbol } (Supabase-authed via apiFetch).
    * On 200, the server activates the symbol; ticks flow over the existing EventSource.
@@ -75,38 +98,55 @@ export type UseLiveStreamResult = {
   subscribeAdHoc: (symbol: string) => Promise<void>;
 };
 
+// ─── Tunables ─────────────────────────────────────────────────────────────────
+
+/** ~20x the ~1/sec tick cadence (D-02, tunable) — no tick for this long during RTH → stalled. */
+export const STALL_THRESHOLD_MS = 20_000;
+
+/** Shared status-derivation re-evaluation cadence (1-5s per RESEARCH Pattern 1; 2s chosen). */
+const STATUS_INTERVAL_MS = 2_000;
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useLiveStream(): UseLiveStreamResult {
   const [greeks, setGreeks] = useState<Map<string, StreamLiveGreekEvent>>(
     () => new Map(),
   );
-  const [status, setStatus] = useState<LiveStreamStatus>("poll");
+  const [status, setStatus] = useState<LiveStreamStatus>("quiet");
   const [lastTickAt, setLastTickAt] = useState<Date | null>(null);
+  const [isRth, setIsRth] = useState<boolean | null>(null);
+  const [hasReceivedFirstTick, setHasReceivedFirstTick] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   // useRef for EventSource — mutation does not trigger re-render.
   const esRef = useRef<EventSource | null>(null);
-  // Tracks whether the EventSource has ever disconnected (to distinguish initial
-  // onopen from a post-error reconnect).
-  const hasEverDisconnectedRef = useRef(false);
+  // Elapsed-time anchor for deriveStreamStatus: last valid tick, or the start of the
+  // most recent connection attempt if no tick has arrived yet (Pattern 1).
+  const lastTickOrConnectAtRef = useRef<number>(Date.now());
+  const isRthRef = useRef<boolean | null>(null);
+  const hasReceivedFirstTickRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const backoffMsRef = useRef(1000);
+  const cancelledRef = useRef(false);
+  const reconnectInFlightRef = useRef(false);
+  // Set inside the effect below so reconnectNow() can trigger a fresh connect() from
+  // outside the effect's closure without duplicating the ticket-mint/EventSource logic.
+  const connectRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   useEffect(() => {
-    // `cancelled` prevents state mutation / reconnects after unmount.
-    let cancelled = false;
-    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-    let backoffMs = 1000;
+    cancelledRef.current = false;
 
     // Each connect() mints a FRESH single-use ticket. The browser's native
     // EventSource reconnect would reuse the consumed ticket in the URL → 401
     // (then EventSource gives up permanently), so on every error we close the
     // EventSource and reconnect ourselves with exponential backoff.
     const scheduleReconnect = (): void => {
-      if (cancelled || reconnectTimer !== undefined) return;
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = undefined;
+      if (cancelledRef.current || reconnectTimerRef.current !== undefined) return;
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = undefined;
         void connect();
-      }, backoffMs);
-      backoffMs = Math.min(backoffMs * 2, 30_000);
+      }, backoffMsRef.current);
+      backoffMsRef.current = Math.min(backoffMsRef.current * 2, 30_000);
     };
 
     async function connect(): Promise<void> {
@@ -123,22 +163,25 @@ export function useLiveStream(): UseLiveStreamResult {
 
         ticketBody = streamTicketResponse.parse(await res.json());
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           // Log error name only — never log the message (may contain PII or token data).
           console.error(
             "useLiveStream: ticket mint failed —",
             err instanceof Error ? err.name : "UnknownError",
           );
           // A mint failure is recoverable (e.g. a transient 401 during token refresh) —
-          // mark stale and retry with backoff so the stream self-heals.
-          hasEverDisconnectedRef.current = true;
-          setStatus("stale");
+          // retry with backoff so the stream self-heals. Status is never set directly
+          // here (Pitfall 1) — the shared interval will reflect the resulting silence.
           scheduleReconnect();
         }
         return;
       }
 
-      if (cancelled) return; // component unmounted while mint was in flight
+      if (cancelledRef.current) return; // component unmounted while mint was in flight
+
+      // A fresh connection attempt resets the elapsed-time anchor — it starts its own
+      // ~20s cold-start grace window (D-11), same as a resumed tick would.
+      lastTickOrConnectAtRef.current = Date.now();
 
       // Construct the EventSource URL. VITE_API_BASE_URL is "" in dev (relative path)
       // and "https://..." in production (cross-origin to Railway API).
@@ -146,32 +189,39 @@ export function useLiveStream(): UseLiveStreamResult {
       const es = new EventSource(`${base}/api/stream?ticket=${ticketBody.ticket}`);
       esRef.current = es;
 
-      // On (re)connect: if we've previously disconnected, move to 'reconnecting'.
       es.onopen = (): void => {
-        backoffMs = 1000; // reset backoff after a successful (re)connect
-        if (hasEverDisconnectedRef.current) {
-          setStatus("reconnecting");
-        }
-        // On the very first connect, stay in 'poll' until the first tick arrives.
+        backoffMsRef.current = 1000; // reset backoff after a successful (re)connect
       };
 
-      // On disconnect / error: freeze last values as stale, then reconnect with a
-      // fresh ticket (the current one is single-use and now consumed).
+      // On disconnect / error: close and reconnect with a fresh ticket (the current one
+      // is single-use and now consumed). Status is deliberately NOT set here (Pitfall 1) —
+      // a transient reconnect stops the tick clock, and the shared interval decides
+      // LIVE/QUIET/STALLED from how long that silence has lasted, not from this handler.
       es.onerror = (): void => {
-        hasEverDisconnectedRef.current = true;
-        setStatus("stale");
         es.close();
         if (esRef.current === es) esRef.current = null;
         scheduleReconnect();
       };
 
       // The server sends NAMED SSE events (stream.routes.ts + stream-fan-out.ts):
-      //   event:"ticks"     → JSON ARRAY of coalesced live greek ticks (~1/sec)
-      //   event:"reconcile" → positions snapshot (cold-start + after a reconnect)
-      //   event:"ping"      → keep-alive (ignored)
+      //   event:"ticks" → JSON ARRAY of coalesced live greek ticks (~1/sec)
+      //   event:"ping"  → keep-alive carrying server-authoritative { isRth } (D-03)
       // EventSource delivers NAMED events to addEventListener — never to onmessage —
-      // so an onmessage-only consumer receives nothing and the badge never leaves
-      // 'poll' even on a healthy stream.
+      // so an onmessage-only consumer receives nothing.
+      es.addEventListener("ping", (event: Event): void => {
+        if (!(event instanceof MessageEvent)) return;
+        let raw: unknown;
+        try {
+          raw = JSON.parse(event.data);
+        } catch {
+          return; // malformed JSON — drop, retain last-known-good isRth (T-20-02)
+        }
+        const parsed = streamPingEvent.safeParse(raw);
+        if (!parsed.success) return; // malformed shape — drop, retain last-known-good isRth
+        isRthRef.current = parsed.data.isRth;
+        setIsRth(parsed.data.isRth);
+      });
+
       es.addEventListener("ticks", (event: Event): void => {
         if (!(event instanceof MessageEvent)) return;
         let raw: unknown;
@@ -191,31 +241,37 @@ export function useLiveStream(): UseLiveStreamResult {
           }
           return next;
         });
-        setStatus("live");
+        hasReceivedFirstTickRef.current = true;
+        setHasReceivedFirstTick(true);
+        lastTickOrConnectAtRef.current = Date.now();
         setLastTickAt(new Date());
       });
+    }
 
-      es.addEventListener("reconcile", (event: Event): void => {
-        if (!(event instanceof MessageEvent)) return;
-        let raw: unknown;
-        try {
-          raw = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-        // Only restore from stale/reconnecting on a well-formed snapshot (T-12-06-01).
-        if (!streamReconcileEvent.safeParse(raw).success) return;
-        setStatus("live");
-      });
-    };
-
+    connectRef.current = connect;
     void connect();
 
+    // The ONLY place status is set — re-evaluates every STATUS_INTERVAL_MS against the
+    // elapsed-time anchor + last known isRth, so a stall is detected even when no event
+    // ever arrives to trigger it (Pattern 1 — silence is itself the signal).
+    const statusInterval = setInterval(() => {
+      const derived = deriveStreamStatus({
+        hasReceivedFirstTick: hasReceivedFirstTickRef.current,
+        msSinceLastTickOrConnect: Date.now() - lastTickOrConnectAtRef.current,
+        isRth: isRthRef.current,
+        stallThresholdMs: STALL_THRESHOLD_MS,
+      });
+      // "connecting" is a copy-only condition the badge derives itself — no 4th enum
+      // member on the public status (D-01).
+      setStatus(derived === "connecting" ? "quiet" : derived);
+    }, STATUS_INTERVAL_MS);
+
     return (): void => {
-      cancelled = true;
-      if (reconnectTimer !== undefined) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = undefined;
+      cancelledRef.current = true;
+      clearInterval(statusInterval);
+      if (reconnectTimerRef.current !== undefined) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = undefined;
       }
       if (esRef.current !== null) {
         esRef.current.close();
@@ -223,6 +279,34 @@ export function useLiveStream(): UseLiveStreamResult {
       }
     };
   }, []); // intentionally empty — connect once on mount, clean up on unmount
+
+  /**
+   * Manual force-reconnect (D-17). Cancels the pending exponential-backoff timer BEFORE
+   * reconnecting so the stale timer can never fire later and open a second EventSource
+   * on top of this manual one (double-connect guard). Re-entrancy-safe: a call while one
+   * is already in flight is a no-op.
+   */
+  const reconnectNow = useCallback((): void => {
+    if (reconnectInFlightRef.current) return;
+    reconnectInFlightRef.current = true;
+    setIsReconnecting(true);
+
+    if (reconnectTimerRef.current !== undefined) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = undefined;
+    }
+    backoffMsRef.current = 1000;
+
+    if (esRef.current !== null) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+
+    void connectRef.current().finally(() => {
+      reconnectInFlightRef.current = false;
+      setIsReconnecting(false);
+    });
+  }, []);
 
   /**
    * Subscribe an ad-hoc OCC symbol to the stream (D-05, SC6).
@@ -244,5 +328,14 @@ export function useLiveStream(): UseLiveStreamResult {
     }
   };
 
-  return { greeks, status, lastTickAt, subscribeAdHoc };
+  return {
+    greeks,
+    status,
+    lastTickAt,
+    isRth,
+    hasReceivedFirstTick,
+    isReconnecting,
+    reconnectNow,
+    subscribeAdHoc,
+  };
 }
