@@ -3,26 +3,33 @@ status: testing
 phase: 19-picker-engine-economic-events
 source: [19-VERIFICATION.md]
 started: 2026-07-05T00:45:52Z
-updated: 2026-07-05T00:45:52Z
+updated: 2026-07-05T01:14:11Z
 ---
 
 ## Current Test
 
-number: 1
-name: Manual visual UAT of the Analyzer picker rail
+number: 2
+name: Live worker chain-trigger confirmation
 expected: |
-  On the live Analyzer screen the picker rail renders LIVE scored candidates (not the
-  fixture). Loading, error, cold-start, zero-filtered, and populated states each render
-  correctly; the per-card freshness dot + "as of HH:MM · source" reflect the real snapshot
-  instant (observedAt, WR-03 fix); GEX/events degraded-context tags show honestly. No layout
-  regression vs the Phase 18 Analyzer.
+  On live Postgres + pg-boss, a compute-gex-snapshot success enqueues compute-picker,
+  which writes a picker_snapshot row (idempotent on same-cohort re-trigger — WR-01);
+  getPicker returns the latest snapshot. Fires next RTH (Mon 2026-07-06).
 awaiting: user response
 
 ## Tests
 
 ### 1. Manual visual UAT of the Analyzer picker rail
 expected: Picker rail shows live candidates; loading/error/cold-start/zero-filtered/populated states correct; freshness dot + "as of · source" from real observedAt; context tags honest; no layout regression.
-result: [pending]
+result: pass
+source: chrome-devtools (morai.wtf live, authenticated session)
+note: |
+  Verified via chrome-devtools on live morai.wtf. 8 candidates (scores 31/28/26/24×4/23),
+  top 7010P 2026-07-31/2026-08-21. Freshness dot amber + "as of 13:29 · cboe" (real observedAt,
+  WR-03). Honest degraded tags "GEX unavailable"/"events unavailable" + GEX-fit/event-adj n/a.
+  Scoring checklist: Forward-vol edge 83%, Breakeven-vs-EM 100%, Positive theta +6.4/d;
+  REFUTED criteria absent + "WHAT WE DON'T SCORE" disclosure. Risk-profile/WHY/Entry-Exit/
+  Term-structure all populate; no layout regression. Minor (non-blocking): WHY panel cites live
+  GEX (+$26.2B) while cards tag GEX unavailable — dual GEX source, cosmetic follow-up.
 
 ### 2. Live worker chain-trigger confirmation
 expected: On live Postgres + pg-boss, a compute-gex-snapshot success enqueues compute-picker, which writes a picker_snapshot row and is idempotent on same-cohort re-trigger (no PK-violation retry loop, WR-01 fix); getPicker returns the latest snapshot.
@@ -35,9 +42,9 @@ result: [pending]
 ## Summary
 
 total: 3
-passed: 0
+passed: 1
 issues: 0
-pending: 3
+pending: 2
 skipped: 0
 blocked: 0
 
