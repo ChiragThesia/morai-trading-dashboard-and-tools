@@ -16,7 +16,7 @@
  * No msw needed — dependencies are fully injectable.
  */
 import { describe, it, expect, vi } from "vitest";
-import { connectToSidecarStream } from "./sidecar-sse.ts";
+import { connectToSidecarStream, runSidecarStreamWithReconnect } from "./sidecar-sse.ts";
 import type { LiveGreekTick, RawOptionTick } from "@morai/core";
 
 // ─── SSE text helpers ─────────────────────────────────────────────────────────
@@ -408,5 +408,130 @@ describe("connectToSidecarStream", () => {
         now: () => new Date("2026-06-10T10:00:00.000Z"),
       }),
     ).rejects.toThrow(/503/);
+  });
+
+  // ─── REVIEW CR-01: a throwing observeSpot must NOT sever the stream ───────────
+
+  it("does NOT reject the stream when observeSpot throws — the frame still processes", async () => {
+    const { spy: bufferTick, calls } = makeBufferTickSpy();
+    const { spy: recompute, callCount } = makeRecomputeSpy(CANNED_TICK);
+    const throwingObserveSpot = (): void => {
+      // Simulates the old CR-01 bug: a synchronous RangeError from the RTH gate.
+      throw new RangeError("Invalid time value");
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_TICK_PAYLOAD)),
+    ]);
+
+    // The connect must RESOLVE (not reject) even though observeSpot threw — the
+    // stream survives a bad callback.
+    await expect(
+      connectToSidecarStream("http://sidecar.test.internal:8000", {
+        fetch: fakeFetch,
+        recompute,
+        bufferTick,
+        observeSpot: throwingObserveSpot,
+        riskFreeRate: 0.045,
+        dividendYield: 0.013,
+        now: () => new Date("2026-06-10T10:00:00.000Z"),
+      }),
+    ).resolves.toBeUndefined();
+
+    // And the frame still reached recompute + bufferTick — the throw was contained.
+    expect(callCount()).toBe(1);
+    expect(calls).toHaveLength(1);
+  });
+});
+
+// ─── REVIEW WR-02: self-healing reconnect loop ─────────────────────────────────
+
+describe("runSidecarStreamWithReconnect", () => {
+  it("reconnects after a failed connect cycle, backing off between attempts", async () => {
+    let attempts = 0;
+    // fetch always throws → connectToSidecarStream rejects each cycle.
+    const failFetch: typeof globalThis.fetch = async () => {
+      attempts += 1;
+      throw new Error("ECONNREFUSED");
+    };
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+
+    const onErrorCalls: unknown[] = [];
+    const sleepCalls: number[] = [];
+    let iterations = 0;
+
+    await runSidecarStreamWithReconnect(
+      "http://sidecar.test.internal:8000",
+      {
+        fetch: failFetch,
+        recompute,
+        bufferTick,
+        riskFreeRate: 0.045,
+        dividendYield: 0.013,
+        now: () => new Date("2026-06-10T10:00:00.000Z"),
+      },
+      {
+        backoffMs: 2000,
+        sleep: async (ms: number) => {
+          sleepCalls.push(ms);
+        },
+        onError: (e: unknown) => {
+          onErrorCalls.push(e);
+        },
+        // Run exactly 3 connect cycles, then stop.
+        shouldContinue: () => {
+          iterations += 1;
+          return iterations <= 3;
+        },
+      },
+    );
+
+    // 3 connect attempts, each failed → 3 onError, and backoff slept between cycles.
+    expect(attempts).toBe(3);
+    expect(onErrorCalls).toHaveLength(3);
+    expect(sleepCalls.every((ms) => ms === 2000)).toBe(true);
+  });
+
+  it("reconnects after the stream closes cleanly (connect resolves)", async () => {
+    let attempts = 0;
+    // A stream that closes immediately (done=true) → connectToSidecarStream resolves.
+    const closingFetch: typeof globalThis.fetch = async () => {
+      attempts += 1;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(ctrl) {
+          ctrl.close();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    };
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+
+    let iterations = 0;
+    await runSidecarStreamWithReconnect(
+      "http://sidecar.test.internal:8000",
+      {
+        fetch: closingFetch,
+        recompute,
+        bufferTick,
+        riskFreeRate: 0.045,
+        dividendYield: 0.013,
+        now: () => new Date("2026-06-10T10:00:00.000Z"),
+      },
+      {
+        sleep: async () => undefined,
+        shouldContinue: () => {
+          iterations += 1;
+          return iterations <= 2;
+        },
+      },
+    );
+
+    // The loop re-opened the stream after each clean close.
+    expect(attempts).toBe(2);
   });
 });

@@ -15,10 +15,11 @@
  * STRM-04: no Postgres access — pure in-memory dispatch.
  * T-12-05-04: every frame Zod-safeParsed before use — no cast on incoming frames.
  *
- * Reconnect / backoff: the CALLER (main.ts) is responsible for reconnect logic.
- * connectToSidecarStream resolves when the stream closes (fetch body done=true).
- * If the fetch fails (non-200 or network error) it throws — main.ts catches and
- * handles reconnect with a reason comment ("void connectToSidecarStream(...)").
+ * Reconnect / backoff: connectToSidecarStream itself resolves when the stream closes
+ * (fetch body done=true) and throws on a non-200 / network error. The self-healing
+ * reconnect+backoff loop is runSidecarStreamWithReconnect (below); main.ts fires that
+ * once at boot instead of a bare void connectToSidecarStream(...) that could die on the
+ * first disconnect (REVIEW WR-02).
  *
  * Injection contract: fetch + recompute + bufferTick + rate/now are all injectable
  * so tests feed a fake ReadableStream without a live sidecar.
@@ -143,6 +144,69 @@ export async function connectToSidecarStream(
   }
 }
 
+// ─── Self-healing reconnect loop ────────────────────────────────────────────────
+
+/**
+ * Options for runSidecarStreamWithReconnect. All are injectable so the loop is testable
+ * without real timers or a live sidecar.
+ */
+export type RunSidecarStreamOptions = {
+  /** Backoff between a stream ending/failing and the next connect attempt. Default 2000ms. */
+  readonly backoffMs?: number;
+  /** Injectable delay — defaults to setTimeout. Tests pass an instant/controllable sleep. */
+  readonly sleep?: (ms: number) => Promise<void>;
+  /**
+   * Loop guard — the loop runs while this returns true. Default `() => true` (runs for the
+   * process lifetime; Railway SIGTERM kills it). Tests pass a counter to bound iterations.
+   */
+  readonly shouldContinue?: () => boolean;
+  /** Error sink for a failed/ended connect cycle. Default logs the error name only. */
+  readonly onError?: (error: unknown) => void;
+};
+
+/**
+ * runSidecarStreamWithReconnect — self-healing wrapper around connectToSidecarStream
+ * (REVIEW WR-02).
+ *
+ * connectToSidecarStream resolves when the stream closes and throws on any transport
+ * failure (non-200, network error, null body). A bare `void connectToSidecarStream(...)`
+ * therefore dies permanently on the first disconnect — live greeks AND event-snapshot
+ * detection stop until the process restarts. This loop catches every cycle's outcome and
+ * reconnects after a backoff, so a single bad frame or dropped connection can never sever
+ * the stream for good. It never throws — the caller fires it with `void`.
+ */
+export async function runSidecarStreamWithReconnect(
+  sidecarUrl: string,
+  deps: ConnectToSidecarStreamDeps,
+  options: RunSidecarStreamOptions = {},
+): Promise<void> {
+  const backoffMs = options.backoffMs ?? 2000;
+  const sleep =
+    options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const shouldContinue = options.shouldContinue ?? ((): boolean => true);
+  const onError =
+    options.onError ??
+    ((error: unknown): void => {
+      console.error(
+        "sidecar stream error, reconnecting —",
+        error instanceof Error ? error.name : "UnknownError",
+      );
+    });
+
+  // Sleep BEFORE each connect except the first, so shouldContinue() is evaluated exactly
+  // once per cycle and no backoff is paid after the loop stops.
+  let firstCycle = true;
+  while (shouldContinue()) {
+    if (!firstCycle) await sleep(backoffMs);
+    firstCycle = false;
+    try {
+      await connectToSidecarStream(sidecarUrl, deps);
+    } catch (error: unknown) {
+      onError(error);
+    }
+  }
+}
+
 // ─── Frame dispatcher (private) ────────────────────────────────────────────────
 
 /**
@@ -188,8 +252,20 @@ function dispatchFrame(
   // SNAP-01 (20-06): feed the event-snapshot detector on every valid tick with a
   // priced underlying — independent of the recompute outcome below (a bad option
   // contract does not mean the spot is bad).
+  //
+  // REVIEW CR-01: dispatchFrame runs synchronously per tick — a throw here would
+  // reject connectToSidecarStream and permanently kill the stream. Swallow any error
+  // the callback might throw (log name only) so no present or future observeSpot
+  // implementation can sever the live stream.
   if (rawTick.underlyingPrice !== null && rawTick.underlyingPrice > 0) {
-    deps.observeSpot?.(rawTick.underlyingPrice, rawTick.ts);
+    try {
+      deps.observeSpot?.(rawTick.underlyingPrice, rawTick.ts);
+    } catch (e: unknown) {
+      console.error(
+        "sidecar-sse: observeSpot threw (swallowed) —",
+        e instanceof Error ? e.name : "UnknownError",
+      );
+    }
   }
 
   // BSM recompute (D-02) — skip result on no-price, bad-symbol, expired, iv-failed.
