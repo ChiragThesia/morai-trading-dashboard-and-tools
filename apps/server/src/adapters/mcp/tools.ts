@@ -18,6 +18,7 @@ import {
   getEventsWithRulesResponse,
   setRuleTagsRequest,
   setRuleTagsResponse,
+  lifecycleResponse,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -35,6 +36,7 @@ import type {
   ForRunningGetPicker,
   ForRunningGetCalendarEventsWithRules,
   ForRunningSetRuleTags,
+  ForRunningGetCalendarLifecycle,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -847,6 +849,65 @@ export function registerSetRuleTagsTool(
         tags: saved.ruleTags,
         otherNote: saved.otherNote,
         updatedAt: saved.updatedAt.toISOString(),
+      });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetJournalLifecycleTool — registers the get_journal_lifecycle MCP tool (JRNL-01 / 22-03).
+ *
+ * MCP-02: shares lifecycleResponse schema with GET /api/journal/:calendarId/lifecycle.
+ * Re-parses args at boundary (same Pitfall 6 guard as get_journal).
+ * Unknown calendarId → returns not-found text, never throws.
+ */
+export function registerGetJournalLifecycleTool(
+  server: McpServer,
+  getCalendarLifecycle: ForRunningGetCalendarLifecycle,
+): void {
+  server.registerTool(
+    "get_journal_lifecycle",
+    {
+      title: "Get Journal Lifecycle",
+      description:
+        "Returns the enriched snapshot series (forward vol + P&L attribution) for a calendar. Same payload as GET /api/journal/:calendarId/lifecycle.",
+      inputSchema: { calendarId: z.string().uuid() },
+    },
+    async (args) => {
+      // safeParse at boundary — never throw on invalid input (SPEC §7, CR-02).
+      const parsed = z.object({ calendarId: z.string().uuid() }).safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid calendarId" }) },
+          ],
+        };
+      }
+      const { calendarId } = parsed.data;
+      const result = await getCalendarLifecycle(calendarId);
+      if (!result.ok) {
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      if (result.value === null) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ error: "not found" }),
+            },
+          ],
+        };
+      }
+      // Serialise Date fields to ISO strings before parsing through the contract
+      // (mirrors journalLifecycleRoutes: row.time.toISOString() — MCP-02 same contract).
+      const payload = lifecycleResponse.parse({
+        snapshots: result.value.map((row) => ({
+          ...row,
+          time: row.time instanceof Date ? row.time.toISOString() : row.time,
+        })),
       });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],

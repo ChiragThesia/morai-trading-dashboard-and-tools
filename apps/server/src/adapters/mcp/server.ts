@@ -17,6 +17,7 @@ import type {
   ForGettingOrders,
   ForRunningGetCalendarEventsWithRules,
   ForRunningSetRuleTags,
+  ForRunningGetCalendarLifecycle,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -37,6 +38,7 @@ import {
   registerTriggerJobTool,
   registerGetRuleTagsTool,
   registerSetRuleTagsTool,
+  registerGetJournalLifecycleTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -69,6 +71,9 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  * RULE-01 / MCP-02 (Phase 20, 20-10): get_rule_tags + set_rule_tags registered here — share
  *         getEventsWithRulesResponse/setRuleTagsRequest/setRuleTagsResponse with GET/PUT
  *         /api/journal/*rules; injected as optional for backward compat with existing call sites.
+ * JRNL-01 / MCP-02 (Phase 22, 22-03): get_journal_lifecycle registered here — shares
+ *         lifecycleResponse with GET /api/journal/:calendarId/lifecycle; injected as optional
+ *         for backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -88,6 +93,7 @@ export function makeMcpRouter(
   enqueueJob?: ForTriggeringJob,
   getEventsWithRules?: ForRunningGetCalendarEventsWithRules,
   setRuleTags?: ForRunningSetRuleTags,
+  getCalendarLifecycle?: ForRunningGetCalendarLifecycle,
 ): Hono {
   const router = new Hono();
 
@@ -145,6 +151,11 @@ export function makeMcpRouter(
     }
     if (setRuleTags !== undefined) {
       registerSetRuleTagsTool(server, setRuleTags);
+    }
+    // JRNL-01 / MCP-02: get_journal_lifecycle tool — optional, wired when the getCalendarLifecycle
+    // use-case is available (Phase 22, 22-03)
+    if (getCalendarLifecycle !== undefined) {
+      registerGetJournalLifecycleTool(server, getCalendarLifecycle);
     }
     return { server, transport };
   }

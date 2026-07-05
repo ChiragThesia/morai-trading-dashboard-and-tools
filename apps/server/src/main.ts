@@ -47,6 +47,7 @@ import {
   makeGetCalendarEventsWithRulesUseCase,
   makeSetRuleTagsUseCase,
   makeSpotObserver,
+  makeGetCalendarLifecycleUseCase,
 } from "@morai/core";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
@@ -59,6 +60,7 @@ import { withRefreshExpiryWarning } from "./adapters/refresh-expiry-warner.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
 import { journalRulesRoutes } from "./adapters/http/journal-rules.routes.ts";
+import { journalLifecycleRoutes } from "./adapters/http/journal-lifecycle.routes.ts";
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
 import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
 import { gexRoutes } from "./adapters/http/gex.routes.ts";
@@ -126,6 +128,11 @@ const closeCalendar = makeCloseCalendarUseCase({
 // Build the journal read use-cases (plan 06)
 // Named consts so plan 07 MCP tools can inject them without re-construction.
 const getJournal = makeGetJournalUseCase({
+  readJournal: calendarSnapshotsRepo.readJournal,
+});
+// JRNL-01 (22-03): getCalendarLifecycle — enriched-series read use-case, shared by the HTTP
+// route + MCP tool over the ONE lifecycleResponse contract (MCP-02).
+const getCalendarLifecycle = makeGetCalendarLifecycleUseCase({
   readJournal: calendarSnapshotsRepo.readJournal,
 });
 const getLiveGreeks = makeGetLiveGreeksUseCase({
@@ -271,6 +278,9 @@ const apiRouter = new Hono()
   .route("/", journalRoutes(getJournal))
   // RULE-01 (20-10): GET/PUT /api/journal/*/rules — event read + rule-tag write (D-13)
   .route("/", journalRulesRoutes(calendarsRepo.getCalendarById, getEventsWithRules, setRuleTags))
+  // JRNL-01 (22-03): GET /api/journal/:calendarId/lifecycle — enriched series (forward vol +
+  // P&L attribution), JWT-gated via this apiRouter mount (T-22-05, never mount on `app`).
+  .route("/", journalLifecycleRoutes(getCalendarLifecycle))
   // BRK-02: positions, transactions, orders read endpoints
   .route("/", brokerageRoutes(getPositions, getTransactions, getOrders))
   // ANLY-03 (06-04/06-05): GET /api/analytics/term-structure + GET /api/analytics/skew
@@ -344,6 +354,7 @@ const mcpRouter = makeMcpRouter(
   enqueueJob,
   getEventsWithRules,
   setRuleTags,
+  getCalendarLifecycle,
 );
 app.route("", mcpRouter);
 
