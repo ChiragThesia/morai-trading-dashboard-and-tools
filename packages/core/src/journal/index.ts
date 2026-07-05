@@ -203,3 +203,11 @@ export type { ForwardVolResult } from "./domain/fwd-vol.ts";
 // (D-01/D-05/D-06), honest gap handling (isGap + null cumulatives, never bridged).
 export { computeAttributionSeries, isGapRow } from "./domain/attribution.ts";
 export type { AttributionPoint } from "./domain/attribution.ts";
+// JRNL-01 (22-03): getCalendarLifecycle use-case — thin forwarder over ForReadingJournal,
+// mapping each row through computeForwardVol + computeAttributionSeries (22-01/22-02).
+export { makeGetCalendarLifecycleUseCase } from "./application/getCalendarLifecycle.ts";
+export type {
+  LifecycleSnapshot,
+  GetCalendarLifecycleDeps,
+  ForRunningGetCalendarLifecycle,
+} from "./application/getCalendarLifecycle.ts";

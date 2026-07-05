@@ -332,3 +332,13 @@ export type {
 export { makeGetPickerUseCase } from "./picker/index.ts";
 // PICK-01/PICK-03 (19-08): compute-picker use-case — chain-triggered by compute-gex-snapshot (D-04).
 export { makeComputePickerSnapshotUseCase } from "./picker/index.ts";
+
+// ─── Phase 22: Journal calendar-lifecycle graph (JRNL-01) ─────────────────────
+// getCalendarLifecycle use-case — thin forwarder over ForReadingJournal, mapping each row
+// through computeForwardVol + computeAttributionSeries (22-01/22-02/22-03).
+export { makeGetCalendarLifecycleUseCase } from "./journal/index.ts";
+export type {
+  LifecycleSnapshot,
+  GetCalendarLifecycleDeps,
+  ForRunningGetCalendarLifecycle,
+} from "./journal/index.ts";
