@@ -428,12 +428,19 @@ a glance. Read-only visualization over the already-collected per-calendar snapsh
 **Plans:** 6 plans (3 waves)
 
 Plans:
+**Wave 1**
 
 - [ ] 22-01-PLAN.md — Forward-vol domain fn (never-NaN tagged guard) + additive lifecycle Zod contract [wave 1]
 - [ ] 22-02-PLAN.md — Attribution domain fn (per-interval buckets + residual, exact accumulation identity, honest gaps) [wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 22-03-PLAN.md — getCalendarLifecycle use-case + JWT-gated GET /api/journal/:calendarId/lifecycle route + get_journal_lifecycle MCP tool [wave 2]
 - [ ] 22-04-PLAN.md — useLifecycle hook (enabled guard) + rail cards (Masthead / Edge / GreeksNow / PnlBridge / Beats) [wave 2]
 - [ ] 22-05-PLAN.md — LifecycleChart rewrite: D-08 stacked panels, forward-vol edge, signed greeks, honest gaps, shared crosshair [wave 2]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 22-06-PLAN.md — Journal.tsx integration: masthead + chart + reactive rail, honest states, relocated Notes [wave 3]
 
 **Success Criteria** (what must be TRUE):

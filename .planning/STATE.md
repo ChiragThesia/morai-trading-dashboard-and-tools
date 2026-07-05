@@ -5,16 +5,16 @@ milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 20
 current_phase_name: stream-watchdog-event-snapshot-strategy-rules
 status: executing
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-07-05T05:08:08Z"
+stopped_at: Phase 22 UI-SPEC approved
+last_updated: "2026-07-05T17:29:26.975Z"
 last_activity: 2026-07-05
 last_activity_desc: Completed 20-01 (WATCH-01 foundation primitives)
 progress:
-  total_phases: 7
-  completed_phases: 5
+  total_phases: 8
+  completed_phases: 6
   total_plans: 37
-  completed_plans: 27
-  percent: 73
+  completed_plans: 37
+  percent: 75
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 20 (stream-watchdog-event-snapshot-strategy-rules) — EXECUTING
 Plan: 2 of 11
-Status: Executing Phase 20
+Status: Ready to execute
 Last activity: 2026-07-05 — Completed 20-01 (WATCH-01 foundation primitives)
 
 ## Milestone v1.2 Summary
@@ -334,8 +334,8 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-05T05:08:08Z
-Stopped at: Completed 20-01-PLAN.md
-Resume file: None
+Last session: 2026-07-05T16:47:43.139Z
+Stopped at: Phase 22 UI-SPEC approved
+Resume file: .planning/phases/22-journal-calendar-lifecycle-graph/22-UI-SPEC.md
 
 - Next: execute 20-02-PLAN.md (server-side ping emitter wiring, WATCH-01)

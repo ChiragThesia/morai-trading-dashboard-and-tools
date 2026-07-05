@@ -508,7 +508,9 @@ helper are fully retired by this phase, per the UI-SPEC's Placement Decision.
 **If empty:** N/A — see table above; all three items are implementation-detail choices within an
 already-verified architecture, not open factual claims about external systems.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+*Both closed during Phase 22 planning; resolutions locked into plan acceptance criteria (22-02, 22-04, 22-06).*
 
 1. **Exact vega-bucket blend formula (A1 above).**
    - What we know: `netVega` is the only available position-level vega scalar; front/back IV are
@@ -516,9 +518,9 @@ already-verified architecture, not open factual claims about external systems.
    - What's unclear: whether `mean(frontIv, backIv)` change, `backIv` change alone (since the
      back leg dominates a calendar's net vega — it's the long leg), or `termSlope` change best
      matches the "long vega" narrative the masthead copy needs to tell.
-   - Recommendation: use `mean(frontIv, backIv)` as the default (symmetric, no leg-dominance
+   - **RESOLVED:** use `mean(frontIv, backIv)` as the default (symmetric, no leg-dominance
      assumption baked in); flag as a one-line tunable constant so it's trivial to change if the
-     narrative reads oddly against real trade data during UAT.
+     narrative reads oddly against real trade data during UAT. Locked in plan 22-02 as "the locked default".
 
 2. **Whether `BeatsCard`'s event list needs SNAP-01 `trigger` data (event-move snapshots) or
    stays entry/close-only for this phase.**
@@ -529,11 +531,11 @@ already-verified architecture, not open factual claims about external systems.
      contract question — left to plan-phase"). This research confirms the data (`trigger` field)
      already exists in `SnapshotRow` and requires zero new plumbing to surface it — it's a "should
      we" (scope) question, not a "can we" (data availability) question.
-   - Recommendation: include `trigger === "event-move"` snapshots as beats if they exist for the
+   - **RESOLVED:** include `trigger === "event-move"` snapshots as beats if they exist for the
      selected calendar (cheap, already-available data); fall back to entry/close-only when none
      exist. Either way, no new backend work is needed beyond passing `trigger` through the
-     existing `lifecycleSnapshotResponse` (it's already a `SnapshotRow` field via `snapshotResponse`
-     — confirm it should be included in the extended schema).
+     existing `lifecycleSnapshotResponse` (it's already a `SnapshotRow` field via `snapshotResponse`).
+     Locked in plans 22-04/22-06 (`trigger === "event-move"` beats, entry/close fallback).
 
 ## Environment Availability
 
