@@ -21,6 +21,10 @@ export type {
 // Journal read contracts (MCP-02: reused by get_journal MCP tool in plan 07)
 export { snapshotResponse, journalResponse } from "./journal.ts";
 export type { SnapshotResponse, JournalResponse } from "./journal.ts";
+// JRNL-01 (22-01/22-03): lifecycle contract — additive .extend() over snapshotResponse,
+// reused by GET /api/journal/:calendarId/lifecycle + get_journal_lifecycle MCP tool (MCP-02).
+export { lifecycleSnapshotResponse, lifecycleResponse } from "./journal.ts";
+export type { LifecycleSnapshotResponse, LifecycleResponse } from "./journal.ts";
 
 // Strategy-rule recording contracts (RULE-01, 20-07: single-sourced from @morai/core D-07)
 export {
