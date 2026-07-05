@@ -1,14 +1,16 @@
 ---
 phase: 17-overview-v2-redesign-iv-calibration-fix
 verified: 2026-07-03T18:10:00Z
-status: human_needed
+status: passed
 score: 4/4 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Deploy/preview Overview and compare to mockups/overview-v2.html"
     expected: "Pill header, full-width payoff hero + breakevens + T+0/@exp scenario strip, positions table docked below, 320px GEX rail on the right (gamma profile, GEX bars, key levels, net book greeks), macro + book rows below. The dedicated Market screen still renders full-size via its own nav tab (no regression)."
     why_human: "Visual layout fidelity vs a mockup (spacing, visual grammar, pixel-level conformance) cannot be verified by grep/unit tests — planner explicitly deferred this to a human-check step (17-04-PLAN.md Task 1)."
+
   - test: "During and outside RTH, watch the live Overview screen"
     expected: "The payoff T+0 curve visibly moves with live marks (not frozen at a flat 18% guess); a non-convergent/illiquid leg shows 'IV n/a' and the net-book 'T+0 excludes N' note; the live-mark badge tints amber past 5 min and the GEX badge tints amber past its refresh window; hovering/selecting a positions row spotlights that position's curve and dims the rest; the scenario strip @exp header shows the front expiry date."
     why_human: "Live production timing/behavior (real market data flowing through the SSE stream, real staleness thresholds crossing in real time) cannot be verified by a unit test — planner explicitly deferred this to a human-check step (17-04-PLAN.md Task 2)."
