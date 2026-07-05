@@ -1,20 +1,26 @@
 /**
- * LiveStatusBadge — connection-status indicator for the live SSE stream.
+ * LiveStatusBadge — connection-status indicator for the live SSE stream (WATCH-01).
  *
- * Presentational only — no hooks. Props carry all state. Designed to slot into
- * the "Position" CardHeading badge position (UI-SPEC Surface 3).
+ * Presentational only — no hooks except the internal last-known-good guard below.
+ * Props carry all state. Designed to slot into the "Position" CardHeading badge
+ * position (UI-SPEC Surface 3).
  *
- * States (D-04 state machine per UI-SPEC Surface 3):
- *   LIVE        — teal text + 6px pulsing dot (.live-dot) — stream connected, ticks arriving.
- *   STALE       — amber text on --color-raise, no dot — stream dropped, values frozen.
- *   RECONNECTING— muted text on --color-raise, no dot — reconnect attempt in progress.
- *   POLL        — dim text, transparent background, no dot — EventSource not yet connected.
+ * States (D-01 3-state model, 20-UI-SPEC.md Color contract):
+ *   LIVE    — text-up + 6px pulsing dot (.live-dot) — ticks arriving during RTH.
+ *   QUIET   — text-dim, transparent, no dot — market closed (benign).
+ *   STALLED — text-down on bg-downd + ring-down/40, no dot — a genuine alarm (D-20):
+ *             RTH but ticks frozen past STALL_THRESHOLD_MS, or transport dead.
+ *   CONNECTING — a copy-only condition (SAME classes as QUIET, D-11): status==='quiet'
+ *             AND the last heartbeat's isRth===true AND no tick has arrived yet. This
+ *             is deliberately not a 4th status value (D-01) — cold-start/mid-reconnect
+ *             during RTH must never flash red.
  *
- * Tooltip: last-tick timestamp (HH:mm:ss) or "No data received yet."
- * Dot animation: @keyframes live-dot-pulse added to apps/web/src/index.css.
+ * Tooltip copy and the STALLED force-reconnect action come from the Copywriting
+ * Contract in 20-UI-SPEC.md. Dot animation: @keyframes live-dot-pulse in
+ * apps/web/src/index.css (unchanged).
  */
 
-import React from "react";
+import React, { useRef } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
   Tooltip,
@@ -22,54 +28,65 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip.tsx";
+import { Button } from "@/components/system/Button.tsx";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
+import { STALL_THRESHOLD_MS } from "../hooks/useLiveStream.ts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Props = {
-  /** Current EventSource connection state. */
+  /** Current 3-state stream status. */
   status: LiveStreamStatus;
   /** Timestamp of the most recently received tick (null until first tick). */
   lastTickAt: Date | null;
+  /** Server-pushed RTH truth from the last well-formed ping (null until the first ping). */
+  isRth: boolean | null;
+  /** True once at least one valid tick has been processed. */
+  hasReceivedFirstTick: boolean;
+  /** True while a manual reconnectNow() call is in flight (D-17). */
+  isReconnecting: boolean;
+  /** Force-reconnect action, wired to the hook's reconnectNow (D-17, STALLED only). */
+  onReconnect: () => void;
 };
 
-// ─── Per-state render config (locked color tokens from UI-SPEC Surface 3) ────
+// ─── Per-state render config (locked tokens from 20-UI-SPEC.md Color contract) ──
 
 type StatusConfig = {
   label: string;
-  textColor: string;
-  background: string;
+  /** Tailwind utility classes (text/background/ring) — the badge's design tokens. */
+  className: string;
   showDot: boolean;
 };
 
 const STATUS_CONFIG = {
   live: {
     label: "LIVE",
-    textColor: "#26a69a", // --color-up
-    background: "transparent",
+    className: "text-up bg-transparent",
     showDot: true,
   },
-  stale: {
-    label: "STALE",
-    textColor: "#f0b429", // --color-amber
-    background: "#161d2b", // --color-raise
+  quiet: {
+    label: "QUIET",
+    className: "text-dim bg-transparent",
     showDot: false,
   },
-  reconnecting: {
-    label: "RECONNECTING",
-    textColor: "#7b8696", // --color-muted
-    background: "#161d2b", // --color-raise
-    showDot: false,
-  },
-  poll: {
-    label: "POLL",
-    textColor: "#566273", // --color-dim
-    background: "transparent",
+  stalled: {
+    // D-20 resolution: the down/red alarm token, not the retired amber "stale" look —
+    // STALLED must read as a genuine fault, never merely stale.
+    label: "STALLED",
+    className: "text-down bg-downd ring-1 ring-down/40",
     showDot: false,
   },
 } as const satisfies Record<LiveStreamStatus, StatusConfig>;
 
-// ─── Helper ──────────────────────────────────────────────────────────────────
+const KNOWN_STATUSES: ReadonlySet<LiveStreamStatus> = new Set<LiveStreamStatus>([
+  "live",
+  "quiet",
+  "stalled",
+]);
+
+const STALL_THRESHOLD_SECONDS = STALL_THRESHOLD_MS / 1000;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Format a Date as HH:mm:ss (local time, 24-hour). */
 function formatTime(d: Date): string {
@@ -81,61 +98,99 @@ function formatTime(d: Date): string {
   });
 }
 
+/** Per-state tooltip copy (20-UI-SPEC.md Copywriting Contract). */
+function resolveTooltipText(params: {
+  status: LiveStreamStatus;
+  isConnecting: boolean;
+  lastTickAt: Date | null;
+}): string {
+  const { status, isConnecting, lastTickAt } = params;
+  if (status === "stalled") {
+    return `No ticks for ${STALL_THRESHOLD_SECONDS}s — your data may be frozen.`;
+  }
+  if (isConnecting) {
+    return "Waiting for first tick…";
+  }
+  if (status === "quiet") {
+    return "Market closed — outside regular trading hours.";
+  }
+  return lastTickAt !== null ? `Last update: ${formatTime(lastTickAt)}` : "No data received yet.";
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
  * LiveStatusBadge — renders the SSE stream state in the Position card heading.
  *
- * Pure presentational component; no hooks.
- * The live-dot-pulse keyframe and .live-dot class are defined in apps/web/src/index.css.
+ * Holds last-known-good on a malformed/unrecognized status value — never renders a
+ * blank/undefined label.
  */
-export function LiveStatusBadge({ status, lastTickAt }: Props): React.ReactElement {
-  const cfg = STATUS_CONFIG[status];
+export function LiveStatusBadge({
+  status,
+  lastTickAt,
+  isRth,
+  hasReceivedFirstTick,
+  isReconnecting,
+  onReconnect,
+}: Props): React.ReactElement {
+  const lastGoodStatusRef = useRef<LiveStreamStatus>("quiet");
+  const effectiveStatus = KNOWN_STATUSES.has(status) ? status : lastGoodStatusRef.current;
+  lastGoodStatusRef.current = effectiveStatus;
 
-  const tooltipText =
-    lastTickAt !== null
-      ? status === "stale"
-        ? `Last update: ${formatTime(lastTickAt)} (stream lost)`
-        : `Last update: ${formatTime(lastTickAt)}`
-      : "No data received yet.";
+  const cfg = STATUS_CONFIG[effectiveStatus];
+  // D-11: cold-start/mid-reconnect during RTH — same classes as QUIET, label/tooltip only.
+  const isConnecting = effectiveStatus === "quiet" && isRth === true && !hasReceivedFirstTick;
+  const label = isConnecting ? "CONNECTING" : cfg.label;
+  const tooltipText = resolveTooltipText({ status: effectiveStatus, isConnecting, lastTickAt });
 
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            cursor: "default",
-            background: "transparent",
-            border: "none",
-            padding: 0,
-          }}
-        >
-          {cfg.showDot && (
-            <span
-              className="live-dot"
-              aria-hidden="true"
-            />
-          )}
-          <Badge
-            variant="outline"
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <TooltipTrigger
             style={{
-              fontSize: 10,
-              fontFamily: "JetBrains Mono, monospace",
-              letterSpacing: "0.9px",
-              textTransform: "uppercase",
-              color: cfg.textColor,
-              background: cfg.background,
-              borderColor: "transparent",
-              padding: "1px 5px",
-              lineHeight: 1.4,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              cursor: "default",
+              background: "transparent",
+              border: "none",
+              padding: 0,
             }}
           >
-            {cfg.label}
-          </Badge>
-        </TooltipTrigger>
+            {cfg.showDot && (
+              <span
+                className="live-dot"
+                aria-hidden="true"
+              />
+            )}
+            <Badge
+              variant="outline"
+              className={cfg.className}
+              style={{
+                fontSize: 10,
+                fontFamily: "JetBrains Mono, monospace",
+                letterSpacing: "0.9px",
+                textTransform: "uppercase",
+                borderColor: "transparent",
+                padding: "1px 5px",
+                lineHeight: 1.4,
+              }}
+            >
+              {label}
+            </Badge>
+          </TooltipTrigger>
+          {effectiveStatus === "stalled" && (
+            <Button
+              variant="primary"
+              size="xs"
+              disabled={isReconnecting}
+              onClick={onReconnect}
+            >
+              {isReconnecting ? "Reconnecting…" : "Reconnect now"}
+            </Button>
+          )}
+        </span>
         <TooltipContent>
           <span
             style={{

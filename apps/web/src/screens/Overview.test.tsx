@@ -5,11 +5,12 @@
  * Data hooks are mocked; GEX rail uses a full GexSnapshotEntry fixture (GAMMAProfile/GexBars
  * need profile/strikes/computedAt, not just spot).
  *
- * Phase 12-07 additions (gap-closure STRM-01 + D-04), preserved through the 17-04 rewrite:
+ * Phase 12-07 additions (gap-closure STRM-01 + D-04), preserved through the 17-04 rewrite,
+ * updated to the WATCH-01 3-state model (Phase 20 D-01):
  *   - useLiveStream mock placed before Overview import (vitest hoists all vi.mock calls)
- *   - LiveStatusBadge renders POLL by default; LIVE/STALE when stream active
+ *   - LiveStatusBadge renders QUIET by default; LIVE/STALLED when stream active
  *   - .live-cell class applied to greek cells when liveTs is not null (STRM-01)
- *   - .live-cell.stale applied when status is 'stale' (Surface 2 color-dim, not opacity)
+ *   - .live-cell.stale applied when status is 'stalled' (Surface 2 color-dim, not opacity)
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
@@ -29,8 +30,12 @@ vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
 vi.mock("../hooks/useLiveStream.ts", () => ({
   useLiveStream: vi.fn(() => ({
     greeks: new Map<string, StreamLiveGreekEvent>(),
-    status: "poll" as const,
+    status: "quiet" as const,
     lastTickAt: null,
+    isRth: null,
+    hasReceivedFirstTick: false,
+    isReconnecting: false,
+    reconnectNow: vi.fn(),
     subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
   })),
   StreamMintError: class StreamMintError extends Error {
@@ -39,6 +44,7 @@ vi.mock("../hooks/useLiveStream.ts", () => ({
   StreamSubscribeError: class StreamSubscribeError extends Error {
     constructor(status: number) { super(String(status)); this.name = "StreamSubscribeError"; }
   },
+  STALL_THRESHOLD_MS: 20_000,
 }));
 
 // 17-04 Task 2: mock resolveLegIv so calibration outcomes (ok/non-convergent/no-price) are
@@ -97,15 +103,19 @@ function setPositions(positions: unknown): void {
   mockUsePositions.mockReturnValue({ data: { positions }, isPending: false } as unknown as ReturnType<typeof usePositions>);
 }
 
-/** Override the useLiveStream mock for live/stale overlay tests. */
+/** Override the useLiveStream mock for live/stalled overlay tests. */
 function setLiveStream(
-  status: "live" | "stale" | "reconnecting" | "poll",
+  status: "live" | "quiet" | "stalled",
   greeks: ReadonlyMap<string, StreamLiveGreekEvent>,
 ): void {
   mockUseLiveStream.mockReturnValue({
     greeks,
     status,
-    lastTickAt: status !== "poll" ? new Date("2026-06-29T14:31:00Z") : null,
+    lastTickAt: status !== "quiet" ? new Date("2026-06-29T14:31:00Z") : null,
+    isRth: status !== "quiet",
+    hasReceivedFirstTick: status !== "quiet",
+    isReconnecting: false,
+    reconnectNow: vi.fn(),
     subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
   });
 }
@@ -184,11 +194,15 @@ describe("Overview screen", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
-    // Reset useLiveStream to default poll/empty-map state after each test
+    // Reset useLiveStream to default quiet/empty-map state after each test
     mockUseLiveStream.mockReturnValue({
       greeks: new Map(),
-      status: "poll",
+      status: "quiet",
       lastTickAt: null,
+      isRth: null,
+      hasReceivedFirstTick: false,
+      isReconnecting: false,
+      reconnectNow: vi.fn(),
       subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
     });
   });
@@ -243,11 +257,11 @@ describe("Overview screen", () => {
 
   // ── Phase 12-07: live overlay + badge tests ───────────────────────────────────
 
-  it("renders a LiveStatusBadge showing POLL in the 'Open positions' section header when stream has no ticks", () => {
+  it("renders a LiveStatusBadge showing QUIET in the 'Open positions' section header when stream has no ticks", () => {
     setPositions([POS]);
     render(<Overview />);
-    // Badge renders "POLL" when status is 'poll' (D-04 state machine)
-    expect(screen.getByText("POLL")).toBeDefined();
+    // Badge renders "QUIET" when status is 'quiet' (WATCH-01 3-state model, D-01)
+    expect(screen.getByText("QUIET")).toBeDefined();
   });
 
   it("no .live-cell class present on greek cells when liveGreeks Map is empty (static fallback)", () => {
@@ -267,12 +281,12 @@ describe("Overview screen", () => {
     expect(container.querySelector(".live-cell")).not.toBeNull();
   });
 
-  it("badge shows STALE and cells carry both live-cell and stale classes when status is stale (Surface 2 color-dim, not opacity)", () => {
+  it("badge shows STALLED and cells carry both live-cell and stale classes when status is stalled (Surface 2 color-dim, not opacity)", () => {
     setPositions([POS]);
-    setLiveStream("stale", new Map([[POS.occSymbol, makeTick()]]));
+    setLiveStream("stalled", new Map([[POS.occSymbol, makeTick()]]));
     const { container } = render(<Overview />);
-    // Badge reflects stale state
-    expect(screen.getByText("STALE")).toBeDefined();
+    // Badge reflects stalled state
+    expect(screen.getByText("STALLED")).toBeDefined();
     // Both live-cell AND stale class present — .live-cell.stale dims by color (never opacity)
     expect(container.querySelector(".live-cell.stale")).not.toBeNull();
   });
@@ -329,6 +343,10 @@ describe("Overview screen", () => {
         greeks: new Map(),
         status: "live",
         lastTickAt: new Date(Date.now() - 6 * 60 * 1000),
+        isRth: true,
+        hasReceivedFirstTick: true,
+        isReconnecting: false,
+        reconnectNow: vi.fn(),
         subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
       });
       setPositions([]);

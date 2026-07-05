@@ -374,7 +374,7 @@ function PositionsTable({
 }): React.ReactElement {
   const rows = useMemo(() => buildRows(positions), [positions]);
 
-  const isStale = liveStatus === "stale" || liveStatus === "reconnecting";
+  const isStale = liveStatus === "stalled";
 
   /** CSS class(es) to add to a live-sourced cell (adds stale dim when stream is stale). */
   const liveCellCn = (liveTs: string | null): string => {
@@ -803,6 +803,10 @@ export function Overview(): React.ReactElement {
     greeks: liveGreeks,
     status: liveStatus,
     lastTickAt: liveLastTickAt,
+    isRth: liveIsRth,
+    hasReceivedFirstTick: liveHasReceivedFirstTick,
+    isReconnecting: liveIsReconnecting,
+    reconnectNow: liveReconnectNow,
   } = useLiveStream();
 
   // ── Payoff hero positions (calendars only — the scenario engine models calendar
@@ -1089,7 +1093,14 @@ export function Overview(): React.ReactElement {
           <Panel>
             <div className="mb-2 flex items-center gap-2">
               <SectionLabel>Positions</SectionLabel>
-              <LiveStatusBadge status={liveStatus} lastTickAt={liveLastTickAt} />
+              <LiveStatusBadge
+                status={liveStatus}
+                lastTickAt={liveLastTickAt}
+                isRth={liveIsRth}
+                hasReceivedFirstTick={liveHasReceivedFirstTick}
+                isReconnecting={liveIsReconnecting}
+                onReconnect={liveReconnectNow}
+              />
             </div>
             <PositionsTable
               positions={positions}
