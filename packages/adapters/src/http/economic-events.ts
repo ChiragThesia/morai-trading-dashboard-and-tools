@@ -111,11 +111,14 @@ async function fetchReleaseDates(
  * ONE sorted EconomicEvent[] — callers never see the two origins (RESEARCH.md Anti-Pattern:
  * never expose FRED-vs-seed as two read paths).
  *
- * No fabricated fallback (D-17): a missing/empty apiKey, non-2xx response, network error, or
- * a malformed payload (Zod safeParse failure) all return err({kind:"fetch-error"}) — the FOMC
- * seed is NOT returned alone on a FRED failure, since a partial/silently-degraded event set
- * would let the compute layer score against an incomplete calendar without knowing it.
- * apiKey is never logged (fred.ts discipline) — static warn text only.
+ * WR-05: FOMC_SEED is unioned regardless of the CPI/NFP fetch outcome — the seed supplements
+ * FRED, it never depends on it (FOMC is the single largest scheduled event for an index-vol
+ * calendar; it must not be coupled to a CPI/NFP fetch it does not actually need). A
+ * missing/empty apiKey, non-2xx response, network error, or malformed payload (Zod safeParse
+ * failure) drops ONLY the affected FRED-sourced (CPI/NFP) rows — never fabricated (D-17 still
+ * holds for CPI/NFP: a real value or nothing, never invented) — and this adapter still resolves
+ * `ok(...)` with at least the FOMC seed. apiKey is never logged (fred.ts discipline) — static
+ * warn text only.
  */
 export function makeEconomicEventsAdapter(deps: {
   readonly fetch: typeof globalThis.fetch;
@@ -123,26 +126,36 @@ export function makeEconomicEventsAdapter(deps: {
   readonly fomcSeed: ReadonlyArray<EconomicEvent>;
 }): ForFetchingEconomicEvents {
   return async (): Promise<Result<ReadonlyArray<EconomicEvent>, FetchError>> => {
+    let cpiEvents: ReadonlyArray<EconomicEvent> = [];
+    let nfpEvents: ReadonlyArray<EconomicEvent> = [];
+
     if (deps.apiKey === undefined || deps.apiKey === "") {
-      console.warn("economic-events: missing FRED API key, cannot fetch CPI/NFP release dates");
-      return err({ kind: "fetch-error", message: "FRED API key missing" });
+      console.warn(
+        "economic-events: missing FRED API key, cannot fetch CPI/NFP release dates -- FOMC seed still returned (WR-05)",
+      );
+    } else {
+      const [cpiResult, nfpResult] = await Promise.all([
+        fetchReleaseDates({ fetch: deps.fetch, apiKey: deps.apiKey }, CPI_RELEASE_ID, "CPI"),
+        fetchReleaseDates({ fetch: deps.fetch, apiKey: deps.apiKey }, NFP_RELEASE_ID, "NFP"),
+      ]);
+
+      if (cpiResult.ok) {
+        cpiEvents = cpiResult.value;
+      } else {
+        console.warn(
+          `economic-events: ${cpiResult.error}, no fallback for CPI release dates -- FOMC seed still returned (WR-05)`,
+        );
+      }
+      if (nfpResult.ok) {
+        nfpEvents = nfpResult.value;
+      } else {
+        console.warn(
+          `economic-events: ${nfpResult.error}, no fallback for NFP release dates -- FOMC seed still returned (WR-05)`,
+        );
+      }
     }
 
-    const [cpiResult, nfpResult] = await Promise.all([
-      fetchReleaseDates({ fetch: deps.fetch, apiKey: deps.apiKey }, CPI_RELEASE_ID, "CPI"),
-      fetchReleaseDates({ fetch: deps.fetch, apiKey: deps.apiKey }, NFP_RELEASE_ID, "NFP"),
-    ]);
-
-    if (!cpiResult.ok) {
-      console.warn(`economic-events: ${cpiResult.error}, no fallback for CPI release dates`);
-      return err({ kind: "fetch-error", message: cpiResult.error });
-    }
-    if (!nfpResult.ok) {
-      console.warn(`economic-events: ${nfpResult.error}, no fallback for NFP release dates`);
-      return err({ kind: "fetch-error", message: nfpResult.error });
-    }
-
-    const union = [...cpiResult.value, ...nfpResult.value, ...deps.fomcSeed].sort((a, b) =>
+    const union = [...cpiEvents, ...nfpEvents, ...deps.fomcSeed].sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
     );
 

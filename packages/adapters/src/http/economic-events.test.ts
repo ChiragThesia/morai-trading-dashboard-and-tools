@@ -75,7 +75,11 @@ describe("makeEconomicEventsAdapter", () => {
     expect(dates).toEqual(sorted);
   });
 
-  it("returns err({kind:'fetch-error'}) when apiKey is undefined — no fetch attempted, key never logged", async () => {
+  // ── WR-05: FOMC_SEED is unioned regardless of FRED fetch success/failure — the seed
+  // supplements CPI/NFP, it never depends on them. Only the FRED-sourced CPI/NFP rows drop
+  // out on a failure; the seed (and whichever of CPI/NFP DID succeed) is always returned.
+
+  it("WR-05: returns ok(FOMC seed only) when apiKey is undefined — no fetch attempted, key never logged, seed never gated by FRED", async () => {
     const fetchSpy: typeof fetch = vi.fn<typeof fetch>();
     const adapter = makeEconomicEventsAdapter({
       fetch: fetchSpy,
@@ -83,13 +87,14 @@ describe("makeEconomicEventsAdapter", () => {
       fomcSeed: FOMC_SEED,
     });
     const result = await adapter();
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.kind).toBe("fetch-error");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual([...FOMC_SEED].sort((a, b) => (a.date < b.date ? -1 : 1)));
+    expect(result.value.some((e) => e.name === "CPI" || e.name === "NFP")).toBe(false);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("returns err({kind:'fetch-error'}) when apiKey is empty string", async () => {
+  it("WR-05: returns ok(FOMC seed only) when apiKey is empty string", async () => {
     const fetchSpy: typeof fetch = vi.fn<typeof fetch>();
     const adapter = makeEconomicEventsAdapter({
       fetch: fetchSpy,
@@ -97,24 +102,39 @@ describe("makeEconomicEventsAdapter", () => {
       fomcSeed: FOMC_SEED,
     });
     const result = await adapter();
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.every((e) => e.name === "FOMC")).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("returns err via safeParse (never a throw) when the FRED payload shape is malformed", async () => {
+  it("WR-05: a malformed CPI payload drops ONLY the CPI rows — NFP + FOMC seed still returned ok", async () => {
     server.use(
-      http.get(FRED_RELEASE_DATES_URL, () =>
-        HttpResponse.json({ not: "the expected shape" }),
-      ),
+      http.get(FRED_RELEASE_DATES_URL, ({ request }) => {
+        const url = new URL(request.url);
+        const releaseId = url.searchParams.get("release_id");
+        if (releaseId === "10") {
+          return HttpResponse.json({ not: "the expected shape" }); // CPI malformed
+        }
+        return HttpResponse.json(
+          releaseDatesResponse([{ release_id: 50, date: "2026-08-07" }]), // NFP ok
+        );
+      }),
     );
     const adapter = makeAdapter();
     const result = await adapter();
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.kind).toBe("fetch-error");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.some((e) => e.name === "CPI")).toBe(false);
+    expect(result.value.find((e) => e.name === "NFP")).toEqual({
+      date: "2026-08-07",
+      name: "NFP",
+      source: "fred",
+    });
+    expect(result.value.some((e) => e.name === "FOMC")).toBe(true);
   });
 
-  it("returns err with static warn text (no key interpolation) on a non-2xx FRED response", async () => {
+  it("WR-05: returns ok(FOMC seed only), with static warn text (no key interpolation), when BOTH CPI and NFP get a non-2xx FRED response", async () => {
     server.use(
       http.get(FRED_RELEASE_DATES_URL, () => new HttpResponse(null, { status: 500 })),
     );
@@ -129,14 +149,14 @@ describe("makeEconomicEventsAdapter", () => {
     });
     const result = await adapter();
     warnSpy.mockRestore();
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.kind).toBe("fetch-error");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.every((e) => e.name === "FOMC")).toBe(true);
     const loggedStr = loggedMessages.map(String).join(" ");
     expect(loggedStr).not.toContain("SUPER_SECRET_KEY_123");
   });
 
-  it("returns err on network throw (never a fabricated event set, D-17)", async () => {
+  it("WR-05: returns ok(FOMC seed only) on a network throw — never permanently zeroes events (D-17 still holds for CPI/NFP: never fabricated)", async () => {
     server.use(
       http.get(FRED_RELEASE_DATES_URL, () => {
         throw new TypeError("network error");
@@ -144,6 +164,9 @@ describe("makeEconomicEventsAdapter", () => {
     );
     const adapter = makeAdapter();
     const result = await adapter();
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.every((e) => e.name === "FOMC")).toBe(true);
+    expect(result.value.length).toBe(FOMC_SEED.length);
   });
 });
