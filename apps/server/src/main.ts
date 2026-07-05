@@ -46,15 +46,8 @@ import {
   makeGetPickerUseCase,
   makeGetCalendarEventsWithRulesUseCase,
   makeSetRuleTagsUseCase,
-  isWithinRth,
-  isNyseHoliday,
-  detectLargeMove,
-  MOVE_WINDOW_MS,
-  MOVE_THRESHOLD_PCT,
-  isWithinCooldown,
-  SNAPSHOT_COOLDOWN_MS,
+  makeSpotObserver,
 } from "@morai/core";
-import type { SpotSample } from "@morai/core";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -74,7 +67,7 @@ import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
 import { streamRoutes, makeStreamSseRouter } from "./adapters/http/stream.routes.ts";
 import { startFlushInterval, bufferTick } from "./adapters/http/stream-fan-out.ts";
-import { connectToSidecarStream } from "./adapters/http/sidecar-sse.ts";
+import { runSidecarStreamWithReconnect } from "./adapters/http/sidecar-sse.ts";
 import { recomputeLiveGreek } from "@morai/core";
 import { makeSidecarPositionReconciler } from "@morai/adapters";
 
@@ -361,58 +354,34 @@ app.route("", mcpRouter);
 startFlushInterval();
 
 // SNAP-01 (20-06): headless event-triggered supplemental snapshot (D-04 — detection must not
-// depend on a browser tab being open). Fed by observeSpot below (RESEARCH.md Pattern 2): every
-// valid SPX tick on the sidecar stream -> rolling-window move detector -> DB cooldown ground
-// truth (Pitfall 2 — cross-process, the worker's 30-min cron also writes rows) -> fire-and-forget
-// enqueue of snapshot-calendars with trigger:'event-move'. Reuses the existing enqueue-only
-// jobBoss client above — no new PgBoss client, no HTTP hop to the worker.
-let moveWindow: ReadonlyArray<SpotSample> = [];
-
-function onSpotObserved(spot: number, tsIso: string): void {
-  const now = new Date(tsIso);
-  // D-15: same RTH+holiday gate as the worker's scheduled job — no detection off-hours.
-  if (!isWithinRth(now) || isNyseHoliday(now)) return;
-
-  const { triggered, nextWindow } = detectLargeMove(
-    moveWindow,
-    { ts: now.getTime(), price: spot },
-    MOVE_WINDOW_MS,
-    MOVE_THRESHOLD_PCT,
-  );
-  moveWindow = nextWindow;
-  if (!triggered) return;
-
-  // dispatchFrame calls observeSpot synchronously per tick — this MUST NOT throw into the
-  // tick loop. The cooldown read + enqueue are both fire-and-forget with .catch.
-  void calendarSnapshotsRepo
-    .readLatestSnapshotTime()
-    .then((result) => {
-      if (!result.ok) {
-        // Fail-safe: a DB read error skips firing rather than risking a duplicate/errant snapshot.
-        console.warn("event-move: cooldown read failed, skipping", result.error);
-        return;
-      }
-      if (isWithinCooldown(now, result.value, SNAPSHOT_COOLDOWN_MS)) return;
-
-      void jobBoss
-        .send("snapshot-calendars", { trigger: "event-move" }, { singletonKey: "event-move" })
-        .catch((e: unknown) => {
-          console.warn("snapshot-calendars: event-move enqueue failed", e);
-        });
-    })
-    .catch((e: unknown) => {
-      console.warn("event-move: cooldown read threw, skipping", e);
-    });
-}
+// depend on a browser tab being open). The observe→detect→cooldown→enqueue orchestration lives
+// in @morai/core's makeSpotObserver (REVIEW WR-04 — extracted from this composition root so it
+// is a tested unit; CR-01 — a bad sidecar timestamp is guarded there and can never throw into
+// the tick loop). This root only wires the DB cooldown read (Pitfall 2 — cross-process ground
+// truth) and the enqueue side effect onto the existing enqueue-only jobBoss client.
+const spotObserver = makeSpotObserver({
+  readLatestSnapshotTime: calendarSnapshotsRepo.readLatestSnapshotTime,
+  enqueueEventMoveSnapshot: async () => {
+    await jobBoss.send(
+      "snapshot-calendars",
+      { trigger: "event-move" },
+      { singletonKey: "event-move" },
+    );
+  },
+  onWarn: (message, detail) => {
+    console.warn(message, detail);
+  },
+});
 
 // SSE consumer: reads the sidecar's /sidecar/events stream, recomputes BSM greeks (D-02),
-// and buffers ticks for the 1-second fan-out. void-ed per floating-promise rule (typescript.md);
-// reconnect/backoff is handled inside connectToSidecarStream.
-void connectToSidecarStream(config.SIDECAR_URL, {
+// and buffers ticks for the 1-second fan-out. runSidecarStreamWithReconnect is the self-healing
+// backoff loop (REVIEW WR-02) — a disconnect reconnects instead of killing the stream. void-ed
+// per floating-promise rule (typescript.md); the loop never rejects.
+void runSidecarStreamWithReconnect(config.SIDECAR_URL, {
   fetch: globalThis.fetch,
   recompute: recomputeLiveGreek,
   bufferTick,
-  observeSpot: onSpotObserved,
+  observeSpot: (spot, tsIso) => void spotObserver.observe(spot, tsIso),
   riskFreeRate: 0.045, // ponytail: SOFR proxy; add config field if FRED integration added
   dividendYield: 0.013, // ponytail: SPX 12m trailing yield proxy
   now: () => new Date(),
