@@ -146,6 +146,97 @@ describe("makeSnapshotCalendarsHandler", () => {
     await expect(handler([makeJob()])).rejects.toThrow("DB write failed");
   });
 
+  it("propagates {trigger:'event-move'} job payload to the use-case", async () => {
+    const normalRth = new Date("2026-06-15T14:00:00Z");
+    const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
+
+    const boss = makeFakeBoss();
+    const handler = makeSnapshotCalendarsHandler({
+      snapshotCalendarsUseCase,
+      boss,
+      now: () => normalRth,
+    });
+
+    const job: Job<object> = {
+      id: "test-job-id",
+      name: "snapshot-calendars",
+      data: { trigger: "event-move" },
+      expireInSeconds: 900,
+      heartbeatSeconds: null,
+      signal: new AbortController().signal,
+    };
+
+    await handler([job]);
+
+    expect(snapshotCalendarsUseCase).toHaveBeenCalledWith({ trigger: "event-move" });
+  });
+
+  it("defaults to trigger:'scheduled' when the job payload has no trigger field", async () => {
+    const normalRth = new Date("2026-06-15T14:00:00Z");
+    const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
+
+    const boss = makeFakeBoss();
+    const handler = makeSnapshotCalendarsHandler({
+      snapshotCalendarsUseCase,
+      boss,
+      now: () => normalRth,
+    });
+
+    await handler([makeJob()]);
+
+    expect(snapshotCalendarsUseCase).toHaveBeenCalledWith({ trigger: "scheduled" });
+  });
+
+  it("defaults to trigger:'scheduled' when the job payload has an invalid trigger value", async () => {
+    const normalRth = new Date("2026-06-15T14:00:00Z");
+    const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
+
+    const boss = makeFakeBoss();
+    const handler = makeSnapshotCalendarsHandler({
+      snapshotCalendarsUseCase,
+      boss,
+      now: () => normalRth,
+    });
+
+    const job: Job<object> = {
+      id: "test-job-id",
+      name: "snapshot-calendars",
+      data: { trigger: "not-a-real-trigger" },
+      expireInSeconds: 900,
+      heartbeatSeconds: null,
+      signal: new AbortController().signal,
+    };
+
+    await handler([job]);
+
+    expect(snapshotCalendarsUseCase).toHaveBeenCalledWith({ trigger: "scheduled" });
+  });
+
+  it("an event-move trigger payload still no-ops off-hours (RTH gate unchanged)", async () => {
+    const outsideRth = new Date("2026-06-13T14:00:00Z");
+    const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
+
+    const boss = makeFakeBoss();
+    const handler = makeSnapshotCalendarsHandler({
+      snapshotCalendarsUseCase,
+      boss,
+      now: () => outsideRth,
+    });
+
+    const job: Job<object> = {
+      id: "test-job-id",
+      name: "snapshot-calendars",
+      data: { trigger: "event-move" },
+      expireInSeconds: 900,
+      heartbeatSeconds: null,
+      signal: new AbortController().signal,
+    };
+
+    await handler([job]);
+
+    expect(snapshotCalendarsUseCase).not.toHaveBeenCalled();
+  });
+
   it("when job array element is undefined: handler no-ops (pg-boss v12 guard)", async () => {
     const normalRth = new Date("2026-06-15T14:00:00Z");
 

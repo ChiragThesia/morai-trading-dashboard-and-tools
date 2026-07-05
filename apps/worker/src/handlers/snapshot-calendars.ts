@@ -1,7 +1,14 @@
 import type { Job } from "pg-boss";
+import { z } from "zod";
 import { isWithinRth, isNyseHoliday } from "@morai/core";
 import type { ForRunningSnapshotCalendars } from "@morai/core";
 import type { BossForChainHandler } from "./fetch-cboe-chain.ts";
+
+// SNAP-01 (20-06): optional job-payload trigger — parse, don't cast (typescript.md).
+// Absent field or a failed parse both default to "scheduled" (D-12 default-at-the-edge).
+const jobPayloadSchema = z.object({
+  trigger: z.enum(["scheduled", "event-move"]).optional(),
+});
 
 type SnapshotCalendarsHandlerDeps = {
   /** The wired snapshotCalendars use-case (composition root provides this). */
@@ -38,7 +45,13 @@ export function makeSnapshotCalendarsHandler(
       return;
     }
 
-    const result = await deps.snapshotCalendarsUseCase();
+    // SNAP-01 (20-06): parse the optional trigger field; absent/invalid -> "scheduled".
+    const payloadResult = jobPayloadSchema.safeParse(job.data);
+    const trigger = payloadResult.success && payloadResult.data.trigger !== undefined
+      ? payloadResult.data.trigger
+      : "scheduled";
+
+    const result = await deps.snapshotCalendarsUseCase({ trigger });
     if (!result.ok) {
       // Throw to signal failure to pg-boss — marks job as failed for retry/alerting
       throw new Error(result.error.message);
