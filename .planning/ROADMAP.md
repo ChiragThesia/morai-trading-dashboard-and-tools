@@ -58,6 +58,9 @@ the picker with the real scoring engine, while clearing v1.1 operational debt.
 - [ ] **Phase 20: Stream Watchdog, Event Snapshot & Strategy Rules** - Three independent tail
   items: honest stream-health badge, event-triggered journal snapshot, rule-firing recording
 
+- [x] **Phase 21: Control Affordance & Button System** - Shared `<Button>` primitive + filled-vs-outline
+  states applied app-wide so controls read active/inactive at a glance (completed 2026-07-05)
+
 ## Phase Details
 
 ### Phase 16: Deploy Phase-15 Image
@@ -327,6 +330,7 @@ own discuss-phase before planning, scoped explicitly to "recording layer, not a 
 | 18. Analyzer → Picker UI Redesign | v1.2 | 5/5 | Complete    | 2026-07-04 |
 | 19. Picker Engine + Economic Events | v1.2 | 9/9 | Complete   | 2026-07-04 |
 | 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 0/TBD | Not started | - |
+| 21. Control Affordance & Button System | v1.2 | 6/6 | Complete | 2026-07-05 |
 
 ## Backlog / Future Enhancements
 
@@ -356,8 +360,13 @@ focus ring, WCAG-AA contrast, adequate hit targets. Frontend-only (`apps/web`); 
 contract change.
 **Requirements**: UI/UX polish (no new backend requirements)
 **Depends on:** Phase 19 (the picker/Analyzer UI this restyles)
-**Plans:** 0 plans
+**Plans:** Executed directly (no formal PLAN.md) — 6 atomic TDD commits `68a44b5..31ef2ba`,
+web 386 tests green, deployed + verified live on morai.wtf 2026-07-05.
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 21 to break down)
+- [x] 21-01 Shared `<Button>` primitive (primary/secondary/ghost/destructive/toggle · tone · focus ring)
+- [x] 21-02 PayoffControls toggles + step buttons → primitive (filled-accent active)
+- [x] 21-03 CandidateCard Combine (amber) / Copy (green) / × (destructive)
+- [x] 21-04 Analyzer Analyze (primary) / Clear-all / Retry / Copy-TOS
+- [x] 21-05 Shell nav tabs — strengthened active state
