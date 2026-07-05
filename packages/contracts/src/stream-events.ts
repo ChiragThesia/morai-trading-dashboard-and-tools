@@ -96,3 +96,18 @@ export const streamFillEvent = z.object({
 });
 
 export type StreamFillEvent = z.infer<typeof streamFillEvent>;
+
+// ─── streamPingEvent ──────────────────────────────────────────────────────────
+
+/**
+ * SSE "ping" event payload — server-pushed heartbeat carrying only the RTH flag (D-03).
+ * Consumed by the client's stream-status derivation (WATCH-01, deriveStreamStatus).
+ *
+ * Security (T-20-01): isRth is the ONLY field. Never batch other state into this
+ * event — it is a minimal boolean channel, not a general-purpose payload.
+ */
+export const streamPingEvent = z.object({
+  isRth: z.boolean(),
+});
+
+export type StreamPingEvent = z.infer<typeof streamPingEvent>;

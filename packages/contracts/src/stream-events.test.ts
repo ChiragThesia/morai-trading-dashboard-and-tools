@@ -12,6 +12,7 @@ import {
   streamLiveGreekEvent,
   streamReconcileEvent,
   streamFillEvent,
+  streamPingEvent,
 } from "./stream-events.ts";
 
 // ─── streamTicketResponse ─────────────────────────────────────────────────────
@@ -180,5 +181,37 @@ describe("streamFillEvent", () => {
       activity: { MESSAGE_TYPE: "OrderFill" },
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// ─── streamPingEvent ──────────────────────────────────────────────────────────
+
+describe("streamPingEvent", () => {
+  it("round-trips isRth: true", () => {
+    const result = streamPingEvent.parse({ isRth: true });
+    expect(result).toEqual({ isRth: true });
+  });
+
+  it("round-trips isRth: false", () => {
+    const result = streamPingEvent.parse({ isRth: false });
+    expect(result).toEqual({ isRth: false });
+  });
+
+  it("rejects a missing isRth field", () => {
+    const result = streamPingEvent.safeParse({});
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-boolean isRth", () => {
+    const result = streamPingEvent.safeParse({ isRth: "yes" });
+    expect(result.success).toBe(false);
+  });
+
+  it("strips extra keys (additive-safe)", () => {
+    const result = streamPingEvent.safeParse({ isRth: true, extra: 1 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ isRth: true });
+    }
   });
 });
