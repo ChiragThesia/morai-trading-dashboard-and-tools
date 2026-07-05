@@ -141,3 +141,8 @@ None - no external service configuration required. No new dependencies, no migra
 ---
 *Phase: 20-stream-watchdog-event-snapshot-strategy-rules*
 *Completed: 2026-07-05*
+
+## Self-Check: PASSED
+
+All 7 created/modified source files and the SUMMARY.md file verified present on disk.
+All 4 commit hashes (121459b, c099ea8, c91ce60, 00165c6) verified present in git log.
