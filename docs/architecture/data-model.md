@@ -245,6 +245,26 @@ entry_thesis  text NULL    -- free-text or tag for L4 strategy-rules attach poin
 This is set at OPEN event creation and is never required. It acts as a hook for the future L4
 strategy-rules layer. No default value; non-destructive ALTER TABLE.
 
+### `calendar_event_annotations` — strategy-rule tags, orthogonal to rebuild (Phase 20, RULE-01)
+
+```
+fill_ids_hash   varchar(64) PK    -- soft reference to calendar_events.fill_ids_hash; NOT a
+                                   -- foreign key (D24 — see stack-decisions.md)
+rule_tags       text[] NOT NULL DEFAULT '{}'   -- enterRuleTag | exitRuleTag | rollRuleTag values
+other_note      text NULL         -- free text; required by the CONTRACT layer (not a DB CHECK)
+                                   -- when 'other' is among rule_tags (D-21)
+updated_at      timestamptz NOT NULL DEFAULT now()
+```
+
+**No foreign key, by design (D24/D-09).** `rebuildJournal` deletes and re-derives `calendar_events`
+rows; a FK from this table to `calendar_events` would either CASCADE-wipe the annotation on delete
+or RESTRICT-block the rebuild. `fill_ids_hash` is deterministic (SHA-256 of the sorted fill UUIDs),
+so a rebuild that reproduces the same fill set reproduces the same hash and the annotation
+transparently re-attaches. A hash that no longer matches any current event is orphaned — the read
+use-case (plan 20-09) logs and omits it, never deletes it.
+
+Ships empty (D-16) — no backfill, and `calendars.entry_thesis` free text is not migrated here.
+
 ### `broker_tokens` — Schwab OAuth token storage (brokerage context, Phase 4)
 
 ```

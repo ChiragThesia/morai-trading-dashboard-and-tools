@@ -30,6 +30,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D21 | BSM kernel leaf | `packages/quant` — pure math leaf imported by both `core` and `web` (see D21 section) | Low (call sites + tsconfig refs + ESLint boundary) | — |
 | D22 | Python schwab-py sidecar | `apps/sidecar/` — FastAPI + schwab-py; sole Schwab auth + REST proxy + streamer; internal Railway network only | Medium (Python service + Railway topology) | TS stack fully covers Schwab streaming natively |
 | D23 | SSE fan-out + opaque ticket auth | In-process `Set<SSEStreamingApi>` fan-out in `apps/server`; single-use ~30s UUID ticket for `GET /api/stream` (EventSource cannot send `Authorization` headers — D-01) | Low (single server, in-memory state fits single Railway instance per D11) | Multi-user scale OR Supabase Realtime covers the use-case |
+| D24 | RULE-01 annotation storage | `calendar_event_annotations` keyed by `fill_ids_hash`, deliberately NO foreign key to `calendar_events` | Low (plain table, no FK to manage) | `rebuildJournal` stops being delete-then-reinsert |
 
 ## D1 — Bun
 
@@ -355,3 +356,36 @@ GW-01 was carried into Phase 11 locked as "no schema change." D-02 pre-authorize
 **Revisit trigger**: Multi-instance deployment (Railway horizontal scaling) OR Supabase Realtime covers the use-case at lower complexity.
 
 **References**: Phase 12 CONTEXT.md D-01, D-07, D-08; `docs/architecture/streaming-fanout.md`.
+
+## D24 — RULE-01 annotations table: deliberately no foreign key (Phase 20, D-09)
+
+**Context**: `rebuildJournal` (`packages/core/src/journal/application/rebuildJournal.ts`) is
+delete-then-reinsert — it DELETEs all `calendar_events` rows for a calendar, then re-derives them
+from broker fills. Any column added directly to `calendar_events` is wiped on every rebuild (the
+latent `entryThesis` data-loss bug from Phase 5, D-07). RULE-01 needs rule-tag annotations to
+survive rebuilds, so they cannot live on `calendar_events` itself.
+
+**Decision**: store annotations in a separate table, `calendar_event_annotations`, keyed by
+`fill_ids_hash` — the same idempotency key already used on `calendar_events`, but deliberately
+**not** declared as a foreign key reference to it. A real FK forces one of two bad outcomes: `ON
+DELETE CASCADE` silently wipes the annotation the instant its parent event row is deleted mid-rebuild
+(before the reinsert step restores it), or `ON DELETE RESTRICT` (the default) blocks the DELETE
+outright and breaks the rebuild entirely. Both defeat the point of an orthogonal annotation store.
+The correct behavior here is the opposite of referential integrity — the annotation must survive the
+deletion of the row it is nominally "about".
+
+**How reads re-attach**: `fill_ids_hash` is deterministic (SHA-256 of the sorted fill UUIDs) — a
+rebuild that re-derives the identical fill set reproduces the identical hash, so an existing
+annotation transparently re-attaches to the recreated event row. If the underlying fill set
+legitimately changes (a rare correction), the hash changes and the old annotation becomes orphaned:
+the RULE-01 read use-case (plan 20-09) logs and omits an orphan, it never deletes it (D-09).
+
+**Ships empty**: no backfill (D-16, Phase 20 CONTEXT). `calendars.entry_thesis`'s existing free-text
+data stays where it is, deprecated-in-place — it is not migrated into this table.
+
+**Swap cost**: Low — a plain table with a non-FK indexed column has no FK to manage.
+**Revisit trigger**: `rebuildJournal` moves from delete-then-reinsert to an in-place upsert, which
+would remove the reason for the no-FK design.
+
+**References**: Phase 20 RESEARCH.md Pitfall 3; `packages/adapters/src/postgres/schema.ts`
+(`calendarEventAnnotations`); `packages/adapters/src/postgres/migrations/0017_calendar_event_annotations.sql`.

@@ -477,6 +477,24 @@ export const pickerSnapshots = pgTable("picker_snapshot", {
   snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
 }).enableRLS();
 
+// ─── 19. calendar_event_annotations — RULE-01 strategy-rule tags (Phase 20) ──
+// Orthogonal to calendar_events — survives rebuildJournal's delete-then-reinsert cycle
+// (D-09/D24). fillIdsHash is a SOFT reference to calendar_events.fillIdsHash: a plain
+// varchar(64) PRIMARY KEY, deliberately NOT a foreign key. rebuildJournal deletes and
+// re-derives calendar_events rows; a real FK would either CASCADE-wipe this table's rows
+// on delete or RESTRICT-block the rebuild outright (RESEARCH Pitfall 3). Do NOT add a
+// .references() call here — see docs/architecture/stack-decisions.md D24.
+// Ships EMPTY — no backfill (D-16); calendars.entryThesis is not migrated into this table.
+
+export const calendarEventAnnotations = pgTable("calendar_event_annotations", {
+  fillIdsHash: varchar("fill_ids_hash", { length: 64 }).primaryKey(),
+  ruleTags: text("rule_tags").array().notNull().default([]),
+  // D-21: 'other' among ruleTags requires a non-empty otherNote — enforced at the
+  // contract layer (packages/contracts/src/journal-rules.ts), NOT a DB CHECK constraint.
+  otherNote: text("other_note"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };
