@@ -30,6 +30,8 @@ export type { ForRunningFetchChain, FetchChainDeps } from "./journal/index.ts";
 export { makeFetchRateUseCase } from "./journal/index.ts";
 export { makeComputeBsmGreeksUseCase } from "./journal/index.ts";
 export { bsmPrice, bsmGreeks, bsmVega, invertIv, computeT, isThirdFriday, isWithinRth, isNyseHoliday, calendarDte } from "./journal/index.ts";
+// SNAP-01 (20-04/20-06): cooldown predicate — composed in apps/server's onSpotObserved wiring.
+export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";
 // Phase 3 calendar domain types and ports
 export type {
@@ -233,6 +235,10 @@ export type {
 } from "./streaming/index.ts";
 export { recomputeLiveGreek } from "./streaming/index.ts";
 export type { LiveGreekSkip } from "./streaming/index.ts";
+// SNAP-01 (20-04/20-06): rolling-window % move detector — composed in apps/server's
+// onSpotObserved wiring (Pattern 2).
+export { detectLargeMove, MOVE_WINDOW_MS, MOVE_THRESHOLD_PCT } from "./streaming/index.ts";
+export type { SpotSample } from "./streaming/index.ts";
 
 // ─── COT bounded context (Phase 13) ───────────────────────────────────────────
 // CFTC COT positioning domain types + driven ports (COT-01, COT-02)

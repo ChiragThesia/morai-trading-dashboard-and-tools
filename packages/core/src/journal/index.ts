@@ -159,3 +159,6 @@ export type { IvError } from "./domain/iv-inversion.ts";
 export { computeT, isThirdFriday, calendarDte } from "./domain/dte.ts";
 export { isWithinRth } from "./domain/rth-window.ts";
 export { isNyseHoliday } from "./domain/nyse-holidays.ts";
+// SNAP-01 (20-04/20-06): cross-process cooldown predicate — composed in apps/server's
+// onSpotObserved wiring (Pattern 2, Pitfall 2).
+export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./domain/snapshot-cooldown.ts";
