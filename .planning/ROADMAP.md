@@ -303,7 +303,7 @@ cheapest/most-isolated first per research.
 **Note**: The RULE-01 sub-item is the most open-ended item in the milestone (rule taxonomy,
 firing-vs-execution boundary, how `entry_thesis` gets populated). Per research, it should get its
 own discuss-phase before planning, scoped explicitly to "recording layer, not a DSL."
-**Plans**: 8/11 plans executed
+**Plans**: 9/11 plans executed
 **UI hint**: yes
 
 Sequenced cheapest-first, three independent deploy+UAT cycles (D-18): WATCH-01 → SNAP-01 → RULE-01.
@@ -337,7 +337,7 @@ Plans:
 
 **Wave 7** *(RULE-01 use-cases)*
 
-- [ ] 20-09-PLAN.md — RULE-01 use-cases: ForReading/WritingAnnotations ports + getCalendarEventsWithRules (new read surface) + setRuleTags (RULE-01)
+- [x] 20-09-PLAN.md — RULE-01 use-cases: ForReading/WritingAnnotations ports + getCalendarEventsWithRules (new read surface) + setRuleTags (RULE-01)
 
 **Wave 8** *(RULE-01 adapter surface)*
 
@@ -371,7 +371,7 @@ Plans:
 | 17.1. Overview Payoff — TOS Graph + Interactivity | v1.2 | 5/5 | Complete    | 2026-07-04 |
 | 18. Analyzer → Picker UI Redesign | v1.2 | 5/5 | Complete    | 2026-07-04 |
 | 19. Picker Engine + Economic Events | v1.2 | 9/9 | Complete    | 2026-07-04 |
-| 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 8/11 | In Progress|  |
+| 20. Stream Watchdog, Event Snapshot & Strategy Rules | v1.2 | 9/11 | In Progress|  |
 | 21. Control Affordance & Button System | v1.2 | 6/6 | Complete | 2026-07-05 |
 
 ## Backlog / Future Enhancements
