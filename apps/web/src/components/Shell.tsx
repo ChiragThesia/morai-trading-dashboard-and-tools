@@ -161,10 +161,10 @@ export function Shell({
                     handleNavigate(tab);
                   }}
                   className={cn(
-                    "min-h-8 min-w-11 rounded-md px-3 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] uppercase transition-colors outline-none focus-visible:ring-2 focus-visible:ring-violet",
+                    "min-h-8 min-w-11 cursor-pointer rounded-md border-b-2 px-3 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] uppercase transition-colors outline-none focus-visible:ring-2 focus-visible:ring-violet",
                     isActive
-                      ? "bg-raise text-txt"
-                      : "text-muted-foreground hover:text-txt",
+                      ? "border-violet bg-violet/10 text-violet"
+                      : "border-transparent text-dim hover:text-txt",
                   )}
                 >
                   {tab}
