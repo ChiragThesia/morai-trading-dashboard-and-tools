@@ -52,7 +52,10 @@ function snap(overrides: Partial<Snapshot> & { time: string }): Snapshot {
   };
 }
 
-const SERIES: ReadonlyArray<Snapshot> = [
+// LifecycleChartProps.snapshots is LifecycleResponse["snapshots"], a mutable array (the
+// zod z.array() inference) — declared as a plain array here, not ReadonlyArray, so it
+// assigns without a variance error.
+const SERIES: Snapshot[] = [
   snap({
     time: "2026-06-22T14:00:00.000Z",
     spot: "7450",
@@ -272,7 +275,7 @@ describe("LifecycleChart — shared crosshair + tooltip (Task 2)", () => {
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
     if (svg === null) throw new Error("unreachable");
-    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+    const rect: DOMRect = {
       x: 0,
       y: 0,
       width: 840,
@@ -282,8 +285,31 @@ describe("LifecycleChart — shared crosshair + tooltip (Task 2)", () => {
       right: 840,
       bottom: 700,
       toJSON: () => "",
-    } as DOMRect);
+    };
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue(rect);
+    // jsdom doesn't implement clientLeft/clientTop on SVGElement (they're 0 in any real
+    // browser after layout) — @visx/event's localPoint fallback path subtracts them, so an
+    // undefined value here would NaN the mapping. Stub them the way a real layout would.
+    Object.defineProperty(svg, "clientLeft", { value: 0, configurable: true });
+    Object.defineProperty(svg, "clientTop", { value: 0, configurable: true });
     return svg;
+  }
+
+  // jsdom (this environment) does not implement a `PointerEvent` constructor at all
+  // (`window.PointerEvent` is undefined), so `fireEvent.pointerMove`'s event-map lookup
+  // silently falls back to a bare `Event` with no clientX/clientY — @visx/event's
+  // localPoint then computes NaN. Firing a `MouseEvent` typed as "pointermove"/
+  // "pointerleave" carries clientX/clientY correctly and still reaches the component's
+  // onPointerMove/onPointerLeave handlers (React's synthetic-event system dispatches by
+  // the native event's `.type` string, not its constructor).
+  function firePointerMove(svg: SVGSVGElement, clientX: number, clientY: number): void {
+    fireEvent(svg, new MouseEvent("pointermove", { clientX, clientY, bubbles: true }));
+  }
+  function firePointerLeave(svg: SVGSVGElement): void {
+    // React synthesizes onPointerLeave from the bubbling native "pointerout" event (plus
+    // a relatedTarget check), not from a native "pointerleave" listener — mirrors how
+    // onMouseLeave is derived from "mouseout".
+    fireEvent(svg, new MouseEvent("pointerout", { bubbles: true, relatedTarget: null }));
   }
 
   it("reports the hovered index via onCrosshairChange on move and null on leave", () => {
@@ -294,10 +320,10 @@ describe("LifecycleChart — shared crosshair + tooltip (Task 2)", () => {
     const svg = svgOf(container);
 
     // x=54 is the chart's left edge (index 0); clientX maps 1:1 given width=840=SVG_W.
-    fireEvent.pointerMove(svg, { clientX: 54, clientY: 100 });
+    firePointerMove(svg, 54, 100);
     expect(onCrosshairChange).toHaveBeenCalledWith(0);
 
-    fireEvent.pointerLeave(svg);
+    firePointerLeave(svg);
     expect(onCrosshairChange).toHaveBeenLastCalledWith(null);
   });
 
@@ -305,7 +331,7 @@ describe("LifecycleChart — shared crosshair + tooltip (Task 2)", () => {
     const { container } = render(<LifecycleChart snapshots={SERIES} />);
     const svg = svgOf(container);
 
-    fireEvent.pointerMove(svg, { clientX: 54, clientY: 100 });
+    firePointerMove(svg, 54, 100);
 
     const tooltip = screen.getByTestId("lifecycle-tooltip");
     const rows = [
@@ -341,7 +367,7 @@ describe("LifecycleChart — shared crosshair + tooltip (Task 2)", () => {
     const x0 = 54;
     const x1 = 840 - 56;
     const gapX = x0 + (2 / (SERIES.length - 1)) * (x1 - x0);
-    fireEvent.pointerMove(svg, { clientX: gapX, clientY: 100 });
+    firePointerMove(svg, gapX, 100);
 
     const tooltip = screen.getByTestId("lifecycle-tooltip");
     expect(tooltip.textContent).toContain("feed lapsed — no data");
