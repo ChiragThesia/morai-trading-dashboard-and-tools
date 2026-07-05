@@ -199,3 +199,7 @@ export type { SpotObserverDeps, ForObservingSpot } from "./application/observeSp
 // JRNL-01 (22-01): forward-vol domain fn — the distinct-edge series (D-02/D-07), never NaN.
 export { computeForwardVol } from "./domain/fwd-vol.ts";
 export type { ForwardVolResult } from "./domain/fwd-vol.ts";
+// JRNL-01 (22-02): per-interval P&L attribution — hero decomposition + exact residual plug
+// (D-01/D-05/D-06), honest gap handling (isGap + null cumulatives, never bridged).
+export { computeAttributionSeries, isGapRow } from "./domain/attribution.ts";
+export type { AttributionPoint } from "./domain/attribution.ts";
