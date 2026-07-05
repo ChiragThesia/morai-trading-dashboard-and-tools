@@ -51,7 +51,9 @@ function formatBreakdownCaption(entry: BreakdownEntry): string {
     case "gexFit":
       return `${(entry.rawValue * 100).toFixed(0)}%`;
     case "eventAdjustment":
-      return entry.rawValue >= 1 ? "ok" : "−";
+      // rawValue is the penalty sum (0 = clean, higher = worse) — WR-02: a penalty present
+      // must read as the warning state, not "ok".
+      return entry.rawValue > 0 ? "−" : "ok";
     case "beVsEm":
       return `${(entry.rawValue * 100).toFixed(0)}%`;
   }

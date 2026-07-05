@@ -494,4 +494,70 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
     expect(screen.getByText("GEX unavailable")).toBeTruthy();
     expect(screen.getByText("events unavailable")).toBeTruthy();
   });
+
+  it("WR-02: shows the warning caption for a high-penalty (evtPenalty >= 1) eventAdjustment, not 'ok'", () => {
+    const highPenaltyBreakdown: BreakdownEntry[] = [
+      { criterion: "slope", weight: 40, rawValue: 0.253841, contribution: 42.31 },
+      { criterion: "fwdEdge", weight: 25, rawValue: 0.1, contribution: 30 },
+      { criterion: "gexFit", weight: 15, rawValue: 1, contribution: 100 },
+      { criterion: "eventAdjustment", weight: 10, rawValue: 1, contribution: 0 }, // worst case: FOMC + CPI
+      { criterion: "beVsEm", weight: 10, rawValue: 0.5329, contribution: 53.29 },
+    ];
+    const candidate = makeCandidate({
+      id: "high-penalty-1",
+      breakdown: highPenaltyBreakdown,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    const caption = screen.getByTestId("breakdown-bar-fill-eventAdjustment").parentElement
+      ?.nextElementSibling;
+    expect(caption?.textContent).toBe("−");
+  });
+
+  it("WR-02: shows the clean caption for a zero-penalty (evtPenalty === 0) eventAdjustment, not '−'", () => {
+    const cleanBreakdown: BreakdownEntry[] = [
+      { criterion: "slope", weight: 40, rawValue: 0.253841, contribution: 42.31 },
+      { criterion: "fwdEdge", weight: 25, rawValue: 0.1, contribution: 30 },
+      { criterion: "gexFit", weight: 15, rawValue: 1, contribution: 100 },
+      { criterion: "eventAdjustment", weight: 10, rawValue: 0, contribution: 100 }, // clean: no front events
+      { criterion: "beVsEm", weight: 10, rawValue: 0.5329, contribution: 53.29 },
+    ];
+    const candidate = makeCandidate({
+      id: "clean-1",
+      breakdown: cleanBreakdown,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    const caption = screen.getByTestId("breakdown-bar-fill-eventAdjustment").parentElement
+      ?.nextElementSibling;
+    expect(caption?.textContent).toBe("ok");
+  });
 });
