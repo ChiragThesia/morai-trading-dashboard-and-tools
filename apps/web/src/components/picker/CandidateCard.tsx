@@ -92,6 +92,13 @@ export interface CandidateCardProps {
   readonly source: "schwab" | "cboe";
   readonly gexContextStatus: "ok" | "stale" | "missing";
   readonly eventsContextStatus: "ok" | "stale" | "missing";
+  /**
+   * True for the single user-pasted calendar (id "pasted") pinned atop the rail. Swaps the
+   * numeric score for a "PASTED" pill, the sub-line for DTE/debit/IV (no θ/vega — a paste has
+   * no greeks, and lean means no fabricated numbers), and suppresses the scoring-context tags
+   * (freshness/GEX/events) that don't apply to an ad-hoc paste. Defaults to false.
+   */
+  readonly pasted?: boolean;
   readonly onSelect: (candidate: PickerCandidate) => void;
   readonly onToggleCombine: (candidate: PickerCandidate) => void;
   readonly onCopy: (candidate: PickerCandidate) => void;
@@ -106,6 +113,7 @@ export function CandidateCard({
   source,
   gexContextStatus,
   eventsContextStatus,
+  pasted = false,
   onSelect,
   onToggleCombine,
   onCopy,
@@ -127,33 +135,45 @@ export function CandidateCard({
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-display text-sm font-bold text-txt">{candidate.name}</span>
-        <span className="font-display text-sm font-bold text-violet">{candidate.score}</span>
+        {pasted ? (
+          <span className="rounded-sm bg-violet/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-violet">
+            PASTED
+          </span>
+        ) : (
+          <span className="font-display text-sm font-bold text-violet">{candidate.score}</span>
+        )}
       </div>
 
       <div className="mt-0.5 font-mono text-[9px] text-dim">
-        {`DTE ${candidate.frontLeg.dte}/${candidate.backLeg.dte} · debit $${candidate.debit.toFixed(0)} · θ +${candidate.theta.toFixed(1)}/d · vega +${candidate.vega.toFixed(0)}`}
-        {candidate.frontEvents.map((ev) => (
-          <span key={`f-${ev}`} className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">
-            {`${ev}◂f`}
-          </span>
-        ))}
-        {candidate.backEvents.map((ev) => (
-          <span key={`b-${ev}`} className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber opacity-60">
-            {`${ev}◂b`}
-          </span>
-        ))}
-        {!hasEvents && (
-          <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-dim">clean</span>
-        )}
-        <span className="ml-1 flex items-center gap-1 rounded-sm bg-raise px-1 py-0.5">
-          <span className={cn("size-1.5 rounded-full", staleness.fresh ? "bg-up" : "bg-amber")} />
-          {`${staleness.label} · ${source}`}
-        </span>
-        {guardGexFit && (
-          <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">GEX unavailable</span>
-        )}
-        {guardEventAdjustment && (
-          <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">events unavailable</span>
+        {pasted ? (
+          `DTE ${candidate.frontLeg.dte}/${candidate.backLeg.dte} · debit $${candidate.debit.toFixed(0)} · IV ${(candidate.frontLeg.iv * 100).toFixed(1)}%`
+        ) : (
+          <>
+            {`DTE ${candidate.frontLeg.dte}/${candidate.backLeg.dte} · debit $${candidate.debit.toFixed(0)} · θ +${candidate.theta.toFixed(1)}/d · vega +${candidate.vega.toFixed(0)}`}
+            {candidate.frontEvents.map((ev) => (
+              <span key={`f-${ev}`} className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">
+                {`${ev}◂f`}
+              </span>
+            ))}
+            {candidate.backEvents.map((ev) => (
+              <span key={`b-${ev}`} className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber opacity-60">
+                {`${ev}◂b`}
+              </span>
+            ))}
+            {!hasEvents && (
+              <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-dim">clean</span>
+            )}
+            <span className="ml-1 flex items-center gap-1 rounded-sm bg-raise px-1 py-0.5">
+              <span className={cn("size-1.5 rounded-full", staleness.fresh ? "bg-up" : "bg-amber")} />
+              {`${staleness.label} · ${source}`}
+            </span>
+            {guardGexFit && (
+              <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">GEX unavailable</span>
+            )}
+            {guardEventAdjustment && (
+              <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">events unavailable</span>
+            )}
+          </>
         )}
       </div>
 
