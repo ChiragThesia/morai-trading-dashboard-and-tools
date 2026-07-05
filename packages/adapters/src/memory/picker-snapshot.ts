@@ -12,8 +12,11 @@ import type {
  *
  * Implements ForPersistingPickerSnapshot + ForReadingPickerSnapshot using an append-only
  * array (D-06 keeps history, unlike GEX's upsert-by-cycleTime convention) — a second
- * insert never replaces a prior row. readPickerSnapshot returns the row with the
- * max observedAt, or null when the store is empty.
+ * insert with a NEW observedAt never replaces a prior row. A second insert with a
+ * DUPLICATE observedAt (a same-cohort re-trigger) is a no-op, mirroring the Postgres
+ * adapter's `onConflictDoNothing` (WR-01) — first-write-wins, never an upsert.
+ * readPickerSnapshot returns the row with the max observedAt, or null when the store
+ * is empty.
  *
  * Always returns ok(...) — no network or DB calls, no error paths.
  *
@@ -33,6 +36,10 @@ export function makeMemoryPickerSnapshotRepo(): MemoryPickerSnapshotRepo {
   const insertPickerSnapshot: ForPersistingPickerSnapshot = async (
     row: PickerSnapshotRow,
   ): Promise<Result<void, StorageError>> => {
+    const isDuplicate = rows.some(
+      (existing) => existing.observedAt.getTime() === row.observedAt.getTime(),
+    );
+    if (isDuplicate) return ok(undefined); // first-write-wins (WR-01) — no-op, mirrors onConflictDoNothing
     rows.push(row); // append-only (D-06) — never replaces an existing row
     return ok(undefined);
   };

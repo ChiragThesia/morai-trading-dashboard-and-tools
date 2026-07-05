@@ -108,5 +108,26 @@ export function runPickerSnapshotContractTests(
       const count = await repo.countSnapshots();
       expect(count).toBe(2);
     });
+
+    it("idempotent on duplicate observedAt (WR-01): re-insert does not error, and readLatest keeps the first-written snapshot", async () => {
+      const first = makeRow(T1, { spot: 7381 });
+      const retrigger = makeRow(T1, { spot: 9999 }); // same observedAt — a same-cohort re-trigger
+
+      const insert1 = await repo.insertPickerSnapshot(first);
+      expect(insert1.ok).toBe(true);
+
+      const insert2 = await repo.insertPickerSnapshot(retrigger);
+      expect(insert2.ok).toBe(true); // must NOT surface a PK-violation StorageError
+
+      const readResult = await repo.readPickerSnapshot();
+      expect(readResult.ok).toBe(true);
+      if (!readResult.ok) return;
+      expect(readResult.value?.observedAt.getTime()).toBe(T1.getTime());
+      expect(readResult.value?.snapshot.spot).toBe(7381); // first-write-wins, not overwritten
+
+      // No duplicate row was appended for the same observedAt.
+      const count = await repo.countSnapshots();
+      expect(count).toBe(1);
+    });
   });
 }
