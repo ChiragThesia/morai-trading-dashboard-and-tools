@@ -14,7 +14,7 @@
  *   - usePositions: mock (for market-strip if any)
  *   - rpc.ts / supabase.ts: prevent real network calls
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -30,6 +30,10 @@ vi.mock("../hooks/useRebuildJournal.ts", () => ({
     isError: false,
     isSuccess: false,
   })),
+}));
+
+vi.mock("../hooks/useRuleTags.ts", () => ({
+  useRuleTags: vi.fn(),
 }));
 
 vi.mock("../lib/rpc.ts", () => ({
@@ -52,8 +56,13 @@ vi.mock("../lib/supabase.ts", () => ({
 // ─── Import screen + mocks (AFTER vi.mock hoisting) ──────────────────────────
 import { Journal } from "./Journal.tsx";
 import { useJournal } from "../hooks/useJournal.ts";
+import { useRuleTags } from "../hooks/useRuleTags.ts";
+import type { UseRuleTagsResult } from "../hooks/useRuleTags.ts";
+import { fireEvent } from "@testing-library/react";
+import type { EventWithRulesEntry } from "@morai/contracts";
 
 const mockUseJournal = vi.mocked(useJournal);
+const mockUseRuleTags = vi.mocked(useRuleTags);
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -111,6 +120,41 @@ function makeHistoryTrade() {
   };
 }
 
+// ─── RULE-01 fixtures ────────────────────────────────────────────────────────
+
+const OPEN_HASH = "1".repeat(64);
+const CLOSE_HASH = "2".repeat(64);
+const ROLL_HASH_1 = "3".repeat(64);
+const ROLL_HASH_2 = "4".repeat(64);
+
+function makeRuleEvent(overrides: {
+  eventType: "OPEN" | "CLOSE" | "ROLL";
+  fillIdsHash: string;
+  eventedAt?: string;
+  tags?: ReadonlyArray<string>;
+  otherNote?: string | null;
+}): EventWithRulesEntry {
+  return {
+    id: "550e8400-e29b-41d4-a716-446655440099",
+    eventType: overrides.eventType,
+    eventedAt: overrides.eventedAt ?? "2026-06-12T14:00:00.000Z",
+    fillIdsHash: overrides.fillIdsHash,
+    legOccSymbol: "SPXW  260712P07375000",
+    tags: overrides.tags !== undefined ? [...overrides.tags] : [],
+    otherNote: overrides.otherNote ?? null,
+  };
+}
+
+function emptyRuleTagsResult(): UseRuleTagsResult {
+  return {
+    events: [],
+    isPending: false,
+    errors: {},
+    save: vi.fn<UseRuleTagsResult["save"]>(),
+    retry: vi.fn<UseRuleTagsResult["retry"]>(),
+  };
+}
+
 function renderJournal(trades?: ReadonlyArray<{
   id: string;
   calendarId: string;
@@ -129,6 +173,10 @@ function renderJournal(trades?: ReadonlyArray<{
 }
 
 describe("Journal screen", () => {
+  beforeEach(() => {
+    mockUseRuleTags.mockReturnValue(emptyRuleTagsResult());
+  });
+
   afterEach(() => {
     cleanup();
     vi.resetAllMocks();
@@ -213,5 +261,163 @@ describe("Journal screen", () => {
 
     // The rebuild button trigger text
     expect(screen.getByText(/Rebuild journal/i)).toBeDefined();
+  });
+});
+
+describe("Journal screen — rule-tag control (RULE-01)", () => {
+  beforeEach(() => {
+    mockUseJournal.mockReturnValue(
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      { data: { snapshots: [] }, isPending: false } as unknown as ReturnType<typeof useJournal>,
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.resetAllMocks();
+  });
+
+  it("ENTER always renders; EXIT shows 'Available at close.' before a CLOSE event; no ROLL section without a ROLL event", () => {
+    mockUseRuleTags.mockReturnValue({
+      ...emptyRuleTagsResult(),
+      events: [makeRuleEvent({ eventType: "OPEN", fillIdsHash: OPEN_HASH })],
+    });
+
+    renderJournal([makeHistoryTrade()]);
+
+    expect(screen.getByText("ENTER")).toBeDefined();
+    expect(screen.getByText("IV skew favorable")).toBeDefined();
+    expect(screen.getByText("EXIT")).toBeDefined();
+    expect(screen.getByText("Available at close.")).toBeDefined();
+    expect(screen.queryByText("ROLL")).toBeNull();
+    // the untouched free-text textarea is still present
+    expect(screen.getByPlaceholderText(/Entry thesis, management, post-mortem/)).toBeDefined();
+  });
+
+  it("EXIT chip row renders once the trade has a CLOSE event", () => {
+    mockUseRuleTags.mockReturnValue({
+      ...emptyRuleTagsResult(),
+      events: [
+        makeRuleEvent({ eventType: "OPEN", fillIdsHash: OPEN_HASH }),
+        makeRuleEvent({ eventType: "CLOSE", fillIdsHash: CLOSE_HASH }),
+      ],
+    });
+
+    renderJournal([makeHistoryTrade()]);
+
+    expect(screen.getByText("Profit target")).toBeDefined();
+    expect(screen.queryByText("Available at close.")).toBeNull();
+  });
+
+  it("renders one ROLL section per ROLL event, each with its own timestamp label", () => {
+    mockUseRuleTags.mockReturnValue({
+      ...emptyRuleTagsResult(),
+      events: [
+        makeRuleEvent({ eventType: "OPEN", fillIdsHash: OPEN_HASH }),
+        makeRuleEvent({
+          eventType: "ROLL",
+          fillIdsHash: ROLL_HASH_1,
+          eventedAt: "2026-06-13T15:00:00.000Z",
+        }),
+        makeRuleEvent({
+          eventType: "ROLL",
+          fillIdsHash: ROLL_HASH_2,
+          eventedAt: "2026-06-14T15:00:00.000Z",
+        }),
+      ],
+    });
+
+    renderJournal([makeHistoryTrade()]);
+
+    expect(screen.getAllByText("ROLL").length).toBe(2);
+    expect(screen.getAllByText("Defend tested side").length).toBe(2);
+  });
+
+  it("clicking a non-OTHER chip saves immediately with the toggled tag set", () => {
+    const mockSave = vi.fn<UseRuleTagsResult["save"]>();
+    mockUseRuleTags.mockReturnValue({
+      ...emptyRuleTagsResult(),
+      events: [makeRuleEvent({ eventType: "OPEN", fillIdsHash: OPEN_HASH })],
+      save: mockSave,
+    });
+
+    renderJournal([makeHistoryTrade()]);
+
+    fireEvent.click(screen.getByText("IV skew favorable"));
+
+    expect(mockSave).toHaveBeenCalledWith(OPEN_HASH, ["iv-skew-favorable"], undefined);
+  });
+
+  it("OTHER requires a note before it can save — blocks with validation copy, saves once a note is typed", () => {
+    const mockSave = vi.fn<UseRuleTagsResult["save"]>();
+    mockUseRuleTags.mockReturnValue({
+      ...emptyRuleTagsResult(),
+      events: [makeRuleEvent({ eventType: "OPEN", fillIdsHash: OPEN_HASH })],
+      save: mockSave,
+    });
+
+    renderJournal([makeHistoryTrade()]);
+
+    fireEvent.click(screen.getByText("Other"));
+
+    const noteInput = screen.getByPlaceholderText('Note for "Other"…');
+    expect(noteInput).toBeDefined();
+
+    // blur with an empty note — blocked, validation copy shown, no save
+    fireEvent.blur(noteInput);
+    expect(screen.getByText('Add a short note for "Other."')).toBeDefined();
+    expect(mockSave).not.toHaveBeenCalled();
+
+    fireEvent.change(noteInput, { target: { value: "Skew was unusually rich" } });
+    fireEvent.blur(noteInput);
+
+    expect(mockSave).toHaveBeenCalledWith(OPEN_HASH, ["other"], "Skew was unusually rich");
+    expect(screen.queryByText('Add a short note for "Other."')).toBeNull();
+  });
+
+  it("chip active state reflects only server-confirmed tags; save error renders inline with a working Retry", () => {
+    const mockRetry = vi.fn<UseRuleTagsResult["retry"]>();
+    mockUseRuleTags.mockReturnValue({
+      ...emptyRuleTagsResult(),
+      events: [
+        makeRuleEvent({ eventType: "OPEN", fillIdsHash: OPEN_HASH, tags: ["iv-skew-favorable"] }),
+      ],
+      errors: { [OPEN_HASH]: "Couldn't save rule tags." },
+      retry: mockRetry,
+    });
+
+    renderJournal([makeHistoryTrade()]);
+
+    expect(screen.getByText("Couldn't save rule tags.")).toBeDefined();
+
+    fireEvent.click(screen.getByText("Retry"));
+    expect(mockRetry).toHaveBeenCalledWith(OPEN_HASH);
+  });
+
+  it("read-view pill shows only when the trade has >=1 recorded tag, neutral-toned (not violet)", () => {
+    mockUseRuleTags.mockReturnValue({
+      ...emptyRuleTagsResult(),
+      events: [
+        makeRuleEvent({ eventType: "OPEN", fillIdsHash: OPEN_HASH, tags: ["iv-skew-favorable"] }),
+      ],
+    });
+
+    renderJournal([makeHistoryTrade()]);
+
+    const pill = screen.getByTestId("rule-tags-pill");
+    expect(pill.textContent).toContain("IV skew favorable");
+    expect(pill.className).toContain("text-dim");
+    expect(pill.className).not.toContain("text-violet");
+  });
+
+  it("read-view pill is absent when the trade has no recorded tags", () => {
+    mockUseRuleTags.mockReturnValue({
+      ...emptyRuleTagsResult(),
+      events: [makeRuleEvent({ eventType: "OPEN", fillIdsHash: OPEN_HASH })],
+    });
+
+    renderJournal([makeHistoryTrade()]);
+
+    expect(screen.queryByTestId("rule-tags-pill")).toBeNull();
   });
 });
