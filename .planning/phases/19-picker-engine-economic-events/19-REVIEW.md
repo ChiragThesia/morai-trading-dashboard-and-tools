@@ -36,7 +36,7 @@ findings:
   warning: 5
   info: 2
   total: 7
-status: issues_found
+status: resolved
 ---
 
 # Phase 19: Code Review Report
@@ -44,7 +44,22 @@ status: issues_found
 **Reviewed:** 2026-07-05T00:09:44Z
 **Depth:** standard
 **Files Reviewed:** 60 (source subset; 27 load-bearing files enumerated above)
-**Status:** issues_found
+**Status:** resolved — all 5 WARNING findings fixed 2026-07-05 (fix pass, TDD red→green,
+one commit per finding; see commits below). The 2 INFO findings are unaddressed
+(non-blocking, documented as accepted tradeoffs at the time of review).
+
+## Fix Pass (2026-07-05)
+
+| Finding | Fix | Commit |
+|---|---|---|
+| WR-01 | `onConflictDoNothing({target: observedAt})` (Postgres) + no-op-on-duplicate (memory twin); shared contract regression | `1963b7a` |
+| WR-02 | Inverted `eventAdjustment` caption logic to match penalty semantics (`rawValue > 0 ? "−" : "ok"`) | `b4069cf` |
+| WR-03 | Added `observedAt` (full-ISO instant) to `pickerSnapshotResponse` + domain `PickerSnapshot`, stamped from `latestTime` in `computePickerSnapshot.ts`; `CandidateCard`/`CandidateRail` consume it instead of date-only `asOf` for the freshness dot | `122ed87` |
+| WR-04 | Candidate id now includes the delta-rung label (`${rung.label}-${K}-${fe}-${be}`), preventing cross-rung id collisions on sparse chains | `9e89e60` |
+| WR-05 | `economic-events.ts` always unions `FOMC_SEED` regardless of CPI/NFP fetch outcome — a FRED failure drops only the affected FRED-sourced rows | `4e9c011` |
+
+Full suite (1829 tests, incl. testcontainers), `bun run typecheck`, and `bun run lint` all
+green after the fix pass.
 
 ## Summary
 
