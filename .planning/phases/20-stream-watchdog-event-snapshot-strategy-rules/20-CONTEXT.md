@@ -96,11 +96,14 @@ Scope clarifies HOW to implement these three; no new capabilities.
   across trades at a glance.
 
 ### Cross-Cutting
-- **D-18 (sequencing):** Build cheapest-first **WATCH-01 → SNAP-01 → RULE-01**. **Ship each
+- **D-18 [informational] (sequencing):** Build cheapest-first **WATCH-01 → SNAP-01 → RULE-01**. **Ship each
   independently to prod** (three separate deploy+UAT cycles within the phase), not one bundled
-  ship. Plans should be grouped so each feature is independently landable.
-- **D-19 (UI-SPEC):** **Run `/gsd-ui-phase 20` before `/gsd-plan-phase 20`** — badge behavior
-  (WATCH-01) + rule control in Journal (RULE-01) both touch UI.
+  ship. Plans should be grouped so each feature is independently landable. *(Meta-decision:
+  enforced structurally by wave order + per-feature ship markers in the plans, not a code
+  must_have.)*
+- **D-19 [informational] (UI-SPEC):** **Run `/gsd-ui-phase 20` before `/gsd-plan-phase 20`** — badge behavior
+  (WATCH-01) + rule control in Journal (RULE-01) both touch UI. *(Process directive, already
+  satisfied — 20-UI-SPEC.md exists and drives plans 20-03/20-11.)*
 
 ### Claude's Discretion (research/planner territory — not user-decided)
 - **Enum DB representation:** recommend `text` + Zod validation at the boundary

@@ -4,9 +4,9 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 21
 current_phase_name: Control Affordance & Button System
-status: verifying
-stopped_at: Phase 20 context gathered
-last_updated: "2026-07-05T03:35:13.071Z"
+status: executing
+stopped_at: Phase 20 UI-SPEC approved
+last_updated: "2026-07-05T04:39:10.764Z"
 last_activity: 2026-07-05
 last_activity_desc: Phase 19 complete, transitioned to Phase 21
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 21 — Control Affordance & Button System
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-07-05 — Phase 19 complete, transitioned to Phase 21
 
 ## Milestone v1.2 Summary
@@ -330,11 +330,11 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 
 ## Session Continuity
 
-Last session: 2026-07-05T03:35:13.059Z
-Stopped at: Phase 20 context gathered
+Last session: 2026-07-05T03:42:52.556Z
+Stopped at: Phase 20 UI-SPEC approved
 Resume file: 
 
-.planning/phases/20-stream-watchdog-event-snapshot-strategy-rules/20-CONTEXT.md
+.planning/phases/20-stream-watchdog-event-snapshot-strategy-rules/20-UI-SPEC.md
 
 - Execute the last Phase 17.1 plan: `/gsd-execute-phase 17.1` (17.1-05-PLAN.md — OVW-03 positions-box expiry/DTE reformat)
 - Re-drop the two TOS reference screenshots into `mockups/tos-reference/` before the end-of-phase human pixel-check on the magenta/cyan curve colors
