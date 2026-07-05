@@ -273,6 +273,48 @@ describe("CandidateCard — pasted variant (paste-redesign)", () => {
 
     expect(container.querySelectorAll('[data-testid^="breakdown-bar-fill-"]').length).toBe(0);
   });
+
+  it("renders no remove button when onRemove is not provided", () => {
+    render(
+      <CandidateCard
+        candidate={makePastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.queryByTestId("remove-pasted-pasted")).toBeNull();
+  });
+
+  it("renders a remove '×' button when onRemove is provided, calling onRemove(candidate) without also firing onSelect", () => {
+    const onRemove = vi.fn();
+    const onSelect = vi.fn();
+    render(
+      <CandidateCard
+        candidate={makePastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={onSelect}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+        onRemove={onRemove}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("remove-pasted-pasted"));
+
+    expect(onRemove).toHaveBeenCalledWith(makePastedCandidate());
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
 
 describe("CandidateCard — click delegation", () => {

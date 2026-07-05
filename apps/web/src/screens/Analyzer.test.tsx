@@ -201,7 +201,7 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
     render(
       <CandidateRail
         candidates={[]}
-        pastedCandidate={null}
+        pastedCandidates={[]}
         pasteText=""
         pasteError={null}
         asOf="2026-07-02"
@@ -217,7 +217,8 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
         onCopy={() => {}}
         onPasteTextChange={() => {}}
         onPasteAnalyze={() => {}}
-        onPasteClear={() => {}}
+        onRemovePasted={() => {}}
+        onClearAllPasted={() => {}}
       />,
     );
 
@@ -232,7 +233,7 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
     const { container } = render(
       <CandidateRail
         candidates={[]}
-        pastedCandidate={null}
+        pastedCandidates={[]}
         pasteText=""
         pasteError={null}
         asOf="2026-07-02"
@@ -248,7 +249,8 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
         onCopy={() => {}}
         onPasteTextChange={() => {}}
         onPasteAnalyze={() => {}}
-        onPasteClear={() => {}}
+        onRemovePasted={() => {}}
+        onClearAllPasted={() => {}}
       />,
     );
     expect(container.querySelectorAll('[data-testid^="candidate-card-"]').length).toBe(0);
@@ -424,15 +426,23 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
   });
 });
 
-describe("Analyzer — pasted calendar (paste redesign)", () => {
+describe("Analyzer — pasted calendars (multi-paste)", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  // Dates far in the future so this suite never goes stale relative to "today".
+  // Dates far in the future so this suite never goes stale relative to "today". Distinct
+  // strikes/debits so two pasted cards are distinguishable in combine assertions.
   const PASTE_EXAMPLE =
     "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7450 PUT @45.85 LMT GTC";
+  const PASTE_EXAMPLE_2 =
+    "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7500 PUT @52.10 LMT GTC";
+
+  function paste(text: string): void {
+    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: text } });
+    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+  }
 
   it("mounts the paste-to-analyze input at the top of the Suggested calendars panel (no separate top chart)", () => {
     render(<Analyzer />);
@@ -443,27 +453,38 @@ describe("Analyzer — pasted calendar (paste redesign)", () => {
     expect(screen.queryByTestId("adhoc-analyze")).toBeNull();
   });
 
-  it("Analyze on a valid paste pins a PASTED card at the top of the rail and auto-selects it", () => {
+  it("Analyze on a valid paste ADDS a PASTED card at the top of the rail, auto-selects it, and clears the input", () => {
     render(<Analyzer />);
 
-    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
-    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+    paste(PASTE_EXAMPLE);
 
     const cards = screen.getAllByTestId(/^candidate-card-/);
-    expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted");
+    expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted-1");
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
-    within(screen.getByTestId("candidate-card-pasted")).getByText("PASTED");
+    within(screen.getByTestId("candidate-card-pasted-1")).getByText("PASTED");
+    expect(screen.getByTestId("picker-paste-input")).toHaveProperty("value", "");
+  });
+
+  it("a second Analyze ADDS a second PASTED card (both coexist, pinned in paste order) and auto-selects the new one", () => {
+    render(<Analyzer />);
+
+    paste(PASTE_EXAMPLE);
+    paste(PASTE_EXAMPLE_2);
+
+    const cards = screen.getAllByTestId(/^candidate-card-/);
+    expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted-1");
+    expect(cards[1]?.getAttribute("data-testid")).toBe("candidate-card-pasted-2");
+    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7500P · pasted");
   });
 
   it("the pasted candidate drives the shared center Risk-profile chart via the same candidate→position→repriceScenario path", () => {
     render(<Analyzer />);
 
-    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
-    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+    paste(PASTE_EXAMPLE);
 
     const parsed = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
     if (parsed === null) throw new Error("expected PASTE_EXAMPLE to parse");
-    const pastedCandidate = parsedCalendarToPickerCandidate(parsed, "pasted");
+    const pastedCandidate = parsedCalendarToPickerCandidate(parsed, "pasted-1");
     const expected = repriceScenario([candidateToAnalyzerPosition(pastedCandidate)], PARAMS);
 
     const props = latestPayoffChartProps();
@@ -471,34 +492,95 @@ describe("Analyzer — pasted calendar (paste redesign)", () => {
     expect(props.expirationCurve).toEqual(expected.expirationCurve);
   });
 
-  it("shows the parse-error copy when the pasted text doesn't parse", () => {
+  it("shows the parse-error copy when the pasted text doesn't parse, without disturbing existing pasted cards", () => {
     render(<Analyzer />);
 
-    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: "not an order" } });
-    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+    paste(PASTE_EXAMPLE);
+    paste("not an order");
 
     expect(screen.getByTestId("picker-paste-error")).toBeTruthy();
-    expect(screen.queryByTestId("candidate-card-pasted")).toBeNull();
+    // The earlier successful paste is untouched by the failed second attempt.
+    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
+    expect(screen.queryByTestId("candidate-card-pasted-2")).toBeNull();
   });
 
-  it("Clear removes the pasted card and re-selects the top-ranked scored candidate", () => {
+  it("each pasted card's × removes just that card, cleans its combine state, and re-selects the top-ranked scored candidate when it was selected", () => {
     render(<Analyzer />);
 
-    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
-    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
-    expect(screen.getByTestId("candidate-card-pasted")).toBeTruthy();
+    paste(PASTE_EXAMPLE);
+    paste(PASTE_EXAMPLE_2);
+    // pasted-2 is auto-selected; combine it too, then remove it.
+    fireEvent.click(within(screen.getByTestId("candidate-card-pasted-2")).getByText("⊕ Combine"));
 
-    fireEvent.click(screen.getByTestId("picker-paste-clear"));
+    fireEvent.click(screen.getByTestId("remove-pasted-pasted-2"));
 
-    expect(screen.queryByTestId("candidate-card-pasted")).toBeNull();
+    expect(screen.queryByTestId("candidate-card-pasted-2")).toBeNull();
+    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
+    // Selection fell back to the first rail candidate (pasted-1, still pinned atop scored ones).
+    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
+    // Combine state for the removed card is gone, so combining pasted-1 doesn't drag it back in.
+    expect(screen.queryByTestId("combined-book-summary")).toBeNull();
+  });
+
+  it("removing a pasted card that is NOT selected leaves the current selection untouched", () => {
+    render(<Analyzer />);
+
+    paste(PASTE_EXAMPLE);
+    paste(PASTE_EXAMPLE_2);
+    // Select pasted-1 explicitly (pasted-2 is auto-selected by the second paste).
+    fireEvent.click(screen.getByTestId("candidate-card-pasted-1"));
+
+    fireEvent.click(screen.getByTestId("remove-pasted-pasted-2"));
+
+    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
+  });
+
+  it("⊕ Combine on two pasted calendars sums both debits into the combined-book summary", () => {
+    render(<Analyzer />);
+
+    paste(PASTE_EXAMPLE);
+    paste(PASTE_EXAMPLE_2);
+    // pasted-2 is selected; combine pasted-1 into it.
+    fireEvent.click(within(screen.getByTestId("candidate-card-pasted-1")).getByText("⊕ Combine"));
+
+    const parsed1 = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
+    const parsed2 = parseTosOrder(PASTE_EXAMPLE_2, new Date(), pickerSnapshotFixture.spot, 0.045);
+    if (parsed1 === null || parsed2 === null) throw new Error("expected both examples to parse");
+    const debit1 = parsedCalendarToPickerCandidate(parsed1, "pasted-1").debit;
+    const debit2 = parsedCalendarToPickerCandidate(parsed2, "pasted-2").debit;
+
+    const summary = screen.getByTestId("combined-book-summary");
+    expect(summary.textContent).toContain("+ 1 more");
+    expect(summary.textContent).toContain(`$${(debit1 + debit2).toFixed(0)}`);
+  });
+
+  it("Clear all removes every pasted card and re-selects the top-ranked scored candidate", () => {
+    render(<Analyzer />);
+
+    paste(PASTE_EXAMPLE);
+    paste(PASTE_EXAMPLE_2);
+    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
+    expect(screen.getByTestId("candidate-card-pasted-2")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("picker-paste-clear-all"));
+
+    expect(screen.queryByTestId("candidate-card-pasted-1")).toBeNull();
+    expect(screen.queryByTestId("candidate-card-pasted-2")).toBeNull();
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
   });
 
-  it("Why / Scoring checklist / Entry-exit show a 'not engine-scored' note when the pasted candidate is selected", () => {
+  it("the Clear all button only renders once at least one calendar has been pasted", () => {
+    render(<Analyzer />);
+    expect(screen.queryByTestId("picker-paste-clear-all")).toBeNull();
+
+    paste(PASTE_EXAMPLE);
+    expect(screen.getByTestId("picker-paste-clear-all")).toBeTruthy();
+  });
+
+  it("Why / Scoring checklist / Entry-exit show a 'not engine-scored' note when a pasted candidate is selected", () => {
     render(<Analyzer />);
 
-    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
-    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+    paste(PASTE_EXAMPLE);
 
     expect(screen.getAllByText("Pasted calendar — not engine-scored.").length).toBe(3);
     expect(screen.queryByTestId("scoring-checklist")).toBeNull();
