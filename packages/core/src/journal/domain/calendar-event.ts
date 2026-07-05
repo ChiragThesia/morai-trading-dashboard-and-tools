@@ -82,7 +82,11 @@ export type RawFill = {
  *   totalCommission = sum of commissions
  *   totalFees = sum of fees
  *
- * positionEffect drives OPEN/CLOSE/ROLL classification (classifyFill uses this + side).
+ * positionEffect drives OPEN/CLOSE/ROLL classification (classifyFill uses this, not side).
+ * side (journal-pnl-opennetdebit-units #2) drives netAmount's sign — the bucket's fills
+ * share one order/leg, so they share one direction (buy or sell); carried through from the
+ * first fill so syncFills can sign OPEN/CLOSE netAmount by ACTUAL direction, not by
+ * classification alone (a calendar's OPEN legs include both a bought and a sold leg).
  */
 export type AggregatedFill = {
   readonly calendarId: string;
@@ -93,5 +97,6 @@ export type AggregatedFill = {
   readonly totalCommission: number;
   readonly totalFees: number;
   readonly positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
+  readonly side: "buy" | "sell";
   readonly fillIds: ReadonlyArray<string>; // fill UUIDs composing this group (for hashFillIds)
 };

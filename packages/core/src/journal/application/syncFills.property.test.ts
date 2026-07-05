@@ -73,8 +73,10 @@ const fakeHashFillIds = (ids: ReadonlyArray<string>): string =>
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────────
 
-// A single fill spec on one of the two legs. side maps to positionEffect at the leg level,
-// so here we only carry the raw economics; the leg's positionEffect drives OPEN/CLOSE.
+// A single fill spec on one of the two legs. positionEffect (via frontStatus/backStatus, set
+// per-leg for the whole run) drives OPEN/CLOSE classification; side (fixed per-leg below,
+// front=sell/back=buy — a realistic bought-back/sold-front calendar) independently drives
+// netAmount's sign (journal-pnl-opennetdebit-units #2) — the two are orthogonal signals.
 type FillSpec = {
   readonly leg: "front" | "back";
   readonly orderId: string;
@@ -98,8 +100,9 @@ const fillSpecsArb: fc.Arbitrary<ReadonlyArray<FillSpec>> = fc.array(fillSpecArb
   maxLength: 12,
 });
 
-// Map FillSpecs → RawFills with distinct ids. side is irrelevant to pairing (positionEffect
-// from the leg drives classification); we set it deterministically from the leg.
+// Map FillSpecs → RawFills with distinct ids. side is irrelevant to CLASSIFICATION
+// (positionEffect from the leg drives OPEN/CLOSE), but IS relevant to netAmount's sign
+// (journal-pnl-opennetdebit-units #2); we set it deterministically per leg.
 function specsToFills(specs: ReadonlyArray<FillSpec>): RawFill[] {
   return specs.map((s, i) => ({
     id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
@@ -366,10 +369,15 @@ describe("syncFills properties", () => {
           const recomputed = recomputeByEventType(h.storedEvents);
 
           // Independently reconstruct the expected open/close totals from the RAW economics of
-          // the paired fills. Each emitted event's open contribution is the price×qty sum of its
-          // composing OPENING-leg fills, its close contribution the price×qty sum of its
-          // CLOSING-leg fills. We re-derive per-fill price×qty from the inputs and bucket by the
-          // leg's positionEffect for the fills that actually landed in an event.
+          // the paired fills. journal-pnl-opennetdebit-units #2: for OPEN/CLOSE (non-ROLL)
+          // events, netAmount is signed by the fill's ACTUAL side (buy=debit/+, sell=credit/-),
+          // NOT unconditionally by open/close role — a leg can be sold-to-open (credit) or
+          // bought-to-close (debit). The ROLL branch's rollOpenDebit/rollCloseCredit were fixed
+          // to the identical convention (money-path review follow-up): rollOpenDebit mirrors
+          // OPEN netAmount's sign (debit positive, credit negative — a sold-to-open new leg is
+          // a credit); rollCloseCredit mirrors the recompute CLOSE bucket's sign (credit
+          // positive, debit negative — a bought-to-close leg is a debit), so ROLL-composing
+          // fills now use the SAME side-signed reconstruction as OPEN/CLOSE, per leg role.
           const orphanSet = new Set(h.storedOrphans);
           const byId = new Map<string, RawFill>();
           for (const f of fills) byId.set(f.id, f);
@@ -381,9 +389,16 @@ describe("syncFills properties", () => {
               const f = byId.get(id);
               if (f === undefined) continue;
               const economics = f.price * f.qty;
-              const effect = f.occSymbol === OCC_FRONT ? frontStatus : backStatus;
-              if (effect === "open") expectedOpen += economics;
-              else expectedClose += economics;
+              const signed = f.side === "sell" ? -economics : economics;
+              if (e.eventType === "ROLL") {
+                const effect = f.occSymbol === OCC_FRONT ? frontStatus : backStatus;
+                if (effect === "open") expectedOpen += signed; // rollOpenDebit convention
+                else expectedClose += f.side === "sell" ? economics : -economics; // rollCloseCredit convention
+              } else if (e.eventType === "OPEN") {
+                expectedOpen += signed;
+              } else {
+                expectedClose += -signed; // recomputeCalendarAmounts negates CLOSE netAmount
+              }
             }
           }
           // Orphaned fills contribute to neither bucket.

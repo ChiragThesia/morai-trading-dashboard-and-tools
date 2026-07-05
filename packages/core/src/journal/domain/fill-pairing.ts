@@ -31,6 +31,10 @@ export type FillAggregationError = {
  * CLOSING→CLOSE, UNKNOWN→UNKNOWN. The raw fill `side` is not used here — it carries no
  * classification information beyond positionEffect, so a dead `side` param is omitted
  * (REVIEW WR-06: do not fabricate a side and feed it to a branch that ignores it).
+ *
+ * Note (journal-pnl-opennetdebit-units #2): `side` IS used elsewhere — it drives netAmount's
+ * SIGN in syncFills.ts (via AggregatedFill.side, propagated by aggregatePartialFills below).
+ * WR-06 only ruled out feeding it into THIS classification function; it is not a dead field.
  */
 export function classifyFill(
   positionEffect: "OPENING" | "CLOSING" | "UNKNOWN",
@@ -54,10 +58,13 @@ export function classifyFill(
  * - sumQty = sum of individual qtys
  * - avgPrice = qty-weighted average price
  * - totalCommission/totalFees = summed (null treated as 0)
+ * - side = the first fill's side (journal-pnl-opennetdebit-units #2): a bucket is one
+ *   (calendarId, legOccSymbol, orderId) — one order on one leg — so every fill in it shares
+ *   one broker-reported direction, exactly like orderId/legOccSymbol below.
  *
  * Returns err(FillAggregationError) for an empty group or a non-positive sumQty — never
- * an avgPrice of 0 (REVIEW WR-03). The orderId/legOccSymbol are taken from the first fill;
- * the bucket key guarantees they are uniform within the group.
+ * an avgPrice of 0 (REVIEW WR-03). The orderId/legOccSymbol/side are taken from the first
+ * fill; the bucket key guarantees they are uniform within the group.
  */
 export function aggregatePartialFills(
   fills: ReadonlyArray<RawFill>,
@@ -109,6 +116,7 @@ export function aggregatePartialFills(
     totalCommission,
     totalFees,
     positionEffect,
+    side: first.side,
     fillIds,
   });
 }

@@ -163,6 +163,79 @@ describe("makeSyncFillsUseCase", () => {
     expect(storedEvents[0]?.netAmount).toBeGreaterThanOrEqual(0);
   });
 
+  // ─── journal-pnl-opennetdebit-units #2: sold-to-open leg must net a CREDIT ────
+  //
+  // Reproduces the prod calendar 65aac62e bug: both legs OPEN the same calendar in the
+  // same window — back leg BOUGHT @159.41 (debit), front leg SOLD @127.06 (credit). The old
+  // code signed BOTH OPEN events positive (avgPrice*sumQty, ignoring side), so
+  // recomputeCalendarAmounts summed 159.41 + 127.06 = 286.47 instead of netting
+  // 159.41 - 127.06 = 32.35. netAmount must be signed by the fill's ACTUAL side, not by
+  // OPEN/CLOSE classification alone.
+  it("calendar with a bought-to-open leg AND a sold-to-open leg: OPEN netAmount nets to the true debit, not summed (journal-pnl-opennetdebit-units #2)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    // Back leg: bought to open @ 159.41 (a debit).
+    const fillBack = makeFill({
+      id: "fill-back-bought-open",
+      occSymbol: OCC_BACK,
+      side: "buy",
+      orderId: "order-cal-open",
+      qty: 1,
+      price: 159.41,
+      commission: 0,
+      fees: 0,
+    });
+    // Front leg: SOLD to open @ 127.06 (a credit) — the reported bug.
+    const fillFront = makeFill({
+      id: "fill-front-sold-open",
+      occSymbol: OCC_FRONT,
+      side: "sell",
+      orderId: "order-cal-open",
+      qty: 1,
+      price: 127.06,
+      commission: 0,
+      fees: 0,
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fillBack, fillFront],
+        legMap: {
+          [OCC_BACK]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+          ],
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedOrphans).toHaveLength(0);
+    expect(storedEvents).toHaveLength(2);
+
+    const backEvent = storedEvents.find((e) => e.legOccSymbol === OCC_BACK);
+    const frontEvent = storedEvents.find((e) => e.legOccSymbol === OCC_FRONT);
+    expect(backEvent?.eventType).toBe("OPEN");
+    expect(frontEvent?.eventType).toBe("OPEN");
+
+    // Bought leg: netAmount is a positive debit.
+    expect(backEvent?.netAmount).toBeCloseTo(159.41, 5);
+    // Sold leg: netAmount is a NEGATIVE credit — NOT +127.06 (the bug).
+    expect(frontEvent?.netAmount).toBeCloseTo(-127.06, 5);
+
+    // The exact reported arithmetic: sum nets to 32.35, not summed-as-debits 286.47.
+    const openDebit = (backEvent?.netAmount ?? 0) + (frontEvent?.netAmount ?? 0);
+    expect(openDebit).toBeCloseTo(32.35, 5);
+  });
+
   it("fill matching no calendar leg → parks in orphan_fills (D-05)", async () => {
     const { makeSyncFillsUseCase } = await import("./syncFills.ts");
 
@@ -467,6 +540,59 @@ describe("makeSyncFillsUseCase", () => {
     expect(storedEvents[0]?.realizedPnl).toBeNull();
   });
 
+  // ─── journal-pnl-opennetdebit-units #2: realizedPnl for a SHORT leg ───────────
+  //
+  // A leg sold-to-open (credit 127.06) then bought-to-close (debit 50): the correct gain is
+  // 127.06 - 50 = 77.06. The prior OPEN event's netAmount is now correctly negative (-127.06,
+  // a credit) since the OPEN-side fix; closeCredit must mirror that convention (derived from
+  // the fixed CLOSE netAmount, not an unconditional Math.abs) or this comes out backwards.
+  it("CLOSE (buy) of a sold-to-open leg: realizedPnl = originalCredit − closeDebit − fees (journal-pnl-opennetdebit-units #2)", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    // Bought to close (paid 50) the leg that was sold to open.
+    const fillClose = makeFill({
+      id: "fill-close-short-leg",
+      occSymbol: OCC_FRONT,
+      side: "buy",
+      orderId: "order-close-short",
+      qty: 1,
+      price: 50,
+      commission: 1,
+      fees: 1,
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fillClose],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+        // Prior OPEN event: sold to open, netAmount correctly negative (a credit, -127.06).
+        priorEvents: {
+          "cal-1": [makeOpenEvent({ legOccSymbol: OCC_FRONT, netAmount: -127.06 })],
+        },
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedOrphans).toHaveLength(0);
+    expect(storedEvents).toHaveLength(1);
+    const closeEvent = storedEvents[0];
+    expect(closeEvent?.eventType).toBe("CLOSE");
+    // netAmount is a positive debit (bought to close).
+    expect(closeEvent?.netAmount).toBeCloseTo(50, 5);
+    // realizedPnl = 127.06 (credit received on open) - 50 (debit paid on close) - 2 (fees) = 75.06
+    expect(closeEvent?.realizedPnl).toBeCloseTo(75.06, 5);
+  });
+
   it("ROLL: realizedPnl reflects only the closed leg, excludes the new leg's debit (B1/WR-01)", async () => {
     const { makeSyncFillsUseCase } = await import("./syncFills.ts");
 
@@ -636,6 +762,140 @@ describe("makeSyncFillsUseCase", () => {
     expect(roll?.rollCloseCredit).toBeCloseTo(8, 6);
     // combined netAmount = openDebit − closeCredit = 20 − 8 = 12 (unchanged).
     expect(roll?.netAmount).toBeCloseTo(12, 6);
+  });
+
+  // ─── journal-pnl-opennetdebit-units #2 (ROLL branch, money-path review 🔴 fix) ─────
+  //
+  // The ROLL branch's closeCredit used Math.abs(cf.avgPrice*cf.sumQty) UNCONDITIONALLY,
+  // ignoring cf.side. A bought-to-close roll leg (a DEBIT paid, e.g. buying back a
+  // previously sold-to-open short leg during a roll) got a POSITIVE rollCloseCredit —
+  // the exact sign inversion the OPEN/CLOSE fix above already corrected for the
+  // non-ROLL path. recomputeCalendarAmounts sums rollCloseCredit directly into
+  // closeNetCredit (no negation) — it must already carry the positive=credit,
+  // negative=debit convention.
+  it("ROLL: CLOSE leg bought-to-close → rollCloseCredit is a NEGATIVE debit, not a positive credit", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    // Bought-to-close (paid 50) the front leg that was previously sold-to-open (a credit).
+    const fillClose = makeFill({
+      id: "fill-roll-close-buy",
+      occSymbol: OCC_FRONT,
+      side: "buy",
+      orderId: "roll-order-buyclose",
+      qty: 1,
+      price: 50,
+      commission: 1,
+      fees: 1,
+    });
+    // New back leg bought-to-open (a normal debit).
+    const fillOpen = makeFill({
+      id: "fill-roll-open-buyclose",
+      occSymbol: OCC_BACK,
+      side: "buy",
+      orderId: "roll-order-buyclose",
+      qty: 1,
+      price: 20,
+      commission: 0,
+      fees: 0,
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fillClose, fillOpen],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+          ],
+          [OCC_BACK]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+        // Prior OPEN event: sold to open, netAmount correctly negative (a credit, -127.06).
+        priorEvents: {
+          "cal-1": [makeOpenEvent({ legOccSymbol: OCC_FRONT, netAmount: -127.06 })],
+        },
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedEvents).toHaveLength(1);
+    const rollEvent = storedEvents[0];
+    expect(rollEvent?.eventType).toBe("ROLL");
+    // Bought-to-close = a DEBIT paid → rollCloseCredit must be NEGATIVE, not +50.
+    expect(rollEvent?.rollCloseCredit).toBeCloseTo(-50, 5);
+    // rollOpenDebit: bought-to-open new leg → still a positive debit (20).
+    expect(rollEvent?.rollOpenDebit).toBeCloseTo(20, 5);
+    // combined netAmount = openDebit − closeCredit = 20 − (−50) = 70.
+    expect(rollEvent?.netAmount).toBeCloseTo(70, 5);
+    // realizedPnl mirrors the equivalent non-ROLL short-leg CLOSE test above:
+    // closeCredit(-50) − originalOpenDebit(-127.06) − feesOnClose(2) = 75.06.
+    expect(rollEvent?.realizedPnl).toBeCloseTo(75.06, 5);
+  });
+
+  it("ROLL: OPEN leg sold-to-open → rollOpenDebit is a NEGATIVE credit, not a positive debit", async () => {
+    const { makeSyncFillsUseCase } = await import("./syncFills.ts");
+
+    const storedEvents: CalendarEvent[] = [];
+    const storedOrphans: OrphanCapture[] = [];
+
+    // Sold-to-close (credit 500) the front leg — a normal, previously bought-to-open leg.
+    const fillClose = makeFill({
+      id: "fill-roll-close-sellopen",
+      occSymbol: OCC_FRONT,
+      side: "sell",
+      orderId: "roll-order-sellopen",
+      qty: 1,
+      price: 500,
+      commission: 1,
+      fees: 1,
+    });
+    // New back leg SOLD to open (a credit, not a debit).
+    const fillOpen = makeFill({
+      id: "fill-roll-open-sellopen",
+      occSymbol: OCC_BACK,
+      side: "sell",
+      orderId: "roll-order-sellopen",
+      qty: 1,
+      price: 20,
+      commission: 0,
+      fees: 0,
+    });
+
+    const syncFills = makeSyncFillsUseCase(
+      buildDeps({
+        fills: [fillClose, fillOpen],
+        legMap: {
+          [OCC_FRONT]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+          ],
+          [OCC_BACK]: [
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+          ],
+        },
+        storedEvents,
+        storedOrphans,
+        priorEvents: {
+          "cal-1": [makeOpenEvent({ legOccSymbol: OCC_FRONT, netAmount: 300 })],
+        },
+      }),
+    );
+
+    const result = await syncFills();
+    expect(result.ok).toBe(true);
+    expect(storedEvents).toHaveLength(1);
+    const rollEvent = storedEvents[0];
+    expect(rollEvent?.eventType).toBe("ROLL");
+    // Sold-to-open new leg = a CREDIT received → rollOpenDebit must be NEGATIVE, not +20.
+    expect(rollEvent?.rollOpenDebit).toBeCloseTo(-20, 5);
+    expect(rollEvent?.rollCloseCredit).toBeCloseTo(500, 5);
+    // combined netAmount = openDebit − closeCredit = −20 − 500 = −520.
+    expect(rollEvent?.netAmount).toBeCloseTo(-520, 5);
   });
 
   it("OPEN/CLOSE events carry null roll components (WR-A1)", async () => {

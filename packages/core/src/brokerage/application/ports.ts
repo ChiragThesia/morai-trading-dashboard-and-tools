@@ -86,6 +86,12 @@ export type BrokerPosition = {
 
 /**
  * BrokerTransaction — a single trade as returned by the trader adapter (BRK-02).
+ *
+ * leg.side (journal-pnl-opennetdebit-units #2): the ACTUAL buy/sell direction of this leg,
+ * sourced from Schwab's own signed per-leg transferItem (not inferred from positionEffect).
+ * A single transaction/order can OPEN one leg by buying and another by selling (e.g. a
+ * calendar spread's back-bought/front-sold legs) — positionEffect alone (OPENING/CLOSING)
+ * cannot distinguish that; side is the independent, authoritative direction signal.
  */
 export type BrokerTransaction = {
   readonly activityId: number;
@@ -97,6 +103,7 @@ export type BrokerTransaction = {
     readonly qty: number;
     readonly price: number;
     readonly positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
+    readonly side: "buy" | "sell";
   }>;
 };
 

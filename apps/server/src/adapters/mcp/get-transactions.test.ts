@@ -37,7 +37,9 @@ const ONE_TX = {
   tradeDate: "2026-06-15",
   netAmount: -1550,
   orderId: 9001,
-  legs: [{ occSymbol: FRONT, qty: 1, price: 15.5, positionEffect: "OPENING" as const }],
+  legs: [
+    { occSymbol: FRONT, qty: 1, price: 15.5, positionEffect: "OPENING" as const, side: "buy" as const },
+  ],
 };
 
 // ─── Reflect helper: reach the registered get_transactions handler ────────────

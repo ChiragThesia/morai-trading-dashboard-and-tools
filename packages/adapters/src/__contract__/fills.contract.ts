@@ -381,6 +381,38 @@ export function runFillsContractTests(
         expect(amounts.closeNetCredit).toBeCloseTo(8, 5);
       });
 
+      // journal-pnl-opennetdebit-units #2: the case above only covers two SAME-direction OPEN
+      // legs (both +debit) — the coverage gap that let a sold-to-open (credit) leg go
+      // unexercised. This asserts recomputeCalendarAmounts NETS a bought leg against a sold
+      // leg (a real calendar always has one of each) rather than summing two debits.
+      it("nets a bought-to-open leg against a sold-to-open (credit) leg — not summed as two debits", async () => {
+        await seed.seedCalendar(calendar({ openNetDebit: null }));
+        // Back leg bought to open (+159.41 debit); front leg SOLD to open (-127.06 credit,
+        // correctly signed by syncFills per the D-08 fix). True net debit: 32.35 — NOT the
+        // wrongly-summed 286.47 the prod bug produced.
+        await seed.seedEvent({
+          calendarId: CAL_ID,
+          eventType: "OPEN",
+          fillIdsHash: "1".repeat(64),
+          legOccSymbol: BACK_OCC,
+          netAmount: 159.41,
+        });
+        await seed.seedEvent({
+          calendarId: CAL_ID,
+          eventType: "OPEN",
+          fillIdsHash: "2".repeat(64),
+          legOccSymbol: FRONT_OCC,
+          netAmount: -127.06,
+        });
+
+        const result = await repo.recomputeCalendarAmounts(CAL_ID);
+        expect(result.ok).toBe(true);
+
+        const amounts = await seed.readCalendarAmounts(CAL_ID);
+        expect(amounts.openNetDebit).toBeCloseTo(32.35, 5);
+        expect(amounts.openNetDebit).not.toBeCloseTo(286.47, 5);
+      });
+
       it("WR-A1: sums by eventType — a ROLL splits into openNetDebit + closeNetCredit", async () => {
         await seed.seedCalendar(calendar({ openNetDebit: null }));
         // OPEN debit (+10) → openNetDebit; CLOSE credit (−4) → closeNetCredit;

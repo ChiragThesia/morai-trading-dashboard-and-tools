@@ -344,6 +344,72 @@ describe("makeSchwabTransactionsAdapter", () => {
       expect(leg.positionEffect).toBe("CLOSING");
     });
 
+    // ─── journal-pnl-opennetdebit-units #2: side from signed amount, not positionEffect ──
+
+    it("maps side from transferItem.amount's SIGN, not positionEffect (fixture rows: amount +1/-1 both happen to agree with the old inference)", async () => {
+      const adapter = makeTransactions();
+      const result = await adapter.fetchTransactions(
+        ACCOUNT_HASH,
+        "2026-06-01",
+        "2026-06-30",
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // Fixture row 1: OPENING, amount +1 (bought) → side "buy".
+      const openLeg = result.value[0]?.legs[0];
+      expect(openLeg?.side).toBe("buy");
+      // Fixture row 2: CLOSING, amount -1 (sold) → side "sell".
+      const closeLeg = result.value[1]?.legs[0];
+      expect(closeLeg?.side).toBe("sell");
+    });
+
+    it("a SOLD-to-open leg (OPENING + negative amount) maps side 'sell', not 'buy' (journal-pnl-opennetdebit-units #2 regression)", async () => {
+      server.use(
+        http.get(TRANSACTIONS_URL, () =>
+          HttpResponse.json([
+            {
+              activityId: 555000111,
+              time: "2026-06-22T14:30:00+0000",
+              accountNumber: "12345678",
+              type: "TRADE",
+              tradeDate: "2026-06-22T14:30:00+0000",
+              settlementDate: "2026-06-23T00:00:00+0000",
+              netAmount: 12704.78,
+              orderId: 1006855414174,
+              activityType: "EXECUTION",
+              transferItems: [
+                {
+                  instrument: {
+                    assetType: "OPTION",
+                    symbol: "SPXW  260807P07425000",
+                    putCall: "PUT",
+                  },
+                  amount: -1, // sold (delivered) — the reported bug's front leg
+                  cost: 12704.78,
+                  price: 127.06,
+                  positionEffect: "OPENING",
+                },
+              ],
+            },
+          ]),
+        ),
+      );
+      const adapter = makeTransactions();
+      const result = await adapter.fetchTransactions(
+        ACCOUNT_HASH,
+        "2026-06-01",
+        "2026-06-30",
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const leg = result.value[0]?.legs[0];
+      expect(leg).toBeDefined();
+      // positionEffect is OPENING, but the leg was SOLD — side must be "sell", not "buy".
+      expect(leg?.positionEffect).toBe("OPENING");
+      expect(leg?.side).toBe("sell");
+      expect(leg?.price).toBe(127.06);
+    });
+
     it("returns err({kind:'auth-expired'}) without calling fetch when token expired", async () => {
       const adapter = makeTransactions(expiredToken());
       const result = await adapter.fetchTransactions(
@@ -372,6 +438,98 @@ describe("makeSchwabTransactionsAdapter", () => {
         "2026-06-30",
       );
       expect(result.ok).toBe(false);
+    });
+
+    // ─── journal-pnl-opennetdebit-units #2 (mapSide hardening, money-path review 🟡 fix) ──
+
+    it("a MISSING transferItem.amount falls back to cost's sign, not a silent 'buy' default", async () => {
+      server.use(
+        http.get(TRANSACTIONS_URL, () =>
+          HttpResponse.json([
+            {
+              activityId: 555000222,
+              time: "2026-06-22T14:30:00+0000",
+              accountNumber: "12345678",
+              type: "TRADE",
+              tradeDate: "2026-06-22T14:30:00+0000",
+              settlementDate: "2026-06-23T00:00:00+0000",
+              netAmount: 12704.78,
+              orderId: 1006855414174,
+              activityType: "EXECUTION",
+              transferItems: [
+                {
+                  instrument: {
+                    assetType: "OPTION",
+                    symbol: "SPXW  260807P07425000",
+                    putCall: "PUT",
+                  },
+                  // amount OMITTED — the old code's `(amount ?? 0) < 0 ? sell : buy` would
+                  // silently default this to "buy". cost is positive (credit received) —
+                  // the real order's front leg was SOLD, so the correct side is "sell".
+                  cost: 12704.78,
+                  price: 127.06,
+                  positionEffect: "OPENING",
+                },
+              ],
+            },
+          ]),
+        ),
+      );
+      const adapter = makeTransactions();
+      const result = await adapter.fetchTransactions(
+        ACCOUNT_HASH,
+        "2026-06-01",
+        "2026-06-30",
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const leg = result.value[0]?.legs[0];
+      expect(leg).toBeDefined();
+      // amount missing but cost's sign (positive = credit = sold) says "sell", not "buy".
+      expect(leg?.side).toBe("sell");
+    });
+
+    it("amount AND cost both missing (no direction signal at all) → the leg is DROPPED, never fabricated as 'buy'", async () => {
+      server.use(
+        http.get(TRANSACTIONS_URL, () =>
+          HttpResponse.json([
+            {
+              activityId: 555000333,
+              time: "2026-06-22T14:30:00+0000",
+              accountNumber: "12345678",
+              type: "TRADE",
+              tradeDate: "2026-06-22T14:30:00+0000",
+              settlementDate: "2026-06-23T00:00:00+0000",
+              netAmount: 0,
+              orderId: 1006855414175,
+              activityType: "EXECUTION",
+              transferItems: [
+                {
+                  instrument: {
+                    assetType: "OPTION",
+                    symbol: "SPXW  260807P07425000",
+                    putCall: "PUT",
+                  },
+                  // Both amount and cost OMITTED — genuinely no direction signal.
+                  price: 127.06,
+                  positionEffect: "OPENING",
+                },
+              ],
+            },
+          ]),
+        ),
+      );
+      const adapter = makeTransactions();
+      const result = await adapter.fetchTransactions(
+        ACCOUNT_HASH,
+        "2026-06-01",
+        "2026-06-30",
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // The transaction is still returned (activityId present), but with NO legs — the
+      // undeterminable leg is dropped, never silently written as a fabricated "buy".
+      expect(result.value[0]?.legs).toHaveLength(0);
     });
   });
 });

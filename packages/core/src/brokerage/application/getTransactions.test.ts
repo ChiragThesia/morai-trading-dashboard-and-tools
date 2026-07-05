@@ -43,6 +43,7 @@ function makeTx(): BrokerTransaction {
         qty: 1,
         price: 12.5,
         positionEffect: "OPENING",
+        side: "buy",
       },
     ],
   };

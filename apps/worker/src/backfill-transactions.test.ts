@@ -61,7 +61,7 @@ function txForChunk(index: number, tradeDate: string): BrokerTransaction {
     tradeDate,
     netAmount: -100,
     orderId: 9000 + index,
-    legs: [{ occSymbol: LEG, qty: 1, price: 10, positionEffect: "OPENING" }],
+    legs: [{ occSymbol: LEG, qty: 1, price: 10, positionEffect: "OPENING", side: "buy" }],
   };
 }
 

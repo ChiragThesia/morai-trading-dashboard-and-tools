@@ -18,8 +18,12 @@
  *
  * Architecture (architecture-boundaries.md):
  *   - Pure core: no I/O, no framework, no node:crypto. The sha256 is injected (HashFillIds).
- *   - side derives from positionEffect: OPENING → buy, CLOSING → sell. UNKNOWN legs are
- *     dropped here (no authoritative side); sync-fills' orphan parking covers genuine misses.
+ *   - side comes directly from the broker transaction leg's OWN reported direction
+ *     (BrokerTransaction.legs[].side, sourced from Schwab's signed transferItem amount) — NOT
+ *     inferred from positionEffect (journal-pnl-opennetdebit-units #2: OPENING does not imply
+ *     buy, nor CLOSING sell — a leg can be sold-to-open or bought-to-close). UNKNOWN
+ *     positionEffect legs are still dropped here (no calendar-leg context to classify
+ *     OPEN/CLOSE); sync-fills' orphan parking covers genuine misses.
  */
 
 import { ok, err } from "@morai/shared";
@@ -126,7 +130,9 @@ function flattenTransaction(
 
   tx.legs.forEach((leg, legIndex) => {
     if (leg.positionEffect === "UNKNOWN") return;
-    const side: "buy" | "sell" = leg.positionEffect === "OPENING" ? "buy" : "sell";
+    // journal-pnl-opennetdebit-units #2: side is the leg's OWN reported direction, not
+    // inferred from positionEffect (see module docstring).
+    const side = leg.side;
     // Deterministic id from (activityId, legIndex) → stable across re-runs.
     // hashFillIds SORTS its input (set-hash for unordered fill-id sets), so the key MUST be a
     // single pre-combined element — passing [activityId, legIndex] as two elements would let

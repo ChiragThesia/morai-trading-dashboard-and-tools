@@ -71,14 +71,14 @@ function fakeTransactions(): ReadonlyArray<BrokerTransaction> {
       tradeDate: "2026-06-15",
       netAmount: 300,
       orderId: 9001,
-      legs: [{ occSymbol: frontSymbol, qty: 1, price: 3.0, positionEffect: "OPENING" }],
+      legs: [{ occSymbol: frontSymbol, qty: 1, price: 3.0, positionEffect: "OPENING", side: "buy" }],
     },
     {
       activityId: 1002,
       tradeDate: "2026-06-16",
       netAmount: -500,
       orderId: 9002,
-      legs: [{ occSymbol: frontSymbol, qty: 1, price: 5.0, positionEffect: "CLOSING" }],
+      legs: [{ occSymbol: frontSymbol, qty: 1, price: 5.0, positionEffect: "CLOSING", side: "sell" }],
     },
   ];
 }

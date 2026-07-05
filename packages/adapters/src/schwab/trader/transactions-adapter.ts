@@ -64,6 +64,34 @@ function mapPositionEffect(
 
 // ─── Domain mapping ────────────────────────────────────────────────────────────
 
+// journal-pnl-opennetdebit-units #2: transferItems[].amount is Schwab's SIGNED per-leg
+// contract quantity — positive when contracts are received (BOUGHT), negative when
+// delivered (SOLD). This is the authoritative direction signal, independent of
+// positionEffect (OPENING/CLOSING): a single order can open one leg by buying and another
+// by selling (e.g. a calendar's back-bought/front-sold legs), which positionEffect alone
+// cannot distinguish. Deriving `side` from positionEffect (the prior approach) silently
+// forced every OPENING leg to "buy" and every CLOSING leg to "sell", corrupting the sign of
+// any sold-to-open or bought-to-close leg all the way through to calendars.open_net_debit.
+//
+// journal-pnl-opennetdebit-units #2 (mapSide hardening, money-path review 🟡 fix): a
+// missing or zero `amount` must NOT silently default to "buy" — that fabricates a
+// direction with a 50% chance of being wrong. `cost` is an independent, corroborating
+// signal Schwab sends on every real fill (confirmed via the schwab-transactions fixture:
+// amount +1/cost -1250.00 for a bought/debit leg, amount -1/cost +800.00 for a sold/credit
+// leg — cost's sign is the exact negation of amount's): negative cost = money paid = bought,
+// positive cost = money received = sold. When amount is unusable, fall back to cost's sign.
+// When NEITHER carries a usable signal, direction is genuinely unknown — return null so the
+// caller drops the leg (mirrors the existing skip-on-unparseable-symbol pattern below)
+// rather than fabricate one.
+function mapSide(
+  amount: number | undefined,
+  cost: number | undefined,
+): "buy" | "sell" | null {
+  if (amount !== undefined && amount !== 0) return amount < 0 ? "sell" : "buy";
+  if (cost !== undefined && cost !== 0) return cost < 0 ? "buy" : "sell";
+  return null;
+}
+
 function mapTransaction(
   tx: z.infer<typeof TransactionSchema>,
 ): BrokerTransaction | null {
@@ -81,11 +109,16 @@ function mapTransaction(
     if (!parsedSymbol.ok) continue;
 
     const occSymbol = formatOccSymbol(parsedSymbol.value);
-    const qty = Math.abs(item.amount ?? 0);
+    const rawAmount = item.amount;
+    const side = mapSide(rawAmount, item.cost);
+    // No usable direction signal (amount and cost both missing/zero) — never fabricate a
+    // side. Drop the leg, same as an unparseable symbol above (D-12 parse-don't-cast).
+    if (side === null) continue;
+    const qty = Math.abs(rawAmount ?? 0);
     const price = item.price ?? 0;
     const positionEffect = mapPositionEffect(item.positionEffect);
 
-    legs.push({ occSymbol, qty, price, positionEffect });
+    legs.push({ occSymbol, qty, price, positionEffect, side });
   }
 
   return {

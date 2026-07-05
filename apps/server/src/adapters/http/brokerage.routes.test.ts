@@ -73,6 +73,7 @@ const okGetTransactions: ForGettingTransactions = async (_from, _to) =>
           qty: 1,
           price: 12.5,
           positionEffect: "OPENING" as const,
+          side: "buy" as const,
         },
       ],
     },

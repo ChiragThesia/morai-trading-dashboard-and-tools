@@ -48,6 +48,7 @@ function makeAggregatedFill(overrides: Partial<AggregatedFill> = {}): Aggregated
     totalCommission: 1.3,
     totalFees: 0.24,
     positionEffect: "OPENING",
+    side: "buy",
     fillIds: ["fill-1", "fill-2"],
     ...overrides,
   };
@@ -150,6 +151,24 @@ describe("aggregatePartialFills", () => {
     expect(isOk(result)).toBe(true);
     if (!isOk(result)) return;
     expect(result.value.fillIds).toEqual(["fill-1", "fill-2"]);
+  });
+
+  // ─── journal-pnl-opennetdebit-units #2: side propagation (D-08 fix) ───────────
+
+  it("propagates side 'buy' from the bucket's fills (journal-pnl-opennetdebit-units #2)", () => {
+    const fills = [makeRawFill({ id: "fill-1", side: "buy" })];
+    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    expect(isOk(result)).toBe(true);
+    if (!isOk(result)) return;
+    expect(result.value.side).toBe("buy");
+  });
+
+  it("propagates side 'sell' from the bucket's fills — a sold-to-open leg (journal-pnl-opennetdebit-units #2)", () => {
+    const fills = [makeRawFill({ id: "fill-1", side: "sell" })];
+    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    expect(isOk(result)).toBe(true);
+    if (!isOk(result)) return;
+    expect(result.value.side).toBe("sell");
   });
 
   it("empty input → error (never avgPrice 0)", () => {

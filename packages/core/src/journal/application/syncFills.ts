@@ -333,8 +333,25 @@ async function pairFills(
           // realizedPnl reflects ONLY the closed (old) leg:
           //   closeCredit − originalOpenDebit − feesOnClose.
           // The new leg's debit is cost basis / netAmount, NOT subtracted (locked decision 2).
-          const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
-          const openDebit = paired.avgPrice * paired.sumQty;
+          //
+          // D-08 (fix, journal-pnl-opennetdebit-units #2 ROLL follow-up): both legs signed by
+          // their ACTUAL fill direction (cf.side / paired.side), mirroring the OPEN/CLOSE
+          // convention below — NOT an unconditional Math.abs/positive assumption. A roll's
+          // closed leg can be bought-to-close (a DEBIT paid, e.g. buying back a previously
+          // sold-to-open short) — closeCredit must go NEGATIVE, not stay a positive "credit".
+          // Likewise the new leg can be sold-to-open (a CREDIT received) — openDebit must go
+          // NEGATIVE, not stay a positive "debit". recomputeCalendarAmounts sums
+          // rollCloseCredit/rollOpenDebit directly (no re-negation), so they must already carry
+          // the same positive=credit/negative=debit (closeCredit) and
+          // positive=debit/negative=credit (openDebit) conventions as CLOSE/OPEN netAmount.
+          const closeCredit =
+            cf.side === "sell"
+              ? cf.avgPrice * cf.sumQty // credit received (sold-to-close)
+              : -(cf.avgPrice * cf.sumQty); // debit paid (bought-to-close)
+          const openDebit =
+            paired.side === "sell"
+              ? -(paired.avgPrice * paired.sumQty) // credit received (sold-to-open)
+              : paired.avgPrice * paired.sumQty; // debit paid (bought-to-open)
           const feesOnClose = cf.totalCommission + cf.totalFees;
 
           // B1/WR-01: originalOpenDebit comes from the prior OPEN event for the CLOSED leg.
@@ -346,19 +363,23 @@ async function pairFills(
               ? null // no prior OPEN → never a wrong number
               : computeRealizedPnl(closeCredit, originalOpenDebit, feesOnClose);
 
+          // legBreakdown's per-leg netAmount mirrors the debit-positive/credit-negative
+          // convention used everywhere else (OPEN/CLOSE netAmount): closing.netAmount is
+          // the negation of the (now correctly-signed) closeCredit; opening.netAmount is
+          // openDebit directly — same values already computed above, same sign fix.
           const legBreakdown = JSON.stringify({
             closing: {
               legOccSymbol: cf.legOccSymbol,
               qty: cf.sumQty,
               avgPrice: cf.avgPrice,
-              netAmount: -(cf.avgPrice * cf.sumQty),
+              netAmount: -closeCredit,
               totalFees: cf.totalCommission + cf.totalFees,
             },
             opening: {
               legOccSymbol: paired.legOccSymbol,
               qty: paired.sumQty,
               avgPrice: paired.avgPrice,
-              netAmount: paired.avgPrice * paired.sumQty,
+              netAmount: openDebit,
               totalFees: paired.totalCommission + paired.totalFees,
             },
           });
@@ -399,10 +420,17 @@ async function pairFills(
     const fillIdsHash = deps.hashFillIds(cf.fillIds);
     const isClose = cf.classification === "CLOSE";
 
-    // D-08: OPEN debit = positive; CLOSE credit = negative
-    const netAmount = isClose
-      ? -(cf.avgPrice * cf.sumQty) // credit received = negative
-      : cf.avgPrice * cf.sumQty;   // debit paid = positive
+    // D-08 (fix, journal-pnl-opennetdebit-units #2): netAmount signed by the ACTUAL fill
+    // direction (cf.side) — NOT by OPEN/CLOSE classification alone. A calendar's OPEN legs
+    // include both a bought leg (debit) and a sold leg (credit); signing purely by
+    // classification made every OPEN leg a positive debit regardless of direction, so
+    // recomputeCalendarAmounts summed two debits instead of netting a debit against a
+    // credit (e.g. bought +159.41, sold +127.06 -> wrongly summed 286.47 instead of the
+    // true net debit 32.35).
+    const netAmount =
+      cf.side === "sell"
+        ? -(cf.avgPrice * cf.sumQty) // credit received = negative
+        : cf.avgPrice * cf.sumQty;   // debit paid = positive
 
     // D-09 (B1/WR-01): realizedPnl = closeCredit − originalOpenDebit − feesOnClose on CLOSE.
     // originalOpenDebit is read from the prior OPEN event for the leg; when no prior OPEN
@@ -410,7 +438,11 @@ async function pairFills(
     // events carry null realizedPnl by definition.
     let realizedPnl: number | null = null;
     if (isClose) {
-      const closeCredit = Math.abs(cf.avgPrice * cf.sumQty);
+      // closeCredit is the negation of the (now correctly-signed) CLOSE netAmount: positive
+      // when the close was a sell (credit received), negative when it was a buy (a debit
+      // paid to close a previously sold-to-open leg) — mirrors originalOpenDebit's sign
+      // convention so a short leg's realizedPnl nets correctly too (journal-pnl-opennetdebit-units #2).
+      const closeCredit = -netAmount;
       const feesOnClose = cf.totalCommission + cf.totalFees;
       const debitResult = await originalOpenDebitFor(cf.calendarId, cf.legOccSymbol);
       if (!debitResult.ok) return err(debitResult.error);

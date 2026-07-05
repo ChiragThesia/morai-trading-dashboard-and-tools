@@ -3,7 +3,10 @@
  *
  * Proves:
  *  - each tx's legs flatten to RawFill rows with correct occSymbol/qty/price/side
- *  - side derives from positionEffect (OPENING→buy, CLOSING→sell)
+ *  - side comes from the leg's OWN reported direction (BrokerTransaction.legs[].side),
+ *    NOT inferred from positionEffect — journal-pnl-opennetdebit-units #2: OPENING does not
+ *    imply buy, nor CLOSING sell (a leg can be sold-to-open or bought-to-close, e.g. a
+ *    calendar's front leg)
  *  - a second run over the same window writes ZERO new fills (deterministic ids)
  *  - AUTH_EXPIRED from fetchTransactions → ok(undefined), no writes (worker degrades)
  */
@@ -38,23 +41,28 @@ const BACK = formatOccSymbol({
   strike: 7100,
 });
 
+// A calendar open: front leg SOLD to open (credit), back leg BOUGHT to open (debit) — both
+// positionEffect "OPENING". Deliberately the OPPOSITE of the old (buggy) side-from-positionEffect
+// inference, so this fixture would silently mis-derive side under the old code.
 const OPEN_TX: BrokerTransaction = {
   activityId: 1001,
   tradeDate: "2026-06-15",
   netAmount: -1550,
   orderId: 9001,
   legs: [
-    { occSymbol: FRONT, qty: 1, price: 15.5, positionEffect: "OPENING" },
-    { occSymbol: BACK, qty: 1, price: 20.0, positionEffect: "OPENING" },
+    { occSymbol: FRONT, qty: 1, price: 15.5, positionEffect: "OPENING", side: "sell" },
+    { occSymbol: BACK, qty: 1, price: 20.0, positionEffect: "OPENING", side: "buy" },
   ],
 };
 
+// A CLOSING leg that is a BUY (buying back the previously sold-to-open front leg) — again
+// the opposite of the old inference (CLOSING -> sell).
 const CLOSE_TX: BrokerTransaction = {
   activityId: 1002,
   tradeDate: "2026-06-18",
   netAmount: 800,
   orderId: 9002,
-  legs: [{ occSymbol: FRONT, qty: 1, price: 8.0, positionEffect: "CLOSING" }],
+  legs: [{ occSymbol: FRONT, qty: 1, price: 8.0, positionEffect: "CLOSING", side: "buy" }],
 };
 
 // ─── Test doubles ──────────────────────────────────────────────────────────────
@@ -117,7 +125,7 @@ const baseDeps = {
 // ─── Tests ──────────────────────────────────────────────────────────────────────
 
 describe("makeSyncTransactionsUseCase — A4 fills source", () => {
-  it("flattens tx legs into RawFill rows with correct fields and side", async () => {
+  it("flattens tx legs into RawFill rows with correct fields and side (journal-pnl-opennetdebit-units #2)", async () => {
     const { writeFills, captured } = makeCapturingWriteFills();
     const run = makeSyncTransactionsUseCase({
       ...baseDeps,
@@ -131,17 +139,23 @@ describe("makeSyncTransactionsUseCase — A4 fills source", () => {
     // 2 legs from OPEN_TX + 1 leg from CLOSE_TX = 3 fills
     expect(captured).toHaveLength(3);
 
-    const front = captured.find(
+    const openFront = captured.find(
       (f) => f.occSymbol === FRONT && f.orderId === "9001",
     );
-    expect(front).toBeDefined();
-    expect(front?.side).toBe("buy"); // OPENING → buy
-    expect(front?.qty).toBe(1);
-    expect(front?.price).toBe(15.5);
-    expect(front?.filledAt.toISOString().slice(0, 10)).toBe("2026-06-15");
+    const openBack = captured.find((f) => f.occSymbol === BACK && f.orderId === "9001");
+    expect(openFront).toBeDefined();
+    expect(openBack).toBeDefined();
+    // side comes from the leg's OWN reported direction, NOT from positionEffect: both legs
+    // are OPENING, but the front was SOLD and the back was BOUGHT.
+    expect(openFront?.side).toBe("sell");
+    expect(openBack?.side).toBe("buy");
+    expect(openFront?.qty).toBe(1);
+    expect(openFront?.price).toBe(15.5);
+    expect(openFront?.filledAt.toISOString().slice(0, 10)).toBe("2026-06-15");
 
     const closeLeg = captured.find((f) => f.orderId === "9002");
-    expect(closeLeg?.side).toBe("sell"); // CLOSING → sell
+    // CLOSING leg that is a BUY (buying back the sold-to-open leg) — not "sell".
+    expect(closeLeg?.side).toBe("buy");
     expect(closeLeg?.price).toBe(8.0);
   });
 
