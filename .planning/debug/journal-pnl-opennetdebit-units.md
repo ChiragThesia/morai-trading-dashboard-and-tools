@@ -1,12 +1,13 @@
 ---
 slug: journal-pnl-opennetdebit-units
-status: resolved
+status: fixing
 trigger: "Journal P&L shows −$319,850 for calendar 65aac62e (7425P) when real P&L ≈ +$415 — openNetDebit stored in dollars, snapshot formula expects points"
 created: 2026-07-05
-updated: 2026-07-05T00:10:00-07:00
+updated: 2026-07-05T00:20:00-07:00
 tdd_mode: true
 goal: find_and_fix
 bug_2_trigger: "validate-on-one FAILED after deploy: rebuild-journal on 65aac62e changed open_net_debit 3235 -> 286.47, still wrong (correct: 32.35) — a SECOND, deeper root cause in the same area"
+round_3_trigger: "Build ONE tested capability to enable account-wide durable re-ingest of Schwab fills, so already-backfilled calendars' fills.side data (wrong before the round-2 code fix) gets corrected at the source. Code-complete + committed; NOT deployed, NOT run against prod — status stays 'fixing' until the orchestrator executes the run sequence and prod-verifies 65aac62e."
 ---
 
 # Debug Session: journal-pnl-opennetdebit-units
@@ -611,3 +612,114 @@ files_changed:
   - packages/core/src/journal/application/syncFills.property.test.ts (P3 ROLL expected-value reconstruction updated from stale-unsigned to side-signed, matching the fix)
   - packages/adapters/src/schwab/trader/transactions-adapter.ts (mapSide(amount, cost): cost-sign fallback + null-on-no-signal, leg dropped instead of fabricated)
   - packages/adapters/src/schwab/trader/trader-adapter.test.ts (+2 tests: missing-amount cost fallback, amount+cost both missing → leg dropped)
+
+## Round 3 — account-wide fills-side-correction capability (wipe-derived-fills)
+
+**Trigger:** Round 2's standing blind_spot: the code fix corrects all FUTURE fills ingestion
+but does NOT retroactively correct already-backfilled calendars' `fills.side` data (no raw
+broker JSON stored — the true sign is unrecoverable from stored fills rows alone). Correcting
+65aac62e (and any other already-backfilled calendar) requires deleting the existing derived
+rows and re-running `backfill-transactions` against Schwab with the fixed adapter — a
+capability that did not exist yet. User approved account-wide re-ingest; this round builds the
+missing piece only. Architecture findings pre-verified by the orchestrator (not re-derived):
+`fills` has no calendar_id FK (occSymbols are shared across calendars — no clean per-calendar
+scope, so the correction is account-wide, not per-calendar); `writeFills` is
+`onConflictDoNothing` on the fill id PK (re-running backfill over EXISTING fills is a no-op —
+wrong-side rows must be deleted first); `fills`/`calendar_events`/`orphan_fills` are 100%
+derived/rebuildable from the Schwab transaction feed; `calendars`/`calendar_snapshots` are NOT
+rebuildable this way and must stay untouched.
+
+**Built (TDD red→green at every layer, full command output captured):**
+- Core port `ForWipingDerivedFills` (packages/core/.../ports.ts) — account-wide, no
+  calendarId, returns `{ fillsDeleted, eventsDeleted, orphansDeleted }`.
+- Core use-case `makeWipeDerivedFillsUseCase` (wipeDerivedFills.ts, 3 tests) — thin
+  delegation to the port (mirrors architecture-boundaries.md §5's use-case-factory
+  requirement even though there is no per-calendar lookup to compose, unlike
+  recomputeSnapshotPnl).
+- Postgres adapter (postgres/repos/fills.ts): `wipeDerivedFills` wraps all 3 DELETEs
+  (calendar_events → orphan_fills → fills, defensive order) in ONE `db.transaction` —
+  all-or-nothing, mirrors recomputeSnapshotPnl's money-path atomicity hardening from the
+  round-1 specialist review. Verified against REAL Postgres via testcontainers, including a
+  postgres-only test that seeds a `calendars` row AND a `calendar_snapshots` row directly and
+  proves both survive untouched after a real `wipeDerivedFills()` call (empirical proof, not
+  just "by construction" — confirmed no FK/CASCADE exists on any of the 3 tables via both the
+  live schema and a migrations grep for `FOREIGN KEY`, zero hits).
+- In-memory twin (memory/fills.ts) — same shared contract suite (`__contract__/fills.contract.ts`,
+  +3 cases run against BOTH adapters: deletes-and-returns-counts, calendars-untouched,
+  idempotent-on-empty), `processedIds` also cleared on wipe for parity (processed_at lives on
+  the fill row in real Postgres — gone with it).
+- Worker handler (`wipe-derived-fills.ts`, 5 tests) — mirrors sync-fills' full-sweep `{}`
+  payload (no calendarId — account-wide) + recompute-snapshot-pnl's "no RTH gate" (on-demand,
+  runs anytime).
+- Wiring: `contracts/jobs.ts` TRIGGERABLE_JOBS (+1, stays calendarId-optional — no per-job
+  refinement needed, unlike rebuild-journal/recompute-snapshot-pnl); `schedule.ts` 14th queue
+  (createQueue + work, deliberately NO schedule() call — destructive account-wide op must
+  never run on a cron); `main.ts` composition wiring; MCP `trigger_job` description string;
+  HTTP `jobs.routes.test.ts` (+1 end-to-end trigger test, TRIGGERABLE_JOBS length 4→5).
+  `enqueueJob`'s existing dedupe logic required NO changes — an account-wide job with no
+  calendarId already falls into the default `scheduledDedupeKey` (10-min window) branch, which
+  is itself a valuable safety property here (prevents a double-trigger storm of this
+  destructive op within the same window) — added ONE test documenting this, not a code change.
+
+**Money-path review (self-conducted — no Task/subagent tool available in this session; applied
+the same rigor as the round-1/round-2 specialist review passes):**
+- Atomicity: confirmed via testcontainers that all 3 deletes commit or roll back together
+  (same `db.transaction` pattern already reviewed/approved for recomputeSnapshotPnl).
+- No FK/CASCADE risk: empirically confirmed (real Postgres test + migrations grep for
+  `FOREIGN KEY` → zero hits) — delete ordering is defensive-only, not correctness-load-bearing
+  today.
+- Idempotency: a second run on already-empty tables returns `{0,0,0}`, no error (tested).
+- Twin parity: the identical shared contract suite passes against both the Postgres adapter
+  (real DB) and the in-memory twin (architecture-boundaries.md §8 satisfied, verified not just
+  declared).
+- No `any`/`as`/`!` introduced (grepped the 4 new/changed production files — clean).
+- **Non-blocking risk flagged, not coded around** (documented here + in the handback): the
+  overall correction is a TWO-STEP workflow (wipe → re-ingest) that is NOT atomic across the
+  step boundary. If `wipe-derived-fills` succeeds but the subsequent `backfill-transactions`
+  fails or is interrupted (e.g. Schwab auth expired), the 3 derived tables are left EMPTY until
+  backfill is successfully retried — the Journal would show NO trade history for the wiped
+  window in the interim. This is an operational sequencing risk inherent to the two-job design
+  (not fixable by adding more code to this job — the fix is discipline in the run sequence: do
+  not proceed past wipe until backfill's own step confirms success), not a defect in either
+  job's own atomicity.
+
+**Verification:** `bun run typecheck` clean (tsc --build --force, zero errors). `bun run lint`
+clean (same pre-existing boundaries-plugin informational warnings as every prior round, zero
+errors). `bun run test` (vitest, whole monorepo): **2139/2139 pass** (was 2119/2119 before this
+round — +20 net new tests: 3 core use-case + 3×2=6 shared fills-contract cases (postgres +
+memory) + 1 postgres-only calendars/calendar_snapshots-survive test + 5 worker handler tests +
+2 contracts/jobs tests + 1 HTTP route test + 1 enqueueJob dedupe test + 1 schedule.ts queue
+test). NOT verified against prod data — no prod job triggered, no deploy performed. Prod
+verification (65aac62e converging to openNetDebit ≈ 32.35 / P&L ≈ +$415) is the orchestrator's
+post-deploy step, after running the full sequence below.
+
+**files_changed (round 3):**
+  - packages/core/src/journal/application/ports.ts (+ForWipingDerivedFills port)
+  - packages/core/src/journal/application/wipeDerivedFills.ts (new use-case)
+  - packages/core/src/journal/application/wipeDerivedFills.test.ts (new, 3 tests)
+  - packages/core/src/journal/index.ts, packages/core/src/index.ts (barrel exports)
+  - packages/core/src/journal/application/enqueueJob.test.ts (+1 test, documents existing dedupe behavior — no enqueueJob.ts/dedupe-key.ts code change)
+  - packages/adapters/src/postgres/repos/fills.ts (+wipeDerivedFills impl, transaction-wrapped 3-table DELETE)
+  - packages/adapters/src/memory/fills.ts (+wipeDerivedFills impl, +countEvents/countOrphans test helpers)
+  - packages/adapters/src/__contract__/fills.contract.ts (+3 shared contract tests, +FillsSeedContext.countEvents/countOrphans)
+  - packages/adapters/src/postgres/repos/fills.contract.test.ts (wiring + 1 postgres-only calendars/calendar_snapshots-survive test)
+  - packages/adapters/src/memory/fills.contract.test.ts (wiring)
+  - packages/contracts/src/jobs.ts (+"wipe-derived-fills" to TRIGGERABLE_JOBS, doc comment)
+  - packages/contracts/src/jobs.test.ts (+2 tests)
+  - apps/server/src/adapters/http/jobs.routes.test.ts (+1 end-to-end trigger test, length 4→5)
+  - apps/server/src/adapters/mcp/tools/trigger-job.ts (description string update)
+  - apps/worker/src/handlers/wipe-derived-fills.ts (new handler)
+  - apps/worker/src/handlers/wipe-derived-fills.test.ts (new, 5 tests)
+  - apps/worker/src/schedule.ts, apps/worker/src/schedule.test.ts (14th queue, on-demand only, no cron)
+  - apps/worker/src/main.ts (composition wiring)
+
+- next_action: Orchestrator-owned. Run the sequence: (1) deploy worker (new handler + queue
+  registration) and server (trigger_job enum gained a 5th job) — code is committed, NOT
+  deployed. (2) Trigger `wipe-derived-fills` (account-wide, no payload). (3) Run
+  `backfill-transactions <from> <to>` covering the earliest calendar's openedAt (2026-04-16)
+  through today, chunked within the Schwab lookback cap (SCHWAB_TX_MAX_RANGE_DAYS per call,
+  SCHWAB_TX_LOOKBACK_MAX_DAYS total span guard) — requires a live Schwab trader-app token
+  (AUTH_EXPIRED fails the whole backfill, writes nothing, per its own over-cap/all-or-nothing
+  guard). (4) Per affected calendarId: `rebuild-journal` then `recompute-snapshot-pnl`. (5)
+  Prod-verify 65aac62e: openNetDebit ≈ 32.35, P&L ≈ +$415. Do NOT run any of this from a
+  debugger session — this session self-verified in dev/test only.
