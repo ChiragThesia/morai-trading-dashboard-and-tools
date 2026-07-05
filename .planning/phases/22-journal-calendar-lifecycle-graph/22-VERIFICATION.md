@@ -121,3 +121,39 @@ No blocking gaps. All 5 ROADMAP success criteria are backed by real, wired, inde
 
 _Verified: 2026-07-05T19:30:53Z_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## Live UAT Addendum — 2026-07-05 (post-deploy, chrome-devtools on morai.wtf)
+
+Phase deployed: web `dpl_GjLeqp…` READY @ `1a93c17`; server Railway `35650233` SUCCESS.
+Both `human_needed` items driven live against prod (authenticated session).
+
+**Item 1 — crosshair → P&L-bridge sync: PASS.** New `GET /api/journal/:id/lifecycle`
+serves 200 with the exact enriched contract. On the open 7425P calendar, hovering a
+Jul-01 non-gap point → chart tooltip renders the real readout
+(`net P&L / theta / vega / delta-gamma / forward vol 0.15% / SPX 7502`) AND the rail
+P&L-bridge label flips to "as of Jul 01"; hovering the latest point → "as of Jul 03".
+Gap rows show "feed lapsed — no data" and the bridge correctly falls back to last-non-gap
+(the designed 22-04 behavior) — never fabricated.
+
+**Item 2 — D-08 visual fidelity: PASS.** Chart renders all panels with real data —
+P&L attribution hero (theta/vega/delta-gamma/residual stack), vol & term structure
+(amber forward-vol line), signed greek small-multiples — plus masthead verdict, rail
+cards (THE EDGE fwd vol 0.2%, GREEKS·NOW delta −1.19), honest-caveats footer, BEATS.
+Gaps drawn as breaks, never interpolated.
+
+**Strike-line gap (was informational):** FIXED pre-deploy in `cd387e6` (TradeSummary →
+toTradeSummary → LifecycleChart strike wiring, TDD RED→GREEN).
+
+**Findings surfaced (NOT phase-22 defects, tracked in STATE follow-ups):**
+1. Prod journal snapshot data is ~74% gap rows (flagship calendar: 12 non-gap of 46) —
+   upstream `snapshot-calendars` writing spot=0/NaN + worker-down hole Jun 27-30. Feature
+   works and renders honestly; real-world richness throttled until the pipeline records
+   clean series.
+2. `GET /api/journal//rules` → 401 (empty calendarId; Phase-20 `useRuleTags` missing the
+   `enabled` guard `useLifecycle` has). Pre-existing.
+
+**Verdict: PASSED** (both human-UAT items confirmed live).
+
+_UAT by: Claude (orchestrator, chrome-devtools) — 2026-07-05_

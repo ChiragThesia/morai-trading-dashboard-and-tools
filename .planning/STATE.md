@@ -4,11 +4,11 @@ milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
 current_phase: 22
 current_phase_name: journal-calendar-lifecycle-graph
-status: awaiting-uat
-stopped_at: Phase 22 executed + verified (human_needed — 2 visual UAT items)
+status: complete
+stopped_at: Phase 22 executed, verified, deployed + live UAT PASSED (both visual items)
 last_updated: "2026-07-05T18:10:26.792Z"
 last_activity: 2026-07-05
-last_activity_desc: Phase 22 executed (6/6 plans) + strike-line gap fix + verification (human_needed)
+last_activity_desc: Phase 22 shipped — 6/6 plans, strike-line gap fix, deployed (web+server), live UAT 2/2 pass on morai.wtf
 progress:
   total_phases: 8
   completed_phases: 7
@@ -28,10 +28,15 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 22 (journal-calendar-lifecycle-graph) — EXECUTED, AWAITING UAT
+Phase: 22 (journal-calendar-lifecycle-graph) — COMPLETE (shipped + UAT passed)
 Plan: 6 of 6 complete
-Status: Verification human_needed — 2 visual UAT items pending (live crosshair→P&L-bridge sync; D-08 visual fidelity vs mockup with prod data). Run `/gsd-verify-work 22`.
-Last activity: 2026-07-05 — Phase 22 executed (6/6 plans, 23 commits) + strike-line gap fix (cd387e6); goal verified, 2 items routed to human UAT
+Status: Deployed to prod (web dpl_GjLeqp READY @1a93c17; server Railway 35650233 SUCCESS). Live UAT on morai.wtf PASSED both items — crosshair→rail sync (rail "as of" flips Jul 01↔Jul 03 on hover) + D-08 chart renders all panels with real data + honest gap breaks.
+Last activity: 2026-07-05 — Phase 22 SHIPPED (6/6 plans, 23 commits) + strike-line gap fix (cd387e6) + deployed + live UAT 2/2
+
+## Open follow-ups (not phase-22 blockers)
+
+1. **Journal snapshot data ~74% gaps** — flagship open calendar (65aac62e) has 46 snapshots but only 12 non-gap (10 on Jul 01, 2 on Jul 03); Jun 23-26 all gap (spot=0/NaN), Jun 27-30 empty (worker-down window). The lifecycle feature works and renders honestly, but real-world richness is throttled by the `snapshot-calendars` job writing gap rows. Fix the snapshot pipeline so calendars accumulate clean non-gap series.
+2. **`GET /api/journal//rules` → 401** — empty calendarId (Phase-20 `useRuleTags` missing the `enabled: !!calendarId` guard that `useLifecycle` got in 22-04). Fires once on Journal mount. Pre-existing, still open.
 
 ## Milestone v1.2 Summary
 
