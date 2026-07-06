@@ -356,12 +356,17 @@ export type PendingObs = {
 
 /**
  * ForReadingPendingObs — scan leg_observations partial index (BSM-03).
- * Returns rows where bsm_iv IS NULL AND mark IS NOT NULL.
- * Uses the partial index leg_obs_pending_bsm_idx for efficiency.
+ * Returns up to `limit` rows where bsm_iv IS NULL AND mark IS NOT NULL,
+ * NEWEST-first (ORDER BY time DESC). Uses the partial index leg_obs_pending_bsm_idx.
+ *
+ * gex-schwab-bsm-null-puts fix: the read MUST be bounded AND newest-first. An unbounded,
+ * oldest-first read starves the newest chain cycle — the live cohort ends up never
+ * processed (bsm_* stay NULL), so GEX drops those legs and loses the put wall / flip.
+ * `limit` must exceed one full-chain cycle so a cycle is never split across runs.
  */
-export type ForReadingPendingObs = () => Promise<
-  Result<ReadonlyArray<PendingObs>, StorageError>
->;
+export type ForReadingPendingObs = (
+  limit: number,
+) => Promise<Result<ReadonlyArray<PendingObs>, StorageError>>;
 
 /**
  * ForWritingBsmResults — write the five bsm_* columns for a batch of rows (BSM-03).

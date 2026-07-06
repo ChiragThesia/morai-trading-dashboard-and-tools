@@ -119,11 +119,15 @@ export function makePostgresLegObservationsRepo(
   // ─── ForReadingPendingObs ─────────────────────────────────────────────────
   // BSM-03: scan the partial index — returns rows where bsm_iv IS NULL AND mark IS NOT NULL.
   // T-02-15: this scan is the mechanism that makes re-runs a no-op (NaN-stamped rows excluded).
-  const readPendingObs: ForReadingPendingObs = async (): Promise<
+  const readPendingObs: ForReadingPendingObs = async (limit): Promise<
     Result<ReadonlyArray<PendingObs>, StorageError>
   > => {
     try {
-      // Step 1: scan the partial index for pending rows
+      // Step 1: scan the partial index for pending rows — NEWEST-first, bounded.
+      // gex-schwab-bsm-null-puts fix: ORDER BY time DESC + LIMIT so the freshest chain cycle
+      // is always the cohort processed. The previous unbounded, oldest-first read starved the
+      // newest (live) cohort — its legs stayed bsm_* NULL and GEX dropped them (no put wall /
+      // flip). The btree partial index (time, contract) supports the backward scan + limit.
       const obsRows = await db
         .select({
           time: legObservations.time,
@@ -132,7 +136,9 @@ export function makePostgresLegObservationsRepo(
           underlyingPrice: legObservations.underlyingPrice,
         })
         .from(legObservations)
-        .where(and(isNull(legObservations.bsmIv), isNotNull(legObservations.mark)));
+        .where(and(isNull(legObservations.bsmIv), isNotNull(legObservations.mark)))
+        .orderBy(desc(legObservations.time))
+        .limit(limit);
 
       if (obsRows.length === 0) return ok([]);
 

@@ -25,6 +25,11 @@ import { formatOccSymbol } from "@morai/shared";
  * - T-02-17: vendor columns unchanged after bsm write
  */
 
+// ForReadingPendingObs now requires a `limit` (bounded, newest-first — gex-schwab-bsm-null-puts
+// fix). These membership/idempotency tests want "effectively all pending", so pass a limit far
+// above any seeded row count. The dedicated newest-first-bounding regression uses a small limit.
+const PENDING_LIMIT_ALL = 100_000;
+
 export type LegObservationsRepo = {
   readonly persistObservations: ForPersistingObservations;
   readonly upsertContracts: ForUpsertingContracts;
@@ -282,7 +287,7 @@ export function runLegObservationsContractTests(
         await repo.upsertContracts(contractRows);
         await repo.persistObservations(observations);
 
-        const pendingResult = await repo.readPendingObs();
+        const pendingResult = await repo.readPendingObs(PENDING_LIMIT_ALL);
         expect(pendingResult.ok).toBe(true);
         if (!pendingResult.ok) return;
 
@@ -352,7 +357,7 @@ export function runLegObservationsContractTests(
         // NaN-stamped row must NOT appear in the pending scan for this time slot
         // (bsm_iv is no longer NULL after NaN stamp)
         // Filter pending by our specific time to avoid cross-test interference
-        const pendingResult = await repo.readPendingObs();
+        const pendingResult = await repo.readPendingObs(PENDING_LIMIT_ALL);
         expect(pendingResult.ok).toBe(true);
         if (!pendingResult.ok) return;
         const pendingForThisTime = pendingResult.value.filter(
@@ -380,7 +385,7 @@ export function runLegObservationsContractTests(
         await repo.writeBsmResults(writes);
 
         // Second read returns empty (idempotent re-run — BSM-03 AC)
-        const pendingResult = await repo.readPendingObs();
+        const pendingResult = await repo.readPendingObs(PENDING_LIMIT_ALL);
         expect(pendingResult.ok).toBe(true);
         if (!pendingResult.ok) return;
 
@@ -389,6 +394,52 @@ export function runLegObservationsContractTests(
           (obs) => obs.time.getTime() === observationTime.getTime(),
         );
         expect(ourPending).toHaveLength(0);
+      });
+
+      // ─── gex-schwab-bsm-null-puts regression ──────────────────────────────
+      // Root cause: an unbounded, OLDEST-first pending read let the newest chain cycle
+      // (the live cohort) sit at the tail forever — its legs stayed bsm_* NULL, so GEX
+      // dropped them and lost the put wall / flip. The read must be BOUNDED (LIMIT) and
+      // NEWEST-first (ORDER BY time DESC) so the freshest cycle is always the cohort returned.
+      it("gex-schwab-bsm-null-puts: read is bounded AND newest-first — newest cycle is not starved", async () => {
+        const oldTime = new Date(Date.UTC(2099, 0, 1, 15, 0, 0)); // older "backlog"
+        const newTime = new Date(Date.UTC(2099, 0, 2, 15, 0, 0)); // newer "live cycle"
+        // Distinct far-future contracts so this cohort is the NEWEST in the shared table.
+        const cA = formatOccSymbol({ root: "SPX", expiry: new Date(Date.UTC(2099, 2, 20)), type: "C", strike: 8000 });
+        const cB = formatOccSymbol({ root: "SPX", expiry: new Date(Date.UTC(2099, 2, 20)), type: "P", strike: 8000 });
+        const cC = formatOccSymbol({ root: "SPX", expiry: new Date(Date.UTC(2099, 2, 20)), type: "C", strike: 8100 });
+
+        const contractRows: ReadonlyArray<ContractRow> = [
+          { occSymbol: cA, underlying: "SPX", root: "SPX", contractType: "C", exerciseStyle: "european", strike: 8000000, expiration: "2099-03-20", multiplier: 100 },
+          { occSymbol: cB, underlying: "SPX", root: "SPX", contractType: "P", exerciseStyle: "european", strike: 8000000, expiration: "2099-03-20", multiplier: 100 },
+          { occSymbol: cC, underlying: "SPX", root: "SPX", contractType: "C", exerciseStyle: "european", strike: 8100000, expiration: "2099-03-20", multiplier: 100 },
+        ];
+        await repo.upsertContracts(contractRows);
+
+        const mkObs = (contract: OccSymbol, time: Date): ObservationRow => ({
+          time, contract, bid: 1.0, ask: 1.1, mark: 1.05, underlyingPrice: 8000.0,
+          iv: 0.2, delta: 0.5, gamma: 0.001, theta: -0.02, vega: 0.3,
+          openInterest: 10, volume: 5, source: "cboe" as const,
+        });
+        // Older backlog cohort: 3 rows at oldTime.
+        await repo.persistObservations([mkObs(cA, oldTime), mkObs(cB, oldTime), mkObs(cC, oldTime)]);
+        // Newer live cohort: 2 rows at newTime (the call + put that must NOT be starved).
+        await repo.persistObservations([mkObs(cA, newTime), mkObs(cB, newTime)]);
+
+        // limit == size of the older backlog. An oldest-first (or unbounded) read returns the
+        // backlog and starves the newTime cohort; newest-first + LIMIT returns the live cycle.
+        const result = await repo.readPendingObs(3);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+
+        // Bounded: at most `limit` rows (an unbounded read returns the whole table → fails here).
+        expect(result.value.length).toBeLessThanOrEqual(3);
+        // Newest-first: BOTH newTime legs (call AND put) are present — the live cohort is covered.
+        const newContracts = result.value
+          .filter((p) => p.time.getTime() === newTime.getTime())
+          .map((p) => p.contract);
+        expect(newContracts).toContain(cA);
+        expect(newContracts).toContain(cB);
       });
     });
 
@@ -405,7 +456,7 @@ export function runLegObservationsContractTests(
         await repo.upsertContracts(contractRows);
         await repo.persistObservations(observations);
 
-        const pendingResult = await repo.readPendingObs();
+        const pendingResult = await repo.readPendingObs(PENDING_LIMIT_ALL);
         expect(pendingResult.ok).toBe(true);
         if (!pendingResult.ok) return;
 
@@ -454,7 +505,7 @@ export function runLegObservationsContractTests(
         expect(persResult.ok).toBe(true);
 
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const pendingResult = await repo.readPendingObs();
+        const pendingResult = await repo.readPendingObs(PENDING_LIMIT_ALL);
 
         expect(pendingResult.ok).toBe(true);
         if (!pendingResult.ok) {

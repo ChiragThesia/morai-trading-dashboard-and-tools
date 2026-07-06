@@ -2,8 +2,8 @@
  * computeBsmGreeks use-case — batch BSM compute for pending leg_observations (BSM-03).
  *
  * Algorithm:
- *   1. Read all pending rows (bsm_iv IS NULL AND mark IS NOT NULL via partial index),
- *      then bound the run to the first MAX_BATCH_SIZE rows (RC#1 — see below)
+ *   1. Read up to MAX_BATCH_SIZE NEWEST pending rows (bsm_iv IS NULL AND mark IS NOT NULL
+ *      via partial index, ORDER BY time DESC LIMIT — see MAX_BATCH_SIZE / RC#1 below)
  *   2. For each row: get rate r from ForReadingRate, memoized per observation date
  *      (RC#1); fall back to fallbackRate if null
  *   3. Compute T = computeT(now(), expiry, root) — settlement-aware (D-04)
@@ -43,14 +43,22 @@ import { computeT } from "../domain/dte.ts";
 // NaN sentinel string — always use this, never JS NaN (T-02-16, Pitfall 4)
 const NAN_STAMP = "NaN";
 
-// RC#1 fix: bound how many pending rows a single run processes. writeBsm persists
-// one row at a time inside a transaction (packages/adapters postgres repo), so an
-// unbounded backlog (e.g. 56k rows from one snapshot) makes the run's total DB round
-// trips grow without limit — a timeout mid-run makes zero forward progress (all-or-
-// nothing write), and every retry redoes the whole backlog. Bounding lets each run
-// finish well within the pg-boss handler timeout (900s) and make incremental progress;
-// rows beyond the bound stay pending (bsm_iv still NULL) for the next scheduled run.
-export const MAX_BATCH_SIZE = 2000;
+// RC#1 + gex-schwab-bsm-null-puts fix: the pending read is bounded AND newest-first.
+//
+// RC#1 (timeout): writeBsm persists one row at a time inside a transaction, so an unbounded
+// backlog makes a run's DB round-trips grow without limit — a timeout mid-run makes zero
+// forward progress. Bounding keeps each run within the pg-boss 900s handler limit.
+//
+// gex-schwab-bsm-null-puts (coverage): the read is now NEWEST-first (ForReadingPendingObs does
+// ORDER BY time DESC LIMIT). The OLD bound was 2000 — smaller than one chain cycle (~11,246
+// CBOE / ~3,622 Schwab legs at a single timestamp) — so oldest-first the newest (live) cohort
+// was starved and, within a partially-reached cycle, puts (contract 'P' > 'C') were cut. Those
+// rows stayed bsm_* NULL and GEX dropped them (no put wall / flip). The bound now exceeds one
+// full cycle so the freshest cycle is always processed whole in a single run.
+//
+// ponytail: fixed ceiling sized to the observed max cycle; if the SPX chain grows past this a
+// cycle splits again — raise it (per-row cost is one indexed UPDATE, far under the 900s limit).
+export const MAX_BATCH_SIZE = 12000;
 
 /**
  * makeComputeBsmGreeksUseCase — factory returning the batch BSM compute use-case.
@@ -72,8 +80,9 @@ export function makeComputeBsmGreeksUseCase(deps: {
   readonly now: () => Date;
 }): () => Promise<Result<void, StorageError>> {
   return async (): Promise<Result<void, StorageError>> => {
-    // Step 1: read pending rows
-    const pendingResult = await deps.readPending();
+    // Step 1: read the newest pending rows, bounded (ForReadingPendingObs: ORDER BY time DESC
+    // LIMIT). MAX_BATCH_SIZE exceeds one full chain cycle so the freshest cycle is never split.
+    const pendingResult = await deps.readPending(MAX_BATCH_SIZE);
     if (!pendingResult.ok) {
       return err(pendingResult.error);
     }

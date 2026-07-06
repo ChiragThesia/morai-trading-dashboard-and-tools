@@ -440,6 +440,30 @@ describe("makeComputeBsmGreeksUseCase", () => {
     expect(readRateCalls).toBe(1);
   });
 
+  it("gex-schwab-bsm-null-puts: forwards MAX_BATCH_SIZE as the read bound (newest-first, bounded)", async () => {
+    // The read MUST be bounded — the use-case passes MAX_BATCH_SIZE so the adapter can apply
+    // ORDER BY time DESC LIMIT and return the freshest cycle rather than an oldest-first backlog.
+    let seenLimit: number | undefined;
+    const readPending: ForReadingPendingObs = async (limit) => {
+      seenLimit = limit;
+      return ok([]);
+    };
+    const writeBsm: ForWritingBsmResults = async () => ok(undefined);
+    const readRate: ForReadingRate = async () => ok("0.05");
+
+    const useCase = makeComputeBsmGreeksUseCase({
+      readPending,
+      writeBsm,
+      readRate,
+      dividendYield: 0.013,
+      fallbackRate: 0.045,
+      now: () => new Date("2026-06-11T15:00:00Z"),
+    });
+
+    await useCase();
+    expect(seenLimit).toBe(MAX_BATCH_SIZE);
+  });
+
   it("regression (RC#1): bounds a single run to MAX_BATCH_SIZE rows, leaving the remainder pending", async () => {
     // Bug: readPending() returns the ENTIRE backlog with no bound, and the use-case
     // writes in one all-or-nothing batch at the end — a timeout mid-run makes zero

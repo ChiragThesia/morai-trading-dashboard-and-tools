@@ -130,7 +130,9 @@ export function runBsmDrainContractTests(makeRepo: () => BsmDrainContractRepo): 
       await repo.seedNanStampedRow(nanOcc1, obsTime, 5.0, UNDERLYING);
       await repo.seedNanStampedRow(nanOcc2, obsTime, 3.0, UNDERLYING);
 
-      const pendingResult = await repo.readPendingObs();
+      // Bounded, newest-first read (gex-schwab-bsm-null-puts); this suite truncates + seeds a
+      // handful of rows, so a large limit returns them all.
+      const pendingResult = await repo.readPendingObs(100_000);
       expect(pendingResult.ok).toBe(true);
       if (!pendingResult.ok) return;
 
