@@ -3,12 +3,21 @@
  * answer). One compact row per OPEN calendar: short name · P&L-since-entry sparkline ·
  * current P&L · DTE. Clicking a row deep-links into the Journal for that calendar.
  *
- * Data: useCalendars() for the open set; useLifecycle(calendarId) per row for the P&L series
- * (same query keys the Journal populates, so the cache is warm on click). Renders nothing
- * when there are no open calendars — no empty panel on Overview.
+ * Data:
+ *   - useCalendars() — the open set (name, strike, expiry).
+ *   - usePositions() — live broker marks; the current P&L number is the calendar's unrealized
+ *     P&L (netUnreal), which is available whenever positions load — NOT the journal snapshot
+ *     history (that lags: it needs the 30-min snapshot-calendars job to have run for the
+ *     calendar, which is chain/RTH-gated).
+ *   - useLifecycle(calendarId) per row — the persisted P&L series that draws the sparkline.
+ *     Empty until snapshots accumulate; the row still shows its live P&L number in the meantime.
+ *
+ * Renders nothing when there are no open calendars — no empty panel on Overview.
  */
 import { useCalendars } from "../hooks/useCalendars.ts";
 import { useLifecycle } from "../hooks/useLifecycle.ts";
+import { usePositions } from "../hooks/usePositions.ts";
+import { pairPositionsIntoCalendars } from "../lib/pair-calendars.ts";
 import { Panel, SectionLabel } from "./system/index.tsx";
 import { sparklinePath } from "../lib/sparkline.ts";
 import { cn } from "@/lib/utils";
@@ -16,6 +25,16 @@ import type { CalendarResponse } from "@morai/contracts";
 
 const SPARK_W = 120;
 const SPARK_H = 26;
+
+/**
+ * Join key for matching a journal calendar to a live broker calendar group. The broker reports
+ * underlyingSymbol "$SPX" for every leg, so we key on option type + strike-in-points, which is
+ * unique per open calendar. parseOccSymbol yields strike in points (7400); the journal calendar
+ * strike is a ×1000 int (7400000) — the strip divides before keying.
+ */
+function legKey(optionType: "C" | "P", strikePoints: number): string {
+  return `${optionType}|${strikePoints}`;
+}
 
 /** Whole calendar days from `now` until a YYYY-MM-DD expiry (floored at 0). */
 function daysUntil(ymd: string, now: Date): number {
@@ -32,10 +51,13 @@ function signedUsd(n: number): string {
 
 function OpenCalendarRow({
   calendar,
+  livePnl,
   now,
   onOpen,
 }: {
   calendar: CalendarResponse;
+  /** Live unrealized P&L from broker marks (netUnreal), or null when no marks match. */
+  livePnl: number | null;
   now: Date;
   onOpen: (calendarId: string) => void;
 }): React.ReactElement {
@@ -45,11 +67,10 @@ function OpenCalendarRow({
     .map((s) => Number(s.pnlOpen))
     .filter((n) => Number.isFinite(n));
 
-  const lastPnl = pnls.at(-1) ?? null;
-  const up = lastPnl !== null && lastPnl >= 0;
+  const up = livePnl !== null && livePnl >= 0;
+  const toneClass = livePnl === null ? "text-dim" : up ? "text-up" : "text-down";
   const name = `${calendar.strike / 1000}${calendar.optionType}`;
   const dte = daysUntil(calendar.frontExpiry, now);
-  const toneClass = lastPnl === null ? "text-dim" : up ? "text-up" : "text-down";
 
   return (
     <button
@@ -68,7 +89,7 @@ function OpenCalendarRow({
         className={cn("overflow-visible", toneClass)}
         aria-hidden="true"
       >
-        {pnls.length > 0 && (
+        {pnls.length > 0 ? (
           <path
             d={sparklinePath(pnls, SPARK_W, SPARK_H)}
             fill="none"
@@ -77,10 +98,22 @@ function OpenCalendarRow({
             strokeLinejoin="round"
             strokeLinecap="round"
           />
+        ) : (
+          // No snapshot history yet (pipeline lag) — a faint baseline, not a fake trend.
+          <line
+            x1={0}
+            y1={SPARK_H / 2}
+            x2={SPARK_W}
+            y2={SPARK_H / 2}
+            className="text-line"
+            stroke="currentColor"
+            strokeWidth={1}
+            strokeDasharray="2 3"
+          />
         )}
       </svg>
       <span className={cn("font-display text-xs font-bold tabular-nums", toneClass)}>
-        {lastPnl === null ? "—" : signedUsd(lastPnl)}
+        {livePnl === null ? "—" : signedUsd(livePnl)}
       </span>
       <span className="font-mono text-[10px] text-dim tabular-nums">{dte}d</span>
     </button>
@@ -92,19 +125,33 @@ export function OpenCalendarsStrip({
 }: {
   onOpenJournal: (calendarId: string) => void;
 }): React.ReactElement | null {
-  const { data } = useCalendars();
-  const open = (data?.calendars ?? []).filter((c) => c.status === "open");
+  const { data: calData } = useCalendars();
+  const { data: posData } = usePositions();
 
+  const open = (calData?.calendars ?? []).filter((c) => c.status === "open");
   if (open.length === 0) return null;
 
   const now = new Date();
+
+  // Live unrealized P&L per open calendar, keyed by option type + strike-in-points.
+  const { calendars: groups } = pairPositionsIntoCalendars(posData?.positions ?? [], now);
+  const pnlByKey = new Map<string, number | null>();
+  for (const g of groups) {
+    pnlByKey.set(legKey(g.optionType, g.strike), g.netUnreal);
+  }
 
   return (
     <Panel>
       <SectionLabel className="mb-2">Open calendars · P&amp;L since entry</SectionLabel>
       <div className="flex flex-col gap-1.5">
         {open.map((c) => (
-          <OpenCalendarRow key={c.id} calendar={c} now={now} onOpen={onOpenJournal} />
+          <OpenCalendarRow
+            key={c.id}
+            calendar={c}
+            livePnl={pnlByKey.get(legKey(c.optionType, c.strike / 1000)) ?? null}
+            now={now}
+            onOpen={onOpenJournal}
+          />
         ))}
       </div>
     </Panel>
