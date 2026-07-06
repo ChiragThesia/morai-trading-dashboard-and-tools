@@ -774,6 +774,21 @@ export type ForWritingAnnotations = (
 ) => Promise<Result<CalendarEventAnnotation, StorageError>>;
 
 /**
+ * ForReadingFillsByOccSymbols — read ALL fills rows matching a set of OCC symbols,
+ * regardless of processed/orphan status (JRNL-02, register-open-calendars).
+ *
+ * Distinct from ForReadingUnprocessedFills(ForCalendar): a calendar auto-registered from
+ * the live position book may have fills that were already orphan-parked (no calendar
+ * existed yet to match them against when they were first ingested) or already marked
+ * processed — this port ignores that state entirely and returns every matching row, so
+ * registerOpenCalendars can source openedAt from the earliest real fill regardless of when
+ * the calendar itself gets registered. Returns empty array when no fill matches.
+ */
+export type ForReadingFillsByOccSymbols = (
+  occSymbols: ReadonlyArray<string>,
+) => Promise<Result<ReadonlyArray<RawFill>, StorageError>>;
+
+/**
  * ForReadingAnnotations — read one annotation by hash, or the subset matching a hash set
  * (RULE-01). readAnnotation returns null on miss; readAnnotationsByHashes returns only the
  * matching rows (empty array when none match) — feeds getCalendarEventsWithRules' in-memory

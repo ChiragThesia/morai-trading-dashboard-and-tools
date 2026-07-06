@@ -164,6 +164,7 @@ export type {
   ForWritingFills,
   ForEnqueueingJob,
   ForWipingDerivedFills,
+  ForReadingFillsByOccSymbols,
 } from "./journal/index.ts";
 export { makeSyncFillsUseCase, makeSyncFillsForCalendarUseCase } from "./journal/index.ts";
 export type {
@@ -364,4 +365,20 @@ export type {
   LifecycleSnapshot,
   GetCalendarLifecycleDeps,
   ForRunningGetCalendarLifecycle,
+} from "./journal/index.ts";
+
+// ─── JRNL-02: register-open-calendars (auto-register calendars from the open position book) ──
+export {
+  pairPositionsIntoCalendarCandidates,
+  makeRegisterOpenCalendarsUseCase,
+} from "./journal/index.ts";
+export type {
+  PositionLeg,
+  CalendarCandidate,
+  ForFetchingOpenPositionLegs,
+  RegisterOpenCalendarsDeps,
+  RegisterOpenCalendarsResult,
+  RegisteredCalendarSummary,
+  SkippedCalendarSummary,
+  ForRunningRegisterOpenCalendars,
 } from "./journal/index.ts";

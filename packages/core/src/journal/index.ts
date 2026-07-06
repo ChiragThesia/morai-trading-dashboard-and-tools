@@ -89,6 +89,7 @@ export type {
   ForWritingFills,
   ForEnqueueingJob,
   ForWipingDerivedFills,
+  ForReadingFillsByOccSymbols,
 } from "./application/ports.ts";
 // Phase 5: syncFills use-case factories + driver ports
 export {
@@ -237,3 +238,19 @@ export type {
   GetCalendarLifecycleDeps,
   ForRunningGetCalendarLifecycle,
 } from "./application/getCalendarLifecycle.ts";
+// JRNL-02: position-pairing pure domain fn — ports the web Positions pairing algorithm
+// into core so registerOpenCalendars can consume the real position book (see
+// domain/position-pairing.ts doc comment for the underlyingSymbol-keyed rationale).
+export { pairPositionsIntoCalendarCandidates } from "./domain/position-pairing.ts";
+export type { PositionLeg, CalendarCandidate } from "./domain/position-pairing.ts";
+// JRNL-02: registerOpenCalendars use-case — auto-register calendars from the open position
+// book so they appear in the Journal without a manual registration step.
+export { makeRegisterOpenCalendarsUseCase } from "./application/registerOpenCalendars.ts";
+export type {
+  ForFetchingOpenPositionLegs,
+  RegisterOpenCalendarsDeps,
+  RegisterOpenCalendarsResult,
+  RegisteredCalendarSummary,
+  SkippedCalendarSummary,
+  ForRunningRegisterOpenCalendars,
+} from "./application/registerOpenCalendars.ts";
