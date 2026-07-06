@@ -31,7 +31,6 @@ import { relAge, GEX_FRESH_MS } from "./Market.tsx";
 import { CotCard } from "../components/CotCard.tsx";
 import { MacroCard } from "../components/MacroCard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
-import { OpenCalendarsStrip } from "../components/OpenCalendarsStrip.tsx";
 import { Panel, PanelHeading, SectionLabel, Stat, MetricChip } from "../components/system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -328,7 +327,7 @@ function buildRows(positions: ReadonlyArray<BrokerPositionResponse>): Row[] {
   return [...calRows, ...singleRows];
 }
 
-const COLS = ["Position", "Expiry / DTE", "Net val", "Unreal", "Δ", "Γ", "Θ/d", "Vega"] as const;
+const COLS = ["Position", "Expiry / DTE", "Net val", "P&L / entry", "Δ", "Γ", "Θ/d", "Vega"] as const;
 
 /**
  * PositionsTable — TOS-style docked positions table with live BSM greek overlay.
@@ -788,12 +787,7 @@ function PillHeader({
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
 
-interface OverviewProps {
-  /** Deep-link a clicked open-calendar row into the Journal for that calendar. */
-  readonly onOpenJournal?: (calendarId: string) => void;
-}
-
-export function Overview({ onOpenJournal }: OverviewProps = {}): React.ReactElement {
+export function Overview(): React.ReactElement {
   const { data: posData } = usePositions();
   const { data: gex } = useGex();
   const { data: cot } = useCot();
@@ -975,10 +969,6 @@ export function Overview({ onOpenJournal }: OverviewProps = {}): React.ReactElem
       {/* ── Two-column body: payoff hero + docked table (left) / GEX rail (right) ── */}
       <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 320px" }}>
         <div className="flex flex-col gap-3">
-          {/* Open book glance — "what's going on right now" across the open calendars.
-              Clicking a row deep-links into the Journal for that calendar. */}
-          <OpenCalendarsStrip onOpenJournal={onOpenJournal ?? noop} />
-
           {/* Payoff hero */}
           <Panel>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

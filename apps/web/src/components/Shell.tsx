@@ -186,3 +186,25 @@ export function Shell({
     </>
   );
 }
+
+// ─── ShellWithRouter ─────────────────────────────────────────────────────────
+
+/**
+ * ShellWithRouter — wraps Shell with its own internal screen state and renders
+ * the active screen from the provided `screens` map.
+ */
+interface ShellWithRouterProps {
+  screens: Record<ScreenName, React.ReactNode>;
+}
+
+export function ShellWithRouter({
+  screens,
+}: ShellWithRouterProps): React.ReactElement {
+  const [activeScreen, setActiveScreen] = useState<ScreenName>("Overview");
+
+  return (
+    <Shell activeScreen={activeScreen} onNavigate={setActiveScreen}>
+      {screens[activeScreen]}
+    </Shell>
+  );
+}

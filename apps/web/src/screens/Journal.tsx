@@ -55,8 +55,6 @@ export interface TradeSummary {
 interface JournalProps {
   /** All trades to show in the left-column list */
   trades: ReadonlyArray<TradeSummary>;
-  /** Deep-link target (Overview open-calendar strip) — pre-selects this calendar's trade. */
-  initialCalendarId?: string | undefined;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -475,22 +473,14 @@ function TradeRow({
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
-export function Journal({ trades, initialCalendarId }: JournalProps): React.ReactElement {
+export function Journal({ trades }: JournalProps): React.ReactElement {
   // Open trades first (the "what's going on now" view); closed trades fold into History.
   const openTrades = trades.filter((t) => t.closedAt === null);
   const closedTrades = trades.filter((t) => t.closedAt !== null);
 
-  // Default selection: a deep-linked calendar (Overview strip) if present, else the first
-  // open trade, else the first trade of any kind. The calendars query is warm from Overview
-  // on a deep-link, so `trades` is populated at first render and the match lands on mount.
-  // ponytail: no re-select effect for a cold direct-mount into a deep-link — that path
-  // doesn't exist (you can't click the Overview row before Overview has loaded calendars).
-  const deepLinked =
-    initialCalendarId !== undefined
-      ? trades.find((t) => t.calendarId === initialCalendarId)
-      : undefined;
+  // Default-select the first open trade (falls back to the first trade of any kind).
   const [selectedId, setSelectedId] = useState<string | null>(
-    deepLinked?.id ?? openTrades[0]?.id ?? trades[0]?.id ?? null,
+    openTrades[0]?.id ?? trades[0]?.id ?? null,
   );
 
   // History (closed trades) is collapsed by default, but auto-expands when there are no
