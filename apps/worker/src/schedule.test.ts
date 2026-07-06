@@ -79,14 +79,16 @@ function makeFakeHandlers(): AllHandlers {
     fetchEconomicEvents: handler,
     recomputeSnapshotPnl: handler,
     wipeDerivedFills: handler,
+    registerOpenCalendars: handler,
   };
 }
 
 // GW-03: refresh-tokens retired; 13-05 COT-01: fetch-cot added; 19-08: compute-picker +
 // fetch-economic-events added; JRNL-01 pnl-unit-mismatch fix: recompute-snapshot-pnl added
 // (on-demand only, mirrors rebuild-journal); journal-pnl-opennetdebit-units round 3:
-// wipe-derived-fills added (on-demand only, account-wide) — 14 queues, 7 crons
-const ALL_14_QUEUES = [
+// wipe-derived-fills added (on-demand only, account-wide); JRNL-02: register-open-calendars
+// added (on-demand only, account-wide) — 15 queues, 7 crons
+const ALL_15_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
@@ -101,6 +103,7 @@ const ALL_14_QUEUES = [
   "fetch-economic-events",
   "recompute-snapshot-pnl",
   "wipe-derived-fills",
+  "register-open-calendars",
 ];
 
 const SCHEDULED_7 = [
@@ -114,11 +117,11 @@ const SCHEDULED_7 = [
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 14 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3)", async () => {
+  it("calls createQueue for all 15 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02)", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_14_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_15_QUEUES.sort());
   });
 
   it("calls schedule 8 times — 7 jobs, fetch-rates scheduled twice; all 8 rows survive the (name, key) upsert (14-05, D-06, CR-01)", async () => {
@@ -201,11 +204,11 @@ describe("registerAllJobs", () => {
     expect(names).not.toContain("refresh-tokens");
   });
 
-  it("calls work() for all 14 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3)", async () => {
+  it("calls work() for all 15 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02)", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_14_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_15_QUEUES.sort());
   });
 
   it("does NOT schedule recompute-snapshot-pnl (on-demand only, mirrors rebuild-journal — JRNL-01)", async () => {
@@ -222,6 +225,14 @@ describe("registerAllJobs", () => {
 
     const names = scheduleCalls.map((c) => c.name);
     expect(names).not.toContain("wipe-derived-fills");
+  });
+
+  it("does NOT schedule register-open-calendars (on-demand only, account-wide — JRNL-02)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const names = scheduleCalls.map((c) => c.name);
+    expect(names).not.toContain("register-open-calendars");
   });
 
   it("does NOT schedule compute-picker (chain-triggered only by compute-gex-snapshot, 19-08 D-04)", async () => {

@@ -82,6 +82,7 @@ export type AllHandlers = {
   readonly fetchEconomicEvents: PgBossHandler;
   readonly recomputeSnapshotPnl: PgBossHandler;
   readonly wipeDerivedFills: PgBossHandler;
+  readonly registerOpenCalendars: PgBossHandler;
 };
 
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
@@ -120,6 +121,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("fetch-economic-events"); // 19-08: weekly FRED+FOMC events refresh (D-14)
   await boss.createQueue("recompute-snapshot-pnl"); // JRNL-01 pnl-unit-mismatch fix: on-demand only; no cron
   await boss.createQueue("wipe-derived-fills"); // journal-pnl-opennetdebit-units round 3: on-demand only, account-wide; no cron
+  await boss.createQueue("register-open-calendars"); // JRNL-02: on-demand only, account-wide; no cron
   // refresh-tokens: RETIRED (GW-03) — sidecar auto-refreshes both Schwab apps; no TS refresher
 
   // ── Phase 2: schedules (idempotent — safe on every boot) ─────────────────────
@@ -201,6 +203,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   // recompute-snapshot-pnl: NO schedule — on-demand via trigger_job (JRNL-01, mirrors rebuild-journal)
   // wipe-derived-fills: NO schedule — on-demand via trigger_job (journal-pnl-opennetdebit-units
   //   round 3; destructive account-wide op — must never run on a cron)
+  // register-open-calendars: NO schedule — on-demand via trigger_job (JRNL-02)
   // refresh-tokens: RETIRED (GW-03) — sidecar handles Schwab token refresh; no TS scheduled job
 
   // ── Phase 3: register handlers (work) ─────────────────────────────────────────
@@ -220,4 +223,5 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("fetch-economic-events", POLLING_INTERVAL, handlers.fetchEconomicEvents);
   await boss.work("recompute-snapshot-pnl", POLLING_INTERVAL, handlers.recomputeSnapshotPnl);
   await boss.work("wipe-derived-fills", POLLING_INTERVAL, handlers.wipeDerivedFills);
+  await boss.work("register-open-calendars", POLLING_INTERVAL, handlers.registerOpenCalendars);
 }

@@ -156,6 +156,7 @@ describe("jobsRoutes", () => {
     expect(TRIGGERABLE_JOBS).toContain("compute-bsm-greeks");
     expect(TRIGGERABLE_JOBS).toContain("recompute-snapshot-pnl");
     expect(TRIGGERABLE_JOBS).toContain("wipe-derived-fills");
-    expect(TRIGGERABLE_JOBS).toHaveLength(5);
+    expect(TRIGGERABLE_JOBS).toContain("register-open-calendars");
+    expect(TRIGGERABLE_JOBS).toHaveLength(6);
   });
 });

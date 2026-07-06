@@ -15,6 +15,7 @@ export const TRIGGERABLE_JOBS = [
   "compute-bsm-greeks",
   "recompute-snapshot-pnl",
   "wipe-derived-fills",
+  "register-open-calendars",
 ] as const;
 
 export type TriggerableJob = (typeof TRIGGERABLE_JOBS)[number];

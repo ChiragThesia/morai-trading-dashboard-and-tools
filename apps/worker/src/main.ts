@@ -29,6 +29,7 @@ import {
   makeCboeChainAdapter,
   makeSidecarChainAdapter,
   makeSchwabTransactionsAdapter,
+  makeSchwabPositionsAdapter,
   makeAccountHashResolver,
   makeFredRateAdapter,
   makePostgresTermStructureObservationsRepo,
@@ -64,7 +65,11 @@ import {
   makeFetchCot,
   makeFetchMacroSeries,
   makeComputePickerSnapshotUseCase,
+  makeGetPositionsUseCase,
+  makeRegisterCalendarUseCase,
+  makeRegisterOpenCalendarsUseCase,
 } from "@morai/core";
+import type { PositionLeg } from "@morai/core";
 import type { GexContextForPicker, GexSnapshotRow } from "@morai/core";
 import { makeFetchCotHandler } from "./handlers/fetch-cot.ts";
 import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
@@ -78,6 +83,7 @@ import { makeSyncTransactionsHandler } from "./handlers/sync-transactions.ts";
 import { makeRebuildJournalHandler } from "./handlers/rebuild-journal.ts";
 import { makeRecomputeSnapshotPnlHandler } from "./handlers/recompute-snapshot-pnl.ts";
 import { makeWipeDerivedFillsHandler } from "./handlers/wipe-derived-fills.ts";
+import { makeRegisterOpenCalendarsHandler } from "./handlers/register-open-calendars.ts";
 import { makeComputePickerHandler } from "./handlers/compute-picker.ts";
 import { makeFetchEconomicEventsHandler } from "./handlers/fetch-economic-events.ts";
 import { registerAllJobs } from "./schedule.ts";
@@ -436,6 +442,56 @@ const wipeDerivedFillsHandler = makeWipeDerivedFillsHandler({
   now: () => new Date(),
 });
 
+// JRNL-02: register-open-calendars — auto-register calendars from the current open position
+// book. Reuses the trader app's positions adapter (mirrors apps/server/src/main.ts's getPositions
+// wiring) + accountHashResolver/traderDeps already built above for sync-transactions.
+const positionsAdapter = makeSchwabPositionsAdapter(traderDeps);
+const getPositionsUseCase = makeGetPositionsUseCase({
+  resolveAccountHash: accountHashResolver.resolveAccountHash,
+  fetchPositions: positionsAdapter.fetchPositions,
+});
+
+// Maps brokerage's BrokerPosition (+ its own AuthExpiredError) into journal's minimal
+// PositionLeg + FetchError shape — registerOpenCalendars stays decoupled from the brokerage
+// bounded context (architecture-boundaries §7: cross bounded contexts via application ports;
+// this mapping IS that composition-root port adaptation).
+const fetchOpenPositionLegs = async () => {
+  const result = await getPositionsUseCase();
+  if (!result.ok) {
+    const message =
+      result.error.kind === "auth-expired"
+        ? `brokerage auth expired for app ${result.error.appId}`
+        : result.error.message;
+    return { ok: false as const, error: { kind: "fetch-error" as const, message } };
+  }
+  const legs: PositionLeg[] = result.value.map((p) => ({
+    occSymbol: p.occSymbol,
+    underlyingSymbol: p.underlyingSymbol,
+    longQty: p.longQty,
+    shortQty: p.shortQty,
+    averagePrice: p.averagePrice,
+  }));
+  return { ok: true as const, value: legs };
+};
+
+const registerCalendarUseCase = makeRegisterCalendarUseCase({
+  persistCalendar: calendarsRepo.registerCalendar,
+  now: () => new Date(),
+});
+
+const registerOpenCalendarsUseCase = makeRegisterOpenCalendarsUseCase({
+  fetchOpenPositions: fetchOpenPositionLegs,
+  listCalendars: calendarsRepo.listCalendars,
+  readFillsByOccSymbols: fillsRepo.readFillsByOccSymbols,
+  registerCalendar: registerCalendarUseCase,
+  now: () => new Date(),
+});
+
+const registerOpenCalendarsHandler = makeRegisterOpenCalendarsHandler({
+  registerOpenCalendarsUseCase,
+  now: () => new Date(),
+});
+
 // COT-01 (13-05): weekly CFTC Commitment of Traders report (Friday 17:00 ET, D-07).
 // CFTC Socrata endpoint — anonymous access, no auth required (landmine 7).
 // Idempotent: ON CONFLICT (contract_code, as_of) DO NOTHING in the repo (D-09).
@@ -527,8 +583,9 @@ await registerAllJobs(boss, {
   fetchEconomicEvents: fetchEconomicEventsHandler,
   recomputeSnapshotPnl: recomputeSnapshotPnlHandler,
   wipeDerivedFills: wipeDerivedFillsHandler,
+  registerOpenCalendars: registerOpenCalendarsHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 14 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 15 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );
