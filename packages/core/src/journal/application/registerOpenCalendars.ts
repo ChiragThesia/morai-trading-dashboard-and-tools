@@ -8,15 +8,22 @@
  *   1. Fetches current open positions (ForFetchingOpenPositionLegs — adapted from the
  *      brokerage bounded context at the composition root; journal stays decoupled from it).
  *   2. Pairs them into calendar candidates via the ported pure domain fn (position-pairing.ts).
- *   3. Dedups against already-registered calendars (ForListingCalendars) by
- *      (underlying, strike, optionType, frontExpiry, backExpiry) — idempotent re-runs.
+ *   3. Dedups against already-OPEN calendars only (ForListingCalendars, filtered to
+ *      status "open") by (underlying, strike, optionType, frontExpiry, backExpiry) —
+ *      idempotent re-runs. A CLOSED calendar sharing the same key is history, not a live
+ *      match: a genuinely re-opened trade at the same strike/expiries (still unexpired)
+ *      must still register as new, so closed rows never block it.
  *   4. openNetDebit (points) = back.averagePrice − front.averagePrice — Σ avgPrice ×
  *      (longQty − shortQty) over both legs (back is long +avgPrice, front is short
  *      −avgPrice for a standard long calendar).
- *   5. openedAt = the earliest matching fill's filledAt (ForReadingFillsByOccSymbols, which
- *      reads regardless of processed/orphan status — these fills may already be orphan-
- *      parked from before the calendar existed). Falls back to now() when no fill is found
- *      — never fabricated, and callers can tell the two cases apart via openedAtSource.
+ *   5. openedAt = the earliest OPENING fill's filledAt among the two legs
+ *      (ForReadingFillsByOccSymbols, which reads regardless of processed/orphan status —
+ *      these fills may already be orphan-parked from before the calendar existed). Only
+ *      positionEffect === "OPENING" fills count: a CLOSING fill on the same OCC symbol
+ *      belongs to a different, possibly older calendar that happened to share a leg (a
+ *      documented real pattern — see fill-pairing.ts's shared-leg disambiguation) and must
+ *      never leak an earlier timestamp in. Falls back to now() when no OPENING fill is
+ *      found — never fabricated, and callers can tell the two cases apart via openedAtSource.
  *   6. Registers via the existing registerCalendar use-case (ForRunningRegisterCalendar).
  *
  * KNOWN LIMITATION (not introduced by this use-case — a pre-existing schema constraint):
@@ -109,16 +116,21 @@ export function makeRegisterOpenCalendarsUseCase(
     const existingResult = await deps.listCalendars();
     if (!existingResult.ok) return existingResult;
 
+    // Dedup scope is OPEN calendars only. A CLOSED calendar sharing the exact same key is
+    // history (a past trade), not a live registration to protect — a genuinely re-opened
+    // trade at the same strike/expiries (still unexpired) must still be registered as new.
     const existingKeys = new Set(
-      existingResult.value.map((c) =>
-        dedupeKey({
-          underlying: c.underlying,
-          strike: c.strike,
-          optionType: c.optionType,
-          frontExpiry: c.frontExpiry,
-          backExpiry: c.backExpiry,
-        }),
-      ),
+      existingResult.value
+        .filter((c) => c.status === "open")
+        .map((c) =>
+          dedupeKey({
+            underlying: c.underlying,
+            strike: c.strike,
+            optionType: c.optionType,
+            frontExpiry: c.frontExpiry,
+            backExpiry: c.backExpiry,
+          }),
+        ),
     );
 
     const registered: RegisteredCalendarSummary[] = [];
@@ -155,8 +167,13 @@ export function makeRegisterOpenCalendarsUseCase(
       ]);
       if (!fillsResult.ok) return fillsResult;
 
+      // Only OPENING fills count toward openedAt — a CLOSING fill on the same OCC symbol
+      // belongs to a DIFFERENT (possibly older, unrelated) calendar that happened to share a
+      // leg (a documented real pattern, see fill-pairing.ts's shared-leg disambiguation) and
+      // must never leak an earlier timestamp into this newly-registered calendar.
       let earliestFilledAt: Date | null = null;
       for (const fill of fillsResult.value) {
+        if (fill.positionEffect !== "OPENING") continue;
         if (earliestFilledAt === null || fill.filledAt.getTime() < earliestFilledAt.getTime()) {
           earliestFilledAt = fill.filledAt;
         }

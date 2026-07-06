@@ -243,6 +243,146 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
     expect(result.value.skippedExisting).toHaveLength(0);
   });
 
+  it("re-registers a candidate whose (underlying,strike,optionType,frontExpiry,backExpiry) matches an existing CLOSED calendar — a closed row is history, not a live dedup match (a re-opened trade must still appear)", async () => {
+    // 7650C candidate: front 2026-07-31 / back 2026-08-03. Seed an existing CLOSED calendar
+    // with the EXACT same key — simulates the user having traded and closed this exact
+    // strike/expiry pair before, then genuinely re-opening it (both legs still unexpired).
+    const existingClosed: Calendar = {
+      id: "closed-reopened",
+      underlying: "SPX",
+      strike: 7650000,
+      optionType: "C",
+      frontExpiry: "2026-07-31",
+      backExpiry: "2026-08-03",
+      qty: 1,
+      openNetDebit: 2,
+      status: "closed",
+      openedAt: new Date("2026-06-01T14:00:00Z"),
+      closedAt: new Date("2026-07-10T14:00:00Z"),
+      notes: null,
+    };
+    const calendarStore: Calendar[] = [existingClosed];
+    let nextId = 1;
+    const registerCalendarUseCase = makeRegisterCalendarUseCase({
+      persistCalendar: async (input) => {
+        const row: Calendar = {
+          id: `cal-${nextId++}`,
+          underlying: input.underlying,
+          strike: input.strike,
+          optionType: input.optionType,
+          frontExpiry: input.frontExpiry,
+          backExpiry: input.backExpiry,
+          qty: input.qty,
+          openNetDebit: input.openNetDebit,
+          status: "open",
+          openedAt: input.openedAt,
+          closedAt: null,
+          notes: input.notes ?? null,
+        };
+        calendarStore.push(row);
+        return ok(row);
+      },
+      now: () => NOW,
+    });
+    const listCalendars: ForListingCalendars = async () => ok(calendarStore);
+    const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async () => ok([]);
+
+    const use = makeRegisterOpenCalendarsUseCase({
+      fetchOpenPositions: fetchOpenPositions(),
+      listCalendars,
+      readFillsByOccSymbols,
+      registerCalendar: registerCalendarUseCase,
+      now: () => NOW,
+    });
+
+    const result = await use();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // All 5 register — the closed row with the matching key does NOT block re-registration.
+    expect(result.value.registered).toHaveLength(5);
+    expect(result.value.skippedExisting).toHaveLength(0);
+    expect(result.value.registered.some((r) => r.strike === 7650000)).toBe(true);
+  });
+
+  it("sources openedAt from the earliest OPENING fill, ignoring an earlier CLOSING fill on the same symbols (a shared/reused leg's stale close must not leak in)", async () => {
+    const calendarStore: Calendar[] = [];
+    let nextId = 1;
+    const registerCalendarUseCase = makeRegisterCalendarUseCase({
+      persistCalendar: async (input) => {
+        const row: Calendar = {
+          id: `cal-${nextId++}`,
+          underlying: input.underlying,
+          strike: input.strike,
+          optionType: input.optionType,
+          frontExpiry: input.frontExpiry,
+          backExpiry: input.backExpiry,
+          qty: input.qty,
+          openNetDebit: input.openNetDebit,
+          status: "open",
+          openedAt: input.openedAt,
+          closedAt: null,
+          notes: input.notes ?? null,
+        };
+        calendarStore.push(row);
+        return ok(row);
+      },
+      now: () => NOW,
+    });
+    const listCalendars: ForListingCalendars = async () => ok(calendarStore);
+
+    // An earlier, unrelated trade's CLOSE fill on the same front-leg symbol (e.g. the symbol
+    // was reused by a prior now-closed calendar) — dated BEFORE the real OPENING fill for
+    // this new position. Must not win as "earliest".
+    const staleClose = new Date("2026-01-01T14:00:00Z");
+    const realOpen = new Date("2026-07-01T14:30:00Z");
+    const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async (occSymbols) => {
+      if (occSymbols.includes("SPX   260804P07400000")) {
+        return ok([
+          {
+            id: "stale-close",
+            orderId: "ORD-OLD",
+            occSymbol: "SPX   260804P07400000",
+            side: "sell",
+            qty: 1,
+            price: 1,
+            filledAt: staleClose,
+            commission: null,
+            fees: null,
+            positionEffect: "CLOSING",
+          },
+          {
+            id: "real-open",
+            orderId: "ORD-NEW",
+            occSymbol: "SPX   260804P07400000",
+            side: "sell",
+            qty: 1,
+            price: 95.3278,
+            filledAt: realOpen,
+            commission: null,
+            fees: null,
+            positionEffect: "OPENING",
+          },
+        ]);
+      }
+      return ok([]);
+    };
+
+    const use = makeRegisterOpenCalendarsUseCase({
+      fetchOpenPositions: fetchOpenPositions(),
+      listCalendars,
+      readFillsByOccSymbols,
+      registerCalendar: registerCalendarUseCase,
+      now: () => NOW,
+    });
+
+    const result = await use();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const c7400 = result.value.registered.find((r) => r.strike === 7400000);
+    expect(c7400?.openedAt).toEqual(realOpen);
+    expect(c7400?.openedAtSource).toBe("fill");
+  });
+
   it("sources openedAt from the earliest matching fill when present", async () => {
     const calendarStore: Calendar[] = [];
     let nextId = 1;
