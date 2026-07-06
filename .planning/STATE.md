@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Trade Picker & Dashboard Redesign
-current_phase: 22
-current_phase_name: journal-calendar-lifecycle-graph
-status: complete
-stopped_at: Phase 22 executed, verified, deployed + live UAT PASSED (both visual items)
-last_updated: "2026-07-05T18:10:26.792Z"
-last_activity: 2026-07-05
-last_activity_desc: Phase 22 shipped — 6/6 plans, strike-line gap fix, deployed (web+server), live UAT 2/2 pass on morai.wtf
+current_phase: null
+status: Awaiting next milestone
+stopped_at: v1.2 closed + tagged 2026-07-06 (override_closeout, 7 acknowledged deferrals)
+last_updated: "2026-07-06T13:06:40.526Z"
+last_activity: 2026-07-06
+last_activity_desc: Milestone v1.2 completed and archived
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 43
   completed_plans: 43
-  percent: 88
+  percent: 100
+current_phase_name: null
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 22 (journal-calendar-lifecycle-graph) — COMPLETE (shipped + UAT passed)
-Plan: 6 of 6 complete
-Status: Deployed to prod (web dpl_GjLeqp READY @1a93c17; server Railway 35650233 SUCCESS). Live UAT on morai.wtf PASSED both items — crosshair→rail sync (rail "as of" flips Jul 01↔Jul 03 on hover) + D-08 chart renders all panels with real data + honest gap breaks.
-Last activity: 2026-07-05 — Phase 22 SHIPPED (6/6 plans, 23 commits) + strike-line gap fix (cd387e6) + deployed + live UAT 2/2
+Phase: Milestone v1.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-06 — Milestone v1.2 completed and archived
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -337,6 +337,18 @@ Items acknowledged and deferred at v1.1 milestone close on 2026-07-02:
 | todo | 03-code-review-followups.md | low, advisory |
 | todo | over-engineering-cleanup.md | ponytail-audit 2026-06-22 |
 
+Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_closeout):
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | journal-pnl-ground-truth | resolved — P&L fixed + 13 calendars oracle-verified 2026-07-05; session marker stale |
+| uat_gap | Phase 17.1: 17.1-UAT.md | passed — 0 pending scenarios |
+| verification_gap | Phase 20: 20-VERIFICATION.md | human_needed — WATCH-01 confirmed live in prod |
+| verification_gap | Phase 22: 22-VERIFICATION.md | human_needed — live UAT 2/2 PASSED on morai.wtf |
+| todo | 03-code-review-followups.md | low, advisory (carried from v1.1) |
+| todo | over-engineering-cleanup.md | ponytail-audit 2026-06-22 (carried from v1.1) |
+| context_open_questions | Phase 22: 22-CONTEXT.md (3) | resolved during execution — UI-SPEC locked |
+
 ## Session Continuity
 
 Last session: 2026-07-05T16:47:43.139Z
@@ -344,3 +356,7 @@ Stopped at: Phase 22 UI-SPEC approved
 Resume file: .planning/phases/22-journal-calendar-lifecycle-graph/22-UI-SPEC.md
 
 - Next: execute 20-02-PLAN.md (server-side ping emitter wiring, WATCH-01)
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

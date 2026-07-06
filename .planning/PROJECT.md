@@ -15,10 +15,21 @@ every trade's life recorded and queryable.
 trade?" — collected automatically, never hand-edited, queryable by API and by Claude Code. If
 everything else fails, this must work.
 
-## Current State (post-v1.1, 2026-07-02)
+## Current State (post-v1.2, 2026-07-06)
 
-**Shipped:** v1.0 Backend + Data Layer (Phases 1–9, 2026-06-25) and v1.1 Real-Time Schwab
-Streaming (Phases 10–15, 2026-07-02). See `.planning/MILESTONES.md`.
+**Shipped:** v1.0 Backend + Data Layer (Phases 1–9, 2026-06-25), v1.1 Real-Time Schwab Streaming
+(Phases 10–15, 2026-07-02), and v1.2 Trade Picker & Dashboard Redesign (Phases 16–22, 2026-07-06).
+See `.planning/MILESTONES.md`.
+
+**v1.2 added:** a TOS-fidelity Overview payoff dock (per-leg IV-calibrated curves, date projection,
+per-calendar toggles), a ranked-cards calendar Picker over a real `scoreCalendarCandidates` engine +
+FOMC/CPI/NFP economic-events context, a 3-state stream-health watchdog, event-triggered journal
+snapshots, a per-trade strategy-rules recording layer, an app-wide button/affordance system, and a
+per-calendar journal lifecycle graph (P&L attribution, forward vol, signed greeks).
+
+**Next milestone (candidate):** reliability / ops hardening — in-app Schwab re-auth trigger +
+market-feed-down alert (no auto-refresh cron or prod refresh path exists today) and fixing the
+`snapshot-calendars` gaps that leave open-calendar journal series ~74% empty.
 
 - Three Railway services (server, worker, Python schwab-py sidecar) + Supabase Postgres +
   Vercel web (morai-web.vercel.app / morai.wtf).
