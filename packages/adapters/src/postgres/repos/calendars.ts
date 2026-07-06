@@ -6,6 +6,7 @@ import type {
   ForRegisteringCalendar,
   ForListingCalendars,
   ForClosingCalendar,
+  ForTransitioningCalendarClosed,
   ForGettingCalendarById,
   ForGettingOpenCalendarLegs,
   Calendar,
@@ -13,7 +14,7 @@ import type {
   CalendarNotFound,
   CalendarAlreadyClosed,
 } from "@morai/core";
-import { sql, eq, desc } from "drizzle-orm";
+import { sql, eq, desc, and } from "drizzle-orm";
 import { calendars } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -33,6 +34,7 @@ export type PostgresCalendarsRepo = {
   readonly registerCalendar: ForRegisteringCalendar;
   readonly listCalendars: ForListingCalendars;
   readonly closeCalendar: ForClosingCalendar;
+  readonly transitionCalendarClosed: ForTransitioningCalendarClosed;
   readonly getCalendarById: ForGettingCalendarById;
   readonly getOpenCalendarLegs: ForGettingOpenCalendarLegs;
   readonly seedOpenCalendar: (calendar: Calendar) => Promise<void>;
@@ -267,6 +269,28 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
     }
   };
 
+  // ─── transitionCalendarClosed (ForTransitioningCalendarClosed — round 5 bug 2) ──────
+  // Auto-transition, driven by the event-processing path (syncFills), NOT a user action:
+  // idempotent no-op if the calendar is already closed or unknown — a re-ingest/rebuild must
+  // be safe to repeat (D-10). Sets closedAt to the REAL historical close date passed in
+  // (never "now"), unlike the user-initiated closeCalendar (CAL-04).
+  const transitionCalendarClosed: ForTransitioningCalendarClosed = async (
+    calendarId: string,
+    closedAt: Date,
+  ): Promise<Result<void, StorageError>> => {
+    try {
+      await db
+        .update(calendars)
+        .set({ status: "closed", closedAt })
+        .where(and(eq(calendars.id, calendarId), eq(calendars.status, "open")));
+      return ok(undefined);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes("invalid input syntax for type uuid")) return ok(undefined);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   const getCalendarById: ForGettingCalendarById = async (
     id: string,
   ): Promise<Result<Calendar | null, StorageError>> => {
@@ -366,6 +390,7 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
     registerCalendar,
     listCalendars,
     closeCalendar,
+    transitionCalendarClosed,
     getCalendarById,
     getOpenCalendarLegs,
     seedOpenCalendar,

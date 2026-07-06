@@ -150,6 +150,8 @@ describe("journal end-to-end (SC4 + SC5) against the real in-memory repo path", 
       };
     };
 
+    const transitionCalendarClosed = async () => ({ ok: true as const, value: undefined });
+
     // First pass: OPEN. Read only the OPENING (buy) fill.
     const openSync = makeSyncFillsUseCase({
       readUnprocessedFills: async () => {
@@ -163,6 +165,7 @@ describe("journal end-to-end (SC4 + SC5) against the real in-memory repo path", 
       resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
       readCalendarEvents: eventsRepo.readCalendarEvents,
       markFillsProcessed: fillsRepo.markFillsProcessed,
+      transitionCalendarClosed,
       newId,
       hashFillIds: hashIds,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -191,6 +194,7 @@ describe("journal end-to-end (SC4 + SC5) against the real in-memory repo path", 
       resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
       readCalendarEvents: eventsRepo.readCalendarEvents,
       markFillsProcessed: fillsRepo.markFillsProcessed,
+      transitionCalendarClosed,
       newId,
       hashFillIds: hashIds,
       now: () => new Date("2026-06-16T14:00:00Z"),
@@ -289,6 +293,7 @@ describe("journal end-to-end (SC4 + SC5) against the real in-memory repo path", 
       resetCalendarAmounts: resetAmounts,
       readCalendarEvents: eventsRepo.readCalendarEvents,
       markFillsProcessed: fillsRepo.markFillsProcessed,
+      transitionCalendarClosed: async () => ({ ok: true as const, value: undefined }),
       newId,
       hashFillIds: hashIds,
       now: () => new Date("2026-06-15T14:00:00Z"),

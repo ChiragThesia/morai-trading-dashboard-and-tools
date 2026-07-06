@@ -31,6 +31,7 @@ export type {
   ForListingCalendars,
   ForGettingCalendarById,
   ForClosingCalendar,
+  ForTransitioningCalendarClosed,
   ForGettingOpenCalendarLegs,
   LegSnapshot,
   ForResolvingLegSnapshot,
@@ -147,6 +148,14 @@ export type {
 } from "./application/getMacro.ts";
 // Phase 5: fill-pairing reference hasher — composition roots wire it with an injected sha256 (C1)
 export { hashFillIds } from "./domain/fill-pairing.ts";
+// journal-pnl-opennetdebit-units round 5: fill→calendar order-anchored disambiguation (bug 1)
+// + fully-closed detection from a calendar's event history (bug 2) — both pure domain fns.
+export { resolveFillMatches, isCalendarFullyClosed } from "./domain/fill-pairing.ts";
+export type {
+  FillMatchCandidate,
+  FillMatchInput,
+  ResolvedFillMatch,
+} from "./domain/fill-pairing.ts";
 // Phase 5: rebuildJournal use-case factory + driver port
 export { makeRebuildJournalUseCase } from "./application/rebuildJournal.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./application/rebuildJournal.ts";

@@ -143,7 +143,12 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
   };
 
   // WR-A2 rebuild support: clear processed_at for the calendar's leg fills so the scoped
-  // re-pair re-reads them (mirrors readUnprocessedFillsForCalendar's leg matching).
+  // re-pair re-reads them (mirrors readUnprocessedFillsForCalendar's leg matching). Round 5
+  // (bug 1): ALSO reset any fill sharing an orderId with a leg-matched fill ("order
+  // context") — otherwise an order-context fill already marked processed by a SIBLING
+  // calendar's earlier rebuild (a shared-leg scenario) never gets reset, and permanently
+  // vanishes from every subsequent scoped read (readUnprocessedFillsForCalendar excludes
+  // processed fills regardless of which calendar's rebuild is asking).
   const resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar = async (
     calendarId: string,
   ): Promise<Result<void, StorageError>> => {
@@ -151,12 +156,19 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
     if (cal === undefined) return ok(undefined);
     const { front, back } = calendarLegSymbols(cal);
     const legSet = new Set<string>([front, back]);
+    const orderIds = new Set(
+      [...fillStore.values()].filter((f) => legSet.has(f.occSymbol)).map((f) => f.orderId),
+    );
     for (const f of fillStore.values()) {
-      if (legSet.has(f.occSymbol)) processedIds.delete(f.id);
+      if (legSet.has(f.occSymbol) || orderIds.has(f.orderId)) processedIds.delete(f.id);
     }
     return ok(undefined);
   };
 
+  // journal-pnl-opennetdebit-units round 5 (bug 1): also include order-context fills —
+  // see the Postgres adapter's readUnprocessedFillsForCalendar doc comment for the full
+  // rationale (a shared leg symbol needs the sibling calendar's unique leg from the SAME
+  // order present in the batch for resolveFillMatches to disambiguate it).
   const readUnprocessedFillsForCalendar: ForReadingUnprocessedFillsForCalendar =
     async (
       calendarId: string,
@@ -165,11 +177,15 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
       if (cal === undefined) return ok([]);
       const { front, back } = calendarLegSymbols(cal);
       const legSet = new Set<string>([front, back]);
-      const rows = [...fillStore.values()].filter(
-        (f) =>
-          !processedIds.has(f.id) && !orphanIds.has(f.id) && legSet.has(f.occSymbol),
+      const unprocessed = [...fillStore.values()].filter(
+        (f) => !processedIds.has(f.id) && !orphanIds.has(f.id),
       );
-      return ok(rows);
+      const ownMatches = unprocessed.filter((f) => legSet.has(f.occSymbol));
+      const orderIds = new Set(ownMatches.map((f) => f.orderId));
+      const contextFills = unprocessed.filter(
+        (f) => orderIds.has(f.orderId) && !legSet.has(f.occSymbol),
+      );
+      return ok([...ownMatches, ...contextFills]);
     };
 
   const readCalendarLegs: ForReadingCalendarLegs = async (

@@ -13,7 +13,7 @@
 
 import { ok, err, parseOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import type { RawFill, AggregatedFill } from "./calendar-event.ts";
+import type { RawFill, AggregatedFill, CalendarEvent } from "./calendar-event.ts";
 
 // Re-export types used by fill-pairing consumers
 export type { RawFill, AggregatedFill };
@@ -197,4 +197,112 @@ export function hashFillIds(
   const sorted = [...ids].sort();
   const joined = sorted.join(":");
   return hasher(joined);
+}
+
+/**
+ * resolveFillMatches — disambiguate fills whose OCC symbol matches more than one calendar's
+ * leg (journal-pnl-opennetdebit-units round 5, bug 1).
+ *
+ * A leg symbol can be shared by two DIFFERENT calendars (e.g. the same front-month contract
+ * reused by two calendar spreads opened at different times) — readCalendarLegs then returns
+ * 2+ candidates for every fill on that symbol, for EITHER calendar. Naively orphan-parking
+ * every such fill (the old behavior) silently drops one calendar's real economics (it keeps
+ * only its unique leg — see the debug session's back-leg-only symptom).
+ *
+ * The disambiguating signal: a calendar's OPENING (and CLOSING) broker order contains BOTH
+ * its legs together. Within one order, a leg matching EXACTLY ONE calendar (an "anchor")
+ * tells us which calendar every OTHER fill in that SAME order belongs to. An ambiguous fill
+ * is resolved to its order's anchor ONLY IF that calendarId is one of its own candidates AND
+ * the order has exactly one anchor calendarId; otherwise it stays ambiguous — never guessed
+ * (D-05/WR-01).
+ */
+export type FillMatchCandidate = {
+  readonly calendarId: string;
+  readonly legOccSymbol: string;
+};
+
+export type FillMatchInput = {
+  readonly fill: RawFill;
+  readonly candidates: ReadonlyArray<FillMatchCandidate>;
+};
+
+export type ResolvedFillMatch =
+  | { readonly kind: "matched"; readonly fill: RawFill; readonly leg: FillMatchCandidate }
+  | { readonly kind: "no-match"; readonly fill: RawFill }
+  | {
+      readonly kind: "ambiguous";
+      readonly fill: RawFill;
+      readonly candidates: ReadonlyArray<FillMatchCandidate>;
+    };
+
+export function resolveFillMatches(
+  entries: ReadonlyArray<FillMatchInput>,
+): ReadonlyArray<ResolvedFillMatch> {
+  // Find each order's anchor calendarId(s): calendarIds that are the SOLE candidate for
+  // some fill in that order.
+  const anchorsByOrder = new Map<string, Set<string>>();
+  for (const { fill, candidates } of entries) {
+    if (candidates.length !== 1) continue;
+    const only = candidates[0];
+    if (only === undefined) continue;
+    const set = anchorsByOrder.get(fill.orderId) ?? new Set<string>();
+    set.add(only.calendarId);
+    anchorsByOrder.set(fill.orderId, set);
+  }
+
+  return entries.map(({ fill, candidates }): ResolvedFillMatch => {
+    if (candidates.length === 0) return { kind: "no-match", fill };
+    if (candidates.length === 1) {
+      const only = candidates[0];
+      if (only === undefined) return { kind: "no-match", fill };
+      return { kind: "matched", fill, leg: only };
+    }
+    // Ambiguous: try to resolve via this fill's order anchor.
+    const anchors = anchorsByOrder.get(fill.orderId);
+    if (anchors !== undefined && anchors.size === 1) {
+      const [anchorCalendarId] = anchors;
+      const resolvedLeg = candidates.find((c) => c.calendarId === anchorCalendarId);
+      if (resolvedLeg !== undefined) return { kind: "matched", fill, leg: resolvedLeg };
+    }
+    return { kind: "ambiguous", fill, candidates };
+  });
+}
+
+/**
+ * isCalendarFullyClosed — true when a calendar's full event history nets to a flat (zero)
+ * position on every leg it has touched (journal-pnl-opennetdebit-units round 5, bug 2).
+ *
+ * OPEN increases a leg's net qty; CLOSE decreases it; ROLL decreases the rolled-from leg and
+ * increases the new leg. A calendar with events but zero net qty on every touched leg is
+ * fully closed — regardless of its stored `status` column (the exact bug: `status` can go
+ * stale and never reflect events proving the position was unwound, e.g. 65aac62e).
+ */
+export function isCalendarFullyClosed(events: ReadonlyArray<CalendarEvent>): boolean {
+  if (events.length === 0) return false;
+
+  const netQtyByLeg = new Map<string, number>();
+  const bump = (legOccSymbol: string, delta: number): void => {
+    netQtyByLeg.set(legOccSymbol, (netQtyByLeg.get(legOccSymbol) ?? 0) + delta);
+  };
+
+  let hasOpen = false;
+  for (const e of events) {
+    switch (e.eventType) {
+      case "OPEN":
+        bump(e.legOccSymbol, e.qty);
+        hasOpen = true;
+        break;
+      case "CLOSE":
+        bump(e.legOccSymbol, -e.qty);
+        break;
+      case "ROLL":
+        if (e.rolledFromOccSymbol !== null) bump(e.rolledFromOccSymbol, -e.qty);
+        bump(e.legOccSymbol, e.qty);
+        hasOpen = true;
+        break;
+    }
+  }
+
+  if (!hasOpen) return false;
+  return [...netQtyByLeg.values()].every((qty) => qty === 0);
 }

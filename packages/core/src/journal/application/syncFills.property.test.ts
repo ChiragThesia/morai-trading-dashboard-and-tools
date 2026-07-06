@@ -47,6 +47,7 @@ import type {
   ForResettingCalendarAmounts,
   ForReadingCalendarEvents,
   ForMarkingFillsProcessed,
+  ForTransitioningCalendarClosed,
   StorageError,
 } from "./ports.ts";
 import type { RawFill, CalendarEvent } from "../domain/calendar-event.ts";
@@ -177,6 +178,7 @@ function buildHarness(opts: { fills: RawFill[] }) {
     for (const id of ids) processed.add(id);
     return ok(undefined);
   };
+  const transitionCalendarClosed: ForTransitioningCalendarClosed = async () => ok(undefined);
 
   let idCounter = 0;
   const newId = (): string =>
@@ -190,6 +192,7 @@ function buildHarness(opts: { fills: RawFill[] }) {
     resetCalendarAmounts,
     readCalendarEvents,
     markFillsProcessed,
+    transitionCalendarClosed,
     newId,
     hashFillIds: fakeHashFillIds,
     now: () => new Date("2026-06-15T14:00:00Z"),

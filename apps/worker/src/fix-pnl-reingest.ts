@@ -133,6 +133,9 @@ if (import.meta.main) {
     resetCalendarAmounts: fillsRepo.resetCalendarAmounts,
     readCalendarEvents: calendarEventsRepo.readCalendarEvents,
     markFillsProcessed: fillsRepo.markFillsProcessed,
+    // journal-pnl-opennetdebit-units round 5 (bug 2): auto-transition a calendar's status
+    // once its rebuilt events prove it's fully closed.
+    transitionCalendarClosed: calendarsRepo.transitionCalendarClosed,
     newId: () => randomUUID(),
     hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
     now: () => new Date(),

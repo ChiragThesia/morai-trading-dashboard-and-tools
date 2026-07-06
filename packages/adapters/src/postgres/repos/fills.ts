@@ -41,7 +41,7 @@ import type {
   CalendarLegEntry,
   StorageError,
 } from "@morai/core";
-import { eq, and, isNull, inArray, notInArray } from "drizzle-orm";
+import { eq, and, or, isNull, inArray, notInArray } from "drizzle-orm";
 import { fills, calendars, calendarEvents, orphanFills } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -185,6 +185,11 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
   // WR-A2 rebuild support: clear processed_at for the calendar's leg fills so the scoped
   // re-pair re-reads them (delete scope == sync scope). Leg matching mirrors
   // readUnprocessedFillsForCalendar (derive the two leg OCC symbols, match fills.occ_symbol).
+  // Round 5 (bug 1): ALSO reset any fill sharing an orderId with a leg-matched fill ("order
+  // context") — otherwise an order-context fill already marked processed by a SIBLING
+  // calendar's earlier rebuild (a shared-leg scenario) never gets reset, and permanently
+  // vanishes from every subsequent scoped read (readUnprocessedFillsForCalendar excludes
+  // processed fills regardless of which calendar's rebuild is asking).
   const resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar = async (
     calendarId: string,
   ): Promise<Result<void, StorageError>> => {
@@ -205,10 +210,19 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
       if (cal === undefined) return ok(undefined);
 
       const { front, back } = calendarLegSymbols(cal);
-      await db
-        .update(fills)
-        .set({ processedAt: null })
-        .where(inArray(fills.occSymbol, [front, back]));
+      const legSet = [front, back];
+      const ownOrderRows = await db
+        .select({ orderId: fills.orderId })
+        .from(fills)
+        .where(inArray(fills.occSymbol, legSet));
+      const orderIds = [...new Set(ownOrderRows.map((r) => r.orderId))];
+
+      const whereClause =
+        orderIds.length === 0
+          ? inArray(fills.occSymbol, legSet)
+          : or(inArray(fills.occSymbol, legSet), inArray(fills.orderId, orderIds));
+
+      await db.update(fills).set({ processedAt: null }).where(whereClause);
       return ok(undefined);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -219,7 +233,16 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
   };
 
   // ─── readUnprocessedFillsForCalendar (ForReadingUnprocessedFillsForCalendar) ─
-  // Unprocessed fills whose OCC symbol is one of the target calendar's two legs.
+  // Unprocessed fills whose OCC symbol is one of the target calendar's two legs, PLUS
+  // (journal-pnl-opennetdebit-units round 5, bug 1) any OTHER unprocessed fill sharing a
+  // broker orderId with one of those — "order context". A leg symbol can be shared by TWO
+  // calendars (the same front-month contract reused by a later spread); a scoped read that
+  // only pulled fills matching THIS calendar's own legs would never see the sibling
+  // calendar's unique leg from the SAME shared order — the exact anchor resolveFillMatches
+  // needs to disambiguate the shared leg. Without this expansion, a calendar-scoped rebuild
+  // (rebuild-journal) can orphan-park the SIBLING'S fills as an unresolvable side effect
+  // (orphaned fills are excluded from ALL future reads, permanently). Including order-context
+  // fills here costs nothing for calendars with no shared leg (no extra orderIds pulled in).
   const readUnprocessedFillsForCalendar: ForReadingUnprocessedFillsForCalendar =
     async (
       calendarId: string,
@@ -246,7 +269,13 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
         const unprocessed = await readUnprocessedFills();
         if (!unprocessed.ok) return unprocessed;
 
-        return ok(unprocessed.value.filter((f) => legSet.has(f.occSymbol)));
+        const ownMatches = unprocessed.value.filter((f) => legSet.has(f.occSymbol));
+        const orderIds = new Set(ownMatches.map((f) => f.orderId));
+        const contextFills = unprocessed.value.filter(
+          (f) => orderIds.has(f.orderId) && !legSet.has(f.occSymbol),
+        );
+
+        return ok([...ownMatches, ...contextFills]);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         // Malformed (non-uuid) calendarId → no calendar matches

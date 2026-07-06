@@ -148,6 +148,20 @@ export type ForClosingCalendar = (
 ) => Promise<Result<Calendar, StorageError | CalendarNotFound | CalendarAlreadyClosed>>;
 
 /**
+ * ForTransitioningCalendarClosed — auto-transition a calendar's status to "closed" once its
+ * rebuilt events prove every leg's net qty is back to zero (journal-pnl-opennetdebit-units
+ * round 5, bug 2). Distinct from ForClosingCalendar (CAL-04's user-initiated close, which
+ * supplies a closeNetCredit and always stamps closedAt = now): this is driven by the
+ * event-processing path itself, so closedAt is the real historical close date, not "now".
+ * Idempotent: a no-op (ok(undefined)) when the calendar is already closed or unknown — never
+ * errors, since a re-ingest/rebuild must be safe to repeat (D-10).
+ */
+export type ForTransitioningCalendarClosed = (
+  calendarId: string,
+  closedAt: Date,
+) => Promise<Result<void, StorageError>>;
+
+/**
  * ForGettingOpenCalendarLegs — D-04 targeted-fetch port.
  * Returns OCC symbols for every open calendar's two legs (front + back),
  * so the fetch-cboe-chain job always captures those contracts regardless of band/DTE filter.

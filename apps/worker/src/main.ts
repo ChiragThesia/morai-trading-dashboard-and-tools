@@ -292,6 +292,9 @@ const syncFillsUseCase = makeSyncFillsUseCase({
   readCalendarEvents: calendarEventsRepo.readCalendarEvents,
   // WR-A2: stamp processed fills so re-sync never re-pairs them.
   markFillsProcessed: fillsRepo.markFillsProcessed,
+  // journal-pnl-opennetdebit-units round 5 (bug 2): auto-transition a calendar's status once
+  // its rebuilt events prove it's fully closed.
+  transitionCalendarClosed: calendarsRepo.transitionCalendarClosed,
   // C1: injected id minter + fill-ids hasher (reference algorithm + node sha256).
   newId: () => randomUUID(),
   hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
@@ -315,6 +318,9 @@ const syncFillsForCalendarUseCase = makeSyncFillsForCalendarUseCase({
   readCalendarEvents: calendarEventsRepo.readCalendarEvents,
   // WR-A2: stamp processed fills so per-calendar re-sync never re-pairs them.
   markFillsProcessed: fillsRepo.markFillsProcessed,
+  // journal-pnl-opennetdebit-units round 5 (bug 2): auto-transition a calendar's status once
+  // its rebuilt events prove it's fully closed.
+  transitionCalendarClosed: calendarsRepo.transitionCalendarClosed,
   newId: () => randomUUID(),
   hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
   now: () => new Date(),

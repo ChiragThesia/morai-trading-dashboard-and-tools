@@ -72,6 +72,7 @@ export type {
   ForListingCalendars,
   ForGettingCalendarById,
   ForClosingCalendar,
+  ForTransitioningCalendarClosed,
   ForGettingOpenCalendarLegs,
   LegSnapshot,
   ForResolvingLegSnapshot,
@@ -190,6 +191,12 @@ export type {
   RangeError as ChunkRangeError,
 } from "./journal/index.ts";
 export { hashFillIds } from "./journal/index.ts";
+export { resolveFillMatches, isCalendarFullyClosed } from "./journal/index.ts";
+export type {
+  FillMatchCandidate,
+  FillMatchInput,
+  ResolvedFillMatch,
+} from "./journal/index.ts";
 export { makeRebuildJournalUseCase } from "./journal/index.ts";
 export type { ForRebuildingJournal, RebuildJournalDeps } from "./journal/index.ts";
 // JRNL-01 (pnl-unit-mismatch fix): recomputeSnapshotPnl use-case (data-correction path)

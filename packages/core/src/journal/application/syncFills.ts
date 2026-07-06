@@ -36,7 +36,10 @@ import {
   aggregatePartialFills,
   detectRoll,
   computeRealizedPnl,
+  resolveFillMatches,
+  isCalendarFullyClosed,
 } from "../domain/fill-pairing.ts";
+import type { FillMatchInput } from "../domain/fill-pairing.ts";
 import type {
   ForStoringCalendarEvent,
   ForReadingUnprocessedFills,
@@ -50,6 +53,7 @@ import type {
   HashFillIds,
   StorageError,
   CalendarLegEntry,
+  ForTransitioningCalendarClosed,
 } from "./ports.ts";
 import type { RawFill, AggregatedFill, CalendarEvent } from "../domain/calendar-event.ts";
 
@@ -68,6 +72,10 @@ type PairingDeps = {
   // processed too) so the next sync never re-reads them. Each fill lands in exactly ONE event;
   // later fills for the same order/leg form a NEW event over only the new fills (no double-count).
   readonly markFillsProcessed: ForMarkingFillsProcessed;
+  // journal-pnl-opennetdebit-units round 5 (bug 2): transition a calendar's status to
+  // "closed" once its rebuilt events show every leg's net qty back to zero — idempotent,
+  // no-op if already closed.
+  readonly transitionCalendarClosed: ForTransitioningCalendarClosed;
   // C1: injected id minter + fill-ids hasher — core imports no node builtin hasher.
   readonly newId: NewId;
   readonly hashFillIds: HashFillIds;
@@ -115,54 +123,45 @@ async function pairFills(
 ): Promise<Result<void, StorageError>> {
   if (fills.length === 0) return ok(undefined);
 
-  // Steps 2: Match each fill to a calendar leg
+  // Step 2: Match each fill to a calendar leg. journal-pnl-opennetdebit-units round 5 (bug 1):
+  // a leg symbol can be shared by TWO calendars (the same front-month contract reused by two
+  // calendar spreads) — readCalendarLegs then returns 2+ candidates for every fill on that
+  // symbol. resolveFillMatches disambiguates using each fill's own broker order (an
+  // unambiguous "anchor" leg in the SAME order identifies the calendar) before falling back
+  // to orphan-parking (never guessed, D-05/WR-01).
   const matched: MatchedFill[] = [];
-
+  const candidateEntries: FillMatchInput[] = [];
   for (const fill of fills) {
     const legsResult = await deps.readCalendarLegs(fill.occSymbol);
     if (!legsResult.ok) return err(legsResult.error);
+    candidateEntries.push({ fill, candidates: legsResult.value });
+  }
 
-    const legs = legsResult.value;
-
-    if (legs.length === 0) {
-      const orphanResult = await deps.storeOrphanFill({
-        fillId: fill.id,
-        occSymbol: fill.occSymbol,
-        side: fill.side,
-        qty: fill.qty,
-        price: fill.price,
-        filledAt: fill.filledAt,
-        reason: "no matching calendar",
-      });
-      if (!orphanResult.ok) return err(orphanResult.error);
-      // WR-A2: parked → processed, so it is not re-read next sync.
-      const markedResult = await deps.markFillsProcessed([fill.id]);
-      if (!markedResult.ok) return err(markedResult.error);
+  for (const resolved of resolveFillMatches(candidateEntries)) {
+    if (resolved.kind === "matched") {
+      matched.push({ fill: resolved.fill, leg: resolved.leg });
       continue;
     }
 
-    if (legs.length > 1) {
-      // Pitfall 6: ambiguous calendar — never auto-assign
-      const calIds = legs.map((l) => l.calendarId).join(", ");
-      const orphanResult = await deps.storeOrphanFill({
-        fillId: fill.id,
-        occSymbol: fill.occSymbol,
-        side: fill.side,
-        qty: fill.qty,
-        price: fill.price,
-        filledAt: fill.filledAt,
-        reason: `ambiguous calendar: [${calIds}]`,
-      });
-      if (!orphanResult.ok) return err(orphanResult.error);
-      // WR-A2: parked → processed.
-      const markedResult = await deps.markFillsProcessed([fill.id]);
-      if (!markedResult.ok) return err(markedResult.error);
-      continue;
-    }
+    const fill = resolved.fill;
+    const reason =
+      resolved.kind === "no-match"
+        ? "no matching calendar"
+        : `ambiguous calendar: [${resolved.candidates.map((l) => l.calendarId).join(", ")}]`;
 
-    const leg = legs[0];
-    if (leg === undefined) continue;
-    matched.push({ fill, leg });
+    const orphanResult = await deps.storeOrphanFill({
+      fillId: fill.id,
+      occSymbol: fill.occSymbol,
+      side: fill.side,
+      qty: fill.qty,
+      price: fill.price,
+      filledAt: fill.filledAt,
+      reason,
+    });
+    if (!orphanResult.ok) return err(orphanResult.error);
+    // WR-A2: parked → processed, so it is not re-read next sync.
+    const markedResult = await deps.markFillsProcessed([fill.id]);
+    if (!markedResult.ok) return err(markedResult.error);
   }
 
   if (matched.length === 0) return ok(undefined);
@@ -490,6 +489,30 @@ async function pairFills(
     // WR-A2: the bucket's fills are now in exactly ONE event → processed.
     const markedResult = await deps.markFillsProcessed(cf.fillIds);
     if (!markedResult.ok) return err(markedResult.error);
+  }
+
+  // journal-pnl-opennetdebit-units round 5 (bug 2): after storing this batch's events, check
+  // every calendar touched in THIS run for full closure (every leg's net qty back to zero)
+  // and transition its status. This is the event-processing path, so a re-ingest/rebuild
+  // naturally sets it — no separate job, no dependence on the (possibly stale) status column.
+  const touchedCalendarIds = new Set(classified.map((cf) => cf.calendarId));
+  for (const calendarId of touchedCalendarIds) {
+    const eventsResult = await deps.readCalendarEvents(calendarId);
+    if (!eventsResult.ok) return err(eventsResult.error);
+    if (!isCalendarFullyClosed(eventsResult.value)) continue;
+
+    // closedAt = the latest REAL trade date among this run's CLOSE fills for this calendar —
+    // never `now()` (a rebuild/re-ingest can run long after the real close). If closure came
+    // entirely from events stored in a PRIOR run (no CLOSE processed just now), there is no
+    // new date to set here — the prior run's own closure check already handled it.
+    const closeFilledAts = classified
+      .filter((cf) => cf.calendarId === calendarId && cf.classification === "CLOSE")
+      .flatMap((cf) => cf.rawFills.map((f) => f.filledAt.getTime()));
+    if (closeFilledAts.length === 0) continue;
+    const closedAt = new Date(Math.max(...closeFilledAts));
+
+    const transitionResult = await deps.transitionCalendarClosed(calendarId, closedAt);
+    if (!transitionResult.ok) return err(transitionResult.error);
   }
 
   return ok(undefined);

@@ -6,6 +6,7 @@ import type {
   ForRegisteringCalendar,
   ForListingCalendars,
   ForClosingCalendar,
+  ForTransitioningCalendarClosed,
   ForGettingCalendarById,
   ForGettingOpenCalendarLegs,
   Calendar,
@@ -29,6 +30,7 @@ export type MemoryCalendarsRepo = {
   readonly registerCalendar: ForRegisteringCalendar;
   readonly listCalendars: ForListingCalendars;
   readonly closeCalendar: ForClosingCalendar;
+  readonly transitionCalendarClosed: ForTransitioningCalendarClosed;
   readonly getCalendarById: ForGettingCalendarById;
   readonly getOpenCalendarLegs: ForGettingOpenCalendarLegs;
   readonly seedOpenCalendar: (calendar: Calendar) => Promise<void>;
@@ -113,6 +115,17 @@ export function makeMemoryCalendarsRepo(): MemoryCalendarsRepo {
     return ok(updated);
   };
 
+  // ─── transitionCalendarClosed (ForTransitioningCalendarClosed — round 5 bug 2) ──────
+  const transitionCalendarClosed: ForTransitioningCalendarClosed = async (
+    calendarId: string,
+    closedAt: Date,
+  ): Promise<Result<void, StorageError>> => {
+    const existing = store.get(calendarId);
+    if (existing === undefined || existing.status === "closed") return ok(undefined);
+    store.set(calendarId, { ...existing, status: "closed", closedAt });
+    return ok(undefined);
+  };
+
   const getCalendarById: ForGettingCalendarById = async (
     id: string,
   ): Promise<Result<Calendar | null, StorageError>> => {
@@ -155,6 +168,7 @@ export function makeMemoryCalendarsRepo(): MemoryCalendarsRepo {
     registerCalendar,
     listCalendars,
     closeCalendar,
+    transitionCalendarClosed,
     getCalendarById,
     getOpenCalendarLegs,
     seedOpenCalendar,

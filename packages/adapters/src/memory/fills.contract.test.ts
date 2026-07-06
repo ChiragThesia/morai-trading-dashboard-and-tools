@@ -22,6 +22,7 @@ describe("in-memory fills twin", () => {
       resetCalendarAmounts: repo.resetCalendarAmounts,
       recomputeCalendarAmounts: repo.recomputeCalendarAmounts,
       markFillsProcessed: repo.markFillsProcessed,
+      resetFillsProcessedForCalendar: repo.resetFillsProcessedForCalendar,
       writeFills: repo.writeFills,
       wipeDerivedFills: repo.wipeDerivedFills,
     }),

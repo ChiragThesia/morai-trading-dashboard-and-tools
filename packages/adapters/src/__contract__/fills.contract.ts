@@ -30,6 +30,7 @@ import type {
   ForResettingCalendarAmounts,
   ForRecomputingCalendarAmounts,
   ForMarkingFillsProcessed,
+  ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   ForWipingDerivedFills,
   RawFill,
@@ -95,6 +96,7 @@ export type FillsRepo = {
   readonly resetCalendarAmounts: ForResettingCalendarAmounts;
   readonly recomputeCalendarAmounts: ForRecomputingCalendarAmounts;
   readonly markFillsProcessed: ForMarkingFillsProcessed;
+  readonly resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar;
   readonly writeFills: ForWritingFills;
   readonly wipeDerivedFills: ForWipingDerivedFills;
 };
@@ -299,7 +301,9 @@ export function runFillsContractTests(
         await repo.writeFills([
           makeFill(FILL_ID_1, FRONT_OCC), // matches calendar front leg
           makeFill(FILL_ID_2, BACK_OCC), // matches calendar back leg
-          makeFill(FILL_ID_3, FOREIGN_OCC), // belongs to no leg
+          // A distinct orderId (not the shared "ORD-1" default) — this fill belongs to no
+          // leg AND no shared order, proving plain exclusion, not just order-context scoping.
+          makeFill(FILL_ID_3, FOREIGN_OCC, { orderId: "ORD-FOREIGN" }),
         ]);
 
         const result = await repo.readUnprocessedFillsForCalendar(CAL_ID);
@@ -322,6 +326,91 @@ export function runFillsContractTests(
         if (!result.ok) return;
         const ids = result.value.map((f) => f.id);
         expect(ids).toEqual([FILL_ID_2]);
+      });
+    });
+
+    // journal-pnl-opennetdebit-units round 5 (bug 1): a leg symbol shared by two calendars
+    // (the same front-month contract reused by a later spread) means a calendar-scoped read
+    // that only pulls fills matching ITS OWN legs never sees the sibling calendar's unique
+    // leg from the SAME shared broker order — the exact anchor resolveFillMatches needs to
+    // disambiguate the shared leg. This is what actually produced the prod bug via
+    // fix-pnl-reingest's calendar-scoped rebuild-journal path.
+    describe("readUnprocessedFillsForCalendar — order-context expansion (round 5 bug 1)", () => {
+      const OTHER_BACK_OCC = "SPX   261017P07100000";
+
+      it("includes a SIBLING calendar's unique-leg fill when it shares an orderId with a leg-matched shared-symbol fill", async () => {
+        await seed.seedCalendar(calendar({ id: CAL_ID })); // legs: FRONT_OCC, BACK_OCC
+        await seed.seedCalendar(
+          calendar({ id: OTHER_CAL_ID, backExpiry: "2026-10-17" }), // legs: FRONT_OCC (shared!), OTHER_BACK_OCC
+        );
+
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC, { orderId: "ORD-OTHER" }), // shared leg, OTHER_CAL_ID's order
+          makeFill(FILL_ID_2, OTHER_BACK_OCC, { orderId: "ORD-OTHER" }), // OTHER_CAL_ID's OWN unique leg, same order
+          makeFill(FILL_ID_3, BACK_OCC, { orderId: "ORD-MINE" }), // CAL_ID's own unique leg, unrelated order
+        ]);
+
+        const result = await repo.readUnprocessedFillsForCalendar(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const ids = result.value.map((f) => f.id).sort();
+        // FILL_ID_1 (own legSet match) + FILL_ID_3 (own leg) + FILL_ID_2 (order-context: the
+        // disambiguating anchor for FILL_ID_1, even though its own symbol isn't CAL_ID's leg).
+        expect(ids).toEqual([FILL_ID_1, FILL_ID_2, FILL_ID_3].sort());
+      });
+
+      it("does NOT pull in an unrelated fill from a different order (no context leak)", async () => {
+        await seed.seedCalendar(calendar());
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC, { orderId: "ORD-A" }),
+          makeFill(FILL_ID_2, FOREIGN_OCC, { orderId: "ORD-B" }), // unrelated order AND unrelated leg
+        ]);
+        const result = await repo.readUnprocessedFillsForCalendar(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.map((f) => f.id)).toEqual([FILL_ID_1]);
+      });
+    });
+
+    // journal-pnl-opennetdebit-units round 5 (bug 1): resetFillsProcessedForCalendar must
+    // expand identically to readUnprocessedFillsForCalendar — otherwise an order-context fill
+    // already marked processed (e.g. by a SIBLING calendar's earlier rebuild pass) never gets
+    // reset, so it silently vanishes from every subsequent scoped read (this was the actual
+    // failure mode found while testing the real fix-pnl-reingest per-calendar rebuild order).
+    describe("resetFillsProcessedForCalendar — order-context expansion (round 5 bug 1)", () => {
+      const OTHER_BACK_OCC_2 = "SPX   261017P07100000";
+
+      it("resets a SIBLING calendar's already-processed unique-leg fill when it shares an order with a shared-symbol fill", async () => {
+        await seed.seedCalendar(calendar({ id: CAL_ID }));
+        await seed.seedCalendar(calendar({ id: OTHER_CAL_ID, backExpiry: "2026-10-17" }));
+
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC, { orderId: "ORD-OTHER" }),
+          makeFill(FILL_ID_2, OTHER_BACK_OCC_2, { orderId: "ORD-OTHER" }),
+        ]);
+        // Simulate: OTHER_CAL_ID's own unique leg was already marked processed by an earlier
+        // pairing pass (e.g. the sibling calendar's own prior rebuild-journal run).
+        await repo.markFillsProcessed([FILL_ID_2]);
+
+        const reset = await repo.resetFillsProcessedForCalendar(CAL_ID);
+        expect(reset.ok).toBe(true);
+
+        // FILL_ID_2 must be unprocessed again — it shares ORD-OTHER with CAL_ID's own
+        // leg-matched FILL_ID_1, so CAL_ID's next scoped read needs it back as context.
+        const processed = await seed.readProcessedFillIds();
+        expect(processed).not.toContain(FILL_ID_2);
+      });
+
+      it("does not reset an unrelated fill on a different order", async () => {
+        await seed.seedCalendar(calendar());
+        await repo.writeFills([makeFill(FILL_ID_1, FOREIGN_OCC, { orderId: "ORD-UNRELATED" })]);
+        await repo.markFillsProcessed([FILL_ID_1]);
+
+        const reset = await repo.resetFillsProcessedForCalendar(CAL_ID);
+        expect(reset.ok).toBe(true);
+
+        const processed = await seed.readProcessedFillIds();
+        expect(processed).toContain(FILL_ID_1);
       });
     });
 

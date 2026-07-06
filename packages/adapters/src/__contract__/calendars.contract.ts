@@ -6,6 +6,7 @@ import type {
   ForRegisteringCalendar,
   ForListingCalendars,
   ForClosingCalendar,
+  ForTransitioningCalendarClosed,
   ForGettingCalendarById,
   ForGettingOpenCalendarLegs,
 } from "@morai/core";
@@ -24,6 +25,7 @@ export type CalendarsRepo = {
   readonly registerCalendar: ForRegisteringCalendar;
   readonly listCalendars: ForListingCalendars;
   readonly closeCalendar: ForClosingCalendar;
+  readonly transitionCalendarClosed: ForTransitioningCalendarClosed;
   readonly getCalendarById: ForGettingCalendarById;
   readonly getOpenCalendarLegs: ForGettingOpenCalendarLegs;
 };
@@ -251,6 +253,95 @@ export function runCalendarsContractTests(
         if (!result.ok) {
           expect(result.error.kind).toBe("already-closed");
         }
+      });
+    });
+
+    describe("transitionCalendarClosed", () => {
+      it("transitions an OPEN calendar to closed with the given closedAt (round 5 bug 2)", async () => {
+        const reg = await repo.registerCalendar({
+          underlying: "SPX",
+          strike: 7100000,
+          optionType: "C",
+          frontExpiry: "2026-02-21",
+          backExpiry: "2026-03-21",
+          qty: 1,
+          openNetDebit: 5.5,
+          openedAt: new Date("2026-01-02T14:30:00Z"),
+        });
+        expect(reg.ok).toBe(true);
+        if (!reg.ok) return;
+        const id = reg.value.id;
+        const closedAt = new Date("2026-07-01T18:00:00Z");
+
+        const result = await repo.transitionCalendarClosed(id, closedAt);
+        expect(result.ok).toBe(true);
+
+        const after = await repo.getCalendarById(id);
+        expect(after.ok).toBe(true);
+        if (!after.ok || after.value === null) return;
+        expect(after.value.status).toBe("closed");
+        expect(after.value.closedAt?.toISOString()).toBe(closedAt.toISOString());
+      });
+
+      it("is idempotent — a no-op on an ALREADY-closed calendar (does not overwrite closedAt)", async () => {
+        const reg = await repo.registerCalendar({
+          underlying: "SPX",
+          strike: 7100000,
+          optionType: "C",
+          frontExpiry: "2026-02-21",
+          backExpiry: "2026-03-21",
+          qty: 1,
+          openNetDebit: 5.5,
+          openedAt: new Date("2026-01-02T14:30:00Z"),
+        });
+        expect(reg.ok).toBe(true);
+        if (!reg.ok) return;
+        const id = reg.value.id;
+
+        const firstClose = await repo.closeCalendar(id, 3.25);
+        expect(firstClose.ok).toBe(true);
+        if (!firstClose.ok) return;
+        const originalClosedAt = firstClose.value.closedAt;
+
+        const result = await repo.transitionCalendarClosed(
+          id,
+          new Date("2026-08-01T00:00:00Z"),
+        );
+        expect(result.ok).toBe(true);
+
+        const after = await repo.getCalendarById(id);
+        expect(after.ok).toBe(true);
+        if (!after.ok || after.value === null) return;
+        expect(after.value.status).toBe("closed");
+        // Untouched — the ORIGINAL close's closedAt survives, not the no-op call's date.
+        expect(after.value.closedAt?.toISOString()).toBe(originalClosedAt?.toISOString());
+      });
+
+      it("is a safe no-op on an unknown calendarId (never errors)", async () => {
+        const result = await repo.transitionCalendarClosed(
+          "00000000-0000-0000-0000-000000000000",
+          new Date("2026-07-01T00:00:00Z"),
+        );
+        expect(result.ok).toBe(true);
+      });
+
+      it("a genuinely-open calendar stays open when NOT transitioned (control case)", async () => {
+        const reg = await repo.registerCalendar({
+          underlying: "SPX",
+          strike: 7100000,
+          optionType: "C",
+          frontExpiry: "2026-02-21",
+          backExpiry: "2026-03-21",
+          qty: 1,
+          openNetDebit: 5.5,
+          openedAt: new Date("2026-01-02T14:30:00Z"),
+        });
+        expect(reg.ok).toBe(true);
+        if (!reg.ok) return;
+        const after = await repo.getCalendarById(reg.value.id);
+        expect(after.ok).toBe(true);
+        if (!after.ok || after.value === null) return;
+        expect(after.value.status).toBe("open");
       });
     });
 

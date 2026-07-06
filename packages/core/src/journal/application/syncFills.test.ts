@@ -22,6 +22,7 @@ import type {
   ForReadingCalendarEvents,
   ForReadingUnprocessedFillsForCalendar,
   ForMarkingFillsProcessed,
+  ForTransitioningCalendarClosed,
   OrphanFillInput,
 } from "./ports.ts";
 import type { RawFill, CalendarEvent } from "../domain/calendar-event.ts";
@@ -94,6 +95,7 @@ function buildDeps(opts: {
     if (opts.markedFillIds !== undefined) opts.markedFillIds.push(...fillIds);
     return ok(undefined);
   };
+  const transitionCalendarClosed: ForTransitioningCalendarClosed = async () => ok(undefined);
   idCounter = 0;
   return {
     readUnprocessedFills,
@@ -103,6 +105,7 @@ function buildDeps(opts: {
     resetCalendarAmounts,
     readCalendarEvents,
     markFillsProcessed,
+    transitionCalendarClosed,
     newId: seqId,
     hashFillIds: fakeHashFillIds,
     now: () => new Date("2026-06-15T14:00:00Z"),
@@ -280,6 +283,7 @@ describe("makeSyncFillsUseCase", () => {
 
     const readCalendarEvents: ForReadingCalendarEvents = async () => ok([]);
     const markFillsProcessed: ForMarkingFillsProcessed = async () => ok(undefined);
+    const transitionCalendarClosed: ForTransitioningCalendarClosed = async () => ok(undefined);
 
     const syncFills = makeSyncFillsUseCase({
       readUnprocessedFills,
@@ -289,6 +293,7 @@ describe("makeSyncFillsUseCase", () => {
       resetCalendarAmounts,
       readCalendarEvents,
       markFillsProcessed,
+      transitionCalendarClosed,
       newId: seqId,
       hashFillIds: fakeHashFillIds,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -1020,6 +1025,8 @@ describe("makeSyncFillsUseCase", () => {
       return ok(undefined);
     };
 
+    const transitionCalendarClosed: ForTransitioningCalendarClosed = async () => ok(undefined);
+
     const deps = {
       readUnprocessedFills,
       readCalendarLegs,
@@ -1028,6 +1035,7 @@ describe("makeSyncFillsUseCase", () => {
       resetCalendarAmounts,
       readCalendarEvents,
       markFillsProcessed,
+      transitionCalendarClosed,
       newId: seqId,
       hashFillIds: fakeHashFillIds,
       now: () => new Date("2026-06-15T14:00:00Z"),
@@ -1110,6 +1118,7 @@ describe("makeSyncFillsForCalendarUseCase", () => {
     const resetCalendarAmounts: ForResettingCalendarAmounts = async () => ok(undefined);
     const readCalendarEvents: ForReadingCalendarEvents = async () => ok([]);
     const markFillsProcessed: ForMarkingFillsProcessed = async () => ok(undefined);
+    const transitionCalendarClosed: ForTransitioningCalendarClosed = async () => ok(undefined);
 
     idCounter = 0;
     const syncForCalendar = makeSyncFillsForCalendarUseCase({
@@ -1120,6 +1129,7 @@ describe("makeSyncFillsForCalendarUseCase", () => {
       resetCalendarAmounts,
       readCalendarEvents,
       markFillsProcessed,
+      transitionCalendarClosed,
       newId: seqId,
       hashFillIds: fakeHashFillIds,
       now: () => new Date("2026-06-15T14:00:00Z"),

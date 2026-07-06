@@ -18,8 +18,10 @@ import {
   computeRealizedPnl,
   detectRoll,
   hashFillIds,
+  resolveFillMatches,
+  isCalendarFullyClosed,
 } from "./fill-pairing.ts";
-import type { RawFill, AggregatedFill } from "./calendar-event.ts";
+import type { RawFill, AggregatedFill, CalendarEvent } from "./calendar-event.ts";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -421,5 +423,231 @@ describe("hashFillIds", () => {
         return hashFillIds(ids, testHasher) === hashFillIds(ids, testHasher);
       }),
     );
+  });
+});
+
+// ─── resolveFillMatches (journal-pnl-opennetdebit-units round 5, bug 1) ────────
+//
+// A leg symbol shared by two DIFFERENT calendars (e.g. the same front-month contract used
+// by two calendar spreads opened at different times) makes readCalendarLegs return 2+
+// candidates for that occSymbol — every fill on that symbol, for EITHER calendar. The old
+// behavior orphan-parked all of them (never guess). This resolves the ambiguity using the
+// fill's own broker order as the disambiguating signal: a calendar's OPENING/CLOSING order
+// contains BOTH its legs together, so an unambiguous ("anchor") leg in the SAME order tells
+// us which calendar every fill in that order belongs to.
+
+describe("resolveFillMatches", () => {
+  const CAL_A = "cal-A";
+  const CAL_B = "cal-B";
+  const SHARED = "SPXW  260618P07275000"; // shared front leg
+  const BACK_A = "SPXW  260623P07275000"; // unique to CAL_A
+  const BACK_B = "SPXW  260717P07275000"; // unique to CAL_B
+
+  it("single candidate → matched", () => {
+    const fill = makeRawFill({ id: "f1", occSymbol: BACK_A, orderId: "order-1" });
+    const [resolved] = resolveFillMatches([
+      { fill, candidates: [{ calendarId: CAL_A, legOccSymbol: BACK_A }] },
+    ]);
+    expect(resolved).toEqual({
+      kind: "matched",
+      fill,
+      leg: { calendarId: CAL_A, legOccSymbol: BACK_A },
+    });
+  });
+
+  it("zero candidates → no-match", () => {
+    const fill = makeRawFill({ id: "f1", occSymbol: "SPXW  260101P09999000", orderId: "order-1" });
+    const [resolved] = resolveFillMatches([{ fill, candidates: [] }]);
+    expect(resolved).toEqual({ kind: "no-match", fill });
+  });
+
+  it("ambiguous fill resolved via an anchor leg in the SAME order (round 5 fix)", () => {
+    // order-1: CAL_A's back leg (unambiguous, the anchor) + the shared front leg (ambiguous).
+    const backFill = makeRawFill({ id: "back-1", occSymbol: BACK_A, orderId: "order-1" });
+    const sharedFill = makeRawFill({ id: "shared-1", occSymbol: SHARED, orderId: "order-1" });
+
+    const resolved = resolveFillMatches([
+      { fill: backFill, candidates: [{ calendarId: CAL_A, legOccSymbol: BACK_A }] },
+      {
+        fill: sharedFill,
+        candidates: [
+          { calendarId: CAL_A, legOccSymbol: SHARED },
+          { calendarId: CAL_B, legOccSymbol: SHARED },
+        ],
+      },
+    ]);
+
+    expect(resolved[0]).toEqual({
+      kind: "matched",
+      fill: backFill,
+      leg: { calendarId: CAL_A, legOccSymbol: BACK_A },
+    });
+    expect(resolved[1]).toEqual({
+      kind: "matched",
+      fill: sharedFill,
+      leg: { calendarId: CAL_A, legOccSymbol: SHARED },
+    });
+  });
+
+  it("the OTHER calendar's shared-leg fill resolves to CAL_B via ITS OWN order's anchor", () => {
+    const backFill = makeRawFill({ id: "back-2", occSymbol: BACK_B, orderId: "order-2" });
+    const sharedFill = makeRawFill({ id: "shared-2", occSymbol: SHARED, orderId: "order-2" });
+
+    const resolved = resolveFillMatches([
+      { fill: backFill, candidates: [{ calendarId: CAL_B, legOccSymbol: BACK_B }] },
+      {
+        fill: sharedFill,
+        candidates: [
+          { calendarId: CAL_A, legOccSymbol: SHARED },
+          { calendarId: CAL_B, legOccSymbol: SHARED },
+        ],
+      },
+    ]);
+
+    expect(resolved[1]).toEqual({
+      kind: "matched",
+      fill: sharedFill,
+      leg: { calendarId: CAL_B, legOccSymbol: SHARED },
+    });
+  });
+
+  it("ambiguous fill with NO anchor in the same order stays ambiguous (never guessed, D-05/WR-01)", () => {
+    // The shared leg fill is alone in its order — no sibling leg to disambiguate it.
+    const sharedFill = makeRawFill({ id: "shared-3", occSymbol: SHARED, orderId: "order-3" });
+    const candidates = [
+      { calendarId: CAL_A, legOccSymbol: SHARED },
+      { calendarId: CAL_B, legOccSymbol: SHARED },
+    ];
+    const [resolved] = resolveFillMatches([{ fill: sharedFill, candidates }]);
+    expect(resolved).toEqual({ kind: "ambiguous", fill: sharedFill, candidates });
+  });
+
+  it("two DIFFERENT anchors in the same order → stays ambiguous (cannot pick one)", () => {
+    // Pathological: same order somehow anchors to two distinct calendars. Never guess.
+    const anchorA = makeRawFill({ id: "anchor-a", occSymbol: BACK_A, orderId: "order-4" });
+    const anchorB = makeRawFill({ id: "anchor-b", occSymbol: BACK_B, orderId: "order-4" });
+    const sharedFill = makeRawFill({ id: "shared-4", occSymbol: SHARED, orderId: "order-4" });
+    const candidates = [
+      { calendarId: CAL_A, legOccSymbol: SHARED },
+      { calendarId: CAL_B, legOccSymbol: SHARED },
+    ];
+
+    const resolved = resolveFillMatches([
+      { fill: anchorA, candidates: [{ calendarId: CAL_A, legOccSymbol: BACK_A }] },
+      { fill: anchorB, candidates: [{ calendarId: CAL_B, legOccSymbol: BACK_B }] },
+      { fill: sharedFill, candidates },
+    ]);
+
+    expect(resolved[2]).toEqual({ kind: "ambiguous", fill: sharedFill, candidates });
+  });
+
+  it("preserves input order and count 1:1", () => {
+    const f1 = makeRawFill({ id: "f1", occSymbol: BACK_A });
+    const f2 = makeRawFill({ id: "f2", occSymbol: "SPXW  209999P09999000" });
+    const resolved = resolveFillMatches([
+      { fill: f1, candidates: [{ calendarId: CAL_A, legOccSymbol: BACK_A }] },
+      { fill: f2, candidates: [] },
+    ]);
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]?.fill).toBe(f1);
+    expect(resolved[1]?.fill).toBe(f2);
+  });
+});
+
+// ─── isCalendarFullyClosed (journal-pnl-opennetdebit-units round 5, bug 2) ─────
+
+function makeCalendarEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
+  return {
+    id: "evt-1",
+    calendarId: "cal-1",
+    eventType: "OPEN",
+    eventedAt: new Date("2026-06-01T14:00:00Z"),
+    fillIdsHash: "hash-1",
+    legOccSymbol: "SPXW  260618P07275000",
+    rolledFromOccSymbol: null,
+    qty: 1,
+    avgPrice: 50,
+    netAmount: 50,
+    realizedPnl: null,
+    legBreakdown: null,
+    entryThesis: null,
+    rollOpenDebit: null,
+    rollCloseCredit: null,
+    ...overrides,
+  };
+}
+
+describe("isCalendarFullyClosed", () => {
+  it("no events → false", () => {
+    expect(isCalendarFullyClosed([])).toBe(false);
+  });
+
+  it("one OPEN event, no close → false (still open)", () => {
+    const events = [makeCalendarEvent({ eventType: "OPEN", legOccSymbol: "front", qty: 1 })];
+    expect(isCalendarFullyClosed(events)).toBe(false);
+  });
+
+  it("OPEN + CLOSE on the SAME leg, same qty → true (net zero)", () => {
+    const events = [
+      makeCalendarEvent({ id: "e1", eventType: "OPEN", legOccSymbol: "front", qty: 1 }),
+      makeCalendarEvent({ id: "e2", eventType: "CLOSE", legOccSymbol: "front", qty: 1 }),
+    ];
+    expect(isCalendarFullyClosed(events)).toBe(true);
+  });
+
+  it("OPEN qty 2, CLOSE qty 1 on the same leg → false (partially closed)", () => {
+    const events = [
+      makeCalendarEvent({ id: "e1", eventType: "OPEN", legOccSymbol: "front", qty: 2 }),
+      makeCalendarEvent({ id: "e2", eventType: "CLOSE", legOccSymbol: "front", qty: 1 }),
+    ];
+    expect(isCalendarFullyClosed(events)).toBe(false);
+  });
+
+  it("two legs (front+back), only ONE closed → false (65aac62e-shaped: not yet fully unwound)", () => {
+    const events = [
+      makeCalendarEvent({ id: "e1", eventType: "OPEN", legOccSymbol: "front", qty: 1 }),
+      makeCalendarEvent({ id: "e2", eventType: "OPEN", legOccSymbol: "back", qty: 1 }),
+      makeCalendarEvent({ id: "e3", eventType: "CLOSE", legOccSymbol: "front", qty: 1 }),
+    ];
+    expect(isCalendarFullyClosed(events)).toBe(false);
+  });
+
+  it("two legs, BOTH closed → true (the real 65aac62e shape: OPEN+OPEN then CLOSE+CLOSE)", () => {
+    const events = [
+      makeCalendarEvent({ id: "e1", eventType: "OPEN", legOccSymbol: "front", qty: 1 }),
+      makeCalendarEvent({ id: "e2", eventType: "OPEN", legOccSymbol: "back", qty: 1 }),
+      makeCalendarEvent({ id: "e3", eventType: "CLOSE", legOccSymbol: "front", qty: 1 }),
+      makeCalendarEvent({ id: "e4", eventType: "CLOSE", legOccSymbol: "back", qty: 1 }),
+    ];
+    expect(isCalendarFullyClosed(events)).toBe(true);
+  });
+
+  it("ROLL nets the rolled-from leg to zero but the new leg stays open → false", () => {
+    const events = [
+      makeCalendarEvent({ id: "e1", eventType: "OPEN", legOccSymbol: "old-leg", qty: 1 }),
+      makeCalendarEvent({
+        id: "e2",
+        eventType: "ROLL",
+        legOccSymbol: "new-leg",
+        rolledFromOccSymbol: "old-leg",
+        qty: 1,
+      }),
+    ];
+    expect(isCalendarFullyClosed(events)).toBe(false);
+  });
+
+  it("ROLL then a final CLOSE on the new leg → true (fully unwound)", () => {
+    const events = [
+      makeCalendarEvent({ id: "e1", eventType: "OPEN", legOccSymbol: "old-leg", qty: 1 }),
+      makeCalendarEvent({
+        id: "e2",
+        eventType: "ROLL",
+        legOccSymbol: "new-leg",
+        rolledFromOccSymbol: "old-leg",
+        qty: 1,
+      }),
+      makeCalendarEvent({ id: "e3", eventType: "CLOSE", legOccSymbol: "new-leg", qty: 1 }),
+    ];
+    expect(isCalendarFullyClosed(events)).toBe(true);
   });
 });
