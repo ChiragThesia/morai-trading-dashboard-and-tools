@@ -1,11 +1,12 @@
 ---
 slug: journal-pnl-opennetdebit-units
-status: fixing
+status: resolved
 trigger: "Journal P&L shows −$319,850 for calendar 65aac62e (7425P) when real P&L ≈ +$415 — openNetDebit stored in dollars, snapshot formula expects points"
 created: 2026-07-05
-updated: 2026-07-05T20:20:00-07:00
+updated: 2026-07-05T20:30:00-07:00
 tdd_mode: true
 goal: find_and_fix
+resolution: "RESOLVED 2026-07-05, 5 rounds. Deployed + prod-corrected via fix-pnl-reingest (wipe→backfill→rebuild→recompute). All 13 openNetDebit match the user-confirmed oracle (journal-pnl-ground-truth.md), verified live via list_calendars; 65aac62e=closed closedAt 2026-07-01, displayed P&L ~+$415 (was −319850/4050). Root causes in order: (1) openNetDebit dollar-scale at registration; (2) fill netAmount unsigned by buy/sell (round-2, regressed bucketing); (3) real cause: readCalendarLegs classified OPEN/CLOSE from calendar.status not the fill's broker positionEffect (round-4 551de23 + migration 0018); (4) shared-leg fills orphaned → order-anchored resolveFillMatches + order-context read expansion (round-5 5d716a7); (5) closed-status re-derived from events (isCalendarFullyClosed). Remaining minor follow-ups (separate): fee-free vs fee-incl ~$2/leg (commission/fees null); gap rows (spot=0) give pnlOpen=-openNetDebit*100, cosmetic since drawn as breaks + headline uses last-non-gap — see morai-journal-snapshot-data-gaps."
 bug_2_trigger: "validate-on-one FAILED after deploy: rebuild-journal on 65aac62e changed open_net_debit 3235 -> 286.47, still wrong (correct: 32.35) — a SECOND, deeper root cause in the same area"
 round_3_trigger: "Build ONE tested capability to enable account-wide durable re-ingest of Schwab fills, so already-backfilled calendars' fills.side data (wrong before the round-2 code fix) gets corrected at the source. Code-complete + committed; NOT deployed, NOT run against prod — status stays 'fixing' until the orchestrator executes the run sequence and prod-verifies 65aac62e."
 round_4_trigger: "Ground-truth oracle built from real transactions (13 real calendars, journal-pnl-ground-truth.md) exposed a THIRD, still-deeper root cause: the round-2 side-fix, once actually exercised against re-ingested real data, produced openNetDebit ≈ -4 for 65aac62e (registered open) and ≈ 0 for every closed-registered calendar — the OPEN/CLOSE classification itself, not the sign, was wrong. Fix code-complete + committed; NOT deployed, NOT run against prod."
