@@ -5,7 +5,11 @@ import type { ForReadingTokenFreshness } from "./ports.ts";
  * selectChainSource — Schwab-primary / CBOE-fallback chain fetcher selector.
  *
  * Implements D-07 (Schwab primary) and D-08 (CBOE fallback on AUTH_EXPIRED):
- *   - market status "fresh" or "stale" → return schwabFetchChain
+ *   - market status "fresh" or "stale" → schwabFetchChain, falling back to
+ *     cboeFetchChain within the same call if the Schwab fetch itself fails
+ *     (a healthy token does not guarantee the call succeeds — chain-frozen-
+ *     schwab-symbol debug session, BUG 3: a live call failure must not leave
+ *     the pipeline dark behind a healthy token)
  *   - market status "AUTH_EXPIRED" or "none_yet" → return cboeFetchChain
  *   - readTokenFreshness returns "none yet" (string) → return cboeFetchChain (safe default)
  *   - readTokenFreshness returns err → return cboeFetchChain (safe default; journal never stalls)
@@ -46,9 +50,17 @@ export async function selectChainSource(deps: {
   // Per-app market status determines which chain source to use
   const marketStatus = freshness.market.status;
 
-  // Schwab primary: use Schwab when market token is fresh or stale (D-07)
+  // Schwab primary: use Schwab when market token is fresh or stale (D-07).
+  // BUG 3: a fresh/stale token only means the TOKEN is healthy — the Schwab
+  // call itself can still fail at runtime (malformed request, transient 5xx,
+  // network blip). Fall back to CBOE within this same invocation so a live
+  // call failure never leaves the pipeline dark behind a healthy token.
   if (marketStatus === "fresh" || marketStatus === "stale") {
-    return deps.schwabFetchChain;
+    return async (root) => {
+      const schwabResult = await deps.schwabFetchChain(root);
+      if (schwabResult.ok) return schwabResult;
+      return deps.cboeFetchChain(root);
+    };
   }
 
   // CBOE fallback: AUTH_EXPIRED or none_yet → CBOE (D-08)
