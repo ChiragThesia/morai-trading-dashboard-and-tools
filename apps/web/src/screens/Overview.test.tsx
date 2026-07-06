@@ -79,6 +79,9 @@ vi.mock("../hooks/useGex.ts", () => ({ useGex: vi.fn(() => ({ data: GEX_FIXTURE 
 vi.mock("../hooks/useStatus.ts", () => ({ useStatus: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useCot.ts", () => ({ useCot: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useMacro.ts", () => ({ useMacro: vi.fn(() => ({ data: undefined, isPending: false })) }));
+// OpenCalendarsStrip hooks (glance strip) — undefined data → strip renders null here.
+vi.mock("../hooks/useCalendars.ts", () => ({ useCalendars: vi.fn(() => ({ data: undefined })) }));
+vi.mock("../hooks/useLifecycle.ts", () => ({ useLifecycle: vi.fn(() => ({ data: undefined })) }));
 
 import { Overview, formatExpiryCell } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";

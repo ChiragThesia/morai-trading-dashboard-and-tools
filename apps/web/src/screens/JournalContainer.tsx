@@ -76,12 +76,20 @@ function toTradeSummary(c: CalendarResponse): TradeSummary {
  * 401: the query enters error state; Journal receives an empty array and shows
  *      the "No journal history yet." empty state — no error shown to the user.
  *      The ErrorBoundary in App.tsx catches unexpected render errors.
+ *
+ * `initialCalendarId` (Overview deep-link) selects that calendar's trade on mount. The
+ * calendars query is warm from Overview's own useCalendars, so trades are present at first
+ * render and the match lands immediately.
  */
-export function JournalContainer(): React.ReactElement {
+export function JournalContainer({
+  initialCalendarId,
+}: {
+  readonly initialCalendarId?: string | undefined;
+} = {}): React.ReactElement {
   const { data } = useCalendars();
 
   const trades: ReadonlyArray<TradeSummary> =
     data !== undefined ? data.calendars.map(toTradeSummary) : [];
 
-  return <Journal trades={trades} />;
+  return <Journal trades={trades} initialCalendarId={initialCalendarId} />;
 }

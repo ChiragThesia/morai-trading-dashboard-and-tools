@@ -2,7 +2,8 @@
  * Journal screen — trade lifecycle + per-calendar rebuild (JOURNAL-01 + REBUILD-01 + JRNL-01)
  *
  * UI-SPEC "Journal screen" 3-column layout:
- *   Left  (250px) — trade list: sorted newest-open-first, then closed reverse-chron.
+ *   Left  (250px) — trade list: open trades first (the "what's going on now" view),
+ *                   closed trades folded into a collapsed "History (N)" section.
  *                   history/entry-exit/OPEN badges; selected row = violet border.
  *   Center (1fr)  — lifecycle: LifecycleMasthead (verdict headline + read + net P&L) +
  *                   the D-08 stacked-panel LifecycleChart (for history trades) OR dashed
@@ -54,6 +55,8 @@ export interface TradeSummary {
 interface JournalProps {
   /** All trades to show in the left-column list */
   trades: ReadonlyArray<TradeSummary>;
+  /** Deep-link target (Overview open-calendar strip) — pre-selects this calendar's trade. */
+  initialCalendarId?: string | undefined;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -389,13 +392,113 @@ function LifecycleSection({
   );
 }
 
+// ─── Trade list row ────────────────────────────────────────────────────────────
+
+/** One selectable trade row in the left-column list (open or closed). */
+function TradeRow({
+  trade,
+  isSelected,
+  tagLabels,
+  onSelect,
+}: {
+  trade: TradeSummary;
+  isSelected: boolean;
+  /** Recorded rule-tag labels — only passed (non-empty) for the selected trade (D-22). */
+  tagLabels: ReadonlyArray<string>;
+  onSelect: (id: string) => void;
+}): React.ReactElement {
+  const isOpen = trade.closedAt === null;
+  const kind = classifyTradeHistory({
+    openedAt: trade.openedAt,
+    closedAt: trade.closedAt,
+    hasSnapshots: trade.hasSnapshots,
+  });
+  const pnlNum = parseFloat(trade.realizedPnl);
+  const pnlClass = isOpen ? "text-blue" : pnlNum >= 0 ? "text-up" : "text-down";
+
+  return (
+    <div
+      onClick={() => {
+        onSelect(trade.id);
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onSelect(trade.id);
+      }}
+      className={`mb-[5px] grid cursor-pointer grid-cols-[1fr_auto] gap-1.5 rounded-lg border px-[9px] py-[7px] ${
+        isSelected ? "border-violet bg-violetd" : "border-line bg-panel2"
+      }`}
+    >
+      <div>
+        <div className="flex items-center gap-1 font-display text-xs text-txt">
+          {trade.name}
+          {isOpen && (
+            <span className="rounded-[3px] border border-cyan/30 px-[5px] text-[8px] text-cyan">
+              OPEN
+            </span>
+          )}
+        </div>
+        <div className="text-[9px] text-dim">
+          {fmtDate(trade.openedAt)}
+          {trade.closedAt !== null ? ` → ${fmtDate(trade.closedAt)}` : ""}
+        </div>
+      </div>
+
+      <div className="text-right">
+        <div className={`font-display text-xs font-bold tabular-nums ${pnlClass}`}>
+          {isOpen ? "open" : fmtPnl(trade.realizedPnl)}
+        </div>
+        {/* History badge */}
+        <div
+          className={`mt-[3px] inline-block rounded-[3px] border px-[5px] text-[8px] ${
+            kind === "history" ? "border-cyan/30 text-cyan" : "border-line2 text-dim"
+          }`}
+        >
+          {kind === "history" ? "history" : "entry/exit"}
+        </div>
+        {/* Rule-tag read-view pill (D-22) — only known for the selected trade
+            (useRuleTags fetches one calendar's tags at a time); neutral, not violet. */}
+        {isSelected && tagLabels.length > 0 && (
+          <div
+            data-testid="rule-tags-pill"
+            title={tagLabels.join(", ")}
+            className="mt-[3px] block max-w-[110px] truncate rounded-[3px] border border-line2 px-[5px] text-[8px] text-dim"
+          >
+            {tagLabels.join(", ")}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
-export function Journal({ trades }: JournalProps): React.ReactElement {
-  // Default-select the first trade (newest / open first)
+export function Journal({ trades, initialCalendarId }: JournalProps): React.ReactElement {
+  // Open trades first (the "what's going on now" view); closed trades fold into History.
+  const openTrades = trades.filter((t) => t.closedAt === null);
+  const closedTrades = trades.filter((t) => t.closedAt !== null);
+
+  // Default selection: a deep-linked calendar (Overview strip) if present, else the first
+  // open trade, else the first trade of any kind. The calendars query is warm from Overview
+  // on a deep-link, so `trades` is populated at first render and the match lands on mount.
+  // ponytail: no re-select effect for a cold direct-mount into a deep-link — that path
+  // doesn't exist (you can't click the Overview row before Overview has loaded calendars).
+  const deepLinked =
+    initialCalendarId !== undefined
+      ? trades.find((t) => t.calendarId === initialCalendarId)
+      : undefined;
   const [selectedId, setSelectedId] = useState<string | null>(
-    trades.length > 0 && trades[0] !== undefined ? trades[0].id : null,
+    deepLinked?.id ?? openTrades[0]?.id ?? trades[0]?.id ?? null,
   );
+
+  // History (closed trades) is collapsed by default, but auto-expands when there are no
+  // open trades — the closed list is then the only thing to show. `historyOverride` holds
+  // the user's explicit toggle once clicked; until then it tracks the open-trade count,
+  // which stays correct even as `trades` arrives async after an empty first render.
+  const [historyOverride, setHistoryOverride] = useState<boolean | null>(null);
+  const historyOpen = historyOverride ?? (openTrades.length === 0);
 
   const selectedTrade = trades.find((t) => t.id === selectedId) ?? trades[0] ?? null;
 
@@ -476,86 +579,45 @@ export function Journal({ trades }: JournalProps): React.ReactElement {
             action={<HeadingPill>SPXW put calendars</HeadingPill>}
           />
 
-          {/* Trade rows */}
+          {/* Trade rows — open first, then the collapsed History (closed) section. */}
           <div>
-            {trades.map((trade) => {
-              const isSelected = trade.id === selectedId;
-              const isOpen = trade.closedAt === null;
-              const kind = classifyTradeHistory({
-                openedAt: trade.openedAt,
-                closedAt: trade.closedAt,
-                hasSnapshots: trade.hasSnapshots,
-              });
-              const pnlNum = parseFloat(trade.realizedPnl);
-              const pnlClass = isOpen
-                ? "text-blue"
-                : pnlNum >= 0
-                  ? "text-up"
-                  : "text-down";
+            {openTrades.map((trade) => (
+              <TradeRow
+                key={trade.id}
+                trade={trade}
+                isSelected={trade.id === selectedTrade?.id}
+                tagLabels={trade.id === selectedTrade?.id ? selectedTradeTagLabels : []}
+                onSelect={setSelectedId}
+              />
+            ))}
 
-              return (
-                <div
-                  key={trade.id}
+            {closedTrades.length > 0 && (
+              <div className={openTrades.length > 0 ? "mt-1" : ""}>
+                <button
+                  type="button"
+                  data-testid="history-toggle"
+                  aria-expanded={historyOpen}
                   onClick={() => {
-                    setSelectedId(trade.id);
+                    setHistoryOverride(!historyOpen);
                   }}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") setSelectedId(trade.id);
-                  }}
-                  className={`mb-[5px] grid cursor-pointer grid-cols-[1fr_auto] gap-1.5 rounded-lg border px-[9px] py-[7px] ${
-                    isSelected
-                      ? "border-violet bg-violetd"
-                      : "border-line bg-panel2"
-                  }`}
+                  className="mb-[5px] flex w-full items-center gap-1.5 rounded-md px-[9px] py-[6px] font-mono text-[10px] tracking-wide text-dim transition-colors hover:text-txt"
                 >
-                  <div>
-                    <div className="flex items-center gap-1 font-display text-xs text-txt">
-                      {trade.name}
-                      {isOpen && (
-                        <span className="rounded-[3px] border border-cyan/30 px-[5px] text-[8px] text-cyan">
-                          OPEN
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[9px] text-dim">
-                      {fmtDate(trade.openedAt)}
-                      {trade.closedAt !== null ? ` → ${fmtDate(trade.closedAt)}` : ""}
-                    </div>
-                  </div>
+                  <span className="text-[8px]">{historyOpen ? "▾" : "▸"}</span>
+                  <span>History ({closedTrades.length})</span>
+                </button>
 
-                  <div className="text-right">
-                    <div
-                      className={`font-display text-xs font-bold tabular-nums ${pnlClass}`}
-                    >
-                      {isOpen ? "open" : fmtPnl(trade.realizedPnl)}
-                    </div>
-                    {/* History badge */}
-                    <div
-                      className={`mt-[3px] inline-block rounded-[3px] border px-[5px] text-[8px] ${
-                        kind === "history"
-                          ? "border-cyan/30 text-cyan"
-                          : "border-line2 text-dim"
-                      }`}
-                    >
-                      {kind === "history" ? "history" : "entry/exit"}
-                    </div>
-                    {/* Rule-tag read-view pill (D-22) — only known for the selected trade
-                        (useRuleTags fetches one calendar's tags at a time); neutral, not violet. */}
-                    {isSelected && selectedTradeTagLabels.length > 0 && (
-                      <div
-                        data-testid="rule-tags-pill"
-                        title={selectedTradeTagLabels.join(", ")}
-                        className="mt-[3px] block max-w-[110px] truncate rounded-[3px] border border-line2 px-[5px] text-[8px] text-dim"
-                      >
-                        {selectedTradeTagLabels.join(", ")}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                {historyOpen &&
+                  closedTrades.map((trade) => (
+                    <TradeRow
+                      key={trade.id}
+                      trade={trade}
+                      isSelected={trade.id === selectedTrade?.id}
+                      tagLabels={trade.id === selectedTrade?.id ? selectedTradeTagLabels : []}
+                      onSelect={setSelectedId}
+                    />
+                  ))}
+              </div>
+            )}
           </div>
         </Panel>
       </div>

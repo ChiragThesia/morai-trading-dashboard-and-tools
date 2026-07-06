@@ -139,6 +139,20 @@ function makeHistoryTrade() {
   };
 }
 
+// An open trade (closedAt === null) — the "what's going on right now" case.
+function makeOpenTrade() {
+  return {
+    id: "trade-open",
+    calendarId: "550e8400-e29b-41d4-a716-446655440003",
+    strike: 7400,
+    name: "7400P (open)",
+    openedAt: "2026-06-20T14:00:00.000Z",
+    closedAt: null,
+    realizedPnl: "",
+    hasSnapshots: true,
+  };
+}
+
 // ─── RULE-01 fixtures ────────────────────────────────────────────────────────
 
 const OPEN_HASH = "1".repeat(64);
@@ -297,6 +311,62 @@ describe("Journal screen", () => {
 
     // The rebuild button trigger text
     expect(screen.getByText(/Rebuild journal/i)).toBeDefined();
+  });
+
+  it("folds closed trades into a collapsed History section; open trades always show", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    mockUseLifecycle.mockReturnValue({
+      data: { snapshots: [] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
+
+    renderJournal([makeOpenTrade(), makeHistoryTrade(), makePreJun12Trade()]);
+
+    // Open trade is always visible in the rail.
+    expect(screen.getAllByText("7400P (open)").length).toBeGreaterThan(0);
+
+    // A "History (2)" toggle summarizes the two closed trades.
+    expect(screen.getByText("History (2)")).toBeDefined();
+
+    // Closed trades are hidden by default (folded behind the collapsed History section).
+    expect(screen.queryByText("7375P (Jun-12+)")).toBeNull();
+    expect(screen.queryByText("7375P (pre-Jun-12)")).toBeNull();
+  });
+
+  it("clicking the History toggle reveals the closed trades", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    mockUseLifecycle.mockReturnValue({
+      data: { snapshots: [] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
+
+    renderJournal([makeOpenTrade(), makeHistoryTrade()]);
+
+    expect(screen.queryByText("7375P (Jun-12+)")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("history-toggle"));
+
+    expect(screen.getAllByText("7375P (Jun-12+)").length).toBeGreaterThan(0);
+  });
+
+  it("expands the History section by default when there are no open trades", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    mockUseLifecycle.mockReturnValue({
+      data: { snapshots: [] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
+
+    renderJournal([makeHistoryTrade(), makePreJun12Trade()]);
+
+    // No open trades → the closed list is shown expanded (nothing else to see).
+    expect(screen.getAllByText("7375P (Jun-12+)").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("7375P (pre-Jun-12)").length).toBeGreaterThan(0);
   });
 
   it("shows the error state with a working Retry button when the lifecycle fetch fails", () => {
