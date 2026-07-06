@@ -221,13 +221,23 @@ async def get_chain(
             # body has none of the keys _map_option_chain_to_response reads, so .get(...,
             # default) previously produced a "successful" spot=0.0/quotes=[] response —
             # zero data with no visible failure anywhere downstream.
+            #
+            # BUG 2 (2026-07-06 chain-frozen-schwab-symbol debug session): every non-200
+            # status used to map to the SAME 503 AUTH_EXPIRED as a real 401, so a 400
+            # bad-param error (BUG 1) masqueraded as a dead token for weeks. Only a real
+            # 401 is an actual auth failure; any other non-200 is a distinct fetch error.
             logger.error(
                 "chain proxy: get_option_chain returned non-200 status %s",
                 resp.status_code,
             )
+            if resp.status_code == 401:
+                return JSONResponse(
+                    status_code=503,
+                    content={"error": "AUTH_EXPIRED"},
+                )
             return JSONResponse(
                 status_code=503,
-                content={"error": "AUTH_EXPIRED"},
+                content={"error": f"SCHWAB_FETCH_ERROR_{resp.status_code}"},
             )
         raw = resp.json()
     except Exception as exc:

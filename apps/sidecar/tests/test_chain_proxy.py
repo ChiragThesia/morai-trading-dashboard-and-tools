@@ -187,6 +187,46 @@ def test_get_option_chain_always_requests_dollar_spx_symbol(
     )
 
 
+def test_400_schwab_response_is_not_reported_as_auth_expired(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    BUG 2 regression (2026-07-06 chain-frozen-schwab-symbol debug session):
+    every non-200 Schwab response (400, 500, etc) was mapped to the SAME
+    503 {"error": "AUTH_EXPIRED"} body as a real 401. This made a param bug
+    (BUG 1: malformed chain symbol → 400 "Check Param Values") masquerade as a
+    dead/expired token for weeks — `get_status` reported AUTH_EXPIRED while the
+    token itself refreshed cleanly the whole time.
+
+    Fix: only a real 401 maps to AUTH_EXPIRED. Any other non-200 (e.g. 400) must
+    surface as a distinct error so it is never mistaken for auth expiry again.
+    A genuine 401 (test_non_2xx_schwab_response_returns_auth_expired_not_empty_success,
+    above) must still map to AUTH_EXPIRED.
+    """
+    from main import app
+
+    error_resp = unittest.mock.MagicMock()
+    error_resp.status_code = 400
+    error_resp.json.return_value = {"error": "Check Param Values"}
+
+    mock_market_client = unittest.mock.AsyncMock()
+    mock_market_client.get_option_chain.return_value = error_resp
+    monkeypatch.setattr(app.state, "market_client", mock_market_client)
+
+    response = client.get("/sidecar/chain?root=SPX")
+
+    assert response.status_code == 503, (
+        f"Expected 503, got {response.status_code}: {response.text}"
+    )
+    body = response.json()
+    assert body != {"error": "AUTH_EXPIRED"}, (
+        f"A 400 (bad param) must not be reported as AUTH_EXPIRED, got {body!r}"
+    )
+    assert isinstance(body.get("error"), str) and body["error"] != "", (
+        f"Expected a distinct non-empty error string, got {body!r}"
+    )
+
+
 def test_contract_chain_shape_pins_ts_schema() -> None:
     """
     D-08 manual-mirror contract test: pins the Python /sidecar/chain response shape to
