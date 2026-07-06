@@ -3,11 +3,12 @@ slug: journal-pnl-opennetdebit-units
 status: fixing
 trigger: "Journal P&L shows −$319,850 for calendar 65aac62e (7425P) when real P&L ≈ +$415 — openNetDebit stored in dollars, snapshot formula expects points"
 created: 2026-07-05
-updated: 2026-07-05T00:20:00-07:00
+updated: 2026-07-05T19:30:00-07:00
 tdd_mode: true
 goal: find_and_fix
 bug_2_trigger: "validate-on-one FAILED after deploy: rebuild-journal on 65aac62e changed open_net_debit 3235 -> 286.47, still wrong (correct: 32.35) — a SECOND, deeper root cause in the same area"
 round_3_trigger: "Build ONE tested capability to enable account-wide durable re-ingest of Schwab fills, so already-backfilled calendars' fills.side data (wrong before the round-2 code fix) gets corrected at the source. Code-complete + committed; NOT deployed, NOT run against prod — status stays 'fixing' until the orchestrator executes the run sequence and prod-verifies 65aac62e."
+round_4_trigger: "Ground-truth oracle built from real transactions (13 real calendars, journal-pnl-ground-truth.md) exposed a THIRD, still-deeper root cause: the round-2 side-fix, once actually exercised against re-ingested real data, produced openNetDebit ≈ -4 for 65aac62e (registered open) and ≈ 0 for every closed-registered calendar — the OPEN/CLOSE classification itself, not the sign, was wrong. Fix code-complete + committed; NOT deployed, NOT run against prod."
 ---
 
 # Debug Session: journal-pnl-opennetdebit-units
@@ -723,3 +724,265 @@ post-deploy step, after running the full sequence below.
   guard). (4) Per affected calendarId: `rebuild-journal` then `recompute-snapshot-pnl`. (5)
   Prod-verify 65aac62e: openNetDebit ≈ 32.35, P&L ≈ +$415. Do NOT run any of this from a
   debugger session — this session self-verified in dev/test only.
+
+## Round 4 — classification-from-status root cause (the "-4 / ~0" regression)
+
+**Trigger:** see `round_4_trigger` in frontmatter. The user-confirmed oracle
+(`.planning/debug/journal-pnl-ground-truth.md`) gave 13 real calendars' true openNetDebit/
+closeNetCredit/realizedPnl, computed independently from `get_transactions`. Prod evidence
+after re-ingest: 65aac62e (registered `open`) → openNetDebit ≈ -4 (32.37 open − 36.33 close
+folded together); every registered-`closed` calendar → openNetDebit ≈ 0.
+
+### Current Focus — reasoning_checkpoint (written BEFORE the fix)
+
+```yaml
+reasoning_checkpoint:
+  hypothesis: >
+    `readCalendarLegs` (postgres/repos/fills.ts AND memory/fills.ts, byte-identical) derived
+    each matched fill's OPEN/CLOSE classification from the CALENDAR's CURRENT `status` column
+    (statusToPositionEffect: open->OPENING, closed->CLOSING) — the SAME value for BOTH legs,
+    applied uniformly to EVERY fill matching that leg regardless of which real historical
+    order it came from. A calendar's status is a single point-in-time snapshot of its LATEST
+    known state, not a per-fill signal — so for 65aac62e (status="open"), its real CLOSE
+    order's fills ALSO got classified OPEN (4 OPEN events instead of 2 OPEN + 2 CLOSE),
+    summing 159.41 - 127.06 - 123.13 + 86.78 = -4.00 exactly. For any calendar registered
+    "closed", the inverse happens: its real OPEN order's fills get classified CLOSE, so
+    openNetDebit sums to 0 (no OPEN events exist at all) and closeNetCredit becomes the
+    NET of both legs (≈ realizedPnl), not the isolated close credit.
+  confirming_evidence:
+    - "Direct arithmetic match: reproduced the debug session's own evidence numbers exactly by feeding the real 4 fills for 65aac62e (159.41 buy, 127.06 sell, 123.13 sell, 86.78 buy) through a RawFill-level regression test (apps/worker/src/journal-oracle.test.ts) with the calendar registered status='open': observed openNetDebit = -4.00, closeNetCredit = 0 — before any fix, RED for the predicted reason."
+    - "packages/core/src/journal/application/syncFills.test.ts's OWN pre-existing journal-e2e.test.ts docstring (written in an earlier round, not by me): 'The memory fills twin derives positionEffect from calendar.status, so we drive OPEN/CLOSE through two separate sync passes against a status flip... the twin can't [classify per real order], so we exercise pairing through the use-case with a custom legs reader' — a prior round had ALREADY discovered this exact limitation and worked around it with hand-rolled test mocks instead of fixing the production code, which is precisely why no existing test caught this: every syncFills.test.ts case supplied positionEffect directly via the MOCKED readCalendarLegs, never through the real status-derivation path."
+    - "recomputeCalendarAmounts (both adapters) was independently re-verified UNCHANGED and correct: it sums OPEN events into openDebit and CLOSE events into closeCredit with no cross-contamination — the existing 'nets a bought-to-open leg against a sold-to-open leg' contract test (159.41/-127.06 -> 32.35) still passes untouched. The bug is entirely upstream of recompute, in which EVENT TYPE each fill gets tagged with."
+    - "The real broker transaction already carries the true, authoritative, per-leg positionEffect (BrokerTransaction.legs[].positionEffect, parsed correctly by the Schwab adapter, confirmed unchanged/correct) — but syncTransactions.ts's flattenTransaction used it ONLY as a drop-filter (`if (leg.positionEffect === 'UNKNOWN') return`) and then DISCARDED it; RawFill had no positionEffect field to carry it forward at all."
+  falsification_test: >
+    Built apps/worker/src/journal-oracle.test.ts from REAL Schwab orders (scratchpad/txns.json)
+    for 5 real calendars (65aac62e open+close; 9eef2153 and e8bfbf41, two simple closed
+    calendars; 60c46a57/24f1e72e, a shared-order pair). Ran it against the PRE-fix code:
+    FAILED with openNetDebit = -4.00 for 65aac62e (exact predicted value) before any
+    production code changed — confirms the hypothesis, not a tautology. If the bug were
+    instead in recomputeCalendarAmounts's summing logic, the failure would NOT reproduce this
+    exact -4.00 figure (it would show whatever recompute's OWN bug produces); it reproduced
+    the debug session's own prod evidence number precisely.
+  fix_rationale: >
+    Root-cause fix, not a bandaid: carry the broker's OWN per-fill positionEffect all the way
+    through the pipeline — mirrors EXACTLY how round 2 fixed the analogous `side` bug (do not
+    re-derive a signal from mutable app state; read it once from the broker and thread it
+    through). RawFill gains `positionEffect` (calendar-event.ts); syncTransactions.ts's
+    flattenTransaction now includes it instead of discarding it; aggregatePartialFills reads
+    it off the bucket's own fills (`first.positionEffect`) instead of accepting an externally
+    supplied value; syncFills.ts stops passing `leg.positionEffect` (removed from
+    CalendarLegEntry entirely — it now exists ONLY to resolve which calendar a fill's OCC
+    symbol belongs to); the fills table gains an additive-nullable `position_effect` column
+    (migration 0018) so it survives round-trips through Postgres, with a safe "UNKNOWN"
+    fallback (orphan-parks, never fabricates a classification) for any pre-migration row.
+    recomputeCalendarAmounts is UNTOUCHED — it was never the bug once its true input
+    (correctly-classified calendar_events) is correct.
+
+    Authoritative-sign principle applied: this is a re-derivation bug in the SAME family as
+    round 2's (a signal was thrown away and re-inferred from the wrong source — here,
+    calendar.status instead of positionEffect; there, positionEffect instead of the broker's
+    signed amount). The fix reduces total sign/classification-inference surface to ONE point
+    (the Schwab adapter boundary) for BOTH signals (side AND positionEffect) — nothing
+    downstream re-derives either one from calendar state ever again.
+  blind_spots: >
+    The 60c46a57/24f1e72e "roll pair" the orchestrator flagged turned out, on inspection of
+    the real order legs, to NOT be a domain ROLL at all: the two calendars have DIFFERENT
+    strikes (7425 vs 7475), and `detectRoll` requires the SAME calendarId (D-03) — so the
+    WR-A1 rollOpenDebit/rollCloseCredit split never fires here; the shared broker order
+    (1006797510202) simply produces two ordinary CLOSE events (60c46a57) and two ordinary
+    OPEN events (24f1e72e) sharing one orderId across two different calendars. This is
+    verified explicitly in journal-oracle.test.ts (asserts every event is OPEN/CLOSE, never
+    ROLL, and both calendars' amounts are correct in isolation) — but it means the ONE actual
+    same-calendar ROLL code path (WR-A1 split, fixed in round 2's money-path-review
+    follow-up) has NOT been re-exercised against real multi-leg roll data in this round; it
+    remains covered only by the synthetic syncFills.test.ts ROLL cases and the P3/P4
+    fast-check properties (real per-fill positionEffect now, not a whole-run-constant).
+
+    The code fix corrects classification for ALL FUTURE fills ingestion (and any calendar
+    whose fills get re-ingested). It does NOT retroactively fix already-ingested fills rows'
+    position_effect column (NULL, falls back to UNKNOWN, which orphan-parks rather than
+    misclassifying — safe, but means a bare `rebuild-journal` on already-backfilled prod data
+    would NOT converge without a fresh re-ingest, since the stored fills predate this column).
+    Correcting prod requires the SAME re-ingest sequence round 3 already built
+    (wipe-derived-fills -> backfill-transactions -> per-calendar rebuild-journal ->
+    recompute-snapshot-pnl) — this round changes what that re-ingest produces, not whether
+    it's still required.
+```
+
+### Evidence
+
+- timestamp: 2026-07-05 — read `.planning/debug/journal-pnl-ground-truth.md` in full: 13 real
+  calendars' oracle openNetDebit/closeNetCredit/realizedPnl computed from `get_transactions`'
+  authoritative signed netAmount. Cross-referenced against `scratchpad/txns.json` (raw Schwab
+  order data) for 65aac62e, 9eef2153, e8bfbf41, 60c46a57, 24f1e72e — every order/leg/price
+  traced and independently re-derived (fee-free, avgPrice×qty convention, matching what
+  syncFills.ts actually computes — commission/fees are always NULL in this pipeline, a
+  separate pre-existing gap, NOT touched this round; the oracle's fee-inclusive figures differ
+  by ~2 cents/leg, exactly as the objective's own text anticipated).
+- timestamp: 2026-07-05 — read `packages/adapters/src/postgres/repos/fills.ts`
+  `readCalendarLegs`/`statusToPositionEffect` and the byte-identical `memory/fills.ts`
+  implementation: both derive `CalendarLegEntry.positionEffect` from `calendar.status`
+  (open->OPENING, closed->CLOSING), uniformly for both legs, independent of which fill/order
+  is being matched. This is the exact function `syncFills.ts`'s `pairFills` uses to classify
+  every fill's aggregate bucket.
+- timestamp: 2026-07-05 — read `packages/core/src/journal/application/syncTransactions.ts`
+  `flattenTransaction`: `if (leg.positionEffect === "UNKNOWN") return;` — the broker's REAL
+  per-leg positionEffect is read, used only as a drop-filter, then discarded; `RawFill` had no
+  field to carry it further.
+- timestamp: 2026-07-05 — built `apps/worker/src/journal-oracle.test.ts` from the real Schwab
+  orders (verbatim activityId/orderId/legs from `scratchpad/txns.json`) for 5 real calendars.
+  RAN AGAINST THE PRE-FIX CODE: FAILED with `openNetDebit = -4.00` for 65aac62e (calendar
+  registered status="open") — the EXACT prod regression figure from the ground-truth doc,
+  confirmed via a debug dump of the 4 stored events: all 4 classified `eventType: "OPEN"`
+  (159.41, -127.06, -123.13, 86.78 -> sum -4.00). This is TDD RED, confirmed for the right
+  reason, before any production code changed.
+- timestamp: 2026-07-05 — implemented the fix (RawFill gains `positionEffect`; carried through
+  `syncTransactions.ts` instead of discarded; `aggregatePartialFills` reads it off the
+  bucket's own fills instead of an externally supplied leg-derived value; `CalendarLegEntry`
+  loses the field entirely — it now exists purely to resolve calendarId/legOccSymbol matching;
+  Postgres `fills` table gains additive-nullable `position_effect` (migration 0018,
+  `bunx drizzle-kit generate`); `mapFillRow` falls back to `"UNKNOWN"` on NULL, never
+  fabricating OPENING/CLOSING; `memory/fills.ts`'s `statusToPositionEffect` removed —
+  `writeFills` already stores the whole RawFill object, so the twin needed zero storage
+  changes, only the `readCalendarLegs` leg-matching function). Re-ran `journal-oracle.test.ts`:
+  GREEN — all 5 real calendars' openNetDebit/closeNetCredit match the independently-derived
+  fee-free expected values exactly (within `toBeCloseTo(x, 2)`), and no spurious ROLL event
+  is created across the 60c46a57/24f1e72e shared-order pair (verified 4 events per calendar,
+  all OPEN/CLOSE, zero ROLL).
+- timestamp: 2026-07-05 — mechanical fallout across the test suite (every RawFill/
+  CalendarLegEntry/aggregatePartialFills construction site in the monorepo): `fill-pairing.ts`
+  (signature drops the external `positionEffect` param), `fill-pairing.test.ts` (+2 new tests:
+  positionEffect propagates OPENING/CLOSING from the bucket's own fills, mirroring the
+  existing side-propagation tests), `syncFills.test.ts` (`makeFill` default `positionEffect:
+  "OPENING"`; every CLOSING/UNKNOWN test case moved its classification signal from the mocked
+  `legMap` onto the fill fixture itself — 8 CLOSING + 2 UNKNOWN overrides, mechanically
+  verified against the pre-edit test file), `syncFills.property.test.ts` (rewrote the
+  generator: `FillSpec` gained its own per-fill `positionEffect` instead of a whole-run
+  `frontStatus`/`backStatus` constant that could never model a real calendar's lifecycle — the
+  property's own prior docstring admitted this limitation explicitly; P3's ROLL
+  reconstruction now reads `e.legOccSymbol`/`e.rolledFromOccSymbol` — the event's own
+  authoritative role signal — instead of the removed per-run status; added P4, a NEW property
+  directly encoding the regressed invariant: openNetDebit is unchanged by adding CLOSING fills
+  to an already-OPENED leg, and their economics land only in closeNetCredit), `
+  syncTransactions.test.ts` (+3 assertions: positionEffect round-trips through
+  `flattenTransaction` unchanged), `__contract__/fills.contract.ts` (`makeFill` default
+  `positionEffect: "OPENING"`; +1 round-trip test through `writeFills`/
+  `readUnprocessedFills`; the obsolete "maps closed-calendar legs to CLOSING positionEffect"
+  test — which tested behavior this fix REMOVES — replaced with "resolves the same
+  (calendarId, legOccSymbol) regardless of calendar status", the direct positive proof of the
+  fix run against BOTH Postgres (testcontainers) and the in-memory twin).
+- timestamp: 2026-07-05 — full verification: `bun run typecheck` clean (tsc --build --force,
+  zero errors). `bun run test` (vitest, whole monorepo, including Postgres testcontainers
+  suites — Docker available in this session): **2145/2145 pass** (was 2139/2139 before this
+  round — +6 net: 1 real-transaction oracle e2e test, 2 fill-pairing propagation tests, 1 P4
+  fast-check property, 1 contract writeFills round-trip test, 1 contract status-independence
+  test, minus 1 removed obsolete contract test whose asserted behavior this fix eliminates).
+  `bun run lint`: clean (same pre-existing boundaries-plugin informational warnings as every
+  prior round, zero errors). Grepped the full diff for `any`/`as`/`!` in every changed
+  production file: zero introduced (only prose comments containing the word "as").
+- timestamp: 2026-07-05 — self-conducted money-path review (no Task/subagent tool available in
+  this session, same constraint as round 3): (1) atomicity — no new multi-step writes
+  introduced; `writeFills` remains a single INSERT (position_effect column added to the same
+  statement, not a second write); `recomputeCalendarAmounts` untouched. (2) migration safety —
+  additive nullable column, matches the project's own documented precedent (`calendar_
+  snapshots.trigger`, migration 0016); no NOT NULL constraint, no backfill, confirmed
+  non-destructive. (3) twin parity — `memory/fills.ts`'s `writeFills` already persists the
+  whole `RawFill` object verbatim (no field-by-field mapping layer), so `positionEffect`
+  flows through with ZERO storage-layer changes to the twin; only its `readCalendarLegs`
+  needed the dead `statusToPositionEffect` removed, mirroring the Postgres adapter exactly —
+  proven identical via the shared `fills.contract.ts` suite passing on both. (4) no FK/CASCADE
+  risk — this fix touches no foreign-key relationships. (5) fallback safety — a NULL/legacy
+  `position_effect` value maps to `"UNKNOWN"`, which routes through the EXISTING
+  `classifyFill` UNKNOWN branch (orphan-parked, WR-01 "never a wrong number" convention) —
+  never silently fabricates OPEN or CLOSE.
+
+## Resolution — Round 4 (classification-from-status root cause)
+
+root_cause: >
+  `calendars.open_net_debit`/`close_net_credit` came out wrong (≈ -4 for calendars registered
+  `open`; ≈ 0 for calendars registered `closed`) because `readCalendarLegs`
+  (postgres/repos/fills.ts and memory/fills.ts) derived every matched fill's OPEN/CLOSE
+  classification from the CALENDAR's CURRENT `status` column — a single, mutable,
+  point-in-time value applied uniformly to EVERY fill matching that calendar's legs,
+  regardless of which real historical order (open or close) the fill actually came from. A
+  calendar's `status` reflects its LATEST known state, not what a historical fill's role was
+  at trade time. The real, authoritative per-fill positionEffect (BrokerTransaction.
+  legs[].positionEffect, parsed correctly by the Schwab adapter) was available at the exact
+  point `syncTransactions.ts`'s `flattenTransaction` ingested each fill — but was used only as
+  a drop-filter (UNKNOWN legs skipped) and then discarded; `RawFill` had no field to carry it
+  forward, so `syncFills.ts` had no choice but to re-derive classification from the calendar's
+  status at pairing time, which is exactly where the round-2 side-fix's re-ingest first
+  exercised this pre-existing, previously-latent bug.
+
+fix: >
+  Code-complete, fully TDD'd (RED confirmed with the EXACT real-data regression figure -4.00
+  before any production code changed, then GREEN after — see Evidence), COMMITTED (see commit
+  SHAs in the handback), NOT deployed, NO prod job triggered:
+  (1) `RawFill` (calendar-event.ts) gains `positionEffect: "OPENING"|"CLOSING"|"UNKNOWN"` —
+  the broker's own per-fill role, carried through instead of discarded.
+  (2) `syncTransactions.ts`'s `flattenTransaction` includes it on every emitted RawFill.
+  (3) `aggregatePartialFills` (fill-pairing.ts) reads `positionEffect` off the bucket's first
+  fill instead of accepting it as an externally-supplied parameter — mirrors exactly how
+  round 2 already handled `side`.
+  (4) `CalendarLegEntry` (ports.ts) loses `positionEffect` entirely — it now exists purely to
+  resolve WHICH calendar a fill's OCC symbol belongs to (calendarId + legOccSymbol); `
+  readCalendarLegs` (both adapters) no longer touches `calendar.status` for this purpose at
+  all, and the dead `statusToPositionEffect` helper is removed from both.
+  (5) `packages/adapters/src/postgres/schema.ts` + migration 0018 (additive nullable
+  `position_effect` varchar(8) on `fills`); `mapFillRow` falls back to `"UNKNOWN"` on NULL
+  (pre-migration rows) — never fabricates a classification, safely orphan-parks instead.
+  Deliberately NOT touched: `recomputeCalendarAmounts` (postgres + memory, byte-identical) —
+  proven correct as-is; its bug-free WR-A1 sum-by-eventType rule was always operating on
+  mis-tagged INPUT events, not mis-summing correctly-tagged ones. The ROLL branch's
+  rollOpenDebit/rollCloseCredit split (round 2's money-path-review follow-up) — untouched,
+  unaffected; the 60c46a57/24f1e72e pair this round tested turned out not to exercise it at
+  all (different strikes → different calendars → not a domain ROLL, see blind_spots).
+
+verification: >
+  Self-verified in dev/test only: `bun run typecheck` clean. `bun run test` (vitest, whole
+  monorepo, INCLUDING Postgres testcontainers suites — Docker was available and used this
+  session): 2145/2145 pass (was 2139/2139 before this round). `bun run lint` clean. The
+  centerpiece: `apps/worker/src/journal-oracle.test.ts`, built entirely from real Schwab order
+  data for 5 real calendars (65aac62e open+close; 9eef2153 and e8bfbf41, two simple closed
+  calendars; 60c46a57/24f1e72e, a shared-broker-order pair proven NOT to be a domain ROLL) —
+  every calendar's openNetDebit/closeNetCredit matches its independently fee-free-derived
+  expected value, confirmed RED (openNetDebit=-4.00 for 65aac62e, the exact prod figure)
+  before the fix and GREEN after. A new fast-check property (P4, 300 runs) directly encodes
+  the regressed invariant: openNetDebit is unchanged by adding CLOSING fills to an
+  already-OPENED leg. NOT verified against prod data — no prod job triggered, no deploy
+  performed. This is the fourth round to reach "self-verified in dev/test, root cause found
+  and fixed with real-transaction TDD coverage" — prod verification remains the orchestrator's
+  post-deploy step (see the handback's prod-correction guidance).
+
+files_changed:
+  - packages/core/src/journal/domain/calendar-event.ts (+positionEffect on RawFill)
+  - packages/core/src/journal/domain/fill-pairing.ts (aggregatePartialFills reads positionEffect off the bucket's own fills, not an external param)
+  - packages/core/src/journal/domain/fill-pairing.test.ts (+2 tests: positionEffect propagation OPENING/CLOSING; all existing calls updated to the 2-arg signature)
+  - packages/core/src/journal/application/ports.ts (CalendarLegEntry loses positionEffect)
+  - packages/core/src/journal/application/syncFills.ts (pairFills stops supplying leg.positionEffect to aggregatePartialFills)
+  - packages/core/src/journal/application/syncFills.test.ts (classification signal moved from mocked legMap onto fill fixtures; 8 CLOSING + 2 UNKNOWN overrides)
+  - packages/core/src/journal/application/syncFills.property.test.ts (FillSpec gains per-fill positionEffect, replacing the whole-run frontStatus/backStatus constant; P3 ROLL reconstruction reads legOccSymbol/rolledFromOccSymbol; +P4 property)
+  - packages/core/src/journal/application/syncTransactions.ts (flattenTransaction carries positionEffect onto RawFill instead of discarding it)
+  - packages/core/src/journal/application/syncTransactions.test.ts (+3 assertions: positionEffect round-trips)
+  - packages/adapters/src/postgres/schema.ts (+position_effect column, additive nullable)
+  - packages/adapters/src/postgres/migrations/0018_fills_position_effect.sql (new migration)
+  - packages/adapters/src/postgres/migrations/meta/0018_snapshot.json, meta/_journal.json (drizzle-kit generated)
+  - packages/adapters/src/postgres/repos/fills.ts (mapFillRow/writeFills persist positionEffect; readCalendarLegs/statusToPositionEffect removed)
+  - packages/adapters/src/memory/fills.ts (readCalendarLegs/statusToPositionEffect removed — writeFills needed no change, already stores the whole RawFill)
+  - packages/adapters/src/__contract__/fills.contract.ts (makeFill default positionEffect; +1 writeFills round-trip test; obsolete status->positionEffect test replaced with a status-independence test)
+  - apps/worker/src/journal-oracle.test.ts (new — real-transaction oracle regression suite, 5 real calendars)
+  - docs/architecture/data-model.md (+position_effect column documentation)
+
+- next_action: Orchestrator-owned. (1) Review/merge this fix. (2) Deploy worker + server (no
+  new job/route surface this round — pure fill-classification fix, no schema-visible API
+  change beyond the additive migration). (3) Run the migration (`bun run migrate` picks up
+  0018 automatically). (4) Re-run the SAME round-3 correction sequence
+  (`wipe-derived-fills` -> `backfill-transactions <from> <to>` -> per-calendar
+  `rebuild-journal` -> `recompute-snapshot-pnl`) — this round's fix changes what that sequence
+  PRODUCES (correct classification), not whether it's still required (already-ingested fills
+  rows predate the position_effect column and fall back to UNKNOWN/orphan-parked without a
+  fresh re-ingest). (5) Prod-verify against the ground-truth oracle: 65aac62e openNetDebit ≈
+  32.35-32.37, all 13 real calendars' openNetDebit/closeNetCredit within a few cents of
+  `.planning/debug/journal-pnl-ground-truth.md`. Do NOT run any of this from a debugger
+  session — this session self-verified in dev/test only (2145/2145 tests green, typecheck
+  clean, lint clean, testcontainers-verified against real Postgres).
