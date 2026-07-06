@@ -24,6 +24,12 @@
  *     buy, nor CLOSING sell — a leg can be sold-to-open or bought-to-close). UNKNOWN
  *     positionEffect legs are still dropped here (no calendar-leg context to classify
  *     OPEN/CLOSE); sync-fills' orphan parking covers genuine misses.
+ *   - positionEffect ALSO carries straight onto the RawFill (journal-pnl-opennetdebit-units
+ *     round 4) — it used to be read here only as a drop-filter and then discarded; sync-fills
+ *     re-derived classification later from the calendar's current status column instead,
+ *     which folded historical CLOSE fills into OPEN events (or vice versa) whenever status
+ *     hadn't kept pace with reality. The broker's own per-fill positionEffect is now the
+ *     single source of truth for classification, all the way through.
  */
 
 import { ok, err } from "@morai/shared";
@@ -148,6 +154,9 @@ function flattenTransaction(
       filledAt,
       commission: null,
       fees: null,
+      // journal-pnl-opennetdebit-units (round 4): the leg's OWN broker-reported role, carried
+      // through instead of discarded (see module docstring).
+      positionEffect: leg.positionEffect,
     });
   });
 }

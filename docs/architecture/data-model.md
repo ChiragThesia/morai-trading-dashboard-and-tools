@@ -83,6 +83,15 @@ SPX/SPXW = European cash-settled; strike stored ×1000 int, ÷1000 on parse.
 Journal positions are **rebuilt from broker fills, never hand-written** — same source-of-truth
 discipline as the trade-advisor plugin's `rebuild-journal`.
 
+`position_effect` (migration 0018, additive nullable) records each fill's OWN broker-reported
+OPENING/CLOSING role (journal-pnl-opennetdebit-units round 4). It drives OPEN/CLOSE/ROLL
+classification directly — sync-fills no longer re-derives this from the calendar's current
+`status` column, which reflects the calendar's LATEST known state, not what a historical
+fill's role was at trade time (deriving classification from status folded a calendar's real
+CLOSE fills into OPEN events, or vice versa, whenever status hadn't kept pace with reality).
+Existing rows read NULL and fall back to `"UNKNOWN"` (orphan-parked, never a fabricated
+classification).
+
 ### `rate_observations` — FRED DGS3MO daily
 ```
 date PK, rate numeric          -- fallback 4.5% if FRED unreachable (rho impact tiny)

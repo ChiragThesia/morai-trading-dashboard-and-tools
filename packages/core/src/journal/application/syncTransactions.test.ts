@@ -152,11 +152,16 @@ describe("makeSyncTransactionsUseCase — A4 fills source", () => {
     expect(openFront?.qty).toBe(1);
     expect(openFront?.price).toBe(15.5);
     expect(openFront?.filledAt.toISOString().slice(0, 10)).toBe("2026-06-15");
+    // journal-pnl-opennetdebit-units round 4: positionEffect carries through onto the
+    // RawFill too — it used to be read only as a drop-filter here and then discarded.
+    expect(openFront?.positionEffect).toBe("OPENING");
+    expect(openBack?.positionEffect).toBe("OPENING");
 
     const closeLeg = captured.find((f) => f.orderId === "9002");
     // CLOSING leg that is a BUY (buying back the sold-to-open leg) — not "sell".
     expect(closeLeg?.side).toBe("buy");
     expect(closeLeg?.price).toBe(8.0);
+    expect(closeLeg?.positionEffect).toBe("CLOSING");
   });
 
   it("derives valid UUID-shaped fill ids", async () => {

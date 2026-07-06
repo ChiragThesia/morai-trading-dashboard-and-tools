@@ -16,6 +16,12 @@
  *                           events yields openNetDebit/closeNetCredit that equal the summed raw
  *                           economics (price×qty) of the paired fills (OPEN debits + ROLL open
  *                           legs → openNetDebit; |CLOSE credits| + ROLL close legs → closeNetCredit).
+ *   P4  OPEN-only debit    — (journal-pnl-opennetdebit-units round 4) openNetDebit is invariant
+ *                           under adding CLOSING fills to an already-OPENED leg; their economics
+ *                           land only in closeNetCredit. This is the exact regressed invariant:
+ *                           classification used to be derived from the calendar's current status
+ *                           column, not each fill's own positionEffect, so a calendar's real
+ *                           CLOSE fills could get folded into openNetDebit (or vice versa).
  *
  * If a property finds a counterexample it is a real residual bug in 05-14/05-15 — the source is
  * fixed at root cause, never the generator narrowed to hide it (TDD rule, plan critical_rules).
@@ -73,15 +79,19 @@ const fakeHashFillIds = (ids: ReadonlyArray<string>): string =>
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────────
 
-// A single fill spec on one of the two legs. positionEffect (via frontStatus/backStatus, set
-// per-leg for the whole run) drives OPEN/CLOSE classification; side (fixed per-leg below,
-// front=sell/back=buy — a realistic bought-back/sold-front calendar) independently drives
-// netAmount's sign (journal-pnl-opennetdebit-units #2) — the two are orthogonal signals.
+// A single fill spec on one of the two legs. positionEffect (journal-pnl-opennetdebit-units
+// round 4) is now a property of the FILL ITSELF — the real broker-reported role at trade
+// time — not a whole-run-constant per-leg "calendar status" (the round-4 root cause: a
+// calendar's status reflects its LATEST state, not what a historical fill's role was). side
+// (fixed per-leg below, front=sell/back=buy — a realistic bought-back/sold-front calendar)
+// independently drives netAmount's sign (journal-pnl-opennetdebit-units #2) — the two are
+// orthogonal signals.
 type FillSpec = {
   readonly leg: "front" | "back";
   readonly orderId: string;
   readonly qty: number; // > 0 (avoid the aggregation-error branch)
   readonly price: number; // finite > 0
+  readonly positionEffect: "OPENING" | "CLOSING";
 };
 
 const fillSpecArb: fc.Arbitrary<FillSpec> = fc.record({
@@ -93,6 +103,7 @@ const fillSpecArb: fc.Arbitrary<FillSpec> = fc.record({
   price: fc
     .float({ min: Math.fround(0.05), max: Math.fround(500), noNaN: true })
     .map((p) => Math.round(p * 100) / 100),
+  positionEffect: fc.constantFrom("OPENING" as const, "CLOSING" as const),
 });
 
 const fillSpecsArb: fc.Arbitrary<ReadonlyArray<FillSpec>> = fc.array(fillSpecArb, {
@@ -101,7 +112,7 @@ const fillSpecsArb: fc.Arbitrary<ReadonlyArray<FillSpec>> = fc.array(fillSpecArb
 });
 
 // Map FillSpecs → RawFills with distinct ids. side is irrelevant to CLASSIFICATION
-// (positionEffect from the leg drives OPEN/CLOSE), but IS relevant to netAmount's sign
+// (each fill's OWN positionEffect drives OPEN/CLOSE), but IS relevant to netAmount's sign
 // (journal-pnl-opennetdebit-units #2); we set it deterministically per leg.
 function specsToFills(specs: ReadonlyArray<FillSpec>): RawFill[] {
   return specs.map((s, i) => ({
@@ -114,31 +125,25 @@ function specsToFills(specs: ReadonlyArray<FillSpec>): RawFill[] {
     filledAt: new Date("2026-06-15T14:00:00Z"),
     commission: null,
     fees: null,
+    positionEffect: s.positionEffect,
   }));
 }
 
 // ─── Harness ────────────────────────────────────────────────────────────────────
 // Composes the REAL makeSyncFillsUseCase with: a mutating processed-set fill source (so a
 // second sync reads only unmarked fills — the idempotency precondition), a capturing event
-// store, and per-leg positionEffect (so front CLOSE + back OPEN forms a ROLL). Leg matching
-// mirrors the real adapter (single calendar, two canonical OCC legs).
+// store, and leg matching that mirrors the real adapter (single calendar, two canonical OCC
+// legs, calendarId resolution ONLY — no positionEffect, journal-pnl-opennetdebit-units round
+// 4: classification comes from each fill's own positionEffect, so a front CLOSE + back OPEN
+// sharing an orderId forms a ROLL regardless of any calendar-level status).
 
-type LegStatus = "open" | "closed";
-
-function buildHarness(opts: {
-  fills: RawFill[];
-  frontStatus: LegStatus; // OPENING when "open", CLOSING when "closed"
-  backStatus: LegStatus;
-}) {
-  const frontEffect = opts.frontStatus === "open" ? "OPENING" : "CLOSING";
-  const backEffect = opts.backStatus === "open" ? "OPENING" : "CLOSING";
-
+function buildHarness(opts: { fills: RawFill[] }) {
   const readCalendarLegs: ForReadingCalendarLegs = async (occSymbol) => {
     if (occSymbol === OCC_FRONT) {
-      return ok([{ calendarId: CAL_ID, legOccSymbol: OCC_FRONT, positionEffect: frontEffect }]);
+      return ok([{ calendarId: CAL_ID, legOccSymbol: OCC_FRONT }]);
     }
     if (occSymbol === OCC_BACK) {
-      return ok([{ calendarId: CAL_ID, legOccSymbol: OCC_BACK, positionEffect: backEffect }]);
+      return ok([{ calendarId: CAL_ID, legOccSymbol: OCC_BACK }]);
     }
     return ok([]);
   };
@@ -248,11 +253,9 @@ describe("syncFills properties", () => {
     await fc.assert(
       fc.asyncProperty(
         fillSpecsArb,
-        fc.constantFrom("open" as const, "closed" as const),
-        fc.constantFrom("open" as const, "closed" as const),
-        async (specs, frontStatus, backStatus) => {
+        async (specs) => {
           const fills = specsToFills(specs);
-          const h = buildHarness({ fills, frontStatus, backStatus });
+          const h = buildHarness({ fills });
           await expectOk(h.sync());
 
           // All paired fills = the union of fill ids across emitted events.
@@ -282,11 +285,9 @@ describe("syncFills properties", () => {
     await fc.assert(
       fc.asyncProperty(
         fillSpecsArb,
-        fc.constantFrom("open" as const, "closed" as const),
-        fc.constantFrom("open" as const, "closed" as const),
-        async (specs, frontStatus, backStatus) => {
+        async (specs) => {
           const fills = specsToFills(specs);
-          const h = buildHarness({ fills, frontStatus, backStatus });
+          const h = buildHarness({ fills });
           await expectOk(h.sync());
           const countAfterFirst = h.storedEvents.length;
           const orphansAfterFirst = h.storedOrphans.length;
@@ -323,6 +324,7 @@ describe("syncFills properties", () => {
             filledAt: new Date("2026-06-15T14:00:00Z"),
             commission: null,
             fees: null,
+            positionEffect: "OPENING",
           };
           const fillB: RawFill = {
             ...fillA,
@@ -332,7 +334,7 @@ describe("syncFills properties", () => {
           };
 
           // Front leg OPENING; start with bucket {A}.
-          const h = buildHarness({ fills: [fillA], frontStatus: "open", backStatus: "open" });
+          const h = buildHarness({ fills: [fillA] });
           await expectOk(h.sync());
           expect(h.storedEvents.length).toBe(1);
           const eventA = h.storedEvents[0];
@@ -358,11 +360,9 @@ describe("syncFills properties", () => {
     await fc.assert(
       fc.asyncProperty(
         fillSpecsArb,
-        fc.constantFrom("open" as const, "closed" as const),
-        fc.constantFrom("open" as const, "closed" as const),
-        async (specs, frontStatus, backStatus) => {
+        async (specs) => {
           const fills = specsToFills(specs);
-          const h = buildHarness({ fills, frontStatus, backStatus });
+          const h = buildHarness({ fills });
           await expectOk(h.sync());
 
           // The WR-A1 recompute rule applied to the emitted events.
@@ -378,6 +378,12 @@ describe("syncFills properties", () => {
           // a credit); rollCloseCredit mirrors the recompute CLOSE bucket's sign (credit
           // positive, debit negative — a bought-to-close leg is a debit), so ROLL-composing
           // fills now use the SAME side-signed reconstruction as OPEN/CLOSE, per leg role.
+          //
+          // journal-pnl-opennetdebit-units round 4: a ROLL event's two composing legs are
+          // told apart by the EVENT itself (e.legOccSymbol = the NEW/opening leg,
+          // e.rolledFromOccSymbol = the OLD/closing leg — D-03), not by any whole-run
+          // per-leg status. This is the authoritative signal, independent of the fill's own
+          // positionEffect (which only decided classification, not ROLL role).
           const orphanSet = new Set(h.storedOrphans);
           const byId = new Map<string, RawFill>();
           for (const f of fills) byId.set(f.id, f);
@@ -391,9 +397,11 @@ describe("syncFills properties", () => {
               const economics = f.price * f.qty;
               const signed = f.side === "sell" ? -economics : economics;
               if (e.eventType === "ROLL") {
-                const effect = f.occSymbol === OCC_FRONT ? frontStatus : backStatus;
-                if (effect === "open") expectedOpen += signed; // rollOpenDebit convention
-                else expectedClose += f.side === "sell" ? economics : -economics; // rollCloseCredit convention
+                if (f.occSymbol === e.legOccSymbol) {
+                  expectedOpen += signed; // rollOpenDebit convention (new/opening leg)
+                } else {
+                  expectedClose += f.side === "sell" ? economics : -economics; // rollCloseCredit convention (old/closing leg)
+                }
               } else if (e.eventType === "OPEN") {
                 expectedOpen += signed;
               } else {
@@ -406,6 +414,80 @@ describe("syncFills properties", () => {
 
           expect(recomputed.openNetDebit).toBeCloseTo(expectedOpen, 5);
           expect(recomputed.closeNetCredit).toBeCloseTo(expectedClose, 5);
+        },
+      ),
+      { numRuns: 300 },
+    );
+  });
+
+  // ─── P4: openNetDebit is OPEN-only — the exact regression this round fixes ────
+  //
+  // journal-pnl-opennetdebit-units round 4's regression: openNetDebit came out folded with
+  // CLOSE economics (a calendar's real CLOSE fills got misclassified as OPEN, or vice versa,
+  // because classification was derived from the calendar's current status instead of each
+  // fill's own positionEffect). This property asserts the invariant directly: adding MORE
+  // CLOSING fills to an already-OPENED leg must never change openNetDebit, and the added
+  // CLOSING fills' economics must land in closeNetCredit alone.
+  it("P4 openNetDebit is OPEN-only: adding CLOSING fills never changes it; their economics land only in closeNetCredit (numRuns≥200)", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            leg: fc.constantFrom("front" as const, "back" as const),
+            orderId: fc.constantFrom("open-1", "open-2"),
+            qty: fc.integer({ min: 1, max: 10 }),
+            price: fc
+              .float({ min: Math.fround(0.05), max: Math.fround(500), noNaN: true })
+              .map((p) => Math.round(p * 100) / 100),
+          }),
+          { minLength: 1, maxLength: 6 },
+        ),
+        fc.array(
+          fc.record({
+            leg: fc.constantFrom("front" as const, "back" as const),
+            orderId: fc.constantFrom("close-1", "close-2"),
+            qty: fc.integer({ min: 1, max: 10 }),
+            price: fc
+              .float({ min: Math.fround(0.05), max: Math.fround(500), noNaN: true })
+              .map((p) => Math.round(p * 100) / 100),
+          }),
+          { minLength: 1, maxLength: 6 },
+        ),
+        async (openSpecs, closeSpecs) => {
+          const openFills = specsToFills(
+            openSpecs.map((s) => ({ ...s, positionEffect: "OPENING" as const })),
+          );
+
+          // Baseline: only the OPEN fills.
+          const hOpenOnly = buildHarness({ fills: openFills });
+          await expectOk(hOpenOnly.sync());
+          const baseline = recomputeByEventType(hOpenOnly.storedEvents);
+
+          // Now add CLOSING fills (distinct ids, distinct orderIds) on top.
+          const closeFills = specsToFills(
+            closeSpecs.map((s, i) => ({
+              ...s,
+              orderId: `${s.orderId}-${i}`,
+              positionEffect: "CLOSING" as const,
+            })),
+          ).map((f, i) => ({ ...f, id: `00000000-0000-4000-a000-${String(i).padStart(12, "0")}` }));
+
+          const hBoth = buildHarness({ fills: [...openFills, ...closeFills] });
+          await expectOk(hBoth.sync());
+          const withClose = recomputeByEventType(hBoth.storedEvents);
+
+          // The exact regressed invariant: openNetDebit is unchanged by the presence of
+          // CLOSING fills on the same legs.
+          expect(withClose.openNetDebit).toBeCloseTo(baseline.openNetDebit, 5);
+
+          // closeNetCredit accumulates ONLY the CLOSING fills' economics (never influenced by
+          // OPEN fills' economics — the exact symmetric invariant).
+          let expectedCloseCredit = 0;
+          for (const f of closeFills) {
+            const economics = f.price * f.qty;
+            expectedCloseCredit += f.side === "sell" ? economics : -economics;
+          }
+          expect(withClose.closeNetCredit).toBeCloseTo(expectedCloseCredit, 5);
         },
       ),
       { numRuns: 300 },

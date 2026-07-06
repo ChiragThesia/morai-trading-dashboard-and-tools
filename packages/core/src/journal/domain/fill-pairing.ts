@@ -52,8 +52,8 @@ export function classifyFill(
 /**
  * aggregatePartialFills — collapse one pre-bucketed group of partial fills into a single
  * AggregatedFill (D-04). The caller (syncFills use-case) buckets by
- * (calendarId, legOccSymbol, orderId) and supplies the calendarId and positionEffect
- * resolved from the matched calendar leg.
+ * (calendarId, legOccSymbol, orderId) and supplies the calendarId (the leg-match result);
+ * everything else the bucket needs is read off its own fills.
  *
  * - sumQty = sum of individual qtys
  * - avgPrice = qty-weighted average price
@@ -61,15 +61,20 @@ export function classifyFill(
  * - side = the first fill's side (journal-pnl-opennetdebit-units #2): a bucket is one
  *   (calendarId, legOccSymbol, orderId) — one order on one leg — so every fill in it shares
  *   one broker-reported direction, exactly like orderId/legOccSymbol below.
+ * - positionEffect = the first fill's OWN broker-reported role (journal-pnl-opennetdebit-units
+ *   round 4) — NOT an externally-supplied value derived from the calendar's current status
+ *   column (that was the round-4 root cause: a calendar's `status` reflects its LATEST known
+ *   state, not what a historical fill's role was at trade time, so deriving classification
+ *   from it folded real CLOSE fills into OPEN events, or vice versa, whenever status hadn't
+ *   kept pace with reality). Same bucket-uniformity guarantee as side.
  *
  * Returns err(FillAggregationError) for an empty group or a non-positive sumQty — never
- * an avgPrice of 0 (REVIEW WR-03). The orderId/legOccSymbol/side are taken from the first
- * fill; the bucket key guarantees they are uniform within the group.
+ * an avgPrice of 0 (REVIEW WR-03). The orderId/legOccSymbol/side/positionEffect are taken
+ * from the first fill; the bucket key guarantees they are uniform within the group.
  */
 export function aggregatePartialFills(
   fills: ReadonlyArray<RawFill>,
   calendarId: string,
-  positionEffect: "OPENING" | "CLOSING" | "UNKNOWN",
 ): Result<AggregatedFill, FillAggregationError> {
   if (fills.length === 0) {
     return err({
@@ -115,7 +120,7 @@ export function aggregatePartialFills(
     avgPrice: weightedPriceSum / sumQty,
     totalCommission,
     totalFees,
-    positionEffect,
+    positionEffect: first.positionEffect,
     side: first.side,
     fillIds,
   });

@@ -126,6 +126,7 @@ function makeFill(id: string, occSymbol: string, overrides: Partial<RawFill> = {
     filledAt: new Date("2026-06-15T14:00:00Z"),
     commission: null,
     fees: null,
+    positionEffect: "OPENING",
     ...overrides,
   };
 }
@@ -174,6 +175,23 @@ export function runFillsContractTests(
         await repo.writeFills([makeFill(FILL_ID_1, FRONT_OCC)]);
         await repo.writeFills([makeFill(FILL_ID_1, FRONT_OCC)]);
         expect(await seed.countFills()).toBe(1);
+      });
+
+      // journal-pnl-opennetdebit-units round 4: positionEffect is a real per-fill column now
+      // (migration 0018) — round-trips through writeFills → readUnprocessedFills unchanged,
+      // not re-derived from anything calendar-side.
+      it("persists positionEffect and round-trips it unchanged through readUnprocessedFills", async () => {
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC, { positionEffect: "OPENING" }),
+          makeFill(FILL_ID_2, BACK_OCC, { positionEffect: "CLOSING" }),
+        ]);
+        const result = await repo.readUnprocessedFills();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const front = result.value.find((f) => f.id === FILL_ID_1);
+        const back = result.value.find((f) => f.id === FILL_ID_2);
+        expect(front?.positionEffect).toBe("OPENING");
+        expect(back?.positionEffect).toBe("CLOSING");
       });
     });
 
@@ -318,7 +336,6 @@ export function runFillsContractTests(
         const entry = result.value[0];
         expect(entry?.calendarId).toBe(CAL_ID);
         expect(entry?.legOccSymbol).toBe(FRONT_OCC);
-        expect(entry?.positionEffect).toBe("OPENING"); // open calendar
       });
 
       it("returns empty for a symbol on no calendar leg", async () => {
@@ -330,13 +347,19 @@ export function runFillsContractTests(
         expect(result.value).toHaveLength(0);
       });
 
-      it("maps closed-calendar legs to CLOSING positionEffect", async () => {
+      // journal-pnl-opennetdebit-units round 4: leg resolution is independent of the
+      // calendar's status — CalendarLegEntry no longer carries positionEffect at all (that
+      // was the root cause: classification derived from status, not the fill's own role).
+      // A closed calendar's leg still resolves identically to an open one.
+      it("resolves the same (calendarId, legOccSymbol) regardless of calendar status (journal-pnl-opennetdebit-units round 4)", async () => {
         await seed.seedCalendar(calendar({ status: "closed" }));
 
         const result = await repo.readCalendarLegs(BACK_OCC);
         expect(result.ok).toBe(true);
         if (!result.ok) return;
-        expect(result.value[0]?.positionEffect).toBe("CLOSING");
+        expect(result.value).toHaveLength(1);
+        expect(result.value[0]?.calendarId).toBe(CAL_ID);
+        expect(result.value[0]?.legOccSymbol).toBe(BACK_OCC);
       });
     });
 

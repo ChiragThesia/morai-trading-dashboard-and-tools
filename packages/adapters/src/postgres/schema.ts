@@ -183,6 +183,11 @@ export const fills = pgTable("fills", {
   // calendar_event (paired) or orphan-parked. readUnprocessedFills filters
   // WHERE processed_at IS NULL — paired fills are never re-read / re-paired (no double-count).
   processedAt: timestamp("processed_at", { withTimezone: true }),
+  // journal-pnl-opennetdebit-units (round 4, additive nullable): the fill's OWN broker-reported
+  // OPENING/CLOSING role (BrokerTransaction.legs[].positionEffect), persisted per fill instead
+  // of re-derived from the calendar's current (mutable) status column. Existing rows read NULL
+  // (mapFillRow falls back to "UNKNOWN", which safely orphan-parks rather than misclassifying).
+  positionEffect: varchar("position_effect", { length: 8 }), // "OPENING" | "CLOSING" | "UNKNOWN"
 }).enableRLS();
 
 // ─── 6. orders — Schwab order feed ───────────────────────────────────────────

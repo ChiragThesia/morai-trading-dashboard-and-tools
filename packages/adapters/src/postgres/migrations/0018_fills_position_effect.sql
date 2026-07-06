@@ -1,0 +1,1 @@
+ALTER TABLE "fills" ADD COLUMN "position_effect" varchar(8);

@@ -89,14 +89,6 @@ export type MemoryFillsRepo = {
   readonly countOrphans: () => number;
 };
 
-function statusToPositionEffect(
-  status: string,
-): "OPENING" | "CLOSING" | "UNKNOWN" {
-  if (status === "open") return "OPENING";
-  if (status === "closed") return "CLOSING";
-  return "UNKNOWN";
-}
-
 function calendarLegSymbols(cal: StoredCalendar): { front: OccSymbol; back: OccSymbol } {
   const strikePoints = cal.strike / 1000;
   const root = cal.underlying === "SPXW" ? "SPXW" : "SPX";
@@ -186,12 +178,11 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
     const entries: CalendarLegEntry[] = [];
     for (const cal of calendarStore.values()) {
       const { front, back } = calendarLegSymbols(cal);
-      const positionEffect = statusToPositionEffect(cal.status);
       if (front === occSymbol) {
-        entries.push({ calendarId: cal.id, legOccSymbol: front, positionEffect });
+        entries.push({ calendarId: cal.id, legOccSymbol: front });
       }
       if (back === occSymbol) {
-        entries.push({ calendarId: cal.id, legOccSymbol: back, positionEffect });
+        entries.push({ calendarId: cal.id, legOccSymbol: back });
       }
     }
     return ok(entries);

@@ -34,6 +34,7 @@ function makeRawFill(overrides: Partial<RawFill> = {}): RawFill {
     filledAt: new Date("2026-06-15T14:00:00Z"),
     commission: 0.65,
     fees: 0.12,
+    positionEffect: "OPENING",
     ...overrides,
   };
 }
@@ -100,7 +101,7 @@ describe("classifyFill", () => {
 describe("aggregatePartialFills", () => {
   it("single fill → ok group with same qty and supplied calendarId/positionEffect", () => {
     const fills = [makeRawFill({ id: "fill-1", qty: 3 })];
-    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    const result = aggregatePartialFills(fills, "cal-1");
     expect(isOk(result)).toBe(true);
     if (!isOk(result)) return;
     expect(result.value.sumQty).toBe(3);
@@ -113,7 +114,7 @@ describe("aggregatePartialFills", () => {
       makeRawFill({ id: "fill-1", qty: 2 }),
       makeRawFill({ id: "fill-2", qty: 3 }),
     ];
-    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    const result = aggregatePartialFills(fills, "cal-1");
     expect(isOk(result)).toBe(true);
     if (!isOk(result)) return;
     expect(result.value.sumQty).toBe(5);
@@ -124,7 +125,7 @@ describe("aggregatePartialFills", () => {
       makeRawFill({ id: "fill-1", qty: 2, price: 10 }),
       makeRawFill({ id: "fill-2", qty: 3, price: 20 }),
     ];
-    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    const result = aggregatePartialFills(fills, "cal-1");
     expect(isOk(result)).toBe(true);
     if (!isOk(result)) return;
     expect(result.value.avgPrice).toBeCloseTo(16, 5);
@@ -135,7 +136,7 @@ describe("aggregatePartialFills", () => {
       makeRawFill({ id: "fill-1", commission: 0.65, fees: 0.1 }),
       makeRawFill({ id: "fill-2", commission: null, fees: null }),
     ];
-    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    const result = aggregatePartialFills(fills, "cal-1");
     expect(isOk(result)).toBe(true);
     if (!isOk(result)) return;
     expect(result.value.totalCommission).toBeCloseTo(0.65, 5);
@@ -147,7 +148,7 @@ describe("aggregatePartialFills", () => {
       makeRawFill({ id: "fill-1" }),
       makeRawFill({ id: "fill-2" }),
     ];
-    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    const result = aggregatePartialFills(fills, "cal-1");
     expect(isOk(result)).toBe(true);
     if (!isOk(result)) return;
     expect(result.value.fillIds).toEqual(["fill-1", "fill-2"]);
@@ -157,7 +158,7 @@ describe("aggregatePartialFills", () => {
 
   it("propagates side 'buy' from the bucket's fills (journal-pnl-opennetdebit-units #2)", () => {
     const fills = [makeRawFill({ id: "fill-1", side: "buy" })];
-    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    const result = aggregatePartialFills(fills, "cal-1");
     expect(isOk(result)).toBe(true);
     if (!isOk(result)) return;
     expect(result.value.side).toBe("buy");
@@ -165,14 +166,35 @@ describe("aggregatePartialFills", () => {
 
   it("propagates side 'sell' from the bucket's fills — a sold-to-open leg (journal-pnl-opennetdebit-units #2)", () => {
     const fills = [makeRawFill({ id: "fill-1", side: "sell" })];
-    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    const result = aggregatePartialFills(fills, "cal-1");
     expect(isOk(result)).toBe(true);
     if (!isOk(result)) return;
     expect(result.value.side).toBe("sell");
   });
 
+  // ─── journal-pnl-opennetdebit-units round 4: positionEffect propagation ───────
+  //
+  // positionEffect used to be supplied externally (derived from the calendar's current
+  // status column). It is now read off the bucket's own fills — mirrors side exactly.
+
+  it("propagates positionEffect 'OPENING' from the bucket's fills (journal-pnl-opennetdebit-units round 4)", () => {
+    const fills = [makeRawFill({ id: "fill-1", positionEffect: "OPENING" })];
+    const result = aggregatePartialFills(fills, "cal-1");
+    expect(isOk(result)).toBe(true);
+    if (!isOk(result)) return;
+    expect(result.value.positionEffect).toBe("OPENING");
+  });
+
+  it("propagates positionEffect 'CLOSING' from the bucket's fills — a real historical CLOSE, not the calendar's current status (journal-pnl-opennetdebit-units round 4)", () => {
+    const fills = [makeRawFill({ id: "fill-1", positionEffect: "CLOSING" })];
+    const result = aggregatePartialFills(fills, "cal-1");
+    expect(isOk(result)).toBe(true);
+    if (!isOk(result)) return;
+    expect(result.value.positionEffect).toBe("CLOSING");
+  });
+
   it("empty input → error (never avgPrice 0)", () => {
-    const result = aggregatePartialFills([], "cal-1", "OPENING");
+    const result = aggregatePartialFills([], "cal-1");
     expect(isErr(result)).toBe(true);
   });
 
@@ -181,7 +203,7 @@ describe("aggregatePartialFills", () => {
       makeRawFill({ id: "fill-1", qty: 2 }),
       makeRawFill({ id: "fill-2", qty: -2 }),
     ];
-    const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+    const result = aggregatePartialFills(fills, "cal-1");
     expect(isErr(result)).toBe(true);
   });
 
@@ -199,7 +221,7 @@ describe("aggregatePartialFills", () => {
         (raws) => {
           const fills = raws.map((r) => makeRawFill(r));
           const total = fills.reduce((s, f) => s + f.qty, 0);
-          const result = aggregatePartialFills(fills, "cal-1", "OPENING");
+          const result = aggregatePartialFills(fills, "cal-1");
           return isOk(result) && result.value.sumQty === total;
         },
       ),

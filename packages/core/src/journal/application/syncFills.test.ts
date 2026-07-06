@@ -43,6 +43,9 @@ function makeFill(overrides: Partial<RawFill> = {}): RawFill {
     filledAt: new Date("2026-06-15T14:00:00Z"),
     commission: 0.65,
     fees: 0.12,
+    // journal-pnl-opennetdebit-units round 4: classification now comes from the fill's OWN
+    // positionEffect, not the mocked leg reader — default OPENING, override per test.
+    positionEffect: "OPENING",
     ...overrides,
   };
 }
@@ -64,7 +67,6 @@ function buildDeps(opts: {
     Array<{
       calendarId: string;
       legOccSymbol: string;
-      positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
     }>
   >;
   storedEvents: CalendarEvent[];
@@ -144,7 +146,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fill],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -205,10 +207,10 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillBack, fillFront],
         legMap: {
           [OCC_BACK]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK },
           ],
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -267,7 +269,6 @@ describe("makeSyncFillsUseCase", () => {
         {
           calendarId: "cal-1",
           legOccSymbol: OCC_FRONT,
-          positionEffect: "OPENING" as const,
         },
       ]);
     const storeCalendarEvent: ForStoringCalendarEvent = async (_event) => {
@@ -311,6 +312,7 @@ describe("makeSyncFillsUseCase", () => {
       side: "sell",
       orderId: "roll-order-1",
       price: 8.0,
+      positionEffect: "CLOSING",
     });
     const fillOpen = makeFill({
       id: "fill-roll-open",
@@ -325,10 +327,10 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose, fillOpen],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
           [OCC_BACK]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK },
           ],
         },
         storedEvents,
@@ -362,8 +364,8 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fill],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-A", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
-            { calendarId: "cal-B", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+            { calendarId: "cal-A", legOccSymbol: OCC_FRONT },
+            { calendarId: "cal-B", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -393,7 +395,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fill1, fill2],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -426,6 +428,7 @@ describe("makeSyncFillsUseCase", () => {
       price: 20.0,
       commission: 0.40,
       fees: 0.10,
+      positionEffect: "CLOSING",
     });
 
     const syncFills = makeSyncFillsUseCase(
@@ -433,7 +436,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -474,6 +477,7 @@ describe("makeSyncFillsUseCase", () => {
       price: 500,
       commission: 1,
       fees: 1,
+      positionEffect: "CLOSING",
     });
 
     const syncFills = makeSyncFillsUseCase(
@@ -481,7 +485,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -518,6 +522,7 @@ describe("makeSyncFillsUseCase", () => {
       price: 500,
       commission: 1,
       fees: 1,
+      positionEffect: "CLOSING",
     });
 
     const syncFills = makeSyncFillsUseCase(
@@ -525,7 +530,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -562,6 +567,7 @@ describe("makeSyncFillsUseCase", () => {
       price: 50,
       commission: 1,
       fees: 1,
+      positionEffect: "CLOSING",
     });
 
     const syncFills = makeSyncFillsUseCase(
@@ -569,7 +575,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -609,6 +615,7 @@ describe("makeSyncFillsUseCase", () => {
       price: 500,
       commission: 1,
       fees: 1,
+      positionEffect: "CLOSING",
     });
     const fillOpen = makeFill({
       id: "fill-roll-open-b1",
@@ -626,10 +633,10 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose, fillOpen],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
           [OCC_BACK]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK },
           ],
         },
         storedEvents,
@@ -667,6 +674,7 @@ describe("makeSyncFillsUseCase", () => {
       qty: 2,
       price: 14,
       filledAt: new Date("2026-06-10T15:30:00Z"),
+      positionEffect: "UNKNOWN",
     });
     const fill2 = makeFill({
       id: "22222222-2222-4222-8222-222222222222",
@@ -676,6 +684,7 @@ describe("makeSyncFillsUseCase", () => {
       qty: 3,
       price: 16,
       filledAt: new Date("2026-06-11T16:45:00Z"),
+      positionEffect: "UNKNOWN",
     });
 
     const syncFills = makeSyncFillsUseCase(
@@ -683,7 +692,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fill1, fill2],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "UNKNOWN" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -726,6 +735,7 @@ describe("makeSyncFillsUseCase", () => {
       orderId: "roll-order-a1",
       qty: 1,
       price: 8,
+      positionEffect: "CLOSING",
     });
     const fillOpen = makeFill({
       id: "fill-roll-open-a1",
@@ -741,10 +751,10 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose, fillOpen],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
           [OCC_BACK]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK },
           ],
         },
         storedEvents,
@@ -789,6 +799,7 @@ describe("makeSyncFillsUseCase", () => {
       price: 50,
       commission: 1,
       fees: 1,
+      positionEffect: "CLOSING",
     });
     // New back leg bought-to-open (a normal debit).
     const fillOpen = makeFill({
@@ -807,10 +818,10 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose, fillOpen],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
           [OCC_BACK]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK },
           ],
         },
         storedEvents,
@@ -854,6 +865,7 @@ describe("makeSyncFillsUseCase", () => {
       price: 500,
       commission: 1,
       fees: 1,
+      positionEffect: "CLOSING",
     });
     // New back leg SOLD to open (a credit, not a debit).
     const fillOpen = makeFill({
@@ -872,10 +884,10 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fillClose, fillOpen],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "CLOSING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
           [OCC_BACK]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_BACK },
           ],
         },
         storedEvents,
@@ -910,7 +922,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fill],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -940,7 +952,7 @@ describe("makeSyncFillsUseCase", () => {
         fills: [fill],
         legMap: {
           [OCC_FRONT]: [
-            { calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+            { calendarId: "cal-1", legOccSymbol: OCC_FRONT },
           ],
         },
         storedEvents,
@@ -995,7 +1007,7 @@ describe("makeSyncFillsUseCase", () => {
     const readUnprocessedFills: ForReadingUnprocessedFills = async () =>
       ok(allFills.filter((f) => !processed.has(f.id)));
     const readCalendarLegs: ForReadingCalendarLegs = async () =>
-      ok([{ calendarId: "cal-1", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" as const }]);
+      ok([{ calendarId: "cal-1", legOccSymbol: OCC_FRONT }]);
     const storeCalendarEvent: ForStoringCalendarEvent = async (event) => {
       storedEvents.push(event);
       return ok(undefined);
@@ -1067,14 +1079,13 @@ describe("makeSyncFillsForCalendarUseCase", () => {
       Array<{
         calendarId: string;
         legOccSymbol: string;
-        positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
       }>
     > = {
       [OCC_FRONT]: [
-        { calendarId: "cal-A", legOccSymbol: OCC_FRONT, positionEffect: "OPENING" },
+        { calendarId: "cal-A", legOccSymbol: OCC_FRONT },
       ],
       [OCC_BACK]: [
-        { calendarId: "cal-B", legOccSymbol: OCC_BACK, positionEffect: "OPENING" },
+        { calendarId: "cal-B", legOccSymbol: OCC_BACK },
       ],
     };
 

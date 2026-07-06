@@ -394,10 +394,17 @@ export type { AggregatedFill } from "../domain/calendar-event.ts";
 
 // Domain type for a calendar leg entry returned by ForReadingCalendarLegs.
 // Adapters translate from the DB schema at the boundary.
+//
+// journal-pnl-opennetdebit-units (round 4): this NO LONGER carries positionEffect. It used
+// to (derived from the calendar's current status column), and syncFills used it to classify
+// OPEN/CLOSE — but a calendar's status reflects its LATEST known state, not what a historical
+// fill's role was at trade time, so every fill matching a leg got the SAME classification
+// regardless of which real order it came from. Classification now comes from the fill's own
+// RawFill.positionEffect (carried through from the broker, see calendar-event.ts) — this
+// entry exists purely to resolve WHICH calendar a fill's OCC symbol belongs to.
 export type CalendarLegEntry = {
   readonly calendarId: string;
   readonly legOccSymbol: string;
-  readonly positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
 };
 
 // Domain type for an orphan fill row (D-05: unmatched fills parked, never dropped)
@@ -460,8 +467,10 @@ export type ForReadingCalendarEventByHash = (
 
 /**
  * ForReadingCalendarLegs — find calendar legs matching a given OCC symbol (JRNL-01, D-01).
- * Returns all (calendarId, legOccSymbol, positionEffect) entries whose leg matches the symbol.
- * Returns empty array when no calendar has this symbol as a leg.
+ * Returns all (calendarId, legOccSymbol) entries whose leg matches the symbol. Returns empty
+ * array when no calendar has this symbol as a leg. Does NOT carry positionEffect
+ * (journal-pnl-opennetdebit-units round 4) — classification comes from the matched fill's
+ * OWN RawFill.positionEffect, not from the calendar's current status.
  */
 export type ForReadingCalendarLegs = (
   occSymbol: string,

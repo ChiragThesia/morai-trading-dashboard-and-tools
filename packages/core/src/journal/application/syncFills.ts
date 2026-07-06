@@ -185,11 +185,11 @@ async function pairFills(
   const classified: ClassifiedFill[] = [];
 
   for (const { fills: bucketFills, leg } of buckets.values()) {
-    const aggResult = aggregatePartialFills(
-      bucketFills,
-      leg.calendarId,
-      leg.positionEffect,
-    );
+    // journal-pnl-opennetdebit-units (round 4): positionEffect is no longer supplied here
+    // from the matched calendar leg (which used to derive it from the calendar's current
+    // status) — aggregatePartialFills now reads it off the bucket's own fills (the fill's
+    // real broker-reported role), exactly like side.
+    const aggResult = aggregatePartialFills(bucketFills, leg.calendarId);
     if (!aggResult.ok) {
       // Malformed bucket (empty / non-positive qty) — park its fills as orphans (D-05),
       // never silently drop. Full per-fill parking with real fields lands in 05-11 (B5).

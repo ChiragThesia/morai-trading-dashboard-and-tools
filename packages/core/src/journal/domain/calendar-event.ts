@@ -69,6 +69,13 @@ export type RawFill = {
   readonly filledAt: Date;
   readonly commission: number | null;
   readonly fees: number | null;
+  // journal-pnl-opennetdebit-units (round 4): the fill's OWN broker-reported OPENING/CLOSING
+  // role (BrokerTransaction.legs[].positionEffect), carried through from the source instead of
+  // re-derived from the calendar's current (mutable) status column at pairing time. A
+  // calendar's `status` reflects its LATEST known state, not what a historical fill's role
+  // was at trade time — deriving classification from status folded a calendar's real CLOSE
+  // fills into OPEN events (or vice versa) whenever status hadn't kept pace with reality.
+  readonly positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
 };
 
 // ─── AggregatedFill ───────────────────────────────────────────────────────────
@@ -87,6 +94,13 @@ export type RawFill = {
  * share one order/leg, so they share one direction (buy or sell); carried through from the
  * first fill so syncFills can sign OPEN/CLOSE netAmount by ACTUAL direction, not by
  * classification alone (a calendar's OPEN legs include both a bought and a sold leg).
+ *
+ * positionEffect (journal-pnl-opennetdebit-units round 4) is likewise carried through from
+ * the bucket's first fill's OWN broker-reported role — a bucket is one (calendarId,
+ * legOccSymbol, orderId), so every fill in it shares one order on one leg, hence one real
+ * positionEffect, exactly like orderId/legOccSymbol/side. It is NO LONGER supplied
+ * externally by the caller from the calendar's current status column (that was the round-4
+ * root cause: status reflects the calendar's LATEST state, not a historical fill's role).
  */
 export type AggregatedFill = {
   readonly calendarId: string;

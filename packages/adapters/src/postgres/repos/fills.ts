@@ -57,15 +57,6 @@ export type PostgresFillsRepo = {
   readonly wipeDerivedFills: ForWipingDerivedFills;
 };
 
-// Map a calendar's status to the positionEffect carried on its legs.
-function statusToPositionEffect(
-  status: string,
-): "OPENING" | "CLOSING" | "UNKNOWN" {
-  if (status === "open") return "OPENING";
-  if (status === "closed") return "CLOSING";
-  return "UNKNOWN";
-}
-
 // Derive the front + back leg OCC symbols for a calendar row, matching getOpenCalendarLegs.
 function calendarLegSymbols(row: {
   underlying: string;
@@ -91,6 +82,16 @@ function calendarLegSymbols(row: {
   return { front, back };
 }
 
+// journal-pnl-opennetdebit-units (round 4): position_effect is additive-nullable (migration
+// 0018) — rows written before this fix carry NULL. "UNKNOWN" is the safe fallback: it routes
+// through classifyFill's existing UNKNOWN branch (orphan-parked), never a fabricated
+// OPEN/CLOSE classification.
+function mapPositionEffect(value: string | null): "OPENING" | "CLOSING" | "UNKNOWN" {
+  if (value === "OPENING") return "OPENING";
+  if (value === "CLOSING") return "CLOSING";
+  return "UNKNOWN";
+}
+
 function mapFillRow(row: typeof fills.$inferSelect): RawFill {
   return {
     id: row.id,
@@ -102,6 +103,7 @@ function mapFillRow(row: typeof fills.$inferSelect): RawFill {
     filledAt: row.filledAt,
     commission: row.commission !== null ? parseFloat(row.commission) : null,
     fees: row.fees !== null ? parseFloat(row.fees) : null,
+    positionEffect: mapPositionEffect(row.positionEffect),
   };
 }
 
@@ -125,6 +127,7 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
             filledAt: f.filledAt,
             commission: f.commission !== null ? String(f.commission) : null,
             fees: f.fees !== null ? String(f.fees) : null,
+            positionEffect: f.positionEffect,
           })),
         )
         .onConflictDoNothing(); // idempotent on id PK (T-05-12-01)
@@ -266,19 +269,17 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
           optionType: calendars.optionType,
           frontExpiry: calendars.frontExpiry,
           backExpiry: calendars.backExpiry,
-          status: calendars.status,
         })
         .from(calendars);
 
       const entries: CalendarLegEntry[] = [];
       for (const cal of calRows) {
         const { front, back } = calendarLegSymbols(cal);
-        const positionEffect = statusToPositionEffect(cal.status);
         if (front === occSymbol) {
-          entries.push({ calendarId: cal.id, legOccSymbol: front, positionEffect });
+          entries.push({ calendarId: cal.id, legOccSymbol: front });
         }
         if (back === occSymbol) {
-          entries.push({ calendarId: cal.id, legOccSymbol: back, positionEffect });
+          entries.push({ calendarId: cal.id, legOccSymbol: back });
         }
       }
       return ok(entries);
