@@ -32,6 +32,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# BUG 1 (2026-07-06 chain-frozen-schwab-symbol): Schwab's /marketdata/v1/chains
+# endpoint accepts ONLY symbol "$SPX" — a bare "SPX" or "SPXW" returns 400 "Check
+# Param Values" (proven live). A single "$SPX" call returns BOTH SPX and SPXW
+# contracts, so every request uses this symbol regardless of the `root` query
+# param (root is kept only as a response label — see get_chain).
+_SCHWAB_CHAIN_SYMBOL = "$SPX"
+
+# ponytail: unbounded $SPX (no date scoping) times out (proven live); bounding by
+# from_date/to_date alone is enough (proven live) so strike_count/range are
+# skipped. 90 matches apps/worker's BSM_MAX_DTE default — bump both together if
+# the downstream DTE filter window changes.
+_CHAIN_LOOKAHEAD_DAYS = 90
+
 
 # ── Response models (Pydantic = Zod safeParse equivalent, T-11-05-05) ────────
 # These mirror the TS SidecarChainResponseSchema exactly.
@@ -196,7 +209,12 @@ async def get_chain(
         )
 
     try:
-        resp = await client.get_option_chain(root)
+        today = datetime.date.today()
+        resp = await client.get_option_chain(
+            _SCHWAB_CHAIN_SYMBOL,
+            from_date=today,
+            to_date=today + datetime.timedelta(days=_CHAIN_LOOKAHEAD_DAYS),
+        )
         if resp.status_code != 200:
             # RC#2 (2026-07-01 debug session): a non-2xx response (e.g. a stale/invalid
             # access token) must not be silently mapped to an empty chain. Schwab's error

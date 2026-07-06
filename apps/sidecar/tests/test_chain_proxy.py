@@ -133,6 +133,60 @@ def test_non_2xx_schwab_response_returns_auth_expired_not_empty_success(
     )
 
 
+def test_get_option_chain_always_requests_dollar_spx_symbol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    BUG 1 regression (2026-07-06 chain-frozen-schwab-symbol debug session):
+    Schwab's /marketdata/v1/chains endpoint accepts ONLY symbol "$SPX" (a single
+    "$SPX" call returns BOTH SPX and SPXW contracts). A bare "SPX" or "SPXW"
+    returns 400 "Check Param Values" — proven live against the real endpoint.
+
+    Before the fix: chain_proxy.py passed the `root` query param straight through
+    as the Schwab symbol (`client.get_option_chain(root)`), so a request for
+    root=SPXW asked Schwab for symbol "SPXW" — malformed, always 400 (mapped to a
+    misleading 503 AUTH_EXPIRED by BUG 2, but the actual Schwab request is wrong
+    regardless of that mapping).
+
+    Fix: always request symbol "$SPX" from Schwab, regardless of `root`, scoped by
+    from_date/to_date (an unbounded $SPX request times out — proven live).
+    """
+    from main import app
+
+    ok_resp = unittest.mock.MagicMock()
+    ok_resp.status_code = 200
+    ok_resp.json.return_value = {
+        "underlyingPrice": 5950.0,
+        "callExpDateMap": {},
+        "putExpDateMap": {},
+    }
+
+    mock_market_client = unittest.mock.AsyncMock()
+    mock_market_client.get_option_chain.return_value = ok_resp
+    monkeypatch.setattr(app.state, "market_client", mock_market_client)
+
+    response = client.get("/sidecar/chain?root=SPXW")
+
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}: {response.text}"
+    )
+    assert mock_market_client.get_option_chain.call_count == 1, (
+        "Expected exactly one Schwab call per request (collapsed SPX+SPXW)"
+    )
+    call = mock_market_client.get_option_chain.call_args
+    symbol_arg = call.args[0] if call.args else call.kwargs.get("symbol")
+    assert symbol_arg == "$SPX", (
+        f"Expected Schwab symbol '$SPX' regardless of root query param, "
+        f"got {symbol_arg!r}"
+    )
+    assert call.kwargs.get("from_date") is not None, (
+        "Expected from_date scoping to bound the request (unbounded $SPX times out)"
+    )
+    assert call.kwargs.get("to_date") is not None, (
+        "Expected to_date scoping to bound the request (unbounded $SPX times out)"
+    )
+
+
 def test_contract_chain_shape_pins_ts_schema() -> None:
     """
     D-08 manual-mirror contract test: pins the Python /sidecar/chain response shape to
