@@ -37,6 +37,7 @@ import type {
   ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   ForWipingDerivedFills,
+  ForReadingFillsByOccSymbols,
   RawFill,
   CalendarLegEntry,
   StorageError,
@@ -55,6 +56,7 @@ export type PostgresFillsRepo = {
   readonly resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar;
   readonly writeFills: ForWritingFills;
   readonly wipeDerivedFills: ForWipingDerivedFills;
+  readonly readFillsByOccSymbols: ForReadingFillsByOccSymbols;
 };
 
 // Derive the front + back leg OCC symbols for a calendar row, matching getOpenCalendarLegs.
@@ -424,6 +426,26 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
     }
   };
 
+  // ─── readFillsByOccSymbols (ForReadingFillsByOccSymbols — JRNL-02) ──────────
+  // ALL fills matching the given OCC symbols, regardless of processed/orphan status.
+  // Used by registerOpenCalendars to source openedAt from fills that may already be
+  // orphan-parked or marked processed (they existed before the calendar did).
+  const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async (
+    occSymbols: ReadonlyArray<string>,
+  ): Promise<Result<ReadonlyArray<RawFill>, StorageError>> => {
+    if (occSymbols.length === 0) return ok([]);
+    try {
+      const rows = await db
+        .select()
+        .from(fills)
+        .where(inArray(fills.occSymbol, [...occSymbols]));
+      return ok(rows.map(mapFillRow));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   return {
     readUnprocessedFills,
     readUnprocessedFillsForCalendar,
@@ -434,5 +456,6 @@ export function makePostgresFillsRepo(db: Db): PostgresFillsRepo {
     resetFillsProcessedForCalendar,
     writeFills,
     wipeDerivedFills,
+    readFillsByOccSymbols,
   };
 }

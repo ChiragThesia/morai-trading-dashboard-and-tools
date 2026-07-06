@@ -33,6 +33,7 @@ import type {
   ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   ForWipingDerivedFills,
+  ForReadingFillsByOccSymbols,
   RawFill,
   StorageError,
 } from "@morai/core";
@@ -99,6 +100,7 @@ export type FillsRepo = {
   readonly resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar;
   readonly writeFills: ForWritingFills;
   readonly wipeDerivedFills: ForWipingDerivedFills;
+  readonly readFillsByOccSymbols: ForReadingFillsByOccSymbols;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -650,6 +652,44 @@ export function runFillsContractTests(
         expect(second.ok).toBe(true);
         if (!second.ok) return;
         expect(second.value).toEqual({ fillsDeleted: 0, eventsDeleted: 0, orphansDeleted: 0 });
+      });
+    });
+
+    // JRNL-02 (register-open-calendars): readFillsByOccSymbols reads ALL fills for a set of
+    // OCC symbols regardless of processed/orphan status — a calendar auto-registered from the
+    // open position book may have fills that were already orphan-parked or marked processed
+    // (they existed before the calendar did), and openedAt sourcing must still find them.
+    describe("readFillsByOccSymbols — regardless of processed/orphan status", () => {
+      it("returns fills matching the given OCC symbols, ignoring processed/orphan state", async () => {
+        await repo.writeFills([
+          makeFill(FILL_ID_1, FRONT_OCC),
+          makeFill(FILL_ID_2, BACK_OCC),
+          makeFill(FILL_ID_3, FOREIGN_OCC),
+        ]);
+        await repo.markFillsProcessed([FILL_ID_1]);
+        await seed.seedOrphan({ fillId: FILL_ID_2 });
+
+        const result = await repo.readFillsByOccSymbols([FRONT_OCC, BACK_OCC]);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const ids = result.value.map((f) => f.id).sort();
+        expect(ids).toEqual([FILL_ID_1, FILL_ID_2].sort());
+      });
+
+      it("returns empty when no fill matches any given symbol", async () => {
+        await repo.writeFills([makeFill(FILL_ID_1, FRONT_OCC)]);
+        const result = await repo.readFillsByOccSymbols([FOREIGN_OCC]);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toHaveLength(0);
+      });
+
+      it("returns empty for an empty symbol list", async () => {
+        await repo.writeFills([makeFill(FILL_ID_1, FRONT_OCC)]);
+        const result = await repo.readFillsByOccSymbols([]);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toHaveLength(0);
       });
     });
   });

@@ -24,6 +24,7 @@ import type {
   ForResettingFillsProcessedForCalendar,
   ForWritingFills,
   ForWipingDerivedFills,
+  ForReadingFillsByOccSymbols,
   RawFill,
   CalendarLegEntry,
   StorageError,
@@ -76,6 +77,7 @@ export type MemoryFillsRepo = {
   readonly resetFillsProcessedForCalendar: ForResettingFillsProcessedForCalendar;
   readonly writeFills: ForWritingFills;
   readonly wipeDerivedFills: ForWipingDerivedFills;
+  readonly readFillsByOccSymbols: ForReadingFillsByOccSymbols;
   // ─── Test seed helpers (mirror the Postgres contract harness) ──────────────
   readonly seedCalendar: (cal: MemorySeedCalendar) => void;
   readonly seedEvent: (event: MemorySeedEvent) => void;
@@ -274,6 +276,17 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
     return ok({ fillsDeleted, eventsDeleted, orphansDeleted });
   };
 
+  // ─── readFillsByOccSymbols (ForReadingFillsByOccSymbols — JRNL-02) ──────────
+  // ALL fills matching the given OCC symbols, regardless of processed/orphan status —
+  // mirrors the Postgres adapter (no processed/orphan filtering here at all).
+  const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async (
+    occSymbols: ReadonlyArray<string>,
+  ): Promise<Result<ReadonlyArray<RawFill>, StorageError>> => {
+    const symbolSet = new Set(occSymbols);
+    const rows = [...fillStore.values()].filter((f) => symbolSet.has(f.occSymbol));
+    return ok(rows);
+  };
+
   // ─── Test seed helpers ──────────────────────────────────────────────────────
   const seedCalendar = (cal: MemorySeedCalendar): void => {
     if (!calendarStore.has(cal.id)) {
@@ -308,6 +321,7 @@ export function makeMemoryFillsRepo(): MemoryFillsRepo {
     resetFillsProcessedForCalendar,
     writeFills,
     wipeDerivedFills,
+    readFillsByOccSymbols,
     seedCalendar,
     seedEvent,
     seedOrphan,

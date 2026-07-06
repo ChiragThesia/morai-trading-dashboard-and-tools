@@ -25,6 +25,7 @@ describe("in-memory fills twin", () => {
       resetFillsProcessedForCalendar: repo.resetFillsProcessedForCalendar,
       writeFills: repo.writeFills,
       wipeDerivedFills: repo.wipeDerivedFills,
+      readFillsByOccSymbols: repo.readFillsByOccSymbols,
     }),
     () => ({
       seedCalendar: async (cal) => repo.seedCalendar(cal),

@@ -48,6 +48,7 @@ describe.skipIf(shouldSkip)("postgres fills adapter", () => {
         resetFillsProcessedForCalendar: repo.resetFillsProcessedForCalendar,
         writeFills: repo.writeFills,
         wipeDerivedFills: repo.wipeDerivedFills,
+        readFillsByOccSymbols: repo.readFillsByOccSymbols,
       };
     },
     () => ({
