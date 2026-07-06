@@ -3,12 +3,13 @@ slug: journal-pnl-opennetdebit-units
 status: fixing
 trigger: "Journal P&L shows −$319,850 for calendar 65aac62e (7425P) when real P&L ≈ +$415 — openNetDebit stored in dollars, snapshot formula expects points"
 created: 2026-07-05
-updated: 2026-07-05T19:30:00-07:00
+updated: 2026-07-05T20:20:00-07:00
 tdd_mode: true
 goal: find_and_fix
 bug_2_trigger: "validate-on-one FAILED after deploy: rebuild-journal on 65aac62e changed open_net_debit 3235 -> 286.47, still wrong (correct: 32.35) — a SECOND, deeper root cause in the same area"
 round_3_trigger: "Build ONE tested capability to enable account-wide durable re-ingest of Schwab fills, so already-backfilled calendars' fills.side data (wrong before the round-2 code fix) gets corrected at the source. Code-complete + committed; NOT deployed, NOT run against prod — status stays 'fixing' until the orchestrator executes the run sequence and prod-verifies 65aac62e."
 round_4_trigger: "Ground-truth oracle built from real transactions (13 real calendars, journal-pnl-ground-truth.md) exposed a THIRD, still-deeper root cause: the round-2 side-fix, once actually exercised against re-ingested real data, produced openNetDebit ≈ -4 for 65aac62e (registered open) and ≈ 0 for every closed-registered calendar — the OPEN/CLOSE classification itself, not the sign, was wrong. Fix code-complete + committed; NOT deployed, NOT run against prod."
+round_5_trigger: "After round 4's re-ingest ran in prod: 11/13 calendars' openNetDebit now match the ground-truth oracle, but 2 (8a63aa81, 6303e6af — a shared-front-leg pair) show BACK-LEG-ONLY debit (the shared leg's fills got orphan-parked as ambiguous), and 65aac62e (registered status open) has a real Jul-1 CLOSE order that never transitioned its status to closed. Two independent bugs, same root pattern (a signal ambiguity resolved by parking/staleness instead of by the real disambiguating broker data): (1) fill-pairing never used the fill's OWN order to disambiguate a leg symbol shared by two calendars; (2) status never re-derived from the calendar's own rebuilt events. Fixed + committed; NOT deployed, NOT run against prod."
 ---
 
 # Debug Session: journal-pnl-opennetdebit-units
@@ -986,3 +987,311 @@ files_changed:
   `.planning/debug/journal-pnl-ground-truth.md`. Do NOT run any of this from a debugger
   session — this session self-verified in dev/test only (2145/2145 tests green, typecheck
   clean, lint clean, testcontainers-verified against real Postgres).
+
+## Round 5 — shared-leg attribution (bug 1) + closed-status transition (bug 2)
+
+**Trigger:** see `round_5_trigger` in frontmatter. After round 4's fix ran against prod
+(via `fix-pnl-reingest`), 11/13 real calendars now match `.planning/debug/journal-pnl-ground-truth.md`.
+2 fail (8a63aa81, 6303e6af) — a pair sharing the SAME front-month contract (SPXW
+260618P07275000) — and 65aac62e (registered `open`) never transitioned to `closed` despite a
+real Jul-1 CLOSE order fully unwinding both legs.
+
+### Current Focus — reasoning_checkpoint (written BEFORE the fix)
+
+```yaml
+reasoning_checkpoint:
+  hypothesis: >
+    BUG 1: readCalendarLegs returns 2 candidate calendars for any fill on occSymbol
+    260618P07275000 (8a63aa81's front leg AND 6303e6af's front leg — the same real contract,
+    opened at different times). syncFills.ts's pairFills orphan-parked EVERY such ambiguous
+    fill outright (Pitfall 6's "never auto-assign") — so both calendars kept only their
+    UNIQUE back leg, producing a back-leg-only debit (e.g. 8a63aa81 showed 62.50 instead of
+    62.50−52.30=10.20). The disambiguating signal exists but was never used: each calendar's
+    real OPENING/CLOSING broker order contains BOTH its legs together, so the order's OTHER
+    (unambiguous) leg identifies which calendar the ambiguous leg belongs to.
+
+    BUG 2: calendars.status is a manually-registered, mutable column that nothing in the
+    event-processing pipeline ever re-derives from the calendar's OWN rebuilt events. A
+    calendar whose real CLOSE order fully closes both legs (net qty back to zero) has no
+    code path that flips status open->closed — it stays wrong forever unless someone
+    hand-edits it (a "no hand-edit trade history" violation this project already forbids).
+  confirming_evidence:
+    - "readCalendarLegs (memory + postgres, byte-identical) computes each calendar's front/back OCC symbols independently and pushes a CalendarLegEntry whenever either matches the queried occSymbol — for 260618P07275000 this returns [{8a63aa81,...},{6303e6af,...}], confirmed by direct calls in the new fill-pairing contract test (readCalendarLegs — order-context expansion section) and by re-deriving both calendars' real order data from scratchpad/txns.json: order 1006681717677 (Jun 9) opens 8a63aa81 with back=260623P07275000@62.50 + front=260618P07275000@52.30; order 1006417446601 (May 19) opens 6303e6af with back=260717P07275000@128.90 + front=260618P07275000@82.90 (the SAME front occSymbol string, different order)."
+    - "syncFills.ts pairFills (pre-fix): `if (legs.length > 1) { ...orphan 'ambiguous calendar'... }` — unconditional, no attempt to use orderId to disambiguate, confirmed by reading the pre-fix code in full."
+    - "BUG 2: grepped every write path to calendars.status — only registerCalendar (sets 'open' at creation) and closeCalendar (CAL-04, a MANUAL user-initiated HTTP action with a user-supplied closeNetCredit) ever change it. Neither syncFills.ts nor rebuildJournal.ts nor recomputeCalendarAmounts touches status. Confirmed by reading all three files in full."
+    - "CalendarEvent.qty is the aggregated per-leg quantity (D-04); OPEN increases a leg's net position, CLOSE decreases it — a calendar with events but zero net qty on every touched leg has objectively been fully closed by real trades, independent of what its stale status column says."
+  falsification_test: >
+    Extended apps/worker/src/journal-oracle.test.ts to all 13 real calendars (Test A). RAN
+    AGAINST THE PRE-FIX CODE: FAILED — 8a63aa81/6303e6af showed back-leg-only openNetDebit
+    (e.g. 62.50 instead of 10.20) and 2 fills each landed in orphan_fills with reason
+    "ambiguous calendar", confirming BUG 1 exactly as predicted. A separate integration test
+    (Test C) run against the REAL per-calendar rebuild-journal mechanism (the one
+    fix-pnl-reingest.ts actually uses, not the full sweep) additionally exposed a SECOND,
+    more subtle failure: even with resolveFillMatches implemented, the scoped rebuild orphaned
+    the sibling calendar's fills whenever it ran SECOND, because resetFillsProcessedForCalendar
+    only reset fills matching ITS OWN calendar's legs — a fill already marked processed by the
+    FIRST calendar's rebuild pass (as order-context) never got reset, so it silently vanished
+    from every subsequent read. This was caught BEFORE being missed: Test C failed RED with 2
+    orphans before the resetFillsProcessedForCalendar fix, GREEN after. For BUG 2, a fresh test
+    (Test B) with 65aac62e seeded status="open" and a real Jul-1 CLOSE order: FAILED (status
+    stayed "open") before the fix, GREEN after (status "closed", closedAt "2026-07-01").
+  fix_rationale: >
+    BUG 1 fixed at the disambiguation layer, not by guessing: `resolveFillMatches` (new pure
+    domain fn, fill-pairing.ts) groups candidate-fills by orderId; any leg matching EXACTLY
+    ONE calendar within an order is an "anchor" for that whole order; an ambiguous fill is
+    resolved to its order's anchor ONLY if unique, else it stays ambiguous (never guessed,
+    preserves D-05/WR-01). This alone is insufficient for the calendar-SCOPED rebuild path
+    (the actual prod mechanism, fix-pnl-reingest.ts) because a scoped read only pulls fills
+    matching ONE calendar's own legs — so `readUnprocessedFillsForCalendar` (both adapters)
+    now ALSO includes "order context" fills (any fill sharing an orderId with a leg-matched
+    fill, even if its own symbol isn't this calendar's leg) so the anchor is always present
+    regardless of which calendar is rebuilt first. `resetFillsProcessedForCalendar` needed the
+    IDENTICAL expansion (symmetric with the read) — otherwise a context fill already processed
+    by a sibling's earlier rebuild never gets un-marked and silently disappears forever.
+
+    BUG 2 fixed at the event-processing path itself (not a separate job): `isCalendarFullyClosed`
+    (new pure domain fn) computes net qty per leg from a calendar's rebuilt events (OPEN
+    +qty, CLOSE −qty, ROLL moves qty between the old/new leg); if every touched leg nets to
+    zero, `syncFills.ts`'s pairFills (shared by full-sweep AND scoped-rebuild) calls a NEW
+    port `ForTransitioningCalendarClosed` with closedAt = the REAL close date (max filledAt
+    among this run's own CLOSE fills for that calendar — never `now()`, since a rebuild can
+    run long after the real close). The transition is idempotent (no-op if already closed)
+    so re-running a rebuild never overwrites an already-correct closedAt.
+  blind_spots: >
+    Both fixes are scoped to the EXACT shape of data evidenced in the 13 real calendars (one
+    shared leg between exactly 2 calendars; no calendar closes via a ROLL). The order-context
+    expansion is deliberately one-hop (a context fill's OWN further order-context is not
+    transitively expanded) — sufficient for the evidenced case, not proven for a hypothetical
+    3-calendar chain sharing legs pairwise. isCalendarFullyClosed's closedAt derivation only
+    sets a date when a plain CLOSE event was processed in the SAME run; if a calendar closes
+    purely via a ROLL with no separate CLOSE processed in that pass, the transition is skipped
+    (safe — status stays whatever it was — but not exercised by any of the 13 real calendars).
+    The still-standing, unrelated, OUT-OF-SCOPE gaps from prior rounds are unchanged: the
+    ~$1-2/leg fee-free vs fee-inclusive gap, and the separate gap-snapshot (spot=0/NaN) issue.
+```
+
+### Evidence
+
+- timestamp: 2026-07-05 — read `.planning/debug/journal-pnl-ground-truth.md` and cross-referenced
+  `scratchpad/txns.json` for the 2 failing calendars: confirmed 8a63aa81 (7275P Jun18/Jun23) and
+  6303e6af (7275P Jun18/Jul17) share the exact front-leg contract 260618P07275000 across FOUR
+  distinct broker orders (2 opens, 2 closes) — 8a63aa81's own open order 1006681717677 (Jun 9)
+  and close order 1006687566650 (Jun 10); 6303e6af's own open order 1006417446601 (May 19) and
+  close order 1006622444775 (Jun 5). Independently derived all 13 calendars' fee-free
+  openNetDebit/closeNetCredit from raw order/leg prices — matches the task's authoritative
+  fee-free figures exactly for all 13.
+- timestamp: 2026-07-05 — read `packages/core/src/journal/application/syncFills.ts` `pairFills`
+  in full: confirmed the pre-fix ambiguous-fill branch orphan-parks unconditionally, with no
+  attempt to use `fill.orderId` (already present on every `RawFill`) to disambiguate.
+- timestamp: 2026-07-05 — read `packages/adapters/src/{postgres,memory}/repos/fills.ts`'s
+  `readUnprocessedFillsForCalendar`/`resetFillsProcessedForCalendar` in full: both scope
+  strictly to the target calendar's own 2 leg symbols — confirmed neither has any mechanism to
+  surface a sibling calendar's leg from a shared order.
+- timestamp: 2026-07-05 — grepped every write site of `calendars.status`: only
+  `registerCalendar` (open) and the manual `closeCalendar` (CAL-04 HTTP route) — confirmed no
+  automatic re-derivation from a calendar's own event history exists anywhere in the codebase.
+- timestamp: 2026-07-05 — TDD RED->GREEN, pure domain layer (`fill-pairing.test.ts`, 23 new
+  tests): `resolveFillMatches` (single/zero/ambiguous-with-anchor/ambiguous-without-anchor/
+  two-conflicting-anchors cases) and `isCalendarFullyClosed` (no events/still-open/single-leg
+  closed/both-legs-closed/ROLL-partial/ROLL-then-closed cases) — all written and run RED
+  (functions did not exist) before implementation, GREEN after.
+- timestamp: 2026-07-05 — implemented `resolveFillMatches` (fill-pairing.ts) and wired it into
+  `syncFills.ts`'s `pairFills`, replacing the old immediate per-fill ambiguity check with a
+  two-pass resolve (collect all candidates, then resolve using order anchors).
+- timestamp: 2026-07-05 — extended `apps/worker/src/journal-oracle.test.ts` to all 13 real
+  calendars (Test A, full-sweep). RAN AGAINST THE PRE-FIX CODE (resolveFillMatches implemented,
+  read/reset expansion NOT yet): FAILED as predicted for the 2 shared-leg calendars specifically
+  via the full-sweep path (the full sweep alone, having every fill in one batch, actually passed
+  once resolveFillMatches existed — the deeper scoped-rebuild bug below required a SEPARATE test
+  to surface).
+- timestamp: 2026-07-05 — added Test C (`journal-oracle.test.ts`): exercises the REAL production
+  mechanism — `makeRebuildJournalUseCase` + `makeSyncFillsForCalendarUseCase` (calendar-SCOPED,
+  exactly what `fix-pnl-reingest.ts` calls per calendar) — run in `fix-pnl-reingest`'s actual
+  processing order (`listCalendars` desc by `openedAt`: 8a63aa81 opened Jun 9 sorts before
+  6303e6af, opened May 19). RAN: FAILED with 2 orphans (8a63aa81's own front-leg fills, orphaned
+  during 6303e6af's SECOND rebuild pass) — confirmed the scoped-read context-expansion alone was
+  insufficient; `resetFillsProcessedForCalendar` needed the identical expansion. Debugged via
+  direct inspection of `readUnprocessedFillsForCalendar`'s returned batch and `readCalendarLegs`
+  responses at each step (temporary debug logging, removed after root cause confirmed) — traced
+  to: fills already marked processed by calendar A's earlier rebuild pass are never reset by
+  calendar B's `resetFillsProcessedForCalendar` (which only resets fills matching B's OWN legs),
+  so they never reappear as order-context for B's own read.
+- timestamp: 2026-07-05 — implemented the `readUnprocessedFillsForCalendar` + matching
+  `resetFillsProcessedForCalendar` order-context expansion in BOTH adapters (postgres + memory).
+  Added 4 new shared contract tests (`fills.contract.ts`, run against both Postgres via
+  testcontainers and the in-memory twin) proving: (1) a sibling calendar's unique-leg fill is
+  included as context when it shares an order with a leg-matched shared-symbol fill; (2) no
+  context leak for an unrelated order; (3) `resetFillsProcessedForCalendar` resets an
+  already-processed sibling fill needed as context; (4) it does NOT reset an unrelated fill on a
+  different order. Fixed one PRE-EXISTING contract test whose fixture accidentally shared the
+  default `orderId` across an unrelated foreign-leg fill (a fixture-collision false regression,
+  not a real bug — gave it a distinct orderId to preserve its original intent).
+- timestamp: 2026-07-05 — re-ran Test C: GREEN. Both calendars converge to their correct
+  openNetDebit/closeNetCredit regardless of processing order; zero orphans; idempotent on a
+  second rebuild of the same calendar.
+- timestamp: 2026-07-05 — implemented BUG 2: added `ForTransitioningCalendarClosed` port
+  (distinct from the existing user-initiated `ForClosingCalendar`/CAL-04 — this one takes a
+  real historical `closedAt`, not "now"), implemented in both calendars adapters (idempotent —
+  no-op if already closed or calendarId unknown), added 4 new shared contract tests
+  (`calendars.contract.ts`, both adapters): transitions open->closed with the given closedAt;
+  idempotent no-op on an already-closed calendar (does NOT overwrite its existing closedAt);
+  safe no-op on an unknown calendarId; a genuinely-open calendar is unaffected when the port is
+  never called. Wired `isCalendarFullyClosed` + the new port into `syncFills.ts`'s pairFills
+  (after the emission loop): for every calendarId touched in the current run, re-reads its
+  events, checks full closure, and — only if a CLOSE was processed in THIS run (so a real
+  closedAt is available) — calls the transition port.
+- timestamp: 2026-07-05 — added Test B (`journal-oracle.test.ts`): seeds all 13 real calendars
+  (65aac62e as the real registered "open", the other 12 as "closed" with a sentinel closedAt to
+  prove no-op idempotency) plus a synthetic 14th "genuinely still open" calendar (OPEN order
+  only, no close). RAN AGAINST THE PRE-FIX CODE: FAILED (65aac62e stayed "open"). Fixed: GREEN —
+  65aac62e transitions to "closed" with `closedAt` = "2026-07-01" (the real close order's trade
+  date, not the test's `now()`); the other 12 remain "closed" with their SENTINEL closedAt
+  completely unchanged (proves the no-op, not just "still closed"); the synthetic 14th stays
+  "open"; re-running the sync a second time is still idempotent.
+- timestamp: 2026-07-05 — mechanical fallout: `transitionCalendarClosed` added to `PairingDeps`
+  (shared by `SyncFillsDeps`/`SyncFillsForCalendarDeps`) — every construction site updated:
+  `syncFills.test.ts` (5 spots), `syncFills.property.test.ts` (1), `journal-e2e.test.ts` (3),
+  `apps/worker/src/main.ts` (2, wired to the real `calendarsRepo.transitionCalendarClosed`),
+  `apps/worker/src/fix-pnl-reingest.ts` (1, same wiring — so the NEXT time this script runs,
+  bug 2's fix applies automatically, no separate step).
+- timestamp: 2026-07-05 — full re-verification: `bun run typecheck` clean (tsc --build --force,
+  zero errors). `bun run test` (vitest, whole monorepo, INCLUDING Postgres testcontainers
+  suites): **2178/2178 pass** (was 2145/2145 before this round — +33 net new tests). `bun run
+  lint` clean (same pre-existing boundaries-plugin informational warnings as every prior round,
+  zero errors). Grepped the full diff for `any`/`as`/`!` in every changed production file: zero
+  introduced.
+- timestamp: 2026-07-05 — self-conducted money-path review (no Task/subagent tool available in
+  this session, same constraint as rounds 3/4): (1) atomicity — `transitionCalendarClosed` is a
+  single UPDATE (postgres), no new multi-step writes; `resolveFillMatches`/order-context
+  expansion are pure reads plus the existing single-statement UPDATE/reset paths, unchanged
+  transactional shape. (2) idempotency — proven via contract tests (both adapters) and
+  journal-oracle Test B/C's explicit re-run assertions. (3) twin parity — the identical shared
+  contract suites (`fills.contract.ts`, `calendars.contract.ts`) pass against BOTH Postgres
+  (testcontainers) and the in-memory twin for every new behavior. (4) no FK/CASCADE risk — no
+  schema change this round, no migration. (5) blast radius — order-context expansion only
+  activates when a leg symbol is genuinely shared across calendars (rare — evidenced exactly
+  once in 13 real calendars) or when fills happen to share a coincidental orderId (the one
+  pre-existing test fixture collision found and fixed); no behavior change for the other 12
+  calendars' own rebuild path, confirmed by Test A's full-13 regression coverage.
+
+## Resolution — Round 5 (shared-leg attribution + closed-status transition)
+
+root_cause: >
+  BUG 1: `readCalendarLegs` correctly returns every calendar whose leg matches a queried OCC
+  symbol — including BOTH calendars when a contract (e.g. 260618P07275000) is genuinely reused
+  across two calendar spreads opened at different times. `syncFills.ts`'s fill-matching step
+  treated any 2+-candidate match as unconditionally ambiguous and orphan-parked it, even though
+  each calendar's own broker order (containing its OTHER, unambiguous leg) already carries the
+  real disambiguating signal. This silently dropped one calendar's shared-leg economics,
+  producing a back-leg-only debit for BOTH 8a63aa81 and 6303e6af.
+
+  BUG 2: `calendars.status` is written once at registration and only ever changed by a
+  user-initiated manual close (CAL-04) — nothing in the automated fill-processing pipeline
+  re-derives it from the calendar's own rebuilt event history. 65aac62e's real Jul-1 CLOSE
+  order fully unwound both legs, but its `status` column never caught up, so downstream
+  consumers (snapshot-calendars, the journal masthead) kept treating it as an open, live
+  position long after it was actually closed.
+
+fix: >
+  Code-complete, fully TDD'd (RED confirmed for the exact predicted reason at every layer —
+  pure domain functions, both adapters' contract tests, and the real-mechanism integration test
+  — then GREEN after each fix, see Evidence), COMMITTED (see commit SHAs in the handback), NOT
+  deployed, NO prod job triggered:
+  (1) `resolveFillMatches` (new pure fn, `fill-pairing.ts`): disambiguates an ambiguous fill
+  using its OWN broker order — an unambiguous "anchor" leg in the same order identifies the
+  calendar; never guesses when no unique anchor exists (D-05/WR-01 preserved).
+  (2) `syncFills.ts`'s `pairFills`: replaced the immediate per-fill ambiguity check with a
+  two-pass resolve using `resolveFillMatches`.
+  (3) `readUnprocessedFillsForCalendar` (postgres + memory): expanded to include "order
+  context" fills — any fill sharing an orderId with a leg-matched fill, even if its own symbol
+  isn't this calendar's own leg — so the scoped rebuild-journal path (the actual prod
+  correction mechanism) always has the anchor available regardless of which calendar rebuilds
+  first.
+  (4) `resetFillsProcessedForCalendar` (postgres + memory): identical order-context expansion,
+  symmetric with (3) — otherwise a context fill already processed by a sibling's earlier
+  rebuild never gets reset and silently vanishes from every later read.
+  (5) `isCalendarFullyClosed` (new pure fn, `fill-pairing.ts`): computes net qty per leg from a
+  calendar's full rebuilt event history; true when every touched leg is flat.
+  (6) `ForTransitioningCalendarClosed` (new port, both calendars adapters): idempotent
+  open->closed transition with a caller-supplied `closedAt` (the real historical close date,
+  never "now").
+  (7) `syncFills.ts`'s `pairFills`: after storing a batch's events, checks every calendar
+  touched in that run for full closure and — only when a real CLOSE was processed in the SAME
+  run (so a real closedAt is available) — calls the transition port.
+
+  Deliberately NOT touched: `recomputeCalendarAmounts` (already correct, proven again by Test
+  A's full-13 pass); the existing `ForClosingCalendar`/CAL-04 manual-close route (different
+  semantics — user-supplied closeNetCredit, always "now" — a separate concern from the
+  automatic event-driven transition); any schema/migration (no new columns needed — reuses the
+  existing `calendars.status`/`closed_at`).
+
+verification: >
+  Self-verified in dev/test only: `bun run typecheck` clean. `bun run test` (vitest, whole
+  monorepo, INCLUDING Postgres testcontainers suites): 2178/2178 pass (was 2145/2145 before
+  this round — +33 net new tests: 23 pure-domain tests, 4+4 new shared contract tests for the
+  order-context expansion and the closed-status port, 2 net journal-oracle tests replacing the
+  round-4 5-calendar test with a 13-calendar Test A + new Test B (bug 2) + new Test C (bug 1's
+  real production mechanism, calendar-scoped rebuild-journal, run in fix-pnl-reingest's actual
+  processing order)). `bun run lint` clean. Every new assertion confirmed RED for the exact
+  predicted reason before GREEN — including a genuine second-order bug found ONLY because Test
+  C exercised the real scoped-rebuild mechanism instead of just the full sweep (the
+  resetFillsProcessedForCalendar gap). NOT verified against prod data — no prod job triggered,
+  no deploy performed.
+
+files_changed:
+  - packages/core/src/journal/domain/fill-pairing.ts (+resolveFillMatches, +isCalendarFullyClosed)
+  - packages/core/src/journal/domain/fill-pairing.test.ts (+23 tests)
+  - packages/core/src/journal/application/ports.ts (+ForTransitioningCalendarClosed)
+  - packages/core/src/journal/application/syncFills.ts (pairFills: resolveFillMatches-based matching; post-emission closed-status check)
+  - packages/core/src/journal/application/syncFills.test.ts (mechanical: +transitionCalendarClosed on every deps construction)
+  - packages/core/src/journal/application/syncFills.property.test.ts (mechanical: +transitionCalendarClosed)
+  - packages/core/src/journal/index.ts, packages/core/src/index.ts (barrel exports: resolveFillMatches, isCalendarFullyClosed, ForTransitioningCalendarClosed)
+  - packages/adapters/src/postgres/repos/fills.ts (readUnprocessedFillsForCalendar + resetFillsProcessedForCalendar order-context expansion)
+  - packages/adapters/src/memory/fills.ts (same expansion, twin parity)
+  - packages/adapters/src/postgres/repos/calendars.ts (+transitionCalendarClosed impl)
+  - packages/adapters/src/memory/calendars.ts (+transitionCalendarClosed impl)
+  - packages/adapters/src/__contract__/fills.contract.ts (+4 order-context tests; fixed 1 pre-existing fixture collision)
+  - packages/adapters/src/__contract__/calendars.contract.ts (+4 transitionCalendarClosed tests)
+  - packages/adapters/src/memory/fills.contract.test.ts, packages/adapters/src/postgres/repos/fills.contract.test.ts (wiring: +resetFillsProcessedForCalendar)
+  - apps/worker/src/journal-e2e.test.ts (mechanical: +transitionCalendarClosed)
+  - apps/worker/src/main.ts (wiring: +transitionCalendarClosed on both syncFills use-cases)
+  - apps/worker/src/fix-pnl-reingest.ts (wiring: +transitionCalendarClosed)
+  - apps/worker/src/journal-oracle.test.ts (extended to all 13 calendars — Test A; +Test B bug 2; +Test C bug 1 real-mechanism)
+
+### 13-calendar computed-vs-oracle openNetDebit table (Test A, fee-free)
+
+| id | computed openNetDebit | oracle (fee-inclusive) | match |
+|---|---|---|---|
+| 65aac62e | 32.35 | 32.37 | yes |
+| 24f1e72e | 41.52 | (roll-split, see ground-truth asterisk) | yes |
+| 60c46a57 | 44.20 | 44.22 | yes |
+| 3ca74277 | 43.00 | 43.02 | yes |
+| 8a63aa81 | 10.20 | 10.22 | yes (was 62.50 pre-fix) |
+| 6303e6af | 46.00 | 46.02 | yes (was 128.90 pre-fix) |
+| 45727d08 | 44.50 | 44.52 | yes |
+| 53533aa7 | 39.55 | 39.57 | yes |
+| b0d862ba | 45.35 | 45.37 | yes |
+| e8bfbf41 | 44.60 | 44.62 | yes |
+| 9eef2153 | 42.85 | 42.87 | yes |
+| 95546839 | 47.55 | 47.57 | yes |
+| f3789ddd | 40.60 | 40.62 | yes |
+
+- next_action: Orchestrator-owned. (1) Review/merge this fix. (2) Deploy worker + server (no
+  schema change this round — no migration to run). (3) Re-run `fix-pnl-reingest` (the SAME
+  script as rounds 3/4 — `wipe-derived-fills` -> `backfill-transactions` -> per-calendar
+  `rebuild-journal` -> `recompute-snapshot-pnl`). This is REQUIRED, not optional, for the 2
+  shared-leg calendars: their fills from the round-4 run are already sitting in `orphan_fills`
+  (parked "ambiguous calendar") from BEFORE this fix, and orphan-parked fill ids are
+  permanently excluded from every future read regardless of this round's code fix — only a
+  full wipe (which clears `orphan_fills` too, in the SAME transaction) followed by a fresh
+  backfill re-ingest clears that stale state so the corrected matching logic gets a chance to
+  run on them. A bare `rebuild-journal` trigger on just 8a63aa81/6303e6af, WITHOUT the wipe,
+  would NOT fix them. (4) Bug 2 needs NO separate step — it is baked into the SAME
+  `rebuild-journal` (via `syncFillsForCalendar`) that step 3 already runs for every calendar,
+  so 65aac62e will auto-transition to `closed` with the real Jul-1 closedAt as a side effect of
+  step 3, with no additional trigger. (5) Prod-verify against
+  `.planning/debug/journal-pnl-ground-truth.md`: all 13 calendars' openNetDebit/closeNetCredit
+  (see the table above), and specifically 65aac62e's `status` = "closed" /
+  `closedAt` ≈ "2026-07-01". Do NOT run any of this from a debugger session — this session
+  self-verified in dev/test only (2178/2178 tests green, typecheck clean, lint clean,
+  testcontainers-verified against real Postgres).
