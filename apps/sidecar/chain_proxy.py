@@ -39,11 +39,18 @@ router = APIRouter()
 # param (root is kept only as a response label — see get_chain).
 _SCHWAB_CHAIN_SYMBOL = "$SPX"
 
-# ponytail: unbounded $SPX (no date scoping) times out (proven live); bounding by
-# from_date/to_date alone is enough (proven live) so strike_count/range are
-# skipped. 90 matches apps/worker's BSM_MAX_DTE default — bump both together if
-# the downstream DTE filter window changes.
+# ponytail: unbounded $SPX (no date scoping) times out (proven live). 90 matches
+# apps/worker's BSM_MAX_DTE default — bump both together if the downstream DTE
+# filter window changes.
 _CHAIN_LOOKAHEAD_DAYS = 90
+
+# BUG 1 reopened (2026-07-06, live prod deploy): from_date/to_date alone still
+# overflows Schwab's gateway at prod scale (502 "Body buffer overflow" —
+# protocol.http.TooBigBody) because the full 90-day strike ladder is too large.
+# strike_count bounds strikes-around-ATM per expiry. Live-verified: 50 -> 200/
+# 4.08MB (unbounded -> 502). Matches the existing strikeCount=50 convention in
+# packages/adapters/src/schwab/market/chain-adapter.ts.
+_SCHWAB_CHAIN_STRIKE_COUNT = 50
 
 
 # ── Response models (Pydantic = Zod safeParse equivalent, T-11-05-05) ────────
@@ -214,6 +221,7 @@ async def get_chain(
             _SCHWAB_CHAIN_SYMBOL,
             from_date=today,
             to_date=today + datetime.timedelta(days=_CHAIN_LOOKAHEAD_DAYS),
+            strike_count=_SCHWAB_CHAIN_STRIKE_COUNT,
         )
         if resp.status_code != 200:
             # RC#2 (2026-07-01 debug session): a non-2xx response (e.g. a stale/invalid

@@ -150,6 +150,12 @@ def test_get_option_chain_always_requests_dollar_spx_symbol(
 
     Fix: always request symbol "$SPX" from Schwab, regardless of `root`, scoped by
     from_date/to_date (an unbounded $SPX request times out — proven live).
+
+    Reopened (2026-07-06, same session): from_date/to_date alone still overflowed
+    Schwab's gateway at prod scale (502 "Body buffer overflow" — the full 90-day
+    strike ladder is too large). A `strike_count` bound is also required —
+    live-verified: strikeCount=50 -> 200/4.08MB. 50 matches the existing convention
+    in packages/adapters/src/schwab/market/chain-adapter.ts.
     """
     from main import app
 
@@ -184,6 +190,14 @@ def test_get_option_chain_always_requests_dollar_spx_symbol(
     )
     assert call.kwargs.get("to_date") is not None, (
         "Expected to_date scoping to bound the request (unbounded $SPX times out)"
+    )
+    assert call.kwargs.get("strike_count") is not None, (
+        "Expected strike_count to bound the request — from_date/to_date alone still "
+        "overflows Schwab's gateway (502 Body buffer overflow) at prod scale"
+    )
+    assert call.kwargs["strike_count"] <= 50, (
+        f"strike_count must stay well under the gateway body limit "
+        f"(live-verified: 50 -> 200/4.08MB), got {call.kwargs['strike_count']!r}"
     )
 
 
