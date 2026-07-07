@@ -54,9 +54,10 @@ const BLUE = "#5b9cf6";
 const AMBER = "#f0b429";
 const ZERO_LINE = "#27313f";
 
-function fmtBn(v: number): string {
-  const bn = v / 1_000_000_000;
-  return `${bn.toFixed(1)}B`;
+// Units regression: domain dollarGamma outputs $Bn/1% ALREADY — a second /1e9
+// collapsed every axis label to "0.0B". Exported for the units regression test.
+export function fmtBn(v: number): string {
+  return `${v.toFixed(1)}B`;
 }
 
 /** Strike-window range: ATM ± N strikes, or "all". */
@@ -132,7 +133,7 @@ function buildOption(
 
   if (mode === "gex") {
     const data = strikes.map((s) => ({
-      value: s.gex / 1_000_000_000, // convert to $Bn
+      value: s.gex, // already $Bn/1% units from the domain
       itemStyle: {
         color: s.gex >= 0 ? TEAL : CORAL,
       },

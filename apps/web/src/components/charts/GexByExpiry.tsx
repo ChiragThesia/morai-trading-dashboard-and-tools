@@ -34,9 +34,9 @@ interface GexByExpiryProps {
 const CORAL = "#ef5350";
 const ZERO_LINE = "#27313f";
 
+// Units regression: domain dollarGamma outputs $Bn/1% ALREADY — no second /1e9.
 function fmtBn(v: number): string {
-  const bn = v / 1_000_000_000;
-  return `${bn >= 0 ? "+" : ""}${bn.toFixed(1)}B`;
+  return `${v >= 0 ? "+" : ""}${v.toFixed(1)}B`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -55,12 +55,12 @@ export function GexByExpiry({
   const option = useMemo(() => {
     const dates = byExpiry.map((e) => e.date);
     const values = byExpiry.map((e) => ({
-      value: e.gex / 1_000_000_000, // convert to $Bn
+      value: e.gex, // already $Bn/1% units from the domain
       itemStyle: { color: CORAL },
       label: {
         show: true,
         position: e.gex >= 0 ? "top" : "bottom",
-        formatter: (params: { value: number }) => fmtBn(params.value * 1_000_000_000),
+        formatter: (params: { value: number }) => fmtBn(params.value),
         color: "#d6dbe4",
         fontSize: 9,
         fontFamily: "JetBrains Mono, monospace",
@@ -89,7 +89,7 @@ export function GexByExpiry({
         axisLabel: {
           color: "#566273",
           fontSize: 9,
-          formatter: (v: number) => fmtBn(v * 1_000_000_000),
+          formatter: (v: number) => fmtBn(v),
         },
       },
       series: [

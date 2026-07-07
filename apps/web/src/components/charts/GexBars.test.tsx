@@ -40,7 +40,7 @@ vi.mock("echarts-for-react", () => ({
 
 // ─── Import AFTER mock registration ──────────────────────────────────────────
 
-import { GexBars, windowStrikes } from "./GexBars.tsx";
+import { GexBars, windowStrikes, fmtBn } from "./GexBars.tsx";
 import type { GexWallEntry } from "@morai/contracts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -152,5 +152,15 @@ describe("windowStrikes", () => {
   it("clamps at the edges without going out of bounds", () => {
     const out = windowStrikes(STRIKES, 7100, 2); // ATM=7100 (index 0)
     expect(out.map((s) => s.k)).toEqual([7100, 7200, 7300]);
+  });
+});
+
+// Units regression: domain dollarGamma outputs $Bn/1% ALREADY (e.g. +4.48 = $4.48Bn).
+// fmtBn previously divided by 1e9 again → every axis label collapsed to "0.0B".
+describe("fmtBn — values are already $Bn units (no second division)", () => {
+  it("formats a domain-scale value directly", () => {
+    expect(fmtBn(4.48)).toBe("4.5B");
+    expect(fmtBn(-5.97)).toBe("-6.0B");
+    expect(fmtBn(0)).toBe("0.0B");
   });
 });

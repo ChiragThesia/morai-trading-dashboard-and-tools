@@ -63,26 +63,27 @@ import type { GexSnapshotEntry } from "@morai/contracts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-/** Sample GEX snapshot — net < 0 → AMPLIFY regime */
+/** Sample GEX snapshot — net < 0 → AMPLIFY regime. All gamma values in $Bn/1%
+ *  units (the domain's dollarGamma scale), matching what prod actually stores. */
 const SAMPLE_SNAPSHOT: GexSnapshotEntry = {
   spot: 7381.12,
   flip: null,
   callWall: 7600,
   putWall: 7400,
-  netGammaAtSpot: -57_047_301_908,
+  netGammaAtSpot: -57.0,
   computedAt: "2026-06-23T14:00:24.000Z",
   profile: [
-    { spot: 7000, gamma: -800_000_000 },
-    { spot: 7381, gamma: -57_047_301_908 },
-    { spot: 7600, gamma: 200_000_000 },
+    { spot: 7000, gamma: -0.8 },
+    { spot: 7381, gamma: -57.0 },
+    { spot: 7600, gamma: 0.2 },
   ],
   strikes: [
-    { k: 7400, gex: -5_974_395_559, coi: 17071, poi: 52786, vol: 8406 },
-    { k: 7600, gex: 1_230_277_553, coi: 69015, poi: 39475, vol: 2228 },
+    { k: 7400, gex: -5.97, coi: 17071, poi: 52786, vol: 8406 },
+    { k: 7600, gex: 1.23, coi: 69015, poi: 39475, vol: 2228 },
   ],
   byExpiry: [
-    { date: "2026-06-27", gex: -10_000_000_000 },
-    { date: "2026-07-18", gex: -47_000_000_000 },
+    { date: "2026-06-27", gex: -10.0 },
+    { date: "2026-07-18", gex: -47.0 },
   ],
   nearTerm: null,
 };
@@ -213,5 +214,19 @@ describe("Market — net γ 0DTE chip", () => {
     // assert the ABSENCE of a formatted 0DTE value instead of counting dashes.
     expect(screen.queryByText("−$9.8B")).toBeNull();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+});
+
+describe("Market — net γ chip units ($Bn/1% domain scale)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("formats netGammaAtSpot as $Bn directly (domain emits $Bn units, not raw dollars)", () => {
+    mockGexWith({ ...SAMPLE_SNAPSHOT, netGammaAtSpot: -47.43 });
+    render(<Market />);
+
+    expect(screen.getByText("−$47.4B /1%")).toBeTruthy();
   });
 });

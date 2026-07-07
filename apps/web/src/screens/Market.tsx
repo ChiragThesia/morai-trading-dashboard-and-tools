@@ -30,16 +30,6 @@ import type { GexSnapshotEntry } from "@morai/contracts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Compact number formatter: $1.2B / $47M / $1.2K */
-function fmtDollar(v: number): string {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "−" : "+";
-  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1)}B`;
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(0)}M`;
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}K`;
-  return `${sign}$${abs.toFixed(0)}`;
-}
-
 /**
  * Human relative age for the GEX freshness badge.
  * Exported for reuse verbatim by Overview.tsx's staleness badges (17-04, D-03) —
@@ -204,7 +194,8 @@ export function Market(): React.ReactElement {
   const regime = classifyRegime(gex.netGammaAtSpot);
   const isAmplify = regime === "AMPLIFY";
 
-  const netGammaLabel = fmtDollar(gex.netGammaAtSpot) + " /1%";
+  // netGammaAtSpot is ALREADY $Bn/1% units (domain dollarGamma divides by 1e9)
+  const netGammaLabel = fmtGammaBn(gex.netGammaAtSpot) + " /1%";
   const flipLabel = gex.flip !== null ? gex.flip.toFixed(0) : "—";
   // 0DTE net gamma — today's expiry from the byExpiry rollup ($Bn/1% units)
   const zeroDte = zeroDteGex(gex.byExpiry, gex.computedAt);

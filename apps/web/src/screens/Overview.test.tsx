@@ -67,8 +67,8 @@ const GEX_FIXTURE = {
     { spot: 7450, gamma: 20 },
   ],
   strikes: [
-    { k: 7300, gex: -1_000_000_000, coi: 100, poi: 200, vol: 50 },
-    { k: 7400, gex: 1_000_000_000, coi: 150, poi: 90, vol: 80 },
+    { k: 7300, gex: -1.0, coi: 100, poi: 200, vol: 50 },
+    { k: 7400, gex: 1.0, coi: 150, poi: 90, vol: 80 },
   ],
   byExpiry: [{ date: "2026-06-29", gex: -9.8 }],
   nearTerm: { callWall: 7420, putWall: 7320, flip: 7355 },
