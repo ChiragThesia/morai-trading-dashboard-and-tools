@@ -21,6 +21,7 @@ handlers are thin inbound adapters calling application use-cases.
 
 | Job | Schedule (America/New_York) | Does |
 |---|---|---|
+| `fetch-schwab-chain` | every 30 min RTH | Dual-source SPX/SPXW chain fetch (Schwab + CBOE) → `leg_observations` + `contracts`; see "Chain fetch" section |
 | `snapshot-calendars` | chain-triggered only (NO cron) | For each open calendar: fetch chain → compute marks/IV/greeks/term-slope → store `calendar_snapshots` row |
 | `compute-bsm-greeks` | every 1 min (drains pending) | Scan `leg_observations WHERE bsm_iv IS NULL` → IV invert → BSM → upsert |
 | `sync-fills` | `*/10 9-16 * * 1-5` (every 10 min RTH) | Schwab transactions → `fills`/`orders`; pair into calendar OPEN/CLOSE/ROLL events |
@@ -38,6 +39,41 @@ Notes carried from old dashboard:
   hard-expire 7 days after issuance → weekly interactive re-auth is mandatory
   (`deployment.md` + `stack-decisions.md` D22). On `invalid_grant`, Schwab jobs pause
   gracefully and status flags AUTH_EXPIRED.
+
+## Chain fetch (dual-source — chain-window-narrow-regression fix)
+
+**Schedule:** `fetch-schwab-chain`, every 30 min during RTH. One job run fetches the SPX +
+SPXW chains from **both** sources and persists all of them to `leg_observations`
+(append-only, `source`-tagged) in a single cycle:
+
+- **Schwab (via sidecar)** — freshness. The Schwab gateway caps response size, so the sidecar
+  requests a bounded window (`strike_count=50`, 90-day lookahead). Wider single calls 502
+  (`TooBigBody`); the window cannot be widened.
+- **CBOE (delayed)** — breadth. Full strike range and all expiries. This is what carries the
+  far-OTM put mass and long-dated open-position legs the Schwab window cannot reach.
+
+Source selection (`selectChainSources`, brokerage context): market token fresh/stale →
+`[schwab, cboe]`; AUTH_EXPIRED, no token, or freshness read failure → `[cboe]` only. A cycle
+succeeds if at least one source succeeds — a Schwab failure never darkens the pipeline.
+
+**Why dual-source (not either/or):** a single Schwab call is too narrow — it distorts GEX
+(missing far-OTM put gamma biases the flip low and fakes the put wall) and misses open
+position legs outside its window (stale journal marks). CBOE alone is delayed. Fetching both
+gives fresh near-ATM data AND full-width coverage every cycle.
+
+**Downstream cohort semantics:** observations keep each source's own `observedAt` timestamp,
+so one logical cycle spans two nearby timestamps. Readers that need "the latest cycle" must
+union per 30-minute slot, not take strict `max(time)`:
+
+- `readLegObsForGex` (GEX input) reads all BSM-solved rows in the 30-min slot of the latest
+  solved observation, deduped per contract (newest row wins) so overlapping near-ATM strikes
+  are never double-counted.
+- `snapshot-calendars` leg resolution is per-contract latest — unaffected by design.
+- `compute-bsm-greeks` drains newest-first with a batch bound sized above one full
+  dual-source cycle (~15k rows).
+
+**Trigger chain (unchanged, single-trigger):** `fetch-schwab-chain` → `compute-bsm-greeks` →
+`snapshot-calendars` → `compute-analytics` → `compute-gex-snapshot` → `compute-picker`.
 
 ## fetch-rates (Phase 2 + Phase 14 macro expansion, MAC-01)
 
