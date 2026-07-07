@@ -189,6 +189,86 @@ export function runGexSnapshotContractTests(
     });
   });
 
+  // chain-window-narrow-regression: one logical fetch cycle now lands as TWO nearby
+  // timestamps (Schwab + CBOE each stamp their own observedAt). The cohort read must
+  // union all BSM-solved rows within the 30-min slot of the latest solved observation —
+  // strict max(time) equality would silently drop one source. Overlapping near-ATM
+  // contracts appear in both sources; they must be deduped per contract (newest wins)
+  // or strikeGex double-counts their OI.
+  describe("readLegObsForGex — dual-source cohort (slot union + per-contract dedup)", () => {
+    // One cycle: schwab lands at 14:00:05, cboe at 14:01:40 — same 30-min slot [14:00, 14:30)
+    const SCHWAB_T = new Date("2026-06-23T14:00:05Z");
+    const CBOE_T = new Date("2026-06-23T14:01:40Z");
+    // Previous slot [13:30, 14:00)
+    const PREV_SLOT_T = new Date("2026-06-23T13:59:50Z");
+
+    const OVERLAP = "SPXW  260627P07400000"; // near-ATM, in BOTH sources
+    const SCHWAB_ONLY = "SPXW  260627C07450000"; // near-ATM, schwab window
+    const CBOE_ONLY = "SPXW  260627P07000000"; // far-OTM put tail, cboe breadth
+    const PREV_SLOT = "SPXW  260627P07300000"; // solved, but an older cycle
+    const UNSOLVED = "SPXW  260627C07500000"; // in-slot but bsm not yet computed
+
+    const baseLeg = {
+      underlyingPrice: 7381,
+      bsmIv: "0.14",
+      openInterest: 1000,
+      expiration: "2026-06-27",
+    };
+
+    async function seedDualSourceCycle(): Promise<void> {
+      await seed.seedLegs([
+        // overlap contract: both sources, different times + gammas
+        { ...baseLeg, time: SCHWAB_T, contract: OVERLAP, bsmGamma: "0.001", contractType: "P", strike: 7400000 },
+        { ...baseLeg, time: CBOE_T, contract: OVERLAP, bsmGamma: "0.002", contractType: "P", strike: 7400000 },
+        // single-source contracts
+        { ...baseLeg, time: SCHWAB_T, contract: SCHWAB_ONLY, bsmGamma: "0.003", contractType: "C", strike: 7450000 },
+        { ...baseLeg, time: CBOE_T, contract: CBOE_ONLY, bsmGamma: "0.004", contractType: "P", strike: 7000000 },
+        // previous slot — must be excluded
+        { ...baseLeg, time: PREV_SLOT_T, contract: PREV_SLOT, bsmGamma: "0.005", contractType: "P", strike: 7300000 },
+        // in-slot but unsolved — must be excluded
+        { ...baseLeg, time: CBOE_T, contract: UNSOLVED, bsmGamma: null, bsmIv: null, contractType: "C", strike: 7500000 },
+      ]);
+    }
+
+    it("unions BSM-solved rows from both sources within the latest 30-min slot", async () => {
+      await seedDualSourceCycle();
+
+      const result = await repo.readLegObsForGex();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const contractsSeen = result.value.map((l) => l.contract);
+      expect(contractsSeen).toContain(SCHWAB_ONLY);
+      expect(contractsSeen).toContain(CBOE_ONLY);
+    });
+
+    it("dedupes overlapping contracts per contract — newest row wins", async () => {
+      await seedDualSourceCycle();
+
+      const result = await repo.readLegObsForGex();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const overlapRows = result.value.filter((l) => l.contract === OVERLAP);
+      expect(overlapRows).toHaveLength(1);
+      const row = overlapRows[0];
+      expect(row?.time.getTime()).toBe(CBOE_T.getTime());
+      expect(row?.bsmGamma).toBe("0.002");
+    });
+
+    it("excludes rows from earlier slots and unsolved rows within the slot", async () => {
+      await seedDualSourceCycle();
+
+      const result = await repo.readLegObsForGex();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const contractsSeen = result.value.map((l) => l.contract);
+      expect(contractsSeen).not.toContain(PREV_SLOT);
+      expect(contractsSeen).not.toContain(UNSOLVED);
+    });
+  });
+
   // CR-02 regression: computedAt must round-trip faithfully and MUST NOT be
   // silently substituted with cycleTime on read.
   //

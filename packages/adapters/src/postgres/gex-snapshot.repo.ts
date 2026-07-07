@@ -1,10 +1,11 @@
 /**
  * makePostgresGexSnapshotRepo — Postgres implementation of the three GEX driven ports.
  *
- * ForReadingLegObsForGex: SELECT lo.*, c.strike, c.expiration, c.contract_type
- *   FROM leg_observations lo JOIN contracts c ON lo.contract = c.occ_symbol
- *   WHERE lo.time = (SELECT MAX(time) FROM leg_observations WHERE bsm_gamma IS NOT NULL)
- *   Returns LegObsForGex[] with all chain rows at the latest cycle (Pitfall 2 JOIN).
+ * ForReadingLegObsForGex: SELECT DISTINCT ON (lo.contract) lo.*, c.strike, c.expiration,
+ *   c.contract_type FROM leg_observations lo JOIN contracts c ON lo.contract = c.occ_symbol
+ *   WHERE lo.time in the 30-min slot of MAX(time WHERE bsm_gamma IS NOT NULL)
+ *   ORDER BY lo.contract, lo.time DESC — the dual-source cohort: union of Schwab + CBOE
+ *   rows in the latest cycle slot, one row per contract, newest wins (Pitfall 2 JOIN).
  *
  * ForPersistingGexSnapshot: INSERT one gex_snapshots row with JSONB blobs for
  *   profile/strikes/byExpiry + numeric scalars as strings.
@@ -26,7 +27,7 @@ import type {
   StorageError,
 } from "@morai/core";
 import { z } from "zod";
-import { eq, and, isNotNull, desc, max, asc } from "drizzle-orm";
+import { and, isNotNull, desc, max, asc, eq, gte, lt } from "drizzle-orm";
 import { legObservations, contracts, gexSnapshots } from "./schema.ts";
 import type { Db } from "./db.ts";
 
@@ -63,13 +64,21 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
   // ── ForReadingLegObsForGex ────────────────────────────────────────────────
   // Pitfall 2: leg_observations does NOT store contractType/strike/expiration —
   // those live on the contracts table. JOIN is mandatory.
-  // Two-step: (1) resolve the latest cycle time where bsm_gamma is NOT NULL;
-  //           (2) read the full JOIN result at that cycle time.
+  // Two-step: (1) resolve the latest observation time where bsm_gamma is NOT NULL;
+  //           (2) read the full JOIN result across that time's 30-min slot.
+  //
+  // chain-window-narrow-regression: one fetch cycle lands as TWO nearby timestamps
+  // (Schwab + CBOE each stamp their own observedAt), so the cohort is the UNION of
+  // all BSM-solved rows in the 30-min slot — strict max(time) equality would drop a
+  // source. DISTINCT ON (contract) with time DESC dedupes the near-ATM overlap
+  // (newest row wins) so strikeGex never double-counts a contract's OI.
+  // Known edge: a cycle straddling a slot boundary degrades to a single-source
+  // cohort for that cycle; it self-heals on the next cycle.
   const readLegObsForGex: ForReadingLegObsForGex = async (): Promise<
     Result<ReadonlyArray<LegObsForGex>, StorageError>
   > => {
     try {
-      // Step 1: find the latest cycle time that has BSM-filled gamma values.
+      // Step 1: find the latest observation time that has BSM-filled gamma values.
       const latestRows = await db
         .select({ maxTime: max(legObservations.time) })
         .from(legObservations)
@@ -78,12 +87,15 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
       const latestTime = latestRows[0]?.maxTime;
       if (latestTime === undefined || latestTime === null) return ok([]);
 
-      // Step 2: JOIN leg_observations ↔ contracts at the resolved cycle time.
-      // ORDER BY strike, contractType for a deterministic row order (IN-04 / WR-03):
-      // the use-case now averages underlyingPrice, so legs[0] is moot, but a stable
-      // order also makes raw-cohort debugging reproducible.
+      // Step 2: resolve the 30-min slot (same slot math as snapCycleTime in
+      // computeGexSnapshot) and JOIN leg_observations ↔ contracts across it,
+      // one row per contract (newest wins).
+      const slotMs = 30 * 60 * 1000;
+      const slotStart = new Date(Math.floor(latestTime.getTime() / slotMs) * slotMs);
+      const slotEnd = new Date(slotStart.getTime() + slotMs);
+
       const rows = await db
-        .select({
+        .selectDistinctOn([legObservations.contract], {
           time: legObservations.time,
           contract: legObservations.contract,
           underlyingPrice: legObservations.underlyingPrice,
@@ -99,11 +111,14 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
         .innerJoin(contracts, eq(legObservations.contract, contracts.occSymbol))
         .where(
           and(
-            eq(legObservations.time, latestTime),
+            gte(legObservations.time, slotStart),
+            lt(legObservations.time, slotEnd),
             isNotNull(legObservations.bsmGamma),
           ),
         )
-        .orderBy(asc(contracts.strike), asc(contracts.contractType));
+        // DISTINCT ON requires the distinct column to lead the ORDER BY;
+        // time DESC within each contract makes the newest row win.
+        .orderBy(asc(legObservations.contract), desc(legObservations.time));
 
       const legs: LegObsForGex[] = rows.map((row) => ({
         time: row.time,

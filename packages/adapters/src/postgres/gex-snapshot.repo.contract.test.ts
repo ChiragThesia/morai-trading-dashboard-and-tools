@@ -32,8 +32,10 @@ describe.skipIf(shouldSkip)("postgres gex-snapshot adapter", () => {
 
   beforeEach(async () => {
     if (!db) return;
-    // Clean up between tests. gex_snapshots has no FK refs to worry about.
+    // Clean up between tests. leg_observations references contracts — truncate together
+    // so the dual-source cohort tests see only their own seeded rows.
     await db.execute(sql`TRUNCATE TABLE gex_snapshots`);
+    await db.execute(sql`TRUNCATE TABLE leg_observations, contracts CASCADE`);
   });
 
   // ── Standard contract tests (shared suite) ─────────────────────────────────
@@ -60,10 +62,24 @@ describe.skipIf(shouldSkip)("postgres gex-snapshot adapter", () => {
       };
     },
     (): GexSnapshotSeedContext => ({
-      seedLegs: async () => {
-        // leg_observations + contracts seeding is only needed for the JOIN read test below.
-        // The shared contract tests only assert readLegObsForGex returns ok([]) when empty —
-        // which is correct since there are no seeded legs.
+      seedLegs: async (legs) => {
+        if (!db || legs === undefined) return;
+        // Insert contract metadata first (FK), then the observation rows.
+        for (const leg of legs) {
+          await db.execute(sql`
+            INSERT INTO contracts (occ_symbol, underlying, root, contract_type, exercise_style, strike, expiration, multiplier)
+            VALUES (${leg.contract}, 'SPX', 'SPXW', ${leg.contractType}, 'european', ${leg.strike}, ${leg.expiration}, 100)
+            ON CONFLICT DO NOTHING
+          `);
+          await db.execute(sql`
+            INSERT INTO leg_observations
+              (time, contract, bid, ask, mark, underlying_price, bsm_iv, bsm_gamma, open_interest, volume, source)
+            VALUES
+              (${leg.time.toISOString()}::timestamptz, ${leg.contract}, '1.5', '2.0', '1.75',
+               ${String(leg.underlyingPrice)}, ${leg.bsmIv}, ${leg.bsmGamma}, ${leg.openInterest}, 0, 'cboe')
+            ON CONFLICT DO NOTHING
+          `);
+        }
       },
     }),
   );

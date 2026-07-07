@@ -42,8 +42,28 @@ export function makeMemoryGexSnapshotRepo(): MemoryGexSnapshotRepo {
   const readLegObsForGex: ForReadingLegObsForGex = async (): Promise<
     Result<ReadonlyArray<LegObsForGex>, StorageError>
   > => {
-    // Memory twin: return seeded legs (empty by default). The Postgres impl does the JOIN.
-    return ok([...seededLegs]);
+    // Mirrors the Postgres dual-source cohort semantics (chain-window-narrow-regression):
+    // union of all BSM-solved rows in the 30-min slot of the latest solved observation,
+    // deduped per contract (newest row wins).
+    const solved = seededLegs.filter((leg) => leg.bsmGamma !== null);
+    if (solved.length === 0) return ok([]);
+
+    const maxTime = Math.max(...solved.map((leg) => leg.time.getTime()));
+    const slotMs = 30 * 60 * 1000;
+    const slotStart = Math.floor(maxTime / slotMs) * slotMs;
+    const slotEnd = slotStart + slotMs;
+
+    const newestByContract = new Map<string, LegObsForGex>();
+    for (const leg of solved) {
+      const t = leg.time.getTime();
+      if (t < slotStart || t >= slotEnd) continue;
+      const existing = newestByContract.get(leg.contract);
+      if (existing === undefined || t > existing.time.getTime()) {
+        newestByContract.set(leg.contract, leg);
+      }
+    }
+
+    return ok([...newestByContract.values()]);
   };
 
   const persistGexSnapshot: ForPersistingGexSnapshot = async (

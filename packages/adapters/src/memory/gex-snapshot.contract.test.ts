@@ -8,19 +8,24 @@ import {
   runGexSnapshotContractTests,
   type GexSnapshotSeedContext,
 } from "../__contract__/gex-snapshot.contract.ts";
-import { makeMemoryGexSnapshotRepo } from "./gex-snapshot.ts";
+import { makeMemoryGexSnapshotRepo, type MemoryGexSnapshotRepo } from "./gex-snapshot.ts";
+
+// The suite creates the seed context BEFORE the repo; seedLegs resolves the repo at call time.
+let currentRepo: MemoryGexSnapshotRepo | undefined;
 
 runGexSnapshotContractTests(
   () => {
-    const repo = makeMemoryGexSnapshotRepo();
+    currentRepo = makeMemoryGexSnapshotRepo();
     return {
-      readLegObsForGex: repo.readLegObsForGex,
-      persistGexSnapshot: repo.persistGexSnapshot,
-      readGexSnapshot: repo.readGexSnapshot,
-      countSnapshots: repo.countSnapshots,
+      readLegObsForGex: currentRepo.readLegObsForGex,
+      persistGexSnapshot: currentRepo.persistGexSnapshot,
+      readGexSnapshot: currentRepo.readGexSnapshot,
+      countSnapshots: currentRepo.countSnapshots,
     };
   },
   (): GexSnapshotSeedContext => ({
-    seedLegs: async () => {},
+    seedLegs: async (legs) => {
+      currentRepo?.seedLegs(legs ?? []);
+    },
   }),
 );
