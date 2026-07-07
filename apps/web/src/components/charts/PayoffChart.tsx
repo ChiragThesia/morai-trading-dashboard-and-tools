@@ -144,6 +144,32 @@ function buildXScale(innerWidth: number) {
   return scaleLinear({ domain: [X_MIN, X_MAX], range: [0, innerWidth] });
 }
 
+type PinnedMarker = {
+  readonly x: number;
+  readonly label: string;
+  readonly anchorEnd: boolean;
+};
+
+/**
+ * Edge-pin a GEX wall/flip marker into the x-domain. The chart SVG overflows
+ * visibly, so an out-of-domain level (e.g. call wall 8000 with X_MAX 7900)
+ * would otherwise draw PAST the plot into neighboring layout. Pinned markers
+ * clamp to the domain edge and carry the true level + arrow in the label.
+ */
+function pinMarker(
+  name: string,
+  value: number,
+  xScale: (v: number) => number,
+): PinnedMarker {
+  if (value > X_MAX) {
+    return { x: xScale(X_MAX), label: `${name} ${value.toFixed(0)} →`, anchorEnd: true };
+  }
+  if (value < X_MIN) {
+    return { x: xScale(X_MIN), label: `← ${name} ${value.toFixed(0)}`, anchorEnd: false };
+  }
+  return { x: xScale(value), label: name, anchorEnd: false };
+}
+
 function buildYScale(lo: number, hi: number, innerHeight: number) {
   return scaleLinear({ domain: [lo, hi], range: [innerHeight, 0] });
 }
@@ -667,78 +693,44 @@ export function PayoffChart({
             />
           )}
 
-          {/* ── Layer 6: GEX wall lines ───────────────────────────────────── */}
+          {/* ── Layer 6: GEX wall lines — edge-pinned into the x-domain ────── */}
           {toggles.showWalls && gex !== null && (
             <>
-              {gex.putWall !== null && (
-                <g>
-                  <line
-                    x1={xScale(gex.putWall)}
-                    y1={0}
-                    x2={xScale(gex.putWall)}
-                    y2={INNER_H}
-                    stroke={CORAL}
-                    strokeWidth={1}
-                    strokeDasharray="2 3"
-                    opacity={0.6}
-                  />
-                  <text
-                    x={xScale(gex.putWall) + 3}
-                    y={10}
-                    fill={CORAL}
-                    fontSize={9}
-                    fontFamily="JetBrains Mono, monospace"
-                  >
-                    put wall
-                  </text>
-                </g>
-              )}
-              {gex.callWall !== null && (
-                <g>
-                  <line
-                    x1={xScale(gex.callWall)}
-                    y1={0}
-                    x2={xScale(gex.callWall)}
-                    y2={INNER_H}
-                    stroke={TEAL}
-                    strokeWidth={1}
-                    strokeDasharray="2 3"
-                    opacity={0.6}
-                  />
-                  <text
-                    x={xScale(gex.callWall) + 3}
-                    y={10}
-                    fill={TEAL}
-                    fontSize={9}
-                    fontFamily="JetBrains Mono, monospace"
-                  >
-                    call wall
-                  </text>
-                </g>
-              )}
-              {gex.flip !== null && (
-                <g>
-                  <line
-                    x1={xScale(gex.flip)}
-                    y1={0}
-                    x2={xScale(gex.flip)}
-                    y2={INNER_H}
-                    stroke={AMBER}
-                    strokeWidth={1}
-                    strokeDasharray="2 3"
-                    opacity={0.6}
-                  />
-                  <text
-                    x={xScale(gex.flip) + 3}
-                    y={10}
-                    fill={AMBER}
-                    fontSize={9}
-                    fontFamily="JetBrains Mono, monospace"
-                  >
-                    {"γ"}flip
-                  </text>
-                </g>
-              )}
+              {(
+                [
+                  { key: "put", name: "put wall", value: gex.putWall, color: CORAL },
+                  { key: "call", name: "call wall", value: gex.callWall, color: TEAL },
+                  { key: "flip", name: "γflip", value: gex.flip, color: AMBER },
+                ] as const
+              ).map(({ key, name, value, color }) => {
+                if (value === null) return null;
+                const marker = pinMarker(name, value, xScale);
+                return (
+                  <g key={`wall-${key}`}>
+                    <line
+                      data-testid={`wall-line-${key}`}
+                      x1={marker.x}
+                      y1={0}
+                      x2={marker.x}
+                      y2={INNER_H}
+                      stroke={color}
+                      strokeWidth={1}
+                      strokeDasharray="2 3"
+                      opacity={0.6}
+                    />
+                    <text
+                      x={marker.anchorEnd ? marker.x - 3 : marker.x + 3}
+                      y={10}
+                      fill={color}
+                      fontSize={9}
+                      fontFamily="JetBrains Mono, monospace"
+                      textAnchor={marker.anchorEnd ? "end" : "start"}
+                    >
+                      {marker.label}
+                    </text>
+                  </g>
+                );
+              })}
             </>
           )}
 

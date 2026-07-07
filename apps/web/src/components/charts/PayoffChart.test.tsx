@@ -515,3 +515,64 @@ describe("PayoffChart — profit zone toggle", () => {
     expect(container.querySelector('[data-testid="profit-zone"]')).toBeNull();
   });
 });
+
+describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not bleed past the plot)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const WALL_TOGGLES: PayoffChartToggles = { ...TOGGLES, showWalls: true };
+  const xScale = buildXScale(INNER_W);
+
+  it("pins an out-of-domain call wall (8000 > X_MAX) to the right edge with an arrow label", () => {
+    const { container } = render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={WALL_TOGGLES}
+        gex={{ callWall: 8000, putWall: 7400, flip: 7486 }}
+      />,
+    );
+
+    // Label carries the true level + arrow so the pin is legible
+    expect(screen.getByText("call wall 8000 →")).toBeTruthy();
+
+    // The line itself is clamped inside the plot — never past INNER_W
+    const line = container.querySelector('[data-testid="wall-line-call"]');
+    expect(line).not.toBeNull();
+    expect(Number(line?.getAttribute("x1"))).toBeLessThanOrEqual(INNER_W);
+  });
+
+  it("pins an out-of-domain put wall (6800 < X_MIN) to the left edge with an arrow label", () => {
+    const { container } = render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={WALL_TOGGLES}
+        gex={{ callWall: 7600, putWall: 6800, flip: 7486 }}
+      />,
+    );
+
+    expect(screen.getByText("← put wall 6800")).toBeTruthy();
+
+    const line = container.querySelector('[data-testid="wall-line-put"]');
+    expect(line).not.toBeNull();
+    expect(Number(line?.getAttribute("x1"))).toBeGreaterThanOrEqual(0);
+  });
+
+  it("renders in-domain walls at their true x with the plain labels (unchanged behavior)", () => {
+    const { container } = render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={WALL_TOGGLES}
+        gex={{ callWall: 7600, putWall: 7400, flip: 7486 }}
+      />,
+    );
+
+    expect(screen.getByText("call wall")).toBeTruthy();
+    expect(screen.getByText("put wall")).toBeTruthy();
+
+    const call = container.querySelector('[data-testid="wall-line-call"]');
+    const put = container.querySelector('[data-testid="wall-line-put"]');
+    expect(Number(call?.getAttribute("x1"))).toBeCloseTo(xScale(7600), 5);
+    expect(Number(put?.getAttribute("x1"))).toBeCloseTo(xScale(7400), 5);
+  });
+});
