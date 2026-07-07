@@ -82,9 +82,15 @@ Key queries used:
 
 ## Current Focus
 
-- hypothesis: Dual-source fetch (Option A) restores breadth with minimal new code; main risks are GEX-cohort union semantics and BSM batch ceiling.
-- next_action: Read `selectChainSource.ts`, `fetchChain.ts` (`makeFetchChainUseCase`), `readLegObsForGex` (postgres gex-snapshot repo) to pin the cohort semantics; then decide A vs B and write the RED test.
-- tdd_checkpoint: nothing written yet — investigation handoff.
+- hypothesis: CONFIRMED + FIX IMPLEMENTED (Option A, 2026-07-07). Both risks were real, plus a third the handoff missed: union without per-contract dedup would double-count near-ATM OI.
+- fix commits (all TDD red→green, full suite 2220 green):
+  - `3d22a59` docs: dual-source policy in `docs/architecture/jobs.md`
+  - `273a0a0` GEX cohort: `readLegObsForGex` unions the 30-min slot, DISTINCT ON (contract) newest-first; memory twin mirrors (was strict `eq(time, max(time))` — would have seen ONE source)
+  - `0d0d2ff` BSM `MAX_BATCH_SIZE` 12000→24000 (dual cycle ≈ 15k)
+  - `7bd2219` `selectChainSources` returns fetcher LIST ([schwab, cboe] on healthy token, [cboe] otherwise); `fetchChain` use-case runs all fetchers × both roots, partial failure ok, all-fail err; worker wiring updated
+- verified free: `resolveLegSnapshot` (journal marks) is per-contract `time DESC LIMIT 1` — unions across sources with no change.
+- next_action: deploy worker (`railway up --service worker` — user approval required; sidecar untouched), then run the goal-backward verification below during RTH.
+- tdd_checkpoint: all commits at green; nothing in flight.
 
 ## Eliminated
 
