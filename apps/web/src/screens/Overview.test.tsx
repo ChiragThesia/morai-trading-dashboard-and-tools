@@ -71,6 +71,7 @@ const GEX_FIXTURE = {
     { k: 7400, gex: 1_000_000_000, coi: 150, poi: 90, vol: 80 },
   ],
   byExpiry: [],
+  nearTerm: { callWall: 7420, putWall: 7320, flip: 7355 },
   computedAt: "2026-06-29T14:00:00.000Z",
 };
 
@@ -640,5 +641,18 @@ describe("Overview screen", () => {
       expect(screen.getByText("Aug 7")).toBeDefined();
       expect(screen.getByText(/^\d+d$/)).toBeDefined();
     });
+  });
+});
+
+describe("GEX rail — near-term (≤45d) key levels", () => {
+  it("renders near-term rows from the fixture's nearTerm set", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    expect(screen.getByText("Call Wall 45d")).toBeDefined();
+    expect(screen.getByText("7420")).toBeDefined();
+    expect(screen.getByText("Put Wall 45d")).toBeDefined();
+    expect(screen.getByText("7320")).toBeDefined();
+    expect(screen.getByText("γ flip 45d")).toBeDefined();
   });
 });

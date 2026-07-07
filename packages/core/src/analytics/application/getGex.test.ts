@@ -35,6 +35,7 @@ const FIXTURE_ROW: GexSnapshotRow = {
     { k: 7400, gex: -5974395559.112409, coi: 17071, poi: 52786, vol: 8406 },
     { k: 7600, gex: 1230277553.8345654, coi: 69015, poi: 39475, vol: 2228 },
   ],
+  nearTerm: { callWall: 7600, putWall: 7400, flip: 7490.5 },
   byExpiry: [
     { date: "2026-06-27", gex: -12345678.9 },
     { date: "2026-07-17", gex: 9876543.2 },

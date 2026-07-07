@@ -62,6 +62,18 @@ export const gexSnapshotEntry = z.object({
   strikes: z.array(gexWallEntry),
   /** Aggregate net GEX rolled up per expiration date. */
   byExpiry: z.array(z.object({ date: z.string(), gex: z.number() })),
+  /**
+   * Near-term (≤45d DTE) level set — walls/flip recomputed from only near-dated legs
+   * (far-dated OI can dominate the all-expiry walls with an intraday-irrelevant level).
+   * Null when no near-term legs solve, and on snapshots computed before this field shipped.
+   */
+  nearTerm: z
+    .object({
+      callWall: z.number().nullable(),
+      putWall: z.number().nullable(),
+      flip: z.number().nullable(),
+    })
+    .nullable(),
   /** ISO 8601 datetime when this snapshot was computed. */
   computedAt: z.string().datetime(),
 });

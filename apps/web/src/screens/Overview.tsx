@@ -652,6 +652,15 @@ function keyLevelsFor(
     { label: "γ flip", value: gex.flip, colorClass: "text-amber" },
     { label: "Spot", value: gex.spot, colorClass: "text-blue" },
     { label: "Put Wall", value: gex.putWall, colorClass: "text-down" },
+    // Near-term (≤45d DTE) set — the intraday-relevant walls when far-dated OI
+    // dominates the all-expiry levels. Absent on pre-0019 snapshots.
+    ...(gex.nearTerm !== null
+      ? [
+          { label: "Call Wall 45d", value: gex.nearTerm.callWall, colorClass: "text-up" },
+          { label: "γ flip 45d", value: gex.nearTerm.flip, colorClass: "text-amber" },
+          { label: "Put Wall 45d", value: gex.nearTerm.putWall, colorClass: "text-down" },
+        ]
+      : []),
   ];
 }
 

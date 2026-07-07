@@ -6,6 +6,7 @@ import type { StrikeRange } from "../components/charts/GexBars.tsx";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs.tsx";
 import { MetricChip, Panel, PanelHeading } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
+import type { GexSnapshotEntry } from "@morai/contracts";
 
 /**
  * Market — Market structure screen (Plan 08).
@@ -118,6 +119,7 @@ interface KeyLevelsTableProps {
   flip: number | null;
   callWall: number | null;
   putWall: number | null;
+  nearTerm: GexSnapshotEntry["nearTerm"];
 }
 
 function KeyLevelsTable({
@@ -125,12 +127,22 @@ function KeyLevelsTable({
   flip,
   callWall,
   putWall,
+  nearTerm,
 }: KeyLevelsTableProps): React.ReactElement {
   const levels: ReadonlyArray<KeyLevel> = [
     { label: "Call Wall", value: callWall, colorClass: "text-up" },
     { label: "γ flip", value: flip, colorClass: "text-amber" },
     { label: "Spot", value: spot, colorClass: "text-blue" },
     { label: "Put Wall", value: putWall, colorClass: "text-down" },
+    // Near-term (≤45d DTE) set — the intraday-relevant walls when far-dated OI
+    // dominates the all-expiry levels. Absent on pre-0019 snapshots.
+    ...(nearTerm !== null
+      ? [
+          { label: "Call Wall 45d", value: nearTerm.callWall, colorClass: "text-up" },
+          { label: "γ flip 45d", value: nearTerm.flip, colorClass: "text-amber" },
+          { label: "Put Wall 45d", value: nearTerm.putWall, colorClass: "text-down" },
+        ]
+      : []),
   ];
 
   return (
@@ -316,6 +328,7 @@ export function Market(): React.ReactElement {
             flip={gex.flip}
             callWall={gex.callWall}
             putWall={gex.putWall}
+            nearTerm={gex.nearTerm}
           />
         </Card>
       </div>

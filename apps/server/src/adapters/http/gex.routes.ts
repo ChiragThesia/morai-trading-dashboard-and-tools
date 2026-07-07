@@ -50,6 +50,7 @@ export function gexRoutes(getGex: ForRunningGetGex) {
         profile: row.profile,
         strikes: row.strikes,
         byExpiry: row.byExpiry,
+        nearTerm: row.nearTerm,
         computedAt:
           row.computedAt instanceof Date
             ? row.computedAt.toISOString()

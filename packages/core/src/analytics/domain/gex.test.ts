@@ -19,7 +19,8 @@
 
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { dollarGamma, findFlip, buildProfile } from "../domain/gex.ts";
+import { dollarGamma, findFlip, buildProfile, strikeGex, pickWalls } from "../domain/gex.ts";
+import type { StrikeGexEntry } from "../domain/gex.ts";
 import type { LegObsForGex } from "../application/ports.ts";
 
 // ─── Oracle fixtures from mockups/gex-profile.json ─────────────────────────────
@@ -256,5 +257,62 @@ describe("dollarGamma — fast-check properties", () => {
       ),
       { numRuns: 500 },
     );
+  });
+});
+
+// ─── Side-specific walls (SpotGamma convention) ────────────────────────────────
+
+describe("strikeGex — per-side dollar gamma (cgex/pgex)", () => {
+  const SPOT = 7381;
+  const LEGS: ReadonlyArray<LegObsForGex> = [
+    makeLeg({ contractType: "C", strike: 7600000, bsmGamma: "0.003", openInterest: 69015 }),
+    makeLeg({ contractType: "P", strike: 7600000, bsmGamma: "0.0005", openInterest: 39475 }),
+    makeLeg({ contractType: "P", strike: 7400000, bsmGamma: "0.002", openInterest: 52786 }),
+  ];
+
+  it("carries per-side dollar gamma: cgex ≥ 0 (calls), pgex ≤ 0 (puts), gex = cgex + pgex", () => {
+    const entries = strikeGex(LEGS, SPOT);
+
+    const e7600 = entries.find((e) => e.k === 7600);
+    expect(e7600).toBeDefined();
+    if (e7600 === undefined) return;
+    expect(e7600.cgex).toBeCloseTo(dollarGamma(0.003, 69015, SPOT), 10);
+    expect(e7600.pgex).toBeCloseTo(-dollarGamma(0.0005, 39475, SPOT), 10);
+    expect(e7600.gex).toBeCloseTo(e7600.cgex + e7600.pgex, 10);
+
+    const e7400 = entries.find((e) => e.k === 7400);
+    expect(e7400).toBeDefined();
+    if (e7400 === undefined) return;
+    expect(e7400.cgex).toBe(0);
+    expect(e7400.pgex).toBeLessThan(0);
+  });
+});
+
+describe("pickWalls — side-specific wall convention (SpotGamma)", () => {
+  function entry(k: number, cgex: number, pgex: number): StrikeGexEntry {
+    return { k, gex: cgex + pgex, cgex, pgex, coi: 0, poi: 0, vol: 0 };
+  }
+
+  it("callWall = largest call-side gamma strike even when its NET gex is negative", () => {
+    // 7500 has the call concentration (cgex 5) but nets negative (pgex −8).
+    // The old net-argmax convention would pick 7450; side-specific must pick 7500.
+    const entries = [entry(7450, 2, 0), entry(7500, 5, -8)];
+    expect(pickWalls(entries).callWall).toBe(7500);
+  });
+
+  it("putWall = most-negative put-side gamma strike even when its NET gex is positive", () => {
+    // 7400 has the put concentration (pgex −6) but nets positive (cgex 9).
+    const entries = [entry(7300, 0, -2), entry(7400, 9, -6)];
+    expect(pickWalls(entries).putWall).toBe(7400);
+  });
+
+  it("callWall null when no strike has call gamma; putWall null when no strike has put gamma", () => {
+    const putsOnly = [entry(7300, 0, -2), entry(7400, 0, -6)];
+    expect(pickWalls(putsOnly).callWall).toBeNull();
+    expect(pickWalls(putsOnly).putWall).toBe(7400);
+
+    const callsOnly = [entry(7500, 3, 0), entry(7600, 5, 0)];
+    expect(pickWalls(callsOnly).putWall).toBeNull();
+    expect(pickWalls(callsOnly).callWall).toBe(7600);
   });
 });

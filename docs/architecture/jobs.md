@@ -75,6 +75,25 @@ union per 30-minute slot, not take strict `max(time)`:
 **Trigger chain (unchanged, single-trigger):** `fetch-schwab-chain` → `compute-bsm-greeks` →
 `snapshot-calendars` → `compute-analytics` → `compute-gex-snapshot` → `compute-picker`.
 
+### GEX methodology (compute-gex-snapshot)
+
+Standard naive dealer-positioning model (Perfiliev / SqueezeMetrics): per contract
+`$GEX = Γ × OI × 100 × S² × 0.01`, calls positive / puts negative (dealers assumed long
+calls, short puts); flip = zero-crossing of the profile re-priced across a spot grid.
+Known model caveats (inherited from the standard): IV held constant across the grid,
+spreads/structured flow ignored → exposure overstated.
+
+**Walls are side-specific (SpotGamma convention):** callWall = strike with the largest
+call-side dollar gamma; putWall = strike with the largest put-side dollar gamma. NOT the
+net-GEX argmax — netting lets one side's OI cancel the other and moves the wall away
+from where the hedging concentration actually sits.
+
+**Near-term level set:** far-dated OI (e.g. Sept quarterly 8000s) can dominate the
+all-expiry walls with a structural level irrelevant intraday. The snapshot therefore also
+carries `near_term` (nullable JSONB column on `gex_snapshots`): `{callWall, putWall, flip}`
+recomputed from only the legs with ≤45 calendar-day DTE; null when no near-term legs
+solve. Read surfaces expose it additively (`nearTerm` on the gex contract).
+
 ## fetch-rates (Phase 2 + Phase 14 macro expansion, MAC-01)
 
 **Schedule:** TWO daily runs, Mon-Fri, `America/New_York` — `0 9 * * 1-5` (09:00 ET) and

@@ -257,3 +257,92 @@ describe("makeComputeGexSnapshotUseCase", () => {
     expect(Math.abs(row.netGammaAtSpot)).toBeLessThan(1e6);
   });
 });
+
+// ─── Side-specific walls + near-term level set (GEX methodology audit) ─────────
+
+describe("side-specific walls (SpotGamma convention)", () => {
+  it("callWall = largest call-side gamma strike even when its NET gex is negative", async () => {
+    // 7500: big call concentration (cgex) but bigger put OI → net negative.
+    // 7450: small call-only strike → net positive.
+    // Net-argmax convention picks 7450; side-specific must pick 7500.
+    const legs: ReadonlyArray<LegObsForGex> = [
+      makeLeg({ contractType: "C", strike: 7450000, bsmGamma: "0.001", openInterest: 2000 }),
+      makeLeg({ contractType: "C", strike: 7500000, bsmGamma: "0.002", openInterest: 40000 }),
+      makeLeg({ contractType: "P", strike: 7500000, bsmGamma: "0.002", openInterest: 60000 }),
+    ];
+
+    const spy = makePersistSpy();
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(legs),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    expect(row.callWall).toBe(7500);
+    expect(row.putWall).toBe(7500);
+  });
+});
+
+describe("near-term (≤45d DTE) level set", () => {
+  // Cycle date 2026-06-23 → 45d boundary 2026-08-07.
+  const NEAR_EXP = "2026-06-27"; // 4d — near
+  const FAR_EXP = "2026-09-18"; // 87d — far
+
+  it("computes nearTerm walls from ≤45d legs only (far-dated OI excluded)", async () => {
+    const legs: ReadonlyArray<LegObsForGex> = [
+      // near-term concentrations: calls at 7600, puts at 7400
+      makeLeg({ contractType: "C", strike: 7600000, bsmGamma: "0.003", openInterest: 69015, expiration: NEAR_EXP }),
+      makeLeg({ contractType: "P", strike: 7400000, bsmGamma: "0.002", openInterest: 52786, expiration: NEAR_EXP }),
+      // far-dated monster OI at 8000 — dominates the ALL-expiry call wall
+      makeLeg({ contractType: "C", strike: 8000000, bsmGamma: "0.0005", openInterest: 569341, expiration: FAR_EXP }),
+    ];
+
+    const spy = makePersistSpy();
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(legs),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    // All-expiry wall dominated by the far 8000s
+    expect(row.callWall).toBe(8000);
+    // Near-term set excludes them
+    expect(row.nearTerm).not.toBeNull();
+    expect(row.nearTerm?.callWall).toBe(7600);
+    expect(row.nearTerm?.putWall).toBe(7400);
+    // flip present as number-or-null
+    expect(
+      row.nearTerm?.flip === null || typeof row.nearTerm?.flip === "number",
+    ).toBe(true);
+  });
+
+  it("nearTerm is null when every leg is beyond 45d", async () => {
+    const legs: ReadonlyArray<LegObsForGex> = [
+      makeLeg({ contractType: "C", strike: 8000000, bsmGamma: "0.0005", openInterest: 569341, expiration: FAR_EXP }),
+    ];
+
+    const spy = makePersistSpy();
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(legs),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    expect(row.nearTerm).toBeNull();
+  });
+});

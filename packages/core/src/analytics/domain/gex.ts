@@ -46,8 +46,10 @@ export function dollarGamma(gamma: number, oi: number, spot: number): number {
 // ─── strikeGex ───────────────────────────────────────────────────────────────
 
 /**
- * Per-strike aggregate net GEX entry (returned as readonly).
- * gex: net dollar gamma at this strike (calls +, puts −), in $Bn/1%.
+ * Per-strike aggregate GEX entry (returned as readonly).
+ * gex:  net dollar gamma at this strike (cgex + pgex), in $Bn/1%.
+ * cgex: call-side dollar gamma (≥ 0) — the call hedging concentration.
+ * pgex: put-side dollar gamma (≤ 0) — the put hedging concentration.
  * coi: call open interest sum at this strike.
  * poi: put open interest sum at this strike.
  * vol: total open interest (coi + poi).
@@ -55,19 +57,22 @@ export function dollarGamma(gamma: number, oi: number, spot: number): number {
 export type StrikeGexEntry = {
   readonly k: number;
   readonly gex: number;
+  readonly cgex: number;
+  readonly pgex: number;
   readonly coi: number;
   readonly poi: number;
   readonly vol: number;
 };
 
 /**
- * Compute per-strike aggregate net GEX from a set of leg observations.
+ * Compute per-strike aggregate GEX from a set of leg observations.
  *
- * Calls contribute POSITIVE GEX (dealer is short calls → long gamma).
- * Puts contribute NEGATIVE GEX (dealer is short puts → short gamma).
+ * Sign convention (standard naive dealer positioning — SqueezeMetrics/Perfiliev):
+ * dealers are assumed LONG calls (customers overwrite) → calls contribute POSITIVE
+ * gamma, and SHORT puts (customers buy protection) → puts contribute NEGATIVE gamma.
  *
- * callWall = argmax over entries with positive gex
- * putWall  = argmin (most negative) entry
+ * Each entry also carries the per-side concentrations (cgex/pgex) so wall selection
+ * can follow the side-specific convention (see pickWalls) instead of netting.
  *
  * @param contracts - leg observations (from leg_observations JOIN contracts)
  * @param spot      - current underlying spot price (index points)
@@ -80,7 +85,7 @@ export function strikeGex(
   // Accumulator: strike (in points) → mutable entry
   const acc = new Map<
     number,
-    { gex: number; coi: number; poi: number }
+    { cgex: number; pgex: number; coi: number; poi: number }
   >();
 
   for (const leg of contracts) {
@@ -93,31 +98,73 @@ export function strikeGex(
     // Strike in points (×1000 convention → divide by 1000)
     const k = leg.strike / 1000;
 
-    // Signed contribution: calls +, puts −
-    const sign = leg.contractType === "C" ? 1 : -1;
-    const dg = sign * dollarGamma(gamma, leg.openInterest, spot);
+    const dg = dollarGamma(gamma, leg.openInterest, spot);
+    const isCall = leg.contractType === "C";
 
     const existing = acc.get(k);
     if (existing === undefined) {
       acc.set(k, {
-        gex: dg,
-        coi: leg.contractType === "C" ? leg.openInterest : 0,
-        poi: leg.contractType === "P" ? leg.openInterest : 0,
+        cgex: isCall ? dg : 0,
+        pgex: isCall ? 0 : -dg,
+        coi: isCall ? leg.openInterest : 0,
+        poi: isCall ? 0 : leg.openInterest,
       });
     } else {
-      existing.gex += dg;
-      existing.coi += leg.contractType === "C" ? leg.openInterest : 0;
-      existing.poi += leg.contractType === "P" ? leg.openInterest : 0;
+      existing.cgex += isCall ? dg : 0;
+      existing.pgex += isCall ? 0 : -dg;
+      existing.coi += isCall ? leg.openInterest : 0;
+      existing.poi += isCall ? 0 : leg.openInterest;
     }
   }
 
   // Sort ascending by strike, build result
   const result: StrikeGexEntry[] = [];
   for (const [k, v] of acc) {
-    result.push({ k, gex: v.gex, coi: v.coi, poi: v.poi, vol: v.coi + v.poi });
+    result.push({
+      k,
+      gex: v.cgex + v.pgex,
+      cgex: v.cgex,
+      pgex: v.pgex,
+      coi: v.coi,
+      poi: v.poi,
+      vol: v.coi + v.poi,
+    });
   }
   result.sort((a, b) => a.k - b.k);
   return result;
+}
+
+// ─── pickWalls ───────────────────────────────────────────────────────────────
+
+/**
+ * Side-specific wall selection (SpotGamma convention):
+ *   callWall = strike with the LARGEST call-side dollar gamma (null when no call gamma)
+ *   putWall  = strike with the MOST NEGATIVE put-side dollar gamma (null when no put gamma)
+ *
+ * NOT the net-GEX argmax/argmin: netting lets one side's OI cancel the other and
+ * moves the wall away from where the hedging concentration actually sits.
+ */
+export function pickWalls(entries: ReadonlyArray<StrikeGexEntry>): {
+  readonly callWall: number | null;
+  readonly putWall: number | null;
+} {
+  let callWall: number | null = null;
+  let callBest = 0;
+  let putWall: number | null = null;
+  let putBest = 0;
+
+  for (const entry of entries) {
+    if (entry.cgex > callBest) {
+      callBest = entry.cgex;
+      callWall = entry.k;
+    }
+    if (entry.pgex < putBest) {
+      putBest = entry.pgex;
+      putWall = entry.k;
+    }
+  }
+
+  return { callWall, putWall };
 }
 
 // ─── findFlip ────────────────────────────────────────────────────────────────

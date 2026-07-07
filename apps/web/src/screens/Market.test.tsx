@@ -84,6 +84,7 @@ const SAMPLE_SNAPSHOT: GexSnapshotEntry = {
     { date: "2026-06-27", gex: -10_000_000_000 },
     { date: "2026-07-18", gex: -47_000_000_000 },
   ],
+  nearTerm: null,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -149,5 +150,35 @@ describe("Market", () => {
 
     // Locked empty state copy from UI-SPEC
     expect(screen.getByText("GEX data unavailable — run fetch-chain to populate.")).toBeTruthy();
+  });
+});
+
+describe("Market — near-term (≤45d) key levels", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders near-term wall/flip pills when nearTerm is present", () => {
+    mockGexWith({
+      ...SAMPLE_SNAPSHOT,
+      nearTerm: { callWall: 7550, putWall: 7420, flip: 7480 },
+    });
+    render(<Market />);
+
+    expect(screen.getByText("Call Wall 45d")).toBeTruthy();
+    expect(screen.getByText("7550")).toBeTruthy();
+    expect(screen.getByText("Put Wall 45d")).toBeTruthy();
+    expect(screen.getByText("7420")).toBeTruthy();
+    expect(screen.getByText("γ flip 45d")).toBeTruthy();
+  });
+
+  it("renders NO near-term pills when nearTerm is null (pre-0019 snapshot)", () => {
+    mockGexWith(SAMPLE_SNAPSHOT); // nearTerm: null
+    render(<Market />);
+
+    expect(screen.queryByText("Call Wall 45d")).toBeNull();
+    expect(screen.queryByText("Put Wall 45d")).toBeNull();
+    expect(screen.queryByText("γ flip 45d")).toBeNull();
   });
 });

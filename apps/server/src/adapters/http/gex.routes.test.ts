@@ -28,6 +28,7 @@ const STORED_ROW = {
     { date: "2026-06-28", gex: -0.8 },
     { date: "2026-07-19", gex: 0.3 },
   ],
+  nearTerm: { callWall: 5550, putWall: 5400, flip: 5460 },
   computedAt: new Date("2026-06-24T15:00:01.000Z"),
 };
 

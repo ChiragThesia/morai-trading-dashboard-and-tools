@@ -31,6 +31,7 @@ const oraclePayload = {
     { date: "2026-06-27", gex: -12345678.9 },
     { date: "2026-07-17", gex: 9876543.2 },
   ],
+  nearTerm: { callWall: 7600, putWall: 7400, flip: 7490.5 },
   computedAt: "2026-06-23T14:00:24.000Z",
 };
 
@@ -79,6 +80,19 @@ describe("gexSnapshotEntry", () => {
   it("rejects a missing computedAt field", () => {
     const { computedAt: _omit, ...withoutAt } = oraclePayload;
     expect(() => gexSnapshotEntry.parse(withoutAt)).toThrow();
+  });
+
+  it("accepts null nearTerm (no near-term legs / pre-0019 snapshot)", () => {
+    expect(() => gexSnapshotEntry.parse({ ...oraclePayload, nearTerm: null })).not.toThrow();
+  });
+
+  it("accepts nearTerm with null members (e.g. no near-term flip)", () => {
+    expect(() =>
+      gexSnapshotEntry.parse({
+        ...oraclePayload,
+        nearTerm: { callWall: 7600, putWall: null, flip: null },
+      }),
+    ).not.toThrow();
   });
 });
 

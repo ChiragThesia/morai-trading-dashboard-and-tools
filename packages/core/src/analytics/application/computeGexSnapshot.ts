@@ -25,7 +25,7 @@ import type {
   LegObsForGex,
   StorageError,
 } from "./ports.ts";
-import { dollarGamma, strikeGex, buildProfile, findFlip } from "../domain/gex.ts";
+import { dollarGamma, strikeGex, buildProfile, findFlip, pickWalls } from "../domain/gex.ts";
 
 // ─── Spot grid constants (from RESEARCH Pattern 3 + playground-v3 oracle) ────
 
@@ -34,6 +34,9 @@ const GRID_HALF_WIDTH = 600;
 
 /** Grid step size (index points). */
 const GRID_STEP = 20;
+
+/** Near-term level-set horizon: legs with calendar DTE ≤ this feed nearTerm. */
+const NEAR_TERM_MAX_DTE_DAYS = 45;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -114,26 +117,10 @@ export function makeComputeGexSnapshotUseCase(
     // If no usable entries (all legs had NaN/null gamma), skip persist.
     if (strikeEntries.length === 0) return ok(undefined);
 
-    // ── Step 5: Derive callWall / putWall / netGammaAtSpot ───────────────────
-    // callWall = argmax over entries with positive gex (highest positive)
-    // putWall  = argmin (most negative) entry
-    let callWall: number | null = null;
-    let callWallGex = -Infinity;
-    let putWall: number | null = null;
-    let putWallGex = Infinity;
-
-    for (const entry of strikeEntries) {
-      if (entry.gex > 0 && entry.gex > callWallGex) {
-        callWallGex = entry.gex;
-        callWall = entry.k;
-      }
-      // WR-05: gate putWall on negative GEX (mirrors callWall's positive gate).
-      // putWall = null when no strike has negative GEX (fully long-gamma chain).
-      if (entry.gex < 0 && entry.gex < putWallGex) {
-        putWallGex = entry.gex;
-        putWall = entry.k;
-      }
-    }
+    // ── Step 5: Derive callWall / putWall (side-specific, SpotGamma convention) ─
+    // callWall = largest call-side gamma strike; putWall = most-negative put-side
+    // gamma strike. Nulls preserved when a side has no gamma (WR-05 semantics).
+    const { callWall, putWall } = pickWalls(strikeEntries);
 
     // ── Step 6: Build the spot-grid profile ──────────────────────────────────
     const spotGrid = buildSpotGrid(spot);
@@ -170,6 +157,30 @@ export function makeComputeGexSnapshotUseCase(
       .map(([date, gex]) => ({ date, gex }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
+    // ── Step 8b: near-term (≤45d DTE) level set ──────────────────────────────
+    // Far-dated OI (e.g. Sept quarterly 8000s) can dominate the all-expiry walls
+    // with a structural level irrelevant intraday; recompute walls + flip from
+    // only the near-dated legs. Null when no near-term legs solve.
+    const nearLegs = legs.filter((leg) => {
+      // Same expiry anchor as buildProfile (~4pm ET on expiration date).
+      const expiryMs = new Date(leg.expiration + "T21:00:00Z").getTime();
+      const dteDays = (expiryMs - leg.time.getTime()) / 86_400_000;
+      return dteDays >= 0 && dteDays <= NEAR_TERM_MAX_DTE_DAYS;
+    });
+
+    let nearTerm: GexSnapshotRow["nearTerm"] = null;
+    if (nearLegs.length > 0) {
+      const nearEntries = strikeGex(nearLegs, spot);
+      if (nearEntries.length > 0) {
+        const nearWalls = pickWalls(nearEntries);
+        nearTerm = {
+          callWall: nearWalls.callWall,
+          putWall: nearWalls.putWall,
+          flip: findFlip(buildProfile(nearLegs, spotGrid)),
+        };
+      }
+    }
+
     // ── Step 9: Build and persist the snapshot row ────────────────────────────
     const row: GexSnapshotRow = {
       cycleTime,
@@ -182,6 +193,7 @@ export function makeComputeGexSnapshotUseCase(
       profile: profile.map((p) => ({ spot: p.spot, gamma: p.gamma })),
       strikes: strikeEntries.map((e) => ({ k: e.k, gex: e.gex, coi: e.coi, poi: e.poi, vol: e.vol })),
       byExpiry,
+      nearTerm,
       computedAt: deps.now(),
     };
 

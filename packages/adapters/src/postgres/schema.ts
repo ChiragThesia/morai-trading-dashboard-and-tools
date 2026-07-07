@@ -384,6 +384,13 @@ export const gexSnapshots = pgTable("gex_snapshots", {
   profile: jsonb("profile").$type<ReadonlyArray<{ readonly spot: number; readonly gamma: number }>>().notNull(),
   strikes: jsonb("strikes").$type<ReadonlyArray<{ readonly k: number; readonly gex: number; readonly coi: number; readonly poi: number; readonly vol: number }>>().notNull(),
   byExpiry: jsonb("by_expiry").$type<ReadonlyArray<{ readonly date: string; readonly gex: number }>>().notNull(),
+  // Near-term (≤45d DTE) level set — nullable: null when no near-term legs solve,
+  // and on rows written before migration 0019.
+  nearTerm: jsonb("near_term").$type<{
+    readonly callWall: number | null;
+    readonly putWall: number | null;
+    readonly flip: number | null;
+  } | null>(),
   // When the snapshot was COMPUTED (wall-clock from deps.now()), distinct from cycleTime
   // (the data-cycle anchor). Persisted so the dashboard can show true freshness.
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull(),

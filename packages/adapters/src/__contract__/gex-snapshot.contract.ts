@@ -68,6 +68,7 @@ function makeSnapshotRow(cycleTime: Date, overrides: Partial<GexSnapshotRow> = {
     byExpiry: [
       { date: "2026-06-27", gex: -12345678.9 },
     ],
+    nearTerm: { callWall: 7600, putWall: 7400, flip: 7490.5 },
     computedAt: cycleTime,
     ...overrides,
   };
@@ -150,6 +151,20 @@ export function runGexSnapshotContractTests(
       expect(result.value?.strikes).toHaveLength(2);
       expect(result.value?.byExpiry).toHaveLength(1);
       expect(result.value?.byExpiry[0]?.date).toBe("2026-06-27");
+    });
+
+    it("round-trips the nearTerm level set, including null (pre-0019 rows / no near legs)", async () => {
+      await repo.persistGexSnapshot(makeSnapshotRow(T1));
+      const withSet = await repo.readGexSnapshot();
+      expect(withSet.ok).toBe(true);
+      if (!withSet.ok) return;
+      expect(withSet.value?.nearTerm).toEqual({ callWall: 7600, putWall: 7400, flip: 7490.5 });
+
+      await repo.persistGexSnapshot(makeSnapshotRow(T2, { nearTerm: null }));
+      const withNull = await repo.readGexSnapshot();
+      expect(withNull.ok).toBe(true);
+      if (!withNull.ok) return;
+      expect(withNull.value?.nearTerm).toBeNull();
     });
   });
 
@@ -352,6 +367,7 @@ export function runGexSnapshotContractTests(
         profile: [{ spot: 7380, gamma: -47.43 }],
         strikes: [{ k: 7412.5, gex: 1230277553.8, coi: 69015, poi: 39475, vol: 108490 }],
         byExpiry: [{ date: "2026-06-27", gex: -12345678.9 }],
+        nearTerm: null,
         computedAt: new Date("2026-06-23T14:07:42Z").toISOString(),
       };
       // Must not throw (previously threw: Expected number to be an integer)

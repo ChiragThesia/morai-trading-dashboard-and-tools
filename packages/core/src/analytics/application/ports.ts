@@ -229,6 +229,16 @@ export type GexSnapshotRow = {
     readonly vol: number;
   }>;
   readonly byExpiry: ReadonlyArray<{ readonly date: string; readonly gex: number }>;
+  /**
+   * Near-term (≤45d DTE) level set — walls/flip recomputed from only the near-dated
+   * legs, so a far-dated OI monster (e.g. Sept quarterly 8000s) can't hide the
+   * intraday-relevant wall. Null when no near-term legs solve.
+   */
+  readonly nearTerm: {
+    readonly callWall: number | null;
+    readonly putWall: number | null;
+    readonly flip: number | null;
+  } | null;
   readonly computedAt: Date;
 };
 

@@ -54,6 +54,14 @@ const byExpirySchema = z.array(
   z.object({ date: z.string(), gex: z.number() }),
 );
 
+const nearTermSchema = z
+  .object({
+    callWall: z.number().nullable(),
+    putWall: z.number().nullable(),
+    flip: z.number().nullable(),
+  })
+  .nullable();
+
 export type PostgresGexSnapshotRepo = {
   readonly readLegObsForGex: ForReadingLegObsForGex;
   readonly persistGexSnapshot: ForPersistingGexSnapshot;
@@ -161,6 +169,7 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
           profile: row.profile,
           strikes: row.strikes,
           byExpiry: row.byExpiry,
+          nearTerm: row.nearTerm,
           computedAt: row.computedAt,
         })
         .onConflictDoNothing(); // SC-4: cycle_time PK — re-run within same cycle = no-op
@@ -195,11 +204,18 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
       const profileParsed = profileSchema.safeParse(row.profile);
       const strikesParsed = strikesSchema.safeParse(row.strikes);
       const byExpiryParsed = byExpirySchema.safeParse(row.byExpiry);
+      // near_term is nullable (and null on pre-0019 rows) — undefined/null map to null.
+      const nearTermParsed = nearTermSchema.safeParse(row.nearTerm ?? null);
 
-      if (!profileParsed.success || !strikesParsed.success || !byExpiryParsed.success) {
+      if (
+        !profileParsed.success ||
+        !strikesParsed.success ||
+        !byExpiryParsed.success ||
+        !nearTermParsed.success
+      ) {
         return err<StorageError>({
           kind: "storage-error",
-          message: `JSONB parse failed: profile=${!profileParsed.success}, strikes=${!strikesParsed.success}, byExpiry=${!byExpiryParsed.success}`,
+          message: `JSONB parse failed: profile=${!profileParsed.success}, strikes=${!strikesParsed.success}, byExpiry=${!byExpiryParsed.success}, nearTerm=${!nearTermParsed.success}`,
         });
       }
 
@@ -214,6 +230,7 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
         profile: profileParsed.data,
         strikes: strikesParsed.data,
         byExpiry: byExpiryParsed.data,
+        nearTerm: nearTermParsed.data,
         computedAt: row.computedAt,
       };
 
