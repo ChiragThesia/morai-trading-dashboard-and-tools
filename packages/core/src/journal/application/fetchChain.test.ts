@@ -152,7 +152,7 @@ describe("makeFetchChainUseCase", () => {
 
   it("only persists in-filter contracts (DTE ≤ maxDte AND strike within ±strikeBandPct)", async () => {
     const useCase = makeFetchChainUseCase({
-      fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() }),
+      fetchChains: async () => [makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() })],
       persistObservations: memPersist.persistObservations,
       upsertContracts: memPersist.upsertContracts,
       getOpenCalendarLegs: async () => ok([]),
@@ -177,7 +177,7 @@ describe("makeFetchChainUseCase", () => {
 
   it("every persisted ObservationRow has source='cboe' and no bsm_* values", async () => {
     const useCase = makeFetchChainUseCase({
-      fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() }),
+      fetchChains: async () => [makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() })],
       persistObservations: memPersist.persistObservations,
       upsertContracts: memPersist.upsertContracts,
       getOpenCalendarLegs: async () => ok([]),
@@ -200,7 +200,7 @@ describe("makeFetchChainUseCase", () => {
 
   it("ContractRow has exerciseStyle='european' and root is 'SPX' or 'SPXW'", async () => {
     const useCase = makeFetchChainUseCase({
-      fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() }),
+      fetchChains: async () => [makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() })],
       persistObservations: memPersist.persistObservations,
       upsertContracts: memPersist.upsertContracts,
       getOpenCalendarLegs: async () => ok([]),
@@ -226,7 +226,7 @@ describe("makeFetchChainUseCase", () => {
     });
 
     const useCase = makeFetchChainUseCase({
-      fetchChain: failFetch,
+      fetchChains: async () => [failFetch],
       persistObservations: memPersist.persistObservations,
       upsertContracts: memPersist.upsertContracts,
       getOpenCalendarLegs: async () => ok([]),
@@ -255,7 +255,7 @@ describe("makeFetchChainUseCase", () => {
         ok([mustIncludeOcc]);
 
       const useCase = makeFetchChainUseCase({
-        fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain() }),
+        fetchChains: async () => [makeMemoryFetch({ SPXW: makeSpxwChain() })],
         persistObservations: memPersist.persistObservations,
         upsertContracts: memPersist.upsertContracts,
         getOpenCalendarLegs,
@@ -279,7 +279,7 @@ describe("makeFetchChainUseCase", () => {
       const getOpenCalendarLegs: ForGettingOpenCalendarLegs = async () => ok([]);
 
       const useCase = makeFetchChainUseCase({
-        fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain() }),
+        fetchChains: async () => [makeMemoryFetch({ SPXW: makeSpxwChain() })],
         persistObservations: memPersist.persistObservations,
         upsertContracts: memPersist.upsertContracts,
         getOpenCalendarLegs,
@@ -300,7 +300,7 @@ describe("makeFetchChainUseCase", () => {
         err<import("./ports.ts").StorageError>({ kind: "storage-error", message: "DB down" });
 
       const useCase = makeFetchChainUseCase({
-        fetchChain: makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() }),
+        fetchChains: async () => [makeMemoryFetch({ SPXW: makeSpxwChain(), SPX: makeSpxChain() })],
         persistObservations: memPersist.persistObservations,
         upsertContracts: memPersist.upsertContracts,
         getOpenCalendarLegs,
@@ -319,12 +319,93 @@ describe("makeFetchChainUseCase", () => {
     });
   });
 
+  // chain-window-narrow-regression: one cycle runs EVERY fetcher the selector returns
+  // (Schwab freshness + CBOE breadth). Partial failure tolerance lives HERE now — the
+  // old selectChainSource runtime fallback (BUG 3) is subsumed because CBOE always runs.
+  describe("dual-source: multiple fetchers per cycle", () => {
+    it("persists BOTH sources' chains in one run", async () => {
+      const schwabFetcher = makeMemoryFetch({
+        SPXW: makeSpxwChain(undefined, "schwab_chain"),
+        SPX: makeSpxChain("schwab_chain"),
+      });
+      const cboeFetcher = makeMemoryFetch({
+        SPXW: makeSpxwChain(undefined, "cboe"),
+        SPX: makeSpxChain("cboe"),
+      });
+
+      const useCase = makeFetchChainUseCase({
+        fetchChains: async () => [schwabFetcher, cboeFetcher],
+        persistObservations: memPersist.persistObservations,
+        upsertContracts: memPersist.upsertContracts,
+        getOpenCalendarLegs: async () => ok([]),
+        now: () => NOW,
+        maxDte: 90,
+        strikeBandPct: 0.10,
+      });
+
+      const result = await useCase();
+      expect(result.ok).toBe(true);
+
+      const sources = new Set(
+        memPersist.capture.observations.flatMap((r) => [...r]).map((row) => row.source),
+      );
+      expect(sources).toContain("schwab_chain");
+      expect(sources).toContain("cboe");
+    });
+
+    it("one source failing → still ok, surviving source persisted (BUG 3 guarantee)", async () => {
+      const failingSchwab: ForFetchingChain = async () =>
+        err<FetchError>({ kind: "fetch-error", message: "schwab 502" });
+      const cboeFetcher = makeMemoryFetch({
+        SPXW: makeSpxwChain(undefined, "cboe"),
+        SPX: makeSpxChain("cboe"),
+      });
+
+      const useCase = makeFetchChainUseCase({
+        fetchChains: async () => [failingSchwab, cboeFetcher],
+        persistObservations: memPersist.persistObservations,
+        upsertContracts: memPersist.upsertContracts,
+        getOpenCalendarLegs: async () => ok([]),
+        now: () => NOW,
+        maxDte: 90,
+        strikeBandPct: 0.10,
+      });
+
+      const result = await useCase();
+      expect(result.ok).toBe(true);
+
+      const allPersisted = memPersist.capture.observations.flatMap((r) => [...r]);
+      expect(allPersisted.length).toBeGreaterThan(0);
+      for (const row of allPersisted) {
+        expect(row.source).toBe("cboe");
+      }
+    });
+
+    it("ALL fetchers failing on all roots → err", async () => {
+      const failing: ForFetchingChain = async () =>
+        err<FetchError>({ kind: "fetch-error", message: "down" });
+
+      const useCase = makeFetchChainUseCase({
+        fetchChains: async () => [failing, failing],
+        persistObservations: memPersist.persistObservations,
+        upsertContracts: memPersist.upsertContracts,
+        getOpenCalendarLegs: async () => ok([]),
+        now: () => NOW,
+        maxDte: 90,
+        strikeBandPct: 0.10,
+      });
+
+      const result = await useCase();
+      expect(result.ok).toBe(false);
+    });
+  });
+
   describe("SC3 regression: chain source provenance — observations carry the adapter's source", () => {
     it("Schwab-sourced chain (source='schwab_chain') → observations tagged source='schwab_chain'", async () => {
       const schwabChain = makeSpxwChain(undefined, "schwab_chain");
 
       const useCase = makeFetchChainUseCase({
-        fetchChain: makeMemoryFetch({ SPXW: schwabChain }),
+        fetchChains: async () => [makeMemoryFetch({ SPXW: schwabChain })],
         persistObservations: memPersist.persistObservations,
         upsertContracts: memPersist.upsertContracts,
         getOpenCalendarLegs: async () => ok([]),
@@ -346,7 +427,7 @@ describe("makeFetchChainUseCase", () => {
       const cboeChain = makeSpxwChain(undefined, "cboe");
 
       const useCase = makeFetchChainUseCase({
-        fetchChain: makeMemoryFetch({ SPXW: cboeChain }),
+        fetchChains: async () => [makeMemoryFetch({ SPXW: cboeChain })],
         persistObservations: memPersist.persistObservations,
         upsertContracts: memPersist.upsertContracts,
         getOpenCalendarLegs: async () => ok([]),

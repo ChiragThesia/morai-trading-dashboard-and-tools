@@ -2,69 +2,60 @@ import type { ForFetchingChain } from "../../journal/application/ports.ts";
 import type { ForReadingTokenFreshness } from "./ports.ts";
 
 /**
- * selectChainSource — Schwab-primary / CBOE-fallback chain fetcher selector.
+ * selectChainSources — the list of chain fetchers to run this cycle.
  *
- * Implements D-07 (Schwab primary) and D-08 (CBOE fallback on AUTH_EXPIRED):
- *   - market status "fresh" or "stale" → schwabFetchChain, falling back to
- *     cboeFetchChain within the same call if the Schwab fetch itself fails
- *     (a healthy token does not guarantee the call succeeds — chain-frozen-
- *     schwab-symbol debug session, BUG 3: a live call failure must not leave
- *     the pipeline dark behind a healthy token)
- *   - market status "AUTH_EXPIRED" or "none_yet" → return cboeFetchChain
- *   - readTokenFreshness returns "none yet" (string) → return cboeFetchChain (safe default)
- *   - readTokenFreshness returns err → return cboeFetchChain (safe default; journal never stalls)
+ * chain-window-narrow-regression: Schwab alone is too narrow (the gateway caps the
+ * response, so the sidecar requests a bounded strike/DTE window — far-OTM put mass
+ * and long-dated position legs never arrive) and CBOE alone is delayed. A healthy
+ * market token therefore means BOTH sources run every cycle:
+ *   - market status "fresh" or "stale" → [schwabFetchChain, cboeFetchChain]
+ *   - market status "AUTH_EXPIRED" or "none_yet" → [cboeFetchChain]
+ *   - readTokenFreshness returns "none yet" (string) → [cboeFetchChain] (safe default)
+ *   - readTokenFreshness returns err or throws → [cboeFetchChain] (journal never stalls)
+ *
+ * The old single-fetcher runtime fallback (chain-frozen-schwab-symbol BUG 3) is
+ * subsumed: CBOE is always fetched, and the fetchChain use-case tolerates partial
+ * failure — a Schwab call failure can no longer darken the pipeline.
  *
  * Pure-ish application logic: no I/O except via the injected ports.
  *
  * @param deps.readTokenFreshness - Driven port; returns per-app freshness map
- * @param deps.schwabFetchChain   - Schwab chain fetcher (primary when market is fresh/stale)
- * @param deps.cboeFetchChain     - CBOE chain fetcher (fallback; no-auth, always available)
- * @returns ForFetchingChain — the appropriate implementation for this call context
+ * @param deps.schwabFetchChain   - Schwab chain fetcher (freshness; runs when market token is healthy)
+ * @param deps.cboeFetchChain     - CBOE chain fetcher (breadth; no-auth, runs every cycle)
+ * @returns the fetchers to run this cycle, in [schwab?, cboe] order
  */
-export async function selectChainSource(deps: {
+export async function selectChainSources(deps: {
   readonly readTokenFreshness: ForReadingTokenFreshness;
   readonly schwabFetchChain: ForFetchingChain;
   readonly cboeFetchChain: ForFetchingChain;
-}): Promise<ForFetchingChain> {
+}): Promise<ReadonlyArray<ForFetchingChain>> {
   let freshnessResult: Awaited<ReturnType<ForReadingTokenFreshness>>;
 
   try {
     freshnessResult = await deps.readTokenFreshness();
   } catch {
-    // readTokenFreshness threw — safe default is CBOE (journal never stalls)
-    return deps.cboeFetchChain;
+    // readTokenFreshness threw — safe default is CBOE only (journal never stalls)
+    return [deps.cboeFetchChain];
   }
 
   if (!freshnessResult.ok) {
-    // Storage error reading freshness — fall back to CBOE
-    return deps.cboeFetchChain;
+    // Storage error reading freshness — CBOE only
+    return [deps.cboeFetchChain];
   }
 
   const freshness = freshnessResult.value;
 
-  // "none yet" string = no tokens set up for either app → CBOE fallback
+  // "none yet" string = no tokens set up for either app → CBOE only
   if (freshness === "none yet") {
-    return deps.cboeFetchChain;
+    return [deps.cboeFetchChain];
   }
 
-  // Per-app market status determines which chain source to use
+  // Healthy market token (fresh or stale) → dual-source cycle.
   const marketStatus = freshness.market.status;
-
-  // Schwab primary: use Schwab when market token is fresh or stale (D-07).
-  // BUG 3: a fresh/stale token only means the TOKEN is healthy — the Schwab
-  // call itself can still fail at runtime (malformed request, transient 5xx,
-  // network blip). Fall back to CBOE within this same invocation so a live
-  // call failure never leaves the pipeline dark behind a healthy token.
   if (marketStatus === "fresh" || marketStatus === "stale") {
-    return async (root) => {
-      const schwabResult = await deps.schwabFetchChain(root);
-      if (schwabResult.ok) return schwabResult;
-      return deps.cboeFetchChain(root);
-    };
+    return [deps.schwabFetchChain, deps.cboeFetchChain];
   }
 
-  // CBOE fallback: AUTH_EXPIRED or none_yet → CBOE (D-08)
-  // AUTH_EXPIRED: market token expired; new snapshots would fail → fall back
-  // none_yet: market not yet set up for this app → safe default
-  return deps.cboeFetchChain;
+  // AUTH_EXPIRED or none_yet → CBOE only (D-08)
+  return [deps.cboeFetchChain];
 }

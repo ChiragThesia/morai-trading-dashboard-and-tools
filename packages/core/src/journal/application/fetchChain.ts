@@ -14,7 +14,12 @@ import type {
 } from "./ports.ts";
 
 export type FetchChainDeps = {
-  readonly fetchChain: ForFetchingChain;
+  /**
+   * The chain fetchers to run this cycle (chain-window-narrow-regression):
+   * dual-source [schwab, cboe] when the market token is healthy, [cboe] otherwise.
+   * Resolved once per run so token freshness is read once per cycle.
+   */
+  readonly fetchChains: () => Promise<ReadonlyArray<ForFetchingChain>>;
   readonly persistObservations: ForPersistingObservations;
   readonly upsertContracts: ForUpsertingContracts;
   /** Clock injection — never use Date.now() in core (D-13, architecture-boundaries.md §2) */
@@ -180,15 +185,19 @@ function processChain(
 }
 
 /**
- * makeFetchChainUseCase — fetch SPX + SPXW chains, filter, persist.
+ * makeFetchChainUseCase — fetch SPX + SPXW chains from every source, filter, persist.
  *
- * Fetches both roots concurrently. Filters each quote by calendar-day DTE
- * and strike band (config-injected, never hardcoded). Maps in-filter quotes
- * to ObservationRow (source='cboe', bsm_* omitted) and first-seen ContractRow
+ * chain-window-narrow-regression: runs EVERY fetcher deps.fetchChains resolves for
+ * this cycle (dual-source: Schwab freshness + CBOE breadth), both roots per fetcher,
+ * all concurrently. Filters each quote by calendar-day DTE and strike band
+ * (config-injected, never hardcoded). Maps in-filter quotes to ObservationRow
+ * (source-tagged per chain, bsm_* omitted) and first-seen ContractRow
  * (exerciseStyle='european'). Persists append-only.
  *
- * If both fetches fail, returns the first error. If one succeeds, persists
- * that chain's data and returns ok.
+ * Partial failure is tolerated: if ANY chain succeeds, its data persists and the run
+ * returns ok — a Schwab failure never darkens the pipeline (BUG 3 guarantee, moved
+ * here from the retired selectChainSource fallback). If ALL fetches fail, returns
+ * the first error.
  *
  * T-02-08: Filter bounds write volume before persistence (DoS mitigation).
  */
@@ -203,31 +212,28 @@ export function makeFetchChainUseCase(deps: FetchChainDeps): ForRunningFetchChai
       ? new Set(legsResult.value)
       : new Set();
 
-    // Fetch both roots concurrently
-    const [spxResult, spxwResult] = await Promise.all([
-      deps.fetchChain("SPX"),
-      deps.fetchChain("SPXW"),
-    ]);
+    // Resolve this cycle's fetchers once (one token-freshness read), then fetch
+    // both roots from every source concurrently.
+    const fetchers = await deps.fetchChains();
+    const results = await Promise.all(
+      fetchers.flatMap((fetchChain) => [fetchChain("SPX"), fetchChain("SPXW")]),
+    );
 
     // Collect chains that succeeded
     const successfulChains: RawChain[] = [];
     let firstError: FetchError | null = null;
 
-    if (spxResult.ok) {
-      successfulChains.push(spxResult.value);
-    } else {
-      firstError = spxResult.error;
-    }
-
-    if (spxwResult.ok) {
-      successfulChains.push(spxwResult.value);
-    } else {
-      if (firstError === null) firstError = spxwResult.error;
+    for (const result of results) {
+      if (result.ok) {
+        successfulChains.push(result.value);
+      } else if (firstError === null) {
+        firstError = result.error;
+      }
     }
 
     // If no chains succeeded, return the first error
     if (successfulChains.length === 0) {
-      const error = firstError ?? { kind: "fetch-error" as const, message: "both chains failed" };
+      const error = firstError ?? { kind: "fetch-error" as const, message: "all chain fetches failed" };
       return err(error);
     }
 

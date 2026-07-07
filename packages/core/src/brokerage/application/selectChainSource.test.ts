@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { ok, err, formatOccSymbol } from "@morai/shared";
 import type { ObservationRow, SnapshotRow, ForFetchingChain } from "../../journal/application/ports.ts";
 import type { ForReadingTokenFreshness } from "./ports.ts";
-import { selectChainSource } from "./selectChainSource.ts";
+import { selectChainSources } from "./selectChainSource.ts";
 
 // ─── Type-level widening tests (compile-time; runtime just asserts assignability) ──
 
@@ -62,10 +62,17 @@ describe("ports source widening", () => {
   });
 });
 
-// ─── selectChainSource unit tests ─────────────────────────────────────────────
+// ─── selectChainSources unit tests ────────────────────────────────────────────
+//
+// chain-window-narrow-regression: the selector returns the LIST of fetchers to run
+// each cycle, not a single winner. Schwab alone is too narrow (bounded window) and
+// CBOE alone is delayed — a healthy token means BOTH run; otherwise CBOE only.
+// The old single-fetcher runtime fallback (BUG 3) is subsumed: CBOE is always
+// fetched, and partial-failure tolerance lives in the fetchChain use-case.
 
 /**
  * Minimal ForFetchingChain stub — always returns err for test isolation.
+ * Selection tests assert by fetcher IDENTITY; these are never called.
  */
 function makeStubChain(label: string): ForFetchingChain {
   return async (_root) => {
@@ -73,164 +80,104 @@ function makeStubChain(label: string): ForFetchingChain {
   };
 }
 
-/**
- * Minimal ForFetchingChain stub — always succeeds, tagged by `source` so a test
- * can assert WHICH fetcher's result was actually returned (BUG 3 regression).
- */
-function makeSuccessChain(source: "schwab_chain" | "cboe"): ForFetchingChain {
-  return async (root) => ok({ root, observedAt: new Date(), spot: 100, quotes: [], source });
-}
+describe("selectChainSources", () => {
+  const schwabChain = makeStubChain("schwab");
+  const cboeChain = makeStubChain("cboe");
 
-describe("selectChainSource", () => {
-  it("returns schwabFetchChain's result when market status is 'fresh' and the call succeeds", async () => {
-    const schwabChain = makeSuccessChain("schwab_chain");
-    const cboeChain = makeStubChain("cboe"); // must NOT be called — errors if it is
-
-    const readTokenFreshness: ForReadingTokenFreshness = async () =>
+  function freshness(marketStatus: "fresh" | "stale" | "AUTH_EXPIRED" | "none_yet"): ForReadingTokenFreshness {
+    const expiresAt = marketStatus === "fresh" || marketStatus === "stale" ? new Date() : null;
+    return async () =>
       ok({
         trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
-        market: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
+        market: { status: marketStatus, expiresAt, refreshIssuedAt: expiresAt, lastRefreshError: null, refreshExpiresIn: null },
       });
+  }
 
-    const selected = await selectChainSource({
+  it("returns [schwab, cboe] when market status is 'fresh' — dual-source cycle", async () => {
+    const sources = await selectChainSources({
+      readTokenFreshness: freshness("fresh"),
+      schwabFetchChain: schwabChain,
+      cboeFetchChain: cboeChain,
+    });
+
+    expect(sources).toHaveLength(2);
+    expect(sources[0]).toBe(schwabChain);
+    expect(sources[1]).toBe(cboeChain);
+  });
+
+  it("returns [schwab, cboe] when market status is 'stale' — dual-source cycle", async () => {
+    const sources = await selectChainSources({
+      readTokenFreshness: freshness("stale"),
+      schwabFetchChain: schwabChain,
+      cboeFetchChain: cboeChain,
+    });
+
+    expect(sources).toHaveLength(2);
+    expect(sources[0]).toBe(schwabChain);
+    expect(sources[1]).toBe(cboeChain);
+  });
+
+  it("returns [cboe] when market status is 'AUTH_EXPIRED' (D-08)", async () => {
+    const sources = await selectChainSources({
+      readTokenFreshness: freshness("AUTH_EXPIRED"),
+      schwabFetchChain: schwabChain,
+      cboeFetchChain: cboeChain,
+    });
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toBe(cboeChain);
+  });
+
+  it("returns [cboe] when market status is 'none_yet' (safe default)", async () => {
+    const sources = await selectChainSources({
+      readTokenFreshness: freshness("none_yet"),
+      schwabFetchChain: schwabChain,
+      cboeFetchChain: cboeChain,
+    });
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toBe(cboeChain);
+  });
+
+  it("returns [cboe] when readTokenFreshness returns 'none yet' string", async () => {
+    const readTokenFreshness: ForReadingTokenFreshness = async () => ok("none yet");
+
+    const sources = await selectChainSources({
       readTokenFreshness,
       schwabFetchChain: schwabChain,
       cboeFetchChain: cboeChain,
     });
 
-    const result = await selected("SPX");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.source).toBe("schwab_chain");
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toBe(cboeChain);
   });
 
-  it("returns schwabFetchChain's result when market status is 'stale' and the call succeeds", async () => {
-    const schwabChain = makeSuccessChain("schwab_chain");
-    const cboeChain = makeStubChain("cboe"); // must NOT be called — errors if it is
-
-    const readTokenFreshness: ForReadingTokenFreshness = async () =>
-      ok({
-        trader: { status: "stale", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
-        market: { status: "stale", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
-      });
-
-    const selected = await selectChainSource({
-      readTokenFreshness,
-      schwabFetchChain: schwabChain,
-      cboeFetchChain: cboeChain,
-    });
-
-    const result = await selected("SPX");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.source).toBe("schwab_chain");
-  });
-
-  it("falls back to cboeFetchChain when the Schwab call fails at runtime despite a fresh token (BUG 3 regression, chain-frozen-schwab-symbol)", async () => {
-    // A healthy/fresh token does not guarantee the Schwab call itself succeeds
-    // (malformed request, transient 5xx, network blip). Before the fix, this left
-    // the pipeline permanently dark behind a healthy token — selectChainSource
-    // only reacted to token freshness, never to the call outcome.
-    const schwabChain = makeStubChain("schwab"); // call fails for a non-auth reason
-    const cboeChain = makeSuccessChain("cboe");
-
-    const readTokenFreshness: ForReadingTokenFreshness = async () =>
-      ok({
-        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
-        market: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
-      });
-
-    const selected = await selectChainSource({
-      readTokenFreshness,
-      schwabFetchChain: schwabChain,
-      cboeFetchChain: cboeChain,
-    });
-
-    const result = await selected("SPX");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.source).toBe("cboe");
-  });
-
-  it("returns cboeFetchChain when market status is 'AUTH_EXPIRED' (D-08)", async () => {
-    const schwabChain = makeStubChain("schwab");
-    const cboeChain = makeStubChain("cboe");
-
-    const readTokenFreshness: ForReadingTokenFreshness = async () =>
-      ok({
-        trader: { status: "fresh", expiresAt: new Date(), refreshIssuedAt: new Date(), lastRefreshError: null, refreshExpiresIn: null },
-        market: { status: "AUTH_EXPIRED", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null, refreshExpiresIn: null },
-      });
-
-    const selected = await selectChainSource({
-      readTokenFreshness,
-      schwabFetchChain: schwabChain,
-      cboeFetchChain: cboeChain,
-    });
-
-    const result = await selected("SPX");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toBe("stub-cboe");
-  });
-
-  it("returns cboeFetchChain when market status is 'none_yet' (safe default)", async () => {
-    const schwabChain = makeStubChain("schwab");
-    const cboeChain = makeStubChain("cboe");
-
-    const readTokenFreshness: ForReadingTokenFreshness = async () =>
-      ok({
-        trader: { status: "none_yet", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null, refreshExpiresIn: null },
-        market: { status: "none_yet", expiresAt: null, refreshIssuedAt: null, lastRefreshError: null, refreshExpiresIn: null },
-      });
-
-    const selected = await selectChainSource({
-      readTokenFreshness,
-      schwabFetchChain: schwabChain,
-      cboeFetchChain: cboeChain,
-    });
-
-    const result = await selected("SPX");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toBe("stub-cboe");
-  });
-
-  it("returns cboeFetchChain when readTokenFreshness returns 'none yet' string", async () => {
-    const schwabChain = makeStubChain("schwab");
-    const cboeChain = makeStubChain("cboe");
-
-    const readTokenFreshness: ForReadingTokenFreshness = async () =>
-      ok("none yet");
-
-    const selected = await selectChainSource({
-      readTokenFreshness,
-      schwabFetchChain: schwabChain,
-      cboeFetchChain: cboeChain,
-    });
-
-    const result = await selected("SPX");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toBe("stub-cboe");
-  });
-
-  it("returns cboeFetchChain when readTokenFreshness returns err (safe default)", async () => {
-    const schwabChain = makeStubChain("schwab");
-    const cboeChain = makeStubChain("cboe");
-
+  it("returns [cboe] when readTokenFreshness returns err (safe default)", async () => {
     const readTokenFreshness: ForReadingTokenFreshness = async () =>
       err({ kind: "storage-error", message: "DB down" });
 
-    const selected = await selectChainSource({
+    const sources = await selectChainSources({
       readTokenFreshness,
       schwabFetchChain: schwabChain,
       cboeFetchChain: cboeChain,
     });
 
-    const result = await selected("SPX");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toBe("stub-cboe");
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toBe(cboeChain);
+  });
+
+  it("returns [cboe] when readTokenFreshness throws (journal never stalls)", async () => {
+    const readTokenFreshness: ForReadingTokenFreshness = async () => {
+      throw new Error("boom");
+    };
+
+    const sources = await selectChainSources({
+      readTokenFreshness,
+      schwabFetchChain: schwabChain,
+      cboeFetchChain: cboeChain,
+    });
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toBe(cboeChain);
   });
 });

@@ -61,7 +61,7 @@ import {
   makeRebuildJournalUseCase,
   makeRecomputeSnapshotPnlUseCase,
   makeWipeDerivedFillsUseCase,
-  selectChainSource,
+  selectChainSources,
   makeFetchCot,
   makeFetchMacroSeries,
   makeComputePickerSnapshotUseCase,
@@ -113,7 +113,7 @@ const calendarSnapshotsRepo = makePostgresCalendarSnapshotsRepo(db);
 const _jobRunsRepo = makePostgresJobRunsRepo(db);
 const legObsRepo = makePostgresLegObservationsRepo(db);
 const rateObsRepo = makePostgresRateObservationsRepo(db);
-// AUTH-04: broker-tokens repo for per-app freshness (used by selectChainSource + T-04-26 logging)
+// AUTH-04: broker-tokens repo for per-app freshness (used by selectChainSources + T-04-26 logging)
 const brokerTokensRepo = makePostgresBrokerTokensRepo(db, config.TOKEN_ENCRYPTION_KEY);
 
 // JRNL-01: calendar-events + orphan-fills + fills repos (sync-fills, rebuild-journal).
@@ -134,7 +134,7 @@ const cboeAdapter = makeCboeChainAdapter({
 
 // JRNL-02 / 11-06: sidecar chain adapter — fetches the SPX option chain from the Python sidecar.
 // The sidecar (schwab-py) is the sole Schwab boundary; it handles auth + chain fetch.
-// CBOE fallback (selectChainSource) remains unchanged: AUTH_EXPIRED → CBOE source.
+// Dual-source (selectChainSources): CBOE runs every cycle; AUTH_EXPIRED → CBOE only.
 const sidecarAdapter = makeSidecarChainAdapter({
   fetch: globalThis.fetch,
   sidecarUrl: config.SIDECAR_URL,
@@ -146,17 +146,17 @@ const fredAdapter = makeFredRateAdapter({
   fallbackRate: config.BSM_RATE_FALLBACK,
 });
 
-// D-07/D-08: selectChainSource — sidecar-primary (JRNL-02), CBOE-fallback (D-08).
+// chain-window-narrow-regression: selectChainSources — dual-source (Schwab freshness +
+// CBOE breadth) when the market token is healthy; CBOE-only on AUTH_EXPIRED (D-08).
 // Called at job-execution time so freshness is checked per invocation (not at boot).
-// 11-06 (GW-03): schwabMarketAdapter replaced by sidecarAdapter as schwabFetchChain input.
-// selectChainSource + cboeFetchChain wiring unchanged — CBOE fallback intact on AUTH_EXPIRED.
+// 11-06 (GW-03): sidecarAdapter is the Schwab boundary (schwab-py handles auth + fetch).
 const fetchChainUseCase = makeFetchChainUseCase({
-  fetchChain: (root) =>
-    selectChainSource({
+  fetchChains: () =>
+    selectChainSources({
       readTokenFreshness: brokerTokensRepo.readTokenFreshness,
       schwabFetchChain: sidecarAdapter.fetchChain,
       cboeFetchChain: cboeAdapter.fetchChain,
-    }).then((fetchChain) => fetchChain(root)),
+    }),
   persistObservations: legObsRepo.persistObservations,
   upsertContracts: legObsRepo.upsertContracts,
   // D-04: targeted-fetch — open calendar legs bypass the DTE/band filter
@@ -236,7 +236,7 @@ const computeGexSnapshotUseCase = makeComputeGexSnapshotUseCase({
 
 // Build handlers (thin adapters — zero business logic)
 // D-07/D-08: Schwab-primary handler replaces the CBOE-only handler.
-// fetchChainUseCase is pre-wired with selectChainSource above (Schwab→CBOE fallback).
+// fetchChainUseCase is pre-wired with selectChainSources above (dual-source: Schwab + CBOE).
 // T-04-26: readTokenFreshness + logAuthExpiredFallback enable the operator-visible warning.
 const fetchSchwabChainHandler = makeFetchSchwabChainHandler({
   fetchChainUseCase,

@@ -9,14 +9,14 @@ import type { BossForChainHandler } from "./fetch-cboe-chain.ts";
 //  - logAuthExpiredFallback: optional; when true, checks freshness before calling use-case
 //    and logs the documented warning if market is AUTH_EXPIRED (D-08, T-04-26)
 //
-// The fetchChainUseCase is pre-wired via selectChainSource in the worker composition root
+// The fetchChainUseCase is pre-wired via selectChainSources in the worker composition root
 // (main.ts), so the handler itself stays thin (architecture-boundaries.md §3):
-//   market fresh/stale → schwabFetchChain  (D-07)
-//   market AUTH_EXPIRED/none_yet/err → cboeFetchChain (D-08)
+//   market fresh/stale → [schwabFetchChain, cboeFetchChain] (dual-source)
+//   market AUTH_EXPIRED/none_yet/err → [cboeFetchChain] (D-08)
 // The handler only calls readTokenFreshness to emit the operator-visible warning (T-04-26).
 
 type FetchSchwabChainHandlerDeps = {
-  /** The wired fetchChain use-case (composition root provides this via selectChainSource). */
+  /** The wired fetchChain use-case (composition root provides this via selectChainSources). */
   readonly fetchChainUseCase: ForRunningFetchChain;
   /** pg-boss instance — used only to enqueue compute on success (D-07). */
   readonly boss: BossForChainHandler;
@@ -42,9 +42,9 @@ type FetchSchwabChainHandlerDeps = {
  * Pattern: array-guard → RTH self-check → AUTH_EXPIRED warning check → call use-case → boss.send.
  *
  * Chain selection (D-07/D-08) is handled in the composition root (main.ts) by building
- * the fetchChainUseCase via selectChainSource:
- *   market fresh/stale → schwabFetchChain (Schwab primary)
- *   market AUTH_EXPIRED/none_yet/err → cboeFetchChain (CBOE fallback)
+ * the fetchChainUseCase via selectChainSources:
+ *   market fresh/stale → [schwabFetchChain, cboeFetchChain] (dual-source cycle)
+ *   market AUTH_EXPIRED/none_yet/err → [cboeFetchChain] (CBOE only)
  *
  * This handler adds T-04-26 logging: when readTokenFreshness + logAuthExpiredFallback are
  * provided, it checks freshness before calling the use-case and emits the documented
@@ -71,8 +71,8 @@ export function makeFetchSchwabChainHandler(
     }
 
     // T-04-26: Emit operator-visible warning when market is AUTH_EXPIRED (D-08, D-09).
-    // The use-case (pre-wired via selectChainSource) will still be called — it uses the
-    // CBOE fallback transparently. The warning tells the operator why Schwab is paused.
+    // The use-case (pre-wired via selectChainSources) will still be called — it runs
+    // CBOE-only transparently. The warning tells the operator why Schwab is paused.
     if (deps.logAuthExpiredFallback === true && deps.readTokenFreshness !== undefined) {
       try {
         const freshnessResult = await deps.readTokenFreshness();

@@ -140,8 +140,8 @@ export type {
   OAuthError,
   ForRefreshingToken,
 } from "./brokerage/index.ts";
-// BRK-01: source selector (Schwab primary / CBOE fallback)
-export { selectChainSource } from "./brokerage/index.ts";
+// BRK-01: source selector (dual-source: Schwab freshness + CBOE breadth)
+export { selectChainSources } from "./brokerage/index.ts";
 // Phase 5: journal ports for fill-pairing + calendar events + orphan fills (JOB-01/JRNL-01)
 export type {
   CalendarEvent,
