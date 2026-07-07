@@ -1,6 +1,6 @@
 ---
 slug: chain-window-narrow-regression
-status: investigating
+status: resolved
 trigger: Schwab-primary chain fetch (strike_count=50, 90d lookahead — the chain-frozen-schwab-symbol fix) is too narrow. Three casualties confirmed live 2026-07-07 — GEX flip/putWall distorted (user caught putWall>flip inversion), 6/8 open-position legs unobserved (journal marks going stale/gapping during RTH), and widening a single call is impossible (502 TooBigBody at strikeCount=150). Recommended fix: dual-source (fetch CBOE alongside Schwab).
 created: 2026-07-07
 updated: 2026-07-07
@@ -89,8 +89,27 @@ Key queries used:
   - `0d0d2ff` BSM `MAX_BATCH_SIZE` 12000→24000 (dual cycle ≈ 15k)
   - `7bd2219` `selectChainSources` returns fetcher LIST ([schwab, cboe] on healthy token, [cboe] otherwise); `fetchChain` use-case runs all fetchers × both roots, partial failure ok, all-fail err; worker wiring updated
 - verified free: `resolveLegSnapshot` (journal marks) is per-contract `time DESC LIMIT 1` — unions across sources with no change.
-- next_action: deploy worker (`railway up --service worker` — user approval required; sidecar untouched), then run the goal-backward verification below during RTH.
+- next_action: NONE — RESOLVED.
 - tdd_checkpoint: all commits at green; nothing in flight.
+
+## LIVE-CONFIRMED 2026-07-07 (first dual-source cycle, 15:00Z)
+
+Deploy: worker `497db308` SUCCESS 14:37:53Z (pushed through `dc63fd1`). Verification (read-only,
+user-approved, railway ssh sidecar) against the 15:00Z cycle — all 4 goal-backward criteria PASS:
+
+1. **Dual-source landed**: schwab_chain 15:00:38Z (7,300 rows) + cboe 15:00:26Z (11,648 rows), same 30-min slot.
+2. **8/8 open-position legs observed** this cycle — Nov 261120 legs via CBOE breadth, near-ATM via both.
+3. **GEX sane**: 15:00Z snapshot spot 7486.78, flip 7485.97, putWall 7400, callWall 8000 →
+   putWall < flip < spot restored (distorted schwab-only 14:00Z cycle had flip 7182).
+   Strike coverage: schwab 6800–8200 (99 strikes) ∪ cboe 6740–8230 (299 strikes).
+4. **Put-OI tail in cohort** (deduped): top-8 includes 7000 (601k), 7200, 7300, 6800 — the
+   entire cluster the schwab window missed.
+5. **Journal**: 15:15Z snapshot-calendars wrote all 5 open calendars incl. both Nov calendars
+   with real spot/netMark/frontIv — no gap rows.
+
+**Watch item (not a bug)**: end-to-end chain fetch→GEX took ~15.5 min (BSM drains ~15k rows/cycle,
+one-row-at-a-time writes; pg-boss handler limit 900s). Completed fine, but margin is thinner with
+dual-source volume — if BSM runs start failing/retrying, batch the writeBsm updates.
 
 ## Eliminated
 
