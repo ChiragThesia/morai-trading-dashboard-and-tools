@@ -464,6 +464,15 @@ describe("makeComputeBsmGreeksUseCase", () => {
     expect(seenLimit).toBe(MAX_BATCH_SIZE);
   });
 
+  it("chain-window-narrow-regression: MAX_BATCH_SIZE covers one full dual-source cycle", async () => {
+    // A cycle now persists BOTH sources (~11,246 CBOE + ~3,638 Schwab ≈ 15k rows at two
+    // nearby timestamps). The newest-first bound must exceed that, or the freshest cycle
+    // splits and its tail stays bsm_* NULL — the exact starvation gex-schwab-bsm-null-puts
+    // fixed for the single-source case.
+    const DUAL_SOURCE_CYCLE_ROWS = 15_000;
+    expect(MAX_BATCH_SIZE).toBeGreaterThanOrEqual(DUAL_SOURCE_CYCLE_ROWS);
+  });
+
   it("regression (RC#1): bounds a single run to MAX_BATCH_SIZE rows, leaving the remainder pending", async () => {
     // Bug: readPending() returns the ENTIRE backlog with no bound, and the use-case
     // writes in one all-or-nothing batch at the end — a timeout mid-run makes zero

@@ -56,9 +56,13 @@ const NAN_STAMP = "NaN";
 // rows stayed bsm_* NULL and GEX dropped them (no put wall / flip). The bound now exceeds one
 // full cycle so the freshest cycle is always processed whole in a single run.
 //
-// ponytail: fixed ceiling sized to the observed max cycle; if the SPX chain grows past this a
-// cycle splits again — raise it (per-row cost is one indexed UPDATE, far under the 900s limit).
-export const MAX_BATCH_SIZE = 12000;
+// chain-window-narrow-regression: a cycle now persists BOTH sources (~11,246 CBOE + ~3,638
+// Schwab ≈ 15k rows at two nearby timestamps), so the bound must exceed one DUAL-source cycle.
+//
+// ponytail: fixed ceiling sized to the observed max dual-source cycle; if the SPX chain grows
+// past this a cycle splits again — raise it (per-row cost is one indexed UPDATE, far under the
+// 900s limit).
+export const MAX_BATCH_SIZE = 24000;
 
 /**
  * makeComputeBsmGreeksUseCase — factory returning the batch BSM compute use-case.
