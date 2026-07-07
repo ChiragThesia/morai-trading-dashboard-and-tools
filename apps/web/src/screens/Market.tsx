@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGex } from "../hooks/useGex.ts";
-import { classifyRegime } from "../lib/gex-regime.ts";
+import { classifyRegime, zeroDteGex, fmtGammaBn } from "../lib/gex-regime.ts";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import type { StrikeRange } from "../components/charts/GexBars.tsx";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs.tsx";
@@ -206,6 +206,8 @@ export function Market(): React.ReactElement {
 
   const netGammaLabel = fmtDollar(gex.netGammaAtSpot) + " /1%";
   const flipLabel = gex.flip !== null ? gex.flip.toFixed(0) : "—";
+  // 0DTE net gamma — today's expiry from the byExpiry rollup ($Bn/1% units)
+  const zeroDte = zeroDteGex(gex.byExpiry, gex.computedAt);
 
   // Sign-color class: coral (AMPLIFY / net short gamma) vs teal (DAMPEN / net long).
   const signClass = isAmplify ? "text-down" : "text-up";
@@ -241,6 +243,18 @@ export function Market(): React.ReactElement {
           value={netGammaLabel}
           alert={isAmplify}
           valueClassName={signClass}
+        />
+        {/* net γ 0DTE — today's expiry only (byExpiry rollup); "—" once it rolls off */}
+        <MetricChip
+          label="net γ 0DTE"
+          value={zeroDte !== null ? fmtGammaBn(zeroDte) : "—"}
+          valueClassName={
+            zeroDte === null
+              ? "text-muted-foreground"
+              : zeroDte < 0
+                ? "text-down"
+                : "text-up"
+          }
         />
         {/* γ flip (amber) */}
         <MetricChip label="γ flip" value={flipLabel} valueClassName="text-amber" />

@@ -182,3 +182,36 @@ describe("Market — near-term (≤45d) key levels", () => {
     expect(screen.queryByText("γ flip 45d")).toBeNull();
   });
 });
+
+describe("Market — net γ 0DTE chip", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders the 0DTE net gamma from byExpiry when today's expiry is present", () => {
+    // SAMPLE computedAt = 2026-06-23T14:00Z → ET date 2026-06-23
+    mockGexWith({
+      ...SAMPLE_SNAPSHOT,
+      byExpiry: [
+        { date: "2026-06-23", gex: -9.8 },
+        { date: "2026-06-27", gex: 2.1 },
+      ],
+    });
+    render(<Market />);
+
+    expect(screen.getByText("net γ 0DTE")).toBeTruthy();
+    expect(screen.getByText("−$9.8B")).toBeTruthy();
+  });
+
+  it("renders — when the 0DTE expiry has rolled off the snapshot", () => {
+    mockGexWith(SAMPLE_SNAPSHOT); // byExpiry: 06-27 + 07-18 only
+    render(<Market />);
+
+    expect(screen.getByText("net γ 0DTE")).toBeTruthy();
+    // The em-dash is shared with other empty chips (flip is null in SAMPLE), so
+    // assert the ABSENCE of a formatted 0DTE value instead of counting dashes.
+    expect(screen.queryByText("−$9.8B")).toBeNull();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+});

@@ -70,7 +70,7 @@ const GEX_FIXTURE = {
     { k: 7300, gex: -1_000_000_000, coi: 100, poi: 200, vol: 50 },
     { k: 7400, gex: 1_000_000_000, coi: 150, poi: 90, vol: 80 },
   ],
-  byExpiry: [],
+  byExpiry: [{ date: "2026-06-29", gex: -9.8 }],
   nearTerm: { callWall: 7420, putWall: 7320, flip: 7355 },
   computedAt: "2026-06-29T14:00:00.000Z",
 };
@@ -645,6 +645,11 @@ describe("Overview screen", () => {
 });
 
 describe("GEX rail — near-term (≤45d) key levels", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
   it("renders near-term rows from the fixture's nearTerm set", () => {
     setPositions([]);
     render(<Overview />);
@@ -654,5 +659,21 @@ describe("GEX rail — near-term (≤45d) key levels", () => {
     expect(screen.getByText("Put Wall 45d")).toBeDefined();
     expect(screen.getByText("7320")).toBeDefined();
     expect(screen.getByText("γ flip 45d")).toBeDefined();
+  });
+});
+
+describe("Pill header — 0DTE γ pill", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders the 0DTE net gamma pill from byExpiry", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    // GEX_FIXTURE computedAt 2026-06-29 + byExpiry entry for that date
+    expect(screen.getByText("0DTE γ")).toBeDefined();
+    expect(screen.getByText("−$9.8B")).toBeDefined();
   });
 });

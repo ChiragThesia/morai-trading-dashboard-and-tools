@@ -11,7 +11,7 @@ import { resolveLivePositionRow } from "../lib/live-position-greeks.ts";
 import { pairPositionsIntoCalendars, bookUnrealizedPnl } from "../lib/pair-calendars.ts";
 import type { CalendarGroup } from "../lib/pair-calendars.ts";
 import { parseOccSymbol } from "@morai/shared";
-import { classifyRegime } from "../lib/gex-regime.ts";
+import { classifyRegime, zeroDteGex } from "../lib/gex-regime.ts";
 import { resolveLegIv } from "../lib/iv-calibration.ts";
 import type { LiveTick } from "../lib/iv-calibration.ts";
 import { computeProjectionBounds } from "../lib/date-projection.ts";
@@ -752,6 +752,8 @@ function PillHeader({
   bookPnl: number;
 }): React.ReactElement {
   const regime = gex !== undefined ? classifyRegime(gex.netGammaAtSpot) : null;
+  // 0DTE net gamma — today's expiry from the byExpiry rollup ($Bn/1% units)
+  const zeroDte = gex !== undefined ? zeroDteGex(gex.byExpiry, gex.computedAt) : null;
   const vix = latestMacroValue(macro, "VIXCLS");
   const vvix = latestMacroValue(macro, "VVIX");
   const dff = latestMacroValue(macro, "DFF");
@@ -765,6 +767,14 @@ function PillHeader({
         value={gex !== undefined ? fmtGammaCompact(gex.netGammaAtSpot) : "—"}
         alert={regime === "AMPLIFY"}
         valueClassName={regime === null ? "text-muted-foreground" : regime === "AMPLIFY" ? "text-down" : "text-up"}
+      />
+      {/* 0DTE γ — today's expiry only (byExpiry rollup); "—" once it rolls off */}
+      <MetricChip
+        label="0DTE γ"
+        value={zeroDte !== null ? fmtGammaCompact(zeroDte) : "—"}
+        valueClassName={
+          zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-down" : "text-up"
+        }
       />
       <MetricChip
         label="γ flip"
