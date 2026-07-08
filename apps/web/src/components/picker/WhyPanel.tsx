@@ -58,8 +58,25 @@ function gexFitSentence(candidate: PickerCandidate, gex: PickerGexContext): stri
   const netSign = gex.netGammaAtSpot >= 0 ? "+" : "−";
   const regime = gex.netGammaAtSpot >= 0 ? "dampen" : "amplify";
 
+  // Prefer the near-term (≤45d) level set — the walls the gexFit rule actually scores
+  // against (rules.ts); fall back to the legacy abs-γ/all-expiry references when absent.
+  const nt = gex.nearTerm;
   let strikeNote: string;
-  if (gex.absGammaStrike !== null && strike === gex.absGammaStrike) {
+  if (nt !== null && nt.putWall !== null && Math.abs(strike - nt.putWall) <= 5) {
+    strikeNote = `pinned at the 45d put wall ${nt.putWall} ✓`;
+  } else if (nt !== null && nt.callWall !== null && Math.abs(strike - nt.callWall) <= 5) {
+    strikeNote = `pinned at the 45d call wall ${nt.callWall} ✓`;
+  } else if (
+    nt !== null &&
+    nt.putWall !== null &&
+    nt.callWall !== null &&
+    strike >= nt.putWall &&
+    strike <= nt.callWall
+  ) {
+    strikeNote = `inside the 45d dealer range [${nt.putWall}, ${nt.callWall}] ✓`;
+  } else if (nt !== null && nt.putWall !== null && nt.callWall !== null) {
+    strikeNote = `outside the 45d dealer range [${nt.putWall}, ${nt.callWall}]`;
+  } else if (gex.absGammaStrike !== null && strike === gex.absGammaStrike) {
     strikeNote = "= absolute-gamma strike (pin magnet) ✓";
   } else if (gex.putWall !== null && strike === gex.putWall) {
     strikeNote = "= put wall (support) ✓";

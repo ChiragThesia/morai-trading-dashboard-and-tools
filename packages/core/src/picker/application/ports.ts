@@ -152,6 +152,11 @@ export type PickerSnapshot = {
     readonly putWall: number | null;
     readonly netGammaAtSpot: number;
     readonly absGammaStrike: number | null;
+    readonly nearTerm: {
+      readonly callWall: number | null;
+      readonly putWall: number | null;
+      readonly flip: number | null;
+    } | null;
   };
   readonly events: ReadonlyArray<{ readonly date: string; readonly name: string }>;
   readonly candidates: ReadonlyArray<PickerCandidateDomain>;

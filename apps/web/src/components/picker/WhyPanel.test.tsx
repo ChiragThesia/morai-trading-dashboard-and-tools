@@ -174,3 +174,32 @@ describe("WhyPanel — GEX-fit closing sentence (static fixture context)", () =>
     expect(sentence).toContain("50pts from abs-");
   });
 });
+
+describe("gex sentence — near-term (45d) level set preferred", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("speaks the 45d dealer range / wall pin when gex.nearTerm is present", () => {
+    const first = pickerSnapshotFixture.candidates[0];
+    expect(first).toBeDefined();
+    if (first === undefined) return;
+    // Strike the candidate exactly on the near-term put wall → pin sentence.
+    const gexWithNearTerm = {
+      ...GEX,
+      nearTerm: { callWall: 7550, putWall: first.frontLeg.strike, flip: 7486 },
+    };
+    render(<WhyPanel candidate={first} gex={gexWithNearTerm} />);
+    const sentence = screen.getByTestId("whypanel-gex-sentence").textContent ?? "";
+    expect(sentence).toContain("45d put wall");
+  });
+
+  it("falls back to the legacy abs-γ reference when nearTerm is null", () => {
+    const first = pickerSnapshotFixture.candidates[0];
+    expect(first).toBeDefined();
+    if (first === undefined) return;
+    render(<WhyPanel candidate={first} gex={{ ...GEX, nearTerm: null }} />);
+    const sentence = screen.getByTestId("whypanel-gex-sentence").textContent ?? "";
+    expect(sentence).toMatch(/abs-γ strike|put wall|absolute-gamma/);
+  });
+});

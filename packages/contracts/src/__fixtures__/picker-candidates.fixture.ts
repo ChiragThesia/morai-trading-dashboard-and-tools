@@ -27,6 +27,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
     putWall: 7400,
     netGammaAtSpot: 26.23,
     absGammaStrike: 7500,
+    nearTerm: null, // fixture predates the near-term level set (read-seam default)
   },
   events: [
     { date: "2026-07-03", name: "NFP" },

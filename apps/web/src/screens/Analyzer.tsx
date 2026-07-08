@@ -23,7 +23,7 @@
  * No any/as/!.
  */
 import { useCallback, useMemo, useState } from "react";
-import type { PickerCandidate, BreakdownEntry, PickerGexContext } from "@morai/contracts";
+import type { PickerCandidate, BreakdownEntry, PickerGexContext, RuleSetEntry } from "@morai/contracts";
 import { cn } from "@/lib/utils";
 import { CandidateCard } from "../components/picker/CandidateCard.tsx";
 import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
@@ -221,15 +221,21 @@ export function CandidateRail({
 
 // ─── Scoring checklist (per-candidate: how THIS calendar scores on the picking rubric) ─────
 //
-// Driven by the selected candidate's `breakdown` contributions, so it changes per calendar.
-// Thresholds here are placeholders (contribution ≥55 = pass, ≥25 = partial) — the real
-// pass/fail rubric lands with the Phase-19 engine; this just renders whatever the data says.
+// Driven by the selected candidate's `breakdown` + the snapshot's `ruleSet` (the engine's
+// own rule registry — rules.ts). Labels/weights come from the registry, and pass/partial
+// status is weight-relative (contribution is the 0-100 share of a criterion's weight:
+// ✓ ≥ ⅔, ~ ≥ ⅓) — no client-side placeholder thresholds.
 
 interface ScoringMethodologyPanelProps {
   readonly candidate: PickerCandidate | null;
+  /** The engine's rule registry from the snapshot (empty on pre-registry snapshots). */
+  readonly ruleSet: ReadonlyArray<RuleSetEntry>;
+  /** Per-gate drop counts for the snapshot's compute run. */
+  readonly gateDrops: { readonly liquidity: number; readonly netTheta: number };
 }
 
-const CHECK_ITEMS: ReadonlyArray<{ readonly key: BreakdownEntry["criterion"]; readonly label: string }> = [
+/** Fallback labels when the snapshot predates the rule registry (ruleSet empty). */
+const FALLBACK_SCORE_ITEMS: ReadonlyArray<{ readonly key: BreakdownEntry["criterion"]; readonly label: string }> = [
   { key: "fwdEdge", label: "Forward-vol edge" },
   { key: "slope", label: "Term-structure slope" },
   { key: "eventAdjustment", label: "Event exposure" },
@@ -237,24 +243,39 @@ const CHECK_ITEMS: ReadonlyArray<{ readonly key: BreakdownEntry["criterion"]; re
   { key: "beVsEm", label: "Breakeven vs EM" },
 ];
 
+// Weight-relative status: contribution is already the 0-100 share of the criterion's weight.
 function scoreStatus(contribution: number): { readonly icon: string; readonly cls: string } {
-  if (contribution >= 55) return { icon: "✓", cls: "text-up" };
-  if (contribution >= 25) return { icon: "~", cls: "text-amber" };
+  if (contribution >= (200 / 3)) return { icon: "✓", cls: "text-up" };
+  if (contribution >= (100 / 3)) return { icon: "~", cls: "text-amber" };
   return { icon: "✗", cls: "text-down" };
 }
 
-function ScoringMethodologyPanel({ candidate }: ScoringMethodologyPanelProps): React.ReactElement {
+function ScoringMethodologyPanel({
+  candidate,
+  ruleSet,
+  gateDrops,
+}: ScoringMethodologyPanelProps): React.ReactElement {
+  // Score rows from the engine's registry when available; legacy fallback otherwise.
+  const scoreRules = ruleSet.filter((r) => r.kind === "score" && r.status === "active");
+  const scoreItems =
+    scoreRules.length > 0
+      ? scoreRules.map((r) => ({ key: r.id, label: r.label, weight: r.weight }))
+      : FALLBACK_SCORE_ITEMS.map((item) => ({ key: item.key, label: item.label, weight: null }));
+  const experimentalRules = ruleSet.filter((r) => r.status === "experimental");
+
   return (
     <Panel>
       <PanelHeading title="Scoring checklist" />
-      <p className="mb-2 font-mono text-[9px] text-dim">How this calendar scores on the picking rubric.</p>
+      <p className="mb-2 font-mono text-[9px] text-dim">
+        The engine&apos;s rule table — labels and weights come from the snapshot itself.
+      </p>
       {candidate === null ? (
         <p className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</p>
       ) : isPastedId(candidate.id) ? (
         <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
       ) : (
         <ul className="flex list-none flex-col gap-1.5 pl-0 font-mono text-[10px]" data-testid="scoring-checklist">
-          {CHECK_ITEMS.map((item) => {
+          {scoreItems.map((item) => {
             const entry = candidate.breakdown.find((b) => b.criterion === item.key);
             const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
             const contribution = entry?.contribution ?? 0;
@@ -263,6 +284,11 @@ function ScoringMethodologyPanel({ candidate }: ScoringMethodologyPanelProps): R
               <li key={item.key} className="flex items-center gap-2" data-testid={`checklist-${item.key}`}>
                 <span className={cn("w-3 shrink-0 text-center", st.cls)}>{st.icon}</span>
                 <span className="flex-1 text-txt">{item.label}</span>
+                {item.weight !== null && (
+                  <span className="text-muted-foreground" data-testid={`checklist-${item.key}-weight`}>
+                    w{item.weight}
+                  </span>
+                )}
                 <span className="text-dim">{guard ? "n/a" : `${Math.round(contribution)}%`}</span>
               </li>
             );
@@ -271,10 +297,41 @@ function ScoringMethodologyPanel({ candidate }: ScoringMethodologyPanelProps): R
             <span className={cn("w-3 shrink-0 text-center", candidate.theta >= 0 ? "text-up" : "text-down")}>
               {candidate.theta >= 0 ? "✓" : "✗"}
             </span>
-            <span className="flex-1 text-txt">Positive daily theta</span>
+            <span className="flex-1 text-txt">Positive daily theta (gate)</span>
             <span className="text-dim">{`${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}</span>
           </li>
+          {(gateDrops.liquidity > 0 || gateDrops.netTheta > 0) && (
+            <li className="flex items-center gap-2" data-testid="checklist-gate-drops">
+              <span className="w-3 shrink-0 text-center text-dim">⌫</span>
+              <span className="flex-1 text-dim">
+                Gates dropped {gateDrops.liquidity} illiquid quote{gateDrops.liquidity === 1 ? "" : "s"} ·{" "}
+                {gateDrops.netTheta} negative-θ pair{gateDrops.netTheta === 1 ? "" : "s"} this run
+              </span>
+            </li>
+          )}
+          {candidate.context.length > 0 && (
+            <li className="mt-1 flex flex-col gap-1" data-testid="checklist-experimental">
+              <span className="font-display text-[9px] font-semibold tracking-[0.09em] text-muted-foreground uppercase">
+                Experimental — not scored
+              </span>
+              {candidate.context.map((entry) => (
+                <div key={entry.id} className="flex items-center gap-2 opacity-70">
+                  <span className="w-3 shrink-0 text-center text-dim">◦</span>
+                  <span className="flex-1 text-dim">{entry.label}</span>
+                  <span className="text-dim">
+                    {entry.value === null ? "—" : entry.value.toFixed(entry.id === "slopePercentile" ? 0 : 3)}
+                  </span>
+                </div>
+              ))}
+            </li>
+          )}
         </ul>
+      )}
+      {experimentalRules.length > 0 && (
+        <p className="mt-1.5 font-mono text-[9px] text-dim">
+          {experimentalRules.length} experimental rule{experimentalRules.length === 1 ? "" : "s"} calibrating
+          (weight 0) — promoted only with PICK-04 backtest evidence.
+        </p>
       )}
       <details className="mt-2.5">
         <summary className="cursor-pointer font-display text-[9px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
@@ -571,7 +628,11 @@ export function Analyzer(): React.ReactElement {
       {/* ── Left column: ranked rail + the scoring matrix (how any calendar is scored) ── */}
       <div className="flex flex-col gap-3">
         {railBody}
-        <ScoringMethodologyPanel candidate={selected} />
+        <ScoringMethodologyPanel
+          candidate={selected}
+          ruleSet={snapshot?.ruleSet ?? []}
+          gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0 }}
+        />
       </div>
 
       {/* ── Center column: payoff graph + term structure (both charts, stacked) ── */}

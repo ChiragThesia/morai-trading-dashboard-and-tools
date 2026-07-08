@@ -161,6 +161,16 @@ export const pickerGexContext = z.object({
   putWall: z.number().nullable(),
   netGammaAtSpot: z.number(),
   absGammaStrike: z.number().nullable(),
+  /** Near-term (≤45d) level set the gexFit rule scores against (rules.ts). Defaulted so
+   *  pre-registry stored snapshots still parse at the read seam. */
+  nearTerm: z
+    .object({
+      callWall: z.number().nullable(),
+      putWall: z.number().nullable(),
+      flip: z.number().nullable(),
+    })
+    .nullable()
+    .default(null),
 });
 
 export type PickerGexContext = z.infer<typeof pickerGexContext>;

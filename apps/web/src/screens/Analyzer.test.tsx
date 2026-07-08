@@ -734,3 +734,73 @@ describe("Analyzer — live-data states (Task 2, 19-09-PLAN.md, D-18/D-19)", () 
     expect(screen.queryByTestId("picker-error")).toBeNull();
   });
 });
+
+describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.ruleSet)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const RULESET = [
+    { id: "net-theta-positive", label: "Net theta > 0", kind: "gate", weight: 0, status: "active", rationale: "carry" },
+    { id: "liquidity", label: "Liquidity", kind: "gate", weight: 0, status: "active", rationale: "tradeable" },
+    { id: "fwdEdge", label: "Forward-IV edge", kind: "score", weight: 35, status: "active", rationale: "fwd" },
+    { id: "slope", label: "Term-structure slope", kind: "score", weight: 30, status: "active", rationale: "vrp" },
+    { id: "gexFit", label: "GEX placement", kind: "score", weight: 15, status: "active", rationale: "walls" },
+    { id: "eventAdjustment", label: "Front-leg event risk", kind: "score", weight: 10, status: "active", rationale: "events" },
+    { id: "beVsEm", label: "Breakeven vs EM", kind: "score", weight: 10, status: "active", rationale: "zone" },
+    { id: "vrp", label: "VRP", kind: "experimental", weight: 0, status: "experimental", rationale: "calibrating" },
+  ] as const;
+
+  function snapshotWithRegistry(): PickerSnapshotResponse {
+    return {
+      ...pickerSnapshotFixture,
+      ruleSet: [...RULESET],
+      gateDrops: { liquidity: 3, netTheta: 2 },
+      candidates: pickerSnapshotFixture.candidates.map((c) => ({
+        ...c,
+        context: [
+          { id: "vrp", label: "VRP (front IV − RV20)", value: 0.031, note: "calibrating (PICK-04)" },
+          { id: "slopePercentile", label: "Slope percentile", value: 67, note: "calibrating (PICK-04)" },
+          { id: "backEventBonus", label: "Event in back window", value: 1, note: "calibrating (PICK-05)" },
+        ],
+      })),
+    };
+  }
+
+  it("renders engine weights from the snapshot ruleSet (w35 on fwdEdge, w30 on slope)", () => {
+    mockUsePickerReturn({ data: snapshotWithRegistry() });
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("checklist-fwdEdge-weight").textContent).toBe("w35");
+    expect(screen.getByTestId("checklist-slope-weight").textContent).toBe("w30");
+  });
+
+  it("renders the gate-drop counts line (no silent caps)", () => {
+    mockUsePickerReturn({ data: snapshotWithRegistry() });
+    render(<Analyzer />);
+
+    const drops = screen.getByTestId("checklist-gate-drops");
+    expect(drops.textContent).toContain("3 illiquid quotes");
+    expect(drops.textContent).toContain("2 negative-θ pairs");
+  });
+
+  it("renders the experimental context rows dim with their computed values", () => {
+    mockUsePickerReturn({ data: snapshotWithRegistry() });
+    render(<Analyzer />);
+
+    const experimental = screen.getByTestId("checklist-experimental");
+    expect(experimental.textContent).toContain("VRP (front IV − RV20)");
+    expect(experimental.textContent).toContain("0.031");
+    expect(experimental.textContent).toContain("Slope percentile");
+    expect(experimental.textContent).toContain("67");
+  });
+
+  it("pre-registry snapshots (empty ruleSet) fall back to the legacy labels with no weights", () => {
+    mockUsePickerReturn({ data: pickerSnapshotFixture });
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("checklist-fwdEdge")).toBeTruthy();
+    expect(screen.queryByTestId("checklist-fwdEdge-weight")).toBeNull();
+  });
+});

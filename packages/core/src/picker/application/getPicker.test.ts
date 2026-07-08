@@ -24,7 +24,7 @@ const ROW: PickerSnapshotRow = {
     gexContextStatus: "ok",
     eventsContextStatus: "ok",
     termStructure: [],
-    gex: { flip: null, callWall: null, putWall: null, netGammaAtSpot: 0, absGammaStrike: null },
+    gex: { flip: null, callWall: null, putWall: null, netGammaAtSpot: 0, absGammaStrike: null, nearTerm: null },
     events: [],
     candidates: [],
     ruleSet: [],

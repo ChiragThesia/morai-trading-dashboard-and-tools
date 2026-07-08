@@ -322,8 +322,25 @@ export function makeComputePickerSnapshotUseCase(
             putWall: gexContext.putWall,
             netGammaAtSpot: gexContext.netGammaAtSpot,
             absGammaStrike: gexContext.absGammaStrike,
+            nearTerm:
+              gexContext.nearTermFlip !== null ||
+              gexContext.nearTermCallWall !== null ||
+              gexContext.nearTermPutWall !== null
+                ? {
+                    callWall: gexContext.nearTermCallWall,
+                    putWall: gexContext.nearTermPutWall,
+                    flip: gexContext.nearTermFlip,
+                  }
+                : null,
           }
-        : { flip: null, callWall: null, putWall: null, netGammaAtSpot: 0, absGammaStrike: null };
+        : {
+            flip: null,
+            callWall: null,
+            putWall: null,
+            netGammaAtSpot: 0,
+            absGammaStrike: null,
+            nearTerm: null,
+          };
 
     const eventsForSnapshot = events.map((event) => ({ date: event.date, name: event.name }));
 
