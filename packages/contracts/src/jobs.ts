@@ -16,6 +16,8 @@ export const TRIGGERABLE_JOBS = [
   "recompute-snapshot-pnl",
   "wipe-derived-fills",
   "register-open-calendars",
+  /** Re-pull chains on demand (24/7): kicks off the full fetch→bsm→analytics→gex→picker chain. */
+  "fetch-schwab-chain",
 ] as const;
 
 export type TriggerableJob = (typeof TRIGGERABLE_JOBS)[number];

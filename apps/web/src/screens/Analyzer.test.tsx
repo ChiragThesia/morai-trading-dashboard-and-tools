@@ -60,6 +60,13 @@ vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
 vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
 
+// useRepullChains needs a QueryClient; this suite renders Analyzer without a provider, so the
+// mutation hook is mocked to an inert stub (its own behavior is covered in useRepullChains.test.ts).
+const { mockRepull } = vi.hoisted(() => ({
+  mockRepull: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isSuccess: false, isError: false })),
+}));
+vi.mock("../hooks/useRepullChains.ts", () => ({ useRepullChains: mockRepull }));
+
 /** Loose shape covering only the fields Analyzer.tsx actually reads off the query result. */
 type MockPickerResult = Pick<
   UseQueryResult<PickerSnapshotResponse | null>,

@@ -41,6 +41,7 @@ import type { ScenarioParams } from "../lib/scenario-engine.ts";
 import { computeProjectionBounds } from "../lib/date-projection.ts";
 import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
 import { usePicker } from "../hooks/usePicker.ts";
+import { useRepullChains } from "../hooks/useRepullChains.ts";
 import { parseTosOrder } from "../lib/tos-parser.ts";
 import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candidate.ts";
 
@@ -255,95 +256,100 @@ function ScoringMethodologyPanel({
   ruleSet,
   gateDrops,
 }: ScoringMethodologyPanelProps): React.ReactElement {
+  const repull = useRepullChains();
+
   // Score rows from the engine's registry when available; legacy fallback otherwise.
   const scoreRules = ruleSet.filter((r) => r.kind === "score" && r.status === "active");
   const scoreItems =
     scoreRules.length > 0
       ? scoreRules.map((r) => ({ key: r.id, label: r.label, weight: r.weight }))
       : FALLBACK_SCORE_ITEMS.map((item) => ({ key: item.key, label: item.label, weight: null }));
-  const experimentalRules = ruleSet.filter((r) => r.status === "experimental");
+
+  const pillBase =
+    "flex items-center gap-1 rounded-full border border-border bg-raise px-2 py-0.5 font-mono text-[10px]";
+
+  let pills: React.ReactNode;
+  if (candidate === null) {
+    pills = <span className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</span>;
+  } else if (isPastedId(candidate.id)) {
+    pills = <span className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</span>;
+  } else {
+    pills = (
+      <div className="flex flex-wrap items-center gap-1.5" data-testid="scoring-checklist">
+        {scoreItems.map((item) => {
+          const entry = candidate.breakdown.find((b) => b.criterion === item.key);
+          const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
+          const contribution = entry?.contribution ?? 0;
+          const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(contribution);
+          return (
+            <span key={item.key} className={pillBase} data-testid={`checklist-${item.key}`}>
+              <span className={cn("text-center", st.cls)}>{st.icon}</span>
+              <span className="text-txt">{item.label}</span>
+              {item.weight !== null && (
+                <span className="text-muted-foreground" data-testid={`checklist-${item.key}-weight`}>
+                  w{item.weight}
+                </span>
+              )}
+              <span className="text-dim">{guard ? "n/a" : `${Math.round(contribution)}%`}</span>
+            </span>
+          );
+        })}
+        <span className={pillBase} data-testid="checklist-theta">
+          <span className={cn("text-center", candidate.theta >= 0 ? "text-up" : "text-down")}>
+            {candidate.theta >= 0 ? "✓" : "✗"}
+          </span>
+          <span className="text-txt">θ gate</span>
+          <span className="text-dim">{`${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}</span>
+        </span>
+        {(gateDrops.liquidity > 0 || gateDrops.netTheta > 0) && (
+          <span className={cn(pillBase, "opacity-70")} data-testid="checklist-gate-drops">
+            <span className="text-dim">⌫</span>
+            <span className="text-dim">
+              dropped {gateDrops.liquidity} illiquid quote{gateDrops.liquidity === 1 ? "" : "s"} ·{" "}
+              {gateDrops.netTheta} negative-θ pair{gateDrops.netTheta === 1 ? "" : "s"}
+            </span>
+          </span>
+        )}
+        {candidate.context.length > 0 && (
+          <span className="flex flex-wrap items-center gap-1.5" data-testid="checklist-experimental">
+            {candidate.context.map((entry) => (
+              <span key={entry.id} className={cn(pillBase, "opacity-60")}>
+                <span className="text-dim">◦</span>
+                <span className="text-dim">{entry.label}</span>
+                <span className="text-dim">
+                  {entry.value === null ? "—" : entry.value.toFixed(entry.id === "slopePercentile" ? 0 : 3)}
+                </span>
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <Panel>
-      <PanelHeading title="Scoring checklist" />
-      <p className="mb-2 font-mono text-[9px] text-dim">
-        The engine&apos;s rule table — labels and weights come from the snapshot itself.
-      </p>
-      {candidate === null ? (
-        <p className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</p>
-      ) : isPastedId(candidate.id) ? (
-        <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
-      ) : (
-        <ul className="flex list-none flex-col gap-1.5 pl-0 font-mono text-[10px]" data-testid="scoring-checklist">
-          {scoreItems.map((item) => {
-            const entry = candidate.breakdown.find((b) => b.criterion === item.key);
-            const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
-            const contribution = entry?.contribution ?? 0;
-            const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(contribution);
-            return (
-              <li key={item.key} className="flex items-center gap-2" data-testid={`checklist-${item.key}`}>
-                <span className={cn("w-3 shrink-0 text-center", st.cls)}>{st.icon}</span>
-                <span className="flex-1 text-txt">{item.label}</span>
-                {item.weight !== null && (
-                  <span className="text-muted-foreground" data-testid={`checklist-${item.key}-weight`}>
-                    w{item.weight}
-                  </span>
-                )}
-                <span className="text-dim">{guard ? "n/a" : `${Math.round(contribution)}%`}</span>
-              </li>
-            );
-          })}
-          <li className="flex items-center gap-2" data-testid="checklist-theta">
-            <span className={cn("w-3 shrink-0 text-center", candidate.theta >= 0 ? "text-up" : "text-down")}>
-              {candidate.theta >= 0 ? "✓" : "✗"}
-            </span>
-            <span className="flex-1 text-txt">Positive daily theta (gate)</span>
-            <span className="text-dim">{`${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}</span>
-          </li>
-          {(gateDrops.liquidity > 0 || gateDrops.netTheta > 0) && (
-            <li className="flex items-center gap-2" data-testid="checklist-gate-drops">
-              <span className="w-3 shrink-0 text-center text-dim">⌫</span>
-              <span className="flex-1 text-dim">
-                Gates dropped {gateDrops.liquidity} illiquid quote{gateDrops.liquidity === 1 ? "" : "s"} ·{" "}
-                {gateDrops.netTheta} negative-θ pair{gateDrops.netTheta === 1 ? "" : "s"} this run
-              </span>
-            </li>
-          )}
-          {candidate.context.length > 0 && (
-            <li className="mt-1 flex flex-col gap-1" data-testid="checklist-experimental">
-              <span className="font-display text-[9px] font-semibold tracking-[0.09em] text-muted-foreground uppercase">
-                Experimental — not scored
-              </span>
-              {candidate.context.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-2 opacity-70">
-                  <span className="w-3 shrink-0 text-center text-dim">◦</span>
-                  <span className="flex-1 text-dim">{entry.label}</span>
-                  <span className="text-dim">
-                    {entry.value === null ? "—" : entry.value.toFixed(entry.id === "slopePercentile" ? 0 : 3)}
-                  </span>
-                </div>
-              ))}
-            </li>
-          )}
-        </ul>
-      )}
-      {experimentalRules.length > 0 && (
-        <p className="mt-1.5 font-mono text-[9px] text-dim">
-          {experimentalRules.length} experimental rule{experimentalRules.length === 1 ? "" : "s"} calibrating
-          (weight 0) — promoted only with PICK-04 backtest evidence.
-        </p>
-      )}
-      <details className="mt-2.5">
-        <summary className="cursor-pointer font-display text-[9px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
-          What we don&apos;t score
-        </summary>
-        <p className="mt-1.5 font-mono text-[10px] leading-[1.5] text-dim">
-          <span className="text-txt">Deliberately NOT scored</span> (evidence didn&apos;t hold): IV-rank
-          gates · fixed IV-difference band · debit-%-of-back. <span className="text-txt">Needs a backtest</span>:
-          slope→SPX predictive test · BE-vs-EM &amp; θ/vega thresholds · VVIX / COT timing.
-        </p>
-      </details>
-    </Panel>
+    <div className="flex items-start justify-between gap-3" data-testid="scoring-pills">
+      <div className="min-w-0 flex-1">{pills}</div>
+      <div className="flex shrink-0 items-center gap-2">
+        {repull.isSuccess && (
+          <span className="font-mono text-[9px] text-dim" data-testid="repull-status">
+            queued — rail refreshes in ~4 min
+          </span>
+        )}
+        {repull.isError && (
+          <span className="font-mono text-[9px] text-down" data-testid="repull-status">
+            re-pull failed
+          </span>
+        )}
+        <Button
+          onClick={() => { repull.mutate(); }}
+          disabled={repull.isPending}
+          data-testid="repull-chains-button"
+        >
+          {repull.isPending ? "Queuing…" : "↻ Re-pull chains"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -624,15 +630,16 @@ export function Analyzer(): React.ReactElement {
 
   return (
     <div className="flex flex-col gap-4 bg-bg p-3">
+      {/* ── Top strip: the engine's rule pills for the selected calendar + re-pull control ── */}
+      <ScoringMethodologyPanel
+        candidate={selected}
+        ruleSet={snapshot?.ruleSet ?? []}
+        gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0 }}
+      />
       <div className="grid gap-4" style={{ gridTemplateColumns: "300px 1fr 330px" }}>
-      {/* ── Left column: ranked rail + the scoring matrix (how any calendar is scored) ── */}
+      {/* ── Left column: ranked rail ── */}
       <div className="flex flex-col gap-3">
         {railBody}
-        <ScoringMethodologyPanel
-          candidate={selected}
-          ruleSet={snapshot?.ruleSet ?? []}
-          gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0 }}
-        />
       </div>
 
       {/* ── Center column: payoff graph + term structure (both charts, stacked) ── */}
