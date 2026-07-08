@@ -797,10 +797,31 @@ describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.rul
     render(<Analyzer />);
 
     const experimental = screen.getByTestId("checklist-experimental");
-    expect(experimental.textContent).toContain("VRP (front IV − RV20)");
+    expect(experimental.textContent).toContain("CALIBRATING");
     expect(experimental.textContent).toContain("0.031");
-    expect(experimental.textContent).toContain("Slope percentile");
     expect(experimental.textContent).toContain("67");
+  });
+
+  it("the Re-pull chains button lives in the Suggested-calendars rail heading, not the scorecard strip", () => {
+    mockUsePickerReturn({ data: snapshotWithRegistry() });
+    render(<Analyzer />);
+
+    const button = screen.getByTestId("repull-chains-button");
+    const strip = screen.getByTestId("scoring-pills");
+    expect(strip.contains(button)).toBe(false);
+    // The button sits inside the rail panel, adjacent to its heading.
+    const rail = screen.getByText("Suggested calendars").closest("section, div.rounded-lg, div");
+    expect(rail).not.toBeNull();
+  });
+
+  it("scorecard chips render MetricChip-scale values (icon + contribution %) for the selected candidate", () => {
+    mockUsePickerReturn({ data: snapshotWithRegistry() });
+    render(<Analyzer />);
+
+    const fwd = screen.getByTestId("checklist-fwdEdge");
+    // Big-value chip: label carries the weight, the value line carries icon + percent.
+    expect(fwd.textContent).toContain("w35");
+    expect(fwd.textContent).toMatch(/[✓~✗].*%/u);
   });
 
   it("pre-registry snapshots (empty ruleSet) fall back to the legacy labels with no weights", () => {

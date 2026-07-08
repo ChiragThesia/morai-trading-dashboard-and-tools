@@ -103,15 +103,18 @@ export function MetricChip({
   valueClassName,
   alert = false,
   className,
+  "data-testid": dataTestId,
 }: {
   label: React.ReactNode;
   value: React.ReactNode;
   valueClassName?: string;
   alert?: boolean;
   className?: string;
+  "data-testid"?: string;
 }): React.ReactElement {
   return (
     <div
+      data-testid={dataTestId}
       className={cn(
         "flex items-center gap-1.5 rounded-md px-3 py-1.5 ring-1",
         alert ? "bg-downd ring-down/40" : "bg-raise/40 ring-line",

@@ -30,7 +30,7 @@ import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
-import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
+import { Panel, PanelHeading, Button, MetricChip } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
@@ -102,6 +102,8 @@ export interface CandidateRailProps {
   readonly onRemovePasted: (candidate: PickerCandidate) => void;
   /** Removes every pasted card at once. */
   readonly onClearAllPasted: () => void;
+  /** Optional heading-row control (the Re-pull chains button — refreshes THIS rail). */
+  readonly headerAction?: React.ReactNode;
 }
 
 /**
@@ -133,16 +135,20 @@ export function CandidateRail({
   onPasteAnalyze,
   onRemovePasted,
   onClearAllPasted,
+  headerAction,
 }: CandidateRailProps): React.ReactElement {
   return (
     <Panel>
       <div className="mb-2 flex items-center justify-between gap-2">
         <PanelHeading title="Suggested calendars" />
-        {pastedCandidates.length > 0 && (
-          <Button variant="ghost" data-testid="picker-paste-clear-all" onClick={onClearAllPasted}>
-            Clear all
-          </Button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {pastedCandidates.length > 0 && (
+            <Button variant="ghost" data-testid="picker-paste-clear-all" onClick={onClearAllPasted}>
+              Clear all
+            </Button>
+          )}
+          {headerAction}
+        </div>
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <input
@@ -251,104 +257,120 @@ function scoreStatus(contribution: number): { readonly icon: string; readonly cl
   return { icon: "✗", cls: "text-down" };
 }
 
+/** Short chip labels — the ruleSet's verbose labels stay in WhyPanel/docs; chips scan fast. */
+const CHIP_LABELS: Record<string, string> = {
+  fwdEdge: "FWD-IV EDGE",
+  slope: "SLOPE",
+  gexFit: "GEX FIT",
+  eventAdjustment: "EVENT RISK",
+  beVsEm: "BE : EM",
+};
+
+const EXPERIMENTAL_SHORT: Record<string, string> = {
+  vrp: "VRP",
+  slopePercentile: "SLP%",
+  backEventBonus: "EVT",
+  thetaVega: "θ/V",
+};
+
 function ScoringMethodologyPanel({
   candidate,
   ruleSet,
   gateDrops,
 }: ScoringMethodologyPanelProps): React.ReactElement {
-  const repull = useRepullChains();
-
   // Score rows from the engine's registry when available; legacy fallback otherwise.
   const scoreRules = ruleSet.filter((r) => r.kind === "score" && r.status === "active");
   const scoreItems =
     scoreRules.length > 0
-      ? scoreRules.map((r) => ({ key: r.id, label: r.label, weight: r.weight }))
-      : FALLBACK_SCORE_ITEMS.map((item) => ({ key: item.key, label: item.label, weight: null }));
+      ? scoreRules.map((r) => ({ key: r.id, label: CHIP_LABELS[r.id] ?? r.label, weight: r.weight }))
+      : FALLBACK_SCORE_ITEMS.map((item) => ({
+          key: item.key,
+          label: CHIP_LABELS[item.key] ?? item.label,
+          weight: null,
+        }));
 
-  const pillBase =
-    "flex items-center gap-1 rounded-full border border-border bg-raise px-2 py-0.5 font-mono text-[10px]";
-
-  let pills: React.ReactNode;
   if (candidate === null) {
-    pills = <span className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</span>;
-  } else if (isPastedId(candidate.id)) {
-    pills = <span className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</span>;
-  } else {
-    pills = (
-      <div className="flex flex-wrap items-center gap-1.5" data-testid="scoring-checklist">
+    return (
+      <div data-testid="scoring-pills">
+        <span className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</span>
+      </div>
+    );
+  }
+  if (isPastedId(candidate.id)) {
+    return (
+      <div data-testid="scoring-pills">
+        <span className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-testid="scoring-pills">
+      <div className="flex flex-wrap items-center gap-2" data-testid="scoring-checklist">
         {scoreItems.map((item) => {
           const entry = candidate.breakdown.find((b) => b.criterion === item.key);
           const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
           const contribution = entry?.contribution ?? 0;
           const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(contribution);
           return (
-            <span key={item.key} className={pillBase} data-testid={`checklist-${item.key}`}>
-              <span className={cn("text-center", st.cls)}>{st.icon}</span>
-              <span className="text-txt">{item.label}</span>
-              {item.weight !== null && (
-                <span className="text-muted-foreground" data-testid={`checklist-${item.key}-weight`}>
-                  w{item.weight}
+            <MetricChip
+              key={item.key}
+              data-testid={`checklist-${item.key}`}
+              label={
+                <>
+                  {item.label}
+                  {item.weight !== null && (
+                    <span className="ml-1 text-dim" data-testid={`checklist-${item.key}-weight`}>
+                      w{item.weight}
+                    </span>
+                  )}
+                </>
+              }
+              value={
+                <span className={st.cls}>
+                  {st.icon} {guard ? "n/a" : `${Math.round(contribution)}%`}
                 </span>
-              )}
-              <span className="text-dim">{guard ? "n/a" : `${Math.round(contribution)}%`}</span>
-            </span>
+              }
+            />
           );
         })}
-        <span className={pillBase} data-testid="checklist-theta">
-          <span className={cn("text-center", candidate.theta >= 0 ? "text-up" : "text-down")}>
-            {candidate.theta >= 0 ? "✓" : "✗"}
-          </span>
-          <span className="text-txt">θ gate</span>
-          <span className="text-dim">{`${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}</span>
-        </span>
-        {(gateDrops.liquidity > 0 || gateDrops.netTheta > 0) && (
-          <span className={cn(pillBase, "opacity-70")} data-testid="checklist-gate-drops">
-            <span className="text-dim">⌫</span>
-            <span className="text-dim">
-              dropped {gateDrops.liquidity} illiquid quote{gateDrops.liquidity === 1 ? "" : "s"} ·{" "}
-              {gateDrops.netTheta} negative-θ pair{gateDrops.netTheta === 1 ? "" : "s"}
+        <MetricChip
+          data-testid="checklist-theta"
+          label="θ GATE"
+          value={
+            <span className={candidate.theta >= 0 ? "text-up" : "text-down"}>
+              {candidate.theta >= 0 ? "✓" : "✗"} {`${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}
             </span>
-          </span>
-        )}
+          }
+        />
         {candidate.context.length > 0 && (
-          <span className="flex flex-wrap items-center gap-1.5" data-testid="checklist-experimental">
-            {candidate.context.map((entry) => (
-              <span key={entry.id} className={cn(pillBase, "opacity-60")}>
-                <span className="text-dim">◦</span>
-                <span className="text-dim">{entry.label}</span>
-                <span className="text-dim">
-                  {entry.value === null ? "—" : entry.value.toFixed(entry.id === "slopePercentile" ? 0 : 3)}
-                </span>
+          <MetricChip
+            data-testid="checklist-experimental"
+            className="opacity-60"
+            label="CALIBRATING"
+            value={
+              <span className="font-mono text-[10px] font-normal text-dim">
+                {candidate.context
+                  .map(
+                    (entry) =>
+                      `${EXPERIMENTAL_SHORT[entry.id] ?? entry.id} ${
+                        entry.value === null
+                          ? "—"
+                          : entry.value.toFixed(entry.id === "slopePercentile" ? 0 : 3)
+                      }`,
+                  )
+                  .join(" · ")}
               </span>
-            ))}
-          </span>
+            }
+          />
         )}
       </div>
-    );
-  }
-
-  return (
-    <div className="flex items-start justify-between gap-3" data-testid="scoring-pills">
-      <div className="min-w-0 flex-1">{pills}</div>
-      <div className="flex shrink-0 items-center gap-2">
-        {repull.isSuccess && (
-          <span className="font-mono text-[9px] text-dim" data-testid="repull-status">
-            queued — rail refreshes in ~4 min
-          </span>
-        )}
-        {repull.isError && (
-          <span className="font-mono text-[9px] text-down" data-testid="repull-status">
-            re-pull failed
-          </span>
-        )}
-        <Button
-          onClick={() => { repull.mutate(); }}
-          disabled={repull.isPending}
-          data-testid="repull-chains-button"
-        >
-          {repull.isPending ? "Queuing…" : "↻ Re-pull chains"}
-        </Button>
-      </div>
+      {(gateDrops.liquidity > 0 || gateDrops.netTheta > 0) && (
+        <span className="font-mono text-[9px] text-dim" data-testid="checklist-gate-drops">
+          {gateDrops.liquidity} illiquid quote{gateDrops.liquidity === 1 ? "" : "s"} ·{" "}
+          {gateDrops.netTheta} negative-θ pair{gateDrops.netTheta === 1 ? "" : "s"} dropped this run
+        </span>
+      )}
     </div>
   );
 }
@@ -559,6 +581,32 @@ export function Analyzer(): React.ReactElement {
   const bookVega = bookCandidates.reduce((sum, c) => sum + c.vega, 0);
   const positionSetSignature = combinedPositions.map((p) => p.id).join("|");
 
+  // Re-pull chains control — lives with the rail it refreshes (heading action slot).
+  const repull = useRepullChains();
+  const repullControl = (
+    <div className="flex items-center gap-1.5">
+      {repull.isSuccess && (
+        <span className="font-mono text-[9px] text-dim" data-testid="repull-status">
+          queued · ~4 min
+        </span>
+      )}
+      {repull.isError && (
+        <span className="font-mono text-[9px] text-down" data-testid="repull-status">
+          failed
+        </span>
+      )}
+      <Button
+        variant="ghost"
+        onClick={() => { repull.mutate(); }}
+        disabled={repull.isPending}
+        data-testid="repull-chains-button"
+        title="Fetch fresh chains and re-score the rail (runs the full pipeline, ~4 min)"
+      >
+        {repull.isPending ? "Queuing…" : "↻ Re-pull"}
+      </Button>
+    </div>
+  );
+
   // ── Rail body: five mutually-exclusive states (D-18/D-19), precedence
   // loading → error → cold-start → zero-filtered (inside CandidateRail) → populated. ──
   let railBody: React.ReactElement;
@@ -593,7 +641,10 @@ export function Analyzer(): React.ReactElement {
   } else if (snapshot === null) {
     railBody = (
       <Panel>
-        <PanelHeading title="Suggested calendars" />
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <PanelHeading title="Suggested calendars" />
+          {repullControl}
+        </div>
         <div className="flex flex-col gap-1.5 p-4" data-testid="picker-empty-cold-start">
           <p className="m-0 font-display text-sm font-bold text-txt">Picker warming up</p>
           <p className="m-0 font-mono text-[11px] text-dim">
@@ -624,13 +675,14 @@ export function Analyzer(): React.ReactElement {
         onPasteAnalyze={handlePasteAnalyze}
         onRemovePasted={handleRemovePasted}
         onClearAllPasted={handleClearAllPasted}
+        headerAction={repullControl}
       />
     );
   }
 
   return (
     <div className="flex flex-col gap-4 bg-bg p-3">
-      {/* ── Top strip: the engine's rule pills for the selected calendar + re-pull control ── */}
+      {/* ── Top strip: the engine's scorecard chips for the selected calendar ── */}
       <ScoringMethodologyPanel
         candidate={selected}
         ruleSet={snapshot?.ruleSet ?? []}
