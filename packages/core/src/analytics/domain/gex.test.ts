@@ -288,7 +288,7 @@ describe("strikeGex — per-side dollar gamma (cgex/pgex)", () => {
   });
 });
 
-describe("pickWalls — side-specific wall convention (SpotGamma)", () => {
+describe("pickWalls — side-specific wall convention, bracketing spot (SpotGamma)", () => {
   function entry(k: number, cgex: number, pgex: number): StrikeGexEntry {
     return { k, gex: cgex + pgex, cgex, pgex, coi: 0, poi: 0, vol: 0 };
   }
@@ -297,22 +297,45 @@ describe("pickWalls — side-specific wall convention (SpotGamma)", () => {
     // 7500 has the call concentration (cgex 5) but nets negative (pgex −8).
     // The old net-argmax convention would pick 7450; side-specific must pick 7500.
     const entries = [entry(7450, 2, 0), entry(7500, 5, -8)];
-    expect(pickWalls(entries).callWall).toBe(7500);
+    expect(pickWalls(entries, 7400).callWall).toBe(7500);
   });
 
   it("putWall = most-negative put-side gamma strike even when its NET gex is positive", () => {
     // 7400 has the put concentration (pgex −6) but nets positive (cgex 9).
     const entries = [entry(7300, 0, -2), entry(7400, 9, -6)];
-    expect(pickWalls(entries).putWall).toBe(7400);
+    expect(pickWalls(entries, 7450).putWall).toBe(7400);
   });
 
   it("callWall null when no strike has call gamma; putWall null when no strike has put gamma", () => {
     const putsOnly = [entry(7300, 0, -2), entry(7400, 0, -6)];
-    expect(pickWalls(putsOnly).callWall).toBeNull();
-    expect(pickWalls(putsOnly).putWall).toBe(7400);
+    expect(pickWalls(putsOnly, 7450).callWall).toBeNull();
+    expect(pickWalls(putsOnly, 7450).putWall).toBe(7400);
 
     const callsOnly = [entry(7500, 3, 0), entry(7600, 5, 0)];
-    expect(pickWalls(callsOnly).putWall).toBeNull();
-    expect(pickWalls(callsOnly).callWall).toBe(7600);
+    expect(pickWalls(callsOnly, 7450).putWall).toBeNull();
+    expect(pickWalls(callsOnly, 7450).callWall).toBe(7600);
+  });
+
+  // Live regression 2026-07-08: gamma concentrates at the ATM round strike (7500 with
+  // spot 7479), so BOTH raw side-specific extremes glued to 7500 — a "put wall" ABOVE
+  // spot is semantically meaningless (support cannot sit above price). Walls must
+  // bracket spot: putWall from strikes ≤ spot, callWall from strikes ≥ spot.
+  it("putWall only considers strikes at/below spot — ATM magnet above spot is skipped", () => {
+    // 7500 (above spot 7479) has the biggest put gamma; 7400 is the biggest at/below.
+    const entries = [entry(7400, 0, -6), entry(7500, 9, -20)];
+    expect(pickWalls(entries, 7479).putWall).toBe(7400);
+  });
+
+  it("callWall only considers strikes at/above spot", () => {
+    // 7450 (below spot 7479) has the biggest call gamma; 7500 is the biggest at/above.
+    const entries = [entry(7450, 9, 0), entry(7500, 5, -20)];
+    expect(pickWalls(entries, 7479).callWall).toBe(7500);
+  });
+
+  it("a strike exactly at spot is eligible for BOTH walls", () => {
+    const entries = [entry(7480, 5, -5)];
+    const walls = pickWalls(entries, 7480);
+    expect(walls.callWall).toBe(7480);
+    expect(walls.putWall).toBe(7480);
   });
 });

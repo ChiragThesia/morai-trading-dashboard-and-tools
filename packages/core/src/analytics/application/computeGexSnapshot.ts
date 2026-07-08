@@ -117,10 +117,11 @@ export function makeComputeGexSnapshotUseCase(
     // If no usable entries (all legs had NaN/null gamma), skip persist.
     if (strikeEntries.length === 0) return ok(undefined);
 
-    // ── Step 5: Derive callWall / putWall (side-specific, SpotGamma convention) ─
-    // callWall = largest call-side gamma strike; putWall = most-negative put-side
-    // gamma strike. Nulls preserved when a side has no gamma (WR-05 semantics).
-    const { callWall, putWall } = pickWalls(strikeEntries);
+    // ── Step 5: Derive callWall / putWall (side-specific, bracketing spot) ────
+    // callWall = largest call-side gamma strike AT/ABOVE spot; putWall = most-negative
+    // put-side gamma strike AT/BELOW spot. Nulls preserved when a side has no gamma
+    // in its bracket (WR-05 semantics).
+    const { callWall, putWall } = pickWalls(strikeEntries, spot);
 
     // ── Step 6: Build the spot-grid profile ──────────────────────────────────
     const spotGrid = buildSpotGrid(spot);
@@ -172,7 +173,7 @@ export function makeComputeGexSnapshotUseCase(
     if (nearLegs.length > 0) {
       const nearEntries = strikeGex(nearLegs, spot);
       if (nearEntries.length > 0) {
-        const nearWalls = pickWalls(nearEntries);
+        const nearWalls = pickWalls(nearEntries, spot);
         nearTerm = {
           callWall: nearWalls.callWall,
           putWall: nearWalls.putWall,

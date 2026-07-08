@@ -137,14 +137,22 @@ export function strikeGex(
 // ─── pickWalls ───────────────────────────────────────────────────────────────
 
 /**
- * Side-specific wall selection (SpotGamma convention):
- *   callWall = strike with the LARGEST call-side dollar gamma (null when no call gamma)
- *   putWall  = strike with the MOST NEGATIVE put-side dollar gamma (null when no put gamma)
+ * Side-specific wall selection, bracketing spot (SpotGamma convention):
+ *   callWall = strike ≥ spot with the LARGEST call-side dollar gamma (null when none)
+ *   putWall  = strike ≤ spot with the MOST NEGATIVE put-side dollar gamma (null when none)
  *
  * NOT the net-GEX argmax/argmin: netting lets one side's OI cancel the other and
  * moves the wall away from where the hedging concentration actually sits.
+ *
+ * The spot bracket is load-bearing (live 2026-07-08): gamma concentrates at the ATM
+ * round strike, so the UNBRACKETED side-specific extremes both glued to it (call wall
+ * = put wall = 7500 with spot 7479). A put wall above spot is meaningless — support
+ * sits below price, resistance above, by definition.
  */
-export function pickWalls(entries: ReadonlyArray<StrikeGexEntry>): {
+export function pickWalls(
+  entries: ReadonlyArray<StrikeGexEntry>,
+  spot: number,
+): {
   readonly callWall: number | null;
   readonly putWall: number | null;
 } {
@@ -154,11 +162,11 @@ export function pickWalls(entries: ReadonlyArray<StrikeGexEntry>): {
   let putBest = 0;
 
   for (const entry of entries) {
-    if (entry.cgex > callBest) {
+    if (entry.k >= spot && entry.cgex > callBest) {
       callBest = entry.cgex;
       callWall = entry.k;
     }
-    if (entry.pgex < putBest) {
+    if (entry.k <= spot && entry.pgex < putBest) {
       putBest = entry.pgex;
       putWall = entry.k;
     }
