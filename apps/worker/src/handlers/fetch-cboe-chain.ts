@@ -1,5 +1,4 @@
 import type { Job } from "pg-boss";
-import { isWithinRth, isNyseHoliday } from "@morai/core";
 import type { ForRunningFetchChain } from "@morai/core";
 
 // Minimal boss interface — only what this handler uses (D-08: no manual trigger)
@@ -17,18 +16,16 @@ type FetchCboeChainHandlerDeps = {
   readonly fetchChainUseCase: ForRunningFetchChain;
   /** pg-boss instance — used only to enqueue compute on success (D-07). */
   readonly boss: BossForChainHandler;
-  /** Clock injection — testable without Date.now() in handler. */
-  readonly now: () => Date;
 };
 
 /**
  * makeFetchCboeChainHandler — thin adapter wrapping the fetchChain use-case as a pg-boss job.
  *
  * Thin-adapter rule (architecture-boundaries.md §3): zero business logic here.
- * Pattern: array-guard → RTH self-check → call use-case → map Result → boss.send.
+ * Pattern: array-guard → call use-case → map Result → boss.send.
  *
- * D-06: RTH self-check via isWithinRth. Outside RTH → no-op + warn (double-layered gate;
- *   first layer is the cron schedule, second layer is this self-check).
+ * 24/7 fetch: no RTH/holiday gate (D-06 retired) — off-hours vendors return frozen closing
+ *   quotes and leg_observations dedups on its (time, contract) PK, so re-fetches are no-ops.
  * D-07: On success, enqueue compute-bsm-greeks with singletonKey to prevent duplicates.
  * T-02-18: array-guard prevents undefined job from reaching use-case (Pitfall 2).
  */
@@ -38,13 +35,6 @@ export function makeFetchCboeChainHandler(
   return async ([job]: ReadonlyArray<Job | undefined>): Promise<void> => {
     // Pitfall 2 (pg-boss v12): array element can be undefined
     if (job === undefined) return;
-
-    // D-06 / CAL-05: RTH + NYSE holiday self-check — no-op outside market hours or on holidays
-    const now = deps.now();
-    if (!isWithinRth(now) || isNyseHoliday(now)) {
-      console.warn("fetch-cboe-chain: skipping — outside RTH or NYSE holiday");
-      return;
-    }
 
     const result = await deps.fetchChainUseCase();
     if (!result.ok) {

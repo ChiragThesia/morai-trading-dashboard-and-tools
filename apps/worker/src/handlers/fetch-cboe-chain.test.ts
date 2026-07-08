@@ -34,36 +34,13 @@ describe("makeFetchCboeChainHandler", () => {
     return { send: vi.fn().mockResolvedValue("singleton-key") };
   }
 
-  it("when outside RTH: use-case NOT called and console.warn was called", async () => {
-    // Saturday 2026-06-13 14:00 UTC = 10:00 EDT — outside RTH (weekend)
-    const outsideRth = new Date("2026-06-13T14:00:00Z");
-
-    const fetchChainUseCase = vi.fn().mockResolvedValue(ok(undefined));
-    const boss = makeBossStub();
-
-    const handler = makeFetchCboeChainHandler({
-      fetchChainUseCase,
-      boss,
-      now: () => outsideRth,
-    });
-
-    await handler([makeJob()]);
-
-    expect(fetchChainUseCase).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledOnce();
-  });
-
   it("when inside RTH + use-case ok: use-case called once and boss.send invoked with singletonKey", async () => {
-    // Monday 2026-06-15 14:00 UTC = 10:00 EDT — inside RTH
-    const insideRth = new Date("2026-06-15T14:00:00Z");
-
     const fetchChainUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss = makeBossStub();
 
     const handler = makeFetchCboeChainHandler({
       fetchChainUseCase,
       boss,
-      now: () => insideRth,
     });
 
     await handler([makeJob()]);
@@ -77,8 +54,6 @@ describe("makeFetchCboeChainHandler", () => {
   });
 
   it("when inside RTH + use-case err: handler throws (pg-boss marks job failed)", async () => {
-    const insideRth = new Date("2026-06-15T14:00:00Z");
-
     const fetchChainUseCase = vi.fn().mockResolvedValue(
       err({ kind: "fetch-error" as const, message: "CBOE timeout" }),
     );
@@ -87,7 +62,6 @@ describe("makeFetchCboeChainHandler", () => {
     const handler = makeFetchCboeChainHandler({
       fetchChainUseCase,
       boss,
-      now: () => insideRth,
     });
 
     await expect(handler([makeJob()])).rejects.toThrow("CBOE timeout");
@@ -96,9 +70,6 @@ describe("makeFetchCboeChainHandler", () => {
   });
 
   it("when inside RTH + use-case ok + boss.send rejects: handler resolves and console.warn is called for failed enqueue (WR-02)", async () => {
-    // Monday 2026-06-15 14:00 UTC = 10:00 EDT — inside RTH
-    const insideRth = new Date("2026-06-15T14:00:00Z");
-
     const fetchChainUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss: BossForChainHandler & { send: ReturnType<typeof vi.fn> } = {
       send: vi.fn().mockRejectedValue(new Error("queue missing")),
@@ -107,7 +78,6 @@ describe("makeFetchCboeChainHandler", () => {
     const handler = makeFetchCboeChainHandler({
       fetchChainUseCase,
       boss,
-      now: () => insideRth,
     });
 
     // Handler must resolve — a failed enqueue must not propagate
@@ -123,37 +93,13 @@ describe("makeFetchCboeChainHandler", () => {
     );
   });
 
-  it("when NYSE holiday: use-case NOT called and console.warn logged (CAL-05)", async () => {
-    // 2026-01-01T14:00:00Z = 09:00 EST — New Year's Day (NYSE full closure)
-    const holidayInstant = new Date("2026-01-01T14:00:00Z");
-
-    const fetchChainUseCase = vi.fn().mockResolvedValue(ok(undefined));
-    const boss = makeBossStub();
-
-    const handler = makeFetchCboeChainHandler({
-      fetchChainUseCase,
-      boss,
-      now: () => holidayInstant,
-    });
-
-    await handler([makeJob()]);
-
-    expect(fetchChainUseCase).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledOnce();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("outside RTH or NYSE holiday"),
-    );
-  });
-
   it("array guard: undefined job returns immediately without calling use-case", async () => {
-    const insideRth = new Date("2026-06-15T14:00:00Z");
     const fetchChainUseCase = vi.fn();
     const boss = makeBossStub();
 
     const handler = makeFetchCboeChainHandler({
       fetchChainUseCase,
       boss,
-      now: () => insideRth,
     });
 
     // Pitfall 2: pg-boss v12 can pass undefined as array element

@@ -23,10 +23,15 @@ type SnapshotCalendarsHandlerDeps = {
  * makeSnapshotCalendarsHandler — thin adapter wrapping the snapshotCalendars use-case as a pg-boss job.
  *
  * Thin-adapter rule (architecture-boundaries.md §3): zero business logic here.
- * Pattern: array-guard → RTH+holiday self-check → call use-case → map Result → boss.send.
+ * Pattern: array-guard → RTH+holiday self-check (journal write only) → call use-case →
+ * map Result → boss.send.
  *
- * CAL-05: RTH + NYSE holiday self-check. Outside RTH or on holidays → no-op + warn.
- * 06-04 (D-03 chain extension): on success, fire-and-forget enqueue of compute-analytics with a
+ * CAL-05 (narrowed for 24/7 compute): the RTH + NYSE holiday gate protects ONLY the journal
+ *   write — the journal's 30-min-RTH-snapshot cadence must never see off-hours rows. The
+ *   compute-analytics chain-enqueue fires regardless, so the analytics→gex→picker pipeline
+ *   runs around the clock on the latest stored cohort (all downstream writes idempotent:
+ *   GEX upserts by cycleTime, picker first-write-wins on observedAt).
+ * 06-04 (D-03 chain extension): fire-and-forget enqueue of compute-analytics with a
  *   singletonKey (prevents duplicate enqueues) — exactly the compute-bsm-greeks→snapshot pattern.
  *   snapshot-calendars is no longer terminal; compute-analytics is the new last step.
  * T-02-18: array-guard for pg-boss v12 undefined element (Pitfall 2).
@@ -38,23 +43,24 @@ export function makeSnapshotCalendarsHandler(
     // Pitfall 2 (pg-boss v12): array element can be undefined
     if (job === undefined) return;
 
-    // CAL-05: RTH + NYSE holiday gate — no-op outside market hours or on holidays
+    // CAL-05 (narrowed): RTH + NYSE holiday gate on the JOURNAL WRITE only — the
+    // compute-analytics chain below still fires so downstream compute runs 24/7.
     const now = deps.now();
-    if (!isWithinRth(now) || isNyseHoliday(now)) {
-      console.warn("snapshot-calendars: skipping — outside RTH or NYSE holiday");
-      return;
-    }
+    const journalWindowOpen = isWithinRth(now) && !isNyseHoliday(now);
+    if (!journalWindowOpen) {
+      console.warn("snapshot-calendars: skipping journal write — outside RTH or NYSE holiday");
+    } else {
+      // SNAP-01 (20-06): parse the optional trigger field; absent/invalid -> "scheduled".
+      const payloadResult = jobPayloadSchema.safeParse(job.data);
+      const trigger = payloadResult.success && payloadResult.data.trigger !== undefined
+        ? payloadResult.data.trigger
+        : "scheduled";
 
-    // SNAP-01 (20-06): parse the optional trigger field; absent/invalid -> "scheduled".
-    const payloadResult = jobPayloadSchema.safeParse(job.data);
-    const trigger = payloadResult.success && payloadResult.data.trigger !== undefined
-      ? payloadResult.data.trigger
-      : "scheduled";
-
-    const result = await deps.snapshotCalendarsUseCase({ trigger });
-    if (!result.ok) {
-      // Throw to signal failure to pg-boss — marks job as failed for retry/alerting
-      throw new Error(result.error.message);
+      const result = await deps.snapshotCalendarsUseCase({ trigger });
+      if (!result.ok) {
+        // Throw to signal failure to pg-boss — marks job as failed for retry/alerting
+        throw new Error(result.error.message);
+      }
     }
 
     // D-03 (06-04): enqueue compute-analytics on success; singletonKey prevents duplicate enqueues.

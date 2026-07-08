@@ -210,8 +210,11 @@ analytics tables:
 **Idempotent:** every table has a per-grain UNIQUE key (the time-leading composite PK). A
 re-run for the same snapshot time inserts zero new rows (`onConflictDoNothing`).
 
-**RTH gate:** inherited from its trigger — it only runs because `snapshot-calendars` ran, and
-that job already gates on RTH and NYSE holidays.
+**RTH gate:** none — the fetch→bsm→analytics→gex→picker pipeline runs 24/7 (the user checks
+candidates at any hour; every write in the chain is idempotent per cohort, so off-hours re-runs
+on frozen closing quotes are no-ops). The ONLY remaining RTH+holiday gate is the journal write
+inside `snapshot-calendars`: off-hours it skips the `calendar_snapshots` write (the journal's
+30-min-RTH cadence must never see off-hours rows) but still chain-enqueues `compute-analytics`.
 
 **Surfaced in status:** added to `TRACKED_JOBS` so its last success/error appears in
 `GET /api/status` `lastJobRuns`.

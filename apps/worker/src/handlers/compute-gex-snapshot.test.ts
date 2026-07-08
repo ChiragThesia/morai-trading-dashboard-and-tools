@@ -47,55 +47,14 @@ describe("makeComputeGexSnapshotHandler", () => {
     return { send: vi.fn().mockResolvedValue("singleton-key") };
   }
 
-  it("when now is a NYSE holiday: use-case NOT called and console.warn issued (T-08-11)", async () => {
-    // 2026-01-01 (New Year's Day) at 14:00 UTC = 09:00 EST — inside RTH hours but a holiday
-    const holidayRth = new Date("2026-01-01T14:00:00Z");
-
-    const computeGexSnapshotUseCase = vi.fn().mockResolvedValue(ok(undefined));
-    const boss = makeBossStub();
-
-    const handler = makeComputeGexSnapshotHandler({
-      computeGexSnapshotUseCase,
-      boss,
-      now: () => holidayRth,
-    });
-
-    await handler([makeJob()]);
-
-    expect(computeGexSnapshotUseCase).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledOnce();
-  });
-
-  it("when now is outside RTH (weekend): use-case NOT called and console.warn issued", async () => {
-    // Saturday 2026-06-13 14:00 UTC — weekend, outside RTH
-    const outsideRth = new Date("2026-06-13T14:00:00Z");
-
-    const computeGexSnapshotUseCase = vi.fn().mockResolvedValue(ok(undefined));
-    const boss = makeBossStub();
-
-    const handler = makeComputeGexSnapshotHandler({
-      computeGexSnapshotUseCase,
-      boss,
-      now: () => outsideRth,
-    });
-
-    await handler([makeJob()]);
-
-    expect(computeGexSnapshotUseCase).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledOnce();
-  });
-
   it("when inside RTH on a normal weekday: use-case IS called exactly once and no throw on ok", async () => {
     // Monday 2026-06-15 14:00 UTC = 10:00 EDT — inside RTH
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
     const computeGexSnapshotUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss = makeBossStub();
 
     const handler = makeComputeGexSnapshotHandler({
       computeGexSnapshotUseCase,
       boss,
-      now: () => normalRth,
     });
 
     await handler([makeJob()]);
@@ -105,8 +64,6 @@ describe("makeComputeGexSnapshotHandler", () => {
   });
 
   it("when inside RTH + use-case err: handler throws Error (pg-boss marks job failed)", async () => {
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
     const computeGexSnapshotUseCase: ForRunningComputeGexSnapshot = async () =>
       err({ kind: "storage-error", message: "DB write failed" });
     const boss = makeBossStub();
@@ -114,7 +71,6 @@ describe("makeComputeGexSnapshotHandler", () => {
     const handler = makeComputeGexSnapshotHandler({
       computeGexSnapshotUseCase,
       boss,
-      now: () => normalRth,
     });
 
     await expect(handler([makeJob()])).rejects.toThrow("DB write failed");
@@ -123,15 +79,12 @@ describe("makeComputeGexSnapshotHandler", () => {
   });
 
   it("when job array element is undefined: handler no-ops (pg-boss v12 array-guard, T-02-18)", async () => {
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
     const computeGexSnapshotUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss = makeBossStub();
 
     const handler = makeComputeGexSnapshotHandler({
       computeGexSnapshotUseCase,
       boss,
-      now: () => normalRth,
     });
 
     // pg-boss v12 can pass undefined as first element
@@ -142,15 +95,12 @@ describe("makeComputeGexSnapshotHandler", () => {
   });
 
   it("19-08 (D-04): on success, boss.send invoked with compute-picker + singletonKey", async () => {
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
     const computeGexSnapshotUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss = makeBossStub();
 
     const handler = makeComputeGexSnapshotHandler({
       computeGexSnapshotUseCase,
       boss,
-      now: () => normalRth,
     });
 
     await handler([makeJob()]);
@@ -163,8 +113,6 @@ describe("makeComputeGexSnapshotHandler", () => {
   });
 
   it("19-08: boss.send rejects → handler resolves and console.warn logs the failed enqueue", async () => {
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
     const computeGexSnapshotUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss: BossForChainHandler & { send: ReturnType<typeof vi.fn> } = {
       send: vi.fn().mockRejectedValue(new Error("queue missing")),
@@ -173,7 +121,6 @@ describe("makeComputeGexSnapshotHandler", () => {
     const handler = makeComputeGexSnapshotHandler({
       computeGexSnapshotUseCase,
       boss,
-      now: () => normalRth,
     });
 
     await expect(handler([makeJob()])).resolves.toBeUndefined();

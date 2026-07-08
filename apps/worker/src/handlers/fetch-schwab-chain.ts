@@ -1,5 +1,4 @@
 import type { Job } from "pg-boss";
-import { isWithinRth, isNyseHoliday } from "@morai/core";
 import type { ForRunningFetchChain } from "@morai/core";
 import type { ForReadingTokenFreshness } from "@morai/core";
 import type { BossForChainHandler } from "./fetch-cboe-chain.ts";
@@ -20,8 +19,6 @@ type FetchSchwabChainHandlerDeps = {
   readonly fetchChainUseCase: ForRunningFetchChain;
   /** pg-boss instance — used only to enqueue compute on success (D-07). */
   readonly boss: BossForChainHandler;
-  /** Clock injection — testable without Date.now() in handler. */
-  readonly now: () => Date;
   /**
    * Optional — when present, used to detect and log AUTH_EXPIRED fallback warning (T-04-26).
    * The composition root should inject brokerTokensRepo.readTokenFreshness here.
@@ -39,7 +36,7 @@ type FetchSchwabChainHandlerDeps = {
  * makeFetchSchwabChainHandler — Schwab-primary chain job handler with CBOE fallback logging.
  *
  * Thin-adapter rule (architecture-boundaries.md §3): zero business logic here.
- * Pattern: array-guard → RTH self-check → AUTH_EXPIRED warning check → call use-case → boss.send.
+ * Pattern: array-guard → AUTH_EXPIRED warning check → call use-case → boss.send.
  *
  * Chain selection (D-07/D-08) is handled in the composition root (main.ts) by building
  * the fetchChainUseCase via selectChainSources:
@@ -50,7 +47,9 @@ type FetchSchwabChainHandlerDeps = {
  * provided, it checks freshness before calling the use-case and emits the documented
  * operator-visible warning when market is AUTH_EXPIRED.
  *
- * D-06: RTH self-check (same as fetch-cboe-chain).
+ * 24/7 fetch: no RTH/holiday gate (D-06 retired) — the user checks chains at any hour;
+ *   off-hours vendors return frozen closing quotes and leg_observations dedups on its
+ *   (time, contract) PK, so re-fetches are idempotent no-ops.
  * D-07: On success, enqueue compute-bsm-greeks with singletonKey.
  * D-09: market AUTH_EXPIRED → CBOE path continues; use-case still called, journal alive.
  * T-02-18 / Pitfall 2: array-guard prevents undefined job.
@@ -62,13 +61,6 @@ export function makeFetchSchwabChainHandler(
   return async ([job]: ReadonlyArray<Job | undefined>): Promise<void> => {
     // Pitfall 2 (pg-boss v12): array element can be undefined
     if (job === undefined) return;
-
-    // D-06 / CAL-05: RTH + NYSE holiday self-check — no-op outside market hours or on holidays
-    const now = deps.now();
-    if (!isWithinRth(now) || isNyseHoliday(now)) {
-      console.warn("fetch-schwab-chain: skipping — outside RTH or NYSE holiday");
-      return;
-    }
 
     // T-04-26: Emit operator-visible warning when market is AUTH_EXPIRED (D-08, D-09).
     // The use-case (pre-wired via selectChainSources) will still be called — it runs

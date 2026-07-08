@@ -2,10 +2,9 @@
  * compute-picker handler tests (Phase 19, Plan 08 — PICK-01/PICK-03).
  *
  * Covers:
- *   - Holiday: use-case NOT called, warn issued (mirrors compute-gex-snapshot T-08-11)
- *   - Outside RTH (weekend): use-case NOT called, warn issued
- *   - Normal RTH instant: use-case IS called exactly once and result ok → no throw
- *   - Normal RTH instant: use-case err → handler throws (pg-boss marks job failed)
+ *   - Off-hours instant (weekend): use-case IS called — 24/7 compute, no RTH gate
+ *   - Use-case ok → no throw
+ *   - Use-case err → handler throws (pg-boss marks job failed)
  *   - pg-boss v12 undefined array element → no-op (array-guard, T-02-18)
  *   - Terminal: no boss.send inside (compute-picker is the new terminal job — D-04)
  */
@@ -39,50 +38,10 @@ describe("makeComputePickerHandler", () => {
     };
   }
 
-  it("when now is a NYSE holiday: use-case NOT called and console.warn issued", async () => {
-    // 2026-01-01 (New Year's Day) at 14:00 UTC = 09:00 EST — inside RTH hours but a holiday
-    const holidayRth = new Date("2026-01-01T14:00:00Z");
-
+  it("runs the use-case regardless of clock (24/7 compute — no RTH/holiday gate)", async () => {
     const computePickerUseCase = vi.fn().mockResolvedValue(ok(undefined));
 
-    const handler = makeComputePickerHandler({
-      computePickerUseCase,
-      now: () => holidayRth,
-    });
-
-    await handler([makeJob()]);
-
-    expect(computePickerUseCase).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledOnce();
-  });
-
-  it("when now is outside RTH (weekend): use-case NOT called and console.warn issued", async () => {
-    // Saturday 2026-06-13 14:00 UTC — weekend, outside RTH
-    const outsideRth = new Date("2026-06-13T14:00:00Z");
-
-    const computePickerUseCase = vi.fn().mockResolvedValue(ok(undefined));
-
-    const handler = makeComputePickerHandler({
-      computePickerUseCase,
-      now: () => outsideRth,
-    });
-
-    await handler([makeJob()]);
-
-    expect(computePickerUseCase).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledOnce();
-  });
-
-  it("when inside RTH on a normal weekday: use-case IS called exactly once and no throw on ok", async () => {
-    // Monday 2026-06-15 14:00 UTC = 10:00 EDT — inside RTH
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
-    const computePickerUseCase = vi.fn().mockResolvedValue(ok(undefined));
-
-    const handler = makeComputePickerHandler({
-      computePickerUseCase,
-      now: () => normalRth,
-    });
+    const handler = makeComputePickerHandler({ computePickerUseCase });
 
     await handler([makeJob()]);
 
@@ -90,29 +49,19 @@ describe("makeComputePickerHandler", () => {
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 
-  it("when inside RTH + use-case err: handler throws Error (pg-boss marks job failed)", async () => {
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
+  it("when use-case err: handler throws Error (pg-boss marks job failed)", async () => {
     const computePickerUseCase: ForRunningComputePicker = async () =>
       err({ kind: "storage-error", message: "DB write failed" });
 
-    const handler = makeComputePickerHandler({
-      computePickerUseCase,
-      now: () => normalRth,
-    });
+    const handler = makeComputePickerHandler({ computePickerUseCase });
 
     await expect(handler([makeJob()])).rejects.toThrow("DB write failed");
   });
 
   it("when job array element is undefined: handler no-ops (pg-boss v12 array-guard, T-02-18)", async () => {
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
     const computePickerUseCase = vi.fn().mockResolvedValue(ok(undefined));
 
-    const handler = makeComputePickerHandler({
-      computePickerUseCase,
-      now: () => normalRth,
-    });
+    const handler = makeComputePickerHandler({ computePickerUseCase });
 
     // pg-boss v12 can pass undefined as first element
     await handler([undefined]);

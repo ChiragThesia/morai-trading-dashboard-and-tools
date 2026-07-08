@@ -53,7 +53,7 @@ describe("makeSnapshotCalendarsHandler", () => {
     };
   }
 
-  it("when now is a NYSE holiday: use-case NOT called and console.warn issued", async () => {
+  it("when now is a NYSE holiday: journal write skipped BUT compute-analytics still chained", async () => {
     // 2026-01-01 (New Year's Day) at 14:00 UTC = 09:00 EST — inside RTH hours but a holiday
     const holidayRth = new Date("2026-01-01T14:00:00Z");
 
@@ -70,9 +70,13 @@ describe("makeSnapshotCalendarsHandler", () => {
 
     expect(snapshotCalendarsUseCase).not.toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalledOnce();
+    // 24/7 compute: the journal gate must NOT sever the analytics→gex→picker chain.
+    expect(boss.sends).toEqual([
+      { name: "compute-analytics", singletonKey: "triggered-by-snapshot" },
+    ]);
   });
 
-  it("when now is outside RTH (weekend): use-case NOT called and console.warn issued", async () => {
+  it("when now is outside RTH (weekend): journal write skipped BUT compute-analytics still chained", async () => {
     // Saturday 2026-06-13 14:00 UTC — weekend, outside RTH
     const outsideRth = new Date("2026-06-13T14:00:00Z");
 
@@ -89,6 +93,9 @@ describe("makeSnapshotCalendarsHandler", () => {
 
     expect(snapshotCalendarsUseCase).not.toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalledOnce();
+    expect(boss.sends).toEqual([
+      { name: "compute-analytics", singletonKey: "triggered-by-snapshot" },
+    ]);
   });
 
   it("when inside RTH on a normal weekday: use-case IS called and no throw on ok", async () => {
@@ -212,7 +219,7 @@ describe("makeSnapshotCalendarsHandler", () => {
     expect(snapshotCalendarsUseCase).toHaveBeenCalledWith({ trigger: "scheduled" });
   });
 
-  it("an event-move trigger payload still no-ops off-hours (RTH gate unchanged)", async () => {
+  it("an event-move trigger payload still skips the journal write off-hours (RTH gate on the write only)", async () => {
     const outsideRth = new Date("2026-06-13T14:00:00Z");
     const snapshotCalendarsUseCase = vi.fn().mockResolvedValue(ok(undefined));
 

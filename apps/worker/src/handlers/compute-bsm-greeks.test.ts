@@ -42,56 +42,14 @@ describe("makeComputeBsmGreeksHandler", () => {
     return { send: vi.fn().mockResolvedValue("singleton-key") };
   }
 
-  it("when now is a NYSE holiday: use-case NOT called and boss.send NOT called (Blocker 3)", async () => {
-    // 2026-01-01 (New Year's Day) at 14:00 UTC = 09:00 EST — inside RTH hours but a holiday
-    const holidayRth = new Date("2026-01-01T14:00:00Z");
-
-    const computeBsmGreeksUseCase = vi.fn().mockResolvedValue(ok(undefined));
-    const boss = makeBossStub();
-
-    const handler = makeComputeBsmGreeksHandler({
-      computeBsmGreeksUseCase,
-      boss,
-      now: () => holidayRth,
-    });
-
-    await handler([makeJob()]);
-
-    expect(computeBsmGreeksUseCase).not.toHaveBeenCalled();
-    expect(boss.send).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledOnce();
-  });
-
-  it("when outside RTH (weekend): use-case NOT called and boss.send NOT called", async () => {
-    // Saturday 2026-06-13 14:00 UTC — weekend
-    const outsideRth = new Date("2026-06-13T14:00:00Z");
-
-    const computeBsmGreeksUseCase = vi.fn().mockResolvedValue(ok(undefined));
-    const boss = makeBossStub();
-
-    const handler = makeComputeBsmGreeksHandler({
-      computeBsmGreeksUseCase,
-      boss,
-      now: () => outsideRth,
-    });
-
-    await handler([makeJob()]);
-
-    expect(computeBsmGreeksUseCase).not.toHaveBeenCalled();
-    expect(boss.send).not.toHaveBeenCalled();
-  });
-
   it("when inside RTH on a normal weekday + success: use-case called AND boss.send fired for snapshot-calendars", async () => {
     // Monday 2026-06-15 14:00 UTC = 10:00 EDT — inside RTH
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
     const computeBsmGreeksUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss = makeBossStub();
 
     const handler = makeComputeBsmGreeksHandler({
       computeBsmGreeksUseCase,
       boss,
-      now: () => normalRth,
     });
 
     await handler([makeJob()]);
@@ -108,8 +66,6 @@ describe("makeComputeBsmGreeksHandler", () => {
   });
 
   it("when use-case err: handler throws and boss.send NOT called", async () => {
-    const normalRth = new Date("2026-06-15T14:00:00Z");
-
     const computeBsmGreeksUseCase = vi.fn().mockResolvedValue(
       err({ kind: "storage-error", message: "BSM compute failed" }),
     );
@@ -118,7 +74,6 @@ describe("makeComputeBsmGreeksHandler", () => {
     const handler = makeComputeBsmGreeksHandler({
       computeBsmGreeksUseCase,
       boss,
-      now: () => normalRth,
     });
 
     await expect(handler([makeJob()])).rejects.toThrow("BSM compute failed");
@@ -128,14 +83,12 @@ describe("makeComputeBsmGreeksHandler", () => {
   });
 
   it("when job is undefined: handler no-ops (pg-boss v12 guard)", async () => {
-    const normalRth = new Date("2026-06-15T14:00:00Z");
     const computeBsmGreeksUseCase = vi.fn().mockResolvedValue(ok(undefined));
     const boss = makeBossStub();
 
     const handler = makeComputeBsmGreeksHandler({
       computeBsmGreeksUseCase,
       boss,
-      now: () => normalRth,
     });
 
     await handler([undefined]);

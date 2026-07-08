@@ -128,7 +128,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   // Existing 3 crons preserved from main.ts:
   await boss.schedule(
     "fetch-schwab-chain",
-    "*/30 * * * 1-5", // every 30 min Mon-Fri ET
+    "*/30 * * * *", // every 30 min, 24/7 — user checks chains anytime; off-hours fetches dedup
     null,
     { tz: "America/New_York" },
   );
@@ -156,7 +156,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   );
   await boss.schedule(
     "compute-bsm-greeks",
-    "0 10-16 * * 1-5", // sparse fallback: hourly 10:00-16:00 ET Mon-Fri
+    "0 * * * *", // sparse fallback: hourly 24/7 (chain-trigger is primary; drain is idempotent)
     null,
     { tz: "America/New_York" },
   );

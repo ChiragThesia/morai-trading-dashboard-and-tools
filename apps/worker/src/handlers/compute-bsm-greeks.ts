@@ -1,5 +1,4 @@
 import type { Job } from "pg-boss";
-import { isWithinRth, isNyseHoliday } from "@morai/core";
 import type { BossForChainHandler } from "./fetch-cboe-chain.ts";
 
 // Import via @morai/core (return type of makeComputeBsmGreeksUseCase)
@@ -10,19 +9,17 @@ type ComputeBsmGreeksHandlerDeps = {
   readonly computeBsmGreeksUseCase: ComputeBsmGreeksUseCase;
   /** pg-boss instance — used only to enqueue snapshot-calendars on success (D-03). */
   readonly boss: BossForChainHandler;
-  /** Clock injection — testable without Date.now() in handler. */
-  readonly now: () => Date;
 };
 
 /**
  * makeComputeBsmGreeksHandler — thin adapter wrapping the computeBsmGreeks use-case as a pg-boss job.
  *
  * Thin-adapter rule (architecture-boundaries.md §3): zero business logic here.
- * Pattern: array-guard → RTH+holiday gate → call use-case → map Result → boss.send.
+ * Pattern: array-guard → call use-case → map Result → boss.send.
  *
- * CAL-05 (Blocker 3): holiday + RTH gate applied BEFORE use-case call.
- *   A holiday compute run must NEVER chain-trigger a snapshot. The gate here prevents that.
- *   Previously no gate; adding it closes the SPEC §6 hole.
+ * 24/7 compute: no RTH/holiday gate (CAL-05 Blocker 3 retired here) — BSM solves are
+ *   idempotent per (time, contract) row, and the journal gate now lives solely inside
+ *   snapshot-calendars, so a holiday chain-enqueue can no longer pollute the journal.
  *
  * D-03: On success, enqueue snapshot-calendars with singletonKey to prevent duplicate enqueues.
  *   Fire-and-forget (void): boss.send failure does NOT fail the compute job.
@@ -35,14 +32,6 @@ export function makeComputeBsmGreeksHandler(
   return async ([job]: ReadonlyArray<Job | undefined>): Promise<void> => {
     // Pitfall 2 (pg-boss v12): array element can be undefined
     if (job === undefined) return;
-
-    // CAL-05 / Blocker 3: RTH + NYSE holiday gate.
-    // Must sit BEFORE the use-case call so a holiday run cannot chain-trigger a snapshot.
-    const now = deps.now();
-    if (!isWithinRth(now) || isNyseHoliday(now)) {
-      console.warn("compute-bsm-greeks: skipping — outside RTH or NYSE holiday");
-      return;
-    }
 
     const result = await deps.computeBsmGreeksUseCase();
     if (!result.ok) {

@@ -242,7 +242,6 @@ const computeGexSnapshotUseCase = makeComputeGexSnapshotUseCase({
 const fetchSchwabChainHandler = makeFetchSchwabChainHandler({
   fetchChainUseCase,
   boss,
-  now: () => new Date(),
   readTokenFreshness: brokerTokensRepo.readTokenFreshness,
   logAuthExpiredFallback: true,
 });
@@ -256,7 +255,6 @@ const fetchRatesHandler = makeFetchRatesHandler({
 const computeBsmGreeksHandler = makeComputeBsmGreeksHandler({
   computeBsmGreeksUseCase,
   boss,
-  now: () => new Date(),
 });
 
 const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
@@ -271,7 +269,6 @@ const snapshotCalendarsHandler = makeSnapshotCalendarsHandler({
 const computeAnalyticsHandler = makeComputeAnalyticsHandler({
   computeAnalyticsUseCase,
   boss,
-  now: () => new Date(),
 });
 
 // 19-08 (D-04): compute-gex-snapshot chain-triggers compute-picker on success — boss dep added
@@ -279,7 +276,6 @@ const computeAnalyticsHandler = makeComputeAnalyticsHandler({
 const computeGexSnapshotHandler = makeComputeGexSnapshotHandler({
   computeGexSnapshotUseCase,
   boss,
-  now: () => new Date(),
 });
 
 // JRNL-01 (A5): sync-fills use-case — composed with the REAL fills, calendar-events, and
@@ -567,7 +563,6 @@ const computePickerSnapshotUseCase = makeComputePickerSnapshotUseCase({
 
 const computePickerHandler = makeComputePickerHandler({
   computePickerUseCase: computePickerSnapshotUseCase,
-  now: () => new Date(),
 });
 
 const fetchEconomicEventsHandler = makeFetchEconomicEventsHandler({
