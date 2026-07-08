@@ -98,7 +98,7 @@ export type PickerCandidateDomain = {
   readonly name: string;
   readonly score: number;
   readonly breakdown: ReadonlyArray<{
-    readonly criterion: "slope" | "fwdEdge" | "gexFit" | "eventAdjustment" | "beVsEm";
+    readonly criterion: "slope" | "fwdEdge" | "gexFit" | "eventAdjustment" | "beVsEm" | "deltaNeutral";
     readonly weight: number;
     readonly rawValue: number;
     readonly contribution: number;

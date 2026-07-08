@@ -21,6 +21,10 @@ import {
   slopePercentileValue,
   backEventBonusValue,
   thetaVegaValue,
+  deltaNeutralFraction,
+  WEIGHT_FWD_EDGE,
+  WEIGHT_SLOPE,
+  WEIGHT_DELTA_NEUTRAL,
   GEX_WALL_PIN_PTS,
 } from "./rules.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
@@ -48,13 +52,13 @@ describe("RULE_SET_METADATA — registry invariants", () => {
     expect(total).toBe(100);
   });
 
-  it("composition: 2 active gates, 5 active scores, 4 experimental", () => {
+  it("composition: 2 active gates, 6 active scores, 4 experimental", () => {
     const gates = RULE_SET_METADATA.filter((r) => r.kind === "gate" && r.status === "active");
     const scores = RULE_SET_METADATA.filter((r) => r.kind === "score" && r.status === "active");
     const experimental = RULE_SET_METADATA.filter((r) => r.status === "experimental");
     expect(gates.map((r) => r.id).sort()).toEqual(["liquidity", "net-theta-positive"]);
     expect(scores.map((r) => r.id).sort()).toEqual(
-      ["beVsEm", "eventAdjustment", "fwdEdge", "gexFit", "slope"],
+      ["beVsEm", "deltaNeutral", "eventAdjustment", "fwdEdge", "gexFit", "slope"],
     );
     expect(experimental.map((r) => r.id).sort()).toEqual(
       ["backEventBonus", "slopePercentile", "thetaVega", "vrp"],
@@ -175,5 +179,20 @@ describe("thetaVegaValue (experimental — θ/vega carry ratio)", () => {
     expect(row?.kind).toBe("experimental");
     expect(row?.weight).toBe(0);
     expect(row?.status).toBe("experimental");
+  });
+});
+
+describe("deltaNeutralFraction (Δ-neutrality score — user-locked 2026-07-08)", () => {
+  it("is 1 at perfectly flat delta and decays linearly to 0 at |Δ| ≥ 10", () => {
+    expect(deltaNeutralFraction(0)).toBe(1);
+    expect(deltaNeutralFraction(-1.8)).toBeCloseTo(0.82, 10);
+    expect(deltaNeutralFraction(4.2)).toBeCloseTo(0.58, 10);
+    expect(deltaNeutralFraction(-15)).toBe(0);
+  });
+
+  it("weights rebalanced: fwdEdge 30, slope 25, deltaNeutral 10 — sum still 100", () => {
+    expect(WEIGHT_FWD_EDGE).toBe(30);
+    expect(WEIGHT_SLOPE).toBe(25);
+    expect(WEIGHT_DELTA_NEUTRAL).toBe(10);
   });
 });

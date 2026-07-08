@@ -43,11 +43,12 @@ User-locked 2026-07-08 (research-verified against tastytrade/SteadyOptions/ORATS
 
 | id | Weight | Formula | Source |
 |---|---|---|---|
-| `fwdEdge` | 35 | fwd = √((t_b·σ_b² − t_f·σ_f²)/(t_b − t_f)); edge = σ_f − fwd; fraction = clamp01((edge+0.02)/0.04); inverted radicand → 0 | Forward-IV term-structure edge (Perfiliev; SpotGamma fwd-IV) |
-| `slope` | 30 | slope = ((σ_b − σ_f)/(t_b − t_f))·365; fraction = clamp01(slope/0.6) | Term-slope ≈ variance-risk-premium proxy (Johnson 2017, JFQA) |
+| `fwdEdge` | 30 | fwd = √((t_b·σ_b² − t_f·σ_f²)/(t_b − t_f)); edge = σ_f − fwd; fraction = clamp01((edge+0.02)/0.04); inverted radicand → 0 | Forward-IV term-structure edge (Perfiliev; SpotGamma fwd-IV) |
+| `slope` | 25 | slope = ((σ_b − σ_f)/(t_b − t_f))·365; fraction = clamp01(slope/0.6) | Term-slope ≈ variance-risk-premium proxy (Johnson 2017, JFQA) |
 | `gexFit` | 15 | near-term (≤45d) GEX placement: +0.5 if spot > flip (dampen regime), +0.3 if K ∈ [putWall, callWall], +0.2 if K within 5 pts of either wall (pin). Falls back to all-expiry flip/walls when `nearTerm` is null. Stale/missing GEX → 0 | Dealer-gamma pinning/dampening (SpotGamma-convention walls; in-house GEX) |
 | `eventAdjustment` | 10 | 1 − Σ(front-leg FOMC/CPI/NFP × 0.5), floor 0 | No binary catalysts inside the short leg (practitioner consensus) |
 | `beVsEm` | 10 | breakeven width / (spot·σ_f·√(t_f/365)); fraction = clamp01(ratio/1.5); <2 breakevens → 0 | Profit-zone width vs expected move (real bisection breakevens, D-09) |
+| `deltaNeutral` | 10 | fraction = clamp01(1 − \|Δ_net\|/10), Δ_net in $/pt per spread | User-locked 2026-07-08: "delta neutral as much as possible"; skew-driven fwd-edge otherwise drags the rail toward high-\|Δ\| strikes |
 
 ## Experimental (weight 0 — display only until PICK-04 calibrates)
 

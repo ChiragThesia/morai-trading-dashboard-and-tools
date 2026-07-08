@@ -23,11 +23,15 @@ import type { GexContextForPicker } from "../application/ports.ts";
 // Rebalanced 2026-07-08 (user decision): fwd-edge is the purest math signal → 35;
 // slope 30. Previous 40/25 split was the uncalibrated mockup port (D-08).
 // ─────────────────────────────────────────────────────────────
-export const WEIGHT_SLOPE = 30;
-export const WEIGHT_FWD_EDGE = 35;
+export const WEIGHT_SLOPE = 25;
+export const WEIGHT_FWD_EDGE = 30;
 export const WEIGHT_GEX_FIT = 15;
 export const WEIGHT_EVENT = 10;
 export const WEIGHT_BE_VS_EM = 10;
+/** Δ-neutrality weight (user-locked 2026-07-08: "delta neutral as much as possible"). */
+export const WEIGHT_DELTA_NEUTRAL = 10;
+/** |net Δ| ($/pt per spread) at which the deltaNeutral fraction reaches 0. */
+export const DELTA_NEUTRAL_MAX = 10;
 
 // ─── Normalizer tunables (documented; PICK-04 backtest recalibrates) ────────────
 export const SLOPE_NORMALIZER = 0.6;
@@ -160,6 +164,16 @@ export function thetaVegaValue(theta: number, vega: number): number | null {
   return theta / vega;
 }
 
+/**
+ * `deltaNeutral`: 1 at perfectly flat net delta, linear to 0 at |Δ| ≥ DELTA_NEUTRAL_MAX.
+ * User-locked 2026-07-08 — without it, skew-driven fwd-edge drags the rail toward
+ * high-|Δ| strikes the user (a delta-neutral trader) would never take.
+ */
+export function deltaNeutralFraction(netDelta: number): number {
+  const fraction = 1 - Math.abs(netDelta) / DELTA_NEUTRAL_MAX;
+  return Math.max(0, Math.min(1, fraction));
+}
+
 // ─────────────────────────────────────────────────────────────
 // The registry (serializable — ships as pickerSnapshotResponse.ruleSet)
 // ─────────────────────────────────────────────────────────────
@@ -244,6 +258,16 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     status: "active",
     rationale: "Real bisection breakevens vs ±1σ expected move — profit-zone coverage.",
     source: "D-09 (replaces the mockup's fixed-strike proxy)",
+  },
+  {
+    id: "deltaNeutral",
+    label: "Delta neutrality",
+    kind: "score",
+    weight: WEIGHT_DELTA_NEUTRAL,
+    status: "active",
+    rationale:
+      "1 − |net Δ|/10, clamped [0,1]. The user trades delta-neutral; without this term, skew-driven forward-edge favors high-|Δ| strikes.",
+    source: "User-locked preference (2026-07-08); consistent with ATM-neutral practitioner default (tastytrade)",
   },
   {
     id: "vrp",

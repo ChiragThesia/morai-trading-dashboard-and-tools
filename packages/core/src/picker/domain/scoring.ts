@@ -33,6 +33,8 @@ import {
   slopePercentileValue,
   backEventBonusValue,
   thetaVegaValue,
+  deltaNeutralFraction,
+  WEIGHT_DELTA_NEUTRAL,
 } from "./rules.ts";
 import type { BreakdownEntry, ContextEntry, ExitPlan, RawCandidate, ScoredCandidate } from "./types.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
@@ -141,12 +143,21 @@ function scoreOne(
   // never a fabricated ratio, never NaN.
   const beVsEmFraction = hasBreakevenPair ? clamp01(beVsEmRatio / BE_VS_EM_TARGET_RATIO) : 0;
 
+  // Δ-neutrality (user-locked): 1 at flat delta, 0 beyond ±10 $/pt.
+  const deltaFraction = deltaNeutralFraction(candidate.delta);
+
   const breakdown: ReadonlyArray<BreakdownEntry> = [
     { criterion: "slope", weight: WEIGHT_SLOPE, rawValue: candidate.slope, contribution: slopeFraction * 100 },
     { criterion: "fwdEdge", weight: WEIGHT_FWD_EDGE, rawValue: fwdEdge, contribution: fwdEdgeFraction * 100 },
     { criterion: "gexFit", weight: WEIGHT_GEX_FIT, rawValue: gexFit, contribution: gexFit * 100 },
     { criterion: "eventAdjustment", weight: WEIGHT_EVENT, rawValue: evtPenalty, contribution: eventFraction * 100 },
     { criterion: "beVsEm", weight: WEIGHT_BE_VS_EM, rawValue: beVsEmRatio, contribution: beVsEmFraction * 100 },
+    {
+      criterion: "deltaNeutral",
+      weight: WEIGHT_DELTA_NEUTRAL,
+      rawValue: candidate.delta,
+      contribution: deltaFraction * 100,
+    },
   ];
 
   const rawScore =
@@ -154,7 +165,8 @@ function scoreOne(
     WEIGHT_FWD_EDGE * fwdEdgeFraction +
     WEIGHT_GEX_FIT * gexFit +
     WEIGHT_EVENT * eventFraction +
-    WEIGHT_BE_VS_EM * beVsEmFraction;
+    WEIGHT_BE_VS_EM * beVsEmFraction +
+    WEIGHT_DELTA_NEUTRAL * deltaFraction;
   const score = Math.min(100, Math.max(0, Math.round(rawScore)));
 
   // ─── Experimental context (weight 0, display-only — rules.ts registry) ───

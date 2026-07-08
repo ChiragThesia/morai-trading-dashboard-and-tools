@@ -264,6 +264,7 @@ const CHIP_LABELS: Record<string, string> = {
   gexFit: "GEX FIT",
   eventAdjustment: "EVENT RISK",
   beVsEm: "BE : EM",
+  deltaNeutral: "Δ NEUTRAL",
 };
 
 const EXPERIMENTAL_SHORT: Record<string, string> = {
