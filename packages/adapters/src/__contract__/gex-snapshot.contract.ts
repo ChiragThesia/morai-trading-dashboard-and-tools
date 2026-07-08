@@ -168,8 +168,8 @@ export function runGexSnapshotContractTests(
     });
   });
 
-  describe("persistGexSnapshot — idempotency (SC-4)", () => {
-    it("re-persisting the same cycleTime produces exactly 1 row (onConflictDoNothing)", async () => {
+  describe("persistGexSnapshot — idempotency (SC-4, upsert semantics)", () => {
+    it("re-persisting the same cycleTime produces exactly 1 row (upsert, no duplicates)", async () => {
       const row = makeSnapshotRow(T1);
 
       // First persist
@@ -178,11 +178,35 @@ export function runGexSnapshotContractTests(
       const count1 = await repo.countSnapshots();
       expect(count1).toBe(1);
 
-      // Second persist with same cycleTime — should be a no-op
+      // Second persist with same cycleTime — still exactly one row
       const r2 = await repo.persistGexSnapshot(row);
       expect(r2.ok).toBe(true);
       const count2 = await repo.countSnapshots();
       expect(count2).toBe(1); // SC-4: still exactly 1 row
+    });
+
+    // Live regression 2026-07-08: BSM drains newest-first, so an early chain run
+    // computed GEX from a partially-solved cohort (Schwab-only) and wrote a premature
+    // row; when the full cohort solved minutes later, the correct recompute hit
+    // onConflictDoNothing and was DISCARDED — the bad row blocked its own correction.
+    // Persist must be an UPSERT: last write for a cycleTime wins (later = fuller cohort).
+    it("re-persisting the same cycleTime UPDATES the row — last write wins", async () => {
+      await repo.persistGexSnapshot(
+        makeSnapshotRow(T1, { callWall: 7500, putWall: 7500, netGammaAtSpot: -18.5 }),
+      );
+      await repo.persistGexSnapshot(
+        makeSnapshotRow(T1, { callWall: 8000, putWall: 7400, netGammaAtSpot: 0.6 }),
+      );
+
+      const count = await repo.countSnapshots();
+      expect(count).toBe(1);
+
+      const result = await repo.readGexSnapshot();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value?.callWall).toBe(8000);
+      expect(result.value?.putWall).toBe(7400);
+      expect(result.value?.netGammaAtSpot).toBe(0.6);
     });
 
     it("two DIFFERENT cycleTime values produce 2 rows", async () => {

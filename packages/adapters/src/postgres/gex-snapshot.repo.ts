@@ -150,31 +150,38 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
   };
 
   // ── ForPersistingGexSnapshot ──────────────────────────────────────────────
-  // Insert one gex_snapshots row. JSONB columns accept JS objects directly (Drizzle
+  // Upsert one gex_snapshots row. JSONB columns accept JS objects directly (Drizzle
   // handles serialization). Numeric scalars must be strings for Drizzle numeric type.
-  // .onConflictDoNothing() on the cycle_time PK = SC-4 idempotency.
+  //
+  // UPSERT (not onConflictDoNothing) on the cycle_time PK: SC-4 idempotency means no
+  // duplicate rows, NOT first-write-wins. BSM drains newest-first, so an early chain
+  // run can compute GEX from a partially-solved cohort; the later recompute (fuller
+  // cohort) must overwrite it — onConflictDoNothing let a premature row block its own
+  // correction (live 2026-07-08 regression).
   const persistGexSnapshot: ForPersistingGexSnapshot = async (
     row: GexSnapshotRow,
   ): Promise<Result<void, StorageError>> => {
     try {
+      const values = {
+        cycleTime: row.cycleTime,
+        spot: String(row.spot),
+        flip: row.flip !== null ? String(row.flip) : null,
+        // callWall/putWall are numeric columns (may be fractional for half-point strikes)
+        callWall: row.callWall !== null ? String(row.callWall) : null,
+        putWall: row.putWall !== null ? String(row.putWall) : null,
+        netGammaAtSpot: String(row.netGammaAtSpot),
+        // JSONB columns: pass as JS objects; Drizzle jsonb handles serialization.
+        profile: row.profile,
+        strikes: row.strikes,
+        byExpiry: row.byExpiry,
+        nearTerm: row.nearTerm,
+        computedAt: row.computedAt,
+      };
+      const { cycleTime: _pk, ...updates } = values;
       await db
         .insert(gexSnapshots)
-        .values({
-          cycleTime: row.cycleTime,
-          spot: String(row.spot),
-          flip: row.flip !== null ? String(row.flip) : null,
-          // callWall/putWall are now numeric columns (may be fractional for half-point strikes)
-          callWall: row.callWall !== null ? String(row.callWall) : null,
-          putWall: row.putWall !== null ? String(row.putWall) : null,
-          netGammaAtSpot: String(row.netGammaAtSpot),
-          // JSONB columns: pass as JS objects; Drizzle jsonb handles serialization.
-          profile: row.profile,
-          strikes: row.strikes,
-          byExpiry: row.byExpiry,
-          nearTerm: row.nearTerm,
-          computedAt: row.computedAt,
-        })
-        .onConflictDoNothing(); // SC-4: cycle_time PK — re-run within same cycle = no-op
+        .values(values)
+        .onConflictDoUpdate({ target: gexSnapshots.cycleTime, set: updates });
 
       return ok(undefined);
     } catch (e) {

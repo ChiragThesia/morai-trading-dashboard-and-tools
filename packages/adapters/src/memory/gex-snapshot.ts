@@ -70,10 +70,9 @@ export function makeMemoryGexSnapshotRepo(): MemoryGexSnapshotRepo {
     row: GexSnapshotRow,
   ): Promise<Result<void, StorageError>> => {
     const key = row.cycleTime.toISOString();
-    // onConflictDoNothing equivalent: if already present, skip (idempotency SC-4).
-    if (!snapshots.has(key)) {
-      snapshots.set(key, row);
-    }
+    // UPSERT equivalent (SC-4 = no duplicates, last write wins): a later recompute
+    // within the same cycle carries a fuller BSM cohort and must overwrite.
+    snapshots.set(key, row);
     return ok(undefined);
   };
 

@@ -85,7 +85,7 @@ describe.skipIf(shouldSkip)("postgres gex-snapshot adapter", () => {
   );
 
   // ── Postgres-specific: SC-4 idempotency via raw count (belt-and-suspenders) ─
-  it("SC-4: re-persisting same cycleTime via onConflictDoNothing → count = 1 (raw SQL verify)", async () => {
+  it("SC-4: re-persisting same cycleTime upserts → count = 1 (raw SQL verify)", async () => {
     if (!db) return;
     const repo = makePostgresGexSnapshotRepo(db);
     const cycleTime = new Date("2026-06-23T15:00:00Z");
