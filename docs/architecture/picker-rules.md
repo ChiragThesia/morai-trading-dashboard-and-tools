@@ -20,17 +20,21 @@ panel renders the engine's actual table, never a copy.
 
 User-locked 2026-07-08 (research-verified against tastytrade/SteadyOptions/ORATS material):
 
-- **Delta rungs:** −0.50 / −0.45 / −0.40 / −0.35 / −0.30 / −0.25 front-put delta. Constant-delta
-  targeting auto-scales the point-offset with vol (further out when IV high, closer when low) —
-  the correct regime response; a VIX-conditional delta shift was researched and REFUTED
-  (tent width widens with IV, so high vol permits MORE offset, not less).
-- **25-point snap:** each resolved strike snaps to the nearest 25-multiple (SPX OI/volume
-  concentrate there; aligns with GEX walls). Post-snap duplicates (two rungs → same strike)
-  collapse to one candidate.
-- **Expected-move cap:** spot − K ≤ 1σ front EM (spot·σ_f·√(t_f/365)). Beyond 1σ the net theta
-  flips negative and the structure stops being a calendar (practitioner consensus).
+- **Band-scan (redesigned 2026-07-08 after the 7450 rung-gap miss):** every liquid 25-point
+  strike whose front put delta lies in **[−0.55, −0.25]** enters the universe — MEMBERSHIP
+  test, not nearest-delta rungs. Commercial screeners use band membership; nearest-target
+  designs provably skip strikes whose delta falls between targets. The band's OTM edge
+  (−0.25Δ ≈ 0.7σ) subsumes the old expected-move cap. A VIX-conditional delta shift was
+  researched and REFUTED (tent width widens with IV).
+- **25-point strikes only:** SPX OI/volume concentrate there; off-grid strikes never enter.
 - **Front DTE:** 21–36. **Back gap:** 21–35 days after the front — ALL qualifying backs are
-  emitted (fwd-edge scoring ranks them); the old absolute 80d back cap is retired.
+  emitted (fwd-edge scoring ranks them).
+- **Fill model:** debits price from the actual bid/ask with the ORATS 2-leg haircut — cross
+  66% of each leg's width off the natural side (buy back at bid+0.66·w, sell front at
+  ask−0.66·w). Ranking on mid or BSM theory overstates edge on wide markets.
+- **Session label:** snapshots carry `marketSession: rth | after-hours` (isWithinRth on the
+  cohort time); AH cohorts render an "AH — indicative" warning chip. The 30-min 24/7 cron
+  replaces AH marks with fresh RTH data automatically at the next open.
 
 ## Gates
 
@@ -38,6 +42,12 @@ User-locked 2026-07-08 (research-verified against tastytrade/SteadyOptions/ORATS
 |---|---|---|
 | `net-theta-positive` | net θ = (θ_back − θ_front)·100 > 0 | A calendar with negative carry has no edge thesis. |
 | `liquidity` | each leg: (ask−bid)/mid ≤ 0.10 AND OI ≥ 100 | Untradeable markets produce fictional debits/breakevens. |
+| `term-inversion` | drop pair when front IV > back IV | Playbook hard gate (trading-knowledge repo): a calendar needs back IV ≥ front IV. |
+| `event-blackout` | drop pair when a tier-1 event (FOMC/CPI/NFP) falls ≤3 days before the front expiry | Playbook H4: event vol + gamma cliff stack in the short leg's final days. |
+
+Deferred to the playbook-port phase (need a macro→picker port + the VIX3M FRED series, which
+`macro_observations` does not yet carry): VIX < 25 hard gate, VIX/VIX3M < 0.95 contango gate,
+and the VIX-tuned target-delta preference (autoTuneTargetDelta).
 
 ## Active scores (weights sum 100)
 

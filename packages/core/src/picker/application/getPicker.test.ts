@@ -22,13 +22,14 @@ const ROW: PickerSnapshotRow = {
     spot: 7500,
     source: "schwab",
     gexContextStatus: "ok",
+  marketSession: "rth",
     eventsContextStatus: "ok",
     termStructure: [],
     gex: { flip: null, callWall: null, putWall: null, netGammaAtSpot: 0, absGammaStrike: null, nearTerm: null },
     events: [],
     candidates: [],
     ruleSet: [],
-    gateDrops: { liquidity: 0, netTheta: 0 },
+    gateDrops: { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 },
   },
 };
 

@@ -3,25 +3,23 @@
  * numerical rule.
  *
  * Covers:
- *   - nearestStrikeByDelta picks the strike whose bsmGreeks put delta is closest to each
- *     target rung (ATM/-0.30/-0.20/-0.10).
- *   - selectCandidates only pairs front legs with DTE in [21,36] and back legs with
- *     (backDTE - frontDTE) >= 21 and backDTE <= 80.
- *   - selectCandidates drops any calendar with net theta <= 0 (criterion 6).
+ *   - Band-scan universe: every liquid 25-multiple with front delta in [−0.55, −0.25]
+ *     (membership test — rung-gap misses like the user's 7450 are structurally impossible).
+ *   - Quote-based debit with the ORATS 2-leg 66%-of-width fill haircut.
+ *   - Hard gates: net-theta, per-pair term inversion, tier-1 event blackout (≤3d before
+ *     front expiry) — all counted in gateDrops, never silent.
  *   - legSpansEvents is a pure ISO-string-interval membership test (Pitfall 3), fast-check
  *     covered for arbitrary date sets.
- *   - selectCandidates dedupes to one candidate per (deltaRung, frontExpiry) — keyed on the
- *     rung label, never on the resolved strike value (Pitfall 5).
  */
 
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { bsmGreeks } from "@morai/quant";
 import {
-  nearestStrikeByDelta,
   legSpansEvents,
   selectCandidates,
-  DELTA_RUNGS,
+  DELTA_BAND_MIN,
+  DELTA_BAND_MAX,
   FRONT_DTE_MIN,
   FRONT_DTE_MAX,
   BACK_DTE_MIN_GAP,
@@ -66,35 +64,6 @@ function chainQuote(
 // asOf resolves from the cohort's own `time` field, snapped to the UTC calendar day —
 // 2026-07-01 is "today" for every fixture chain below.
 const TODAY = "2026-07-01";
-
-describe("nearestStrikeByDelta", () => {
-  it("picks the strike whose bsmGreeks put delta is closest to each target rung", () => {
-    const dte = 30;
-    const iv = 0.15;
-    const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
-    const quotes = strikes.map((strike) => ({ strike, iv }));
-
-    for (const rung of DELTA_RUNGS) {
-      const pick = nearestStrikeByDelta(quotes, SPOT, dte, rung.targetDelta, R, Q);
-      expect(pick).not.toBeNull();
-      if (pick === null) continue;
-
-      // The picked strike must be at least as close (in delta space) to the target as every
-      // other strike on the chain — proves "nearest", not just "some" strike.
-      const pickedDiff = Math.abs(
-        bsmGreeks(SPOT, pick.strike, dte / 365, pick.iv, R, Q, "P").delta - rung.targetDelta,
-      );
-      for (const q of quotes) {
-        const diff = Math.abs(bsmGreeks(SPOT, q.strike, dte / 365, q.iv, R, Q, "P").delta - rung.targetDelta);
-        expect(pickedDiff).toBeLessThanOrEqual(diff);
-      }
-    }
-  });
-
-  it("returns null for an empty quote list", () => {
-    expect(nearestStrikeByDelta([], SPOT, 30, -0.3, R, Q)).toBeNull();
-  });
-});
 
 describe("legSpansEvents", () => {
   it("returns exactly the events whose date is in (today, legExpiry]", () => {
@@ -143,10 +112,74 @@ describe("legSpansEvents", () => {
 });
 
 describe("selectCandidates", () => {
-  it("exposes the user-locked delta rungs: −0.50…−0.25 in 0.05 steps", () => {
-    expect(DELTA_RUNGS.map((rung) => rung.targetDelta)).toEqual([
-      -0.5, -0.45, -0.4, -0.35, -0.3, -0.25,
-    ]);
+  it("band-scan: emits EVERY liquid 25-multiple whose front delta is inside [−0.55, −0.25]", () => {
+    // Dense 25-pt grid: the old nearest-delta rungs skipped strikes whose delta fell between
+    // rung targets (the user's real 7450 fill at Δ−0.43 was missed). Band MEMBERSHIP must
+    // emit them all.
+    const iv = 0.15;
+    const strikes = [7550, 7525, 7500, 7475, 7450, 7425, 7400, 7375, 7350, 7325, 7300, 7275, 7250];
+    const chain: ChainQuoteForPicker[] = [];
+    for (const expiration of ["2026-07-31", "2026-08-26"]) {
+      for (const strike of strikes) {
+        chain.push(chainQuote(strike, expiration, iv));
+      }
+    }
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
+    const ks = new Set(candidates.map((c) => c.frontLeg.strike));
+    // Contiguous run of in-band strikes — no rung gaps.
+    expect(ks.has(7450)).toBe(true);
+    expect(ks.has(7425)).toBe(true);
+    expect(ks.has(7400)).toBe(true);
+    // Every emitted strike's front delta is inside the band.
+    for (const c of candidates) {
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      expect(d).toBeLessThanOrEqual(DELTA_BAND_MAX + 1e-9);
+      expect(d).toBeGreaterThanOrEqual(DELTA_BAND_MIN - 1e-9);
+    }
+  });
+
+  it("prices the debit from quotes with the ORATS 2-leg haircut (cross 66% of width), not BSM theory", () => {
+    const iv = 0.15;
+    const chain: ChainQuoteForPicker[] = [
+      chainQuote(7450, "2026-07-31", iv, "P", SPOT, { bid: 80, ask: 84, openInterest: 1000 }),
+      chainQuote(7450, "2026-08-26", iv, "P", SPOT, { bid: 120, ask: 126, openInterest: 1000 }),
+    ];
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
+    expect(candidates).toHaveLength(1);
+    const c = candidates[0];
+    expect(c).toBeDefined();
+    if (c === undefined) return;
+    // Buy back: bid + 0.66·width = 120 + 3.96 = 123.96; sell front: ask − 0.66·width = 84 − 2.64 = 81.36.
+    // Debit = (123.96 − 81.36) × 100 = 4260.
+    expect(c.debit).toBeCloseTo(4260, 0);
+  });
+
+  it("gates per-pair term inversion (front IV > back IV) and counts the drops", () => {
+    const chain: ChainQuoteForPicker[] = [
+      chainQuote(7450, "2026-07-31", 0.20, "P"), // front RICHER than back → inverted pair
+      chainQuote(7450, "2026-08-26", 0.15, "P"),
+    ];
+    const { candidates, gateDrops } = selectCandidates(chain, [], { r: R, q: Q });
+    expect(candidates).toHaveLength(0);
+    expect(gateDrops.termInverted).toBe(1);
+  });
+
+  it("gates tier-1 events within 3 days BEFORE the front expiry and counts the drops", () => {
+    const iv = 0.15;
+    const chain: ChainQuoteForPicker[] = [
+      chainQuote(7450, "2026-07-31", iv, "P"),
+      chainQuote(7450, "2026-08-26", iv, "P"),
+    ];
+    // FOMC lands 2 days before the 2026-07-31 front expiry → playbook blackout (≤3d).
+    const events: EconomicEvent[] = [{ date: "2026-07-29", name: "FOMC", source: "seed" }];
+    const { candidates, gateDrops } = selectCandidates(chain, events, { r: R, q: Q });
+    expect(candidates).toHaveLength(0);
+    expect(gateDrops.eventBlackout).toBe(1);
+
+    // An event 10 days before expiry does NOT trigger the blackout.
+    const eventsFar: EconomicEvent[] = [{ date: "2026-07-21", name: "FOMC", source: "seed" }];
+    const ok = selectCandidates(chain, eventsFar, { r: R, q: Q });
+    expect(ok.candidates).toHaveLength(1);
   });
 
   it("only pairs front legs in [21,36] DTE with back legs where the gap is in [21,35] days — ALL qualifying backs kept", () => {

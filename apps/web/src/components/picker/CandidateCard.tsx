@@ -58,6 +58,9 @@ function formatBreakdownCaption(entry: BreakdownEntry): string {
       return entry.rawValue > 0 ? "−" : "ok";
     case "beVsEm":
       return `${(entry.rawValue * 100).toFixed(0)}%`;
+    case "deltaNeutral":
+      // rawValue is the net position delta ($/pt) — signed, one decimal.
+      return `${entry.rawValue >= 0 ? "+" : ""}${entry.rawValue.toFixed(1)}Δ`;
   }
 }
 

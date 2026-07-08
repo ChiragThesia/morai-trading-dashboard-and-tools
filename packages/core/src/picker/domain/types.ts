@@ -12,9 +12,8 @@
  * Hexagon law (architecture-boundaries §2): pure structural types, no imports needed.
  */
 
-/** Delta-rung label — which put-delta target this candidate's strike was selected for (D-01;
- * user-locked −0.50…−0.25 grid, 2026-07-08). */
-export type DeltaRung = "50D" | "45D" | "40D" | "35D" | "30D" | "25D";
+/** Front-leg |Δ| label in whole delta points (e.g. "43D") — band-scan universe, no rungs. */
+export type DeltaRung = string;
 
 /** One leg (front or back) of a candidate calendar — puts only in scope this milestone. */
 export type RawCandidateLeg = {

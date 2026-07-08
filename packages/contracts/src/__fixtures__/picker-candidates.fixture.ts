@@ -20,6 +20,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
   spot: 7498.85,
   source: "schwab",
   gexContextStatus: "ok",
+  marketSession: "rth",
   eventsContextStatus: "ok",
   gex: {
     flip: 7472.65,
@@ -324,5 +325,5 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
   // Rule-registry metadata + gate-drop counts (rules.ts). The fixture predates the
   // registry — empty/zero values exercise the read-seam defaults path.
   ruleSet: [],
-  gateDrops: { liquidity: 0, netTheta: 0 },
+  gateDrops: { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 },
 };

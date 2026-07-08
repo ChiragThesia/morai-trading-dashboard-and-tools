@@ -145,6 +145,8 @@ export type PickerSnapshot = {
   readonly source: "schwab" | "cboe";
   readonly gexContextStatus: "ok" | "stale" | "missing";
   readonly eventsContextStatus: "ok" | "stale" | "missing";
+  /** Whether the cohort's marks are RTH or after-hours/indicative (2026-07-08 AH labeling). */
+  readonly marketSession: "rth" | "after-hours";
   readonly termStructure: ReadonlyArray<{ readonly dte: number; readonly iv: number }>;
   readonly gex: {
     readonly flip: number | null;
@@ -163,7 +165,12 @@ export type PickerSnapshot = {
   /** The rule registry this snapshot was scored with (rules.ts RULE_SET_METADATA). */
   readonly ruleSet: ReadonlyArray<RuleSetEntry>;
   /** Per-gate drop counts for this compute (no silent caps). */
-  readonly gateDrops: { readonly liquidity: number; readonly netTheta: number };
+  readonly gateDrops: {
+    readonly liquidity: number;
+    readonly netTheta: number;
+    readonly termInverted: number;
+    readonly eventBlackout: number;
+  };
 };
 
 /** PickerSnapshotRow — a persisted picker snapshot (append-only, D-06 keeps history). */

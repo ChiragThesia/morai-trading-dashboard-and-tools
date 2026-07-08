@@ -831,4 +831,16 @@ describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.rul
     expect(screen.getByTestId("checklist-fwdEdge")).toBeTruthy();
     expect(screen.queryByTestId("checklist-fwdEdge-weight")).toBeNull();
   });
+
+  it("shows an AH-marks warning chip when the snapshot's marketSession is after-hours", () => {
+    mockUsePickerReturn({ data: { ...snapshotWithRegistry(), marketSession: "after-hours" } });
+    render(<Analyzer />);
+    const chip = screen.getByTestId("session-badge");
+    expect(chip.textContent).toContain("AH");
+
+    cleanup();
+    mockUsePickerReturn({ data: snapshotWithRegistry() }); // fixture defaults to rth
+    render(<Analyzer />);
+    expect(screen.queryByTestId("session-badge")).toBeNull();
+  });
 });

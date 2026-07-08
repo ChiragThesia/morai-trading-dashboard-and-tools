@@ -239,6 +239,8 @@ interface ScoringMethodologyPanelProps {
   readonly ruleSet: ReadonlyArray<RuleSetEntry>;
   /** Per-gate drop counts for the snapshot's compute run. */
   readonly gateDrops: { readonly liquidity: number; readonly netTheta: number };
+  /** Marks provenance — "after-hours" renders the indicative-marks warning chip. */
+  readonly marketSession: "rth" | "after-hours";
 }
 
 /** Fallback labels when the snapshot predates the rule registry (ruleSet empty). */
@@ -278,6 +280,7 @@ function ScoringMethodologyPanel({
   candidate,
   ruleSet,
   gateDrops,
+  marketSession,
 }: ScoringMethodologyPanelProps): React.ReactElement {
   // Score rows from the engine's registry when available; legacy fallback otherwise.
   const scoreRules = ruleSet.filter((r) => r.kind === "score" && r.status === "active");
@@ -307,6 +310,14 @@ function ScoringMethodologyPanel({
 
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="scoring-pills">
+      {marketSession === "after-hours" && (
+        <MetricChip
+          data-testid="session-badge"
+          alert
+          label="SESSION"
+          value={<span className="text-amber">AH — indicative</span>}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2" data-testid="scoring-checklist">
         {scoreItems.map((item) => {
           const entry = candidate.breakdown.find((b) => b.criterion === item.key);
@@ -687,7 +698,8 @@ export function Analyzer(): React.ReactElement {
       <ScoringMethodologyPanel
         candidate={selected}
         ruleSet={snapshot?.ruleSet ?? []}
-        gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0 }}
+        gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 }}
+        marketSession={snapshot?.marketSession ?? "rth"}
       />
       <div className="grid gap-4" style={{ gridTemplateColumns: "300px 1fr 330px" }}>
       {/* ── Left column: ranked rail ── */}

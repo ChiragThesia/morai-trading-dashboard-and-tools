@@ -34,13 +34,14 @@ const SNAPSHOT: PickerSnapshotResponse = {
   spot: 7498.85,
   source: "schwab",
   gexContextStatus: "ok",
+  marketSession: "rth",
   eventsContextStatus: "ok",
   termStructure: [{ dte: 21, iv: 0.1249 }],
   gex: { flip: 7472.65, callWall: 7525, putWall: 7400, netGammaAtSpot: 26.23, absGammaStrike: 7500, nearTerm: null },
   events: [{ date: "2026-07-03", name: "NFP" }],
   candidates: [],
   ruleSet: [],
-  gateDrops: { liquidity: 0, netTheta: 0 },
+  gateDrops: { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 },
 };
 
 function makeOkResponse(body: unknown): { ok: boolean; status: number; json: () => Promise<unknown> } {

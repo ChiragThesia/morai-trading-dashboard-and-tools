@@ -407,7 +407,7 @@ describe("rule registry in the snapshot (rules.ts)", () => {
     expect(row.snapshot.ruleSet.some((r) => r.id === "vrp" && r.status === "experimental")).toBe(true);
 
     // Gate drops present (all-liquid fixture → zero drops, but the field is real).
-    expect(row.snapshot.gateDrops).toEqual({ liquidity: 0, netTheta: 0 });
+    expect(row.snapshot.gateDrops).toEqual({ liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 });
 
     // Every candidate carries the 4 experimental context entries; vrp/slopePercentile are
     // real numbers given the supplied history.
@@ -420,5 +420,22 @@ describe("rule registry in the snapshot (rules.ts)", () => {
     expect(vrp?.value).not.toBeNull();
     const pct = candidate.context.find((c) => c.id === "slopePercentile");
     expect(pct?.value).not.toBeNull();
+  });
+
+  it("labels the snapshot's market session: rth for an in-hours cohort, after-hours otherwise", async () => {
+    // Baseline fixture cohort time is 14:30Z on a weekday = RTH.
+    const { deps, rows } = baseDeps({});
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+    await useCase();
+    expect(rows[0]?.snapshot.marketSession).toBe("rth");
+
+    // Same chain re-stamped at 22:00Z (after the 20:00Z cash close) = after-hours.
+    const shifted = realCandidateChain().map((quote) => ({
+      ...quote,
+      time: new Date("2026-07-01T22:00:00.000Z"),
+    }));
+    const ah = baseDeps({ chain: shifted });
+    await makeComputePickerSnapshotUseCase(ah.deps)();
+    expect(ah.rows[0]?.snapshot.marketSession).toBe("after-hours");
   });
 });

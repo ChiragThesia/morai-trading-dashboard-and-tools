@@ -217,6 +217,9 @@ export const pickerSnapshotResponse = z.object({
   gexContextStatus: z.enum(["ok", "stale", "missing"]),
   /** Freshness of the economic-events context used to score candidates (D-17); never silent. */
   eventsContextStatus: z.enum(["ok", "stale", "missing"]),
+  /** Marks provenance: after-hours cohorts are indicative (stale/wide quotes). Defaulted
+   *  "rth" — every pre-labeling stored row came from an RTH-gated cycle. */
+  marketSession: z.enum(["rth", "after-hours"]).default("rth"),
   termStructure: z.array(termStructurePoint),
   gex: pickerGexContext,
   events: z.array(pickerEvent),
@@ -229,8 +232,11 @@ export const pickerSnapshotResponse = z.object({
     .object({
       liquidity: z.number().int(),
       netTheta: z.number().int(),
+      /** Playbook hard gates (2026-07-08) — defaulted so older stored rows parse. */
+      termInverted: z.number().int().default(0),
+      eventBlackout: z.number().int().default(0),
     })
-    .default({ liquidity: 0, netTheta: 0 }),
+    .default({ liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 }),
 });
 
 export type PickerSnapshotResponse = z.infer<typeof pickerSnapshotResponse>;

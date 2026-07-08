@@ -29,7 +29,7 @@
  * context's own `application/ports.ts` and `domain/*.ts` siblings.
  */
 
-import { ok, err, assertDefined } from "@morai/shared";
+import { ok, err, assertDefined, isWithinRth, isNyseHoliday } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { selectCandidates } from "../domain/candidate-selection.ts";
 import { scoreCalendarCandidates } from "../domain/scoring.ts";
@@ -354,6 +354,8 @@ export function makeComputePickerSnapshotUseCase(
       source,
       gexContextStatus,
       eventsContextStatus,
+      marketSession:
+        isWithinRth(latestTime) && !isNyseHoliday(latestTime) ? "rth" : "after-hours",
       termStructure,
       gex: gexForSnapshot,
       events: eventsForSnapshot,
