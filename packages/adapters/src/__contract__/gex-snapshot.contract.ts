@@ -206,16 +206,19 @@ export function runGexSnapshotContractTests(
 
   // chain-window-narrow-regression: one logical fetch cycle now lands as TWO nearby
   // timestamps (Schwab + CBOE each stamp their own observedAt). The cohort read must
-  // union all BSM-solved rows within the 30-min slot of the latest solved observation —
-  // strict max(time) equality would silently drop one source. Overlapping near-ATM
-  // contracts appear in both sources; they must be deduped per contract (newest wins)
-  // or strikeGex double-counts their OI.
-  describe("readLegObsForGex — dual-source cohort (slot union + per-contract dedup)", () => {
-    // One cycle: schwab lands at 14:00:05, cboe at 14:01:40 — same 30-min slot [14:00, 14:30)
+  // union all BSM-solved rows within a lookback WINDOW of the latest solved observation
+  // — strict max(time) equality would silently drop one source, and a calendar-slot
+  // union breaks when the cycle straddles the 30-min boundary (live 2026-07-08: CBOE
+  // stamped 16:59:31, Schwab 17:00:31 — pg-boss cron jitter + Schwab's ~60s latency
+  // straddle the boundary CONSTANTLY, collapsing GEX to a single source). Overlapping
+  // near-ATM contracts appear in both sources; they must be deduped per contract
+  // (newest wins) or strikeGex double-counts their OI.
+  describe("readLegObsForGex — dual-source cohort (lookback union + per-contract dedup)", () => {
+    // One cycle: schwab lands at 14:00:05, cboe at 14:01:40 — within the lookback window
     const SCHWAB_T = new Date("2026-06-23T14:00:05Z");
     const CBOE_T = new Date("2026-06-23T14:01:40Z");
-    // Previous slot [13:30, 14:00)
-    const PREV_SLOT_T = new Date("2026-06-23T13:59:50Z");
+    // Previous cycle, 30 min earlier — outside the lookback window
+    const PREV_SLOT_T = new Date("2026-06-23T13:31:40Z");
 
     const OVERLAP = "SPXW  260627P07400000"; // near-ATM, in BOTH sources
     const SCHWAB_ONLY = "SPXW  260627C07450000"; // near-ATM, schwab window
@@ -271,7 +274,7 @@ export function runGexSnapshotContractTests(
       expect(row?.bsmGamma).toBe("0.002");
     });
 
-    it("excludes rows from earlier slots and unsolved rows within the slot", async () => {
+    it("excludes rows from the previous cycle and unsolved rows within the window", async () => {
       await seedDualSourceCycle();
 
       const result = await repo.readLegObsForGex();
@@ -281,6 +284,30 @@ export function runGexSnapshotContractTests(
       const contractsSeen = result.value.map((l) => l.contract);
       expect(contractsSeen).not.toContain(PREV_SLOT);
       expect(contractsSeen).not.toContain(UNSOLVED);
+    });
+
+    // Live regression 2026-07-08: the fetch job fired at ~:59:30, CBOE stamped
+    // 16:59:31 and Schwab 17:00:31 — the cycle STRADDLED the 30-min boundary and a
+    // calendar-slot union read Schwab-only (walls collapsed to ATM, netΓ −18B
+    // artifact). The lookback window must keep both sides of the boundary together.
+    it("unions a cycle that straddles the 30-min boundary (cboe :59:31 + schwab :00:31)", async () => {
+      const CBOE_STRADDLE = new Date("2026-06-23T16:59:31Z");
+      const SCHWAB_STRADDLE = new Date("2026-06-23T17:00:31Z");
+      const CBOE_LEG = "SPXW  260627P07000000";
+      const SCHWAB_LEG = "SPXW  260627C07450000";
+
+      await seed.seedLegs([
+        { ...baseLeg, time: CBOE_STRADDLE, contract: CBOE_LEG, bsmGamma: "0.004", contractType: "P", strike: 7000000 },
+        { ...baseLeg, time: SCHWAB_STRADDLE, contract: SCHWAB_LEG, bsmGamma: "0.003", contractType: "C", strike: 7450000 },
+      ]);
+
+      const result = await repo.readLegObsForGex();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const contractsSeen = result.value.map((l) => l.contract);
+      expect(contractsSeen).toContain(CBOE_LEG);
+      expect(contractsSeen).toContain(SCHWAB_LEG);
     });
   });
 

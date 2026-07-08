@@ -3,9 +3,10 @@
  *
  * ForReadingLegObsForGex: SELECT DISTINCT ON (lo.contract) lo.*, c.strike, c.expiration,
  *   c.contract_type FROM leg_observations lo JOIN contracts c ON lo.contract = c.occ_symbol
- *   WHERE lo.time in the 30-min slot of MAX(time WHERE bsm_gamma IS NOT NULL)
+ *   WHERE lo.time in [MAX(time WHERE bsm_gamma IS NOT NULL) − 10 min, MAX(...)]
  *   ORDER BY lo.contract, lo.time DESC — the dual-source cohort: union of Schwab + CBOE
- *   rows in the latest cycle slot, one row per contract, newest wins (Pitfall 2 JOIN).
+ *   rows in the latest cycle's lookback window, one row per contract, newest wins
+ *   (Pitfall 2 JOIN; lookback not calendar slots — boundary-straddle regression).
  *
  * ForPersistingGexSnapshot: INSERT one gex_snapshots row with JSONB blobs for
  *   profile/strikes/byExpiry + numeric scalars as strings.
@@ -27,7 +28,7 @@ import type {
   StorageError,
 } from "@morai/core";
 import { z } from "zod";
-import { and, isNotNull, desc, max, asc, eq, gte, lt } from "drizzle-orm";
+import { and, isNotNull, desc, max, asc, eq, gte, lte } from "drizzle-orm";
 import { legObservations, contracts, gexSnapshots } from "./schema.ts";
 import type { Db } from "./db.ts";
 
@@ -73,15 +74,18 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
   // Pitfall 2: leg_observations does NOT store contractType/strike/expiration —
   // those live on the contracts table. JOIN is mandatory.
   // Two-step: (1) resolve the latest observation time where bsm_gamma is NOT NULL;
-  //           (2) read the full JOIN result across that time's 30-min slot.
+  //           (2) read the full JOIN result across a lookback window ending there.
   //
   // chain-window-narrow-regression: one fetch cycle lands as TWO nearby timestamps
   // (Schwab + CBOE each stamp their own observedAt), so the cohort is the UNION of
-  // all BSM-solved rows in the 30-min slot — strict max(time) equality would drop a
-  // source. DISTINCT ON (contract) with time DESC dedupes the near-ATM overlap
-  // (newest row wins) so strikeGex never double-counts a contract's OI.
-  // Known edge: a cycle straddling a slot boundary degrades to a single-source
-  // cohort for that cycle; it self-heals on the next cycle.
+  // all BSM-solved rows in [maxTime − LOOKBACK, maxTime] — strict max(time) equality
+  // would drop a source, and a CALENDAR-SLOT union breaks when the cycle straddles
+  // the 30-min boundary (live 2026-07-08: CBOE 16:59:31 vs Schwab 17:00:31 — cron
+  // jitter + Schwab latency straddle the boundary constantly). The lookback is
+  // anchored to the data itself, so there is no boundary to straddle. DISTINCT ON
+  // (contract) with time DESC dedupes the near-ATM overlap (newest row wins) so
+  // strikeGex never double-counts a contract's OI. LOOKBACK is well under the 30-min
+  // cycle spacing, so adjacent cycles never merge.
   const readLegObsForGex: ForReadingLegObsForGex = async (): Promise<
     Result<ReadonlyArray<LegObsForGex>, StorageError>
   > => {
@@ -95,12 +99,10 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
       const latestTime = latestRows[0]?.maxTime;
       if (latestTime === undefined || latestTime === null) return ok([]);
 
-      // Step 2: resolve the 30-min slot (same slot math as snapCycleTime in
-      // computeGexSnapshot) and JOIN leg_observations ↔ contracts across it,
+      // Step 2: JOIN leg_observations ↔ contracts across the lookback window,
       // one row per contract (newest wins).
-      const slotMs = 30 * 60 * 1000;
-      const slotStart = new Date(Math.floor(latestTime.getTime() / slotMs) * slotMs);
-      const slotEnd = new Date(slotStart.getTime() + slotMs);
+      const lookbackMs = 10 * 60 * 1000;
+      const windowStart = new Date(latestTime.getTime() - lookbackMs);
 
       const rows = await db
         .selectDistinctOn([legObservations.contract], {
@@ -119,8 +121,8 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
         .innerJoin(contracts, eq(legObservations.contract, contracts.occSymbol))
         .where(
           and(
-            gte(legObservations.time, slotStart),
-            lt(legObservations.time, slotEnd),
+            gte(legObservations.time, windowStart),
+            lte(legObservations.time, latestTime),
             isNotNull(legObservations.bsmGamma),
           ),
         )

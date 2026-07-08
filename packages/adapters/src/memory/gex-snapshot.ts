@@ -43,20 +43,20 @@ export function makeMemoryGexSnapshotRepo(): MemoryGexSnapshotRepo {
     Result<ReadonlyArray<LegObsForGex>, StorageError>
   > => {
     // Mirrors the Postgres dual-source cohort semantics (chain-window-narrow-regression):
-    // union of all BSM-solved rows in the 30-min slot of the latest solved observation,
-    // deduped per contract (newest row wins).
+    // union of all BSM-solved rows in [maxTime − LOOKBACK, maxTime], deduped per
+    // contract (newest row wins). Lookback (not calendar slots) — a cycle that
+    // straddles the 30-min boundary must stay together (live 2026-07-08 regression).
     const solved = seededLegs.filter((leg) => leg.bsmGamma !== null);
     if (solved.length === 0) return ok([]);
 
     const maxTime = Math.max(...solved.map((leg) => leg.time.getTime()));
-    const slotMs = 30 * 60 * 1000;
-    const slotStart = Math.floor(maxTime / slotMs) * slotMs;
-    const slotEnd = slotStart + slotMs;
+    const lookbackMs = 10 * 60 * 1000;
+    const windowStart = maxTime - lookbackMs;
 
     const newestByContract = new Map<string, LegObsForGex>();
     for (const leg of solved) {
       const t = leg.time.getTime();
-      if (t < slotStart || t >= slotEnd) continue;
+      if (t < windowStart || t > maxTime) continue;
       const existing = newestByContract.get(leg.contract);
       if (existing === undefined || t > existing.time.getTime()) {
         newestByContract.set(leg.contract, leg);
