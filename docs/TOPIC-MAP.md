@@ -15,6 +15,7 @@ Read in order. Source of truth for how Morai works.
 | [monorepo-layout.md](architecture/monorepo-layout.md) | Bun workspaces, dependency graph, composition roots |
 | [data-model.md](architecture/data-model.md) | Journal schema, snapshots, Postgres-vs-Timescale math |
 | [jobs.md](architecture/jobs.md) | Job catalog, schedules, pg-boss patterns, JobQueue port |
+| [picker-rules.md](architecture/picker-rules.md) | Calendar-picker rule table: gates, weighted scores, experimental rules, refuted list, how to add a rule |
 | [api-design.md](architecture/api-design.md) | Hono RPC, Zod contracts, error model, service/DAO vocabulary |
 | [mcp-and-plugins.md](architecture/mcp-and-plugins.md) | MCP server as inbound adapter, tool surface, plugin shape |
 | [testing-tdd.md](architecture/testing-tdd.md) | Red→green loop, test pyramid, calibration gates |

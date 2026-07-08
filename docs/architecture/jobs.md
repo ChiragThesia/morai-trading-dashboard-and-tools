@@ -74,6 +74,8 @@ union per 30-minute slot, not take strict `max(time)`:
 
 **Trigger chain (unchanged, single-trigger):** `fetch-schwab-chain` → `compute-bsm-greeks` →
 `snapshot-calendars` → `compute-analytics` → `compute-gex-snapshot` → `compute-picker`.
+`compute-picker` scores candidates against the typed rule registry — see
+[picker-rules.md](picker-rules.md) for the full gate/score/experimental table.
 
 ### GEX methodology (compute-gex-snapshot)
 
