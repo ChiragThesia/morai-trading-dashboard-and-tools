@@ -32,6 +32,7 @@ import {
   vrpValue,
   slopePercentileValue,
   backEventBonusValue,
+  thetaVegaValue,
 } from "./rules.ts";
 import type { BreakdownEntry, ContextEntry, ExitPlan, RawCandidate, ScoredCandidate } from "./types.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
@@ -175,6 +176,12 @@ function scoreOne(
       label: "Event in back window",
       value: backEventBonusValue(candidate.backEvents),
       note: "calibrating (PICK-05)",
+    },
+    {
+      id: "thetaVega",
+      label: "θ/vega carry ratio",
+      value: thetaVegaValue(candidate.theta, candidate.vega),
+      note: "calibrating (PICK-04)",
     },
   ];
 

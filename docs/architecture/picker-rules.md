@@ -16,6 +16,22 @@ panel renders the engine's actual table, never a copy.
 - **experimental** — computed and displayed per candidate (`candidate.context[]`) but weight
   0. Promotion to `score` requires the PICK-04 backtest over the `picker_snapshot` corpus.
 
+## Candidate universe (generation — before any gate)
+
+User-locked 2026-07-08 (research-verified against tastytrade/SteadyOptions/ORATS material):
+
+- **Delta rungs:** −0.50 / −0.45 / −0.40 / −0.35 / −0.30 / −0.25 front-put delta. Constant-delta
+  targeting auto-scales the point-offset with vol (further out when IV high, closer when low) —
+  the correct regime response; a VIX-conditional delta shift was researched and REFUTED
+  (tent width widens with IV, so high vol permits MORE offset, not less).
+- **25-point snap:** each resolved strike snaps to the nearest 25-multiple (SPX OI/volume
+  concentrate there; aligns with GEX walls). Post-snap duplicates (two rungs → same strike)
+  collapse to one candidate.
+- **Expected-move cap:** spot − K ≤ 1σ front EM (spot·σ_f·√(t_f/365)). Beyond 1σ the net theta
+  flips negative and the structure stops being a calendar (practitioner consensus).
+- **Front DTE:** 21–36. **Back gap:** 21–35 days after the front — ALL qualifying backs are
+  emitted (fwd-edge scoring ranks them); the old absolute 80d back cap is retired.
+
 ## Gates
 
 | id | Condition | Why |
@@ -40,6 +56,7 @@ panel renders the engine's actual table, never a copy.
 | `vrp` | σ_f(front IV) − RV20, RV20 = stdev(last 20 daily log returns)·√252 | daily spot closes (leg_observations, last obs per day) |
 | `slopePercentile` | percentile of candidate slope vs trailing candidate slopes from stored picker snapshots | picker_snapshot history |
 | `backEventBonus` | 1 if an FOMC/CPI/NFP date ∈ (frontExpiry, backExpiry] else 0 — "own the event vol in the back leg" | economic_events (PICK-05 precursor) |
+| `thetaVega` | θ_net / vega_net (null when vega 0) — practitioner gate is ≥ 0.20 ("vega ≤ 5× theta", tastytrade/OptionsTradingIQ); cutoff unvalidated on our data, so display-only until PICK-04 | candidate greeks |
 
 ## Refuted — MUST NOT be encoded
 

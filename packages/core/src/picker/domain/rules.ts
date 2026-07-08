@@ -150,6 +150,16 @@ export function backEventBonusValue(backEvents: ReadonlyArray<string>): number {
   return backEvents.length > 0 ? 1 : 0;
 }
 
+/**
+ * `thetaVega`: net θ / net vega — the carry-per-vol-risk ratio. Practitioner gate is ≥ 0.20
+ * ("vega no more than 5× theta", tastytrade/OptionsTradingIQ); the cutoff is unvalidated on
+ * our data, so this ships display-only until PICK-04. Null-honest when vega is 0.
+ */
+export function thetaVegaValue(theta: number, vega: number): number | null {
+  if (vega === 0) return null;
+  return theta / vega;
+}
+
 // ─────────────────────────────────────────────────────────────
 // The registry (serializable — ships as pickerSnapshotResponse.ruleSet)
 // ─────────────────────────────────────────────────────────────
@@ -264,5 +274,15 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     rationale:
       "An event between front and back expiry means the long leg owns event vol the short leg never faces. Display-only until PICK-05 calibrates.",
     source: "Practitioner event-vol placement (PICK-05 precursor)",
+  },
+  {
+    id: "thetaVega",
+    label: "θ/vega carry ratio",
+    kind: "experimental",
+    weight: 0,
+    status: "experimental",
+    rationale:
+      "Carry per unit of vol risk; practitioner gate is ≥ 0.20 (vega ≤ 5× theta) to bound vol-crush damage. Cutoff unvalidated on our data — display-only until PICK-04.",
+    source: "tastytrade benchmark via OptionsTradingIQ (vega-control articles)",
   },
 ];

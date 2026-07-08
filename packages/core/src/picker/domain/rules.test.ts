@@ -5,7 +5,7 @@
  *   1. Active score-rule weights sum to EXACTLY 100.
  *   2. Refuted criteria (Phase-19 research, `.planning/research/calendar-selection-criteria.md`)
  *      can never appear as rule ids/labels — the guard test names them verbatim.
- *   3. Registry composition: 2 active gates, 5 active scores, 3 experimental.
+ *   3. Registry composition: 2 active gates, 5 active scores, 4 experimental.
  *   4. gexFitFraction prefers the near-term (≤45d) level set, falls back to all-expiry,
  *      and awards dampen-regime / in-range / wall-pin credits.
  *   5. isLiquidQuote enforces spread ≤10% of mid AND OI ≥ 100.
@@ -20,6 +20,7 @@ import {
   vrpValue,
   slopePercentileValue,
   backEventBonusValue,
+  thetaVegaValue,
   GEX_WALL_PIN_PTS,
 } from "./rules.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
@@ -47,7 +48,7 @@ describe("RULE_SET_METADATA — registry invariants", () => {
     expect(total).toBe(100);
   });
 
-  it("composition: 2 active gates, 5 active scores, 3 experimental", () => {
+  it("composition: 2 active gates, 5 active scores, 4 experimental", () => {
     const gates = RULE_SET_METADATA.filter((r) => r.kind === "gate" && r.status === "active");
     const scores = RULE_SET_METADATA.filter((r) => r.kind === "score" && r.status === "active");
     const experimental = RULE_SET_METADATA.filter((r) => r.status === "experimental");
@@ -56,7 +57,7 @@ describe("RULE_SET_METADATA — registry invariants", () => {
       ["beVsEm", "eventAdjustment", "fwdEdge", "gexFit", "slope"],
     );
     expect(experimental.map((r) => r.id).sort()).toEqual(
-      ["backEventBonus", "slopePercentile", "vrp"],
+      ["backEventBonus", "slopePercentile", "thetaVega", "vrp"],
     );
   });
 
@@ -156,5 +157,23 @@ describe("experimental evaluators — null-honest", () => {
   it("backEventBonusValue is 1 when the back leg spans an event the front does not, else 0", () => {
     expect(backEventBonusValue(["FOMC"])).toBe(1);
     expect(backEventBonusValue([])).toBe(0);
+  });
+});
+
+describe("thetaVegaValue (experimental — θ/vega carry ratio)", () => {
+  it("returns theta/vega for a normal candidate", () => {
+    expect(thetaVegaValue(10, 50)).toBeCloseTo(0.2, 10);
+  });
+
+  it("is null-honest when vega is zero (never Infinity/NaN)", () => {
+    expect(thetaVegaValue(10, 0)).toBeNull();
+  });
+
+  it("ships in RULE_SET_METADATA as an experimental weight-0 row", () => {
+    const row = RULE_SET_METADATA.find((r) => r.id === "thetaVega");
+    expect(row).toBeDefined();
+    expect(row?.kind).toBe("experimental");
+    expect(row?.weight).toBe(0);
+    expect(row?.status).toBe("experimental");
   });
 });

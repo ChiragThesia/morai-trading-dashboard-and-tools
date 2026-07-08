@@ -36,21 +36,35 @@ import type { DeltaRung, RawCandidate } from "./types.ts";
 // Named constants (D-01/D-02 defaults, Claude's-discretion per 19-CONTEXT.md)
 // ─────────────────────────────────────────────────────────────
 
-/** Delta-rung targets (put delta, i.e. negative) -- ATM plus the ~30/20/10-delta OTM rungs. */
+/**
+ * Delta-rung targets (put delta, i.e. negative) — user-locked 2026-07-08, research bands:
+ * 45-50Δ neutral, 35-40Δ mild-bearish (the classic put-calendar lean), 25-32Δ directional.
+ * Constant-delta targeting auto-scales the point-offset with vol — a VIX-conditional delta
+ * shift was researched and refuted (docs/architecture/picker-rules.md, universe section).
+ */
 export const DELTA_RUNGS: ReadonlyArray<{ readonly label: DeltaRung; readonly targetDelta: number }> = [
-  { label: "ATM", targetDelta: -0.5 },
+  { label: "50D", targetDelta: -0.5 },
+  { label: "45D", targetDelta: -0.45 },
+  { label: "40D", targetDelta: -0.4 },
+  { label: "35D", targetDelta: -0.35 },
   { label: "30D", targetDelta: -0.3 },
-  { label: "20D", targetDelta: -0.2 },
-  { label: "10D", targetDelta: -0.1 },
+  { label: "25D", targetDelta: -0.25 },
 ];
+
+/** SPX strikes snap to 25-point multiples — OI/volume concentrate there (user lock). */
+export const STRIKE_INCREMENT = 25;
 
 /** Front-leg DTE window (mockup default grid, D-02). */
 export const FRONT_DTE_MIN = 21;
 export const FRONT_DTE_MAX = 36;
 
-/** Back-leg DTE constraints relative to the front leg (mockup default grid, D-02). */
+/**
+ * Back-leg gap window relative to the front leg (user-locked 2026-07-08): every back expiry
+ * with gap ∈ [21, 35] days is emitted (fwd-edge scoring ranks them); the old absolute 80d
+ * back cap is retired.
+ */
 export const BACK_DTE_MIN_GAP = 21;
-export const BACK_DTE_MAX = 80;
+export const BACK_DTE_MAX_GAP = 35;
 
 // ─────────────────────────────────────────────────────────────
 // Pure helpers
@@ -211,6 +225,9 @@ export function selectCandidates(
   const expiries = [...byExpiry.keys()];
 
   const candidates: RawCandidate[] = [];
+  // Post-snap dedupe: two rungs snapping to the same 25-multiple describe the SAME calendar —
+  // one row per (strike, frontExpiry, backExpiry), first (highest-|delta|) rung wins.
+  const seenPairs = new Set<string>();
 
   for (const fe of expiries) {
     const tf = daysBetween(asOfIso, fe);
@@ -223,68 +240,77 @@ export function selectCandidates(
     for (const rung of DELTA_RUNGS) {
       const frontPick = nearestStrikeByDelta(frontQuotes, spot, tf, rung.targetDelta, r, q);
       if (frontPick === null) continue;
-      const K = frontPick.strike;
-      const ivF = frontPick.iv;
 
-      // Find every qualifying back expiry at the SAME strike K, then keep the nearest one
-      // (dedupe-by-construction, Pitfall 5 -- see module doc comment).
-      let chosen: { readonly be: string; readonly tb: number; readonly ivB: number } | null = null;
+      // Snap to the nearest 25-point multiple (user lock: OI/volume live on 25s). The snapped
+      // strike must itself be quoted on the front expiry, else the rung is skipped.
+      const snappedK = Math.round(frontPick.strike / STRIKE_INCREMENT) * STRIKE_INCREMENT;
+      const snappedFront = frontQuotes.find((quote) => quote.strike === snappedK);
+      if (snappedFront === undefined) continue;
+      const K = snappedFront.strike;
+      const ivF = snappedFront.iv;
+
+      // 1σ expected-move cap (practitioner consensus): beyond spot − EM the net theta flips
+      // negative and the structure stops behaving like a calendar.
+      const expectedMove = spot * ivF * Math.sqrt(tf / 365);
+      if (spot - K > expectedMove) continue;
+
+      // Emit EVERY qualifying back expiry at the SAME strike K (user lock: keep all pairs —
+      // fwd-edge scoring ranks them; gap window [BACK_DTE_MIN_GAP, BACK_DTE_MAX_GAP]).
       for (const be of expiries) {
         const tb = daysBetween(asOfIso, be);
-        if (tb - tf < BACK_DTE_MIN_GAP) continue;
-        if (tb > BACK_DTE_MAX) continue;
+        const gap = tb - tf;
+        if (gap < BACK_DTE_MIN_GAP || gap > BACK_DTE_MAX_GAP) continue;
         const backQuotes = byExpiry.get(be);
         assertDefined(backQuotes, "selectCandidates: backQuotes (be came from byExpiry.keys())");
         const backAtK = backQuotes.find((quote) => quote.strike === K);
         if (backAtK === undefined) continue;
-        if (chosen === null || tb < chosen.tb) {
-          chosen = { be, tb, ivB: backAtK.iv };
+        const ivB = backAtK.iv;
+
+        const pairKey = `${K}-${fe}-${be}`;
+        if (seenPairs.has(pairKey)) continue;
+
+        const gF = bsmGreeks(spot, K, tf / 365, ivF, r, q, "P");
+        const gB = bsmGreeks(spot, K, tb / 365, ivB, r, q, "P");
+        const theta = (gB.theta - gF.theta) * 100;
+        if (theta <= 0) {
+          // Gate `net-theta-positive` (criterion 6) — counted, never silent.
+          netThetaDrops += 1;
+          continue;
         }
+
+        seenPairs.add(pairKey);
+
+        const vega = (gB.vega - gF.vega) * 100;
+        const delta = (gB.delta - gF.delta) * 100;
+
+        const priceF = bsmPrice(spot, K, tf / 365, ivF, r, q, "P");
+        const priceB = bsmPrice(spot, K, tb / 365, ivB, r, q, "P");
+        const debit = (priceB - priceF) * 100;
+
+        const slope = ((ivB - ivF) / (tb - tf)) * 365;
+
+        const frontEvents = legSpansEvents(fe, asOfIso, events);
+        const backEventsAll = legSpansEvents(be, asOfIso, events);
+        const backEvents = backEventsAll.filter((name) => !frontEvents.includes(name));
+
+        candidates.push({
+          // The rung label stays in the id for stability, but uniqueness comes from the
+          // post-snap (strike, frontExpiry, backExpiry) dedupe above.
+          id: `${rung.label}-${K}-${fe}-${be}`,
+          name: `${K}P ${fe} / ${be}`,
+          frontLeg: { strike: K, putCall: "P", expiration: fe, dte: tf, iv: ivF },
+          backLeg: { strike: K, putCall: "P", expiration: be, dte: tb, iv: ivB },
+          deltaRung: rung.label,
+          spot,
+          theta,
+          vega,
+          delta,
+          debit,
+          slope,
+          frontEvents,
+          backEvents,
+        });
       }
-      if (chosen === null) continue;
-      const { be, tb, ivB } = chosen;
-
-      const gF = bsmGreeks(spot, K, tf / 365, ivF, r, q, "P");
-      const gB = bsmGreeks(spot, K, tb / 365, ivB, r, q, "P");
-      const theta = (gB.theta - gF.theta) * 100;
-      if (theta <= 0) {
-        // Gate `net-theta-positive` (criterion 6) — counted, never silent.
-        netThetaDrops += 1;
-        continue;
-      }
-
-      const vega = (gB.vega - gF.vega) * 100;
-      const delta = (gB.delta - gF.delta) * 100;
-
-      const priceF = bsmPrice(spot, K, tf / 365, ivF, r, q, "P");
-      const priceB = bsmPrice(spot, K, tb / 365, ivB, r, q, "P");
-      const debit = (priceB - priceF) * 100;
-
-      const slope = ((ivB - ivF) / (tb - tf)) * 365;
-
-      const frontEvents = legSpansEvents(fe, asOfIso, events);
-      const backEventsAll = legSpansEvents(be, asOfIso, events);
-      const backEvents = backEventsAll.filter((name) => !frontEvents.includes(name));
-
-      candidates.push({
-        // WR-04: include the delta rung -- a resolved strike is a pure function of (rung,
-        // frontExpiry), but a sparse chain can make TWO DIFFERENT rungs resolve to the SAME
-        // strike for the same front expiry, which would otherwise collide on `${K}-${fe}-${be}`
-        // (React key collision + combined-book double-toggle downstream).
-        id: `${rung.label}-${K}-${fe}-${be}`,
-        name: `${K}P ${fe} / ${be}`,
-        frontLeg: { strike: K, putCall: "P", expiration: fe, dte: tf, iv: ivF },
-        backLeg: { strike: K, putCall: "P", expiration: be, dte: tb, iv: ivB },
-        deltaRung: rung.label,
-        spot,
-        theta,
-        vega,
-        delta,
-        debit,
-        slope,
-        frontEvents,
-        backEvents,
-      });
     }
   }
 

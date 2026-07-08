@@ -12,8 +12,9 @@
  * Hexagon law (architecture-boundaries §2): pure structural types, no imports needed.
  */
 
-/** Delta-rung label — which OTM-put target this candidate's strike was selected for (D-01). */
-export type DeltaRung = "ATM" | "30D" | "20D" | "10D";
+/** Delta-rung label — which put-delta target this candidate's strike was selected for (D-01;
+ * user-locked −0.50…−0.25 grid, 2026-07-08). */
+export type DeltaRung = "50D" | "45D" | "40D" | "35D" | "30D" | "25D";
 
 /** One leg (front or back) of a candidate calendar — puts only in scope this milestone. */
 export type RawCandidateLeg = {
@@ -76,7 +77,7 @@ export type BreakdownEntry = {
  * `value` is null-honest: insufficient history → null, never a fabricated number.
  */
 export type ContextEntry = {
-  readonly id: "vrp" | "slopePercentile" | "backEventBonus";
+  readonly id: "vrp" | "slopePercentile" | "backEventBonus" | "thetaVega";
   readonly label: string;
   readonly value: number | null;
   readonly note: string;

@@ -409,13 +409,13 @@ describe("rule registry in the snapshot (rules.ts)", () => {
     // Gate drops present (all-liquid fixture → zero drops, but the field is real).
     expect(row.snapshot.gateDrops).toEqual({ liquidity: 0, netTheta: 0 });
 
-    // Every candidate carries the 3 experimental context entries; vrp/slopePercentile are
+    // Every candidate carries the 4 experimental context entries; vrp/slopePercentile are
     // real numbers given the supplied history.
     const candidate = row.snapshot.candidates[0];
     expect(candidate).toBeDefined();
     if (candidate === undefined) return;
     const ids = candidate.context.map((c) => c.id).sort();
-    expect(ids).toEqual(["backEventBonus", "slopePercentile", "vrp"]);
+    expect(ids).toEqual(["backEventBonus", "slopePercentile", "thetaVega", "vrp"]);
     const vrp = candidate.context.find((c) => c.id === "vrp");
     expect(vrp?.value).not.toBeNull();
     const pct = candidate.context.find((c) => c.id === "slopePercentile");

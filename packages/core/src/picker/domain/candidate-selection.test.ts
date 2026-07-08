@@ -25,7 +25,7 @@ import {
   FRONT_DTE_MIN,
   FRONT_DTE_MAX,
   BACK_DTE_MIN_GAP,
-  BACK_DTE_MAX,
+  BACK_DTE_MAX_GAP,
 } from "./candidate-selection.ts";
 import type { ChainQuoteForPicker, EconomicEvent } from "../application/ports.ts";
 
@@ -143,9 +143,16 @@ describe("legSpansEvents", () => {
 });
 
 describe("selectCandidates", () => {
-  it("only pairs front legs in [21,36] DTE with back legs where (backDTE-frontDTE)>=21 and backDTE<=80", () => {
+  it("exposes the user-locked delta rungs: −0.50…−0.25 in 0.05 steps", () => {
+    expect(DELTA_RUNGS.map((rung) => rung.targetDelta)).toEqual([
+      -0.5, -0.45, -0.4, -0.35, -0.3, -0.25,
+    ]);
+  });
+
+  it("only pairs front legs in [21,36] DTE with back legs where the gap is in [21,35] days — ALL qualifying backs kept", () => {
     // Front expiries at dte 20 (too early), 30 (valid), 40 (too late).
-    // Back expiries at dte 45 (valid gap+cap from the 30-dte front), 95 (gap ok but > 80 cap).
+    // Backs from the 30-dte front: gap 15 (too tight), gap 26 (valid), gap 33 (valid),
+    // gap 46 (beyond the 35d cap).
     const iv = 0.15;
     const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
     const chain: ChainQuoteForPicker[] = [];
@@ -153,9 +160,10 @@ describe("selectCandidates", () => {
       "2026-07-21": 20, // too-early front
       "2026-07-31": 30, // valid front
       "2026-08-10": 40, // too-late front
-      "2026-08-15": 45, // valid back (45-30=15 <21, so NOT a valid pair for the 30-dte front either)
-      "2026-08-26": 56, // valid back for the 30-dte front (56-30=26 >=21, <=80)
-      "2026-10-04": 95, // gap ok (95-30=65>=21) but dte 95 > 80 cap -> excluded
+      "2026-08-15": 45, // gap 15 from the 30-dte front → too tight
+      "2026-08-26": 56, // gap 26 → valid back
+      "2026-09-02": 63, // gap 33 → valid back (second qualifying back, must ALSO be kept)
+      "2026-09-15": 76, // gap 46 → beyond the 35d gap cap
     };
     for (const expiration of Object.keys(expiries)) {
       for (const strike of strikes) {
@@ -174,16 +182,55 @@ describe("selectCandidates", () => {
       expect(c.frontLeg.dte).toBeGreaterThanOrEqual(FRONT_DTE_MIN);
       expect(c.frontLeg.dte).toBeLessThanOrEqual(FRONT_DTE_MAX);
       expect(c.backLeg.dte - c.frontLeg.dte).toBeGreaterThanOrEqual(BACK_DTE_MIN_GAP);
-      expect(c.backLeg.dte).toBeLessThanOrEqual(BACK_DTE_MAX);
+      expect(c.backLeg.dte - c.frontLeg.dte).toBeLessThanOrEqual(BACK_DTE_MAX_GAP);
     }
 
-    // The 30-dte front never pairs with the 45-dte back (gap only 15 days).
     const frontThirty = candidates.filter((c) => c.frontLeg.expiration === "2026-07-31");
+    // The 30-dte front never pairs with the gap-15 back (too tight) nor the gap-46 back (too wide).
     expect(frontThirty.every((c) => c.backLeg.expiration !== "2026-08-15")).toBe(true);
-    // It DOES pair with the 56-dte back (gap 26 days, within [21,80] window from front).
+    expect(frontThirty.every((c) => c.backLeg.expiration !== "2026-09-15")).toBe(true);
+    // ALL qualifying backs are kept (user lock: keep all pairs — fwd-edge scoring ranks them).
     expect(frontThirty.some((c) => c.backLeg.expiration === "2026-08-26")).toBe(true);
-    // Never with the 95-dte expiry (95 > BACK_DTE_MAX).
-    expect(frontThirty.every((c) => c.backLeg.expiration !== "2026-10-04")).toBe(true);
+    expect(frontThirty.some((c) => c.backLeg.expiration === "2026-09-02")).toBe(true);
+  });
+
+  it("snaps every candidate strike to a 25-point multiple even when the chain lists 5-point strikes", () => {
+    const iv = 0.15;
+    // 5-point grid around the money — resolved nearest-delta strikes will often land on
+    // off-25 strikes (7495, 7480, …); the universe must snap them to 25s (user lock: OI/volume
+    // concentrate on 25-multiples).
+    const strikes = [7530, 7525, 7520, 7515, 7510, 7505, 7500, 7495, 7490, 7485, 7480, 7475, 7450, 7425, 7400, 7375, 7350, 7325];
+    const chain: ChainQuoteForPicker[] = [];
+    for (const expiration of ["2026-07-31", "2026-08-26"]) {
+      for (const strike of strikes) {
+        chain.push(chainQuote(strike, expiration, iv));
+      }
+    }
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
+    expect(candidates.length).toBeGreaterThan(0);
+    for (const c of candidates) {
+      expect(c.frontLeg.strike % 25).toBe(0);
+      expect(c.backLeg.strike % 25).toBe(0);
+    }
+  });
+
+  it("caps the universe at the 1σ front expected move: spot − K ≤ spot·σ_f·√(t_f/365)", () => {
+    // Low iv → tight EM: 7500·0.08·√(30/365) ≈ 172 pts → strikes below ~7328 are beyond 1σ
+    // and must be excluded even though the −0.25Δ rung would otherwise reach for them.
+    const iv = 0.08;
+    const strikes = [7500, 7475, 7450, 7425, 7400, 7375, 7350, 7325, 7300, 7275, 7250];
+    const chain: ChainQuoteForPicker[] = [];
+    for (const expiration of ["2026-07-31", "2026-08-26"]) {
+      for (const strike of strikes) {
+        chain.push(chainQuote(strike, expiration, iv));
+      }
+    }
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
+    expect(candidates.length).toBeGreaterThan(0);
+    for (const c of candidates) {
+      const em = c.spot * c.frontLeg.iv * Math.sqrt(c.frontLeg.dte / 365);
+      expect(c.spot - c.frontLeg.strike).toBeLessThanOrEqual(em);
+    }
   });
 
   it("drops any calendar with net theta <= 0 (criterion 6)", () => {
@@ -202,46 +249,22 @@ describe("selectCandidates", () => {
     expect(candidates.length).toBe(0);
   });
 
-  it("dedupes to one candidate per (deltaRung, frontExpiry), never keyed on resolved strike", () => {
-    const iv = 0.15;
-    const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
-    const chain: ChainQuoteForPicker[] = [];
-    const expiries = ["2026-07-31", "2026-08-26", "2026-09-15"]; // front dte30; two valid backs (dte56, dte76)
-    for (const expiration of expiries) {
-      for (const strike of strikes) {
-        chain.push(chainQuote(strike, expiration, iv));
-      }
-    }
-    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
-    const frontThirty = candidates.filter((c) => c.frontLeg.expiration === "2026-07-31");
-    const keys = frontThirty.map((c) => c.deltaRung);
-    const uniqueKeys = new Set(keys);
-    // Exactly one candidate per delta rung for this front expiry -- never more than
-    // DELTA_RUNGS.length entries, proving the (deltaRung, frontExpiry) dedupe collapsed the
-    // two valid back-expiry choices (dte56 and dte76) down to one each.
-    expect(keys.length).toBe(uniqueKeys.size);
-    expect(keys.length).toBeLessThanOrEqual(DELTA_RUNGS.length);
-  });
-
-  it("WR-04: two different delta rungs resolving to the SAME strike (sparse chain) never produce a duplicate candidate id", () => {
+  it("collapses post-snap duplicates: two rungs snapping to the same (strike, front, back) yield ONE candidate", () => {
     const iv = 0.15;
     const chain: ChainQuoteForPicker[] = [];
-    // Only ONE strike available on the whole chain -- every delta rung (ATM/30D/20D/10D)
-    // must resolve to this same strike. The module's dedupe-by-construction (Pitfall 5) only
-    // guarantees one candidate per (rung, frontExpiry); it does NOT prevent two DIFFERENT
-    // rungs from colliding on the same resolved strike when the chain is this sparse (WR-04).
+    // Only ONE strike available on the whole chain — every delta rung resolves (and snaps)
+    // to this same strike. The post-snap dedupe on (strike, frontExpiry, backExpiry) must
+    // collapse them all to a single candidate (duplicate rows on the rail were the user's
+    // original complaint).
     for (const expiration of ["2026-07-31", "2026-08-26"]) {
       chain.push(chainQuote(7500, expiration, iv));
     }
     const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
     const frontThirty = candidates.filter((c) => c.frontLeg.expiration === "2026-07-31");
 
-    // Sanity: confirm the sparse setup actually triggers the strike collision under test.
-    expect(frontThirty.length).toBeGreaterThan(1);
-    expect(new Set(frontThirty.map((c) => c.frontLeg.strike)).size).toBe(1);
-
-    const ids = frontThirty.map((c) => c.id);
-    expect(new Set(ids).size).toBe(ids.length); // no duplicate ids despite the strike collision
+    expect(frontThirty.length).toBe(1);
+    const ids = candidates.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length); // ids unique across the whole universe
   });
 });
 
