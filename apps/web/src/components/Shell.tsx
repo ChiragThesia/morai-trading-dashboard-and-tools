@@ -1,8 +1,4 @@
 import { useState } from "react";
-import { useGex } from "../hooks/useGex.ts";
-import { usePositions } from "../hooks/usePositions.ts";
-import { bookUnrealizedPnl } from "../lib/pair-calendars.ts";
-import { MetricChip } from "./system/index.tsx";
 import { cn } from "@/lib/utils";
 import { AuthExpiredBanner } from "./AuthExpiredBanner.tsx";
 
@@ -20,87 +16,6 @@ const NAV_TABS: ReadonlyArray<ScreenName> = [
   "Journal",
 ] as const;
 
-// ─── Compact number formatting ────────────────────────────────────────────────
-
-/** Formats a numeric value with optional sign prefix and compact suffixes ($1.2M etc.) */
-function fmtCompact(value: number, prefix = ""): string {
-  const abs = Math.abs(value);
-  const sign = value >= 0 ? "+" : "−";
-  const p = prefix;
-  if (abs >= 1_000_000_000) {
-    return `${sign}${p}${(abs / 1_000_000_000).toFixed(1)}B`;
-  }
-  if (abs >= 1_000_000) {
-    return `${sign}${p}${(abs / 1_000_000).toFixed(1)}M`;
-  }
-  if (abs >= 1_000) {
-    return `${sign}${p}${(abs / 1_000).toFixed(1)}k`;
-  }
-  return `${sign}${p}${abs.toFixed(0)}`;
-}
-
-/** Formats a spot price without sign (SPX level — always positive) */
-function fmtSpot(value: number): string {
-  return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
-
-/** Formats gamma flip / netGamma values to 2 decimal places */
-function fmtGamma(value: number): string {
-  const sign = value >= 0 ? "+" : "−";
-  return `${sign}$${Math.abs(value).toFixed(2)}B`;
-}
-
-/** Tailwind sign-color class for a signed value (null → muted). */
-function signClass(value: number | null): string {
-  if (value === null) return "text-muted-foreground";
-  return value >= 0 ? "text-up" : "text-down";
-}
-
-// ─── MarketStrip ─────────────────────────────────────────────────────────────
-
-function MarketStrip(): React.ReactElement {
-  const { data: gex } = useGex();
-  const { data: positions } = usePositions();
-
-  // Book P&L: total unrealized P&L across the book (Σ legUnreal). NOT marketValue·netQty
-  // — that flips short signs and sums notional magnitude (the bug this replaces).
-  const bookPnl = positions ? bookUnrealizedPnl(positions.positions) : null;
-
-  const isNegativeGamma = gex !== undefined && gex.netGammaAtSpot < 0;
-
-  return (
-    <div className="flex shrink-0 items-center gap-2">
-      <MetricChip
-        label="SPX"
-        value={gex !== undefined ? fmtSpot(gex.spot) : "—"}
-        valueClassName="text-blue"
-      />
-      <MetricChip
-        label="net γ /1%"
-        value={gex !== undefined ? fmtGamma(gex.netGammaAtSpot) : "—"}
-        alert={isNegativeGamma}
-        valueClassName={
-          gex !== undefined
-            ? gex.netGammaAtSpot >= 0
-              ? "text-up"
-              : "text-down"
-            : "text-muted-foreground"
-        }
-      />
-      <MetricChip
-        label="γ flip"
-        value={gex !== undefined && gex.flip !== null ? fmtSpot(gex.flip) : "—"}
-        valueClassName="text-amber"
-      />
-      <MetricChip
-        label="book P&L"
-        value={bookPnl !== null ? fmtCompact(bookPnl, "$") : "—"}
-        valueClassName={signClass(bookPnl)}
-      />
-    </div>
-  );
-}
-
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
 interface ShellProps {
@@ -115,9 +30,10 @@ interface ShellProps {
 /**
  * Shell — the top-level layout shell for the authenticated Morai dashboard.
  *
- *   - Sticky frosted-glass header (~48px) with the MORAI brand logotype, three
- *     locked nav tabs (Overview · Analyzer · Journal), and a right-aligned live
- *     market strip (SPX spot, net γ /1%, γ flip, book P&L).
+ *   - Sticky frosted-glass header (~48px) with the MORAI brand logotype and three
+ *     locked nav tabs (Overview · Analyzer · Journal). Market metrics live ONLY in
+ *     the Overview pill header — a second renderer here drifted in rounding/format
+ *     and read as inaccurate (one source of truth).
  *   - The active screen in its content area (via `children` or internal switcher).
  *   - The fixed-bottom <AuthExpiredBanner> (always mounted when authenticated).
  *
@@ -174,8 +90,6 @@ export function Shell({
           </nav>
         </div>
 
-        {/* Right: Live market strip */}
-        <MarketStrip />
       </header>
 
       {/* Active screen content area */}
