@@ -44,6 +44,10 @@ export type ChainQuoteForPicker = {
   readonly contractType: "C" | "P";
   readonly underlyingPrice: number;
   readonly bsmIv: string | null;
+  /** Quote bid/ask + open interest — inputs to the `liquidity` gate (rules.ts). */
+  readonly bid: number;
+  readonly ask: number;
+  readonly openInterest: number;
   readonly source: "schwab" | "cboe";
 };
 
@@ -58,7 +62,34 @@ export type GexContextForPicker = {
   readonly putWall: number | null;
   readonly netGammaAtSpot: number;
   readonly absGammaStrike: number | null;
+  /**
+   * Near-term (≤45d DTE) level set from gex_snapshots.near_term — the intraday-relevant
+   * walls the gexFit rule prefers (rules.ts). All null when the snapshot predates
+   * migration 0019 or no near-term legs solved; gexFit then falls back to the
+   * all-expiry flip/walls above.
+   */
+  readonly nearTermFlip: number | null;
+  readonly nearTermCallWall: number | null;
+  readonly nearTermPutWall: number | null;
   readonly computedAt: Date;
+};
+
+/** One experimental rule value shipped per candidate (weight 0, display-only). */
+export type CandidateContextEntry = {
+  readonly id: string;
+  readonly label: string;
+  readonly value: number | null;
+  readonly note: string;
+};
+
+/** One rule-registry row shipped in the snapshot (the UI's methodology source of truth). */
+export type RuleSetEntry = {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: "gate" | "score" | "experimental";
+  readonly weight: number;
+  readonly status: "active" | "experimental";
+  readonly rationale: string;
 };
 
 /** PickerCandidateDomain — readonly domain mirror of contracts' pickerCandidate. */
@@ -83,6 +114,8 @@ export type PickerCandidateDomain = {
   readonly expectedMove: number;
   readonly frontEvents: ReadonlyArray<string>;
   readonly backEvents: ReadonlyArray<string>;
+  /** Experimental rule values (weight 0, display-only — rules.ts registry). */
+  readonly context: ReadonlyArray<CandidateContextEntry>;
   readonly frontLeg: {
     readonly strike: number;
     readonly putCall: "C" | "P";
@@ -122,6 +155,10 @@ export type PickerSnapshot = {
   };
   readonly events: ReadonlyArray<{ readonly date: string; readonly name: string }>;
   readonly candidates: ReadonlyArray<PickerCandidateDomain>;
+  /** The rule registry this snapshot was scored with (rules.ts RULE_SET_METADATA). */
+  readonly ruleSet: ReadonlyArray<RuleSetEntry>;
+  /** Per-gate drop counts for this compute (no silent caps). */
+  readonly gateDrops: { readonly liquidity: number; readonly netTheta: number };
 };
 
 /** PickerSnapshotRow — a persisted picker snapshot (append-only, D-06 keeps history). */
@@ -184,6 +221,22 @@ export type ForPersistingPickerSnapshot = (
  * Returns ok(null) when no snapshot exists yet.
  */
 export type ForReadingPickerSnapshot = () => Promise<Result<PickerSnapshotRow | null, StorageError>>;
+
+/**
+ * ForReadingDailySpotCloses — trailing daily SPX closes (last observation per UTC day from
+ * leg_observations), ascending by day. Feeds the experimental `vrp` rule's RV20.
+ */
+export type ForReadingDailySpotCloses = (
+  days: number,
+) => Promise<Result<ReadonlyArray<number>, StorageError>>;
+
+/**
+ * ForReadingPickerSlopeHistory — trailing candidate slopes from stored picker snapshots
+ * (the PICK-04 corpus). Feeds the experimental `slopePercentile` rule.
+ */
+export type ForReadingPickerSlopeHistory = (
+  limit: number,
+) => Promise<Result<ReadonlyArray<number>, StorageError>>;
 
 /**
  * ForRunningComputePicker — driver port for the compute-picker use-case factory.

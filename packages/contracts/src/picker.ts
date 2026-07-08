@@ -58,6 +58,39 @@ export const exitPlan = z.object({
 
 export type ExitPlan = z.infer<typeof exitPlan>;
 
+// ─── Experimental context + rule registry (rules.ts) ───────────────────────────
+
+/**
+ * candidateContextEntry — one experimental (weight-0) rule's computed value for a
+ * candidate. Display-only ("calibrating") until the PICK-04 backtest promotes the rule.
+ * `value` is null-honest: insufficient history → null, never a fabricated number.
+ */
+export const candidateContextEntry = z.object({
+  id: z.string(),
+  label: z.string(),
+  value: z.number().nullable(),
+  note: z.string(),
+});
+
+export type CandidateContextEntry = z.infer<typeof candidateContextEntry>;
+
+/**
+ * ruleSetEntry — one rule-registry row (core's rules.ts RULE_SET_METADATA). Shipped in
+ * the snapshot so the Analyzer methodology panel renders the ENGINE's table, never a
+ * client-side copy with placeholder thresholds.
+ */
+export const ruleSetEntry = z.object({
+  id: z.string(),
+  label: z.string(),
+  kind: z.enum(["gate", "score", "experimental"]),
+  /** Score points at 100% fraction; 0 for gates and experimental rules. */
+  weight: z.number(),
+  status: z.enum(["active", "experimental"]),
+  rationale: z.string(),
+});
+
+export type RuleSetEntry = z.infer<typeof ruleSetEntry>;
+
 // ─── Candidate ──────────────────────────────────────────────────────────────────
 
 /**
@@ -97,6 +130,9 @@ export const pickerCandidate = z.object({
   backEvents: z.array(z.string()),
   frontLeg: pickerCandidateLeg,
   backLeg: pickerCandidateLeg,
+  /** Experimental rule values (weight 0, display-only — rules.ts registry).
+   *  Defaulted so pre-registry stored snapshots still parse at the read seam. */
+  context: z.array(candidateContextEntry).default([]),
   exitPlan,
 });
 
@@ -175,6 +211,16 @@ export const pickerSnapshotResponse = z.object({
   gex: pickerGexContext,
   events: z.array(pickerEvent),
   candidates: z.array(pickerCandidate),
+  /** The rule registry this snapshot was scored with — the UI methodology source of truth.
+   *  Defaulted so pre-registry stored snapshots still parse at the read seam. */
+  ruleSet: z.array(ruleSetEntry).default([]),
+  /** Per-gate drop counts for this compute (no silent caps). Defaulted for old rows. */
+  gateDrops: z
+    .object({
+      liquidity: z.number().int(),
+      netTheta: z.number().int(),
+    })
+    .default({ liquidity: 0, netTheta: 0 }),
 });
 
 export type PickerSnapshotResponse = z.infer<typeof pickerSnapshotResponse>;

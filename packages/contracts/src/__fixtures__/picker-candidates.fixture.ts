@@ -96,6 +96,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7500, putCall: "P", dte: 21, iv: 0.1249 },
       backLeg: { strike: 7500, putCall: "P", dte: 43, iv: 0.1402 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23" },
     },
     {
@@ -122,6 +123,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7500, putCall: "P", dte: 25, iv: 0.125 },
       backLeg: { strike: 7500, putCall: "P", dte: 50, iv: 0.1419 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-27" },
     },
     {
@@ -148,6 +150,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7500, putCall: "P", dte: 26, iv: 0.1263 },
       backLeg: { strike: 7500, putCall: "P", dte: 50, iv: 0.1419 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-28" },
     },
     {
@@ -174,6 +177,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7500, putCall: "P", dte: 22, iv: 0.1275 },
       backLeg: { strike: 7500, putCall: "P", dte: 43, iv: 0.1402 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-24" },
     },
     {
@@ -200,6 +204,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7400, putCall: "P", dte: 21, iv: 0.133797 },
       backLeg: { strike: 7400, putCall: "P", dte: 43, iv: 0.149097 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23" },
     },
     {
@@ -226,6 +231,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7400, putCall: "P", dte: 25, iv: 0.133897 },
       backLeg: { strike: 7400, putCall: "P", dte: 50, iv: 0.150797 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-27" },
     },
     {
@@ -252,6 +258,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7400, putCall: "P", dte: 26, iv: 0.135197 },
       backLeg: { strike: 7400, putCall: "P", dte: 50, iv: 0.150797 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-28" },
     },
     {
@@ -278,6 +285,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7400, putCall: "P", dte: 22, iv: 0.136397 },
       backLeg: { strike: 7400, putCall: "P", dte: 43, iv: 0.149097 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-24" },
     },
     // Guard-case candidate (D-03a/D-06) — constructed, not a literal buildCandidates() row:
@@ -308,7 +316,12 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       backEvents: ["FOMC"],
       frontLeg: { strike: 7450, putCall: "P", dte: 21, iv: 0.155 },
       backLeg: { strike: 7450, putCall: "P", dte: 45, iv: 0.105 },
+      context: [],
       exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23" },
     },
   ],
+  // Rule-registry metadata + gate-drop counts (rules.ts). The fixture predates the
+  // registry — empty/zero values exercise the read-seam defaults path.
+  ruleSet: [],
+  gateDrops: { liquidity: 0, netTheta: 0 },
 };

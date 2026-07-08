@@ -78,6 +78,9 @@ const GEX_CONTEXT: GexContextForPicker = {
   putWall: 7400,
   netGammaAtSpot: -47,
   absGammaStrike: 7500,
+  nearTermFlip: 7486,
+  nearTermCallWall: 7550,
+  nearTermPutWall: 7450,
   computedAt: new Date("2026-07-01T14:30:00.000Z"),
 };
 
@@ -237,5 +240,79 @@ describe("scoreCalendarCandidates", () => {
         }
       }),
     );
+  });
+});
+
+describe("gexFit — near-term placement via the rules.ts registry", () => {
+  it("scores gexFit from the NEAR-TERM walls/flip (spot above flip + in range + pinned = full credit)", () => {
+    // normalCandidate: K 7500, spot 7500. Near-term set: flip 7486, walls [7450, 7550].
+    // spot 7500 > 7486 (+0.5); K in range (+0.3); |K−CW45|=50, |K−PW45|=50 → no pin.
+    const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
+    expect(scored).toBeDefined();
+    if (scored === undefined) return;
+    const entry = scored.breakdown.find((b) => b.criterion === "gexFit");
+    expect(entry).toBeDefined();
+    if (entry === undefined) return;
+    expect(entry.rawValue).toBeCloseTo(0.8, 10);
+  });
+
+  it("falls back to all-expiry walls when the near-term set is null", () => {
+    const ctx: GexContextForPicker = {
+      ...GEX_CONTEXT,
+      nearTermFlip: null,
+      nearTermCallWall: null,
+      nearTermPutWall: null,
+    };
+    // All-expiry: flip 7480 < spot 7500 (+0.5); K 7500 ∈ [7400, 7600] (+0.3); no pin.
+    const [scored] = scoreCalendarCandidates([normalCandidate()], ctx, { r: R, q: Q });
+    expect(scored).toBeDefined();
+    if (scored === undefined) return;
+    const entry = scored.breakdown.find((b) => b.criterion === "gexFit");
+    expect(entry?.rawValue).toBeCloseTo(0.8, 10);
+  });
+
+  it("null GEX context still zeroes gexFit (degraded context, never silent credit)", () => {
+    const [scored] = scoreCalendarCandidates([normalCandidate()], null, { r: R, q: Q });
+    expect(scored).toBeDefined();
+    if (scored === undefined) return;
+    const entry = scored.breakdown.find((b) => b.criterion === "gexFit");
+    expect(entry?.rawValue).toBe(0);
+    expect(entry?.contribution).toBe(0);
+  });
+});
+
+describe("experimental context entries (weight 0, display-only)", () => {
+  it("emits vrp/slopePercentile/backEventBonus with supplied extras", () => {
+    const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, {
+      r: R,
+      q: Q,
+      realizedVol20: 0.11,
+      slopeHistory: [0.05, 0.1, 0.3],
+    });
+    expect(scored).toBeDefined();
+    if (scored === undefined) return;
+
+    const byId = new Map(scored.context.map((c) => [c.id, c]));
+    expect(byId.get("vrp")?.value).toBeCloseTo(0.14 - 0.11, 12);
+    // normalCandidate slope ≈ 0.2106 → 2 of 3 history values ≤ it
+    expect(byId.get("slopePercentile")?.value).toBeCloseTo((100 * 2) / 3, 6);
+    expect(byId.get("backEventBonus")?.value).toBe(0);
+  });
+
+  it("is null-honest when extras are absent (no fabricated values)", () => {
+    const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
+    expect(scored).toBeDefined();
+    if (scored === undefined) return;
+    const byId = new Map(scored.context.map((c) => [c.id, c]));
+    expect(byId.get("vrp")?.value).toBeNull();
+    expect(byId.get("slopePercentile")?.value).toBeNull();
+  });
+
+  it("backEventBonus = 1 when the back leg spans an event the front does not", () => {
+    const candidate = { ...normalCandidate(), backEvents: ["FOMC"] };
+    const [scored] = scoreCalendarCandidates([candidate], GEX_CONTEXT, { r: R, q: Q });
+    expect(scored).toBeDefined();
+    if (scored === undefined) return;
+    expect(scored.context.find((c) => c.id === "backEventBonus")?.value).toBe(1);
   });
 });

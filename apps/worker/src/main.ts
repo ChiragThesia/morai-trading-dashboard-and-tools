@@ -46,6 +46,7 @@ import {
   makePostgresEconomicEventsRepo,
   makePostgresPickerChainRepo,
   makePostgresPickerSnapshotRepo,
+  makePostgresPickerHistoryRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -539,16 +540,26 @@ const readGexContextForPicker = async () => {
     putWall: row.putWall,
     netGammaAtSpot: row.netGammaAtSpot,
     absGammaStrike: toAbsGammaStrike(row),
+    // Near-term (≤45d) level set — the gexFit rule prefers these walls (rules.ts);
+    // null on pre-0019 snapshots → gexFit falls back to the all-expiry set above.
+    nearTermFlip: row.nearTerm?.flip ?? null,
+    nearTermCallWall: row.nearTerm?.callWall ?? null,
+    nearTermPutWall: row.nearTerm?.putWall ?? null,
     computedAt: row.computedAt,
   };
   return ok(context);
 };
+
+// Picker rule engine: history reads feeding the experimental vrp/slopePercentile rules.
+const pickerHistoryRepo = makePostgresPickerHistoryRepo(db);
 
 const computePickerSnapshotUseCase = makeComputePickerSnapshotUseCase({
   readChainForPicker: pickerChainRepo.readChainForPicker,
   readGexContext: readGexContextForPicker,
   readEconomicEvents: economicEventsRepo.readEconomicEvents,
   persistPickerSnapshot: pickerSnapshotRepo.insertPickerSnapshot,
+  readDailySpotCloses: pickerHistoryRepo.readDailySpotCloses,
+  readPickerSlopeHistory: pickerHistoryRepo.readPickerSlopeHistory,
   rate: config.BSM_RATE_FALLBACK,
   dividendYield: config.BSM_DIVIDEND_YIELD,
   now: () => new Date(),

@@ -17,6 +17,8 @@ export type {
   PickerSnapshotRow,
   ForPersistingPickerSnapshot,
   ForReadingPickerSnapshot,
+  ForReadingDailySpotCloses,
+  ForReadingPickerSlopeHistory,
   ForRunningComputePicker,
   ForRunningGetPicker,
 } from "./application/ports.ts";

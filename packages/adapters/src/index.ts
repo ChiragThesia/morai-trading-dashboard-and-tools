@@ -115,6 +115,13 @@ export type { PostgresPickerSnapshotRepo } from "./postgres/repos/picker-snapsho
 export { makeMemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
 export type { MemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
 
+// Picker rule engine: history reads for the experimental vrp/slopePercentile rules —
+// postgres + in-memory twin (architecture-boundaries §8)
+export { makePostgresPickerHistoryRepo } from "./postgres/repos/picker-history.ts";
+export type { PostgresPickerHistoryRepo } from "./postgres/repos/picker-history.ts";
+export { makeMemoryPickerHistoryRepo } from "./memory/picker-history.ts";
+export type { MemoryPickerHistoryRepo } from "./memory/picker-history.ts";
+
 // Phase 19 (19-04/19-08): economic-events adapter (FRED+FOMC seed) + repo — postgres + in-memory twin
 export { makeEconomicEventsAdapter, FOMC_SEED } from "./http/economic-events.ts";
 export { makePostgresEconomicEventsRepo } from "./postgres/repos/economic-events.ts";

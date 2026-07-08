@@ -64,6 +64,9 @@ function chainQuote(
     contractType,
     underlyingPrice,
     bsmIv: String(iv),
+    bid: 99,
+    ask: 101,
+    openInterest: 1000,
     source: "schwab",
   };
 }
@@ -100,6 +103,9 @@ const GEX_CONTEXT_FRESH: GexContextForPicker = {
   putWall: 7400,
   netGammaAtSpot: -47,
   absGammaStrike: 7500,
+  nearTermFlip: null,
+  nearTermCallWall: null,
+  nearTermPutWall: null,
   computedAt: new Date("2026-07-01T14:00:00.000Z"), // 1h before "now" below
 };
 
@@ -153,6 +159,8 @@ function baseDeps(overrides: {
   readonly chain?: ReadonlyArray<ChainQuoteForPicker>;
   readonly gexContext?: GexContextForPicker | null;
   readonly events?: ReadonlyArray<EconomicEvent>;
+  readonly dailyCloses?: ReadonlyArray<number>;
+  readonly slopeHistory?: ReadonlyArray<number>;
 }) {
   const { persistPickerSnapshot, rows } = makeRecordingPersist();
   // Note: `??` would coalesce an explicit `null` (missing-GEX fixture) back to the default --
@@ -164,6 +172,10 @@ function baseDeps(overrides: {
       readGexContext: fakeReadGexContext(gexContext),
       readEconomicEvents: fakeReadEvents(overrides.events ?? FUTURE_EVENTS),
       persistPickerSnapshot,
+      readDailySpotCloses: async (): Promise<Result<ReadonlyArray<number>, StorageError>> =>
+        ok(overrides.dailyCloses ?? []),
+      readPickerSlopeHistory: async (): Promise<Result<ReadonlyArray<number>, StorageError>> =>
+        ok(overrides.slopeHistory ?? []),
       rate: R,
       dividendYield: Q,
       now: () => NOW,
@@ -331,7 +343,7 @@ describe("makeComputePickerSnapshotUseCase", () => {
 describe("rankAndCapCandidates", () => {
   it("sorts score-desc and breaks ties deterministically by ascending id", () => {
     const chain = realCandidateChain();
-    const raw = selectCandidates(chain, [], { r: R, q: Q });
+    const { candidates: raw } = selectCandidates(chain, [], { r: R, q: Q });
     const scored = scoreCalendarCandidates(raw, null, { r: R, q: Q });
     expect(scored.length).toBeGreaterThanOrEqual(2);
 
@@ -357,7 +369,7 @@ describe("rankAndCapCandidates", () => {
 
   it("caps the result at topN", () => {
     const chain = realCandidateChain();
-    const raw = selectCandidates(chain, [], { r: R, q: Q });
+    const { candidates: raw } = selectCandidates(chain, [], { r: R, q: Q });
     const scored = scoreCalendarCandidates(raw, null, { r: R, q: Q });
     const ranked = rankAndCapCandidates(scored, 1);
     expect(ranked.length).toBeLessThanOrEqual(1);
@@ -369,5 +381,44 @@ describe("exported freshness-window constants", () => {
   it("GEX_FRESHNESS_WINDOW_MS and EVENTS_FRESHNESS_WINDOW_MS are positive", () => {
     expect(GEX_FRESHNESS_WINDOW_MS).toBeGreaterThan(0);
     expect(EVENTS_FRESHNESS_WINDOW_MS).toBeGreaterThan(0);
+  });
+});
+
+describe("rule registry in the snapshot (rules.ts)", () => {
+  it("ships ruleSet metadata, gateDrops counts, and per-candidate experimental context", async () => {
+    const { deps, rows } = baseDeps({
+      dailyCloses: [7400, 7410, 7405, 7420, 7415, 7430, 7425, 7440, 7450, 7445],
+      slopeHistory: [0.05, 0.1, 0.3],
+    });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    // ruleSet mirrors the registry: 5 active scores summing to 100, gates, experimental.
+    const activeScores = row.snapshot.ruleSet.filter(
+      (r) => r.kind === "score" && r.status === "active",
+    );
+    expect(activeScores.reduce((sum, r) => sum + r.weight, 0)).toBe(100);
+    expect(row.snapshot.ruleSet.some((r) => r.id === "liquidity" && r.kind === "gate")).toBe(true);
+    expect(row.snapshot.ruleSet.some((r) => r.id === "vrp" && r.status === "experimental")).toBe(true);
+
+    // Gate drops present (all-liquid fixture → zero drops, but the field is real).
+    expect(row.snapshot.gateDrops).toEqual({ liquidity: 0, netTheta: 0 });
+
+    // Every candidate carries the 3 experimental context entries; vrp/slopePercentile are
+    // real numbers given the supplied history.
+    const candidate = row.snapshot.candidates[0];
+    expect(candidate).toBeDefined();
+    if (candidate === undefined) return;
+    const ids = candidate.context.map((c) => c.id).sort();
+    expect(ids).toEqual(["backEventBonus", "slopePercentile", "vrp"]);
+    const vrp = candidate.context.find((c) => c.id === "vrp");
+    expect(vrp?.value).not.toBeNull();
+    const pct = candidate.context.find((c) => c.id === "slopePercentile");
+    expect(pct?.value).not.toBeNull();
   });
 });

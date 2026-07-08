@@ -90,6 +90,55 @@ describe.skipIf(shouldSkip)("postgres picker-chain adapter", () => {
     expect(leg.underlyingPrice).toBe(7390);
     expect(leg.source).toBe("schwab"); // schwab_chain → "schwab"
     expect(leg.time.getTime()).toBe(latestTime.getTime());
+    // Liquidity-gate inputs ride along (rules.ts).
+    expect(leg.bid).toBe(2.0);
+    expect(leg.ask).toBe(2.5);
+    expect(leg.openInterest).toBe(700);
+  });
+
+  // Same regression class as the 2026-07-08 GEX cohort bug: a dual-source cycle lands as
+  // TWO nearby timestamps (CBOE ~:59:31, Schwab ~:00:31). A strict max(time) read collapses
+  // to a single source; the lookback union must keep both, deduped per contract.
+  it("unions a boundary-straddling dual-source cycle and dedupes per contract (newest wins)", async () => {
+    if (!db) return;
+    const repo = makePostgresPickerChainRepo(db);
+
+    const cboeTime = new Date("2026-07-08T16:59:31Z");
+    const schwabTime = new Date("2026-07-08T17:00:31Z");
+    const cboeOnlyOcc = "O:SPX260801P07000"; // far-OTM breadth (cboe only)
+    const overlapOcc = "O:SPX260801P07500"; // near-ATM, both sources
+
+    await db.execute(sql`
+      INSERT INTO contracts (occ_symbol, underlying, root, contract_type, exercise_style, strike, expiration, multiplier)
+      VALUES
+        (${cboeOnlyOcc}, 'SPX', 'SPX', 'P', 'european', 7000000, '2026-08-01', 100),
+        (${overlapOcc}, 'SPX', 'SPX', 'P', 'european', 7500000, '2026-08-01', 100)
+      ON CONFLICT DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO leg_observations
+        (time, contract, bid, ask, mark, underlying_price, bsm_iv, open_interest, volume, source)
+      VALUES
+        (${cboeTime.toISOString()}::timestamptz, ${cboeOnlyOcc}, '1.0', '1.1', '1.05', '7480', '0.19', 900, 0, 'cboe'),
+        (${cboeTime.toISOString()}::timestamptz, ${overlapOcc}, '2.0', '2.2', '2.1', '7480', '0.16', 700, 0, 'cboe'),
+        (${schwabTime.toISOString()}::timestamptz, ${overlapOcc}, '2.1', '2.3', '2.2', '7481', '0.165', 710, 0, 'schwab_chain')
+      ON CONFLICT DO NOTHING
+    `);
+
+    const result = await repo.readChainForPicker();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Union: the CBOE-only far strike survives despite living on the other side of the
+    // half-hour boundary.
+    const strikes = result.value.map((l) => l.strike);
+    expect(strikes).toContain(7000000);
+
+    // Dedup: the overlap contract appears exactly once, newest (schwab) row winning.
+    const overlapRows = result.value.filter((l) => l.strike === 7500000);
+    expect(overlapRows).toHaveLength(1);
+    expect(overlapRows[0]?.source).toBe("schwab");
+    expect(overlapRows[0]?.bsmIv).toBe("0.165");
   });
 
   it("maps a 'cboe'-sourced leg to source: 'cboe'", async () => {

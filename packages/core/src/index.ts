@@ -348,6 +348,8 @@ export type {
   PickerSnapshotRow,
   ForPersistingPickerSnapshot,
   ForReadingPickerSnapshot,
+  ForReadingDailySpotCloses,
+  ForReadingPickerSlopeHistory,
   ForRunningComputePicker,
   ForRunningGetPicker,
 } from "./picker/index.ts";

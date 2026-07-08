@@ -28,6 +28,7 @@
 
 import { assertDefined } from "@morai/shared";
 import { bsmGreeks, bsmPrice } from "@morai/quant";
+import { isLiquidQuote } from "./rules.ts";
 import type { ChainQuoteForPicker, EconomicEvent } from "../application/ports.ts";
 import type { DeltaRung, RawCandidate } from "./types.ts";
 
@@ -130,6 +131,19 @@ export type SelectCandidatesParams = {
   readonly q: number;
 };
 
+/** Per-gate drop counts — logged by the use-case so gating is never a silent cap. */
+export type GateDrops = {
+  /** Quotes excluded by the `liquidity` gate (spread/OI — rules.ts). */
+  readonly liquidity: number;
+  /** Candidate pairs dropped by the `net-theta-positive` gate (criterion 6). */
+  readonly netTheta: number;
+};
+
+export type SelectCandidatesResult = {
+  readonly candidates: ReadonlyArray<RawCandidate>;
+  readonly gateDrops: GateDrops;
+};
+
 /**
  * Build the delta-targeted OTM-put calendar universe over a chain cohort.
  *
@@ -144,10 +158,14 @@ export function selectCandidates(
   chain: ReadonlyArray<ChainQuoteForPicker>,
   events: ReadonlyArray<EconomicEvent>,
   params: SelectCandidatesParams,
-): ReadonlyArray<RawCandidate> {
-  if (chain.length === 0) return [];
+): SelectCandidatesResult {
+  if (chain.length === 0) {
+    return { candidates: [], gateDrops: { liquidity: 0, netTheta: 0 } };
+  }
 
   const { r, q } = params;
+  let liquidityDrops = 0;
+  let netThetaDrops = 0;
 
   // Cohort spot: average underlyingPrice across the whole cohort (GEX precedent).
   const spot = chain.reduce((sum, quote) => sum + quote.underlyingPrice, 0) / chain.length;
@@ -161,7 +179,9 @@ export function selectCandidates(
   assertDefined(latestTime, "selectCandidates: latestTime (chain is non-empty)");
   const asOfIso = latestTime.toISOString().slice(0, 10);
 
-  // Convert ×1000 -> points ONCE (Pitfall 1); puts only (D-01); skip null/non-finite iv.
+  // Convert ×1000 -> points ONCE (Pitfall 1); puts only (D-01); skip null/non-finite iv;
+  // liquidity gate (rules.ts): a leg quote with a wide market or thin OI never enters the
+  // universe — an untradeable leg produces fictional debits/breakevens. Drops are counted.
   type PointsQuote = { readonly strike: number; readonly expiration: string; readonly iv: number };
   const putQuotes: PointsQuote[] = [];
   for (const quote of chain) {
@@ -169,9 +189,15 @@ export function selectCandidates(
     if (quote.bsmIv === null) continue;
     const iv = Number(quote.bsmIv);
     if (!Number.isFinite(iv)) continue;
+    if (!isLiquidQuote(quote)) {
+      liquidityDrops += 1;
+      continue;
+    }
     putQuotes.push({ strike: quote.strike / 1000, expiration: quote.expiration, iv });
   }
-  if (putQuotes.length === 0) return [];
+  if (putQuotes.length === 0) {
+    return { candidates: [], gateDrops: { liquidity: liquidityDrops, netTheta: 0 } };
+  }
 
   const byExpiry = new Map<string, PointsQuote[]>();
   for (const quote of putQuotes) {
@@ -221,7 +247,11 @@ export function selectCandidates(
       const gF = bsmGreeks(spot, K, tf / 365, ivF, r, q, "P");
       const gB = bsmGreeks(spot, K, tb / 365, ivB, r, q, "P");
       const theta = (gB.theta - gF.theta) * 100;
-      if (theta <= 0) continue; // criterion 6
+      if (theta <= 0) {
+        // Gate `net-theta-positive` (criterion 6) — counted, never silent.
+        netThetaDrops += 1;
+        continue;
+      }
 
       const vega = (gB.vega - gF.vega) * 100;
       const delta = (gB.delta - gF.delta) * 100;
@@ -258,5 +288,5 @@ export function selectCandidates(
     }
   }
 
-  return candidates;
+  return { candidates, gateDrops: { liquidity: liquidityDrops, netTheta: netThetaDrops } };
 }

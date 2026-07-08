@@ -43,6 +43,11 @@ function chainQuote(
   iv: number,
   contractType: "C" | "P" = "P",
   underlyingPrice: number = SPOT,
+  liquidity: { bid: number; ask: number; openInterest: number } = {
+    bid: 99,
+    ask: 101,
+    openInterest: 1000,
+  },
 ): ChainQuoteForPicker {
   return {
     time: new Date("2026-07-01T14:30:00.000Z"),
@@ -51,6 +56,9 @@ function chainQuote(
     contractType,
     underlyingPrice,
     bsmIv: String(iv),
+    bid: liquidity.bid,
+    ask: liquidity.ask,
+    openInterest: liquidity.openInterest,
     source: "schwab",
   };
 }
@@ -155,7 +163,7 @@ describe("selectCandidates", () => {
       }
     }
     // Re-anchor "today" so the dte map above holds: today = 2026-07-01.
-    const candidates = selectCandidates(chain, [], { r: R, q: Q });
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
 
     const frontExpiries = new Set(candidates.map((c) => c.frontLeg.expiration));
     expect(frontExpiries.has("2026-07-21")).toBe(false); // dte 20 < 21
@@ -190,7 +198,7 @@ describe("selectCandidates", () => {
       chain.push(chainQuote(strike, "2026-07-31", 0.05, "P")); // front: dte 30, low iv
       chain.push(chainQuote(strike, "2026-08-21", 2.5, "P")); // back: dte 51, extreme iv
     }
-    const candidates = selectCandidates(chain, [], { r: R, q: Q });
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
     expect(candidates.length).toBe(0);
   });
 
@@ -204,7 +212,7 @@ describe("selectCandidates", () => {
         chain.push(chainQuote(strike, expiration, iv));
       }
     }
-    const candidates = selectCandidates(chain, [], { r: R, q: Q });
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
     const frontThirty = candidates.filter((c) => c.frontLeg.expiration === "2026-07-31");
     const keys = frontThirty.map((c) => c.deltaRung);
     const uniqueKeys = new Set(keys);
@@ -225,7 +233,7 @@ describe("selectCandidates", () => {
     for (const expiration of ["2026-07-31", "2026-08-26"]) {
       chain.push(chainQuote(7500, expiration, iv));
     }
-    const candidates = selectCandidates(chain, [], { r: R, q: Q });
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
     const frontThirty = candidates.filter((c) => c.frontLeg.expiration === "2026-07-31");
 
     // Sanity: confirm the sparse setup actually triggers the strike collision under test.
@@ -234,5 +242,59 @@ describe("selectCandidates", () => {
 
     const ids = frontThirty.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length); // no duplicate ids despite the strike collision
+  });
+});
+
+describe("gates — liquidity + drop counts (rules.ts registry)", () => {
+  it("excludes illiquid quotes (wide spread / thin OI) from the universe and counts them", () => {
+    const iv = 0.15;
+    const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
+    const chain: ChainQuoteForPicker[] = [];
+    for (const expiration of ["2026-07-31", "2026-08-26"]) {
+      for (const strike of strikes) {
+        // 7500 quotes are untradeable: 40% spread. Everything else is liquid.
+        const liquidity =
+          strike === 7500
+            ? { bid: 8, ask: 12, openInterest: 5000 }
+            : { bid: 99, ask: 101, openInterest: 1000 };
+        chain.push(chainQuote(strike, expiration, iv, "P", SPOT, liquidity));
+      }
+    }
+
+    const { candidates, gateDrops } = selectCandidates(chain, [], { r: R, q: Q });
+
+    // Both expiries' 7500 quotes were dropped (2 quotes).
+    expect(gateDrops.liquidity).toBe(2);
+    // No surviving candidate can sit on the gated strike.
+    for (const c of candidates) {
+      expect(c.frontLeg.strike).not.toBe(7500);
+      expect(c.backLeg.strike).not.toBe(7500);
+    }
+    // The rest of the chain still produces candidates (the gate is surgical, not a wipeout).
+    expect(candidates.length).toBeGreaterThan(0);
+  });
+
+  it("thin open interest alone gates a quote", () => {
+    const iv = 0.15;
+    const chain: ChainQuoteForPicker[] = [
+      chainQuote(7500, "2026-07-31", iv, "P", SPOT, { bid: 99, ask: 101, openInterest: 10 }),
+      chainQuote(7500, "2026-08-26", iv, "P", SPOT, { bid: 99, ask: 101, openInterest: 10 }),
+    ];
+    const { candidates, gateDrops } = selectCandidates(chain, [], { r: R, q: Q });
+    expect(candidates).toHaveLength(0);
+    expect(gateDrops.liquidity).toBe(2);
+  });
+
+  it("net-theta gate drops are counted (never a silent cap)", () => {
+    const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
+    const chain: ChainQuoteForPicker[] = [];
+    for (const strike of strikes) {
+      chain.push(chainQuote(strike, "2026-07-31", 0.05, "P"));
+      chain.push(chainQuote(strike, "2026-08-21", 2.5, "P"));
+    }
+    const { candidates, gateDrops } = selectCandidates(chain, [], { r: R, q: Q });
+    expect(candidates).toHaveLength(0);
+    expect(gateDrops.netTheta).toBeGreaterThan(0);
+    expect(gateDrops.liquidity).toBe(0);
   });
 });

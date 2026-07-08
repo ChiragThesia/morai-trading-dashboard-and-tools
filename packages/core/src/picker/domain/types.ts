@@ -70,6 +70,18 @@ export type BreakdownEntry = {
   readonly contribution: number;
 };
 
+/**
+ * ContextEntry — one experimental (weight-0) rule's computed value for a candidate.
+ * Displayed on cards ("calibrating"), never scored, until PICK-04 promotes the rule.
+ * `value` is null-honest: insufficient history → null, never a fabricated number.
+ */
+export type ContextEntry = {
+  readonly id: "vrp" | "slopePercentile" | "backEventBonus";
+  readonly label: string;
+  readonly value: number | null;
+  readonly note: string;
+};
+
 /** Entry/exit defaults for a candidate (D-01b; fixed defaults this phase, not per-candidate tuned). */
 export type ExitPlan = {
   readonly profitTargetPct: number;
@@ -101,5 +113,7 @@ export type ScoredCandidate = RawCandidate & {
   readonly fwdEdge: number;
   /** +/-1 sigma expected move by front expiry. */
   readonly expectedMove: number;
+  /** Experimental rule values (weight 0, display-only — rules.ts registry). */
+  readonly context: ReadonlyArray<ContextEntry>;
   readonly exitPlan: ExitPlan;
 };

@@ -1,77 +1,57 @@
 /**
- * scoreCalendarCandidates — the named-weight score + closed-enum breakdown (Phase 19, Plan 03).
+ * scoreCalendarCandidates — registry-driven scoring (rules.ts is the single rule table).
  *
- * Port + generalize (D-07) of the mockup's score formula (playground-v4.html lines 267-271)
- * as documented tunable named constants (D-08: "not empirically calibrated — tune later
- * PICK-04/05"). The 5th term (the mockup's faked `K===7500?1:0.7` strike-equality proxy) is
- * replaced (D-09) with the REAL breakeven-width/expectedMove ratio via `findBreakevens`.
+ * Every weight, normalizer, and formula constant lives in `./rules.ts` (re-exported here for
+ * compatibility with existing imports); this module ORCHESTRATES: it computes the shared
+ * intermediates (forward IV, breakevens, expected move) once per candidate, asks each rule
+ * for its fraction, assembles the closed-enum breakdown, and attaches the experimental
+ * context entries (weight 0, display-only — PICK-04 promotes them).
  *
- * Never-silent guard-tagging (mirrors the fwdIv guard precedent, 19-PATTERNS.md): an inverted
- * term structure zeroes the fwdEdge contribution outright (never rewarded) and a candidate
- * with fewer than 2 breakevens zeroes the beVsEm contribution (documented fallback) — the
- * score is always a finite number in [0,100], never NaN, never a fabricated clean value.
+ * Never-silent guard-tagging (fwdIv precedent, 19-PATTERNS.md): an inverted term structure
+ * zeroes fwdEdge outright; <2 breakevens zeroes beVsEm; a null/stale GEX context zeroes
+ * gexFit; experimental values are null-honest. The score is always finite in [0,100].
  *
- * Hexagon law (architecture-boundaries §2): imports only `@morai/quant`, this bounded
- * context's own `application/ports.ts` (intra-context read, gex.ts precedent), and this
- * module's own `./types.ts` / `./fwd-iv.ts` / `./breakevens.ts` siblings. No second BSM
- * (Pitfall 2) — pricing flows through `findBreakevens`, which itself calls `@morai/quant`.
+ * Hexagon law (architecture-boundaries §2): imports only `@morai/quant` (via breakevens),
+ * this bounded context's own `application/ports.ts`, and sibling domain modules.
  */
 
 import { computeFwdIv } from "./fwd-iv.ts";
 import { findBreakevens } from "./breakevens.ts";
-import type { BreakdownEntry, EventPenaltyWeights, ExitPlan, RawCandidate, ScoredCandidate } from "./types.ts";
+import {
+  WEIGHT_SLOPE,
+  WEIGHT_FWD_EDGE,
+  WEIGHT_GEX_FIT,
+  WEIGHT_EVENT,
+  WEIGHT_BE_VS_EM,
+  SLOPE_NORMALIZER,
+  FWD_EDGE_OFFSET,
+  FWD_EDGE_RANGE,
+  BE_VS_EM_TARGET_RATIO,
+  EVENT_PENALTY,
+  gexFitFraction,
+  vrpValue,
+  slopePercentileValue,
+  backEventBonusValue,
+} from "./rules.ts";
+import type { BreakdownEntry, ContextEntry, ExitPlan, RawCandidate, ScoredCandidate } from "./types.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
 
-// ─────────────────────────────────────────────────────────────
-// Named weight tunables (D-08) — ported verbatim from the approved mockup
-// (playground-v4.html lines 267-271). NOT empirically calibrated; PICK-04/05 backlog items
-// will validate/tune these against real outcomes.
-// ─────────────────────────────────────────────────────────────
-export const WEIGHT_SLOPE = 40;
-export const WEIGHT_FWD_EDGE = 25;
-export const WEIGHT_GEX_FIT = 15;
-export const WEIGHT_EVENT = 10;
-export const WEIGHT_BE_VS_EM = 10;
+// ─── Compatibility re-exports (the registry owns these — see rules.ts) ─────────
+export {
+  WEIGHT_SLOPE,
+  WEIGHT_FWD_EDGE,
+  WEIGHT_GEX_FIT,
+  WEIGHT_EVENT,
+  WEIGHT_BE_VS_EM,
+  SLOPE_NORMALIZER,
+  FWD_EDGE_OFFSET,
+  FWD_EDGE_RANGE,
+  BE_VS_EM_TARGET_RATIO,
+  EVENT_PENALTY,
+} from "./rules.ts";
 
 // ─────────────────────────────────────────────────────────────
-// Per-criterion normalizer tunables (D-08/D-09) — documented, not empirically calibrated.
-// ─────────────────────────────────────────────────────────────
-
-/** Slope (annualized vol-pts/yr) treated as "full credit" for the slope criterion (mockup constant). */
-export const SLOPE_NORMALIZER = 0.6;
-
-/** fwdEdge normalization window: (fwdEdge + OFFSET) / RANGE, clamped to [0,1] (mockup constants). */
-export const FWD_EDGE_OFFSET = 0.02;
-export const FWD_EDGE_RANGE = 0.04;
-
-/** GEX-fit tier credits (criterion 7, mockup constants): base long-gamma credit + proximity bonus. */
-export const GEX_NET_GAMMA_BASE_CREDIT = 0.6;
-export const GEX_PROXIMITY_ABS_GAMMA_CREDIT = 0.4;
-export const GEX_PROXIMITY_PUT_WALL_CREDIT = 0.25;
-export const GEX_ABS_GAMMA_PROXIMITY_PTS = 25;
-export const GEX_PUT_WALL_PROXIMITY_PTS = 5;
-
-/**
- * D-09 replacement for the mockup's faked `K===7500?1:0.7` term: a documented-tunable target
- * ratio of breakeven-width to expected-move above which beVsEm earns full credit. The metric
- * itself (real breakeven width / real expected move) is honest; only this threshold is
- * uncalibrated (RESEARCH.md flags the threshold, not the metric, as needing future tuning).
- */
-export const BE_VS_EM_TARGET_RATIO = 1.5;
-
-/**
- * Per-event penalty weights (D-11) — front-leg-only (back-leg events are informational/display
- * only, never penalized here). Default: all three FOMC/CPI/NFP at 0.5 (planner's discretion
- * per 19-CONTEXT.md: "default all-three-tunable").
- */
-export const EVENT_PENALTY: EventPenaltyWeights = {
-  FOMC: 0.5,
-  CPI: 0.5,
-  NFP: 0.5,
-};
-
-// ─────────────────────────────────────────────────────────────
-// Exit-plan fixed defaults (D-01b) — not per-candidate tuned this phase.
+// Exit-plan fixed defaults (D-01b) — universe/exit parameters, not score rules.
 // ─────────────────────────────────────────────────────────────
 export const EXIT_PROFIT_TARGET_PCT = 0.25;
 export const EXIT_STOP_PCT = 0.175;
@@ -86,13 +66,16 @@ export type ScoringParams = {
   readonly r: number;
   /** Continuous dividend yield (decimal), supplied by the use-case from config. */
   readonly q: number;
+  /** RV20 for the experimental `vrp` rule; omit/null when history is insufficient. */
+  readonly realizedVol20?: number | null;
+  /** Trailing candidate slopes for the experimental `slopePercentile` rule. */
+  readonly slopeHistory?: ReadonlyArray<number>;
 };
 
 /**
- * Score a single candidate: forward-edge (criterion 1), slope (criterion 2), GEX-fit
- * (criterion 7), front-leg event penalty (criterion 4 / D-11), and the real beVsEm ratio
- * (D-09). Never NaN — the fwdIv-inverted case and the <2-breakeven case both zero their
- * respective term rather than propagating an undefined value.
+ * Score a single candidate against the registry's active score rules, and attach the
+ * experimental context entries. Never NaN — every degraded input zeroes (or nulls) its own
+ * term rather than propagating an undefined value.
  */
 function scoreOne(
   candidate: RawCandidate,
@@ -106,7 +89,7 @@ function scoreOne(
   const ivF = candidate.frontLeg.iv;
   const ivB = candidate.backLeg.iv;
 
-  // ─── Criterion 1: forward edge (never-NaN inverted-structure guard) ───
+  // ─── fwdEdge (never-NaN inverted-structure guard) ───
   const fwd = computeFwdIv(tf, ivF, tb, ivB);
   let fwdIv: number | null;
   let fwdEdge: number;
@@ -116,8 +99,8 @@ function scoreOne(
     fwdEdge = ivF - fwd.fwdIv;
     fwdEdgeFraction = clamp01((fwdEdge + FWD_EDGE_OFFSET) / FWD_EDGE_RANGE);
   } else {
-    // Inverted term structure is never rewarded -- the fwdEdge term contributes 0 outright,
-    // not merely a neutral fwdEdge=0 run through the normal normalization window.
+    // Inverted term structure is never rewarded — 0 outright, not a neutral run through
+    // the normalization window.
     fwdIv = null;
     fwdEdge = 0;
     fwdEdgeFraction = 0;
@@ -125,25 +108,17 @@ function scoreOne(
 
   const expectedMove = candidate.spot * ivF * Math.sqrt(tf / 365);
 
-  // ─── Criterion 2: term-structure slope ───
+  // ─── slope ───
   const slopeFraction = clamp01(candidate.slope / SLOPE_NORMALIZER);
 
-  // ─── Criterion 4 (D-11): front-leg-only event penalty ───
+  // ─── eventAdjustment (front-leg only, D-11) ───
   const evtPenalty = candidate.frontEvents.reduce((sum, name) => sum + (EVENT_PENALTY[name] ?? 0), 0);
   const eventFraction = Math.max(0, 1 - evtPenalty);
 
-  // ─── Criterion 7: GEX-fit tiers (never-silent: missing/null GEX pieces contribute 0) ───
-  const netGammaBase =
-    gexContext !== null && gexContext.netGammaAtSpot > 0 ? GEX_NET_GAMMA_BASE_CREDIT : 0;
-  let proximity = 0;
-  if (gexContext !== null && gexContext.absGammaStrike !== null && Math.abs(K - gexContext.absGammaStrike) <= GEX_ABS_GAMMA_PROXIMITY_PTS) {
-    proximity = GEX_PROXIMITY_ABS_GAMMA_CREDIT;
-  } else if (gexContext !== null && gexContext.putWall !== null && Math.abs(K - gexContext.putWall) <= GEX_PUT_WALL_PROXIMITY_PTS) {
-    proximity = GEX_PROXIMITY_PUT_WALL_CREDIT;
-  }
-  const gexFit = clamp01(netGammaBase + proximity);
+  // ─── gexFit (near-term placement — rules.ts owns the formula) ───
+  const gexFit = gexFitFraction(K, candidate.spot, gexContext);
 
-  // ─── D-09: real beVsEm ratio via findBreakevens (never the fixed-strike proxy) ───
+  // ─── beVsEm (real bisection breakevens, D-09) ───
   const breakevens = findBreakevens({
     spot: candidate.spot,
     frontStrike: K,
@@ -161,7 +136,7 @@ function scoreOne(
     hasBreakevenPair && expectedMove > 0
       ? (Math.max(...breakevens) - Math.min(...breakevens)) / expectedMove
       : 0;
-  // Documented fallback (D-09/never-silent): fewer than 2 breakevens earns no beVsEm credit --
+  // Documented fallback (D-09/never-silent): fewer than 2 breakevens earns no beVsEm credit —
   // never a fabricated ratio, never NaN.
   const beVsEmFraction = hasBreakevenPair ? clamp01(beVsEmRatio / BE_VS_EM_TARGET_RATIO) : 0;
 
@@ -181,6 +156,28 @@ function scoreOne(
     WEIGHT_BE_VS_EM * beVsEmFraction;
   const score = Math.min(100, Math.max(0, Math.round(rawScore)));
 
+  // ─── Experimental context (weight 0, display-only — rules.ts registry) ───
+  const context: ReadonlyArray<ContextEntry> = [
+    {
+      id: "vrp",
+      label: "VRP (front IV − RV20)",
+      value: vrpValue(ivF, params.realizedVol20 ?? null),
+      note: "calibrating (PICK-04)",
+    },
+    {
+      id: "slopePercentile",
+      label: "Slope percentile",
+      value: slopePercentileValue(candidate.slope, params.slopeHistory ?? []),
+      note: "calibrating (PICK-04)",
+    },
+    {
+      id: "backEventBonus",
+      label: "Event in back window",
+      value: backEventBonusValue(candidate.backEvents),
+      note: "calibrating (PICK-05)",
+    },
+  ];
+
   const exitPlan: ExitPlan = {
     profitTargetPct: EXIT_PROFIT_TARGET_PCT,
     stopPct: EXIT_STOP_PCT,
@@ -196,15 +193,16 @@ function scoreOne(
     fwdIvGuard: fwd.guard,
     fwdEdge,
     expectedMove,
+    context,
     exitPlan,
   };
 }
 
 /**
- * Score every candidate in `rawCandidates` against the named 40/25/15/10/10 weights (D-08),
- * emitting the closed-enum breakdown and the real beVsEm ratio (D-09) for each. `gexContext`
- * may be null (D-17: GEX snapshot missing/stale) -- the gexFit term contributes 0, never a
- * silently-clean score.
+ * Score every candidate against the registry's active weights (rules.ts), emitting the
+ * closed-enum breakdown, the real beVsEm ratio (D-09), and the experimental context entries.
+ * `gexContext` may be null (D-17: GEX snapshot missing/stale) — the gexFit term contributes
+ * 0, never a silently-clean score.
  */
 export function scoreCalendarCandidates(
   rawCandidates: ReadonlyArray<RawCandidate>,

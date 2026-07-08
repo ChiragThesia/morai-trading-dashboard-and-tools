@@ -33,14 +33,18 @@ import { ok, err, assertDefined } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { selectCandidates } from "../domain/candidate-selection.ts";
 import { scoreCalendarCandidates } from "../domain/scoring.ts";
+import { realizedVol } from "../domain/realized-vol.ts";
+import { RULE_SET_METADATA } from "../domain/rules.ts";
 import type { ScoredCandidate } from "../domain/types.ts";
 import type {
   ChainQuoteForPicker,
   EconomicEvent,
   ForPersistingPickerSnapshot,
   ForReadingChainForPicker,
+  ForReadingDailySpotCloses,
   ForReadingEconomicEvents,
   ForReadingGexContext,
+  ForReadingPickerSlopeHistory,
   ForRunningComputePicker,
   GexContextForPicker,
   PickerCandidateDomain,
@@ -62,6 +66,12 @@ export const GEX_FRESHNESS_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours
  * allows one missed run before tagging the feed stale. */
 export const EVENTS_FRESHNESS_WINDOW_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
+/** Daily closes fetched for RV20 (21 closes → 20 log returns). */
+export const RV_CLOSES_DAYS = 21;
+
+/** Trailing candidate slopes read for the experimental slopePercentile rule. */
+export const SLOPE_HISTORY_LIMIT = 60;
+
 // ─── Deps ───────────────────────────────────────────────────────────────────────
 
 export type ComputePickerSnapshotDeps = {
@@ -73,6 +83,10 @@ export type ComputePickerSnapshotDeps = {
   readonly readEconomicEvents: ForReadingEconomicEvents;
   /** Persist one PickerSnapshotRow (append-only, D-06). */
   readonly persistPickerSnapshot: ForPersistingPickerSnapshot;
+  /** Trailing daily closes for the experimental `vrp` rule (RV20). */
+  readonly readDailySpotCloses: ForReadingDailySpotCloses;
+  /** Trailing candidate slopes for the experimental `slopePercentile` rule. */
+  readonly readPickerSlopeHistory: ForReadingPickerSlopeHistory;
   /** Risk-free rate (decimal), supplied from config. */
   readonly rate: number;
   /** Continuous dividend yield (decimal), supplied from config. */
@@ -170,6 +184,7 @@ function toPickerCandidateDomain(candidate: ScoredCandidate): PickerCandidateDom
     expectedMove: candidate.expectedMove,
     frontEvents: candidate.frontEvents,
     backEvents: candidate.backEvents,
+    context: candidate.context,
     frontLeg: {
       strike: candidate.frontLeg.strike,
       putCall: candidate.frontLeg.putCall,
@@ -270,12 +285,25 @@ export function makeComputePickerSnapshotUseCase(
     const gexContextStatus = resolveGexContextStatus(gexContext, now);
     const eventsContextStatus = resolveEventsContextStatus(events, now);
 
+    // ── Step 3b: Experimental-rule inputs (null-honest — a failed read degrades to
+    // "insufficient history", it never fails the compute or fabricates a value) ──
+    const closesResult = await deps.readDailySpotCloses(RV_CLOSES_DAYS);
+    const realizedVol20 = closesResult.ok ? realizedVol(closesResult.value) : null;
+
+    const slopeHistoryResult = await deps.readPickerSlopeHistory(SLOPE_HISTORY_LIMIT);
+    const slopeHistory = slopeHistoryResult.ok ? slopeHistoryResult.value : [];
+
     // ── Step 4: Select + score (D-17: pass null gexContext whenever not "ok") ──
-    const raw = selectCandidates(chain, events, { r: deps.rate, q: deps.dividendYield });
+    const { candidates: raw, gateDrops } = selectCandidates(chain, events, {
+      r: deps.rate,
+      q: deps.dividendYield,
+    });
     const gexContextForScoring = gexContextStatus === "ok" ? gexContext : null;
     let scored = scoreCalendarCandidates(raw, gexContextForScoring, {
       r: deps.rate,
       q: deps.dividendYield,
+      realizedVol20,
+      slopeHistory,
     });
     if (eventsContextStatus !== "ok") {
       scored = scored.map(zeroEventAdjustment);
@@ -313,6 +341,18 @@ export function makeComputePickerSnapshotUseCase(
       gex: gexForSnapshot,
       events: eventsForSnapshot,
       candidates,
+      // The registry rows this snapshot was scored with — the UI methodology panel's
+      // single source of truth (rules.ts).
+      ruleSet: RULE_SET_METADATA.map((rule) => ({
+        id: rule.id,
+        label: rule.label,
+        kind: rule.kind,
+        weight: rule.weight,
+        status: rule.status,
+        rationale: rule.rationale,
+      })),
+      // Per-gate drop counts — gating is never a silent cap.
+      gateDrops,
     };
 
     // ── Step 7: Persist (D-06 append-only; observedAt = cohort data time, NEVER now()) ──
