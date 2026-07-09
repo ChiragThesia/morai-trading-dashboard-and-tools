@@ -141,6 +141,13 @@
       "when": 1783452870392,
       "tag": "0019_gex_near_term",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783590629053,
+      "tag": "0020_exit_verdicts",
+      "breakpoints": true
     }
   ]
 }

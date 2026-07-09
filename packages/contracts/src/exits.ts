@@ -29,6 +29,28 @@ export const exitRollDetail = z.object({
 export type ExitRollDetail = z.infer<typeof exitRollDetail>;
 
 /**
+ * exitVerdict — the persisted `exit_verdicts.verdict` JSONB blob shape (Phase 26, Plan 03).
+ * Mirrors `packages/core/src/exits/domain/types.ts` `ExitVerdict` field-for-field. Distinct
+ * from `heldPositionVerdict` below: that is the API response ROW (adds calendarId/name/
+ * changed/pnlPct/basis, all computed at read time by the 26-04 use-case) — this is exactly
+ * what the evaluator produces and what gets written to storage, one row per (observedAt,
+ * calendarId). Validated on BOTH write and read at the repo boundary (26-03).
+ */
+export const exitVerdict = z.object({
+  verdict: exitVerdictEnum,
+  rung: z.string().nullable(),
+  // EXIT-04: every verdict MUST name the firing rule — an empty ruleId is a fabricated,
+  // unattributable verdict and is rejected at the write boundary.
+  ruleId: z.string().min(1),
+  metric: exitMetric,
+  indicative: z.boolean(),
+  escalate: z.boolean(),
+  roll: exitRollDetail.nullable(),
+});
+
+export type ExitVerdictBlob = z.infer<typeof exitVerdict>;
+
+/**
  * heldPositionVerdict — one open calendar's verdict for this cycle. `metric` is always
  * required (EXIT-04: never a bare verdict). `changed` + `escalate` drive the UI's alert
  * styling (EXIT-09) — only verdict CHANGES surface as alerts, STOP/EXIT_PRE_EVENT escalate

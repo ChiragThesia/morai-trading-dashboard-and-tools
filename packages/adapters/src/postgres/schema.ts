@@ -507,6 +507,26 @@ export const calendarEventAnnotations = pgTable("calendar_event_annotations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
+// ─── 20. exit_verdicts — append-history exit-advisor verdicts (Phase 26, EXIT-01/02) ──
+// One row per (observed_at, calendar_id) — INSERT only, never onConflictDoUpdate
+// (append-only history, mirrors picker_snapshot's D-06 convention at per-calendar grain).
+// calendar_id is a soft reference (no FK) — mirrors calendar_snapshots.calendar_id (this
+// codebase never FKs calendars; see D24 note above). verdict is the WHOLE core ExitVerdict
+// shape as one JSONB blob, validated through contracts' exitVerdict.parse at the adapter
+// boundary on write AND read (26-03, mirrors picker_snapshot's T-19-10 convention).
+
+export const exitVerdicts = pgTable(
+  "exit_verdicts",
+  {
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    calendarId: uuid("calendar_id").notNull(),
+    verdict: jsonb("verdict").$type<Record<string, unknown>>().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.observedAt, table.calendarId] }),
+  ],
+).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };
