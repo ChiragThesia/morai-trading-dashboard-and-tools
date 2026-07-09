@@ -15,7 +15,7 @@ every trade's life recorded and queryable.
 trade?" — collected automatically, never hand-edited, queryable by API and by Claude Code. If
 everything else fails, this must work.
 
-## Current State (post-v1.2, 2026-07-06)
+## Current State (post-v1.2, 2026-07-09)
 
 **Shipped:** v1.0 Backend + Data Layer (Phases 1–9, 2026-06-25), v1.1 Real-Time Schwab Streaming
 (Phases 10–15, 2026-07-02), and v1.2 Trade Picker & Dashboard Redesign (Phases 16–22, 2026-07-06).
@@ -45,29 +45,31 @@ typecheck gate in CI (4 pre-existing tsc failures). *(Phase 16, 2026-07-03: prod
 phase-15 image on server+worker+web — T-24h re-auth alert surface (`refreshExpiresIn` +
 AuthExpiredBanner) live; DEPLOY-04 validated. Next re-auth window ~2026-07-09.)*
 
-## Current Milestone: v1.2 Trade Picker & Dashboard Redesign
+## Current Milestone: v1.3 Picker Intelligence
 
-**Goal:** Ship the redesigned dashboard (Overview + Analyzer) to prod first, then power the
-picker with the real scoring engine — while clearing v1.1 operational debt.
+**Goal:** Close the trade loop — the engine that picks entries with the user's real criteria
+learns to manage exits, proves its rules on his own trade history, and inherits the rest of
+his trading-knowledge playbook.
 
 **Target features (build order):**
-1. Phase-15 image deploy (server+worker+web) — re-auth window ~2026-07-09
-2. Overview v2 redesign (variant B "TOS dock") + scenario-engine IV calibration fix — live on
-   prod before picker work starts
-3. Analyzer → picker redesign (playground-v4 variant B, ranked-cards rail) against
-   candidate-contract fixtures/stubs (contract-first; engine fills it later)
-4. Picker engine: `scoreCalendarCandidates` (8 verified criteria per
-   `.planning/research/calendar-selection-criteria.md`) + NEW economic-events adapter
-   (FOMC/CPI/NFP) + API/MCP routes — wires real data into the picker UI
-5. Tail: live-stream stall watchdog · event-triggered supplemental snapshot ·
-   strategy-rules engine (L4: record enter/exit/roll rules + which rule fired; attach point
-   `entry_thesis`, D-07)
+1. Exit advisor: per-open-calendar verdicts (HOLD / TAKE / STOP / ROLL / EXIT-pre-event) each
+   picker cycle, from an exit-rule registry encoding the playbook ladder (+5/+10/+15% takes,
+   −25/−50% stops, EVT/TERM/GAMMA triggers, roll rule, theta-runway-vs-risk) — held-positions
+   panel in the Analyzer + MCP tool
+2. PICK-04 backtest harness: replay stored chains (leg_observations since 2026-06-12) + the
+   13 validated closed calendars through entry AND exit rules; measure per-rule predictive
+   power against realized P&L; promote/demote weights with evidence
+3. Playbook port: VIX < 25 + VIX/VIX3M < 0.95 crisis gates (requires ingesting the VIXCLS3M
+   FRED series), anti-criteria (max open calendars, trend filter, loss cooldown), sizing
+   tiers, event-calendar bucket (gap 3–10d cheap style)
 
-**Key context:** research + mockups already decided (`calendar-selection-criteria.md`,
-`mockups/playground-v4.html`, `mockups/overview-v2.html`). REFUTED criteria (IV-rank gates,
-−1..−3% IV-diff band, debit-%-of-back band) must NOT be encoded. Open discuss-phase decisions:
-DTE range as user filter (live book 141-DTE ≠ stated 21–30 rule), strike enumeration by delta
-target.
+**Key context (2026-07-09):** Picker criteria v4.1 live in prod (band-scan Δ∈[−0.49,−0.30],
+gap 15–90d, liquidity-driven strikes, 66%-of-width fill haircut, 9 scored rules incl.
+debitFit $3.2k–5k / θ-vega / VRP, event→exit stamp with thetaCapturePct, marketSession AH
+labeling). Exit-advisor design thought through in-session — data 90% flowing already; the
+user's GH trading-knowledge repo (`plugins/trade-advisor/`) is the reference spec. Reusable
+oracle: his real fills. Ops rider candidates: batched BSM writes (900s handler cap),
+journal snapshot gap fix.
 
 ## Requirements
 

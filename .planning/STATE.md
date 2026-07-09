@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Trade Picker & Dashboard Redesign
-current_phase: null
-status: Awaiting next milestone
-stopped_at: v1.2 closed + tagged 2026-07-06 (override_closeout, 7 acknowledged deferrals)
-last_updated: "2026-07-06T13:06:40.526Z"
-last_activity: 2026-07-06
-last_activity_desc: Milestone v1.2 completed and archived
+milestone: v1.3
+milestone_name: Picker Intelligence
+status: planning
+last_updated: "2026-07-09T04:53:56.307Z"
+last_activity: 2026-07-09
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 43
-  completed_plans: 43
-  percent: 100
-current_phase_name: null
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: Milestone v1.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-06 — Milestone v1.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-09 — Milestone v1.3 started
 
 ## Open follow-ups (not phase-22 blockers)
 
