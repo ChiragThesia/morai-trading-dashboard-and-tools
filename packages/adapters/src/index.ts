@@ -117,6 +117,12 @@ export type { PostgresPickerSnapshotRepo } from "./postgres/repos/picker-snapsho
 export { makeMemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
 export type { MemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
 
+// Phase 26 (26-03): exit-verdicts repo — postgres + in-memory twin (architecture-boundaries §8)
+export { makePostgresExitVerdictsRepo } from "./postgres/repos/exit-verdicts.ts";
+export type { PostgresExitVerdictsRepo } from "./postgres/repos/exit-verdicts.ts";
+export { makeMemoryExitVerdictsRepo } from "./memory/exit-verdicts.ts";
+export type { MemoryExitVerdictsRepo } from "./memory/exit-verdicts.ts";
+
 // Picker rule engine: history reads for the experimental vrp/slopePercentile rules —
 // postgres + in-memory twin (architecture-boundaries §8)
 export { makePostgresPickerHistoryRepo } from "./postgres/repos/picker-history.ts";
