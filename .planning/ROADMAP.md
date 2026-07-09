@@ -72,7 +72,7 @@ of his trading-knowledge playbook. Every rule research-grounded — "no feeling.
 - [x] **Phase 26: Exit Advisor** - Every open calendar gets a HOLD/TAKE/STOP/ROLL/EXIT-pre-event (completed 2026-07-09)
   verdict each cycle, from the user's own playbook ladder
 
-- [ ] **Phase 27: PICK-04 Backtest Harness** - Operator CLI replays stored chains through the live
+- [x] **Phase 27: PICK-04 Backtest Harness** - Operator CLI replays stored chains through the live (completed 2026-07-09)
   entry+exit rules, honest at n=13 (refutation-only, never a weight-fitter)
 
 - [ ] **Phase 28: Playbook Gates, Anti-Criteria & Sizing** - Market-level crisis gates,
@@ -228,12 +228,13 @@ exit domains to exist)
      promotion stays gated until n≥30 real closed trades.
 
 **Plans**: 6 plans
-- [ ] 27-01-PLAN.md — Docs + migration 0021 backtest_runs + INSERT-only repo/twin + backtest module skeleton
-- [ ] 27-02-PLAN.md — Reuse seams: additive @morai/core exports + ablation weights seam + computeLegPairMetrics extraction
-- [ ] 27-03-PLAN.md — Point-in-time readers: as-of-T chain (no-lookahead) + as-of-T RV20 + cohort ledger + source-inclusive history
-- [ ] 27-04-PLAN.md — Report kernel (fast-check): directional attribution + ablation-delta + seeded bootstrap CI + coverage
-- [ ] 27-05-PLAN.md — Replay engine: leakage oracle (BT-02) + 13-trade exit reproduction (BT-03) + full-universe hypothetical (BT-04)
-- [ ] 27-06-PLAN.md — runBacktest report assembly + DATABASE_URL-only CLI + BT-05 no-write-path guard
+
+- [x] 27-01-PLAN.md — Docs + migration 0021 backtest_runs + INSERT-only repo/twin + backtest module skeleton
+- [x] 27-02-PLAN.md — Reuse seams: additive @morai/core exports + ablation weights seam + computeLegPairMetrics extraction
+- [x] 27-03-PLAN.md — Point-in-time readers: as-of-T chain (no-lookahead) + as-of-T RV20 + cohort ledger + source-inclusive history
+- [x] 27-04-PLAN.md — Report kernel (fast-check): directional attribution + ablation-delta + seeded bootstrap CI + coverage
+- [x] 27-05-PLAN.md — Replay engine: leakage oracle (BT-02) + 13-trade exit reproduction (BT-03) + full-universe hypothetical (BT-04)
+- [x] 27-06-PLAN.md — runBacktest report assembly + DATABASE_URL-only CLI + BT-05 no-write-path guard
 
 ### Phase 28: Playbook Gates, Anti-Criteria & Sizing
 
@@ -273,7 +274,7 @@ Phases execute in numeric order: 23 → 24 → 25 → 26 → 27 → 28
 | 24. Regime & Breadth Board | 5/5 | Complete   | 2026-07-09 |
 | 25. Data-Quality Ops Rider | 2/2 | Complete    | 2026-07-09 |
 | 26. Exit Advisor | 6/6 | Complete    | 2026-07-09 |
-| 27. PICK-04 Backtest Harness | 0/TBD | Not started | - |
+| 27. PICK-04 Backtest Harness | 6/6 | Complete    | 2026-07-09 |
 | 28. Playbook Gates, Anti-Criteria & Sizing | 0/TBD | Not started | - |
 
 ## Backlog / Future Enhancements

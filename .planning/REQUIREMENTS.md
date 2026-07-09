@@ -60,16 +60,16 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### PICK-04 backtest harness
 
-- [ ] **BT-01**: Operator CLI replays stored chains (leg_observations since 2026-06-12) through
+- [x] **BT-01**: Operator CLI replays stored chains (leg_observations since 2026-06-12) through
       the SAME pure entry + exit rule functions with point-in-time correctness (no lookahead;
       as-of ≤T filtering)
-- [ ] **BT-02**: Replay of a historical cohort reproduces the recorded live picker_snapshot score
+- [x] **BT-02**: Replay of a historical cohort reproduces the recorded live picker_snapshot score
       for that cohort (leakage oracle — catches percentile leakage and late-solved-BSM lookahead)
-- [ ] **BT-03**: Harness reproduces the 13 closed calendars' validated outcomes (direction +
+- [x] **BT-03**: Harness reproduces the 13 closed calendars' validated outcomes (direction +
       rough magnitude) with fill-haircut applied on entry AND exit — mechanics validation
-- [ ] **BT-04**: Per-rule directional attribution + leave-one-rule-out ablation reported with
+- [x] **BT-04**: Per-rule directional attribution + leave-one-rule-out ablation reported with
       every number stamped `n=` and date range; report persisted append-only (backtest_runs)
-- [ ] **BT-05**: The harness never writes weights — outputs are directional evidence flags a
+- [x] **BT-05**: The harness never writes weights — outputs are directional evidence flags a
       human reads; weight promotion stays gated until n≥30 real closed trades
 
 ### Playbook gates & sizing
@@ -131,11 +131,11 @@ Explicit exclusions with reasoning.
 | EXIT-08 | Phase 26 | Complete |
 | EXIT-09 | Phase 26 | Complete |
 | EXIT-10 | Phase 26 | Complete |
-| BT-01 | Phase 27 | Pending |
-| BT-02 | Phase 27 | Pending |
-| BT-03 | Phase 27 | Pending |
-| BT-04 | Phase 27 | Pending |
-| BT-05 | Phase 27 | Pending |
+| BT-01 | Phase 27 | Complete |
+| BT-02 | Phase 27 | Complete |
+| BT-03 | Phase 27 | Complete |
+| BT-04 | Phase 27 | Complete |
+| BT-05 | Phase 27 | Complete |
 | PLAY-01 | Phase 28 | Pending |
 | PLAY-02 | Phase 28 | Pending |
 | PLAY-03 | Phase 28 | Pending |

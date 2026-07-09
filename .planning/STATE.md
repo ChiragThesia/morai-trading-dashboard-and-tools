@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 27
-current_phase_name: PICK-04 Backtest Harness
+current_phase: 28
+current_phase_name: Playbook Gates, Anti-Criteria & Sizing
 status: planning
 stopped_at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
-last_updated: "2026-07-09T11:46:00.711Z"
+last_updated: "2026-07-09T15:40:53.921Z"
 last_activity: 2026-07-09
-last_activity_desc: Phase 26 complete, transitioned to Phase 27
+last_activity_desc: Phase 27 complete, transitioned to Phase 28
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
-  percent: 67
+  completed_phases: 5
+  total_plans: 20
+  completed_plans: 20
+  percent: 83
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 27 of 28 (PICK-04 Backtest Harness)
+Phase: 28 of 28 (Playbook Gates, Anti-Criteria & Sizing)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-09 — Phase 26 complete, transitioned to Phase 27
+Last activity: 2026-07-09 — Phase 27 complete, transitioned to Phase 28
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -161,6 +161,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 23 | 1 | - | - |
 | 25 | 2 | - | - |
 | 26 | 6 | - | - |
+| 27 | 6 | - | - |
 
 **Recent Trend:**
 
