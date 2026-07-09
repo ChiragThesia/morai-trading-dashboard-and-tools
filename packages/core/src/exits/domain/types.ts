@@ -100,5 +100,4 @@ export type PreviousVerdict = {
   readonly verdict: ExitVerdictKind;
   readonly rung: string | null;
   readonly ruleId: string;
-  readonly armedAt: Date;
 } | null;

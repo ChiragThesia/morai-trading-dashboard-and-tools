@@ -62,8 +62,8 @@ function makeContext(overrides: Partial<MarketContext> = {}): MarketContext {
   };
 }
 
-function toPreviousVerdict(verdict: ExitVerdict, armedAt: Date): PreviousVerdict {
-  return { verdict: verdict.verdict, rung: verdict.rung, ruleId: verdict.ruleId, armedAt };
+function toPreviousVerdict(verdict: ExitVerdict): PreviousVerdict {
+  return { verdict: verdict.verdict, rung: verdict.rung, ruleId: verdict.ruleId };
 }
 
 /** Pure day-number arithmetic mirroring candidate-selection.ts's convention (test-local). */
@@ -246,14 +246,14 @@ describe("evaluateExit — TAKE hysteresis (fast-check, no-flap both directions)
           // Fresh arm at the exact threshold.
           const armResult = evaluateExit(position, contextAtPnl(rung.arm), previous);
           expect(armResult.rung).toBe(rung.label);
-          previous = toPreviousVerdict(armResult, cohortNow);
+          previous = toPreviousVerdict(armResult);
 
           // Hover inside the open (disarm, arm) band — must stay armed on this rung.
           for (const fraction of fractions) {
             const hoverPnl = rung.disarm + fraction * (rung.arm - rung.disarm);
             const hoverResult = evaluateExit(position, contextAtPnl(hoverPnl), previous);
             expect(hoverResult.rung).toBe(rung.label);
-            previous = toPreviousVerdict(hoverResult, cohortNow);
+            previous = toPreviousVerdict(hoverResult);
           }
 
           // Cross past disarm — must release this rung.
@@ -294,13 +294,13 @@ describe("evaluateExit — STOP hysteresis (fast-check, no-flap both directions)
           const armResult = evaluateExit(position, contextAtPnl(rung.arm), previous);
           expect(armResult.rung).toBe(rung.label);
           expect(armResult.verdict).toBe("STOP");
-          previous = toPreviousVerdict(armResult, cohortNow);
+          previous = toPreviousVerdict(armResult);
 
           for (const fraction of fractions) {
             const hoverPnl = rung.arm + fraction * (rung.disarm - rung.arm);
             const hoverResult = evaluateExit(position, contextAtPnl(hoverPnl), previous);
             expect(hoverResult.rung).toBe(rung.label);
-            previous = toPreviousVerdict(hoverResult, cohortNow);
+            previous = toPreviousVerdict(hoverResult);
           }
 
           const disarmedResult = evaluateExit(position, contextAtPnl(rung.disarm + 0.001), previous);

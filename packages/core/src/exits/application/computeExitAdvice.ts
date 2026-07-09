@@ -126,7 +126,6 @@ export function makeComputeExitAdviceUseCase(deps: ComputeExitAdviceDeps): ForRu
               verdict: previousRow.verdict.verdict,
               rung: previousRow.verdict.rung,
               ruleId: previousRow.verdict.ruleId,
-              armedAt: previousRow.observedAt,
             };
 
       const verdict = evaluateExit(position, context, previousVerdict);
