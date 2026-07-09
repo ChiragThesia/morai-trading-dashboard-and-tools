@@ -296,6 +296,9 @@ export function runCalendarSnapshotsContractTests(
         expect(leg.bsmIv).toBe("0.22");
         expect(leg.bsmDelta).toBe("0.55");
         expect(leg.ivRaw).toBeCloseTo(0.21, 4);
+        // OPS-01: LegSnapshot.time must round-trip the real seeded timestamptz column —
+        // proving the field maps the actual leg_observations.time, not a stub.
+        expect(leg.time.getTime()).toBe(obsTime.getTime());
       });
 
       it("returns the LATEST observation when multiple exist (ORDER BY time DESC LIMIT 1)", async () => {
@@ -325,6 +328,8 @@ export function runCalendarSnapshotsContractTests(
         // Should return the t2 observation (mark=22.0, the latest)
         expect(leg.mark).toBeCloseTo(22.0, 2);
         expect(leg.bsmIv).toBe("0.23");
+        // time round-trips the LATEST seeded row (t2), not the earlier t1.
+        expect(leg.time.getTime()).toBe(t2.getTime());
       });
     });
 

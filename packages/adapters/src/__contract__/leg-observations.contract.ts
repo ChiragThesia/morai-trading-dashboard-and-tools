@@ -608,6 +608,11 @@ export function runLegObservationsContractTests(
         if (result.value === null) return;
         expect(result.value.occSymbol).toBe(obs0.contract);
         expect(result.value.mark).toBeCloseTo(obs0.mark, 5);
+        // Note: no `time` round-trip assertion here — this suite reuses the same fixture
+        // occSymbol across many tests without truncating between them, so "latest for this
+        // contract" can legitimately be a row from an earlier test. The round-trip proof
+        // lives in the "latest row when multiple observations exist" test below, which uses
+        // a deliberately later timestamp that is provably the newest across the whole file.
       });
 
       it("returns null for a symbol with no observations (miss)", async () => {
@@ -650,6 +655,8 @@ export function runLegObservationsContractTests(
         // Must return the LATEST (later-time) observation
         expect(result.value.mark).toBeCloseTo(99.99, 2);
         expect(result.value.underlyingPrice).toBeCloseTo(8000, 0);
+        // time round-trips the LATEST seeded row (laterTime), not the earlier observationTime.
+        expect(result.value.time.getTime()).toBe(laterTime.getTime());
       });
     });
   });
