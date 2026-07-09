@@ -11,9 +11,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Ops rider (defect fixes the new features consume)
 
-- [ ] **OPS-01**: snapshot-calendars no longer writes empty/gap journal rows — open-calendar
+- [x] **OPS-01**: snapshot-calendars no longer writes empty/gap journal rows — open-calendar
       series are complete going forward (root-cause the ~74% gap-row windows)
-- [ ] **OPS-02**: compute-bsm-greeks commits work in batches so a full-cohort drain survives the
+- [x] **OPS-02**: compute-bsm-greeks commits work in batches so a full-cohort drain survives the
       900s pg-boss handler cap without the timeout+retry dance
 
 ### Macro & regime data (day-one plumbing — no backfill exists)
@@ -119,8 +119,8 @@ Explicit exclusions with reasoning.
 | BOARD-01 | Phase 24 | Pending |
 | BOARD-02 | Phase 24 | Pending |
 | BOARD-03 | Phase 24 | Pending |
-| OPS-01 | Phase 25 | Pending |
-| OPS-02 | Phase 25 | Pending |
+| OPS-01 | Phase 25 | Complete |
+| OPS-02 | Phase 25 | Complete |
 | EXIT-01 | Phase 26 | Pending |
 | EXIT-02 | Phase 26 | Pending |
 | EXIT-03 | Phase 26 | Pending |

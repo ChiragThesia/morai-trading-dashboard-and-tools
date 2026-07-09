@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 24
-current_phase_name: Regime & Breadth Board
+current_phase: 26
+current_phase_name: Exit Advisor
 status: planning
 stopped_at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
-last_updated: "2026-07-09T05:59:26.070Z"
+last_updated: "2026-07-09T08:44:42.107Z"
 last_activity: 2026-07-09
-last_activity_desc: Phase 23 complete, transitioned to Phase 24
+last_activity_desc: Phase 25 complete, transitioned to Phase 26
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 17
+  completed_phases: 3
+  total_plans: 8
+  completed_plans: 8
+  percent: 50
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 24 of 28 (Regime & Breadth Board)
+Phase: 26 of 28 (Exit Advisor)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-09 — Phase 23 complete, transitioned to Phase 24
+Last activity: 2026-07-09 — Phase 25 complete, transitioned to Phase 26
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -159,6 +159,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 18 | 5 | - | - |
 | 19 | 9 | - | - |
 | 23 | 1 | - | - |
+| 25 | 2 | - | - |
 
 **Recent Trend:**
 

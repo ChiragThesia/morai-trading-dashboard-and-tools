@@ -66,7 +66,7 @@ of his trading-knowledge playbook. Every rule research-grounded — "no feeling.
 - [x] **Phase 24: Regime & Breadth Board** - Overview shows an evidence-admitted regime/breadth (completed 2026-07-09)
   board with per-indicator provenance (source + threshold rationale)
 
-- [ ] **Phase 25: Data-Quality Ops Rider** - `snapshot-calendars` stops writing gap rows; a full
+- [x] **Phase 25: Data-Quality Ops Rider** - `snapshot-calendars` stops writing gap rows; a full (completed 2026-07-09)
   BSM cohort recompute survives one handler cycle
 
 - [ ] **Phase 26: Exit Advisor** - Every open calendar gets a HOLD/TAKE/STOP/ROLL/EXIT-pre-event
@@ -154,11 +154,12 @@ pipeline; sequenced here so Exit Advisor and Backtest never inherit its defects
   2. A full BSM cohort recompute completes within a single pg-boss handler cycle during normal
      chain volume, without hitting the 900s timeout-and-retry dance.
 
-**Plans**: 2 plans
+**Plans**: 2/2 plans complete
 
 Plans:
-- [ ] 25-01-PLAN.md — OPS-01: LegSnapshot.time freshness gate — snapshot-calendars skips missing/stale legs instead of writing gap rows (TDD)
-- [ ] 25-02-PLAN.md — OPS-02: compute-bsm-greeks batch-commit loop + wall-clock budget — durable per-batch drain under the 900s cap (TDD)
+
+- [x] 25-01-PLAN.md — OPS-01: LegSnapshot.time freshness gate — snapshot-calendars skips missing/stale legs instead of writing gap rows (TDD)
+- [x] 25-02-PLAN.md — OPS-02: compute-bsm-greeks batch-commit loop + wall-clock budget — durable per-batch drain under the 900s cap (TDD)
 
 ### Phase 26: Exit Advisor
 
@@ -256,7 +257,7 @@ Phases execute in numeric order: 23 → 24 → 25 → 26 → 27 → 28
 |-------|----------------|--------|-----------|
 | 23. VIX3M Ingestion | 1/1 | Complete    | 2026-07-09 |
 | 24. Regime & Breadth Board | 5/5 | Complete   | 2026-07-09 |
-| 25. Data-Quality Ops Rider | 0/TBD | Not started | - |
+| 25. Data-Quality Ops Rider | 2/2 | Complete    | 2026-07-09 |
 | 26. Exit Advisor | 0/TBD | Not started | - |
 | 27. PICK-04 Backtest Harness | 0/TBD | Not started | - |
 | 28. Playbook Gates, Anti-Criteria & Sizing | 0/TBD | Not started | - |
