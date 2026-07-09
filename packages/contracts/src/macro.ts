@@ -20,7 +20,7 @@ export const macroResponse = z.record(z.string(), z.array(macroSeriesPoint));
 
 export type MacroResponse = z.infer<typeof macroResponse>;
 
-/** MACRO_SERIES_IDS — the eight series ingested by fetch-rates (7 FRED + VVIX via CBOE). */
+/** MACRO_SERIES_IDS — the nine series ingested by fetch-rates (8 FRED + VVIX via CBOE). */
 export const MACRO_SERIES_IDS = [
   "DFF",
   "DGS1MO",
@@ -30,6 +30,7 @@ export const MACRO_SERIES_IDS = [
   "T10Y3M",
   "VIXCLS",
   "VVIX",
+  "VXVCLS",
 ] as const;
 
 export const macroSeriesId = z.enum(MACRO_SERIES_IDS);

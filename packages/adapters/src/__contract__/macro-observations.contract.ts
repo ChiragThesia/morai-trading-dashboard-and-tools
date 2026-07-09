@@ -99,6 +99,11 @@ export function runMacroObservationsContractTests(
       await repo.insertMacroObservation(
         makeRow({ seriesId: "VVIX", date: "2026-06-30", value: 89.0, source: "cboe" }),
       );
+      // VXVCLS (VIX3M, Phase 23/MACRO-01) — no DB enum, series is a text column, so an
+      // id absent from the contracts enum still inserts+reads cleanly (no migration).
+      await repo.insertMacroObservation(
+        makeRow({ seriesId: "VXVCLS", date: "2026-06-30", value: 19.01 }),
+      );
 
       const readResult = await repo.readMacroObservations();
       expect(readResult.ok).toBe(true);
@@ -108,6 +113,7 @@ export function runMacroObservationsContractTests(
       expect(seriesIds.has("DFF")).toBe(true);
       expect(seriesIds.has("VIXCLS")).toBe(true);
       expect(seriesIds.has("VVIX")).toBe(true);
+      expect(seriesIds.has("VXVCLS")).toBe(true);
     });
 
     it("readMacroObservations returns empty array when no rows exist", async () => {

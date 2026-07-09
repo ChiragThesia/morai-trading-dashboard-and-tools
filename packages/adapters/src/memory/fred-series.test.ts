@@ -68,4 +68,19 @@ describe("makeMemoryFredSeriesAdapter", () => {
     expect(result.value.date).toBe("2026-07-01");
     expect(result.value.value).toBe(4.35);
   });
+
+  it("returns ok with the exact seeded VXVCLS row — raw index level, no /100 (D-14 parity with VIXCLS)", async () => {
+    const adapter = makeMemoryFredSeriesAdapter();
+    const vxvclsRow: MacroObservationRow = {
+      seriesId: "VXVCLS",
+      date: "2026-07-07",
+      value: 19.01,
+      source: "fred",
+    };
+    adapter.seed(vxvclsRow);
+    const result = await adapter.fetchFredSeries("VXVCLS");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual(vxvclsRow);
+  });
 });
