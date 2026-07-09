@@ -23,6 +23,7 @@ import type {
   ForReadingLatestSnapshotTime,
   ForRecomputingSnapshotPnl,
   ForReadingLatestSnapshotPerOpenCalendarForJournal,
+  ForReadingFullSnapshotHistoryForCalendar,
   SnapshotRow,
   LegSnapshot,
   StorageError,
@@ -46,6 +47,8 @@ export type CalendarSnapshotsRepo = {
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
   /** 26-03 (EXIT-02): latest calendar_snapshots row per open calendar, DISTINCT ON (calendar_id) */
   readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
+  /** 27-03 (BT-03): every snapshot row for one calendar, ASC, any source/status */
+  readonly readFullSnapshotHistoryForCalendar: ForReadingFullSnapshotHistoryForCalendar;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -590,6 +593,63 @@ export function runCalendarSnapshotsContractTests(
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.value.some((r) => r.calendarId === CAL_ID_EMPTY)).toBe(false);
+      });
+    });
+
+    describe("readFullSnapshotHistoryForCalendar — source-inclusive full history (27-03, BT-03)", () => {
+      it("returns every row ASC, INCLUDING schwab_chain-sourced rows (never dropped, unlike readJournal/mapSnapshotRow)", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const tCboe = new Date("2026-07-01T19:00:00Z");
+        const tSchwab = new Date("2026-07-01T19:30:00Z");
+        await repo.persistSnapshot(makeSnapshotRow(tCboe, CAL_ID, { source: "cboe" }));
+        await repo.persistSnapshot(makeSnapshotRow(tSchwab, CAL_ID, { source: "schwab_chain" }));
+
+        const result = await repo.readFullSnapshotHistoryForCalendar(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toHaveLength(2);
+        expect(result.value[0]?.time.getTime()).toBe(tCboe.getTime());
+        expect(result.value[0]?.source).toBe("cboe");
+        // The regression: a naive readJournal/mapSnapshotRow reuse would silently drop this row.
+        expect(result.value[1]?.time.getTime()).toBe(tSchwab.getTime());
+        expect(result.value[1]?.source).toBe("schwab_chain");
+      });
+
+      it("returns numeric fields as numbers (not strings) and passes through dteFront/dteBack/spot", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T19:00:00Z");
+        await repo.persistSnapshot(
+          makeSnapshotRow(time, CAL_ID, {
+            netMark: "15.5",
+            frontIv: "0.20",
+            backIv: "0.25",
+            dteFront: 17,
+            dteBack: 80,
+            spot: "5000",
+          }),
+        );
+
+        const result = await repo.readFullSnapshotHistoryForCalendar(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const row = result.value[0];
+        expect(row).toBeDefined();
+        if (row === undefined) return;
+        expect(row.netMark).toBeCloseTo(15.5, 5);
+        expect(row.frontIv).toBeCloseTo(0.2, 5);
+        expect(row.backIv).toBeCloseTo(0.25, 5);
+        expect(row.dteFront).toBe(17);
+        expect(row.dteBack).toBe(80);
+        expect(row.spot).toBeCloseTo(5000, 5);
+        expect(row.calendarId).toBe(CAL_ID);
+      });
+
+      it("returns ok([]) for a calendar with no snapshot rows", async () => {
+        await seed.seedCalendar(CAL_ID_EMPTY);
+        const result = await repo.readFullSnapshotHistoryForCalendar(CAL_ID_EMPTY);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).toEqual([]);
       });
     });
   });

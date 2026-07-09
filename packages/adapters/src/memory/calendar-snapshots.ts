@@ -31,7 +31,9 @@ import type {
   ForReadingLatestSnapshotTime,
   ForRecomputingSnapshotPnl,
   ForReadingLatestSnapshotPerOpenCalendarForJournal,
+  ForReadingFullSnapshotHistoryForCalendar,
   LatestSnapshotForOpenCalendar,
+  FullHistorySnapshotRow,
   SnapshotRow,
   LegSnapshot,
   CalendarSnapshotForCycle,
@@ -46,6 +48,7 @@ export type MemoryCalendarSnapshotsRepo = {
   readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
   readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
+  readonly readFullSnapshotHistoryForCalendar: ForReadingFullSnapshotHistoryForCalendar;
   /**
    * seedCalendar — register a calendarId as known so readJournal returns
    * ok([]) (not ok(null)) for it. Mirrors the FK enforced by the Postgres
@@ -182,6 +185,29 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok(mapped);
   };
 
+  // 27-03 (BT-03) twin: every row for one calendar, ASC, any source/status — mirrors the
+  // Postgres adapter, which performs NO join to calendars (status/existence are irrelevant
+  // here, unlike readJournal). A calendar with no rows returns ok([]), not an error.
+  const readFullSnapshotHistoryForCalendar: ForReadingFullSnapshotHistoryForCalendar = async (
+    calendarId: string,
+  ): Promise<Result<ReadonlyArray<FullHistorySnapshotRow>, StorageError>> => {
+    const rows: FullHistorySnapshotRow[] = [...store.values()]
+      .filter((r) => r.calendarId === calendarId)
+      .sort((a, b) => a.time.getTime() - b.time.getTime())
+      .map((r) => ({
+        calendarId: r.calendarId,
+        time: r.time,
+        netMark: parseFloat(r.netMark),
+        frontIv: parseFloat(r.frontIv),
+        backIv: parseFloat(r.backIv),
+        dteFront: r.dteFront,
+        dteBack: r.dteBack,
+        spot: parseFloat(r.spot),
+        source: r.source,
+      }));
+    return ok(rows);
+  };
+
   const seedCalendar = (id: string): void => {
     knownIds.add(id);
   };
@@ -205,6 +231,7 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     readLatestSnapshotTime,
     recomputeSnapshotPnl,
     readLatestSnapshotPerOpenCalendar,
+    readFullSnapshotHistoryForCalendar,
     seedCalendar,
     seedLegSnapshot,
   };

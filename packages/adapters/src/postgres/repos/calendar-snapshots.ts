@@ -26,7 +26,9 @@ import type {
   ForReadingLatestSnapshotTime,
   ForRecomputingSnapshotPnl,
   ForReadingLatestSnapshotPerOpenCalendarForJournal,
+  ForReadingFullSnapshotHistoryForCalendar,
   LatestSnapshotForOpenCalendar,
+  FullHistorySnapshotRow,
   SnapshotRow,
   LegSnapshot,
   CalendarSnapshotForCycle,
@@ -44,6 +46,7 @@ export type PostgresCalendarSnapshotsRepo = {
   readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
   readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
+  readonly readFullSnapshotHistoryForCalendar: ForReadingFullSnapshotHistoryForCalendar;
 };
 
 export function makePostgresCalendarSnapshotsRepo(
@@ -398,6 +401,54 @@ export function makePostgresCalendarSnapshotsRepo(
     }
   };
 
+  // ─── ForReadingFullSnapshotHistoryForCalendar (27-03, BT-03) ────────────────
+  // Plain SELECT — no status join, no source filter — every row for one calendar, ASC.
+  // Mirrors readLatestSnapshotPerOpenCalendar's source-inclusive mapping (never
+  // mapSnapshotRow's `source !== "cboe" → null` drop, RESEARCH Pattern 4).
+  const readFullSnapshotHistoryForCalendar: ForReadingFullSnapshotHistoryForCalendar = async (
+    calendarId: string,
+  ): Promise<Result<ReadonlyArray<FullHistorySnapshotRow>, StorageError>> => {
+    try {
+      const rows = await db
+        .select({
+          time: calendarSnapshots.time,
+          calendarId: calendarSnapshots.calendarId,
+          netMark: calendarSnapshots.netMark,
+          frontIv: calendarSnapshots.frontIv,
+          backIv: calendarSnapshots.backIv,
+          dteFront: calendarSnapshots.dteFront,
+          dteBack: calendarSnapshots.dteBack,
+          spot: calendarSnapshots.spot,
+          source: calendarSnapshots.source,
+        })
+        .from(calendarSnapshots)
+        .where(eq(calendarSnapshots.calendarId, calendarId))
+        .orderBy(asc(calendarSnapshots.time));
+
+      const mapped: FullHistorySnapshotRow[] = rows.map((row) => {
+        // snapshot_source enum's third value ("computed_only") never actually lands in this
+        // column (the writer maps it to "cboe" before persisting) — mirror
+        // readLatestSnapshotPerOpenCalendar's inclusive mapping, never drop the row.
+        const source: string = row.source === "schwab_chain" ? "schwab_chain" : "cboe";
+        return {
+          calendarId: row.calendarId,
+          time: row.time,
+          netMark: parseFloat(row.netMark),
+          frontIv: parseFloat(row.frontIv),
+          backIv: parseFloat(row.backIv),
+          dteFront: row.dteFront,
+          dteBack: row.dteBack,
+          spot: parseFloat(row.spot),
+          source,
+        };
+      });
+      return ok(mapped);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   return {
     persistSnapshot,
     readJournal,
@@ -406,6 +457,7 @@ export function makePostgresCalendarSnapshotsRepo(
     readLatestSnapshotTime,
     recomputeSnapshotPnl,
     readLatestSnapshotPerOpenCalendar,
+    readFullSnapshotHistoryForCalendar,
   };
 }
 

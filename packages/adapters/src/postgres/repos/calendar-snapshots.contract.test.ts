@@ -46,6 +46,7 @@ describe.skipIf(shouldSkip)("postgres calendar-snapshots adapter", () => {
         readLatestSnapshotTime: repo.readLatestSnapshotTime,
         recomputeSnapshotPnl: repo.recomputeSnapshotPnl,
         readLatestSnapshotPerOpenCalendar: repo.readLatestSnapshotPerOpenCalendar,
+        readFullSnapshotHistoryForCalendar: repo.readFullSnapshotHistoryForCalendar,
         countSnapshots: async (calendarId: string): Promise<number> => {
           const rows = await db.execute(
             sql`SELECT COUNT(*)::int AS cnt FROM calendar_snapshots WHERE calendar_id = ${calendarId}::uuid`,
@@ -109,6 +110,47 @@ describe.skipIf(shouldSkip)("postgres calendar-snapshots adapter", () => {
       },
     }),
   );
+});
+
+/**
+ * readFullSnapshotHistoryForCalendar (27-03, BT-03): the plan's behavior spec requires rows
+ * to be returned "regardless of calendars.status (closed included)". The implementation
+ * performs NO join to calendars at all, so status is structurally irrelevant — this test
+ * proves it directly against a status='closed' calendar (raw SQL, since the shared seed
+ * helper's seedCalendar always inserts status='open').
+ */
+describe.skipIf(shouldSkip)("postgres readFullSnapshotHistoryForCalendar — closed calendars included", () => {
+  let cdb: ReturnType<typeof makeDb>;
+
+  beforeAll(() => {
+    if (dbUrl) cdb = makeDb(dbUrl);
+  });
+
+  beforeEach(async () => {
+    if (cdb) await cdb.execute(sql`TRUNCATE TABLE calendar_snapshots, calendars CASCADE`);
+  });
+
+  it("returns snapshot rows for a CLOSED calendar", async () => {
+    if (!cdb) return;
+    const closedCalId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    await cdb.execute(sql`
+      INSERT INTO calendars (id, underlying, strike, option_type, front_expiry, back_expiry, qty, status, opened_at, closed_at, open_net_debit)
+      VALUES (${closedCalId}::uuid, 'SPX', 5000000, 'P', '2026-07-18', '2026-09-19', 2, 'closed', '2026-06-01T14:00:00Z'::timestamptz, '2026-06-15T14:00:00Z'::timestamptz, '5.00')
+    `);
+    const time = new Date("2026-06-10T19:00:00Z");
+    await cdb.execute(sql`
+      INSERT INTO calendar_snapshots (time, calendar_id, spot, net_mark, front_mark, back_mark, front_iv, back_iv, front_iv_raw, back_iv_raw, net_delta, net_gamma, net_theta, net_vega, term_slope, dte_front, dte_back, pnl_open, source)
+      VALUES (${time.toISOString()}::timestamptz, ${closedCalId}::uuid, '5000', '15', '10', '25', '0.20', '0.25', '0.19', '0.24', '30', '0.6', '-360', '1240', '0.05', 17, 80, '2000', 'cboe')
+    `);
+
+    const repo = makePostgresCalendarSnapshotsRepo(cdb);
+    const result = await repo.readFullSnapshotHistoryForCalendar(closedCalId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toHaveLength(1);
+    expect(result.value[0]?.calendarId).toBe(closedCalId);
+    expect(result.value[0]?.time.getTime()).toBe(time.getTime());
+  });
 });
 
 /**
