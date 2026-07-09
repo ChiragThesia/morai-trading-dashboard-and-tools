@@ -16,7 +16,7 @@
  */
 import { cn } from "@/lib/utils";
 import type { HeldPositionVerdict, ExitMetric, ExitVerdictEnum } from "@morai/contracts";
-import { Panel, PanelHeading, MetricChip } from "../components/system/index.tsx";
+import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { GEX_FRESH_MS } from "./Market.tsx";
 
 /** The verdict's OWN color — shared by the value text (when not forced INDICATIVE) and the
@@ -75,9 +75,13 @@ function formatAsOf(observedAt: string): { readonly label: string; readonly fres
 }
 
 /**
- * VerdictChip — the verdict badge for one held position. STOP and EXIT_PRE_EVENT are the only two
- * escalated verdicts (distinct hues at the same filled weight); an `indicative` mark is FORCED to
- * the non-actionable INDICATIVE treatment and never renders escalated STOP/TAKE colors (T-26-16).
+ * VerdictChip — the verdict badge for one held position: a single-line, table-density pill
+ * (px-2 py-0.5, rounded-full, text-[10px]) — NOT the header-strip `MetricChip`'s two-line
+ * label+value box, which inflated row height and duplicated the column header ("VERDICT
+ * VERDICT"). Escalation-tier rule unchanged (26-UI-SPEC): only STOP and EXIT_PRE_EVENT
+ * (server's `escalate` flag, never re-derived) render on a filled/alert-weight background;
+ * every other state — including INDICATIVE, the LEAST actionable state — stays low-key
+ * (transparent bg, subtle ring, dim text), never the loud filled treatment (T-26-16).
  */
 export function VerdictChip({
   row,
@@ -86,23 +90,31 @@ export function VerdictChip({
   readonly row: HeldPositionVerdict;
   readonly marketSession: "rth" | "after-hours";
 }): React.ReactElement {
-  const isEscalatedAmber = !row.indicative && row.verdict === "EXIT_PRE_EVENT";
+  const escalated = row.escalate && !row.indicative;
+  const fillRing =
+    escalated && row.verdict === "STOP"
+      ? "bg-downd ring-down/40"
+      : escalated && row.verdict === "EXIT_PRE_EVENT"
+        ? "bg-amber/15 ring-amber/40"
+        : "bg-transparent ring-line";
   return (
-    <MetricChip
+    <span
       data-testid={`held-position-verdict-${row.calendarId}`}
-      alert={row.indicative || row.escalate}
-      className={cn(isEscalatedAmber && "bg-amber/15 ring-1 ring-amber/40")}
-      label="VERDICT"
-      value={
-        row.indicative ? (
-          <span className="text-amber" data-testid={`held-position-indicative-${row.calendarId}`}>
-            {marketSession === "after-hours" ? "AH — indicative" : "STALE — indicative"}
-          </span>
-        ) : (
-          <span className={verdictColorClass(row.verdict)}>{verdictLabel(row.verdict, row.rung)}</span>
-        )
-      }
-    />
+      className={cn(
+        "inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.02em] ring-1",
+        fillRing,
+        escalated && "font-bold",
+        !row.indicative && verdictColorClass(row.verdict),
+      )}
+    >
+      {row.indicative ? (
+        <span className="text-amber/70" data-testid={`held-position-indicative-${row.calendarId}`}>
+          {marketSession === "after-hours" ? "AH — indicative" : "STALE — indicative"}
+        </span>
+      ) : (
+        verdictLabel(row.verdict, row.rung)
+      )}
+    </span>
   );
 }
 

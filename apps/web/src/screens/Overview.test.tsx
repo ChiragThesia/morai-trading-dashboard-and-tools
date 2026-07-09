@@ -896,15 +896,16 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
     expect(chip.className).not.toContain("bg-downd");
   });
 
-  it("HOLD/TAKE/ROLL render on the plain (non-alert) chip background", () => {
+  it("HOLD/TAKE/ROLL render on the plain (non-alert, unfilled) chip background", () => {
     setPositions([]);
     setExitsReturn({ data: EXITS_FIXTURE });
     render(<Overview />);
 
     for (const id of ["cal-hold", "cal-take", "cal-roll"]) {
       const chip = screen.getByTestId(`held-position-verdict-${id}`);
-      expect(chip.className).toContain("bg-raise/40");
+      expect(chip.className).toContain("bg-transparent");
       expect(chip.className).not.toContain("bg-downd");
+      expect(chip.className).not.toContain("bg-amber/15");
     }
   });
 
