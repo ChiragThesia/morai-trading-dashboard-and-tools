@@ -338,8 +338,13 @@ export async function replayPickerCohort(
   if (!chainResult.ok) return chainResult;
   const pickerChain = chainResult.value.map(toChainQuoteForPicker);
 
+  // WR-01: propagate a closes-read failure the same way the chain read above does. Silently
+  // degrading to [] makes realizedVol20 null, which scores `vrp` differently from the stored
+  // snapshot -- a transient DB hiccup would surface as a FABRICATED score-mismatch, poisoning
+  // the leakage oracle's entire value (trustworthy mismatch reporting).
   const closesResult = await deps.readDailySpotClosesAsOf(RV_CLOSES_DAYS, stored.observedAt);
-  const realizedVol20Result = closesResult.ok ? closesResult.value : [];
+  if (!closesResult.ok) return closesResult;
+  const realizedVol20Result = closesResult.value;
   const events = toEconomicEvents(snapshot.events);
   const gexContext = snapshot.gexContextStatus === "ok" ? toGexContextForPicker(snapshot.gex, stored.observedAt) : null;
 

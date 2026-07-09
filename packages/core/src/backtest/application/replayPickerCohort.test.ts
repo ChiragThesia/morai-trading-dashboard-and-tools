@@ -163,6 +163,7 @@ async function buildStoredRow(overrides: {
 
 function replayDeps(overrides: {
   readonly chainReadOk?: boolean;
+  readonly closesReadOk?: boolean;
 }): { readChainAsOf: ForReadingChainAsOf; readDailySpotClosesAsOf: ForReadingDailySpotClosesAsOf } {
   return {
     readChainAsOf: async (): Promise<Result<ReadonlyArray<ChainLegQuoteAsOf>, StorageError>> => {
@@ -171,7 +172,12 @@ function replayDeps(overrides: {
       }
       return ok(realCandidateChain().map(toChainLegQuoteAsOf));
     },
-    readDailySpotClosesAsOf: async (): Promise<Result<ReadonlyArray<number>, StorageError>> => ok([]),
+    readDailySpotClosesAsOf: async (): Promise<Result<ReadonlyArray<number>, StorageError>> => {
+      if (overrides.closesReadOk === false) {
+        return { ok: false, error: { kind: "storage-error", message: "closes read failed" } };
+      }
+      return ok([]);
+    },
   };
 }
 
@@ -284,6 +290,20 @@ describe("replayPickerCohort", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe("storage-error");
+  });
+
+  it("propagates a closes-read StorageError instead of crying wolf on the vrp rule", async () => {
+    // A transient DB error on the closes read must NOT degrade to [] -> realizedVol20=null,
+    // which would score `vrp` differently from the stored snapshot and surface a FABRICATED
+    // score-mismatch (WR-01). It must propagate as a storage error, like the chain read.
+    const stored = await buildStoredRow({});
+    const result = await replayPickerCohort(
+      { observedAt: stored.observedAt, snapshot: stored.snapshot },
+      { ...replayDeps({ closesReadOk: false }), rate: R, dividendYield: Q },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toBe("closes read failed");
   });
 
   it("propagates a chain-read StorageError", async () => {
