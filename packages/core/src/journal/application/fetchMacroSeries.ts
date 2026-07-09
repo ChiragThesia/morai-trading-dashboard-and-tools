@@ -1,14 +1,14 @@
 /**
  * fetchMacroSeries.ts — makeFetchMacroSeries orchestration use-case (MAC-01).
  *
- * Orchestrates: fetch 7 FRED series + VVIX independently (Promise.allSettled) → persist every
+ * Orchestrates: fetch 8 FRED series + VVIX independently (Promise.allSettled) → persist every
  * success → fail-loud finish naming any series that failed to fetch OR persist (D-07).
  *
  * Port contract:
  *   fetchFredSeries:         ForFetchingFredSeries          (parameterized FRED HTTP adapter, no fallback)
  *   fetchVvixQuote:          ForFetchingVvixQuote           (CBOE VVIX HTTP adapter)
  *   persistMacroObservation: ForPersistingMacroObservation  (Postgres repo / in-memory twin)
- *   fredSeriesIds?:          ReadonlyArray<string>          (defaults to the 7 FRED ids)
+ *   fredSeriesIds?:          ReadonlyArray<string>          (defaults to the 8 FRED ids)
  *
  * Behaviour (D-07 best-effort + fail-loud finish):
  *   - Fetches run via Promise.allSettled — one series' rejection never short-circuits the batch.
@@ -34,7 +34,7 @@ import type {
 // ─── Domain constant ────────────────────────────────────────────────────────
 
 /**
- * DEFAULT_FRED_SERIES_IDS — the seven FRED series fetched by default (MAC-01).
+ * DEFAULT_FRED_SERIES_IDS — the eight FRED series fetched by default (MAC-01, MACRO-01).
  * A domain constant defined here — core cannot import @morai/contracts.
  */
 export const DEFAULT_FRED_SERIES_IDS: ReadonlyArray<string> = [
@@ -45,6 +45,7 @@ export const DEFAULT_FRED_SERIES_IDS: ReadonlyArray<string> = [
   "T10Y2Y",
   "T10Y3M",
   "VIXCLS",
+  "VXVCLS",
 ];
 
 // ─── Port type ────────────────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ type TaskOutcome = {
  * makeFetchMacroSeries — inject deps, return the driver function (ForRunningFetchMacroSeries).
  *
  * The returned driver:
- *   1. Builds one fetch task per FRED series id (default: the 7 ids) plus one VVIX task.
+ *   1. Builds one fetch task per FRED series id (default: the 8 ids) plus one VVIX task.
  *   2. Runs all tasks via Promise.allSettled (per-series independence, D-07).
  *   3. Persists every fetch success independently of any other series' outcome.
  *   4. Collects every series that failed to fetch OR failed to persist.
