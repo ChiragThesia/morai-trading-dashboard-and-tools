@@ -26,6 +26,7 @@ import {
   makePostgresPickerSnapshotRepo,
   makePostgresCalendarEventsRepo,
   makePostgresCalendarEventAnnotationsRepo,
+  makePostgresExitVerdictsRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -49,7 +50,15 @@ import {
   makeSetRuleTagsUseCase,
   makeSpotObserver,
   makeGetCalendarLifecycleUseCase,
+  makeGetExitAdviceUseCase,
 } from "@morai/core";
+import type {
+  Calendar,
+  ForReadingHeldPositions,
+  ForReadingLatestSnapshotPerOpenCalendar,
+  LatestSnapshotForOpenCalendar,
+} from "@morai/core";
+import { ok } from "@morai/shared";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -66,6 +75,7 @@ import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
 import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
 import { gexRoutes } from "./adapters/http/gex.routes.ts";
 import { pickerRoutes } from "./adapters/http/picker.routes.ts";
+import { exitRoutes } from "./adapters/http/exits.routes.ts";
 import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
 import { streamRoutes, makeStreamSseRouter } from "./adapters/http/stream.routes.ts";
@@ -190,6 +200,61 @@ const getPicker = makeGetPickerUseCase({
   readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
 });
 
+// EXIT-08 / MCP-02 (26-05): get-exit-advice read use-case — shared by GET /api/exits +
+// get_exit_advice MCP tool over the ONE exitsResponse contract. Reuses calendarsRepo +
+// calendarSnapshotsRepo (already built above), adapted into the exits-owned
+// HeldPosition/LatestSnapshotForCalendar shapes at this composition root — mirrors
+// apps/worker/src/main.ts's mapCalendarToHeldPosition/mapSnapshotToLatestSnapshotForCalendar
+// closures exactly (26-04 precedent), since each app composes its own root.
+const exitVerdictsRepo = makePostgresExitVerdictsRepo(db);
+
+function mapCalendarToHeldPosition(calendar: Calendar) {
+  return {
+    calendarId: calendar.id,
+    name: `${calendar.strike / 1000}${calendar.optionType} ${calendar.frontExpiry} / ${calendar.backExpiry}`,
+    strike: calendar.strike / 1000, // Calendar.strike is the ×1000 convention; exits reads points
+    qty: calendar.qty,
+    openNetDebit: calendar.openNetDebit,
+    frontExpiry: calendar.frontExpiry,
+    backExpiry: calendar.backExpiry,
+  };
+}
+
+const readHeldPositionsForExits: ForReadingHeldPositions = async () => {
+  const result = await calendarsRepo.getOpenCalendars();
+  if (!result.ok) return result;
+  return ok(result.value.map(mapCalendarToHeldPosition));
+};
+
+function mapSnapshotToLatestSnapshotForCalendar(row: LatestSnapshotForOpenCalendar) {
+  return {
+    calendarId: row.calendarId,
+    time: row.snapshot.time,
+    // journal's SnapshotRow carries Drizzle-numeric strings ('NaN' is a valid sentinel,
+    // D-06) — Number('NaN') is JS NaN, which the evaluator's indicative gate already checks.
+    netMark: Number(row.snapshot.netMark),
+    pnlOpen: Number(row.snapshot.pnlOpen),
+    spot: Number(row.snapshot.spot),
+    frontIv: Number(row.snapshot.frontIv),
+    backIv: Number(row.snapshot.backIv),
+    dteFront: row.snapshot.dteFront,
+    dteBack: row.snapshot.dteBack,
+  };
+}
+
+const readLatestSnapshotForExits: ForReadingLatestSnapshotPerOpenCalendar = async () => {
+  const result = await calendarSnapshotsRepo.readLatestSnapshotPerOpenCalendar();
+  if (!result.ok) return result;
+  return ok(result.value.map(mapSnapshotToLatestSnapshotForCalendar));
+};
+
+const getExitAdvice = makeGetExitAdviceUseCase({
+  readHeldPositions: readHeldPositionsForExits,
+  readLatestSnapshotPerOpenCalendar: readLatestSnapshotForExits,
+  readLatestVerdictsPerCalendar: exitVerdictsRepo.readLatestVerdictsPerCalendar,
+  now: () => new Date(),
+});
+
 // RULE-01 / MCP-02 (20-10): get-events-with-rules read use-case + set-rule-tags write
 // use-case — shared by GET/PUT /api/journal/*/rules and the get_rule_tags/set_rule_tags
 // MCP tools over the ONE journal-rules contract schema set (D-13).
@@ -299,7 +364,9 @@ const apiRouter = new Hono()
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex))
   // PICK-02 (19-07): GET /api/picker/candidates — stored-row read (D-04, never recomputed)
-  .route("/", pickerRoutes(getPicker));
+  .route("/", pickerRoutes(getPicker))
+  // EXIT-08 (26-05): GET /api/exits — read-time exit-advice snapshot (MCP-02)
+  .route("/", exitRoutes(getExitAdvice));
 
 // Phase 12 (12-05): streaming — build shared deps before route mounts.
 const sidecarReconciler = makeSidecarPositionReconciler({
