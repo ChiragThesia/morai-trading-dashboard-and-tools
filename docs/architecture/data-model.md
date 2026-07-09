@@ -114,9 +114,13 @@ value       numeric NOT NULL   -- RAW as reported by the source, NO /100 (D-14):
 source      text                -- 'fred' | 'cboe' (provenance)
 ```
 
-Nine series land here: `DFF`, `DGS1MO`, `DGS3MO`, `SOFR`, `T10Y2Y`, `T10Y3M`, `VIXCLS`, `VXVCLS`
-(source `fred`) and `VVIX` (source `cboe`, via the existing CBOE index-quote adapter). `VXVCLS`
-(VIX3M) is an index level like `VIXCLS`, stored raw with no `/100` (D-14, Phase 23).
+Eleven series land here: `DFF`, `DGS1MO`, `DGS3MO`, `SOFR`, `T10Y2Y`, `T10Y3M`, `VIXCLS`,
+`VXVCLS`, `BAMLH0A0HYM2` (source `fred`) and `VVIX`, `VIX9D` (source `cboe`, via the existing
+CBOE index-quote adapter). `VXVCLS` (VIX3M) is an index level like `VIXCLS`, stored raw with no
+`/100` (D-14, Phase 23). `VIX9D` (Phase 24) is a CBOE delayed-quote index level, same shape as
+`VVIX`. `BAMLH0A0HYM2` (HY OAS, Phase 24) is a FRED percent-units level (e.g. `2.67` = 2.67%),
+stored raw with no unit conversion — see [regime-board.md](regime-board.md) for the indicators
+these two new series feed.
 DGS3MO is double-written — once here (raw, source `fred`) and once in `rate_observations`
 (decimal-fraction, unchanged BSM path, D-02).
 

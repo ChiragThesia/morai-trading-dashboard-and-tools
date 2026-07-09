@@ -106,14 +106,15 @@ handler and NYSE-holiday gate.
 **Two independent responsibilities in one run:**
 1. **DGS3MO → `rate_observations`** (unchanged, Phase 2) — the BSM risk-free rate. `readRate`
    and `computeBsmGreeks.ts` keep reading this path exactly as before (D-02 — untouched).
-2. **Expanded macro fetch → `macro_observations`** (new, Phase 14; VXVCLS added Phase 23) —
-   8 FRED series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS, VXVCLS) plus VVIX via
-   the existing CBOE adapter. DGS3MO is double-written: the legacy single-row BSM pipeline
-   AND a `macro_observations` row for the macro API (MAC-02).
+2. **Expanded macro fetch → `macro_observations`** (new, Phase 14; VXVCLS added Phase 23;
+   BAMLH0A0HYM2 + VIX9D added Phase 24, see [regime-board.md](regime-board.md)) —
+   9 FRED series (DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS, VXVCLS, BAMLH0A0HYM2)
+   plus VVIX and VIX9D via the existing CBOE adapter. DGS3MO is double-written: the legacy
+   single-row BSM pipeline AND a `macro_observations` row for the macro API (MAC-02).
 
 **Failure policy (D-07):** best-effort per series, fail-loud finish. Every series is fetched
 independently; every successful fetch persists regardless of the others' outcome. If ANY of
-the 9 series failed, the handler throws after persisting all successes, naming the failed
+the 11 series failed, the handler throws after persisting all successes, naming the failed
 series — pg-boss marks the run failed and `/api/status` surfaces `lastErr`. No silent
 failures.
 
