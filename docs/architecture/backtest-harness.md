@@ -94,3 +94,18 @@ role, which bypasses RLS, so the single `backtest_runs` INSERT works without a p
 backtest-runs contract test verifies this INSERT against real Postgres as the table owner.
 Running the CLI under a restricted role would need an explicit policy; the operator role
 must own the table or hold `BYPASSRLS`, matching every other table here.
+
+## Runtime Profile (measured 2026-07-09)
+
+The replay is I/O-bound, not CPU-bound: the forward walk issues serial per-slot
+`readChainAsOf` round-trips against the remote Postgres pooler, and network latency
+dominates (measured: a 4-week full-range run accrued only ~6 CPU-minutes across 50+
+wall-minutes before being cut; a one-week run passes 15 wall-minutes). Practical
+guidance:
+
+- Narrow ranges (`--from`/`--to` of a week or two) are the interactive workflow.
+- Full-corpus runs are overnight jobs — start them and walk away; the report persists
+  when done.
+- The structural fix, if interactive full-range runs are ever needed, is batching the
+  per-slot chain reads (one range query per candidate walk, sliced in memory) — an
+  adapter-only change; the pure replay code is already slot-agnostic.
