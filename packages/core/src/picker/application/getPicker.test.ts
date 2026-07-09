@@ -30,6 +30,16 @@ const ROW: PickerSnapshotRow = {
     candidates: [],
     ruleSet: [],
     gateDrops: { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 },
+    gate: {
+      vix: null,
+      vix3m: null,
+      ratio: null,
+      asOf: null,
+      state: "open",
+      penaltyMultiplier: 1,
+      brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+      reasons: [],
+    },
   },
 };
 

@@ -42,6 +42,17 @@ const SNAPSHOT: PickerSnapshotResponse = {
   candidates: [],
   ruleSet: [],
   gateDrops: { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 },
+  // 28-03: the fixture predates the entry gate — matches the schema's read-seam default.
+  gate: {
+    vix: null,
+    vix3m: null,
+    ratio: null,
+    asOf: null,
+    state: "open",
+    penaltyMultiplier: 1,
+    brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+    reasons: [],
+  },
 };
 
 function makeOkResponse(body: unknown): { ok: boolean; status: number; json: () => Promise<unknown> } {

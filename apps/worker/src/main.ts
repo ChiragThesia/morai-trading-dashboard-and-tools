@@ -566,6 +566,9 @@ const readGexContextForPicker = async () => {
 // Picker rule engine: history reads feeding the experimental vrp/slopePercentile rules.
 const pickerHistoryRepo = makePostgresPickerHistoryRepo(db);
 
+// 28-03 (PLAY-01/PLAY-02): entry-gate deps — reuses the EXISTING macroObsRepo/calendarsRepo/
+// calendarEventsRepo/pickerSnapshotRepo instances already built above (macro fetch, JRNL-01,
+// PICK-02) — zero new adapter wiring for the gate.
 const computePickerSnapshotUseCase = makeComputePickerSnapshotUseCase({
   readChainForPicker: pickerChainRepo.readChainForPicker,
   readGexContext: readGexContextForPicker,
@@ -573,6 +576,10 @@ const computePickerSnapshotUseCase = makeComputePickerSnapshotUseCase({
   persistPickerSnapshot: pickerSnapshotRepo.insertPickerSnapshot,
   readDailySpotCloses: pickerHistoryRepo.readDailySpotCloses,
   readPickerSlopeHistory: pickerHistoryRepo.readPickerSlopeHistory,
+  readMacroObservations: macroObsRepo.readMacroObservations,
+  readOpenCalendars: calendarsRepo.getOpenCalendars,
+  readRecentClosedCalendars: calendarEventsRepo.readRecentClosedCalendars,
+  readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
   rate: config.BSM_RATE_FALLBACK,
   dividendYield: config.BSM_DIVIDEND_YIELD,
   now: () => new Date(),

@@ -36,6 +36,9 @@ import { scoreCalendarCandidates } from "../domain/scoring.ts";
 import { realizedVol } from "../domain/realized-vol.ts";
 import { RULE_SET_METADATA } from "../domain/rules.ts";
 import type { ScoredCandidate } from "../domain/types.ts";
+import { resolveEntryGate, businessDaysSince, applyGatePenaltyScore } from "../domain/entry-gate.ts";
+import type { EntryGateState } from "../domain/entry-gate.ts";
+import { maxOpenTripped, cooldownActive, cooldownCutoff, COOLDOWN_BIZDAYS, LOSS_COOLDOWN_PCT } from "../domain/brakes.ts";
 import type {
   ChainQuoteForPicker,
   EconomicEvent,
@@ -45,12 +48,22 @@ import type {
   ForReadingEconomicEvents,
   ForReadingGexContext,
   ForReadingPickerSlopeHistory,
+  ForReadingPickerSnapshot,
   ForRunningComputePicker,
   GexContextForPicker,
   PickerCandidateDomain,
+  PickerGate,
   PickerSnapshot,
   StorageError,
 } from "./ports.ts";
+// 28-03 (PLAY-01/PLAY-02): cross-context reads for the entry gate — application-layer import of
+// another bounded context's application ports (architecture-boundaries rule 7), same convention
+// analytics/application/getRegimeBoard.ts already established for ForReadingMacroObservations.
+import type {
+  ForGettingOpenCalendars,
+  ForReadingMacroObservations,
+  ForReadingRecentClosedCalendars,
+} from "../../journal/index.ts";
 
 // ─── Tunables (D-03/D-17; documented, not empirically calibrated) ──────────────
 
@@ -87,6 +100,14 @@ export type ComputePickerSnapshotDeps = {
   readonly readDailySpotCloses: ForReadingDailySpotCloses;
   /** Trailing candidate slopes for the experimental `slopePercentile` rule. */
   readonly readPickerSlopeHistory: ForReadingPickerSlopeHistory;
+  /** Latest macro observations (VIXCLS/VXVCLS pair) for the market-level entry gate (28-03). */
+  readonly readMacroObservations: ForReadingMacroObservations;
+  /** Currently-open calendars — feeds the max-open anti-criteria brake (28-02/28-03). */
+  readonly readOpenCalendars: ForGettingOpenCalendars;
+  /** Calendars closed since the cooldown cutoff — feeds the loss-cooldown brake (28-02/28-03). */
+  readonly readRecentClosedCalendars: ForReadingRecentClosedCalendars;
+  /** The previously persisted snapshot — self-read for the gate's arm/disarm hysteresis (28-03). */
+  readonly readPickerSnapshot: ForReadingPickerSnapshot;
   /** Risk-free rate (decimal), supplied from config. */
   readonly rate: number;
   /** Continuous dividend yield (decimal), supplied from config. */
@@ -151,6 +172,89 @@ function zeroEventAdjustment(candidate: ScoredCandidate): ScoredCandidate {
   const rawScore = breakdown.reduce((sum, entry) => sum + (entry.weight * entry.contribution) / 100, 0);
   const score = Math.min(100, Math.max(0, Math.round(rawScore)));
   return { ...candidate, breakdown, score };
+}
+
+// ─── Entry-gate wiring helpers (28-03, PLAY-01/PLAY-02) ─────────────────────────
+
+/**
+ * T-28-07: any of the macro/open-calendars/recent-closed reads failing fails the gate CLOSED
+ * — never a silent default-open. Mirrors resolveEntryGate's own GATE BLIND shape (the
+ * macro-missing path) so a read failure reads identically to "the market data is gone".
+ */
+const GATE_READ_ERROR: PickerGate = {
+  vix: null,
+  vix3m: null,
+  ratio: null,
+  asOf: null,
+  state: "blind",
+  penaltyMultiplier: 0,
+  brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+  reasons: ["gateReadError"],
+};
+
+/**
+ * Reconstruct enough of EntryGateState from a persisted PickerGate to feed resolveEntryGate's
+ * `previousState` — only `.reasons` is actually read by the hysteresis walk (previousLabelFor
+ * in entry-gate.ts), but the parameter type requires the full shape.
+ */
+function toEntryGateState(gate: PickerGate): EntryGateState {
+  return {
+    vix: gate.vix,
+    vix3m: gate.vix3m,
+    ratio: gate.ratio,
+    asOf: gate.asOf,
+    state: gate.state,
+    penaltyMultiplier: gate.penaltyMultiplier,
+    entriesAllowed: gate.state === "open" || gate.state === "penalty",
+    reasons: gate.reasons,
+  };
+}
+
+/** Project resolveEntryGate's pure output + the two brake booleans/cooldownUntil into the
+ * persisted PickerGate wire shape. */
+function toPickerGate(
+  state: EntryGateState,
+  maxOpenBrake: boolean,
+  cooldownBrake: boolean,
+  cooldownUntil: string | null,
+): PickerGate {
+  return {
+    vix: state.vix,
+    vix3m: state.vix3m,
+    ratio: state.ratio,
+    asOf: state.asOf,
+    state: state.state,
+    penaltyMultiplier: state.penaltyMultiplier,
+    brakes: { maxOpen: maxOpenBrake, cooldown: cooldownBrake, cooldownUntil },
+    reasons: state.reasons,
+  };
+}
+
+/**
+ * cooldownUntilFrom — the ISO date COOLDOWN_BIZDAYS business days after `closedAtIso`, walked
+ * forward one day at a time using businessDaysSince as the oracle — the symmetric partner to
+ * brakes.ts's cooldownCutoff (which walks BACKWARD from "now" to find the read window's start).
+ * Local here: only this wiring layer needs "when does an ALREADY-TRIPPED cooldown lift" —
+ * brakes.ts answers the opposite question ("how far back should the read window reach").
+ */
+function cooldownUntilFrom(closedAtIso: string): string {
+  const cursor = new Date(`${closedAtIso}T00:00:00.000Z`);
+  for (;;) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const candidateIso = cursor.toISOString().slice(0, 10);
+    if (businessDaysSince(closedAtIso, candidateIso) >= COOLDOWN_BIZDAYS) return candidateIso;
+  }
+}
+
+/**
+ * applyGatePenalty — scales a candidate's score by the gate's combined multiplier (28-03),
+ * mirroring zeroEventAdjustment's post-scoring-override shape. Breakdown is untouched: the
+ * gate penalty is explicitly NOT one of the 9 weighted scoring criteria (picker-rules.md).
+ * A no-op at multiplier 1 (open state, or the read-error/blind/blocked paths where the whole
+ * candidate list is zeroed out downstream anyway).
+ */
+function applyGatePenalty(candidate: ScoredCandidate, multiplier: number): ScoredCandidate {
+  return { ...candidate, score: applyGatePenaltyScore(candidate.score, multiplier) };
 }
 
 /**
@@ -285,6 +389,66 @@ export function makeComputePickerSnapshotUseCase(
     const gexContextStatus = resolveGexContextStatus(gexContext, now);
     const eventsContextStatus = resolveEventsContextStatus(events, now);
 
+    // ── Step 3c: entry-gate inputs — macro pair, open-calendar count, recent-closed rows,
+    // and the previous cycle's gate for hysteresis (28-03, PLAY-01/PLAY-02) ──
+    const nowIso = now.toISOString().slice(0, 10);
+    const cooldownSinceIso = cooldownCutoff(nowIso);
+
+    const macroResult = await deps.readMacroObservations();
+    const openCalendarsResult = await deps.readOpenCalendars();
+    const recentClosedResult = await deps.readRecentClosedCalendars(cooldownSinceIso);
+    const previousSnapshotResult = await deps.readPickerSnapshot();
+
+    // ── Step 3d: resolve the gate ONCE per cohort — never per candidate (T-28-10 regression
+    // guard: the retired term-inversion gate's per-candidate placement mistake). T-28-07: any
+    // of the three reads above failing fails the gate CLOSED, never a silent default-open. ──
+    let gate: PickerGate;
+    if (!macroResult.ok || !openCalendarsResult.ok || !recentClosedResult.ok) {
+      gate = GATE_READ_ERROR;
+    } else {
+      const openCount = openCalendarsResult.value.length;
+      const recentClosed = recentClosedResult.value;
+      const maxOpenBrake = maxOpenTripped(openCount);
+      const cooldownBrake = cooldownActive(recentClosed);
+      const previousGate =
+        previousSnapshotResult.ok && previousSnapshotResult.value !== null
+          ? toEntryGateState(previousSnapshotResult.value.snapshot.gate)
+          : null;
+
+      const gateState = resolveEntryGate({
+        rows: macroResult.value,
+        nowIso,
+        maxOpenBrake,
+        cooldownBrake,
+        previousState: previousGate,
+      });
+
+      // ponytail: re-filters the SAME -25% trigger cooldownActive already checked, just to find
+      // WHICH row(s) tripped it (for cooldownUntil's display date) — small, local duplication
+      // kept out of brakes.ts (28-02, already shipped/tested) rather than adding a second export
+      // there for one caller.
+      const triggeringLosses = recentClosed.filter(
+        (row) =>
+          row.openNetDebit !== 0 &&
+          row.realizedPnl !== null &&
+          row.realizedPnl / row.openNetDebit <= LOSS_COOLDOWN_PCT,
+      );
+      const latestTriggerClosedAt = triggeringLosses.reduce<Date | undefined>((max, row) => {
+        if (max === undefined) return row.closedAt;
+        return row.closedAt.getTime() > max.getTime() ? row.closedAt : max;
+      }, undefined);
+      const cooldownUntil =
+        latestTriggerClosedAt === undefined
+          ? null
+          : cooldownUntilFrom(latestTriggerClosedAt.toISOString().slice(0, 10));
+
+      gate = toPickerGate(gateState, maxOpenBrake, cooldownBrake, cooldownUntil);
+    }
+    const entriesAllowed =
+      (gate.state === "open" || gate.state === "penalty") &&
+      !gate.brakes.maxOpen &&
+      !gate.brakes.cooldown;
+
     // ── Step 3b: Experimental-rule inputs (null-honest — a failed read degrades to
     // "insufficient history", it never fails the compute or fabricates a value) ──
     const closesResult = await deps.readDailySpotCloses(RV_CLOSES_DAYS);
@@ -308,10 +472,17 @@ export function makeComputePickerSnapshotUseCase(
     if (eventsContextStatus !== "ok") {
       scored = scored.map(zeroEventAdjustment);
     }
+    // ── Step 4b: post-scoring gate penalty (28-03) — breakdown untouched, mirrors
+    // zeroEventAdjustment's post-scoring-override shape. A no-op at multiplier 1 (open state). ──
+    scored = scored.map((candidate) => applyGatePenalty(candidate, gate.penaltyMultiplier));
 
     // ── Step 5: Rank (stable id tie-break) + cap at PICKER_TOP_N (D-03) ──────
     const ranked = rankAndCapCandidates(scored, PICKER_TOP_N);
-    const candidates: ReadonlyArray<PickerCandidateDomain> = ranked.map(toPickerCandidateDomain);
+    // Blocked/blind/braked -> ship candidates: [] (Step 6 truth); termStructure/gex/events
+    // below stay populated regardless — the board and Analyzer keep their context.
+    const candidates: ReadonlyArray<PickerCandidateDomain> = entriesAllowed
+      ? ranked.map(toPickerCandidateDomain)
+      : [];
 
     // ── Step 6: Assemble the snapshot ────────────────────────────────────────
     const gexForSnapshot =
@@ -372,6 +543,8 @@ export function makeComputePickerSnapshotUseCase(
       })),
       // Per-gate drop counts — gating is never a silent cap.
       gateDrops,
+      // The market-level entry gate + anti-criteria brakes (28-03, PLAY-01/PLAY-02).
+      gate,
     };
 
     // ── Step 7: Persist (D-06 append-only; observedAt = cohort data time, NEVER now()) ──

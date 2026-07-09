@@ -149,6 +149,16 @@ async function buildStoredRow(overrides: {
     persistPickerSnapshot,
     readDailySpotCloses: async () => ok([]),
     readPickerSlopeHistory: async () => ok([]),
+    // 28-03: calm gate inputs -- the backtest oracle isn't exercising the entry gate, just
+    // needs it to resolve to "open" so candidates aren't zeroed out.
+    readMacroObservations: async () =>
+      ok([
+        { seriesId: "VIXCLS", date: "2026-07-01", value: 15, source: "fred" as const },
+        { seriesId: "VXVCLS", date: "2026-07-01", value: 20, source: "fred" as const },
+      ]),
+    readOpenCalendars: async () => ok([]),
+    readRecentClosedCalendars: async () => ok([]),
+    readPickerSnapshot: async () => ok(null),
     rate: R,
     dividendYield: Q,
     now: () => NOW,
