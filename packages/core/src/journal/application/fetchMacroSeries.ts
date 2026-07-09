@@ -1,14 +1,14 @@
 /**
  * fetchMacroSeries.ts — makeFetchMacroSeries orchestration use-case (MAC-01).
  *
- * Orchestrates: fetch 8 FRED series + VVIX independently (Promise.allSettled) → persist every
+ * Orchestrates: fetch 9 FRED series + VVIX independently (Promise.allSettled) → persist every
  * success → fail-loud finish naming any series that failed to fetch OR persist (D-07).
  *
  * Port contract:
  *   fetchFredSeries:         ForFetchingFredSeries          (parameterized FRED HTTP adapter, no fallback)
  *   fetchVvixQuote:          ForFetchingVvixQuote           (CBOE VVIX HTTP adapter)
  *   persistMacroObservation: ForPersistingMacroObservation  (Postgres repo / in-memory twin)
- *   fredSeriesIds?:          ReadonlyArray<string>          (defaults to the 8 FRED ids)
+ *   fredSeriesIds?:          ReadonlyArray<string>          (defaults to the 9 FRED ids)
  *
  * Behaviour (D-07 best-effort + fail-loud finish):
  *   - Fetches run via Promise.allSettled — one series' rejection never short-circuits the batch.
@@ -34,7 +34,8 @@ import type {
 // ─── Domain constant ────────────────────────────────────────────────────────
 
 /**
- * DEFAULT_FRED_SERIES_IDS — the eight FRED series fetched by default (MAC-01, MACRO-01).
+ * DEFAULT_FRED_SERIES_IDS — the nine FRED series fetched by default (MAC-01, MACRO-01,
+ * BAMLH0A0HYM2 added Phase 24 MACRO-02/03 — see docs/architecture/regime-board.md).
  * A domain constant defined here — core cannot import @morai/contracts.
  */
 export const DEFAULT_FRED_SERIES_IDS: ReadonlyArray<string> = [
@@ -46,6 +47,7 @@ export const DEFAULT_FRED_SERIES_IDS: ReadonlyArray<string> = [
   "T10Y3M",
   "VIXCLS",
   "VXVCLS",
+  "BAMLH0A0HYM2",
 ];
 
 // ─── Port type ────────────────────────────────────────────────────────────────

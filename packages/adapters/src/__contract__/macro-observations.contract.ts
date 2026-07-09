@@ -104,6 +104,11 @@ export function runMacroObservationsContractTests(
       await repo.insertMacroObservation(
         makeRow({ seriesId: "VXVCLS", date: "2026-06-30", value: 19.01 }),
       );
+      // BAMLH0A0HYM2 (HY OAS, Phase 24/MACRO-02) — same text-column parity: a new series id
+      // inserts+reads cleanly with zero migration (docs/architecture/regime-board.md).
+      await repo.insertMacroObservation(
+        makeRow({ seriesId: "BAMLH0A0HYM2", date: "2026-06-30", value: 2.67 }),
+      );
 
       const readResult = await repo.readMacroObservations();
       expect(readResult.ok).toBe(true);
@@ -114,6 +119,7 @@ export function runMacroObservationsContractTests(
       expect(seriesIds.has("VIXCLS")).toBe(true);
       expect(seriesIds.has("VVIX")).toBe(true);
       expect(seriesIds.has("VXVCLS")).toBe(true);
+      expect(seriesIds.has("BAMLH0A0HYM2")).toBe(true);
     });
 
     it("readMacroObservations returns empty array when no rows exist", async () => {

@@ -83,4 +83,19 @@ describe("makeMemoryFredSeriesAdapter", () => {
     if (!result.ok) return;
     expect(result.value).toEqual(vxvclsRow);
   });
+
+  it("returns ok with the exact seeded BAMLH0A0HYM2 row — raw percent units, no /100 (Phase 24 HY OAS)", async () => {
+    const adapter = makeMemoryFredSeriesAdapter();
+    const hyOasRow: MacroObservationRow = {
+      seriesId: "BAMLH0A0HYM2",
+      date: "2026-07-07",
+      value: 2.67,
+      source: "fred",
+    };
+    adapter.seed(hyOasRow);
+    const result = await adapter.fetchFredSeries("BAMLH0A0HYM2");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual(hyOasRow);
+  });
 });

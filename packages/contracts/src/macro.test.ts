@@ -52,7 +52,7 @@ describe("macroResponse", () => {
 // ─── MACRO_SERIES_IDS ───────────────────────────────────────────────────────────
 
 describe("MACRO_SERIES_IDS", () => {
-  it("contains all nine series ids", () => {
+  it("contains all ten series ids", () => {
     expect(MACRO_SERIES_IDS).toEqual([
       "DFF",
       "DGS1MO",
@@ -63,6 +63,7 @@ describe("MACRO_SERIES_IDS", () => {
       "VIXCLS",
       "VVIX",
       "VXVCLS",
+      "BAMLH0A0HYM2",
     ]);
   });
 });
