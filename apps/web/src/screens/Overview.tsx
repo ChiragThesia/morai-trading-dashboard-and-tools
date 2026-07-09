@@ -29,7 +29,6 @@ import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import { relAge, GEX_FRESH_MS } from "./Market.tsx";
 import { CotCard } from "../components/CotCard.tsx";
-import { MacroCard } from "../components/MacroCard.tsx";
 import { RegimeBoard } from "../components/RegimeBoard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
 import { Panel, PanelHeading, SectionLabel, Stat, MetricChip } from "../components/system/index.tsx";
@@ -51,7 +50,8 @@ import type { StreamLiveGreekEvent } from "@morai/contracts";
  *   2. Two-column body: left = payoff hero ("Risk profile — combined book") + docked
  *      positions table; right = 320px GEX rail (dealer γ profile, GEX by strike,
  *      key levels, net book greeks).
- *   3. Positioning & macro detail row (CotCard + MacroCard, unchanged).
+ *   3. Positioning & macro detail row (CotCard + RegimeBoard — the merged "Market
+ *      regime" panel absorbs the former standalone FRED macro card).
  *   4. Book & system row (BookSummary + SystemHealth, unchanged).
  *
  * The payoff hero uses `repriceScenario` over calendar positions built from
@@ -1143,19 +1143,14 @@ export function Overview(): React.ReactElement {
         </div>
       </div>
 
-      {/* ── Positioning & macro detail (unchanged) ── */}
+      {/* ── Positioning & macro detail: COT + Market regime (Phase 24 BOARD-01/02,
+          merged with the former FRED macro card in the post-v1.3 tweak) ── */}
       <section>
         <SectionLabel className="mb-2">Positioning & macro detail</SectionLabel>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <CotCard />
-          <MacroCard />
+          <RegimeBoard />
         </div>
-      </section>
-
-      {/* ── Regime & breadth (Phase 24, BOARD-01/02) ── */}
-      <section>
-        <SectionLabel className="mb-2">Regime & breadth</SectionLabel>
-        <RegimeBoard />
       </section>
 
       {/* ── Book & system (unchanged) ── */}
