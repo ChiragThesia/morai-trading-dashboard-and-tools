@@ -63,7 +63,7 @@ of his trading-knowledge playbook. Every rule research-grounded — "no feeling.
 - [x] **Phase 23: VIX3M Ingestion** - `VXVCLS` lands daily in `macro_observations`, first and (completed 2026-07-09)
   alone, before any consumer needs its un-backfillable history
 
-- [ ] **Phase 24: Regime & Breadth Board** - Overview shows an evidence-admitted regime/breadth
+- [x] **Phase 24: Regime & Breadth Board** - Overview shows an evidence-admitted regime/breadth (completed 2026-07-09)
   board with per-indicator provenance (source + threshold rationale)
 
 - [ ] **Phase 25: Data-Quality Ops Rider** - `snapshot-calendars` stops writing gap rows; a full
@@ -127,13 +127,13 @@ now-accreting macro pipeline)
   5. Indicators update on a daily cadence with as-of dates stamped — EOD data is never presented
      as if it were intraday.
 
-**Plans**: 5 plans
+**Plans**: 5/5 plans complete
 
-- [ ] 24-01-PLAN.md — Docs-first (regime-board.md evidence table + refutations) + HY OAS (BAMLH0A0HYM2) into FRED macro pipeline
-- [ ] 24-02-PLAN.md — CBOE _VIX9D adapter (clone of cboe-vvix) + port + in-memory twin + macro-orchestration/worker wiring
-- [ ] 24-03-PLAN.md — regimeResponse contract + 4 pure banding functions (named threshold constants, fast-check)
-- [ ] 24-04-PLAN.md — getRegimeBoard use-case (computed-on-read, missing→omit, as-of) + GET /api/analytics/regime + get_regime MCP tool
-- [ ] 24-05-PLAN.md — Overview "Regime & breadth" board UI (chip grid, band triad, provenance tooltip) per UI-SPEC
+- [x] 24-01-PLAN.md — Docs-first (regime-board.md evidence table + refutations) + HY OAS (BAMLH0A0HYM2) into FRED macro pipeline
+- [x] 24-02-PLAN.md — CBOE _VIX9D adapter (clone of cboe-vvix) + port + in-memory twin + macro-orchestration/worker wiring
+- [x] 24-03-PLAN.md — regimeResponse contract + 4 pure banding functions (named threshold constants, fast-check)
+- [x] 24-04-PLAN.md — getRegimeBoard use-case (computed-on-read, missing→omit, as-of) + GET /api/analytics/regime + get_regime MCP tool
+- [x] 24-05-PLAN.md — Overview "Regime & breadth" board UI (chip grid, band triad, provenance tooltip) per UI-SPEC
 
 **UI hint**: yes
 
@@ -154,7 +154,11 @@ pipeline; sequenced here so Exit Advisor and Backtest never inherit its defects
   2. A full BSM cohort recompute completes within a single pg-boss handler cycle during normal
      chain volume, without hitting the 900s timeout-and-retry dance.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 25-01-PLAN.md — OPS-01: LegSnapshot.time freshness gate — snapshot-calendars skips missing/stale legs instead of writing gap rows (TDD)
+- [ ] 25-02-PLAN.md — OPS-02: compute-bsm-greeks batch-commit loop + wall-clock budget — durable per-batch drain under the 900s cap (TDD)
 
 ### Phase 26: Exit Advisor
 
@@ -251,7 +255,7 @@ Phases execute in numeric order: 23 → 24 → 25 → 26 → 27 → 28
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 23. VIX3M Ingestion | 1/1 | Complete    | 2026-07-09 |
-| 24. Regime & Breadth Board | 0/TBD | Not started | - |
+| 24. Regime & Breadth Board | 5/5 | Complete   | 2026-07-09 |
 | 25. Data-Quality Ops Rider | 0/TBD | Not started | - |
 | 26. Exit Advisor | 0/TBD | Not started | - |
 | 27. PICK-04 Backtest Harness | 0/TBD | Not started | - |
