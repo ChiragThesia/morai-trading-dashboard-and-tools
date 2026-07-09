@@ -367,6 +367,8 @@ export type {
   ForReadingChainForPicker,
   GexContextForPicker,
   ForReadingGexContext,
+  PickerGate,
+  PickerGateBrakes,
   PickerSnapshot,
   PickerSnapshotRow,
   ForPersistingPickerSnapshot,

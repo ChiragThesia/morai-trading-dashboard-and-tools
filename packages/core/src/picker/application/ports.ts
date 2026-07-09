@@ -82,6 +82,31 @@ export type CandidateContextEntry = {
   readonly note: string;
 };
 
+/** PickerGateBrakes — the two anti-criteria brakes (28-02) surfaced on the gate. */
+export type PickerGateBrakes = {
+  readonly maxOpen: boolean;
+  readonly cooldown: boolean;
+  readonly cooldownUntil: string | null; // YYYY-MM-DD, the date the cooldown lifts
+};
+
+/**
+ * PickerGate — readonly domain mirror of contracts' pickerGate (28-03, PLAY-01/PLAY-02).
+ * Computed ONCE per cohort by resolveEntryGate (domain/entry-gate.ts) — never per-candidate.
+ * `reasons` carries the per-metric hysteresis tags (e.g. "vixBlocked") this cycle's
+ * resolveEntryGate call produced — persisted so the NEXT cycle's self-read can reconstruct
+ * arm/disarm state (the Postgres repo round-trips this whole shape through the Zod contract).
+ */
+export type PickerGate = {
+  readonly vix: number | null;
+  readonly vix3m: number | null;
+  readonly ratio: number | null;
+  readonly asOf: string | null; // YYYY-MM-DD
+  readonly state: "open" | "penalty" | "blocked" | "blind";
+  readonly penaltyMultiplier: number;
+  readonly brakes: PickerGateBrakes;
+  readonly reasons: ReadonlyArray<string>;
+};
+
 /** One rule-registry row shipped in the snapshot (the UI's methodology source of truth). */
 export type RuleSetEntry = {
   readonly id: string;
@@ -172,6 +197,8 @@ export type PickerSnapshot = {
     readonly termInverted: number;
     readonly eventBlackout: number;
   };
+  /** The market-level entry gate + anti-criteria brakes (28-03, PLAY-01/PLAY-02). */
+  readonly gate: PickerGate;
 };
 
 /** PickerSnapshotRow — a persisted picker snapshot (append-only, D-06 keeps history). */

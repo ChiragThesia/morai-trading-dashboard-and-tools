@@ -183,6 +183,63 @@ describe("pickerSnapshotResponse.observedAt (WR-03 — real instant, not date-on
   });
 });
 
+describe("pickerSnapshotResponse.gate (28-03, PLAY-01/PLAY-02 — additive)", () => {
+  const basePayload = {
+    asOf: "2026-07-02",
+    observedAt: "2026-07-02T14:32:00.000Z",
+    spot: 7498.85,
+    source: "schwab",
+    gexContextStatus: "ok",
+    eventsContextStatus: "ok",
+    termStructure: [],
+    gex: { flip: null, callWall: null, putWall: null, netGammaAtSpot: 0, absGammaStrike: null },
+    events: [],
+    candidates: [],
+  };
+
+  it("a stored snapshot MISSING gate parses to the defaulted gate (no schema break)", () => {
+    const parsed = pickerSnapshotResponse.parse(basePayload);
+    expect(parsed.gate).toEqual({
+      vix: null,
+      vix3m: null,
+      ratio: null,
+      asOf: null,
+      state: "open",
+      penaltyMultiplier: 1,
+      brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+      reasons: [],
+    });
+  });
+
+  it("a full gate object round-trips through pickerSnapshotResponse", () => {
+    const fullGate = {
+      vix: 27.4,
+      vix3m: 24.1,
+      ratio: 1.137,
+      asOf: "2026-07-08",
+      state: "blocked",
+      penaltyMultiplier: 0,
+      brakes: { maxOpen: true, cooldown: false, cooldownUntil: null },
+      reasons: ["vixBlocked"],
+    };
+    const parsed = pickerSnapshotResponse.parse({ ...basePayload, gate: fullGate });
+    expect(parsed.gate).toEqual(fullGate);
+  });
+
+  it("REJECTS an out-of-enum gate.state value", () => {
+    const badGate = {
+      vix: 20,
+      vix3m: 20,
+      ratio: 1,
+      asOf: "2026-07-08",
+      state: "crisis", // not a valid state
+      penaltyMultiplier: 0.5,
+      brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+    };
+    expect(() => pickerSnapshotResponse.parse({ ...basePayload, gate: badGate })).toThrow();
+  });
+});
+
 describe("pickerSnapshotResponse.source / gexContextStatus / eventsContextStatus (Phase 19, D-15/D-17)", () => {
   const basePayload = {
     asOf: "2026-07-02",

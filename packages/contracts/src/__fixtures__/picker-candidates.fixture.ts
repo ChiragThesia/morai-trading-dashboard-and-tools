@@ -326,4 +326,15 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
   // registry — empty/zero values exercise the read-seam defaults path.
   ruleSet: [],
   gateDrops: { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 },
+  // The fixture predates the entry gate (28-03) — open/no-brakes exercises the read-seam default.
+  gate: {
+    vix: null,
+    vix3m: null,
+    ratio: null,
+    asOf: null,
+    state: "open",
+    penaltyMultiplier: 1,
+    brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+    reasons: [],
+  },
 };

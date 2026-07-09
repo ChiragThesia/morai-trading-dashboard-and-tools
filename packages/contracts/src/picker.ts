@@ -188,6 +188,56 @@ export const pickerEvent = z.object({
 
 export type PickerEvent = z.infer<typeof pickerEvent>;
 
+// ─── Entry gate (28-03, PLAY-01/PLAY-02) ────────────────────────────────────────
+
+/**
+ * pickerGateBrakes — the two anti-criteria brakes (28-02) surfaced on the gate. `cooldownUntil`
+ * is the ISO date the loss-cooldown lifts (null when the brake is not tripped).
+ */
+export const pickerGateBrakes = z.object({
+  maxOpen: z.boolean(),
+  cooldown: z.boolean(),
+  cooldownUntil: z.string().nullable(),
+});
+
+export type PickerGateBrakes = z.infer<typeof pickerGateBrakes>;
+
+/**
+ * pickerGate — the market-level entry gate (28-01) plus anti-criteria brakes (28-02), computed
+ * ONCE per cohort in computePickerSnapshot.ts (never per-candidate — the retired-gate scar,
+ * T-28-10). `.default()` so a snapshot stored before Phase 28 still parses: it reads as an open
+ * gate with no brakes tripped, which is harmless for a HISTORICAL row (nothing re-gates on read).
+ *
+ * `reasons` (additive) carries the per-metric hysteresis tags (e.g. "vixBlocked",
+ * "ratioPenalty") resolveEntryGate produced this cycle. The Postgres picker-snapshot repo
+ * round-trips every persisted snapshot through THIS schema on both write and read (parse-don't-
+ * cast at the storage seam) — so the self-read hysteresis in computePickerSnapshot.ts needs
+ * `reasons` on the wire to survive a restart, or the arm/disarm state resets every cycle.
+ */
+export const pickerGate = z.object({
+  vix: z.number().nullable(),
+  vix3m: z.number().nullable(),
+  ratio: z.number().nullable(),
+  asOf: z.string().nullable(),
+  state: z.enum(["open", "penalty", "blocked", "blind"]),
+  penaltyMultiplier: z.number(),
+  brakes: pickerGateBrakes,
+  reasons: z.array(z.string()).default([]),
+});
+
+export type PickerGate = z.infer<typeof pickerGate>;
+
+const DEFAULT_PICKER_GATE: PickerGate = {
+  vix: null,
+  vix3m: null,
+  ratio: null,
+  asOf: null,
+  state: "open",
+  penaltyMultiplier: 1,
+  brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+  reasons: [],
+};
+
 // ─── Snapshot response ──────────────────────────────────────────────────────────
 
 /**
@@ -239,6 +289,9 @@ export const pickerSnapshotResponse = z.object({
       eventBlackout: z.number().int().default(0),
     })
     .default({ liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 }),
+  /** The market-level entry gate + anti-criteria brakes (28-03). Defaulted so pre-Phase-28
+   *  stored rows parse. */
+  gate: pickerGate.default(DEFAULT_PICKER_GATE),
 });
 
 export type PickerSnapshotResponse = z.infer<typeof pickerSnapshotResponse>;
