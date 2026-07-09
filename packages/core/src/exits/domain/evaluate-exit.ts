@@ -181,9 +181,9 @@ function evalRoll(
   context: MarketContext,
   dteFront: number,
   pnlPct: number,
-  blockedByEvent: boolean,
 ): RuleHit | null {
-  if (blockedByEvent) return null;
+  // No blockedByEvent guard (IN-01): `evt` precedes `roll` in EXIT_PRECEDENCE, so when an event
+  // fires the loop selects `evt` and breaks before `roll` is ever evaluated — the guard was dead.
   if (dteFront >= ROLL_FRONT_DTE_MAX) return null;
   const offStrike = Math.abs(context.spot - position.strike) / position.strike;
   if (offStrike > ROLL_SPOT_BAND) return null;
@@ -264,7 +264,7 @@ export function evaluateExit(
         hit = evalTake(pnlPct, previousVerdict);
         break;
       case "roll":
-        hit = evalRoll(position, context, context.dteFront, pnlPct, evtHit !== null);
+        hit = evalRoll(position, context, context.dteFront, pnlPct);
         break;
       case "hold":
         hit = {
