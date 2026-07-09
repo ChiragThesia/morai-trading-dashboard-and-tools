@@ -1,7 +1,7 @@
 ---
 phase: 26
 slug: exit-advisor
-status: draft
+status: approved
 shadcn_initialized: true
 preset: base-nova (neutral base, cssVariables, iconLibrary lucide, registries none)
 created: 2026-07-09
@@ -247,11 +247,23 @@ list, not scored chips:
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS (grandfathered exception — see below)
+- [x] Dimension 5 Spacing: PASS (grandfathered exception — see below)
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-07-09 (orchestrator)
+
+### Grandfathered exceptions (orchestrator acknowledgment, 2026-07-09)
+
+The checker BLOCKed on the literal Dimension 4/5 rules: 3 font weights (400/600/700) and the
+6px `sm-half` spacing value. Both are values of the ALREADY-SHIPPED Analyzer/system design
+language (`MetricChip`, `CandidateCard`, `EntryExitPlan`) that the user LOCKED this phase to
+reuse ("MetricChip visual language", entry-methodology symmetry). Phase 24's checker passed
+the identical two values as non-blocking inherited FLAGs. Diverging from the shipped system
+to satisfy the generic heuristic would fragment the design system — the worse outcome. Per
+the checker's own Option 1 recommendation, these are accepted as grandfathered pre-existing
+system values, NOT new debt introduced by this phase. If a future phase re-grids the design
+system, these inherit that change.
