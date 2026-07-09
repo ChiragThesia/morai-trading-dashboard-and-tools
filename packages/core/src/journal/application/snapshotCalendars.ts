@@ -20,7 +20,8 @@
  *   bsmIv='NaN' (fresh but unsolved), STILL write the row. Affected columns (IV, greeks,
  *   termSlope) get NAN_STAMP; marks and pnlOpen still populate.
  *
- * Pure domain: no I/O, no Date.now(), imports only @morai/shared and ports/domain.
+ * Pure domain apart from a single console.warn skip diagnostic; no other I/O, no
+ * Date.now(), imports only @morai/shared and ports/domain.
  */
 
 import { ok, err } from "@morai/shared";
@@ -53,6 +54,54 @@ export const SNAPSHOT_LEG_STALENESS_TOLERANCE_MS = 45 * 60 * 1000;
 export function isLegFresh(leg: LegSnapshot | null, now: Date): boolean {
   if (leg === null) return false;
   return now.getTime() - leg.time.getTime() <= SNAPSHOT_LEG_STALENESS_TOLERANCE_MS;
+}
+
+/**
+ * LegFreshnessReason — OPS-01 skip-warn diagnostic (WR-01). Distinguishes a genuine
+ * no-observation miss ("missing") from a present-but-expired observation ("stale") from a
+ * resolveLegs storage error ("resolve-error") — previously all collapsed into "missing",
+ * hiding a transient DB hiccup behind the same label as "leg never observed".
+ */
+type LegFreshnessReason = "fresh" | "missing" | "stale" | "resolve-error";
+
+type LegFreshness = {
+  readonly fresh: boolean;
+  readonly reason: LegFreshnessReason;
+  readonly ageMinutes: number | null;
+  readonly observedAt: string | null;
+};
+
+/**
+ * assessLegFreshness — classifies a resolveLegs Result against the OPS-01 gate. Computed
+ * once per leg per calendar and reused for both the gate check and the warn message (IN-02:
+ * no redundant isLegFresh re-evaluation).
+ */
+function assessLegFreshness(
+  legResult: Result<LegSnapshot | null, StorageError>,
+  now: Date,
+): LegFreshness {
+  if (!legResult.ok) {
+    return { fresh: false, reason: "resolve-error", ageMinutes: null, observedAt: null };
+  }
+  const leg = legResult.value;
+  if (leg === null) {
+    return { fresh: false, reason: "missing", ageMinutes: null, observedAt: null };
+  }
+  const fresh = isLegFresh(leg, now);
+  return {
+    fresh,
+    reason: fresh ? "fresh" : "stale",
+    ageMinutes: Math.round((now.getTime() - leg.time.getTime()) / 60000),
+    observedAt: leg.time.toISOString(),
+  };
+}
+
+/** describeLegFreshness — renders a leg's classification for the skip-warn message. */
+function describeLegFreshness(freshness: LegFreshness, now: Date): string {
+  if (freshness.reason === "fresh") return "fresh";
+  if (freshness.reason !== "stale") return freshness.reason;
+  const observedAt = freshness.observedAt ?? "unknown";
+  return `stale (${String(freshness.ageMinutes)}m, observed ${observedAt}, now ${now.toISOString()})`;
 }
 
 /**
@@ -207,11 +256,11 @@ export function makeSnapshotCalendarsUseCase(
       // OPS-01: skip this calendar's cycle when either leg is missing or stale — never write
       // a spot=0/net_mark=0/front_iv=NaN gap row (Jul-06 mechanism) or silently serve stale
       // marks. Next cycle self-heals; historical rows are never backfilled.
-      if (!isLegFresh(front, now) || !isLegFresh(back, now)) {
-        const frontReason = front === null ? "missing" : "stale";
-        const backReason = back === null ? "missing" : "stale";
+      const frontFreshness = assessLegFreshness(frontResult, now);
+      const backFreshness = assessLegFreshness(backResult, now);
+      if (!frontFreshness.fresh || !backFreshness.fresh) {
         console.warn(
-          `snapshot-calendars: skipping calendar ${calendar.id} — front leg ${isLegFresh(front, now) ? "fresh" : frontReason}, back leg ${isLegFresh(back, now) ? "fresh" : backReason}`,
+          `snapshot-calendars: skipping calendar ${calendar.id} — front leg ${describeLegFreshness(frontFreshness, now)}, back leg ${describeLegFreshness(backFreshness, now)}`,
         );
         continue;
       }

@@ -315,7 +315,8 @@ describe("makeSnapshotCalendarsUseCase", () => {
       expect(parseFloat(row.pnlOpen)).toBeCloseTo(1000, 5);
     });
 
-    it("when front resolves null (storage error): calendar is SKIPPED (OPS-01) — no row, run still ok", async () => {
+    it("when front resolves with a storage error: calendar is SKIPPED (OPS-01) — no row, run still ok, warns 'resolve-error'", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const cal = makeCalendar({ qty: 1, openNetDebit: 3.0 });
       let callCount = 0;
       const resolveLegs: ForResolvingLegSnapshot = async () => {
@@ -337,11 +338,17 @@ describe("makeSnapshotCalendarsUseCase", () => {
       );
       const result = await useCase();
 
-      // OPS-01: a resolve error is treated as a missing leg (unchanged error policy) — the
-      // freshness gate now skips the row instead of writing a spot=0/NaN gap row. The run
-      // itself still succeeds; only this calendar's cycle is skipped (self-heals next cycle).
+      // OPS-01: a resolveLegs storage error skips the row (freshness gate) instead of writing
+      // a spot=0/NaN gap row. The run itself still succeeds; only this calendar's cycle is
+      // skipped (self-heals next cycle). WR-01: the warn labels this "resolve-error", distinct
+      // from a genuine ok(null) "missing" — an operator can tell a DB hiccup from a real miss.
       expect(result.ok).toBe(true);
       expect(capture.calledTimes()).toBe(0);
+      expect(warnSpy).toHaveBeenCalled();
+      const warnMsg = String(warnSpy.mock.calls[0]?.[0] ?? "");
+      expect(warnMsg).toMatch(/front leg resolve-error/);
+      expect(warnMsg).toMatch(/back leg fresh/);
+      warnSpy.mockRestore();
     });
   });
 
@@ -365,10 +372,13 @@ describe("makeSnapshotCalendarsUseCase", () => {
       expect(warnSpy).toHaveBeenCalled();
       const warnMsg = String(warnSpy.mock.calls[0]?.[0] ?? "");
       expect(warnMsg).toMatch(/cal-001/);
+      // WR-01: a genuine ok(null) miss is labeled "missing", distinct from "stale"/"resolve-error"
+      expect(warnMsg).toMatch(/front leg missing/);
+      expect(warnMsg).toMatch(/back leg fresh/);
       warnSpy.mockRestore();
     });
 
-    it("Test B (stale-serve shape): both legs resolve but the front leg is older than the tolerance → skipped, warns", async () => {
+    it("Test B (stale-serve shape): both legs resolve but the front leg is older than the tolerance → skipped, warns with age", async () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const now = new Date("2026-07-01T19:00:00Z");
       const staleTime = new Date(now.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS - 1);
@@ -390,6 +400,10 @@ describe("makeSnapshotCalendarsUseCase", () => {
       // Was: stale marks silently served. Now: skipped, zero persists.
       expect(capture.calledTimes()).toBe(0);
       expect(warnSpy).toHaveBeenCalled();
+      const warnMsg = String(warnSpy.mock.calls[0]?.[0] ?? "");
+      // WR-01: staleness age (minutes) + the observed/now timestamps are in the diagnostic
+      expect(warnMsg).toMatch(/front leg stale \(45m, observed 2026-07-01T18:14:59\.999Z, now 2026-07-01T19:00:00\.000Z\)/);
+      expect(warnMsg).toMatch(/back leg fresh/);
       warnSpy.mockRestore();
     });
 
