@@ -86,3 +86,11 @@ gated behind a real-trade sample the backtest cannot supply.
 `exit_verdicts`: one row per run, `params` and `report` as JSONB, no update path. A
 second run never overwrites the first — every run is evidence, kept forever. See
 [data-model.md](data-model.md) for the column shape.
+
+Like every table in this repo, migration 0021 runs `ENABLE ROW LEVEL SECURITY` with no
+`CREATE POLICY` — the drizzle-generated convention. This denies all access to non-owner,
+non-`BYPASSRLS` roles. The backtest CLI connects via `DATABASE_URL` as the owner/service
+role, which bypasses RLS, so the single `backtest_runs` INSERT works without a policy. The
+backtest-runs contract test verifies this INSERT against real Postgres as the table owner.
+Running the CLI under a restricted role would need an explicit policy; the operator role
+must own the table or hold `BYPASSRLS`, matching every other table here.
