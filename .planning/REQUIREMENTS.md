@@ -111,7 +111,37 @@ Explicit exclusions with reasoning.
 
 ## Traceability
 
-Filled by roadmap creation.
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| MACRO-01 | Phase 23 | Pending |
+| MACRO-02 | Phase 24 | Pending |
+| MACRO-03 | Phase 24 | Pending |
+| BOARD-01 | Phase 24 | Pending |
+| BOARD-02 | Phase 24 | Pending |
+| BOARD-03 | Phase 24 | Pending |
+| OPS-01 | Phase 25 | Pending |
+| OPS-02 | Phase 25 | Pending |
+| EXIT-01 | Phase 26 | Pending |
+| EXIT-02 | Phase 26 | Pending |
+| EXIT-03 | Phase 26 | Pending |
+| EXIT-04 | Phase 26 | Pending |
+| EXIT-05 | Phase 26 | Pending |
+| EXIT-06 | Phase 26 | Pending |
+| EXIT-07 | Phase 26 | Pending |
+| EXIT-08 | Phase 26 | Pending |
+| EXIT-09 | Phase 26 | Pending |
+| EXIT-10 | Phase 26 | Pending |
+| BT-01 | Phase 27 | Pending |
+| BT-02 | Phase 27 | Pending |
+| BT-03 | Phase 27 | Pending |
+| BT-04 | Phase 27 | Pending |
+| BT-05 | Phase 27 | Pending |
+| PLAY-01 | Phase 28 | Pending |
+| PLAY-02 | Phase 28 | Pending |
+| PLAY-03 | Phase 28 | Pending |
+| PLAY-04 | Phase 28 | Pending |
+| PLAY-05 | Phase 28 | Pending |
 
-| Requirement | Phase |
-|-------------|-------|
+**Coverage:** 28/28 v1.3 requirements mapped, 0 orphans. Phase order:
+23 (VIX3M, first-and-alone) → 24 (regime board) → 25 (ops rider) → 26 (exit advisor) →
+27 (backtest, depends on 26) → 28 (playbook gates, depends on 24 + 27).

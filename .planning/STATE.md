@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
 status: planning
-last_updated: "2026-07-09T04:53:56.307Z"
+last_updated: "2026-07-09T05:30:00.000Z"
 last_activity: 2026-07-09
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,19 +20,67 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 22 — journal-calendar-lifecycle-graph
+**Current focus:** Phase 23 — vix3m-ingestion
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-09 — Milestone v1.3 started
+Phase: 23 of 28 (VIX3M Ingestion)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-07-09 — v1.3 ROADMAP.md created: 6 phases (23-28), 28/28 requirements mapped, no orphans
 
 ## Open follow-ups (not phase-22 blockers)
 
-1. **Journal snapshot data ~74% gaps** — flagship open calendar (65aac62e) has 46 snapshots but only 12 non-gap (10 on Jul 01, 2 on Jul 03); Jun 23-26 all gap (spot=0/NaN), Jun 27-30 empty (worker-down window). The lifecycle feature works and renders honestly, but real-world richness is throttled by the `snapshot-calendars` job writing gap rows. Fix the snapshot pipeline so calendars accumulate clean non-gap series.
+1. **Journal snapshot data ~74% gaps** — flagship open calendar (65aac62e) has 46 snapshots but only 12 non-gap (10 on Jul 01, 2 on Jul 03); Jun 23-26 all gap (spot=0/NaN), Jun 27-30 empty (worker-down window). The lifecycle feature works and renders honestly, but real-world richness is throttled by the `snapshot-calendars` job writing gap rows. Fix the snapshot pipeline so calendars accumulate clean non-gap series. **Now scheduled as Phase 25 (OPS-01).**
 2. **`GET /api/journal//rules` → 401** — empty calendarId (Phase-20 `useRuleTags` missing the `enabled: !!calendarId` guard that `useLifecycle` got in 22-04). Fires once on Journal mount. Pre-existing, still open.
+
+## Milestone v1.3 Summary
+
+**6 phases, 28 requirements (OPS-01..02, MACRO-01..03, BOARD-01..03, EXIT-01..10, BT-01..05, PLAY-01..05)**
+
+Research-validated build order (`.planning/research/SUMMARY.md`, confirmed dependency-correct
+across all 4 research files):
+
+- Phase 23 (MACRO-01) → Phase 24 (MACRO-02..03, BOARD-01..03) → Phase 25 (OPS-01..02) →
+  Phase 26 (EXIT-01..10) → Phase 27 (BT-01..05) → Phase 28 (PLAY-01..05)
+- VIX3M ingestion is first and alone — `macro_observations` has no backfill, so every day
+  skipped before Phase 23 ships is permanently lost crisis-gate/backtest history.
+- Ops rider (Phase 25) lands before the inference features it protects — both the exit advisor
+  and the backtest inherit the pipeline's gap-row/BSM-timeout defects directly; a silent data bug
+  becomes a confident wrong verdict once an advisor reads it.
+- Exit Advisor (26) strictly precedes Backtest (27) — the backtest replays the exit-rule registry
+  the advisor builds; it cannot validate rules that don't exist yet.
+- Playbook gates (28) land last — they consume the VIX3M history accruing since Phase 23 and are
+  informed by Phase 27's backtest evidence.
+
+Key risks carried into planning:
+
+1. **n=13 sample-size wall** (Phase 27) — 9 free weights fit to 13 correlated trades is
+   overfitting formalized. The backtest is a refutation/mechanics-validation tool, never a
+   weight-fitter; every number stamped `n=`; automated promotion blocked until n≥30.
+2. **In-sample leakage / late-solved BSM** (Phase 27) — every distributional stat must be
+   point-in-time; the free oracle is that replaying a historical cohort must reproduce its
+   recorded live `picker_snapshot` score exactly.
+3. **Exit-verdict / regime-gate flapping** (Phases 26, 28) — hysteresis/banding required; the
+   codebase already retired per-pair hard gates for deleting trades with edge — penalty band over
+   a cliff.
+4. **Acting on stale/AH/gap marks** (Phase 26) — session- and gap-aware; verdicts on AH/gap
+   cohorts are display-only, never actionable STOP/TAKE.
+5. **Fail-open vs fail-closed on missing VIX3M** (Phase 28) — open decision, must be resolved and
+   documented during that phase's planning.
+6. **FRED series id is `VXVCLS`** (Phase 23) — live-verified 2026-07-09; `VIXCLS3M`/`VIX3MCLS`/
+   `VXV` all 404. Some research docs still say `VIXCLS3M` — treat STACK.md's live verification as
+   authoritative.
+
+Regression gates (must survive every phase, carried from v1.0/v1.1/v1.2):
+
+- SPX OI=0 / SPY proxy (~10.048×)
+- CBOE timestamps are UTC (not ET)
+- GEX put-sign (negative gamma for puts)
+- 65,534-param insert limit (chunk at ≤2,000 rows)
+- REFUTED picker criteria (IV-rank gates, −1..−3% IV-diff band, debit-%-of-back band,
+  per-pair crisis gates) must never be re-encoded
+- Advisor/backtest never execute — advise + alert only (STRM-04 read-only boundary)
 
 ## Milestone v1.2 Summary
 
@@ -217,6 +265,11 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
   event-triggered snapshot, strategy-rules L4 recording layer). Backlog items "strategy rules"
   and "event-triggered snapshot" (previously in ROADMAP.md Backlog section) are now scheduled in
   Phase 20 as RULE-01 and SNAP-01.
+- Phases 23-28 added (2026-07-09): Milestone v1.3 — Picker Intelligence. VIX3M ingestion (alone,
+  no-backfill) → regime/breadth board (user-added, evidence-gated) → data-quality ops rider →
+  exit advisor → PICK-04 backtest harness (n=13 refutation-only) → playbook crisis gates/
+  anti-criteria/sizing. `.planning/research/SUMMARY.md` confirms the dependency order across all
+  4 research files; 28/28 requirements mapped, no orphans.
 
 ### Decisions
 
@@ -315,7 +368,7 @@ None yet.
 | Realized P&L | IN-A2 — real per-leg commission/fees + intraday filledAt: BrokerTransaction domain type carries no time/commission/fees fields; needs docs-first brokerage domain + Schwab adapter change. Realized P&L stays fee-blind until a dedicated plan. | future | Phase 05 P14 |
 | Go-live: migration 0011 | `bun run migrate` (direct DATABASE_URL 5432) to apply token_json to live Supabase — file committed, testcontainer-applied; live apply pending prod-up | go-live UAT | Phase 11 P02 |
 | Go-live: sidecar deploy | Create Railway sidecar service (railway.sidecar.toml, NO public domain GW-05), set 6 env vars + SIDECAR_URL on server/worker, run one-time Schwab OAuth dance to seed token_json, verify /sidecar/health ok + not public | go-live UAT | Phase 11 P05 |
-| Picker | PICK-04 — term-slope signal backtest over `leg_observations` (validate Vasquez cross-sectional finding on SPX time-series) | v1.2.x backlog | REQUIREMENTS.md Future Requirements |
+| Picker | PICK-04 — term-slope signal backtest over `leg_observations` (validate Vasquez cross-sectional finding on SPX time-series) | now v1.3 Phase 27 (BT-01..05) | REQUIREMENTS.md Future Requirements |
 | Picker | PICK-05 — event-premium weighting by surprise magnitude | v1.2.x backlog | REQUIREMENTS.md Future Requirements |
 | Strategy Rules | RULE-02 — rule-fired → outcome correlation report (needs RULE-01 data accumulated) | v1.2.x backlog | REQUIREMENTS.md Future Requirements |
 
@@ -347,12 +400,12 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-05T16:47:43.139Z
-Stopped at: Phase 22 UI-SPEC approved
-Resume file: .planning/phases/22-journal-calendar-lifecycle-graph/22-UI-SPEC.md
+Last session: 2026-07-09T05:30:00.000Z
+Stopped at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
+Resume file: .planning/ROADMAP.md (v1.3 section)
 
-- Next: execute 20-02-PLAN.md (server-side ping emitter wiring, WATCH-01)
+- Next: /gsd-plan-phase 23 (VIX3M Ingestion)
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan the first v1.3 phase with /gsd-plan-phase 23 (VIX3M Ingestion)
