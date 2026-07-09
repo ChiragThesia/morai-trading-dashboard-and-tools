@@ -1,6 +1,19 @@
 import { Hono } from "hono";
-import { termStructureResponse, skewResponse, cotResponse, macroResponse, macroQuery } from "@morai/contracts";
-import type { ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot, ForRunningGetMacro } from "@morai/core";
+import {
+  termStructureResponse,
+  skewResponse,
+  cotResponse,
+  macroResponse,
+  macroQuery,
+  regimeResponse,
+} from "@morai/contracts";
+import type {
+  ForRunningGetTermStructure,
+  ForRunningGetSkew,
+  ForRunningGetCot,
+  ForRunningGetMacro,
+  ForRunningGetRegimeBoard,
+} from "@morai/core";
 
 /**
  * analyticsRoutes — factory returning a Hono router for the analytics read endpoints.
@@ -11,25 +24,30 @@ import type { ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot, F
  * 06-04 adds GET /analytics/term-structure; 06-05 adds GET /analytics/skew.
  * 13-06 adds GET /analytics/cot (CFTC TFF weekly series — COT-02 / MCP-02).
  * 14-06 adds GET /analytics/macro (FRED + VVIX series — MAC-02 / MCP-02).
+ * 24-04 adds GET /analytics/regime (regime/breadth board — BOARD-01/02/03 / MCP-02).
  *
  * Threat mitigations:
- *   T-06-08/T-06-13/T-13-06-INJ/T-14-14: errors mapped to flat {error:"internal"} — no DB message returned.
+ *   T-06-08/T-06-13/T-13-06-INJ/T-14-14/T-24-08: errors mapped to flat {error:"internal"} — no DB
+ *            message returned.
  *   T-06-09/T-06-14: optional ?calendarId/?underlying/?expiration are parsed at the boundary; an
  *            unknown value simply matches no rows → contract-valid EMPTY array (not an error).
  *   T-13-06-INJ: GET /analytics/cot takes no user-controlled query input; output validated against
  *            cotResponse before send.
  *   T-14-01: GET /analytics/macro DOES take user input (?days/?series) — validated via macroQuery
  *            at the boundary before the use-case runs; invalid input never reaches getMacro.
+ *   T-24-08: GET /analytics/regime takes no user-controlled query input; output validated against
+ *            regimeResponse before send.
  *
- * MCP-02: termStructureResponse + skewResponse + cotResponse + macroResponse are the single schema
- *   sources shared by these routes and the corresponding MCP tools. A one-sided field change fails
- *   typecheck.
+ * MCP-02: termStructureResponse + skewResponse + cotResponse + macroResponse + regimeResponse are
+ *   the single schema sources shared by these routes and the corresponding MCP tools. A one-sided
+ *   field change fails typecheck.
  */
 export function analyticsRoutes(
   getTermStructure: ForRunningGetTermStructure,
   getSkew: ForRunningGetSkew,
   getCot: ForRunningGetCot,
   getMacro: ForRunningGetMacro,
+  getRegimeBoard: ForRunningGetRegimeBoard,
 ) {
   const router = new Hono();
 
@@ -140,6 +158,19 @@ export function analyticsRoutes(
 
     // Empty map on no data — never an error (mirrors COT/skew SPEC R5 convention).
     return c.json(macroResponse.parse(result.value));
+  });
+
+  // BOARD-01/02/03 / MCP-02: GET /analytics/regime — regime/breadth board, computed on-read
+  // from macro_observations (no new table). T-24-08: no user input; output contract-parsed.
+  router.get("/analytics/regime", async (c) => {
+    const result = await getRegimeBoard();
+    if (!result.ok) {
+      // T-24-08: flat error body — never expose DB internals.
+      return c.json({ error: "internal" }, 500);
+    }
+
+    // Empty array on no data — never an error (mirrors COT convention; T-24-09).
+    return c.json(regimeResponse.parse(result.value));
   });
 
   return router;

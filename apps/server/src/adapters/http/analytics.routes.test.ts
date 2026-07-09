@@ -10,43 +10,57 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
-import type { ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot, ForRunningGetMacro } from "@morai/core";
-import { termStructureResponse, skewResponse, cotResponse, macroResponse } from "@morai/contracts";
+import type {
+  ForRunningGetTermStructure,
+  ForRunningGetSkew,
+  ForRunningGetCot,
+  ForRunningGetMacro,
+  ForRunningGetRegimeBoard,
+} from "@morai/core";
+import { termStructureResponse, skewResponse, cotResponse, macroResponse, regimeResponse } from "@morai/contracts";
 import { analyticsRoutes } from "./analytics.routes.ts";
 
 const CAL_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-// Default fakes (empty) — overridable per test for the /skew, /cot, and /macro cases.
+// Default fakes (empty) — overridable per test for the /skew, /cot, /macro, and /regime cases.
 const skewEmpty: ForRunningGetSkew = async () => ok([]);
 const cotEmpty: ForRunningGetCot = async () => ok([]);
 const macroEmpty: ForRunningGetMacro = async () => ok({});
+const regimeEmpty: ForRunningGetRegimeBoard = async () => ok([]);
 
 function buildApp(
   getTermStructure: ForRunningGetTermStructure,
   getSkew: ForRunningGetSkew = skewEmpty,
   getCot: ForRunningGetCot = cotEmpty,
   getMacro: ForRunningGetMacro = macroEmpty,
+  getRegimeBoard: ForRunningGetRegimeBoard = regimeEmpty,
 ) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro));
+  app.route("/api", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro, getRegimeBoard));
   return app;
 }
 
 function buildSkewApp(getSkew: ForRunningGetSkew) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, getSkew, cotEmpty, macroEmpty));
+  app.route("/api", analyticsRoutes(empty, getSkew, cotEmpty, macroEmpty, regimeEmpty));
   return app;
 }
 
 function buildCotApp(getCot: ForRunningGetCot) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, skewEmpty, getCot, macroEmpty));
+  app.route("/api", analyticsRoutes(empty, skewEmpty, getCot, macroEmpty, regimeEmpty));
   return app;
 }
 
 function buildMacroApp(getMacro: ForRunningGetMacro) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, getMacro));
+  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, getMacro, regimeEmpty));
+  return app;
+}
+
+function buildRegimeApp(getRegimeBoard: ForRunningGetRegimeBoard) {
+  const app = new Hono();
+  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, macroEmpty, getRegimeBoard));
   return app;
 }
 
@@ -305,6 +319,55 @@ describe("GET /api/analytics/macro", () => {
   it("maps a storage error to a flat {error:'internal'} 500 (T-14-14)", async () => {
     const app = buildMacroApp(macroErrored);
     const res = await app.request("/api/analytics/macro");
+    expect(res.status).toBe(500);
+    const body: unknown = await res.json();
+    expect(body).toEqual({ error: "internal" });
+  });
+});
+
+// ─── Regime board (Phase 24, BOARD-01/02/03) ───────────────────────────────────
+
+const regimeIndicator = {
+  id: "vix-term-structure",
+  label: "VIX/VIX3M Term Structure",
+  value: 0.9,
+  band: "warning" as const,
+  asOf: "2026-07-07",
+  source: "eco3min.fr",
+  rationale: "0.90 warn / 0.95 crisis.",
+  inputs: { VIXCLS: 18.0, VXVCLS: 20.0 },
+};
+
+const regimeWithData: ForRunningGetRegimeBoard = async () => ok([regimeIndicator]);
+
+const regimeErrored: ForRunningGetRegimeBoard = async () =>
+  err({ kind: "storage-error", message: "boom" });
+
+describe("GET /api/analytics/regime", () => {
+  it("returns a contract-valid array with ≥1 present indicator when data exists (MCP-02)", async () => {
+    const app = buildRegimeApp(regimeWithData);
+    const res = await app.request("/api/analytics/regime");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    // Parsing must succeed — proves MCP-02 contract conformance.
+    const parsed = regimeResponse.parse(body);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.id).toBe("vix-term-structure");
+    expect(parsed[0]?.band).toBe("warning");
+    expect(parsed[0]?.asOf).toBe("2026-07-07");
+  });
+
+  it("returns a contract-valid EMPTY array (not an error) when there is no data", async () => {
+    const app = buildRegimeApp(regimeEmpty);
+    const res = await app.request("/api/analytics/regime");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(regimeResponse.parse(body)).toEqual([]);
+  });
+
+  it("maps a storage error to a flat {error:'internal'} 500 (T-24-08)", async () => {
+    const app = buildRegimeApp(regimeErrored);
+    const res = await app.request("/api/analytics/regime");
     expect(res.status).toBe(500);
     const body: unknown = await res.json();
     expect(body).toEqual({ error: "internal" });

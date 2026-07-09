@@ -43,6 +43,7 @@ import {
   makeGetGexUseCase,
   makeGetCotUseCase,
   makeGetMacroUseCase,
+  makeGetRegimeBoardUseCase,
   makeGetPickerUseCase,
   makeGetCalendarEventsWithRulesUseCase,
   makeSetRuleTagsUseCase,
@@ -174,6 +175,13 @@ const getMacro = makeGetMacroUseCase({
   readMacroObservations: macroObservationsRepo.readMacroObservations,
 });
 
+// BOARD-01/02/03 / MCP-02 (24-04): get-regime-board read use-case — shared by
+// GET /api/analytics/regime + get_regime MCP tool over the ONE regimeResponse contract.
+// Reuses the EXISTING macroObservationsRepo (zero new repo, 24-RESEARCH.md).
+const getRegimeBoard = makeGetRegimeBoardUseCase({
+  readMacroObservations: macroObservationsRepo.readMacroObservations,
+});
+
 // PICK-02 / MCP-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
 // get_picker_candidates MCP tool over the ONE pickerSnapshotResponse contract. Pure stored-row
 // read (D-04) — never recomputed on read.
@@ -286,7 +294,8 @@ const apiRouter = new Hono()
   // ANLY-03 (06-04/06-05): GET /api/analytics/term-structure + GET /api/analytics/skew
   // COT-02 (13-06): GET /api/analytics/cot — CFTC TFF weekly series (MCP-02)
   // MAC-02 (14-06): GET /api/analytics/macro — FRED + VVIX series (MCP-02)
-  .route("/", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro))
+  // BOARD-01/02/03 (24-04): GET /api/analytics/regime — regime/breadth board (MCP-02)
+  .route("/", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro, getRegimeBoard))
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex))
   // PICK-02 (19-07): GET /api/picker/candidates — stored-row read (D-04, never recomputed)
@@ -336,6 +345,8 @@ app.route("/api", jobsGroup);
 // MAC-02 / MCP-02 (14-06): get_macro tool added here — same getMacro use-case as the HTTP route.
 // PICK-02 / MCP-02 (19-07): get_picker_candidates tool added here — same getPicker use-case
 // as the HTTP route.
+// BOARD-03 / MCP-02 (24-04): get_regime tool added here — same getRegimeBoard use-case as the
+// HTTP route.
 const mcpRouter = makeMcpRouter(
   config,
   statusPort,
@@ -355,6 +366,7 @@ const mcpRouter = makeMcpRouter(
   getEventsWithRules,
   setRuleTags,
   getCalendarLifecycle,
+  getRegimeBoard,
 );
 app.route("", mcpRouter);
 

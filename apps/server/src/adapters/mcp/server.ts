@@ -11,6 +11,7 @@ import type {
   ForRunningGetGex,
   ForRunningGetCot,
   ForRunningGetMacro,
+  ForRunningGetRegimeBoard,
   ForRunningGetPicker,
   ForGettingPositions,
   ForGettingTransactions,
@@ -31,6 +32,7 @@ import {
   registerGetGexTool,
   registerGetCotTool,
   registerGetMacroTool,
+  registerGetRegimeTool,
   registerGetPickerCandidatesTool,
   registerGetPositionsTool,
   registerGetTransactionsTool,
@@ -74,6 +76,9 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  * JRNL-01 / MCP-02 (Phase 22, 22-03): get_journal_lifecycle registered here — shares
  *         lifecycleResponse with GET /api/journal/:calendarId/lifecycle; injected as optional
  *         for backward compat with existing call sites.
+ * BOARD-03 / MCP-02 (Phase 24, 24-04): get_regime registered here — shares regimeResponse with
+ *         GET /api/analytics/regime; injected as optional for backward compat with existing
+ *         call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -94,6 +99,7 @@ export function makeMcpRouter(
   getEventsWithRules?: ForRunningGetCalendarEventsWithRules,
   setRuleTags?: ForRunningSetRuleTags,
   getCalendarLifecycle?: ForRunningGetCalendarLifecycle,
+  getRegimeBoard?: ForRunningGetRegimeBoard,
 ): Hono {
   const router = new Hono();
 
@@ -156,6 +162,11 @@ export function makeMcpRouter(
     // use-case is available (Phase 22, 22-03)
     if (getCalendarLifecycle !== undefined) {
       registerGetJournalLifecycleTool(server, getCalendarLifecycle);
+    }
+    // BOARD-03 / MCP-02: get_regime tool — optional, wired when the getRegimeBoard use-case
+    // is available (Phase 24, 24-04)
+    if (getRegimeBoard !== undefined) {
+      registerGetRegimeTool(server, getRegimeBoard);
     }
     return { server, transport };
   }

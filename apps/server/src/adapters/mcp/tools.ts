@@ -14,6 +14,7 @@ import {
   brokerageAuthExpiredPayload,
   macroResponse,
   macroQuery,
+  regimeResponse,
   pickerSnapshotResponse,
   getEventsWithRulesResponse,
   setRuleTagsRequest,
@@ -30,6 +31,7 @@ import type {
   ForRunningGetGex,
   ForRunningGetCot,
   ForRunningGetMacro,
+  ForRunningGetRegimeBoard,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -713,6 +715,47 @@ export function registerGetMacroTool(
 
       // Empty map on no data — never an error (MAC-02 / MCP-02 stability).
       const payload = macroResponse.parse(result.value);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetRegimeTool — registers the get_regime MCP tool (BOARD-03 / MCP-02 / 24-04).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: call use-case → parse result through regimeResponse schema → return content.
+ *
+ * MCP-02: the SAME regimeResponse schema used by GET /api/analytics/regime is used here.
+ * A one-sided field rename fails `bun run typecheck`.
+ *
+ * BOARD-03: returns a contract-valid EMPTY array (never an error) when no data exists.
+ * T-24-08: no input parameters; output validated against the contract before return.
+ */
+export function registerGetRegimeTool(
+  server: McpServer,
+  getRegimeBoard: ForRunningGetRegimeBoard,
+): void {
+  server.registerTool(
+    "get_regime",
+    {
+      title: "Get Regime Board",
+      description:
+        "Returns the regime/breadth board — VIX/VIX3M term structure, VVIX, VIX9D/VIX, and HY OAS credit spread — each with value, calm/warning/crisis band, as-of date, source, and threshold rationale. Same payload as GET /api/analytics/regime. Empty array when a required input series has no data yet.",
+      // No input parameters — returns the full computed-on-read board (public data, no filters).
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getRegimeBoard();
+      if (!result.ok) {
+        // T-24-08: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      // Empty array on no data — never an error (BOARD-03 / MCP-02 stability, T-24-09).
+      const payload = regimeResponse.parse(result.value);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
