@@ -127,7 +127,14 @@ now-accreting macro pipeline)
   5. Indicators update on a daily cadence with as-of dates stamped — EOD data is never presented
      as if it were intraday.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+- [ ] 24-01-PLAN.md — Docs-first (regime-board.md evidence table + refutations) + HY OAS (BAMLH0A0HYM2) into FRED macro pipeline
+- [ ] 24-02-PLAN.md — CBOE _VIX9D adapter (clone of cboe-vvix) + port + in-memory twin + macro-orchestration/worker wiring
+- [ ] 24-03-PLAN.md — regimeResponse contract + 4 pure banding functions (named threshold constants, fast-check)
+- [ ] 24-04-PLAN.md — getRegimeBoard use-case (computed-on-read, missing→omit, as-of) + GET /api/analytics/regime + get_regime MCP tool
+- [ ] 24-05-PLAN.md — Overview "Regime & breadth" board UI (chip grid, band triad, provenance tooltip) per UI-SPEC
+
 **UI hint**: yes
 
 ### Phase 25: Data-Quality Ops Rider
