@@ -106,6 +106,7 @@ const CAVEATS: ReadonlyArray<string> = [
   "late-solved-BSM optimism: leg_observations has no bsm_solved_at column, so an as-of-T chain read can show a value actually solved after that instant. The leakage-oracle replay reuses the stored picker_snapshot's frozen fields and is largely shielded; the hypothetical-entry replay (attribution/ablation input) is not.",
   "economic-events leakage: economic_events has no discoveredAt column, so the hypothetical-entry replay's event view reflects the CURRENT calendar, not necessarily what was known at each historical decision date. Low risk in practice — FOMC/CPI/NFP dates are published months ahead and are rarely rescheduled.",
   "13-trade magnitude band (BT-03): the shared haircut-fill model approximates the trader's real fills, so BT-03 reproduces DIRECTION as a hard check and MAGNITUDE only within a 3x tolerance band. A 'direction-only' trade agrees in sign but its modeled |P&L| fell outside 3x of the oracle |P&L| — the direction signal holds, the magnitude does not.",
+  "hypothetical forward-walk sampling (BT-04): each hypothetical candidate's exit is found by forward-walking the chain at DAILY samples (not every 30-min slot) up to front expiry, to bound the read cost of the full-universe replay. A daily walk can miss an intra-day exit trigger, biasing the modeled exit slightly later than the live 30-min engine would. Candidates with no forward chain data for their expiries are marked unreplayable and excluded from the replayed count, never fabricated.",
 ];
 
 function isoDate(d: Date): string {
@@ -156,9 +157,9 @@ export function makeRunBacktestUseCase(deps: RunBacktestDeps) {
         dividendYield: deps.dividendYield,
       });
       if (!baselineResult.ok) return baselineResult;
-      baselineByCohort.set(cohort, baselineResult.value);
-      allBaselineOutcomes.push(...baselineResult.value);
-      coverageCohorts.push({ date: isoDate(cohort.observedAt), isGap: baselineResult.value.length === 0 });
+      baselineByCohort.set(cohort, baselineResult.value.outcomes);
+      allBaselineOutcomes.push(...baselineResult.value.outcomes);
+      coverageCohorts.push({ date: isoDate(cohort.observedAt), isGap: baselineResult.value.slotKind !== "replayed" });
     }
 
     // ─── BT-03 13-trade oracle (every closed calendar, optionally narrowed to one) ─────────
@@ -215,7 +216,7 @@ export function makeRunBacktestUseCase(deps: RunBacktestDeps) {
           { [ruleId]: 0 },
         );
         if (!ablatedResult.ok) return ablatedResult;
-        const ablated = ablatedResult.value;
+        const ablated = ablatedResult.value.outcomes;
 
         const baselineRankedIds = sortedByScore(baseline).map((o) => o.candidateId);
         const ablatedRankedIds = sortedByScore(ablated).map((o) => o.candidateId);

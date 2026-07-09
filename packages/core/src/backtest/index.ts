@@ -55,6 +55,7 @@ export {
   replayHypotheticalEntry,
   type ReplayHypotheticalEntryDeps,
   type HypotheticalCandidateOutcome,
+  type HypotheticalCohortResult,
   type HypotheticalOutcomeCaveat,
 } from "./application/replayHypotheticalEntry.ts";
 

@@ -61,6 +61,7 @@ import type {
   HeldPosition,
   LegSnapshot,
   MarketContext,
+  PreviousVerdict,
   ScoredCandidate,
 } from "@morai/core";
 import type {
@@ -112,6 +113,18 @@ export type HypotheticalCandidateOutcome = {
 };
 
 const OUTCOME_CAVEATS: ReadonlyArray<HypotheticalOutcomeCaveat> = ["events-leakage", "late-bsm-optimism"];
+
+/**
+ * HypotheticalCohortResult — the cohort's simulated outcomes plus a coverage classification
+ * (WR-03): "gap" = no/degenerate chain at T0 (never priced), "empty-universe" = real T0 data
+ * but zero surviving candidates (all gate-dropped or none forward-replayable), "replayed" =
+ * at least one candidate forward-walked to a simulated P&L. runBacktest counts gap vs
+ * empty-universe slots distinctly instead of conflating both as a data gap.
+ */
+export type HypotheticalCohortResult = {
+  readonly outcomes: ReadonlyArray<HypotheticalCandidateOutcome>;
+  readonly slotKind: "gap" | "empty-universe" | "replayed";
+};
 
 // ─── Adapters (mirrors replayPickerCohort.ts's toChainQuoteForPicker/toGexContextForPicker) ─
 
@@ -193,71 +206,119 @@ function toLegSnapshot(leg: ChainLegQuoteAsOf): LegSnapshot | null {
   };
 }
 
-/** Forward-walks one scored candidate to a simulated P&L, or null when the candidate is
- * skipped (leg missing/stale/NaN -- never simulated at a fabricated price). */
-function simulateCandidateExit(
-  candidate: ScoredCandidate,
-  chain: ReadonlyArray<ChainLegQuoteAsOf>,
-  cohortObservedAt: Date,
-): number | null {
-  // candidate.frontLeg/backLeg.strike are already converted to POINTS (RawCandidateLeg's own
-  // convention); ChainLegQuoteAsOf.strike is still the raw ×1000 int convention — convert
-  // back before matching (Pitfall 1, mirrors candidate-selection.ts's own conversion boundary).
-  const frontLegRaw = findLeg(chain, candidate.frontLeg.strike * 1000, candidate.frontLeg.expiration);
-  const backLegRaw = findLeg(chain, candidate.backLeg.strike * 1000, candidate.backLeg.expiration);
-  const frontFresh = isLegFresh(frontLegRaw, cohortObservedAt) ? frontLegRaw : undefined;
-  const backFresh = isLegFresh(backLegRaw, cohortObservedAt) ? backLegRaw : undefined;
+/**
+ * Forward-walk cadence (CR-01). The exit MUST be priced from a chain slice LATER than entry,
+ * so we step forward from the cohort instant sampling the chain and re-evaluating exit at each
+ * step, mirroring replayExitsForCalendar's snapshot-history walk. Chain reads are the cost, so
+ * we SAMPLE DAILY (not every 30-min slot) and cap the horizon — a documented approximation
+ * (report caveat): a daily walk can miss an intra-day trigger, biasing the exit slightly later.
+ * Landing each step at the cohort's own time-of-day keeps the read on a real RTH snapshot
+ * instant; weekend/holiday steps return an empty/stale slice and are skipped, never filled.
+ */
+const FORWARD_STEP_MS = 24 * 60 * 60 * 1000;
+const MAX_FORWARD_STEPS = 90;
 
-  const metrics = computeLegPairMetrics(
-    cohortObservedAt,
-    frontFresh !== undefined ? toLegSnapshot(frontFresh) : null,
-    backFresh !== undefined ? toLegSnapshot(backFresh) : null,
-    1, // HYPOTHETICAL_QTY: position sizing is out of scope this phase; direction/sign is qty-invariant.
-    candidate.frontLeg.expiration,
-    candidate.backLeg.expiration,
-  );
-
+function buildContext(
+  metrics: ReturnType<typeof computeLegPairMetrics>,
+  openNetDebit: number,
+  slotTime: Date,
+): MarketContext {
   const netMark = Number(metrics.netMark);
-  const frontIv = Number(metrics.frontIv);
-  const backIv = Number(metrics.backIv);
-  const spot = Number(metrics.spot);
-
   const marketSession: "rth" | "after-hours" =
-    isWithinRth(cohortObservedAt) && !isNyseHoliday(cohortObservedAt) ? "rth" : "after-hours";
+    isWithinRth(slotTime) && !isNyseHoliday(slotTime) ? "rth" : "after-hours";
+  return {
+    netMark,
+    pnlOpen: (netMark - openNetDebit) * 100,
+    spot: Number(metrics.spot),
+    frontIv: Number(metrics.frontIv),
+    backIv: Number(metrics.backIv),
+    dteFront: metrics.dteFront,
+    dteBack: metrics.dteBack,
+    snapshotTime: slotTime,
+    cohortNow: slotTime,
+    marketSession,
+    tier1Events: [],
+    rollChain: { candidates: [] },
+  };
+}
 
+/**
+ * Forward-walks one scored candidate from its cohort entry to a simulated P&L.
+ *
+ * Entry is priced at T0 (candidate.debit, haircut). Stepping forward daily, at each slot we
+ * read the chain, re-price the candidate's FIXED front/back legs, assemble a synthetic
+ * MarketContext, and run evaluateExit with previousVerdict threaded for hysteresis. The walk
+ * exits at the FIRST actionable (non-indicative, non-HOLD) verdict, pricing the exit from THAT
+ * slot's quotes; if it reaches front expiry without a trigger it exits at the last slot that
+ * had fresh quotes. Returns ok(pnl), or ok(null) when NO forward slot ever had fresh legs (no
+ * forward chain data for this candidate's expiries — never fabricates a fill), or a StorageError.
+ */
+async function simulateCandidateForward(
+  candidate: ScoredCandidate,
+  readChainAsOf: ForReadingChainAsOf,
+  cohortObservedAt: Date,
+): Promise<Result<number | null, StorageError>> {
+  const entryValue = candidate.debit / 100;
   const position: HeldPosition = {
     calendarId: "hypothetical",
     name: candidate.name,
     strike: candidate.frontLeg.strike,
     qty: 1,
-    openNetDebit: candidate.debit / 100,
+    openNetDebit: entryValue,
     frontExpiry: candidate.frontLeg.expiration,
     backExpiry: candidate.backLeg.expiration,
   };
-  const context: MarketContext = {
-    netMark,
-    pnlOpen: (netMark - position.openNetDebit) * 100,
-    spot,
-    frontIv,
-    backIv,
-    dteFront: metrics.dteFront,
-    dteBack: metrics.dteBack,
-    snapshotTime: cohortObservedAt,
-    cohortNow: cohortObservedAt,
-    marketSession,
-    tier1Events: [],
-    rollChain: { candidates: [] },
-  };
+  const frontExpiryMs = Date.parse(`${candidate.frontLeg.expiration}T23:59:59.000Z`);
 
-  const verdict = evaluateExit(position, context, null);
-  if (verdict.indicative) return null; // gap/missing-leg/NaN — skip, never fill on garbage
+  let previousVerdict: PreviousVerdict = null;
+  let lastFreshExitValue: number | null = null;
 
-  // Both legs are guaranteed non-null here (indicative would be true otherwise via the
-  // NaN-propagation chain), so the haircut close price is always computable.
-  if (frontFresh === undefined || backFresh === undefined) return null;
-  const exitValue = haircutFill(backFresh, "sell") - haircutFill(frontFresh, "buy");
-  const entryValue = candidate.debit / 100;
-  return (exitValue - entryValue) * 100;
+  for (let step = 1; step <= MAX_FORWARD_STEPS; step++) {
+    const slotTime = new Date(cohortObservedAt.getTime() + step * FORWARD_STEP_MS);
+    if (slotTime.getTime() > frontExpiryMs) break;
+
+    const chainResult = await readChainAsOf(slotTime);
+    if (!chainResult.ok) return chainResult;
+    const chain = chainResult.value;
+
+    // candidate.frontLeg/backLeg.strike are POINTS; ChainLegQuoteAsOf.strike is the raw ×1000
+    // int convention -- convert before matching (mirrors candidate-selection.ts's boundary).
+    const frontRaw = findLeg(chain, candidate.frontLeg.strike * 1000, candidate.frontLeg.expiration);
+    const backRaw = findLeg(chain, candidate.backLeg.strike * 1000, candidate.backLeg.expiration);
+    const frontFresh = isLegFresh(frontRaw, slotTime) ? frontRaw : undefined;
+    const backFresh = isLegFresh(backRaw, slotTime) ? backRaw : undefined;
+    if (frontFresh === undefined || backFresh === undefined) continue; // no fresh quotes this slot
+
+    const frontSnap = toLegSnapshot(frontFresh);
+    const backSnap = toLegSnapshot(backFresh);
+    if (frontSnap === null || backSnap === null) continue; // unparseable occSymbol — skip, don't fill
+
+    const metrics = computeLegPairMetrics(
+      slotTime,
+      frontSnap,
+      backSnap,
+      1, // HYPOTHETICAL_QTY: sizing is out of scope; direction/sign is qty-invariant.
+      candidate.frontLeg.expiration,
+      candidate.backLeg.expiration,
+    );
+    const context = buildContext(metrics, entryValue, slotTime);
+    const verdict = evaluateExit(position, context, previousVerdict);
+    previousVerdict = { verdict: verdict.verdict, rung: verdict.rung, ruleId: verdict.ruleId };
+
+    // A gap/stale/AH/NaN slot is indicative -- never an exit trigger, never priced.
+    if (verdict.indicative) continue;
+
+    const exitValue = haircutFill(backFresh, "sell") - haircutFill(frontFresh, "buy");
+    lastFreshExitValue = exitValue;
+    if (verdict.verdict !== "HOLD") {
+      return ok((exitValue - entryValue) * 100); // first actionable verdict — exit here
+    }
+  }
+
+  // No actionable verdict before front expiry: exit at the last slot that had fresh quotes.
+  // If no forward slot ever had fresh legs, the candidate is unreplayable (no forward data).
+  if (lastFreshExitValue === null) return ok(null);
+  return ok((lastFreshExitValue - entryValue) * 100);
 }
 
 // ─── replayHypotheticalEntry ────────────────────────────────────────────────────
@@ -276,7 +337,7 @@ export async function replayHypotheticalEntry(
   cohort: StoredPickerSnapshotRow,
   deps: ReplayHypotheticalEntryDeps,
   weights?: Partial<Record<BreakdownCriterion, number>>,
-): Promise<Result<ReadonlyArray<HypotheticalCandidateOutcome>, StorageError>> {
+): Promise<Result<HypotheticalCohortResult, StorageError>> {
   const parsed = frozenGexSchema.safeParse(cohort.snapshot);
   if (!parsed.success) {
     return err({
@@ -289,9 +350,12 @@ export async function replayHypotheticalEntry(
   if (!chainResult.ok) return chainResult;
   const chain = chainResult.value;
 
-  // Gap cohort guard (T-27-12): no chain data at/before observedAt -- skip, never simulate
-  // at spot=0.
-  if (chain.length === 0) return ok([]);
+  // Gap cohort guard (T-27-12, WR-03): no chain at/before observedAt, or a degenerate all-spot-0
+  // slice, is a DATA GAP -- skip, never simulate at spot=0. Distinct from an empty candidate
+  // universe over real data (classified below).
+  if (chain.length === 0 || !chain.some((leg) => leg.underlyingPrice > 0)) {
+    return ok({ outcomes: [], slotKind: "gap" });
+  }
 
   const eventsResult = await deps.readEconomicEvents();
   if (!eventsResult.ok) return eventsResult;
@@ -315,16 +379,22 @@ export async function replayHypotheticalEntry(
 
   const outcomes: HypotheticalCandidateOutcome[] = [];
   for (const candidate of scored) {
-    const simulatedPnl = simulateCandidateExit(candidate, chain, cohort.observedAt);
-    if (simulatedPnl === null) continue;
+    const pnlResult = await simulateCandidateForward(candidate, deps.readChainAsOf, cohort.observedAt);
+    if (!pnlResult.ok) return pnlResult;
+    // null = unreplayable (no forward chain data for this candidate's expiries — the Nov-legs
+    // problem). Never fabricate a P&L; the candidate simply drops out of the replayed count.
+    if (pnlResult.value === null) continue;
     outcomes.push({
       cohortObservedAt: cohort.observedAt.toISOString(),
       candidateId: candidate.id,
       score: candidate.score,
-      simulatedPnl,
+      simulatedPnl: pnlResult.value,
       caveats: OUTCOME_CAVEATS,
       breakdown: candidate.breakdown,
     });
   }
-  return ok(outcomes);
+  // Real T0 data but no simulated outcome (all gate-dropped OR none forward-replayable) is an
+  // EMPTY UNIVERSE, not a data gap (WR-03).
+  const slotKind = outcomes.length > 0 ? "replayed" : "empty-universe";
+  return ok({ outcomes, slotKind });
 }
