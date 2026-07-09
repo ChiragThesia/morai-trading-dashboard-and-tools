@@ -136,6 +136,10 @@ export type {
   TermStructurePoint,
   PickerGexContext,
   PickerEvent,
+  RuleSetEntry,
+  PickerGate,
+  PickerGateBrakes,
+  PickerSizing,
   PickerSnapshotResponse,
 } from "./picker.ts";
 export { pickerSnapshotFixture } from "./__fixtures__/picker-candidates.fixture.ts";

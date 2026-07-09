@@ -1,4 +1,5 @@
 import { useRegimeBoard } from "../hooks/useRegimeBoard.ts";
+import { usePicker } from "../hooks/usePicker.ts";
 import { Panel } from "./system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -8,10 +9,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip.tsx";
 import { cn } from "@/lib/utils";
-import type { RegimeBand, RegimeIndicator } from "@morai/contracts";
+import type { RegimeBand, RegimeIndicator, PickerGate } from "@morai/contracts";
 
 /**
- * RegimeBoard — the "Regime & breadth" board (Phase 24, BOARD-01/02).
+ * RegimeBoard — the "Regime & breadth" board (Phase 24, BOARD-01/02) plus the picker's
+ * entry-gate tile (Phase 28, PLAY-01, 28-06).
  *
  * A Panel holding a `grid grid-cols-2 gap-2 md:grid-cols-4` of Tile-shaped chips, one
  * per PRESENT indicator (a missing series is silently omitted — never a fabricated
@@ -22,6 +24,15 @@ import type { RegimeBand, RegimeIndicator } from "@morai/contracts";
  * No internal PanelHeading — the mounting Overview section supplies the "Regime &
  * breadth" SectionLabel (avoids a duplicated title, unlike CotCard/MacroCard whose
  * internal titles differ from their section's SectionLabel).
+ *
+ * The entry-gate tile (GateChip, 28-06) reads `PickerSnapshotResponse.gate` straight
+ * from `usePicker()` — a separate data source from the regime indicators above, so it
+ * renders independently of the regime board's own loading/error/empty states and is
+ * silently omitted (never a fabricated tile) when no snapshot is available yet. `state:
+ * "blind"` (GATE BLIND, the never-silent age-tolerance fail-closed flag) reuses the same
+ * `bg-downd`/`ring-down` "genuine alarm" filled treatment LiveStatusBadge's STALLED state
+ * and MetricChip's `alert` prop already established — louder than the plain `text-down`
+ * "blocked" state, no new visual language.
  */
 
 const BAND_CLASSES: Record<RegimeBand, { dot: string; text: string }> = {
@@ -94,8 +105,81 @@ function Chip({ indicator }: { indicator: RegimeIndicator }): React.ReactElement
   );
 }
 
+const GATE_STATE_LABEL: Record<PickerGate["state"], string> = {
+  open: "OPEN",
+  penalty: "PENALTY",
+  blocked: "BLOCKED",
+  blind: "GATE BLIND",
+};
+
+const GATE_STATE_TEXT_CLASS: Record<PickerGate["state"], string> = {
+  open: "text-up",
+  penalty: "text-amber",
+  blocked: "text-down",
+  blind: "text-down",
+};
+
+/** Names a tripped brake alongside the gate state (28-03's two anti-criteria brakes) — never
+ *  both at once in the fixture data, but a maxOpen+cooldown overlap still names both. */
+function brakeLabel(brakes: PickerGate["brakes"]): string | null {
+  const names = [
+    brakes.maxOpen ? "max-open" : null,
+    brakes.cooldown ? "cooldown" : null,
+  ].filter((n): n is string => n !== null);
+  return names.length === 0 ? null : names.join(", ");
+}
+
+/** GateChip — the picker's entry-gate tile (28-06, PLAY-01/T-28-17). Every value is read
+ *  straight from `PickerSnapshotResponse.gate` — no client-side band recomputation.
+ *  `state: "blind"` gets the SAME filled `bg-downd`/`ring-down` alarm treatment
+ *  LiveStatusBadge's STALLED state already established — louder than "blocked", which
+ *  only colors the state label/dot. */
+function GateChip({ gate }: { gate: PickerGate }): React.ReactElement {
+  const isBlind = gate.state === "blind";
+  const brake = brakeLabel(gate.brakes);
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-0.5 rounded-sm px-2 py-1.5",
+        isBlind ? "bg-downd ring-1 ring-down/40" : "bg-raise/40",
+      )}
+      data-testid="gate-chip"
+    >
+      <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+        Entry gate
+      </span>
+      <span
+        className={cn(
+          "font-display text-base font-bold tabular-nums uppercase",
+          GATE_STATE_TEXT_CLASS[gate.state],
+        )}
+        data-testid="gate-state"
+      >
+        {GATE_STATE_LABEL[gate.state]}
+      </span>
+      <span className="font-mono text-[10px] text-dim" data-testid="gate-metrics">
+        {`VIX ${gate.vix === null ? "—" : gate.vix.toFixed(2)} · ratio ${gate.ratio === null ? "—" : gate.ratio.toFixed(2)}`}
+      </span>
+      <span className="font-mono text-[10px] text-dim" data-testid="gate-asof">
+        {`as of ${gate.asOf ?? "—"}`}
+      </span>
+      {brake !== null && (
+        <span className="font-mono text-[10px] text-amber" data-testid="gate-brake">
+          {`brake: ${brake}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function RegimeBoard(): React.ReactElement {
   const { data, isPending, isError } = useRegimeBoard();
+  // The entry-gate tile (28-06) is a separate data source (usePicker) from the regime
+  // indicators above — silently omitted (T-24-09 "never a fabricated chip") when no
+  // snapshot has been computed yet, independent of the regime board's own load state.
+  const { data: pickerSnapshot } = usePicker();
+  const gate = pickerSnapshot?.gate ?? null;
 
   if (isPending && data === undefined) {
     return (
@@ -142,6 +226,7 @@ export function RegimeBoard(): React.ReactElement {
         {data.map((indicator) => (
           <Chip key={indicator.id} indicator={indicator} />
         ))}
+        {gate !== null && <GateChip gate={gate} />}
       </div>
     </Panel>
   );

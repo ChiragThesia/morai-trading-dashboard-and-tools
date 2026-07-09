@@ -1,5 +1,6 @@
 /**
- * RegimeBoard.test.tsx — TDD suite for the Regime & Breadth board (Phase 24, BOARD-01/02).
+ * RegimeBoard.test.tsx — TDD suite for the Regime & Breadth board (Phase 24, BOARD-01/02)
+ * plus the picker entry-gate tile (Phase 28, PLAY-01, 28-06).
  *
  * Behaviors under test:
  *   1. Loading / empty / error states use the exact 24-UI-SPEC.md copy.
@@ -8,15 +9,22 @@
  *   3. Partial data (2 of 4) → exactly 2 chips, no placeholder/dash chip for the missing 2.
  *   4. Provenance: the regime-why-{id} ⓘ trigger's tooltip shows the payload's own
  *      source + rationale verbatim — not a hardcoded per-indicator lookup.
+ *   5. Entry-gate tile (28-06): all four gate states render with VIX/ratio/asOf; "blind"
+ *      renders louder than "blocked"; a tripped brake is named; no gate tile when the
+ *      picker snapshot is unavailable (never a fabricated tile, T-24-09 precedent).
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { assertDefined } from "@morai/shared";
-import type { RegimeResponse } from "@morai/contracts";
+import { pickerSnapshotFixture } from "@morai/contracts";
+import type { RegimeResponse, PickerGate } from "@morai/contracts";
 
 const { mockUseRegimeBoard } = vi.hoisted(() => ({ mockUseRegimeBoard: vi.fn() }));
 vi.mock("../hooks/useRegimeBoard.ts", () => ({ useRegimeBoard: mockUseRegimeBoard }));
+
+const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
+vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
 
 import { RegimeBoard } from "./RegimeBoard.tsx";
 
@@ -67,7 +75,21 @@ function setRegimeBoard(data: unknown, opts: { isPending?: boolean; isError?: bo
   });
 }
 
+/** Sets usePicker()'s snapshot to `null` (no gate tile — the T-24-09 "never fabricate" default),
+ *  or a full snapshot carrying the given `gate` when provided. */
+function setPickerGate(gate?: PickerGate): void {
+  mockUsePicker.mockReturnValue({
+    data: gate === undefined ? null : { ...pickerSnapshotFixture, gate },
+    isPending: false,
+    isError: false,
+  });
+}
+
 describe("RegimeBoard", () => {
+  beforeEach(() => {
+    setPickerGate();
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -137,5 +159,99 @@ describe("RegimeBoard", () => {
     assertDefined(hyOas, "hy-oas fixture present");
     expect(await screen.findByText(hyOas.source)).toBeDefined();
     expect(await screen.findByText(hyOas.rationale)).toBeDefined();
+  });
+});
+
+describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const BASE_GATE: PickerGate = {
+    vix: 18,
+    vix3m: 20,
+    ratio: 0.9,
+    asOf: "2026-07-09",
+    state: "open",
+    penaltyMultiplier: 1,
+    brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+    reasons: [],
+  };
+
+  it("renders no gate tile when the picker snapshot is unavailable (never a fabricated tile)", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate();
+    render(<RegimeBoard />);
+
+    expect(screen.queryByTestId("gate-chip")).toBeNull();
+  });
+
+  it("renders the open gate state with VIX/ratio/asOf", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate(BASE_GATE);
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("gate-state").textContent).toBe("OPEN");
+    expect(screen.getByTestId("gate-metrics").textContent).toBe("VIX 18.00 · ratio 0.90");
+    expect(screen.getByTestId("gate-asof").textContent).toBe("as of 2026-07-09");
+    expect(screen.getByTestId("gate-state").className).toContain("text-up");
+  });
+
+  it("renders the penalty gate state distinctly (amber)", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate({ ...BASE_GATE, state: "penalty", vix: 22 });
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("gate-state").textContent).toBe("PENALTY");
+    expect(screen.getByTestId("gate-state").className).toContain("text-amber");
+  });
+
+  it("renders the blocked gate state (down token), without the blind alarm treatment", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate({ ...BASE_GATE, state: "blocked", vix: 26 });
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("gate-state").textContent).toBe("BLOCKED");
+    expect(screen.getByTestId("gate-state").className).toContain("text-down");
+    expect(screen.getByTestId("gate-chip").className).not.toContain("bg-downd");
+  });
+
+  it("renders GATE BLIND visibly louder than blocked — the filled alarm treatment", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate({ ...BASE_GATE, state: "blind", vix: null, ratio: null, asOf: null, reasons: ["gateReadError"] });
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("gate-state").textContent).toBe("GATE BLIND");
+    expect(screen.getByTestId("gate-chip").className).toContain("bg-downd");
+    expect(screen.getByTestId("gate-metrics").textContent).toBe("VIX — · ratio —");
+    expect(screen.getByTestId("gate-asof").textContent).toBe("as of —");
+  });
+
+  it("names a tripped max-open brake alongside the gate state", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate({ ...BASE_GATE, brakes: { maxOpen: true, cooldown: false, cooldownUntil: null } });
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("gate-brake").textContent).toBe("brake: max-open");
+  });
+
+  it("names a tripped cooldown brake alongside the gate state", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate({
+      ...BASE_GATE,
+      brakes: { maxOpen: false, cooldown: true, cooldownUntil: "2026-07-11" },
+    });
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("gate-brake").textContent).toBe("brake: cooldown");
+  });
+
+  it("renders no brake tag when neither brake is tripped", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate(BASE_GATE);
+    render(<RegimeBoard />);
+
+    expect(screen.queryByTestId("gate-brake")).toBeNull();
   });
 });
