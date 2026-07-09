@@ -2,15 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
+current_phase: 24
+current_phase_name: Regime & Breadth Board
 status: planning
-last_updated: "2026-07-09T05:30:00.000Z"
+stopped_at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
+last_updated: "2026-07-09T05:59:26.070Z"
 last_activity: 2026-07-09
+last_activity_desc: Phase 23 complete, transitioned to Phase 24
 progress:
   total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 17
 ---
 
 # Project State
@@ -24,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 23 of 28 (VIX3M Ingestion)
-Plan: — (not yet planned)
+Phase: 24 of 28 (Regime & Breadth Board)
+Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-09 — v1.3 ROADMAP.md created: 6 phases (23-28), 28/28 requirements mapped, no orphans
+Last activity: 2026-07-09 — Phase 23 complete, transitioned to Phase 24
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -43,13 +47,17 @@ across all 4 research files):
 
 - Phase 23 (MACRO-01) → Phase 24 (MACRO-02..03, BOARD-01..03) → Phase 25 (OPS-01..02) →
   Phase 26 (EXIT-01..10) → Phase 27 (BT-01..05) → Phase 28 (PLAY-01..05)
+
 - VIX3M ingestion is first and alone — `macro_observations` has no backfill, so every day
   skipped before Phase 23 ships is permanently lost crisis-gate/backtest history.
+
 - Ops rider (Phase 25) lands before the inference features it protects — both the exit advisor
   and the backtest inherit the pipeline's gap-row/BSM-timeout defects directly; a silent data bug
   becomes a confident wrong verdict once an advisor reads it.
+
 - Exit Advisor (26) strictly precedes Backtest (27) — the backtest replays the exit-rule registry
   the advisor builds; it cannot validate rules that don't exist yet.
+
 - Playbook gates (28) land last — they consume the VIX3M history accruing since Phase 23 and are
   informed by Phase 27's backtest evidence.
 
@@ -58,16 +66,21 @@ Key risks carried into planning:
 1. **n=13 sample-size wall** (Phase 27) — 9 free weights fit to 13 correlated trades is
    overfitting formalized. The backtest is a refutation/mechanics-validation tool, never a
    weight-fitter; every number stamped `n=`; automated promotion blocked until n≥30.
+
 2. **In-sample leakage / late-solved BSM** (Phase 27) — every distributional stat must be
    point-in-time; the free oracle is that replaying a historical cohort must reproduce its
    recorded live `picker_snapshot` score exactly.
+
 3. **Exit-verdict / regime-gate flapping** (Phases 26, 28) — hysteresis/banding required; the
    codebase already retired per-pair hard gates for deleting trades with edge — penalty band over
    a cliff.
+
 4. **Acting on stale/AH/gap marks** (Phase 26) — session- and gap-aware; verdicts on AH/gap
    cohorts are display-only, never actionable STOP/TAKE.
+
 5. **Fail-open vs fail-closed on missing VIX3M** (Phase 28) — open decision, must be resolved and
    documented during that phase's planning.
+
 6. **FRED series id is `VXVCLS`** (Phase 23) — live-verified 2026-07-09; `VIXCLS3M`/`VIX3MCLS`/
    `VXV` all 404. Some research docs still say `VIXCLS3M` — treat STACK.md's live verification as
    authoritative.
@@ -80,6 +93,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1/v1.2):
 - 65,534-param insert limit (chunk at ≤2,000 rows)
 - REFUTED picker criteria (IV-rank gates, −1..−3% IV-diff band, debit-%-of-back band,
   per-pair crisis gates) must never be re-encoded
+
 - Advisor/backtest never execute — advise + alert only (STRM-04 read-only boundary)
 
 ## Milestone v1.2 Summary
@@ -144,6 +158,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 17.1 | 5 | - | - |
 | 18 | 5 | - | - |
 | 19 | 9 | - | - |
+| 23 | 1 | - | - |
 
 **Recent Trend:**
 
@@ -265,6 +280,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
   event-triggered snapshot, strategy-rules L4 recording layer). Backlog items "strategy rules"
   and "event-triggered snapshot" (previously in ROADMAP.md Backlog section) are now scheduled in
   Phase 20 as RULE-01 and SNAP-01.
+
 - Phases 23-28 added (2026-07-09): Milestone v1.3 — Picker Intelligence. VIX3M ingestion (alone,
   no-backfill) → regime/breadth board (user-added, evidence-gated) → data-quality ops rider →
   exit advisor → PICK-04 backtest harness (n=13 refutation-only) → playbook crisis gates/

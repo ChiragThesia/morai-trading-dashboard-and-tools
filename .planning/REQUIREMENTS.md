@@ -18,7 +18,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Macro & regime data (day-one plumbing — no backfill exists)
 
-- [ ] **MACRO-01**: VIX3M ingested daily from FRED (`VXVCLS`) into macro_observations alongside
+- [x] **MACRO-01**: VIX3M ingested daily from FRED (`VXVCLS`) into macro_observations alongside
       the existing 8 series
 - [ ] **MACRO-02**: Regime/breadth indicator set researched online and admitted only with
       documented evidence (candidates: RSP:SPY equal-weight breadth ratio, VIX9D/VIX and
@@ -113,7 +113,7 @@ Explicit exclusions with reasoning.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MACRO-01 | Phase 23 | Pending |
+| MACRO-01 | Phase 23 | Complete |
 | MACRO-02 | Phase 24 | Pending |
 | MACRO-03 | Phase 24 | Pending |
 | BOARD-01 | Phase 24 | Pending |

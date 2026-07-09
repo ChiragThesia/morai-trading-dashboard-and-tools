@@ -60,7 +60,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 criteria learns to manage exits, proves its rules on his own trade history, and inherits the rest
 of his trading-knowledge playbook. Every rule research-grounded — "no feeling."
 
-- [ ] **Phase 23: VIX3M Ingestion** - `VXVCLS` lands daily in `macro_observations`, first and
+- [x] **Phase 23: VIX3M Ingestion** - `VXVCLS` lands daily in `macro_observations`, first and (completed 2026-07-09)
   alone, before any consumer needs its un-backfillable history
 
 - [ ] **Phase 24: Regime & Breadth Board** - Overview shows an evidence-admitted regime/breadth
@@ -98,8 +98,9 @@ the series has no backfill, so every day skipped is permanently lost.
   3. A failed FRED fetch for `VXVCLS` degrades the same way the other 8 series already do (a
      visible error state, never a silent skip).
 
-**Plans**: 1 plan
-- [ ] 23-01-PLAN.md — VXVCLS added to DEFAULT_FRED_SERIES_IDS + MACRO_SERIES_IDS enum (TDD), memory-twin + contract parity rows, docs counts corrected
+**Plans**: 1/1 plans complete
+
+- [x] 23-01-PLAN.md — VXVCLS added to DEFAULT_FRED_SERIES_IDS + MACRO_SERIES_IDS enum (TDD), memory-twin + contract parity rows, docs counts corrected
 
 ### Phase 24: Regime & Breadth Board
 
@@ -242,7 +243,7 @@ Phases execute in numeric order: 23 → 24 → 25 → 26 → 27 → 28
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 23. VIX3M Ingestion | 0/TBD | Not started | - |
+| 23. VIX3M Ingestion | 1/1 | Complete    | 2026-07-09 |
 | 24. Regime & Breadth Board | 0/TBD | Not started | - |
 | 25. Data-Quality Ops Rider | 0/TBD | Not started | - |
 | 26. Exit Advisor | 0/TBD | Not started | - |
