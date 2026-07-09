@@ -85,6 +85,12 @@ vi.mock("../hooks/useMacro.ts", () => ({ useMacro: vi.fn(() => ({ data: undefine
 vi.mock("../hooks/useRegimeBoard.ts", () => ({
   useRegimeBoard: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
 }));
+// 28-06: RegimeBoard also reads usePicker() for its entry-gate tile — mocked the same way
+// (no snapshot -> no gate tile, T-24-09 "never fabricate" precedent) so this file's plain
+// render() calls keep working without a QueryClientProvider.
+vi.mock("../hooks/usePicker.ts", () => ({
+  usePicker: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+}));
 
 import { Overview, formatExpiryCell } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
