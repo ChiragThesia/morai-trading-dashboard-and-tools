@@ -235,7 +235,11 @@ export function evaluateExit(
   // slip past hasNaN into an actionable escalated STOP/TAKE. Treat a non-positive basis (or any
   // non-finite ratio) as indicative — the shared guard that protects every consumer of pnlPct.
   const pnlFinite = position.openNetDebit > 0 && Number.isFinite(pnlPct);
-  const indicative = isAfterHours || isStale || hasNaN || !pnlFinite;
+  // WR-01: a gap snapshot (spot=0) has non-NaN marks that pass hasNaN but drives GAMMA's
+  // offStrike to 1.0 — an escalated STOP on garbage. Treat a non-positive/non-finite spot as
+  // indicative so a degenerate row can never fire an actionable verdict.
+  const spotFinite = context.spot > 0 && Number.isFinite(context.spot);
+  const indicative = isAfterHours || isStale || hasNaN || !pnlFinite || !spotFinite;
 
   const evtHit = evalEvt(position.frontExpiry, context.tier1Events, context.cohortNow.toISOString().slice(0, 10));
 

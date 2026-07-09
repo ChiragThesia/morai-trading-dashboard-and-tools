@@ -598,3 +598,17 @@ describe("evaluateExit — non-finite P&L basis is indicative (CR-01)", () => {
     expect(result.escalate).toBe(false);
   });
 });
+
+// ─── WR-01: degenerate spot=0 gap row never fires an escalated GAMMA STOP ────────────────────
+
+describe("evaluateExit — spot=0 gap row is indicative (WR-01)", () => {
+  const cohortNow = new Date("2026-07-19T15:00:00.000Z");
+
+  it("a gap snapshot (spot=0, non-NaN marks, dteFront<7) is indicative and GAMMA does not escalate", () => {
+    const position = makePosition({ strike: 7000 });
+    const context = makeContext({ cohortNow, snapshotTime: cohortNow, spot: 0, dteFront: 5 });
+    const result = evaluateExit(position, context, null);
+    expect(result.indicative).toBe(true);
+    expect(result.escalate).toBe(false);
+  });
+});
