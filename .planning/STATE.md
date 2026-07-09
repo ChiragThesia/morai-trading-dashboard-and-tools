@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 28
-current_phase_name: Playbook Gates, Anti-Criteria & Sizing
+current_phase: 25
+current_phase_name: Data-Quality Ops Rider
 status: planning
 stopped_at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
-last_updated: "2026-07-09T15:40:53.921Z"
+last_updated: "2026-07-09T18:31:58.885Z"
 last_activity: 2026-07-09
-last_activity_desc: Phase 27 complete, transitioned to Phase 28
+last_activity_desc: Phase 24 complete, transitioned to Phase 25
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 20
-  completed_plans: 20
-  percent: 83
+  completed_phases: 6
+  total_plans: 26
+  completed_plans: 26
+  percent: 100
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 28 of 28 (Playbook Gates, Anti-Criteria & Sizing)
+Phase: 25 of 28 (Data-Quality Ops Rider)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-09 — Phase 27 complete, transitioned to Phase 28
+Last activity: 2026-07-09 — Phase 24 complete, transitioned to Phase 25
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -162,6 +162,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 25 | 2 | - | - |
 | 26 | 6 | - | - |
 | 27 | 6 | - | - |
+| 24 | 5 | - | - |
 
 **Recent Trend:**
 

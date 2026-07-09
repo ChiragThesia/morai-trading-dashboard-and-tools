@@ -20,20 +20,20 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **MACRO-01**: VIX3M ingested daily from FRED (`VXVCLS`) into macro_observations alongside
       the existing 8 series
-- [ ] **MACRO-02**: Regime/breadth indicator set researched online and admitted only with
+- [x] **MACRO-02**: Regime/breadth indicator set researched online and admitted only with
       documented evidence (candidates: RSP:SPY equal-weight breadth ratio, VIX9D/VIX and
       VVIX/VIX ratios, term-structure state, FRED movement series) — each indicator carries a
       source + rationale in docs, mirroring picker-rules.md discipline
-- [ ] **MACRO-03**: Evidence-admitted indicators are ingested/computed on a daily cadence with
+- [x] **MACRO-03**: Evidence-admitted indicators are ingested/computed on a daily cadence with
       as-of dates stamped (EOD data never presented as intraday)
 
 ### Regime board (Overview tab)
 
-- [ ] **BOARD-01**: Overview tab shows a visible regime/breadth board: each indicator with
+- [x] **BOARD-01**: Overview tab shows a visible regime/breadth board: each indicator with
       current value, threshold state (calm/warning/crisis banding), and as-of date
-- [ ] **BOARD-02**: Each board indicator exposes its "why" (source + threshold rationale) the
+- [x] **BOARD-02**: Each board indicator exposes its "why" (source + threshold rationale) the
       same way the Analyzer scorecard exposes rule provenance
-- [ ] **BOARD-03**: Board data ships HTTP + MCP (MCP-02 convention)
+- [x] **BOARD-03**: Board data ships HTTP + MCP (MCP-02 convention)
 
 ### Exit advisor
 
@@ -74,17 +74,17 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Playbook gates & sizing
 
-- [ ] **PLAY-01**: Market-level crisis gates: picker computes nothing new to enter when VIX ≥ 25
+- [x] **PLAY-01**: Market-level crisis gates: picker computes nothing new to enter when VIX ≥ 25
       or VIX/VIX3M ≥ 0.95 (banded/dated — lean penalty-over-cliff per the retired-gate lessons;
       board shows the gate state)
-- [ ] **PLAY-02**: Anti-criteria brakes: max open calendars, loss cooldown (recent realized loss
+- [x] **PLAY-02**: Anti-criteria brakes: max open calendars, loss cooldown (recent realized loss
       pauses new entries), sustained-trend filter — thresholds from the trade-advisor playbook,
       confirmed with user at phase discuss
-- [ ] **PLAY-03**: Sizing tiers: recommended contract count per VIX regime tier (discrete,
+- [x] **PLAY-03**: Sizing tiers: recommended contract count per VIX regime tier (discrete,
       user-set — never a derived optimum)
-- [ ] **PLAY-04**: Event-calendar bucket: second universe path for short-gap (3–10d) calendars
+- [x] **PLAY-04**: Event-calendar bucket: second universe path for short-gap (3–10d) calendars
       that intentionally own an event, scored with event-appropriate rules
-- [ ] **PLAY-05**: autoTuneTargetDelta: VIX-tuned target-delta preference applied to the band
+- [x] **PLAY-05**: autoTuneTargetDelta: VIX-tuned target-delta preference applied to the band
       scan (additive, after crisis-gate infra lands)
 
 ## Future Requirements
@@ -114,11 +114,11 @@ Explicit exclusions with reasoning.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MACRO-01 | Phase 23 | Complete |
-| MACRO-02 | Phase 24 | Pending |
-| MACRO-03 | Phase 24 | Pending |
-| BOARD-01 | Phase 24 | Pending |
-| BOARD-02 | Phase 24 | Pending |
-| BOARD-03 | Phase 24 | Pending |
+| MACRO-02 | Phase 24 | Complete |
+| MACRO-03 | Phase 24 | Complete |
+| BOARD-01 | Phase 24 | Complete |
+| BOARD-02 | Phase 24 | Complete |
+| BOARD-03 | Phase 24 | Complete |
 | OPS-01 | Phase 25 | Complete |
 | OPS-02 | Phase 25 | Complete |
 | EXIT-01 | Phase 26 | Complete |
@@ -136,11 +136,11 @@ Explicit exclusions with reasoning.
 | BT-03 | Phase 27 | Complete |
 | BT-04 | Phase 27 | Complete |
 | BT-05 | Phase 27 | Complete |
-| PLAY-01 | Phase 28 | Pending |
-| PLAY-02 | Phase 28 | Pending |
-| PLAY-03 | Phase 28 | Pending |
-| PLAY-04 | Phase 28 | Pending |
-| PLAY-05 | Phase 28 | Pending |
+| PLAY-01 | Phase 28 | Complete |
+| PLAY-02 | Phase 28 | Complete |
+| PLAY-03 | Phase 28 | Complete |
+| PLAY-04 | Phase 28 | Complete |
+| PLAY-05 | Phase 28 | Complete |
 
 **Coverage:** 28/28 v1.3 requirements mapped, 0 orphans. Phase order:
 23 (VIX3M, first-and-alone) → 24 (regime board) → 25 (ops rider) → 26 (exit advisor) →

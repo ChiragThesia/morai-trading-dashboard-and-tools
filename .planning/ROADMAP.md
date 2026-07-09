@@ -262,6 +262,7 @@ Phase 27 (gate thresholds and sizing tiers are informed by the backtest's direct
      additively and only after the crisis-gate infrastructure is live.
 
 **Plans**: 6 plans
+
 - [ ] 28-01-PLAN.md — Docs + shared VIX ladder + market-level entry-gate domain (banding, hysteresis, GATE BLIND) [PLAY-01]
 - [ ] 28-02-PLAN.md — New recent-closed-calendars port/repo/twin + anti-criteria brakes domain [PLAY-02]
 - [ ] 28-03-PLAN.md — Use-case wiring + additive gate snapshot payload + composition root [PLAY-01, PLAY-02]
@@ -277,7 +278,7 @@ Phases execute in numeric order: 23 → 24 → 25 → 26 → 27 → 28
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 23. VIX3M Ingestion | 1/1 | Complete    | 2026-07-09 |
-| 24. Regime & Breadth Board | 5/5 | Complete   | 2026-07-09 |
+| 24. Regime & Breadth Board | 5/5 | Complete    | 2026-07-09 |
 | 25. Data-Quality Ops Rider | 2/2 | Complete    | 2026-07-09 |
 | 26. Exit Advisor | 6/6 | Complete    | 2026-07-09 |
 | 27. PICK-04 Backtest Harness | 6/6 | Complete    | 2026-07-09 |
