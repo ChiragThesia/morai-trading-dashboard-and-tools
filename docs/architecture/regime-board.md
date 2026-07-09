@@ -19,6 +19,21 @@ wires hard gates into the picker.
 | `vix9d-vix` | VIX9D/VIX ratio (CBOE `_VIX9D` delayed quote, new this phase, / FRED `VIXCLS`) | `< 1.0` / `1.0–1.1` / `≥ 1.1` — **`[ASSUMED]`** | No source gives a specific backtested numeric cut (unlike VIX/VIX3M's documented 0.90/0.95). Bands are a structural analogy to the VIX/VIX3M ratio logic (>1.0 = near-curve inversion = stress), not backtested. Display-only this phase — do not wire into a hard gate without a dedicated backtest (Phase 28). | topstep.com, macroption.com, cboe.com (VIX9D/VIX term-structure concept, no numeric cut cited) | 2026-07-09 |
 | `hy-oas` | HY OAS absolute level, percent units (FRED `BAMLH0A0HYM2`, new this phase — ICE BofA US High Yield Index Option-Adjusted Spread) | `< 3.0` / `3.0–5.0` / `≥ 5.0` — **`[ASSUMED]`, newly-calibrated** | New calibration (not a refinement of an existing user prior — the original credit leg, `HYG < 20d avg`, is unreachable, see Refuted/Dropped #4). Synthesized from 3 practitioner sources: spreads above 800bp have historically coincided with or preceded recession; below ~300–350bp signals late-cycle complacency. Shipped as an absolute level, not a moving average — a brand-new series has zero history on ship day (Pitfall: the FRED adapter fetches only the latest observation per run, no backfill). | eco3min.fr (HY OAS recession-signal study), macroradar.io, convextrade.com | 2026-07-09 |
 
+## Known limitations
+
+`vix9d-vix`'s numerator (CBOE `_VIX9D`, delayed quote) and denominator (FRED `VIXCLS`,
+prior-session EOD close) come from different observation times — the ratio can divide
+today's intraday VIX9D by yesterday's VIXCLS close. `asOf` is the OLDER of the two dates
+(MACRO-03), so the chip honestly stamps the stale VIXCLS date even though the numerator is
+fresher. During a fast intraday vol spike the stale denominator can inflate the ratio and
+flip the band spuriously. `vix-term-structure` does not have this problem — VIXCLS and
+VXVCLS are both FRED EOD, same lag.
+
+This is display-only and `[ASSUMED]` (see table above), so it is non-corrupting today.
+**Phase 28 MUST NOT wire `vix9d-vix` into a hard picker gate until both legs share an
+observation time** (e.g. source the denominator from the same CBOE delayed-quote surface
+as VIX9D — an in-system `_VIX` quote — instead of FRED `VIXCLS`).
+
 ## Refuted / Dropped
 
 | # | Candidate | Reason | Revival path |
