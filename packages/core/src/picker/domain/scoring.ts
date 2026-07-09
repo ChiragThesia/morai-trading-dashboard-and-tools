@@ -203,7 +203,8 @@ function scoreOne(
     profitTargetPct: EXIT_PROFIT_TARGET_PCT,
     stopPct: EXIT_STOP_PCT,
     manageShortDte: EXIT_MANAGE_SHORT_DTE,
-    closeByExpiry: candidate.frontLeg.expiration,
+    // EVT discipline: exit the day before a front-window tier-1 event when stamped.
+    closeByExpiry: candidate.exitBeforeIso ?? candidate.frontLeg.expiration,
   };
 
   return {

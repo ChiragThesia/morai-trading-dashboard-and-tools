@@ -42,7 +42,11 @@ User-locked 2026-07-08 (research-verified against tastytrade/SteadyOptions/ORATS
 |---|---|---|
 | `net-theta-positive` | net θ = (θ_back − θ_front)·100 > 0 | A calendar with negative carry has no edge thesis. |
 | `liquidity` | each leg: (ask−bid)/mid ≤ 0.10 AND OI ≥ 100 | Untradeable markets produce fictional debits/breakevens. |
-| `event-blackout` | drop pair when a tier-1 event (FOMC/CPI/NFP) falls ≤3 days before the front expiry | Playbook H4: event vol + gamma cliff stack in the short leg's final days. |
+(RETIRED as an entry gate 2026-07-09: the event-blackout was an EXIT discipline read as an
+entry block — it rejected structures the user actually trades, e.g. a Jul-30 front entered
+3 weeks before its Jul-29 FOMC. Now: `eventAdjustment` (w10) penalizes the score, and a
+tier-1 event ≤3 days before the front expiry stamps `exitPlan.closeByExpiry` to the day
+BEFORE the event — the playbook's EVT trigger encoded as the hard-close date.)
 
 RETIRED 2026-07-09: the per-pair `term-inversion` gate (drop when front IV > back IV). It read
 the playbook's crisis guard literally and deleted exactly the trades with edge (ORATS: "you

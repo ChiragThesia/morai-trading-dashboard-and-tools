@@ -164,22 +164,25 @@ describe("selectCandidates", () => {
     expect(gateDrops.termInverted).toBe(0);
   });
 
-  it("gates tier-1 events within 3 days BEFORE the front expiry and counts the drops", () => {
+  it("keeps pairs with a tier-1 event in the front's final 3 days but stamps exitBeforeIso (EVT exit discipline, 2026-07-09)", () => {
     const iv = 0.15;
     const chain: ChainQuoteForPicker[] = [
       chainQuote(7450, "2026-07-31", iv, "P"),
       chainQuote(7450, "2026-08-26", iv, "P"),
     ];
-    // FOMC lands 2 days before the 2026-07-31 front expiry → playbook blackout (≤3d).
+    // FOMC 2 days before the 2026-07-31 front expiry → candidate KEPT, hard exit the day
+    // before the event (the user's own 7450 fill entered exactly this structure).
     const events: EconomicEvent[] = [{ date: "2026-07-29", name: "FOMC", source: "seed" }];
     const { candidates, gateDrops } = selectCandidates(chain, events, { r: R, q: Q });
-    expect(candidates).toHaveLength(0);
-    expect(gateDrops.eventBlackout).toBe(1);
+    expect(candidates).toHaveLength(1);
+    expect(gateDrops.eventBlackout).toBe(0);
+    expect(candidates[0]?.exitBeforeIso).toBe("2026-07-28");
 
-    // An event 10 days before expiry does NOT trigger the blackout.
+    // An event 10 days before expiry sets no early exit.
     const eventsFar: EconomicEvent[] = [{ date: "2026-07-21", name: "FOMC", source: "seed" }];
     const ok = selectCandidates(chain, eventsFar, { r: R, q: Q });
     expect(ok.candidates).toHaveLength(1);
+    expect(ok.candidates[0]?.exitBeforeIso).toBeNull();
   });
 
   it("only pairs front legs in [21,36] DTE with back legs where the gap is in [21,35] days — ALL qualifying backs kept", () => {

@@ -50,6 +50,7 @@ function normalCandidate(): RawCandidate {
     slope: ((0.155 - 0.14) / (56 - 30)) * 365,
     frontEvents: [],
     backEvents: [],
+    exitBeforeIso: null,
   };
 }
 
@@ -69,6 +70,7 @@ function invertedCandidate(): RawCandidate {
     slope: ((0.105 - 0.155) / (45 - 21)) * 365,
     frontEvents: ["FOMC"],
     backEvents: [],
+    exitBeforeIso: null,
   };
 }
 
@@ -226,6 +228,7 @@ describe("scoreCalendarCandidates", () => {
           slope: ((ivB - ivF) / (backDte - frontDte)) * 365,
           frontEvents: [],
           backEvents: [],
+    exitBeforeIso: null,
         };
         const [scored] = scoreCalendarCandidates([candidate], GEX_CONTEXT, { r: R, q: Q });
         expect(scored).toBeDefined();
@@ -315,4 +318,17 @@ describe("experimental context entries (weight 0, display-only)", () => {
     if (scored === undefined) return;
     expect(scored.context.find((c) => c.id === "backEventBonus")?.value).toBe(1);
   });
+
+describe("exit plan — EVT discipline (2026-07-09)", () => {
+  it("closeByExpiry = exitBeforeIso when a tier-1 event sits in the front's final days", () => {
+    const withEvt = { ...normalCandidate(), exitBeforeIso: "2026-07-28" };
+    const [scored] = scoreCalendarCandidates([withEvt], GEX_CONTEXT, { r: R, q: Q });
+    expect(scored?.exitPlan.closeByExpiry).toBe("2026-07-28");
+  });
+
+  it("closeByExpiry = front expiration when no early-exit date is stamped", () => {
+    const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
+    expect(scored?.exitPlan.closeByExpiry).toBe(normalCandidate().frontLeg.expiration);
+  });
+});
 });

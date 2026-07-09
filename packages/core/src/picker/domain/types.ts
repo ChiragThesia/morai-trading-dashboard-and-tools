@@ -55,6 +55,8 @@ export type RawCandidate = {
   readonly frontEvents: ReadonlyArray<string>;
   /** Scheduled events the back leg spans, excluding any already in frontEvents. */
   readonly backEvents: ReadonlyArray<string>;
+  /** Exit-before date (day before a tier-1 event in the front's final 3 days), else null. */
+  readonly exitBeforeIso: string | null;
 };
 
 /** One scored criterion contributing to `ScoredCandidate.score` — closed enum (T-19-04). */

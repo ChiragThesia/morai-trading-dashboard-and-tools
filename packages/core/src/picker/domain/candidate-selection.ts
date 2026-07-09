@@ -17,8 +17,9 @@
  * Hard gates (each counted in gateDrops, never silent):
  *   - liquidity (rules.ts isLiquidQuote): spread ≤10% of mid + OI ≥100 per leg;
  *   - net-theta-positive (criterion 6);
- *   - event blackout: a tier-1 event (FOMC/CPI/NFP) within EVENT_BLACKOUT_DAYS before the
- *     front expiry (playbook H4: gamma+event risk peaks into the front leg's final days).
+ *   (event handling: a tier-1 event within EVENT_BLACKOUT_DAYS before the front expiry no
+ *   longer blocks entry — it stamps exitBeforeIso, the day before the event, which scoring
+ *   turns into the hard-close date. gateDrops.eventBlackout stays 0 for contract compat.)
  *
  * Strike-unit conversion boundary (Pitfall 1): `ChainQuoteForPicker.strike` is the ×1000 int
  * convention. This module converts to points ONCE, at the top of `selectCandidates` — no
@@ -228,14 +229,18 @@ export function selectCandidates(
     const frontQuotesRaw = byExpiry.get(fe);
     assertDefined(frontQuotesRaw, "selectCandidates: frontQuotesRaw (fe came from byExpiry.keys())");
 
-    // Playbook H4 / event blackout: a tier-1 event within EVENT_BLACKOUT_DAYS before this
-    // front expiry blocks every pair built on it. Evaluated once per front expiry; counted
-    // per dropped pair below.
+    // Playbook EVT discipline (2026-07-09 — was an entry BLOCK, now an exit rule): a tier-1
+    // event within EVENT_BLACKOUT_DAYS before this front expiry stamps a hard exit on the day
+    // BEFORE the earliest such event; eventAdjustment (w10) still penalizes the score.
     const feDay = isoDayNumber(fe);
-    const frontHasBlackout = events.some((ev) => {
+    let exitBeforeIso: string | null = null;
+    for (const ev of events) {
       const evDay = isoDayNumber(ev.date);
-      return evDay <= feDay && feDay - evDay <= EVENT_BLACKOUT_DAYS;
-    });
+      if (evDay <= feDay && feDay - evDay <= EVENT_BLACKOUT_DAYS) {
+        const dayBefore = new Date((evDay - 1) * 86_400_000).toISOString().slice(0, 10);
+        if (exitBeforeIso === null || dayBefore < exitBeforeIso) exitBeforeIso = dayBefore;
+      }
+    }
 
     // Band membership (NOT nearest-target): every strike whose front delta is in the band.
     for (const frontQuote of frontQuotesRaw) {
@@ -261,11 +266,6 @@ export function selectCandidates(
         // (ORATS/SteadyOptions) — slopeEntryFraction ranks it; its crisis floor (slope
         // < −1.5) zeroes true stress inversions. gateDrops.termInverted stays at 0 for
         // contract compat until the next schema pass.
-
-        if (frontHasBlackout) {
-          drops.eventBlackout += 1;
-          continue;
-        }
 
         const gF = bsmGreeks(spot, K, tf / 365, ivF, r, q, "P");
         const gB = bsmGreeks(spot, K, tb / 365, ivB, r, q, "P");
@@ -306,6 +306,7 @@ export function selectCandidates(
           slope,
           frontEvents,
           backEvents,
+          exitBeforeIso,
         });
       }
     }
