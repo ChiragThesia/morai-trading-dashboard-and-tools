@@ -44,7 +44,7 @@ import {
   slopeEntryFraction,
   WEIGHT_DELTA_NEUTRAL,
 } from "./rules.ts";
-import type { BreakdownEntry, ContextEntry, ExitPlan, RawCandidate, ScoredCandidate } from "./types.ts";
+import type { BreakdownCriterion, BreakdownEntry, ContextEntry, ExitPlan, RawCandidate, ScoredCandidate } from "./types.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
 
 // ─── Compatibility re-exports (the registry owns these — see rules.ts) ─────────
@@ -90,6 +90,12 @@ export type ScoringParams = {
   readonly realizedVol20?: number | null;
   /** Trailing candidate slopes for the experimental `slopePercentile` rule. */
   readonly slopeHistory?: ReadonlyArray<number>;
+  /**
+   * Ablation seam (PICK-04, T-27-03): override one or more active-rule weights. Absent/
+   * undefined criteria fall back to the rules.ts constant — omitting this field entirely
+   * (every live call site) reproduces today's live score/breakdown byte-identically.
+   */
+  readonly weights?: Partial<Record<BreakdownCriterion, number>>;
 };
 
 /**
@@ -103,6 +109,17 @@ function scoreOne(
   params: ScoringParams,
 ): ScoredCandidate {
   const { r, q } = params;
+  // Ablation seam (PICK-04, T-27-03): per-criterion ?? fallback to the rules.ts constant —
+  // no live call site passes `weights`, so this is a no-op for every existing caller.
+  const wSlope = params.weights?.slope ?? WEIGHT_SLOPE;
+  const wFwdEdge = params.weights?.fwdEdge ?? WEIGHT_FWD_EDGE;
+  const wGexFit = params.weights?.gexFit ?? WEIGHT_GEX_FIT;
+  const wEvent = params.weights?.eventAdjustment ?? WEIGHT_EVENT;
+  const wBeVsEm = params.weights?.beVsEm ?? WEIGHT_BE_VS_EM;
+  const wDeltaNeutral = params.weights?.deltaNeutral ?? WEIGHT_DELTA_NEUTRAL;
+  const wThetaVega = params.weights?.thetaVega ?? WEIGHT_THETA_VEGA;
+  const wVrp = params.weights?.vrp ?? WEIGHT_VRP;
+  const wDebitFit = params.weights?.debitFit ?? WEIGHT_DEBIT_FIT;
   const K = candidate.frontLeg.strike;
   const tf = candidate.frontLeg.dte;
   const tb = candidate.backLeg.dte;
@@ -171,47 +188,47 @@ function scoreOne(
   const debitFrac = debitFitFraction(candidate.debit);
 
   const breakdown: ReadonlyArray<BreakdownEntry> = [
-    { criterion: "slope", weight: WEIGHT_SLOPE, rawValue: candidate.slope, contribution: slopeFraction * 100 },
-    { criterion: "fwdEdge", weight: WEIGHT_FWD_EDGE, rawValue: fwdEdge, contribution: fwdEdgeFraction * 100 },
-    { criterion: "gexFit", weight: WEIGHT_GEX_FIT, rawValue: gexFit, contribution: gexFit * 100 },
-    { criterion: "eventAdjustment", weight: WEIGHT_EVENT, rawValue: evtPenalty, contribution: eventFraction * 100 },
-    { criterion: "beVsEm", weight: WEIGHT_BE_VS_EM, rawValue: beVsEmRatio, contribution: beVsEmFraction * 100 },
+    { criterion: "slope", weight: wSlope, rawValue: candidate.slope, contribution: slopeFraction * 100 },
+    { criterion: "fwdEdge", weight: wFwdEdge, rawValue: fwdEdge, contribution: fwdEdgeFraction * 100 },
+    { criterion: "gexFit", weight: wGexFit, rawValue: gexFit, contribution: gexFit * 100 },
+    { criterion: "eventAdjustment", weight: wEvent, rawValue: evtPenalty, contribution: eventFraction * 100 },
+    { criterion: "beVsEm", weight: wBeVsEm, rawValue: beVsEmRatio, contribution: beVsEmFraction * 100 },
     {
       criterion: "deltaNeutral",
-      weight: WEIGHT_DELTA_NEUTRAL,
+      weight: wDeltaNeutral,
       rawValue: candidate.delta,
       contribution: deltaFraction * 100,
     },
     {
       criterion: "thetaVega",
-      weight: WEIGHT_THETA_VEGA,
+      weight: wThetaVega,
       rawValue: thetaVegaValue(candidate.theta, candidate.vega) ?? 0,
       contribution: thetaVegaFrac * 100,
     },
     {
       criterion: "vrp",
-      weight: WEIGHT_VRP,
+      weight: wVrp,
       rawValue: vrpValue(ivF, params.realizedVol20 ?? null) ?? 0,
       contribution: vrpFrac * 100,
     },
     {
       criterion: "debitFit",
-      weight: WEIGHT_DEBIT_FIT,
+      weight: wDebitFit,
       rawValue: candidate.debit,
       contribution: debitFrac * 100,
     },
   ];
 
   const rawScore =
-    WEIGHT_SLOPE * slopeFraction +
-    WEIGHT_FWD_EDGE * fwdEdgeFraction +
-    WEIGHT_GEX_FIT * gexFit +
-    WEIGHT_EVENT * eventFraction +
-    WEIGHT_BE_VS_EM * beVsEmFraction +
-    WEIGHT_DELTA_NEUTRAL * deltaFraction +
-    WEIGHT_THETA_VEGA * thetaVegaFrac +
-    WEIGHT_VRP * vrpFrac +
-    WEIGHT_DEBIT_FIT * debitFrac;
+    wSlope * slopeFraction +
+    wFwdEdge * fwdEdgeFraction +
+    wGexFit * gexFit +
+    wEvent * eventFraction +
+    wBeVsEm * beVsEmFraction +
+    wDeltaNeutral * deltaFraction +
+    wThetaVega * thetaVegaFrac +
+    wVrp * vrpFrac +
+    wDebitFit * debitFrac;
   const score = Math.min(100, Math.max(0, Math.round(rawScore)));
 
   // ─── Experimental context (weight 0, display-only — rules.ts registry) ───

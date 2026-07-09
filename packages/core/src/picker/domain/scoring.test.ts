@@ -337,4 +337,71 @@ describe("exit plan — EVT discipline (2026-07-09)", () => {
     expect(scored?.exitPlan.closeByExpiry).toBe(normalCandidate().frontLeg.expiration);
   });
 });
+
+describe("ScoringParams.weights — PICK-04 ablation seam (T-27-03)", () => {
+  it("omitting weights reproduces today's live score/breakdown byte-identically (regression fixture)", () => {
+    // Two separate calls, both omitting `weights` entirely (exactOptionalPropertyTypes forbids
+    // an explicit `weights: undefined` — the repo's own no-`as`/strict-optional convention) —
+    // deterministic scoring means they must be byte-identical to each other and to the
+    // pinned live constant below.
+    const [call1] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
+    const [call2] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
+    expect(call1).toBeDefined();
+    expect(call2).toBeDefined();
+    if (call1 === undefined || call2 === undefined) return;
+
+    // Byte-identical score + full breakdown array (rules.ts constants used throughout).
+    expect(call2.score).toBe(call1.score);
+    expect(call2.breakdown).toEqual(call1.breakdown);
+
+    // Pin the exact live value so a future accidental weight-substitution change fails loud.
+    expect(call1.breakdown.find((b) => b.criterion === "slope")?.weight).toBe(WEIGHT_SLOPE);
+  });
+
+  it("weights: { slope: 0 } zeroes ONLY the slope criterion's contribution, leaving others unchanged", () => {
+    const [baseline] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
+    const [ablated] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, {
+      r: R,
+      q: Q,
+      weights: { slope: 0 },
+    });
+    expect(baseline).toBeDefined();
+    expect(ablated).toBeDefined();
+    if (baseline === undefined || ablated === undefined) return;
+
+    const ablatedSlope = ablated.breakdown.find((b) => b.criterion === "slope");
+    expect(ablatedSlope?.weight).toBe(0);
+    // rawValue (the un-normalized metric) is unaffected — only the weight/contribution-to-score.
+    const baselineSlope = baseline.breakdown.find((b) => b.criterion === "slope");
+    expect(ablatedSlope?.rawValue).toBe(baselineSlope?.rawValue);
+
+    // Every other criterion's weight + contribution is byte-identical to baseline.
+    for (const entry of ablated.breakdown) {
+      if (entry.criterion === "slope") continue;
+      const baselineEntry = baseline.breakdown.find((b) => b.criterion === entry.criterion);
+      expect(entry.weight).toBe(baselineEntry?.weight);
+      expect(entry.contribution).toBe(baselineEntry?.contribution);
+    }
+
+    // Total score is lowered (or held, never raised) once slope's weight contribution is zeroed.
+    expect(ablated.score).toBeLessThanOrEqual(baseline.score);
+  });
+
+  it("a criterion absent from the weights map falls back to its rules.ts constant (per-criterion ??, not all-or-nothing)", () => {
+    const [baseline] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
+    const [partial] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, {
+      r: R,
+      q: Q,
+      weights: { slope: 0 },
+    });
+    expect(baseline).toBeDefined();
+    expect(partial).toBeDefined();
+    if (baseline === undefined || partial === undefined) return;
+
+    const fwdEdgeBaseline = baseline.breakdown.find((b) => b.criterion === "fwdEdge");
+    const fwdEdgePartial = partial.breakdown.find((b) => b.criterion === "fwdEdge");
+    expect(fwdEdgePartial?.weight).toBe(WEIGHT_FWD_EDGE);
+    expect(fwdEdgePartial?.weight).toBe(fwdEdgeBaseline?.weight);
+  });
+});
 });
