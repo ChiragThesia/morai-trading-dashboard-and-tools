@@ -11,8 +11,10 @@
  * (never a parallel P&L formula, EXIT-02) — never fabricating a value for a verdict whose
  * calendar or snapshot has since gone missing (that position is simply omitted).
  *
- * `changed` is conservatively `false`: no "N most recent verdicts" read exists yet to
- * reconstruct a cross-cycle diff at read time (see HeldPositionVerdict's port doc comment).
+ * `changed` is read straight off the latest persisted row's `verdict.changed` (EXIT-09 gap
+ * closure, 26-VERIFICATION.md) — computeExitAdvice.ts already computes it at WRITE time via
+ * hasChanged() and attaches it before persisting, so no read-time cross-cycle diff is needed
+ * here. A row persisted before this fix has no `changed` key; that absence defaults to `false`.
  *
  * Cold start (D-18 precedent): zero verdict rows anywhere → ok(null).
  *
@@ -73,7 +75,8 @@ export function makeGetExitAdviceUseCase(deps: GetExitAdviceDeps): ForRunningGet
         calendarId: row.calendarId,
         name: position.name,
         verdict: row.verdict,
-        changed: false,
+        // EXIT-09 gap closure: the real write-time flag, not a hardcoded false (26-VERIFICATION.md).
+        changed: row.verdict.changed ?? false,
         pnlPct,
         basis: { openNetDebit: position.openNetDebit, netMark: snapshot.netMark },
       });

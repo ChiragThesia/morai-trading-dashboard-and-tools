@@ -10,6 +10,9 @@
  * - a calendar with no prior verdict is absent from the result (not an error)
  * - a corrupted stored row (bypassing the repo's own write-path validation) surfaces a
  *   StorageError on read, never a silently-invalid domain shape (T-26-08)
+ * - EXIT-09 gap closure (26-VERIFICATION.md): a real write-time `changed` flag round-trips
+ *   through insert -> read on BOTH adapters; a legacy row with no `changed` key defaults to
+ *   `false` on read (additive JSONB field, no migration)
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
@@ -175,6 +178,42 @@ export function runExitVerdictsContractTests(makeRepo: () => ExitVerdictsRepo): 
       expect(readResult.ok).toBe(true);
       if (!readResult.ok) return;
       expect(readResult.value.some((r) => r.calendarId === CAL_A)).toBe(false);
+    });
+
+    it("EXIT-09 gap closure: a real write-time `changed:true` flag round-trips through insert -> read", async () => {
+      const row: ExitVerdictRow = {
+        observedAt: T1,
+        calendarId: CAL_A,
+        verdict: { ...makeVerdict({ verdict: "STOP", rung: "-25%", ruleId: "STOP-25" }), changed: true },
+      };
+
+      const insertResult = await repo.insertExitVerdict(row);
+      expect(insertResult.ok).toBe(true);
+
+      const readResult = await repo.readLatestVerdictsPerCalendar();
+      expect(readResult.ok).toBe(true);
+      if (!readResult.ok) return;
+      const found = readResult.value.find((r) => r.calendarId === CAL_A);
+      expect(found?.verdict.changed).toBe(true);
+    });
+
+    it("EXIT-09 gap closure: a legacy stored blob with no `changed` key defaults to false on read", async () => {
+      await repo.seedRawVerdict(T1, CAL_A, {
+        verdict: "HOLD",
+        rung: null,
+        ruleId: "HOLD-legacy",
+        metric: { name: "pnlPct", value: 0.02, threshold: 0.05 },
+        indicative: false,
+        escalate: false,
+        roll: null,
+        // no `changed` key — simulates a row persisted before this fix
+      });
+
+      const readResult = await repo.readLatestVerdictsPerCalendar();
+      expect(readResult.ok).toBe(true);
+      if (!readResult.ok) return;
+      const found = readResult.value.find((r) => r.calendarId === CAL_A);
+      expect(found?.verdict.changed).toBe(false);
     });
   });
 }

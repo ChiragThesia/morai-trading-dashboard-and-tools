@@ -8,6 +8,9 @@
  *     ruleSet echoes the registry, marketSession is evaluated at read time.
  *   - A verdict whose calendar or snapshot has since gone missing is omitted, not fabricated.
  *   - observedAt/asOf reflect the MAX observedAt across included verdicts.
+ *   - EXIT-09 gap closure (26-VERIFICATION.md): `changed` passes through the persisted row's
+ *     write-time flag instead of a hardcoded `false`; a legacy row with no `changed` key still
+ *     defaults to `false`.
  */
 
 import { describe, it, expect } from "vitest";
@@ -189,5 +192,75 @@ describe("getExitAdvice — shape", () => {
     if (!result.ok || result.value === null) throw new Error("expected a snapshot");
     expect(result.value.observedAt).toEqual(newer.observedAt);
     expect(result.value.asOf).toBe("2026-07-09");
+  });
+});
+
+// ─── EXIT-09 gap closure: `changed` passthrough (26-VERIFICATION.md) ───────────────
+
+describe("getExitAdvice — changed passthrough (EXIT-09 gap closure)", () => {
+  it("passes the persisted row's real write-time `changed:true` through to the API response", async () => {
+    const row = makeVerdictRow({
+      verdict: {
+        verdict: "STOP",
+        rung: "-25%",
+        ruleId: "stop",
+        metric: { name: "pnlPct", value: -0.26, threshold: -0.25 },
+        indicative: false,
+        escalate: true,
+        roll: null,
+        changed: true,
+      },
+    });
+
+    const useCase = makeGetExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition()]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot()]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([row]),
+      now: () => new Date("2026-07-09T16:00:00.000Z"),
+    });
+
+    const result = await useCase();
+    if (!result.ok || result.value === null) throw new Error("expected a snapshot");
+    expect(result.value.positions[0]?.changed).toBe(true);
+  });
+
+  it("a persisted `changed:false` row (unchanged verdict cycle-to-cycle) still reads back false", async () => {
+    const row = makeVerdictRow({
+      verdict: {
+        verdict: "STOP",
+        rung: "-25%",
+        ruleId: "stop",
+        metric: { name: "pnlPct", value: -0.26, threshold: -0.25 },
+        indicative: false,
+        escalate: true,
+        roll: null,
+        changed: false,
+      },
+    });
+
+    const useCase = makeGetExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition()]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot()]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([row]),
+      now: () => new Date("2026-07-09T16:00:00.000Z"),
+    });
+
+    const result = await useCase();
+    if (!result.ok || result.value === null) throw new Error("expected a snapshot");
+    expect(result.value.positions[0]?.changed).toBe(false);
+  });
+
+  it("a legacy row persisted before this fix (no `changed` key at all) still defaults to false", async () => {
+    const row = makeVerdictRow(); // verdict has no `changed` key — pre-fix shape
+    const useCase = makeGetExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition()]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot()]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([row]),
+      now: () => new Date("2026-07-09T16:00:00.000Z"),
+    });
+
+    const result = await useCase();
+    if (!result.ok || result.value === null) throw new Error("expected a snapshot");
+    expect(result.value.positions[0]?.changed).toBe(false);
   });
 });

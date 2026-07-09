@@ -8,6 +8,8 @@
  *   - A calendar with no snapshot yet is skipped (not an error), other calendars still get verdicts.
  *   - Hysteresis self-read: the previous verdict row feeds evaluateExit's 3rd argument.
  *   - Change detection: console.warn fires only when (verdict,rung,ruleId) changed AND escalate.
+ *   - EXIT-09 gap closure (26-VERIFICATION.md): the SAME `changed` value is attached to the
+ *     persisted row, not just used for the console.warn side-effect (was previously discarded).
  *   - Indicative pass-through: an after-hours snapshot produces an indicative, non-escalating verdict.
  *   - Partial-failure/resume: a persist error on one calendar surfaces as err immediately.
  *   - observedAt is the calendar's own snapshot time (retry-idempotency grain), not wall-clock now().
@@ -245,7 +247,7 @@ describe("computeExitAdvice — change detection", () => {
         roll: null,
       },
     };
-    const { persist } = makePersistSpy();
+    const { persist, calls } = makePersistSpy();
 
     const useCase = makeComputeExitAdviceUseCase({
       readHeldPositions: fakeReadHeldPositions([makePosition({ openNetDebit: 4000 })]),
@@ -260,6 +262,8 @@ describe("computeExitAdvice — change detection", () => {
     await useCase();
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(String(warnSpy.mock.calls[0]?.[0])).toContain("cal-1");
+    // EXIT-09 gap closure: the persisted row carries the SAME `changed:true` the warn used.
+    expect(calls[0]?.verdict.changed).toBe(true);
   });
 
   it("does NOT log when the same STOP rung stays armed cycle to cycle (unchanged)", async () => {
@@ -277,7 +281,7 @@ describe("computeExitAdvice — change detection", () => {
         roll: null,
       },
     };
-    const { persist } = makePersistSpy();
+    const { persist, calls } = makePersistSpy();
 
     const useCase = makeComputeExitAdviceUseCase({
       readHeldPositions: fakeReadHeldPositions([makePosition({ openNetDebit: 4000 })]),
@@ -291,6 +295,8 @@ describe("computeExitAdvice — change detection", () => {
 
     await useCase();
     expect(warnSpy).not.toHaveBeenCalled();
+    // EXIT-09 gap closure: an unchanged verdict persists `changed:false`.
+    expect(calls[0]?.verdict.changed).toBe(false);
   });
 
   it("does NOT log on a changed but non-escalating verdict (e.g. HOLD to TAKE)", async () => {
@@ -307,7 +313,7 @@ describe("computeExitAdvice — change detection", () => {
         roll: null,
       },
     };
-    const { persist } = makePersistSpy();
+    const { persist, calls } = makePersistSpy();
 
     const useCase = makeComputeExitAdviceUseCase({
       readHeldPositions: fakeReadHeldPositions([makePosition({ openNetDebit: 4000 })]),
@@ -321,6 +327,9 @@ describe("computeExitAdvice — change detection", () => {
 
     await useCase();
     expect(warnSpy).not.toHaveBeenCalled();
+    // EXIT-09 gap closure: changed-but-non-escalating still persists `changed:true` — the UI's
+    // (non-red) CHANGED marker is a separate concern from console.warn's escalation gate.
+    expect(calls[0]?.verdict.changed).toBe(true);
   });
 });
 

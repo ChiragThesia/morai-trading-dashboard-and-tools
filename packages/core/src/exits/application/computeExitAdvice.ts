@@ -132,9 +132,14 @@ export function makeComputeExitAdviceUseCase(deps: ComputeExitAdviceDeps): ForRu
       const verdict = evaluateExit(position, context, previousVerdict);
 
       // EXIT-09: only verdict CHANGES surface as alerts; STOP/EXIT_PRE_EVENT escalate distinctly.
+      // `changed` is computed ONCE here and used both for the console.warn gate below AND
+      // persisted on the row (EXIT-09 gap closure, 26-VERIFICATION.md) — getExitAdvice.ts reads
+      // it straight through instead of hardcoding false.
+      const changed = hasChanged(verdict, previousVerdict);
+
       // No external notification system this phase (26-CONTEXT.md) — console.warn is the
       // sanctioned ops-visibility channel (typescript.md "gate console").
-      if (hasChanged(verdict, previousVerdict) && verdict.escalate) {
+      if (changed && verdict.escalate) {
         console.warn(
           `compute-exit-advice: verdict change for calendar ${position.calendarId}: ` +
             `${verdict.verdict}${verdict.rung !== null ? ` ${verdict.rung}` : ""} (${verdict.ruleId})`,
@@ -149,7 +154,7 @@ export function makeComputeExitAdviceUseCase(deps: ComputeExitAdviceDeps): ForRu
       const persistResult = await deps.persistExitVerdict({
         observedAt: snapshot.time,
         calendarId: position.calendarId,
-        verdict,
+        verdict: { ...verdict, changed },
       });
       if (!persistResult.ok) return persistResult;
     }

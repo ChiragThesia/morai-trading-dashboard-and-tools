@@ -21,11 +21,15 @@ export type StorageError = {
 /**
  * ExitVerdictRow — one persisted `exit_verdicts` row (append-only, keyed
  * `(observed_at, calendar_id)`, `onConflictDoNothing` — 26-03's idempotency convention).
+ * `verdict.changed` is the write-time change-detection flag computeExitAdvice.ts attaches via
+ * hasChanged() before persisting (EXIT-09 gap closure, 26-VERIFICATION.md) — optional because
+ * a row persisted before this fix has no `changed` key; readers treat an absent value as
+ * `false` (matches the contract schema's `.default(false)`, getExitAdvice.ts).
  */
 export type ExitVerdictRow = {
   readonly observedAt: Date;
   readonly calendarId: string;
-  readonly verdict: ExitVerdict;
+  readonly verdict: ExitVerdict & { readonly changed?: boolean };
 };
 
 /**
@@ -99,11 +103,11 @@ export type ForRunningComputeExitAdvice = () => Promise<Result<void, StorageErro
  * HeldPositionVerdict — one open calendar's verdict for this cycle, shaped for the API/MCP
  * read surface (mirrors contracts/src/exits.ts `heldPositionVerdict` field-for-field).
  * `pnlPct`/`basis`/`name` are re-derived at READ time from the calendar + latest snapshot
- * (getExitAdvice.ts) — they are NOT part of the persisted `ExitVerdict` blob. `changed` is
- * conservatively `false` in this plan: no "N most recent verdicts" read exists yet to
- * reconstruct a cross-cycle diff at read time (a genuinely new capability, deferred — see
- * 26-04-SUMMARY.md). computeExitAdvice.ts still computes+acts on `changed` internally, at
- * WRITE time, for its own escalation logging (EXIT-09).
+ * (getExitAdvice.ts) — they are NOT part of the persisted `ExitVerdict` blob. `changed` IS
+ * part of the persisted blob (EXIT-09 gap closure, 26-VERIFICATION.md): computeExitAdvice.ts
+ * computes it at WRITE time via hasChanged() — the same value it already used for its own
+ * escalation console.warn — and attaches it to the row before persisting; getExitAdvice.ts
+ * reads it straight through (`row.verdict.changed ?? false`), no read-time diff needed.
  */
 export type HeldPositionVerdict = {
   readonly calendarId: string;

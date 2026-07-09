@@ -30,11 +30,15 @@ export type ExitRollDetail = z.infer<typeof exitRollDetail>;
 
 /**
  * exitVerdict — the persisted `exit_verdicts.verdict` JSONB blob shape (Phase 26, Plan 03).
- * Mirrors `packages/core/src/exits/domain/types.ts` `ExitVerdict` field-for-field. Distinct
- * from `heldPositionVerdict` below: that is the API response ROW (adds calendarId/name/
- * changed/pnlPct/basis, all computed at read time by the 26-04 use-case) — this is exactly
- * what the evaluator produces and what gets written to storage, one row per (observedAt,
- * calendarId). Validated on BOTH write and read at the repo boundary (26-03).
+ * Mirrors `packages/core/src/exits/domain/types.ts` `ExitVerdict` field-for-field, PLUS
+ * `changed` — the write-time change-detection flag computeExitAdvice.ts attaches before
+ * persisting (EXIT-09 gap closure, 26-VERIFICATION.md: was computed but discarded, never
+ * persisted). Distinct from `heldPositionVerdict` below: that is the API response ROW (adds
+ * calendarId/name/pnlPct/basis, all computed at read time by the 26-04 use-case) — this is
+ * what the evaluator produces plus that one write-time addition, written to storage one row
+ * per (observedAt, calendarId). `changed` defaults to `false` so a row persisted before this
+ * fix still parses (no migration needed — additive JSONB field). Validated on BOTH write and
+ * read at the repo boundary (26-03).
  */
 export const exitVerdict = z.object({
   verdict: exitVerdictEnum,
@@ -46,6 +50,9 @@ export const exitVerdict = z.object({
   indicative: z.boolean(),
   escalate: z.boolean(),
   roll: exitRollDetail.nullable(),
+  /** True when this verdict differs from the previous cycle's — set at WRITE time by
+   * computeExitAdvice.ts's hasChanged(), read straight through by getExitAdvice.ts. */
+  changed: z.boolean().default(false),
 });
 
 export type ExitVerdictBlob = z.infer<typeof exitVerdict>;
