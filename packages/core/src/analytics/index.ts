@@ -6,6 +6,15 @@
 export { interpolateRiskReversal } from "./domain/risk-reversal.ts";
 export { percentileRank } from "./domain/percentile-rank.ts";
 
+// Regime banding domain (Phase 24, BOARD-01/02) — pure calm/warning/crisis classifiers
+export {
+  bandVixTermStructure,
+  bandVvix,
+  bandVix9dRatio,
+  bandHyOas,
+} from "./domain/regime.ts";
+export type { RegimeBand } from "./domain/regime.ts";
+
 // Use-cases (06-04: term-structure half of compute-analytics + the read forwarder)
 export { makeComputeAnalyticsUseCase } from "./application/computeAnalytics.ts";
 export type {
