@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 26
-current_phase_name: Exit Advisor
+current_phase: 27
+current_phase_name: PICK-04 Backtest Harness
 status: planning
 stopped_at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
-last_updated: "2026-07-09T08:44:42.107Z"
+last_updated: "2026-07-09T11:46:00.711Z"
 last_activity: 2026-07-09
-last_activity_desc: Phase 25 complete, transitioned to Phase 26
+last_activity_desc: Phase 26 complete, transitioned to Phase 27
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
-  percent: 50
+  completed_phases: 4
+  total_plans: 14
+  completed_plans: 14
+  percent: 67
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 26 of 28 (Exit Advisor)
+Phase: 27 of 28 (PICK-04 Backtest Harness)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-09 — Phase 25 complete, transitioned to Phase 26
+Last activity: 2026-07-09 — Phase 26 complete, transitioned to Phase 27
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -160,6 +160,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 19 | 9 | - | - |
 | 23 | 1 | - | - |
 | 25 | 2 | - | - |
+| 26 | 6 | - | - |
 
 **Recent Trend:**
 

@@ -37,26 +37,26 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Exit advisor
 
-- [ ] **EXIT-01**: Every open calendar gets a verdict each pipeline cycle — HOLD / TAKE (with
+- [x] **EXIT-01**: Every open calendar gets a verdict each pipeline cycle — HOLD / TAKE (with
       ladder rung +5/+10/+15%) / STOP (−25/−50%) / EXIT-pre-event — from a typed exit-rule
       registry mirroring rules.ts
-- [ ] **EXIT-02**: Verdicts derive from the validated journal fill-ledger P&L basis (never a
+- [x] **EXIT-02**: Verdicts derive from the validated journal fill-ledger P&L basis (never a
       recomputed parallel P&L) and the latest calendar snapshot (netMark, term structure, greeks)
-- [ ] **EXIT-03**: TERM trigger fires on live front−back IV inversion ≥0.5pp; GAMMA trigger on
+- [x] **EXIT-03**: TERM trigger fires on live front−back IV inversion ≥0.5pp; GAMMA trigger on
       spot >2% off strike with front <7 DTE; EVT trigger on tier-1 event ≤3d from front expiry
-- [ ] **EXIT-04**: Each verdict names the rule that fired and its raw metric (no bare verdicts,
+- [x] **EXIT-04**: Each verdict names the rule that fired and its raw metric (no bare verdicts,
       no fabricated confidence percentages)
-- [ ] **EXIT-05**: Verdicts are session/staleness-gated with hysteresis banding — no flapping on
+- [x] **EXIT-05**: Verdicts are session/staleness-gated with hysteresis banding — no flapping on
       AH-indicative marks or gap rows
-- [ ] **EXIT-06**: ROLL verdict: when front <14 DTE, spot within ±1% of strike, profit <15%, and
+- [x] **EXIT-06**: ROLL verdict: when front <14 DTE, spot within ±1% of strike, profit <15%, and
       no blocking event — advisor suggests a haircut-priced replacement front (+14–21 DTE)
-- [ ] **EXIT-07**: Analyzer shows a held-positions panel with per-calendar verdict chips + the
+- [x] **EXIT-07**: Analyzer shows a held-positions panel with per-calendar verdict chips + the
       exit ruleSet rendered from the engine (entry-methodology symmetry)
-- [ ] **EXIT-08**: MCP tool answers "what should I do with my open calendars?" with the same
+- [x] **EXIT-08**: MCP tool answers "what should I do with my open calendars?" with the same
       verdict payloads
-- [ ] **EXIT-09**: Only verdict CHANGES are surfaced as alerts; STOP and EXIT-pre-event escalate
+- [x] **EXIT-09**: Only verdict CHANGES are surfaced as alerts; STOP and EXIT-pre-event escalate
       distinctly (no alert spam)
-- [ ] **EXIT-10**: Advisor never executes — advise + alert only (STRM-04 read-only boundary)
+- [x] **EXIT-10**: Advisor never executes — advise + alert only (STRM-04 read-only boundary)
 
 ### PICK-04 backtest harness
 
@@ -121,16 +121,16 @@ Explicit exclusions with reasoning.
 | BOARD-03 | Phase 24 | Pending |
 | OPS-01 | Phase 25 | Complete |
 | OPS-02 | Phase 25 | Complete |
-| EXIT-01 | Phase 26 | Pending |
-| EXIT-02 | Phase 26 | Pending |
-| EXIT-03 | Phase 26 | Pending |
-| EXIT-04 | Phase 26 | Pending |
-| EXIT-05 | Phase 26 | Pending |
-| EXIT-06 | Phase 26 | Pending |
-| EXIT-07 | Phase 26 | Pending |
-| EXIT-08 | Phase 26 | Pending |
-| EXIT-09 | Phase 26 | Pending |
-| EXIT-10 | Phase 26 | Pending |
+| EXIT-01 | Phase 26 | Complete |
+| EXIT-02 | Phase 26 | Complete |
+| EXIT-03 | Phase 26 | Complete |
+| EXIT-04 | Phase 26 | Complete |
+| EXIT-05 | Phase 26 | Complete |
+| EXIT-06 | Phase 26 | Complete |
+| EXIT-07 | Phase 26 | Complete |
+| EXIT-08 | Phase 26 | Complete |
+| EXIT-09 | Phase 26 | Complete |
+| EXIT-10 | Phase 26 | Complete |
 | BT-01 | Phase 27 | Pending |
 | BT-02 | Phase 27 | Pending |
 | BT-03 | Phase 27 | Pending |

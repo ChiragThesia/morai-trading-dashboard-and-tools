@@ -69,7 +69,7 @@ of his trading-knowledge playbook. Every rule research-grounded — "no feeling.
 - [x] **Phase 25: Data-Quality Ops Rider** - `snapshot-calendars` stops writing gap rows; a full (completed 2026-07-09)
   BSM cohort recompute survives one handler cycle
 
-- [ ] **Phase 26: Exit Advisor** - Every open calendar gets a HOLD/TAKE/STOP/ROLL/EXIT-pre-event
+- [x] **Phase 26: Exit Advisor** - Every open calendar gets a HOLD/TAKE/STOP/ROLL/EXIT-pre-event (completed 2026-07-09)
   verdict each cycle, from the user's own playbook ladder
 
 - [ ] **Phase 27: PICK-04 Backtest Harness** - Operator CLI replays stored chains through the live
@@ -190,13 +190,15 @@ EXIT-10
   5. Only verdict changes surface as alerts — STOP and EXIT-pre-event escalate distinctly, no
      spam — and the advisor only ever advises: it never places or modifies an order.
 
-**Plans**: 6 plans
-- [ ] 26-01-PLAN.md — Docs (exit-rules.md) + haircut extraction + exits contracts/types/ports interface
-- [ ] 26-02-PLAN.md — Exit-rule registry + pure evaluateExit (precedence, hysteresis, gating, ROLL) [TDD]
-- [ ] 26-03-PLAN.md — Migration 0020 + exit_verdicts repo/twin + journal latest-snapshot port [TDD]
-- [ ] 26-04-PLAN.md — computeExitAdvice/getExitAdvice use-cases + worker chain trigger + EXIT-10 guard [TDD]
-- [ ] 26-05-PLAN.md — GET /api/exits route + get_exit_advice MCP tool (MCP-02 parity) [TDD]
-- [ ] 26-06-PLAN.md — Analyzer held-positions panel + exit rules panel (per 26-UI-SPEC)
+**Plans**: 6/6 plans complete
+
+- [x] 26-01-PLAN.md — Docs (exit-rules.md) + haircut extraction + exits contracts/types/ports interface
+- [x] 26-02-PLAN.md — Exit-rule registry + pure evaluateExit (precedence, hysteresis, gating, ROLL) [TDD]
+- [x] 26-03-PLAN.md — Migration 0020 + exit_verdicts repo/twin + journal latest-snapshot port [TDD]
+- [x] 26-04-PLAN.md — computeExitAdvice/getExitAdvice use-cases + worker chain trigger + EXIT-10 guard [TDD]
+- [x] 26-05-PLAN.md — GET /api/exits route + get_exit_advice MCP tool (MCP-02 parity) [TDD]
+- [x] 26-06-PLAN.md — Analyzer held-positions panel + exit rules panel (per 26-UI-SPEC)
+
 **UI hint**: yes
 
 ### Phase 27: PICK-04 Backtest Harness
@@ -264,7 +266,7 @@ Phases execute in numeric order: 23 → 24 → 25 → 26 → 27 → 28
 | 23. VIX3M Ingestion | 1/1 | Complete    | 2026-07-09 |
 | 24. Regime & Breadth Board | 5/5 | Complete   | 2026-07-09 |
 | 25. Data-Quality Ops Rider | 2/2 | Complete    | 2026-07-09 |
-| 26. Exit Advisor | 0/TBD | Not started | - |
+| 26. Exit Advisor | 6/6 | Complete    | 2026-07-09 |
 | 27. PICK-04 Backtest Harness | 0/TBD | Not started | - |
 | 28. Playbook Gates, Anti-Criteria & Sizing | 0/TBD | Not started | - |
 
