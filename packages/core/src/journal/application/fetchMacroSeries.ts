@@ -1,12 +1,13 @@
 /**
  * fetchMacroSeries.ts — makeFetchMacroSeries orchestration use-case (MAC-01).
  *
- * Orchestrates: fetch 9 FRED series + VVIX independently (Promise.allSettled) → persist every
- * success → fail-loud finish naming any series that failed to fetch OR persist (D-07).
+ * Orchestrates: fetch 9 FRED series + VVIX + VIX9D independently (Promise.allSettled) → persist
+ * every success → fail-loud finish naming any series that failed to fetch OR persist (D-07).
  *
  * Port contract:
  *   fetchFredSeries:         ForFetchingFredSeries          (parameterized FRED HTTP adapter, no fallback)
  *   fetchVvixQuote:          ForFetchingVvixQuote           (CBOE VVIX HTTP adapter)
+ *   fetchVix9dQuote:         ForFetchingVix9dQuote          (CBOE VIX9D HTTP adapter, Phase 24)
  *   persistMacroObservation: ForPersistingMacroObservation  (Postgres repo / in-memory twin)
  *   fredSeriesIds?:          ReadonlyArray<string>          (defaults to the 9 FRED ids)
  *
@@ -26,6 +27,7 @@ import type { Result } from "@morai/shared";
 import type {
   ForFetchingFredSeries,
   ForFetchingVvixQuote,
+  ForFetchingVix9dQuote,
   ForPersistingMacroObservation,
   MacroObservationRow,
   FetchError,
@@ -68,7 +70,7 @@ type TaskOutcome = {
  * makeFetchMacroSeries — inject deps, return the driver function (ForRunningFetchMacroSeries).
  *
  * The returned driver:
- *   1. Builds one fetch task per FRED series id (default: the 8 ids) plus one VVIX task.
+ *   1. Builds one fetch task per FRED series id (default: the 9 ids) plus one VVIX + one VIX9D task.
  *   2. Runs all tasks via Promise.allSettled (per-series independence, D-07).
  *   3. Persists every fetch success independently of any other series' outcome.
  *   4. Collects every series that failed to fetch OR failed to persist.
@@ -77,6 +79,7 @@ type TaskOutcome = {
 export function makeFetchMacroSeries(deps: {
   readonly fetchFredSeries: ForFetchingFredSeries;
   readonly fetchVvixQuote: ForFetchingVvixQuote;
+  readonly fetchVix9dQuote: ForFetchingVix9dQuote;
   readonly persistMacroObservation: ForPersistingMacroObservation;
   readonly fredSeriesIds?: ReadonlyArray<string>;
 }): ForRunningFetchMacroSeries {
@@ -88,6 +91,7 @@ export function makeFetchMacroSeries(deps: {
   }> = [
     ...fredSeriesIds.map((id) => ({ id, fetch: () => deps.fetchFredSeries(id) })),
     { id: "VVIX", fetch: () => deps.fetchVvixQuote() },
+    { id: "VIX9D", fetch: () => deps.fetchVix9dQuote() },
   ];
 
   return async (): Promise<Result<void, FetchError>> => {

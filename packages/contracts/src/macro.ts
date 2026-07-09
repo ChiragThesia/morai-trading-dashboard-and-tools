@@ -21,8 +21,8 @@ export const macroResponse = z.record(z.string(), z.array(macroSeriesPoint));
 export type MacroResponse = z.infer<typeof macroResponse>;
 
 /**
- * MACRO_SERIES_IDS — the ten series ingested by fetch-rates (9 FRED + VVIX via CBOE).
- * BAMLH0A0HYM2 (HY OAS) added Phase 24 — see docs/architecture/regime-board.md.
+ * MACRO_SERIES_IDS — the eleven series ingested by fetch-rates (9 FRED + VVIX + VIX9D via CBOE).
+ * BAMLH0A0HYM2 (HY OAS) and VIX9D added Phase 24 — see docs/architecture/regime-board.md.
  */
 export const MACRO_SERIES_IDS = [
   "DFF",
@@ -35,6 +35,7 @@ export const MACRO_SERIES_IDS = [
   "VVIX",
   "VXVCLS",
   "BAMLH0A0HYM2",
+  "VIX9D",
 ] as const;
 
 export const macroSeriesId = z.enum(MACRO_SERIES_IDS);

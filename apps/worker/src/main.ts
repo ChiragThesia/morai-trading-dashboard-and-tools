@@ -40,6 +40,7 @@ import {
   makePostgresCotObservationsRepo,
   makeFredSeriesAdapter,
   makeCboeVvixAdapter,
+  makeCboeVix9dAdapter,
   makePostgresMacroObservationsRepo,
   makeEconomicEventsAdapter,
   FOMC_SEED,
@@ -172,9 +173,10 @@ const fetchRateUseCase = makeFetchRateUseCase({
   persistRate: rateObsRepo.persistRate,
 });
 
-// MAC-01 (14-05): macro fetch — 7 FRED series (parameterized, no-fallback adapter) + VVIX
-// (CBOE) into macro_observations. D-02: fully additive — does NOT touch fredAdapter/
+// MAC-01 (14-05): macro fetch — 9 FRED series (parameterized, no-fallback adapter) + VVIX +
+// VIX9D (CBOE) into macro_observations. D-02: fully additive — does NOT touch fredAdapter/
 // fetchRateUseCase/rateObsRepo above (DGS3MO→rate_observations/BSM path stays untouched).
+// VIX9D added Phase 24 (MACRO-02/03) — FRED does not publish it (24-RESEARCH.md).
 const fetchFredSeries = makeFredSeriesAdapter({
   fetch: globalThis.fetch,
   apiKey: config.FRED_API_KEY,
@@ -183,10 +185,15 @@ const fetchVvixQuote = makeCboeVvixAdapter({
   fetch: globalThis.fetch,
   userAgent: USER_AGENT,
 });
+const fetchVix9dQuote = makeCboeVix9dAdapter({
+  fetch: globalThis.fetch,
+  userAgent: USER_AGENT,
+});
 const macroObsRepo = makePostgresMacroObservationsRepo(db);
 const fetchMacroSeriesUseCase = makeFetchMacroSeries({
   fetchFredSeries,
   fetchVvixQuote,
+  fetchVix9dQuote,
   persistMacroObservation: macroObsRepo.insertMacroObservation,
 });
 

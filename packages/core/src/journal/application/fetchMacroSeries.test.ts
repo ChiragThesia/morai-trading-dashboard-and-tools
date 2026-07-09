@@ -18,6 +18,7 @@ import { ok, err } from "@morai/shared";
 import type {
   ForFetchingFredSeries,
   ForFetchingVvixQuote,
+  ForFetchingVix9dQuote,
   ForPersistingMacroObservation,
   MacroObservationRow,
 } from "./ports.ts";
@@ -30,17 +31,18 @@ function makeRow(seriesId: string): MacroObservationRow {
     seriesId,
     date: "2026-07-01",
     value: 1.23,
-    source: seriesId === "VVIX" ? "cboe" : "fred",
+    source: seriesId === "VVIX" || seriesId === "VIX9D" ? "cboe" : "fred",
   };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("makeFetchMacroSeries", () => {
-  it("persists every row and returns ok(void) when all 10 series succeed", async () => {
+  it("persists every row and returns ok(void) when all 11 series succeed", async () => {
     const persisted: Array<MacroObservationRow> = [];
     const fetchFredSeries: ForFetchingFredSeries = async (seriesId) => ok(makeRow(seriesId));
     const fetchVvixQuote: ForFetchingVvixQuote = async () => ok(makeRow("VVIX"));
+    const fetchVix9dQuote: ForFetchingVix9dQuote = async () => ok(makeRow("VIX9D"));
     const persistMacroObservation: ForPersistingMacroObservation = async (row) => {
       persisted.push(row);
       return ok(undefined);
@@ -49,15 +51,16 @@ describe("makeFetchMacroSeries", () => {
     const fetchMacroSeries = makeFetchMacroSeries({
       fetchFredSeries,
       fetchVvixQuote,
+      fetchVix9dQuote,
       persistMacroObservation,
     });
 
     const result = await fetchMacroSeries();
 
     expect(result.ok).toBe(true);
-    expect(persisted).toHaveLength(10);
+    expect(persisted).toHaveLength(11);
     expect(persisted.map((r) => r.seriesId).sort()).toEqual(
-      [...DEFAULT_FRED_SERIES_IDS, "VVIX"].sort(),
+      [...DEFAULT_FRED_SERIES_IDS, "VVIX", "VIX9D"].sort(),
     );
     expect(DEFAULT_FRED_SERIES_IDS).toContain("BAMLH0A0HYM2");
   });
@@ -71,6 +74,7 @@ describe("makeFetchMacroSeries", () => {
       return ok(makeRow(seriesId));
     };
     const fetchVvixQuote: ForFetchingVvixQuote = async () => ok(makeRow("VVIX"));
+    const fetchVix9dQuote: ForFetchingVix9dQuote = async () => ok(makeRow("VIX9D"));
     const persistMacroObservation: ForPersistingMacroObservation = async (row) => {
       persisted.push(row);
       return ok(undefined);
@@ -79,6 +83,7 @@ describe("makeFetchMacroSeries", () => {
     const fetchMacroSeries = makeFetchMacroSeries({
       fetchFredSeries,
       fetchVvixQuote,
+      fetchVix9dQuote,
       persistMacroObservation,
     });
 
@@ -90,7 +95,7 @@ describe("makeFetchMacroSeries", () => {
       expect(result.error.message).toContain("SOFR");
     }
     // successes STILL persisted even though the overall Result is err (D-07)
-    expect(persisted).toHaveLength(8);
+    expect(persisted).toHaveLength(9);
     const persistedIds = persisted.map((r) => r.seriesId);
     expect(persistedIds).not.toContain("DFF");
     expect(persistedIds).not.toContain("SOFR");
@@ -100,6 +105,7 @@ describe("makeFetchMacroSeries", () => {
     const persisted: Array<string> = [];
     const fetchFredSeries: ForFetchingFredSeries = async (seriesId) => ok(makeRow(seriesId));
     const fetchVvixQuote: ForFetchingVvixQuote = async () => ok(makeRow("VVIX"));
+    const fetchVix9dQuote: ForFetchingVix9dQuote = async () => ok(makeRow("VIX9D"));
     const persistMacroObservation: ForPersistingMacroObservation = async (row) => {
       if (row.seriesId === "SOFR") {
         return err({ kind: "storage-error" as const, message: "db down" });
@@ -111,6 +117,7 @@ describe("makeFetchMacroSeries", () => {
     const fetchMacroSeries = makeFetchMacroSeries({
       fetchFredSeries,
       fetchVvixQuote,
+      fetchVix9dQuote,
       persistMacroObservation,
     });
 
@@ -120,8 +127,8 @@ describe("makeFetchMacroSeries", () => {
     if (!result.ok) {
       expect(result.error.message).toContain("SOFR");
     }
-    // 9 of 10 series persisted successfully — SOFR's persist failed but the others still attempted
-    expect(persisted).toHaveLength(9);
+    // 10 of 11 series persisted successfully — SOFR's persist failed but the others still attempted
+    expect(persisted).toHaveLength(10);
     expect(persisted).not.toContain("SOFR");
   });
 
@@ -134,6 +141,7 @@ describe("makeFetchMacroSeries", () => {
       return ok(makeRow(seriesId));
     };
     const fetchVvixQuote: ForFetchingVvixQuote = async () => ok(makeRow("VVIX"));
+    const fetchVix9dQuote: ForFetchingVix9dQuote = async () => ok(makeRow("VIX9D"));
     const persistMacroObservation: ForPersistingMacroObservation = async (row) => {
       persisted.push(row.seriesId);
       return ok(undefined);
@@ -142,6 +150,7 @@ describe("makeFetchMacroSeries", () => {
     const fetchMacroSeries = makeFetchMacroSeries({
       fetchFredSeries,
       fetchVvixQuote,
+      fetchVix9dQuote,
       persistMacroObservation,
     });
 
@@ -151,7 +160,34 @@ describe("makeFetchMacroSeries", () => {
     if (!result.ok) {
       expect(result.error.message).toContain("T10Y2Y");
     }
-    expect(persisted).toHaveLength(9);
+    expect(persisted).toHaveLength(10);
     expect(persisted).not.toContain("T10Y2Y");
+  });
+
+  it("names VIX9D among failures when its fetch fails", async () => {
+    const persisted: Array<string> = [];
+    const fetchFredSeries: ForFetchingFredSeries = async (seriesId) => ok(makeRow(seriesId));
+    const fetchVvixQuote: ForFetchingVvixQuote = async () => ok(makeRow("VVIX"));
+    const fetchVix9dQuote: ForFetchingVix9dQuote = async () =>
+      err({ kind: "fetch-error" as const, message: "VIX9D unavailable" });
+    const persistMacroObservation: ForPersistingMacroObservation = async (row) => {
+      persisted.push(row.seriesId);
+      return ok(undefined);
+    };
+
+    const fetchMacroSeries = makeFetchMacroSeries({
+      fetchFredSeries,
+      fetchVvixQuote,
+      fetchVix9dQuote,
+      persistMacroObservation,
+    });
+
+    const result = await fetchMacroSeries();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("VIX9D");
+    }
+    expect(persisted).not.toContain("VIX9D");
   });
 });
