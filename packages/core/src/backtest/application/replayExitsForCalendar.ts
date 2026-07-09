@@ -155,8 +155,7 @@ export async function replayExitsForCalendar(
   const entryValue = (await priceLegPairHaircut(deps, calendar, calendar.openedAt, "open")) ?? calendar.openNetDebit;
 
   const modeledPnl = (exitValue - entryValue) * calendar.qty * 100;
-  const directionMatch =
-    Math.sign(modeledPnl) === Math.sign(oraclePnl) || (modeledPnl === 0 && oraclePnl === 0);
+  const directionMatch = Math.sign(modeledPnl) === Math.sign(oraclePnl);
 
   return ok({ calendarId: calendar.id, directionMatch, modeledPnl, oraclePnl });
 }
