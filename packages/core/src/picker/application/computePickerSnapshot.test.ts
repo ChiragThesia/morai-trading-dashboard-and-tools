@@ -26,12 +26,14 @@ import type { Result } from "@morai/shared";
 import {
   makeComputePickerSnapshotUseCase,
   rankAndCapCandidates,
+  cooldownUntilFrom,
   PICKER_TOP_N,
   GEX_FRESHNESS_WINDOW_MS,
   EVENTS_FRESHNESS_WINDOW_MS,
 } from "./computePickerSnapshot.ts";
 import { selectCandidates } from "../domain/candidate-selection.ts";
 import { scoreCalendarCandidates } from "../domain/scoring.ts";
+import { cooldownCutoff } from "../domain/brakes.ts";
 import type {
   ChainQuoteForPicker,
   EconomicEvent,
@@ -715,6 +717,24 @@ describe("makeComputePickerSnapshotUseCase — entry gate (28-03, PLAY-01/PLAY-0
     expect(row).toBeDefined();
     if (row === undefined) return;
     expect(row.snapshot.gate.state).toBe("open");
+  });
+
+  // WR-01: cooldownUntil (cooldownUntilFrom, the display lift date) must agree with the ACTUAL
+  // read window (cooldownCutoff, brakes.ts) on every business day around the boundary -- never
+  // a day where the repo's `eventedAt >= cutoff` window still includes the loss (cooldown still
+  // active) while cooldownUntil claims it already lifted.
+  it("cooldownUntil agrees with the cooldownCutoff read window on every business day of the boundary (WR-01)", () => {
+    const closedAtIso = "2026-06-29"; // Monday
+    const untilIso = cooldownUntilFrom(closedAtIso);
+    // Simulates the repo's `eventedAt >= cooldownCutoff(dayIso)` inclusion test for each
+    // candidate "today" spanning the window's edges (Tue/Wed/Thu).
+    for (const dayIso of ["2026-06-30", "2026-07-01", "2026-07-02"]) {
+      const stillInWindow = closedAtIso >= cooldownCutoff(dayIso);
+      const notYetLifted = dayIso < untilIso;
+      expect(notYetLifted).toBe(stillInWindow);
+    }
+    // The Monday loss's window lifts Thursday -- the first day businessDaysSince(Mon, C) > 2.
+    expect(untilIso).toBe("2026-07-02");
   });
 });
 

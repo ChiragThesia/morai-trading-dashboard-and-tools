@@ -239,12 +239,12 @@ function toPickerGate(
  * Local here: only this wiring layer needs "when does an ALREADY-TRIPPED cooldown lift" —
  * brakes.ts answers the opposite question ("how far back should the read window reach").
  */
-function cooldownUntilFrom(closedAtIso: string): string {
+export function cooldownUntilFrom(closedAtIso: string): string {
   const cursor = new Date(`${closedAtIso}T00:00:00.000Z`);
   for (;;) {
     cursor.setUTCDate(cursor.getUTCDate() + 1);
     const candidateIso = cursor.toISOString().slice(0, 10);
-    if (businessDaysSince(closedAtIso, candidateIso) >= COOLDOWN_BIZDAYS) return candidateIso;
+    if (businessDaysSince(closedAtIso, candidateIso) > COOLDOWN_BIZDAYS) return candidateIso;
   }
 }
 
