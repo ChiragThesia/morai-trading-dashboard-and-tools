@@ -73,6 +73,9 @@ describe("bootstrapCi", () => {
   });
 
   it("fast-check: a constant samples array always degenerates to a point interval", () => {
+    // Tolerance, not exact equality: summing+dividing identical floats (e.g. subnormal
+    // doubles near zero, which fc.double explores) can differ from the input by a few ULP
+    // — the invariant under test is "degenerates to essentially a point", not bit-identity.
     fc.assert(
       fc.property(
         fc.double({ min: -1000, max: 1000, noNaN: true }),
@@ -81,7 +84,10 @@ describe("bootstrapCi", () => {
         (value, length, seed) => {
           const samples = Array.from({ length }, () => value);
           const result = bootstrapCi(samples, seed, 200);
-          return result.low === value && result.high === value;
+          const tolerance = 1e-9 * Math.max(1, Math.abs(value));
+          return (
+            Math.abs(result.low - value) <= tolerance && Math.abs(result.high - value) <= tolerance
+          );
         },
       ),
     );

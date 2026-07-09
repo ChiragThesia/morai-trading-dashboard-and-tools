@@ -26,3 +26,19 @@ export type {
   FullHistorySnapshotRow,
   ForReadingFullSnapshotHistoryForCalendar,
 } from "./application/ports.ts";
+
+// ─── Report kernel (Phase 27, Plan 04) — pure, no I/O, reused by 06's runBacktest ──────
+export {
+  directionalAttribution,
+  type AttributionSample,
+  type AttributionVerdict,
+  type AttributionResult,
+} from "./domain/directional-attribution.ts";
+export { ablationDelta } from "./domain/ablation-delta.ts";
+export { bootstrapCi, quantile, type BootstrapCiResult } from "./domain/bootstrap-ci.ts";
+export {
+  coveragePercent,
+  type CoverageCohort,
+  type CoverageDayResult,
+  type CoveragePercentResult,
+} from "./domain/coverage.ts";
