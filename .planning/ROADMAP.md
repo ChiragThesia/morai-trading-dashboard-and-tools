@@ -261,7 +261,13 @@ Phase 27 (gate thresholds and sizing tiers are informed by the backtest's direct
   5. The band scan's target-delta preference is VIX-tuned (`autoTuneTargetDelta`), applied
      additively and only after the crisis-gate infrastructure is live.
 
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 28-01-PLAN.md — Docs + shared VIX ladder + market-level entry-gate domain (banding, hysteresis, GATE BLIND) [PLAY-01]
+- [ ] 28-02-PLAN.md — New recent-closed-calendars port/repo/twin + anti-criteria brakes domain [PLAY-02]
+- [ ] 28-03-PLAN.md — Use-case wiring + additive gate snapshot payload + composition root [PLAY-01, PLAY-02]
+- [ ] 28-04-PLAN.md — VIX-tiered discrete sizing + autoTuneTargetDelta (experimental/deferrable) [PLAY-03, PLAY-05]
+- [ ] 28-05-PLAN.md — Event-calendar bucket: second universe + separate rule set [PLAY-04]
+- [ ] 28-06-PLAN.md — UI (board gate state + Analyzer sizing/bucket) + MCP surface + UAT checkpoint [PLAY-01, PLAY-03, PLAY-04]
 
 ## Progress
 
@@ -275,7 +281,7 @@ Phases execute in numeric order: 23 → 24 → 25 → 26 → 27 → 28
 | 25. Data-Quality Ops Rider | 2/2 | Complete    | 2026-07-09 |
 | 26. Exit Advisor | 6/6 | Complete    | 2026-07-09 |
 | 27. PICK-04 Backtest Harness | 6/6 | Complete    | 2026-07-09 |
-| 28. Playbook Gates, Anti-Criteria & Sizing | 0/TBD | Not started | - |
+| 28. Playbook Gates, Anti-Criteria & Sizing | 0/6 | Not started | - |
 
 ## Backlog / Future Enhancements
 
