@@ -51,9 +51,12 @@ the playbook's crisis guard literally and deleted exactly the trades with edge (
 want backwardation" when buying a calendar). Crisis protection arrives as market-level
 VIX/VIX3M + VIX gates in the playbook-port phase.
 
-Deferred to the playbook-port phase (need a macro→picker port + the VIX3M FRED series, which
-`macro_observations` does not yet carry): VIX < 25 hard gate, VIX/VIX3M < 0.95 contango gate,
-and the VIX-tuned target-delta preference (autoTuneTargetDelta).
+## Market-Level Entry Gate
+
+Crisis protection (VIX ≥ 25, VIX/VIX3M ≥ 0.95) lives at the MARKET level, not here — a single
+`resolveEntryGate` call per `computePickerSnapshot` cycle, banded with hysteresis, never a
+per-candidate gate row (the exact mistake the retired `term-inversion` gate above made). See
+[playbook-gates.md](playbook-gates.md) for the full gate, brake, and sizing design.
 
 ## Active scores (weights sum 100)
 

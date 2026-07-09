@@ -18,6 +18,7 @@ Read in order. Source of truth for how Morai works.
 | [picker-rules.md](architecture/picker-rules.md) | Calendar-picker rule table: gates, weighted scores, experimental rules, refuted list, how to add a rule |
 | [exit-rules.md](architecture/exit-rules.md) | Exit advisor rule ladder: the seven exit rules, precedence order, hysteresis bands, P&L basis, read-only boundary, how to add a rule |
 | [regime-board.md](architecture/regime-board.md) | Regime & breadth board — admitted indicators, thresholds, provenance |
+| [playbook-gates.md](architecture/playbook-gates.md) | Market-level entry gate — shared VIX ladder, penalty bands + hysteresis, GATE BLIND fail-closed, anti-criteria brakes (max-open, loss-cooldown, deferred sustained-trend), sizing tiers |
 | [api-design.md](architecture/api-design.md) | Hono RPC, Zod contracts, error model, service/DAO vocabulary |
 | [mcp-and-plugins.md](architecture/mcp-and-plugins.md) | MCP server as inbound adapter, tool surface, plugin shape |
 | [testing-tdd.md](architecture/testing-tdd.md) | Red→green loop, test pyramid, calibration gates |

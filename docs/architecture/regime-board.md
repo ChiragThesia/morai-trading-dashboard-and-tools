@@ -34,6 +34,9 @@ This is display-only and `[ASSUMED]` (see table above), so it is non-corrupting 
 observation time** (e.g. source the denominator from the same CBOE delayed-quote surface
 as VIX9D — an in-system `_VIX` quote — instead of FRED `VIXCLS`).
 
+Phase 28 resolves this constraint by wiring the picker's entry gate to the same-epoch FRED
+`VIXCLS`/`VXVCLS` pair instead — see [playbook-gates.md](playbook-gates.md).
+
 ## Refuted / Dropped
 
 | # | Candidate | Reason | Revival path |
