@@ -21,6 +21,8 @@ import {
   slopePercentileValue,
   backEventBonusValue,
   thetaVegaValue,
+  thetaVegaFraction,
+  vrpFraction,
   deltaNeutralFraction,
   slopeEntryFraction,
   WEIGHT_FWD_EDGE,
@@ -53,16 +55,16 @@ describe("RULE_SET_METADATA — registry invariants", () => {
     expect(total).toBe(100);
   });
 
-  it("composition: 2 active gates, 6 active scores, 4 experimental", () => {
+  it("composition: 2 active gates, 8 active scores, 2 experimental", () => {
     const gates = RULE_SET_METADATA.filter((r) => r.kind === "gate" && r.status === "active");
     const scores = RULE_SET_METADATA.filter((r) => r.kind === "score" && r.status === "active");
     const experimental = RULE_SET_METADATA.filter((r) => r.status === "experimental");
     expect(gates.map((r) => r.id).sort()).toEqual(["liquidity", "net-theta-positive"]);
     expect(scores.map((r) => r.id).sort()).toEqual(
-      ["beVsEm", "deltaNeutral", "eventAdjustment", "fwdEdge", "gexFit", "slope"],
+      ["beVsEm", "deltaNeutral", "eventAdjustment", "fwdEdge", "gexFit", "slope", "thetaVega", "vrp"],
     );
     expect(experimental.map((r) => r.id).sort()).toEqual(
-      ["backEventBonus", "slopePercentile", "thetaVega", "vrp"],
+      ["backEventBonus", "slopePercentile"],
     );
   });
 
@@ -174,27 +176,40 @@ describe("thetaVegaValue (experimental — θ/vega carry ratio)", () => {
     expect(thetaVegaValue(10, 0)).toBeNull();
   });
 
-  it("ships in RULE_SET_METADATA as an experimental weight-0 row", () => {
+  it("ships in RULE_SET_METADATA as a PROMOTED scored row (2026-07-09 user lock)", () => {
     const row = RULE_SET_METADATA.find((r) => r.id === "thetaVega");
     expect(row).toBeDefined();
-    expect(row?.kind).toBe("experimental");
-    expect(row?.weight).toBe(0);
-    expect(row?.status).toBe("experimental");
+    expect(row?.kind).toBe("score");
+    expect(row?.weight).toBe(10);
+    expect(row?.status).toBe("active");
+  });
+
+  it("thetaVegaFraction: linear to full credit at 0.25; 0 on zero vega", () => {
+    expect(thetaVegaFraction(2.5, 10)).toBe(1); // ratio 0.25
+    expect(thetaVegaFraction(2, 10)).toBeCloseTo(0.8, 10); // practitioner floor 0.20 → 80%
+    expect(thetaVegaFraction(1, 0)).toBe(0);
+  });
+
+  it("vrpFraction: 0 when RV null or IV ≤ RV; full at +3 vol pts", () => {
+    expect(vrpFraction(0.16, null)).toBe(0);
+    expect(vrpFraction(0.14, 0.15)).toBe(0);
+    expect(vrpFraction(0.18, 0.15)).toBe(1);
+    expect(vrpFraction(0.165, 0.15)).toBeCloseTo(0.5, 10);
   });
 });
 
 describe("deltaNeutralFraction (Δ-neutrality score — user-locked 2026-07-08)", () => {
-  it("is 1 at perfectly flat delta and decays linearly to 0 at |Δ| ≥ 10", () => {
+  it("is 1 at perfectly flat delta and decays linearly to 0 at |Δ| ≥ 5 (tightened 2026-07-09)", () => {
     expect(deltaNeutralFraction(0)).toBe(1);
-    expect(deltaNeutralFraction(-1.8)).toBeCloseTo(0.82, 10);
-    expect(deltaNeutralFraction(4.2)).toBeCloseTo(0.58, 10);
-    expect(deltaNeutralFraction(-15)).toBe(0);
+    expect(deltaNeutralFraction(-1.8)).toBeCloseTo(0.64, 10);
+    expect(deltaNeutralFraction(4)).toBeCloseTo(0.2, 10);
+    expect(deltaNeutralFraction(-5)).toBe(0);
   });
 
-  it("weights rebalanced: fwdEdge 30, slope 25, deltaNeutral 10 — sum still 100", () => {
-    expect(WEIGHT_FWD_EDGE).toBe(30);
-    expect(WEIGHT_SLOPE).toBe(25);
-    expect(WEIGHT_DELTA_NEUTRAL).toBe(10);
+  it("weights v4: fwdEdge 25, slope 15, beVsEm 15, deltaNeutral 15 — sum still 100", () => {
+    expect(WEIGHT_FWD_EDGE).toBe(25);
+    expect(WEIGHT_SLOPE).toBe(15);
+    expect(WEIGHT_DELTA_NEUTRAL).toBe(15);
   });
 });
 

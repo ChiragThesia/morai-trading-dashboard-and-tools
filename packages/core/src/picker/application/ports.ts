@@ -98,7 +98,7 @@ export type PickerCandidateDomain = {
   readonly name: string;
   readonly score: number;
   readonly breakdown: ReadonlyArray<{
-    readonly criterion: "slope" | "fwdEdge" | "gexFit" | "eventAdjustment" | "beVsEm" | "deltaNeutral";
+    readonly criterion: "slope" | "fwdEdge" | "gexFit" | "eventAdjustment" | "beVsEm" | "deltaNeutral" | "thetaVega" | "vrp";
     readonly weight: number;
     readonly rawValue: number;
     readonly contribution: number;
@@ -133,6 +133,7 @@ export type PickerCandidateDomain = {
     readonly stopPct: number;
     readonly manageShortDte: number;
     readonly closeByExpiry: string; // YYYY-MM-DD
+    readonly thetaCapturePct: number | null;
   };
 };
 

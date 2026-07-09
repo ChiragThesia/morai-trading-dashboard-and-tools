@@ -267,6 +267,8 @@ const CHIP_LABELS: Record<string, string> = {
   eventAdjustment: "EVENT RISK",
   beVsEm: "BE : EM",
   deltaNeutral: "Δ NEUTRAL",
+  thetaVega: "θ/VEGA",
+  vrp: "VRP",
 };
 
 const EXPERIMENTAL_SHORT: Record<string, string> = {

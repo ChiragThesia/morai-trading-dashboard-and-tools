@@ -38,6 +38,7 @@ export function parsedCalendarToPickerCandidate(parsed: ParsedCalendar, id: stri
       stopPct: 0.175,
       manageShortDte: 21,
       closeByExpiry: "",
+      thetaCapturePct: null,
     },
   };
   return pickerCandidate.parse(candidate);

@@ -57,10 +57,12 @@ export type RawCandidate = {
   readonly backEvents: ReadonlyArray<string>;
   /** Exit-before date (day before a tier-1 event in the front's final 3 days), else null. */
   readonly exitBeforeIso: string | null;
+  /** True when a tier-1 event collides with the peak-theta window (final 5 days before front expiry). */
+  readonly eventInPeakTheta: boolean;
 };
 
 /** One scored criterion contributing to `ScoredCandidate.score` — closed enum (T-19-04). */
-export type BreakdownCriterion = "slope" | "fwdEdge" | "gexFit" | "eventAdjustment" | "beVsEm" | "deltaNeutral";
+export type BreakdownCriterion = "slope" | "fwdEdge" | "gexFit" | "eventAdjustment" | "beVsEm" | "deltaNeutral" | "thetaVega" | "vrp";
 
 export type BreakdownEntry = {
   readonly criterion: BreakdownCriterion;
@@ -78,7 +80,7 @@ export type BreakdownEntry = {
  * `value` is null-honest: insufficient history → null, never a fabricated number.
  */
 export type ContextEntry = {
-  readonly id: "vrp" | "slopePercentile" | "backEventBonus" | "thetaVega";
+  readonly id: "slopePercentile" | "backEventBonus";
   readonly label: string;
   readonly value: number | null;
   readonly note: string;
@@ -91,6 +93,8 @@ export type ExitPlan = {
   readonly manageShortDte: number;
   /** Hard close-by date (YYYY-MM-DD) — the front leg's expiration. */
   readonly closeByExpiry: string;
+  /** Fraction of the calendar's total decay runway captured by the hard-close date (0-1), null when unpriceable. */
+  readonly thetaCapturePct: number | null;
 };
 
 /** Per-event penalty weights (D-11) — a tunable map keyed by event name. */

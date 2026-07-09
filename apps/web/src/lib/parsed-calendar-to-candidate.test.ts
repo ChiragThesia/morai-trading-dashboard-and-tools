@@ -58,6 +58,7 @@ describe("parsedCalendarToPickerCandidate", () => {
       stopPct: 0.175,
       manageShortDte: 21,
       closeByExpiry: "",
+      thetaCapturePct: null,
     });
   });
 

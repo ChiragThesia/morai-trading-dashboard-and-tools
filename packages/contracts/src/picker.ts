@@ -31,7 +31,7 @@ export type PickerCandidateLeg = z.infer<typeof pickerCandidateLeg>;
  * debit-%-of-back band). Adding a criterion requires an explicit schema change.
  */
 export const breakdownEntry = z.object({
-  criterion: z.enum(["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm", "deltaNeutral"]),
+  criterion: z.enum(["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm", "deltaNeutral", "thetaVega", "vrp"]),
   /** Points this criterion contributes at 100% (e.g. 40 for slope, 10 for eventAdjustment). */
   weight: z.number(),
   /** The criterion's raw computed metric (e.g. slope in vol-pts/yr, gexFit as a 0-1 fraction). */
@@ -52,8 +52,10 @@ export const exitPlan = z.object({
   stopPct: z.number(),
   /** Manage the short (front) leg at this many DTE remaining. */
   manageShortDte: z.number().int(),
-  /** Hard close-by date (ISO 8601 date) — the front leg's expiration. */
+  /** Hard close-by date (ISO 8601 date) — front expiry, or the day before a front-window tier-1 event (EVT). */
   closeByExpiry: z.string(),
+  /** Fraction of total decay runway captured by the hard-close date (2026-07-09); defaulted for old rows. */
+  thetaCapturePct: z.number().nullable().default(null),
 });
 
 export type ExitPlan = z.infer<typeof exitPlan>;

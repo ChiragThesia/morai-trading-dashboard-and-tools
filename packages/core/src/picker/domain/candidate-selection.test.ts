@@ -185,10 +185,10 @@ describe("selectCandidates", () => {
     expect(ok.candidates[0]?.exitBeforeIso).toBeNull();
   });
 
-  it("only pairs front legs in [21,36] DTE with back legs where the gap is in [21,35] days — ALL qualifying backs kept", () => {
+  it("only pairs front legs in [21,36] DTE with back legs where the gap is in [15,90] days — ALL qualifying backs kept", () => {
     // Front expiries at dte 20 (too early), 30 (valid), 40 (too late).
-    // Backs from the 30-dte front: gap 15 (too tight), gap 26 (valid), gap 33 (valid),
-    // gap 46 (beyond the 35d cap).
+    // Backs from the 30-dte front: gap 15/26/33/46 all valid in the [15,90] window;
+    // an extra dte-130 expiry (gap 100) exceeds the 90d cap.
     const iv = 0.15;
     const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
     const chain: ChainQuoteForPicker[] = [];
@@ -196,10 +196,10 @@ describe("selectCandidates", () => {
       "2026-07-21": 20, // too-early front
       "2026-07-31": 30, // valid front
       "2026-08-10": 40, // too-late front
-      "2026-08-15": 45, // gap 15 from the 30-dte front → too tight
+      "2026-08-15": 45, // gap 15 → valid (min gap now 15)
       "2026-08-26": 56, // gap 26 → valid back
       "2026-09-02": 63, // gap 33 → valid back (second qualifying back, must ALSO be kept)
-      "2026-09-15": 76, // gap 46 → beyond the 35d gap cap
+      "2026-11-08": 130, // gap 100 → beyond the 90d gap cap
     };
     for (const expiration of Object.keys(expiries)) {
       for (const strike of strikes) {
@@ -222,20 +222,18 @@ describe("selectCandidates", () => {
     }
 
     const frontThirty = candidates.filter((c) => c.frontLeg.expiration === "2026-07-31");
-    // The 30-dte front never pairs with the gap-15 back (too tight) nor the gap-46 back (too wide).
-    expect(frontThirty.every((c) => c.backLeg.expiration !== "2026-08-15")).toBe(true);
-    expect(frontThirty.every((c) => c.backLeg.expiration !== "2026-09-15")).toBe(true);
-    // ALL qualifying backs are kept (user lock: keep all pairs — fwd-edge scoring ranks them).
+    // The 30-dte front never pairs beyond the 90d gap cap.
+    expect(frontThirty.every((c) => c.backLeg.expiration !== "2026-11-08")).toBe(true);
+    // ALL qualifying backs are kept (user lock: keep all pairs — scoring ranks them).
+    expect(frontThirty.some((c) => c.backLeg.expiration === "2026-08-15")).toBe(true);
     expect(frontThirty.some((c) => c.backLeg.expiration === "2026-08-26")).toBe(true);
     expect(frontThirty.some((c) => c.backLeg.expiration === "2026-09-02")).toBe(true);
   });
 
-  it("snaps every candidate strike to a 25-point multiple even when the chain lists 5-point strikes", () => {
+  it("admits liquid OFF-25 strikes — liquidity decides membership, not the 25-grid (2026-07-09 user lock)", () => {
     const iv = 0.15;
-    // 5-point grid around the money — resolved nearest-delta strikes will often land on
-    // off-25 strikes (7495, 7480, …); the universe must snap them to 25s (user lock: OI/volume
-    // concentrate on 25-multiples).
-    const strikes = [7530, 7525, 7520, 7515, 7510, 7505, 7500, 7495, 7490, 7485, 7480, 7475, 7450, 7425, 7400, 7375, 7350, 7325];
+    // A liquid 5-point strike inside the delta band must enter the universe alongside 25s.
+    const strikes = [7430, 7425, 7400, 7375, 7350];
     const chain: ChainQuoteForPicker[] = [];
     for (const expiration of ["2026-07-31", "2026-08-26"]) {
       for (const strike of strikes) {
@@ -243,11 +241,7 @@ describe("selectCandidates", () => {
       }
     }
     const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
-    expect(candidates.length).toBeGreaterThan(0);
-    for (const c of candidates) {
-      expect(c.frontLeg.strike % 25).toBe(0);
-      expect(c.backLeg.strike % 25).toBe(0);
-    }
+    expect(candidates.some((c) => c.frontLeg.strike === 7430)).toBe(true);
   });
 
   it("caps the universe at the 1σ front expected move: spot − K ≤ spot·σ_f·√(t_f/365)", () => {

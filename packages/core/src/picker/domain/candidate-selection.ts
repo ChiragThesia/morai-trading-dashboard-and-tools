@@ -47,11 +47,12 @@ import type { DeltaRung, RawCandidate } from "./types.ts";
  * every liquid 25-multiple with delta in [min, max] enters the universe. Put deltas are
  * negative, so min = deepest (−0.55, just past ATM) and max = furthest OTM edge (−0.25).
  */
-export const DELTA_BAND_MIN = -0.55;
-export const DELTA_BAND_MAX = -0.25;
+export const DELTA_BAND_MIN = -0.49;
+export const DELTA_BAND_MAX = -0.3;
 
-/** SPX strikes snap to 25-point multiples — OI/volume concentrate there (user lock). */
-export const STRIKE_INCREMENT = 25;
+// 25-multiple filter RETIRED 2026-07-09 (user: "25s is where I see OI — if you see OI and
+// volume elsewhere consider that too"): the liquidity gate (OI + spread) is the real
+// criterion; any strike passing it enters the universe.
 
 /** Front-leg DTE window (mockup default grid, D-02). */
 export const FRONT_DTE_MIN = 21;
@@ -61,8 +62,8 @@ export const FRONT_DTE_MAX = 36;
  * Back-leg gap window relative to the front leg (user-locked 2026-07-08): every back expiry
  * with gap ∈ [21, 35] days is emitted (fwd-edge scoring ranks them).
  */
-export const BACK_DTE_MIN_GAP = 21;
-export const BACK_DTE_MAX_GAP = 35;
+export const BACK_DTE_MIN_GAP = 15;
+export const BACK_DTE_MAX_GAP = 90;
 
 /**
  * ORATS 2-leg fill haircut: cross this fraction of each leg's bid-ask width off the natural
@@ -76,6 +77,13 @@ export const FILL_WIDTH_FRACTION = 0.66;
  * the front expiry — event vol + gamma cliff stack in the short leg's final days.
  */
 export const EVENT_BLACKOUT_DAYS = 3;
+
+/**
+ * Peak-theta window: the final N days before the front expiry, where calendar decay is
+ * richest. A tier-1 event inside it collides with the harvest — scoring doubles the event
+ * penalty (2026-07-09 user lock: weigh the forced pre-event exit against max theta decay).
+ */
+export const PEAK_THETA_DAYS = 5;
 
 // ─────────────────────────────────────────────────────────────
 // Pure helpers
@@ -191,7 +199,6 @@ export function selectCandidates(
     const iv = Number(quote.bsmIv);
     if (!Number.isFinite(iv)) continue;
     const strike = quote.strike / 1000;
-    if (strike % STRIKE_INCREMENT !== 0) continue;
     if (!isLiquidQuote(quote)) {
       drops.liquidity += 1;
       continue;
@@ -234,12 +241,14 @@ export function selectCandidates(
     // BEFORE the earliest such event; eventAdjustment (w10) still penalizes the score.
     const feDay = isoDayNumber(fe);
     let exitBeforeIso: string | null = null;
+    let eventInPeakTheta = false;
     for (const ev of events) {
       const evDay = isoDayNumber(ev.date);
       if (evDay <= feDay && feDay - evDay <= EVENT_BLACKOUT_DAYS) {
         const dayBefore = new Date((evDay - 1) * 86_400_000).toISOString().slice(0, 10);
         if (exitBeforeIso === null || dayBefore < exitBeforeIso) exitBeforeIso = dayBefore;
       }
+      if (evDay <= feDay && feDay - evDay <= PEAK_THETA_DAYS) eventInPeakTheta = true;
     }
 
     // Band membership (NOT nearest-target): every strike whose front delta is in the band.
@@ -307,6 +316,7 @@ export function selectCandidates(
           frontEvents,
           backEvents,
           exitBeforeIso,
+          eventInPeakTheta,
         });
       }
     }

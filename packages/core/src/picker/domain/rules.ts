@@ -23,15 +23,21 @@ import type { GexContextForPicker } from "../application/ports.ts";
 // Rebalanced 2026-07-08 (user decision): fwd-edge is the purest math signal → 35;
 // slope 30. Previous 40/25 split was the uncalibrated mockup port (D-08).
 // ─────────────────────────────────────────────────────────────
-export const WEIGHT_SLOPE = 25;
-export const WEIGHT_FWD_EDGE = 30;
-export const WEIGHT_GEX_FIT = 15;
-export const WEIGHT_EVENT = 10;
-export const WEIGHT_BE_VS_EM = 10;
-/** Δ-neutrality weight (user-locked 2026-07-08: "delta neutral as much as possible"). */
-export const WEIGHT_DELTA_NEUTRAL = 10;
-/** |net Δ| ($/pt per spread) at which the deltaNeutral fraction reaches 0. */
-export const DELTA_NEUTRAL_MAX = 10;
+export const WEIGHT_SLOPE = 15;
+export const WEIGHT_FWD_EDGE = 25;
+export const WEIGHT_GEX_FIT = 10;
+export const WEIGHT_EVENT = 5;
+export const WEIGHT_BE_VS_EM = 15;
+/** Δ-neutrality weight (user-locked: "near 0 basically if possible"). */
+export const WEIGHT_DELTA_NEUTRAL = 15;
+/** |net Δ| ($/pt per spread) at which the deltaNeutral fraction reaches 0 (tightened /10→/5, 2026-07-09). */
+export const DELTA_NEUTRAL_MAX = 5;
+/** θ/vega promoted to scored (2026-07-09 user lock): full credit at ≥ this ratio. */
+export const WEIGHT_THETA_VEGA = 10;
+export const THETA_VEGA_FULL = 0.25;
+/** VRP promoted to scored: full credit when front IV exceeds RV20 by ≥ this (3 vol pts). */
+export const WEIGHT_VRP = 5;
+export const VRP_FULL = 0.03;
 
 // ─── Normalizer tunables (documented; PICK-04 backtest recalibrates) ────────────
 export const SLOPE_NORMALIZER = 0.6;
@@ -40,7 +46,7 @@ export const SLOPE_RICH_FULL = -0.25;
 export const SLOPE_CRISIS_FLOOR = -1.5;
 export const FWD_EDGE_OFFSET = 0.02;
 export const FWD_EDGE_RANGE = 0.04;
-export const BE_VS_EM_TARGET_RATIO = 1.5;
+export const BE_VS_EM_TARGET_RATIO = 2.0; // raised 1.5→2.0 (2026-07-09): wider profit zone keeps earning credit
 
 // ─── gexFit tunables (near-term placement, spot-bracketed walls) ────────────────
 /** Credit when spot sits ABOVE the flip (dampen regime — calendars want suppressed realized vol). */
@@ -194,6 +200,20 @@ export function deltaNeutralFraction(netDelta: number): number {
   return Math.max(0, Math.min(1, fraction));
 }
 
+/** `thetaVega` scored fraction: linear 0→1 up to THETA_VEGA_FULL; 0 when vega is 0/negative ratio. */
+export function thetaVegaFraction(theta: number, vega: number): number {
+  const ratio = thetaVegaValue(theta, vega);
+  if (ratio === null) return 0;
+  return clamp01(ratio / THETA_VEGA_FULL);
+}
+
+/** `vrp` scored fraction: 0 when front IV ≤ RV20 (or RV unknown — null-honest), 1 at +VRP_FULL. */
+export function vrpFraction(frontIv: number, realizedVol20: number | null): number {
+  const vrp = vrpValue(frontIv, realizedVol20);
+  if (vrp === null) return 0;
+  return clamp01(vrp / VRP_FULL);
+}
+
 // ─────────────────────────────────────────────────────────────
 // The registry (serializable — ships as pickerSnapshotResponse.ruleSet)
 // ─────────────────────────────────────────────────────────────
@@ -267,8 +287,9 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     kind: "score",
     weight: WEIGHT_EVENT,
     status: "active",
-    rationale: "Binary macro catalysts (FOMC/CPI/NFP) inside the short leg spike gamma risk.",
-    source: "Practitioner consensus; D-11",
+    rationale:
+      "Binary macro catalysts (FOMC/CPI/NFP) inside the short leg spike gamma risk; an event colliding with the peak-theta window (final 5 days) doubles its penalty — the forced pre-event exit forfeits the richest decay days.",
+    source: "Practitioner consensus; D-11; peak-theta collision 2026-07-09",
   },
   {
     id: "beVsEm",
@@ -276,7 +297,8 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     kind: "score",
     weight: WEIGHT_BE_VS_EM,
     status: "active",
-    rationale: "Real bisection breakevens vs ±1σ expected move — profit-zone coverage.",
+    rationale:
+      "Real bisection breakevens vs ±1σ expected move — profit-zone coverage; credit up to 2.0× (user: moves amplify, wider is better).",
     source: "D-09 (replaces the mockup's fixed-strike proxy)",
   },
   {
@@ -286,18 +308,18 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     weight: WEIGHT_DELTA_NEUTRAL,
     status: "active",
     rationale:
-      "1 − |net Δ|/10, clamped [0,1]. The user trades delta-neutral; without this term, skew-driven forward-edge favors high-|Δ| strikes.",
+      "1 − |net Δ|/5, clamped [0,1] (tightened 2026-07-09: 'near 0 basically if possible'). Without this term, skew-driven forward-edge favors high-|Δ| strikes.",
     source: "User-locked preference (2026-07-08); consistent with ATM-neutral practitioner default (tastytrade)",
   },
   {
     id: "vrp",
     label: "Volatility risk premium (front IV − RV20)",
-    kind: "experimental",
-    weight: 0,
-    status: "experimental",
+    kind: "score",
+    weight: WEIGHT_VRP,
+    status: "active",
     rationale:
-      "Short the front leg only when implied trades above what the underlying realizes. Display-only until the PICK-04 backtest calibrates a threshold.",
-    source: "VRP literature (Johnson 2017 et al.)",
+      "Short the front leg only when implied trades above what the underlying realizes; full credit at +3 vol pts. Null RV history earns 0 (never fabricated).",
+    source: "VRP literature (Johnson 2017 et al.); promoted 2026-07-09 (user lock, PICK-04 re-arbitrates)",
   },
   {
     id: "slopePercentile",
@@ -322,11 +344,11 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
   {
     id: "thetaVega",
     label: "θ/vega carry ratio",
-    kind: "experimental",
-    weight: 0,
-    status: "experimental",
+    kind: "score",
+    weight: WEIGHT_THETA_VEGA,
+    status: "active",
     rationale:
-      "Carry per unit of vol risk; practitioner gate is ≥ 0.20 (vega ≤ 5× theta) to bound vol-crush damage. Cutoff unvalidated on our data — display-only until PICK-04.",
-    source: "tastytrade benchmark via OptionsTradingIQ (vega-control articles)",
+      "Carry per unit of vol risk; full credit at ratio ≥ 0.25 (practitioner floor 0.20 = 80% credit). Bounds vol-crush damage per theta dollar.",
+    source: "tastytrade benchmark via OptionsTradingIQ; promoted 2026-07-09 (user lock, PICK-04 re-arbitrates)",
   },
 ];

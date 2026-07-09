@@ -20,15 +20,13 @@ panel renders the engine's actual table, never a copy.
 
 User-locked 2026-07-08 (research-verified against tastytrade/SteadyOptions/ORATS material):
 
-- **Band-scan (redesigned 2026-07-08 after the 7450 rung-gap miss):** every liquid 25-point
-  strike whose front put delta lies in **[−0.55, −0.25]** enters the universe — MEMBERSHIP
-  test, not nearest-delta rungs. Commercial screeners use band membership; nearest-target
-  designs provably skip strikes whose delta falls between targets. The band's OTM edge
-  (−0.25Δ ≈ 0.7σ) subsumes the old expected-move cap. A VIX-conditional delta shift was
-  researched and REFUTED (tent width widens with IV).
-- **25-point strikes only:** SPX OI/volume concentrate there; off-grid strikes never enter.
-- **Front DTE:** 21–36. **Back gap:** 21–35 days after the front — ALL qualifying backs are
-  emitted (fwd-edge scoring ranks them).
+- **Band-scan (v4, 2026-07-09):** every LIQUID strike whose front put delta lies in
+  **[−0.49, −0.30]** enters the universe — membership test, not nearest-delta rungs
+  (−0.50 = ATM excluded as user preference edge; −0.25 refined to −0.30 "too far OTM").
+  Liquidity (OI + spread) decides strike membership — the 25-point grid is where OI usually
+  lives, but a liquid off-25 strike qualifies (user lock).
+- **Front DTE:** 21–36. **Back gap:** 15–90 days after the front (user lock; wide expensive
+  backs are punished by debit-normalized scoring, not banned) — ALL qualifying backs emitted.
 - **Fill model:** debits price from the actual bid/ask with the ORATS 2-leg haircut — cross
   66% of each leg's width off the natural side (buy back at bid+0.66·w, sell front at
   ask−0.66·w). Ranking on mid or BSM theory overstates edge on wide markets.
@@ -61,21 +59,21 @@ and the VIX-tuned target-delta preference (autoTuneTargetDelta).
 
 | id | Weight | Formula | Source |
 |---|---|---|---|
-| `fwdEdge` | 30 | fwd = √((t_b·σ_b² − t_f·σ_f²)/(t_b − t_f)); edge = σ_f − fwd; fraction = clamp01((edge+0.02)/0.04); inverted radicand → 0 | Forward-IV term-structure edge (Perfiliev; SpotGamma fwd-IV) |
-| `slope` | 25 | slope = ((σ_b − σ_f)/(t_b − t_f))·365 (negative = front-rich/backwardation between legs); fraction = 1 at slope ≤ −0.25 (mild front-richness = best entry), linear down to 0 at slope ≥ +0.6 (steep contango), and 0 again below −1.5 (crisis inversion) | REDESIGNED 2026-07-09: ORATS backwardation backtest (−0.09%→+0.58%/yr) + SteadyOptions negative-differential evidence — calendar ENTRY wants the front rich, not carry contango. Johnson-2017 carry rationale demoted to the backtest |
-| `gexFit` | 15 | near-term (≤45d) GEX placement: +0.5 if spot > flip (dampen regime), +0.3 if K ∈ [putWall, callWall], +0.2 if K within 5 pts of either wall (pin). Falls back to all-expiry flip/walls when `nearTerm` is null. Stale/missing GEX → 0 | Dealer-gamma pinning/dampening (SpotGamma-convention walls; in-house GEX) |
-| `eventAdjustment` | 10 | 1 − Σ(front-leg FOMC/CPI/NFP × 0.5), floor 0 | No binary catalysts inside the short leg (practitioner consensus) |
-| `beVsEm` | 10 | breakeven width / (spot·σ_f·√(t_f/365)); fraction = clamp01(ratio/1.5); <2 breakevens → 0 | Profit-zone width vs expected move (real bisection breakevens, D-09) |
-| `deltaNeutral` | 10 | fraction = clamp01(1 − \|Δ_net\|/10), Δ_net in $/pt per spread | User-locked 2026-07-08: "delta neutral as much as possible"; skew-driven fwd-edge otherwise drags the rail toward high-\|Δ\| strikes |
+| `fwdEdge` | 25 | fwd = √((t_b·σ_b² − t_f·σ_f²)/(t_b − t_f)); edge = σ_f − fwd; fraction = clamp01((edge+0.02)/0.04); inverted radicand → 0 | Forward-IV term-structure edge (Perfiliev; SpotGamma fwd-IV) |
+| `slope` | 15 | slope = ((σ_b − σ_f)/(t_b − t_f))·365 (negative = front-rich/backwardation between legs); fraction = 1 at slope ≤ −0.25 (mild front-richness = best entry), linear down to 0 at slope ≥ +0.6 (steep contango), and 0 again below −1.5 (crisis inversion) | REDESIGNED 2026-07-09: ORATS backwardation backtest (−0.09%→+0.58%/yr) + SteadyOptions negative-differential evidence — calendar ENTRY wants the front rich, not carry contango. Johnson-2017 carry rationale demoted to the backtest |
+| `gexFit` | 10 | near-term (≤45d) GEX placement: +0.5 if spot > flip (dampen regime), +0.3 if K ∈ [putWall, callWall], +0.2 if K within 5 pts of either wall (pin). Falls back to all-expiry flip/walls when `nearTerm` is null. Stale/missing GEX → 0 | Dealer-gamma pinning/dampening (SpotGamma-convention walls; in-house GEX) |
+| `eventAdjustment` | 5 | 1 − Σ(front-leg FOMC/CPI/NFP × 0.5), penalty ×2 when the event collides with the peak-theta window (final 5 days before front expiry — the forced pre-event exit forfeits the richest decay), floor 0 | No binary catalysts inside the short leg (practitioner consensus) |
+| `beVsEm` | 15 | breakeven width / (spot·σ_f·√(t_f/365)); fraction = clamp01(ratio/2.0) — wider zone keeps earning (user: moves amplify); <2 breakevens → 0 | Profit-zone width vs expected move (real bisection breakevens, D-09) |
+| `deltaNeutral` | 15 | fraction = clamp01(1 − \|Δ_net\|/5) — tightened /10→/5 (user: "near 0 basically if possible") | User-locked 2026-07-08/09 |
+| `thetaVega` | 10 | θ_net/vega_net; fraction = clamp01(ratio/0.25) — practitioner floor 0.20 ≈ 80% credit; vega 0 → 0 | Promoted from experimental 2026-07-09 (user lock; PICK-04 re-arbitrates); tastytrade/OptionsTradingIQ |
+| `vrp` | 5 | front IV − RV20 (RV20 = stdev of last 20 daily log returns ·√252); fraction = clamp01(vrp/0.03); null RV → 0, never fabricated | Promoted from experimental 2026-07-09; VRP literature |
 
 ## Experimental (weight 0 — display only until PICK-04 calibrates)
 
 | id | Formula | Inputs |
 |---|---|---|
-| `vrp` | σ_f(front IV) − RV20, RV20 = stdev(last 20 daily log returns)·√252 | daily spot closes (leg_observations, last obs per day) |
 | `slopePercentile` | percentile of candidate slope vs trailing candidate slopes from stored picker snapshots | picker_snapshot history |
 | `backEventBonus` | 1 if an FOMC/CPI/NFP date ∈ (frontExpiry, backExpiry] else 0 — "own the event vol in the back leg" | economic_events (PICK-05 precursor) |
-| `thetaVega` | θ_net / vega_net (null when vega 0) — practitioner gate is ≥ 0.20 ("vega ≤ 5× theta", tastytrade/OptionsTradingIQ); cutoff unvalidated on our data, so display-only until PICK-04 | candidate greeks |
 
 ## Refuted — MUST NOT be encoded
 

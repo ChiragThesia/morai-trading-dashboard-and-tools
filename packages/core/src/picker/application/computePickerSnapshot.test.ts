@@ -404,22 +404,22 @@ describe("rule registry in the snapshot (rules.ts)", () => {
     );
     expect(activeScores.reduce((sum, r) => sum + r.weight, 0)).toBe(100);
     expect(row.snapshot.ruleSet.some((r) => r.id === "liquidity" && r.kind === "gate")).toBe(true);
-    expect(row.snapshot.ruleSet.some((r) => r.id === "vrp" && r.status === "experimental")).toBe(true);
+    expect(row.snapshot.ruleSet.some((r) => r.id === "vrp" && r.status === "active")).toBe(true);
 
     // Gate drops present (all-liquid fixture → zero drops, but the field is real).
     expect(row.snapshot.gateDrops).toEqual({ liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 });
 
-    // Every candidate carries the 4 experimental context entries; vrp/slopePercentile are
+    // Every candidate carries the 2 remaining experimental context entries; slopePercentile is
     // real numbers given the supplied history.
     const candidate = row.snapshot.candidates[0];
     expect(candidate).toBeDefined();
     if (candidate === undefined) return;
     const ids = candidate.context.map((c) => c.id).sort();
-    expect(ids).toEqual(["backEventBonus", "slopePercentile", "thetaVega", "vrp"]);
-    const vrp = candidate.context.find((c) => c.id === "vrp");
-    expect(vrp?.value).not.toBeNull();
+    expect(ids).toEqual(["backEventBonus", "slopePercentile"]);
     const pct = candidate.context.find((c) => c.id === "slopePercentile");
     expect(pct?.value).not.toBeNull();
+    // vrp is scored now — its breakdown entry carries the real RV-fed rawValue.
+    expect(candidate.breakdown.some((b) => b.criterion === "vrp")).toBe(true);
   });
 
   it("labels the snapshot's market session: rth for an in-hours cohort, after-hours otherwise", async () => {

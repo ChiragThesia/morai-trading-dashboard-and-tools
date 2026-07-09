@@ -51,6 +51,7 @@ function normalCandidate(): RawCandidate {
     frontEvents: [],
     backEvents: [],
     exitBeforeIso: null,
+    eventInPeakTheta: false,
   };
 }
 
@@ -71,6 +72,7 @@ function invertedCandidate(): RawCandidate {
     frontEvents: ["FOMC"],
     backEvents: [],
     exitBeforeIso: null,
+    eventInPeakTheta: false,
   };
 }
 
@@ -86,15 +88,15 @@ const GEX_CONTEXT: GexContextForPicker = {
   computedAt: new Date("2026-07-01T14:30:00.000Z"),
 };
 
-const ALLOWED_CRITERIA = new Set(["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm", "deltaNeutral"]);
+const ALLOWED_CRITERIA = new Set(["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm", "deltaNeutral", "thetaVega", "vrp"]);
 
 describe("scoreCalendarCandidates", () => {
-  it("emits exactly the 6 closed-enum criteria with the named weights, score = rounded weighted sum", () => {
+  it("emits exactly the 8 closed-enum criteria with the named weights, score = rounded weighted sum", () => {
     const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
     expect(scored).toBeDefined();
     if (scored === undefined) return;
 
-    expect(scored.breakdown).toHaveLength(6);
+    expect(scored.breakdown).toHaveLength(8);
     const criteria = scored.breakdown.map((b) => b.criterion);
     expect(new Set(criteria)).toEqual(ALLOWED_CRITERIA);
 
@@ -229,6 +231,7 @@ describe("scoreCalendarCandidates", () => {
           frontEvents: [],
           backEvents: [],
     exitBeforeIso: null,
+    eventInPeakTheta: false,
         };
         const [scored] = scoreCalendarCandidates([candidate], GEX_CONTEXT, { r: R, q: Q });
         expect(scored).toBeDefined();
@@ -285,7 +288,7 @@ describe("gexFit — near-term placement via the rules.ts registry", () => {
 });
 
 describe("experimental context entries (weight 0, display-only)", () => {
-  it("emits vrp/slopePercentile/backEventBonus with supplied extras", () => {
+  it("emits slopePercentile/backEventBonus context; vrp is now a SCORED criterion (promoted 2026-07-09)", () => {
     const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, {
       r: R,
       q: Q,
@@ -296,19 +299,22 @@ describe("experimental context entries (weight 0, display-only)", () => {
     if (scored === undefined) return;
 
     const byId = new Map(scored.context.map((c) => [c.id, c]));
-    expect(byId.get("vrp")?.value).toBeCloseTo(0.14 - 0.11, 12);
     // normalCandidate slope ≈ 0.2106 → 2 of 3 history values ≤ it
     expect(byId.get("slopePercentile")?.value).toBeCloseTo((100 * 2) / 3, 6);
     expect(byId.get("backEventBonus")?.value).toBe(0);
+    // vrp lives in the breakdown now, with the supplied RV20 feeding its rawValue.
+    const vrpEntry = scored.breakdown.find((b) => b.criterion === "vrp");
+    expect(vrpEntry?.rawValue).toBeCloseTo(0.14 - 0.11, 12);
+    expect(vrpEntry?.contribution).toBe(100); // +3 vol pts = full credit
   });
 
-  it("is null-honest when extras are absent (no fabricated values)", () => {
+  it("is null-honest when extras are absent: vrp contributes 0, slopePercentile null", () => {
     const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
     expect(scored).toBeDefined();
     if (scored === undefined) return;
     const byId = new Map(scored.context.map((c) => [c.id, c]));
-    expect(byId.get("vrp")?.value).toBeNull();
     expect(byId.get("slopePercentile")?.value).toBeNull();
+    expect(scored.breakdown.find((b) => b.criterion === "vrp")?.contribution).toBe(0);
   });
 
   it("backEventBonus = 1 when the back leg spans an event the front does not", () => {

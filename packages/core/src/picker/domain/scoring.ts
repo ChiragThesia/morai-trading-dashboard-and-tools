@@ -15,6 +15,7 @@
  * this bounded context's own `application/ports.ts`, and sibling domain modules.
  */
 
+import { bsmPrice } from "@morai/quant";
 import { computeFwdIv } from "./fwd-iv.ts";
 import { findBreakevens } from "./breakevens.ts";
 import {
@@ -33,6 +34,10 @@ import {
   slopePercentileValue,
   backEventBonusValue,
   thetaVegaValue,
+  thetaVegaFraction,
+  vrpFraction,
+  WEIGHT_THETA_VEGA,
+  WEIGHT_VRP,
   deltaNeutralFraction,
   slopeEntryFraction,
   WEIGHT_DELTA_NEUTRAL,
@@ -60,6 +65,15 @@ export {
 export const EXIT_PROFIT_TARGET_PCT = 0.25;
 export const EXIT_STOP_PCT = 0.175;
 export const EXIT_MANAGE_SHORT_DTE = 21;
+
+/** Days between two ISO dates (to − from) via Date.UTC on parsed components (Pitfall 3). */
+function isoDaysBetween(fromIso: string, toIso: string): number {
+  const day = (iso: string): number => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1) / 86_400_000;
+  };
+  return day(toIso) - day(fromIso);
+}
 
 function clamp01(x: number): number {
   return Math.min(1, Math.max(0, x));
@@ -116,8 +130,9 @@ function scoreOne(
   // 2026-07-09: front-richness is the entry edge (ORATS/SteadyOptions) — see rules.ts.
   const slopeFraction = slopeEntryFraction(candidate.slope);
 
-  // ─── eventAdjustment (front-leg only, D-11) ───
-  const evtPenalty = candidate.frontEvents.reduce((sum, name) => sum + (EVENT_PENALTY[name] ?? 0), 0);
+  // ─── eventAdjustment (front-leg only, D-11; peak-theta collision doubles it 2026-07-09) ───
+  const evtPenaltyBase = candidate.frontEvents.reduce((sum, name) => sum + (EVENT_PENALTY[name] ?? 0), 0);
+  const evtPenalty = candidate.eventInPeakTheta ? evtPenaltyBase * 2 : evtPenaltyBase;
   const eventFraction = Math.max(0, 1 - evtPenalty);
 
   // ─── gexFit (near-term placement — rules.ts owns the formula) ───
@@ -145,8 +160,12 @@ function scoreOne(
   // never a fabricated ratio, never NaN.
   const beVsEmFraction = hasBreakevenPair ? clamp01(beVsEmRatio / BE_VS_EM_TARGET_RATIO) : 0;
 
-  // Δ-neutrality (user-locked): 1 at flat delta, 0 beyond ±10 $/pt.
+  // Δ-neutrality (user-locked, tightened 2026-07-09): 1 at flat delta, 0 beyond ±5 $/pt.
   const deltaFraction = deltaNeutralFraction(candidate.delta);
+
+  // Promoted 2026-07-09 (user lock; PICK-04 re-arbitrates): θ/vega + VRP become scored terms.
+  const thetaVegaFrac = thetaVegaFraction(candidate.theta, candidate.vega);
+  const vrpFrac = vrpFraction(ivF, params.realizedVol20 ?? null);
 
   const breakdown: ReadonlyArray<BreakdownEntry> = [
     { criterion: "slope", weight: WEIGHT_SLOPE, rawValue: candidate.slope, contribution: slopeFraction * 100 },
@@ -160,6 +179,18 @@ function scoreOne(
       rawValue: candidate.delta,
       contribution: deltaFraction * 100,
     },
+    {
+      criterion: "thetaVega",
+      weight: WEIGHT_THETA_VEGA,
+      rawValue: thetaVegaValue(candidate.theta, candidate.vega) ?? 0,
+      contribution: thetaVegaFrac * 100,
+    },
+    {
+      criterion: "vrp",
+      weight: WEIGHT_VRP,
+      rawValue: vrpValue(ivF, params.realizedVol20 ?? null) ?? 0,
+      contribution: vrpFrac * 100,
+    },
   ];
 
   const rawScore =
@@ -168,17 +199,13 @@ function scoreOne(
     WEIGHT_GEX_FIT * gexFit +
     WEIGHT_EVENT * eventFraction +
     WEIGHT_BE_VS_EM * beVsEmFraction +
-    WEIGHT_DELTA_NEUTRAL * deltaFraction;
+    WEIGHT_DELTA_NEUTRAL * deltaFraction +
+    WEIGHT_THETA_VEGA * thetaVegaFrac +
+    WEIGHT_VRP * vrpFrac;
   const score = Math.min(100, Math.max(0, Math.round(rawScore)));
 
   // ─── Experimental context (weight 0, display-only — rules.ts registry) ───
   const context: ReadonlyArray<ContextEntry> = [
-    {
-      id: "vrp",
-      label: "VRP (front IV − RV20)",
-      value: vrpValue(ivF, params.realizedVol20 ?? null),
-      note: "calibrating (PICK-04)",
-    },
     {
       id: "slopePercentile",
       label: "Slope percentile",
@@ -191,20 +218,36 @@ function scoreOne(
       value: backEventBonusValue(candidate.backEvents),
       note: "calibrating (PICK-05)",
     },
-    {
-      id: "thetaVega",
-      label: "θ/vega carry ratio",
-      value: thetaVegaValue(candidate.theta, candidate.vega),
-      note: "calibrating (PICK-04)",
-    },
   ];
+
+  // Theta-capture at the hard-close date (2026-07-09): fraction of the calendar's total
+  // decay runway (entry → front expiry, constant spot/IV) harvested by closing early.
+  // 1 when the close IS the front expiry; null when the runway is unpriceable.
+  const closeByExpiry = candidate.exitBeforeIso ?? candidate.frontLeg.expiration;
+  let thetaCapturePct: number | null = null;
+  if (candidate.exitBeforeIso === null) {
+    thetaCapturePct = 1;
+  } else {
+    const daysHeld = tf - isoDaysBetween(candidate.exitBeforeIso, candidate.frontLeg.expiration);
+    if (daysHeld > 0 && daysHeld < tf) {
+      const value = (frontDte: number, backDte: number): number =>
+        bsmPrice(candidate.spot, candidate.backLeg.strike, backDte / 365, ivB, r, q, "P") -
+        bsmPrice(candidate.spot, K, frontDte / 365, ivF, r, q, "P");
+      const v0 = value(tf, tb);
+      const vClose = value(tf - daysHeld, tb - daysHeld);
+      const vExpiry = value(0.0001, tb - tf);
+      const runway = vExpiry - v0;
+      thetaCapturePct = runway > 0 ? clamp01((vClose - v0) / runway) : null;
+    }
+  }
 
   const exitPlan: ExitPlan = {
     profitTargetPct: EXIT_PROFIT_TARGET_PCT,
     stopPct: EXIT_STOP_PCT,
     manageShortDte: EXIT_MANAGE_SHORT_DTE,
     // EVT discipline: exit the day before a front-window tier-1 event when stamped.
-    closeByExpiry: candidate.exitBeforeIso ?? candidate.frontLeg.expiration,
+    closeByExpiry,
+    thetaCapturePct,
   };
 
   return {

@@ -65,7 +65,11 @@ export function EntryExitPlan({ candidate }: EntryExitPlanProps): React.ReactEle
       <PlanRow
         label="Hard close by"
         testId="entryexit-value-closeby"
-        value={`${fmtDate(closeByDate)} (front expiry)`}
+        value={
+          candidate.exitPlan.thetaCapturePct !== null && candidate.exitPlan.thetaCapturePct < 1
+            ? `${fmtDate(closeByDate)} (pre-event · captures ~${Math.round(candidate.exitPlan.thetaCapturePct * 100)}% of θ runway)`
+            : `${fmtDate(closeByDate)} (front expiry)`
+        }
         valueClassName="text-amber"
       />
       <p className="m-0 mt-1.5 font-mono text-[9px] leading-[1.5] text-dim">

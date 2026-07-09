@@ -99,7 +99,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7500, putCall: "P", dte: 21, iv: 0.1249 },
       backLeg: { strike: 7500, putCall: "P", dte: 43, iv: 0.1402 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23", thetaCapturePct: null },
     },
     {
       id: "7500-260727-260821",
@@ -126,7 +126,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7500, putCall: "P", dte: 25, iv: 0.125 },
       backLeg: { strike: 7500, putCall: "P", dte: 50, iv: 0.1419 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-27" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-27", thetaCapturePct: null },
     },
     {
       id: "7500-260728-260821",
@@ -153,7 +153,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7500, putCall: "P", dte: 26, iv: 0.1263 },
       backLeg: { strike: 7500, putCall: "P", dte: 50, iv: 0.1419 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-28" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-28", thetaCapturePct: null },
     },
     {
       id: "7500-260724-260814",
@@ -180,7 +180,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7500, putCall: "P", dte: 22, iv: 0.1275 },
       backLeg: { strike: 7500, putCall: "P", dte: 43, iv: 0.1402 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-24" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-24", thetaCapturePct: null },
     },
     {
       id: "7400-260723-260814",
@@ -207,7 +207,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7400, putCall: "P", dte: 21, iv: 0.133797 },
       backLeg: { strike: 7400, putCall: "P", dte: 43, iv: 0.149097 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23", thetaCapturePct: null },
     },
     {
       id: "7400-260727-260821",
@@ -234,7 +234,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7400, putCall: "P", dte: 25, iv: 0.133897 },
       backLeg: { strike: 7400, putCall: "P", dte: 50, iv: 0.150797 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-27" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-27", thetaCapturePct: null },
     },
     {
       id: "7400-260728-260821",
@@ -261,7 +261,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7400, putCall: "P", dte: 26, iv: 0.135197 },
       backLeg: { strike: 7400, putCall: "P", dte: 50, iv: 0.150797 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-28" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-28", thetaCapturePct: null },
     },
     {
       id: "7400-260724-260814",
@@ -288,7 +288,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7400, putCall: "P", dte: 22, iv: 0.136397 },
       backLeg: { strike: 7400, putCall: "P", dte: 43, iv: 0.149097 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-24" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-24", thetaCapturePct: null },
     },
     // Guard-case candidate (D-03a/D-06) — constructed, not a literal buildCandidates() row:
     // front IV 15.5% > back IV 10.5% at 21/45 DTE inverts the forward-variance radicand
@@ -319,7 +319,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
       frontLeg: { strike: 7450, putCall: "P", dte: 21, iv: 0.155 },
       backLeg: { strike: 7450, putCall: "P", dte: 45, iv: 0.105 },
       context: [],
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23" },
+      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-07-23", thetaCapturePct: null },
     },
   ],
   // Rule-registry metadata + gate-drop counts (rules.ts). The fixture predates the

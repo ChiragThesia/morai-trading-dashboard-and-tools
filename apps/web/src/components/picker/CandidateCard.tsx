@@ -61,6 +61,11 @@ function formatBreakdownCaption(entry: BreakdownEntry): string {
     case "deltaNeutral":
       // rawValue is the net position delta ($/pt) — signed, one decimal.
       return `${entry.rawValue >= 0 ? "+" : ""}${entry.rawValue.toFixed(1)}Δ`;
+    case "thetaVega":
+      return entry.rawValue.toFixed(2);
+    case "vrp":
+      // rawValue is front IV − RV20 in vol terms.
+      return `${(entry.rawValue * 100).toFixed(1)}v`;
   }
 }
 
