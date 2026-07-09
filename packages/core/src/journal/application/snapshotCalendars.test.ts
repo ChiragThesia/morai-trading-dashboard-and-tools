@@ -19,6 +19,7 @@ import {
   makeSnapshotCalendarsUseCase,
   isLegFresh,
   SNAPSHOT_LEG_STALENESS_TOLERANCE_MS,
+  computeLegPairMetrics,
 } from "./snapshotCalendars.ts";
 import type { SnapshotCalendarsDeps } from "./snapshotCalendars.ts";
 import type {
@@ -558,6 +559,69 @@ describe("makeSnapshotCalendarsUseCase", () => {
       for (const row of capture.rows) {
         expect(row.trigger).toBe("event-move");
       }
+    });
+  });
+
+  describe("computeLegPairMetrics — PICK-04 extraction (27-02, Pattern 5)", () => {
+    it("is directly callable with literal LegSnapshots (no Calendar row needed) and returns the leg-pair metric fields", () => {
+      const front = makeLegSnapshot({ mark: 10.0, bsmIv: "0.20", bsmDelta: "0.40" });
+      const back = makeLegSnapshot({ mark: 25.0, bsmIv: "0.25", bsmDelta: "0.55" });
+      const now = new Date("2026-07-01T19:00:00Z");
+
+      const metrics = computeLegPairMetrics(now, front, back, 2, "2026-07-18", "2026-09-19");
+
+      expect(metrics.netMark).toBe("15");
+      expect(metrics.frontMark).toBe("10");
+      expect(metrics.backMark).toBe("25");
+      expect(metrics.frontIv).toBe("0.20");
+      expect(metrics.backIv).toBe("0.25");
+      expect(parseFloat(metrics.netDelta)).toBeCloseTo((0.55 - 0.40) * 2 * 100, 5);
+      expect(parseFloat(metrics.termSlope)).toBeCloseTo(0.25 - 0.20, 10);
+      expect(metrics.dteFront).toBe(17);
+      expect(metrics.dteBack).toBe(80);
+      expect(metrics.source).toBe("cboe");
+      // calendarId/pnlOpen/trigger are NOT on this return type (Omit<SnapshotRow, ...>) —
+      // a hypothetical (never-traded) candidate has no Calendar row to derive them from.
+      expect(Object.hasOwn(metrics, "calendarId")).toBe(false);
+      expect(Object.hasOwn(metrics, "pnlOpen")).toBe(false);
+      expect(Object.hasOwn(metrics, "trigger")).toBe(false);
+    });
+
+    it("parity: buildSnapshotRow's output (via the live use-case) is byte-identical to computeLegPairMetrics + calendarId/pnlOpen/trigger", async () => {
+      const cal = makeCalendar({ id: "cal-parity", qty: 3, openNetDebit: 4.5 });
+      const frontLeg = makeLegSnapshot({ mark: 12.0, bsmIv: "0.18" });
+      const backLeg = makeLegSnapshot({ mark: 22.0, bsmIv: "0.23" });
+      const now = new Date("2026-07-01T19:00:00Z");
+
+      let callCount = 0;
+      const resolveLegs: ForResolvingLegSnapshot = async () => {
+        callCount += 1;
+        return ok(callCount === 1 ? frontLeg : backLeg);
+      };
+      const capture = makePersistCapture();
+
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({
+          getOpenCalendars: async () => ok([cal]),
+          resolveLegs,
+          persistSnapshot: capture.persistSnapshot,
+          now: () => now,
+        }),
+      );
+      await useCase();
+
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
+
+      const metrics = computeLegPairMetrics(now, frontLeg, backLeg, cal.qty, cal.frontExpiry, cal.backExpiry);
+      const expectedPnlOpen = String((parseFloat(metrics.netMark) - cal.openNetDebit) * cal.qty * 100);
+
+      expect(row).toEqual({
+        ...metrics,
+        calendarId: cal.id,
+        pnlOpen: expectedPnlOpen,
+        trigger: "scheduled",
+      });
     });
   });
 

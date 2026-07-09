@@ -98,6 +98,9 @@ export {
   computeSnapshotPnl,
   makeGetJournalUseCase,
   makeGetLiveGreeksUseCase,
+  // PICK-04 (27-02): pure leg-pair metrics extracted from buildSnapshotRow (RESEARCH
+  // Pattern 5) — reused by the backtest harness for hypothetical-candidate pricing.
+  computeLegPairMetrics,
 } from "./journal/index.ts";
 export type {
   ForRunningRegisterCalendar,

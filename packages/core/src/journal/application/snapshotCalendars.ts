@@ -132,19 +132,23 @@ export type ForRunningSnapshotCalendars = (args?: {
 }) => Promise<Result<void, StorageError>>;
 
 /**
- * buildSnapshotRow — compute a full 18-column SnapshotRow per D-05 / D-06.
+ * computeLegPairMetrics — pure leg-pair metrics formula (PICK-04, 27-02, RESEARCH Pattern 5).
+ * Extracted out of `buildSnapshotRow` so a hypothetical (never-traded) candidate's metrics
+ * can be computed from a bare front/back `LegSnapshot` pair without a `Calendar` row.
  *
- * Called once per open calendar. Either leg may be null (resolve error or ok(null)).
- * When either leg's bsmIv is NAN_STAMP, ALL IV/greek columns get NAN_STAMP.
- * Marks and pnlOpen always populate from whatever data exists.
+ * Everything `buildSnapshotRow` computes EXCEPT `calendarId`/`pnlOpen`/`trigger` — those
+ * depend on a `Calendar` object (id, openNetDebit) a hypothetical candidate doesn't have.
+ * Either leg may be null (resolve error or ok(null)). When either leg's bsmIv is NAN_STAMP,
+ * ALL IV/greek columns get NAN_STAMP. Marks always populate from whatever data exists.
  */
-function buildSnapshotRow(
+export function computeLegPairMetrics(
   now: Date,
-  cal: Calendar,
   front: LegSnapshot | null,
   back: LegSnapshot | null,
-  trigger: "scheduled" | "event-move",
-): SnapshotRow {
+  qty: number,
+  frontExpiry: string,
+  backExpiry: string,
+): Omit<SnapshotRow, "calendarId" | "pnlOpen" | "trigger"> {
   // Marks default to 0 when a leg is missing (NaN row will indicate the issue)
   const frontMark = front?.mark ?? 0;
   const backMark = back?.mark ?? 0;
@@ -158,16 +162,13 @@ function buildSnapshotRow(
   // net greek helper — propagates NaN when either IV is NaN or a BSM greek is null
   const netGreek = (b: string | null, f: string | null): string => {
     if (anyNaN || b === null || f === null) return NAN_STAMP;
-    return String((parseFloat(b) - parseFloat(f)) * cal.qty * 100);
+    return String((parseFloat(b) - parseFloat(f)) * qty * 100);
   };
 
   // term slope — NaN when either IV is NaN
   const termSlope = anyNaN
     ? NAN_STAMP
     : String(parseFloat(backIv) - parseFloat(frontIv));
-
-  // pnl_open uses marks (not greeks) — always computable regardless of NaN (D-06)
-  const pnlOpen = String(computeSnapshotPnl(netMark, cal.openNetDebit, cal.qty));
 
   // spot from underlyingPrice — prefer back leg, fall back to front, else "0"
   const spot = String(
@@ -191,7 +192,6 @@ function buildSnapshotRow(
 
   return {
     time: now,
-    calendarId: cal.id,
     spot,
     netMark: String(netMark),
     frontMark: String(frontMark),
@@ -205,12 +205,30 @@ function buildSnapshotRow(
     netTheta: netGreek(back?.bsmTheta ?? null, front?.bsmTheta ?? null),
     netVega: netGreek(back?.bsmVega ?? null, front?.bsmVega ?? null),
     termSlope,
-    dteFront: calendarDte(now, new Date(cal.frontExpiry)),
-    dteBack: calendarDte(now, new Date(cal.backExpiry)),
-    pnlOpen,
+    dteFront: calendarDte(now, new Date(frontExpiry)),
+    dteBack: calendarDte(now, new Date(backExpiry)),
     source,
-    trigger,
   };
+}
+
+/**
+ * buildSnapshotRow — compute a full 18-column SnapshotRow per D-05 / D-06.
+ *
+ * Called once per open calendar. Delegates the pure leg-pair metrics to
+ * `computeLegPairMetrics` (PICK-04, 27-02) and attaches the Calendar-derived fields
+ * (calendarId, pnlOpen, trigger) — behavior byte-identical to before the extraction.
+ */
+function buildSnapshotRow(
+  now: Date,
+  cal: Calendar,
+  front: LegSnapshot | null,
+  back: LegSnapshot | null,
+  trigger: "scheduled" | "event-move",
+): SnapshotRow {
+  const metrics = computeLegPairMetrics(now, front, back, cal.qty, cal.frontExpiry, cal.backExpiry);
+  // pnl_open uses marks (not greeks) — always computable regardless of NaN (D-06)
+  const pnlOpen = String(computeSnapshotPnl(parseFloat(metrics.netMark), cal.openNetDebit, cal.qty));
+  return { ...metrics, calendarId: cal.id, pnlOpen, trigger };
 }
 
 /**

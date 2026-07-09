@@ -57,6 +57,10 @@ export {
 // Snapshot use-case (Phase 3, plan 05)
 export { makeSnapshotCalendarsUseCase, computeSnapshotPnl } from "./application/snapshotCalendars.ts";
 export type { ForRunningSnapshotCalendars, SnapshotCalendarsDeps } from "./application/snapshotCalendars.ts";
+// PICK-04 (27-02): computeLegPairMetrics — pure leg-pair metrics extracted from
+// buildSnapshotRow, so the backtest harness can price a hypothetical candidate without a
+// Calendar row (RESEARCH Pattern 5). Additive; buildSnapshotRow's live output is unchanged.
+export { computeLegPairMetrics } from "./application/snapshotCalendars.ts";
 // Journal read + live-greeks use-cases (Phase 3, plan 06)
 export { makeGetJournalUseCase } from "./application/getJournal.ts";
 export type { ForRunningGetJournal, GetJournalDeps } from "./application/getJournal.ts";
