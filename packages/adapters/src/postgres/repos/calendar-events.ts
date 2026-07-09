@@ -9,18 +9,20 @@
  * T-05-17: onConflictDoNothing makes re-run a no-op (SC4 idempotency).
  */
 
-import { ok, err } from "@morai/shared";
+import { ok, err, assertDefined } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type {
   ForStoringCalendarEvent,
   ForReadingCalendarEvents,
   ForReadingCalendarEventByHash,
   ForDeletingCalendarEvents,
+  ForReadingRecentClosedCalendars,
+  RecentClosedCalendar,
   CalendarEvent,
   StorageError,
 } from "@morai/core";
-import { eq, asc } from "drizzle-orm";
-import { calendarEvents } from "../schema.ts";
+import { eq, asc, and, gte, max, sum } from "drizzle-orm";
+import { calendarEvents, calendars } from "../schema.ts";
 import type { Db } from "../db.ts";
 
 export type PostgresCalendarEventsRepo = {
@@ -28,6 +30,7 @@ export type PostgresCalendarEventsRepo = {
   readonly readCalendarEvents: ForReadingCalendarEvents;
   readonly readCalendarEventByHash: ForReadingCalendarEventByHash;
   readonly deleteCalendarEvents: ForDeletingCalendarEvents;
+  readonly readRecentClosedCalendars: ForReadingRecentClosedCalendars;
 };
 
 export function makePostgresCalendarEventsRepo(db: Db): PostgresCalendarEventsRepo {
@@ -165,5 +168,57 @@ export function makePostgresCalendarEventsRepo(db: Db): PostgresCalendarEventsRe
     }
   };
 
-  return { storeCalendarEvent, readCalendarEvents, readCalendarEventByHash, deleteCalendarEvents };
+  // ─── readRecentClosedCalendars (ForReadingRecentClosedCalendars, 28-02/PLAY-02) ──
+  // ONE JOIN — calendars ⋈ calendar_events WHERE event_type = 'CLOSE' — never an N+1 loop
+  // over closed calendars (Pitfall 4). GROUP BY calendars.id (the PK) so Postgres accepts
+  // the un-aggregated calendars.open_net_debit column via functional dependency; realizedPnl
+  // is SUM()'d across a calendar's leg CLOSE events (D-04), never recomputed.
+  const readRecentClosedCalendars: ForReadingRecentClosedCalendars = async (
+    sinceDate: string,
+  ): Promise<Result<ReadonlyArray<RecentClosedCalendar>, StorageError>> => {
+    try {
+      const rows = await db
+        .select({
+          calendarId: calendars.id,
+          closedAt: max(calendarEvents.eventedAt),
+          openNetDebit: calendars.openNetDebit,
+          realizedPnl: sum(calendarEvents.realizedPnl),
+        })
+        .from(calendarEvents)
+        .innerJoin(calendars, eq(calendarEvents.calendarId, calendars.id))
+        .where(
+          and(
+            eq(calendarEvents.eventType, "CLOSE"),
+            gte(calendarEvents.eventedAt, new Date(sinceDate)),
+          ),
+        )
+        .groupBy(calendars.id);
+
+      const mapped: RecentClosedCalendar[] = rows.map((row) => {
+        assertDefined(
+          row.closedAt,
+          "readRecentClosedCalendars: grouped CLOSE row missing eventedAt",
+        );
+        return {
+          calendarId: row.calendarId,
+          closedAt: row.closedAt,
+          openNetDebit: row.openNetDebit !== null ? parseFloat(row.openNetDebit) : 0,
+          realizedPnl: row.realizedPnl !== null ? parseFloat(row.realizedPnl) : null,
+        };
+      });
+
+      return ok(mapped);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  return {
+    storeCalendarEvent,
+    readCalendarEvents,
+    readCalendarEventByHash,
+    deleteCalendarEvents,
+    readRecentClosedCalendars,
+  };
 }

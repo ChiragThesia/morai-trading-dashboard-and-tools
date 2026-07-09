@@ -842,3 +842,33 @@ export type ForReadingAnnotations = {
     hashes: ReadonlyArray<string>,
   ) => Promise<Result<ReadonlyArray<CalendarEventAnnotation>, StorageError>>;
 };
+
+// ─── Phase 28 (PLAY-02): anti-criteria loss-cooldown brake read port ─────────
+
+/**
+ * RecentClosedCalendar — one row per calendar with at least one CLOSE calendar_events row on
+ * or after a cutoff date (PLAY-02 loss-cooldown brake). openNetDebit is read straight from
+ * calendars (never recomputed). realizedPnl is the SUM of the calendar's CLOSE events in the
+ * window — a calendar's two legs close via separate CLOSE events (D-04/D-09), so this is an
+ * aggregate of already-stored values, never a fabricated/recomputed P&L; null only when every
+ * summed CLOSE event itself carries a null realizedPnl (T-28-05: brakes.ts skips it, never
+ * NaN/divide-by-zero).
+ */
+export type RecentClosedCalendar = {
+  readonly calendarId: string;
+  readonly closedAt: Date;
+  readonly openNetDebit: number;
+  readonly realizedPnl: number | null;
+};
+
+/**
+ * ForReadingRecentClosedCalendars — bulk read of every calendar with a CLOSE event on or
+ * after sinceDate (PLAY-02). ONE query — calendars JOIN calendar_events WHERE event_type =
+ * 'CLOSE' — never an N+1 loop over closed calendars as history grows (Pitfall 4). Implemented
+ * by the Postgres adapter (single JOIN) and the in-memory twin; contract-tested for row
+ * parity. A read failure propagates as err(StorageError) — never a silent empty array, so a
+ * failed read can never silently clear the cooldown (T-28-04).
+ */
+export type ForReadingRecentClosedCalendars = (
+  sinceDate: string, // YYYY-MM-DD
+) => Promise<Result<ReadonlyArray<RecentClosedCalendar>, StorageError>>;

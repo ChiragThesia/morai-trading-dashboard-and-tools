@@ -49,6 +49,11 @@ export type {
   ForWritingAnnotations,
   ForReadingAnnotations,
 } from "./journal/index.ts";
+// Phase 28 (28-02, PLAY-02): anti-criteria loss-cooldown brake read port
+export type {
+  RecentClosedCalendar,
+  ForReadingRecentClosedCalendars,
+} from "./journal/index.ts";
 export { makeGetCalendarEventsWithRulesUseCase } from "./journal/index.ts";
 export type {
   CalendarEventWithRules,
