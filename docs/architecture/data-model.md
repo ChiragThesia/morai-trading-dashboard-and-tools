@@ -114,8 +114,9 @@ value       numeric NOT NULL   -- RAW as reported by the source, NO /100 (D-14):
 source      text                -- 'fred' | 'cboe' (provenance)
 ```
 
-Eight series land here: `DFF`, `DGS1MO`, `DGS3MO`, `SOFR`, `T10Y2Y`, `T10Y3M`, `VIXCLS`
-(source `fred`) and `VVIX` (source `cboe`, via the existing CBOE index-quote adapter).
+Nine series land here: `DFF`, `DGS1MO`, `DGS3MO`, `SOFR`, `T10Y2Y`, `T10Y3M`, `VIXCLS`, `VXVCLS`
+(source `fred`) and `VVIX` (source `cboe`, via the existing CBOE index-quote adapter). `VXVCLS`
+(VIX3M) is an index level like `VIXCLS`, stored raw with no `/100` (D-14, Phase 23).
 DGS3MO is double-written — once here (raw, source `fred`) and once in `rate_observations`
 (decimal-fraction, unchanged BSM path, D-02).
 
