@@ -82,6 +82,12 @@ export type {
   ForReadingJournal,
   ForRecomputingSnapshotPnl,
   ForReadingLatestLegObs,
+  // 26-03: journal's OWN latest-snapshot-per-open-calendar port (SnapshotRow-shaped).
+  // Aliased — the exits context (26-01) already exports a structurally-different,
+  // exits-owned re-declaration under the SAME bare name (its own `LatestSnapshotForCalendar`
+  // shape, not journal's `SnapshotRow`); see the "Exits bounded context" block below.
+  LatestSnapshotForOpenCalendar,
+  ForReadingLatestSnapshotPerOpenCalendar as ForReadingLatestSnapshotPerOpenCalendarForJournal,
 } from "./journal/index.ts";
 // Phase 3 calendar use-case factories
 export {

@@ -29,6 +29,7 @@ describe("in-memory calendar-snapshots adapter", () => {
         readSnapshotsForCycle: repo.readSnapshotsForCycle,
         readLatestSnapshotTime: repo.readLatestSnapshotTime,
         recomputeSnapshotPnl: repo.recomputeSnapshotPnl,
+        readLatestSnapshotPerOpenCalendar: repo.readLatestSnapshotPerOpenCalendar,
         countSnapshots: async (calendarId: string): Promise<number> => {
           // Read through the public port — safe because countSnapshots is only called
           // for known calendarIds in the contract suite (after seedCalendar).

@@ -45,6 +45,7 @@ describe.skipIf(shouldSkip)("postgres calendar-snapshots adapter", () => {
         readSnapshotsForCycle: repo.readSnapshotsForCycle,
         readLatestSnapshotTime: repo.readLatestSnapshotTime,
         recomputeSnapshotPnl: repo.recomputeSnapshotPnl,
+        readLatestSnapshotPerOpenCalendar: repo.readLatestSnapshotPerOpenCalendar,
         countSnapshots: async (calendarId: string): Promise<number> => {
           const rows = await db.execute(
             sql`SELECT COUNT(*)::int AS cnt FROM calendar_snapshots WHERE calendar_id = ${calendarId}::uuid`,

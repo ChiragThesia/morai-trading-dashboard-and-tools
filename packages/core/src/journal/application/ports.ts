@@ -260,6 +260,31 @@ export type ForReadingJournal = (
 ) => Promise<Result<ReadonlyArray<SnapshotRow> | null, StorageError>>;
 
 /**
+ * LatestSnapshotForOpenCalendar — one open calendar's most-recent calendar_snapshots row
+ * (Phase 26, EXIT-02). Carries the FULL SnapshotRow shape (not the term-slope-only
+ * readSnapshotsForCycle projection) — feeds the exits context's MarketContext read.
+ */
+export type LatestSnapshotForOpenCalendar = {
+  readonly calendarId: string;
+  readonly snapshot: SnapshotRow;
+};
+
+/**
+ * ForReadingLatestSnapshotPerOpenCalendar — the latest calendar_snapshots row per OPEN
+ * calendar, one row per calendar (Phase 26, EXIT-02).
+ *
+ * MUST be implemented via a fresh DISTINCT ON (calendar_id) query, NEVER by reusing
+ * readJournal/mapSnapshotRow — that function silently drops every row whose `source` is
+ * "schwab_chain" (`if (row.source !== "cboe") return null`), which would make any
+ * consumer blind to a calendar whose latest leg resolved from the Schwab chain
+ * (26-RESEARCH.md Pitfall 1). A calendar with zero snapshot rows is simply absent from
+ * the result — not an error.
+ */
+export type ForReadingLatestSnapshotPerOpenCalendar = () => Promise<
+  Result<ReadonlyArray<LatestSnapshotForOpenCalendar>, StorageError>
+>;
+
+/**
  * ForRecomputingSnapshotPnl — re-derive AND write pnl_open on every stored calendar_snapshots
  * row for a calendar, given the CURRENT openNetDebit + qty (D-05: pnl_open = (net_mark -
  * openNetDebit) * qty * 100). One-time data-correction step (JRNL-01): if openNetDebit is

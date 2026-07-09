@@ -22,6 +22,7 @@ import type {
   ForReadingCalendarSnapshotsForCycle,
   ForReadingLatestSnapshotTime,
   ForRecomputingSnapshotPnl,
+  ForReadingLatestSnapshotPerOpenCalendar,
   SnapshotRow,
   LegSnapshot,
   StorageError,
@@ -43,6 +44,8 @@ export type CalendarSnapshotsRepo = {
   readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
   /** JRNL-01 pnl-unit-mismatch fix: re-derive pnl_open on every row from openNetDebit/qty */
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
+  /** 26-03 (EXIT-02): latest calendar_snapshots row per open calendar, DISTINCT ON (calendar_id) */
+  readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendar;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -531,6 +534,62 @@ export function runCalendarSnapshotsContractTests(
         if (otherRows === null) return;
         // Untouched: still the stale value.
         expect(parseFloat(otherRows[0]?.pnlOpen ?? "NaN")).toBeCloseTo(-319850, 5);
+      });
+    });
+
+    describe("readLatestSnapshotPerOpenCalendar — per-open-calendar latest read (26-03, EXIT-02)", () => {
+      it("returns the single most-recent row per calendar when multiple snapshots exist", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const t1 = new Date("2026-07-01T19:00:00Z");
+        const t2 = new Date("2026-07-01T19:30:00Z");
+        await repo.persistSnapshot(makeSnapshotRow(t1, CAL_ID, { netMark: "10" }));
+        await repo.persistSnapshot(makeSnapshotRow(t2, CAL_ID, { netMark: "20" }));
+
+        const result = await repo.readLatestSnapshotPerOpenCalendar();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const rowsForCal = result.value.filter((r) => r.calendarId === CAL_ID);
+        expect(rowsForCal).toHaveLength(1);
+        const row = rowsForCal[0];
+        expect(row).toBeDefined();
+        if (row === undefined) return;
+        expect(row.snapshot.time.getTime()).toBe(t2.getTime());
+        expect(row.snapshot.netMark).toBe("20");
+      });
+
+      it("Pitfall-1 regression: a calendar whose latest row is schwab_chain-sourced IS returned (never dropped)", async () => {
+        const CAL_SCHWAB = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+        const CAL_CBOE = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+        await seed.seedCalendar(CAL_SCHWAB);
+        await seed.seedCalendar(CAL_CBOE);
+        // Distinct timestamps (green-suite lesson) — "latest" must be unambiguous.
+        const tSchwab = new Date("2026-07-01T19:00:00Z");
+        const tCboe = new Date("2026-07-01T19:05:00Z");
+        await repo.persistSnapshot(
+          makeSnapshotRow(tSchwab, CAL_SCHWAB, { source: "schwab_chain" }),
+        );
+        await repo.persistSnapshot(makeSnapshotRow(tCboe, CAL_CBOE, { source: "cboe" }));
+
+        const result = await repo.readLatestSnapshotPerOpenCalendar();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const bySource = new Map(result.value.map((r) => [r.calendarId, r]));
+
+        // The regression: a naive readJournal/mapSnapshotRow reuse would silently drop
+        // CAL_SCHWAB's row (source !== "cboe" guard) — both must be present here.
+        expect(bySource.has(CAL_SCHWAB)).toBe(true);
+        expect(bySource.has(CAL_CBOE)).toBe(true);
+        expect(bySource.get(CAL_SCHWAB)?.snapshot.source).toBe("schwab_chain");
+        expect(bySource.get(CAL_CBOE)?.snapshot.source).toBe("cboe");
+      });
+
+      it("a calendar with zero snapshot rows is absent from the result (not an error)", async () => {
+        await seed.seedCalendar(CAL_ID_EMPTY);
+
+        const result = await repo.readLatestSnapshotPerOpenCalendar();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.some((r) => r.calendarId === CAL_ID_EMPTY)).toBe(false);
       });
     });
   });

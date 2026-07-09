@@ -41,6 +41,8 @@ export type {
   ForReadingJournal,
   ForRecomputingSnapshotPnl,
   ForReadingLatestLegObs,
+  LatestSnapshotForOpenCalendar,
+  ForReadingLatestSnapshotPerOpenCalendar,
 } from "./application/ports.ts";
 export type { ForGettingStatus, StatusPayload, StatusError } from "./application/getStatus.ts";
 export { makeGetStatusUseCase } from "./application/getStatus.ts";
