@@ -147,6 +147,20 @@ on the snapshot for Analyzer display only. Proposed defaults `[ASSUMED]`, pendin
 | Elevated (20 – 25) | 1 |
 | Crisis (≥ 25) | 0 (moot — the hard block already suppresses candidates) |
 
+## autoTuneTargetDelta (Plan 04, PLAY-05 — shipped, not deferred)
+
+Thin, directional-only evidence [CITED: earlyretirementnow.com, "Options Trading Series Part
+14"]: higher VIX → sell further OTM. The milestone's own time-box permitted deferring this —
+Plan 04 shipped the smallest version that held up under testing instead: `autoTuneTargetDelta`
+linearly nudges the band-scan's DEEP (min) delta edge toward the far-OTM edge
+(`DELTA_BAND_MAX`) as the cohort VIX rises through the SAME `VIX_LADDER` normal→crisis floors
+(15 → 25) the gate/sizing already use. It is a universe-MEMBERSHIP preference only — an
+optional `effectiveDeltaMin` param on `selectCandidates`, clamped into `[DELTA_BAND_MIN,
+DELTA_BAND_MAX]` inside the function itself — never a scoring criterion (`RULE_SET_METADATA`
+is untouched, so it can't fight `slope`/`fwdEdge` the way a superimposed score tilt could).
+`autoTuneTargetDelta(null)` (GATE BLIND / gate-read-error / cold-start) is a no-op —
+reproduces today's untilted universe unchanged.
+
 ## Where to look
 
 - [picker-rules.md](picker-rules.md) — the per-candidate rule table this gate sits above
@@ -155,3 +169,6 @@ on the snapshot for Analyzer display only. Proposed defaults `[ASSUMED]`, pendin
   `vix9d-vix` epoch-mismatch note this gate deliberately avoids
 - `packages/core/src/picker/domain/entry-gate.ts` — `resolveEntryGate`, `VIX_LADDER`,
   `businessDaysSince`, `extractVixPair`
+- `packages/core/src/picker/domain/sizing.ts` — `SIZING_TIERS`, `resolveSizingTier`
+- `packages/core/src/picker/domain/candidate-selection.ts` — `autoTuneTargetDelta`,
+  `SelectCandidatesParams.effectiveDeltaMin`
