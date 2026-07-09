@@ -18,12 +18,14 @@ import { bsmGreeks } from "@morai/quant";
 import {
   legSpansEvents,
   selectCandidates,
+  haircutFill,
   DELTA_BAND_MIN,
   DELTA_BAND_MAX,
   FRONT_DTE_MIN,
   FRONT_DTE_MAX,
   BACK_DTE_MIN_GAP,
   BACK_DTE_MAX_GAP,
+  FILL_WIDTH_FRACTION,
 } from "./candidate-selection.ts";
 import type { ChainQuoteForPicker, EconomicEvent } from "../application/ports.ts";
 
@@ -349,5 +351,28 @@ describe("gates — liquidity + drop counts (rules.ts registry)", () => {
     expect(candidates).toHaveLength(0);
     expect(gateDrops.netTheta).toBeGreaterThan(0);
     expect(gateDrops.liquidity).toBe(0);
+  });
+});
+
+describe("haircutFill (Phase 26, extracted for exits/ROLL pricing reuse — Pitfall 2)", () => {
+  it("buy: crosses FILL_WIDTH_FRACTION of the width UP toward the ask", () => {
+    // bid 120, ask 126, width 6 -> 120 + 0.66*6 = 123.96
+    expect(haircutFill({ bid: 120, ask: 126 }, "buy")).toBeCloseTo(123.96, 6);
+  });
+
+  it("sell: crosses FILL_WIDTH_FRACTION of the width DOWN toward the bid", () => {
+    // bid 80, ask 84, width 4 -> 84 - 0.66*4 = 81.36
+    expect(haircutFill({ bid: 80, ask: 84 }, "sell")).toBeCloseTo(81.36, 6);
+  });
+
+  it("zero-width market: both sides return the price exactly", () => {
+    expect(haircutFill({ bid: 100, ask: 100 }, "buy")).toBe(100);
+    expect(haircutFill({ bid: 100, ask: 100 }, "sell")).toBe(100);
+  });
+
+  it("uses the exported FILL_WIDTH_FRACTION constant (never a hardcoded 0.66)", () => {
+    const quote = { bid: 10, ask: 20 };
+    expect(haircutFill(quote, "buy")).toBeCloseTo(quote.bid + (quote.ask - quote.bid) * FILL_WIDTH_FRACTION, 9);
+    expect(haircutFill(quote, "sell")).toBeCloseTo(quote.ask - (quote.ask - quote.bid) * FILL_WIDTH_FRACTION, 9);
   });
 });

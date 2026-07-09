@@ -121,6 +121,18 @@ export function legSpansEvents(
   return events.filter((ev) => todayIso < ev.date && ev.date <= legExpiryIso).map((ev) => ev.name);
 }
 
+/**
+ * ORATS 2-leg fill haircut (Phase 26, extracted from selectCandidates' private buyFill/sellFill
+ * closures — Pitfall 2): a buyer pays UP toward the ask, a seller receives DOWN toward the bid,
+ * each crossing FILL_WIDTH_FRACTION of the bid-ask width off the natural side. Exported so ROLL
+ * pricing (exits context) imports this formula instead of re-deriving it — one source of truth
+ * for the fill model on both the entry and exit side.
+ */
+export function haircutFill(quote: { readonly bid: number; readonly ask: number }, side: "buy" | "sell"): number {
+  const width = quote.ask - quote.bid;
+  return side === "buy" ? quote.bid + width * FILL_WIDTH_FRACTION : quote.ask - width * FILL_WIDTH_FRACTION;
+}
+
 // ─────────────────────────────────────────────────────────────
 // selectCandidates
 // ─────────────────────────────────────────────────────────────
@@ -220,12 +232,6 @@ export function selectCandidates(
   }
   const expiries = [...byExpiry.keys()];
 
-  // ORATS 2-leg fill haircut: buy at bid + f·width, sell at ask − f·width.
-  const buyFill = (quote: PointsQuote): number =>
-    quote.bid + (quote.ask - quote.bid) * FILL_WIDTH_FRACTION;
-  const sellFill = (quote: PointsQuote): number =>
-    quote.ask - (quote.ask - quote.bid) * FILL_WIDTH_FRACTION;
-
   const candidates: RawCandidate[] = [];
   const seenPairs = new Set<string>();
 
@@ -290,7 +296,7 @@ export function selectCandidates(
         const netDelta = (gB.delta - gF.delta) * 100;
 
         // Debit from the actual market with the fill haircut — buy the back, sell the front.
-        const debit = (buyFill(backAtK) - sellFill(frontQuote)) * 100;
+        const debit = (haircutFill(backAtK, "buy") - haircutFill(frontQuote, "sell")) * 100;
 
         const slope = ((ivB - ivF) / (tb - tf)) * 365;
 
