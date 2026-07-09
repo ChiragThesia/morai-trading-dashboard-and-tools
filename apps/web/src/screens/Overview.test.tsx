@@ -80,6 +80,11 @@ vi.mock("../hooks/useGex.ts", () => ({ useGex: vi.fn(() => ({ data: GEX_FIXTURE 
 vi.mock("../hooks/useStatus.ts", () => ({ useStatus: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useCot.ts", () => ({ useCot: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useMacro.ts", () => ({ useMacro: vi.fn(() => ({ data: undefined, isPending: false })) }));
+// Phase 24: RegimeBoard's own hook — mocked so mounting the board doesn't require a
+// QueryClientProvider in this file's plain render() calls (matches useMacro's pattern).
+vi.mock("../hooks/useRegimeBoard.ts", () => ({
+  useRegimeBoard: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+}));
 
 import { Overview, formatExpiryCell } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
@@ -233,6 +238,13 @@ describe("Overview screen", () => {
     expect(screen.queryByText("FRED macro")).toBeNull();
     expect(screen.queryByText("○ needs feed")).toBeNull();
     expect(screen.getByTestId("macro-empty")).toBeDefined();
+  });
+
+  it("mounts the 'Regime & breadth' section between Positioning & macro detail and Book & system (Phase 24)", () => {
+    setPositions([]);
+    render(<Overview />);
+    expect(screen.getByText("Regime & breadth")).toBeDefined();
+    expect(screen.getByTestId("regime-empty")).toBeDefined();
   });
 
   it("renders the payoff hero risk profile chart (visx SVG) for the combined book", () => {

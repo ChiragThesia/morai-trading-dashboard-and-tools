@@ -30,6 +30,7 @@ import { GexBars } from "../components/charts/GexBars.tsx";
 import { relAge, GEX_FRESH_MS } from "./Market.tsx";
 import { CotCard } from "../components/CotCard.tsx";
 import { MacroCard } from "../components/MacroCard.tsx";
+import { RegimeBoard } from "../components/RegimeBoard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
 import { Panel, PanelHeading, SectionLabel, Stat, MetricChip } from "../components/system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -1149,6 +1150,12 @@ export function Overview(): React.ReactElement {
           <CotCard />
           <MacroCard />
         </div>
+      </section>
+
+      {/* ── Regime & breadth (Phase 24, BOARD-01/02) ── */}
+      <section>
+        <SectionLabel className="mb-2">Regime & breadth</SectionLabel>
+        <RegimeBoard />
       </section>
 
       {/* ── Book & system (unchanged) ── */}

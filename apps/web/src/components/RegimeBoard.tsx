@@ -1,5 +1,5 @@
 import { useRegimeBoard } from "../hooks/useRegimeBoard.ts";
-import { Panel, PanelHeading } from "./system/index.tsx";
+import { Panel } from "./system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
   Tooltip,
@@ -18,6 +18,10 @@ import type { RegimeBand, RegimeIndicator } from "@morai/contracts";
  * dash chip, T-24-09). Each chip: label + ⓘ provenance tooltip (payload's own source +
  * rationale, BOARD-02) / band dot + value / as-of date. Reuses the existing "IV n/a"
  * Badge+Tooltip interaction verbatim (Overview.tsx) — no new atom, no new token.
+ *
+ * No internal PanelHeading — the mounting Overview section supplies the "Regime &
+ * breadth" SectionLabel (avoids a duplicated title, unlike CotCard/MacroCard whose
+ * internal titles differ from their section's SectionLabel).
  */
 
 const BAND_CLASSES: Record<RegimeBand, { dot: string; text: string }> = {
@@ -96,7 +100,6 @@ export function RegimeBoard(): React.ReactElement {
   if (isPending && data === undefined) {
     return (
       <Panel className="flex flex-col gap-2" style={{ minHeight: 96 }}>
-        <PanelHeading title="Regime & breadth" />
         <div
           className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
           data-testid="regime-loading"
@@ -110,7 +113,6 @@ export function RegimeBoard(): React.ReactElement {
   if (isError) {
     return (
       <Panel className="flex flex-col gap-2" style={{ minHeight: 96 }}>
-        <PanelHeading title="Regime & breadth" />
         <div
           className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
           data-testid="regime-error"
@@ -124,7 +126,6 @@ export function RegimeBoard(): React.ReactElement {
   if (data === undefined || data.length === 0) {
     return (
       <Panel className="flex flex-col gap-2" style={{ minHeight: 96 }}>
-        <PanelHeading title="Regime & breadth" />
         <div
           className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
           data-testid="regime-empty"
@@ -137,7 +138,6 @@ export function RegimeBoard(): React.ReactElement {
 
   return (
     <Panel className="flex flex-col gap-2" data-testid="regime-board">
-      <PanelHeading title="Regime & breadth" />
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {data.map((indicator) => (
           <Chip key={indicator.id} indicator={indicator} />
