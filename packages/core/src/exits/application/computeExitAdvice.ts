@@ -136,9 +136,14 @@ export function makeComputeExitAdviceUseCase(deps: ComputeExitAdviceDeps): ForRu
       // it straight through instead of hardcoding false.
       const changed = hasChanged(verdict, previousVerdict);
 
+      // IN-05: a STOP suppressed as indicative last cycle that becomes actionable this cycle has
+      // changed=false (same verdict/rung/ruleId) — the changed-gated warn would stay silent even
+      // though the position just became actionable. Also fire on an escalate false→true onset.
+      const escalationOnset = verdict.escalate && previousRow !== null && !previousRow.verdict.escalate;
+
       // No external notification system this phase (26-CONTEXT.md) — console.warn is the
       // sanctioned ops-visibility channel (typescript.md "gate console").
-      if (changed && verdict.escalate) {
+      if ((changed && verdict.escalate) || escalationOnset) {
         console.warn(
           `compute-exit-advice: verdict change for calendar ${position.calendarId}: ` +
             `${verdict.verdict}${verdict.rung !== null ? ` ${verdict.rung}` : ""} (${verdict.ruleId})`,

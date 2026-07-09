@@ -299,6 +299,43 @@ describe("computeExitAdvice — change detection", () => {
     expect(calls[0]?.verdict.changed).toBe(false);
   });
 
+  it("logs when escalate transitions false→true even though the verdict is unchanged (IN-05)", async () => {
+    // Last cycle the STOP was indicative (escalate:false); this cycle the SAME STOP -50% rung
+    // becomes actionable (escalate:true). (verdict,rung,ruleId) are identical so changed=false,
+    // but the position just became actionable — ops visibility must still fire.
+    const snapshotTime = new Date("2026-07-09T15:00:00.000Z");
+    const previous: ExitVerdictRow = {
+      observedAt: new Date("2026-07-09T14:30:00.000Z"),
+      calendarId: "cal-1",
+      verdict: {
+        verdict: "STOP",
+        rung: "-50%",
+        ruleId: "stop",
+        metric: { name: "pnlPct", value: -0.5, threshold: -0.5 },
+        indicative: true,
+        escalate: false,
+        roll: null,
+      },
+    };
+    const { persist, calls } = makePersistSpy();
+
+    const useCase = makeComputeExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition({ openNetDebit: 4000 })]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot({ time: snapshotTime, netMark: 2000 })]), // -50%, fresh RTH → actionable
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([previous]),
+      readEconomicEvents: fakeReadEvents(),
+      readChainForRoll: fakeReadChainForRoll(),
+      persistExitVerdict: persist,
+      now: () => new Date("2026-07-09T15:05:00.000Z"),
+    });
+
+    await useCase();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    // The verdict itself is unchanged cycle-to-cycle — the warn fired on the escalation onset.
+    expect(calls[0]?.verdict.changed).toBe(false);
+    expect(calls[0]?.verdict.escalate).toBe(true);
+  });
+
   it("does NOT log on a changed but non-escalating verdict (e.g. HOLD to TAKE)", async () => {
     const previous: ExitVerdictRow = {
       observedAt: new Date("2026-07-09T14:30:00.000Z"),
