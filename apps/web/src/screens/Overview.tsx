@@ -71,12 +71,13 @@ import type { StreamLiveGreekEvent, HeldPositionVerdict } from "@morai/contracts
  * with per-leg calibrated IV via `resolveLegIv` (OVW-02) — do not read this DEFAULT_IV
  * as final; it is superseded by the calibration wiring in the same plan.
  *
- * `netGreeksForLegs`/`BookSummary` stay on flat DEFAULT_IV permanently (OQ2 deferral,
- * recorded in 17-04-SUMMARY.md) — that path is NOT the payoff-hero calibration path.
+ * `netGreeksForLegs` (the GEX rail's Net book greeks tile) stays on flat DEFAULT_IV
+ * permanently (OQ2 deferral, recorded in 17-04-SUMMARY.md) — that path is NOT the
+ * payoff-hero calibration path.
  *
  * D-06 constraint: exactly one live-stream consumer on this surface. useLiveStream()
- * is called here and threaded into the payoff hero + docked positions table — NOT into
- * BookSummary or any other section. AdHocPicker / SC6 stays on Analyzer.
+ * is called here and threaded into the payoff hero + docked positions table only.
+ * AdHocPicker / SC6 stays on Analyzer.
  */
 
 const DEFAULT_IV = 0.18;
@@ -182,8 +183,8 @@ function nearestCurveValue(curve: ReadonlyArray<PayoffPoint>, level: number): nu
 }
 
 /** Sum position greeks across legs, scaled to position terms (per-share × netQty × 100).
- *  Used for the static BookSummary section AND the GEX rail's Net book greeks tile —
- *  NOT for the calibrated payoff-hero curve (OQ2 deferral). */
+ *  Used for the GEX rail's Net book greeks tile — NOT for the calibrated payoff-hero
+ *  curve (OQ2 deferral). */
 function netGreeksForLegs(
   legs: ReadonlyArray<BrokerPositionResponse>,
   spot: number,
@@ -860,8 +861,8 @@ export function Overview(): React.ReactElement {
   }, []);
 
   // Per-leg calibrated IV (OVW-02, D-01/D-02) — resolveLegIv per leg, never DEFAULT_IV
-  // on this path (T-17-05). DEFAULT_IV remains only for netGreeksForLegs/BookSummary
-  // (OQ2, recorded deferral).
+  // on this path (T-17-05). DEFAULT_IV remains only for netGreeksForLegs (the GEX rail's
+  // Net book greeks tile, OQ2 recorded deferral).
   const calendarBuild = useMemo(
     () =>
       calendars.map((cal) =>
