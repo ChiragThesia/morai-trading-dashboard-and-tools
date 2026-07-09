@@ -22,7 +22,7 @@ handlers are thin inbound adapters calling application use-cases.
 | Job | Schedule (America/New_York) | Does |
 |---|---|---|
 | `fetch-schwab-chain` | every 30 min RTH | Dual-source SPX/SPXW chain fetch (Schwab + CBOE) → `leg_observations` + `contracts`; see "Chain fetch" section |
-| `snapshot-calendars` | chain-triggered only (NO cron) | For each open calendar: fetch chain → compute marks/IV/greeks/term-slope → store `calendar_snapshots` row |
+| `snapshot-calendars` | chain-triggered only (NO cron) | For each open calendar: resolve front + back legs; write a `calendar_snapshots` row ONLY when both legs are present and fresher than `SNAPSHOT_LEG_STALENESS_TOLERANCE_MS` (~45 min = 1.5x the 30-min chain cadence). A missing or stale leg means that calendar is skipped for the cycle (no row written), logged via `console.warn`, self-healing on the next fresh cycle (OPS-01 root-cause fix — historical gap rows are never backfilled) |
 | `compute-bsm-greeks` | every 1 min (drains pending) | Scan `leg_observations WHERE bsm_iv IS NULL` → IV invert → BSM → upsert |
 | `sync-fills` | `*/10 9-16 * * 1-5` (every 10 min RTH) | Schwab transactions → `fills`/`orders`; pair into calendar OPEN/CLOSE/ROLL events |
 | `refresh-tokens` | RETIRED (GW-03) | Token refresh moved to the schwab-py sidecar (Phase 11 cutover); removed from the trigger surface in Phase 15 — see section below |
