@@ -32,6 +32,7 @@ function makePosition(overrides: Partial<HeldPosition> = {}): HeldPosition {
     calendarId: "cal-1",
     name: "7000P calendar",
     strike: 7000,
+    optionType: "P",
     qty: 1,
     openNetDebit: 4000,
     frontExpiry: "2026-09-18",
@@ -124,6 +125,21 @@ describe("getExitAdvice — shape", () => {
     expect(position?.changed).toBe(false);
     expect(result.value.ruleSet.length).toBeGreaterThan(0);
     expect(result.value.ruleSet.map((r) => r.id)).toContain("stop");
+  });
+
+  it("re-derives strike/optionType from the held calendar (verdict-in-row join key, not hardcoded 'P')", async () => {
+    const useCase = makeGetExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition({ strike: 7650, optionType: "C" })]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot()]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([makeVerdictRow()]),
+      now: () => new Date("2026-07-09T16:00:00.000Z"),
+    });
+
+    const result = await useCase();
+    if (!result.ok || result.value === null) throw new Error("expected a snapshot");
+    const position = result.value.positions[0];
+    expect(position?.strike).toBe(7650);
+    expect(position?.optionType).toBe("C");
   });
 
   it("emits pnlPct null (not ±Infinity) when openNetDebit is 0 (CR-01)", async () => {
