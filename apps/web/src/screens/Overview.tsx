@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import { usePositions } from "../hooks/usePositions.ts";
 import { useGex } from "../hooks/useGex.ts";
-import { useStatus } from "../hooks/useStatus.ts";
 import { useCot } from "../hooks/useCot.ts";
 import { useMacro } from "../hooks/useMacro.ts";
 import { useExits } from "../hooks/useExits.ts";
@@ -29,12 +28,17 @@ import { PayoffControls } from "../components/charts/PayoffControls.tsx";
 import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import { relAge, GEX_FRESH_MS } from "./Market.tsx";
-import { CotCard } from "../components/CotCard.tsx";
-import { RegimeBoard } from "../components/RegimeBoard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
-import { HeldPositionsPanel } from "./HeldPositionsPanel.tsx";
+import { MarketRail } from "./MarketRail.tsx";
+import {
+  HeldPositionsPanel,
+  VerdictChip,
+  VerdictChangedMarker,
+  VerdictDetailBody,
+} from "./HeldPositionsPanel.tsx";
 import { ExitRulesPanel } from "./ExitRulesPanel.tsx";
 import { Panel, PanelHeading, SectionLabel, Stat, MetricChip, Button } from "../components/system/index.tsx";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
   Tooltip,
@@ -44,21 +48,23 @@ import {
 } from "@/components/ui/tooltip.tsx";
 import { cn } from "@/lib/utils";
 import type { BrokerPositionResponse, GexSnapshotEntry, MacroResponse, MacroSeriesId } from "@morai/contracts";
-import type { StreamLiveGreekEvent } from "@morai/contracts";
+import type { StreamLiveGreekEvent, HeldPositionVerdict } from "@morai/contracts";
 
 /**
- * Overview — the home dashboard, TOS-dock layout (Phase 17 redesign, OVW-01/OVW-02):
+ * Overview — the home dashboard, three-column Launchpad shell (overview-layout-redesign.md,
+ * Option A):
  *   1. Pill header — SPX spot, net γ/1% + regime, γ flip, VIX, VVIX, Fed funds, 10y−2y,
  *      COT lev, book P&L.
- *   2. Two-column body: left = payoff hero ("Risk profile — combined book") + docked
- *      positions table; right = 320px GEX rail (dealer γ profile, GEX by strike,
- *      key levels, net book greeks).
- *   3. Held positions & exit rules row (moved from Analyzer — verdicts belong next to
- *      the book: HeldPositionsPanel + ExitRulesPanel, sourced from useExits(), same
- *      loading/error/cold-start/empty precedence Analyzer used).
- *   4. Positioning & macro detail row (CotCard + RegimeBoard — the merged "Market
- *      regime" panel absorbs the former standalone FRED macro card).
- *   5. Book & system row (BookSummary + SystemHealth, unchanged).
+ *   2. LEFT MarketRail (~280px) — entry gate + regime pills + rates + COT + system health
+ *      (see MarketRail.tsx). Persistent "where is the market" context.
+ *   3. CENTER — payoff hero ("Risk profile — combined book") above the docked positions
+ *      table. The table carries a VERDICT column: each open calendar's exit verdict is
+ *      joined into its row by `${strike}${optionType}` (verdictByRowKey). Row click expands
+ *      the verdict detail (rule + metric, roll, CHANGED, as-of). Verdicts with no live
+ *      broker row fall to an "Unlinked verdicts" list under the table (never dropped). The
+ *      exit-rules ladder opens from an "Exit rules ▸" dialog button in the Positions header.
+ *   4. RIGHT — 320px GEX rail (dealer γ profile, GEX by strike, key levels, net book greeks).
+ *   5. Mobile — stacks ticker → MarketRail (collapsible) → hero → positions+verdicts → GEX.
  *
  * The payoff hero uses `repriceScenario` over calendar positions built from
  * `pairPositionsIntoCalendars`. Task 17-04/2 replaces the placeholder flat IV below
@@ -204,17 +210,6 @@ function netGreeksForLegs(
   return acc;
 }
 
-/** Σ unrealized P&L across legs (marketValue − avgPrice·netQty·100).
- *  Used for the static BookSummary section — NOT for the live-overlaid PositionsTable. */
-function netUnreal(legs: ReadonlyArray<BrokerPositionResponse>): number | null {
-  let total = 0;
-  for (const l of legs) {
-    if (l.marketValue === null || l.averagePrice === null) return null;
-    total += l.marketValue - l.averagePrice * (l.longQty - l.shortQty) * 100;
-  }
-  return total;
-}
-
 /**
  * Truncate a non-negative number to `dp` decimals WITHOUT rounding, padded to `dp` places.
  * Round at dp+2 first (kills float noise like 186.5799999) then string-slice — so the
@@ -334,7 +329,7 @@ function buildRows(positions: ReadonlyArray<BrokerPositionResponse>): Row[] {
   return [...calRows, ...singleRows];
 }
 
-const COLS = ["Position", "Expiry / DTE", "Net val", "P&L / entry", "Δ", "Γ", "Θ/d", "Vega"] as const;
+const COLS = ["Position", "Expiry / DTE", "Net val", "P&L / entry", "Δ", "Γ", "Θ/d", "Vega", "Verdict"] as const;
 
 /**
  * PositionsTable — TOS-style docked positions table with live BSM greek overlay.
@@ -353,6 +348,10 @@ function PositionsTable({
   liveGreeks,
   liveStatus,
   ivNaByRowKey,
+  verdictByRowKey,
+  expandedRowKey,
+  verdictObservedAt,
+  verdictMarketSession,
   highlightedRowKey,
   onHoverRow,
   onSelectRow,
@@ -365,6 +364,14 @@ function PositionsTable({
   liveStatus: LiveStreamStatus;
   /** Rows whose calendar leg(s) genuinely did not converge (D-02) — renders "IV n/a". */
   ivNaByRowKey: ReadonlyMap<string, boolean>;
+  /** Exit verdict per row, keyed by the row `label` (`${strike}${optionType}`) — the
+   *  verdict-in-row join. Absent key → no verdict for that position (renders "—"). */
+  verdictByRowKey: ReadonlyMap<string, HeldPositionVerdict>;
+  /** The click-persisted selected row (drives the verdict-detail expand) — null when none. */
+  expandedRowKey: string | null;
+  /** Cohort instant + session for the expanded verdict detail's as-of dot / INDICATIVE label. */
+  verdictObservedAt: string | null;
+  verdictMarketSession: "rth" | "after-hours";
   /** The docked-table row currently hovered/selected (D-05) — null when none. */
   highlightedRowKey: string | null;
   onHoverRow: (key: string | null) => void;
@@ -432,9 +439,11 @@ function PositionsTable({
           const rowLive = liveCellCn(liveTs);
           const flashCn = liveTs !== null ? `live-cell-flash ${rowLive}` : "";
           const ivNa = ivNaByRowKey.get(r.key) === true;
+          const verdict = verdictByRowKey.get(r.label) ?? null;
+          const expanded = expandedRowKey === r.key && verdict !== null;
           return (
+            <Fragment key={r.key}>
             <tr
-              key={r.key}
               data-testid={`position-row-${r.key}`}
               onMouseEnter={() => { onHoverRow(r.key); }}
               onMouseLeave={() => { onHoverRow(null); }}
@@ -539,7 +548,27 @@ function PositionsTable({
               >
                 {signedUsd(g.vega)}
               </td>
+              {/* Verdict — joined exit verdict for this calendar (static, no live-cell) */}
+              <td className="px-2 py-1 text-right">
+                {verdict !== null ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <VerdictChangedMarker row={verdict} />
+                    <VerdictChip row={verdict} marketSession={verdictMarketSession} />
+                  </span>
+                ) : (
+                  <span className="text-dim">—</span>
+                )}
+              </td>
             </tr>
+            {expanded && verdict !== null && (
+              <tr data-testid={`position-verdict-detail-${r.key}`}>
+                <td className="px-2 pb-2" />
+                <td className="px-2 pb-2" colSpan={COLS.length}>
+                  <VerdictDetailBody row={verdict} observedAt={verdictObservedAt ?? ""} />
+                </td>
+              </tr>
+            )}
+            </Fragment>
           );
         })}
         {/* Net total row — uses resolveLivePositionRow over all included legs */}
@@ -591,61 +620,11 @@ function PositionsTable({
           >
             {signedUsd(total.greeks.vega)}
           </td>
+          {/* Verdict column — no aggregate */}
+          <td className="px-2 py-1" />
         </tr>
       </tbody>
     </table>
-  );
-}
-
-// ─── Book summary (unchanged — OQ2: stays on flat DEFAULT_IV) ────────────────
-
-function BookSummary({
-  positions,
-  spot,
-}: {
-  positions: ReadonlyArray<BrokerPositionResponse>;
-  spot: number;
-}): React.ReactElement {
-  const rows = buildRows(positions);
-  const allLegs = rows.flatMap((r) => r.legs);
-  const unreal = netUnreal(allLegs);
-  const g = netGreeksForLegs(allLegs, spot);
-  return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-      <Stat label="Positions" value={String(rows.length)} />
-      <Stat
-        label="Unrealized P&L"
-        value={unreal === null ? "—" : signedUsd(unreal)}
-        valueClassName={unreal === null ? "text-dim" : signClass(unreal)}
-      />
-      <Stat label="Net Δ" value={signed(g.delta)} valueClassName={signClass(g.delta)} />
-      <Stat label="Net Θ/day" value={signedUsd(g.theta)} valueClassName={signClass(g.theta)} />
-      <Stat label="Net Vega" value={signedUsd(g.vega)} valueClassName={signClass(g.vega)} />
-      <Stat label="Net Γ" value={signed(g.gamma)} />
-    </div>
-  );
-}
-
-function SystemHealth(): React.ReactElement {
-  const { data: status } = useStatus();
-  if (status === undefined || status.lastJobRuns === "none yet") {
-    return <p className="font-mono text-[11px] text-dim">System status loading…</p>;
-  }
-  return (
-    <div className="flex flex-col gap-1.5">
-      {Object.entries(status.lastJobRuns).map(([job, rec]) => {
-        const healthy =
-          rec.lastErrorAt === null ||
-          (rec.lastSuccessAt !== null && rec.lastSuccessAt > rec.lastErrorAt);
-        return (
-          <div key={job} className="flex items-center gap-2 font-mono text-[11px]">
-            <span className={cn("size-2 shrink-0 rounded-full", healthy ? "bg-up" : "bg-down")} />
-            <span className="text-muted-foreground">{job}</span>
-            <span className="ml-auto text-dim">{healthy ? "ok" : "error"}</span>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -827,6 +806,24 @@ export function Overview(): React.ReactElement {
   const { data: exitsData, isPending: exitsIsPending, isError: exitsIsError, refetch: exitsRefetch } = useExits();
   const exitsSnapshot = exitsData ?? null;
 
+  // ── Verdict-in-row join (overview-layout-redesign.md §Join design) ────────────
+  // Deterministic, root-agnostic: key each loaded verdict by `${strike}${optionType}` and
+  // look it up per positions row by its `label` (same format). A verdict with no live broker
+  // row (closed calendar) is NEVER dropped — it falls to the "Unlinked verdicts" list below.
+  const loadedVerdicts = exitsSnapshot?.positions ?? [];
+  const verdictByRowKey = useMemo(
+    () => new Map(loadedVerdicts.map((v) => [`${v.strike}${v.optionType}`, v])),
+    [loadedVerdicts],
+  );
+  const rowLabels = useMemo(
+    () => new Set(buildRows(positions).map((r) => r.label)),
+    [positions],
+  );
+  const unlinkedVerdicts = useMemo(
+    () => loadedVerdicts.filter((v) => !rowLabels.has(`${v.strike}${v.optionType}`)),
+    [loadedVerdicts, rowLabels],
+  );
+
   // Phase 12-07: live stream hook (D-06 — this surface only).
   // useLiveStream() is called once here and threaded into the payoff hero + docked table.
   // Overview and Analyzer never mount simultaneously (Shell renders one screen at a time)
@@ -994,76 +991,76 @@ export function Overview(): React.ReactElement {
       ? liveLastTickAt.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
       : "—";
 
-  let exitsBody: React.ReactElement;
+  // Exit-advisor status / unlinked verdicts — rendered UNDER the positions table. The loaded
+  // verdicts join into the table's VERDICT column above; this surfaces the advisor's non-loaded
+  // states (loading/error/cold-start/empty, same copy the moved-from-Analyzer panel used) and,
+  // once loaded, any verdict with no live broker row (never silently dropped).
+  let exitsBody: React.ReactElement | null;
   if (exitsIsPending && exitsData === undefined) {
     exitsBody = (
-      <Panel>
-        <PanelHeading title="Held positions" />
-        <div
-          className="flex items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
-          data-testid="held-positions-loading"
-        >
-          Loading exit verdicts…
-        </div>
-      </Panel>
+      <div
+        className="font-mono text-[10px] text-dim"
+        data-testid="held-positions-loading"
+      >
+        Loading exit verdicts…
+      </div>
     );
   } else if (exitsIsError) {
     exitsBody = (
-      <Panel>
-        <PanelHeading title="Held positions" />
-        <div className="flex flex-col items-center gap-2 p-4 text-center" data-testid="held-positions-error">
-          <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load exit verdicts.</p>
-          <Button
-            onClick={() => {
-              void exitsRefetch();
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      </Panel>
+      <div className="flex items-center gap-2" data-testid="held-positions-error">
+        <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load exit verdicts.</p>
+        <Button
+          onClick={() => {
+            void exitsRefetch();
+          }}
+        >
+          Retry
+        </Button>
+      </div>
     );
   } else if (exitsSnapshot === null) {
     exitsBody = (
-      <Panel>
-        <PanelHeading title="Held positions" />
-        <div className="flex flex-col gap-1.5 p-4" data-testid="held-positions-cold-start">
-          <p className="m-0 font-display text-sm font-bold text-txt">Exit advisor warming up</p>
-          <p className="m-0 font-mono text-[11px] text-dim">
-            First verdict pending — check back after the next chain snapshot.
-          </p>
-        </div>
-      </Panel>
+      <div className="flex flex-col gap-1.5" data-testid="held-positions-cold-start">
+        <p className="m-0 font-display text-sm font-bold text-txt">Exit advisor warming up</p>
+        <p className="m-0 font-mono text-[11px] text-dim">
+          First verdict pending — check back after the next chain snapshot.
+        </p>
+      </div>
     );
   } else if (exitsSnapshot.positions.length === 0) {
     exitsBody = (
-      <Panel>
-        <PanelHeading title="Held positions" />
-        <div className="flex flex-col gap-1.5 p-4" data-testid="held-positions-empty">
-          <p className="m-0 font-display text-sm font-bold text-txt">No open positions</p>
-          <p className="m-0 font-mono text-[11px] text-dim">
-            Nothing to advise on — the exit advisor activates once you have an open calendar.
-          </p>
-        </div>
-      </Panel>
+      <div className="flex flex-col gap-1.5" data-testid="held-positions-empty">
+        <p className="m-0 font-display text-sm font-bold text-txt">No open positions</p>
+        <p className="m-0 font-mono text-[11px] text-dim">
+          Nothing to advise on — the exit advisor activates once you have an open calendar.
+        </p>
+      </div>
     );
-  } else {
+  } else if (unlinkedVerdicts.length > 0) {
     exitsBody = (
       <HeldPositionsPanel
-        positions={exitsSnapshot.positions}
+        positions={unlinkedVerdicts}
         observedAt={exitsSnapshot.observedAt}
         marketSession={exitsSnapshot.marketSession}
+        title="Unlinked verdicts"
       />
     );
+  } else {
+    exitsBody = null;
   }
 
   return (
     <div className="mx-auto flex max-w-[1480px] flex-col gap-5 p-3.5">
       <PillHeader gex={gex} cotLev={cotLev} macro={macro} bookPnl={bookPnl} />
 
-      {/* ── Two-column body: payoff hero + docked table (left) / GEX rail (right) ── */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 320px" }}>
-        <div className="flex flex-col gap-3">
+      {/* ── Three-column Launchpad shell: MarketRail (left) / hero + positions (center) /
+          GEX rail (right). Mobile stacks in DOM order: rail → hero → positions → GEX. ── */}
+      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[280px_minmax(0,1fr)_320px] lg:items-start">
+        {/* LEFT — persistent market context rail */}
+        <MarketRail />
+
+        {/* CENTER — payoff hero + docked positions table + exit-advisor status */}
+        <div className="flex min-w-0 flex-col gap-3">
           {/* Payoff hero */}
           <Panel>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -1184,7 +1181,8 @@ export function Overview(): React.ReactElement {
             )}
           </Panel>
 
-          {/* Docked positions table */}
+          {/* Docked positions table — verdicts join into the VERDICT column; the exit-rules
+              ladder opens from the header dialog button */}
           <Panel>
             <div className="mb-2 flex items-center gap-2">
               <SectionLabel>Positions</SectionLabel>
@@ -1196,6 +1194,19 @@ export function Overview(): React.ReactElement {
                 isReconnecting={liveIsReconnecting}
                 onReconnect={liveReconnectNow}
               />
+              {exitsSnapshot !== null && (
+                <Dialog>
+                  <DialogTrigger
+                    data-testid="exit-rules-trigger"
+                    className="ml-auto rounded-md bg-raise/40 px-2.5 py-1 font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase ring-1 ring-line hover:text-txt"
+                  >
+                    Exit rules ▸
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <ExitRulesPanel ruleSet={exitsSnapshot.ruleSet} />
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
             <PositionsTable
               positions={positions}
@@ -1203,6 +1214,10 @@ export function Overview(): React.ReactElement {
               liveGreeks={liveGreeks}
               liveStatus={liveStatus}
               ivNaByRowKey={ivNaByRowKey}
+              verdictByRowKey={verdictByRowKey}
+              expandedRowKey={selectedRowKey}
+              verdictObservedAt={exitsSnapshot?.observedAt ?? null}
+              verdictMarketSession={exitsSnapshot?.marketSession ?? "rth"}
               highlightedRowKey={highlightedRowKey}
               onHoverRow={handleHoverRow}
               onSelectRow={handleSelectRow}
@@ -1210,48 +1225,16 @@ export function Overview(): React.ReactElement {
               onToggleExcluded={handleToggleExcludedCalendar}
             />
           </Panel>
+
+          {/* Exit-advisor status / unlinked verdicts — under the table */}
+          {exitsBody}
         </div>
 
-        {/* GEX rail */}
+        {/* RIGHT — GEX rail (untouched) */}
         <div className="flex flex-col gap-3">
           <GexRail gex={gex} railGreeks={railGreeks} />
         </div>
       </div>
-
-      {/* ── Held positions & exit rules (moved from Analyzer — verdicts belong next to
-          the book, immediately below the positions table above) ── */}
-      <section>
-        <SectionLabel className="mb-2">Held positions & exit rules</SectionLabel>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {exitsBody}
-          {exitsSnapshot !== null && <ExitRulesPanel ruleSet={exitsSnapshot.ruleSet} />}
-        </div>
-      </section>
-
-      {/* ── Positioning & macro detail: COT + Market regime (Phase 24 BOARD-01/02,
-          merged with the former FRED macro card in the post-v1.3 tweak) ── */}
-      <section>
-        <SectionLabel className="mb-2">Positioning & macro detail</SectionLabel>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <CotCard />
-          <RegimeBoard />
-        </div>
-      </section>
-
-      {/* ── Book & system (unchanged) ── */}
-      <section>
-        <SectionLabel className="mb-2">Book & system</SectionLabel>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Panel className="p-4">
-            <SectionLabel className="mb-3">Book summary</SectionLabel>
-            <BookSummary positions={positions} spot={spot} />
-          </Panel>
-          <Panel className="p-4">
-            <SectionLabel className="mb-3">System health</SectionLabel>
-            <SystemHealth />
-          </Panel>
-        </div>
-      </section>
     </div>
   );
 }

@@ -238,6 +238,8 @@ const EXITS_FIXTURE: ExitsResponse = {
     {
       calendarId: "cal-hold",
       name: "SPX 18SEP/14AUG 7425P",
+      strike: 7425,
+      optionType: "P",
       verdict: "HOLD",
       rung: null,
       ruleId: "hold",
@@ -252,6 +254,8 @@ const EXITS_FIXTURE: ExitsResponse = {
     {
       calendarId: "cal-take",
       name: "SPX 18SEP/14AUG 7450P",
+      strike: 7450,
+      optionType: "P",
       verdict: "TAKE",
       rung: "+10%",
       ruleId: "take",
@@ -266,6 +270,8 @@ const EXITS_FIXTURE: ExitsResponse = {
     {
       calendarId: "cal-stop",
       name: "SPX 18SEP/14AUG 7400P",
+      strike: 7400,
+      optionType: "P",
       verdict: "STOP",
       rung: "-25%",
       ruleId: "stop",
@@ -280,6 +286,8 @@ const EXITS_FIXTURE: ExitsResponse = {
     {
       calendarId: "cal-exit",
       name: "SPX 21AUG/14AUG 7500P",
+      strike: 7500,
+      optionType: "P",
       verdict: "EXIT_PRE_EVENT",
       rung: null,
       ruleId: "evt",
@@ -294,6 +302,8 @@ const EXITS_FIXTURE: ExitsResponse = {
     {
       calendarId: "cal-indicative",
       name: "SPX 18SEP/14AUG 7350P",
+      strike: 7350,
+      optionType: "P",
       verdict: "STOP",
       rung: "-50%",
       ruleId: "stop",
@@ -308,6 +318,8 @@ const EXITS_FIXTURE: ExitsResponse = {
     {
       calendarId: "cal-roll",
       name: "SPX 28AUG/21AUG 7420P",
+      strike: 7420,
+      optionType: "P",
       verdict: "ROLL",
       rung: null,
       ruleId: "roll",
@@ -350,18 +362,23 @@ describe("Overview screen", () => {
 
   // ── Existing tests (unchanged assertions) ─────────────────────────────────────
 
-  it("renders the TOS-dock section headers", () => {
+  it("renders the three-column shell headers (left rail, center hero+positions, GEX rail)", () => {
     setPositions([]);
     render(<Overview />);
+    // LEFT — the persistent MarketRail context column.
+    expect(screen.getByTestId("market-rail")).toBeDefined();
+    // CENTER — hero + docked positions table.
     expect(screen.getByText("Risk profile — combined book")).toBeDefined();
-    // "Positions" also appears as a BookSummary Stat label — assert the docked-table
-    // panel heading (an <h3>) specifically.
     expect(screen.getByRole("heading", { name: "Positions" })).toBeDefined();
+    // RIGHT — GEX rail (untouched).
     expect(screen.getByText("Dealer γ profile")).toBeDefined();
     expect(screen.getByText("GEX by strike")).toBeDefined();
     expect(screen.getByText("Key levels")).toBeDefined();
     expect(screen.getByText("Net book greeks")).toBeDefined();
-    expect(screen.getByText("Book & system")).toBeDefined();
+    // The old full-width below-fold sections are gone (their content lives in the rail).
+    expect(screen.queryByText("Book & system")).toBeNull();
+    expect(screen.queryByText("Positioning & macro detail")).toBeNull();
+    expect(screen.queryByText("Held positions & exit rules")).toBeNull();
   });
 
   it("renders the live COT card and the merged Market regime panel — no more standalone FRED macro card", () => {
@@ -380,12 +397,12 @@ describe("Overview screen", () => {
     expect(screen.queryByTestId("regime-rates-row")).toBeNull();
   });
 
-  it("mounts the merged 'Market regime' panel inside Positioning & macro detail (Phase 24 + post-v1.3 FRED merge)", () => {
+  it("mounts the merged 'Market regime' panel inside the left MarketRail (Option A relocation)", () => {
     setPositions([]);
     render(<Overview />);
-    expect(screen.getByText("Positioning & macro detail")).toBeDefined();
-    expect(screen.getByText("Market regime")).toBeDefined();
-    expect(screen.getByTestId("regime-empty")).toBeDefined();
+    const rail = screen.getByTestId("market-rail");
+    expect(within(rail).getByText("Market regime")).toBeDefined();
+    expect(within(rail).getByTestId("regime-empty")).toBeDefined();
   });
 
   it("renders the payoff hero risk profile chart (visx SVG) for the combined book", () => {
@@ -837,14 +854,20 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
     vi.clearAllMocks();
   });
 
-  it("renders one held-position row per fixture position + the exit rules list in payload order", () => {
+  it("lists every verdict (all unlinked here) + opens the exit rules ladder from the header dialog", () => {
     setPositions([]);
     setExitsReturn({ data: EXITS_FIXTURE });
     render(<Overview />);
 
+    // With no broker positions, every verdict is unlinked → rendered in the fallback list.
     for (const row of EXITS_FIXTURE.positions) {
       expect(screen.getByTestId(`held-position-${row.calendarId}`)).toBeTruthy();
     }
+
+    // Exit rules live behind the header dialog — closed until the trigger is clicked.
+    expect(screen.queryByTestId("exit-rules-list")).toBeNull();
+    fireEvent.click(screen.getByTestId("exit-rules-trigger"));
+
     const ruleRows = screen.getAllByTestId(/^exit-rule-/);
     expect(ruleRows.map((el) => el.getAttribute("data-testid"))).toEqual(
       EXITS_FIXTURE.ruleSet.map((r) => `exit-rule-${r.id}`),
@@ -986,5 +1009,78 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
     expect(errorBlock.textContent).toContain("Couldn't load exit verdicts.");
     fireEvent.click(within(errorBlock).getByText("Retry"));
     expect(refetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Overview — verdict-in-row join (overview-layout-redesign.md §Join design)", () => {
+  beforeEach(() => {
+    // Calendars must build so the 7425P row exists (buildRows is IV-independent, but keep
+    // calibration deterministic to avoid non-convergent noise elsewhere on the surface).
+    mockResolveLegIv.mockImplementation(() => ok(0.2));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("joins a matching verdict into its positions-row VERDICT cell, not the unlinked list", () => {
+    setPositions([CAL_FRONT, CAL_BACK]); // 7425P calendar → row label "7425P"
+    setExitsReturn({ data: EXITS_FIXTURE }); // cal-hold is strike 7425, optionType "P"
+    render(<Overview />);
+
+    const row = screen.getByTestId(`position-row-${CAL_ROW_KEY}`);
+    expect(within(row).getByTestId("held-position-verdict-cal-hold")).toBeDefined();
+    // Matched → NOT duplicated in the unlinked fallback list.
+    expect(screen.queryByTestId("held-position-cal-hold")).toBeNull();
+  });
+
+  it("routes every non-matching verdict to the 'Unlinked verdicts' list — never silently dropped", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    expect(screen.getByText("Unlinked verdicts")).toBeDefined();
+    for (const id of ["cal-take", "cal-stop", "cal-exit", "cal-indicative", "cal-roll"]) {
+      expect(screen.getByTestId(`held-position-${id}`)).toBeDefined();
+    }
+    expect(screen.queryByTestId("held-position-cal-hold")).toBeNull();
+  });
+
+  it("the join key is option-type specific — a call verdict never matches a put row at the same strike", () => {
+    setPositions([CAL_FRONT, CAL_BACK]); // 7425 P row
+    const callAt7425: ExitsResponse = {
+      ...EXITS_FIXTURE,
+      positions: EXITS_FIXTURE.positions.map((p) =>
+        p.calendarId === "cal-hold" ? { ...p, optionType: "C" as const } : p,
+      ),
+    };
+    setExitsReturn({ data: callAt7425 });
+    render(<Overview />);
+
+    const row = screen.getByTestId(`position-row-${CAL_ROW_KEY}`);
+    expect(within(row).queryByTestId("held-position-verdict-cal-hold")).toBeNull();
+    // 7425C → no put row → unlinked list.
+    expect(screen.getByTestId("held-position-cal-hold")).toBeDefined();
+  });
+
+  it("clicking a matched row expands its verdict detail (rule + metric line)", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    expect(screen.queryByTestId(`position-verdict-detail-${CAL_ROW_KEY}`)).toBeNull();
+    fireEvent.click(screen.getByTestId(`position-row-${CAL_ROW_KEY}`));
+
+    const detail = screen.getByTestId(`position-verdict-detail-${CAL_ROW_KEY}`);
+    expect(within(detail).getByTestId("held-position-rule-cal-hold").textContent).toBe("hold · pnlPct +2.0%");
+  });
+
+  it("shows the em-dash (no chip) in the VERDICT column while the advisor is cold-starting", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    setExitsReturn({ data: null });
+    render(<Overview />);
+
+    expect(screen.queryByTestId("held-position-verdict-cal-hold")).toBeNull();
+    expect(screen.getByTestId("held-positions-cold-start")).toBeDefined();
   });
 });
