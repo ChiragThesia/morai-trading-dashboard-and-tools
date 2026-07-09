@@ -105,6 +105,7 @@ const BOOTSTRAP_CONFIDENCE = 0.9;
 const CAVEATS: ReadonlyArray<string> = [
   "late-solved-BSM optimism: leg_observations has no bsm_solved_at column, so an as-of-T chain read can show a value actually solved after that instant. The leakage-oracle replay reuses the stored picker_snapshot's frozen fields and is largely shielded; the hypothetical-entry replay (attribution/ablation input) is not.",
   "economic-events leakage: economic_events has no discoveredAt column, so the hypothetical-entry replay's event view reflects the CURRENT calendar, not necessarily what was known at each historical decision date. Low risk in practice — FOMC/CPI/NFP dates are published months ahead and are rarely rescheduled.",
+  "13-trade magnitude band (BT-03): the shared haircut-fill model approximates the trader's real fills, so BT-03 reproduces DIRECTION as a hard check and MAGNITUDE only within a 3x tolerance band. A 'direction-only' trade agrees in sign but its modeled |P&L| fell outside 3x of the oracle |P&L| — the direction signal holds, the magnitude does not.",
 ];
 
 function isoDate(d: Date): string {

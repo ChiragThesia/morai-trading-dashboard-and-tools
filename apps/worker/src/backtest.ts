@@ -110,8 +110,13 @@ function summarizeBacktestReport(report: BacktestReport): void {
       `${otherMismatchCount} mismatch(es), ${registryDriftCount} registry-drift flag(s)`,
   );
 
-  const tradeMatches = report.tradeReproductions.filter((t) => t.directionMatch).length;
-  console.warn(`backtest: 13-trade oracle -- ${tradeMatches}/${report.tradeReproductions.length} direction match(es)`);
+  const tradeTotal = report.tradeReproductions.length;
+  const reproduced = report.tradeReproductions.filter((t) => t.reproduction === "reproduced").length;
+  const directionOnly = report.tradeReproductions.filter((t) => t.reproduction === "direction-only").length;
+  console.warn(
+    `backtest: 13-trade oracle -- ${reproduced}/${tradeTotal} reproduced (direction + magnitude within 3x), ` +
+      `${directionOnly} direction-only`,
+  );
 
   for (const row of report.attribution) {
     console.warn(`backtest: attribution ${row.ruleId} = ${row.sign} (n=${row.n})`);

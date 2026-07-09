@@ -46,6 +46,33 @@ export type ReplayExitsForCalendarDeps = {
   readonly readChainAsOf: ForReadingChainAsOf;
 };
 
+/**
+ * Magnitude tolerance band (WR-02, 27-05-PLAN.md L99/L103): the modeled and oracle P&L must
+ * agree in magnitude within this multiple to count as "reproduced". The shared haircut-fill
+ * model is a deliberate approximation of the trader's real fills (27-CONTEXT.md "direction +
+ * rough magnitude, not cent-exact"), so a wide-but-bounded 3x band is the documented
+ * tolerance: outside it, direction may still match but the magnitude is not reproduced.
+ */
+const MAGNITUDE_TOLERANCE_MULTIPLE = 3;
+
+/** True when |modeled| and |oracle| are within MAGNITUDE_TOLERANCE_MULTIPLE of each other.
+ * Both-zero is a trivial match; exactly one zero can never be within a finite multiple. */
+function withinMagnitudeBand(modeledPnl: number, oraclePnl: number): boolean {
+  const m = Math.abs(modeledPnl);
+  const o = Math.abs(oraclePnl);
+  if (m === 0 && o === 0) return true;
+  if (m === 0 || o === 0) return false;
+  return Math.max(m, o) / Math.min(m, o) <= MAGNITUDE_TOLERANCE_MULTIPLE;
+}
+
+function classifyReproduction(
+  directionMatch: boolean,
+  magnitudeMatch: boolean,
+): "reproduced" | "direction-only" | "diverged" {
+  if (!directionMatch) return "diverged";
+  return magnitudeMatch ? "reproduced" : "direction-only";
+}
+
 /** Sum of calendar_events.realizedPnl over CLOSE/ROLL rows -- the validated fills-ledger
  * oracle (Pattern 3, Phase-22 P&L fix; "the fills are the oracle"). */
 function oraclePnlFromEvents(events: ReadonlyArray<CalendarEvent>): number {
@@ -148,7 +175,14 @@ export async function replayExitsForCalendar(
   const lastRow = historyResult.value[historyResult.value.length - 1];
   const finalRow = exitRow ?? lastRow ?? null;
   if (finalRow === null) {
-    return ok({ calendarId: calendar.id, directionMatch: false, modeledPnl: 0, oraclePnl });
+    return ok({
+      calendarId: calendar.id,
+      directionMatch: false,
+      magnitudeMatch: false,
+      reproduction: "diverged",
+      modeledPnl: 0,
+      oraclePnl,
+    });
   }
 
   const exitValue = (await priceLegPairHaircut(deps, calendar, finalRow.time, "close")) ?? finalRow.netMark;
@@ -156,6 +190,8 @@ export async function replayExitsForCalendar(
 
   const modeledPnl = (exitValue - entryValue) * calendar.qty * 100;
   const directionMatch = Math.sign(modeledPnl) === Math.sign(oraclePnl);
+  const magnitudeMatch = withinMagnitudeBand(modeledPnl, oraclePnl);
+  const reproduction = classifyReproduction(directionMatch, magnitudeMatch);
 
-  return ok({ calendarId: calendar.id, directionMatch, modeledPnl, oraclePnl });
+  return ok({ calendarId: calendar.id, directionMatch, magnitudeMatch, reproduction, modeledPnl, oraclePnl });
 }

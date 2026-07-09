@@ -49,10 +49,18 @@ export type CoverageDay = {
   readonly coveragePct: number;
 };
 
-/** TradeReproduction — one of the 13 closed calendars' modeled-vs-oracle outcome (BT-03). */
+/**
+ * TradeReproduction — one of the 13 closed calendars' modeled-vs-oracle outcome (BT-03).
+ * `directionMatch` is the hard sign check; `magnitudeMatch` is the plan's ~3x tolerance band
+ * (|modeled| vs |oracle| within MAGNITUDE_TOLERANCE_MULTIPLE, replayExitsForCalendar.ts). The
+ * `reproduction` verdict distinguishes a full reproduction from a direction-only agreement
+ * whose magnitude the approximate haircut-fill model could not reproduce within band (WR-02).
+ */
 export type TradeReproduction = {
   readonly calendarId: string;
   readonly directionMatch: boolean;
+  readonly magnitudeMatch: boolean;
+  readonly reproduction: "reproduced" | "direction-only" | "diverged";
   readonly modeledPnl: number;
   readonly oraclePnl: number;
 };

@@ -106,6 +106,42 @@ describe("replayExitsForCalendar", () => {
     expect(result.value.oraclePnl).toBe(30);
     expect(result.value.modeledPnl).toBeCloseTo((1.45 - 1.2) * 100, 6);
     expect(result.value.directionMatch).toBe(true);
+    // modeled +25 vs oracle +30 -> ratio 1.2, within the 3x band -> reproduced (WR-02).
+    expect(result.value.magnitudeMatch).toBe(true);
+    expect(result.value.reproduction).toBe("reproduced");
+  });
+
+  it("flags direction-only when the magnitude is outside the 3x tolerance band (WR-02)", async () => {
+    const rows = [
+      row({ time: new Date("2026-07-01T14:30:00.000Z"), netMark: 1.2 }),
+      row({ time: new Date("2026-07-10T14:30:00.000Z"), netMark: 1.45 }), // modeled +25
+    ];
+    const result = await replayExitsForCalendar(CALENDAR, {
+      readFullSnapshotHistoryForCalendar: fakeHistory(rows),
+      readCalendarEvents: fakeEvents([closeEvent(1)]), // oracle +1, same sign, |25/1| >> 3
+      readChainAsOf: fakeChain(),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.directionMatch).toBe(true);
+    expect(result.value.magnitudeMatch).toBe(false);
+    expect(result.value.reproduction).toBe("direction-only");
+  });
+
+  it("flags diverged when direction disagrees (WR-02)", async () => {
+    const rows = [
+      row({ time: new Date("2026-07-01T14:30:00.000Z"), netMark: 1.2 }),
+      row({ time: new Date("2026-07-05T14:30:00.000Z"), netMark: 0.8 }), // modeled negative
+    ];
+    const result = await replayExitsForCalendar(CALENDAR, {
+      readFullSnapshotHistoryForCalendar: fakeHistory(rows),
+      readCalendarEvents: fakeEvents([closeEvent(30)]), // oracle positive -> sign mismatch
+      readChainAsOf: fakeChain(),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.directionMatch).toBe(false);
+    expect(result.value.reproduction).toBe("diverged");
   });
 
   it("STOP trajectory reproduces the oracle's negative direction", async () => {
@@ -224,7 +260,14 @@ describe("replayExitsForCalendar", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toEqual({ calendarId: CALENDAR.id, directionMatch: false, modeledPnl: 0, oraclePnl: 0 });
+    expect(result.value).toEqual({
+      calendarId: CALENDAR.id,
+      directionMatch: false,
+      magnitudeMatch: false,
+      reproduction: "diverged",
+      modeledPnl: 0,
+      oraclePnl: 0,
+    });
   });
 
   it("propagates a StorageError from readCalendarEvents", async () => {
