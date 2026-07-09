@@ -354,6 +354,8 @@ const EXIT_ADVICE_SNAPSHOT: ExitAdviceSnapshot = {
     {
       calendarId: "cal-1",
       name: "7500 Put Calendar",
+      strike: 7500,
+      optionType: "P",
       verdict: {
         verdict: "STOP",
         rung: "-25%",

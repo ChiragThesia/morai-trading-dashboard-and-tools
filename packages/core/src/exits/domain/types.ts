@@ -14,6 +14,7 @@ export type HeldPosition = {
   readonly name: string;
   /** Strike in points (already converted from any ×1000 chain convention at the read boundary). */
   readonly strike: number;
+  readonly optionType: "C" | "P";
   readonly qty: number;
   readonly openNetDebit: number;
   readonly frontExpiry: string; // YYYY-MM-DD

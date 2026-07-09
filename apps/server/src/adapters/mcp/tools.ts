@@ -1016,6 +1016,8 @@ export function registerGetExitAdviceTool(
         positions: snapshot.positions.map((p) => ({
           calendarId: p.calendarId,
           name: p.name,
+          strike: p.strike,
+          optionType: p.optionType,
           verdict: p.verdict.verdict,
           rung: p.verdict.rung,
           ruleId: p.verdict.ruleId,

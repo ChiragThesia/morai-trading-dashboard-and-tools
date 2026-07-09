@@ -15,6 +15,8 @@ const SNAPSHOT: ExitAdviceSnapshot = {
     {
       calendarId: "cal-1",
       name: "7500 Put Calendar",
+      strike: 7500,
+      optionType: "P",
       verdict: {
         verdict: "STOP",
         rung: "-25%",
@@ -64,6 +66,8 @@ describe("GET /exits", () => {
     expect(parsed.marketSession).toBe("rth");
     expect(parsed.positions).toHaveLength(1);
     expect(parsed.positions[0]?.calendarId).toBe("cal-1");
+    expect(parsed.positions[0]?.strike).toBe(7500);
+    expect(parsed.positions[0]?.optionType).toBe("P");
     expect(parsed.positions[0]?.verdict).toBe("STOP");
     expect(parsed.positions[0]?.rung).toBe("-25%");
     expect(parsed.positions[0]?.ruleId).toBe("stop-25");

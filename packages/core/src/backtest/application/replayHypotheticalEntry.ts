@@ -263,6 +263,9 @@ async function simulateCandidateForward(
     calendarId: "hypothetical",
     name: candidate.name,
     strike: candidate.frontLeg.strike,
+    // RawCandidate is always a delta-targeted PUT calendar (picker/domain/types.ts doc comment)
+    // — never a hardcoded guess for a live-broker read, just this domain's one shape.
+    optionType: "P",
     qty: 1,
     openNetDebit: entryValue,
     frontExpiry: candidate.frontLeg.expiration,

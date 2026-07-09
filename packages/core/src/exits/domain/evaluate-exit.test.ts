@@ -35,6 +35,7 @@ function makePosition(overrides: Partial<HeldPosition> = {}): HeldPosition {
     calendarId: "cal-1",
     name: "7000P calendar",
     strike: 7000,
+    optionType: "P",
     qty: 1,
     openNetDebit: 4000,
     frontExpiry: "2026-08-14",

@@ -88,6 +88,8 @@ export function makeGetExitAdviceUseCase(deps: GetExitAdviceDeps): ForRunningGet
       positions.push({
         calendarId: row.calendarId,
         name: position.name,
+        strike: position.strike,
+        optionType: position.optionType,
         verdict,
         changed,
         pnlPct,

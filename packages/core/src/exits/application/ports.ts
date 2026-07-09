@@ -112,6 +112,11 @@ export type ForRunningComputeExitAdvice = () => Promise<Result<void, StorageErro
 export type HeldPositionVerdict = {
   readonly calendarId: string;
   readonly name: string;
+  /** Strike in points + option type — the Overview verdict-in-row join key (deterministic
+   * `${strike}${optionType}` match against the positions table's row label). Read-time derived
+   * from the held calendar, never persisted separately (see contracts/src/exits.ts). */
+  readonly strike: number;
+  readonly optionType: "C" | "P";
   readonly verdict: ExitVerdict;
   readonly changed: boolean;
   /** Null when the P&L basis is non-finite (openNetDebit <= 0, CR-01) — never ±Infinity. */

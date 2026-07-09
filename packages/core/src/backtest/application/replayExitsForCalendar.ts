@@ -152,6 +152,7 @@ export async function replayExitsForCalendar(
     calendarId: calendar.id,
     name: `${calendar.underlying} ${calendar.strike / 1000}P`,
     strike: calendar.strike / 1000,
+    optionType: calendar.optionType,
     qty: calendar.qty,
     openNetDebit: calendar.openNetDebit,
     frontExpiry: calendar.frontExpiry,

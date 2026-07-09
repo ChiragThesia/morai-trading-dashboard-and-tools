@@ -12,6 +12,8 @@ import { exitsResponse, heldPositionVerdict, exitMetric } from "./exits.ts";
 const validPosition = {
   calendarId: "cal-1",
   name: "7500P 2026-07-31 / 2026-08-26",
+  strike: 7500,
+  optionType: "P",
   verdict: "TAKE",
   rung: "+10%",
   ruleId: "take-10",

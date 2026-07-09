@@ -70,6 +70,11 @@ export type ExitVerdictBlob = z.infer<typeof exitVerdict>;
 export const heldPositionVerdict = z.object({
   calendarId: z.string(),
   name: z.string(),
+  /** Strike (points) + option type — the Overview verdict-in-row join key against the
+   * positions table's `${strike}${optionType}` row label. Additive, read-time derived; the
+   * persisted exit_verdicts JSONB blob is unchanged. */
+  strike: z.number(),
+  optionType: z.enum(["C", "P"]),
   verdict: exitVerdictEnum,
   /** Named rung (e.g. "+10%", "-25%"), null for rules with no rung (EVT, ROLL, HOLD). */
   rung: z.string().nullable(),

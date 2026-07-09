@@ -213,6 +213,7 @@ function mapCalendarToHeldPosition(calendar: Calendar) {
     calendarId: calendar.id,
     name: `${calendar.strike / 1000}${calendar.optionType} ${calendar.frontExpiry} / ${calendar.backExpiry}`,
     strike: calendar.strike / 1000, // Calendar.strike is the ×1000 convention; exits reads points
+    optionType: calendar.optionType,
     qty: calendar.qty,
     openNetDebit: calendar.openNetDebit,
     frontExpiry: calendar.frontExpiry,
