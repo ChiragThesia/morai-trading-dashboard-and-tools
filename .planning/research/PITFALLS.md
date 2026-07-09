@@ -1,437 +1,518 @@
-# Pitfalls Research — v1.2 Trade Picker & Dashboard Redesign
+# Pitfalls Research — v1.3 Picker Intelligence
 
-**Domain:** Options candidate-scoring engine, economic-event calendar, live-dashboard UI
-redesign, IV calibration solver, stream watchdog, trade-rules engine — added to an existing
-production options-analytics system (Morai).
-**Researched:** 2026-07-03
-**Confidence:** MEDIUM (project-specific pitfalls HIGH — grounded in existing docs/code;
-external domain pitfalls MEDIUM — cross-checked web sources, no official-docs citation)
+**Domain:** Adding an exit advisor + options backtest harness + regime gates to an existing SPX calendar-spread journaling/picker system
+**Researched:** 2026-07-09
+**Confidence:** HIGH (canonical quant/backtest pitfalls are web-grounded and well-established; system-specific integration pitfalls are drawn from this repo's architecture docs and incident history)
+
+> **Framing.** v1.3 does not build a new system — it bolts three inference layers onto a data
+> pipeline that already has known defects: ~74% gap rows in some snapshot windows (spot=0/NaN),
+> a BSM drain that can exceed the 900s pg-boss handler cap and leave a big cohort partially
+> solved when `compute-picker` fires last in the chain, first-write-wins `picker_snapshot`
+> rows, and exactly **13 closed calendars** as the only labeled outcomes. Every pitfall below is
+> about *inheriting* those defects into an exit advisor, a backtest, or a regime gate — where a
+> data-quality bug stops being a cosmetic gap and becomes a wrong trade verdict or a false
+> "this rule works" conclusion. The single biggest theme: **these features convert silent data
+> gaps into confident wrong answers.**
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Scoring runs against a stale or partial chain snapshot without saying so
+### Pitfall 1: Overfitting the 9 rule weights to 13 closed trades
 
 **What goes wrong:**
-The picker calls `scoreCalendarCandidates` over the live SPX chain, but the chain fetch is
-either (a) minutes old because a 30-min snapshot cron or CBOE-fallback path served it, or (b)
-partially populated because the sidecar streamer only tracks ~500 symbols and the picker needs
-strikes outside that window. The engine silently scores against a chain that no longer reflects
-tradable prices, and the UI shows ranked cards with no visible staleness signal — the user acts
-on numbers that were true two snapshots ago.
+PICK-04 runs, reports that re-weighting (say) `thetaVega` up and `beVsEm` down improves realized
+P&L across the 13 closed calendars, and the weights get promoted. The "improvement" is noise. 13
+outcomes is below every statistical floor: ~30 trades is the bare Central-Limit heuristic, ~100 is
+"basic reliability," 200–500 is institutional confidence. Worse, the 13 are highly correlated (one
+trader, one instrument, one ~6-week window, mostly the same 2026 contango regime), so the
+*effective* sample is smaller than 13. Tuning 9 free weights against ~13 correlated points is
+curve-fitting by definition — you will always find weights that fit the history and fail forward.
 
 **Why it happens:**
-The existing regression gate "SPX OI=0 → SPY proxy" and the CBOE-UTC-timestamp gotcha both
-prove this system already has multiple chain sources with different freshness and correctness
-characteristics (live stream, 30-min REST snapshot, CBOE delayed fallback). A new picker built
-against "the chain" without pinning which source and its age inherits all of that ambiguity
-silently, because none of the existing paths were designed to expose freshness to a scoring
-consumer — they were designed to expose freshness to a human reading a journal chart.
+The harness looks like a validation tool, and a green backtest manufactures false confidence. The
+optimizer's job *feels* like "find the weights that maximize P&L on my real trades." Every extra
+parameter tested raises the odds of a spurious fit; 9 weights is already deep into overfit
+territory even before you count the gates and universe knobs.
 
 **How to avoid:**
-- Every chain snapshot fed to the scoring engine carries an explicit `observedAt` timestamp and
-  `source` tag (stream / REST-30min / CBOE-fallback); the scoring port signature requires it, not
-  optional metadata.
-- Define and enforce a max-staleness threshold per source (e.g., stream data > 5 min old is
-  treated as REST-tier, not live-tier) — reject or flag scoring runs outside it rather than
-  scoring anyway.
-- Surface staleness in the picker UI on every ranked card (age badge), not just in a debug log.
-- Reuse the CBOE-timestamp-is-UTC lesson explicitly: any new adapter feeding the picker gets a
-  timestamp-timezone test before it ships, not after a silent-wrong-answer incident.
+Treat PICK-04 as a **refutation tool, not a fitting tool** — it can demote a rule whose sign is
+demonstrably wrong (strong prior + evidence, e.g. the slope redesign), never fine-tune all 9
+weights at once. Change **one variable at a time** and cap changes per run (the rule table already
+says PICK-04 "re-arbitrates" — keep a human in that loop; never auto-write weights). With N=13 the
+only honest split is **leave-one-out** (train on 12, test on the held-out one); require a rule's
+sign to be *stable across LOO folds* before promotion, not a P&L bump. Report **bootstrap
+confidence intervals** on every metric — with 13 samples the CI is enormous, and showing it is the
+honest antidote to false precision. Keep the user-locked weights versioned in `rules.ts` so any
+promotion is a reviewable diff guarded by the weight-sum-100 test.
 
 **Warning signs:**
-- Picker scores differ from the Analyzer's live view for the same expiry pair at the same wall
-  clock time with no explanation.
-- No `observedAt` field on the data structure the scoring function consumes.
-- Manual UAT only tested during RTH with a warm cache — never tested against a cold/stale chain.
+Backtest shows a large hit-rate/Sharpe jump from a weight change; in-sample P&L climbs with each
+parameter added; the optimizer touches several weights simultaneously; no CI reported, or a
+suspiciously tight one.
 
-**Phase to address:**
-Picker engine phase (`scoreCalendarCandidates` + events adapter) — must be a day-one contract
-decision, not a hardening pass after the engine works on happy-path data.
+**Phase to address:** PICK-04 backtest harness phase.
 
 ---
 
-### Pitfall 2: FwdIV radicand goes negative and the engine either crashes or silently returns garbage
+### Pitfall 2: In-sample percentile / normalization leakage
 
 **What goes wrong:**
-Criterion 1 in `calendar-selection-criteria.md` requires
-`FwdIV = sqrt((T2·σ2² − T1·σ1²)/(T2 − T1))`. Under term-structure inversion (documented
-project-wide as a known real condition — see the IV-engine-discrepancy incident, which was
-itself triggered by a backwardated read), the radicand goes negative. `Math.sqrt` of a negative
-number is `NaN` in JS/TS, which then silently propagates through comparisons (`NaN > 0` is
-`false`, `NaN` sorts unpredictably) rather than throwing — a candidate can rank incorrectly (not
-crash) with no visible error.
+Several rules normalize a raw metric against a distribution: `slopePercentile` ("percentile of
+candidate slope vs trailing candidate slopes"), `vrp` against RV20, `beVsEm` and `debitFit` clamps,
+any future promoted percentile rule. If the backtest computes those percentiles / means / stdevs
+against the **whole stored corpus** (including cohorts *after* the decision date), the rule "sees the
+future." A percentile computed against the full dataset is the textbook look-ahead leak, and it is
+invisible — the code runs, the numbers look plausible, the backtest looks better than reality.
 
 **Why it happens:**
-Backwardation is exactly the market state where forward-vol edge signals matter most (front IV
-rich vs the curve), so the failure mode is not an edge case to defer — it is a first-class
-outcome the scoring engine must classify. Developers reach for `Math.sqrt` first and only notice
-the `NaN` problem when a sort order looks wrong, because `NaN` doesn't throw.
+It is convenient and fast to precompute one global stats table over all `leg_observations` /
+`picker_snapshot` rows and join it in. Point-in-time recomputation per cohort is more work and
+easy to skip.
 
 **How to avoid:**
-- Radicand check is explicit and typed: `radicand < 0` returns a tagged result variant (e.g.
-  `{ kind: 'inverted', ... }`), never a bare `NaN` number flowing into comparisons — matches the
-  project's `Result<T,E>` / no-`any` discipline already mandated by `.claude/rules/typescript.md`.
-  A raw `Math.sqrt(negative)` returning silent `NaN` is exactly what that rule exists to prevent.
-- Decide the domain behavior once, in the plan/spec phase, not while coding: does inversion mean
-  "exclude candidate", "score zero on this criterion but keep others", or "flag as inverted and
-  let criterion 2 (slope) dominate"? Criterion 2 already treats slope-down as "avoid" — the two
-  criteria should agree on what inversion means for a candidate's final rank.
-- Property-test the FwdIV function directly against inverted-curve fixtures (fast-check, already
-  a project dependency) — assert it never returns `NaN` or `Infinity` to a caller.
+Every distributional statistic in the backtest must be **point-in-time**: computed only from data
+with `observedAt <= decision-cohort time` (trailing window), exactly as the live picker saw it.
+Then exploit a free oracle this system already has — **prod writes `picker_snapshot` rows live**.
+For any historical cohort that has a real `picker_snapshot`, the backtest replaying that cohort
+**must reproduce the recorded score exactly**. A mismatch means leakage (or a fill/data drift) and
+is a hard test failure. This single invariant catches most leaks cheaply. Add a targeted test:
+feeding a future-dated observation must not change a past decision's score.
 
 **Warning signs:**
-- A candidate with clearly inverted-looking legs appears mid-pack in rankings instead of
-  flagged/excluded.
-- `NaN` or `undefined` anywhere in scoring output during manual QA.
-- No explicit test fixture with `σ_front > σ_back` and `T_front < T_back` in the same direction
-  that produces inversion.
+A percentile/rank that stays stable when you add future data (it should shift); one global stats
+table feeding the replay; backtest scores that diverge from the recorded `picker_snapshot` for the
+same cohort.
 
-**Phase to address:**
-Picker engine phase — same phase as Pitfall 1, since both are core scoring-engine correctness
-issues that must be nailed down before wiring real data into the UI.
+**Phase to address:** backtest harness phase.
 
 ---
 
-### Pitfall 3: Economic-event dates hardcoded once, then go stale or drift across DST
+### Pitfall 3: Look-ahead via late-solved BSM and dual-source cohort union
 
 **What goes wrong:**
-FOMC releases at 2:00pm ET, CPI and NFP at 8:30am ET — but "ET" is EST/EDT depending on the
-calendar date, and the BLS/Fed publish each year's schedule separately (FOMC meeting calendar,
-BLS CPI/NFP schedule) rather than on a fixed recurring rule. A calendar seeded once (e.g. a
-static JSON of 2026 dates baked in during this milestone) silently goes wrong in two ways: (a) it
-never gets 2027 dates and the event-flag criterion (3/4 in the scoring doc) starts treating
-event-adjacent expiries as clean, and (b) if event times are stored as a fixed UTC offset instead
-of America/New_York wall-clock, event windows shift by an hour across the March/November DST
-transitions.
+Two system-specific leaks beyond percentiles. (1) **Late-solved greeks.** `compute-bsm-greeks`
+drains `bsm_iv IS NULL` rows over many cycles (and can exceed the 900s cap on a big cohort). In
+*live*, the picker at cohort T only sees rows already solved by T; a backtest reading the table
+*today* sees every row ever solved, including ones solved minutes-to-cycles later — so the backtest
+is **more complete than live was**, which is optimism. (2) **Cohort union.** The dual-source chain
+carries two `observedAt` timestamps per logical 30-min cycle (Schwab + CBOE). A naive `max(time)`
+or a join that pulls a later CBOE row into an earlier decision leaks future data across the seam.
 
 **Why it happens:**
-Both FOMC and BLS publish once-a-year calendars precisely because the underlying schedule isn't
-a clean recurring rule (FOMC meets ~8 times a year on irregular dates; BLS release day depends on
-month-length and weekday alignment). A developer who hardcodes "2nd Wednesday" or a fixed offset
-gets it right for one cycle and wrong for the next, and there's no immediate error — the event
-flag just silently stops firing or fires on the wrong day.
+The schema records `observedAt` but the BSM solve happens in-place via upsert — there is likely **no
+`bsm_solved_at` column**, so the as-of-solved set at time T is not perfectly reconstructable from
+the table today. And the documented cohort semantics ("union per 30-minute slot, not `max(time)`")
+are a live-read discipline that a backtest author can forget to replicate.
 
 **How to avoid:**
-- Store event datetimes as `America/New_York` local time + explicit date, converted to UTC at
-  read time with the IANA tz database (never as a precomputed fixed UTC offset) — this is the
-  same class of bug as the already-documented "CBOE timestamps are UTC not ET" gotcha, just in
-  the opposite direction (wall-clock stored, needs correct offset resolution, not a naive one).
-- Treat the event calendar as data with a refresh/re-seed process, not a one-time migration.
-  Document the annual re-seed step (docs/operations, matching the existing re-auth runbook
-  pattern) so "add next year's FOMC dates" doesn't get forgotten the way the phase-15 image
-  deploy nearly did.
-- Add a startup/cron sanity check: if the last known event date is more than N months in the
-  past, log a warning (cheap, catches "we shipped 2026 and it's now 2027" before it silently
-  degrades scoring).
+Replay per 30-minute slot with the same **per-contract-latest, deduped, union** semantics the live
+readers use (`readLegObsForGex` is the reference). For the BSM lag: either record a solve timestamp
+so the as-of-solved set is reconstructable, or **explicitly flag the residual optimism** ("backtest
+assumes greeks were available at cohort time; live BSM drain may lag") and keep it out of the
+"proven" column. Prefer validating against `picker_snapshot` (Pitfall 2) — those rows already
+encode what the live picker actually saw, drain lag included.
 
 **Warning signs:**
-- Event dates stored as plain UTC timestamps with no timezone field or IANA identifier.
-- No code path that ever adds new dates — the table/JSON was populated once during
-  implementation and nothing references updating it.
-- Event flag stops appearing on cards that should be flagged, with no error anywhere.
+Backtest greeks present for a cohort where live `picker_snapshot` had NULL-derived scores; replay
+joins on `max(observedAt)`; edge numbers better than the live picker recorded.
 
-**Phase to address:**
-Economic-events adapter phase (picker engine phase, per ROADMAP build-order item 4) — the
-timezone-storage decision must be made when the adapter's schema is designed, not discovered
-during the first DST transition after ship.
+**Phase to address:** backtest harness phase; ties to the BSM-drain / `bsm_solved_at` ops rider.
 
 ---
 
-### Pitfall 4: Bisection/Newton IV calibration solver hangs or converges to garbage on deep-ITM or illiquid legs
+### Pitfall 4: Mid-fill optimism and fill-model divergence (entry AND exit)
 
 **What goes wrong:**
-The scenario-engine per-position IV calibration (v1.2 feature 4) inverts price → IV per leg.
-Deep-ITM legs and wide-spread/thin-volume strikes have near-zero vega, which is exactly the
-regime where root-finders misbehave: Newton-style updates (`Δσ = f(σ)/vega`) blow up or oscillate
-when vega is tiny, and pure bisection converges but can take many iterations or converge to a
-technically-valid-but-meaningless IV when the input price itself is unstable (bid/ask spread
-wider than the price's sensitivity to vol). The 141-DTE live book noted in project context makes
-this concrete: far-dated legs plus any strike drift into deep ITM/OTM is a real, not
-hypothetical, path the calibration solver will hit.
+The live picker already prices entries with the ORATS 66%-of-width haircut — good. The trap is the
+**exit side of the backtest** closing at mid. Exiting a calendar means selling the back and buying
+the front — you cross the spread *again*. Modeling the exit at mid overstates realized edge exactly
+as entering at mid would, and it is the more dangerous half because exit marks decide the +5/+10/+15%
+ladder. Compounding it: stored chains are 30-min snapshots, so the backtest can only fill at snapshot
+marks while real fills happen at arbitrary intraday times — unmodeled slippage.
 
 **Why it happens:**
-Root-finders are usually built and tested against liquid ATM examples where convergence is fast
-and unambiguous; the failure modes only show up once real illiquid/deep-ITM data flows through,
-which tends to happen after the happy path already shipped.
+Entry haircut is visible in `candidate-selection.ts`; the exit path is new code and mid is the
+obvious default. The snapshot cadence makes intraday slippage invisible.
 
 **How to avoid:**
-- Cap iterations and impose a hard convergence tolerance; when the cap is hit, return a tagged
-  "solver did not converge" result (same `Result<T,E>` discipline as Pitfall 2) — never return
-  the last iterate silently as if it were a valid IV.
-- Use mid price, never raw bid or ask, as the solver's price input; the project already knows
-  this class of problem from the Schwab-vs-TOS IV discrepancy doc, which names "mid convention"
-  as one of the very things different platforms disagree on — be explicit about which convention
-  this new solver uses and document it next to the existing discrepancy doc.
-- Consider a vega floor: if vega falls below a threshold, don't trust the inverted IV for scoring
-  purposes — flag the leg as "illiquid, IV unreliable" rather than feeding a shaky number into
-  downstream P&L scenarios.
-- Property-test the calibration function against fixtures spanning ATM, deep ITM, deep OTM, and
-  near-zero-vega synthetic inputs (fast-check already in the stack) — this is the same testing
-  discipline already applied to the BSM engine (BSM-01..03, property-tested).
+**One shared fill function** used by the live picker and both sides of the backtest — extend the
+existing haircut to the exit leg. Then **calibrate against the 13 real fills** (the oracle from the
+journal P&L ledger fix): if the model says +$400 and the real fill netted +$150, the haircut is too
+generous. Report backtest P&L as a **range (mid → full-haircut)**, never a single number, so the
+optimism band is explicit.
 
 **Warning signs:**
-- Calibration takes visibly longer or times out for specific legs during manual QA.
-- Calibrated IV for a deep-ITM leg looks wildly different from a nearby-strike ATM leg's IV with
-  no economic explanation.
-- No explicit iteration cap / convergence-failure path in the solver's type signature.
+Exit modeled at mid; backtest exit P&L exceeds the real fill for a trade you can check; entry and
+exit use different fill code.
 
-**Phase to address:**
-Overview v2 redesign + scenario-engine IV calibration fix phase (ROADMAP build-order item 2) —
-this is named as a "fix," implying the existing behavior already has a known gap; the pitfall is
-fixing the visible symptom without adding the convergence-failure and mid-price-convention
-guards that prevent the next silent-wrong-number incident.
+**Phase to address:** backtest harness phase (calibration reuses the journal P&L oracle).
 
 ---
 
-### Pitfall 5: Stream stall watchdog false-positives during legitimately quiet markets, or worse, stays silent during a real stall
+### Pitfall 5: Survivorship in the 13 trades and in strike selection
 
 **What goes wrong:**
-A naive watchdog ("no message received in N seconds → mark stream down") either fires constantly
-during low-volume periods (lunch lull, pre-open, holiday-adjacent sessions) — training the
-operator to ignore or disable the alert — or, tuned too loose to avoid that, fails to catch the
-actual silent-stall failure mode this feature exists to fix (the v1.1 known-debt item: "no
-silent-stall watchdog on the live stream," where the UI badge lies "LIVE" while data is frozen).
+Two survivorship flavors. (1) The 13 closed calendars are the ones the trader *chose to open and
+chose to close* — they survived his selection and his exit judgment. Fitting entry rules to them
+measures "what he already did," not "what the engine would independently pick," and inflates apparent
+skill toward 100%. (2) In the strike replay, only strikes that stayed liquid (OI≥100, tight spread)
+are reliably present in `leg_observations`; illiquid strikes the engine would have *correctly
+rejected* are underrepresented, so the backtest can't see its own good rejections and overstates hit
+rate.
 
 **Why it happens:**
-Message cadence on a live options/position stream is inherently bursty and volume-dependent —
-there is no fixed "should have received a message by now" interval that's correct both during
-RTH price action and during a quiet open-position hold with no ticks. Watchdogs built around raw
-silence duration conflate "no new data because market is quiet" with "no new data because the
-connection died," which are operationally very different and require different responses.
+You backtest on the data you have, and the data you have is survivors — the classic survivorship
+bias that inflates equity backtests 1–3%/yr, here concentrated in a tiny hand-picked set.
 
 **How to avoid:**
-- Decouple the watchdog from market-data cadence: use an app-level heartbeat/ping-pong on the
-  stream transport itself (the sidecar's SSE fan-out), independent of whether position/option
-  data actually changed — a heartbeat proves the pipe is alive even when there's nothing to say.
-- Distinguish RTH from non-RTH in the watchdog's expectations: during RTH, an absence of *any*
-  message (heartbeat or data) for the timeout window is a real stall; outside RTH, only the
-  heartbeat channel needs to be checked, not data cadence.
-- Make the watchdog state visible and distinct from "LIVE": e.g. `LIVE` / `QUIET` (heartbeat ok,
-  no data) / `STALLED` (heartbeat missed) — this directly fixes the documented v1.1 gap where the
-  badge only knows `LIVE` vs `disconnected`, not `frozen-but-still-connected`.
-- Test the false-stall path explicitly: replay a known quiet-market fixture (or a synthetic
-  heartbeat-only period) through the watchdog and assert it does NOT fire — the project's
-  Phase-12 test-3 harness pattern (CDP-offline EventSource injection) is the reusable template
-  for simulating stream conditions in tests; extend it to simulate quiet-vs-dead instead of only
-  online-vs-offline.
+**Separate the two evaluation questions.** Use the 13 trades to test the **exit rules** (did the
+ladder beat his actual exits? — real fills are the oracle) and to sanity-check entry scores, **not**
+to fit entry weights. To test the **entry engine** honestly, replay the **full candidate universe**
+at each historical cohort (every band-scan strike, including rejected ones) through the same
+generation code, and measure what the engine *would* have picked and how those hypothetical trades
+would have fared. Acknowledge in the output that a 6-week single-trader dataset cannot be fully
+de-survivored.
 
 **Warning signs:**
-- Watchdog fires during known-quiet historical windows in a replay test.
-- Watchdog has a single timeout constant with no RTH/non-RTH branch.
-- No test exercises the "connected but frozen" state distinctly from "disconnected."
+Entry backtest hit rate near 100%; the replay set contains only traded strikes; "the engine agrees
+with every trade I made" (it's testing on your own survivors).
 
-**Phase to address:**
-Tail phase item "live-stream stall watchdog" (ROADMAP build-order item 5) — but the RTH-vs-quiet
-distinction and heartbeat-vs-data-cadence decoupling must be a design decision made before
-implementation starts, since retrofitting it after a naive silence-timeout ships means re-doing
-the state machine, not just tuning a constant.
+**Phase to address:** backtest harness phase.
 
 ---
 
-### Pitfall 6: Big-bang Analyzer→picker and Overview v2 rewrites break working screens for weeks
+### Pitfall 6: Exit-verdict flapping between cycles
 
 **What goes wrong:**
-Both UI redesigns (Overview v2 "TOS dock" and Analyzer→picker "ranked-cards rail") replace
-screens that are in daily personal use by the sole user (this is a live trading tool, not a
-staging demo). A full rewrite-and-cutover approach means the old Analyzer/Overview is frozen (no
-bug fixes land there) for the full redesign duration, and the new screen must be 100% functionally
-complete before it can replace the old one — any missed feature is discovered only at cutover,
-when the fallback is "revert the whole redesign."
+The exit advisor emits HOLD/TAKE/STOP/ROLL/EXIT-pre-event every picker cycle (every 30 min, 24/7).
+Near a ladder threshold (+5% take, −25% stop), a mark that oscillates around the boundary flips the
+verdict cycle to cycle — TAKE, HOLD, TAKE, STOP — off bid/ask-midpoint jitter and IV-recompute
+noise. The panel looks jittery and untrustworthy, and the user can't act on a verdict that won't
+sit still.
 
 **Why it happens:**
-UI redesigns feel like all-or-nothing changes because the visual language changes completely
-(new mockup, new layout), which tempts a wholesale replace-the-route approach instead of an
-incremental one. This is a known-failure pattern broadly: big-bang rewrites commonly run over
-time/budget estimates and deliver zero value until the entire thing is done, with an all-or-
-nothing cutover risk.
+Naive threshold comparison with no hysteresis and no cross-cycle state, applied to inherently noisy
+marks.
 
 **How to avoid:**
-- The project's own build order already mitigates this by sequencing: Overview v2 ships to prod
-  *before* picker work starts (ROADMAP item 2 vs item 3/4), and the Analyzer→picker redesign is
-  built "against candidate-contract fixtures/stubs (contract-first; engine fills it later)"
-  (ROADMAP item 3) — this is already a strangler-style incremental approach; preserve that
-  discipline rather than collapsing the two ROADMAP items into one big rewrite PR.
-  - Reject the temptation to also swap the real scoring engine in during the same PR/phase as the
-    UI redesign — ROADMAP already separates "redesign against stubs" (item 3) from "wire real
-    engine" (item 4); don't recombine them under schedule pressure.
-- Ship each redesign behind a route/flag if feasible so the old screen stays reachable until the
-  new one is verified in real use, not just in UAT — single-user apps still benefit from a quick
-  revert path when "verified in daily trading use" is the real bar, not a demo click-through.
-- Explicitly re-run the existing regression gates (SPX OI=0 proxy, GEX put-sign, CBOE-UTC) against
-  the redesigned screens — a UI rewrite that touches how data is fetched/rendered can silently
-  reintroduce a previously-fixed display bug even if the underlying API contract didn't change.
+**Hysteresis / debounce.** Require a condition to hold for K consecutive cycles, or use a band (arm
+TAKE at +5%, only downgrade below +3%). The playbook ladder is already banded (+5/+10/+15,
+−25/−50) — snap verdicts to those discrete bands, not raw points. Carry verdict state across cycles
+in the `picker_snapshot` append-history table (the JSONB history is the natural home). Surface the
+reason **and how long the verdict has held**, not just the label.
 
 **Warning signs:**
-- A single PR/phase touches both visual redesign and the data source it renders.
-- No way to view the old screen once the new one is merged (no flag, no parallel route).
-- UAT only covers the new screen's happy path, not the existing regression-gate scenarios.
+Verdict changes more than once an hour on a static position; two cohorts 30 min apart with near-
+identical marks disagree; "it keeps changing its mind."
 
-**Phase to address:**
-Overview v2 redesign phase and Analyzer→picker redesign phase (ROADMAP items 2 and 3) — the
-contract-first stub approach is already the plan; the risk is scope creep collapsing it back into
-a big-bang change during execution.
+**Phase to address:** exit advisor phase.
 
 ---
 
-### Pitfall 7: Strategy-rules engine (L4) grows into a generic rules DSL nobody but this milestone needs
+### Pitfall 7: Acting on stale / after-hours / gap marks
 
 **What goes wrong:**
-The stated goal is narrow: "record the enter/exit/roll RULES per trade + which rule fired" for a
-single user's SPX calendar strategy (backlog note, ROADMAP). It's easy to over-deliver: a
-generic condition/action rule engine with configurable operators, rule priorities, a rule editor
-UI, versioned rule sets, etc. — none of which is needed when there is exactly one strategy, one
-user, and the actual requirement is closer to "an enum of rule types + a text field for which one
-fired + an attach point on `entry_thesis`."
+The advisor fires STOP/TAKE off a mark that is stale (the ~74% gap rows with spot=0/NaN), after-hours
+indicative (overnight boards legitimately empty and failing the liquidity gate), or derived from NULL
+BSM greeks. A −25% STOP at 3am on an empty overnight board is pure noise, potentially panic-inducing,
+and un-actionable (market closed).
 
 **Why it happens:**
-"Rules engine" as a term pattern-matches to generic business-rule-engine architectures from
-enterprise software, which is a much bigger and more general problem than "record which of a
-short, closed list of trading rules caused this action." The generality tax (rule DSL parser,
-condition combinators, priority resolution) buys configurability nobody asked for — the YAGNI
-failure mode of adding structure for hypothetical future rule types before a second concrete rule
-type ever appears.
+The fetch→bsm→…→picker chain runs 24/7 by design. An exit advisor that treats every cohort equally
+emits verdicts on garbage cohorts. The `marketSession` label and gap rows exist but must be
+*consciously* gated on the exit path.
 
 **How to avoid:**
-- Re-read the actual requirement before designing: it's a ledger/attribution feature (L4 in the
-  documented 4-layer model: ledger → greeks time-series → attribution → rules), not a rules
-  execution engine — the system does not need to *evaluate* rules against live data and act, it
-  needs to *record* which named rule the human judged fired, alongside the entry thesis.
-  Attribution (L3) is the analytical layer that already computes θ/vega/δ/event decomposition;
-  the rules layer is a thin recording layer over the ledger, not a decision engine.
-  Confirm this scope boundary explicitly in the phase's plan doc before implementation.
-- Start with a closed enum of rule types (whatever's in the trader's actual playbook today) plus
-  a free-text field for anything unanticipated, rather than a fully generic condition grammar. Add
-  structure only when a second real trade surfaces a pattern that the enum can't express.
-  - Reuse the existing `entry_thesis` attach point (Phase 5 D-07) rather than inventing a new
-    schema alongside it — this was flagged as the minimal attach point already; extending it is
-    the low-risk path.
-- Defer any "improve the algo" analysis (the stated end-goal — see which rules correlate with
-  good outcomes) to a query/read-side concern over recorded data, not a feature of the
-  rules-recording write path.
+Make the advisor **session- and gap-aware**. Reuse the existing `marketSession: rth | after-hours`
+label and the AH-indicative chip. Verdicts on AH/stale/gap cohorts are **display-only** ("indicative,
+RTH will confirm") and **must not escalate to actionable STOP/TAKE**. Require a valid (non-null,
+non-zero, non-NaN) spot + non-null net greeks + liquidity-passing legs before a verdict is
+actionable; otherwise emit HOLD/UNKNOWN with a reason. This pitfall is the direct argument for
+sequencing the **snapshot-gap ops fix** before/with the exit advisor — fixing gaps improves signal
+quality at the source.
 
 **Warning signs:**
-- The rules schema has a generic `condition` field (JSON logic, expression string) instead of a
-  closed enum plus free text.
-- Any UI for "editing rule definitions" exists before a second rule type has actually been used.
-- The phase plan describes evaluating/firing rules automatically rather than recording a human
-  judgment about which rule fired.
+Actionable verdicts timestamped outside RTH; STOP with spot=0; verdict computed where `bsm_iv IS
+NULL`.
 
-**Phase to address:**
-Strategy-rules engine (L4) tail phase (ROADMAP build-order item 5) — the scope boundary must be
-set at spec/plan time; this is the phase most likely to balloon without an explicit "closed enum,
-not a DSL" constraint written into its plan.
+**Phase to address:** exit advisor phase; depends on / benefits from the snapshot-gap ops rider.
+
+---
+
+### Pitfall 8: P&L-basis mismatch (mid vs fill; points vs dollars)
+
+**What goes wrong:**
+The +5%/−25% ladder is a percentage of *what*? If current P&L is `(current mid − openNetDebit)`, it
+mixes a mid-based current value against a fill-based cost basis, so the % is wrong by the whole
+entry+exit haircut. Far worse in *this* system, which has a documented history of `openNetDebit`
+unit bugs (dollars stored where points were expected → **−$319,850 reported for a +$395 trade**) and
+`pnl_open` frozen-at-write staleness needing `recompute-snapshot-pnl`. An exit advisor that reads
+`openNetDebit`/`pnl_open` without unit discipline produces a garbage ladder.
+
+**Why it happens:**
+P&L looks trivial; unit and basis discipline are invisible until a number is absurd.
+
+**How to avoid:**
+Define the % basis **explicitly and consistently**: current **haircut-exit** value vs the **actual
+open fill debit** (the oracle), both in the same unit (points·100·qty). Reuse the validated fill
+ledger from the journal-P&L fix — do not recompute basis independently. Never compute exit % off
+mid. Add the same oracle discipline that fixed the journal: a known trade's exit % must match a
+hand-computed value. Guard the `openNetDebit IS NULL` case (no prior OPEN event) — emit UNKNOWN,
+never a fabricated %.
+
+**Warning signs:**
+Exit % implausibly large; verdict % disagrees with the journal P&L-attribution graph for the same
+calendar; a NULL-basis calendar still shows a %.
+
+**Phase to address:** exit advisor phase (reuse the journal P&L ledger + oracle).
+
+---
+
+### Pitfall 9: Advising exits the market can't fill
+
+**What goes wrong:**
+The advisor says TAKE at +12%, but the back leg is a wide, thin far-dated strike (the CBOE-breadth
+legs that carry long-dated open positions) quoting a 15% spread. Crossing to exit gives back most of
+the gain; the "+12%" evaporates. Or it advises EXIT-pre-event on an AH board with no bids —
+theoretically right, practically unfillable.
+
+**Why it happens:**
+Entry has a liquidity gate; exit advice often doesn't. Calendars are held toward expiry, and the back
+leg drifts out of the liquid window over the trade's life, so the exit market is systematically worse
+than the entry market.
+
+**How to avoid:**
+Apply the **same liquidity gate to the current legs** before issuing an actionable exit — if the
+current market fails `(ask−bid)/mid ≤ 0.10` and `OI ≥ 100`, downgrade to "illiquid — indicative."
+Value the exit at the **haircut exit price** (what you'd actually get), not mid. Prefer **ROLL over
+EXIT** when the back leg is illiquid but the front is liquid — this is already the playbook ladder's
+roll rule.
+
+**Warning signs:**
+TAKE on a leg with a double-digit spread; modeled exit at mid vs at haircut differ by >30%.
+
+**Phase to address:** exit advisor phase.
+
+---
+
+### Pitfall 10: Regime-gate data lag (EOD FRED vs intraday decisions)
+
+**What goes wrong:**
+The playbook port adds VIX < 25 and VIX/VIX3M < 0.95 gates, requiring the `VIXCLS3M` FRED series.
+FRED publishes VIXCLS / VIXCLS3M **end-of-day, once daily, with a publication lag** (the 18:30 ET
+`fetch-rates` run catches same-day; some series lag T+1). The picker runs every 30 min, 24/7. Gating
+intraday entries on yesterday's (or this morning's stale) EOD vol is a decision-time/data-time
+mismatch — a cousin of look-ahead. And it fails exactly when it matters: backwardation episodes are
+**short (avg 3.3 days, median 1 day)**, so an EOD gate can be a full day behind a fast vol spike.
+
+**Why it happens:**
+FRED is the path of least resistance — already integrated for 8 macro series — and it is EOD by
+nature. The gate reads `macro_observations` latest without regard to its resolution.
+
+**How to avoid:**
+Design the gate as a **slow, day-granularity regime filter** ("are we in a crisis regime"), not an
+intraday trigger — VIX 25 rarely flips within a session, so daily resolution is defensible for a
+regime read. If intraday freshness genuinely matters, source spot VIX from the CBOE adapter (already
+used for VVIX) rather than FRED; intraday VIX3M would need a new CBOE source. **Stamp every gate
+decision with the as-of date** of the vol data so staleness is visible. Decide **fail-open vs
+fail-closed** for missing VIX3M explicitly and document it (a crisis gate failing *closed* blocks all
+entries on missing data — that may be undesirable; fail-open risks trading blind into a spike).
+
+**Warning signs:**
+Gate uses a VIX value dated >1 day old during a fast move; gate decision inconsistent with the live
+VIX print; missing VIX3M silently passes.
+
+**Phase to address:** playbook port phase.
+
+---
+
+### Pitfall 11: Regime-gate flapping at thresholds
+
+**What goes wrong:**
+VIX oscillates around 25, or VIX/VIX3M around 0.95. On the boundary the gate flips open/closed, and
+the whole candidate universe appears and vanishes. Because backwardation episodes are short (median 1
+day), a single EOD print can trip and untrip the ratio gate — the user sees an unstable universe and
+loses trust.
+
+**Why it happens:**
+Hard threshold, no hysteresis, applied to a noisy boundary value sampled once a day.
+
+**How to avoid:**
+Same hysteresis pattern as exit verdicts — **band the gate** (block above VIX 26, re-open below 24;
+or require the regime to persist ≥1–2 days). Since the source is daily, day-level persistence is
+natural and cheap. **Log gate transitions** (like the existing gates log drop counts) so flapping is
+visible. Strongly consider a **graded score penalty near the boundary instead of a hard gate** — this
+system already learned that lesson twice: the `event-blackout` and `term-inversion` hard gates were
+**RETIRED** precisely because they deleted trades with edge. A VIX gate should inherit that scar and
+lean toward a penalty band over a cliff.
+
+**Warning signs:**
+Candidate count swings widely day to day; the same structure is gated in and out on consecutive days;
+gate transitions cluster at the threshold value.
+
+**Phase to address:** playbook port phase.
+
+---
+
+### Pitfall 12: Gap-row poisoning of the backtest and percentiles
+
+**What goes wrong:**
+~74% of some snapshot windows are gap rows (spot=0/NaN); `snapshot-calendars` wrote empty rows
+Jun 23–26 and a worker-down hole Jun 27–30. If the backtest replays these cohorts as valid, it fills
+on spot=0 (infinite/garbage edge), poisons RV20 (a 0-return inflates stdev), and skews every
+percentile/normalization built over the corpus. A single NaN through a `clamp01` can propagate
+silently and corrupt a whole rule column.
+
+**Why it happens:**
+The backtest reads `leg_observations` / `calendar_snapshots` wholesale; gap rows are real rows a
+naive query includes.
+
+**How to avoid:**
+An **explicit gap-row filter at the backtest data boundary** — reject cohorts where spot is 0/NaN,
+greeks are NULL, or the cohort's row count is below a minimum. Treat gaps as **missing (skip the
+cohort), never as zeros**. NaN-guard every normalization (the codebase's "null RV → 0, never
+fabricated" rule is exactly the right instinct — extend it everywhere). **Report coverage**:
+"replayed X of Y cohorts, skipped Z gap cohorts," so the user sees how thin the real data is. This is
+a second argument for doing the **snapshot-gap ops fix before/with the backtest**.
+
+**Warning signs:**
+Absurd backtest edge; RV20 spikes; low coverage %; any replayed cohort with spot=0.
+
+**Phase to address:** backtest harness phase; strongly benefits from the snapshot-gap ops fix first.
+
+---
 
 ## Technical Debt Patterns
 
+Shortcuts that seem reasonable but create long-term problems.
+
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|-----------------|------------------|
-| Ship picker scoring without an `observedAt`/staleness field, add it later | Faster first cut of `scoreCalendarCandidates` | Retrofitting staleness into every call site + UI card after the fact; silent-stale-score incidents in the meantime | Never — add the field on day one, it costs nothing when the type exists from the start |
-| Hardcode 2026 FOMC/CPI/NFP dates as static JSON, defer the refresh mechanism | Unblocks event-flag criterion this milestone | Silently stops flagging events after year-end with no error | Acceptable for this milestone ONLY if a startup staleness-warning check ships alongside it (cheap) so the gap is visible, not silent |
-| Skip the solver-non-convergence tagged result, return best-effort IV | Simpler calibration function signature | A downstream scenario P&L silently uses a garbage IV from an illiquid deep-ITM leg | Never for the calibration solver — this is exactly the class of bug the IV-discrepancy incident already cost a wrong trade decision |
-| Ship the watchdog with a single fixed silence timeout, tune RTH/non-RTH split later | One state machine instead of two | Alert fatigue (false positives) trains the operator to ignore/disable it before the RTH split ever ships | Acceptable only as a very short-lived first cut behind a flag the operator can mute; must not be the shipped state |
-| Build the Analyzer→picker redesign and the real scoring engine in the same phase | Fewer phase-transition overheads | Collapses the contract-first isolation the ROADMAP already planned; a scoring bug and a UI bug become indistinguishable during UAT | Never — ROADMAP already separates these into items 3 and 4, keep it that way |
+|----------|-------------------|----------------|-----------------|
+| Auto-write rule weights from the backtest | Fast iteration | Overfits 13 correlated trades; ships false confidence into live picks | **Never** — human arbitrates; one weight change per run |
+| Close backtest exits at mid | Simpler exit code | Overstates edge; diverges from the live haircut; corrupts the ladder | **Never** — reuse the shared haircut fill fn on both legs |
+| First-write-wins `picker_snapshot`/exit-history | Trivial idempotency | Freezes a partial/AH/NULL-greek first write over a fuller RTH recompute (same class as the GEX premature-UPSERT bug) | Only if **completeness-gated** (BSM drained, spot valid, RTH) |
+| Global percentile table over the full corpus | One query | Look-ahead leak invisible in a green run | **Never** — point-in-time trailing windows only |
+| FRED-only VIX3M feeding a gate | Already integrated | EOD lag; a day behind a 1-day backwardation spike | Acceptable as a **slow day-granularity regime filter**, not an intraday trigger |
+| Emit exit verdicts on every 24/7 cohort uniformly | One code path | Flapping + AH/gap noise + un-actionable off-hours STOPs | Only with **session/gap gating + hysteresis** |
+| Point-metric backtest report (single P&L/Sharpe) on N=13 | Looks decisive | False precision; hides that CI spans zero | **Never** — report range/CI + coverage + "N=13, directional" |
+
+---
 
 ## Integration Gotchas
 
+Common mistakes when connecting to external services and internal seams.
+
 | Integration | Common Mistake | Correct Approach |
-|-------------|-----------------|--------------------|
-| Economic-event calendar (FOMC/CPI/NFP, no existing adapter) | Storing event times as fixed UTC offsets baked in at seed time | Store as `America/New_York` local wall-clock + IANA tz conversion at read time; matches lesson already learned the hard way with CBOE-UTC timestamps (just inverted direction) |
-| Live SPX chain feed → picker scoring | Scoring engine reads whichever chain source happens to be freshest without recording which one | Scoring port requires an explicit `source` + `observedAt` on every input snapshot; reject/flag scoring against stale or CBOE-fallback data rather than treating all sources as equivalent |
-| Sidecar SSE stream → watchdog | Watchdog inspects only option/position data messages for cadence | Add a transport-level heartbeat independent of data messages; watch heartbeat cadence, not data cadence, to distinguish "quiet" from "dead" |
-| Scenario-engine IV calibration → BSM engine | New calibration solver reuses ad hoc `Math.sqrt`/Newton math instead of the project's existing property-tested BSM/solver module | Extend the existing BSM engine's solver conventions (mid-price input, documented in `docs/iv-engine-discrepancy-and-solver.md`) rather than writing a parallel, untested root-finder |
+|-------------|----------------|------------------|
+| FRED `VIXCLS3M` | Reading `.latest` as if it's intraday | It is EOD + publication-lagged; stamp the as-of date, treat as daily regime resolution, decide fail-open/closed on missing |
+| Schwab+CBOE dual-source chain | `max(observedAt)` join for "latest cycle" | Union per 30-min slot, dedupe per contract newest-wins (mirror `readLegObsForGex`); a later CBOE row must not leak into an earlier decision |
+| BSM greeks in `leg_observations` | Backtest reads final solved value | Solve happens late/in-place with no `bsm_solved_at`; reconstruct as-of-solved set or flag the optimism; prefer validating vs `picker_snapshot` |
+| Real Schwab fills (the 13) | Using them to fit entry weights | They are survivors of the trader's own selection+exit; use as the **exit oracle** and P&L basis, not entry training data |
+| `openNetDebit` / `pnl_open` | Reading for the exit % basis without unit checks | Documented dollars-vs-points and frozen-`pnl_open` bugs; reuse the validated journal fill ledger + `recompute-snapshot-pnl` discipline |
+
+---
 
 ## Performance Traps
 
+Patterns that work at small scale but fail as the corpus grows.
+
 | Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|-----------------|
-| Scoring engine re-fetches/recomputes the full chain per candidate instead of once per scoring run | Picker UI feels sluggish as candidate count grows; redundant DB/API calls | Fetch chain once per scoring invocation, pass the snapshot down to all per-candidate scoring functions as pure input | Noticeable once the strike-enumeration-by-delta-target approach expands candidate count beyond a handful |
-| Bisection solver with no iteration cap runs unbounded on a pathological illiquid leg | One bad leg stalls the whole scenario calibration request | Hard iteration cap + convergence-failure result type (see Pitfall 4) | First time a real illiquid deep-ITM leg hits the live book — plausible given the 141-DTE live positions already noted |
-| Watchdog polling on a tight interval to catch stalls fast | Unnecessary CPU/log churn on a single-user, low-throughput system | Heartbeat-driven detection (event-based) rather than tight polling loops | Not a real scale concern for this project (single user), but tight polling still adds noisy logs that mask real signals during debugging |
+|------|----------|------------|----------------|
+| BSM drain exceeds the 900s handler cap; `compute-picker` (last in chain) fires on a partially-solved cohort | Missing put wall / NULL-greek scores in the picker & exit verdict | Batched `writeBsm`, newest-first bounded read (partly shipped); completeness-gate the picker write | Large dual-source cohorts (~15k rows/cycle) |
+| Backtest replays full chain × all cohorts × full universe in memory | Slow / OOM on a growing corpus | Stream per-cohort; cap the replay universe exactly as the live generator does | `leg_observations` since Jun-12 already large; worsens each cycle |
+| Percentile/rank recomputed per candidate per cohort against all history | O(n²) replay time | Precompute trailing-window stats incrementally, point-in-time | Long history / many candidates per cohort |
+
+---
 
 ## Security Mistakes
 
+Domain-specific issues beyond general web security.
+
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Economic-event or scoring data pulled from a new third-party API without going through the existing adapter/port boundary | Bypasses the hexagonal boundary law (core imports only shared); a vendor-specific detail leaks into `packages/core` | New economic-events source is a driven adapter (`packages/adapters`) behind a port, same pattern as CBOE/Schwab — enforced by existing ESLint boundary rules |
-| Rules-engine or picker feature adds a new unauthenticated route by accident while iterating quickly on UI | Same single-bearer-token/Supabase-JWT model must apply; a forgotten auth gate mirrors the Phase-8 `/api/status` healthcheck auth-gate bug already hit once in this project | Every new HTTP + MCP route pair follows the same auth pattern as existing routes; verify with the same checklist that caught the prior gate bug |
+| Wiring the exit advisor to auto-place orders | A flapping/stale/AH verdict trades real money on noise | Keep the advisor **display-only**, mirroring STRM-04 (stream is display-only; REST/human stays the fill authority) |
+| Backfill/exit code logging broker fills or tokens | Credential/PII leak in logs | Existing rule: Schwab creds/tokens never in code, logs, or fixtures; fills stay out of logs |
+
+---
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
-|---------|-------------|-------------------|
-| Ranked picker cards show a score with no indication of chain staleness or which criteria drove the rank | User trusts a number that may already be stale, or can't tell why one candidate outranked another | Surface `observedAt` age + a per-criterion breakdown (matches the scoring table's per-criterion structure already designed in `calendar-selection-criteria.md`) directly on the card |
-| Watchdog badge only distinguishes LIVE vs disconnected | User can't tell "frozen but still connected" from "genuinely live," which is the exact v1.1 known gap this feature exists to close | Three-state badge: LIVE / QUIET (idle, heartbeat ok) / STALLED (heartbeat missed) |
-| New Overview/Analyzer screens ship without a way to see the old layout during the transition | If a redesigned screen has a subtle regression, the only recovery is a full revert/redeploy | Flag or parallel route to fall back to the old screen without a deploy, at least until the new screen has survived a few real trading days |
+|---------|-------------|-----------------|
+| Verdict with no reason or duration | Can't trust or act on a bare label | Show the rule that fired + how long the verdict has held + the fill-adjusted number |
+| AH/indicative verdict shown as actionable | User acts on overnight noise | Reuse the AH-indicative chip; label "RTH will confirm"; never render STOP/TAKE as actionable off-hours |
+| Backtest shows a point P&L/Sharpe on 13 trades | False precision; over-confidence | Show CI/range + coverage % + explicit "N=13, directional only" |
+| Regime universe appears/vanishes daily | Confusion, distrust | Hysteresis band + a visible regime-state banner explaining why candidates are gated |
+
+---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Picker scoring engine:** Often missing an explicit chain-staleness contract — verify
-  every scoring call records `source` + `observedAt` and the UI renders it, not just that scores
-  compute correctly on a warm cache.
-- [ ] **FwdIV / calibration solvers:** Often missing the negative-radicand / non-convergence
-  path — verify with fixtures that force inversion and near-zero vega, not just typical ATM
-  inputs; confirm neither path returns `NaN`/`any` silently.
-- [ ] **Economic-events adapter:** Often missing timezone-correct storage and a refresh path —
-  verify dates are stored with an explicit IANA timezone (not a bare UTC timestamp) and that
-  there's a documented process for adding next year's dates.
-- [ ] **Stream watchdog:** Often missing the RTH-vs-quiet distinction — verify a replay of a
-  known quiet period does NOT trigger a false stall, and a replay of a genuine stall during RTH
-  DOES trigger.
-- [ ] **UI redesigns:** Often missing a re-run of the existing regression gates (SPX OI=0 proxy,
-  GEX put-sign, CBOE-UTC) against the new screens — verify these are in the phase's verification
-  checklist explicitly, not assumed still-passing because the API didn't change.
-- [ ] **Strategy-rules engine:** Often missing an explicit scope boundary — verify the schema is
-  a closed enum + free text, not a generic rule/condition grammar, before calling the phase done.
+- [ ] **Backtest percentiles:** often missing point-in-time isolation — verify feeding a future-dated row does **not** change a past decision's score.
+- [ ] **Backtest fidelity:** often missing the `picker_snapshot` reproduction check — verify the replay reproduces the recorded live score for every cohort that has one.
+- [ ] **Backtest coverage:** often missing gap-cohort exclusion + coverage report — verify skipped-cohort count is surfaced and no replayed cohort has spot=0.
+- [ ] **Backtest fills:** often missing the exit-side haircut — verify entry and exit use the one shared fill fn and P&L is a mid→haircut range.
+- [ ] **Exit advisor stability:** often missing hysteresis — verify the verdict is stable across ≥3 cycles on a static position.
+- [ ] **Exit advisor gating:** often missing session/liquidity gate — verify no actionable STOP/TAKE on an AH, spot=0, or illiquid cohort.
+- [ ] **Exit advisor basis:** often missing an explicit % basis — verify the exit % matches the journal-ledger oracle for a known trade, and NULL-basis emits UNKNOWN.
+- [ ] **Regime gate freshness:** often missing an as-of stamp + hysteresis — verify the gate uses fresh vol data and doesn't flip on one boundary print.
+- [ ] **Pipeline completeness:** often missing a completeness gate — verify `compute-picker` sees a fully-drained cohort (not mid-BSM-drain).
+
+---
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|-----------------|
-| Scoring silently used stale chain data | LOW | Add the `observedAt`/`source` field retroactively (it's additive), backfill nothing (scores were never stored as history at this stage), re-verify against a live snapshot |
-| FwdIV `NaN` shipped to prod | MEDIUM | Patch the radicand guard, add the fixture test that would have caught it, audit any persisted picker results for the affected window and re-score |
-| Event calendar goes stale after year-end | LOW | One-time re-seed of the new year's dates; add the startup staleness-warning check so this doesn't recur silently |
-| Watchdog alert fatigue led operator to mute it | MEDIUM | Re-tune with the RTH/quiet split, replay historical quiet-period fixtures to prove no false positives before re-enabling, communicate the change (single user, so this is a personal runbook update) |
-| Big-bang UI rewrite broke a working screen | HIGH | Revert to old screen via flag/route if one exists (cheap); if not, full redeploy of the prior version while the redesign is fixed forward — this is precisely why a flag/parallel-route is worth the small upfront cost |
-| Rules engine over-built into a generic DSL | MEDIUM | Strip down to closed enum + free text; migrate any already-recorded generic-condition data into the enum, accept some information loss for entries that don't map cleanly |
+|---------|---------------|----------------|
+| Overfit weights shipped | MEDIUM | Revert to user-locked weights (versioned in `rules.ts`, weight-sum test); weights are display-sourced so rollback is a reviewed code change |
+| Backtest leakage discovered | LOW–MEDIUM | Re-run with point-in-time cutoff; the `picker_snapshot` reproduction test pins the regression |
+| Exit advisor fired bad verdicts | LOW | Display-only means no capital moved; add hysteresis/gating and re-derive verdict history from the append log |
+| Regime gate deleted good trades | MEDIUM | Same scar as the retired `term-inversion`/`event-blackout` gates — convert the hard gate to a penalty band; the universe regenerates next cycle |
+| Gap rows poisoned the corpus | MEDIUM | Fix snapshot gaps (ops rider), re-run backtest with the gap filter; append-only tables mean no destructive loss |
+
+---
 
 ## Pitfall-to-Phase Mapping
 
+Suggested build order mirrors the milestone's stated order, with one **prerequisite ops rider**
+surfaced by the data-quality pitfalls (7, 12, and the BSM/first-write-wins traps): the snapshot-gap
+fix + batched BSM writes + completeness-gated picker snapshot should land **before or alongside** the
+backtest and exit advisor, because both features inherit those defects directly.
+
 | Pitfall | Prevention Phase | Verification |
-|---------|-------------------|----------------|
-| Stale/partial chain scoring | Picker engine phase | Scoring port type requires `observedAt`+`source`; UAT includes a deliberately-stale-snapshot scenario |
-| FwdIV radicand < 0 | Picker engine phase | Property test with inverted-curve fixtures asserts no `NaN`/`Infinity` output |
-| Event-date timezone/revision errors | Economic-events adapter (picker engine phase) | Unit test asserts correct UTC conversion across a DST boundary date; startup staleness-warning check exists |
-| Bisection/Newton non-convergence | Overview v2 + scenario-engine IV calibration fix phase | Property test spanning ATM/deep-ITM/deep-OTM/near-zero-vega fixtures; convergence-failure result type covered by a test |
-| Watchdog false positives / missed stalls | Tail: live-stream stall watchdog phase | Replay tests for both a known-quiet period (no false trigger) and a simulated RTH stall (trigger) |
-| Big-bang UI rewrite risk | Overview v2 + Analyzer→picker redesign phases | Contract-first stub approach preserved per ROADMAP; existing regression gates re-run against new screens before ship |
-| Over-engineered rules engine | Strategy-rules engine (L4) tail phase | Plan doc states closed-enum-plus-free-text scope explicitly; UAT rejects any PR introducing a generic condition grammar |
+|---------|------------------|--------------|
+| Exit flapping (6) | Exit advisor | Verdict stable across ≥3 cycles on a static position |
+| Stale/AH/gap marks (7) | Exit advisor (+ ops rider) | No actionable verdict on AH/spot=0/NULL-greek cohort |
+| P&L-basis mismatch (8) | Exit advisor | Exit % matches journal-ledger oracle; NULL basis → UNKNOWN |
+| Unfillable exits (9) | Exit advisor | No actionable TAKE on an illiquid leg; exit valued at haircut |
+| Overfitting 13 trades (1) | Backtest harness | LOO stability + bootstrap CI reported; ≤1 weight change/run; no auto-write |
+| Percentile leakage (2) | Backtest harness | Future row doesn't move a past score; reproduces `picker_snapshot` |
+| Late-BSM / cohort union (3) | Backtest harness (+ ops rider) | Replay uses per-slot union; optimism flagged or `bsm_solved_at` recorded |
+| Fill-model divergence (4) | Backtest harness | Shared haircut both legs; P&L reported as range; calibrated to 13 fills |
+| Survivorship (5) | Backtest harness | Entry backtest replays full universe incl. rejected strikes |
+| Gap-row poisoning (12) | Backtest harness (+ ops rider) | Gap filter + coverage report; no spot=0 in replay set |
+| Regime data lag (10) | Playbook port | Gate stamped with vol as-of date; treated as daily filter; fail-mode documented |
+| Regime flapping (11) | Playbook port | Hysteresis band; transitions logged; penalty-over-cliff considered |
+| BSM-cap / first-write-wins | Ops rider (before/with backtest) | `compute-picker` sees a fully-drained cohort; snapshot completeness-gated |
+
+---
 
 ## Sources
 
-- Project-internal (HIGH confidence, ground truth):
-  - `.planning/PROJECT.md` — v1.2 scope, known debt, constraints
-  - `.planning/research/calendar-selection-criteria.md` — verified/refuted scoring criteria,
-    FwdIV formula and inversion guard, event-premium criteria
-  - `docs/iv-engine-discrepancy-and-solver.md` — mid-price convention, no-canonical-IV root
-    cause, solver design precedent
-  - `.planning/ROADMAP.md` — v1.2 build order, strategy-rules-engine backlog note (L4, 4-layer
-    model), event-triggered-snapshot backlog note
-  - `packages/core/src/analytics/`, `packages/core/src/streaming/` — existing BSM/GEX/streaming
-    module boundaries the new features must extend, not duplicate
-- Web (MEDIUM confidence, cross-checked across multiple independent results per topic):
-  - Federal Reserve meeting calendar pages — FOMC 2:00pm ET release convention
-  - BLS schedule pages (bls.gov/schedule) — CPI/NFP 8:30am ET release convention, annual
-    schedule + revision practice
-  - Interactive Brokers Quant News, HyperVolatility (Medium) — Newton-Raphson near-zero-vega
-    non-convergence, bisection-fallback hybrid solver pattern
-  - websocket.org, oneuptime.com, websockets.readthedocs.io — heartbeat/ping-pong timeout
-    best practices, false-positive watchdog patterns
-  - ThetaScanner, general options-screener vendor docs — stale-snapshot and illiquid-hit pitfalls
-  - Strangler Fig pattern write-ups (Medium, algomaster.io, Future Processing) — big-bang vs
-    incremental rewrite risk comparison
-  - YAGNI references (lawsofsoftwareengineering.com, GeeksforGeeks) — premature-configurability
-    over-engineering pattern
+- [The critical pitfalls of backtesting trading strategies — StarQube](https://starqube.com/backtesting-investment-strategies/) — look-ahead, survivorship, overfitting taxonomy (HIGH)
+- [Survivorship Bias in Backtesting Explained — LuxAlgo](https://www.luxalgo.com/blog/survivorship-bias-in-backtesting-explained/) — survivorship inflates returns 1–3%/yr (HIGH)
+- [The Seven Sins of Quantitative Investing — Portfolio Optimization Book §8.2](https://portfoliooptimizationbook.com/book/8.2-seven-sins.html) — canonical backtest-sin list (HIGH)
+- [Backtesting Mistakes That Kill Quant Strategies — Hedge Fund Alpha](https://hedgefundalpha.com/education/backtesting-mistakes-kill-quant-strategies-guide/) — overfitting via parameter search (HIGH)
+- [Minimum Trades for a Valid Backtest — BacktestBase](https://www.backtestbase.com/education/how-many-trades-for-backtest) — 30 floor / 100 basic / 200–500 institutional; correlated trades shrink effective N (HIGH)
+- [How Many Trades Are Enough — statistical significance in backtesting](https://medium.com/@trading.dude/how-many-trades-are-enough-a-guide-to-statistical-significance-in-backtesting-093c2eac6f05) — in-sample vs out-of-sample divergence as the overfit tell (MEDIUM)
+- [Put Calendar Spread Guide — Option Alpha](https://optionalpha.com/strategies/put-calendar-spread) — exit discipline, close 5–10 DTE, roll at 7 DTE (HIGH)
+- [Calendar Spreads 101 — OptionsTradingIQ](https://optionstradingiq.com/calendar-spreads/) — 50%-profit-in-50%-duration take rule (banded exits → argues for hysteresis) (HIGH)
+- [VIX Term Structure — VolRadar](https://volradar.com/learn/term-structure) — VIX/VIX3M<1.0 = contango (~80% of time) (HIGH)
+- [VIX Term Structure — Raven Quant](https://ravenquant.com/vix-term-structure/) — backwardation episodes avg 3.3 days / median 1 day; term structure as a fast early-warning regime signal (MEDIUM)
+- Repo docs read directly: `docs/architecture/picker-rules.md`, `docs/architecture/jobs.md`, `.planning/PROJECT.md` — rule registry, gate history (retired hard gates), dual-source cohort semantics, BSM drain, fill haircut, `marketSession` labeling (HIGH)
+- Incident history (project memory): journal-P&L fill-ledger fix (−$319,850 oracle), GEX premature-UPSERT / BSM-starvation NULL greeks, snapshot ~74% gap rows (HIGH)
 
 ---
-*Pitfalls research for: Morai v1.2 Trade Picker & Dashboard Redesign*
-*Researched: 2026-07-03*
+*Pitfalls research for: exit advisor + options backtest harness + regime gates on an existing SPX calendar system*
+*Researched: 2026-07-09*

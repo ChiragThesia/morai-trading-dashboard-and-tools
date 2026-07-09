@@ -1,295 +1,164 @@
 # Project Research Summary
 
-**Project:** Morai Trading Dashboard & Tools — v1.2 Trade Picker & Dashboard Redesign
-**Domain:** Single-user, self-hosted SPX options trading system — dashboard redesign +
-candidate-scoring engine added onto an existing hexagonal (ports & adapters) production app
-**Researched:** 2026-07-03
-**Confidence:** MEDIUM-HIGH
+**Project:** Morai — Trading Dashboard & Tools · milestone v1.3 "Picker Intelligence"
+**Domain:** Single-user, self-hosted SPX calendar-spread trading system — adding a held-position exit advisor, an options backtest harness (PICK-04), and a personal-playbook rule port onto an existing hexagonal Bun/TS pipeline
+**Researched:** 2026-07-09
+**Confidence:** HIGH
 
 ## Executive Summary
 
-v1.2 is a subsequent-milestone integration, not a greenfield build: six new capabilities
-(economic-events calendar, dashboard redesign, IV-calibration fix, trade-picker scoring engine,
-strategy-rules recording, stream watchdog, event-triggered snapshot) land on top of a shipped
-Bun/Hono/Supabase/Drizzle/pg-boss hexagonal system. The headline finding across all four research
-tracks is convergent: nothing here needs a new dependency or a new architectural pattern. Every
-feature maps onto an existing precedent already in the codebase — the FRED adapter shape, the
-`iv-inversion.ts` bisection, the Drizzle-migration-per-context pattern, the pg-boss ad-hoc
-`send()`, three already-installed chart libraries (or plain SVG, per the approved mockups), and
-the D21 `packages/quant` extraction precedent. The job is disciplined reuse and correct sequencing,
-not technology selection.
+v1.3 does not build a new system. It bolts three *inference layers* onto a data pipeline that already ships everything they need: a validated journal P&L ledger, live greeks, term structure, GEX walls, an economic-events adapter, a 9-rule entry picker, and a dual-source (Schwab+CBOE) chain corpus since 2026-06-12. All four research streams converge on the same conclusion: **zero new dependencies, three additive derived-read features, and one hard statistical ceiling that reframes what the backtest is allowed to be.** The exit advisor evaluates open calendars each cycle into a single verdict (HOLD/TAKE/STOP/ROLL/EXIT-pre-event) from the user's own playbook ladder; the backtest replays stored chains through the *exact same* pure rule functions; the playbook port adds two market-level VIX crisis gates plus anti-criteria and sizing tiers.
 
-The recommended approach mirrors the user's own decided build order, which the architecture
-research independently confirms is dependency-correct: (1) ship the pending phase-15 image so v1.2
-isn't built on a stale prod baseline, (2) Overview v2 + the IV-calibration fix together (both
-independent of the picker, and the IV fix is a repeat of the already-proven D21
-core→quant-extraction pattern), (3) Analyzer→picker UI built contract-first against Zod-typed
-fixtures (decouples UX risk from scoring-correctness risk), (4) the picker engine + economic-events
-adapter wire real data in (events adapter first, since picker criteria 3/4 depend on it), and (5)
-three independent tail items (stall watchdog, event-triggered snapshot, strategy-rules L4) ordered
-cheapest/most-isolated first.
+The single most important finding — woven through FEATURES and PITFALLS — is the **n=13 sample-size wall.** The corpus is 13 validated closed calendars inside one ~6-week volatility regime, less than half the ~30-trade bare statistical floor, and the trades are correlated (one trader, one instrument). This makes per-rule weight optimization *dishonest by construction*: 9 free weights fit to 13 correlated points is overfitting formalized. The backtest must therefore be a **refutation and mechanics-validation tool, never a weight-fitter.** It reproduces the 13 known outcomes deterministically (no lookahead), reports directional per-rule attribution stamped `n=13`, and defers all automated promote/demote until n≥30 real closed trades. The milestone brief's phrase "promote/demote weights with evidence" resolves to "a human promotes when a real sample exists," not an optimizer.
 
-The key risk is not "will this work" but "will it silently produce wrong numbers or scope-creep."
-Pitfalls research surfaces five correctness traps that must be closed at the type level, not caught
-in QA: stale/mis-sourced chain data flowing into scores with no visible staleness signal; the
-FwdIV formula's radicand going negative under term-structure inversion (bare `Math.sqrt` → silent
-`NaN` propagating into rankings); economic-event dates stored as fixed UTC instead of
-America/New_York-with-DST (mirror image of the already-learned CBOE-UTC lesson); the IV-calibration
-bisection hanging or converging to garbage on deep-ITM/illiquid legs; and a naive stream watchdog
-that either cries wolf during quiet markets or stays silent during a real stall. A sixth,
-process risk — big-bang UI rewrites breaking a screen in daily personal trading use — is already
-mitigated by the user's own contract-first/staged sequencing, provided execution doesn't collapse
-it back into one PR under schedule pressure. A seventh — the strategy-rules engine ballooning into
-a generic rules DSL nobody asked for — is a scope-discipline risk to flag explicitly at plan time,
-not a technical one.
+The recommended approach is a clean, opinionated build order that every file independently confirms and refines: **VIX3M ingestion first and alone** (one array entry — because `macro_observations` has no backfill, every un-ingested day is permanently lost history), a **data-quality ops rider** before or alongside the two inference features (the pipeline carries ~74% gap rows in some windows and a BSM drain that can exceed the 900s handler cap — defects that turn from cosmetic into *confident wrong trade verdicts* once an advisor reads them), then the **exit advisor** (headline value, all data already flows), then the **backtest** (needs exit rules to exist before it can validate them), then the **playbook gates** (consume the accumulating VIX3M history and the backtest evidence). The chief risk is not building the features — it is inheriting the pipeline's silent data gaps into confident wrong answers, mitigated by session/gap gating, hysteresis, point-in-time replay, and the free `picker_snapshot`-reproduction oracle.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Zero new npm/pip dependencies for all six v1.2 capabilities. Economic events (FOMC/CPI/NFP) reuse
-the already-live `FRED_API_KEY` and the existing `fred.ts` adapter shape for CPI/NFP release
-dates, plus a small hand-maintained static table for FOMC (no JSON/ICS feed exists federally, and
-FOMC dates are announced ~12 months ahead and essentially never move). Dashboard redesign charts
-reuse one of three already-installed chart libraries (`@visx/*`, `echarts`, `uplot`) or plain
-hand-rolled SVG — the approved mockups (`playground-v4.html`, `overview-v2.html`) already prove
-plain SVG suffices and is what should be ported. IV calibration extends the existing
-`iv-inversion.ts` bisection rather than adding a numerical/root-finding package. Strategy-rules
-persistence and the economic-events table both reuse Drizzle + Postgres migrations, the same
-pattern as `macro_observations`. The stall watchdog and event-triggered snapshot are standard-
-library `setInterval`/pg-boss `send()` usage — no new tooling.
+**Zero new dependencies.** All three features are built from capabilities the repo already ships (see `.planning/research/STACK.md`). The one external unknown — the FRED series id for the 3-month VIX — is **live-verified as `VXVCLS`** (HTTP 200, daily, current to 2026-07-07 = 19.01), and adding it is a one-line change to the existing `DEFAULT_FRED_SERIES_IDS` constant, not code. Backtest replay and per-rule metrics are ~15-30 lines of pure TS reusing the in-repo `percentileRank` helper and the `realizedVol` stdev pattern, property-tested with the already-installed fast-check. Two small new append-history tables follow the established `picker_snapshot` idempotency convention.
 
-**Core technologies (all pre-existing, being extended not replaced):**
-- FRED `releases/dates` API: CPI/NFP scheduled dates — already-keyed, free, JSON, no scraping
-- `packages/core/src/journal/domain/iv-inversion.ts`: bisection to extend for per-position calibration
-- Drizzle + Postgres migrations: `economic_events`, `strategy_rules`/`rule_firings` tables
-- Existing `@visx`/`echarts`/`uplot` or plain SVG: redesign charts, matches decided mockups exactly
-- pg-boss `send()` (ad-hoc, alongside existing `schedule()`): event-triggered snapshot
+**Core technologies (all existing, locked):**
+- **FRED HTTP adapter (in-repo, parameterized)** — fetch any series by id, raw value, no fallback — adding VIX3M needs zero adapter change, just `"VXVCLS"` in the series list
+- **Drizzle ORM + Zod** — two new append-history tables (exit verdicts, backtest runs) + idempotent migrations (0018+); JSONB blobs Zod-parsed on write AND read at the adapter edge
+- **pg-boss** — the exit advisor is a new terminal handler on the existing single-trigger chain (`…→compute-picker→compute-exit-advice`); the backtest is deliberately NOT a job
+- **Own picker engine (`scoreCalendarCandidates`, pure)** — the backtest *replays* stored chains through this same engine; exit rules extend the same typed gate/score registry pattern
+- **fast-check + testcontainers** — required for the numeric backtest kernel (correlation invariants) and the new repo tables (SQL never mocked)
 
 ### Expected Features
 
-**Must have (table stakes, matches every comparable screener — TOS, OptionStrat, ONE):**
-- Ranked candidate list sorted by composite score, with a per-candidate "why-panel" score breakdown
-- Visible "as of" chain-snapshot timestamp + staleness indicator distinct from "no data"
-- Payoff diagram per candidate, one click away (BSM engine already shipped)
-- DTE range and delta-target filters
-- Economic-event flag per candidate leg, shown as day-count/icon not raw data
-- Stream connection badge (LIVE/STALE/DISCONNECTED) — closes an already-flagged v1.1 gap
-- Rule-fired tag recorded at entry, structured (enum), not free text
+See `.planning/research/FEATURES.md`. Every backtest number must carry `n=13` and its date range — this is a hard constraint, not a caution.
 
-**Should have (differentiators — no mainstream retail tool does these):**
-- Forward-IV (not raw IV diff) as the primary edge metric — a genuine analytical edge, verified in
-  `calendar-selection-criteria.md`
-- GEX-fit folded directly into the picker score, not a separate dashboard tab
-- Event-premium-aware baseline (strip event-spanning expiries before computing "clean" forward vol)
-- Event-triggered supplemental snapshot on large SPX moves — no comparable tool does off-cadence capture
+**Must have (table stakes):**
+- **Live P&L per open calendar + one clear verdict** (HOLD/TAKE/STOP/ROLL/EXIT-pre-event) with the firing rule and its raw metric shown — reuse the validated journal P&L ledger, don't recompute
+- **Deterministic, point-in-time replay loop** (chain@T → engine → walk forward → exit verdict → realized P&L) that reproduces the 13-trade oracle's direction/magnitude — the honest, achievable backtest win
+- **Fill-haircut on BOTH entry and exit** (one shared fill function) — ranking on mid overstates edge; the exit side is the more dangerous half because it decides the ladder
+- **VIX3M ingestion + two market-level crisis gates** (VIX<25; VIX/VIX3M<0.95) — applied once at market level, never per-candidate
 
-**Defer (v1.2.x / v2+):**
-- Rule-fired → outcome correlation report (needs a population of tagged trades first)
-- Event-premium magnitude weighting (binary flag is the v1.2 scope)
-- Full backtesting engine, auto-execution, multi-underlying screener — all explicitly out of scope
-  per PROJECT.md boundaries (trade-advisor plugin territory, SPX-only constraint D17)
+**Should have (competitive differentiators):**
+- **Playbook-encoded verdict registry** — the user's own ladder (+5/+10/+15% takes, −25/−50% stops, EVT≤3d, TERM inversion, GAMMA, roll) auto-evaluated every cycle — no retail tool does per-position verdicts from a personal playbook
+- **Per-rule DIRECTIONAL attribution + leave-one-out ablation** — "did high-scoring trades beat low-scoring ones?" reported as a sign + `n`, never a coefficient; reveals redundant rules cheaply even at n=13
+- **TERM-inversion exit trigger from live term structure** — no retail tool watches front−back IV inversion as an exit signal
+- **Sizing tiers by VIX regime** — discrete user-set tiers (NOT a derived optimum)
+
+**Defer (blocked on data or boundary):**
+- **Automated weight promotion/demotion from the backtest** — defer until ≥30 real closed trades; at n=13 the evidence does not exist
+- **Auto-execution of exits/rolls** — crosses the read-only boundary (STRM-04); Morai advises, the human executes. The single most important boundary to hold
+- **Kelly / optimal-f sizing, Sharpe on 13 trades, a backtesting DSL, ML regime-classification** — all fabricated rigor or scope creep at this sample size / user count
 
 ### Architecture Approach
 
-Standard hexagonal extension: each new capability gets its own bounded context under
-`packages/core/src/` (`picker/`, `economic-events/`, `strategy-rules/`) following the
-domain/application split, with driven adapters in `packages/adapters/` and driving adapters
-(HTTP route + MCP tool, paired per rule 9) in `apps/server`. The picker's scoring function itself
-needs no new port — it's a pure domain function over already-resolved inputs, tested the same way
-as `bsmGreeks`. The IV-calibration fix is a D21-style extraction into `packages/quant` (the one
-sanctioned `web`-importable pure-leaf package), not a fix inline in `apps/web` or a reach across
-the `web→core` boundary. UI redesign work is contract-first: `packages/contracts/src/picker.ts` is
-authored before any UI code, and the Analyzer redesign builds against Zod-typed fixtures so the
-eventual swap to a live route is a one-line change.
+See `.planning/research/ARCHITECTURE.md`. All three features are **additive derived-reads** — none touches the journal's fills→events→P&L source-of-truth path, none mutates a position, none changes an existing context's `domain/`. That is what keeps the hexagon law satisfied throughout.
 
 **Major components:**
-1. `packages/core/src/picker/` (NEW) — pure `scoreCalendarCandidates` domain logic + `buildScoredCandidates` use-case, composing existing chain/GEX/rate ports plus the new events port
-2. `packages/core/src/economic-events/` (NEW) — FOMC/CPI/NFP fetch, upsert (revisable schedule, not append-only observation), and windowed read
-3. `packages/quant` (extended) — IV-inversion solver moved here from `core/journal/domain`, `apps/web`'s scenario-engine calls it directly
-4. `apps/web` Overview/Analyzer (modified) — component extraction (`PositionsTable`, `MarketStrip`, etc. become real files) + picker UI built against contract-typed fixtures
-5. `packages/core/src/strategy-rules/` (NEW, tail) — closed-enum rule recording + firing ledger over the existing `entry_thesis` attach point
+1. **`exits` bounded context (NEW)** — sibling to `picker`, in the mould of `analytics`: reads position/mark/greeks/P&L from `journal`, GEX from `analytics`, events from `picker` — all through its own application ports (never a foreign `domain/` import); owns the exit-rule registry and `evaluateExit(position, context)` pure function; writes verdicts, never mutates journal
+2. **`exit_verdicts` table + `compute-exit-advice` job (NEW)** — append-only, keyed `(observed_at, calendar_id)`, `onConflictDoNothing` first-write-wins on the cohort clock (the proven `picker_snapshot` convention at per-calendar grain); a thin terminal pg-boss handler after `compute-picker`
+3. **Backtest as an operator CLI (NEW)** — `apps/worker/src/backtest.ts`, following the `fix-pnl-reingest.ts` precedent — NOT a pg-boss job (no cadence; the 900s cap fights a bulk history scan) and NOT a server route; it does all I/O up front, then replays history through the untouched pure `selectCandidates`/`scoreCalendarCandidates`/`evaluateExit`; only the reusable predictive-power kernel lives in `packages/core/src/backtest/domain/`
+4. **VIX3M ingestion (MODIFIED, one array entry)** — lands `VXVCLS` into `macro_observations`; a later macro→picker read port surfaces VIX + VIX3M to the crisis gates
 
 ### Critical Pitfalls
 
-1. **Stale/partial chain data silently feeds scoring** — require an explicit `observedAt` +
-   `source` on every chain snapshot the scoring port consumes; reject/flag rather than score
-   silently against stale or CBOE-fallback data; surface age on every ranked card.
-2. **FwdIV radicand goes negative under term-structure inversion** — `Math.sqrt(negative)` is a
-   silent `NaN` that still sorts; use a tagged `Result` variant for the inverted case, decided once
-   at spec time, and property-test against inverted-curve fixtures.
-3. **Economic-event dates stored as fixed UTC instead of `America/New_York` + IANA tz** — same bug
-   class as the CBOE-UTC lesson, inverted direction; also needs an annual re-seed process and a
-   startup staleness-warning check so the calendar doesn't silently go stale after year-end.
-4. **IV-calibration bisection hangs/garbage on deep-ITM or illiquid legs** — cap iterations, return
-   a tagged non-convergence result (never the last iterate), use mid price per the existing
-   discrepancy-doc convention, and property-test ATM/deep-ITM/deep-OTM/near-zero-vega fixtures.
-5. **Stream watchdog false-positives on quiet markets or silence during a real stall** — decouple
-   from data cadence with a transport-level heartbeat; three-state badge (LIVE/QUIET/STALLED), not
-   two; replay-test both a known-quiet period and a simulated RTH stall.
+See `.planning/research/PITFALLS.md`. The unifying theme: **these features convert silent data gaps into confident wrong answers.**
 
-Two additional risks worth carrying into planning even though they didn't make the top five:
-big-bang UI rewrites breaking a screen in daily personal use (mitigated by the already-decided
-contract-first staging — don't collapse it under schedule pressure), and the strategy-rules engine
-scope-creeping into a generic rules DSL (constrain to closed-enum-plus-free-text explicitly in that
-phase's plan).
+1. **Overfitting 9 weights to 13 correlated trades** — treat PICK-04 as a refutation tool: change one variable at a time, leave-one-out only, bootstrap CI on every metric (the CI is enormous and showing it is the honest antidote), never auto-write weights (guarded by the weight-sum-100 test)
+2. **In-sample percentile / normalization leakage** — every distributional statistic must be point-in-time (`observedAt ≤ decision-cohort time`); exploit the free oracle: prod writes `picker_snapshot` rows live, so replaying a historical cohort **must reproduce the recorded score exactly** — a mismatch is a hard test failure that catches most leaks cheaply
+3. **Look-ahead via late-solved BSM and dual-source cohort union** — replay per 30-min slot with the same per-contract-latest deduped union the live readers use (`readLegObsForGex`); either record a `bsm_solved_at` or explicitly flag the residual optimism
+4. **Fill-model divergence (exit at mid)** — one shared haircut fill function on both legs, calibrated against the 13 real fills; report P&L as a mid→haircut range, never a single number
+5. **Exit-verdict + regime-gate flapping** — hysteresis/banding (arm TAKE at +5%, downgrade below +3%; block VIX above 26, re-open below 24); the codebase already retired the `term-inversion`/`event-blackout` hard gates for deleting trades with edge — lean toward a penalty band over a cliff
+6. **Acting on stale/AH/gap marks** — session- and gap-aware advisor; verdicts on AH/spot=0/NULL-greek cohorts are display-only ("indicative, RTH will confirm"), never actionable STOP/TAKE
 
 ## Implications for Roadmap
 
-The user has already decided the build order; research confirms it is dependency-correct and
-should be used as-is rather than re-derived. Below, mapped to phase language for roadmap creation.
+Based on the research, the suggested phase structure. All four files independently confirm this order; ARCHITECTURE and PITFALLS refine it by splitting VIX3M to the front and surfacing an ops rider. (NOTE: the user added a regime/breadth BOARD requirement set after research — MACRO-02/03 + BOARD-01..03 in REQUIREMENTS.md — which slots naturally with the macro-ingestion and playbook work.)
 
-### Phase 1: Deploy phase-15 image (prod baseline)
-**Rationale:** Hard prerequisite — v1.1's re-auth alert isn't live in prod until this ships; every
-subsequent phase should be built/tested against a current, not stale, prod surface. Zero
-architectural coupling to the rest of v1.2.
-**Delivers:** Server+worker+web running the already-merged phase-15 code in prod.
-**Addresses:** N/A (ops/deploy only).
-**Avoids:** Building v1.2 on top of an untested pre-15 baseline.
+### Phase 1: VIX3M Ingestion (`VXVCLS`)
+**Rationale:** Must go **first and alone** — `macro_observations` has no backfill, so every day without ingestion is permanently lost VIX3M history that both the crisis gates and their eventual backtest need. Trivially small and isolated.
+**Delivers:** `VXVCLS` landing daily in `macro_observations` (one array entry + memory-twin seed + contract-test row).
+**Addresses:** FEATURES "VIX3M series ingestion" table-stakes prerequisite.
+**Avoids:** PITFALLS Anti-Pattern 5 (deferring VIX3M until the gates are built).
 
-### Phase 2: Overview v2 redesign + scenario-engine IV calibration fix
-**Rationale:** Both are independent of the picker track, so bundling them first is safe and
-delivers visible value early. The IV fix is a repeat of the proven D21 extraction pattern
-(`packages/quant`), not a new architectural decision. Component extraction from
-`Overview.tsx`/`Shell.tsx` here establishes the "components are files" pattern the Analyzer
-redesign leans on next.
-**Delivers:** TOS-dock Overview layout live in prod; IV-calibration solver moved to
-`@morai/quant` with a convergence-failure result type; extracted `PositionsTable`/`BookSummary`/
-`SystemHealth`/`MarketStrip` as real components.
-**Uses:** `packages/quant` extension (Feature 5 in ARCHITECTURE.md), existing 3 chart libraries or
-plain-SVG port from `overview-v2.html`.
-**Implements:** D21-style shim pattern; docs-first `stack-decisions.md` entry (next D-number)
-before the `packages/quant` move, per the project's docs-before-architecture rule.
-**Avoids:** Pitfall 4 (bisection non-convergence/deep-ITM garbage) and Pitfall 6 (big-bang rewrite
-— keep this phase UI-and-solver-fix only, no picker engine work mixed in).
+### Phase 2: Data-Quality Ops Rider
+**Rationale:** The pipeline carries known defects — ~74% gap rows (spot=0/NaN) in some snapshot windows, a BSM drain that can exceed the 900s cap leaving `compute-picker` firing on a partially-solved cohort, first-write-wins rows that can freeze a partial write over a fuller recompute. Both inference features inherit these directly; a data bug becomes a wrong verdict or a false "this rule works." PITFALLS says this must land **before or alongside** the exit advisor and backtest.
+**Delivers:** Snapshot-gap fix, batched `writeBsm`, completeness-gated `compute-picker` snapshot.
+**Uses:** Existing `snapshot-calendars`, `compute-bsm-greeks`, cohort-union read semantics.
+**Avoids:** PITFALLS 7, 12, and the BSM-cap / first-write-wins traps at the source.
 
-### Phase 3: Analyzer → picker UI redesign, contract-first against fixtures
-**Rationale:** The picker engine's two open decisions (DTE-range filter shape, delta-target strike
-enumeration) are UX-shaping; resolving them by building the UI against the mockup first, before the
-engine's enumeration logic locks in, decouples UX risk from scoring-correctness risk. Zero backend
-dependency once the contract exists.
-**Delivers:** Ranked-cards rail UI matching `playground-v4.html`, wired to
-`packages/contracts/src/picker.ts` (authored first, before any UI code) and a typed
-`picker-fixtures.ts` stub.
-**Addresses:** Ranked candidate list + why-panel, staleness indicator, DTE/delta filters, payoff
-diagram (table-stakes features from FEATURES.md).
-**Avoids:** Pitfall 6 (big-bang rewrite) by keeping engine work explicitly out of this phase.
+### Phase 3: Exit Advisor
+**Rationale:** The milestone headline and the fastest to ship — ~90% of its data already flows (P&L ledger, greeks, term structure, events, GEX). It closes the trade loop the user watches daily AND provides the exit rules the backtest needs.
+**Delivers:** `exits` bounded context + `evaluateExit` registry (the playbook ladder as typed rows) + `exit_verdicts` table/repo/twin + `compute-exit-advice` terminal job + `GET /api/exits` route + `get_exit_advice` MCP tool + Analyzer held-positions panel rendering the ruleSet.
+**Implements:** ARCHITECTURE component 1 & 2 (derived-read `exits` context, cohort-clock idempotency).
+**Addresses:** FEATURES exit-advisor table-stakes + differentiators (verdict registry, TERM trigger, laddered TAKE).
+**Avoids:** PITFALLS 6 (flapping → hysteresis), 7 (AH/gap → session gating), 8 (P&L basis → reuse the validated journal ledger + oracle), 9 (unfillable exits → liquidity gate on current legs).
 
-### Phase 4: Picker engine + economic-events adapter (real data wired in)
-**Rationale:** Picker scoring criteria 3/4 (event flags, event-penalty) depend on the events
-adapter, so it must land first within this phase, not the other way around. Internal order:
-events context → picker domain (pure scoring, tested against verified/refuted criteria) →
-picker application (wires in existing chain/GEX/rate ports) → route/MCP → swap the fixture import
-for the live call.
-**Delivers:** `packages/core/src/economic-events/` (FOMC/CPI/NFP, upsertable table,
-weekly cron), `packages/core/src/picker/` (pure `scoreCalendarCandidates` + `buildScoredCandidates`
-use-case), `GET /api/picker/candidates` route + `get_picker_candidates` MCP tool.
-**Addresses:** Economic-event flag, forward-IV differentiator, GEX-fit differentiator,
-event-premium-aware baseline (FEATURES.md differentiators).
-**Avoids:** Pitfall 1 (stale-chain scoring — `observedAt`/`source` required at the port signature),
-Pitfall 2 (FwdIV radicand — property-test inverted-curve fixtures, tagged result not `NaN`),
-Pitfall 3 (event-date timezone/staleness — IANA tz storage, startup staleness check). REFUTED
-scoring criteria (IV-rank gates, raw IV-diff band, 25-40% debit band) must be encoded as regression
-assertions, not just doc notes.
+### Phase 4: PICK-04 Backtest Harness
+**Rationale:** Depends on **both** the entry domain (exists) and the exit domain (Phase 3) so it can validate both. This is the highest-risk phase for *methodology* correctness, but the pitfalls are exhaustively documented.
+**Delivers:** Operator CLI (`apps/worker/src/backtest.ts`) + pure predictive-power kernel (`packages/core/src/backtest/domain/`, fast-check tested) + `backtest_runs` JSONB report table; deterministic no-lookahead replay reproducing the 13 oracle outcomes, directional per-rule attribution + leave-one-out ablation, every number stamped `n=13` + date range + coverage %.
+**Uses:** STACK pure-TS metrics reusing `percentileRank`; replay through the existing engine (no framework).
+**Avoids:** PITFALLS 1 (overfit → refutation-only, LOO, CI), 2 (leakage → point-in-time + `picker_snapshot` reproduction), 3 (late-BSM/union), 4 (fill divergence → shared haircut + calibration), 5 (survivorship → replay full universe incl. rejected strikes), 12 (gap-row poisoning → gap filter + coverage report).
 
-### Phase 5: Tail — stall watchdog → event-triggered snapshot → strategy-rules (L4)
-**Rationale:** Ordered cheapest/most-isolated-and-lowest-risk first. Watchdog is pure transport
-plumbing with no core changes. Event-triggered snapshot reuses the existing `ForEnqueueingJob`
-port and touches the same ACCT_ACTIVITY handler the watchdog work just modified (context stays
-warm). Strategy-rules is last because it has the most open scope questions and is most likely to
-need its own discuss-phase before planning.
-**Delivers:** Three-state stream badge (LIVE/QUIET/STALLED) with heartbeat decoupled from data
-cadence; debounced ad-hoc `snapshot-calendars` job triggered off ACCT_ACTIVITY reconcile; closed-
-enum `strategy_rules`/`rule_firings` tables recording which rule fired against `entry_thesis`.
-**Addresses:** Stream badge and rule-tag table-stakes features; closes the documented v1.1
-"badge lies LIVE" gap.
-**Avoids:** Pitfall 5 (watchdog false-positives/missed-stall — RTH-vs-quiet state machine, replay
-tests both directions) and Pitfall 7 (rules-engine scope creep — closed enum + free text, explicit
-non-goal statement in the phase plan, no generic condition grammar, no rule-editor UI).
+### Phase 5: Playbook Crisis Gates + Anti-Criteria + Sizing
+**Rationale:** Lands last — it consumes the VIX3M history accumulating since Phase 1 and is best informed by Phase 4's backtest evidence. Anti-criteria (max open, loss cooldown) reuse the open-position + realized-P&L state the exit advisor establishes.
+**Delivers:** VIX<25 and VIX/VIX3M<0.95 market-level gates (the deferred `picker-rules.md` rows) + a new macro→picker read port + anti-criteria gates + discrete VIX-regime sizing tiers; optionally the event-calendar bucket and `autoTuneTargetDelta` (most-optional, time-box and drop first).
+**Addresses:** FEATURES playbook-port table-stakes + differentiators.
+**Avoids:** PITFALLS 10 (EOD FRED lag → treat as a daily regime filter, stamp the as-of date, decide fail-open vs fail-closed explicitly), 11 (gate flapping → hysteresis band, penalty over cliff — inherit the retired-gate scar).
 
 ### Phase Ordering Rationale
 
-- Dependencies flow one direction: events adapter → picker scoring → picker UI-with-real-data;
-  nothing later in the sequence is a blocking dependency for anything earlier.
-- Grouping follows blast-radius: prod-deploy (zero app-logic risk) → independent UI+solver fixes →
-  UI-only redesign against stubs → real engine wiring → fully independent tail items. Risk and
-  scope-ambiguity increase through the sequence, which is also the safest order to build public-
-  API/schema decisions on top of increasingly-stable ground.
-- This ordering directly avoids Pitfall 6 (big-bang rewrite) by construction — UI and engine are
-  different phases — and surfaces Pitfall 3/1/2 at the one phase (4) where the events/scoring
-  contracts are actually being designed, which is the only point those guards can be added cheaply.
+- **Dependency-forced:** the backtest cannot replay exits without an exit-rule registry, so Exit Advisor strictly precedes Backtest. This fixes Exit → Backtest → Playbook, exactly as PROJECT.md sequences it (confirmed by all four files).
+- **Data-accretion-forced:** VIX3M moves to the very front because there is no backfill — it must start accreting before its consumers exist.
+- **Data-quality-forced:** the ops rider precedes (or parallels) the inference features because both inherit the pipeline's gap/BSM/first-write-wins defects, and a silent data bug becomes a confident wrong answer once an advisor reads it.
+- **Value-forced:** Exit Advisor is both the fastest to ship (data already flows) and the highest core value (closes the daily trade loop), so it leads the inference work.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning (`--research-phase`):
-- **Phase 4 (Picker engine + economic-events adapter):** BLS/Fed release-id lookups still need
-  confirming (Employment Situation `release_id` not nailed down in this pass — resolve via
-  `fred/releases?search_text=Employment+Situation`); the DTE-range/delta-target enumeration
-  decisions are explicitly still open and need to be resolved during this phase's discuss-phase.
-- **Phase 5, strategy-rules (L4) sub-item:** scope boundary (rule DSL shape vs. closed enum,
-  firing-vs-execution boundary, how `entry_thesis` gets populated) is the most open-ended item in
-  the milestone and should get its own discuss-phase before planning, per PITFALLS.md.
+Phases likely needing deeper research or an explicit decision during planning:
+- **Phase 4 (Backtest):** highest methodology risk. Research is already deep (PITFALLS covers leakage, survivorship, fill-model, gap-poisoning, sample-size exhaustively), so this is a **careful-planning** flag, not a research-gap flag. The one open technical decision: record a `bsm_solved_at` column vs flag the residual optimism.
+- **Phase 5 (Playbook gates):** one genuine open decision — **fail-open vs fail-closed** on missing VIX3M (a crisis gate failing closed blocks all entries on missing data; fail-open risks trading blind into a spike). Must be decided and documented during planning.
+- **Phase 2 (Ops rider):** scope decision — confirm during planning whether the snapshot-gap fix is in-scope for v1.3 or a separate concern (PITFALLS says it must land before/with, but the milestone brief frames v1.3 as the three inference features).
+- **Regime board (user-added BOARD-01..03 + MACRO-02/03):** needs its own indicator-evidence research pass (RSP:SPY, VIX9D/VIX, VVIX/VIX, FRED movement series) at phase planning — each indicator admitted only with documented evidence, mirroring picker-rules.md discipline.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (deploy):** pure ops, already-merged code, no research needed.
-- **Phase 2 (Overview v2 + IV fix):** D21 extraction is a proven in-repo precedent; mockups already
-  decided.
-- **Phase 3 (Analyzer UI, contract-first):** UI work against an already-approved mockup and a
-  Zod-schema-first fixture pattern already used elsewhere in the codebase.
-- **Phase 5, watchdog and event-triggered-snapshot sub-items:** both are `setInterval`/pg-boss
-  `send()` usage over existing infrastructure — standard, no external research needed.
+- **Phase 1 (VIX3M):** one array entry into an already-parameterized adapter; live-verified series id. Fully specified.
+- **Phase 3 (Exit Advisor):** mirrors the existing `picker` context and `picker_snapshot` idempotency verbatim; ARCHITECTURE gives the full port/table/route inventory. Well-documented pattern.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verdict is "zero new dependencies" grounded directly in existing `package.json`/codebase inspection, not external survey; the two external facts (FRED endpoint param, no FOMC JSON feed) are cross-checked against official docs |
-| Features | MEDIUM-HIGH | Comparable-tool behavior (TOS, OptionStrat, ONE, Edgewonk, SpotGamma) is well-documented via official docs/guides; the single-user scope judgment call is this project's own explicit constraint (PROJECT.md), not externally sourced |
-| Architecture | HIGH | Grounded directly in `docs/architecture/*`, existing `ports.ts` files, and existing directory shapes — an internal-fit question, not an ecosystem survey |
-| Pitfalls | MEDIUM | Project-specific pitfalls (chain staleness, CBOE-UTC precedent, IV-discrepancy doc, watchdog gap) are HIGH — grounded in this project's own docs/incidents; external domain pitfalls (Newton-Raphson near-zero-vega, watchdog heartbeat patterns, strangler-fig rewrite risk, YAGNI) are MEDIUM — cross-checked across multiple sources but no single official-docs citation |
+| Stack | HIGH | Zero new deps; FRED `VXVCLS` live-verified 2026-07-09 (HTTP 200, current); all reused helpers read directly in-repo |
+| Features | MEDIUM-HIGH | Exit-management and backtest-honesty norms well-sourced and cross-checked; thresholds are the user's own already-validated playbook, not re-derived; the n=13 wall is peer-reviewed statistical consensus |
+| Architecture | HIGH | Grounded in the actual codebase (`picker`/`journal`/`analytics` contexts, `picker_snapshot` repo, `fix-pnl-reingest`/`backfill-transactions` CLI precedent, the pg-boss chain) — an internal-fit question, not a survey |
+| Pitfalls | HIGH | Canonical quant/backtest pitfalls web-grounded; system-specific pitfalls drawn from this repo's architecture docs and incident history (journal-P&L fix, GEX premature-UPSERT, ~74% gap rows) |
 
-**Overall confidence:** HIGH — this milestone is dominated by internal-architecture-fit questions
-where the codebase itself is the primary source, not external technology research.
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- FRED release_id for "Employment Situation" (NFP) was not confirmed in this research pass —
-  resolve via a one-off API query during Phase 4 before hardcoding the constant.
-- DTE-range-as-filter vs. fixed-rule, and delta-target strike enumeration, are both still open
-  product decisions (noted in PROJECT.md) — deliberately deferred to Phase 4's discuss-phase so the
-  Phase 3 UI can inform them; do not resolve prematurely in Phase 3.
-- Strategy-rules (L4) scope (rule DSL shape, firing-vs-execution boundary, `entry_thesis` population
-  mechanism) is unresolved by design — needs its own discuss-phase before Phase 5's rules sub-item
-  is planned.
-- Vasquez slope signal's transfer to SPX (criterion 2 in `calendar-selection-criteria.md`) is
-  flagged there as needing a separate in-house backtest — explicitly out of v1.2 scope, tracked as
-  a P2/P3 backlog item, not a gap this milestone must close.
+- **FRED series id discrepancy (resolve to `VXVCLS`):** STACK.md live-verified the correct FRED id is **`VXVCLS`** (HTTP 200, current); `VIX3M`/`VIX3MCLS`/`VXV` all 404. FEATURES.md and ARCHITECTURE.md still write `VIXCLS3M` (the CBOE ticker / an assumed id, not the FRED id). **The roadmap and Phase 1 plan must use `VXVCLS`** — using `VIXCLS3M` fails with a 404. Treat STACK.md's live verification as authoritative.
+- **Table naming to reconcile:** STACK.md calls the exit table `exit_advisories`; ARCHITECTURE.md calls it `exit_verdicts`. Pick one at planning — `exit_verdicts` is the more codebase-grounded name (ARCHITECTURE read the actual `picker_snapshot` grain). Cosmetic, but fix before the migration is written.
+- **`bsm_solved_at` column:** decide during Phase 4 planning whether to add a solve-timestamp column (reconstructable as-of-solved set) or explicitly flag the residual late-BSM optimism and keep it out of the "proven" column.
+- **Fail-open vs fail-closed on missing VIX3M:** an explicit Phase 5 planning decision, must be documented.
+- **Ops-rider scoping:** confirm at planning whether the snapshot-gap/BSM fix is a v1.3 phase or a parallel ops track — PITFALLS requires it before/with the inference features either way.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- In-repo: `docs/architecture/{overview,hexagonal-ddd,data-model,jobs,api-design,mcp-and-plugins,streaming-fanout,stack-decisions}.md`
-- In-repo: `packages/core/src/{journal,analytics,brokerage,streaming}/**`, `packages/quant/src/**`
-- In-repo: `packages/adapters/src/http/fred.ts`, `packages/adapters/src/postgres/migrations/0013_macro_observations.sql`
-- In-repo: `apps/web/src/{screens/Overview.tsx,screens/Analyzer.tsx,components/Shell.tsx,lib/scenario-engine.ts}`, `apps/web/package.json`
-- `.planning/research/calendar-selection-criteria.md` (adversarially verified scoring criteria — canonical, not re-derived)
-- `.planning/PROJECT.md`, `.planning/ROADMAP.md` (scope, constraints, decided build order)
-- `docs/iv-engine-discrepancy-and-solver.md` (mid-price convention, solver design precedent)
-- FRED API docs: `fred/releases/dates` — https://fred.stlouisfed.org/docs/api/fred/releases_dates.html
-- FRED release id 10 = Consumer Price Index — https://fred.stlouisfed.org/release?rid=10
-- thinkorswim Spread Hacker / Scan manual (official docs), OptionNet Explorer official site/User Guide
+- FRED `fredgraph.csv?id=VXVCLS` — direct fetch 2026-07-09: HTTP 200, 4852 daily rows, current to 2026-07-07 (19.01), still updating; `VIX3M`/`VIX3MCLS`/`VXV` all HTTP 404 — authoritative, verified
+- Codebase read directly 2026-07-09: `packages/core/src/{picker,journal,analytics}/**`, `packages/adapters/src/postgres/repos/picker-snapshot.ts` + `picker-chain.ts`, `journal/application/fetchMacroSeries.ts`, `packages/shared/src/percentile-rank.ts`, `packages/core/src/picker/domain/realized-vol.ts`, `apps/worker/src/{fix-pnl-reingest,backfill-transactions,handlers/compute-picker}.ts`
+- Repo docs: `docs/architecture/{hexagonal-ddd,jobs,picker-rules,stack-decisions}.md`, `.claude/rules/architecture-boundaries.md`, `.planning/PROJECT.md`
+- Bailey, Borwein, López de Prado & Zhu — *The Probability of Backtest Overfitting* (SSRN 2326253) — 30/100/200–500 sample floors, Deflated Sharpe Ratio, PBO
+- Incident history (project memory): journal-P&L fill-ledger fix (−$319,850 oracle), GEX premature-UPSERT / BSM-starvation NULL greeks, snapshot ~74% gap rows
 
 ### Secondary (MEDIUM confidence)
-- Federal Reserve Board FOMC meeting calendars (HTML only, no feed) — federalreserve.gov
-- BLS schedule of releases (HTML only; subject to delay, e.g. Oct 2025 shutdown) — bls.gov/schedule
-- Edgewonk, OptionStrat, SpotGamma feature pages; Forex Factory calendar conventions
-- Interactive Brokers Quant News / HyperVolatility — Newton-Raphson near-zero-vega non-convergence
-- websocket.org, oneuptime.com — heartbeat/ping-pong watchdog best practices
-- Strangler Fig pattern write-ups (algomaster.io, Future Processing) — incremental vs. big-bang rewrite risk
+- Exit-management norms (50%/21-DTE dual rule, P&L-per-day-in-trade, roll at 7 DTE): tastytrade, Option Alpha, OptionsTradingIQ, daystoexpiry.com
+- VIX term structure (VIX/VIX3M<1.0 = contango ~80% of time; backwardation avg 3.3 days / median 1 day): VolRadar, Raven Quant
+- Backtest pitfalls taxonomy (look-ahead, survivorship 1–3%/yr inflation, overfitting): StarQube, LuxAlgo, Portfolio Optimization Book §8.2, Hedge Fund Alpha, BacktestBase
+- Exit/position-management UX (OptionStrat payoff+probability, tos Position Statement, LX/SX labels): OptionStrat, thinkorswim learning center
 
 ### Tertiary (LOW confidence)
-- None flagged — all research converged on codebase-grounded or officially-documented answers.
+- Per-rule attribution / signal-quality methodology (predictive-power + PnL-contribution decomposition, ablation, interpretation stability): macrosynergy.com + ML-backtest literature — directional guidance, not tiny-sample-specific
 
 ---
-*Research completed: 2026-07-03*
+*Research completed: 2026-07-09*
 *Ready for roadmap: yes*

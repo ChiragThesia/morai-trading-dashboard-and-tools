@@ -1,177 +1,209 @@
-# Technology Stack — v1.2 Additions
+# Stack Research
 
-**Project:** Morai Trading Dashboard & Tools — v1.2 Trade Picker & Dashboard Redesign
-**Researched:** 2026-07-03
-**Scope:** ONLY new capabilities for v1.2. Existing locked stack (Bun/Hono/Supabase/Drizzle/
+**Domain:** SPX calendar-spread trading system — v1.3 Picker Intelligence (exit advisor, PICK-04 backtest harness, playbook port / VIX3M ingestion)
+**Researched:** 2026-07-09
+**Confidence:** HIGH
+**Scope:** ONLY the three new v1.3 features. The locked stack (Bun/Hono/Supabase/Drizzle/
 pg-boss/Vitest/Railway, schwab-py sidecar, React/Vite/Tailwind/shadcn) is unchanged and not
-re-researched — see `docs/architecture/stack-decisions.md`. (This file supersedes the v1.1
-STACK.md that previously lived here — v1.1's sidecar/COT/FRED research is now implemented and
-covered by `docs/architecture/stack-decisions.md` + the shipped adapters; nothing here
-duplicates or contradicts that.)
+re-researched — see `docs/architecture/stack-decisions.md`. This file supersedes the v1.2
+STACK.md previously here.
 
-**Verdict up front: zero new npm/pip dependencies required for any of the six v1.2 features.**
-Every unknown resolves to reusing an existing library, an existing in-house module, or a small
-static/config addition.
+## Headline
 
-## Recommended Stack — New Capabilities
+**Zero new dependencies.** All three v1.3 features are built from capabilities the repo
+already ships. The single external unknown — the FRED series id for the 3-month VIX — is
+verified: it is **`VXVCLS`** (still live, daily, current to 2026-07-07), and adding it is a
+one-line change to an existing constant, not a code change. Backtest replay and per-rule
+metrics are pure TS over stored Postgres data reusing helpers that already exist. Exit
+verdicts and backtest runs get two small new tables following the established
+append-history pattern — no storage engine, no ORM, no npm additions.
 
-### 1. Economic-events adapter (FOMC / CPI / NFP dates)
+## Recommended Stack
 
-| Source | Purpose | Why |
-|--------|---------|-----|
-| FRED `fred/releases/dates` endpoint (`api.stlouisfed.org`) | CPI + NFP (Employment Situation) scheduled release dates, including **future** dates | Already-integrated API — `FRED_API_KEY` is live in prod since Phase 14 (MAC-01/02). JSON, versioned, no scraping. Pass `include_release_dates_with_no_data=true` to get unpublished future dates (default `false` excludes them — the one non-obvious param). `release_id=10` = Consumer Price Index (confirmed). Employment Situation's release_id was not nailed down by web search in this pass — resolve it once via `fred/releases?search_text=Employment+Situation` and hardcode the id as a named constant, same as `DGS3MO`/`VIXCLS` today. |
-| Static seed table (checked-in TS/JSON const) | FOMC meeting calendar | The Federal Reserve Board publishes FOMC dates only as an HTML page (`federalreserve.gov/monetarypolicy/fomccalendars.htm`) — **no JSON/ICS feed exists**. FOMC meets 8x/year, dates are announced 12+ months ahead and essentially never move. Scraping HTML for something that changes once a year is worse engineering than an 8-row static table refreshed by hand when the Fed publishes next year's calendar (matches the "static-ish" conclusion `calendar-selection-criteria.md` already reached). |
+There are **no new core technologies**. The table below is the existing, locked stack the
+three features build on — included so the roadmap sees which pieces each feature touches.
 
-**Why not X:**
-- **A scraper for federalreserve.gov or bls.gov** — fragile (HTML structure risk), and the
-  payoff (auto-refresh) doesn't matter for something announced 12+ months in advance. It's
-  also worse on failure: BLS delayed/cancelled its Oct 2025 CPI/Employment releases during a
-  government shutdown — a scraper would silently break the same week the calendar mattered
-  most, while the FRED API surfaces this as a normal "no data yet" case.
-- **A paid economic-calendar API/MCP** (Trading Economics, ForexFactory scrapers, Apify
-  economic-calendar actors — all surfaced in the research pass) — unnecessary: FRED already
-  covers the two release-tracked events (CPI, NFP) for free with a key we already have, and
-  FOMC doesn't need a live feed at all.
-- **`node-ical` / `ics` parsing libraries** — no ICS feed exists for any of the three events,
-  so there's nothing to parse.
+### Core Technologies
 
-**Integration point (mirrors the existing FRED adapter, zero new pattern):**
-- `packages/adapters/src/http/fred.ts` already implements `fetchFredSeries` against
-  `fred/series/observations` with Zod parsing, `.`-sentinel filtering, and the
-  no-key-means-fallback/err split (`makeFredRateAdapter` has a fallback; `makeFredSeriesAdapter`
-  does not, per D-09). The new economic-events adapter is the same shape: a new
-  `fetchFredReleaseDates` helper hitting `fred/releases/dates`, a new
-  `ForFetchingEconomicEvents` port in `packages/core`, an HTTP adapter
-  (`packages/adapters/src/http/economic-events.ts`) that calls it for CPI + NFP release ids
-  and merges in the static FOMC table, and an in-memory twin
-  (`packages/adapters/src/memory/economic-events.ts`) per the mandatory-twin rule.
-- **Persistence:** reuse the Drizzle + Postgres migration pattern already used for
-  `macro_observations` (`packages/adapters/src/postgres/migrations/0013_macro_observations.sql`)
-  — a small `economic_events` table (date, kind: FOMC|CPI|NFP, source). Fetch on a
-  low-frequency pg-boss cron (daily is plenty; these dates don't change intraday), the same
-  job-scheduling mechanism as `fetch-cot`/`fetch-rates`. No new job infra.
-- **No auth needed beyond the existing `FRED_API_KEY`.**
+| Technology | Version (pinned) | Purpose | Why it already covers the new work |
+|------------|------------------|---------|-----------------------------------|
+| FRED HTTP adapter (`makeFredSeriesAdapter`, in-repo) | n/a (own code) | Fetch any FRED series by id, raw value, no fallback (D-09/D-14) | Already **parameterized** — takes any `seriesId`. Adding VIX3M = add `"VXVCLS"` to `DEFAULT_FRED_SERIES_IDS`. The adapter, the `macro_observations` table, the in-memory twin, and the fail-loud batch need zero code change. |
+| Drizzle ORM + drizzle-kit | `drizzle-orm@^0.45.2`, `drizzle-kit@^0.31.10` | Schema + idempotent migrations | Two new append-history tables (exit advisories, backtest runs) are ordinary Drizzle tables + one idempotent migration (the DATA-01..04 pattern, next numbers 0018+). |
+| Zod | `zod@^4.4.3` | Parse-don't-cast at every boundary | The exit-verdict and backtest-report JSONB blobs are Zod-parsed on write AND read at the adapter edge — the exact `picker_snapshot` discipline (T-19-10). |
+| pg-boss | `pg-boss@^12.18.3` | Chain-triggered jobs | The exit advisor is a new handler appended to the existing single-trigger chain (`…→compute-gex-snapshot→compute-picker→compute-exit-advice`). No queue change. |
+| Own picker engine (`scoreCalendarCandidates`, `PICKER_RULES`) | n/a (own code) | Entry scoring over a typed rule registry | The backtest **replays** stored chains through this same engine — no separate simulation framework. Exit rules extend the same registry pattern (gate/score rows). |
 
-### 2. Charting for redesigned payoff / term-structure / candidate-card UI
+### Supporting Libraries
 
-**Verdict: no new charting library. `apps/web/package.json` already carries three.**
+**No new libraries.** The reusable primitives the backtest metrics need already live in the
+repo — listed here so the plan reuses them (ponytail rung 2) instead of adding a stats dep.
 
-| Existing library | Version | Already used for |
-|---|---|---|
-| `@visx/*` (axis, curve, event, gradient, group, scale, shape, tooltip) | ^4.0.0 | Low-level composable SVG charts (React-native, D3 scales under the hood) |
-| `echarts` + `echarts-for-react` | ^6.1.0 / ^3.0.6 | Declarative charts (candlestick-style, term structure) |
-| `uplot` + `uplot-react` | ^1.6.32 / ^1.2.4 | High-density time-series line charts |
+| Existing helper | Location | Purpose | Reuse in v1.3 |
+|-----------------|----------|---------|---------------|
+| `percentileRank(value, history)` | `packages/shared/src/percentile-rank.ts` | Inclusive trailing-window percentile, null-safe | Per-rule predictive-power ranking; Spearman = Pearson on ranks, and ranks come from this same sort/rank logic. |
+| `realizedVol(closes)` | `packages/core/src/picker/domain/realized-vol.ts` | Sample stdev (n−1) of log returns × √252 | Its mean/variance/stdev pattern is the template for Pearson-r / information-coefficient — copy the shape, don't add jStat. |
+| `picker_snapshot` append-history corpus | `packages/adapters/src/postgres/schema.ts` | One JSONB `pickerSnapshotResponse` per `observedAt`, INSERT-only | Schema comment already says it exists "for PICK-04's future slope backtest" — it is the trailing-slope input; the corpus is already accumulating. |
+| `leg_observations` (dual-source chains) | schema `legObservations` | Full SPX chain since 2026-06-12 | The raw replay material — re-derive candidates per historical cohort. |
+| `calendar_events` (realizedPnl) | schema `calendarEvents` | 13 closed calendars, OPEN/CLOSE/ROLL + realized P&L | The backtest **oracle** — measure each rule's score against realized outcome. |
+| `getMacro` / `macro_observations` read | `packages/core/src/journal/application/getMacro.ts` | Read latest macro series by id | The VIX/VIX3M ratio gate reads VIXCLS + VXVCLS from here; ratio is one division, pure TS. |
 
-The decided mockups (`mockups/playground-v4.html`, `mockups/overview-v2.html`) render every
-chart — payoff diagram, gamma profile, GEX-by-strike bars, term-structure curve with event
-markers, breakeven/expected-move overlays — as **hand-rolled inline SVG**
-(`document.createElementNS` helpers: `svgEl`, `path`, `txt`), with no charting library at all.
-That is direct evidence the redesign's visual complexity does not require a new dependency:
-the real build can either (a) port the mockup's SVG-builder functions near-verbatim into React
-components (cheapest, matches the approved design pixel-for-pixel), or (b) reimplement the
-same shapes with `@visx/shape` + `@visx/scale` (more idiomatic React, same visual output). Both
-are zero-new-dependency paths. Candidate-card score bars and breakdown bars (slope / fwd-edge /
-GEX-fit / event-adj in playground-v4) are plain CSS width-percentage divs — no library, just
-Tailwind, matching the mockup exactly. `@base-ui/react`, `shadcn`, `lucide-react`,
-`class-variance-authority`, `tailwind-merge` already cover the component/UI-kit needs (cards,
-pills, tags, tabs) the redesign uses.
+### Development Tools
 
-**Why not X:**
-- **Recharts / Chart.js / bare d3 / Highcharts / Nivo** — would be a 4th-5th charting
-  dependency for a use case the existing 3 (or plain SVG) already cover; pure bloat.
-- **TradingView Lightweight Charts** — attractive for candlestick/OHLC, but v1.2's new charts
-  (payoff diagrams, GEX bars, term-structure with event markers) are not OHLC time-series; the
-  mockup's plain-SVG approach is simpler and already validated.
-
-### 3. Scenario-engine per-position IV calibration (bisection to live mark)
-
-**Verdict: reuse in-house code, not a new library.**
-
-`packages/core/src/journal/domain/iv-inversion.ts` already implements bisection to invert an
-observed option price into an implied vol (used by the journal/BSM pipeline today). The
-scenario-engine's "calibrate model IV to the live mark" requirement (visible in
-`mockups/overview-v2.html`'s `ivScale` bisection loop: 48 iterations, `lo=0.15/hi=2.5` bracket)
-is the same numerical problem — bisect a scale/vol parameter until `modelValue(spot) ==
-liveMark` — applied per-position instead of per-chain-quote. Extend or call the existing
-`iv-inversion.ts` bisection with a position-level objective function; do not add a numerical
-library (e.g. `mathjs`, a root-finding package) for a well-understood monotone bisection that's
-already implemented once in this codebase and works.
-
-### 4. Strategy-rules engine (L4) persistence
-
-**Verdict: reuse Drizzle + Postgres, zero new dependency.**
-
-Recording enter/exit/roll rules and which rule fired (attach point `entry_thesis`, D-07 per
-PROJECT.md) is a straight append-only audit-table problem, structurally identical to the
-existing `macro_observations` / COT tables: a Drizzle migration adding `strategy_rules` (rule
-definitions) and `rule_firings` (rule id, calendar id, timestamp, trigger snapshot) under
-`packages/adapters/postgres/migrations/`, contract-tested the same way as
-`macro-observations.contract.test.ts`. No JSON-rules-engine library (e.g. `json-rules-engine`,
-`nools`) is needed — the rule set is small, author-defined, and versioned in TypeScript/SQL,
-consistent with the "no hand-edited journal, everything typed and testable" discipline already
-in place. A generic rules DSL library would add indirection without buying anything at this
-scale (single trader, tens of rules).
-
-### 5. Live-stream stall watchdog
-
-**Verdict: no dependency — a heartbeat comparison against the existing SSE stream.**
-
-The existing live-stream infrastructure (Phase 11-12: `apps/web` SSE client + `apps/server` SSE
-fan-out) already ticks on every LEVELONE_OPTION/ACCT_ACTIVITY message. A watchdog is: track
-`lastMessageAt`, compare against `Date.now()` on a `setInterval` (or in the `useEffect` that
-already owns the `EventSource`), and flip a `STALLED` UI state past a threshold (e.g. 60s with
-no tick during RTH). This is a standard-library `setInterval`/timestamp comparison, not a
-package. (Memory: "open minor gap: no silent-stall watchdog" from Phase 12 — this is exactly
-the gap being closed; no new tooling was flagged as needed there either.)
-
-### 6. Event-triggered supplemental snapshot
-
-**Verdict: reuse the existing pg-boss job pattern, zero new dependency.**
-
-The 30-min RTH snapshot job already exists as a pg-boss job handler in `apps/worker`. An
-event-triggered supplemental snapshot is the same job handler enqueued on-demand (e.g. when the
-new economic-events fetch detects an unscheduled/surprise event, or a price-move threshold
-fires) instead of only on the cron schedule. pg-boss already supports ad-hoc `send()` alongside
-`schedule()` (established in Phase 14, CR-01: same-name `boss.schedule()` upserts on
-`(name,key)` — the ad-hoc path is a distinct, already-supported pg-boss call, not new
-infrastructure).
-
-## Alternatives Considered
-
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Economic events (CPI/NFP) | FRED `releases/dates` API | ForexFactory/Trading-Economics/Apify economic-calendar scrapers | Already have a working, keyed, free FRED integration; scrapers add fragility and (for paid ones) cost for data FRED already exposes |
-| Economic events (FOMC) | Static checked-in table, hand-refreshed ~1x/yr | HTML scrape of federalreserve.gov | No structured feed exists; scraping a page that changes once a year is worse than a config file |
-| Redesign charts | Existing `@visx/*` / `echarts` / `uplot`, or plain SVG matching the mockups | New library (Recharts, d3, Highcharts, TradingView Lightweight Charts) | Three chart libraries already installed with idle capacity; mockups proved plain SVG suffices |
-| IV calibration | Extend `packages/core/.../iv-inversion.ts` bisection | New numerical/root-finding package (`mathjs`, etc.) | Bisection is already implemented in-house and is the right algorithm for a monotone 1-D calibration |
-| Rules-engine persistence | New Drizzle tables + migration | Generic rules-engine library (`json-rules-engine`) | Rule set is small and author-defined; a DSL engine adds indirection with no benefit at this scale |
-| Stall watchdog | `setInterval` + timestamp diff in existing SSE client | Heartbeat/reconnection library | Trivial with the platform primitive already wrapping the existing `EventSource` |
-| Supplemental snapshot | Ad-hoc pg-boss `send()` reusing the existing job handler | New scheduler/queue | pg-boss already installed and already runs this exact handler on a cron |
+| Tool | Version | Notes |
+|------|---------|-------|
+| Vitest | `vitest@^4.1.8` | Existing workspace runner. |
+| fast-check | `fast-check@^4.8.0` | **Required** for the backtest metric functions (numerical code → property tests per tdd.md): correlation invariants (∈[−1,1], rank-permutation stability, round-trips). Already installed. |
+| testcontainers | `testcontainers@^12.0.1`, `@testcontainers/postgresql@^12.0.1` | Real-Postgres repo tests for the two new tables (SQL never mocked). Already installed. |
+| msw | `msw@^2.14.6` | Network-layer test for the VXVCLS fetch path (reuses the existing FRED adapter test harness). Already installed. |
 
 ## Installation
 
-No new packages. If the FOMC static table needs review, it lives as a plain TS/JSON file
-inside the new `economic-events` adapter directory — no install step. All other additions are
-Drizzle migrations (`bun run migrate`, already a project script) and code in existing packages.
+```bash
+# Nothing to install. v1.3 adds zero npm packages.
+```
+
+The only "install-shaped" change for VIX3M ingestion is one line:
+
+```ts
+// packages/core/src/journal/application/fetchMacroSeries.ts
+export const DEFAULT_FRED_SERIES_IDS: ReadonlyArray<string> = [
+  "DFF", "DGS1MO", "DGS3MO", "SOFR", "T10Y2Y", "T10Y3M", "VIXCLS",
+  "VXVCLS", // ← add: CBOE S&P 500 3-Month Volatility Index (VIX3M)
+];
+```
+
+Plus its memory-twin seed in the fetchMacroSeries test and a contract-test row (architecture
+rule 8), then two Drizzle migrations for the new tables. No `package.json` edit.
+
+## Verified: the VIX3M FRED series (question a)
+
+| Question | Answer | Evidence (live, 2026-07-09) |
+|----------|--------|------------------------------|
+| Exact FRED series id for the 3-month VIX? | **`VXVCLS`** — "CBOE S&P 500 3-Month Volatility Index" | FRED public CSV `fredgraph.csv?id=VXVCLS` → **HTTP 200**, 4852 daily rows, 2007-12-04 → **2026-07-07 = 19.01**. |
+| Is VXVCLS discontinued? | **No — live and current.** | Latest observation is one trading day old; series still updating daily. |
+| The "renamed" history? | The **underlying CBOE index** ticker changed **VXV → VIX3M in Sept 2017**, but **FRED kept the legacy `VXVCLS` id**. | `VIX3M`, `VIX3MCLS`, `VXV` all return **HTTP 404** on FRED — they do not exist as FRED series. |
+| Unit handling? | RAW index level, **no /100** — identical to the already-ingested `VIXCLS`. | The adapter's D-14 raw-value path (VIXCLS is stored raw) is already correct for VXVCLS. |
+
+**Integration caveat for the ratio gate:** the VIX/VIX3M gate must read `VIXCLS` and `VXVCLS`
+from the **same `macro_observations.date`**. Both are daily FRED series on the same NYSE
+publication calendar (both carry blank/`.` rows on half-days like 2026-07-03, already filtered
+by the adapter's `.` guard), so joining on `date` avoids comparing a stale VXVCLS against a
+fresh VIXCLS. The evening `fetch-rates` run persists only the latest non-`.` row per series —
+on a normal weekday both land the same date.
+
+> Note: the brief's phrase "fredapi in worker" is imprecise — the worker has **no `fredapi`
+> Python dependency**. FRED is fetched by a plain `fetch()`-based TS adapter
+> (`packages/adapters/src/http/fred.ts`). Nothing Python-side changes for VIX3M.
+
+## Backtest harness — library needed? (question b)
+
+**None. Pure TS is sufficient and correct.**
+
+- **Replay** = iterate stored `leg_observations` cohorts + `picker_snapshot` history through
+  the existing `scoreCalendarCandidates` engine, scored against `calendar_events.realizedPnl`.
+  This is DB reads + existing domain code — a backtest *framework* would wrap the engine we
+  already have.
+- **Metrics** (per-rule predictive power: rank correlation / information coefficient /
+  hit-rate) are ~15–30 lines of pure TS in a new
+  `packages/core/src/picker/domain/backtest-metrics.ts`, reusing `percentileRank` and the
+  `realizedVol` stdev pattern, property-tested with the already-installed fast-check.
+
+## Storage shape — new tables vs JSONB (question c)
+
+**Two new small tables**, both following the repo's established append-history pattern.
+Not JSONB bolted onto `calendar_snapshots`; not a wide normalized metric schema.
+
+**1. `exit_advisories`** — the exit advisor's per-cycle verdicts.
+- Append-only; time-leading composite PK **`(observed_at, calendar_id)`**; columns
+  `verdict` (text enum `HOLD|TAKE|STOP|ROLL|EXIT_PRE_EVENT`) + `detail` JSONB (triggers
+  fired, metric snapshot, reason strings). `onConflictDoNothing` → idempotent per chain
+  cycle, exactly like `skew_observations` / `term_structure_observations`.
+- **Per-(calendar, instant) rows, not a whole-blob-per-instant** (unlike `picker_snapshot`):
+  the held-positions panel and MCP tool ask "this calendar's verdict now / its history" — a
+  per-calendar row is directly queryable; a blob would force JSON extraction on every read.
+- **New table, not JSONB on `calendar_snapshots`:** that table is journal data — RTH-gated,
+  rebuilt from fills, "never hand-edited". Exit advice is a derived 24/7 read-only
+  computation with a different lifecycle. Keeping it separate preserves JRNL integrity and
+  matches the one-table-per-derived-concern pattern (skew / risk-reversal / term-structure /
+  gex / picker each got their own).
+
+**2. `backtest_runs`** — evidence trail for weight promote/demote.
+- Append-only; PK `run_at` timestamptz (or `id`); one **`report` JSONB blob** = the whole
+  typed `BacktestReport` (params, per-rule metrics array, summary), **Zod-parsed on write AND
+  read** at the adapter boundary. This is the `picker_snapshot` pattern verbatim.
+- JSONB beats a normalized schema here: low volume (a handful of runs), heterogeneous nested
+  per-rule metrics, and the append-history lets a weight change cite the run that justified it
+  ("promote/demote with evidence" — the milestone requirement).
+- **Ponytail note:** if you only ever act on the latest report and never query run history,
+  skip the table and emit a report artifact. Since the milestone wants *auditable* weight
+  changes, the one thin JSONB table is the minimal persistent form — recommend keeping it.
+
+Both tables need the full port kit (architecture rules 8–9): Drizzle table + idempotent
+migration (0018+), a Zod contract for the JSONB shape, an in-memory twin + testcontainers
+repo test, and HTTP + MCP read surfaces. All with the existing stack.
+
+## Alternatives Considered
+
+| Recommended | Alternative | When the alternative would win |
+|-------------|-------------|--------------------------------|
+| Pure-TS metrics reusing `percentileRank` / `realizedVol` pattern | `simple-statistics`, `jStat`, `ml-*` | Never here — the needed functions are ~30 lines already patterned in-repo; a dep pays off only at a large, varied stats surface. |
+| Replay through the existing engine | A backtesting framework (backtrader, zipline, vectorbt) | Never — those are Python, heavyweight, and would wrap an engine we already own; wrong runtime for a Bun/TS monorepo. |
+| Postgres + Drizzle grouping/aggregation | danfojs / arquero dataframes | Never — Postgres already groups/aggregates the cohorts; a dataframe layer duplicates it in memory. |
+| Two new append-history tables | JSONB columns on `calendar_snapshots` | Never — pollutes fills-derived journal data with derived advice and breaks the RTH-gate lifecycle. |
+| `VXVCLS` via existing FRED adapter | A dedicated FRED client (`fredapi` py, `node-fred`) | Never — the parameterized TS adapter already fetches any series id; a client lib adds a dependency for a URL we already build. |
+
+## What NOT to Use
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| FRED series id `VIX3M` / `VIX3MCLS` / `VXV` | **404 on FRED** — they don't exist as FRED series (the VIX3M name is the CBOE ticker, not the FRED id) | `VXVCLS` |
+| `fredapi` (Python) or any Node FRED client | The worker fetches FRED with a plain TS `fetch()` adapter that already parameterizes by series id | Add `"VXVCLS"` to `DEFAULT_FRED_SERIES_IDS` |
+| Python backtest frameworks (backtrader / zipline / vectorbt) | Wrong runtime; heavyweight; re-wraps the picker engine we already own | Replay stored chains through `scoreCalendarCandidates` |
+| TS stats libs (simple-statistics / jStat / ml-matrix) | ~30 lines of correlation/rank already patterned in-repo; violates the zero-new-deps rule | `percentileRank` + a small `backtest-metrics.ts`, fast-check-tested |
+| Dataframe libs (danfojs / arquero) | Postgres + Drizzle already group and aggregate cohorts | SQL aggregation + Drizzle repos |
+| JSONB advice columns on `calendar_snapshots` | Journal data is RTH-gated and rebuilt from fills; derived advice has a different lifecycle | New `exit_advisories` + `backtest_runs` tables |
+
+## Stack Patterns by Variant
+
+**Exit advisor (per-open-calendar, each cycle):**
+- New pg-boss handler on the existing single-trigger chain after `compute-picker`.
+- New exit-rule registry mirroring `PICKER_RULES` (gate/score rows) in
+  `packages/core/src/picker/domain/` (or a sibling `exit/` context).
+- Storage: `exit_advisories` (per-calendar append-history, above). Read surfaces: held-positions
+  panel (HTTP) + MCP tool.
+
+**PICK-04 backtest (on-demand):**
+- On-demand CLI in `apps/worker` (the `backfill-transactions` precedent — not a pg-boss job),
+  or a `trigger_job`-style manual run.
+- Metrics in a pure-domain `backtest-metrics.ts`; oracle = `calendar_events.realizedPnl`.
+- Storage: `backtest_runs` JSONB report (above).
+
+**VIX3M / playbook gates:**
+- `"VXVCLS"` into `DEFAULT_FRED_SERIES_IDS`; ratio + VIX-level gates read `macro_observations`
+  by same-date join; new gate rows in the picker registry (the deferred `VIX < 25` /
+  `VIX/VIX3M < 0.95` gates named in `docs/architecture/picker-rules.md`).
+
+## Version Compatibility
+
+| Package | Version | Notes |
+|---------|---------|-------|
+| drizzle-orm / drizzle-kit | `^0.45.2` / `^0.31.10` | New tables use the same builders as the 17 existing tables — no version bump. |
+| zod | `^4.4.3` | JSONB contracts use the same `z.infer` boundary parsing as `picker_snapshot`. |
+| pg-boss | `^12.18.3` | Exit-advice handler uses the existing `singletonKey` dedupe + array-guard (Pitfall 2) pattern. |
+| vitest / fast-check | `^4.1.8` / `^4.8.0` | Backtest metric property tests use the installed fast-check. |
+| testcontainers | `^12.0.1` | New repo tests reuse the existing testcontainers Postgres harness. |
+
+**No new packages → no new compatibility surface.**
 
 ## Sources
 
-- FRED API docs: `fred/releases/dates` (release dates incl. future, via
-  `include_release_dates_with_no_data=true`) — https://fred.stlouisfed.org/docs/api/fred/releases_dates.html
-- FRED release id 10 = Consumer Price Index — https://fred.stlouisfed.org/release?rid=10
-- Federal Reserve Board FOMC meeting calendars (HTML only, no feed) —
-  https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
-- BLS schedule of releases (HTML only, no feed; subject to delay, e.g. Oct 2025 shutdown) —
-  https://www.bls.gov/schedule/
-- In-repo: `packages/adapters/src/http/fred.ts` (existing FRED adapter pattern to mirror),
-  `packages/core/src/journal/domain/iv-inversion.ts` (existing bisection to reuse),
-  `packages/adapters/src/postgres/migrations/0013_macro_observations.sql` (migration pattern
-  to mirror), `apps/web/package.json` (confirmed existing chart/UI deps),
-  `mockups/playground-v4.html`, `mockups/overview-v2.html` (decided designs; confirm SVG-only
-  chart implementation and bisection-based IV calibration precedent)
+- FRED `fredgraph.csv?id=VXVCLS` — direct fetch, 2026-07-09: HTTP 200, 4852 rows, 2007-12-04 → 2026-07-07 (19.01), still updating. **HIGH** (authoritative source, verified).
+- FRED `fredgraph.csv?id={VIX3M,VIX3MCLS,VXV}` — direct fetch, 2026-07-09: all HTTP 404. **HIGH** (authoritative, verified).
+- [CBOE S&P 500 3-Month Volatility Index (VXVCLS) | FRED](https://fred.stlouisfed.org/series/VXVCLS) — series title + active status. **HIGH**.
+- [CBOE Volatility Index: VIX (VIXCLS) | FRED](https://fred.stlouisfed.org/series/VIXCLS) — confirms VIXCLS (already ingested) is the sibling series. **HIGH**.
+- [Cboe VIX3M dashboard](https://www.cboe.com/us/indices/dashboard/vix3m/) — confirms the underlying index is now branded VIX3M (formerly VXV). **HIGH**.
+- Codebase (in-repo, read 2026-07-09): `packages/adapters/src/http/fred.ts` (parameterized adapter, raw value), `packages/core/src/journal/application/fetchMacroSeries.ts` (`DEFAULT_FRED_SERIES_IDS`), `packages/adapters/src/postgres/schema.ts` (`macro_observations`, `picker_snapshot`, analytics-table pattern), `packages/shared/src/percentile-rank.ts`, `packages/core/src/picker/domain/realized-vol.ts`. **HIGH** (direct source).
 
 ---
-
-*Stack research for: Morai v1.2 — economic-events adapter, dashboard redesign, scenario-engine
-IV calibration, strategy-rules engine, stall watchdog, event-triggered snapshot*
-*Researched: 2026-07-03*
+*Stack research for: SPX calendar-spread trading system — v1.3 Picker Intelligence*
+*Researched: 2026-07-09*

@@ -1,355 +1,412 @@
-# Architecture Research — v1.2 Integration
+# Architecture Research — v1.3 Picker Intelligence Integration
 
 **Domain:** Subsequent-milestone integration into an existing hexagonal (ports & adapters)
-trading system
-**Researched:** 2026-07-03
-**Confidence:** HIGH (grounded directly in `docs/architecture/*`, `packages/core/src/**/ports.ts`,
-`packages/adapters/src/**`, and `apps/web/src/**` — no external ecosystem research needed; this
-is an internal-architecture-fit question, not a technology survey)
+trading system — exit advisor, backtest harness, VIX3M ingestion
+**Researched:** 2026-07-09
+**Confidence:** HIGH (grounded in the actual codebase — `packages/core/src/{picker,journal,analytics}/**`,
+the `picker_snapshot` idempotency repo, the `fix-pnl-reingest`/`backfill-transactions` CLI
+precedent, and the pg-boss chain in `apps/worker`; this is an internal-architecture-fit question,
+not a technology survey)
 
-> Supersedes the previous (2026-06-25) contents of this file, which covered the v1.1 sidecar
-> integration — that work is shipped and live in prod. See `.planning/milestones/` for the v1.1
-> archive if that history is needed.
+> Supersedes the previous (2026-07-03) contents of this file, which covered v1.2 (picker engine,
+> events adapter, Overview/Analyzer redesign) — that work is shipped and live. See
+> `.planning/milestones/` for the v1.2 archive if that history is needed.
 
-## Standard Architecture (unchanged baseline)
+## TL;DR — the four answers
 
-```
-Browser (apps/web, Vercel)          Claude Code (MCP)
-        │ Hono RPC (contracts)              │ streamable HTTP
-        ▼                                   ▼
-┌──────────────────────────────────────────────────────┐
-│ apps/server — Hono API + MCP (driving adapters)       │
-│  routes/*.routes.ts        mcp/tools/*.ts             │
-└───────────────┬───────────────────────┬────────────────┘
-                │ calls                 │ calls
-                ▼                       ▼
-┌──────────────────────────────────────────────────────┐
-│ packages/core  — the hexagon (framework-free)         │
-│  <context>/domain/       pure functions, no I/O       │
-│  <context>/application/  ports.ts + use-case factories│
-│  contexts today: journal, analytics, brokerage,       │
-│  streaming                                            │
-└───────────────┬───────────────────────┬────────────────┘
-                │ implements ports       │ implements ports
-                ▼                       ▼
-┌──────────────────────────────────────────────────────┐
-│ packages/adapters — postgres | http | schwab | sidecar│
-│                      | pgboss | memory (twin per port)│
-└───────────────┬───────────────────────┬────────────────┘
-                ▼                       ▼
-          Supabase Postgres      Schwab · CBOE · FRED · CFTC
+1. **Exit rules own a NEW `exits` bounded context** (`packages/core/src/exits/`), sibling to
+   `picker`. It is a *derived-read* context in the exact mould of `analytics`: it reads the
+   position from `journal`, the current mark/greeks/P&L from the latest `calendar_snapshots` row,
+   GEX from `analytics`, and events from `picker` — all through its own application ports
+   (cross-context-via-ports, never a foreign `domain/` import). It writes verdicts; it never
+   mutates journal state. This keeps `journal` a pure fills-source-of-truth and `picker` a pure
+   entry-universe scorer, and gives the backtest two symmetric pure-domain replays (entry + exit).
+2. **Verdicts get their own table `exit_verdicts`**, keyed `(observed_at, calendar_id)`, `jsonb`
+   blob validated by a contracts Zod schema, `onConflictDoNothing` = first-write-wins per cohort
+   per calendar. This is the proven `picker_snapshot` convention applied at a per-calendar grain.
+   Do **not** extend `picker_snapshot` — different grain, different lifecycle, different context.
+3. **The backtest runs as an operator CLI** (`apps/worker/src/backtest.ts`), following the
+   `fix-pnl-reingest.ts` precedent — **not** a pg-boss job (no cadence, and the 900s handler cap
+   fights a bulk history scan) and **not** a server route. It reuses the exact rule code because
+   the rules are already pure functions (`selectCandidates` + `scoreCalendarCandidates`, plus the
+   new `evaluateExit`): the CLI does all I/O up front, then replays history through those functions
+   with zero ports touched in the loop.
+4. **Build order: VIX3M ingestion → exit advisor → backtest → playbook crisis gates.** VIX3M
+   moves *first and alone* (one array entry) precisely because `macro_observations` has no
+   backfill — every day of delay is permanently lost history. Exit advisor is next (headline
+   feature, uses only data that already flows). Backtest is third (it needs the exit rules to exist
+   before it can validate them). The VIX-gated playbook rules land last, informed by both the
+   accumulated VIX3M history and the backtest evidence.
 
-packages/quant  — pure-leaf BSM math (D21). Imported by BOTH
-                  packages/core AND apps/web. No I/O, no deps.
-                  This is the ONE exception to "web imports
-                  contracts only" — established precedent, not
-                  a new pattern.
-```
+## Standard Architecture
 
-Per-context directory shape (see `journal`, `analytics`, `brokerage`): `domain/` (pure
-functions) + `application/` (`ports.ts` + one file per use-case, `make*UseCase(deps)` factory).
-`streaming` is the one flat exception (no domain/application split — small context). New v1.2
-contexts should follow the domain/application split; keep the flat shape only if a context stays
-this small.
-
-Two conventions load-bearing for every feature below:
-
-1. **"New use-case ⇒ HTTP route + MCP tool in the same PR"** (`architecture-boundaries.md`,
-   rule 9) — the picker and events surfaces both need this pairing.
-2. **"Docs before architecture changes"** (`workflow.md`) — every NEW bounded context, NEW
-   table, or NEW cross-package dependency (the `@morai/quant` extension below) needs a
-   `stack-decisions.md` entry / `data-model.md` table section BEFORE the implementing PR, not
-   after.
-
-## Feature-by-Feature Integration
-
-### 1. Picker engine — `scoreCalendarCandidates`
-
-| Aspect | Decision |
-|---|---|
-| Owning layer | **Core, new bounded context** `packages/core/src/picker/` |
-| New vs modified | NEW context. Nothing existing changes. |
-| New ports | None required for the scoring math itself (pure function). One new *use-case* composition (below), reusing existing ports. |
-| New tables | **None.** Candidates are computed on demand from live chain + events + GEX; nothing is persisted (MVP). Open Question #2 in `calendar-selection-criteria.md` wants an in-house Vasquez-slope backtest over `leg_observations` — that is a separate, future analytics job, not the picker's live-scoring path. |
-| Data flow | `ForFetchingChain` (existing, journal context) → build candidate structures (strike×DTE×delta enumeration) → attach `ForReadingEconomicEvents` flags (new, events context) → attach latest GEX (existing analytics-context read) → attach `ForReadingRate` (existing) → pure `scoreCalendarCandidates(candidates, context)` in `picker/domain/` → ranked list → route/MCP response |
-
-**Why no port for the scoring function itself:** all 8 verified criteria in
-`calendar-selection-criteria.md` reduce to arithmetic over values already resolved by the time
-scoring runs (forward IV, term slope, event flags, delta, net theta, GEX proximity, debit). That
-makes `scoreCalendarCandidates` a **pure domain function** — same shape as `bsmGreeks` or
-`invertIv` — testable with fast-check property tests (e.g. an otherwise-identical candidate that
-avoids event-spanning must never score lower than one that spans an event) with zero mocks.
-
-**New domain types (`picker/domain/candidate.ts`):**
-- `CalendarCandidate` — strike, front/back expiry, DTE pair, delta, frontIv/backIv, netTheta,
-  netGamma-context (for GEX bonus), debit — the shape the use-case assembles per candidate.
-- `ScoredCandidate` — `CalendarCandidate` + per-criterion score/flag breakdown + `totalScore` +
-  human-readable labels (mirrors the "ranked-cards" UI need directly — see Feature 4).
-
-**New application layer (`picker/application/`):**
-- `ports.ts` — no NEW driven ports beyond `ForReadingEconomicEvents` (owned by the events
-  context, imported here as a cross-context application-port TYPE — allowed; only cross-context
-  `domain/` imports are forbidden per `hexagonal-ddd.md`).
-- `buildScoredCandidates.ts` — the use-case: fetches chain + events + GEX + rate via injected
-  ports, enumerates strike/DTE combinations from user-supplied filter params (DTE range, delta
-  target — both explicitly still-open decisions per PROJECT.md), calls the pure scorer, returns
-  `ReadonlyArray<ScoredCandidate>`.
-
-**REFUTED criteria are a code-review/test gate, not just a doc note.** IV-rank gates, the
-−1..−3% raw IV-diff band, and the 25–40% debit-of-back band must never appear as scoring terms
-or filter predicates — treat their absence as a required assertion in the domain test suite
-(a candidate satisfying one of the refuted "rules" but not the verified ones must NOT score
-higher), so a future edit can't silently reintroduce them.
-
-### 2. Economic-events adapter (FOMC/CPI/NFP)
-
-| Aspect | Decision |
-|---|---|
-| Owning layer | **New bounded context** `packages/core/src/economic-events/` + new outbound adapters in `packages/adapters/src/http/` and `.../postgres/repos/` |
-| New vs modified | Entirely NEW — no existing file touched except job registration tables (`TRACKED_JOBS`/`TRIGGERABLE_JOBS`, additive) |
-| New port | `ForFetchingEconomicEvents(source: 'fomc' \| 'bls') → Result<ReadonlyArray<EconomicEvent>, FetchError>`, `ForPersistingEconomicEvent`, `ForReadingEconomicEvents(windowStart, windowEnd) → Result<ReadonlyArray<EconomicEvent>, StorageError>` |
-| New table | `economic_events` — see Data Model below |
-| Data flow | NEW `fetch-economic-events` cron (worker) → HTTP adapter(s) pull Fed FOMC yearly schedule + BLS CPI/NFP monthly release calendar → upsert `economic_events` → picker's `buildScoredCandidates` reads the table windowed to `[today, candidate.backExpiry]` → flags any leg whose expiry window brackets an event date (criterion 3) → penalty applied when the **front** leg specifically spans an event (criterion 4) |
-
-**Design-stance deviation, called out on purpose.** `data-model.md`'s stance is "append-only
-observation tables for anything time-stamped." `economic_events` is not an observation — it is a
-**published schedule that can be revised** (BLS/Fed sometimes shift a release date). Model it
-like `contracts` (first-seen/reference metadata, upsertable), not like `calendar_snapshots`:
+### System Overview — where the three features attach to the hexagon
 
 ```
-economic_events
-  id          uuid PK
-  event_type  enum: FOMC | CPI | NFP
-  event_date  date NOT NULL
-  source      text            -- 'fomc' | 'bls'
-  fetched_at  timestamptz     -- when this row was last confirmed/updated
-UNIQUE (event_type, event_date)   -- idempotent upsert key; a revised date is a
-                                  -- DELETE+INSERT (or explicit update), not a blind append
+┌──────────────────────────────────────────────────────────────────────────┐
+│  DRIVING ADAPTERS (apps/)                                                  │
+│  apps/server: HTTP routes + MCP tools    apps/worker: pg-boss handlers     │
+│    GET /api/exits (NEW)                     compute-exit-advice (NEW job)   │
+│    MCP get_exit_advice (NEW)                backtest.ts (NEW operator CLI)  │
+├──────────────────────────────────────────────────────────────────────────┤
+│  THE HEXAGON (packages/core/)                                              │
+│                                                                            │
+│   journal ───────┐   analytics ──┐   picker ────────┐   exits (NEW) ◀──┐   │
+│   Calendar,      │   gex_snap,   │   entry universe,│   exit registry, │   │
+│   snapshots,     │   skew, term  │   rules.ts,      │   HeldPosition,   │  │
+│   fills, P&L     │               │   scoring.ts     │   ExitVerdict     │  │
+│        │ reads (application ports only, never cross-context domain) ────┘   │
+│        ▼         ▼               ▼                                          │
+│   ForReadingLatestSnapshotPerOpenCalendar (NEW journal port)               │
+│   ForReadingGexContext (reuse picker's shape)  ForReadingEconomicEvents    │
+│   ForReadingOpenCalendars   ForPersistingExitVerdicts (NEW)                │
+├──────────────────────────────────────────────────────────────────────────┤
+│  DRIVEN ADAPTERS (packages/adapters/)                                      │
+│  postgres: exit_verdicts repo (NEW) + memory twin (NEW) + contract test    │
+│  fetchMacroSeries gains "VIXCLS3M" (one array entry)                       │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-Migration: `packages/adapters/src/postgres/migrations/0014_economic_events.sql` (next free
-number after `0013_macro_observations.sql`).
+The whole design principle: **all three features are additive derived-reads.** None of them
+touches the journal's fills → events → P&L source-of-truth path, none mutates a position, and
+none requires a change inside an existing context's `domain/`. That is what keeps the hexagon law
+satisfied in every recommendation below.
 
-**Job cadence:** FOMC dates are published a year ahead (effectively static); CPI/NFP follow a
-BLS monthly cadence. A weekly cron (e.g. `0 6 * * 1`, mirroring the COT weekly-fetch cadence in
-`jobs.md`) is generous — daily is unnecessary churn. Follow the existing `fetch-rates` model:
-best-effort per source, fail-loud if a source errors, never fabricate a date.
+### Component Responsibilities
 
-**Adapters needed:** two HTTP fetchers behind ONE port (`source` param) — Fed publishes FOMC
-meeting dates as static HTML/PDF (may need a maintained-constant fallback given no clean JSON
-API, similar in spirit to `nyse-holidays.ts`'s static calendar approach in `journal/domain/`);
-BLS publishes CPI/NFP release schedules as JSON/HTML. Both get an in-memory twin
-(`packages/adapters/src/memory/economic-events.ts`) per the "ship the in-memory twin" rule.
+| Component | Responsibility | Implementation |
+|-----------|----------------|----------------|
+| `exits` context (NEW) | Own the exit-rule registry (playbook ladder) + evaluate open calendars into verdicts | `packages/core/src/exits/{domain,application}` — mirrors `picker`'s shape |
+| `exit_verdicts` table (NEW) | Append-only history of per-calendar verdicts per cohort | Postgres repo + memory twin, `(observed_at, calendar_id)` PK |
+| `compute-exit-advice` job (NEW) | Chain-triggered evaluation each picker cycle | Thin pg-boss handler after `compute-picker` |
+| `backtest.ts` CLI (NEW) | Replay history through entry + exit domains, score per-rule predictive power | Operator CLI in `apps/worker`, not a job |
+| VIX3M ingestion (MODIFIED) | Land `VIXCLS3M` into `macro_observations` | One entry in `fetchMacroSeries.ts` `FRED_SERIES` array |
+| `journal` (reused, +1 port) | Source open calendars + latest snapshot marks/greeks/P&L | Existing `ForGettingOpenCalendars` + NEW `ForReadingLatestSnapshotPerOpenCalendar` |
+| `analytics` (reused) | Supply GEX flip/walls for the GAMMA trigger | Existing GEX snapshot read |
+| `picker` (reused) | Supply economic events; later consume VIX3M for crisis gates | Existing `ForReadingEconomicEvents` |
 
-### 3. Picker API route + MCP tool
+## Recommended Project Structure
 
-| Aspect | Decision |
-|---|---|
-| Owning layer | Driving adapters in `apps/server/src/adapters/http/` and `.../mcp/` |
-| New vs modified | NEW route file, NEW MCP tool, NEW contracts file. No existing route touched. |
-| New contract | `packages/contracts/src/picker.ts` — Zod schemas for the candidate-filter request and the `ScoredCandidate[]` response. **Author this file FIRST** (see Build Order) — it is the shape both the UI fixtures (Feature 4) and the eventual live route must match byte-for-byte. |
-| Route | `GET /api/picker/candidates?underlying=SPX&dteMin=&dteMax=&deltaTarget=` → Zod-validate query → `buildScoredCandidates` use-case → `contracts.picker.candidatesResponse.parse(...)` |
-| MCP tool | `get_picker_candidates` — same contract, same use-case, mirrors the `get_skew`/`get_term_structure` pairing pattern |
+```
+packages/core/src/exits/                    # NEW bounded context (sibling to picker/)
+├── domain/
+│   ├── exit-rules.ts        # THE registry: playbook ladder as typed rows (mirrors picker/domain/rules.ts)
+│   │                        #   +5/+10/+15% takes · −25/−50% stops · EVT/TERM/GAMMA · roll · theta-runway
+│   ├── evaluate-exit.ts     # pure: (HeldPosition, MarketContext) → ExitVerdict  ← the replay entrypoint
+│   ├── types.ts             # HeldPosition, MarketContext, ExitVerdict (HOLD|TAKE|STOP|ROLL|EXIT-pre-event)
+│   └── *.test.ts            # fast-check on the numeric triggers (P&L%, theta runway) — tdd rule
+├── application/
+│   ├── ports.ts             # driven ports (local StorageError, journal/analytics/picker precedent)
+│   └── computeExitAdvice.ts # use-case: read positions+marks+GEX+events → evaluate → persist
+└── index.ts                 # public surface
 
-Matches the existing analytics-route shape exactly (`api-design.md`): empty array on "no
-candidates match filter," never an error — "no data yet" is a normal state here too.
+packages/core/src/backtest/                 # NEW — thin, pure predictive-power math only
+├── domain/
+│   ├── predictive-power.ts  # rank-correlation / hit-rate of a score term vs realized P&L (pure, tested)
+│   └── predictive-power.test.ts
+└── index.ts                 # (no application/ports — the CLI owns orchestration & I/O)
 
-### 4. Analyzer + Overview redesigns (apps/web)
+apps/worker/src/backtest.ts                 # NEW operator CLI (fix-pnl-reingest.ts precedent)
 
-| Aspect | Decision |
-|---|---|
-| Owning layer | `apps/web` only. **Zero hexagon impact** — pure UI-layer work. |
-| New vs modified | `Overview.tsx` (461 lines) and `Shell.tsx` (210 lines) get internal components EXTRACTED (modified); `Analyzer.tsx` (880 lines) gets redesigned against new fixtures (modified, large rewrite). |
-| Extraction needed | `PositionsTable`, `BookSummary`, `SystemHealth` are currently **local functions inside `Overview.tsx`**, not importable components. `MarketStrip` is local to `Shell.tsx`. Overview v2 ("TOS dock" variant B) rearranges/reuses these — pull each into its own file under `apps/web/src/components/` (or a `screens/overview/` subfolder) before or during the redesign, not after — otherwise the redesign PR is one giant diff with no reviewable seams. |
-| Picker UI (Analyzer) | Build against **fixtures**, not the live route. New `apps/web/src/lib/picker-fixtures.ts` exporting stub data typed as `z.infer<typeof contracts.picker.candidatesResponse>` (import the Zod schema from `@morai/contracts` even though the HTTP call isn't wired yet — this is what makes "contract-first" real instead of aspirational: the fixture can't drift from the eventual response because it's typed against the same schema). |
+packages/adapters/src/
+├── postgres/repos/exit-verdicts.ts         # NEW repo + contract test
+├── postgres/migrations/00NN_exit_verdicts.sql
+└── memory/exit-verdicts.ts                 # NEW twin (architecture rule 8)
 
-**Why UI-first-with-fixtures is the right call here (not just the user's stated preference):**
-the picker engine's two open decisions (DTE range as filter vs. fixed rule; delta-target strike
-enumeration) are UX-shaping — they determine what filter controls the ranked-cards rail needs.
-Building the UI against a contracts-typed fixture first lets those UX questions get resolved by
-looking at the mockup (`mockups/playground-v4.html`) before the engine's enumeration logic is
-locked in, without the UI work blocking on — or being blocked by — engine work. When the engine
-lands (Feature 1+3), swapping the fixture import for a real `hc<ApiType>()` call is a one-line
-change per the existing Hono RPC pattern.
+apps/server/src/adapters/{http,mcp}/exits.* # NEW route + MCP tool (architecture rule 9)
+```
 
-### 5. Scenario-engine IV calibration fix
+### Structure Rationale
 
-| Aspect | Decision |
-|---|---|
-| Owning layer | **`packages/quant`** (the pure-leaf, not `apps/web` and not `packages/core`) |
-| New vs modified | Extend `@morai/quant` (currently only exports `bsmPrice`/`bsmGreeks`/`bsmVega`) with an IV-inversion export; modify `apps/web/src/lib/scenario-engine.ts` to call it. |
-| Why not fix it inline in scenario-engine.ts | `apps/web` cannot import `packages/core` (dependency law: `web → contracts only`, softened once already for `@morai/quant` — never for `core`). The equivalent algorithm already exists server-side as `invertIv` in `packages/core/src/journal/domain/iv-inversion.ts` (Newton-Raphson + bisection fallback). Two independently-maintained bisection solvers for the same math is exactly the class of drift D21 was created to prevent. |
-| Precedent | This is a **repeat of D21**, not a new pattern: D21 moved `bsm.ts` out of `core/journal/domain/` down into `@morai/quant`, leaving a re-export shim in core so no call site changed (confirmed live in the codebase today: `core/journal/domain/bsm.ts` is exactly that shim). Do the same with `invertIv` — move it to `quant/src/iv-inversion.ts`, leave `core/journal/domain/iv-inversion.ts` as a shim re-exporting from `@morai/quant`, then `scenario-engine.ts` imports the real thing from `@morai/quant` directly. |
-| Docs-first requirement | `stack-decisions.md` gets a new decision entry (next available, e.g. D24) documenting this extraction BEFORE the move, per the "docs before architecture changes" rule — same as D21's own entry. |
+- **`exits/` is its own context, not a folder inside `picker` or `journal`.** By data-gravity the
+  exit advisor's inputs are ~80% journal-owned (the position, entry debit, current mark, and the
+  P&L already computed into `calendar_snapshots.pnl_open`). The two remaining inputs (GEX, events)
+  are already read cross-context by `analytics`/`picker` — so pulling them from `exits` is the
+  established pattern, not new machinery. But putting exit logic *inside* journal would contaminate
+  the "rebuilt from fills, never hand-edited" source-of-truth context with advisory opinion;
+  putting it inside picker would bolt a real-position concept onto a context whose entire identity
+  is scoring a *hypothetical* entry universe (no calendar id, no entry debit). A separate
+  derived-read context — exactly what `analytics` already is — is the clean seam. It also gives the
+  backtest two parallel pure-domain replays (picker entry + exits exit) instead of a replay that
+  straddles picker-domain and journal-domain.
+- **`backtest/` carries only pure math; orchestration lives in the CLI.** The backtest is a
+  cross-context *analysis* — it replays `picker` + `exits` domains and joins to `journal` realized
+  P&L. A core module may not import another context's `domain/`, so the join cannot live inside a
+  core context. The `apps/worker` CLI *is* a composition root — apps may import every context's
+  public `index.ts` — so the cross-context orchestration legally lives there. Only the reusable,
+  testable numeric kernel (predictive power) sits in core, where the tdd rule can demand fast-check
+  coverage of it.
 
-### 6. Live-stream stall watchdog
+## Architectural Patterns
 
-| Aspect | Decision |
-|---|---|
-| Owning layer | Driving adapter only — `apps/server` (SSE fan-out) + `apps/web` (stream hook). **No core/domain change required.** |
-| New vs modified | Modify the existing SSE route in `apps/server/src/adapters/http/` (add a periodic heartbeat) and the existing client stream hook in `apps/web` (add a staleness timer). No new port — `apps/server`'s fan-out registry already owns the `Set<SSEStreamingApi>` and coalescer state; a heartbeat is additive to that same loop. |
-| Root-cause framing | The existing STRM-05 "stale" badge only fires on a hard disconnect (`EventSource` `onerror`/close). The known gap ("badge lies LIVE") is a **silent stall**: the connection stays open but the sidecar/Schwab feed stops producing ticks. A hard-disconnect check cannot detect that — a heartbeat can. |
-| Recommended shape | Server emits a periodic SSE heartbeat event (e.g. every 5s, piggybacking on the existing 1s coalescer flush interval — no new timer, just an event type) independent of whether real ticks arrived. Client tracks `lastEventAt` (tick OR heartbeat) and flips to a `stalled` UI state if `now − lastEventAt > threshold` while `readyState === OPEN`. This is the standard SSE liveness pattern — cheaper and more precise than a client-only "haven't gotten data in N seconds" guess, because it distinguishes "market is quiet" (ticks stop, heartbeats keep flowing) from "pipe is dead" (both stop). |
-| Where NOT to put it | Do not push this into `packages/core/src/streaming/` as a "port." Liveness/heartbeat is transport plumbing (SSE-specific), not domain logic — it has no meaning outside the wire protocol, unlike `recomputeLiveGreek` which is genuinely pure math. Keep the hexagon out of it. |
+### Pattern 1: Pure-domain replay (the backtest's whole reason to be cheap)
 
-### 7. Event-triggered supplemental snapshot job
+**What:** The entry rules are already pure functions. `computePickerSnapshot.ts` (the use-case)
+does all the I/O through ports; `selectCandidates` + `scoreCalendarCandidates` (the domain) take
+data in and return results with zero I/O. The backtest reuses the *domain* untouched and swaps the
+*I/O source* from "latest cohort" to "every historical cohort."
 
-| Aspect | Decision |
-|---|---|
-| Owning layer | Driving adapter (`apps/server`'s stream handler) triggers; **existing** `snapshotCalendars` use-case (journal context) executes. |
-| New vs modified | Modify `apps/server`'s ACCT_ACTIVITY handling to additionally call the existing `ForEnqueueingJob` port; modify `snapshotCalendars.ts` use-case to accept an optional `calendarId` for a single-calendar out-of-cycle run (vs. the full RTH-cycle scan). No new port — `ForEnqueueingJob` already exists (`journal/application/ports.ts`) and is already wired for `trigger_job`/rebuild-journal. |
-| New tables | None. Writes land in the same `calendar_snapshots` table through the same idempotent path. |
-| Data flow | Sidecar `ACCT_ACTIVITY` event → server reconciles positions (existing flow) → if the reconcile reveals a fill/position change on an open calendar → `enqueueJob('snapshot-calendars', { calendarId }, dedupeKey)` → worker picks it up → normal `snapshotCalendars` path (fetch chain → compute → persist) → chain-triggers `compute-analytics` exactly as it already does |
-| Dedupe key | Must NOT collide with the cron's `snapshot-calendars:{windowStart}` key (`jobs.md`'s existing pattern). Use a distinct namespace, e.g. `snapshot-calendars:event:{calendarId}:{minuteBucket}`, so a burst of fills in the same minute produces one supplemental run, not N. |
+**When to use:** Any time you need to run production decision logic over history. Build the exit
+rules the same way — `evaluateExit(position, context)` pure — so the backtest treats exits
+identically.
 
-### 8. Strategy-rules engine (L4)
+**Trade-offs:** Requires discipline that the loop touches no ports (all data pre-loaded). Pays for
+itself: zero rule duplication, and any rule change is automatically reflected in the backtest.
 
-| Aspect | Decision |
-|---|---|
-| Owning layer | **New bounded context** `packages/core/src/strategy-rules/` |
-| New vs modified | Entirely NEW. `calendars.entry_thesis` (already exists, D-07, nullable) becomes the attach point when an OPEN is associated with a rule that fired. |
-| New ports | `ForStoringRule`, `ForListingRules`, `ForStoringRuleFiring`, `ForReadingRuleFirings` |
-| New tables | `strategy_rules` (id, name, rule_type: enter\|exit\|roll, condition_json, active, created_at) and `rule_firings` (id, rule_id FK, calendar_id FK, fired_at, calendar_event_id FK NULL — links to the `calendar_events` row it corresponds to) |
-| Data flow | NEW chain-triggered job `evaluate-strategy-rules` (fires after `snapshot-calendars`, same pattern as `compute-analytics`) reads active rules + latest `calendar_snapshots` → pure `evaluateRule(rule, snapshotContext): boolean` in `strategy-rules/domain/` → on true, writes a `rule_firings` row |
-| Scope boundary — reaffirm at build time | PROJECT.md Out-of-Scope: "Live trade advice / regime scoring... Morai owns collected/historical data." A rule firing **records** that a condition became true — it must never auto-execute, auto-close, or push actionable "you should trade now" copy. This is the most speculative item in the milestone; scope it through its own discuss-phase before planning (rule condition DSL shape, whether firings surface as a passive log or a dashboard badge, how `entry_thesis` gets populated — operator-selected at OPEN time, or derived post-hoc from which rule's conditions matched). |
+```typescript
+// apps/worker/src/backtest.ts  (composition root — may import multiple contexts' public surfaces)
+import { selectCandidates, scoreCalendarCandidates } from "@morai/core"; // picker domain, unchanged
+import { evaluateExit } from "@morai/core";                              // exits domain, unchanged
 
-## New vs Modified — Summary Table
+// 1. I/O PHASE (adapters) — read everything once, outside the loop
+const cohorts = await readHistoricalCohorts();          // leg_observations grouped into 30-min slots
+const events  = await readEconomicEvents();
+const gexByCohort = await readHistoricalGex();
+const closed  = await readClosedCalendarsWithRealizedPnl(); // the 13 validated-oracle calendars
 
-| Component | New | Modified | Untouched |
-|---|---|---|---|
-| `packages/core/src/picker/` | ✓ (domain + application) | | |
-| `packages/core/src/economic-events/` | ✓ (domain + application) | | |
-| `packages/core/src/strategy-rules/` | ✓ (domain + application) | | |
-| `packages/core/src/journal/` (`snapshotCalendars.ts`) | | ✓ (optional `calendarId` param) | rest of journal context |
-| `packages/quant` | | ✓ (add IV-inversion export) | `bsmPrice`/`bsmGreeks`/`bsmVega` |
-| `packages/core/src/journal/domain/iv-inversion.ts` | | ✓ (becomes a re-export shim, D21-style) | |
-| `packages/adapters/src/http/` | ✓ (FOMC/BLS fetchers) | | schwab, cboe, fred, cot fetchers |
-| `packages/adapters/src/postgres/repos/` | ✓ (economic-events, strategy-rules) | | |
-| `packages/adapters/src/postgres/migrations/` | ✓ 0014 (economic_events), later 0015 (strategy_rules + rule_firings) | | |
-| `packages/adapters/src/memory/` | ✓ (twins for all new ports) | | |
-| `packages/contracts/src/picker.ts` | ✓ | | |
-| `packages/contracts/src/economic-events.ts` | ✓ (only if exposed as its own route; picker may be the sole consumer, in which case skip a standalone route and keep this internal to core) | | |
-| `apps/server/src/adapters/http/picker.routes.ts` | ✓ | | |
-| `apps/server/src/adapters/mcp/` | ✓ `get_picker_candidates` tool | | existing tools |
-| `apps/server` SSE route | | ✓ (heartbeat) | ticket auth, coalescer core loop |
-| `apps/server` ACCT_ACTIVITY handler | | ✓ (enqueue supplemental snapshot) | reconcile-on-connect flow |
-| `apps/worker` job registration | | ✓ (add `fetch-economic-events`, `evaluate-strategy-rules` to `TRACKED_JOBS`) | existing crons |
-| `apps/web/src/screens/Overview.tsx` | | ✓ (extract components, TOS-dock layout) | |
-| `apps/web/src/screens/Analyzer.tsx` | | ✓ (picker redesign) | |
-| `apps/web/src/components/Shell.tsx` | | ✓ (extract `MarketStrip`) | |
-| `apps/web/src/lib/scenario-engine.ts` | | ✓ (call `@morai/quant` IV solver) | |
-| `apps/web/src/lib/picker-fixtures.ts` | ✓ | | |
-| `calendars.entry_thesis` column | | (already exists, D-07 — becomes a real attach point) | |
+// 2. PURE REPLAY (domain) — no ports touched here
+for (const cohort of cohorts) {
+  const { candidates } = selectCandidates(cohort.chain, events, params);
+  const scored = scoreCalendarCandidates(candidates, gexByCohort.get(cohort.t) ?? null, params);
+  // ...and for any position open at cohort.t: evaluateExit(position, contextAt(cohort.t))
+}
 
-## Build Order (dependency-respecting, matches user-decided sequence)
+// 3. SCORE (backtest domain) — did high-scoring terms track realized P&L?
+const power = predictivePower(scored, closed);          // pure, fast-check tested
+```
 
-The user's stated order is right; here is the dependency reasoning underneath each step, so a
-future re-plan doesn't accidentally reorder something load-bearing.
+### Pattern 2: Derived-read context via application ports (exit advisor, following `analytics`)
 
-1. **Phase-15 image deploy** (server+worker+web). Hard prerequisite for everything else — v1.1's
-   T-24h re-auth alert isn't live in prod until this ships, and building v1.2 on top of a
-   pre-15 prod image means testing against a known-stale surface. Zero architectural coupling to
-   the rest of v1.2; it's purely "ship what's already merged."
+**What:** `exits` reads other contexts' *data* through its own `ForVerbingNoun` driven ports,
+re-declaring `StorageError` locally (journal/analytics/picker all do this today). It never imports
+`journal/domain` or `analytics/domain`.
 
-2. **Overview v2 (TOS dock) + scenario-engine IV calibration fix.** These two are independent of
-   each other but both independent of the picker work, so bundling them first is safe. The IV
-   fix should land as the `@morai/quant` extraction (Feature 5) — do the D21-style move (docs
-   entry → quant export → shim → scenario-engine call site) as ONE unit so `packages/core`'s
-   `invertIv` call sites never see a behavior change mid-flight. Component extraction from
-   `Overview.tsx`/`Shell.tsx` (Feature 4) should happen here too, even though Overview v2 doesn't
-   strictly need Analyzer's picker components — it establishes the "components are files, not
-   local functions" pattern the Analyzer redesign will lean on next.
+**When to use:** Every cross-context read in this milestone.
 
-3. **Analyzer → picker redesign, UI-first with fixtures.** This step has ONE real dependency
-   that must land first even though it's not "engine work": **`packages/contracts/src/picker.ts`
-   must exist before the fixtures do.** Write the Zod schema (candidate shape, score breakdown,
-   filter params) as the very first task of this step — even before any UI code — so
-   `picker-fixtures.ts` is typed against the real contract from day one instead of an ad-hoc
-   shape that gets "reconciled" later. Everything else in this step (ranked-cards rail, filter
-   controls, mockup fidelity to `playground-v4.html`) is pure `apps/web` work with zero backend
-   dependency, which is exactly why it can run before the engine exists.
+**Trade-offs:** Each new port needs a memory twin + Postgres repo + contract test in the same PR
+(architecture rule 8). That is the cost of the boundary and it is non-negotiable here.
 
-4. **Picker engine wires in** — `packages/core/src/picker/` + `packages/core/src/economic-events/`
-   + routes/MCP. Internal ordering within this step:
-   - Build `economic-events` context first (adapter + table + job) — it has no dependency on
-     `picker` and the picker's event-flag criteria (3 and 4) need it as an input, not the other
-     way around.
-   - Build `picker/domain/` scoring functions second, test them against the verified criteria
-     table with fixed inputs (no I/O needed yet) — this is where the REFUTED-criteria regression
-     assertions belong.
-   - Build `picker/application/buildScoredCandidates.ts` third, wiring in `ForFetchingChain`
-     (existing), `ForReadingEconomicEvents` (just built), the analytics context's GEX read
-     (existing), and `ForReadingRate` (existing).
-   - Wire the route + MCP tool last, then swap `apps/web`'s fixture import for the live
-     `hc<ApiType>()` call — this should be a small, low-risk diff precisely because step 3
-     already built the UI against the contract this step fulfills.
-   - Resolve the two open decisions (DTE range as user filter; delta-target strike enumeration)
-     as part of this step's discuss-phase — they were deliberately left open until the picker's
-     actual filter UI (built in step 3) existed to inform them.
+```typescript
+// packages/core/src/exits/application/ports.ts  — imports ONLY @morai/shared
+export type StorageError = { readonly kind: "storage-error"; readonly message: string };
 
-5. **Tail: stall watchdog → event-triggered snapshot → strategy-rules (L4).** Ordered by
-   independence and risk, cheapest/most-isolated first:
-   - **Watchdog** first — pure `apps/server` + `apps/web` transport work, no core changes, no
-     new tables, fully independent of the picker.
-   - **Event-triggered snapshot** second — touches the same ACCT_ACTIVITY handler the watchdog
-     work will have just been sitting next to, so doing it right after keeps that file's context
-     warm, and it reuses `ForEnqueueingJob` (no new port work).
-   - **Strategy-rules (L4)** last — the newest bounded context, the most open scope questions
-     (rule DSL, firing-vs-execution boundary), and the one most likely to need its own
-     discuss-phase before planning. Nothing else in the milestone depends on it landing.
+// Position + its current mark/greeks/P&L — sourced from journal's latest calendar_snapshot + calendar row
+export type ForReadingHeldPositions = () => Promise<Result<ReadonlyArray<HeldPosition>, StorageError>>;
+// GEX context for the GAMMA trigger — mirror picker's GexContextForPicker shape (no cross-context import)
+export type ForReadingGexContext = () => Promise<Result<GexContextForExits | null, StorageError>>;
+export type ForReadingEconomicEvents = () => Promise<Result<ReadonlyArray<EconomicEvent>, StorageError>>;
+export type ForPersistingExitVerdicts = (row: ExitVerdictRow) => Promise<Result<void, StorageError>>;
+```
 
-## Anti-Patterns to Avoid
+### Pattern 3: Cohort-clock idempotency (verdict persistence copies `picker_snapshot`)
 
-### Anti-Pattern: persisting picker scores "for consistency with the journal pattern"
+**What:** The verdict row's `observed_at` is the **chain cohort's own quote time**, never `now()`.
+Insert is `onConflictDoNothing` on the PK. A same-cohort re-trigger (observedAt does not advance)
+is a silent no-op instead of PK-violating the terminal job into a retry loop — the exact WR-01
+lesson the `picker_snapshot` repo already documents.
 
-**What people do:** because `calendar_snapshots` and the analytics tables are all
-append-only-observation, it's tempting to give picker candidates the same treatment — a
-`picker_candidates` observation table written on some cadence.
-**Why it's wrong:** the picker is a live, on-demand query over a moving chain — there is no
-"the candidate set as of 30 minutes ago" that matters the way a journal snapshot does. Persisting
-it adds a write path, a staleness problem, and a migration for zero product value at this stage.
-**Do this instead:** compute on request; revisit ONLY if/when the Vasquez-slope backtest (Open
-Question #2) needs historical candidate scores to validate against, and even then that is a
-separate analytics job over `leg_observations`, not the live picker path.
+**When to use:** The `exit_verdicts` writer.
 
-### Anti-Pattern: reusing `packages/core`'s `invertIv` directly from `apps/web`
+**Trade-offs:** First-write-wins means an in-cohort correction won't overwrite — correct for
+append-only history, and consistent with how every derived table in this repo already behaves.
 
-**What people do:** "the algorithm already exists, just import it" — reaching across the
-`web → core` boundary because it's the path of least resistance for a bug fix.
-**Why it's wrong:** it is a hard dependency-law violation (`architecture-boundaries.md` rule 1)
-and the ESLint boundary config will catch it (correctly) — the fix would arrive already broken
-by design, or worse, get merged with an `eslint-disable` (explicitly forbidden).
-**Do this instead:** the D21-pattern move into `@morai/quant` (Feature 5 above).
+```sql
+CREATE TABLE "exit_verdicts" (
+  "observed_at" timestamptz NOT NULL,   -- the cohort clock (same instant the picker cycle used)
+  "calendar_id" text        NOT NULL,
+  "verdict"     jsonb        NOT NULL,   -- validated by a contracts Zod schema before insert
+  PRIMARY KEY ("observed_at", "calendar_id")
+);
+-- insert: ON CONFLICT (observed_at, calendar_id) DO NOTHING  -- first-write-wins (WR-01), append-only
+```
 
-### Anti-Pattern: giving the events fetcher its own bounded-context ports file bolted onto `journal`
+## Data Flow
 
-**What people do:** COT and macro-FRED ports both got appended directly into
-`journal/application/ports.ts` (existing precedent in this codebase) even though neither is
-journal-specific. It would be easy to do the same for economic events "since that's how COT/FRED
-did it."
-**Why it's wrong here specifically:** COT/FRED are read by journal/analytics use-cases that
-already lived in that file, so the append was low-friction at the time. Economic events are read
-ONLY by the new `picker` context — there's no journal use-case that needs them. Piling a fourth
-unrelated vendor's ports onto an already-large `journal/application/ports.ts` makes that file
-the de facto "everything" ports dump, which is the opposite of the bounded-context intent.
-**Do this instead:** give economic-events its own context directory (Feature 2) — it is a new
-enough concern, with a new enough table, that it earns the standard shape.
+### Exit-advice flow (runs each picker cycle)
+
+```
+fetch-schwab-chain → compute-bsm-greeks → snapshot-calendars → compute-analytics
+     → compute-gex-snapshot → compute-picker → compute-exit-advice  (NEW terminal)
+                                                       │
+   reads (all already written this cycle):            │
+     journal:   open calendars (openNetDebit, qty, front/back expiry, strike)
+                + latest calendar_snapshots row per calendar (netMark, pnlOpen,
+                  front/back IV, term_slope, net greeks, dteFront/dteBack, spot)
+     analytics: latest gex_snapshot (flip, callWall, putWall, nearTerm)   → GAMMA trigger
+     picker:    economic_events (FOMC/CPI/NFP)                             → EVT trigger
+                                                       ▼
+             evaluateExit(position, marketContext) per open calendar → ExitVerdict
+                                                       ▼
+             persist exit_verdicts (observed_at = cohort clock, first-write-wins)
+```
+
+**Why append after `compute-picker` (not parallel):** exit advice depends on `calendar_snapshots`
+(from `snapshot-calendars`), `gex_snapshots`, and `economic_events` — **not** on picker's output.
+It could run in parallel after `compute-gex-snapshot`. But the docs emphasise a single-trigger
+linear chain (`fetch → bsm → snapshot → analytics → gex → picker`), so the lazy-correct move is:
+`compute-picker` chain-enqueues `compute-exit-advice` as the new terminal job. Small latency cost,
+preserves the invariant. Parallelize only if latency ever matters.
+
+**Why no live leg re-resolve:** the latest `calendar_snapshots` row already carries `netMark`,
+`pnlOpen`, front/back IV, `term_slope`, net greeks, and DTEs — everything the take/stop/TERM/
+theta-runway rules need, computed and persisted one step earlier the *same* cycle by
+`snapshot-calendars`. P&L% is just `(netMark − openNetDebit) / openNetDebit` (numerator on the
+snapshot, denominator on the `Calendar` row). The advisor is a pure read over data that already
+exists; it never calls Schwab/CBOE. That is why a new `ForReadingLatestSnapshotPerOpenCalendar`
+journal port (snapshot row + `openNetDebit`/`qty` per open calendar) is the single new read the
+exit advisor needs — not a live-chain resolver.
+
+### Read flow (UI + MCP)
+
+```
+Analyzer held-positions panel  ─GET /api/exits→  getExitAdvice use-case
+Claude Code  ─MCP get_exit_advice→               → read latest exit_verdicts per open calendar
+                                                 → return verdict + triggered rules + P&L%
+```
+
+### VIX3M flow
+
+```
+fetch-rates (18:30 ET run) → fetchMacroSeries → FRED "VIXCLS3M" → macro_observations
+   (one array entry; existing best-effort-per-series + (series_id,date) upsert unchanged)
+        │
+        └─ later: NEW macro→picker read port surfaces VIX + VIX3M to the crisis gates
+           (VIX < 25 hard gate, VIX/VIX3M < 0.95 contango gate — the deferred picker-rules.md rows)
+```
+
+## Scaling Considerations
+
+| Scale | Adjustments |
+|-------|-------------|
+| Today (1 trader, ~a dozen open calendars, chain since 2026-06-12) | Everything as described. Exit advice is a handful of pure evaluations per cycle; trivial. |
+| Backtest over full `leg_observations` history | The only heavy read. Stream cohorts (don't load all rows at once) and hold the pre-loaded per-cohort context. This is exactly why it is a CLI, not a 900s-capped pg-boss handler. |
+| More rules / longer history | Registry-driven scoring stays O(candidates × rules); backtest stays O(cohorts × candidates). No architectural change until history is years long. |
+
+### Scaling Priorities
+
+1. **First bottleneck: the backtest's history read**, not the compute. Chunk `leg_observations` by
+   cohort and reuse the picker-chain cohort semantics (10-min lookback union, `DISTINCT ON
+   (contract)` newest-wins) so one logical dual-source cycle isn't split or double-counted. Mirror
+   `readLegObsForGex` / `picker-chain.ts` exactly.
+2. **Second bottleneck: none realistic at this user count.** Do NOT build result-persistence
+   infrastructure for the backtest until the "promote/demote weights with evidence" workflow
+   actually needs stored runs. v1 emits a report to stdout/file.
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Extending `picker_snapshot` to hold exit verdicts
+
+**What people do:** Add a `verdicts[]` field to the picker snapshot blob "since it runs the same
+cycle."
+**Why it's wrong:** Different grain (per-calendar vs per-universe), different lifecycle (tied to
+open positions vs the entry scan), and it couples the exit read path to picker's write path and
+conflates two contexts in one row.
+**Do this instead:** Own table `exit_verdicts` keyed `(observed_at, calendar_id)`, same idempotency
+convention.
+
+### Anti-Pattern 2: Reimplementing rule math in the backtest
+
+**What people do:** Write a "backtest version" of the scoring so it can run over history.
+**Why it's wrong:** Two sources of truth for the rules; they drift; the backtest then validates
+something the live engine doesn't do.
+**Do this instead:** Import and call the exact `selectCandidates` / `scoreCalendarCandidates` /
+`evaluateExit`. They are already pure — feed them historical data. If a rule is *not* pure enough
+to replay, that is a bug in the rule; fix it there.
+
+### Anti-Pattern 3: Putting exit logic inside `journal`
+
+**What people do:** "Journal owns the position, so put the advisor there."
+**Why it's wrong:** Journal is the fills-source-of-truth context — "rebuilt from broker fills,
+never hand-edited." Advisory logic that reads GEX/events and emits opinions does not belong in the
+context whose discipline is *record only what actually happened*.
+**Do this instead:** A separate derived-read `exits` context, reading journal position data through
+a port — the same way `analytics` reads journal.
+
+### Anti-Pattern 4: Running the backtest as a pg-boss job or server route
+
+**What people do:** Reach for the job runner because "it's the worker."
+**Why it's wrong:** No cadence, and the 900s handler cap (already a live hazard for the BSM drain)
+throttles a full-history scan; a server route ties a long batch analysis to a request.
+**Do this instead:** Operator CLI (`railway run bun run apps/worker/src/backtest.ts`) — the
+`fix-pnl-reingest.ts` / `backfill-transactions.ts` precedent.
+
+### Anti-Pattern 5: Deferring VIX3M ingestion until the gates are built
+
+**What people do:** Bundle VIX3M into the playbook-port phase since that phase is what consumes it.
+**Why it's wrong:** `macro_observations` persists only the latest value per day with **no
+backfill** — every day without ingestion is permanently lost VIX3M history, and the crisis gates
+plus their backtest both need history.
+**Do this instead:** Land the one-line `VIXCLS3M` addition first, before its consumers exist, so
+history starts accreting immediately.
+
+## Integration Points
+
+### New vs modified — explicit inventory
+
+| Item | New / Modified | Where |
+|------|----------------|-------|
+| `exits` bounded context (domain registry, evaluate-exit, types, use-case, ports) | NEW | `packages/core/src/exits/` |
+| `ForReadingLatestSnapshotPerOpenCalendar` (latest snapshot + openNetDebit/qty per open calendar) | NEW journal port | `journal/application/ports.ts` (+ memory twin + postgres repo + contract test) |
+| `exit_verdicts` table + Postgres repo + memory twin + contract test | NEW | `packages/adapters/src/{postgres,memory}` + migration |
+| `compute-exit-advice` pg-boss handler | NEW | `apps/worker/src/handlers/` |
+| `compute-picker` handler → enqueue `compute-exit-advice` on success | MODIFIED (currently terminal) | `apps/worker/src/handlers/compute-picker.ts` + `schedule.ts` queue registration |
+| `GET /api/exits` route + `get_exit_advice` MCP tool | NEW (architecture rule 9, same PR) | `apps/server/src/adapters/{http,mcp}/` |
+| Exit-verdict + held-position Zod schemas | NEW | `packages/contracts/` |
+| `backtest.ts` operator CLI | NEW | `apps/worker/src/` |
+| `backtest` predictive-power domain (pure, fast-check tested) | NEW | `packages/core/src/backtest/domain/` |
+| `VIXCLS3M` added to FRED series list | MODIFIED (one array entry) | `journal/application/fetchMacroSeries.ts` |
+| macro→picker read port for VIX/VIX3M (crisis gates) | NEW (playbook-port phase) | picker application ports (+ twin + repo) |
+
+### Internal boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| `exits` ← `journal` | Application port (`ForReadingHeldPositions`) | Reads open calendars + latest snapshot; never imports `journal/domain` |
+| `exits` ← `analytics` | Application port (`ForReadingGexContext`) | Re-declare a local `GexContextForExits` type, as picker did — no cross-context import |
+| `exits` ← `picker` (events) | Application port (`ForReadingEconomicEvents`) | `economic_events` is picker-owned; read its data, not its domain |
+| `backtest.ts` → picker/exits/journal | Public `index.ts` imports | Legal only because the CLI is a composition root (apps may import all contexts) |
+| `compute-exit-advice` → use-case | Thin handler | Zod-guard → call use-case → throw on err. Zero business logic (architecture rule 3) |
+
+### Suggested build order (with dependency rationale)
+
+The milestone's stated order (PROJECT.md) is: exit advisor → backtest → playbook port. This
+refines it by splitting the *cheap VIX3M ingestion* out of the playbook phase and moving it to the
+front, for the no-backfill data-accretion reason.
+
+1. **VIX3M ingestion** — one entry in `FRED_SERIES` (`fetchMacroSeries.ts`). No dependency; do it
+   *first* so `VIXCLS3M` starts landing in `macro_observations` immediately (no backfill exists).
+   Ships in an afternoon.
+2. **Exit advisor** — the milestone headline. Depends only on data that already flows
+   (`calendar_snapshots`, GEX, events). Delivers the exit rules the backtest needs. Build
+   inward-out: domain registry (fast-check tested) → use-case + ports → table/repo/twin → wire into
+   the chain → route + MCP + Analyzer held-positions panel.
+3. **Backtest** — depends on **both** the entry domain (exists) and the exit domain (feature 2) so
+   it can validate both. CLI + pure predictive-power kernel. Produces the evidence to promote
+   experimental picker rules to scored (the PICK-04 gate `picker-rules.md` already references) and
+   to weight the exit ladder.
+4. **Playbook crisis gates** — the VIX < 25 / VIX/VIX3M < 0.95 gates + anti-criteria + sizing tiers
+   + event-bucket. Land last: they consume the VIX3M history accumulating since step 1, and are
+   best informed by step 3's backtest evidence. This is where the picker-rules.md deferred gates
+   (and the new macro→picker read port) land.
 
 ## Sources
 
-- `docs/architecture/overview.md`, `hexagonal-ddd.md`, `data-model.md`, `jobs.md`,
-  `api-design.md`, `mcp-and-plugins.md`, `streaming-fanout.md`, `stack-decisions.md` (D21) —
-  read directly, 2026-07-03.
-- `packages/core/src/{journal,analytics,brokerage,streaming}/**` — directory shape and existing
-  port conventions, read directly.
-- `packages/quant/src/**`, `packages/core/src/journal/domain/{bsm,iv-inversion}.ts` — confirmed
-  the D21 shim pattern and located the un-migrated `invertIv`.
-- `apps/web/src/{screens/Overview.tsx,screens/Analyzer.tsx,components/Shell.tsx,lib/scenario-engine.ts}`
-  — confirmed local-function extraction candidates and the existing `@morai/quant` import
-  precedent in web.
-- `.planning/research/calendar-selection-criteria.md`, `.planning/PROJECT.md` — verified
-  scoring criteria and milestone scope/sequencing constraints.
+- `packages/core/src/picker/{domain,application}/*` — pure `selectCandidates`/`scoreCalendarCandidates`
+  vs thin `computePickerSnapshot` orchestration (the replay-reuse basis) — HIGH
+- `packages/adapters/src/postgres/repos/picker-snapshot.ts` + `picker-chain.ts` +
+  `migrations/0015_picker_snapshot.sql` — append-only `onConflictDoNothing` cohort-clock
+  idempotency (WR-01) and the cohort-union read semantics the backtest must mirror — HIGH
+- `packages/core/src/journal/application/{ports.ts,snapshotCalendars.ts,getCalendarLifecycle.ts}` —
+  open-calendar reads, `pnl_open`/`computeSnapshotPnl`, latest-snapshot semantics, the `Calendar`
+  entity — HIGH
+- `packages/core/src/journal/application/fetchMacroSeries.ts` — FRED series list (VIXCLS present,
+  VIXCLS3M absent), best-effort-per-series + `(series_id,date)` upsert, no backfill — HIGH
+- `apps/worker/src/{fix-pnl-reingest.ts,backfill-transactions.ts,handlers/compute-picker.ts}` —
+  operator-CLI precedent + terminal chain-trigger pattern (compute-picker is currently terminal) — HIGH
+- `docs/architecture/{hexagonal-ddd.md,jobs.md,picker-rules.md}`, `.claude/rules/architecture-boundaries.md` —
+  cross-context-via-ports, memory-twin (rule 8), route+MCP-same-PR (rule 9), analytics-reads-journal
+  precedent, deferred VIX gates — HIGH
 
 ---
-*Architecture research for: v1.2 Trade Picker & Dashboard Redesign integration*
-*Researched: 2026-07-03*
+*Architecture research for: v1.3 Picker Intelligence — exit advisor + backtest + VIX3M integration*
+*Researched: 2026-07-09*

@@ -1,200 +1,265 @@
-# Feature Research — v1.2 Trade Picker & Dashboard Redesign
+# Feature Research — v1.3 Picker Intelligence
 
-**Domain:** Single-user, self-hosted options-trading dashboard — candidate scanner/screener,
-economic-event calendar, trade-rules engine, stream-health watchdog, event-triggered capture
-**Researched:** 2026-07-03
-**Confidence:** MEDIUM-HIGH (comparable-tool behavior well documented; single-user scope is a
-judgment call, not sourced)
+**Domain:** Single-user, self-hosted SPX calendar-spread trading system — held-position exit
+advisor, options-strategy backtest harness, and a personal-playbook rule port. Extends an
+existing entry picker (9-rule weighted registry), validated journal P&L, GEX/greeks/term-structure
+analytics, and an MCP surface.
+**Researched:** 2026-07-08
+**Confidence:** MEDIUM-HIGH (exit-management and backtest-honesty norms are well-sourced and
+cross-checked; the specific rule thresholds are the user's own already-validated playbook, not
+re-derived here. This file supersedes the prior v1.2 FEATURES.md, which is archived with v1.2
+milestone research.)
 
-This file covers ONLY the five NEW v1.2 feature areas. Existing shipped features (journal,
-live greeks, GEX/skew analytics, COT/FRED cards, MCP surface) are out of scope — see
-`.planning/PROJECT.md` for what's already built. Scoring criteria themselves are NOT
-re-researched here — see `.planning/research/calendar-selection-criteria.md` (already
-adversarially verified; do not re-derive). This file supersedes the prior (v1.1) FEATURES.md,
-archived alongside other v1.1 milestone research.
+This file covers ONLY the three NEW v1.3 feature areas. Existing shipped features (entry picker,
+journal, live greeks, GEX/skew, COT/FRED, economic events, MCP) are out of scope — see
+`.planning/PROJECT.md`. Entry scoring criteria are NOT re-researched — see
+`docs/architecture/picker-rules.md` (already adversarially verified) and
+`.planning/research/calendar-selection-criteria.md`.
 
-## Comparable Tools Surveyed
+## The One Thing That Reframes Everything: Sample Size
 
-| Tool | What it is | Relevant to |
-|------|-----------|-------------|
-| thinkorswim Analyze tab + Spread Hacker/Option Hacker | Retail standard for options analysis; on-demand scan over a symbol universe against user filters, then Analyze-tab payoff/greeks drill-down | Candidate scanner UX |
-| OptionNet Explorer (ONE) | Desktop backtester + live paper/real trade log; custom filters (`Underlying = SPX and PnL > 0`), grouping by DTE, trade log with tags | Rules/checklist tagging pattern (not live scanning — batch/backtest tool) |
-| OptionStrat | Web-based strategy builder/scanner; payoff-first UI, one-click strategy comparison | Payoff-first candidate card layout (mockup precedent already chosen: playground-v4 variant B) |
-| SpotGamma | GEX/dealer-positioning dashboard; already Morai's primary GEX source | GEX regime display conventions (already adopted); forward-IV framing (criterion 1) |
-| ForexFactory economic calendar | The de facto standard economic-event calendar UI | Event-impact color coding, proximity-to-event display |
-| Edgewonk / Tradervue | Retail trade journals; checklist-per-setup, rule-adherence-over-time reporting (Edgewonk "Tiltmeter") | Rule-fired logging + post-trade review pattern |
-| TradingView / general trading dashboards | Stale-data visual conventions (yellow "delayed" badge), heartbeat-based feed-health detection | Stream watchdog UX + stall-detection thresholds |
+Read this before the feature tables. It changes what the backtest feature is *allowed to be*.
+
+The corpus is **13 validated closed calendars + ~1 month of stored chains** (`leg_observations`
+since 2026-06-12). The statistical floors for a trading backtest (Bailey & López de Prado,
+cross-checked against the standard literature) are:
+
+- **~30 trades** — the bare statistical floor for any significance at all.
+- **~100 trades** — basic reliability of aggregate metrics (win rate, P&L/day).
+- **200–500 trades** — institutional confidence.
+- And trade count alone is not enough: **500 trades in one regime is weaker than 100 across
+  several.** One month of 2026-06/07 chains is a **single volatility regime.**
+
+13 trades is **less than half the bare floor, inside one regime.** The consequences are hard
+constraints on Feature 2, not soft cautions:
+
+- **Per-rule weight OPTIMIZATION is impossible honestly.** 9 scored rules against 13 outcomes
+  is more knobs than data — the definition of overfitting. The Probability of Backtest
+  Overfitting is near-certain at this ratio; a Deflated Sharpe Ratio would deflate any headline
+  number to nothing.
+- **Parameter search (delta band, DTE window, thresholds) is worse** — continuous knobs fit to
+  13 points give a perfect in-sample curve with zero out-of-sample meaning.
+- **What IS honest:** deterministic replay with no lookahead, reproducing the 13 known
+  outcomes as a *mechanics* check, and *directional* per-rule attribution flagged with its
+  sample size. Never a re-weighting.
+
+Every number the backtest emits must carry `n=13` and its date range. This constraint is woven
+into the tables below and is the single most important thing the roadmap must respect. Confidence:
+MEDIUM-HIGH (statistical consensus, multiple sources).
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
+Features the trader assumes exist. Missing = the feature feels broken or dishonest.
+
+**Exit Advisor**
+
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Ranked candidate list, sorted by composite score | Every screener tool (TOS Spread Hacker, OptionStrat) leads with a sortable ranked list — a scanner that just dumps a filtered table with no rank feels unfinished | LOW | Sort by `scoreCalendarCandidates` composite; ties broken by criterion #1 (FwdIV edge) |
-| Per-candidate score breakdown ("why-panel") | TOS shows the filter criteria that matched; Edgewonk shows checklist-item-by-item pass/fail. Users distrust a single opaque number | MEDIUM | Already the mockup decision (playground-v4 variant B, why-panel). Map 1:1 to the 8 criteria rows in calendar-selection-criteria.md |
-| Visible "as of" timestamp on chain data | TradingView's delayed-data badge is the industry pattern; SpotGamma timestamps every GEX snapshot | LOW | Picker reads the 30-min REST chain snapshot (full-chain streaming is explicitly out of scope per PROJECT.md) — timestamp = chain snapshot time, not "now" |
-| Staleness indicator distinct from "no data" | Feed-health literature treats stale ≠ absent — a frozen-but-present value is more dangerous than a visible gap | LOW-MEDIUM | Applies to picker (chain snapshot age) AND stream watchdog (tick heartbeat age) — same visual language, two data sources |
-| Payoff diagram per candidate, one click away | Universal across OptionStrat, TOS Analyze tab, ONE — payoff curve is the trust-building artifact before sizing a trade | MEDIUM | Already shipped BSM engine; UI work is "payoff compare" per milestone scope, not new math |
-| Filter by DTE range and strike/delta target | TOS Spread Hacker's core UX is filter-first; CML TradeMachine's (delta, front DTE, back DTE) tuple matches Morai's user constraint shape exactly | LOW | Matches open discuss-phase decision noted in PROJECT.md (DTE as user filter, strike by delta target) |
-| Economic event flag per candidate leg | Criterion 3/4 in calendar-selection-criteria.md requires this; every options-analysis tool that discusses calendars (SpotGamma, tastytrade content) calls out earnings/FOMC proximity as baseline due diligence | MEDIUM | New adapter — no existing feed. FOMC is static/yearly; CPI/NFP are monthly BLS releases |
-| Event proximity shown as a simple day-count or icon, not raw JSON | ForexFactory's color-badge-plus-date convention is the readable baseline | LOW | Red/flagged if a leg's expiry window spans the event window; otherwise clean |
-| Stream connection state visible as a UI badge (LIVE / STALE / DISCONNECTED) | TradingView-style feed-health badges are standard; Morai's own phase-12 audit flagged "badge lies LIVE" as an open gap — this is closing known debt, not speculative scope | LOW-MEDIUM | Backend: heartbeat/last-tick timestamp already exists in SSE payload; badge is mostly a UI-state-machine problem |
-| Rule tag recorded at entry (which rule fired) | Edgewonk's checklist-per-setup and OptionNet Explorer's trade-log tags are the baseline pattern in every serious trade journal | LOW | Attach point already decided: `entry_thesis` field (D-07). Structured enum/tag, not free text |
+| Live P&L per open calendar (% of debit + $) | Every exit decision anchors on "where am I vs entry?" A verdict with no P&L is meaningless | LOW | Journal P&L fill-ledger already computes this (validated vs real-txn oracle, 13 calendars). Reuse, don't recompute |
+| One clear verdict per position (HOLD/TAKE/STOP/ROLL/EXIT-pre-event) | Retail norm (tastytrade, tos): exit is an action verb attached to the position, not a metric dump | MEDIUM | New exit rule registry mirroring `packages/core/src/picker/domain/rules.ts`. One recommended action, always |
+| The "why" — which rule fired + its raw metric | Entry picker already renders its methodology table from the engine; user expects symmetry on exits | LOW-MEDIUM | Ship the exit `ruleSet` to the UI exactly like `pickerSnapshotResponse.ruleSet` |
+| Front DTE + time/gamma context | 21-DTE / terminal-gamma discipline is universal exit canon; drives GAMMA and ROLL triggers | LOW | Front DTE already on live greeks |
+| Spot-vs-strike distance | GAMMA trigger (spot >2% off strike & front <7 DTE) | LOW | Spot + strike already present |
+| Event proximity to front expiry | EVT trigger (tier-1 event ≤3d before front); entry already stamps `exitPlan.closeByExpiry` | LOW | `economic_events` adapter + the exitPlan stamp are the handoff contract |
+
+**Backtest Harness (PICK-04)**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Deterministic replay loop (chain@T → engine → walk forward → exit verdict → realized P&L) | This IS a backtest; anything less is a spreadsheet | MEDIUM-HIGH | Call the SAME `scoreCalendarCandidates` + exit registry — never re-implement the rules |
+| Point-in-time correctness (no lookahead) | The #1 backtest bug; lookahead gives false confidence — worse than no backtest | MEDIUM-HIGH | `leg_observations` is timestamped; filter to as-of ≤T. Chronological replay IS walk-forward by construction |
+| Mechanics validation vs the 13-trade oracle | The 13 closed calendars have validated real-fill P&L; the harness must reproduce their direction/rough magnitude or it's broken | MEDIUM | The honest, achievable win. If the sim says a winner lost, stop and fix the harness |
+| Fill-haircut applied on BOTH entry and exit | Ranking on mid/theory overstates edge; P&L without the ORATS 66% cross is fantasy | MEDIUM | Same haircut model the entry universe already uses |
+| Aggregate metrics with sample size stamped | Win rate, avg P&L, **P&L-per-day-in-trade** (tastytrade's preferred metric), max drawdown | LOW | Every number carries `n=13` + date range. No exceptions |
+
+**Playbook Port**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| VIX3M series ingestion (`VIXCLS3M`) | Prerequisite for the crisis gates; picker-rules doc explicitly defers them pending this series | LOW | FRED adapter live (8 series); this is series #9. Pure plumbing into `macro_observations` |
+| Market-level crisis gates (VIX <25; VIX/VIX3M <0.95) | Standard discipline rails; drop all candidates in a crisis regime | LOW | GATES applied once at market level — NOT per-candidate. The retired per-pair term-inversion gate proved crisis logic belongs here |
+| Anti-criteria gates (max open calendars, loss cooldown, trend filter) | Over-trading is the #1 retail account-killer; portfolio-level entry brakes | MEDIUM | Need open-position count + recent realized P&L — same state the exit advisor reads |
 
 ### Differentiators (Competitive Advantage)
 
-None of these tools are built for one trader running SPX calendars specifically — Morai's edge
-is depth on a narrow, well-understood structure rather than breadth across strategy types.
+Where Morai beats a generic tool. Aligns with the Core Value: *the engine picks with the user's
+real criteria, now manages the whole trade loop.*
+
+**Exit Advisor**
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Forward-IV (not raw IV diff) as the primary edge metric | No mainstream retail tool (TOS, OptionStrat, ONE) computes true forward vol between two expiries by default — most compare raw IV%, which criterion 1 shows is only valid same-date. This is a real analytical edge over off-the-shelf screeners | MEDIUM | Formula and guard already verified (calendar-selection-criteria.md #1) |
-| GEX-fit as a scoring input, not a separate dashboard tab | SpotGamma treats GEX as its own product surface; nobody folds "strike near Absolute Gamma strike" directly into a calendar-candidate score. Morai already computes GEX (shipped) — wiring it into the picker is cheap and differentiated | LOW (data exists) / MEDIUM (scoring integration) | Criterion 7 — bonus term, not a hard gate (sign alone is insufficient per research) |
-| Event-premium-aware baseline (strip event-spanning expiries before computing "clean" forward vol) | This is a genuinely non-obvious refinement (arXiv 2606.12872 / NBER w28306-backed) that generic screeners don't do — they don't distinguish structural edge from discrete event premium | MEDIUM-HIGH | Criteria 3+4 combined; requires the event adapter to exist first (dependency) |
-| Rule-fired → outcome correlation report (post-trade review) | Edgewonk's Tiltmeter concept (rule adherence vs. equity curve) applied narrowly to Morai's own enter/exit/roll rule set — "did trades where Rule X fired outperform?" | MEDIUM | Needs a population of tagged trades to be meaningful; defer reporting UI until rule-tagging has run for a few cycles (L4 is "record + which rule fired," not the analytics layer yet) |
-| Event-triggered supplemental snapshot (off-cadence capture on large SPX moves) | No comparable tool does this because most retail tools poll on a fixed timer or are always-live; Morai's 30-min cadence is a deliberate cost/scope tradeoff (full-chain streaming ruled out), so a move-triggered exception snapshot captures the "something happened" moments the cadence would otherwise miss | MEDIUM | Trigger source = existing live SSE price tick, not a new feed; must debounce (see anti-features) |
+| Playbook-encoded verdict registry | HIS ladder (+5/+10/+15% takes, −25/−50% stops, EVT≤3d, TERM inversion ≥0.5pp, GAMMA, roll rule) auto-evaluated every cycle — not a generic 50%/21DTE. No retail tool does per-position verdicts from a personal playbook | MEDIUM | The headline differentiator. Mirror the entry registry's typed-row architecture |
+| TERM trigger from live term structure | Exit on front−back IV inversion ≥0.5pp. Morai already computes term structure + forward vol per calendar (journal lifecycle graph) | MEDIUM | No retail tool watches term inversion as an exit signal |
+| Precomputed every cycle, no manual trigger | Verdicts land on the `compute-picker` job cadence; the held-positions panel is always current | MEDIUM | Reuse the Phase-19 precompute pattern; append-history table like picker |
+| MCP exit-verdict tool | "What should I do with my open calendars?" answerable in Claude Code | LOW-MEDIUM | Every surface ships HTTP+MCP (MCP-02) |
+| Laddered TAKE (scale at +5 / more at +10 / full at +15) | The ladder is inherently multi-level; present tiered, not binary | MEDIUM | Verdict payload carries the rung, UI renders the ladder |
+
+**Backtest Harness (PICK-04)**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Per-rule DIRECTIONAL attribution (sign, not coefficient) | "Did high-scoring-rule trades beat low-scoring ones?" reported as a direction + `n`, never a re-weighting. Honest ablation at tiny n | LOW-MEDIUM | e.g. "fwdEdge pointed right on 8/11 trades where it had an opinion." Qualitative, evidence-flagged |
+| Leave-one-rule-out ablation | Does dropping a rule change which candidate gets picked, and did that help or hurt? Reveals redundant rules cheaply, even at n=13 | LOW-MEDIUM | Many of 9 rules may be doing nothing; this is where you'd learn it |
+| Replay-as-forward-test scaffolding | Built so the SAME harness gets more powerful as trades close and chains accumulate — validates mechanics today, calibrates weights when n≥30 | MEDIUM | The value compounds. Design for the future sample, ship for today's |
+
+**Playbook Port**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Sizing tiers by regime | Recommended contract count per VIX tier — extends the picker from "what structure" to "what AND how much," closing the entry side of the trade plan | MEDIUM | Discrete user-set tiers, NOT a derived optimum (see anti-features) |
+| Event-calendar bucket (gap 3–10d cheap) | A distinct second play style: short-gap calendars that intentionally own an event in the window, alongside the main band-scan | MEDIUM | New universe-generation path in `candidate-selection.ts`; the `backEventBonus` experimental rule already gestures at it |
+| Regime-tuned target delta (`autoTuneTargetDelta`) | VIX-tuned entry-band preference; deferred in picker-rules doc pending VIX3M | LOW-MEDIUM | Additive to the band-scan; only after crisis-gate infra lands |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
+Features that look good and create real problems. Naming them prevents scope creep and boundary
+violations.
+
 | Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|------------------|-------------|
-| Multi-underlying / full-market screener (scan hundreds of symbols like TOS Stock Hacker) | "Real" screeners scan a universe | Morai is SPX-only by design (PROJECT.md constraint); building universe-scan infra for one symbol is pure waste and reopens the full-chain-streaming question that was explicitly closed (D17) | Picker scans the SPX chain snapshot only; DTE/strike/delta are the "universe" being filtered, not tickers |
-| Continuous/real-time picker refresh (sub-second re-scoring as the chain ticks) | Feels more "live," matches the SSE greeks stream users already see elsewhere in the app | Candidate data source is the 30-min REST chain snapshot, not the live stream (full-chain streaming is out of scope); faking sub-second refresh over 30-min-stale data is worse than an honest timestamp — same trap as "badge lies LIVE" that phase 12 already hit | Re-score on each chain snapshot arrival (30 min) + manual "as of" display; let the user request a refresh, which just re-reads the latest snapshot rather than polling Schwab live |
-| Backtesting engine (OptionNet-Explorer-style historical strategy replay) | ONE is the category-standard tool and backtesting feels like the obvious next step after a scoring engine | PROJECT.md explicitly scopes Trade Picker as "scores structures, not advice/timing"; a backtester is a different product surface, needs a fill-simulation model, and the open question in calendar-selection-criteria.md (Vasquez slope signal transfer to SPX) says this needs a proper backtest later, not bolted onto v1.2 | Leave it as a documented backlog item; `leg_observations` already has the data since 2026-06-12 if it's ever built |
-| Auto-execution / one-click order placement from a candidate card | Natural next step once a candidate looks good | Explicitly out of scope — "Live trade advice" boundary belongs to the separate `trade-advisor` plugin; Morai owns collected/historical data, not trade execution | Candidate card shows the structure; the trader places the order manually in their broker platform, same as today |
-| Full multi-country economic calendar (ForexFactory-style, all currencies/central banks) | ForexFactory is the "obvious" reference implementation | Only FOMC/CPI/NFP matter for SPX; the rest is noise for a single-symbol single-user tool and multiplies data-source surface for no benefit | Three event types only, sourced from Fed schedule (static/yearly) + BLS (monthly); extend later only if a real gap surfaces |
-| Live economic-surprise data (actual vs. consensus, market reaction magnitude) | Would make event flags "smarter" | Requires a second paid data feed just to color an already-binary flag; the verified criteria (3/4) only need "does this leg span the event window," not surprise magnitude | Flag = date/window membership only; magnitude-aware weighting is a documented open question (calendar-selection-criteria.md open questions #1/#3), not v1.2 scope |
-| Free-text rule/thesis notes as the only record of "which rule fired" | Feels flexible, fastest to type | Unqueryable — can't ever answer "did Rule X trades outperform?" without re-reading prose; defeats the whole point of L4 (structured rule tracking) | Structured enum/tag on `entry_thesis` (already the attach point decision) with optional free-text supplement, not instead of it |
-| Aggressive auto-reconnect / retry storms on stream stall | Feels more resilient | Reconnect storms can worsen an already-degraded sidecar/Schwab connection and mask the real signal (is Schwab down, or is our process wedged?) — this exact class of problem is why Phase 11 needed a zombie-lock self-heal | Bounded backoff (few attempts, capped interval), visible attempt count in the badge state, and fail loud to STALE/DISCONNECTED rather than silently retrying forever |
-| Snapshotting on every tick during a fast move | "More data is safer" | 30-min cadence is a deliberate storage/cost boundary; unthrottled event-triggered snapshots on a volatile day could produce hundreds of extra rows and re-litigate the chunked-insert-limit lesson from Phase 2 | Debounce/cooldown window (e.g., one supplemental snapshot per N minutes regardless of how many times the threshold re-fires) |
+|---------|---------------|-----------------|-------------|
+| Auto-execution of exits/rolls | "The advisor knows what to do, let it do it" | Crosses the read-only boundary. Stream is display-only (STRM-04); Morai never places orders. Auto-close needs order-entry auth and turns a data tool into a liable trading bot | Advise + alert; the human executes in the broker. **The single most important boundary to hold** |
+| Confidence % / probability on a verdict | "78% confidence" feels rigorous | With 13 trades there is no basis to calibrate a probability — fabricated precision | Show which rule fired + the raw metric (profit %, DTE, IV spread). Let the number speak |
+| Tick-level exit re-evaluation | "Real-time exits" | Contradicts STRM-04 (no per-tick writes) and the 30-min cadence; invites alert spam | Cycle-cadence verdicts + a "materially changed" delta highlighting new verdicts |
+| Notification on every state | "Alert me on everything" | A verdict flipping HOLD→TAKE→HOLD is noise; over-managing is a documented failure mode | Surface only verdict CHANGES; escalate only the irreversible ones (STOP, EXIT-pre-event) |
+| Automated weight promotion/demotion from the backtest | Milestone brief literally says "promote/demote weights with evidence" | At n=13 the evidence does not exist. Auto-promoting a rule because it "worked" on 13 trades is overfitting formalized | Backtest OUTPUTS a directional flag + `n`; a human decides. **Defer any promotion until n≥30 real closed trades.** picker-rules doc already gates promotion on PICK-04 — read "evidence" as "a real sample" |
+| Optimizing rule parameters to fit the 13 | "Find the best delta band / DTE window" | Continuous knobs + 13 points = perfect in-sample fit, zero out-of-sample meaning | Parameters stay user-locked (already research-verified); the backtest reports how the LOCKED params did, never searches |
+| Sharpe / fancy risk-adjusted metrics on 13 trades | "Institutional-grade stats" | A Sharpe from 13 trades is noise dressed as rigor; DSR deflates it to ~0 anyway | Raw win rate + P&L/day + `n`, with "not statistically significant" stated plainly |
+| A backtesting DSL / configurable strategy language | "Make it flexible for any strategy" | YAGNI — one trader, one strategy family (SPX put calendars), one engine. A generic backtester is months of work for a "replay MY engine over MY chains" problem | A thin replay loop that calls the existing engine |
+| Full regime-classification / ML market-timing model | "Detect the regime automatically" | PROJECT.md puts live trade-advice / regime scoring OUT OF SCOPE (the `trade-advisor` plugin owns it). Crisis gates are 2 thresholds, not a model | Two hard VIX gates as documented discipline rails. Respect the boundary |
+| Porting the entire trade-advisor plugin | "Inherit the whole playbook" | Only the rules that map to the typed gate/score/universe structure belong in Morai; live discretionary analysis does not (out of scope) | Port crisis gates + sizing + anti-criteria + event bucket; leave live advice in the plugin |
+| Kelly / optimal-f position sizing | "Size it optimally" | Kelly needs a reliable edge estimate — which the 13-trade sample cannot provide (same honesty wall as Feature 2) | Simple discrete VIX-regime tiers, user-set, not derived |
+| Resurrecting per-pair crisis logic (term inversion) under a new name | "Protect against backwardation" | The per-pair `term-inversion` gate was already RETIRED — it deleted exactly the trades with edge. Registry test asserts it can't reappear | Crisis lives at MARKET level (VIX gates), never per-structure |
 
 ## Feature Dependencies
 
 ```
-Economic-events adapter (FOMC/CPI/NFP)
-    └──requires──> [nothing new — static Fed schedule + BLS monthly schedule]
-    └──feeds──> Picker criterion 3/4 (event flags, event-premium penalty)
-                    └──feeds──> Picker scoring engine (scoreCalendarCandidates)
-                                    └──requires──> 30-min chain snapshot (existing, shipped)
-                                    └──requires──> BSM engine (existing, shipped)
-                                    └──requires──> GEX computation (existing, shipped, criterion 7)
-                                    └──feeds──> Analyzer picker UI (ranked cards + why-panel)
-                                                    └──requires──> Overview v2 / payoff UI patterns
-                                                                     (ships first per milestone build order)
+[VIX3M FRED series]
+    └──enables──> [Crisis gates (VIX / VIX3M)]  ──part-of──> [Playbook Port]
 
-Strategy-rules engine (L4)
-    └──requires──> entry_thesis field (existing schema attach point)
-    └──enables (later, not v1.2)──> rule-fired → outcome correlation report
+[Journal P&L fill-ledger] (exists)
+[Live greeks / front DTE / spot·strike] (exists)
+[Term structure + forward vol] (exists)
+[economic_events + exitPlan stamp] (exists)
+[GEX walls] (exists)
+    └──all feed──> [Exit Advisor]  ──MUST SHIP FIRST──
 
-Stream stall watchdog
-    └──requires──> existing SSE heartbeat/last-tick data (shipped, Phase 11-12)
-    └──independent of──> picker and events work (can ship in parallel/any order)
+[Exit Advisor]  (provides the exit rules)
+    └──required-by──> [PICK-04 Backtest]  (can't replay exits without exit rules)
 
-Event-triggered supplemental snapshot
-    └──requires──> existing live SSE price tick (shipped) as trigger source
-    └──requires──> existing 30-min snapshot job (shipped, reused/re-triggered off-cadence)
-    └──enhances──> journal (existing core value), not the picker
+[Entry engine: scoreCalendarCandidates] (exists)
+[leg_observations chains] (exists)
+[13 validated closed calendars = the oracle] (exists)
+    └──all feed──> [PICK-04 Backtest]
+
+[Open-position count + realized P&L] (established by Exit Advisor)
+    └──shared-by──> [Anti-criteria gates in Playbook Port]
+
+[Exit Advisor] ──enhances──> [Entry Picker] (reads the exitPlan the entry stamped)
+[Playbook Port] ──must-not-resurrect──> [retired term-inversion gate]
 ```
 
 ### Dependency Notes
 
-- **Picker scoring requires the events adapter first:** criteria 3 and 4 (event flags, event
-  penalty) are two of the eight scoring rows — the picker engine phase cannot be feature-complete
-  without the adapter landing first or alongside it. Per milestone build order, events adapter is
-  bundled into the same phase as the engine (step 4), which is correct sequencing.
-- **Picker UI can ship ahead of the real engine:** the milestone plan already sequences the
-  Analyzer→picker redesign against candidate-contract fixtures/stubs before the engine exists
-  (contract-first). This is the right call — it decouples UI/UX risk from scoring-correctness risk.
-- **Stall watchdog and event-triggered snapshot are independent of the picker track** — both only
-  touch the existing live-stream/journal pipeline, not the new scoring engine. They can be
-  sequenced as tail work without blocking or being blocked by picker delivery, as the milestone
-  plan already does.
-- **Rule-fired → outcome correlation report enhances the rules engine but is not required for
-  L4** — L4 scope is record + attribute the fired rule; the analytics/report layer needs a
-  population of tagged trades to be meaningful and should be a later addition, not bundled in.
+- **PICK-04 requires the Exit Advisor:** the backtest replays entry AND exit rules. You cannot
+  simulate an exit without an exit-rule registry to run. This fixes the build order:
+  **Exit Advisor → Backtest → Playbook Port**, exactly as PROJECT.md sequences it — confirmed.
+- **Exit Advisor's data is ~90% flowing already:** P&L ledger, greeks, term structure, events,
+  GEX all exist. That makes it the fastest to ship AND the highest core value (it closes the
+  trade loop the user watches daily). Correct as feature #1.
+- **Exit Advisor enhances the Entry Picker via the exitPlan stamp:** entry stamps
+  `exitPlan.closeByExpiry` + `thetaCapturePct`; the exit advisor reads and evaluates against it.
+  The stamp is the contract between the two engines — no new coupling.
+- **Playbook Port is largely independent of the Backtest** but its anti-criteria (max open,
+  loss cooldown) reuse the open-position + realized-P&L state the Exit Advisor establishes —
+  a reason not to build the anti-criteria before Feature 1.
+- **Crisis gates block on VIX3M ingestion** — a small, isolated prerequisite; land it first
+  inside the Playbook Port phase.
+- **Event-calendar bucket extends `candidate-selection.ts`** additively, alongside the band-scan;
+  it does not modify the existing universe.
 
 ## MVP Definition
 
-### Launch With (v1.2)
+### Launch With (v1.3 core)
 
-Matches the milestone's stated build order — nothing added here beyond what PROJECT.md already
-scopes.
+- [ ] **Exit Advisor — the 5 verdicts from the playbook ladder**, in an Analyzer held-positions
+      panel + MCP tool. HOLD/TAKE/STOP/EXIT-pre-event as the spine (data all exists); each verdict
+      carries the rule that fired + its raw metric. — *closes the trade loop, the milestone's
+      headline value*
+- [ ] **Exit `ruleSet` rendered from the engine** (like the entry methodology panel) — *symmetry
+      the user expects; near-free reuse*
 
-- [ ] Ranked candidate list with composite score + why-panel (per-criterion breakdown) —
-      the core trust-building UX every comparable screener has
-- [ ] "As of" chain-snapshot timestamp + staleness indicator on the picker — prevents the
-      exact "badge lies" failure mode already seen once in this project
-- [ ] DTE range / delta-target filters on the picker — matches user's stated trading constraints
-- [ ] Economic-events adapter (FOMC/CPI/NFP) feeding criteria 3/4 — scoring is incomplete without it
-- [ ] Payoff diagram + compare view per candidate — table stakes, and the BSM engine already exists
-- [ ] Stream stall watchdog (LIVE/STALE/DISCONNECTED badge) — closes a known, already-flagged gap
-- [ ] Event-triggered supplemental snapshot with debounce — narrow, well-scoped addition to the
-      existing journal job
-- [ ] Rule-fired tag on `entry_thesis` (structured, not free text) — L4 record-only scope
+### Add After Validation (v1.x within the milestone)
 
-### Add After Validation (v1.2.x or v1.3)
+- [ ] **ROLL verdict + roll-candidate suggestion** — *roll needs the fill-haircut model applied to
+      the candidate front; more work than the other four verdicts, so it follows*
+- [ ] **PICK-04 as MECHANICS VALIDATION** — deterministic no-lookahead replay that reproduces the
+      13 oracle outcomes, plus directional per-rule attribution + leave-one-out ablation, every
+      number stamped `n=13`. — *trigger: exit rules exist; explicitly NOT weight optimization*
+- [ ] **Playbook Port core** — VIX3M ingestion → crisis gates (VIX/VIX3M) → anti-criteria
+      (max open, loss cooldown). — *trigger: exit advisor established the open-position/P&L state*
 
-- [ ] Rule-fired → outcome correlation report — once enough tagged trades exist to be meaningful
-- [ ] Event-premium magnitude weighting (vs. binary flag) — if binary flagging proves too coarse
-      in practice
-- [ ] Vasquez slope in-house backtest over `leg_observations` — explicitly flagged as needing
-      separate validation work in calendar-selection-criteria.md, not a v1.2 UI/engine concern
+### Future Consideration (defer)
 
-### Future Consideration (v2+ / explicitly out of scope)
-
-- [ ] Full backtesting engine (OptionNet-Explorer-style) — different product surface, no fill-sim
-      model exists, no evidence yet that it's needed beyond the one already-flagged slope backtest
-- [ ] Auto-execution from candidate cards — crosses into `trade-advisor` plugin's territory
-- [ ] Multi-underlying screener — contradicts the SPX-only constraint (D17)
+- [ ] **Weight promotion/demotion from the backtest** — *defer until ≥30 real closed trades exist;
+      the corpus cannot support it today*
+- [ ] **Auto roll-order construction** — *boundary risk (order entry) + haircut modeling; advise
+      only*
+- [ ] **Sizing tiers + event-calendar bucket + autoTuneTargetDelta** — *the most-optional Playbook
+      slice; time-box and drop first if the milestone runs long*
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Ranked candidate list + why-panel | HIGH | MEDIUM | P1 |
-| Chain-snapshot staleness indicator (picker) | HIGH | LOW | P1 |
-| Economic-events adapter (FOMC/CPI/NFP) | HIGH | MEDIUM | P1 |
-| Payoff diagram/compare | HIGH | MEDIUM | P1 |
-| DTE/delta filters | MEDIUM | LOW | P1 |
-| Stream stall watchdog (badge state) | MEDIUM-HIGH | LOW-MEDIUM | P1 |
-| Event-triggered supplemental snapshot | MEDIUM | MEDIUM | P1 |
-| Rule-fired tag on entry_thesis | MEDIUM | LOW | P1 |
-| Rule-fired → outcome report | MEDIUM | MEDIUM | P2 |
-| Event-premium magnitude weighting | LOW-MEDIUM | MEDIUM-HIGH | P3 |
-| Vasquez slope backtest (leg_observations) | MEDIUM (validates criterion 2) | HIGH | P2/P3 |
-| Full backtesting engine | LOW (no current evidence of need) | HIGH | P3 (backlog only) |
+| Exit Advisor — HOLD/TAKE/STOP/EXIT verdicts + panel + MCP | HIGH | MEDIUM | P1 |
+| Exit ruleSet rendered from engine | MEDIUM | LOW | P1 |
+| PICK-04 replay + mechanics validation vs oracle | HIGH | MEDIUM-HIGH | P1 |
+| PICK-04 directional attribution + ablation | MEDIUM | LOW-MEDIUM | P2 |
+| ROLL verdict + roll-candidate suggestion | MEDIUM | MEDIUM-HIGH | P2 |
+| VIX3M ingestion + crisis gates | MEDIUM | LOW | P2 |
+| Anti-criteria gates (max open, cooldown) | HIGH | MEDIUM | P2 |
+| Sizing tiers by regime | MEDIUM | MEDIUM | P3 |
+| Event-calendar bucket | MEDIUM | MEDIUM | P3 |
+| autoTuneTargetDelta | LOW | LOW-MEDIUM | P3 |
+| Weight promotion from backtest | (negative until n≥30) | — | DEFER |
 
-**Priority key:**
-- P1: In the v1.2 build order per PROJECT.md
-- P2: Should have, natural next step once v1.2 data exists
-- P3: Nice to have / explicitly deferred, backlog candidate only
+**Priority key:** P1 = must have for the milestone · P2 = should have, add when possible ·
+P3 = nice to have · DEFER = blocked on more data.
 
 ## Competitor Feature Analysis
 
-| Feature | thinkorswim (Spread Hacker/Analyze) | OptionNet Explorer (ONE) | OptionStrat | SpotGamma | Morai's Approach |
-|---------|--------------------------------------|---------------------------|--------------|-----------|-------------------|
-| Candidate ranking | Filter-driven scan list, no composite score | N/A (backtest/log tool, not a live scanner) | Payoff-first cards, comparison view | N/A (GEX dashboard, not a screener) | Composite score (8 verified criteria) + why-panel — more transparent than TOS's filter-pass/fail-only list |
-| Data freshness display | Live/streaming during market hours, no explicit staleness UI | N/A (historical/backtest) | Live quotes, standard "as of" ticker | Snapshot timestamps on GEX charts | Explicit "as of" chain-snapshot age + staleness state, honest about 30-min cadence |
-| Economic event awareness | None built into scan/Analyze | None | None | Not a calendar feature (GEX-only) | New adapter, purpose-built for FOMC/CPI/NFP flags feeding the score, not a general calendar |
-| Rule/checklist tracking | None | Trade-log tags, custom filters, no explicit "rule fired" concept | None | N/A | Structured rule tag on `entry_thesis`, closer to Edgewonk's checklist-per-setup pattern than any options-analysis tool |
-| Stream health / stall indication | Standard broker-platform connection status, not stall-specific | N/A | Standard live-quote refresh | N/A | Purpose-built LIVE/STALE/DISCONNECTED badge with bounded reconnect — closes a specific known gap (phase-12 audit) |
-| GEX-informed scoring | Not offered | Not offered | Not offered | GEX is the product, but not fused into a calendar-candidate score | Differentiator: GEX fit folded directly into the picker score (criterion 7) |
+| Feature | tastytrade / tos | OptionStrat | Our Approach |
+|---------|------------------|-------------|--------------|
+| Exit presentation | Right-click position → close/roll/analyze by leg or spread; strategy studies label actions LX/SX | Color-coded P&L-over-time/IV payoff + probability (PoP, prob-touch) to plan exit timing | A single verdict per open calendar from the user's playbook ladder, with the firing rule + raw metric shown — precomputed every cycle |
+| Exit rule basis | Generic canon: 50% profit OR 21 DTE | Manual read of payoff/greeks; no verdict | The trader's OWN ladder (+5/+10/+15, −25/−50, EVT/TERM/GAMMA, roll), auto-evaluated |
+| Roll | Inline adjustment on the position (build the order) | Rebuild strategy manually | ROLL verdict names a candidate front as a suggestion; user executes (no auto-order) |
+| Backtest | tastytrade research = large-n published studies (200k+ trades); no personal backtest | Third-party historical replay tools | Replay MY engine over MY chains; honest at n=13 = mechanics validation + directional attribution, NOT weight optimization |
+| Crisis / regime | Discretionary; VIX awareness manual | None | Two hard VIX gates (VIX<25, VIX/VIX3M<0.95) as discipline rails at market level |
 
 ## Sources
 
-- [thinkorswim Spread Hacker manual](https://toslc.thinkorswim.com/center/howToTos/thinkManual/Scan/Spread-Hacker) — HIGH (official docs)
-- [thinkorswim Scan tab overview](https://toslc.thinkorswim.com/center/howToTos/thinkManual/Scan) — HIGH (official docs)
-- [OptionNet Explorer official site](https://www.optionnetexplorer.com/) / [User Guide](https://help.optionnetexplorer.com/) — HIGH (official docs)
-- [SteadyOptions: OptionNET Explorer review](https://steadyoptions.com/articles/optionnet-explorer-one-options-backtesting-software-r743/) — MEDIUM (practitioner review)
-- [Edgewonk Features](https://edgewonk.com/features) and [Edgewonk blog: 10 Things to Do After First Trades](https://edgewonk.com/blog/10-things-to-do-in-edgewonk) — MEDIUM (vendor content, cross-checked against Tradervue positioning)
-- [Forex Factory Calendar](https://www.forexfactory.com/calendar) and impact-color-coding guides ([XS.com guide](https://www.xs.com/en/blog/forex-factory-guide/), [eplanetbrokers guide](https://eplanetbrokers.com/en-US/training/forex-factory-calendar)) — MEDIUM (third-party guides, consistent across sources)
-- [Deephaven: Building real-time trading dashboards](https://deephaven.io/blog/2025/11/13/real-time-trading-dashboard/) — MEDIUM (vendor engineering blog, general real-time dashboard patterns)
-- [dataintellect.com: Measuring Stale Data in Trading Systems](https://dataintellect.com/blog/stale-data-measuring-what-isnt-there/) — MEDIUM (data-quality engineering blog; Poisson-based stall-detection framing used to justify bounded-threshold approach over open-ended polling)
-- [TradingView delayed-data documentation](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-Issues/) — MEDIUM (platform docs, corroborates "yellow delayed badge" convention)
-- `.planning/research/calendar-selection-criteria.md` (this project, adversarially verified) — HIGH (primary source for scoring criteria; not re-derived here)
-- `.planning/PROJECT.md` (this project) — HIGH (scope boundaries, existing shipped features, milestone build order)
+- Exit-management norms (50% profit / 21-DTE dual rule, defined-risk 25–50% targets,
+  P&L-per-day-in-trade metric): daystoexpiry.com, traderc.com, tastytrade support (Calendar
+  Spreads / Spreads at Expiration) — MEDIUM (community/vendor canon, cross-checked).
+- Backtest overfitting & minimum sample (30/100/200–500 floors, Deflated Sharpe Ratio, PBO,
+  walk-forward vs random CV, purged K-fold): Bailey, Borwein, López de Prado & Zhu — *The
+  Probability of Backtest Overfitting* (SSRN 2326253); backtestbase.com sample-size calculator —
+  MEDIUM-HIGH (peer-reviewed statistical consensus).
+- Rolling calendar spreads (front <7 DTE, drift-to-strike, IV-context roll triggers; roll
+  mechanics): optionalpha.com, tradingblock.com, fastercapital.com — MEDIUM (community consensus).
+- Per-rule attribution / signal quality (predictive-power necessary + PnL-contribution
+  sufficient; ablation; return-source decomposition; interpretation-stability for concept drift):
+  macrosynergy.com + ML-backtest literature — LOW (directional guidance, not tiny-sample-specific).
+- Exit/position-management UX (OptionStrat payoff+probability; tos Position Statement
+  right-click close/roll; LX/SX/LE/SE study labels): OptionStrat, thinkorswim learning center,
+  options-america.com — MEDIUM (documented tool behavior).
+- Project context: `.planning/PROJECT.md`, `docs/architecture/picker-rules.md`, and the user's
+  `trade-advisor` playbook (reference spec, per PROJECT.md) — HIGH (canonical project sources).
 
 ---
-*Feature research for: single-user self-hosted SPX options trading dashboard (v1.2 scope)*
-*Researched: 2026-07-03*
+*Feature research for: v1.3 Picker Intelligence — held-position exit advisor, options backtest
+harness, personal-playbook port*
+*Researched: 2026-07-08*
