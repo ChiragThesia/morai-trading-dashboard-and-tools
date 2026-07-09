@@ -8,8 +8,10 @@ import { z } from "zod";
 /** exitMetric — the raw metric behind a verdict (e.g. { name: "pnlPct", value: -0.261, threshold: -0.25 }). */
 export const exitMetric = z.object({
   name: z.string(),
-  value: z.number(),
-  threshold: z.number(),
+  // CR-01 defense-in-depth: `.finite()` rejects ±Infinity/NaN at the write boundary so a
+  // non-finite value can never round-trip through JSONB as `null` and poison every later read.
+  value: z.number().finite(),
+  threshold: z.number().finite(),
 });
 
 export type ExitMetric = z.infer<typeof exitMetric>;
@@ -81,7 +83,7 @@ export const heldPositionVerdict = z.object({
   escalate: z.boolean(),
   /** Null when the P&L basis is non-finite (openNetDebit <= 0, CR-01) — the read side never
    * emits ±Infinity; the UI renders "—" for a null. `basis` still carries the raw components. */
-  pnlPct: z.number().nullable(),
+  pnlPct: z.number().finite().nullable(),
   basis: z.object({
     openNetDebit: z.number(),
     netMark: z.number(),

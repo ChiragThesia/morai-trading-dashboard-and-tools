@@ -588,6 +588,9 @@ describe("evaluateExit — non-finite P&L basis is indicative (CR-01)", () => {
     const result = evaluateExit(position, context, null);
     expect(result.indicative).toBe(true);
     expect(result.escalate).toBe(false);
+    // Second-order poisoning guard: a non-finite metric.value serializes to JSONB null and
+    // fails the next read for every calendar — the persisted metric must stay finite.
+    expect(Number.isFinite(result.metric.value)).toBe(true);
   });
 
   it("openNetDebit=0 with a loss is indicative, never an escalated STOP (−Infinity pnlPct)", () => {
@@ -596,6 +599,16 @@ describe("evaluateExit — non-finite P&L basis is indicative (CR-01)", () => {
     const result = evaluateExit(position, context, null);
     expect(result.indicative).toBe(true);
     expect(result.escalate).toBe(false);
+    expect(Number.isFinite(result.metric.value)).toBe(true);
+  });
+
+  it("openNetDebit=0 with netMark=0 (NaN pnlPct) is indicative with a finite metric", () => {
+    const position = makePosition({ openNetDebit: 0 });
+    const context = makeContext({ cohortNow, snapshotTime: cohortNow, netMark: 0, spot: position.strike, dteFront: 30 });
+    const result = evaluateExit(position, context, null);
+    expect(result.indicative).toBe(true);
+    expect(result.escalate).toBe(false);
+    expect(Number.isFinite(result.metric.value)).toBe(true);
   });
 });
 

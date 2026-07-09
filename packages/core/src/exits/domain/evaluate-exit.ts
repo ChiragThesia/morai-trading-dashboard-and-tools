@@ -225,7 +225,13 @@ export function evaluateExit(
   previousVerdict: PreviousVerdict,
 ): ExitVerdict {
   // P&L basis (EXIT-02): derived ONLY from the passed ledger fields, never recomputed elsewhere.
-  const pnlPct = (context.netMark - position.openNetDebit) / position.openNetDebit;
+  // CR-01: a NULL/zero openNetDebit resolves the ratio to ±Infinity/NaN. Left raw it would (a)
+  // slip past the NaN-only gate into a bogus escalated STOP/TAKE and (b) — once persisted — turn
+  // into JSONB `null` (JSON.stringify(±Infinity/NaN)), failing the next read for EVERY calendar.
+  // A non-positive basis collapses pnlPct to a finite 0 sentinel: it fires no rung (→ HOLD), keeps
+  // the persisted metric finite, and is forced indicative below regardless.
+  const pnlFinite = position.openNetDebit > 0;
+  const pnlPct = pnlFinite ? (context.netMark - position.openNetDebit) / position.openNetDebit : 0;
 
   // Gate FIRST (Pitfall 4): AH / stale / NaN-sentinel never renders as an actionable escalation.
   // MarketContext carries no separate net-greeks field (26-01) — the NaN sentinel check covers
@@ -234,10 +240,8 @@ export function evaluateExit(
   const elapsedMs = context.cohortNow.getTime() - context.snapshotTime.getTime();
   const isStale = elapsedMs > STALENESS_TOLERANCE_MS;
   const hasNaN = Number.isNaN(context.frontIv) || Number.isNaN(context.backIv) || Number.isNaN(context.netMark);
-  // CR-01: a NULL/zero openNetDebit basis makes pnlPct ±Infinity, which is NOT NaN and would
-  // slip past hasNaN into an actionable escalated STOP/TAKE. Treat a non-positive basis (or any
-  // non-finite ratio) as indicative — the shared guard that protects every consumer of pnlPct.
-  const pnlFinite = position.openNetDebit > 0 && Number.isFinite(pnlPct);
+  // CR-01: a non-positive basis (pnlFinite=false, computed above) is indicative — the shared
+  // guard that keeps a no-basis calendar from ever rendering as an actionable escalated STOP/TAKE.
   // WR-01: a gap snapshot (spot=0) has non-NaN marks that pass hasNaN but drives GAMMA's
   // offStrike to 1.0 — an escalated STOP on garbage. Treat a non-positive/non-finite spot as
   // indicative so a degenerate row can never fire an actionable verdict.
