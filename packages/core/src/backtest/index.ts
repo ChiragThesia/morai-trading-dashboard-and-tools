@@ -42,3 +42,17 @@ export {
   type CoverageDayResult,
   type CoveragePercentResult,
 } from "./domain/coverage.ts";
+
+// ─── Replay use-cases (Phase 27, Plan 05) — the three replay paths, reused by 06's
+// runBacktest orchestrator ──────────────────────────────────────────────────────
+export { replayPickerCohort, type ReplayPickerCohortDeps } from "./application/replayPickerCohort.ts";
+export {
+  replayExitsForCalendar,
+  type ReplayExitsForCalendarDeps,
+} from "./application/replayExitsForCalendar.ts";
+export {
+  replayHypotheticalEntry,
+  type ReplayHypotheticalEntryDeps,
+  type HypotheticalCandidateOutcome,
+  type HypotheticalOutcomeCaveat,
+} from "./application/replayHypotheticalEntry.ts";
