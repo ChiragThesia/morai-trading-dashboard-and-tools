@@ -576,3 +576,25 @@ describe("evaluateExit — escalate true only for STOP-kind and EXIT_PRE_EVENT v
     expect(result.escalate).toBe(false);
   });
 });
+
+// ─── CR-01: non-finite P&L basis (zero/NULL openNetDebit) never renders actionable ──────────
+
+describe("evaluateExit — non-finite P&L basis is indicative (CR-01)", () => {
+  const cohortNow = new Date("2026-07-18T15:00:00.000Z");
+
+  it("openNetDebit=0 with a gain is indicative, never an actionable TAKE (+Infinity pnlPct)", () => {
+    const position = makePosition({ openNetDebit: 0 });
+    const context = makeContext({ cohortNow, snapshotTime: cohortNow, netMark: 500, spot: position.strike, dteFront: 30 });
+    const result = evaluateExit(position, context, null);
+    expect(result.indicative).toBe(true);
+    expect(result.escalate).toBe(false);
+  });
+
+  it("openNetDebit=0 with a loss is indicative, never an escalated STOP (−Infinity pnlPct)", () => {
+    const position = makePosition({ openNetDebit: 0 });
+    const context = makeContext({ cohortNow, snapshotTime: cohortNow, netMark: -500, spot: position.strike, dteFront: 30 });
+    const result = evaluateExit(position, context, null);
+    expect(result.indicative).toBe(true);
+    expect(result.escalate).toBe(false);
+  });
+});

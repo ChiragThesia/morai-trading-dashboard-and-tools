@@ -69,7 +69,10 @@ export function makeGetExitAdviceUseCase(deps: GetExitAdviceDeps): ForRunningGet
       // is omitted rather than rendered with a fabricated name/pnlPct (EXIT-04).
       if (position === undefined || snapshot === undefined) continue;
 
-      const pnlPct = (snapshot.netMark - position.openNetDebit) / position.openNetDebit;
+      // CR-01: a non-positive basis yields ±Infinity — emit null (JSON-safe, UI renders "—")
+      // rather than a value the wire would coerce to null anyway and a bogus P&L would imply.
+      const pnlPct =
+        position.openNetDebit > 0 ? (snapshot.netMark - position.openNetDebit) / position.openNetDebit : null;
 
       positions.push({
         calendarId: row.calendarId,

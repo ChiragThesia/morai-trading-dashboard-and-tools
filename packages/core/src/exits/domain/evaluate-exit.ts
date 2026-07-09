@@ -231,7 +231,11 @@ export function evaluateExit(
   const elapsedMs = context.cohortNow.getTime() - context.snapshotTime.getTime();
   const isStale = elapsedMs > STALENESS_TOLERANCE_MS;
   const hasNaN = Number.isNaN(context.frontIv) || Number.isNaN(context.backIv) || Number.isNaN(context.netMark);
-  const indicative = isAfterHours || isStale || hasNaN;
+  // CR-01: a NULL/zero openNetDebit basis makes pnlPct ±Infinity, which is NOT NaN and would
+  // slip past hasNaN into an actionable escalated STOP/TAKE. Treat a non-positive basis (or any
+  // non-finite ratio) as indicative — the shared guard that protects every consumer of pnlPct.
+  const pnlFinite = position.openNetDebit > 0 && Number.isFinite(pnlPct);
+  const indicative = isAfterHours || isStale || hasNaN || !pnlFinite;
 
   const evtHit = evalEvt(position.frontExpiry, context.tier1Events, context.cohortNow.toISOString().slice(0, 10));
 

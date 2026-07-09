@@ -114,7 +114,8 @@ export type HeldPositionVerdict = {
   readonly name: string;
   readonly verdict: ExitVerdict;
   readonly changed: boolean;
-  readonly pnlPct: number;
+  /** Null when the P&L basis is non-finite (openNetDebit <= 0, CR-01) — never ±Infinity. */
+  readonly pnlPct: number | null;
   readonly basis: {
     readonly openNetDebit: number;
     readonly netMark: number;

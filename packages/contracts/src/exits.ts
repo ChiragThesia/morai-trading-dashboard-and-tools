@@ -77,7 +77,9 @@ export const heldPositionVerdict = z.object({
   changed: z.boolean(),
   /** True for STOP/EXIT_PRE_EVENT — escalated visual treatment in the UI. */
   escalate: z.boolean(),
-  pnlPct: z.number(),
+  /** Null when the P&L basis is non-finite (openNetDebit <= 0, CR-01) — the read side never
+   * emits ±Infinity; the UI renders "—" for a null. `basis` still carries the raw components. */
+  pnlPct: z.number().nullable(),
   basis: z.object({
     openNetDebit: z.number(),
     netMark: z.number(),

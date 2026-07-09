@@ -126,6 +126,21 @@ describe("getExitAdvice — shape", () => {
     expect(result.value.ruleSet.map((r) => r.id)).toContain("stop");
   });
 
+  it("emits pnlPct null (not ±Infinity) when openNetDebit is 0 (CR-01)", async () => {
+    const useCase = makeGetExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition({ openNetDebit: 0 })]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot({ netMark: 500 })]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([makeVerdictRow()]),
+      now: () => new Date("2026-07-09T15:20:00.000Z"), // fresh (within staleness tolerance)
+    });
+
+    const result = await useCase();
+    if (!result.ok || result.value === null) throw new Error("expected a snapshot");
+    const position = result.value.positions[0];
+    expect(position?.pnlPct).toBeNull();
+    expect(position?.basis).toEqual({ openNetDebit: 0, netMark: 500 });
+  });
+
   it("marketSession is evaluated at read time (RTH weekday) not tied to the verdict's own observedAt", async () => {
     const useCase = makeGetExitAdviceUseCase({
       readHeldPositions: fakeReadHeldPositions([makePosition()]),
