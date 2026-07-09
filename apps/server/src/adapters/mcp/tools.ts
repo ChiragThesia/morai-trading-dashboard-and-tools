@@ -20,6 +20,7 @@ import {
   setRuleTagsRequest,
   setRuleTagsResponse,
   lifecycleResponse,
+  exitsResponse,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -39,6 +40,7 @@ import type {
   ForRunningGetCalendarEventsWithRules,
   ForRunningSetRuleTags,
   ForRunningGetCalendarLifecycle,
+  ForRunningGetExitAdvice,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -953,6 +955,81 @@ export function registerGetJournalLifecycleTool(
           time: row.time instanceof Date ? row.time.toISOString() : row.time,
         })),
       });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetExitAdviceTool — registers the get_exit_advice MCP tool (EXIT-08 / MCP-02 / 26-05).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: call use-case → map Result → parse through exitsResponse schema → return content.
+ *
+ * MCP-02: the SAME exitsResponse schema used by GET /api/exits is used here — a one-sided
+ * field rename fails `bun run typecheck` (MCP-02 parity, T-26-14).
+ *
+ * Cold start (zero verdict rows anywhere) → structured {error:'no-verdicts'} payload, never
+ * throws. Domain→contract flattening mirrors exits.routes.ts exactly (verdict.rung/ruleId/
+ * metric/indicative/escalate/roll hoisted to top-level siblings on the held-position row).
+ */
+export function registerGetExitAdviceTool(
+  server: McpServer,
+  getExitAdvice: ForRunningGetExitAdvice,
+): void {
+  server.registerTool(
+    "get_exit_advice",
+    {
+      title: "Get Exit Advice",
+      description:
+        "Returns the latest exit verdict (HOLD/TAKE/STOP/ROLL/EXIT_PRE_EVENT) for every open calendar — rule id, raw metric, indicative/escalate flags, and P&L basis. Same payload as GET /api/exits. Returns {error:'no-verdicts'} when no verdict has been computed yet.",
+      // No input parameters — returns the latest computed advice for every open calendar.
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getExitAdvice();
+
+      if (!result.ok) {
+        // T-26-13: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      if (result.value === null) {
+        // Cold start — structured payload, never throw (MCP-02 stability).
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ error: "no-verdicts" }),
+            },
+          ],
+        };
+      }
+
+      const snapshot = result.value;
+      const payload = exitsResponse.parse({
+        asOf: snapshot.asOf,
+        observedAt: snapshot.observedAt.toISOString(),
+        marketSession: snapshot.marketSession,
+        positions: snapshot.positions.map((p) => ({
+          calendarId: p.calendarId,
+          name: p.name,
+          verdict: p.verdict.verdict,
+          rung: p.verdict.rung,
+          ruleId: p.verdict.ruleId,
+          metric: p.verdict.metric,
+          indicative: p.verdict.indicative,
+          changed: p.changed,
+          escalate: p.verdict.escalate,
+          pnlPct: p.pnlPct,
+          basis: p.basis,
+          roll: p.verdict.roll,
+        })),
+        ruleSet: snapshot.ruleSet,
+      });
+
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };

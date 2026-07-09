@@ -434,6 +434,7 @@ const mcpRouter = makeMcpRouter(
   setRuleTags,
   getCalendarLifecycle,
   getRegimeBoard,
+  getExitAdvice,
 );
 app.route("", mcpRouter);
 

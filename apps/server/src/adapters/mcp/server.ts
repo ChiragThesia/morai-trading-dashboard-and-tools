@@ -19,6 +19,7 @@ import type {
   ForRunningGetCalendarEventsWithRules,
   ForRunningSetRuleTags,
   ForRunningGetCalendarLifecycle,
+  ForRunningGetExitAdvice,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -41,6 +42,7 @@ import {
   registerGetRuleTagsTool,
   registerSetRuleTagsTool,
   registerGetJournalLifecycleTool,
+  registerGetExitAdviceTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -79,6 +81,8 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  * BOARD-03 / MCP-02 (Phase 24, 24-04): get_regime registered here — shares regimeResponse with
  *         GET /api/analytics/regime; injected as optional for backward compat with existing
  *         call sites.
+ * EXIT-08 / MCP-02 (Phase 26, 26-05): get_exit_advice registered here — shares exitsResponse
+ *         with GET /api/exits; injected as optional for backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -100,6 +104,7 @@ export function makeMcpRouter(
   setRuleTags?: ForRunningSetRuleTags,
   getCalendarLifecycle?: ForRunningGetCalendarLifecycle,
   getRegimeBoard?: ForRunningGetRegimeBoard,
+  getExitAdvice?: ForRunningGetExitAdvice,
 ): Hono {
   const router = new Hono();
 
@@ -167,6 +172,11 @@ export function makeMcpRouter(
     // is available (Phase 24, 24-04)
     if (getRegimeBoard !== undefined) {
       registerGetRegimeTool(server, getRegimeBoard);
+    }
+    // EXIT-08 / MCP-02: get_exit_advice tool — optional, wired when the getExitAdvice
+    // use-case is available (Phase 26, 26-05)
+    if (getExitAdvice !== undefined) {
+      registerGetExitAdviceTool(server, getExitAdvice);
     }
     return { server, transport };
   }

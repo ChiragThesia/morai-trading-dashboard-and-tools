@@ -17,8 +17,15 @@ import type {
   CalendarEventAnnotation,
   ValidationError,
   CalendarNotFound,
+  ForRunningGetExitAdvice,
+  ExitAdviceSnapshot,
 } from "@morai/core";
-import { pickerSnapshotResponse, getEventsWithRulesResponse, setRuleTagsResponse } from "@morai/contracts";
+import {
+  pickerSnapshotResponse,
+  getEventsWithRulesResponse,
+  setRuleTagsResponse,
+  exitsResponse,
+} from "@morai/contracts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -26,7 +33,10 @@ import {
   registerGetPickerCandidatesTool,
   registerGetRuleTagsTool,
   registerSetRuleTagsTool,
+  registerGetExitAdviceTool,
 } from "./tools.ts";
+import { exitRoutes } from "../http/exits.routes.ts";
+import { Hono } from "hono";
 
 // ── Test doubles ──────────────────────────────────────────────────────────────
 
@@ -331,5 +341,96 @@ describe("set_rule_tags MCP tool", () => {
 
     expect(text).toBe("internal error");
     expect(text).not.toContain("db down");
+  });
+});
+
+// ── get_exit_advice MCP tool (EXIT-08, plan 26-05) ──────────────────────────────
+
+const EXIT_ADVICE_SNAPSHOT: ExitAdviceSnapshot = {
+  asOf: "2026-07-09",
+  observedAt: new Date("2026-07-09T14:30:00.000Z"),
+  marketSession: "rth",
+  positions: [
+    {
+      calendarId: "cal-1",
+      name: "7500 Put Calendar",
+      verdict: {
+        verdict: "STOP",
+        rung: "-25%",
+        ruleId: "stop-25",
+        metric: { name: "pnlPct", value: -0.261, threshold: -0.25 },
+        indicative: false,
+        escalate: true,
+        roll: null,
+      },
+      changed: true,
+      pnlPct: -0.261,
+      basis: { openNetDebit: 150, netMark: 110.85 },
+    },
+  ],
+  ruleSet: [{ id: "stop-25", kind: "trigger", rationale: "Cut losers at -25% of debit." }],
+};
+
+/** Returns the stored exit-advice snapshot */
+const getExitAdviceOk: ForRunningGetExitAdvice = async () => ok(EXIT_ADVICE_SNAPSHOT);
+
+/** Returns null — no verdicts computed yet (cold start) */
+const getExitAdviceNull: ForRunningGetExitAdvice = async () => ok(null);
+
+/** Returns a storage error */
+const getExitAdviceErr: ForRunningGetExitAdvice = async () =>
+  err({ kind: "storage-error" as const, message: "db connection failed" });
+
+async function callGetExitAdvice(getExitAdvice: ForRunningGetExitAdvice): Promise<string> {
+  const server = new McpServer({ name: "test", version: "0.0.1" });
+  registerGetExitAdviceTool(server, getExitAdvice);
+
+  const client = new Client({ name: "test-client", version: "0.0.1" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+
+  const result = await client.callTool({ name: "get_exit_advice", arguments: {} });
+  const first = result.content[0];
+  if (first === undefined || first.type !== "text") {
+    throw new Error("expected text content from get_exit_advice");
+  }
+  return first.text;
+}
+
+describe("get_exit_advice MCP tool", () => {
+  it("returns exitsResponse-valid content for a stored snapshot", async () => {
+    const text = await callGetExitAdvice(getExitAdviceOk);
+    const parsed = exitsResponse.parse(JSON.parse(text));
+    expect(parsed.asOf).toBe("2026-07-09");
+    expect(parsed.marketSession).toBe("rth");
+    expect(parsed.positions[0]?.verdict).toBe("STOP");
+    expect(parsed.positions[0]?.escalate).toBe(true);
+  });
+
+  it("returns {error:'no-verdicts'} content when getExitAdvice returns null (cold start)", async () => {
+    const text = await callGetExitAdvice(getExitAdviceNull);
+    expect(JSON.parse(text)).toStrictEqual({ error: "no-verdicts" });
+  });
+
+  it("returns 'internal error' text on a storage error (never throws)", async () => {
+    const text = await callGetExitAdvice(getExitAdviceErr);
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db connection failed");
+  });
+
+  it("MCP-02 parity: the tool's payload validates against the SAME schema GET /api/exits emits", async () => {
+    const text = await callGetExitAdvice(getExitAdviceOk);
+    const toolPayload: unknown = JSON.parse(text);
+
+    const app = new Hono();
+    app.route("/", exitRoutes(getExitAdviceOk));
+    const res = await app.request("/exits");
+    const routePayload: unknown = await res.json();
+
+    // Both surfaces must parse through the ONE contracts exitsResponse schema, and produce
+    // an identical payload from the same use-case (MCP-02 parity, T-26-14 schema-drift guard).
+    expect(() => exitsResponse.parse(toolPayload)).not.toThrow();
+    expect(() => exitsResponse.parse(routePayload)).not.toThrow();
+    expect(toolPayload).toStrictEqual(routePayload);
   });
 });
