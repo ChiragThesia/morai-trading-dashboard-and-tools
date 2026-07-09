@@ -189,12 +189,15 @@ function evalRoll(
   if (offStrike > ROLL_SPOT_BAND) return null;
   if (pnlPct >= ROLL_PROFIT_MAX) return null;
 
-  const cohortNowIso = context.cohortNow.toISOString().slice(0, 10);
+  // IN-03: replacement DTE is measured from the SAME reference as the `dteFront` gate above —
+  // snapshot time, the clock that produced `dteFront` — not wall-clock cohortNow, so the gate
+  // and the selection can't disagree across the ~1-2 min chain latency.
+  const referenceIso = context.snapshotTime.toISOString().slice(0, 10);
   const midpoint = (ROLL_REPLACEMENT_DTE_MIN + ROLL_REPLACEMENT_DTE_MAX) / 2;
   let best: RollCandidateQuote | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const candidate of context.rollChain.candidates) {
-    const dte = daysBetween(cohortNowIso, candidate.expiration);
+    const dte = daysBetween(referenceIso, candidate.expiration);
     if (dte < ROLL_REPLACEMENT_DTE_MIN || dte > ROLL_REPLACEMENT_DTE_MAX) continue;
     const distance = Math.abs(dte - midpoint);
     const isCloser = distance < bestDistance;
