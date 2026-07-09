@@ -13,6 +13,7 @@ export type {
   CoverageDay,
   TradeReproduction,
   BacktestReport,
+  BootstrapCiRow,
 } from "./domain/types.ts";
 
 export type {
@@ -56,3 +57,7 @@ export {
   type HypotheticalCandidateOutcome,
   type HypotheticalOutcomeCaveat,
 } from "./application/replayHypotheticalEntry.ts";
+
+// ─── Orchestrator (Phase 27, Plan 06) — reduces the three replay paths into one persisted
+// BacktestReport; the CLI's (apps/worker/src/backtest.ts) only reach into this context ──────
+export { makeRunBacktestUseCase, type RunBacktestDeps, type RunBacktestParams } from "./application/runBacktest.ts";

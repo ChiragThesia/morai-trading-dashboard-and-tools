@@ -53,6 +53,7 @@ import {
 } from "@morai/core";
 import type {
   BreakdownCriterion,
+  BreakdownEntry,
   ChainQuoteForPicker,
   EconomicEvent,
   ForReadingEconomicEvents,
@@ -102,6 +103,12 @@ export type HypotheticalCandidateOutcome = {
   readonly score: number;
   readonly simulatedPnl: number;
   readonly caveats: ReadonlyArray<HypotheticalOutcomeCaveat>;
+  /** The candidate's per-criterion score breakdown (Plan 06 addition) — runBacktest's
+   * per-rule directional attribution needs each rule's own raw contribution alongside the
+   * outcome (median-split "high-scoring beat low-scoring" sign test, 27-CONTEXT.md); the
+   * aggregate `score` alone can't be attributed back to one rule. Purely additive — no
+   * existing field changed. */
+  readonly breakdown: ReadonlyArray<BreakdownEntry>;
 };
 
 const OUTCOME_CAVEATS: ReadonlyArray<HypotheticalOutcomeCaveat> = ["events-leakage", "late-bsm-optimism"];
@@ -316,6 +323,7 @@ export async function replayHypotheticalEntry(
       score: candidate.score,
       simulatedPnl,
       caveats: OUTCOME_CAVEATS,
+      breakdown: candidate.breakdown,
     });
   }
   return ok(outcomes);

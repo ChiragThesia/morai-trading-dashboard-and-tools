@@ -491,10 +491,13 @@ export type {
   ForRunningRegisterOpenCalendars,
 } from "./journal/index.ts";
 
-// ─── Backtest bounded context (Phase 27, Plan 01) ──────────────────────────────
-// Domain types + driven port TYPE declarations only — no use-cases yet (03 read ports,
-// 04 kernel, 05 replay, 06 CLI/report). StorageError is NOT re-exported a second time
-// under that name (see ./backtest/index.ts header comment, mirrors exits' convention).
+// ─── Backtest bounded context (Phase 27, Plans 01-06) ──────────────────────────
+// Domain types + driven port TYPE declarations + the runBacktest orchestrator (06). Only
+// runBacktest is threaded as a value — the replay use-cases/kernel fns are consumed
+// internally by runBacktest via plain relative imports (same bounded context), never by the
+// CLI directly. StorageError is NOT re-exported a second time under that name (see
+// ./backtest/index.ts header comment, mirrors exits' convention).
+export { makeRunBacktestUseCase } from "./backtest/index.ts";
 export type {
   ReplayMismatchKind,
   CohortMismatch,
@@ -504,6 +507,7 @@ export type {
   CoverageDay,
   TradeReproduction,
   BacktestReport,
+  BootstrapCiRow,
   BacktestRunRow,
   ForPersistingBacktestRun,
   ChainLegQuoteAsOf,
@@ -513,4 +517,6 @@ export type {
   ForReadingPickerSnapshotsInRange,
   FullHistorySnapshotRow,
   ForReadingFullSnapshotHistoryForCalendar,
+  RunBacktestDeps,
+  RunBacktestParams,
 } from "./backtest/index.ts";

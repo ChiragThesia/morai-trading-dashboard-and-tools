@@ -58,6 +58,20 @@ export type TradeReproduction = {
 };
 
 /**
+ * BootstrapCiRow — a seeded bootstrap CI (bootstrap-ci.ts) on one headline P&L metric
+ * (BT-04). Added in Plan 06: the shipped Plan 01 BacktestReport shape had nowhere to carry
+ * "Bootstrap CI on every headline metric" (27-CONTEXT.md's own report-content lock) — this
+ * field closes that gap, additively. The interval's width AT n=13 IS the honesty signal
+ * CONTEXT.md asks the report to surface, not hide.
+ */
+export type BootstrapCiRow = {
+  readonly metric: string;
+  readonly low: number;
+  readonly high: number;
+  readonly n: number;
+};
+
+/**
  * BacktestReport — the whole persisted report for one backtest run (BT-04/BT-05). Every
  * headline number carries n= and a date range at the top level; caveats names the
  * documented residual-optimism flags (late-solved BSM, event-discovery gap) rather than
@@ -74,4 +88,5 @@ export type BacktestReport = {
   readonly ablation: ReadonlyArray<AblationRow>;
   readonly coverage: ReadonlyArray<CoverageDay>;
   readonly caveats: ReadonlyArray<string>;
+  readonly ci: ReadonlyArray<BootstrapCiRow>;
 };
