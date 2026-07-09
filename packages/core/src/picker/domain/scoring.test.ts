@@ -17,6 +17,7 @@ import fc from "fast-check";
 import { bsmPrice } from "@morai/quant";
 import {
   scoreCalendarCandidates,
+  scoreEventCandidates,
   WEIGHT_SLOPE,
   WEIGHT_FWD_EDGE,
   WEIGHT_GEX_FIT,
@@ -24,6 +25,7 @@ import {
   WEIGHT_BE_VS_EM,
   BE_VS_EM_TARGET_RATIO,
 } from "./scoring.ts";
+import { WEIGHT_BACK_EVENT_BONUS } from "./rules.ts";
 import { findBreakevens } from "./breakevens.ts";
 import type { RawCandidate } from "./types.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
@@ -404,4 +406,37 @@ describe("ScoringParams.weights — PICK-04 ablation seam (T-27-03)", () => {
     expect(fwdEdgePartial?.weight).toBe(fwdEdgeBaseline?.weight);
   });
 });
+});
+
+// ─────────────────────────────────────────────────────────────
+// scoreEventCandidates (28-05, PLAY-04) — event-calendar bucket scoring: the same primary
+// formulas at bucket-scaled weights (EVENT_SCORE_WEIGHTS), plus the backEventBonus bonus
+// added on top -- never a second scoring engine.
+// ─────────────────────────────────────────────────────────────
+
+describe("scoreEventCandidates (28-05, PLAY-04 event-calendar bucket)", () => {
+  it("adds the WEIGHT_BACK_EVENT_BONUS bonus on top of the bucket-scaled base score", () => {
+    const withEvent = { ...normalCandidate(), backEvents: ["FOMC"] };
+    const withoutEvent = { ...normalCandidate(), backEvents: [] };
+    const [scoredWith] = scoreEventCandidates([withEvent], GEX_CONTEXT, { r: R, q: Q });
+    const [scoredWithout] = scoreEventCandidates([withoutEvent], GEX_CONTEXT, { r: R, q: Q });
+    expect(scoredWith).toBeDefined();
+    expect(scoredWithout).toBeDefined();
+    if (scoredWith === undefined || scoredWithout === undefined) return;
+    expect(scoredWith.score).toBe(Math.min(100, scoredWithout.score + WEIGHT_BACK_EVENT_BONUS));
+  });
+
+  it("never exceeds 100 even when the bucket-scaled base is already near max", () => {
+    const candidate = { ...normalCandidate(), backEvents: ["FOMC"] };
+    const [scored] = scoreEventCandidates([candidate], GEX_CONTEXT, { r: R, q: Q });
+    expect(scored).toBeDefined();
+    if (scored === undefined) return;
+    expect(scored.score).toBeGreaterThanOrEqual(0);
+    expect(scored.score).toBeLessThanOrEqual(100);
+  });
+
+  it("does not mutate the primary registry's weights -- scoreCalendarCandidates still uses WEIGHT_SLOPE", () => {
+    const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
+    expect(scored?.breakdown.find((b) => b.criterion === "slope")?.weight).toBe(WEIGHT_SLOPE);
+  });
 });

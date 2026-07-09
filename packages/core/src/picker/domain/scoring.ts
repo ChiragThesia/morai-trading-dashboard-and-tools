@@ -43,6 +43,8 @@ import {
   deltaNeutralFraction,
   slopeEntryFraction,
   WEIGHT_DELTA_NEUTRAL,
+  EVENT_SCORE_WEIGHTS,
+  WEIGHT_BACK_EVENT_BONUS,
 } from "./rules.ts";
 import type { BreakdownCriterion, BreakdownEntry, ContextEntry, ExitPlan, RawCandidate, ScoredCandidate } from "./types.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
@@ -302,4 +304,30 @@ export function scoreCalendarCandidates(
   params: ScoringParams,
 ): ReadonlyArray<ScoredCandidate> {
   return rawCandidates.map((candidate) => scoreOne(candidate, gexContext, params));
+}
+
+/**
+ * scoreEventCandidates (28-05, PLAY-04) — scores the event-calendar bucket with
+ * `EVENT_SCORE_WEIGHTS` (rules.ts) via `scoreCalendarCandidates`'s existing per-criterion
+ * weights ablation seam (T-27-03) — same formulas, bucket-scaled weights, never a second
+ * scoring engine — then adds the `backEventBonus` bonus on top (post-scoring override,
+ * mirrors `zeroEventAdjustment`/`applyGatePenalty`'s shape in computePickerSnapshot.ts). Every
+ * candidate passed in is expected to already satisfy `backEvents.length > 0`
+ * (`selectEventCandidates`'s post-filter), so the bonus is a no-op only for a caller that
+ * skips that filter.
+ */
+export function scoreEventCandidates(
+  rawCandidates: ReadonlyArray<RawCandidate>,
+  gexContext: GexContextForPicker | null,
+  params: ScoringParams,
+): ReadonlyArray<ScoredCandidate> {
+  const base = scoreCalendarCandidates(rawCandidates, gexContext, {
+    ...params,
+    weights: { ...EVENT_SCORE_WEIGHTS, ...params.weights },
+  });
+  return base.map((candidate) => {
+    const bonus = backEventBonusValue(candidate.backEvents) * WEIGHT_BACK_EVENT_BONUS;
+    const score = Math.min(100, Math.max(0, Math.round(candidate.score + bonus)));
+    return { ...candidate, score };
+  });
 }

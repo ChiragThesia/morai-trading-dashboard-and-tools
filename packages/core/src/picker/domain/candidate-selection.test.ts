@@ -18,6 +18,7 @@ import { bsmGreeks } from "@morai/quant";
 import {
   legSpansEvents,
   selectCandidates,
+  selectEventCandidates,
   haircutFill,
   autoTuneTargetDelta,
   DELTA_BAND_MIN,
@@ -459,5 +460,63 @@ describe("selectCandidates — effectiveDeltaMin (28-04, PLAY-05 wiring)", () =>
       const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
       expect(d).toBeLessThanOrEqual(DELTA_BAND_MAX + 1e-9);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// selectEventCandidates (28-05, PLAY-04) — event-calendar bucket: [3,10]d gap window,
+// post-filtered to candidates whose back leg owns an event the front leg does not.
+// ─────────────────────────────────────────────────────────────
+
+describe("selectEventCandidates (28-05, PLAY-04 event-calendar bucket)", () => {
+  function chainWithGaps(): ChainQuoteForPicker[] {
+    const iv = 0.15;
+    const strikes = [7500, 7475, 7450, 7425, 7400];
+    const chain: ChainQuoteForPicker[] = [];
+    // today = 2026-07-01; front expiry 2026-07-31 -> dte 30 (valid front window [21,36]).
+    // Backs: 2026-08-02 (dte 32, gap 2 -- below [3,10]), 2026-08-05 (dte 35, gap 5 -- in window),
+    // 2026-08-10 (dte 40, gap 10 -- in window), 2026-08-15 (dte 45, gap 15 -- above [3,10]).
+    for (const expiration of ["2026-07-31", "2026-08-02", "2026-08-05", "2026-08-10", "2026-08-15"]) {
+      for (const strike of strikes) {
+        chain.push(chainQuote(strike, expiration, iv));
+      }
+    }
+    return chain;
+  }
+
+  it("emits only candidates whose back leg owns an event, within the [3,10]d gap window", () => {
+    // 2026-08-03 falls in (front=2026-07-31, back] for the gap-5 (08-05) and gap-10 (08-10)
+    // backs, but NOT for the front leg itself (front's own span is (today, 2026-07-31]).
+    const events: EconomicEvent[] = [{ date: "2026-08-03", name: "FOMC", source: "seed" }];
+    const { candidates } = selectEventCandidates(chainWithGaps(), events, { r: R, q: Q });
+    expect(candidates.length).toBeGreaterThan(0);
+    for (const c of candidates) {
+      const gap = c.backLeg.dte - c.frontLeg.dte;
+      expect(gap).toBeGreaterThanOrEqual(3);
+      expect(gap).toBeLessThanOrEqual(10);
+      expect(c.backEvents.length).toBeGreaterThan(0);
+      expect(c.frontEvents).not.toContain("FOMC");
+    }
+    // The gap-15 back is a real event-owner too, but outside the [3,10] window -- never emitted.
+    expect(candidates.some((c) => c.backLeg.expiration === "2026-08-15")).toBe(false);
+    // The gap-2 back is inside the primary window's edge but outside [3,10] -- never emitted.
+    expect(candidates.some((c) => c.backLeg.expiration === "2026-08-02")).toBe(false);
+  });
+
+  it("drops every candidate in the [3,10]d window when no event falls in any back-leg span", () => {
+    const { candidates } = selectEventCandidates(chainWithGaps(), [], { r: R, q: Q });
+    expect(candidates).toHaveLength(0);
+  });
+
+  it("selectCandidates with explicit default gap params reproduces the omitted-params universe exactly", () => {
+    const chain = chainWithGaps();
+    const withDefault = selectCandidates(chain, [], { r: R, q: Q });
+    const withExplicit = selectCandidates(chain, [], {
+      r: R,
+      q: Q,
+      backDteMinGap: BACK_DTE_MIN_GAP,
+      backDteMaxGap: BACK_DTE_MAX_GAP,
+    });
+    expect(withDefault.candidates).toEqual(withExplicit.candidates);
   });
 });
