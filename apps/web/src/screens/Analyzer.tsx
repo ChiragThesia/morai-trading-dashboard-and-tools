@@ -41,12 +41,9 @@ import type { ScenarioParams } from "../lib/scenario-engine.ts";
 import { computeProjectionBounds } from "../lib/date-projection.ts";
 import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
 import { usePicker } from "../hooks/usePicker.ts";
-import { useExits } from "../hooks/useExits.ts";
 import { useRepullChains } from "../hooks/useRepullChains.ts";
 import { parseTosOrder } from "../lib/tos-parser.ts";
 import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candidate.ts";
-import { HeldPositionsPanel } from "./HeldPositionsPanel.tsx";
-import { ExitRulesPanel } from "./ExitRulesPanel.tsx";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -701,77 +698,6 @@ export function Analyzer(): React.ReactElement {
     );
   }
 
-  // ── Held positions + exit rules (EXIT-07/EXIT-09, 26-06-PLAN.md): new full-width sections
-  // BELOW the 3-col grid — the existing rail/risk-profile/why-panel columns above are UNCHANGED
-  // (PICK-02 "no layout change"). Same D-18/D-19-style state precedence as the picker rail:
-  // loading → error → cold-start (no verdicts computed anywhere yet) → empty (settled, zero open
-  // calendars) → loaded. ──
-  const { data: exitsData, isPending: exitsIsPending, isError: exitsIsError, refetch: exitsRefetch } = useExits();
-  const exitsSnapshot = exitsData ?? null;
-
-  let exitsBody: React.ReactElement;
-  if (exitsIsPending && exitsData === undefined) {
-    exitsBody = (
-      <Panel>
-        <PanelHeading title="Held positions" />
-        <div
-          className="flex items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
-          data-testid="held-positions-loading"
-        >
-          Loading exit verdicts…
-        </div>
-      </Panel>
-    );
-  } else if (exitsIsError) {
-    exitsBody = (
-      <Panel>
-        <PanelHeading title="Held positions" />
-        <div className="flex flex-col items-center gap-2 p-4 text-center" data-testid="held-positions-error">
-          <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load exit verdicts.</p>
-          <Button
-            onClick={() => {
-              void exitsRefetch();
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      </Panel>
-    );
-  } else if (exitsSnapshot === null) {
-    exitsBody = (
-      <Panel>
-        <PanelHeading title="Held positions" />
-        <div className="flex flex-col gap-1.5 p-4" data-testid="held-positions-cold-start">
-          <p className="m-0 font-display text-sm font-bold text-txt">Exit advisor warming up</p>
-          <p className="m-0 font-mono text-[11px] text-dim">
-            First verdict pending — check back after the next chain snapshot.
-          </p>
-        </div>
-      </Panel>
-    );
-  } else if (exitsSnapshot.positions.length === 0) {
-    exitsBody = (
-      <Panel>
-        <PanelHeading title="Held positions" />
-        <div className="flex flex-col gap-1.5 p-4" data-testid="held-positions-empty">
-          <p className="m-0 font-display text-sm font-bold text-txt">No open positions</p>
-          <p className="m-0 font-mono text-[11px] text-dim">
-            Nothing to advise on — the exit advisor activates once you have an open calendar.
-          </p>
-        </div>
-      </Panel>
-    );
-  } else {
-    exitsBody = (
-      <HeldPositionsPanel
-        positions={exitsSnapshot.positions}
-        observedAt={exitsSnapshot.observedAt}
-        marketSession={exitsSnapshot.marketSession}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4 bg-bg p-3">
       {/* ── Top strip: the engine's scorecard chips for the selected calendar ── */}
@@ -883,11 +809,6 @@ export function Analyzer(): React.ReactElement {
       {/* ── Right column: why-panel / entry-exit-plan ─── */}
       <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
       </div>
-
-      {/* ── Held positions + exit rules (EXIT-07/EXIT-09): new full-width sections below the
-          3-col grid — a new sibling, not inserted into the picker's own columns above. ── */}
-      {exitsBody}
-      {exitsSnapshot !== null && <ExitRulesPanel ruleSet={exitsSnapshot.ruleSet} />}
     </div>
   );
 }

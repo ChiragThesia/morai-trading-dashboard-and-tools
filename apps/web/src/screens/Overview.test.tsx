@@ -14,9 +14,10 @@
  *   - .live-cell.stale applied when status is 'stalled' (Surface 2 color-dim, not opacity)
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { ok, err, assertDefined } from "@morai/shared";
-import type { StreamLiveGreekEvent } from "@morai/contracts";
+import type { StreamLiveGreekEvent, ExitsResponse } from "@morai/contracts";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { toDateInputValue } from "../lib/date-projection.ts";
 
 // 17.1-03 (OVW-06): spy-wrap PayoffChart so tests can inspect the exact curve/signature
@@ -93,16 +94,38 @@ vi.mock("../hooks/usePicker.ts", () => ({
   usePicker: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
 }));
 
+// Held positions + exit rules (moved from Analyzer, 26-06-PLAN.md): mocked the same way as
+// usePicker — no network needed. Defaults to the cold-start shape (data: null) so every
+// pre-existing test in this file is unaffected; the held-positions/exit-rules describe block
+// below overrides per test via setExitsReturn.
+vi.mock("../hooks/useExits.ts", () => ({
+  useExits: vi.fn(() => ({ data: null, isPending: false, isError: false, refetch: vi.fn() })),
+}));
+
 import { Overview, formatExpiryCell } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
 import { useLiveStream } from "../hooks/useLiveStream.ts";
+import { useExits } from "../hooks/useExits.ts";
 import { resolveLegIv } from "../lib/iv-calibration.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 
 const mockUsePositions = vi.mocked(usePositions);
 const mockUseLiveStream = vi.mocked(useLiveStream);
+const mockUseExits = vi.mocked(useExits);
 const mockResolveLegIv = vi.mocked(resolveLegIv);
 const mockPayoffChart = vi.mocked(PayoffChart);
+
+type MockExitsResult = Pick<UseQueryResult<ExitsResponse | null>, "data" | "isPending" | "isError" | "refetch">;
+
+function setExitsReturn(overrides: Partial<MockExitsResult>): void {
+  mockUseExits.mockReturnValue({
+    data: null,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+    ...overrides,
+  });
+}
 
 /** Props of the most recent PayoffChart render (throws if it never rendered). */
 function latestPayoffChartProps(): import("../components/charts/PayoffChart.tsx").PayoffChartProps {
@@ -202,6 +225,111 @@ function makeTick(): StreamLiveGreekEvent {
     ts: "2026-06-29T14:31:00Z",
   };
 }
+
+// 26-06 (moved from Analyzer): a distinct-timestamp exitsResponse fixture covering every
+// verdict/severity/indicative/changed/roll combination the held-positions panel renders. No
+// packages/contracts fixture exists for this response shape — inline, mirroring this file's
+// own local GEX_FIXTURE convention above.
+const EXITS_FIXTURE: ExitsResponse = {
+  asOf: "2026-07-09",
+  observedAt: "2026-07-09T14:30:00.000Z",
+  marketSession: "rth",
+  positions: [
+    {
+      calendarId: "cal-hold",
+      name: "SPX 18SEP/14AUG 7425P",
+      verdict: "HOLD",
+      rung: null,
+      ruleId: "hold",
+      metric: { name: "pnlPct", value: 0.02, threshold: 0 },
+      indicative: false,
+      changed: false,
+      escalate: false,
+      pnlPct: 0.02,
+      basis: { openNetDebit: 480, netMark: 490 },
+      roll: null,
+    },
+    {
+      calendarId: "cal-take",
+      name: "SPX 18SEP/14AUG 7450P",
+      verdict: "TAKE",
+      rung: "+10%",
+      ruleId: "take",
+      metric: { name: "pnlPct", value: 0.11, threshold: 0.1 },
+      indicative: false,
+      changed: true,
+      escalate: false,
+      pnlPct: 0.11,
+      basis: { openNetDebit: 500, netMark: 555 },
+      roll: null,
+    },
+    {
+      calendarId: "cal-stop",
+      name: "SPX 18SEP/14AUG 7400P",
+      verdict: "STOP",
+      rung: "-25%",
+      ruleId: "stop",
+      metric: { name: "pnlPct", value: -0.261, threshold: -0.25 },
+      indicative: false,
+      changed: false,
+      escalate: true,
+      pnlPct: -0.261,
+      basis: { openNetDebit: 500, netMark: 369.5 },
+      roll: null,
+    },
+    {
+      calendarId: "cal-exit",
+      name: "SPX 21AUG/14AUG 7500P",
+      verdict: "EXIT_PRE_EVENT",
+      rung: null,
+      ruleId: "evt",
+      metric: { name: "daysToEvent", value: 2, threshold: 3 },
+      indicative: false,
+      changed: false,
+      escalate: true,
+      pnlPct: 0.03,
+      basis: { openNetDebit: 400, netMark: 412 },
+      roll: null,
+    },
+    {
+      calendarId: "cal-indicative",
+      name: "SPX 18SEP/14AUG 7350P",
+      verdict: "STOP",
+      rung: "-50%",
+      ruleId: "stop",
+      metric: { name: "pnlPct", value: -0.55, threshold: -0.5 },
+      indicative: true,
+      changed: false,
+      escalate: false,
+      pnlPct: -0.55,
+      basis: { openNetDebit: 400, netMark: 180 },
+      roll: null,
+    },
+    {
+      calendarId: "cal-roll",
+      name: "SPX 28AUG/21AUG 7420P",
+      verdict: "ROLL",
+      rung: null,
+      ruleId: "roll",
+      metric: { name: "dteFront", value: 10, threshold: 14 },
+      indicative: false,
+      changed: false,
+      escalate: false,
+      pnlPct: 0.04,
+      basis: { openNetDebit: 420, netMark: 437 },
+      roll: { suggestedFrontExpiry: "2026-09-11", estNewFrontCredit: 410 },
+    },
+  ],
+  ruleSet: [
+    { id: "stop", kind: "trigger", rationale: "Capital preservation is non-negotiable." },
+    { id: "evt", kind: "trigger", rationale: "A fixed calendar date, not a noise-driven trigger." },
+    { id: "gamma", kind: "trigger", rationale: "Pin/whipsaw risk in the final DTE window." },
+    { id: "term", kind: "trigger", rationale: "Front-back IV inversion means the edge is gone." },
+    { id: "take", kind: "profit-take", rationale: "Profit-taking is patient, evaluated last." },
+    { id: "roll", kind: "roll", rationale: "A constructive continuation, evaluated only once nothing urgent fired." },
+    { id: "hold", kind: "hold", rationale: "Default verdict when no other rule fired." },
+  ],
+};
 
 describe("Overview screen", () => {
   afterEach(() => {
@@ -700,5 +828,163 @@ describe("Pill header — 0DTE γ pill", () => {
     // GEX_FIXTURE computedAt 2026-06-29 + byExpiry entry for that date
     expect(screen.getByText("0DTE γ")).toBeDefined();
     expect(screen.getByText("−$9.8B")).toBeDefined();
+  });
+});
+
+describe("Overview — held positions + exit rules panels (moved from Analyzer, 26-06-PLAN.md, EXIT-07/EXIT-09/EXIT-10)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders one held-position row per fixture position + the exit rules list in payload order", () => {
+    setPositions([]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    for (const row of EXITS_FIXTURE.positions) {
+      expect(screen.getByTestId(`held-position-${row.calendarId}`)).toBeTruthy();
+    }
+    const ruleRows = screen.getAllByTestId(/^exit-rule-/);
+    expect(ruleRows.map((el) => el.getAttribute("data-testid"))).toEqual(
+      EXITS_FIXTURE.ruleSet.map((r) => `exit-rule-${r.id}`),
+    );
+  });
+
+  it("STOP escalates to the down-alert chip with the exact verdict label + rule/metric line", () => {
+    setPositions([]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    const chip = screen.getByTestId("held-position-verdict-cal-stop");
+    expect(chip.textContent).toContain("STOP −25%");
+    expect(chip.className).toContain("bg-downd");
+    expect(screen.getByTestId("held-position-rule-cal-stop").textContent).toBe("stop · pnlPct −26.1%");
+  });
+
+  it("EXIT — pre-event escalates to the filled-amber chip, a distinct hue from STOP's fill", () => {
+    setPositions([]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    const chip = screen.getByTestId("held-position-verdict-cal-exit");
+    expect(chip.textContent).toContain("EXIT — pre-event");
+    expect(chip.className).toContain("bg-amber/15");
+    expect(chip.className).not.toContain("bg-downd");
+  });
+
+  it("HOLD/TAKE/ROLL render on the plain (non-alert) chip background", () => {
+    setPositions([]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    for (const id of ["cal-hold", "cal-take", "cal-roll"]) {
+      const chip = screen.getByTestId(`held-position-verdict-${id}`);
+      expect(chip.className).toContain("bg-raise/40");
+      expect(chip.className).not.toContain("bg-downd");
+    }
+  });
+
+  it("T-26-16: an indicative STOP is FORCED to the INDICATIVE treatment, never escalated STOP colors", () => {
+    setPositions([]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    expect(screen.queryByText("STOP −50%")).toBeNull();
+    const indicativeMark = screen.getByTestId("held-position-indicative-cal-indicative");
+    // EXITS_FIXTURE.marketSession is "rth" — a session-agnostic indicative row (e.g. a stale
+    // mark) reads "STALE — indicative", not "AH — indicative" (that string is reserved for an
+    // after-hours-marketSession snapshot, exercised separately below).
+    expect(indicativeMark.textContent).toBe("STALE — indicative");
+    expect(indicativeMark.className).toContain("text-amber");
+  });
+
+  it("indicative marker reads 'AH — indicative' when the snapshot's marketSession is after-hours", () => {
+    setPositions([]);
+    setExitsReturn({ data: { ...EXITS_FIXTURE, marketSession: "after-hours" } });
+    render(<Overview />);
+
+    const indicativeMark = screen.getByTestId("held-position-indicative-cal-indicative");
+    expect(indicativeMark.textContent).toBe("AH — indicative");
+  });
+
+  it("EXIT-09: a changed verdict shows the CHANGED marker in the verdict's own value color", () => {
+    setPositions([]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    const marker = screen.getByTestId("held-position-changed-cal-take");
+    expect(marker.textContent).toBe("CHANGED");
+    expect(marker.className).toContain("text-up");
+    expect(screen.queryByTestId("held-position-changed-cal-hold")).toBeNull();
+  });
+
+  it("renders the ROLL suggestion detail row only for the ROLL verdict", () => {
+    setPositions([]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    const rollRow = screen.getByTestId("held-position-roll-cal-roll");
+    expect(rollRow.textContent).toContain("2026-09-11");
+    expect(rollRow.textContent).toContain("$410");
+    // WR-03: labelled as the replacement-front SELL credit, not a net "est. debit".
+    expect(rollRow.textContent).toContain("new front est. credit");
+    expect(rollRow.textContent).not.toContain("est. debit");
+    expect(screen.queryByTestId("held-position-roll-cal-hold")).toBeNull();
+  });
+
+  it("EXIT-10: the held-positions panel has no button/order affordance anywhere in its rows", () => {
+    setPositions([]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    for (const row of EXITS_FIXTURE.positions) {
+      const rowEl = screen.getByTestId(`held-position-${row.calendarId}`);
+      expect(rowEl.querySelectorAll("button").length).toBe(0);
+    }
+  });
+
+  it("cold-start: null data shows 'Exit advisor warming up'", () => {
+    setPositions([]);
+    setExitsReturn({ data: null, isPending: false, isError: false });
+    render(<Overview />);
+
+    const coldStart = screen.getByTestId("held-positions-cold-start");
+    expect(coldStart.textContent).toContain("Exit advisor warming up");
+    expect(coldStart.textContent).toContain(
+      "First verdict pending — check back after the next chain snapshot.",
+    );
+  });
+
+  it("empty: a settled snapshot with zero positions shows 'No open positions'", () => {
+    setPositions([]);
+    setExitsReturn({ data: { ...EXITS_FIXTURE, positions: [] }, isPending: false, isError: false });
+    render(<Overview />);
+
+    const empty = screen.getByTestId("held-positions-empty");
+    expect(empty.textContent).toContain("No open positions");
+    expect(empty.textContent).toContain(
+      "Nothing to advise on — the exit advisor activates once you have an open calendar.",
+    );
+  });
+
+  it("loading: shows 'Loading exit verdicts…'", () => {
+    setPositions([]);
+    setExitsReturn({ data: undefined, isPending: true, isError: false });
+    render(<Overview />);
+
+    expect(screen.getByTestId("held-positions-loading").textContent).toBe("Loading exit verdicts…");
+  });
+
+  it("error: shows \"Couldn't load exit verdicts.\" + a Retry button wired to refetch", () => {
+    setPositions([]);
+    const refetch = vi.fn();
+    setExitsReturn({ data: undefined, isPending: false, isError: true, refetch });
+    render(<Overview />);
+
+    const errorBlock = screen.getByTestId("held-positions-error");
+    expect(errorBlock.textContent).toContain("Couldn't load exit verdicts.");
+    fireEvent.click(within(errorBlock).getByText("Retry"));
+    expect(refetch).toHaveBeenCalledOnce();
   });
 });

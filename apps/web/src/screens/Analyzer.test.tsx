@@ -50,7 +50,7 @@ import { render, screen, cleanup, fireEvent, within } from "@testing-library/rea
 import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { PickerSnapshotResponse, ExitsResponse } from "@morai/contracts";
+import type { PickerSnapshotResponse } from "@morai/contracts";
 
 vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../components/charts/PayoffChart.tsx")>();
@@ -59,13 +59,6 @@ vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
 
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
 vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
-
-// useExits (26-06): mocked the same way as usePicker — no network, no QueryClientProvider
-// needed. Defaults to the cold-start shape (data: null) so every pre-existing fixture-driven
-// suite in this file is unaffected; the held-positions/exit-rules describe block below
-// overrides per test.
-const { mockUseExits } = vi.hoisted(() => ({ mockUseExits: vi.fn() }));
-vi.mock("../hooks/useExits.ts", () => ({ useExits: mockUseExits }));
 
 // useRepullChains needs a QueryClient; this suite renders Analyzer without a provider, so the
 // mutation hook is mocked to an inert stub (its own behavior is covered in useRepullChains.test.ts).
@@ -83,18 +76,6 @@ type MockPickerResult = Pick<
 function mockUsePickerReturn(overrides: Partial<MockPickerResult>): void {
   mockUsePicker.mockReturnValue({
     data: pickerSnapshotFixture,
-    isPending: false,
-    isError: false,
-    refetch: vi.fn(),
-    ...overrides,
-  });
-}
-
-type MockExitsResult = Pick<UseQueryResult<ExitsResponse | null>, "data" | "isPending" | "isError" | "refetch">;
-
-function mockUseExitsReturn(overrides: Partial<MockExitsResult>): void {
-  mockUseExits.mockReturnValue({
-    data: null,
     isPending: false,
     isError: false,
     refetch: vi.fn(),
@@ -144,118 +125,10 @@ if (GUARD === undefined) {
   throw new Error("pickerSnapshotFixture must carry a guard (fwdIv null) candidate for this suite");
 }
 
-// 26-06: a distinct-timestamp exitsResponse fixture covering every verdict/severity/indicative/
-// changed/roll combination the held-positions panel renders. No packages/contracts fixture
-// exists yet for this response shape (26-05 shipped the route, not a fixture) — inline, mirroring
-// this file's own RULESET-style local fixtures below.
-const EXITS_FIXTURE: ExitsResponse = {
-  asOf: "2026-07-09",
-  observedAt: "2026-07-09T14:30:00.000Z",
-  marketSession: "rth",
-  positions: [
-    {
-      calendarId: "cal-hold",
-      name: "SPX 18SEP/14AUG 7425P",
-      verdict: "HOLD",
-      rung: null,
-      ruleId: "hold",
-      metric: { name: "pnlPct", value: 0.02, threshold: 0 },
-      indicative: false,
-      changed: false,
-      escalate: false,
-      pnlPct: 0.02,
-      basis: { openNetDebit: 480, netMark: 490 },
-      roll: null,
-    },
-    {
-      calendarId: "cal-take",
-      name: "SPX 18SEP/14AUG 7450P",
-      verdict: "TAKE",
-      rung: "+10%",
-      ruleId: "take",
-      metric: { name: "pnlPct", value: 0.11, threshold: 0.1 },
-      indicative: false,
-      changed: true,
-      escalate: false,
-      pnlPct: 0.11,
-      basis: { openNetDebit: 500, netMark: 555 },
-      roll: null,
-    },
-    {
-      calendarId: "cal-stop",
-      name: "SPX 18SEP/14AUG 7400P",
-      verdict: "STOP",
-      rung: "-25%",
-      ruleId: "stop",
-      metric: { name: "pnlPct", value: -0.261, threshold: -0.25 },
-      indicative: false,
-      changed: false,
-      escalate: true,
-      pnlPct: -0.261,
-      basis: { openNetDebit: 500, netMark: 369.5 },
-      roll: null,
-    },
-    {
-      calendarId: "cal-exit",
-      name: "SPX 21AUG/14AUG 7500P",
-      verdict: "EXIT_PRE_EVENT",
-      rung: null,
-      ruleId: "evt",
-      metric: { name: "daysToEvent", value: 2, threshold: 3 },
-      indicative: false,
-      changed: false,
-      escalate: true,
-      pnlPct: 0.03,
-      basis: { openNetDebit: 400, netMark: 412 },
-      roll: null,
-    },
-    {
-      calendarId: "cal-indicative",
-      name: "SPX 18SEP/14AUG 7350P",
-      verdict: "STOP",
-      rung: "-50%",
-      ruleId: "stop",
-      metric: { name: "pnlPct", value: -0.55, threshold: -0.5 },
-      indicative: true,
-      changed: false,
-      escalate: false,
-      pnlPct: -0.55,
-      basis: { openNetDebit: 400, netMark: 180 },
-      roll: null,
-    },
-    {
-      calendarId: "cal-roll",
-      name: "SPX 28AUG/21AUG 7420P",
-      verdict: "ROLL",
-      rung: null,
-      ruleId: "roll",
-      metric: { name: "dteFront", value: 10, threshold: 14 },
-      indicative: false,
-      changed: false,
-      escalate: false,
-      pnlPct: 0.04,
-      basis: { openNetDebit: 420, netMark: 437 },
-      roll: { suggestedFrontExpiry: "2026-09-11", estNewFrontCredit: 410 },
-    },
-  ],
-  ruleSet: [
-    { id: "stop", kind: "trigger", rationale: "Capital preservation is non-negotiable." },
-    { id: "evt", kind: "trigger", rationale: "A fixed calendar date, not a noise-driven trigger." },
-    { id: "gamma", kind: "trigger", rationale: "Pin/whipsaw risk in the final DTE window." },
-    { id: "term", kind: "trigger", rationale: "Front-back IV inversion means the edge is gone." },
-    { id: "take", kind: "profit-take", rationale: "Profit-taking is patient, evaluated last." },
-    { id: "roll", kind: "roll", rationale: "A constructive continuation, evaluated only once nothing urgent fired." },
-    { id: "hold", kind: "hold", rationale: "Default verdict when no other rule fired." },
-  ],
-};
-
-// Default usePicker()/useExits() mock for every test in this file: a settled, populated picker
-// fetch equal to the frozen Phase-18 fixture (every pre-existing fixture-driven suite below is
-// unaffected) + a cold-start exits fetch (data: null — no held-positions/exit-rules content, so
-// no pre-existing DOM assertion below is affected). Individual tests override either per-test.
+// Default usePicker() mock for every test in this file: a settled, populated picker fetch
+// equal to the frozen Phase-18 fixture. Individual tests override per-test.
 beforeEach(() => {
   mockUsePickerReturn({});
-  mockUseExitsReturn({});
 });
 
 describe("Analyzer — ranked candidate rail (Task 2)", () => {
@@ -968,150 +841,5 @@ describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.rul
     mockUsePickerReturn({ data: snapshotWithRegistry() }); // fixture defaults to rth
     render(<Analyzer />);
     expect(screen.queryByTestId("session-badge")).toBeNull();
-  });
-});
-
-describe("Analyzer — held positions + exit rules panels (26-06-PLAN.md, EXIT-07/EXIT-09/EXIT-10)", () => {
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-  });
-
-  it("renders one held-position row per fixture position + the exit rules list in payload order", () => {
-    mockUseExitsReturn({ data: EXITS_FIXTURE });
-    render(<Analyzer />);
-
-    for (const row of EXITS_FIXTURE.positions) {
-      expect(screen.getByTestId(`held-position-${row.calendarId}`)).toBeTruthy();
-    }
-    const ruleRows = screen.getAllByTestId(/^exit-rule-/);
-    expect(ruleRows.map((el) => el.getAttribute("data-testid"))).toEqual(
-      EXITS_FIXTURE.ruleSet.map((r) => `exit-rule-${r.id}`),
-    );
-  });
-
-  it("STOP escalates to the down-alert chip with the exact verdict label + rule/metric line", () => {
-    mockUseExitsReturn({ data: EXITS_FIXTURE });
-    render(<Analyzer />);
-
-    const chip = screen.getByTestId("held-position-verdict-cal-stop");
-    expect(chip.textContent).toContain("STOP −25%");
-    expect(chip.className).toContain("bg-downd");
-    expect(screen.getByTestId("held-position-rule-cal-stop").textContent).toBe("stop · pnlPct −26.1%");
-  });
-
-  it("EXIT — pre-event escalates to the filled-amber chip, a distinct hue from STOP's fill", () => {
-    mockUseExitsReturn({ data: EXITS_FIXTURE });
-    render(<Analyzer />);
-
-    const chip = screen.getByTestId("held-position-verdict-cal-exit");
-    expect(chip.textContent).toContain("EXIT — pre-event");
-    expect(chip.className).toContain("bg-amber/15");
-    expect(chip.className).not.toContain("bg-downd");
-  });
-
-  it("HOLD/TAKE/ROLL render on the plain (non-alert) chip background", () => {
-    mockUseExitsReturn({ data: EXITS_FIXTURE });
-    render(<Analyzer />);
-
-    for (const id of ["cal-hold", "cal-take", "cal-roll"]) {
-      const chip = screen.getByTestId(`held-position-verdict-${id}`);
-      expect(chip.className).toContain("bg-raise/40");
-      expect(chip.className).not.toContain("bg-downd");
-    }
-  });
-
-  it("T-26-16: an indicative STOP is FORCED to the INDICATIVE treatment, never escalated STOP colors", () => {
-    mockUseExitsReturn({ data: EXITS_FIXTURE });
-    render(<Analyzer />);
-
-    expect(screen.queryByText("STOP −50%")).toBeNull();
-    const indicativeMark = screen.getByTestId("held-position-indicative-cal-indicative");
-    // EXITS_FIXTURE.marketSession is "rth" — a session-agnostic indicative row (e.g. a stale
-    // mark) reads "STALE — indicative", not "AH — indicative" (that string is reserved for an
-    // after-hours-marketSession snapshot, exercised separately below).
-    expect(indicativeMark.textContent).toBe("STALE — indicative");
-    expect(indicativeMark.className).toContain("text-amber");
-  });
-
-  it("indicative marker reads 'AH — indicative' when the snapshot's marketSession is after-hours", () => {
-    mockUseExitsReturn({ data: { ...EXITS_FIXTURE, marketSession: "after-hours" } });
-    render(<Analyzer />);
-
-    const indicativeMark = screen.getByTestId("held-position-indicative-cal-indicative");
-    expect(indicativeMark.textContent).toBe("AH — indicative");
-  });
-
-  it("EXIT-09: a changed verdict shows the CHANGED marker in the verdict's own value color", () => {
-    mockUseExitsReturn({ data: EXITS_FIXTURE });
-    render(<Analyzer />);
-
-    const marker = screen.getByTestId("held-position-changed-cal-take");
-    expect(marker.textContent).toBe("CHANGED");
-    expect(marker.className).toContain("text-up");
-    expect(screen.queryByTestId("held-position-changed-cal-hold")).toBeNull();
-  });
-
-  it("renders the ROLL suggestion detail row only for the ROLL verdict", () => {
-    mockUseExitsReturn({ data: EXITS_FIXTURE });
-    render(<Analyzer />);
-
-    const rollRow = screen.getByTestId("held-position-roll-cal-roll");
-    expect(rollRow.textContent).toContain("2026-09-11");
-    expect(rollRow.textContent).toContain("$410");
-    // WR-03: labelled as the replacement-front SELL credit, not a net "est. debit".
-    expect(rollRow.textContent).toContain("new front est. credit");
-    expect(rollRow.textContent).not.toContain("est. debit");
-    expect(screen.queryByTestId("held-position-roll-cal-hold")).toBeNull();
-  });
-
-  it("EXIT-10: the held-positions panel has no button/order affordance anywhere in its rows", () => {
-    mockUseExitsReturn({ data: EXITS_FIXTURE });
-    render(<Analyzer />);
-
-    for (const row of EXITS_FIXTURE.positions) {
-      const rowEl = screen.getByTestId(`held-position-${row.calendarId}`);
-      expect(rowEl.querySelectorAll("button").length).toBe(0);
-    }
-  });
-
-  it("cold-start: null data shows 'Exit advisor warming up'", () => {
-    mockUseExitsReturn({ data: null, isPending: false, isError: false });
-    render(<Analyzer />);
-
-    const coldStart = screen.getByTestId("held-positions-cold-start");
-    expect(coldStart.textContent).toContain("Exit advisor warming up");
-    expect(coldStart.textContent).toContain(
-      "First verdict pending — check back after the next chain snapshot.",
-    );
-  });
-
-  it("empty: a settled snapshot with zero positions shows 'No open positions'", () => {
-    mockUseExitsReturn({ data: { ...EXITS_FIXTURE, positions: [] }, isPending: false, isError: false });
-    render(<Analyzer />);
-
-    const empty = screen.getByTestId("held-positions-empty");
-    expect(empty.textContent).toContain("No open positions");
-    expect(empty.textContent).toContain(
-      "Nothing to advise on — the exit advisor activates once you have an open calendar.",
-    );
-  });
-
-  it("loading: shows 'Loading exit verdicts…'", () => {
-    mockUseExitsReturn({ data: undefined, isPending: true, isError: false });
-    render(<Analyzer />);
-
-    expect(screen.getByTestId("held-positions-loading").textContent).toBe("Loading exit verdicts…");
-  });
-
-  it("error: shows \"Couldn't load exit verdicts.\" + a Retry button wired to refetch", () => {
-    const refetch = vi.fn();
-    mockUseExitsReturn({ data: undefined, isPending: false, isError: true, refetch });
-    render(<Analyzer />);
-
-    const errorBlock = screen.getByTestId("held-positions-error");
-    expect(errorBlock.textContent).toContain("Couldn't load exit verdicts.");
-    fireEvent.click(within(errorBlock).getByText("Retry"));
-    expect(refetch).toHaveBeenCalledOnce();
   });
 });

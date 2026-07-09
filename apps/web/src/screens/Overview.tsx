@@ -4,6 +4,7 @@ import { useGex } from "../hooks/useGex.ts";
 import { useStatus } from "../hooks/useStatus.ts";
 import { useCot } from "../hooks/useCot.ts";
 import { useMacro } from "../hooks/useMacro.ts";
+import { useExits } from "../hooks/useExits.ts";
 import { useLiveStream } from "../hooks/useLiveStream.ts";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { computePositionGreeks } from "../lib/position-greeks.ts";
@@ -31,7 +32,9 @@ import { relAge, GEX_FRESH_MS } from "./Market.tsx";
 import { CotCard } from "../components/CotCard.tsx";
 import { RegimeBoard } from "../components/RegimeBoard.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
-import { Panel, PanelHeading, SectionLabel, Stat, MetricChip } from "../components/system/index.tsx";
+import { HeldPositionsPanel } from "./HeldPositionsPanel.tsx";
+import { ExitRulesPanel } from "./ExitRulesPanel.tsx";
+import { Panel, PanelHeading, SectionLabel, Stat, MetricChip, Button } from "../components/system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
   Tooltip,
@@ -50,9 +53,12 @@ import type { StreamLiveGreekEvent } from "@morai/contracts";
  *   2. Two-column body: left = payoff hero ("Risk profile — combined book") + docked
  *      positions table; right = 320px GEX rail (dealer γ profile, GEX by strike,
  *      key levels, net book greeks).
- *   3. Positioning & macro detail row (CotCard + RegimeBoard — the merged "Market
+ *   3. Held positions & exit rules row (moved from Analyzer — verdicts belong next to
+ *      the book: HeldPositionsPanel + ExitRulesPanel, sourced from useExits(), same
+ *      loading/error/cold-start/empty precedence Analyzer used).
+ *   4. Positioning & macro detail row (CotCard + RegimeBoard — the merged "Market
  *      regime" panel absorbs the former standalone FRED macro card).
- *   4. Book & system row (BookSummary + SystemHealth, unchanged).
+ *   5. Book & system row (BookSummary + SystemHealth, unchanged).
  *
  * The payoff hero uses `repriceScenario` over calendar positions built from
  * `pairPositionsIntoCalendars`. Task 17-04/2 replaces the placeholder flat IV below
@@ -815,6 +821,12 @@ export function Overview(): React.ReactElement {
   const positions = posData?.positions ?? [];
   const spot = gex?.spot ?? 5800;
 
+  // ── Held positions + exit rules (moved from Analyzer, EXIT-07/EXIT-09/EXIT-10):
+  // same D-18/D-19-style state precedence Analyzer used — loading → error → cold-start
+  // (no verdicts computed anywhere yet) → empty (settled, zero open calendars) → loaded. ──
+  const { data: exitsData, isPending: exitsIsPending, isError: exitsIsError, refetch: exitsRefetch } = useExits();
+  const exitsSnapshot = exitsData ?? null;
+
   // Phase 12-07: live stream hook (D-06 — this surface only).
   // useLiveStream() is called once here and threaded into the payoff hero + docked table.
   // Overview and Analyzer never mount simultaneously (Shell renders one screen at a time)
@@ -982,6 +994,69 @@ export function Overview(): React.ReactElement {
       ? liveLastTickAt.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
       : "—";
 
+  let exitsBody: React.ReactElement;
+  if (exitsIsPending && exitsData === undefined) {
+    exitsBody = (
+      <Panel>
+        <PanelHeading title="Held positions" />
+        <div
+          className="flex items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
+          data-testid="held-positions-loading"
+        >
+          Loading exit verdicts…
+        </div>
+      </Panel>
+    );
+  } else if (exitsIsError) {
+    exitsBody = (
+      <Panel>
+        <PanelHeading title="Held positions" />
+        <div className="flex flex-col items-center gap-2 p-4 text-center" data-testid="held-positions-error">
+          <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load exit verdicts.</p>
+          <Button
+            onClick={() => {
+              void exitsRefetch();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      </Panel>
+    );
+  } else if (exitsSnapshot === null) {
+    exitsBody = (
+      <Panel>
+        <PanelHeading title="Held positions" />
+        <div className="flex flex-col gap-1.5 p-4" data-testid="held-positions-cold-start">
+          <p className="m-0 font-display text-sm font-bold text-txt">Exit advisor warming up</p>
+          <p className="m-0 font-mono text-[11px] text-dim">
+            First verdict pending — check back after the next chain snapshot.
+          </p>
+        </div>
+      </Panel>
+    );
+  } else if (exitsSnapshot.positions.length === 0) {
+    exitsBody = (
+      <Panel>
+        <PanelHeading title="Held positions" />
+        <div className="flex flex-col gap-1.5 p-4" data-testid="held-positions-empty">
+          <p className="m-0 font-display text-sm font-bold text-txt">No open positions</p>
+          <p className="m-0 font-mono text-[11px] text-dim">
+            Nothing to advise on — the exit advisor activates once you have an open calendar.
+          </p>
+        </div>
+      </Panel>
+    );
+  } else {
+    exitsBody = (
+      <HeldPositionsPanel
+        positions={exitsSnapshot.positions}
+        observedAt={exitsSnapshot.observedAt}
+        marketSession={exitsSnapshot.marketSession}
+      />
+    );
+  }
+
   return (
     <div className="mx-auto flex max-w-[1480px] flex-col gap-5 p-3.5">
       <PillHeader gex={gex} cotLev={cotLev} macro={macro} bookPnl={bookPnl} />
@@ -1142,6 +1217,16 @@ export function Overview(): React.ReactElement {
           <GexRail gex={gex} railGreeks={railGreeks} />
         </div>
       </div>
+
+      {/* ── Held positions & exit rules (moved from Analyzer — verdicts belong next to
+          the book, immediately below the positions table above) ── */}
+      <section>
+        <SectionLabel className="mb-2">Held positions & exit rules</SectionLabel>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {exitsBody}
+          {exitsSnapshot !== null && <ExitRulesPanel ruleSet={exitsSnapshot.ruleSet} />}
+        </div>
+      </section>
 
       {/* ── Positioning & macro detail: COT + Market regime (Phase 24 BOARD-01/02,
           merged with the former FRED macro card in the post-v1.3 tweak) ── */}
