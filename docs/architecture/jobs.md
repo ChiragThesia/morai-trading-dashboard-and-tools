@@ -23,7 +23,7 @@ handlers are thin inbound adapters calling application use-cases.
 |---|---|---|
 | `fetch-schwab-chain` | every 30 min RTH | Dual-source SPX/SPXW chain fetch (Schwab + CBOE) → `leg_observations` + `contracts`; see "Chain fetch" section |
 | `snapshot-calendars` | chain-triggered only (NO cron) | For each open calendar: resolve front + back legs; write a `calendar_snapshots` row ONLY when both legs are present and fresher than `SNAPSHOT_LEG_STALENESS_TOLERANCE_MS` (~45 min = 1.5x the 30-min chain cadence). A missing or stale leg means that calendar is skipped for the cycle (no row written), logged via `console.warn`, self-healing on the next fresh cycle (OPS-01 root-cause fix — historical gap rows are never backfilled) |
-| `compute-bsm-greeks` | every 1 min (drains pending) | Scan `leg_observations WHERE bsm_iv IS NULL` → IV invert → BSM → upsert |
+| `compute-bsm-greeks` | chain-triggered (`fetch-schwab-chain`/`fetch-cboe-chain` on success) + hourly `0 * * * *` sparse fallback | Batch-commit loop (OPS-02): reads newest-first pending rows in `COMMIT_BATCH_SIZE` (800) slices, solves + `writeBsm`s each slice as a durable checkpoint, and voluntarily returns `ok` when the `BSM_TIME_BUDGET_MS` (700,000ms) wall-clock budget is hit — remaining rows drain on the next trigger (the `bsm_iv IS NULL` predicate makes resume free). Both constants are tunable (MEDIUM confidence, see RESEARCH A2) |
 | `sync-fills` | `*/10 9-16 * * 1-5` (every 10 min RTH) | Schwab transactions → `fills`/`orders`; pair into calendar OPEN/CLOSE/ROLL events |
 | `refresh-tokens` | RETIRED (GW-03) | Token refresh moved to the schwab-py sidecar (Phase 11 cutover); removed from the trigger surface in Phase 15 — see section below |
 | `fetch-rates` | `0 9 * * 1-5` + `30 18 * * 1-5` | FRED DGS3MO daily (BSM rate) + expanded macro fetch (Phase 14) |
@@ -302,8 +302,12 @@ export type ForEnqueueingJob = (
   old dashboard, adapted to pg-boss.)
 - **Idempotent handlers** — every handler safe to run twice (append-only tables + upserts make
   this natural).
-- **Retries**: default `retryLimit: 5`, exponential backoff. 4xx-class errors (bad request,
-  auth permanently broken) fail fast — no retry.
+- **Retries**: pg-boss v12 `QUEUE_DEFAULTS` — `retry_limit: 2`, `retry_backoff: false`,
+  `retry_delay: 0` (no override in `schedule.ts`). `retry_delay: 0` means a retry fires
+  immediately once pg-boss's maintenance cycle detects a job stuck past `expire_seconds`
+  (900s default) — so the "~15-min retry" behavior seen in practice is expiry-detection
+  latency, not a configured backoff. 4xx-class errors (bad request, auth permanently
+  broken) fail fast — no retry.
 - **Structured failure results** — handlers return `{ computed: false, reason }` style results,
   logged queryably; never swallow.
 - **Job payloads Zod-parsed** at the handler boundary.
