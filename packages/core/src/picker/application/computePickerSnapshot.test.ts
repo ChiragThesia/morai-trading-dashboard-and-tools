@@ -292,6 +292,7 @@ function baseDeps(overrides: {
   readonly recentClosed?: ReadonlyArray<RecentClosedCalendar>;
   readonly recentClosedReadError?: boolean;
   readonly previousSnapshot?: PickerSnapshotRow | null;
+  readonly now?: () => Date;
 }) {
   const { persistPickerSnapshot, rows } = makeRecordingPersist();
   // Note: `??` would coalesce an explicit `null` (missing-GEX fixture) back to the default --
@@ -337,7 +338,7 @@ function baseDeps(overrides: {
       readPickerSnapshot: fakeReadPickerSnapshot(previousSnapshot),
       rate: R,
       dividendYield: Q,
-      now: () => NOW,
+      now: overrides.now ?? (() => NOW),
     },
     rows,
     readMacroCallCount: () => readMacroCallCount,
@@ -752,6 +753,32 @@ describe("makeComputePickerSnapshotUseCase — entry gate (28-03, PLAY-01/PLAY-0
     if (row === undefined) return;
     expect(row.snapshot.gate.brakes.cooldown).toBe(false);
     expect(row.snapshot.gate.brakes.cooldownUntil).toBeNull();
+  });
+
+  // IN-02: nowIso must derive from the ET calendar day (the day FRED's VIXCLS/VXVCLS EOD dates
+  // are stamped in), never the UTC calendar day -- a late-UTC run can otherwise add a spurious
+  // stale business day to the gate's businessDaysSince(asOf, nowIso) staleness check.
+  it("a late-UTC now (still evening ET, same ET day) does not add a spurious stale business day (IN-02)", async () => {
+    const rows: ReadonlyArray<MacroObservationRow> = [
+      { seriesId: "VIXCLS", date: "2026-06-25", value: 15, source: "fred" },
+      { seriesId: "VXVCLS", date: "2026-06-25", value: 20, source: "fred" },
+    ];
+    // 2026-07-01T03:00Z is 2026-06-30T23:00 EDT (America/New_York, UTC-4 in July) -- the UTC
+    // calendar day is Wed 07-01 (4 business days from Thu 06-25 -> would trip GATE BLIND at
+    // GATE_BLIND_MAX_BIZDAYS=3); the correct ET calendar day is Tue 06-30 (3 business days --
+    // within tolerance).
+    const { deps, rows: persisted } = baseDeps({
+      macroRows: rows,
+      now: () => new Date("2026-07-01T03:00:00.000Z"),
+    });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = persisted[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.snapshot.gate.state).not.toBe("blind");
   });
 });
 

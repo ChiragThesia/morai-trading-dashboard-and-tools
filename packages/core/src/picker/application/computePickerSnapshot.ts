@@ -138,6 +138,31 @@ function isoDateToUtcMs(iso: string): number {
   return Date.UTC(Number(y), Number(m) - 1, Number(d));
 }
 
+/**
+ * etDateIso — the ET calendar day (YYYY-MM-DD) of `now`, via Intl.DateTimeFormat with
+ * timeZone:'America/New_York' — the SAME mechanism @morai/shared's isNyseHoliday uses
+ * internally (nyse-holidays.ts). FRED's VIXCLS/VXVCLS EOD dates are stamped in the ET
+ * calendar day; a UTC calendar day (`toISOString().slice(0,10)`) can run one day ahead of
+ * the ET day for late-UTC timestamps, adding a spurious stale business day to the gate's
+ * businessDaysSince(asOf, nowIso) staleness check (IN-02).
+ */
+function etDateIso(now: Date): string {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = fmt.formatToParts(now);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+  assertDefined(year, "etDateIso: year component");
+  assertDefined(month, "etDateIso: month component");
+  assertDefined(day, "etDateIso: day component");
+  return `${year}-${month}-${day}`;
+}
+
 /** D-17: gexContextStatus — "missing" when absent, "stale" beyond the freshness window, else "ok". */
 function resolveGexContextStatus(
   gexContext: GexContextForPicker | null,
@@ -408,7 +433,7 @@ export function makeComputePickerSnapshotUseCase(
 
     // ── Step 3c: entry-gate inputs — macro pair, open-calendar count, recent-closed rows,
     // and the previous cycle's gate for hysteresis (28-03, PLAY-01/PLAY-02) ──
-    const nowIso = now.toISOString().slice(0, 10);
+    const nowIso = etDateIso(now);
     const cooldownSinceIso = cooldownCutoff(nowIso);
 
     const macroResult = await deps.readMacroObservations();
