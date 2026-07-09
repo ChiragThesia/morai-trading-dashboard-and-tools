@@ -19,6 +19,11 @@
  * snapshot never reads as fresh/clean (T-19-21). `observedAt` is the full-ISO real instant
  * (WR-03), not the date-only `asOf` reference date.
  *
+ * A `bucket === "event-calendar"` candidate (28-05/28-06, PLAY-04 — the short-gap universe that
+ * intentionally owns a scheduled event) renders a distinct amber label under the header — the
+ * same amber token the front/back event tags already use, since this is the same "event"
+ * semantic at the whole-candidate level rather than a new color/token.
+ *
  * Hand-rolled bar fills (bg-violet/bg-blue/bg-up/bg-amber Tailwind tokens, no hardcoded hex)
  * mirror PayoffChart.tsx's existing hand-rolled precedent (UI-SPEC Registry Safety).
  */
@@ -177,6 +182,15 @@ export function CandidateCard({
           <span className="font-display text-sm font-bold text-violet">{candidate.score}</span>
         )}
       </div>
+
+      {!pasted && candidate.bucket === "event-calendar" && (
+        <span
+          className="mt-0.5 inline-block rounded-sm bg-amber/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-amber"
+          data-testid={`bucket-label-${candidate.id}`}
+        >
+          Event-calendar bucket
+        </span>
+      )}
 
       <div className="mt-0.5 font-mono text-[9px] text-dim">
         {pasted ? (

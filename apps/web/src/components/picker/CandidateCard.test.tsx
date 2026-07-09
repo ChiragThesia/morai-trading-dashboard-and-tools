@@ -31,6 +31,7 @@ function makeCandidate(overrides: {
   breakdown: BreakdownEntry[];
   fwdIv: number | null;
   fwdIvGuard: "ok" | "inverted";
+  bucket?: "standard" | "event-calendar";
 }): PickerCandidate {
   return {
     id: overrides.id,
@@ -50,11 +51,14 @@ function makeCandidate(overrides: {
     backEvents: ["FOMC"],
     frontLeg: leg(7500, 0.1249, 21),
     backLeg: leg(7500, 0.1402, 43),
+    context: [],
+    bucket: overrides.bucket ?? "standard",
     exitPlan: {
       profitTargetPct: 0.25,
       stopPct: 0.175,
       manageShortDte: 21,
       closeByExpiry: "2026-07-23",
+      thetaCapturePct: null,
     },
   };
 }
@@ -189,7 +193,15 @@ describe("CandidateCard — pasted variant (paste-redesign)", () => {
       backEvents: [],
       frontLeg: leg(7450, 0.17, 30),
       backLeg: leg(7450, 0.17, 58),
-      exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "" },
+      context: [],
+      bucket: "standard",
+      exitPlan: {
+        profitTargetPct: 0.25,
+        stopPct: 0.175,
+        manageShortDte: 21,
+        closeByExpiry: "",
+        thetaCapturePct: null,
+      },
     };
   }
 
@@ -711,5 +723,61 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
     const caption = screen.getByTestId("breakdown-bar-fill-eventAdjustment").parentElement
       ?.nextElementSibling;
     expect(caption?.textContent).toBe("ok");
+  });
+});
+
+describe("CandidateCard — event-calendar bucket label (28-06, PLAY-04)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders a distinct bucket label for an event-calendar candidate", () => {
+    const candidate = makeCandidate({
+      id: "event-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+      bucket: "event-calendar",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId("bucket-label-event-1")).toBeTruthy();
+  });
+
+  it("renders no bucket label for a standard candidate", () => {
+    const candidate = makeCandidate({
+      id: "standard-1",
+      breakdown: SHUFFLED_BREAKDOWN,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+      bucket: "standard",
+    });
+
+    render(
+      <CandidateCard
+        candidate={candidate}
+        selected={false}
+        combined={false}
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.queryByTestId("bucket-label-standard-1")).toBeNull();
   });
 });

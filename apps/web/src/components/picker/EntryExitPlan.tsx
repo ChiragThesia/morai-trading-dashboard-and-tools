@@ -7,8 +7,33 @@
  * closeByExpiry itself. Row labels are fixed literal copy per D-01b (Phase 18 renders the fixed
  * +25%/−17.5%/21-DTE defaults verbatim — no per-candidate label templating), while every VALUE is
  * computed from the candidate's own `exitPlan` fields, never hardcoded.
+ *
+ * A 6th row (28-06, PLAY-03) renders the engine-resolved VIX-tiered sizing recommendation from
+ * `PickerSnapshotResponse.sizing` — passed in as a prop (sizing is a snapshot-level field, not
+ * per-candidate), never recomputed here. Null/no-tier (GATE BLIND / cold start / prop omitted)
+ * renders "No recommendation" — the same null-honest convention `sizing.ts` (core) established.
  */
-import type { PickerCandidate } from "@morai/contracts";
+import type { PickerCandidate, PickerSizing } from "@morai/contracts";
+
+const SIZING_TIER_LABEL: Record<NonNullable<PickerSizing["tier"]>, string> = {
+  low: "Low",
+  normal: "Normal",
+  elevated: "Elevated",
+  crisis: "Crisis",
+};
+
+function formatVix(vix: number): string {
+  return Number.isInteger(vix) ? String(vix) : vix.toFixed(1);
+}
+
+function formatSizing(sizing: PickerSizing | null): string {
+  if (sizing === null || sizing.tier === null || sizing.contracts === null) {
+    return "No recommendation";
+  }
+  const vixPrefix = sizing.vix === null ? "" : `VIX ${formatVix(sizing.vix)} → `;
+  const contractsLabel = `${sizing.contracts} contract${sizing.contracts === 1 ? "" : "s"}`;
+  return `${vixPrefix}${SIZING_TIER_LABEL[sizing.tier]} → ${contractsLabel}`;
+}
 
 function debitUsd(v: number): string {
   return v >= 0 ? `$${v.toFixed(0)}` : `−$${Math.abs(v).toFixed(0)}`;
@@ -36,9 +61,12 @@ const MS_PER_DAY = 86_400_000;
 
 export interface EntryExitPlanProps {
   readonly candidate: PickerCandidate;
+  /** VIX-tiered sizing recommendation from the snapshot (28-06, PLAY-03) — omitted/null
+   *  renders "No recommendation", never a guessed tier. */
+  readonly sizing?: PickerSizing | null;
 }
 
-export function EntryExitPlan({ candidate }: EntryExitPlanProps): React.ReactElement {
+export function EntryExitPlan({ candidate, sizing = null }: EntryExitPlanProps): React.ReactElement {
   const { debit, exitPlan } = candidate;
   const target = Math.abs(debit) * exitPlan.profitTargetPct;
   const stop = Math.abs(debit) * exitPlan.stopPct;
@@ -71,6 +99,11 @@ export function EntryExitPlan({ candidate }: EntryExitPlanProps): React.ReactEle
             : `${fmtDate(closeByDate)} (front expiry)`
         }
         valueClassName="text-amber"
+      />
+      <PlanRow
+        label="Recommended sizing"
+        testId="entryexit-value-sizing"
+        value={formatSizing(sizing)}
       />
       <p className="m-0 mt-1.5 font-mono text-[9px] leading-[1.5] text-dim">
         Max-loss=debit holds only if closed as a spread by front expiration (European SPX, no

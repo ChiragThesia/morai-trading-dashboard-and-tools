@@ -23,7 +23,7 @@
  * No any/as/!.
  */
 import { useCallback, useMemo, useState } from "react";
-import type { PickerCandidate, BreakdownEntry, PickerGexContext, RuleSetEntry } from "@morai/contracts";
+import type { PickerCandidate, BreakdownEntry, PickerGexContext, RuleSetEntry, PickerSizing } from "@morai/contracts";
 import { cn } from "@/lib/utils";
 import { CandidateCard } from "../components/picker/CandidateCard.tsx";
 import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
@@ -398,6 +398,9 @@ function ScoringMethodologyPanel({
 export interface RightColumnProps {
   readonly candidate: PickerCandidate | null;
   readonly gex: PickerGexContext | null;
+  /** VIX-tiered sizing recommendation from the snapshot (28-06, PLAY-03) — threaded straight
+   *  to EntryExitPlan, never recomputed here. */
+  readonly sizing: PickerSizing | null;
 }
 
 /**
@@ -405,7 +408,7 @@ export interface RightColumnProps {
  * candidate. The term-structure chart moved to the center column (stacked under the payoff graph);
  * reads the live snapshot's GEX context (Phase 19: never the frozen fixture).
  */
-function RightColumn({ candidate, gex }: RightColumnProps): React.ReactElement {
+function RightColumn({ candidate, gex, sizing }: RightColumnProps): React.ReactElement {
   const isPasted = candidate !== null && isPastedId(candidate.id);
   return (
     <div className="flex flex-col gap-3">
@@ -422,7 +425,7 @@ function RightColumn({ candidate, gex }: RightColumnProps): React.ReactElement {
         {isPasted ? (
           <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
         ) : (
-          candidate !== null && <EntryExitPlan candidate={candidate} />
+          candidate !== null && <EntryExitPlan candidate={candidate} sizing={sizing} />
         )}
       </Panel>
     </div>
@@ -878,7 +881,7 @@ export function Analyzer(): React.ReactElement {
       </div>
 
       {/* ── Right column: why-panel / entry-exit-plan ─── */}
-      <RightColumn candidate={selected} gex={snapshot?.gex ?? null} />
+      <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
       </div>
 
       {/* ── Held positions + exit rules (EXIT-07/EXIT-09): new full-width sections below the

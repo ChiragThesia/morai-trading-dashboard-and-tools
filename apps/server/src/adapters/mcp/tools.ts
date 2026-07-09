@@ -582,7 +582,7 @@ export function registerGetPickerCandidatesTool(
     {
       title: "Get Picker Candidates",
       description:
-        "Returns the latest scored calendar-spread picker candidates — term structure, GEX context, scheduled economic events, and per-candidate score breakdowns. Returns {error:'no-snapshot'} when no snapshot has been computed yet.",
+        "Returns the latest scored calendar-spread picker candidates — term structure, GEX context, scheduled economic events, and per-candidate score breakdowns. Also carries the market-level entry gate (VIX/VIX3M-ratio crisis state + anti-criteria brakes), a VIX-tiered sizing recommendation (tier + contract count), and each candidate's universe bucket (standard vs event-calendar). Returns {error:'no-snapshot'} when no snapshot has been computed yet.",
       // No input parameters — returns the latest stored snapshot (no filters).
       inputSchema: {},
     },

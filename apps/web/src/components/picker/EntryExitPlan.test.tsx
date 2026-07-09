@@ -94,3 +94,41 @@ describe("EntryExitPlan — 5 locked rows + arithmetic (ANLZ-03/D-01b)", () => {
     ).toBeTruthy();
   });
 });
+
+describe("EntryExitPlan — sizing tier + contract count (28-06, PLAY-03)", () => {
+  afterEach(cleanup);
+
+  it("renders the engine-resolved sizing tier + contract count from the snapshot's sizing field", () => {
+    render(
+      <EntryExitPlan
+        candidate={NORMAL}
+        sizing={{ tier: "normal", contracts: 2, vix: 18 }}
+      />,
+    );
+    expect(screen.getByTestId("entryexit-value-sizing").textContent).toBe(
+      "VIX 18 → Normal → 2 contracts",
+    );
+  });
+
+  it("pluralizes correctly for a single-contract recommendation", () => {
+    render(
+      <EntryExitPlan
+        candidate={NORMAL}
+        sizing={{ tier: "elevated", contracts: 1, vix: 22 }}
+      />,
+    );
+    expect(screen.getByTestId("entryexit-value-sizing").textContent).toBe(
+      "VIX 22 → Elevated → 1 contract",
+    );
+  });
+
+  it("renders 'No recommendation' when sizing is omitted (never recomputed client-side)", () => {
+    render(<EntryExitPlan candidate={NORMAL} />);
+    expect(screen.getByTestId("entryexit-value-sizing").textContent).toBe("No recommendation");
+  });
+
+  it("renders 'No recommendation' when sizing.tier is null (GATE BLIND / cold start)", () => {
+    render(<EntryExitPlan candidate={NORMAL} sizing={{ tier: null, contracts: null, vix: null }} />);
+    expect(screen.getByTestId("entryexit-value-sizing").textContent).toBe("No recommendation");
+  });
+});
