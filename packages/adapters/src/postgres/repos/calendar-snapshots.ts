@@ -168,6 +168,7 @@ export function makePostgresCalendarSnapshotsRepo(
       // Step 2: latest leg_observation for this occSymbol
       const obsRows = await db
         .select({
+          time: legObservations.time,
           mark: legObservations.mark,
           underlyingPrice: legObservations.underlyingPrice,
           iv: legObservations.iv,
@@ -188,6 +189,7 @@ export function makePostgresCalendarSnapshotsRepo(
 
       const leg: LegSnapshot = {
         occSymbol: formatOccSymbol(parsedOcc.value),
+        time: obsRow.time,
         mark: parseFloat(obsRow.mark),
         underlyingPrice: parseFloat(obsRow.underlyingPrice),
         ivRaw: obsRow.iv !== null ? parseFloat(obsRow.iv) : null,

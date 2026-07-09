@@ -175,6 +175,8 @@ export type ForGettingOpenCalendarLegs = () => Promise<
 // underlyingPrice is needed for the spot column in SnapshotRow.
 export type LegSnapshot = {
   readonly occSymbol: OccSymbol;
+  /** The observation instant (leg_observations.time) — feeds the OPS-01 freshness gate. */
+  readonly time: Date;
   readonly mark: number;
   readonly underlyingPrice: number;
   readonly ivRaw: number | null;

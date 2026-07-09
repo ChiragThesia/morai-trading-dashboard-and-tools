@@ -85,6 +85,7 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
 
     const leg: LegSnapshot = {
       occSymbol: latest.contract,
+      time: latest.time,
       mark: latest.mark,
       underlyingPrice: latest.underlyingPrice,
       ivRaw: latest.iv,

@@ -41,6 +41,7 @@ const BACK_OCC = formatOccSymbol({
 function makeLegSnapshot(occSymbol: OccSymbol, overrides?: Partial<LegSnapshot>): LegSnapshot {
   return {
     occSymbol,
+    time: new Date("2026-06-14T15:00:00Z"),
     mark: 25.4,
     underlyingPrice: 7274.14,
     ivRaw: 0.25,

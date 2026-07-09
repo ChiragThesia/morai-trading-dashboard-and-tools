@@ -4,8 +4,11 @@
  * Algorithm:
  *   1. Get all open calendars (closed calendars are excluded by the port)
  *   2. For each calendar, resolve front leg (by frontExpiry) and back leg (by backExpiry)
- *   3. Build a SnapshotRow per D-05 formulas and D-06 NaN continuity rule
- *   4. Persist each row (idempotency is the repo's job via composite PK)
+ *   3. OPS-01 freshness gate: skip the calendar (no row) when either leg is missing or older
+ *      than SNAPSHOT_LEG_STALENESS_TOLERANCE_MS — never write a zero/NaN gap row or serve
+ *      stale marks silently. Next cycle self-heals; historical gap rows are never backfilled.
+ *   4. Build a SnapshotRow per D-05 formulas and D-06 NaN continuity rule
+ *   5. Persist each row (idempotency is the repo's job via composite PK)
  *
  * D-05 formulas:
  *   net_mark = back_mark - front_mark
@@ -13,8 +16,9 @@
  *   pnl_open = (net_mark - open_net_debit) * qty * 100
  *   term_slope = back_iv - front_iv
  *
- * D-06 NaN continuity: when a leg is null or has bsmIv='NaN', STILL write the row.
- *   Affected columns (IV, greeks, termSlope) get NAN_STAMP; marks and pnlOpen still populate.
+ * D-06 NaN continuity (only reached once both legs pass the freshness gate): when a leg's
+ *   bsmIv='NaN' (fresh but unsolved), STILL write the row. Affected columns (IV, greeks,
+ *   termSlope) get NAN_STAMP; marks and pnlOpen still populate.
  *
  * Pure domain: no I/O, no Date.now(), imports only @morai/shared and ports/domain.
  */
@@ -34,6 +38,22 @@ import { calendarDte } from "../domain/dte.ts";
 
 // NaN sentinel — always use this string, never JS NaN (D-06, T-03-13)
 export const NAN_STAMP = "NaN";
+
+/**
+ * SNAPSHOT_LEG_STALENESS_TOLERANCE_MS — OPS-01 freshness gate tolerance: 45 minutes
+ * (1.5x the 30-min RTH chain-fetch cadence). MEDIUM-confidence tunable per RESEARCH A1.
+ */
+export const SNAPSHOT_LEG_STALENESS_TOLERANCE_MS = 45 * 60 * 1000;
+
+/**
+ * isLegFresh — OPS-01 freshness predicate. A missing leg (null) is never fresh. A present
+ * leg is fresh when its observation instant is within the tolerance of `now`. Boundary is
+ * inclusive: exactly at the tolerance edge counts as fresh.
+ */
+export function isLegFresh(leg: LegSnapshot | null, now: Date): boolean {
+  if (leg === null) return false;
+  return now.getTime() - leg.time.getTime() <= SNAPSHOT_LEG_STALENESS_TOLERANCE_MS;
+}
 
 /**
  * computeSnapshotPnl — D-05 pnl_open formula, exported so the JRNL-01 data-correction path
@@ -147,10 +167,11 @@ function buildSnapshotRow(
 /**
  * makeSnapshotCalendarsUseCase — factory returning the batch snapshot use-case.
  *
- * Iterates all open calendars. Resolves both legs. Builds the row per D-05/D-06.
- * Persists unconditionally (idempotency is handled by the composite-PK repo).
- * Propagates StorageError from getOpenCalendars or persistSnapshot.
- * resolveLegs errors are treated as null legs per D-06 (never abort the loop).
+ * Iterates all open calendars. Resolves both legs, applies the OPS-01 freshness gate, and
+ * builds the row per D-05/D-06 only when both legs pass. Idempotency is handled by the
+ * composite-PK repo. Propagates StorageError from getOpenCalendars or persistSnapshot.
+ * resolveLegs errors are treated as null legs (never abort the whole run) — a null leg now
+ * fails the freshness gate and skips that one calendar's cycle instead of persisting.
  */
 export function makeSnapshotCalendarsUseCase(
   deps: SnapshotCalendarsDeps,
@@ -182,6 +203,18 @@ export function makeSnapshotCalendarsUseCase(
         expiry: calendar.backExpiry,
       });
       const back = backResult.ok ? backResult.value : null;
+
+      // OPS-01: skip this calendar's cycle when either leg is missing or stale — never write
+      // a spot=0/net_mark=0/front_iv=NaN gap row (Jul-06 mechanism) or silently serve stale
+      // marks. Next cycle self-heals; historical rows are never backfilled.
+      if (!isLegFresh(front, now) || !isLegFresh(back, now)) {
+        const frontReason = front === null ? "missing" : "stale";
+        const backReason = back === null ? "missing" : "stale";
+        console.warn(
+          `snapshot-calendars: skipping calendar ${calendar.id} — front leg ${isLegFresh(front, now) ? "fresh" : frontReason}, back leg ${isLegFresh(back, now) ? "fresh" : backReason}`,
+        );
+        continue;
+      }
 
       const row = buildSnapshotRow(now, calendar, front, back, trigger);
 

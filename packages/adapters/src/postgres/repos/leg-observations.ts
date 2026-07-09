@@ -266,6 +266,7 @@ export function makePostgresLegObservationsRepo(
     try {
       const rows = await db
         .select({
+          time: legObservations.time,
           contract: legObservations.contract,
           mark: legObservations.mark,
           underlyingPrice: legObservations.underlyingPrice,
@@ -291,6 +292,7 @@ export function makePostgresLegObservationsRepo(
 
       const leg: LegSnapshot = {
         occSymbol: formatOccSymbol(parsedOcc.value),
+        time: row.time,
         mark: parseFloat(row.mark),
         underlyingPrice: parseFloat(row.underlyingPrice),
         ivRaw: row.iv !== null ? parseFloat(row.iv) : null,

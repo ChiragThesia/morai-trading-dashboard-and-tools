@@ -6,15 +6,20 @@
  *
  * Covers:
  *   - Happy path: front+back legs → exact D-05 formulas for every column
- *   - NaN-leg case: row still written with frontIv='NaN', pnlOpen populated
+ *   - NaN-leg case (fresh-but-unsolved bsmIv): row still written with frontIv='NaN', pnlOpen populated
  *   - Idempotency: persistSnapshot called once per calendar
  *   - fast-check property: pnlOpen = (netMark - openNetDebit) * qty * 100 for any inputs
+ *   - OPS-01 freshness gate: a missing or stale leg SKIPS the row entirely (no zero/NaN gap row)
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ok, err, formatOccSymbol } from "@morai/shared";
 import * as fc from "fast-check";
-import { makeSnapshotCalendarsUseCase } from "./snapshotCalendars.ts";
+import {
+  makeSnapshotCalendarsUseCase,
+  isLegFresh,
+  SNAPSHOT_LEG_STALENESS_TOLERANCE_MS,
+} from "./snapshotCalendars.ts";
 import type { SnapshotCalendarsDeps } from "./snapshotCalendars.ts";
 import type {
   Calendar,
@@ -49,9 +54,14 @@ function makeCalendar(overrides: Partial<Calendar> = {}): Calendar {
 // Reusable branded OccSymbol for test doubles
 const TEST_OCC = formatOccSymbol({ root: "SPX", expiry: new Date("2026-07-18T12:00:00Z"), type: "C", strike: 5000 });
 
+// Default leg time: 1 minute before makeDeps' now (2026-07-01T19:00:00Z) — fresh under any
+// reasonable tolerance, so existing fixtures stay green without every call site overriding it.
+const FRESH_TIME = new Date("2026-07-01T18:59:00Z");
+
 function makeLegSnapshot(overrides: Partial<LegSnapshot> = {}): LegSnapshot {
   return {
     occSymbol: TEST_OCC,
+    time: FRESH_TIME,
     mark: 20.0,
     underlyingPrice: 5010.0,
     ivRaw: 0.22,
@@ -305,7 +315,7 @@ describe("makeSnapshotCalendarsUseCase", () => {
       expect(parseFloat(row.pnlOpen)).toBeCloseTo(1000, 5);
     });
 
-    it("when front resolves null (storage error): row still written with NaN fields", async () => {
+    it("when front resolves null (storage error): calendar is SKIPPED (OPS-01) — no row, run still ok", async () => {
       const cal = makeCalendar({ qty: 1, openNetDebit: 3.0 });
       let callCount = 0;
       const resolveLegs: ForResolvingLegSnapshot = async () => {
@@ -325,24 +335,23 @@ describe("makeSnapshotCalendarsUseCase", () => {
           persistSnapshot: capture.persistSnapshot,
         }),
       );
-      await useCase();
+      const result = await useCase();
 
-      // Row still persisted despite front leg error
-      expect(capture.calledTimes()).toBe(1);
-      const row = capture.rows[0];
-      if (row === undefined) throw new Error("no row captured");
-      expect(row.frontIv).toBe("NaN");
-      expect(row.netDelta).toBe("NaN");
-      // Back mark still present; front mark defaults to 0
-      expect(row.frontMark).toBe("0");
-      expect(row.backMark).toBe("20");
+      // OPS-01: a resolve error is treated as a missing leg (unchanged error policy) — the
+      // freshness gate now skips the row instead of writing a spot=0/NaN gap row. The run
+      // itself still succeeds; only this calendar's cycle is skipped (self-heals next cycle).
+      expect(result.ok).toBe(true);
+      expect(capture.calledTimes()).toBe(0);
     });
+  });
 
-    it("when front resolves ok(null): treated as missing leg — NaN fields", async () => {
+  describe("freshness gate (OPS-01) — Jul-06 gap-row shapes eliminated", () => {
+    it("Test A (zero-row shape): a missing leg (resolveLegs ok(null)) → persistSnapshot called ZERO times, warns", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       let callCount = 0;
       const resolveLegs: ForResolvingLegSnapshot = async () => {
         callCount += 1;
-        if (callCount === 1) return ok(null); // front is null
+        if (callCount === 1) return ok(null); // front is missing
         return ok(makeLegSnapshot({ mark: 20.0 }));
       };
       const capture = makePersistCapture();
@@ -352,10 +361,90 @@ describe("makeSnapshotCalendarsUseCase", () => {
       );
       await useCase();
 
+      expect(capture.calledTimes()).toBe(0);
+      expect(warnSpy).toHaveBeenCalled();
+      const warnMsg = String(warnSpy.mock.calls[0]?.[0] ?? "");
+      expect(warnMsg).toMatch(/cal-001/);
+      warnSpy.mockRestore();
+    });
+
+    it("Test B (stale-serve shape): both legs resolve but the front leg is older than the tolerance → skipped, warns", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const now = new Date("2026-07-01T19:00:00Z");
+      const staleTime = new Date(now.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS - 1);
+      const frontLeg = makeLegSnapshot({ time: staleTime, mark: 10.0 });
+      const backLeg = makeLegSnapshot({ mark: 20.0 });
+
+      let callCount = 0;
+      const resolveLegs: ForResolvingLegSnapshot = async () => {
+        callCount += 1;
+        return ok(callCount === 1 ? frontLeg : backLeg);
+      };
+      const capture = makePersistCapture();
+
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ resolveLegs, persistSnapshot: capture.persistSnapshot }),
+      );
+      await useCase();
+
+      // Was: stale marks silently served. Now: skipped, zero persists.
+      expect(capture.calledTimes()).toBe(0);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it("Test C (boundary): a leg exactly at the tolerance edge is fresh; one ms past is stale", () => {
+      const now = new Date("2026-07-01T19:00:00Z");
+      const atEdge = makeLegSnapshot({
+        time: new Date(now.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS),
+      });
+      const pastEdge = makeLegSnapshot({
+        time: new Date(now.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS - 1),
+      });
+
+      // Documented boundary semantics: <= tolerance = fresh, > tolerance = stale.
+      expect(isLegFresh(atEdge, now)).toBe(true);
+      expect(isLegFresh(pastEdge, now)).toBe(false);
+      expect(isLegFresh(null, now)).toBe(false);
+    });
+
+    it("Test D (regression, both fresh): exactly one persist, row identical to today's D-05/D-06 output", async () => {
+      const capture = makePersistCapture();
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ persistSnapshot: capture.persistSnapshot }),
+      );
+      await useCase();
+
+      expect(capture.calledTimes()).toBe(1);
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
+      expect(row.frontIv).toBe("0.22");
+      expect(row.backIv).toBe("0.22");
+    });
+
+    it("Test E (D-06 preserved): both legs fresh but front bsmIv='NaN' → row STILL written with NaN greeks + populated marks", async () => {
+      const frontLeg = makeLegSnapshot({ bsmIv: "NaN", mark: 10.0 });
+      const backLeg = makeLegSnapshot({ bsmIv: "0.25", mark: 25.0 });
+
+      let callCount = 0;
+      const resolveLegs: ForResolvingLegSnapshot = async () => {
+        callCount += 1;
+        return ok(callCount === 1 ? frontLeg : backLeg);
+      };
+      const capture = makePersistCapture();
+
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ resolveLegs, persistSnapshot: capture.persistSnapshot }),
+      );
+      await useCase();
+
+      // Freshness gate is about age/presence, NOT BSM solve state — D-06 continuity holds.
+      expect(capture.calledTimes()).toBe(1);
       const row = capture.rows[0];
       if (row === undefined) throw new Error("no row captured");
       expect(row.frontIv).toBe("NaN");
-      expect(capture.calledTimes()).toBe(1);
+      expect(row.frontMark).toBe("10");
+      expect(row.backMark).toBe("25");
     });
   });
 

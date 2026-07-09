@@ -56,7 +56,7 @@ describe("in-memory calendar-snapshots adapter", () => {
       },
       seedObservation: async (
         occ: OccSymbol,
-        _time: Date,
+        time: Date,
         mark: number,
         underlyingPrice: number,
         bsmIv: string | null,
@@ -85,6 +85,7 @@ describe("in-memory calendar-snapshots adapter", () => {
 
         const leg: LegSnapshot = {
           occSymbol: occ,
+          time,
           mark,
           underlyingPrice,
           ivRaw,
