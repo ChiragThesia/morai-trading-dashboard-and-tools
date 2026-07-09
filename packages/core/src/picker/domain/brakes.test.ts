@@ -105,6 +105,13 @@ describe("cooldownActive", () => {
     expect(cooldownActive(rows)).toBe(false);
   });
 
+  it("skips a row with a negative (credit) openNetDebit — never inverts the loss ratio's sign (IN-01)", () => {
+    // A credit-opened calendar with a real GAIN: realizedPnl/openNetDebit = 150 / -500 = -0.3,
+    // which would falsely trip the -25% rung on a WIN without the guard.
+    const rows = [row({ openNetDebit: -500, realizedPnl: 150 })];
+    expect(cooldownActive(rows)).toBe(false);
+  });
+
   it("fast-check: never throws or returns NaN-driven true for any finite inputs", () => {
     fc.assert(
       fc.property(

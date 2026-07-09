@@ -736,6 +736,23 @@ describe("makeComputePickerSnapshotUseCase — entry gate (28-03, PLAY-01/PLAY-0
     // The Monday loss's window lifts Thursday -- the first day businessDaysSince(Mon, C) > 2.
     expect(untilIso).toBe("2026-07-02");
   });
+
+  // IN-01: a credit-opened calendar (negative openNetDebit) must never trip the cooldown
+  // brake or name a cooldownUntil date -- realizedPnl/openNetDebit inverts sign for a credit,
+  // so a real GAIN can read as a "loss" without the guard (mirrors brakes.ts's cooldownActive).
+  it("a credit-opened calendar never trips the cooldown brake, even on an inverted-sign 'loss' ratio (IN-01)", async () => {
+    const recentClosed = [lossRow("c1", new Date("2026-06-30T20:00:00.000Z"), -500, 150)];
+    const { deps, rows } = baseDeps({ recentClosed });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.snapshot.gate.brakes.cooldown).toBe(false);
+    expect(row.snapshot.gate.brakes.cooldownUntil).toBeNull();
+  });
 });
 
 describe("makeComputePickerSnapshotUseCase — sizing (28-04, PLAY-03)", () => {

@@ -51,12 +51,13 @@ export type RecentClosedCalendarRow = {
 
 /**
  * cooldownActive — true when ANY recently-closed calendar's realizedPnl/openNetDebit is at or
- * beyond LOSS_COOLDOWN_PCT (a -25.0% close trips it; -24.9% does not). A zero openNetDebit or
- * a null realizedPnl skips that row entirely — never a divide-by-zero or NaN (T-28-05).
+ * beyond LOSS_COOLDOWN_PCT (a -25.0% close trips it; -24.9% does not). A non-positive
+ * openNetDebit (zero, or negative for a credit-opened calendar) or a null realizedPnl skips
+ * that row entirely — never a divide-by-zero, NaN, or sign-inverted ratio (T-28-05, IN-01).
  */
 export function cooldownActive(recentClosed: ReadonlyArray<RecentClosedCalendarRow>): boolean {
   return recentClosed.some((row) => {
-    if (row.openNetDebit === 0 || row.realizedPnl === null) return false;
+    if (row.openNetDebit <= 0 || row.realizedPnl === null) return false;
     return row.realizedPnl / row.openNetDebit <= LOSS_COOLDOWN_PCT;
   });
 }

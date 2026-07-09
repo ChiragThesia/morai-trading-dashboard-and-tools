@@ -443,10 +443,11 @@ export function makeComputePickerSnapshotUseCase(
       // ponytail: re-filters the SAME -25% trigger cooldownActive already checked, just to find
       // WHICH row(s) tripped it (for cooldownUntil's display date) — small, local duplication
       // kept out of brakes.ts (28-02, already shipped/tested) rather than adding a second export
-      // there for one caller.
+      // there for one caller. Guard mirrors cooldownActive's IN-01 fix: a non-positive
+      // openNetDebit (credit-opened calendar) never trips, never inverts the ratio's sign.
       const triggeringLosses = recentClosed.filter(
         (row) =>
-          row.openNetDebit !== 0 &&
+          row.openNetDebit > 0 &&
           row.realizedPnl !== null &&
           row.realizedPnl / row.openNetDebit <= LOSS_COOLDOWN_PCT,
       );
