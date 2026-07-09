@@ -373,6 +373,31 @@ export type {
 export { makeGetPickerUseCase } from "./picker/index.ts";
 // PICK-01/PICK-03 (19-08): compute-picker use-case — chain-triggered by compute-gex-snapshot (D-04).
 export { makeComputePickerSnapshotUseCase } from "./picker/index.ts";
+// PICK-04 (27-02): additive reuse exports — the backtest harness reuses these SAME pure
+// picker domain functions (BT-01's "zero reimplementation" lock), not a second copy. No
+// live call site changes; every existing picker test stays green.
+export {
+  selectCandidates,
+  haircutFill,
+  scoreCalendarCandidates,
+  RULE_SET_METADATA,
+  realizedVol,
+  rankAndCapCandidates,
+  PICKER_TOP_N,
+} from "./picker/index.ts";
+export type {
+  SelectCandidatesParams,
+  SelectCandidatesResult,
+  GateDrops,
+  ScoringParams,
+  RuleMetadata,
+  RawCandidate,
+  ScoredCandidate,
+  BreakdownEntry,
+  BreakdownCriterion,
+  ContextEntry,
+  ExitPlan,
+} from "./picker/index.ts";
 
 // ─── Phase 22: Journal calendar-lifecycle graph (JRNL-01) ─────────────────────
 // getCalendarLifecycle use-case — thin forwarder over ForReadingJournal, mapping each row
@@ -424,6 +449,28 @@ export type {
 // exitsResponse contract, MCP-02).
 export { makeComputeExitAdviceUseCase, makeGetExitAdviceUseCase } from "./exits/index.ts";
 export type { ComputeExitAdviceDeps, GetExitAdviceDeps } from "./exits/index.ts";
+// PICK-04 (27-02): additive reuse exports — the backtest harness reuses the SAME pure exit
+// evaluator + rule registry (BT-01's lock), not a second copy. exits/index.ts already
+// barrels these; this thread was the only missing hop up to @morai/core.
+export { evaluateExit } from "./exits/index.ts";
+export {
+  EXIT_RULE_METADATA,
+  EXIT_PRECEDENCE,
+  TAKE_RUNGS,
+  STOP_RUNGS,
+  TERM_INVERSION_MIN,
+  TERM_INVERSION_DISARM,
+  GAMMA_OFF_STRIKE,
+  GAMMA_OFF_STRIKE_DISARM,
+  GAMMA_FRONT_DTE_MAX,
+  EVT_BLACKOUT_DAYS,
+  ROLL_FRONT_DTE_MAX,
+  ROLL_SPOT_BAND,
+  ROLL_PROFIT_MAX,
+  ROLL_REPLACEMENT_DTE_MIN,
+  ROLL_REPLACEMENT_DTE_MAX,
+} from "./exits/index.ts";
+export type { ExitRuleId, ExitRuleKind, ExitRuleMetadata, ExitRung } from "./exits/index.ts";
 
 // ─── JRNL-02: register-open-calendars (auto-register calendars from the open position book) ──
 export {

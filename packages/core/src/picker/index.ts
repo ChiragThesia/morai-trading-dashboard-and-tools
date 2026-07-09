@@ -30,3 +30,26 @@ export { makeGetPickerUseCase } from "./application/getPicker.ts";
 // PICK-01/PICK-03 (19-08): compute-picker use-case — chain-triggered by compute-gex-snapshot
 // (D-04); reads chain+GEX+events, scores candidates, persists exactly one snapshot row.
 export { makeComputePickerSnapshotUseCase } from "./application/computePickerSnapshot.ts";
+// PICK-04 (27-02): additive reuse exports — the backtest harness must reuse (never
+// reimplement) these pure picker domain functions/types. Zero live-behavior change; every
+// live call site is unaffected by this barrel wiring.
+export { selectCandidates, haircutFill } from "./domain/candidate-selection.ts";
+export type {
+  SelectCandidatesParams,
+  SelectCandidatesResult,
+  GateDrops,
+} from "./domain/candidate-selection.ts";
+export { scoreCalendarCandidates } from "./domain/scoring.ts";
+export type { ScoringParams } from "./domain/scoring.ts";
+export { RULE_SET_METADATA } from "./domain/rules.ts";
+export type { RuleMetadata } from "./domain/rules.ts";
+export type {
+  RawCandidate,
+  ScoredCandidate,
+  BreakdownEntry,
+  BreakdownCriterion,
+  ContextEntry,
+  ExitPlan,
+} from "./domain/types.ts";
+export { realizedVol } from "./domain/realized-vol.ts";
+export { rankAndCapCandidates, PICKER_TOP_N } from "./application/computePickerSnapshot.ts";
