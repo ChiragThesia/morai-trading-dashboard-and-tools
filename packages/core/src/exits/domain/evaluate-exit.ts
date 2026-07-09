@@ -49,7 +49,7 @@ import type {
  * snapshotCalendars.ts). An exits-owned constant, not a cross-context import (domain layer
  * only imports @morai/shared).
  */
-const STALENESS_TOLERANCE_MS = 45 * 60 * 1000;
+export const STALENESS_TOLERANCE_MS = 45 * 60 * 1000;
 
 // ─── Pure calendar-day arithmetic (mirrors candidate-selection.ts's convention) ────────────
 

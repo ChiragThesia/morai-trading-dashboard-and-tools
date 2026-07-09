@@ -25,6 +25,7 @@
 import { ok, isWithinRth, isNyseHoliday } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { EXIT_RULE_METADATA } from "../domain/exit-rules.ts";
+import { STALENESS_TOLERANCE_MS } from "../domain/evaluate-exit.ts";
 import type {
   ExitAdviceSnapshot,
   ForReadingHeldPositions,
@@ -61,6 +62,7 @@ export function makeGetExitAdviceUseCase(deps: GetExitAdviceDeps): ForRunningGet
 
     const positions: HeldPositionVerdict[] = [];
     let latestObservedAt: Date | null = null;
+    const now = deps.now();
 
     for (const row of verdictsResult.value) {
       const position = positionByCalendar.get(row.calendarId);
@@ -74,12 +76,20 @@ export function makeGetExitAdviceUseCase(deps: GetExitAdviceDeps): ForRunningGet
       const pnlPct =
         position.openNetDebit > 0 ? (snapshot.netMark - position.openNetDebit) / position.openNetDebit : null;
 
+      // WR-02: `indicative` was computed once at WRITE time against the write-cycle clock. If the
+      // chain broke downstream and this verdict froze, a stale actionable STOP would keep serving
+      // as escalate:true. Re-apply the SHARED staleness tolerance at read time and force the
+      // verdict indicative/non-escalating (and clear the frozen CHANGED marker, IN-04) when stale.
+      const stale = now.getTime() - row.observedAt.getTime() > STALENESS_TOLERANCE_MS;
+      const verdict = stale ? { ...row.verdict, indicative: true, escalate: false } : row.verdict;
+      // EXIT-09 gap closure: the real write-time flag, not a hardcoded false (26-VERIFICATION.md).
+      const changed = stale ? false : (row.verdict.changed ?? false);
+
       positions.push({
         calendarId: row.calendarId,
         name: position.name,
-        verdict: row.verdict,
-        // EXIT-09 gap closure: the real write-time flag, not a hardcoded false (26-VERIFICATION.md).
-        changed: row.verdict.changed ?? false,
+        verdict,
+        changed,
         pnlPct,
         basis: { openNetDebit: position.openNetDebit, netMark: snapshot.netMark },
       });
@@ -87,8 +97,7 @@ export function makeGetExitAdviceUseCase(deps: GetExitAdviceDeps): ForRunningGet
       if (latestObservedAt === null || row.observedAt > latestObservedAt) latestObservedAt = row.observedAt;
     }
 
-    const observedAt = latestObservedAt ?? deps.now();
-    const now = deps.now();
+    const observedAt = latestObservedAt ?? now;
     const marketSession: "rth" | "after-hours" = isWithinRth(now) && !isNyseHoliday(now) ? "rth" : "after-hours";
 
     return ok({

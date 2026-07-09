@@ -210,6 +210,57 @@ describe("getExitAdvice — shape", () => {
   });
 });
 
+// ─── WR-02: read-time staleness re-application ─────────────────────────────────────
+
+describe("getExitAdvice — read-time staleness (WR-02)", () => {
+  const observedAt = new Date("2026-07-09T15:00:00.000Z");
+  const actionableStop = makeVerdictRow({
+    observedAt,
+    verdict: {
+      verdict: "STOP",
+      rung: "-25%",
+      ruleId: "stop",
+      metric: { name: "pnlPct", value: -0.26, threshold: -0.25 },
+      indicative: false,
+      escalate: true,
+      roll: null,
+      changed: true,
+    },
+  });
+
+  it("forces a stored actionable STOP to indicative/non-escalating/unchanged once its data is stale at read time", async () => {
+    const useCase = makeGetExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition()]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot()]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([actionableStop]),
+      now: () => new Date(observedAt.getTime() + 46 * 60_000), // 46 min old > 45 min tolerance
+    });
+
+    const result = await useCase();
+    if (!result.ok || result.value === null) throw new Error("expected a snapshot");
+    const position = result.value.positions[0];
+    expect(position?.verdict.indicative).toBe(true);
+    expect(position?.verdict.escalate).toBe(false);
+    expect(position?.changed).toBe(false);
+  });
+
+  it("leaves a fresh stored actionable STOP untouched (still escalating, still changed)", async () => {
+    const useCase = makeGetExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition()]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot()]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([actionableStop]),
+      now: () => new Date(observedAt.getTime() + 30 * 60_000), // 30 min old < 45 min tolerance
+    });
+
+    const result = await useCase();
+    if (!result.ok || result.value === null) throw new Error("expected a snapshot");
+    const position = result.value.positions[0];
+    expect(position?.verdict.indicative).toBe(false);
+    expect(position?.verdict.escalate).toBe(true);
+    expect(position?.changed).toBe(true);
+  });
+});
+
 // ─── EXIT-09 gap closure: `changed` passthrough (26-VERIFICATION.md) ───────────────
 
 describe("getExitAdvice — changed passthrough (EXIT-09 gap closure)", () => {
@@ -231,7 +282,7 @@ describe("getExitAdvice — changed passthrough (EXIT-09 gap closure)", () => {
       readHeldPositions: fakeReadHeldPositions([makePosition()]),
       readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot()]),
       readLatestVerdictsPerCalendar: fakeReadVerdicts([row]),
-      now: () => new Date("2026-07-09T16:00:00.000Z"),
+      now: () => new Date("2026-07-09T15:20:00.000Z"), // fresh (within staleness tolerance, WR-02)
     });
 
     const result = await useCase();
