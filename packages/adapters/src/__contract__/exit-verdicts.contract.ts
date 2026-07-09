@@ -8,14 +8,15 @@
  *   blob does not overwrite the first, and does not error (onConflictDoNothing, T-26-07)
  * - readLatestVerdictsPerCalendar returns the single most-recent verdict per calendar
  * - a calendar with no prior verdict is absent from the result (not an error)
- * - a corrupted stored row (bypassing the repo's own write-path validation) surfaces a
- *   StorageError on read, never a silently-invalid domain shape (T-26-08)
+ * - WR-01: a corrupted stored row (bypassing the repo's own write-path validation) is skipped
+ *   with a console.warn on read — never fails the whole batch, and never flows into the domain
+ *   as a silently-invalid shape (T-26-08). One bad row can't take down the advisory read.
  * - EXIT-09 gap closure (26-VERIFICATION.md): a real write-time `changed` flag round-trips
  *   through insert -> read on BOTH adapters; a legacy row with no `changed` key defaults to
  *   `false` on read (additive JSONB field, no migration)
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import type {
   ForPersistingExitVerdict,
   ForReadingLatestVerdictsPerCalendar,
@@ -161,11 +162,22 @@ export function runExitVerdictsContractTests(makeRepo: () => ExitVerdictsRepo): 
       expect(readResult.value.some((r) => r.calendarId === CAL_NO_VERDICT)).toBe(false);
     });
 
-    it("T-26-08: a corrupted stored row surfaces a StorageError on read, never a silently-invalid shape", async () => {
-      await repo.seedRawVerdict(T1, CAL_A, { not: "a valid verdict blob" });
+    it("WR-01: a corrupted stored row is skipped (not fatal), and valid rows for other calendars still read", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      try {
+        await repo.seedRawVerdict(T1, CAL_A, { not: "a valid verdict blob" });
+        await repo.insertExitVerdict(makeRow(T1, CAL_B, { verdict: "STOP", rung: "-50%", ruleId: "STOP-50" }));
 
-      const result = await repo.readLatestVerdictsPerCalendar();
-      expect(result.ok).toBe(false);
+        const result = await repo.readLatestVerdictsPerCalendar();
+        // One bad row for one calendar must not take down the whole advisory read (WR-01).
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.some((r) => r.calendarId === CAL_A)).toBe(false); // corrupted → skipped
+        expect(result.value.find((r) => r.calendarId === CAL_B)?.verdict.verdict).toBe("STOP");
+        expect(warnSpy).toHaveBeenCalled(); // skip is logged for ops visibility
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
 
     it("rejects an insert whose verdict blob violates the exitVerdict contract (empty ruleId, EXIT-04) — zero rows land", async () => {

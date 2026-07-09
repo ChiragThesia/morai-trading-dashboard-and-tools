@@ -18,9 +18,9 @@ import { exitVerdict } from "@morai/contracts";
  * BEFORE storing — matches the Postgres write-boundary validation exactly (T-26-08).
  *
  * readLatestVerdictsPerCalendar: the max-observedAt row per calendarId. Each stored blob
- * is re-validated via exitVerdict.parse on read (parse-don't-cast at the read seam) — a
- * row seeded via seedRawVerdict (bypassing insertExitVerdict's own validation) surfaces a
- * StorageError, matching the Postgres adapter's corrupted-row behavior.
+ * is re-validated via exitVerdict.safeParse on read (parse-don't-cast at the read seam); a
+ * row seeded via seedRawVerdict (bypassing insertExitVerdict's own validation) is SKIPPED
+ * with a console.warn (WR-01), matching the Postgres adapter's corrupted-row behavior.
  *
  * Architectural rule: every driven port change ships with its in-memory twin in the same
  * PR (architecture-boundaries.md §8).
@@ -70,13 +70,19 @@ export function makeMemoryExitVerdictsRepo(): MemoryExitVerdictsRepo {
           latestByCalendar.set(row.calendarId, { observedAt: row.observedAt, rawVerdict: row.rawVerdict });
         }
       }
-      const mapped: ExitVerdictRow[] = [...latestByCalendar.entries()].map(
-        ([calendarId, { observedAt, rawVerdict }]) => ({
-          observedAt,
-          calendarId,
-          verdict: exitVerdict.parse(rawVerdict),
-        }),
-      );
+      // WR-01: parse per-row and SKIP a corrupted blob (with a console.warn) rather than
+      // failing the whole batch — mirrors the Postgres twin exactly (architecture-boundaries §8).
+      const mapped: ExitVerdictRow[] = [];
+      for (const [calendarId, { observedAt, rawVerdict }] of latestByCalendar.entries()) {
+        const parsed = exitVerdict.safeParse(rawVerdict);
+        if (!parsed.success) {
+          console.warn(
+            `exit-verdicts: skipping corrupted verdict row for calendar ${calendarId}: ${parsed.error.message}`,
+          );
+          continue;
+        }
+        mapped.push({ observedAt, calendarId, verdict: parsed.data });
+      }
       return ok(mapped);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

@@ -24,9 +24,10 @@ import type { Db } from "../db.ts";
  *
  * readLatestVerdictsPerCalendar: DISTINCT ON (calendar_id) ORDER BY calendar_id,
  * observed_at DESC — the newest verdict per calendar, feeding the 26-04 use-case's
- * hysteresis self-read. Each stored blob is re-validated via exitVerdict.parse AFTER read
- * (parse-don't-cast at the read seam) — a legacy/corrupted row surfaces a StorageError
- * rather than flowing into the domain as a silently invalid shape (T-26-08).
+ * hysteresis self-read. Each stored blob is re-validated via exitVerdict.safeParse AFTER read
+ * (parse-don't-cast at the read seam); a legacy/corrupted row is SKIPPED with a console.warn
+ * (WR-01) rather than failing the whole batch — one bad row must not take down verdict
+ * computation and the API for every calendar.
  */
 export type PostgresExitVerdictsRepo = {
   readonly insertExitVerdict: ForPersistingExitVerdict;
@@ -69,11 +70,20 @@ export function makePostgresExitVerdictsRepo(db: Db): PostgresExitVerdictsRepo {
         // within each calendar makes the newest verdict win.
         .orderBy(asc(exitVerdicts.calendarId), desc(exitVerdicts.observedAt));
 
-      const mapped: ExitVerdictRow[] = rows.map((row) => ({
-        observedAt: row.observedAt,
-        calendarId: row.calendarId,
-        verdict: exitVerdict.parse(row.verdict),
-      }));
+      // WR-01: parse per-row and SKIP a corrupted blob (with a console.warn) rather than
+      // failing the whole batch — one bad row for one calendar must not take down verdict
+      // computation and the API for every calendar (mirrors readJournal's unknown-source skip).
+      const mapped: ExitVerdictRow[] = [];
+      for (const row of rows) {
+        const parsed = exitVerdict.safeParse(row.verdict);
+        if (!parsed.success) {
+          console.warn(
+            `exit-verdicts: skipping corrupted verdict row for calendar ${row.calendarId}: ${parsed.error.message}`,
+          );
+          continue;
+        }
+        mapped.push({ observedAt: row.observedAt, calendarId: row.calendarId, verdict: parsed.data });
+      }
       return ok(mapped);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
