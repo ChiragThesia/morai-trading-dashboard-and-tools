@@ -269,6 +269,7 @@ const CHIP_LABELS: Record<string, string> = {
   deltaNeutral: "Δ NEUTRAL",
   thetaVega: "θ/VEGA",
   vrp: "VRP",
+  debitFit: "DEBIT",
 };
 
 const EXPERIMENTAL_SHORT: Record<string, string> = {

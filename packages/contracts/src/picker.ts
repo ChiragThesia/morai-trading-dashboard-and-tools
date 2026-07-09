@@ -31,7 +31,7 @@ export type PickerCandidateLeg = z.infer<typeof pickerCandidateLeg>;
  * debit-%-of-back band). Adding a criterion requires an explicit schema change.
  */
 export const breakdownEntry = z.object({
-  criterion: z.enum(["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm", "deltaNeutral", "thetaVega", "vrp"]),
+  criterion: z.enum(["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm", "deltaNeutral", "thetaVega", "vrp", "debitFit"]),
   /** Points this criterion contributes at 100% (e.g. 40 for slope, 10 for eventAdjustment). */
   weight: z.number(),
   /** The criterion's raw computed metric (e.g. slope in vol-pts/yr, gexFit as a 0-1 fraction). */

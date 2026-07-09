@@ -36,6 +36,8 @@ import {
   thetaVegaValue,
   thetaVegaFraction,
   vrpFraction,
+  debitFitFraction,
+  WEIGHT_DEBIT_FIT,
   WEIGHT_THETA_VEGA,
   WEIGHT_VRP,
   deltaNeutralFraction,
@@ -166,6 +168,7 @@ function scoreOne(
   // Promoted 2026-07-09 (user lock; PICK-04 re-arbitrates): θ/vega + VRP become scored terms.
   const thetaVegaFrac = thetaVegaFraction(candidate.theta, candidate.vega);
   const vrpFrac = vrpFraction(ivF, params.realizedVol20 ?? null);
+  const debitFrac = debitFitFraction(candidate.debit);
 
   const breakdown: ReadonlyArray<BreakdownEntry> = [
     { criterion: "slope", weight: WEIGHT_SLOPE, rawValue: candidate.slope, contribution: slopeFraction * 100 },
@@ -191,6 +194,12 @@ function scoreOne(
       rawValue: vrpValue(ivF, params.realizedVol20 ?? null) ?? 0,
       contribution: vrpFrac * 100,
     },
+    {
+      criterion: "debitFit",
+      weight: WEIGHT_DEBIT_FIT,
+      rawValue: candidate.debit,
+      contribution: debitFrac * 100,
+    },
   ];
 
   const rawScore =
@@ -201,7 +210,8 @@ function scoreOne(
     WEIGHT_BE_VS_EM * beVsEmFraction +
     WEIGHT_DELTA_NEUTRAL * deltaFraction +
     WEIGHT_THETA_VEGA * thetaVegaFrac +
-    WEIGHT_VRP * vrpFrac;
+    WEIGHT_VRP * vrpFrac +
+    WEIGHT_DEBIT_FIT * debitFrac;
   const score = Math.min(100, Math.max(0, Math.round(rawScore)));
 
   // ─── Experimental context (weight 0, display-only — rules.ts registry) ───

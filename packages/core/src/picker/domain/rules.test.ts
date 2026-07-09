@@ -25,6 +25,8 @@ import {
   vrpFraction,
   deltaNeutralFraction,
   slopeEntryFraction,
+  debitFitFraction,
+  WEIGHT_DEBIT_FIT,
   WEIGHT_FWD_EDGE,
   WEIGHT_SLOPE,
   WEIGHT_DELTA_NEUTRAL,
@@ -55,13 +57,13 @@ describe("RULE_SET_METADATA — registry invariants", () => {
     expect(total).toBe(100);
   });
 
-  it("composition: 2 active gates, 8 active scores, 2 experimental", () => {
+  it("composition: 2 active gates, 9 active scores, 2 experimental", () => {
     const gates = RULE_SET_METADATA.filter((r) => r.kind === "gate" && r.status === "active");
     const scores = RULE_SET_METADATA.filter((r) => r.kind === "score" && r.status === "active");
     const experimental = RULE_SET_METADATA.filter((r) => r.status === "experimental");
     expect(gates.map((r) => r.id).sort()).toEqual(["liquidity", "net-theta-positive"]);
     expect(scores.map((r) => r.id).sort()).toEqual(
-      ["beVsEm", "deltaNeutral", "eventAdjustment", "fwdEdge", "gexFit", "slope", "thetaVega", "vrp"],
+      ["beVsEm", "debitFit", "deltaNeutral", "eventAdjustment", "fwdEdge", "gexFit", "slope", "thetaVega", "vrp"],
     );
     expect(experimental.map((r) => r.id).sort()).toEqual(
       ["backEventBonus", "slopePercentile"],
@@ -206,9 +208,9 @@ describe("deltaNeutralFraction (Δ-neutrality score — user-locked 2026-07-08)"
     expect(deltaNeutralFraction(-5)).toBe(0);
   });
 
-  it("weights v4: fwdEdge 25, slope 15, beVsEm 15, deltaNeutral 15 — sum still 100", () => {
+  it("weights v4.1: fwdEdge 25, slope 10, beVsEm 15, deltaNeutral 15 — sum still 100", () => {
     expect(WEIGHT_FWD_EDGE).toBe(25);
-    expect(WEIGHT_SLOPE).toBe(15);
+    expect(WEIGHT_SLOPE).toBe(10);
     expect(WEIGHT_DELTA_NEUTRAL).toBe(15);
   });
 });
@@ -229,5 +231,30 @@ describe("slopeEntryFraction (redesigned 2026-07-09 — front-richness IS the en
   it("is 0 below the crisis-inversion floor (slope < −1.5)", () => {
     expect(slopeEntryFraction(-1.51)).toBe(0);
     expect(slopeEntryFraction(-5)).toBe(0);
+  });
+});
+
+describe("debitFitFraction (user ideal $3.2k-5k, cheap ok, expensive fades)", () => {
+  it("is 1 inside the ideal band", () => {
+    expect(debitFitFraction(3200)).toBe(1);
+    expect(debitFitFraction(4000)).toBe(1);
+    expect(debitFitFraction(5000)).toBe(1);
+  });
+
+  it("decays gently below the band to a 0.7 floor at ≤$2,000", () => {
+    expect(debitFitFraction(2600)).toBeCloseTo(0.85, 10);
+    expect(debitFitFraction(2000)).toBeCloseTo(0.7, 10);
+    expect(debitFitFraction(500)).toBeCloseTo(0.7, 10);
+  });
+
+  it("decays steeply above the band to 0 at ≥$7,500", () => {
+    expect(debitFitFraction(6250)).toBeCloseTo(0.5, 10);
+    expect(debitFitFraction(7500)).toBe(0);
+    expect(debitFitFraction(12000)).toBe(0);
+  });
+
+  it("weights v4.1: slope 10 pays for debitFit 5 — sum still 100", () => {
+    expect(WEIGHT_SLOPE).toBe(10);
+    expect(WEIGHT_DEBIT_FIT).toBe(5);
   });
 });

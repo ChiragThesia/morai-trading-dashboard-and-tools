@@ -23,7 +23,7 @@ import type { GexContextForPicker } from "../application/ports.ts";
 // Rebalanced 2026-07-08 (user decision): fwd-edge is the purest math signal → 35;
 // slope 30. Previous 40/25 split was the uncalibrated mockup port (D-08).
 // ─────────────────────────────────────────────────────────────
-export const WEIGHT_SLOPE = 15;
+export const WEIGHT_SLOPE = 10;
 export const WEIGHT_FWD_EDGE = 25;
 export const WEIGHT_GEX_FIT = 10;
 export const WEIGHT_EVENT = 5;
@@ -38,6 +38,13 @@ export const THETA_VEGA_FULL = 0.25;
 /** VRP promoted to scored: full credit when front IV exceeds RV20 by ≥ this (3 vol pts). */
 export const WEIGHT_VRP = 5;
 export const VRP_FULL = 0.03;
+/** debitFit (2026-07-09 user lock): ideal spend $3.2k-5k per calendar; cheap ok, expensive fades. */
+export const WEIGHT_DEBIT_FIT = 5;
+export const DEBIT_IDEAL_MIN = 3200;
+export const DEBIT_IDEAL_MAX = 5000;
+export const DEBIT_CHEAP_FLOOR = 2000;
+export const DEBIT_CHEAP_CREDIT = 0.7;
+export const DEBIT_EXPENSIVE_ZERO = 7500;
 
 // ─── Normalizer tunables (documented; PICK-04 backtest recalibrates) ────────────
 export const SLOPE_NORMALIZER = 0.6;
@@ -200,6 +207,25 @@ export function deltaNeutralFraction(netDelta: number): number {
   return Math.max(0, Math.min(1, fraction));
 }
 
+/**
+ * `debitFit`: preference band on the HAIRCUT debit (the price actually paid). Asymmetric —
+ * "I usually like to pay as little as possible but still get a good calendar": full credit
+ * $3.2k-5k, gentle decay to a 0.7 floor at ≤$2k (cheapness is a virtue; structurally-odd
+ * cheap candidates are caught by other rules), steep decay to 0 at ≥$7.5k.
+ */
+export function debitFitFraction(debit: number): number {
+  if (debit >= DEBIT_IDEAL_MIN && debit <= DEBIT_IDEAL_MAX) return 1;
+  if (debit < DEBIT_IDEAL_MIN) {
+    if (debit <= DEBIT_CHEAP_FLOOR) return DEBIT_CHEAP_CREDIT;
+    return (
+      DEBIT_CHEAP_CREDIT +
+      ((debit - DEBIT_CHEAP_FLOOR) / (DEBIT_IDEAL_MIN - DEBIT_CHEAP_FLOOR)) * (1 - DEBIT_CHEAP_CREDIT)
+    );
+  }
+  if (debit >= DEBIT_EXPENSIVE_ZERO) return 0;
+  return (DEBIT_EXPENSIVE_ZERO - debit) / (DEBIT_EXPENSIVE_ZERO - DEBIT_IDEAL_MAX);
+}
+
 /** `thetaVega` scored fraction: linear 0→1 up to THETA_VEGA_FULL; 0 when vega is 0/negative ratio. */
 export function thetaVegaFraction(theta: number, vega: number): number {
   const ratio = thetaVegaValue(theta, vega);
@@ -300,6 +326,16 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     rationale:
       "Real bisection breakevens vs ±1σ expected move — profit-zone coverage; credit up to 2.0× (user: moves amplify, wider is better).",
     source: "D-09 (replaces the mockup's fixed-strike proxy)",
+  },
+  {
+    id: "debitFit",
+    label: "Debit fit ($3.2k–5k ideal)",
+    kind: "score",
+    weight: WEIGHT_DEBIT_FIT,
+    status: "active",
+    rationale:
+      "Preference band on the realistic-fill debit: full credit $3.2k-5k, cheap floors at 0.7, expensive fades to 0 at $7.5k.",
+    source: "User-locked spend preference (2026-07-09)",
   },
   {
     id: "deltaNeutral",

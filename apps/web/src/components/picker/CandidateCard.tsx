@@ -66,6 +66,8 @@ function formatBreakdownCaption(entry: BreakdownEntry): string {
     case "vrp":
       // rawValue is front IV − RV20 in vol terms.
       return `${(entry.rawValue * 100).toFixed(1)}v`;
+    case "debitFit":
+      return `$${Math.round(entry.rawValue)}`;
   }
 }
 

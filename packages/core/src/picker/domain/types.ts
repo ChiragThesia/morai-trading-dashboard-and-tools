@@ -62,7 +62,7 @@ export type RawCandidate = {
 };
 
 /** One scored criterion contributing to `ScoredCandidate.score` — closed enum (T-19-04). */
-export type BreakdownCriterion = "slope" | "fwdEdge" | "gexFit" | "eventAdjustment" | "beVsEm" | "deltaNeutral" | "thetaVega" | "vrp";
+export type BreakdownCriterion = "slope" | "fwdEdge" | "gexFit" | "eventAdjustment" | "beVsEm" | "deltaNeutral" | "thetaVega" | "vrp" | "debitFit";
 
 export type BreakdownEntry = {
   readonly criterion: BreakdownCriterion;

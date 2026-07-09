@@ -88,15 +88,15 @@ const GEX_CONTEXT: GexContextForPicker = {
   computedAt: new Date("2026-07-01T14:30:00.000Z"),
 };
 
-const ALLOWED_CRITERIA = new Set(["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm", "deltaNeutral", "thetaVega", "vrp"]);
+const ALLOWED_CRITERIA = new Set(["slope", "fwdEdge", "gexFit", "eventAdjustment", "beVsEm", "deltaNeutral", "thetaVega", "vrp", "debitFit"]);
 
 describe("scoreCalendarCandidates", () => {
-  it("emits exactly the 8 closed-enum criteria with the named weights, score = rounded weighted sum", () => {
+  it("emits exactly the 9 closed-enum criteria with the named weights, score = rounded weighted sum", () => {
     const [scored] = scoreCalendarCandidates([normalCandidate()], GEX_CONTEXT, { r: R, q: Q });
     expect(scored).toBeDefined();
     if (scored === undefined) return;
 
-    expect(scored.breakdown).toHaveLength(8);
+    expect(scored.breakdown).toHaveLength(9);
     const criteria = scored.breakdown.map((b) => b.criterion);
     expect(new Set(criteria)).toEqual(ALLOWED_CRITERIA);
 
