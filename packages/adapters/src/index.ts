@@ -123,6 +123,18 @@ export type { PostgresExitVerdictsRepo } from "./postgres/repos/exit-verdicts.ts
 export { makeMemoryExitVerdictsRepo } from "./memory/exit-verdicts.ts";
 export type { MemoryExitVerdictsRepo } from "./memory/exit-verdicts.ts";
 
+// Phase 27 (27-01/27-03/27-06): backtest-harness repos — postgres only (no live/adapter
+// consumer needed an in-memory twin outside packages/core's own tests, which use plain
+// port fakes per the architecture-boundaries §2 core/testcontainers split — 27-05 key-decisions).
+// Never exported from this barrel until 27-06: the CLI composition root is the first
+// consumer that needs them reachable via @morai/adapters.
+export { makePostgresBacktestChainRepo } from "./postgres/repos/backtest-chain.ts";
+export type { PostgresBacktestChainRepo } from "./postgres/repos/backtest-chain.ts";
+export { makePostgresBacktestHistoryRepo } from "./postgres/repos/backtest-history.ts";
+export type { PostgresBacktestHistoryRepo } from "./postgres/repos/backtest-history.ts";
+export { makePostgresBacktestRunsRepo } from "./postgres/repos/backtest-runs.ts";
+export type { PostgresBacktestRunsRepo } from "./postgres/repos/backtest-runs.ts";
+
 // Picker rule engine: history reads for the experimental vrp/slopePercentile rules —
 // postgres + in-memory twin (architecture-boundaries §8)
 export { makePostgresPickerHistoryRepo } from "./postgres/repos/picker-history.ts";
