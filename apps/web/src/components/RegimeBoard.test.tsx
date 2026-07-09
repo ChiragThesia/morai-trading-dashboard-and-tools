@@ -26,6 +26,9 @@ vi.mock("../hooks/useRegimeBoard.ts", () => ({ useRegimeBoard: mockUseRegimeBoar
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
 vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
 
+const { mockUseMacro } = vi.hoisted(() => ({ mockUseMacro: vi.fn() }));
+vi.mock("../hooks/useMacro.ts", () => ({ useMacro: mockUseMacro }));
+
 import { RegimeBoard } from "./RegimeBoard.tsx";
 
 const INDICATORS: RegimeResponse = [
@@ -85,9 +88,25 @@ function setPickerGate(gate?: PickerGate): void {
   });
 }
 
+const MACRO_DATA = {
+  DFF: [{ time: "2026-06-30", value: 4.33 }],
+  SOFR: [{ time: "2026-06-30", value: 4.35 }],
+  T10Y2Y: [{ time: "2026-06-30", value: 0.52 }],
+  T10Y3M: [{ time: "2026-06-30", value: -0.18 }],
+  DGS1MO: [{ time: "2026-06-30", value: 5.28 }],
+  DGS3MO: [{ time: "2026-06-30", value: 5.1 }],
+};
+
+/** Sets useMacro()'s data — omitted/empty (no rates row, "never fabricate" default) or
+ *  the given series map. */
+function setMacro(data?: unknown): void {
+  mockUseMacro.mockReturnValue({ data, isPending: false });
+}
+
 describe("RegimeBoard", () => {
   beforeEach(() => {
     setPickerGate();
+    setMacro();
   });
 
   afterEach(() => {
@@ -160,9 +179,105 @@ describe("RegimeBoard", () => {
     expect(await screen.findByText(hyOas.source)).toBeDefined();
     expect(await screen.findByText(hyOas.rationale)).toBeDefined();
   });
+
+  it("renders the 'Market regime' panel heading in every state (loading/error/empty/populated)", () => {
+    setRegimeBoard(undefined, { isPending: true });
+    const { unmount } = render(<RegimeBoard />);
+    expect(screen.getByText("Market regime")).toBeDefined();
+    unmount();
+
+    setRegimeBoard(undefined, { isError: true });
+    const err1 = render(<RegimeBoard />);
+    expect(screen.getByText("Market regime")).toBeDefined();
+    err1.unmount();
+
+    setRegimeBoard([]);
+    const empty = render(<RegimeBoard />);
+    expect(screen.getByText("Market regime")).toBeDefined();
+    empty.unmount();
+
+    setRegimeBoard(INDICATORS);
+    render(<RegimeBoard />);
+    expect(screen.getByText("Market regime")).toBeDefined();
+  });
+});
+
+describe("RegimeBoard — merged rates row (post-v1.3 FRED macro absorption)", () => {
+  beforeEach(() => {
+    setPickerGate();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("omits the rates row when macro data is unavailable — never fabricated (T-24-09 precedent)", () => {
+    setRegimeBoard(INDICATORS);
+    setMacro(undefined);
+    render(<RegimeBoard />);
+    expect(screen.queryByTestId("regime-rates-row")).toBeNull();
+  });
+
+  it("omits the rates row when macro data is an empty map", () => {
+    setRegimeBoard(INDICATORS);
+    setMacro({});
+    render(<RegimeBoard />);
+    expect(screen.queryByTestId("regime-rates-row")).toBeNull();
+  });
+
+  it("renders one pill per rate series with its latest value, dropping the old bare VIX/VVIX chips", () => {
+    setRegimeBoard(INDICATORS);
+    setMacro(MACRO_DATA);
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("rate-chip-DFF").textContent).toContain("4.33");
+    expect(screen.getByTestId("rate-chip-SOFR").textContent).toContain("4.35");
+    expect(screen.getByTestId("rate-chip-DGS1MO").textContent).toContain("5.28");
+    expect(screen.getByTestId("rate-chip-DGS3MO").textContent).toContain("5.10");
+    expect(screen.getByTestId("rate-chip-T10Y2Y").textContent).toContain("0.52");
+    expect(screen.getByTestId("rate-chip-T10Y3M").textContent).toContain("-0.18");
+    // VIX/VVIX are dropped from this row — VVIX stays only as a banded indicator chip above.
+    expect(screen.queryByTestId("rate-chip-VIXCLS")).toBeNull();
+    expect(screen.queryByTestId("rate-chip-VVIX")).toBeNull();
+  });
+
+  it("renders both the indicator/gate row and the rates row as pill-shaped (rounded-full) chips", () => {
+    setRegimeBoard(INDICATORS);
+    setMacro(MACRO_DATA);
+    setPickerGate({
+      vix: 18,
+      vix3m: 20,
+      ratio: 0.9,
+      asOf: "2026-07-09",
+      state: "open",
+      penaltyMultiplier: 1,
+      brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+      reasons: [],
+    });
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("regime-chip-vvix").className).toContain("rounded-full");
+    expect(screen.getByTestId("gate-chip").className).toContain("rounded-full");
+    expect(screen.getByTestId("rate-chip-DFF").className).toContain("rounded-full");
+  });
+
+  it("renders the rates row alongside the loading/error/empty regime-board states (independent data source)", () => {
+    setRegimeBoard(undefined, { isError: true });
+    setMacro(MACRO_DATA);
+    render(<RegimeBoard />);
+    expect(
+      screen.getByText("Regime board unavailable — check the FRED/CBOE fetch job."),
+    ).toBeDefined();
+    expect(screen.getByTestId("regime-rates-row")).toBeDefined();
+  });
 });
 
 describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
+  beforeEach(() => {
+    setMacro();
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();

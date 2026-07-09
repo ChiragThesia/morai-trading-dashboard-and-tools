@@ -1,7 +1,8 @@
 /**
  * Overview screen tests — TOS-dock layout (Phase 17 redesign):
  *   1. Pill header, 2. payoff hero + docked positions table (left) / GEX rail (right),
- *   3. Positioning & macro detail (CotCard + MacroCard), 4. Book & system.
+ *   3. Positioning & macro detail (CotCard + RegimeBoard's merged "Market regime"
+ *      panel — absorbs the former standalone FRED macro card), 4. Book & system.
  * Data hooks are mocked; GEX rail uses a full GexSnapshotEntry fixture (GAMMAProfile/GexBars
  * need profile/strikes/computedAt, not just spot).
  *
@@ -235,21 +236,27 @@ describe("Overview screen", () => {
     expect(screen.getByText("Book & system")).toBeDefined();
   });
 
-  it("renders the live COT card and the live MacroCard — no more 'FRED macro' stub", () => {
+  it("renders the live COT card and the merged Market regime panel — no more standalone FRED macro card", () => {
     setPositions([]);
     render(<Overview />);
     // COT is a wired card (Phase 13) — its heading is present.
     expect(screen.getByText(/CFTC COT/)).toBeDefined();
-    // FRED macro is now a wired card (Phase 14, D-12) — the "needs feed" stub is gone.
+    // The standalone FRED macro card/stub is gone — its rates row is absorbed into
+    // RegimeBoard's "Market regime" panel (post-v1.3 merge).
     expect(screen.queryByText("FRED macro")).toBeNull();
     expect(screen.queryByText("○ needs feed")).toBeNull();
-    expect(screen.getByTestId("macro-empty")).toBeDefined();
+    expect(screen.getByText("Market regime")).toBeDefined();
+    expect(screen.getByTestId("regime-empty")).toBeDefined();
+    // useMacro is mocked with data: undefined for this file — the rates row is
+    // silently omitted rather than fabricated (T-24-09 precedent).
+    expect(screen.queryByTestId("regime-rates-row")).toBeNull();
   });
 
-  it("mounts the 'Regime & breadth' section between Positioning & macro detail and Book & system (Phase 24)", () => {
+  it("mounts the merged 'Market regime' panel inside Positioning & macro detail (Phase 24 + post-v1.3 FRED merge)", () => {
     setPositions([]);
     render(<Overview />);
-    expect(screen.getByText("Regime & breadth")).toBeDefined();
+    expect(screen.getByText("Positioning & macro detail")).toBeDefined();
+    expect(screen.getByText("Market regime")).toBeDefined();
     expect(screen.getByTestId("regime-empty")).toBeDefined();
   });
 
