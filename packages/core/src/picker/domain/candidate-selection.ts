@@ -35,6 +35,8 @@
 import { assertDefined } from "@morai/shared";
 import { bsmGreeks, bsmPrice } from "@morai/quant";
 import { isLiquidQuote } from "./rules.ts";
+import { VIX_LADDER } from "./entry-gate.ts";
+import type { VixTier } from "./entry-gate.ts";
 import type { ChainQuoteForPicker, EconomicEvent } from "../application/ports.ts";
 import type { DeltaRung, RawCandidate } from "./types.ts";
 
@@ -84,6 +86,40 @@ export const EVENT_BLACKOUT_DAYS = 3;
  * penalty (2026-07-09 user lock: weigh the forced pre-event exit against max theta decay).
  */
 export const PEAK_THETA_DAYS = 5;
+
+// ─────────────────────────────────────────────────────────────
+// autoTuneTargetDelta (28-04, PLAY-05) — thin, directional-only evidence
+// [CITED: earlyretirementnow.com, "Options Trading Series Part 14"]: "If the VIX is high at
+// inception, you will likely sell so far out of the money..." Ships the SMALLEST version per
+// the milestone's own time-box: a linear nudge of the band's DEEP (min) edge toward the
+// further-OTM edge (DELTA_BAND_MAX) as VIX rises — never a scoring criterion, purely a
+// universe-membership preference `selectCandidates` consumes via `effectiveDeltaMin`.
+// ─────────────────────────────────────────────────────────────
+
+function vixLadderFloor(tier: VixTier): number {
+  const row = VIX_LADDER.find((r) => r.tier === tier);
+  assertDefined(row, `candidate-selection: VIX_LADDER missing tier "${tier}"`);
+  return row.min;
+}
+
+/** Tilt range: VIX_LADDER's normal floor (15) to its crisis floor (25) — the SAME ladder the
+ * gate/sizing use. Past 25 the gate hard-blocks entries anyway, so tilting further is moot. */
+const AUTOTUNE_VIX_FLOOR = vixLadderFloor("normal");
+const AUTOTUNE_VIX_CEILING = vixLadderFloor("crisis");
+
+/**
+ * autoTuneTargetDelta — the VIX-tuned deep (min) band edge. Linear from DELTA_BAND_MIN at/
+ * below AUTOTUNE_VIX_FLOOR to DELTA_BAND_MAX at/above AUTOTUNE_VIX_CEILING; null/NaN vix (no
+ * tilt) returns DELTA_BAND_MIN unchanged. ALWAYS inside [DELTA_BAND_MIN, DELTA_BAND_MAX]
+ * (fast-check proven) — the tilt can only narrow the band from its deep end, never widen it
+ * past the original edges (PLAY-05: "never pushes the effective delta outside the band").
+ */
+export function autoTuneTargetDelta(vix: number | null): number {
+  if (vix === null || !Number.isFinite(vix) || vix <= AUTOTUNE_VIX_FLOOR) return DELTA_BAND_MIN;
+  if (vix >= AUTOTUNE_VIX_CEILING) return DELTA_BAND_MAX;
+  const fraction = (vix - AUTOTUNE_VIX_FLOOR) / (AUTOTUNE_VIX_CEILING - AUTOTUNE_VIX_FLOOR);
+  return DELTA_BAND_MIN + fraction * (DELTA_BAND_MAX - DELTA_BAND_MIN);
+}
 
 // ─────────────────────────────────────────────────────────────
 // Pure helpers
@@ -142,6 +178,14 @@ export type SelectCandidatesParams = {
   readonly r: number;
   /** Continuous dividend yield (decimal), supplied by the use-case from config. */
   readonly q: number;
+  /**
+   * Optional VIX-tuned deep (min) band edge (28-04, PLAY-05 — `autoTuneTargetDelta`).
+   * Defaults to `DELTA_BAND_MIN` when omitted, reproducing today's live universe byte-
+   * identically for every existing caller. Clamped into `[DELTA_BAND_MIN, DELTA_BAND_MAX]`
+   * here (not just at the caller) — the invariant holds regardless of what a future caller
+   * passes.
+   */
+  readonly effectiveDeltaMin?: number;
 };
 
 /** Per-gate drop counts — logged by the use-case so gating is never a silent cap. */
@@ -182,6 +226,10 @@ export function selectCandidates(
   }
 
   const { r, q } = params;
+  const deltaMin = Math.min(
+    Math.max(params.effectiveDeltaMin ?? DELTA_BAND_MIN, DELTA_BAND_MIN),
+    DELTA_BAND_MAX,
+  );
 
   // Cohort spot: average underlyingPrice across the whole cohort (GEX precedent).
   const spot = chain.reduce((sum, quote) => sum + quote.underlyingPrice, 0) / chain.length;
@@ -260,7 +308,7 @@ export function selectCandidates(
     // Band membership (NOT nearest-target): every strike whose front delta is in the band.
     for (const frontQuote of frontQuotesRaw) {
       const delta = bsmGreeks(spot, frontQuote.strike, tf / 365, frontQuote.iv, r, q, "P").delta;
-      if (delta < DELTA_BAND_MIN || delta > DELTA_BAND_MAX) continue;
+      if (delta < deltaMin || delta > DELTA_BAND_MAX) continue;
       const K = frontQuote.strike;
       const ivF = frontQuote.iv;
 

@@ -597,16 +597,20 @@ describe("makeComputePickerSnapshotUseCase — entry gate (28-03, PLAY-01/PLAY-0
     expect(penaltyRow.snapshot.gate.state).toBe("penalty");
     expect(penaltyRow.snapshot.gate.penaltyMultiplier).toBeLessThan(1);
     expect(penaltyRow.snapshot.gate.penaltyMultiplier).toBeGreaterThan(0);
-    expect(penaltyRow.snapshot.candidates.length).toBe(calmRow.snapshot.candidates.length);
+    // 28-04 (PLAY-05): PENALTY_MACRO_ROWS' VIX 22 also narrows the universe via
+    // autoTuneTargetDelta (a separate, additive tilt) -- the penalty run's candidate SET is
+    // now a subset of the calm run's, not an equal-length re-ranking. Look up by id (never
+    // positional index) so this test isolates the score-penalty axis from the universe tilt.
+    expect(penaltyRow.snapshot.candidates.length).toBeGreaterThan(0);
+    expect(penaltyRow.snapshot.candidates.length).toBeLessThanOrEqual(calmRow.snapshot.candidates.length);
 
-    for (let i = 0; i < penaltyRow.snapshot.candidates.length; i += 1) {
-      const calmCandidate = calmRow.snapshot.candidates[i];
-      const penaltyCandidate = penaltyRow.snapshot.candidates[i];
+    const calmById = new Map(calmRow.snapshot.candidates.map((c) => [c.id, c]));
+    for (const penaltyCandidate of penaltyRow.snapshot.candidates) {
+      const calmCandidate = calmById.get(penaltyCandidate.id);
+      // Every candidate surviving the (narrower) penalty-run universe also exists in the
+      // calm run's (wider) universe -- the tilt only ever DROPS candidates, never adds one.
       expect(calmCandidate).toBeDefined();
-      expect(penaltyCandidate).toBeDefined();
-      if (calmCandidate === undefined || penaltyCandidate === undefined) continue;
-      // Same id at the same rank -> the multiplier scaled scores without reshuffling this fixture.
-      expect(penaltyCandidate.id).toBe(calmCandidate.id);
+      if (calmCandidate === undefined) continue;
       expect(penaltyCandidate.score).toBeLessThanOrEqual(calmCandidate.score);
       // Breakdown is untouched -- the gate penalty is not one of the 9 weighted criteria.
       expect(penaltyCandidate.breakdown).toEqual(calmCandidate.breakdown);
@@ -694,6 +698,93 @@ describe("makeComputePickerSnapshotUseCase — entry gate (28-03, PLAY-01/PLAY-0
     expect(row).toBeDefined();
     if (row === undefined) return;
     expect(row.snapshot.gate.state).toBe("open");
+  });
+});
+
+describe("makeComputePickerSnapshotUseCase — sizing (28-04, PLAY-03)", () => {
+  it("calm VIX (15, the low/normal edge) -> sizing resolves 'normal' tier, 2 contracts", async () => {
+    const { deps, rows } = baseDeps({}); // CALM_MACRO_ROWS default: VIX 15
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.snapshot.sizing).toEqual({ tier: "normal", contracts: 2, vix: 15 });
+  });
+
+  it("penalty-band VIX (22) -> sizing resolves 'elevated' tier, 1 contract", async () => {
+    const { deps, rows } = baseDeps({ macroRows: PENALTY_MACRO_ROWS });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.snapshot.sizing).toEqual({ tier: "elevated", contracts: 1, vix: 22 });
+  });
+
+  it("crisis VIX (26, gate blocked) -> sizing still resolves 'crisis' tier, 0 contracts -- coincides with the hard block", async () => {
+    const { deps, rows } = baseDeps({ macroRows: BLOCKED_MACRO_ROWS });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.snapshot.gate.state).toBe("blocked");
+    expect(row.snapshot.sizing).toEqual({ tier: "crisis", contracts: 0, vix: 26 });
+  });
+
+  it("GATE BLIND (missing macro) -> sizing resolves no recommendation, never a guessed tier", async () => {
+    const { deps, rows } = baseDeps({ macroRows: [] });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.snapshot.gate.state).toBe("blind");
+    expect(row.snapshot.sizing).toEqual({ tier: null, contracts: null, vix: null });
+  });
+});
+
+describe("makeComputePickerSnapshotUseCase — autoTuneTargetDelta wiring (28-04, PLAY-05)", () => {
+  it("VIX 17 (still 'open', below the gate's own penalty floor) narrows the universe -- drops the deepest strike vs calm VIX 15", async () => {
+    // No penalty-band confound: both runs resolve gate.state 'open', penaltyMultiplier 1 --
+    // isolates the universe-membership tilt from the (separately-tested) score penalty.
+    const tiltedRows: ReadonlyArray<MacroObservationRow> = [
+      { seriesId: "VIXCLS", date: NOW_ISO, value: 17, source: "fred" },
+      { seriesId: "VXVCLS", date: NOW_ISO, value: 20, source: "fred" },
+    ];
+    const calm = baseDeps({});
+    const calmResult = await makeComputePickerSnapshotUseCase(calm.deps)();
+    expect(calmResult.ok).toBe(true);
+    const calmRow = calm.rows[0];
+    expect(calmRow).toBeDefined();
+    if (calmRow === undefined) return;
+
+    const tilted = baseDeps({ macroRows: tiltedRows });
+    const tiltedResult = await makeComputePickerSnapshotUseCase(tilted.deps)();
+    expect(tiltedResult.ok).toBe(true);
+    const tiltedRow = tilted.rows[0];
+    expect(tiltedRow).toBeDefined();
+    if (tiltedRow === undefined) return;
+
+    expect(tiltedRow.snapshot.gate.state).toBe("open");
+    expect(tiltedRow.snapshot.gate.penaltyMultiplier).toBe(1);
+
+    const calmStrikes = new Set(calmRow.snapshot.candidates.map((c) => c.frontLeg.strike));
+    const tiltedStrikes = new Set(tiltedRow.snapshot.candidates.map((c) => c.frontLeg.strike));
+    expect(calmStrikes.has(7500)).toBe(true); // the deepest strike, present at calm VIX 15
+    expect(tiltedStrikes.has(7500)).toBe(false); // tilted out of the universe at VIX 17
+    expect(tiltedStrikes.size).toBeLessThan(calmStrikes.size);
+    // The tilt never becomes a new weighted criterion -- ruleSet is untouched.
+    expect(tiltedRow.snapshot.ruleSet).toEqual(calmRow.snapshot.ruleSet);
   });
 });
 

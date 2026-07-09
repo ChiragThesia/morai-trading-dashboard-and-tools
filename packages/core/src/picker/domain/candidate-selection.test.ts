@@ -19,6 +19,7 @@ import {
   legSpansEvents,
   selectCandidates,
   haircutFill,
+  autoTuneTargetDelta,
   DELTA_BAND_MIN,
   DELTA_BAND_MAX,
   FRONT_DTE_MIN,
@@ -374,5 +375,89 @@ describe("haircutFill (Phase 26, extracted for exits/ROLL pricing reuse — Pitf
     const quote = { bid: 10, ask: 20 };
     expect(haircutFill(quote, "buy")).toBeCloseTo(quote.bid + (quote.ask - quote.bid) * FILL_WIDTH_FRACTION, 9);
     expect(haircutFill(quote, "sell")).toBeCloseTo(quote.ask - (quote.ask - quote.bid) * FILL_WIDTH_FRACTION, 9);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// autoTuneTargetDelta (28-04, PLAY-05) — VIX-tuned deep band-edge nudge, thin directional
+// evidence, milestone time-box permits shipping the smallest version or deferring.
+// ─────────────────────────────────────────────────────────────
+
+describe("autoTuneTargetDelta", () => {
+  it("returns DELTA_BAND_MIN unchanged at/below the tuning floor (VIX 15)", () => {
+    expect(autoTuneTargetDelta(10)).toBe(DELTA_BAND_MIN);
+    expect(autoTuneTargetDelta(15)).toBe(DELTA_BAND_MIN);
+  });
+
+  it("returns DELTA_BAND_MAX at/above the tuning ceiling (VIX 25 -- the gate's own crisis floor)", () => {
+    expect(autoTuneTargetDelta(25)).toBe(DELTA_BAND_MAX);
+    expect(autoTuneTargetDelta(40)).toBe(DELTA_BAND_MAX);
+  });
+
+  it("interpolates linearly between the floor and ceiling", () => {
+    // Midpoint of the 15-25 tuning range -> midpoint of the delta band.
+    const mid = autoTuneTargetDelta(20);
+    expect(mid).toBeCloseTo((DELTA_BAND_MIN + DELTA_BAND_MAX) / 2, 9);
+  });
+
+  it("null/NaN vix -> no tilt, DELTA_BAND_MIN unchanged", () => {
+    expect(autoTuneTargetDelta(null)).toBe(DELTA_BAND_MIN);
+    expect(autoTuneTargetDelta(Number.NaN)).toBe(DELTA_BAND_MIN);
+  });
+
+  it("property: for any finite vix, the result never leaves [DELTA_BAND_MIN, DELTA_BAND_MAX]", () => {
+    fc.assert(
+      fc.property(fc.double({ min: -100, max: 200, noNaN: true }), (vix) => {
+        const target = autoTuneTargetDelta(vix);
+        expect(target).toBeGreaterThanOrEqual(DELTA_BAND_MIN - 1e-9);
+        expect(target).toBeLessThanOrEqual(DELTA_BAND_MAX + 1e-9);
+      }),
+    );
+  });
+});
+
+describe("selectCandidates — effectiveDeltaMin (28-04, PLAY-05 wiring)", () => {
+  function denseChain(): ChainQuoteForPicker[] {
+    const iv = 0.15;
+    const strikes = [7550, 7525, 7500, 7475, 7450, 7425, 7400, 7375, 7350, 7325, 7300, 7275, 7250];
+    const chain: ChainQuoteForPicker[] = [];
+    for (const expiration of ["2026-07-31", "2026-08-26"]) {
+      for (const strike of strikes) {
+        chain.push(chainQuote(strike, expiration, iv));
+      }
+    }
+    return chain;
+  }
+
+  it("omitting effectiveDeltaMin reproduces the DELTA_BAND_MIN universe byte-identically", () => {
+    const withDefault = selectCandidates(denseChain(), [], { r: R, q: Q });
+    const withExplicitMin = selectCandidates(denseChain(), [], { r: R, q: Q, effectiveDeltaMin: DELTA_BAND_MIN });
+    expect(withDefault.candidates).toEqual(withExplicitMin.candidates);
+  });
+
+  it("a narrower effectiveDeltaMin (high-VIX tilt) drops the deepest strikes, keeps the shallow ones", () => {
+    const full = selectCandidates(denseChain(), [], { r: R, q: Q });
+    const tilted = selectCandidates(denseChain(), [], {
+      r: R,
+      q: Q,
+      effectiveDeltaMin: autoTuneTargetDelta(25), // crisis-floor VIX -> the far edge, DELTA_BAND_MAX
+    });
+    expect(tilted.candidates.length).toBeLessThan(full.candidates.length);
+    for (const c of tilted.candidates) {
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      expect(d).toBeGreaterThanOrEqual(DELTA_BAND_MAX - 1e-9);
+    }
+  });
+
+  it("an effectiveDeltaMin outside the band is clamped -- the effective delta never leaves [DELTA_BAND_MIN, DELTA_BAND_MAX]", () => {
+    const clampedLow = selectCandidates(denseChain(), [], { r: R, q: Q, effectiveDeltaMin: -10 });
+    const withDefault = selectCandidates(denseChain(), [], { r: R, q: Q });
+    expect(clampedLow.candidates).toEqual(withDefault.candidates);
+
+    const clampedHigh = selectCandidates(denseChain(), [], { r: R, q: Q, effectiveDeltaMin: 10 });
+    for (const c of clampedHigh.candidates) {
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      expect(d).toBeLessThanOrEqual(DELTA_BAND_MAX + 1e-9);
+    }
   });
 });

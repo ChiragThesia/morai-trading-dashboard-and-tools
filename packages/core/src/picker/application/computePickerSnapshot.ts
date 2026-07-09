@@ -31,7 +31,7 @@
 
 import { ok, err, assertDefined, isWithinRth, isNyseHoliday } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { selectCandidates } from "../domain/candidate-selection.ts";
+import { selectCandidates, autoTuneTargetDelta } from "../domain/candidate-selection.ts";
 import { scoreCalendarCandidates } from "../domain/scoring.ts";
 import { realizedVol } from "../domain/realized-vol.ts";
 import { RULE_SET_METADATA } from "../domain/rules.ts";
@@ -39,6 +39,7 @@ import type { ScoredCandidate } from "../domain/types.ts";
 import { resolveEntryGate, businessDaysSince, applyGatePenaltyScore } from "../domain/entry-gate.ts";
 import type { EntryGateState } from "../domain/entry-gate.ts";
 import { maxOpenTripped, cooldownActive, cooldownCutoff, COOLDOWN_BIZDAYS, LOSS_COOLDOWN_PCT } from "../domain/brakes.ts";
+import { resolveSizingTier } from "../domain/sizing.ts";
 import type {
   ChainQuoteForPicker,
   EconomicEvent,
@@ -53,6 +54,7 @@ import type {
   GexContextForPicker,
   PickerCandidateDomain,
   PickerGate,
+  PickerSizing,
   PickerSnapshot,
   StorageError,
 } from "./ports.ts";
@@ -244,6 +246,17 @@ function cooldownUntilFrom(closedAtIso: string): string {
     const candidateIso = cursor.toISOString().slice(0, 10);
     if (businessDaysSince(closedAtIso, candidateIso) >= COOLDOWN_BIZDAYS) return candidateIso;
   }
+}
+
+/**
+ * toPickerSizing — resolves the VIX-tiered sizing recommendation (28-04, PLAY-03) from the
+ * SAME cohort VIX the gate already resolved (`gate.vix`) — one shared read, no second macro
+ * lookup. `tier`/`contracts` are null together whenever `resolveSizingTier` finds no tier
+ * (null/NaN vix — GATE BLIND/gate-read-error/cold-start), never a guessed tier (T-28-11).
+ */
+function toPickerSizing(vix: number | null): PickerSizing {
+  const resolved = resolveSizingTier(vix);
+  return { tier: resolved?.tier ?? null, contracts: resolved?.contracts ?? null, vix };
 }
 
 /**
@@ -458,9 +471,13 @@ export function makeComputePickerSnapshotUseCase(
     const slopeHistory = slopeHistoryResult.ok ? slopeHistoryResult.value : [];
 
     // ── Step 4: Select + score (D-17: pass null gexContext whenever not "ok") ──
+    // 28-04 (PLAY-05): autoTuneTargetDelta nudges the band's deep edge toward the far-OTM
+    // edge as the cohort VIX rises (the SAME vix the gate already resolved) — a universe-
+    // membership preference, never a scoring criterion (RULE_SET_METADATA untouched).
     const { candidates: raw, gateDrops } = selectCandidates(chain, events, {
       r: deps.rate,
       q: deps.dividendYield,
+      effectiveDeltaMin: autoTuneTargetDelta(gate.vix),
     });
     const gexContextForScoring = gexContextStatus === "ok" ? gexContext : null;
     let scored = scoreCalendarCandidates(raw, gexContextForScoring, {
@@ -545,9 +562,8 @@ export function makeComputePickerSnapshotUseCase(
       gateDrops,
       // The market-level entry gate + anti-criteria brakes (28-03, PLAY-01/PLAY-02).
       gate,
-      // VIX-tiered sizing (28-04, PLAY-03) -- resolved from the cohort VIX in Task 2; this
-      // task only adds the field to the contract/domain shapes (28-04-PLAN.md Task 1 scope).
-      sizing: { tier: null, contracts: null, vix: null },
+      // VIX-tiered sizing (28-04, PLAY-03) -- resolved from the SAME cohort VIX the gate read.
+      sizing: toPickerSizing(gate.vix),
     };
 
     // ── Step 7: Persist (D-06 append-only; observedAt = cohort data time, NEVER now()) ──
