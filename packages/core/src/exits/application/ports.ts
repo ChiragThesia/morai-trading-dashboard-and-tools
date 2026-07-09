@@ -89,3 +89,49 @@ export type ForReadingLatestVerdictsPerCalendar = () => Promise<
 
 /** ForPersistingExitVerdict — append one ExitVerdictRow (idempotent on the composite PK). */
 export type ForPersistingExitVerdict = (row: ExitVerdictRow) => Promise<Result<void, StorageError>>;
+
+// ─── Driver ports (Phase 26, Plan 04) ──────────────────────────────────────────
+
+/** ForRunningComputeExitAdvice — the per-cycle compute-exit-advice job's driver port. */
+export type ForRunningComputeExitAdvice = () => Promise<Result<void, StorageError>>;
+
+/**
+ * HeldPositionVerdict — one open calendar's verdict for this cycle, shaped for the API/MCP
+ * read surface (mirrors contracts/src/exits.ts `heldPositionVerdict` field-for-field).
+ * `pnlPct`/`basis`/`name` are re-derived at READ time from the calendar + latest snapshot
+ * (getExitAdvice.ts) — they are NOT part of the persisted `ExitVerdict` blob. `changed` is
+ * conservatively `false` in this plan: no "N most recent verdicts" read exists yet to
+ * reconstruct a cross-cycle diff at read time (a genuinely new capability, deferred — see
+ * 26-04-SUMMARY.md). computeExitAdvice.ts still computes+acts on `changed` internally, at
+ * WRITE time, for its own escalation logging (EXIT-09).
+ */
+export type HeldPositionVerdict = {
+  readonly calendarId: string;
+  readonly name: string;
+  readonly verdict: ExitVerdict;
+  readonly changed: boolean;
+  readonly pnlPct: number;
+  readonly basis: {
+    readonly openNetDebit: number;
+    readonly netMark: number;
+  };
+};
+
+/** ExitRuleSetEntry — one rule-registry row shipped to the read surface (EXIT-07). */
+export type ExitRuleSetEntry = {
+  readonly id: string;
+  readonly kind: string;
+  readonly rationale: string;
+};
+
+/** ExitAdviceSnapshot — the getExitAdvice.ts read use-case's output shape. */
+export type ExitAdviceSnapshot = {
+  readonly asOf: string; // YYYY-MM-DD
+  readonly observedAt: Date;
+  readonly marketSession: "rth" | "after-hours";
+  readonly positions: ReadonlyArray<HeldPositionVerdict>;
+  readonly ruleSet: ReadonlyArray<ExitRuleSetEntry>;
+};
+
+/** ForRunningGetExitAdvice — the read use-case's driver port. ok(null) at cold start. */
+export type ForRunningGetExitAdvice = () => Promise<Result<ExitAdviceSnapshot | null, StorageError>>;

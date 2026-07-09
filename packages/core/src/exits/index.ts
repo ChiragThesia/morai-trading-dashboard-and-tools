@@ -28,6 +28,11 @@ export type {
   ForReadingChainForRoll,
   ForReadingLatestVerdictsPerCalendar,
   ForPersistingExitVerdict,
+  ForRunningComputeExitAdvice,
+  HeldPositionVerdict,
+  ExitRuleSetEntry,
+  ExitAdviceSnapshot,
+  ForRunningGetExitAdvice,
 } from "./application/ports.ts";
 
 // ─── Exit rule registry (Phase 26, Plan 02) ────────────────────────────────
@@ -52,3 +57,9 @@ export {
 
 // ─── Pure evaluator (Phase 26, Plan 02) ────────────────────────────────────
 export { evaluateExit } from "./domain/evaluate-exit.ts";
+
+// ─── Use-cases (Phase 26, Plan 04) ─────────────────────────────────────────
+export { makeComputeExitAdviceUseCase } from "./application/computeExitAdvice.ts";
+export type { ComputeExitAdviceDeps } from "./application/computeExitAdvice.ts";
+export { makeGetExitAdviceUseCase } from "./application/getExitAdvice.ts";
+export type { GetExitAdviceDeps } from "./application/getExitAdvice.ts";

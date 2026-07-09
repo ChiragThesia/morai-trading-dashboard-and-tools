@@ -413,7 +413,17 @@ export type {
   ForReadingChainForRoll,
   ForReadingLatestVerdictsPerCalendar,
   ForPersistingExitVerdict,
+  ForRunningComputeExitAdvice,
+  HeldPositionVerdict,
+  ExitRuleSetEntry,
+  ExitAdviceSnapshot,
+  ForRunningGetExitAdvice,
 } from "./exits/index.ts";
+// 26-04: computeExitAdvice (terminal-job use-case, chain-triggered by compute-picker) +
+// getExitAdvice (read use-case — 26-05's HTTP route + MCP tool will share this over the
+// exitsResponse contract, MCP-02).
+export { makeComputeExitAdviceUseCase, makeGetExitAdviceUseCase } from "./exits/index.ts";
+export type { ComputeExitAdviceDeps, GetExitAdviceDeps } from "./exits/index.ts";
 
 // ─── JRNL-02: register-open-calendars (auto-register calendars from the open position book) ──
 export {
