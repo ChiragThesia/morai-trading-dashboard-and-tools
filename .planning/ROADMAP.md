@@ -227,7 +227,13 @@ exit domains to exist)
   5. The harness never writes weights — its output is directional evidence a human reads; weight
      promotion stays gated until n≥30 real closed trades.
 
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 27-01-PLAN.md — Docs + migration 0021 backtest_runs + INSERT-only repo/twin + backtest module skeleton
+- [ ] 27-02-PLAN.md — Reuse seams: additive @morai/core exports + ablation weights seam + computeLegPairMetrics extraction
+- [ ] 27-03-PLAN.md — Point-in-time readers: as-of-T chain (no-lookahead) + as-of-T RV20 + cohort ledger + source-inclusive history
+- [ ] 27-04-PLAN.md — Report kernel (fast-check): directional attribution + ablation-delta + seeded bootstrap CI + coverage
+- [ ] 27-05-PLAN.md — Replay engine: leakage oracle (BT-02) + 13-trade exit reproduction (BT-03) + full-universe hypothetical (BT-04)
+- [ ] 27-06-PLAN.md — runBacktest report assembly + DATABASE_URL-only CLI + BT-05 no-write-path guard
 
 ### Phase 28: Playbook Gates, Anti-Criteria & Sizing
 
