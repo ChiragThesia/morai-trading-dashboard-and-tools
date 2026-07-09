@@ -28,6 +28,7 @@ handlers are thin inbound adapters calling application use-cases.
 | `refresh-tokens` | RETIRED (GW-03) | Token refresh moved to the schwab-py sidecar (Phase 11 cutover); removed from the trigger surface in Phase 15 — see section below |
 | `fetch-rates` | `0 9 * * 1-5` + `30 18 * * 1-5` | FRED DGS3MO daily (BSM rate) + expanded macro fetch (Phase 14) |
 | `compute-analytics` | chain-triggered only (NO cron) | Reads `leg_observations` + `calendar_snapshots`; writes `skew_observations`, `risk_reversal_observations`, `term_structure_observations` |
+| `compute-exit-advice` | chain-triggered only (NO cron) | Thin terminal handler: reads open calendars + the latest snapshot + economic events + the previous cycle's verdict per open calendar, evaluates the exit rule ladder ([exit-rules.md](exit-rules.md)), and appends one `exit_verdicts` row per calendar. Terminal — nothing enqueues after it |
 | `rebuild-journal` | on-demand only (no schedule) | Reconstructs OPEN/CLOSE/ROLL events for one calendar from fills; idempotent delete-then-reinsert |
 
 Notes carried from old dashboard:
@@ -72,10 +73,13 @@ union per 30-minute slot, not take strict `max(time)`:
 - `compute-bsm-greeks` drains newest-first with a batch bound sized above one full
   dual-source cycle (~15k rows).
 
-**Trigger chain (unchanged, single-trigger):** `fetch-schwab-chain` → `compute-bsm-greeks` →
-`snapshot-calendars` → `compute-analytics` → `compute-gex-snapshot` → `compute-picker`.
-`compute-picker` scores candidates against the typed rule registry — see
-[picker-rules.md](picker-rules.md) for the full gate/score/experimental table.
+**Trigger chain (single-trigger):** `fetch-schwab-chain` → `compute-bsm-greeks` →
+`snapshot-calendars` → `compute-analytics` → `compute-gex-snapshot` → `compute-picker` →
+`compute-exit-advice`. `compute-picker` scores candidates against the typed rule registry —
+see [picker-rules.md](picker-rules.md) for the full gate/score/experimental table.
+`compute-exit-advice` is the new terminal step: it scores every OPEN calendar against the
+exit rule ladder — see [exit-rules.md](exit-rules.md) for the full ladder, precedence order,
+and hysteresis bands.
 
 ### GEX methodology (compute-gex-snapshot)
 
