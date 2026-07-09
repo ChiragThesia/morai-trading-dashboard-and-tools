@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from "vitest";
 import { ok, err, formatOccSymbol } from "@morai/shared";
-import { makeComputeBsmGreeksUseCase, MAX_BATCH_SIZE } from "./computeBsmGreeks.ts";
+import { makeComputeBsmGreeksUseCase, COMMIT_BATCH_SIZE, BSM_TIME_BUDGET_MS } from "./computeBsmGreeks.ts";
 import type { ForReadingPendingObs, ForWritingBsmResults, ForReadingRate, PendingObs, StorageError } from "./ports.ts";
 import { bsmPrice } from "../domain/bsm.ts";
 
@@ -38,6 +38,21 @@ function makePendingObs(overrides: Partial<PendingObs> = {}): PendingObs {
 
 function makeStorageErr(): StorageError {
   return { kind: "storage-error", message: "db error" };
+}
+
+/**
+ * makeSingleBatchReadPending — a readPending double for tests that model a backlog that
+ * fits in one batch: serves `rows` on the first call, then empty (fully drained) on every
+ * call after — required under the OPS-02 while-loop shape so a fixed-clock test terminates
+ * instead of looping forever on a double that always reports the same non-empty rows.
+ */
+function makeSingleBatchReadPending(rows: ReadonlyArray<PendingObs>): ForReadingPendingObs {
+  let served = false;
+  return async () => {
+    if (served) return ok([]);
+    served = true;
+    return ok(rows);
+  };
 }
 
 // ─── Tests ────────────────────────────────────────────────────
@@ -95,7 +110,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       expiry: new Date("2027-06-11"), // ~1 year away
     });
 
-    const readPending: ForReadingPendingObs = async () => ok([pendingObs]);
+    const readPending: ForReadingPendingObs = makeSingleBatchReadPending([pendingObs]);
     const writes: Array<{ bsmIv: string }> = [];
     const writeBsm: ForWritingBsmResults = async (ws) => {
       writes.push(...ws.map((w) => ({ bsmIv: w.bsmIv })));
@@ -132,7 +147,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       expiry: new Date("2027-06-11"), // ~1yr from now date
     });
 
-    const readPending: ForReadingPendingObs = async () => ok([pendingObs]);
+    const readPending: ForReadingPendingObs = makeSingleBatchReadPending([pendingObs]);
     const writtenRows: Array<Parameters<ForWritingBsmResults>[0][number]> = [];
     const writeBsm: ForWritingBsmResults = async (ws) => {
       writtenRows.push(...ws);
@@ -181,7 +196,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       expiry: new Date("2027-06-11"),
     });
 
-    const readPending: ForReadingPendingObs = async () => ok([pendingObs]);
+    const readPending: ForReadingPendingObs = makeSingleBatchReadPending([pendingObs]);
     const writtenRows: Array<Parameters<ForWritingBsmResults>[0][number]> = [];
     const writeBsm: ForWritingBsmResults = async (ws) => {
       writtenRows.push(...ws);
@@ -226,7 +241,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       time: new Date("2026-06-11T15:00:00Z"),
     });
 
-    const readPending: ForReadingPendingObs = async () => ok([pendingObs]);
+    const readPending: ForReadingPendingObs = makeSingleBatchReadPending([pendingObs]);
     const writtenRows: Array<Parameters<ForWritingBsmResults>[0][number]> = [];
     const writeBsm: ForWritingBsmResults = async (ws) => {
       writtenRows.push(...ws);
@@ -276,7 +291,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       expiry: new Date("2027-06-11"),
     });
 
-    const readPending: ForReadingPendingObs = async () => ok([pendingObs]);
+    const readPending: ForReadingPendingObs = makeSingleBatchReadPending([pendingObs]);
     const writtenRows: Array<Parameters<ForWritingBsmResults>[0][number]> = [];
     const writeBsm: ForWritingBsmResults = async (ws) => {
       writtenRows.push(...ws);
@@ -346,7 +361,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       type: "C",
     };
 
-    const readPending: ForReadingPendingObs = async () => ok([pendingObs]);
+    const readPending: ForReadingPendingObs = makeSingleBatchReadPending([pendingObs]);
     const writtenRows: Array<Parameters<ForWritingBsmResults>[0][number]> = [];
     const writeBsm: ForWritingBsmResults = async (ws) => {
       writtenRows.push(...ws);
@@ -388,7 +403,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
   it("returns ok(void) even when writeBsm fails (absorbs per-row errors as NaN stamps — no throw)", async () => {
     // This tests that writeBsm storage errors propagate (not silently swallowed)
     const pendingObs = makePendingObs();
-    const readPending: ForReadingPendingObs = async () => ok([pendingObs]);
+    const readPending: ForReadingPendingObs = makeSingleBatchReadPending([pendingObs]);
     const writeBsm: ForWritingBsmResults = async () => err(makeStorageErr());
     const readRate: ForReadingRate = async () => ok("0.05");
 
@@ -417,7 +432,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       makePendingObs({ time: new Date(`${sameDay}T16:00:00Z`) }),
     ];
 
-    const readPending: ForReadingPendingObs = async () => ok(rows);
+    const readPending: ForReadingPendingObs = makeSingleBatchReadPending(rows);
     const writeBsm: ForWritingBsmResults = async () => ok(undefined);
     let readRateCalls = 0;
     const readRate: ForReadingRate = async () => {
@@ -440,12 +455,13 @@ describe("makeComputeBsmGreeksUseCase", () => {
     expect(readRateCalls).toBe(1);
   });
 
-  it("gex-schwab-bsm-null-puts: forwards MAX_BATCH_SIZE as the read bound (newest-first, bounded)", async () => {
-    // The read MUST be bounded — the use-case passes MAX_BATCH_SIZE so the adapter can apply
-    // ORDER BY time DESC LIMIT and return the freshest cycle rather than an oldest-first backlog.
-    let seenLimit: number | undefined;
+  it("gex-schwab-bsm-null-puts: forwards COMMIT_BATCH_SIZE as the read bound on every call (newest-first, bounded)", async () => {
+    // The read MUST be bounded — the use-case passes COMMIT_BATCH_SIZE so the adapter can
+    // apply ORDER BY time DESC LIMIT and return the freshest cohort rather than an
+    // oldest-first backlog. OPS-02: this is now the PER-BATCH bound, checked on every call.
+    const seenLimits: number[] = [];
     const readPending: ForReadingPendingObs = async (limit) => {
-      seenLimit = limit;
+      seenLimits.push(limit);
       return ok([]);
     };
     const writeBsm: ForWritingBsmResults = async () => ok(undefined);
@@ -461,24 +477,11 @@ describe("makeComputeBsmGreeksUseCase", () => {
     });
 
     await useCase();
-    expect(seenLimit).toBe(MAX_BATCH_SIZE);
+    expect(seenLimits).toEqual([COMMIT_BATCH_SIZE]);
   });
 
-  it("chain-window-narrow-regression: MAX_BATCH_SIZE covers one full dual-source cycle", async () => {
-    // A cycle now persists BOTH sources (~11,246 CBOE + ~3,638 Schwab ≈ 15k rows at two
-    // nearby timestamps). The newest-first bound must exceed that, or the freshest cycle
-    // splits and its tail stays bsm_* NULL — the exact starvation gex-schwab-bsm-null-puts
-    // fixed for the single-source case.
-    const DUAL_SOURCE_CYCLE_ROWS = 15_000;
-    expect(MAX_BATCH_SIZE).toBeGreaterThanOrEqual(DUAL_SOURCE_CYCLE_ROWS);
-  });
-
-  it("regression (RC#1): bounds a single run to MAX_BATCH_SIZE rows, leaving the remainder pending", async () => {
-    // Bug: readPending() returns the ENTIRE backlog with no bound, and the use-case
-    // writes in one all-or-nothing batch at the end — a timeout mid-run makes zero
-    // forward progress, so every retry redoes the whole (growing) backlog.
-    const overflow = MAX_BATCH_SIZE + 250;
-    const rows: PendingObs[] = Array.from({ length: overflow }, (_, i) =>
+  it("Test A (single-batch drain): pending count below one batch → one loop pass, one writeBsm call, ok(undefined)", async () => {
+    const rows: PendingObs[] = Array.from({ length: 5 }, (_, i) =>
       makePendingObs({
         contract: formatOccSymbol({
           root: "SPXW",
@@ -490,9 +493,15 @@ describe("makeComputeBsmGreeksUseCase", () => {
       }),
     );
 
-    const readPending: ForReadingPendingObs = async () => ok(rows);
+    let readCalls = 0;
+    const readPending: ForReadingPendingObs = async () => {
+      readCalls++;
+      return readCalls === 1 ? ok(rows) : ok([]);
+    };
+    let writeCalls = 0;
     const writtenRows: Array<Parameters<ForWritingBsmResults>[0][number]> = [];
     const writeBsm: ForWritingBsmResults = async (ws) => {
+      writeCalls++;
       writtenRows.push(...ws);
       return ok(undefined);
     };
@@ -509,8 +518,149 @@ describe("makeComputeBsmGreeksUseCase", () => {
 
     const result = await useCase();
     expect(result.ok).toBe(true);
-    // Only MAX_BATCH_SIZE rows processed this run — the rest stay pending (bsm_iv still
-    // NULL in the DB, since readPending's partial index scan is unaffected) for the next run.
-    expect(writtenRows).toHaveLength(MAX_BATCH_SIZE);
+    expect(writeCalls).toBe(1);
+    expect(writtenRows).toHaveLength(5);
+    // Second readPending call sees the drained-to-empty state (fully drained, loop exits).
+    expect(readCalls).toBe(2);
+  });
+
+  it("Test B (multi-batch): writes each COMMIT_BATCH_SIZE-bounded batch as its own writeBsm call", async () => {
+    const makeRow = (i: number): PendingObs =>
+      makePendingObs({
+        contract: formatOccSymbol({
+          root: "SPXW",
+          expiry: new Date(2026, 5, 19),
+          type: "C",
+          strike: 5000 + i,
+        }),
+        time: new Date("2026-06-11T15:00:00Z"),
+      });
+
+    const firstBatch = Array.from({ length: COMMIT_BATCH_SIZE }, (_, i) => makeRow(i));
+    const secondBatch = Array.from({ length: 250 }, (_, i) => makeRow(COMMIT_BATCH_SIZE + i));
+
+    let readCalls = 0;
+    const seenLimits: number[] = [];
+    const readPending: ForReadingPendingObs = async (limit) => {
+      readCalls++;
+      seenLimits.push(limit);
+      if (readCalls === 1) return ok(firstBatch);
+      if (readCalls === 2) return ok(secondBatch);
+      return ok([]); // fully drained on the third call
+    };
+
+    const writeSizes: number[] = [];
+    const writeBsm: ForWritingBsmResults = async (ws) => {
+      writeSizes.push(ws.length);
+      return ok(undefined);
+    };
+    const readRate: ForReadingRate = async () => ok("0.05");
+
+    const useCase = makeComputeBsmGreeksUseCase({
+      readPending,
+      writeBsm,
+      readRate,
+      dividendYield: 0.013,
+      fallbackRate: 0.045,
+      // Fixed clock — never advances past the budget, so only batch exhaustion ends the loop.
+      now: () => new Date("2026-06-11T20:00:00Z"),
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    // One writeBsm call per non-empty batch, each ≤ COMMIT_BATCH_SIZE — proves batching, not
+    // one giant write.
+    expect(writeSizes).toEqual([COMMIT_BATCH_SIZE, 250]);
+    expect(writeSizes.every((n) => n <= COMMIT_BATCH_SIZE)).toBe(true);
+    expect(readCalls).toBe(3);
+    expect(seenLimits).toEqual([COMMIT_BATCH_SIZE, COMMIT_BATCH_SIZE, COMMIT_BATCH_SIZE]);
+  });
+
+  it("Test C (budget exit, not error): exits with ok(undefined) once BSM_TIME_BUDGET_MS elapses, no further reads/writes, rows still pending", async () => {
+    const pendingRows = Array.from({ length: 10 }, (_, i) =>
+      makePendingObs({
+        contract: formatOccSymbol({
+          root: "SPXW",
+          expiry: new Date(2026, 5, 19),
+          type: "C",
+          strike: 5000 + i,
+        }),
+        time: new Date("2026-06-11T15:00:00Z"),
+      }),
+    );
+
+    let readCalls = 0;
+    const readPending: ForReadingPendingObs = async () => {
+      readCalls++;
+      // Always claims more pending rows exist — the loop must stop because of the budget
+      // check, not because readPending ever reports empty.
+      return ok(pendingRows);
+    };
+
+    let writeCalls = 0;
+    const writeBsm: ForWritingBsmResults = async () => {
+      writeCalls++;
+      return ok(undefined);
+    };
+    const readRate: ForReadingRate = async () => ok("0.05");
+
+    const startMs = Date.UTC(2026, 5, 11, 20, 0, 0);
+    let nowCalls = 0;
+    const now = (): Date => {
+      nowCalls++;
+      // Call 1 establishes the deadline; call 2 is the pre-first-iteration check (still
+      // under budget); call 3+ (the post-batch-1 check) reports time already past the
+      // budget, forcing the loop to exit cleanly without a second readPending/writeBsm call.
+      if (nowCalls <= 2) return new Date(startMs);
+      return new Date(startMs + BSM_TIME_BUDGET_MS + 1);
+    };
+
+    const useCase = makeComputeBsmGreeksUseCase({
+      readPending,
+      writeBsm,
+      readRate,
+      dividendYield: 0.013,
+      fallbackRate: 0.045,
+      now,
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true); // clean ok — NOT an error — even though rows remain pending
+    expect(readCalls).toBe(1);
+    expect(writeCalls).toBe(1);
+  });
+
+  it("Test D (readPending error mid-loop): a second batch's read failing propagates err after the first batch's write already stands", async () => {
+    const batch1 = [makePendingObs()];
+    const storageErr = makeStorageErr();
+
+    let readCalls = 0;
+    const readPending: ForReadingPendingObs = async () => {
+      readCalls++;
+      if (readCalls === 1) return ok(batch1);
+      return err(storageErr);
+    };
+
+    let writeCalls = 0;
+    const writeBsm: ForWritingBsmResults = async () => {
+      writeCalls++;
+      return ok(undefined);
+    };
+    const readRate: ForReadingRate = async () => ok("0.05");
+
+    const useCase = makeComputeBsmGreeksUseCase({
+      readPending,
+      writeBsm,
+      readRate,
+      dividendYield: 0.013,
+      fallbackRate: 0.045,
+      now: () => new Date("2026-06-11T20:00:00Z"), // fixed clock, well under budget
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe("storage-error");
+    // The first batch's durable checkpoint already happened before the failing second read.
+    expect(writeCalls).toBe(1);
   });
 });
