@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { formatOccSymbol } from "@morai/shared";
 import type { OccSymbol } from "@morai/shared";
 import type { ForReadingPendingObs, ForWritingBsmResults } from "@morai/core";
-import { makeComputeBsmGreeksUseCase } from "@morai/core";
+import { makeComputeBsmGreeksUseCase, COMMIT_BATCH_SIZE, BSM_TIME_BUDGET_MS } from "@morai/core";
 
 /**
  * runBsmDrainContract — SC3 drain-to-zero + idempotent-upsert integration contract.
@@ -276,6 +276,100 @@ export function runBsmDrainContractTests(makeRepo: () => BsmDrainContractRepo): 
 
       // No duplicate rows injected
       expect(rowCountAfterSecond).toBe(rowCountAfterFirst);
+    });
+  });
+
+  describe("OPS-02: batch-commit durability — budget-interrupted-then-resumed", () => {
+    let repo: BsmDrainContractRepo;
+    const UNDERLYING = 5500;
+    const FALLBACK_RATE = 0.045;
+    const DIVIDEND_YIELD = 0.013;
+
+    beforeEach(() => {
+      repo = makeRepo();
+    });
+
+    it("a budget-expired run commits the first batch (durable checkpoint) and leaves the remainder pending; a second invocation with a fresh budget resumes to zero pending with no rework", async () => {
+      // Seed more pending rows than one batch — COMMIT_BATCH_SIZE + a remainder — so the
+      // first invocation's budget-exit leaves real work still pending.
+      const remainder = 5;
+      const totalRows = COMMIT_BATCH_SIZE + remainder;
+      const obsTimeOps02 = new Date(Date.UTC(2026, 5, 10, 16, 0, 0, 0));
+      for (let i = 0; i < totalRows; i++) {
+        const occ = formatOccSymbol({
+          root: "SPX",
+          expiry: new Date(Date.UTC(2026, 8, 19)),
+          type: "C",
+          strike: 5000 + i,
+        });
+        await repo.seedPendingRow(
+          occ,
+          obsTimeOps02,
+          100.0 + i,
+          UNDERLYING,
+          5000 + i,
+          "2026-09-19",
+          "SPX",
+          "C",
+        );
+      }
+
+      const pendingBeforeAnyRun = await repo.countAllPendingBsm();
+      expect(pendingBeforeAnyRun).toBe(totalRows);
+
+      // First invocation: inject a `now()` that reports the BSM_TIME_BUDGET_MS budget as
+      // already exhausted right after the first batch — simulating a kill/interruption
+      // between batch 1's durable writeBsm commit and what would have been batch 2's read.
+      const startMs = Date.UTC(2026, 5, 10, 16, 0, 0);
+      let nowCalls = 0;
+      const budgetExpiredAfterFirstBatch = (): Date => {
+        nowCalls++;
+        // Call 1 sets the deadline; call 2 is the pre-batch-1 check (still under budget);
+        // call 3+ (post-batch-1 check) reports the budget already blown.
+        if (nowCalls <= 2) return new Date(startMs);
+        return new Date(startMs + BSM_TIME_BUDGET_MS + 1);
+      };
+
+      const interruptedRun = makeComputeBsmGreeksUseCase({
+        readPending: repo.readPendingObs,
+        writeBsm: repo.writeBsmResults,
+        readRate: async (_date) => ({ ok: true, value: String(FALLBACK_RATE) }),
+        dividendYield: DIVIDEND_YIELD,
+        fallbackRate: FALLBACK_RATE,
+        now: budgetExpiredAfterFirstBatch,
+      });
+
+      const result1 = await interruptedRun();
+      // Budget exit is a CLEAN ok — not an error — even though rows remain pending.
+      expect(result1.ok).toBe(true);
+
+      // Durability: exactly one batch's worth of rows got solved and committed; the
+      // remainder is still pending in real Postgres (bsm_iv IS NULL AND mark IS NOT NULL).
+      const pendingAfterKill = await repo.countAllPendingBsm();
+      expect(pendingAfterKill).toBe(remainder);
+
+      // Second invocation: a fresh budget (now() never approaches the deadline) resumes and
+      // drains the rest — the first batch's rows are excluded by readPending's bsm_iv IS
+      // NULL predicate, so they are never re-solved (idempotent resume).
+      const resumedRun = makeComputeBsmGreeksUseCase({
+        readPending: repo.readPendingObs,
+        writeBsm: repo.writeBsmResults,
+        readRate: async (_date) => ({ ok: true, value: String(FALLBACK_RATE) }),
+        dividendYield: DIVIDEND_YIELD,
+        fallbackRate: FALLBACK_RATE,
+        now: () => new Date(startMs + 60_000),
+      });
+
+      const result2 = await resumedRun();
+      expect(result2.ok).toBe(true);
+
+      const pendingAfterResume = await repo.countAllPendingBsm();
+      expect(pendingAfterResume).toBe(0);
+
+      // No rework: total row count is unchanged (no duplicate writes from re-solving the
+      // already-committed first batch).
+      const totalRowsAfter = await repo.countAllRows();
+      expect(totalRowsAfter).toBe(totalRows);
     });
   });
 }

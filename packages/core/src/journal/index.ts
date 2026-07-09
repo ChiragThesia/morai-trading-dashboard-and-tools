@@ -47,7 +47,11 @@ export { makeGetStatusUseCase } from "./application/getStatus.ts";
 export { makeFetchChainUseCase } from "./application/fetchChain.ts";
 export type { ForRunningFetchChain, FetchChainDeps } from "./application/fetchChain.ts";
 export { makeFetchRateUseCase } from "./application/fetchRate.ts";
-export { makeComputeBsmGreeksUseCase } from "./application/computeBsmGreeks.ts";
+export {
+  makeComputeBsmGreeksUseCase,
+  COMMIT_BATCH_SIZE,
+  BSM_TIME_BUDGET_MS,
+} from "./application/computeBsmGreeks.ts";
 // Snapshot use-case (Phase 3, plan 05)
 export { makeSnapshotCalendarsUseCase, computeSnapshotPnl } from "./application/snapshotCalendars.ts";
 export type { ForRunningSnapshotCalendars, SnapshotCalendarsDeps } from "./application/snapshotCalendars.ts";
