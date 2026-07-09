@@ -1,8 +1,8 @@
 # Phase 28: Playbook Gates, Anti-Criteria & Sizing - Context
 
-**Gathered:** 2026-07-09 (draft — TWO OPEN USER DECISIONS below block planning)
-**Status:** AWAITING USER at discuss-gate (per milestone kickoff: "Phase 28: crisis gates banded... fail-closed vs fail-open on missing VIX3M → ASK ME at that phase's discuss; anti-criteria thresholds → ASK ME")
-**Source:** User-locked milestone kickoff + REQUIREMENTS PLAY-01..05 + research SUMMARY/PITFALLS
+**Gathered:** 2026-07-09 (user answered both gate questions in-session — decisions final below)
+**Status:** Ready for planning
+**Source:** User-locked milestone kickoff + REQUIREMENTS PLAY-01..05 + research SUMMARY/PITFALLS + user answers 2026-07-09
 
 <domain>
 ## Phase Boundary
@@ -34,23 +34,23 @@ autoTuneTargetDelta. Requirements PLAY-01..05.
 - Weight discipline: gates are GATES (universe filters/penalties), not score weights — active
   score weights stay sum-100 untouched.
 
-### ⛔ OPEN — USER DECISION 1: fail-closed vs fail-open on missing VIX3M
-Crisis gate behavior when VXVCLS (or VIXCLS) has no fresh row (FRED outage/holiday gap):
-- fail-closed = block all new entries on missing data (safe, but a FRED hiccup silences the
-  picker; VXVCLS history only accretes since 2026-07-09 — thin early history)
-- fail-open = compute without the gate + loud "gate blind" flag on the board/snapshot
-  (keeps picker alive, risks trading blind into a spike)
-- middle option: fail-open with age tolerance (gate uses last value ≤ N business days old,
-  N=2-3; older → fail-closed/open per choice)
-RESEARCH leans: explicit decision required, document either way (PITFALLS 10).
+### ✅ USER DECISION 1 (2026-07-09): missing-data gate = AGE-TOLERANCE
+- Gate uses the last FRED value up to **3 business days old** (T-1 lag is normal FRED
+  behavior). Older than 3 business days → data treated as MISSING → gate **fails CLOSED**
+  (blocks new entries) with a loud "GATE BLIND" flag on the regime board and picker snapshot.
+- Never silent: the blind state is always visible where the gate state renders.
 
-### ⛔ OPEN — USER DECISION 2: anti-criteria thresholds (PLAY-02)
-From the trade-advisor playbook, need user-confirmed values:
-- Max open calendars: N = ? (candidate: 5? user has run 5 open concurrently)
-- Loss cooldown: pause new entries for D days after a realized loss ≥ X% (candidates: D=2-3
-  business days, X = any realized STOP-level loss ≥25%?)
-- Sustained-trend filter: definition + threshold (candidate: |20d SPX return| or close<20d-avg
-  streak ≥ K days — user's TOS fragility leg used close < 20d avg)
+### ✅ USER DECISION 2 (2026-07-09): anti-criteria thresholds
+- **Max open calendars: 6** — new entries pause when open count ≥ 6.
+- **Loss cooldown: realized loss ≥ 25% → 2 business days** — any calendar closed at or
+  beyond the −25% STOP rung pauses new entries for 2 business days.
+- **Sustained-trend filter: DROPPED (user challenged necessity; orchestrator concurred).**
+  Rationale recorded: crisis gates cover vol-regime danger; deltaNeutral scoring + GAMMA/
+  STOP exits cover directional blowthrough; n=13 gives no honest calibration basis for a
+  price-trend brake. Deferred — revivable when backtest directional-attribution at larger n
+  supplies evidence. Document in the playbook-gates doc as a deferred row with this
+  rationale (PLAY-02 delivered as two brakes, third consciously deferred — NOT silently
+  dropped).
 
 ### Claude's Discretion (after the two decisions)
 - Hysteresis band widths for the crisis gates (e.g. block ≥25 / re-open <24; block ≥0.95 /
