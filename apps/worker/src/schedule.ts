@@ -1,12 +1,12 @@
 /**
  * schedule.ts — registerAllJobs (Plan 05-04 Task 3, JOB-01/D-12; updated 11-06 GW-03; 13-05
  * COT-01; 19-08 PICK-01/PICK-03; JRNL-01 pnl-unit-mismatch fix; journal-pnl-opennetdebit-units
- * round 3: wipe-derived-fills).
+ * round 3: wipe-derived-fills; 26-04 EXIT-01: compute-exit-advice).
  *
  * Extracts all pg-boss createQueue / schedule / work calls from main.ts into a single
  * exported function. main.ts imports and calls registerAllJobs; inline blocks removed.
  *
- * Registers all 14 queues (GW-03: refresh-tokens retired — sidecar is sole token writer):
+ * Registers all 15 queues (GW-03: refresh-tokens retired — sidecar is sole token writer):
  *   fetch-schwab-chain, fetch-rates, compute-bsm-greeks, snapshot-calendars (no cron — D-03),
  *   compute-analytics (no cron — chain-triggered by snapshot-calendars, 06-04),
  *   compute-gex-snapshot (no cron — chain-triggered by compute-analytics, 08-06 D-01),
@@ -14,6 +14,7 @@
  *   rebuild-journal (no cron — on-demand only),
  *   fetch-cot (weekly Friday 17:00 ET — COT-01/D-07),
  *   compute-picker (no cron — chain-triggered by compute-gex-snapshot, 19-08 D-04),
+ *   compute-exit-advice (no cron — chain-triggered by compute-picker, 26-04 EXIT-01),
  *   fetch-economic-events (weekly Friday 17:00 ET — 19-08 D-14),
  *   recompute-snapshot-pnl (no cron — on-demand only, JRNL-01 data-correction path),
  *   wipe-derived-fills (no cron — on-demand only, account-wide fills-side-correction follow-up)
@@ -23,6 +24,7 @@
  *   compute-analytics: NO schedule — chain-triggered only by snapshot-calendars (06-04)
  *   compute-gex-snapshot: NO schedule — chain-triggered only by compute-analytics (08-06 D-01)
  *   compute-picker: NO schedule — chain-triggered only by compute-gex-snapshot (19-08 D-04)
+ *   compute-exit-advice: NO schedule — chain-triggered only by compute-picker (26-04 EXIT-01)
  *   rebuild-journal: NO schedule — on-demand via trigger_job
  *   recompute-snapshot-pnl: NO schedule — on-demand via trigger_job (JRNL-01)
  *   wipe-derived-fills: NO schedule — on-demand via trigger_job (destructive account-wide op)
@@ -79,6 +81,7 @@ export type AllHandlers = {
   readonly rebuildJournal: PgBossHandler;
   readonly fetchCot: PgBossHandler;
   readonly computePicker: PgBossHandler;
+  readonly computeExitAdvice: PgBossHandler;
   readonly fetchEconomicEvents: PgBossHandler;
   readonly recomputeSnapshotPnl: PgBossHandler;
   readonly wipeDerivedFills: PgBossHandler;
@@ -118,6 +121,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("rebuild-journal"); // on-demand only; no cron
   await boss.createQueue("fetch-cot"); // COT-01: weekly CFTC COT report (Friday 17:00 ET, D-07)
   await boss.createQueue("compute-picker"); // 19-08: chain-triggered by compute-gex-snapshot; no cron (D-04)
+  await boss.createQueue("compute-exit-advice"); // 26-04: chain-triggered by compute-picker; no cron (EXIT-01)
   await boss.createQueue("fetch-economic-events"); // 19-08: weekly FRED+FOMC events refresh (D-14)
   await boss.createQueue("recompute-snapshot-pnl"); // JRNL-01 pnl-unit-mismatch fix: on-demand only; no cron
   await boss.createQueue("wipe-derived-fills"); // journal-pnl-opennetdebit-units round 3: on-demand only, account-wide; no cron
@@ -199,6 +203,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   // compute-analytics: NO schedule — chain-triggered only by snapshot-calendars (06-04)
   // compute-gex-snapshot: NO schedule — chain-triggered only by compute-analytics (08-06 D-01)
   // compute-picker: NO schedule — chain-triggered only by compute-gex-snapshot (19-08 D-04)
+  // compute-exit-advice: NO schedule — chain-triggered only by compute-picker (26-04 EXIT-01)
   // rebuild-journal: NO schedule — on-demand via trigger_job
   // recompute-snapshot-pnl: NO schedule — on-demand via trigger_job (JRNL-01, mirrors rebuild-journal)
   // wipe-derived-fills: NO schedule — on-demand via trigger_job (journal-pnl-opennetdebit-units
@@ -220,6 +225,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("rebuild-journal", POLLING_INTERVAL, handlers.rebuildJournal);
   await boss.work("fetch-cot", POLLING_INTERVAL, handlers.fetchCot);
   await boss.work("compute-picker", POLLING_INTERVAL, handlers.computePicker);
+  await boss.work("compute-exit-advice", POLLING_INTERVAL, handlers.computeExitAdvice);
   await boss.work("fetch-economic-events", POLLING_INTERVAL, handlers.fetchEconomicEvents);
   await boss.work("recompute-snapshot-pnl", POLLING_INTERVAL, handlers.recomputeSnapshotPnl);
   await boss.work("wipe-derived-fills", POLLING_INTERVAL, handlers.wipeDerivedFills);

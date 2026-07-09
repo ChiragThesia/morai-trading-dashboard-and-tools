@@ -48,6 +48,7 @@ import {
   makePostgresPickerChainRepo,
   makePostgresPickerSnapshotRepo,
   makePostgresPickerHistoryRepo,
+  makePostgresExitVerdictsRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -70,9 +71,17 @@ import {
   makeGetPositionsUseCase,
   makeRegisterCalendarUseCase,
   makeRegisterOpenCalendarsUseCase,
+  makeComputeExitAdviceUseCase,
 } from "@morai/core";
 import type { PositionLeg } from "@morai/core";
 import type { GexContextForPicker, GexSnapshotRow } from "@morai/core";
+import type {
+  Calendar,
+  ForReadingHeldPositions,
+  ForReadingLatestSnapshotPerOpenCalendar,
+  ForReadingChainForRoll,
+  LatestSnapshotForOpenCalendar,
+} from "@morai/core";
 import { makeFetchCotHandler } from "./handlers/fetch-cot.ts";
 import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
@@ -87,6 +96,7 @@ import { makeRecomputeSnapshotPnlHandler } from "./handlers/recompute-snapshot-p
 import { makeWipeDerivedFillsHandler } from "./handlers/wipe-derived-fills.ts";
 import { makeRegisterOpenCalendarsHandler } from "./handlers/register-open-calendars.ts";
 import { makeComputePickerHandler } from "./handlers/compute-picker.ts";
+import { makeComputeExitAdviceHandler } from "./handlers/compute-exit-advice.ts";
 import { makeFetchEconomicEventsHandler } from "./handlers/fetch-economic-events.ts";
 import { registerAllJobs } from "./schedule.ts";
 
@@ -568,13 +578,98 @@ const computePickerSnapshotUseCase = makeComputePickerSnapshotUseCase({
   now: () => new Date(),
 });
 
+// 26-04 (EXIT-01): compute-picker gains a boss dep — enqueues compute-exit-advice on success
+// (mirrors computeGexSnapshotHandler adding boss in 19-08).
 const computePickerHandler = makeComputePickerHandler({
   computePickerUseCase: computePickerSnapshotUseCase,
+  boss,
 });
 
 const fetchEconomicEventsHandler = makeFetchEconomicEventsHandler({
   fetchEconomicEvents: economicEventsAdapter,
   persistEconomicEvents: economicEventsRepo.persistEconomicEvents,
+});
+
+// 26-04 (EXIT-01): exits context wiring — reuses the picker-chain + economic-events adapters
+// above (structural compatibility: EconomicEvent/ChainQuoteForPicker are structurally wider
+// than exits' own Tier1Event/ChainQuoteForRoll re-declarations, so the SAME functions satisfy
+// both port shapes with no wrapper) and adapts calendarsRepo/calendarSnapshotsRepo into the
+// exits-owned HeldPosition/LatestSnapshotForCalendar shapes at the composition root — mirrors
+// the toAbsGammaStrike/readGexContextForPicker mapping-closure precedent above.
+const exitVerdictsRepo = makePostgresExitVerdictsRepo(db);
+
+function mapCalendarToHeldPosition(calendar: Calendar) {
+  return {
+    calendarId: calendar.id,
+    name: `${calendar.strike / 1000}${calendar.optionType} ${calendar.frontExpiry} / ${calendar.backExpiry}`,
+    strike: calendar.strike / 1000, // Calendar.strike is the ×1000 convention; exits reads points
+    qty: calendar.qty,
+    openNetDebit: calendar.openNetDebit,
+    frontExpiry: calendar.frontExpiry,
+    backExpiry: calendar.backExpiry,
+  };
+}
+
+const readHeldPositionsForExits: ForReadingHeldPositions = async () => {
+  const result = await calendarsRepo.getOpenCalendars();
+  if (!result.ok) return result;
+  return ok(result.value.map(mapCalendarToHeldPosition));
+};
+
+function mapSnapshotToLatestSnapshotForCalendar(row: LatestSnapshotForOpenCalendar) {
+  return {
+    calendarId: row.calendarId,
+    time: row.snapshot.time,
+    // journal's SnapshotRow carries Drizzle-numeric strings ('NaN' is a valid sentinel,
+    // D-06) — Number('NaN') is JS NaN, which the evaluator's indicative gate already checks.
+    netMark: Number(row.snapshot.netMark),
+    pnlOpen: Number(row.snapshot.pnlOpen),
+    spot: Number(row.snapshot.spot),
+    frontIv: Number(row.snapshot.frontIv),
+    backIv: Number(row.snapshot.backIv),
+    dteFront: row.snapshot.dteFront,
+    dteBack: row.snapshot.dteBack,
+  };
+}
+
+const readLatestSnapshotForExits: ForReadingLatestSnapshotPerOpenCalendar = async () => {
+  const result = await calendarSnapshotsRepo.readLatestSnapshotPerOpenCalendar();
+  if (!result.ok) return result;
+  return ok(result.value.map(mapSnapshotToLatestSnapshotForCalendar));
+};
+
+// ChainQuoteForRoll declares strike in points; the reused picker-chain adapter returns the
+// ×1000 chain convention (ChainQuoteForPicker) — convert here, not at the use-case boundary,
+// so a bare pass-through never silently compares points to ×1000 and fails to match a
+// calendar's own strike. The `strike` param is accepted for the port's own filtering contract
+// but unused here — readChainForPicker has no server-side filter; computeExitAdvice.ts filters
+// the returned array client-side per calendar.
+const readChainForRollForExits: ForReadingChainForRoll = async (_strike) => {
+  const result = await pickerChainRepo.readChainForPicker();
+  if (!result.ok) return result;
+  return ok(
+    result.value.map((quote) => ({
+      strike: quote.strike / 1000,
+      expiration: quote.expiration,
+      contractType: quote.contractType,
+      bid: quote.bid,
+      ask: quote.ask,
+    })),
+  );
+};
+
+const computeExitAdviceUseCase = makeComputeExitAdviceUseCase({
+  readHeldPositions: readHeldPositionsForExits,
+  readLatestSnapshotPerOpenCalendar: readLatestSnapshotForExits,
+  readLatestVerdictsPerCalendar: exitVerdictsRepo.readLatestVerdictsPerCalendar,
+  readEconomicEvents: economicEventsRepo.readEconomicEvents,
+  readChainForRoll: readChainForRollForExits,
+  persistExitVerdict: exitVerdictsRepo.insertExitVerdict,
+  now: () => new Date(),
+});
+
+const computeExitAdviceHandler = makeComputeExitAdviceHandler({
+  computeExitAdviceUseCase,
 });
 
 // Register all 12 queues, 8 crons, and 12 work handlers via registerAllJobs (Plan 05-04 + 08-06 + 13-05 + 19-08).
@@ -593,6 +688,7 @@ await registerAllJobs(boss, {
   rebuildJournal: rebuildJournalHandler,
   fetchCot: fetchCotHandler,
   computePicker: computePickerHandler,
+  computeExitAdvice: computeExitAdviceHandler,
   fetchEconomicEvents: fetchEconomicEventsHandler,
   recomputeSnapshotPnl: recomputeSnapshotPnlHandler,
   wipeDerivedFills: wipeDerivedFillsHandler,
@@ -600,5 +696,5 @@ await registerAllJobs(boss, {
 });
 
 console.warn(
-  "morai worker: pg-boss started; 15 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 16 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );

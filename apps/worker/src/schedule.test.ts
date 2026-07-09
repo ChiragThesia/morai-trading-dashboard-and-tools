@@ -1,4 +1,4 @@
-// schedule.ts — registerAllJobs tests (Plan 05-04 Task 3; updated plan 05-13 for A4; updated 11-06 GW-03; 13-05 COT-01)
+// schedule.ts — registerAllJobs tests (Plan 05-04 Task 3; updated plan 05-13 for A4; updated 11-06 GW-03; 13-05 COT-01; 26-04 EXIT-01)
 //
 // Behaviors tested:
 //   - createQueue called for all 10 job names (refresh-tokens retired GW-03; fetch-cot added COT-01)
@@ -76,6 +76,7 @@ function makeFakeHandlers(): AllHandlers {
     rebuildJournal: handler,
     fetchCot: handler,
     computePicker: handler,
+    computeExitAdvice: handler,
     fetchEconomicEvents: handler,
     recomputeSnapshotPnl: handler,
     wipeDerivedFills: handler,
@@ -87,8 +88,9 @@ function makeFakeHandlers(): AllHandlers {
 // fetch-economic-events added; JRNL-01 pnl-unit-mismatch fix: recompute-snapshot-pnl added
 // (on-demand only, mirrors rebuild-journal); journal-pnl-opennetdebit-units round 3:
 // wipe-derived-fills added (on-demand only, account-wide); JRNL-02: register-open-calendars
-// added (on-demand only, account-wide) — 15 queues, 7 crons
-const ALL_15_QUEUES = [
+// added (on-demand only, account-wide); 26-04 EXIT-01: compute-exit-advice added
+// (chain-triggered only) — 16 queues, 7 crons
+const ALL_16_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
@@ -100,6 +102,7 @@ const ALL_15_QUEUES = [
   "rebuild-journal",
   "fetch-cot",
   "compute-picker",
+  "compute-exit-advice",
   "fetch-economic-events",
   "recompute-snapshot-pnl",
   "wipe-derived-fills",
@@ -117,11 +120,11 @@ const SCHEDULED_7 = [
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 15 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02)", async () => {
+  it("calls createQueue for all 16 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02)", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_15_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_16_QUEUES.sort());
   });
 
   it("calls schedule 8 times — 7 jobs, fetch-rates scheduled twice; all 8 rows survive the (name, key) upsert (14-05, D-06, CR-01)", async () => {
@@ -204,11 +207,11 @@ describe("registerAllJobs", () => {
     expect(names).not.toContain("refresh-tokens");
   });
 
-  it("calls work() for all 15 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02)", async () => {
+  it("calls work() for all 16 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02)", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_15_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_16_QUEUES.sort());
   });
 
   it("does NOT schedule recompute-snapshot-pnl (on-demand only, mirrors rebuild-journal — JRNL-01)", async () => {
@@ -241,6 +244,14 @@ describe("registerAllJobs", () => {
 
     const names = scheduleCalls.map((c) => c.name);
     expect(names).not.toContain("compute-picker");
+  });
+
+  it("does NOT schedule compute-exit-advice (chain-triggered only by compute-picker, 26-04 EXIT-01)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const names = scheduleCalls.map((c) => c.name);
+    expect(names).not.toContain("compute-exit-advice");
   });
 
   it("fetch-economic-events cron is '0 17 * * 5' tz America/New_York (19-08, weekly Friday 17:00 ET, D-14)", async () => {
