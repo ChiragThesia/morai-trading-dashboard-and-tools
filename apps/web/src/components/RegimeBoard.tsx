@@ -177,9 +177,11 @@ export function RegimeBoard(): React.ReactElement {
   const { data, isPending, isError } = useRegimeBoard();
   // The entry-gate tile (28-06) is a separate data source (usePicker) from the regime
   // indicators above — silently omitted (T-24-09 "never a fabricated chip") when no
-  // snapshot has been computed yet, independent of the regime board's own load state.
+  // snapshot has been computed yet, and rendered in EVERY branch below (WR-02: never
+  // suppressed by the regime board's own unrelated loading/error/empty state).
   const { data: pickerSnapshot } = usePicker();
   const gate = pickerSnapshot?.gate ?? null;
+  const gateChip = gate !== null ? <GateChip gate={gate} /> : null;
 
   if (isPending && data === undefined) {
     return (
@@ -190,6 +192,7 @@ export function RegimeBoard(): React.ReactElement {
         >
           Loading regime board…
         </div>
+        {gateChip}
       </Panel>
     );
   }
@@ -203,6 +206,7 @@ export function RegimeBoard(): React.ReactElement {
         >
           Regime board unavailable — check the FRED/CBOE fetch job.
         </div>
+        {gateChip}
       </Panel>
     );
   }
@@ -216,6 +220,7 @@ export function RegimeBoard(): React.ReactElement {
         >
           Regime data unavailable — run fetch-rates to populate.
         </div>
+        {gateChip}
       </Panel>
     );
   }
@@ -226,7 +231,7 @@ export function RegimeBoard(): React.ReactElement {
         {data.map((indicator) => (
           <Chip key={indicator.id} indicator={indicator} />
         ))}
-        {gate !== null && <GateChip gate={gate} />}
+        {gateChip}
       </div>
     </Panel>
   );

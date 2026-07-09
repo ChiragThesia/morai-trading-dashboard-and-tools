@@ -254,4 +254,24 @@ describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
 
     expect(screen.queryByTestId("gate-brake")).toBeNull();
   });
+
+  it("still shows the gate chip when the regime board query errors (WR-02: gate is a separate data source, never hidden by an unrelated failure)", () => {
+    setRegimeBoard(undefined, { isError: true });
+    setPickerGate({
+      ...BASE_GATE,
+      state: "blind",
+      vix: null,
+      ratio: null,
+      asOf: null,
+      reasons: ["gateReadError"],
+    });
+    render(<RegimeBoard />);
+
+    expect(
+      screen.getByText("Regime board unavailable — check the FRED/CBOE fetch job."),
+    ).toBeDefined();
+    expect(screen.getByTestId("gate-chip")).toBeDefined();
+    expect(screen.getByTestId("gate-state").textContent).toBe("GATE BLIND");
+    expect(screen.getByTestId("gate-chip").className).toContain("bg-downd");
+  });
 });
