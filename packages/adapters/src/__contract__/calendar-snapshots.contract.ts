@@ -22,7 +22,7 @@ import type {
   ForReadingCalendarSnapshotsForCycle,
   ForReadingLatestSnapshotTime,
   ForRecomputingSnapshotPnl,
-  ForReadingLatestSnapshotPerOpenCalendar,
+  ForReadingLatestSnapshotPerOpenCalendarForJournal,
   SnapshotRow,
   LegSnapshot,
   StorageError,
@@ -45,7 +45,7 @@ export type CalendarSnapshotsRepo = {
   /** JRNL-01 pnl-unit-mismatch fix: re-derive pnl_open on every row from openNetDebit/qty */
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
   /** 26-03 (EXIT-02): latest calendar_snapshots row per open calendar, DISTINCT ON (calendar_id) */
-  readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendar;
+  readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────

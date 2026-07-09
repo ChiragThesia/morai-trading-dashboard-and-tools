@@ -25,6 +25,8 @@ import type {
   ForReadingCalendarSnapshotsForCycle,
   ForReadingLatestSnapshotTime,
   ForRecomputingSnapshotPnl,
+  ForReadingLatestSnapshotPerOpenCalendarForJournal,
+  LatestSnapshotForOpenCalendar,
   SnapshotRow,
   LegSnapshot,
   CalendarSnapshotForCycle,
@@ -41,6 +43,7 @@ export type PostgresCalendarSnapshotsRepo = {
   readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
   readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
+  readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
 };
 
 export function makePostgresCalendarSnapshotsRepo(
@@ -315,6 +318,86 @@ export function makePostgresCalendarSnapshotsRepo(
     }
   };
 
+  // ─── ForReadingLatestSnapshotPerOpenCalendar (26-03, EXIT-02) ───────────────
+  // Fresh DISTINCT ON (calendar_id) query, NEVER readJournal/mapSnapshotRow — that mapper
+  // silently drops schwab_chain-sourced rows (RESEARCH Pitfall 1). Joined to calendars
+  // WHERE status = 'open' so only open positions are read; a calendar with no snapshot
+  // rows is simply absent from the result (inner join), not an error.
+  const readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal = async (): Promise<
+    Result<ReadonlyArray<LatestSnapshotForOpenCalendar>, StorageError>
+  > => {
+    try {
+      const rows = await db
+        .selectDistinctOn([calendarSnapshots.calendarId], {
+          time: calendarSnapshots.time,
+          calendarId: calendarSnapshots.calendarId,
+          spot: calendarSnapshots.spot,
+          netMark: calendarSnapshots.netMark,
+          frontMark: calendarSnapshots.frontMark,
+          backMark: calendarSnapshots.backMark,
+          frontIv: calendarSnapshots.frontIv,
+          backIv: calendarSnapshots.backIv,
+          frontIvRaw: calendarSnapshots.frontIvRaw,
+          backIvRaw: calendarSnapshots.backIvRaw,
+          netDelta: calendarSnapshots.netDelta,
+          netGamma: calendarSnapshots.netGamma,
+          netTheta: calendarSnapshots.netTheta,
+          netVega: calendarSnapshots.netVega,
+          termSlope: calendarSnapshots.termSlope,
+          dteFront: calendarSnapshots.dteFront,
+          dteBack: calendarSnapshots.dteBack,
+          pnlOpen: calendarSnapshots.pnlOpen,
+          source: calendarSnapshots.source,
+          trigger: calendarSnapshots.trigger,
+        })
+        .from(calendarSnapshots)
+        .innerJoin(calendars, eq(calendars.id, calendarSnapshots.calendarId))
+        .where(eq(calendars.status, "open"))
+        // DISTINCT ON requires the distinct column to lead the ORDER BY; time DESC within
+        // each calendar makes the newest row win — no source filter (Pitfall 1).
+        .orderBy(asc(calendarSnapshots.calendarId), desc(calendarSnapshots.time));
+
+      const mapped: LatestSnapshotForOpenCalendar[] = rows.map((row) => {
+        // snapshot_source enum has a third value ("computed_only") that never actually lands
+        // in this column — the writer (snapshotCalendars.ts) maps it to "cboe" before
+        // persisting. Mirror that same mapping here (never drop the row, unlike mapSnapshotRow).
+        const source: "cboe" | "schwab_chain" =
+          row.source === "schwab_chain" ? "schwab_chain" : "cboe";
+        const trigger: "scheduled" | "event-move" =
+          row.trigger === "event-move" ? "event-move" : "scheduled";
+        return {
+          calendarId: row.calendarId,
+          snapshot: {
+            time: row.time,
+            calendarId: row.calendarId,
+            spot: row.spot,
+            netMark: row.netMark,
+            frontMark: row.frontMark,
+            backMark: row.backMark,
+            frontIv: row.frontIv,
+            backIv: row.backIv,
+            frontIvRaw: row.frontIvRaw,
+            backIvRaw: row.backIvRaw,
+            netDelta: row.netDelta,
+            netGamma: row.netGamma,
+            netTheta: row.netTheta,
+            netVega: row.netVega,
+            termSlope: row.termSlope,
+            dteFront: row.dteFront,
+            dteBack: row.dteBack,
+            pnlOpen: row.pnlOpen,
+            source,
+            trigger,
+          },
+        };
+      });
+      return ok(mapped);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   return {
     persistSnapshot,
     readJournal,
@@ -322,6 +405,7 @@ export function makePostgresCalendarSnapshotsRepo(
     readSnapshotsForCycle,
     readLatestSnapshotTime,
     recomputeSnapshotPnl,
+    readLatestSnapshotPerOpenCalendar,
   };
 }
 

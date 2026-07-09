@@ -30,6 +30,8 @@ import type {
   ForReadingCalendarSnapshotsForCycle,
   ForReadingLatestSnapshotTime,
   ForRecomputingSnapshotPnl,
+  ForReadingLatestSnapshotPerOpenCalendarForJournal,
+  LatestSnapshotForOpenCalendar,
   SnapshotRow,
   LegSnapshot,
   CalendarSnapshotForCycle,
@@ -43,6 +45,7 @@ export type MemoryCalendarSnapshotsRepo = {
   readonly readSnapshotsForCycle: ForReadingCalendarSnapshotsForCycle;
   readonly readLatestSnapshotTime: ForReadingLatestSnapshotTime;
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
+  readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
   /**
    * seedCalendar — register a calendarId as known so readJournal returns
    * ok([]) (not ok(null)) for it. Mirrors the FK enforced by the Postgres
@@ -157,6 +160,28 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok({ rowsUpdated });
   };
 
+  // 26-03 (EXIT-02) twin: latest row per known calendar id, no source filtering — the
+  // memory model never had the readJournal/mapSnapshotRow cboe-only bug (Pitfall 1) since
+  // it never filters by source at all. Closed-calendar exclusion is not modeled at this
+  // repo layer (knownIds only tracks "known", mirroring the Postgres seed helper, which
+  // always inserts status='open' — see architecture-boundaries.md §8 twin parity).
+  const readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal = async (): Promise<
+    Result<ReadonlyArray<LatestSnapshotForOpenCalendar>, StorageError>
+  > => {
+    const latestByCalendar = new Map<string, SnapshotRow>();
+    for (const row of store.values()) {
+      if (!knownIds.has(row.calendarId)) continue;
+      const existing = latestByCalendar.get(row.calendarId);
+      if (existing === undefined || row.time.getTime() > existing.time.getTime()) {
+        latestByCalendar.set(row.calendarId, row);
+      }
+    }
+    const mapped: LatestSnapshotForOpenCalendar[] = [...latestByCalendar.entries()].map(
+      ([calendarId, row]) => ({ calendarId, snapshot: withDefaultTrigger(row) }),
+    );
+    return ok(mapped);
+  };
+
   const seedCalendar = (id: string): void => {
     knownIds.add(id);
   };
@@ -179,6 +204,7 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     readSnapshotsForCycle,
     readLatestSnapshotTime,
     recomputeSnapshotPnl,
+    readLatestSnapshotPerOpenCalendar,
     seedCalendar,
     seedLegSnapshot,
   };
