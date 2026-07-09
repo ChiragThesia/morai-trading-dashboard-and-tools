@@ -134,6 +134,7 @@ export type {
   MacroObservationRow,
   ForFetchingFredSeries,
   ForFetchingVvixQuote,
+  ForFetchingVix9dQuote,
   ForPersistingMacroObservation,
   ForReadingMacroObservations,
 } from "./application/ports.ts";

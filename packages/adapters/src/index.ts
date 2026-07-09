@@ -94,6 +94,8 @@ export type { SidecarPositionReconcilerDeps } from "./sidecar/positions-reconcil
 export { makeFredRateAdapter, makeFredSeriesAdapter } from "./http/fred.ts";
 // Phase 14 (14-03): CBOE VVIX index-quote adapter — ForFetchingVvixQuote (MAC-01, D-15)
 export { makeCboeVvixAdapter } from "./http/cboe-vvix.ts";
+// Phase 24: CBOE VIX9D index-quote adapter — ForFetchingVix9dQuote (MACRO-02/03)
+export { makeCboeVix9dAdapter } from "./http/cboe-vix9d.ts";
 // Phase 13 (13-02): CFTC Socrata TFF adapter — ForFetchingCotReport over gpe5-46if.json (COT-01)
 export { makeCftcCotAdapter } from "./http/cftc.ts";
 // Phase 13 (13-03): COT observations repo — ForPersistingCotObservation + ForReadingCotObservations
@@ -157,6 +159,9 @@ export { makeMemoryFredSeriesAdapter } from "./memory/fred-series.ts";
 export type { MemoryFredSeriesAdapter } from "./memory/fred-series.ts";
 export { makeMemoryVvixAdapter } from "./memory/vvix.ts";
 export type { MemoryVvixAdapter } from "./memory/vvix.ts";
+// Phase 24: in-memory twin for ForFetchingVix9dQuote (architecture-boundaries §8)
+export { makeMemoryVix9dAdapter } from "./memory/vix9d.ts";
+export type { MemoryVix9dAdapter } from "./memory/vix9d.ts";
 export { makeMemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
 export type { MemoryBrokerTokensRepo } from "./memory/broker-tokens.ts";
 

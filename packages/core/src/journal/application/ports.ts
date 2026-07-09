@@ -725,6 +725,14 @@ export type ForFetchingFredSeries = (
 export type ForFetchingVvixQuote = () => Promise<Result<MacroObservationRow, FetchError>>;
 
 /**
+ * ForFetchingVix9dQuote — fetch the current VIX9D quote via CBOE (Phase 24, MACRO-02/03).
+ * FRED does not publish VIX9D (VIX9DCLS 404s — 24-RESEARCH.md), so this mirrors
+ * ForFetchingVvixQuote exactly. Returns a MacroObservationRow with seriesId 'VIX9D' and
+ * source 'cboe'. No fallback — any failure returns err(FetchError).
+ */
+export type ForFetchingVix9dQuote = () => Promise<Result<MacroObservationRow, FetchError>>;
+
+/**
  * ForPersistingMacroObservation — upsert one macro_observations row (MAC-01, D-05).
  * Idempotent on (date, series_id) — a second same-day run for an unchanged value is a no-op;
  * a revised value updates in place (FRED sometimes revises preliminary data).
