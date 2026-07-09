@@ -527,6 +527,20 @@ export const exitVerdicts = pgTable(
   ],
 ).enableRLS();
 
+// ─── 21. backtest_runs — append-only backtest report (Phase 27, PICK-04, BT-04/BT-05) ──
+// One row per operator CLI run — INSERT only, never onConflictDoUpdate (append-only,
+// mirrors picker_snapshot's D-06 convention). params/report are each the WHOLE
+// request/result as one JSONB blob, validated at the adapter boundary on write. This
+// table is the harness's ONLY write path — no update/delete method exists on its repo
+// (BT-05, see docs/architecture/backtest-harness.md).
+
+export const backtestRuns = pgTable("backtest_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  params: jsonb("params").$type<Record<string, unknown>>().notNull(),
+  report: jsonb("report").$type<Record<string, unknown>>().notNull(),
+}).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };

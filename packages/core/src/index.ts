@@ -440,3 +440,27 @@ export type {
   SkippedCalendarSummary,
   ForRunningRegisterOpenCalendars,
 } from "./journal/index.ts";
+
+// ─── Backtest bounded context (Phase 27, Plan 01) ──────────────────────────────
+// Domain types + driven port TYPE declarations only — no use-cases yet (03 read ports,
+// 04 kernel, 05 replay, 06 CLI/report). StorageError is NOT re-exported a second time
+// under that name (see ./backtest/index.ts header comment, mirrors exits' convention).
+export type {
+  ReplayMismatchKind,
+  CohortMismatch,
+  ReplayMismatch,
+  DirectionalAttributionRow,
+  AblationRow,
+  CoverageDay,
+  TradeReproduction,
+  BacktestReport,
+  BacktestRunRow,
+  ForPersistingBacktestRun,
+  ChainLegQuoteAsOf,
+  ForReadingChainAsOf,
+  ForReadingDailySpotClosesAsOf,
+  StoredPickerSnapshotRow,
+  ForReadingPickerSnapshotsInRange,
+  FullHistorySnapshotRow,
+  ForReadingFullSnapshotHistoryForCalendar,
+} from "./backtest/index.ts";
