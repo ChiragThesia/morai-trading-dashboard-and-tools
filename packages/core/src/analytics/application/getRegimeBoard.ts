@@ -8,7 +8,9 @@
  *
  * An indicator whose required input series has no row is OMITTED — never fabricated
  * (T-24-09). A ratio indicator's asOf is the OLDER of its two input dates — never
- * overstates freshness (T-24-10, MACRO-03).
+ * overstates freshness (T-24-10, MACRO-03). A non-finite value (e.g. a `0` ratio
+ * denominator yielding Infinity/NaN) is OMITTED the same way — never pushed (WR-01);
+ * one bad input drops one chip, not the whole board.
  *
  * RegimeIndicatorOut is a core-local type (core cannot import @morai/contracts,
  * architecture-boundaries §2) structurally matching contracts' regimeIndicator; the
@@ -102,18 +104,20 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
     const vxvcls = latest.get("VXVCLS");
     if (vixCls !== undefined && vxvcls !== undefined) {
       const value = vixCls.value / vxvcls.value;
-      indicators.push({
-        id: "vix-term-structure",
-        ...META["vix-term-structure"],
-        value,
-        band: bandVixTermStructure(value),
-        asOf: olderDate(vixCls.date, vxvcls.date),
-        inputs: { VIXCLS: vixCls.value, VXVCLS: vxvcls.value },
-      });
+      if (Number.isFinite(value)) {
+        indicators.push({
+          id: "vix-term-structure",
+          ...META["vix-term-structure"],
+          value,
+          band: bandVixTermStructure(value),
+          asOf: olderDate(vixCls.date, vxvcls.date),
+          inputs: { VIXCLS: vixCls.value, VXVCLS: vxvcls.value },
+        });
+      }
     }
 
     const vvix = latest.get("VVIX");
-    if (vvix !== undefined) {
+    if (vvix !== undefined && Number.isFinite(vvix.value)) {
       indicators.push({
         id: "vvix",
         ...META.vvix,
@@ -127,18 +131,20 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
     const vix9d = latest.get("VIX9D");
     if (vix9d !== undefined && vixCls !== undefined) {
       const value = vix9d.value / vixCls.value;
-      indicators.push({
-        id: "vix9d-vix",
-        ...META["vix9d-vix"],
-        value,
-        band: bandVix9dRatio(value),
-        asOf: olderDate(vix9d.date, vixCls.date),
-        inputs: { VIX9D: vix9d.value, VIXCLS: vixCls.value },
-      });
+      if (Number.isFinite(value)) {
+        indicators.push({
+          id: "vix9d-vix",
+          ...META["vix9d-vix"],
+          value,
+          band: bandVix9dRatio(value),
+          asOf: olderDate(vix9d.date, vixCls.date),
+          inputs: { VIX9D: vix9d.value, VIXCLS: vixCls.value },
+        });
+      }
     }
 
     const hyOas = latest.get("BAMLH0A0HYM2");
-    if (hyOas !== undefined) {
+    if (hyOas !== undefined && Number.isFinite(hyOas.value)) {
       indicators.push({
         id: "hy-oas",
         ...META["hy-oas"],

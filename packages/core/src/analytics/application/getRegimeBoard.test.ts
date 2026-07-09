@@ -154,6 +154,25 @@ describe("makeGetRegimeBoardUseCase", () => {
     }
   });
 
+  it("OMITS vix9d-vix when the VIXCLS denominator is 0 — never emits Infinity (WR-01)", async () => {
+    const rows = FULL_ROWS.map((r) =>
+      r.seriesId === "VIXCLS" && r.date === "2026-07-08" ? { ...r, value: 0 } : r,
+    );
+    const readMacroObservations: ForReadingMacroObservations = async () => ok(rows);
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+
+    const result = await getRegimeBoard();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.find((i) => i.id === "vix9d-vix")).toBeUndefined();
+      // one bad ratio omits itself only — the rest of the board still ships
+      expect(result.value.find((i) => i.id === "vvix")).toBeDefined();
+      expect(result.value.find((i) => i.id === "hy-oas")).toBeDefined();
+      expect(result.value.find((i) => i.id === "vix-term-structure")).toBeDefined();
+    }
+  });
+
   it("returns ok([]) when the store is empty", async () => {
     const readMacroObservations: ForReadingMacroObservations = async () => ok([]);
     const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
