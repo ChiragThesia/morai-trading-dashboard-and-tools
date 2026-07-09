@@ -60,3 +60,11 @@ export { makeComputeGexSnapshotUseCase } from "./application/computeGexSnapshot.
 export type { ComputeGexSnapshotDeps } from "./application/computeGexSnapshot.ts";
 export { makeGetGexUseCase } from "./application/getGex.ts";
 export type { GetGexDeps } from "./application/getGex.ts";
+
+// Regime board use-case (Phase 24, 24-04) — BOARD-01/02/03, MACRO-03
+export { makeGetRegimeBoardUseCase } from "./application/getRegimeBoard.ts";
+export type {
+  GetRegimeBoardDeps,
+  ForRunningGetRegimeBoard,
+  RegimeIndicatorOut,
+} from "./application/getRegimeBoard.ts";

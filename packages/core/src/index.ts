@@ -280,6 +280,14 @@ export type {
   GetGexDeps,
 } from "./analytics/index.ts";
 
+// Regime board use-case (Phase 24, 24-04) — BOARD-01/02/03, MACRO-03
+export { makeGetRegimeBoardUseCase } from "./analytics/index.ts";
+export type {
+  GetRegimeBoardDeps,
+  ForRunningGetRegimeBoard,
+  RegimeIndicatorOut,
+} from "./analytics/index.ts";
+
 // ─── Streaming bounded context (Phase 12) ─────────────────────────────────────
 // SSE fan-out pipeline domain types and BSM live-greek recompute (D-02, STRM-01)
 export type {
