@@ -98,7 +98,8 @@ function summarizeBacktestReport(report: BacktestReport): void {
   const overall = report.coverage.find((c) => c.date === "overall");
   if (overall !== undefined) {
     console.warn(
-      `backtest: coverage ${overall.coveragePct.toFixed(1)}% (${overall.observedCohorts}/${overall.expectedCohorts} cohort(s), gap rows excluded)`,
+      `backtest: coverage ${overall.coveragePct.toFixed(1)}% (${overall.observedCohorts}/${overall.expectedCohorts} cohort(s) replayed; ` +
+        `${overall.gapCohorts} data-gap, ${overall.emptyUniverseCohorts} empty-universe)`,
     );
   }
 

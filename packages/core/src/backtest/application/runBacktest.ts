@@ -159,7 +159,7 @@ export function makeRunBacktestUseCase(deps: RunBacktestDeps) {
       if (!baselineResult.ok) return baselineResult;
       baselineByCohort.set(cohort, baselineResult.value.outcomes);
       allBaselineOutcomes.push(...baselineResult.value.outcomes);
-      coverageCohorts.push({ date: isoDate(cohort.observedAt), isGap: baselineResult.value.slotKind !== "replayed" });
+      coverageCohorts.push({ date: isoDate(cohort.observedAt), kind: baselineResult.value.slotKind });
     }
 
     // ─── BT-03 13-trade oracle (every closed calendar, optionally narrowed to one) ─────────
@@ -247,6 +247,8 @@ export function makeRunBacktestUseCase(deps: RunBacktestDeps) {
       date: d.date,
       expectedCohorts: d.total,
       observedCohorts: d.replayed,
+      gapCohorts: d.gap,
+      emptyUniverseCohorts: d.emptyUniverse,
       coveragePct: d.coveragePct,
     }));
 

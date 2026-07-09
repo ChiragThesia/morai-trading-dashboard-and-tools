@@ -41,11 +41,18 @@ export type AblationRow = {
   readonly n: number;
 };
 
-/** CoverageDay — replayed-vs-expected cohort count for one calendar day (gap-row honesty). */
+/**
+ * CoverageDay — replayed-vs-expected cohort count for one calendar day (gap-row honesty).
+ * `gapCohorts` (no/degenerate chain) and `emptyUniverseCohorts` (real data, zero surviving
+ * candidates) are the two DISTINCT reasons a cohort was not replayed, reported separately so a
+ * thin real-data footprint is never mislabeled as a data gap (WR-03).
+ */
 export type CoverageDay = {
   readonly date: string; // YYYY-MM-DD
   readonly expectedCohorts: number;
   readonly observedCohorts: number;
+  readonly gapCohorts: number;
+  readonly emptyUniverseCohorts: number;
   readonly coveragePct: number;
 };
 

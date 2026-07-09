@@ -40,6 +40,7 @@ export { bootstrapCi, quantile, type BootstrapCiResult } from "./domain/bootstra
 export {
   coveragePercent,
   type CoverageCohort,
+  type CoverageSlotKind,
   type CoverageDayResult,
   type CoveragePercentResult,
 } from "./domain/coverage.ts";
