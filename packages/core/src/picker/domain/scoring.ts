@@ -34,6 +34,7 @@ import {
   backEventBonusValue,
   thetaVegaValue,
   deltaNeutralFraction,
+  slopeEntryFraction,
   WEIGHT_DELTA_NEUTRAL,
 } from "./rules.ts";
 import type { BreakdownEntry, ContextEntry, ExitPlan, RawCandidate, ScoredCandidate } from "./types.ts";
@@ -112,7 +113,8 @@ function scoreOne(
   const expectedMove = candidate.spot * ivF * Math.sqrt(tf / 365);
 
   // ─── slope ───
-  const slopeFraction = clamp01(candidate.slope / SLOPE_NORMALIZER);
+  // 2026-07-09: front-richness is the entry edge (ORATS/SteadyOptions) — see rules.ts.
+  const slopeFraction = slopeEntryFraction(candidate.slope);
 
   // ─── eventAdjustment (front-leg only, D-11) ───
   const evtPenalty = candidate.frontEvents.reduce((sum, name) => sum + (EVENT_PENALTY[name] ?? 0), 0);

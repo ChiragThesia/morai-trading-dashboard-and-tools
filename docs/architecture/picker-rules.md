@@ -42,8 +42,12 @@ User-locked 2026-07-08 (research-verified against tastytrade/SteadyOptions/ORATS
 |---|---|---|
 | `net-theta-positive` | net θ = (θ_back − θ_front)·100 > 0 | A calendar with negative carry has no edge thesis. |
 | `liquidity` | each leg: (ask−bid)/mid ≤ 0.10 AND OI ≥ 100 | Untradeable markets produce fictional debits/breakevens. |
-| `term-inversion` | drop pair when front IV > back IV | Playbook hard gate (trading-knowledge repo): a calendar needs back IV ≥ front IV. |
 | `event-blackout` | drop pair when a tier-1 event (FOMC/CPI/NFP) falls ≤3 days before the front expiry | Playbook H4: event vol + gamma cliff stack in the short leg's final days. |
+
+RETIRED 2026-07-09: the per-pair `term-inversion` gate (drop when front IV > back IV). It read
+the playbook's crisis guard literally and deleted exactly the trades with edge (ORATS: "you
+want backwardation" when buying a calendar). Crisis protection arrives as market-level
+VIX/VIX3M + VIX gates in the playbook-port phase.
 
 Deferred to the playbook-port phase (need a macro→picker port + the VIX3M FRED series, which
 `macro_observations` does not yet carry): VIX < 25 hard gate, VIX/VIX3M < 0.95 contango gate,
@@ -54,7 +58,7 @@ and the VIX-tuned target-delta preference (autoTuneTargetDelta).
 | id | Weight | Formula | Source |
 |---|---|---|---|
 | `fwdEdge` | 30 | fwd = √((t_b·σ_b² − t_f·σ_f²)/(t_b − t_f)); edge = σ_f − fwd; fraction = clamp01((edge+0.02)/0.04); inverted radicand → 0 | Forward-IV term-structure edge (Perfiliev; SpotGamma fwd-IV) |
-| `slope` | 25 | slope = ((σ_b − σ_f)/(t_b − t_f))·365; fraction = clamp01(slope/0.6) | Term-slope ≈ variance-risk-premium proxy (Johnson 2017, JFQA) |
+| `slope` | 25 | slope = ((σ_b − σ_f)/(t_b − t_f))·365 (negative = front-rich/backwardation between legs); fraction = 1 at slope ≤ −0.25 (mild front-richness = best entry), linear down to 0 at slope ≥ +0.6 (steep contango), and 0 again below −1.5 (crisis inversion) | REDESIGNED 2026-07-09: ORATS backwardation backtest (−0.09%→+0.58%/yr) + SteadyOptions negative-differential evidence — calendar ENTRY wants the front rich, not carry contango. Johnson-2017 carry rationale demoted to the backtest |
 | `gexFit` | 15 | near-term (≤45d) GEX placement: +0.5 if spot > flip (dampen regime), +0.3 if K ∈ [putWall, callWall], +0.2 if K within 5 pts of either wall (pin). Falls back to all-expiry flip/walls when `nearTerm` is null. Stale/missing GEX → 0 | Dealer-gamma pinning/dampening (SpotGamma-convention walls; in-house GEX) |
 | `eventAdjustment` | 10 | 1 − Σ(front-leg FOMC/CPI/NFP × 0.5), floor 0 | No binary catalysts inside the short leg (practitioner consensus) |
 | `beVsEm` | 10 | breakeven width / (spot·σ_f·√(t_f/365)); fraction = clamp01(ratio/1.5); <2 breakevens → 0 | Profit-zone width vs expected move (real bisection breakevens, D-09) |

@@ -35,6 +35,9 @@ export const DELTA_NEUTRAL_MAX = 10;
 
 // ─── Normalizer tunables (documented; PICK-04 backtest recalibrates) ────────────
 export const SLOPE_NORMALIZER = 0.6;
+/** slopeEntryFraction breakpoints (2026-07-09 redesign — see slopeEntryFraction doc). */
+export const SLOPE_RICH_FULL = -0.25;
+export const SLOPE_CRISIS_FLOOR = -1.5;
 export const FWD_EDGE_OFFSET = 0.02;
 export const FWD_EDGE_RANGE = 0.04;
 export const BE_VS_EM_TARGET_RATIO = 1.5;
@@ -169,6 +172,23 @@ export function thetaVegaValue(theta: number, vega: number): number | null {
  * User-locked 2026-07-08 — without it, skew-driven fwd-edge drags the rail toward
  * high-|Δ| strikes the user (a delta-neutral trader) would never take.
  */
+/**
+ * `slope` entry fraction (REDESIGNED 2026-07-09): calendar ENTRY wants the front leg rich —
+ * mild backwardation between the legs. ORATS backwardation backtest (−0.09%→+0.58%/yr) and
+ * SteadyOptions' negative-differential evidence both point this way; the old contango-reward
+ * (Johnson 2017 carry) actively fought fwdEdge on inverted boards.
+ *   slope ≤ −1.5   → 0   (crisis-grade inversion — vol exploding, not edge)
+ *   −1.5 … −0.25   → 1   (mild front-richness — the sweet spot)
+ *   −0.25 … +0.6   → linear 1 → 0 (flat to steep contango — edge fades)
+ *   ≥ +0.6         → 0
+ */
+export function slopeEntryFraction(slope: number): number {
+  if (slope < SLOPE_CRISIS_FLOOR) return 0;
+  if (slope <= SLOPE_RICH_FULL) return 1;
+  if (slope >= SLOPE_NORMALIZER) return 0;
+  return (SLOPE_NORMALIZER - slope) / (SLOPE_NORMALIZER - SLOPE_RICH_FULL);
+}
+
 export function deltaNeutralFraction(netDelta: number): number {
   const fraction = 1 - Math.abs(netDelta) / DELTA_NEUTRAL_MAX;
   return Math.max(0, Math.min(1, fraction));

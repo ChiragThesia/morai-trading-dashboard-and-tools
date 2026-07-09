@@ -22,6 +22,7 @@ import {
   backEventBonusValue,
   thetaVegaValue,
   deltaNeutralFraction,
+  slopeEntryFraction,
   WEIGHT_FWD_EDGE,
   WEIGHT_SLOPE,
   WEIGHT_DELTA_NEUTRAL,
@@ -194,5 +195,24 @@ describe("deltaNeutralFraction (Δ-neutrality score — user-locked 2026-07-08)"
     expect(WEIGHT_FWD_EDGE).toBe(30);
     expect(WEIGHT_SLOPE).toBe(25);
     expect(WEIGHT_DELTA_NEUTRAL).toBe(10);
+  });
+});
+
+describe("slopeEntryFraction (redesigned 2026-07-09 — front-richness IS the entry edge)", () => {
+  it("is 1 in the mild front-rich zone (slope ≤ −0.25 vol-pts/yr down to the crisis floor)", () => {
+    expect(slopeEntryFraction(-0.25)).toBe(1);
+    expect(slopeEntryFraction(-1.0)).toBe(1);
+    expect(slopeEntryFraction(-1.5)).toBe(1);
+  });
+
+  it("decays linearly from 1 at −0.25 to 0 at steep contango (+0.6)", () => {
+    expect(slopeEntryFraction(0.175)).toBeCloseTo(0.5, 10);
+    expect(slopeEntryFraction(0.6)).toBe(0);
+    expect(slopeEntryFraction(2)).toBe(0);
+  });
+
+  it("is 0 below the crisis-inversion floor (slope < −1.5)", () => {
+    expect(slopeEntryFraction(-1.51)).toBe(0);
+    expect(slopeEntryFraction(-5)).toBe(0);
   });
 });

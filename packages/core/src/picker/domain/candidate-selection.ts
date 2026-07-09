@@ -17,8 +17,6 @@
  * Hard gates (each counted in gateDrops, never silent):
  *   - liquidity (rules.ts isLiquidQuote): spread ≤10% of mid + OI ≥100 per leg;
  *   - net-theta-positive (criterion 6);
- *   - term inversion: front IV > back IV for the pair (playbook hard gate — a calendar
- *     needs back IV ≥ front IV);
  *   - event blackout: a tier-1 event (FOMC/CPI/NFP) within EVENT_BLACKOUT_DAYS before the
  *     front expiry (playbook H4: gamma+event risk peaks into the front leg's final days).
  *
@@ -259,11 +257,10 @@ export function selectCandidates(
         const pairKey = `${K}-${fe}-${be}`;
         if (seenPairs.has(pairKey)) continue;
 
-        // Playbook hard gate: back IV must be ≥ front IV (term inversion = no calendar edge).
-        if (ivF > ivB) {
-          drops.termInverted += 1;
-          continue;
-        }
+        // Term-inversion gate RETIRED 2026-07-09: mild front-richness IS the entry edge
+        // (ORATS/SteadyOptions) — slopeEntryFraction ranks it; its crisis floor (slope
+        // < −1.5) zeroes true stress inversions. gateDrops.termInverted stays at 0 for
+        // contract compat until the next schema pass.
 
         if (frontHasBlackout) {
           drops.eventBlackout += 1;

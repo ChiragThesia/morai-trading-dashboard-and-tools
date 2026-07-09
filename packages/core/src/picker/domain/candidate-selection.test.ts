@@ -154,14 +154,14 @@ describe("selectCandidates", () => {
     expect(c.debit).toBeCloseTo(4260, 0);
   });
 
-  it("gates per-pair term inversion (front IV > back IV) and counts the drops", () => {
+  it("KEEPS front-rich (mildly inverted) pairs — the entry edge; scoring ranks them (gate retired 2026-07-09)", () => {
     const chain: ChainQuoteForPicker[] = [
-      chainQuote(7450, "2026-07-31", 0.20, "P"), // front RICHER than back → inverted pair
+      chainQuote(7450, "2026-07-31", 0.17, "P"), // front slightly richer than back — the good entry
       chainQuote(7450, "2026-08-26", 0.15, "P"),
     ];
     const { candidates, gateDrops } = selectCandidates(chain, [], { r: R, q: Q });
-    expect(candidates).toHaveLength(0);
-    expect(gateDrops.termInverted).toBe(1);
+    expect(candidates).toHaveLength(1);
+    expect(gateDrops.termInverted).toBe(0);
   });
 
   it("gates tier-1 events within 3 days BEFORE the front expiry and counts the drops", () => {
