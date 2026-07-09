@@ -683,7 +683,7 @@ export function registerGetMacroTool(
     {
       title: "Get Macro",
       description:
-        "Returns the macro backdrop series (8 FRED series — DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS, VXVCLS — plus VVIX via CBOE), keyed by series id, ascending by date. Same payload as GET /api/analytics/macro. Optional days (max 1825) and series (CSV of known ids) filters; defaults to the last 90 days of all series.",
+        "Returns the macro backdrop series (9 FRED series — DFF, DGS1MO, DGS3MO, SOFR, T10Y2Y, T10Y3M, VIXCLS, VXVCLS, BAMLH0A0HYM2 — plus VVIX and VIX9D via CBOE), keyed by series id, ascending by date. Same payload as GET /api/analytics/macro. Optional days (max 1825) and series (CSV of known ids) filters; defaults to the last 90 days of all series.",
       inputSchema: {
         days: z.number().int().positive().max(1825).optional(),
         series: z.string().optional(),
