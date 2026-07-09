@@ -238,6 +238,26 @@ const DEFAULT_PICKER_GATE: PickerGate = {
   reasons: [],
 };
 
+// ─── Sizing (28-04, PLAY-03) ─────────────────────────────────────────────────────
+
+/**
+ * pickerSizing — the VIX-tiered discrete contract-count recommendation (core's sizing.ts
+ * SIZING_TIERS registry), resolved ONCE per cohort from the same VIX the gate reads.
+ * `.default()` so a snapshot stored before Phase 28 Plan 04 still parses: it reads as no
+ * recommendation, harmless for a HISTORICAL row (nothing re-resolves on read). `tier`/
+ * `contracts` are null together whenever the cohort VIX itself is null (GATE BLIND /
+ * gate-read-error / cold-start) — never a guessed tier (T-28-11).
+ */
+export const pickerSizing = z.object({
+  tier: z.enum(["low", "normal", "elevated", "crisis"]).nullable(),
+  contracts: z.number().int().nullable(),
+  vix: z.number().nullable(),
+});
+
+export type PickerSizing = z.infer<typeof pickerSizing>;
+
+const DEFAULT_PICKER_SIZING: PickerSizing = { tier: null, contracts: null, vix: null };
+
 // ─── Snapshot response ──────────────────────────────────────────────────────────
 
 /**
@@ -292,6 +312,9 @@ export const pickerSnapshotResponse = z.object({
   /** The market-level entry gate + anti-criteria brakes (28-03). Defaulted so pre-Phase-28
    *  stored rows parse. */
   gate: pickerGate.default(DEFAULT_PICKER_GATE),
+  /** VIX-tiered discrete sizing recommendation (28-04, PLAY-03). Defaulted so pre-Plan-04
+   *  stored rows parse. */
+  sizing: pickerSizing.default(DEFAULT_PICKER_SIZING),
 });
 
 export type PickerSnapshotResponse = z.infer<typeof pickerSnapshotResponse>;

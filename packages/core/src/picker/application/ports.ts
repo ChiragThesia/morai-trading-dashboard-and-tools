@@ -107,6 +107,18 @@ export type PickerGate = {
   readonly reasons: ReadonlyArray<string>;
 };
 
+/**
+ * PickerSizing — readonly domain mirror of contracts' pickerSizing (28-04, PLAY-03). The
+ * VIX-tiered discrete contract-count recommendation (domain/sizing.ts SIZING_TIERS),
+ * resolved ONCE per cohort from the same VIX the gate reads. `tier`/`contracts` are null
+ * together whenever the cohort VIX is null — never a guessed tier (T-28-11).
+ */
+export type PickerSizing = {
+  readonly tier: "low" | "normal" | "elevated" | "crisis" | null;
+  readonly contracts: number | null;
+  readonly vix: number | null;
+};
+
 /** One rule-registry row shipped in the snapshot (the UI's methodology source of truth). */
 export type RuleSetEntry = {
   readonly id: string;
@@ -199,6 +211,8 @@ export type PickerSnapshot = {
   };
   /** The market-level entry gate + anti-criteria brakes (28-03, PLAY-01/PLAY-02). */
   readonly gate: PickerGate;
+  /** VIX-tiered discrete sizing recommendation (28-04, PLAY-03). */
+  readonly sizing: PickerSizing;
 };
 
 /** PickerSnapshotRow — a persisted picker snapshot (append-only, D-06 keeps history). */

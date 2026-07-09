@@ -40,6 +40,7 @@ const ROW: PickerSnapshotRow = {
       brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
       reasons: [],
     },
+    sizing: { tier: null, contracts: null, vix: null },
   },
 };
 

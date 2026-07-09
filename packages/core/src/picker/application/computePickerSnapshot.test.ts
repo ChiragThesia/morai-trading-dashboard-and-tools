@@ -225,6 +225,7 @@ function previousSnapshotWithGate(gate: PickerGate): PickerSnapshotRow {
       ruleSet: [],
       gateDrops: { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 },
       gate,
+      sizing: { tier: null, contracts: null, vix: null },
     },
   };
 }

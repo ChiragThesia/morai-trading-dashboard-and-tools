@@ -545,6 +545,9 @@ export function makeComputePickerSnapshotUseCase(
       gateDrops,
       // The market-level entry gate + anti-criteria brakes (28-03, PLAY-01/PLAY-02).
       gate,
+      // VIX-tiered sizing (28-04, PLAY-03) -- resolved from the cohort VIX in Task 2; this
+      // task only adds the field to the contract/domain shapes (28-04-PLAN.md Task 1 scope).
+      sizing: { tier: null, contracts: null, vix: null },
     };
 
     // ── Step 7: Persist (D-06 append-only; observedAt = cohort data time, NEVER now()) ──

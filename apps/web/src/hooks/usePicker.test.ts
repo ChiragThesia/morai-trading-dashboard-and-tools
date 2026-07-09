@@ -53,6 +53,8 @@ const SNAPSHOT: PickerSnapshotResponse = {
     brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
     reasons: [],
   },
+  // 28-04: the fixture predates VIX-tiered sizing — matches the schema's read-seam default.
+  sizing: { tier: null, contracts: null, vix: null },
 };
 
 function makeOkResponse(body: unknown): { ok: boolean; status: number; json: () => Promise<unknown> } {

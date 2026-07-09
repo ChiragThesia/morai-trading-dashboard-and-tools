@@ -337,4 +337,7 @@ export const pickerSnapshotFixture: PickerSnapshotResponse = {
     brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
     reasons: [],
   },
+  // The fixture predates VIX-tiered sizing (28-04) — no recommendation exercises the
+  // read-seam default.
+  sizing: { tier: null, contracts: null, vix: null },
 };
