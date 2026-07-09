@@ -307,6 +307,25 @@ Design rationale:
 - **No expiry column for refresh token** — the 7-day hard cutoff is computed from
   `refresh_issued_at` at read time by the `isTokenExpired` pure domain function.
 
+### `backtest_runs` — append-only backtest report (Phase 27, PICK-04, BT-04/BT-05)
+
+One row per operator CLI run — INSERT only, never `onConflictDoUpdate` (append-only,
+mirrors `picker_snapshot`'s D-06 convention). `params` and `report` are each the
+WHOLE request/result as one JSONB blob, validated at the adapter boundary on write.
+This is the harness's only write path — see
+[backtest-harness.md](backtest-harness.md) for the hard never-writes-weights
+boundary (BT-05).
+
+```
+id            uuid PK              -- defaultRandom
+created_at    timestamptz NOT NULL -- defaultNow
+params        jsonb NOT NULL       -- CLI args: from/to/calendar filter
+report        jsonb NOT NULL       -- BacktestReport: mismatches, attribution,
+                                    -- ablation, coverage, caveats, all n-stamped
+```
+
+**RLS enabled**, mirroring every other table in this schema.
+
 ## Migrations
 
 - drizzle-kit generated SQL in `packages/adapters/postgres/migrations/`.
