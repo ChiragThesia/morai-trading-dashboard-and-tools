@@ -98,7 +98,8 @@ the series has no backfill, so every day skipped is permanently lost.
   3. A failed FRED fetch for `VXVCLS` degrades the same way the other 8 series already do (a
      visible error state, never a silent skip).
 
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 23-01-PLAN.md — VXVCLS added to DEFAULT_FRED_SERIES_IDS + MACRO_SERIES_IDS enum (TDD), memory-twin + contract parity rows, docs counts corrected
 
 ### Phase 24: Regime & Breadth Board
 
