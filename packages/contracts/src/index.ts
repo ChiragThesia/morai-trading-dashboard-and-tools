@@ -111,6 +111,11 @@ export type { CotSeriesEntry, CotResponse } from "./cot.ts";
 export { macroSeriesPoint, macroResponse, macroQuery, MACRO_SERIES_IDS, macroSeriesId } from "./macro.ts";
 export type { MacroSeriesPoint, MacroResponse, MacroQuery, MacroSeriesId } from "./macro.ts";
 
+// Regime contracts (Phase 24 — MCP-02: ONE schema source for the future GET /api/analytics/regime
+// route + get_regime MCP tool, BOARD-01/02)
+export { regimeBand, regimeIndicator, regimeResponse } from "./regime.ts";
+export type { RegimeBand, RegimeIndicator, RegimeResponse } from "./regime.ts";
+
 // Picker contracts (Phase 18 — D-01; MCP-02: ONE schema source for the Phase-19
 // /api/picker/candidates + get_picker_candidates MCP tool)
 export {
