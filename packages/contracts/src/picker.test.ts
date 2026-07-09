@@ -291,3 +291,19 @@ describe("pickerSnapshotResponse.source / gexContextStatus / eventsContextStatus
     ).toThrow();
   });
 });
+
+describe("pickerCandidate.bucket (28-05, PLAY-04 event-calendar bucket — additive)", () => {
+  it("defaults to 'standard' when absent -- old stored rows (pre-Plan-05) still parse", () => {
+    const parsed = pickerCandidate.parse(oraclePayload);
+    expect(parsed.bucket).toBe("standard");
+  });
+
+  it("round-trips an explicit 'event-calendar' bucket tag", () => {
+    const parsed = pickerCandidate.parse({ ...oraclePayload, bucket: "event-calendar" });
+    expect(parsed.bucket).toBe("event-calendar");
+  });
+
+  it("rejects an out-of-enum bucket value", () => {
+    expect(() => pickerCandidate.parse({ ...oraclePayload, bucket: "premium" })).toThrow();
+  });
+});

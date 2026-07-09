@@ -153,6 +153,9 @@ export type PickerCandidateDomain = {
   readonly backEvents: ReadonlyArray<string>;
   /** Experimental rule values (weight 0, display-only — rules.ts registry). */
   readonly context: ReadonlyArray<CandidateContextEntry>;
+  /** Which universe this candidate came from (28-05, PLAY-04): the primary band-scan
+   *  universe ("standard") or the short-gap event-owning universe ("event-calendar"). */
+  readonly bucket: "standard" | "event-calendar";
   readonly frontLeg: {
     readonly strike: number;
     readonly putCall: "C" | "P";

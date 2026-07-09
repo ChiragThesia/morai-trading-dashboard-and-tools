@@ -96,6 +96,23 @@ function realCandidateChain(): ChainQuoteForPicker[] {
   return chain;
 }
 
+/** realCandidateChain() plus a gap-8 back expiry (2026-08-08, in the [3,10]d event-bucket
+ * window) -- feeds the event-calendar bucket (28-05, PLAY-04) alongside the primary universe. */
+function realCandidateChainWithEventBucket(): ChainQuoteForPicker[] {
+  const chain = [...realCandidateChain()];
+  const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
+  for (const strike of strikes) {
+    chain.push(chainQuote(strike, "2026-08-08", 0.15));
+  }
+  return chain;
+}
+
+/** An event inside (front=2026-07-31, back=2026-08-08] -- the gap-8 back leg owns it, the
+ * front leg does not (front's own span is (today, 2026-07-31]). */
+const EVENT_BUCKET_EVENTS: ReadonlyArray<EconomicEvent> = [
+  { date: "2026-08-05", name: "CPI", source: "fred" },
+];
+
 /** A chain whose only pairing has net theta <= 0 -- selectCandidates returns []. */
 function zeroCandidateChain(): ChainQuoteForPicker[] {
   const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
@@ -885,5 +902,87 @@ describe("rule registry in the snapshot (rules.ts)", () => {
     const ah = baseDeps({ chain: shifted });
     await makeComputePickerSnapshotUseCase(ah.deps)();
     expect(ah.rows[0]?.snapshot.marketSession).toBe("after-hours");
+  });
+});
+
+describe("makeComputePickerSnapshotUseCase — event-calendar bucket (28-05, PLAY-04)", () => {
+  it("tags primary candidates 'standard' and includes event-owning short-gap candidates tagged 'event-calendar'", async () => {
+    const { deps, rows } = baseDeps({
+      chain: realCandidateChainWithEventBucket(),
+      events: EVENT_BUCKET_EVENTS,
+    });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    const standard = row.snapshot.candidates.filter((c) => c.bucket === "standard");
+    const eventBucket = row.snapshot.candidates.filter((c) => c.bucket === "event-calendar");
+    expect(standard.length).toBeGreaterThan(0);
+    expect(eventBucket.length).toBeGreaterThan(0);
+    for (const c of eventBucket) {
+      expect(c.backEvents.length).toBeGreaterThan(0);
+      const gap = c.backLeg.dte - c.frontLeg.dte;
+      expect(gap).toBeGreaterThanOrEqual(3);
+      expect(gap).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it("a blocked gate suppresses the event-calendar bucket too (no second un-gated entry path, T-28-15)", async () => {
+    const { deps, rows } = baseDeps({
+      chain: realCandidateChainWithEventBucket(),
+      events: EVENT_BUCKET_EVENTS,
+      macroRows: BLOCKED_MACRO_ROWS,
+    });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    expect(row.snapshot.gate.state).toBe("blocked");
+    expect(row.snapshot.candidates).toEqual([]);
+  });
+
+  it("a max-open brake suppresses the event-calendar bucket too", async () => {
+    const openCalendars = Array.from({ length: 6 }, (_v, i) => openCalendar(`c${i}`));
+    const { deps, rows } = baseDeps({
+      chain: realCandidateChainWithEventBucket(),
+      events: EVENT_BUCKET_EVENTS,
+      openCalendars,
+    });
+    const useCase = makeComputePickerSnapshotUseCase(deps);
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    expect(row.snapshot.gate.brakes.maxOpen).toBe(true);
+    expect(row.snapshot.candidates).toEqual([]);
+  });
+
+  it("primary universe ranking and eventAdjustment are unchanged by the event bucket's presence", async () => {
+    const withoutBucket = baseDeps({});
+    const withBucket = baseDeps({
+      chain: realCandidateChainWithEventBucket(),
+      events: EVENT_BUCKET_EVENTS,
+    });
+    await makeComputePickerSnapshotUseCase(withoutBucket.deps)();
+    await makeComputePickerSnapshotUseCase(withBucket.deps)();
+
+    const primaryOnly = withoutBucket.rows[0]?.snapshot.candidates ?? [];
+    const primaryFromBucketRun = (withBucket.rows[0]?.snapshot.candidates ?? []).filter(
+      (c) => c.bucket === "standard",
+    );
+    // Same primary chain data underlies both runs (realCandidateChainWithEventBucket only
+    // ADDS a gap-8 back expiry) -- the primary top-N ranking is unaffected by its presence.
+    expect(primaryFromBucketRun.map((c) => c.id)).toEqual(primaryOnly.map((c) => c.id));
   });
 });

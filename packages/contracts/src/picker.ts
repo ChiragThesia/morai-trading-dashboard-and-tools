@@ -135,6 +135,10 @@ export const pickerCandidate = z.object({
   /** Experimental rule values (weight 0, display-only — rules.ts registry).
    *  Defaulted so pre-registry stored snapshots still parse at the read seam. */
   context: z.array(candidateContextEntry).default([]),
+  /** Which universe this candidate came from (28-05, PLAY-04): the primary band-scan
+   *  universe or the short-gap event-owning universe, rendered in a distinct Analyzer
+   *  section. Defaulted so pre-Plan-05 stored rows (all primary-universe) still parse. */
+  bucket: z.enum(["standard", "event-calendar"]).default("standard"),
   exitPlan,
 });
 

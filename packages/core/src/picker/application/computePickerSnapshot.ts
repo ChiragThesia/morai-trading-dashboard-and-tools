@@ -31,8 +31,8 @@
 
 import { ok, err, assertDefined, isWithinRth, isNyseHoliday } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { selectCandidates, autoTuneTargetDelta } from "../domain/candidate-selection.ts";
-import { scoreCalendarCandidates } from "../domain/scoring.ts";
+import { selectCandidates, selectEventCandidates, autoTuneTargetDelta } from "../domain/candidate-selection.ts";
+import { scoreCalendarCandidates, scoreEventCandidates } from "../domain/scoring.ts";
 import { realizedVol } from "../domain/realized-vol.ts";
 import { RULE_SET_METADATA } from "../domain/rules.ts";
 import type { ScoredCandidate } from "../domain/types.ts";
@@ -284,8 +284,12 @@ export function rankAndCapCandidates(
 }
 
 /** Map a domain ScoredCandidate onto the application/contracts PickerCandidateDomain shape. */
-function toPickerCandidateDomain(candidate: ScoredCandidate): PickerCandidateDomain {
+function toPickerCandidateDomain(
+  candidate: ScoredCandidate,
+  bucket: "standard" | "event-calendar",
+): PickerCandidateDomain {
   return {
+    bucket,
     id: candidate.id,
     name: candidate.name,
     score: candidate.score,
@@ -493,12 +497,39 @@ export function makeComputePickerSnapshotUseCase(
     // zeroEventAdjustment's post-scoring-override shape. A no-op at multiplier 1 (open state). ──
     scored = scored.map((candidate) => applyGatePenalty(candidate, gate.penaltyMultiplier));
 
-    // ── Step 5: Rank (stable id tie-break) + cap at PICKER_TOP_N (D-03) ──────
+    // ── Step 4c: event-calendar bucket (28-05, PLAY-04) — a second universe for short-gap
+    // (3-10d) calendars intentionally owning an event, scored with the bucket-scoped
+    // EVENT_SCORE_WEIGHTS registry. SAME gate/events-degradation/gate-penalty machinery as
+    // the primary universe — T-28-15: no second un-gated entry path. ──
+    const { candidates: rawEvent } = selectEventCandidates(chain, events, {
+      r: deps.rate,
+      q: deps.dividendYield,
+      effectiveDeltaMin: autoTuneTargetDelta(gate.vix),
+    });
+    let scoredEvent = scoreEventCandidates(rawEvent, gexContextForScoring, {
+      r: deps.rate,
+      q: deps.dividendYield,
+      realizedVol20,
+      slopeHistory,
+    });
+    if (eventsContextStatus !== "ok") {
+      scoredEvent = scoredEvent.map(zeroEventAdjustment);
+    }
+    scoredEvent = scoredEvent.map((candidate) => applyGatePenalty(candidate, gate.penaltyMultiplier));
+
+    // ── Step 5: Rank (stable id tie-break) + cap at PICKER_TOP_N (D-03), each universe
+    // independently, then concatenate — the primary universe's own ranking is unaffected
+    // by the event bucket's presence. ──
     const ranked = rankAndCapCandidates(scored, PICKER_TOP_N);
-    // Blocked/blind/braked -> ship candidates: [] (Step 6 truth); termStructure/gex/events
-    // below stay populated regardless — the board and Analyzer keep their context.
+    const rankedEvent = rankAndCapCandidates(scoredEvent, PICKER_TOP_N);
+    // Blocked/blind/braked -> ship candidates: [] (Step 6 truth) for BOTH universes;
+    // termStructure/gex/events below stay populated regardless — the board and Analyzer
+    // keep their context.
     const candidates: ReadonlyArray<PickerCandidateDomain> = entriesAllowed
-      ? ranked.map(toPickerCandidateDomain)
+      ? [
+          ...ranked.map((c) => toPickerCandidateDomain(c, "standard")),
+          ...rankedEvent.map((c) => toPickerCandidateDomain(c, "event-calendar")),
+        ]
       : [];
 
     // ── Step 6: Assemble the snapshot ────────────────────────────────────────
