@@ -215,7 +215,9 @@ function RateChip({ id, label, value }: { id: MacroSeriesId; label: string; valu
   );
 }
 
-export function RegimeBoard(): React.ReactElement {
+/** `dense` packs the regime pills into a fixed 2×2 grid (no md:4-across) for the narrow
+ *  left MarketRail; the default keeps the 4-across desktop layout the standalone board uses. */
+export function RegimeBoard({ dense = false }: { dense?: boolean } = {}): React.ReactElement {
   const { data, isPending, isError } = useRegimeBoard();
   // The entry-gate tile (28-06) is a separate data source (usePicker) from the regime
   // indicators above — silently omitted (T-24-09 "never a fabricated chip") when no
@@ -289,7 +291,7 @@ export function RegimeBoard(): React.ReactElement {
   return (
     <Panel className="flex flex-col gap-2" data-testid="regime-board">
       <PanelHeading title="Market regime" />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className={cn("grid grid-cols-2 gap-2", !dense && "md:grid-cols-4")}>
         {data.map((indicator) => (
           <Chip key={indicator.id} indicator={indicator} />
         ))}
