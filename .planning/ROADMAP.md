@@ -190,7 +190,13 @@ EXIT-10
   5. Only verdict changes surface as alerts — STOP and EXIT-pre-event escalate distinctly, no
      spam — and the advisor only ever advises: it never places or modifies an order.
 
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 26-01-PLAN.md — Docs (exit-rules.md) + haircut extraction + exits contracts/types/ports interface
+- [ ] 26-02-PLAN.md — Exit-rule registry + pure evaluateExit (precedence, hysteresis, gating, ROLL) [TDD]
+- [ ] 26-03-PLAN.md — Migration 0020 + exit_verdicts repo/twin + journal latest-snapshot port [TDD]
+- [ ] 26-04-PLAN.md — computeExitAdvice/getExitAdvice use-cases + worker chain trigger + EXIT-10 guard [TDD]
+- [ ] 26-05-PLAN.md — GET /api/exits route + get_exit_advice MCP tool (MCP-02 parity) [TDD]
+- [ ] 26-06-PLAN.md — Analyzer held-positions panel + exit rules panel (per 26-UI-SPEC)
 **UI hint**: yes
 
 ### Phase 27: PICK-04 Backtest Harness
