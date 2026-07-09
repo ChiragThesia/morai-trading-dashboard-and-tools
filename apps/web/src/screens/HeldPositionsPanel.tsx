@@ -145,7 +145,7 @@ export function HeldPositionsPanel({
                 >
                   <span className="text-dim">Suggested roll</span>
                   <span className="text-txt">
-                    {`→ ${row.roll.suggestedFrontExpiry} · est. debit $${Math.round(row.roll.estDebit)}`}
+                    {`→ ${row.roll.suggestedFrontExpiry} · new front est. credit $${Math.round(row.roll.estNewFrontCredit)}`}
                   </span>
                 </div>
               )}

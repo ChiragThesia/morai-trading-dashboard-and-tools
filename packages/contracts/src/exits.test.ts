@@ -72,7 +72,7 @@ describe("exitsResponse", () => {
       verdict: "ROLL",
       rung: null,
       ruleId: "roll",
-      roll: { suggestedFrontExpiry: "2026-08-14", estDebit: 4100 },
+      roll: { suggestedFrontExpiry: "2026-08-14", estNewFrontCredit: 4100 },
     };
     expect(() => exitsResponse.parse({ ...validPayload, positions: [rollPosition] })).not.toThrow();
   });

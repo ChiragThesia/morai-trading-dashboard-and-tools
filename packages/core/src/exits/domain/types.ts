@@ -69,10 +69,12 @@ export type ExitMetric = {
 /** ExitVerdictKind — closed enum, mirrors contracts' exitVerdictEnum. */
 export type ExitVerdictKind = "HOLD" | "TAKE" | "STOP" | "ROLL" | "EXIT_PRE_EVENT";
 
-/** ExitRollSuggestion — present only when verdict === "ROLL". */
+/** ExitRollSuggestion — present only when verdict === "ROLL". `estNewFrontCredit` is the haircut
+ * SELL estimate for the replacement front alone (a credit) — NOT the net roll cost: it omits the
+ * buy-back of the current short front (WR-03), which this evaluator's inputs don't carry. */
 export type ExitRollSuggestion = {
   readonly suggestedFrontExpiry: string;
-  readonly estDebit: number;
+  readonly estNewFrontCredit: number;
 };
 
 /** ExitVerdict — the evaluator's output for one held calendar, one cycle. */

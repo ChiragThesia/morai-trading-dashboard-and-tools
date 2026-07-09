@@ -444,7 +444,7 @@ describe("evaluateExit — ROLL boundaries + haircutFill pricing", () => {
     expect(result.ruleId).toBe("roll");
     expect(result.roll).not.toBeNull();
     expect(result.roll?.suggestedFrontExpiry).toBe(candidateInWindow.expiration);
-    expect(result.roll?.estDebit).toBeCloseTo(haircutFill(candidateInWindow, "sell"), 10);
+    expect(result.roll?.estNewFrontCredit).toBeCloseTo(haircutFill(candidateInWindow, "sell"), 10);
   });
 
   it("does not fire at exactly 14 DTE (not < 14)", () => {
@@ -529,7 +529,7 @@ describe("evaluateExit — ROLL boundaries + haircutFill pricing", () => {
     });
     const result = evaluateExit(position, context, null);
     expect(result.roll?.suggestedFrontExpiry).toBe(midpoint.expiration);
-    expect(result.roll?.estDebit).toBeCloseTo(haircutFill(midpoint, "sell"), 10);
+    expect(result.roll?.estNewFrontCredit).toBeCloseTo(haircutFill(midpoint, "sell"), 10);
   });
 
   it("does not fire (falls through to HOLD) when no candidate is in the [14,21] DTE window", () => {

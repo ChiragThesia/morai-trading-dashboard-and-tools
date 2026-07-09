@@ -20,10 +20,12 @@ export const exitVerdictEnum = z.enum(["HOLD", "TAKE", "STOP", "ROLL", "EXIT_PRE
 
 export type ExitVerdictEnum = z.infer<typeof exitVerdictEnum>;
 
-/** exitRollDetail — present only when verdict === "ROLL": the suggested replacement front. */
+/** exitRollDetail — present only when verdict === "ROLL": the suggested replacement front.
+ * `estNewFrontCredit` is the haircut SELL estimate of the replacement front alone (a credit),
+ * NOT the net roll cost — it omits the buy-back of the current short front (WR-03). */
 export const exitRollDetail = z.object({
   suggestedFrontExpiry: z.string(),
-  estDebit: z.number(),
+  estNewFrontCredit: z.number(),
 });
 
 export type ExitRollDetail = z.infer<typeof exitRollDetail>;

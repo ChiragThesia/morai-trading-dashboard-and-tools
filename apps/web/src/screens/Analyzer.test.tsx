@@ -235,7 +235,7 @@ const EXITS_FIXTURE: ExitsResponse = {
       escalate: false,
       pnlPct: 0.04,
       basis: { openNetDebit: 420, netMark: 437 },
-      roll: { suggestedFrontExpiry: "2026-09-11", estDebit: 410 },
+      roll: { suggestedFrontExpiry: "2026-09-11", estNewFrontCredit: 410 },
     },
   ],
   ruleSet: [
@@ -1059,6 +1059,9 @@ describe("Analyzer — held positions + exit rules panels (26-06-PLAN.md, EXIT-0
     const rollRow = screen.getByTestId("held-position-roll-cal-roll");
     expect(rollRow.textContent).toContain("2026-09-11");
     expect(rollRow.textContent).toContain("$410");
+    // WR-03: labelled as the replacement-front SELL credit, not a net "est. debit".
+    expect(rollRow.textContent).toContain("new front est. credit");
+    expect(rollRow.textContent).not.toContain("est. debit");
     expect(screen.queryByTestId("held-position-roll-cal-hold")).toBeNull();
   });
 

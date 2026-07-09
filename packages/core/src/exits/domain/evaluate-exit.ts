@@ -210,7 +210,7 @@ function evalRoll(
     verdict: "ROLL",
     rung: null,
     metric: { name: "dteFront", value: dteFront, threshold: ROLL_FRONT_DTE_MAX },
-    roll: { suggestedFrontExpiry: best.expiration, estDebit: haircutFill(best, "sell") },
+    roll: { suggestedFrontExpiry: best.expiration, estNewFrontCredit: haircutFill(best, "sell") },
   };
 }
 
