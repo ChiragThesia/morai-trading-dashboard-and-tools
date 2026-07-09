@@ -49,3 +49,6 @@ export {
   ROLL_REPLACEMENT_DTE_MIN,
   ROLL_REPLACEMENT_DTE_MAX,
 } from "./domain/exit-rules.ts";
+
+// ─── Pure evaluator (Phase 26, Plan 02) ────────────────────────────────────
+export { evaluateExit } from "./domain/evaluate-exit.ts";
