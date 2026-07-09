@@ -378,6 +378,37 @@ export type {
   ForRunningGetCalendarLifecycle,
 } from "./journal/index.ts";
 
+// ─── Exits bounded context (Phase 26, Plan 01) ────────────────────────────────
+// Domain types + driven port TYPE declarations only — no use-cases yet (26-02 evaluator,
+// 26-04 use-case). ForReadingEconomicEvents is aliased on this barrel: it is an exits-owned
+// re-declaration (Tier1Event, no `source` field), a structurally different type from picker's
+// own ForReadingEconomicEvents (EconomicEvent, has `source`) — both are real, distinct ports,
+// so both must be reachable under distinct names from this top-level barrel (unlike the
+// structurally-IDENTICAL StorageError/FetchError collisions elsewhere in this file, which are
+// intentionally not re-exported twice).
+export type {
+  HeldPosition,
+  Tier1EventName,
+  Tier1Event,
+  RollCandidateQuote,
+  RollChainContext,
+  MarketContext,
+  ExitMetric,
+  ExitVerdictKind,
+  ExitRollSuggestion,
+  ExitVerdict,
+  PreviousVerdict,
+  ExitVerdictRow,
+  LatestSnapshotForCalendar,
+  ChainQuoteForRoll,
+  ForReadingHeldPositions,
+  ForReadingLatestSnapshotPerOpenCalendar,
+  ForReadingEconomicEvents as ForReadingEconomicEventsForExits,
+  ForReadingChainForRoll,
+  ForReadingLatestVerdictsPerCalendar,
+  ForPersistingExitVerdict,
+} from "./exits/index.ts";
+
 // ─── JRNL-02: register-open-calendars (auto-register calendars from the open position book) ──
 export {
   pairPositionsIntoCalendarCandidates,

@@ -139,3 +139,22 @@ export type {
   PickerSnapshotResponse,
 } from "./picker.ts";
 export { pickerSnapshotFixture } from "./__fixtures__/picker-candidates.fixture.ts";
+
+// Exits contracts (Phase 26, Plan 01 — MCP-02: ONE schema source for the future
+// GET /api/exits response + get_exit_advice MCP tool)
+export {
+  exitMetric,
+  exitVerdictEnum,
+  exitRollDetail,
+  heldPositionVerdict,
+  exitRuleSetEntry,
+  exitsResponse,
+} from "./exits.ts";
+export type {
+  ExitMetric,
+  ExitVerdictEnum,
+  ExitRollDetail,
+  HeldPositionVerdict,
+  ExitRuleSetEntry,
+  ExitsResponse,
+} from "./exits.ts";
