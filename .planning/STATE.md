@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 29
 current_phase_name: Runtime Rule Settings
-status: ready-to-execute
+status: executing
 stopped_at: Phase 29 planned — 14 plans / 6 waves, plan-checker passed
-last_updated: "2026-07-10T03:50:24.828Z"
-last_activity: 2026-07-09
-last_activity_desc: Phase 29 planned (14 plans, 6 waves), ready to execute
+last_updated: "2026-07-10T03:56:51.471Z"
+last_activity: 2026-07-10
+last_activity_desc: Phase 29 execution started
 progress:
-  total_phases: 7
-  completed_phases: 5
+  total_phases: 8
+  completed_phases: 6
   total_plans: 40
-  completed_plans: 26
-  percent: 65
+  completed_plans: 27
+  percent: 68
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 23 — vix3m-ingestion
+**Current focus:** Phase 29 — Runtime Rule Settings
 
 ## Current Position
 
-Phase: 29 of 29 (Runtime Rule Settings)
-Plan: Not started (14 plans, 6 waves)
+Phase: 29 (Runtime Rule Settings) — EXECUTING
+Plan: 2 of 14
 Status: Ready to execute
-Last activity: 2026-07-09 — Phase 29 planned (plan-checker passed); Phase 28 executed earlier, gate decisions live
+Last activity: 2026-07-10 — Phase 29 execution started
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -271,6 +271,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 19 P08 | 20min | 3 tasks | 12 files |
 | Phase 19 P09 | ~20min | 3 tasks | 6 files |
 | Phase 20 P01 | 15min | 2 tasks | 4 files |
+| Phase 29 P01 | 4min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -295,6 +296,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
   full tent (tails + BEs clipped today; user screenshot 2026-07-09 shows 7500P pasted with apex
   at right edge, left tail cut), and pasted calendars get real engine entry analysis instead of
   "Pasted calendar — not engine-scored" placeholders.
+
 - Phase 29 added (2026-07-09): Runtime Rule Settings — curated ~20-knob settings surface
   (entry/picker weights + bands, exit advisor rungs, regime warn/crisis bands) stored as a single
   JSONB overrides row merged over code defaults (worker job start + server request time);
@@ -375,6 +377,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 20-01]: deriveStreamStatus placed in apps/web/src/lib (not hooks/) so it carries zero React import and is unit-testable standalone, mirroring rth-window.ts's caller-passes-now purity idiom
 - [Phase 20-01]: dropped an automated "no Date.now()/no React import" source-text purity test (import.meta.url did not resolve to file:// scheme in this repo's Vitest config) — verified the same property manually via grep instead
 - [Phase 20-01]: NOT marking WATCH-01 complete in REQUIREMENTS.md despite it appearing in this plan's requirements frontmatter — 20-01 ships only the contract schema + pure derivation foundation; the user-facing three-state badge ships in 20-03 per ROADMAP.md ("WATCH-01 ships" annotation), matching the 18-01/19-04 precedent
+- [Phase ?]: 29-01: rule_overrides is a single-row JSONB table keyed by fixed literal id 'default' (mirrors broker_tokens.app_id, no DB CHECK constraint); this explicitly overrides Phase 28 T-28-11 -- constants remain DEFAULTS, overrides row is an explicit visible layer merged at consumption time
 
 ### Pending Todos
 
@@ -431,7 +434,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-09T05:30:00.000Z
+Last session: 2026-07-10T03:55:57.440Z
 Stopped at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
 Resume file: .planning/ROADMAP.md (v1.3 section)
 
