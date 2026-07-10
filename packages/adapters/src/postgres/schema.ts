@@ -541,6 +541,19 @@ export const backtestRuns = pgTable("backtest_runs", {
   report: jsonb("report").$type<Record<string, unknown>>().notNull(),
 }).enableRLS();
 
+// ─── 22. rule_overrides — runtime rule-settings singleton row (Phase 29, 29-08) ──
+// Single row keyed by the fixed literal "default" — app-level singleton by convention,
+// no DB CHECK constraint, mirrors broker_tokens.appId (T-28-11 override: constants stay
+// the DEFAULTS, this row is an explicit editable layer merged at consumption time).
+// overrides is the WHOLE partial-deltas blob, validated through the contracts'
+// ruleOverrides schema at the adapter boundary on write AND read (T-19-10 convention).
+
+export const ruleOverrides = pgTable("rule_overrides", {
+  id: text("id").primaryKey(),
+  overrides: jsonb("overrides").$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };
