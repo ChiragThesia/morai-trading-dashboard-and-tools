@@ -102,6 +102,9 @@ function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean 
   const warnPct = clampedAxisPct(indicator.bandWarn, scale.min, scale.max);
   const crisisPct = clampedAxisPct(indicator.bandCrisis, scale.min, scale.max);
   const valuePct = clampedAxisPct(indicator.value, scale.min, scale.max);
+  // WR-01: aria-valuenow must stay within [aria-valuemin, aria-valuemax] per the meter role
+  // contract. aria-valuetext below still carries the true, unclamped value for AT users.
+  const clampedValue = Math.min(scale.max, Math.max(scale.min, indicator.value));
 
   return (
     <div className="flex flex-col gap-1 py-1.5" data-testid={`regime-chip-${indicator.id}`}>
@@ -153,7 +156,7 @@ function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean 
       <div
         role="meter"
         className="relative h-1.5 w-full overflow-hidden rounded-full bg-line2"
-        aria-valuenow={indicator.value}
+        aria-valuenow={clampedValue}
         aria-valuemin={scale.min}
         aria-valuemax={scale.max}
         aria-valuetext={`${indicator.value.toFixed(2)} — ${indicator.band}`}
