@@ -228,6 +228,18 @@ describe("POST /picker/analyze", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 on a malformed frontExpiry, never a throw/500 (CR-01 regression)", async () => {
+    let called = false;
+    const analyzeSpy: ForAnalyzingAdHocCalendar = async () => {
+      called = true;
+      return ok({ scored: true, candidate: ANALYZED_CANDIDATE });
+    };
+    const app = buildTestApp(getPickerOk, analyzeSpy);
+    const res = await postAnalyze(app, { ...VALID_ANALYZE_BODY, frontExpiry: "not-a-date" });
+    expect(res.status).toBe(400);
+    expect(called).toBe(false);
+  });
+
   it("returns 500 {error:'internal'} when the use-case returns a storage error", async () => {
     const app = buildTestApp(getPickerOk, analyzeErr);
     const res = await postAnalyze(app, VALID_ANALYZE_BODY);

@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import fc from "fast-check";
-import { ok, err } from "@morai/shared";
+import { ok, err, assertDefined } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { bsmGreeks } from "@morai/quant";
 import { makeAnalyzeAdHocCalendarUseCase } from "./analyzeAdHocCalendar.ts";
@@ -48,6 +48,18 @@ const R = 0.04;
 const Q = 0.013;
 const SNAPSHOT_SPOT = 7500;
 const SNAPSHOT_ASOF = "2026-07-01";
+
+/** Adds `days` calendar days to an ISO date -- the test-side mirror of the use-case's
+ *  daysBetween check, so the property test's dte/expiry pairs stay internally consistent. */
+function addDaysIso(fromIso: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromIso);
+  assertDefined(match, `addDaysIso: malformed ISO date "${fromIso}"`);
+  const [, y, m, d] = match;
+  assertDefined(y, "addDaysIso: year component");
+  assertDefined(m, "addDaysIso: month component");
+  assertDefined(d, "addDaysIso: day component");
+  return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)) + days * 86_400_000).toISOString().slice(0, 10);
+}
 
 const GEX_CONTEXT: GexContextForPicker = {
   flip: 7480,
@@ -147,8 +159,11 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
         debitArb,
         async (strike, ivF, ivB, frontDte, gap, debit) => {
           const backDte = frontDte + gap;
-          const frontExpiry = "2026-07-31";
-          const backExpiry = "2026-09-15";
+          // CR-01: frontExpiry/backExpiry must agree with frontDte/backDte relative to
+          // SNAPSHOT_ASOF ("2026-07-01"), or the use-case now rejects the pair -- derive
+          // both expiries from the same day offsets the arbitrary picked.
+          const frontExpiry = addDaysIso(SNAPSHOT_ASOF, frontDte);
+          const backExpiry = addDaysIso(SNAPSHOT_ASOF, backDte);
           const input: AdHocCalendarInput = {
             putCall: "P",
             strike,
@@ -264,6 +279,24 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
     const slopeEntry = result.value.candidate.breakdown.find((b) => b.criterion === "slope");
     expect(slopeEntry?.rawValue).toBe(0);
     expect(Number.isFinite(result.value.candidate.score)).toBe(true);
+  });
+
+  it("rejects a frontDte/frontExpiry pair that disagree with the snapshot's asOf: ok({scored:false}), never a throw (CR-01)", async () => {
+    // SNAPSHOT_ASOF is 2026-07-01; frontExpiry 2026-07-31 is 30 days out, but frontDte
+    // claims 7 -- an internally inconsistent pair a caller must not be able to smuggle in.
+    const mismatched: AdHocCalendarInput = { ...SAMPLE_INPUT, frontDte: 7 };
+    const result = await makeAnalyzeAdHocCalendarUseCase(makeDeps())(mismatched);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ scored: false, reason: "dte-expiry-mismatch" });
+  });
+
+  it("rejects a backDte/backExpiry pair that disagree with the snapshot's asOf: ok({scored:false}), never a throw (CR-01)", async () => {
+    const mismatched: AdHocCalendarInput = { ...SAMPLE_INPUT, backDte: 999 };
+    const result = await makeAnalyzeAdHocCalendarUseCase(makeDeps())(mismatched);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ scored: false, reason: "dte-expiry-mismatch" });
   });
 
   it("propagates a StorageError from readPickerSnapshot unchanged, never a throw", async () => {

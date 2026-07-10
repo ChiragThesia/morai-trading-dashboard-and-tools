@@ -370,6 +370,12 @@ describe("analyzeAdHocCalendarRequest", () => {
   it("rejects an extra 'spot' key (.strict() — never trust a client-supplied spot)", () => {
     expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, spot: 7500 })).toThrow();
   });
+
+  it("rejects a malformed frontExpiry/backExpiry (CR-01: must 400 at the Zod boundary, never reach the use-case's assertDefined)", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, frontExpiry: "not-a-date" })).toThrow();
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, frontExpiry: "" })).toThrow();
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, backExpiry: "07-17-2026" })).toThrow();
+  });
 });
 
 describe("analyzeAdHocCalendarResponse", () => {

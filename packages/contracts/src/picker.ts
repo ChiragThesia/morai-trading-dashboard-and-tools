@@ -333,6 +333,10 @@ export type PickerSnapshotResponse = z.infer<typeof pickerSnapshotResponse>;
  * derives spot from the latest stored snapshot, never a client-supplied price
  * (T-30-06 threat mitigation). `.strict()` rejects any extra key, including `spot`.
  */
+/** YYYY-MM-DD ISO calendar date (CR-01: reject malformed date strings at the Zod boundary,
+ *  before they can reach `isoDayNumber`'s `assertDefined` invariant deep in the engine). */
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
+
 export const analyzeAdHocCalendarRequest = z
   .object({
     putCall: z.literal("P"),
@@ -344,9 +348,9 @@ export const analyzeAdHocCalendarRequest = z
     backIv: z.number().finite().positive(),
     debit: z.number().finite(),
     /** ISO 8601 date. */
-    frontExpiry: z.string(),
+    frontExpiry: isoDate,
     /** ISO 8601 date. */
-    backExpiry: z.string(),
+    backExpiry: isoDate,
   })
   .strict()
   .refine((v) => v.backDte > v.frontDte, {

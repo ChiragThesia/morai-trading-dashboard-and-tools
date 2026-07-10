@@ -24,7 +24,7 @@
 import { ok, err, assertDefined } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { bsmGreeks } from "@morai/quant";
-import { legSpansEvents, resolveEventExit } from "../domain/candidate-selection.ts";
+import { legSpansEvents, resolveEventExit, daysBetween } from "../domain/candidate-selection.ts";
 import { scoreCalendarCandidates } from "../domain/scoring.ts";
 import { realizedVol } from "../domain/realized-vol.ts";
 import { resolvePickerRuleConfig } from "../domain/rule-config.ts";
@@ -121,6 +121,15 @@ export function makeAnalyzeAdHocCalendarUseCase(
     const ivB = input.backIv;
     const fe = input.frontExpiry;
     const be = input.backExpiry;
+
+    // CR-01: frontDte/backDte must agree with frontExpiry/backExpiry relative to the
+    // snapshot's own asOf, or a caller could submit a mismatched pair that scores one
+    // date's greeks against another date's exit plan (silent, money-facing desync).
+    // `fe`/`be` are already Zod-validated YYYY-MM-DD strings at this point (30-05 boundary),
+    // so `daysBetween`'s `isoDayNumber` call is a true invariant here, never a throw.
+    if (daysBetween(asOfIso, fe) !== tf || daysBetween(asOfIso, be) !== tb) {
+      return ok({ scored: false, reason: "dte-expiry-mismatch" });
+    }
 
     const gF = bsmGreeks(spot, K, tf / 365, ivF, r, q, "P");
     const gB = bsmGreeks(spot, K, tb / 365, ivB, r, q, "P");

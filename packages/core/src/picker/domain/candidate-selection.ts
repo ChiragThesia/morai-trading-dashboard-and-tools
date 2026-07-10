@@ -148,7 +148,7 @@ function isoDayNumber(iso: string): number {
 }
 
 /** Days between two ISO calendar dates (`to` minus `from`), via calendar-day arithmetic. */
-function daysBetween(fromIso: string, toIso: string): number {
+export function daysBetween(fromIso: string, toIso: string): number {
   return isoDayNumber(toIso) - isoDayNumber(fromIso);
 }
 
