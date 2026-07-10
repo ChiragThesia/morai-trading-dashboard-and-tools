@@ -44,6 +44,8 @@ export type RegimeIndicatorOut = {
   readonly label: string;
   readonly value: number;
   readonly band: RegimeBand;
+  readonly bandWarn: number; // effective warn threshold used to compute `band` (Phase-29 overrides-aware)
+  readonly bandCrisis: number; // effective crisis threshold used to compute `band`
   readonly asOf: string; // YYYY-MM-DD, observation date — never now() (MACRO-03)
   readonly source: string;
   readonly rationale: string;
@@ -122,6 +124,8 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
           ...META["vix-term-structure"],
           value,
           band: bandVixTermStructure(value, config.vixTermStructure),
+          bandWarn: config.vixTermStructure.warn,
+          bandCrisis: config.vixTermStructure.crisis,
           asOf: olderDate(vixCls.date, vxvcls.date),
           inputs: { VIXCLS: vixCls.value, VXVCLS: vxvcls.value },
         });
@@ -135,6 +139,8 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
         ...META.vvix,
         value: vvix.value,
         band: bandVvix(vvix.value, config.vvix),
+        bandWarn: config.vvix.warn,
+        bandCrisis: config.vvix.crisis,
         asOf: vvix.date,
         inputs: { VVIX: vvix.value },
       });
@@ -149,6 +155,8 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
           ...META["vix9d-vix"],
           value,
           band: bandVix9dRatio(value, config.vix9dRatio),
+          bandWarn: config.vix9dRatio.warn,
+          bandCrisis: config.vix9dRatio.crisis,
           asOf: olderDate(vix9d.date, vixCls.date),
           inputs: { VIX9D: vix9d.value, VIXCLS: vixCls.value },
         });
@@ -162,6 +170,8 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
         ...META["hy-oas"],
         value: hyOas.value,
         band: bandHyOas(hyOas.value, config.hyOas),
+        bandWarn: config.hyOas.warn,
+        bandCrisis: config.hyOas.crisis,
         asOf: hyOas.date,
         inputs: { BAMLH0A0HYM2: hyOas.value },
       });

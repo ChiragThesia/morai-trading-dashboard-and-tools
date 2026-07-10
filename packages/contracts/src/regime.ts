@@ -18,6 +18,8 @@ export const regimeIndicator = z.object({
   label: z.string(),
   value: z.number(),
   band: regimeBand,
+  bandWarn: z.number(), // the warn threshold actually used to compute `band` (effective, Phase-29 overrides-aware)
+  bandCrisis: z.number(), // the crisis threshold actually used to compute `band`
   asOf: z.string().date(),
   source: z.string(),
   rationale: z.string(),
