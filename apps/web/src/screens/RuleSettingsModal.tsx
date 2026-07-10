@@ -12,12 +12,17 @@
  */
 import { useState } from "react";
 import { Settings, Info } from "lucide-react";
-import { RULE_EXPLAINERS } from "@morai/contracts";
+import { RULE_EXPLAINERS, previewRuleOverridesRequest } from "@morai/contracts";
+import type { PreviewRuleOverridesResponse, RegimeIndicator } from "@morai/contracts";
+import type { RegimeRuleOverrides } from "@morai/core";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog.tsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip.tsx";
 import { Button, Panel, PanelHeading } from "../components/system/index.tsx";
 import { useRuleSettings } from "../hooks/useRuleSettings.ts";
 import type { RuleSettingsGroup } from "../hooks/useRuleSettings.ts";
+import { useRuleSettingsPreview, previewRegimeBands } from "../hooks/useRuleSettingsPreview.ts";
+import type { RegimeBandPreview } from "../hooks/useRuleSettingsPreview.ts";
+import { useRegimeBoard } from "../hooks/useRegimeBoard.ts";
 
 interface LeafRow {
   readonly path: ReadonlyArray<string>;
@@ -80,6 +85,99 @@ function explainerKey(group: RuleSettingsGroup, row: LeafRow): string {
   return [group, ...row.path].join(".");
 }
 
+// Regime rows are flat (single-segment paths, unflatten produces exactly these 8 keys) --
+// narrows the staged group's Record<string, unknown> into RegimeRuleOverrides for
+// previewRegimeBands without an `as` cast (conditional-spread idiom, mirrors the server's
+// toPreviewInput/isPickerRuleOverridesShape bridge, 32-04 precedent).
+function toRegimeOverrides(record: Record<string, unknown>): RegimeRuleOverrides {
+  const get = (key: string): number | undefined => {
+    const value = record[key];
+    return typeof value === "number" ? value : undefined;
+  };
+  const vixTermStructureWarn = get("vixTermStructureWarn");
+  const vixTermStructureCrisis = get("vixTermStructureCrisis");
+  const vvixWarn = get("vvixWarn");
+  const vvixCrisis = get("vvixCrisis");
+  const vix9dRatioWarn = get("vix9dRatioWarn");
+  const vix9dRatioCrisis = get("vix9dRatioCrisis");
+  const hyOasWarn = get("hyOasWarn");
+  const hyOasCrisis = get("hyOasCrisis");
+  return {
+    ...(vixTermStructureWarn !== undefined ? { vixTermStructureWarn } : {}),
+    ...(vixTermStructureCrisis !== undefined ? { vixTermStructureCrisis } : {}),
+    ...(vvixWarn !== undefined ? { vvixWarn } : {}),
+    ...(vvixCrisis !== undefined ? { vvixCrisis } : {}),
+    ...(vix9dRatioWarn !== undefined ? { vix9dRatioWarn } : {}),
+    ...(vix9dRatioCrisis !== undefined ? { vix9dRatioCrisis } : {}),
+    ...(hyOasWarn !== undefined ? { hyOasWarn } : {}),
+    ...(hyOasCrisis !== undefined ? { hyOasCrisis } : {}),
+  };
+}
+
+type PickerPreviewBranch = NonNullable<PreviewRuleOverridesResponse["picker"]>;
+type ExitsPreviewBranch = NonNullable<PreviewRuleOverridesResponse["exits"]>;
+
+/** Top movers by |newScore - oldScore|, honest note takes precedence over fake movers (B5). */
+function renderPickerPreview(branch: PickerPreviewBranch | null): React.ReactElement | null {
+  if (branch === null) return null;
+  if (branch.universeNote !== null) {
+    return <div className="font-mono text-[9px] text-txt">{branch.universeNote}</div>;
+  }
+  const movers = branch.candidates
+    .filter((c) => c.score !== c.oldScore)
+    .sort((a, b) => Math.abs(b.score - b.oldScore) - Math.abs(a.score - a.oldScore))
+    .slice(0, 5);
+  const gateChanged = branch.gate !== null && branch.gate.before.state !== branch.gate.after.state;
+  const sizingChanged = branch.sizing !== null && branch.sizing.before.tier !== branch.sizing.after.tier;
+  if (movers.length === 0 && !gateChanged && !sizingChanged) {
+    return <div className="font-mono text-[9px] text-dim">No change.</div>;
+  }
+  return (
+    <>
+      {movers.map((c) => (
+        <div key={c.id} className="font-mono text-[9px] text-txt">
+          {c.name}: {c.oldScore} → {c.score}
+        </div>
+      ))}
+      {gateChanged && branch.gate !== null && (
+        <div className="font-mono text-[9px] text-txt">
+          Gate: {branch.gate.before.state} → {branch.gate.after.state}
+        </div>
+      )}
+      {sizingChanged && branch.sizing !== null && (
+        <div className="font-mono text-[9px] text-txt">
+          Sizing: {branch.sizing.before.tier ?? "-"} → {branch.sizing.after.tier ?? "-"}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Per-calendar current->staged verdict/rung; unchanged calendars collapse to "No change." */
+function renderExitsPreview(entries: ExitsPreviewBranch | null): React.ReactElement | null {
+  if (entries === null) return null;
+  if (entries.length === 0) {
+    return <div className="font-mono text-[9px] text-dim">No open calendars to preview.</div>;
+  }
+  const changed = entries.filter(
+    (e) => e.current.verdict !== e.staged.verdict || e.current.rung !== e.staged.rung,
+  );
+  if (changed.length === 0) {
+    return <div className="font-mono text-[9px] text-dim">No change.</div>;
+  }
+  return (
+    <>
+      {changed.map((e) => (
+        <div key={e.calendarId} className="font-mono text-[9px] text-txt">
+          {e.calendarId}: {e.current.verdict}
+          {e.current.rung !== null ? ` (${e.current.rung})` : ""} → {e.staged.verdict}
+          {e.staged.rung !== null ? ` (${e.staged.rung})` : ""}
+        </div>
+      ))}
+    </>
+  );
+}
+
 const GROUPS: ReadonlyArray<{ readonly group: RuleSettingsGroup; readonly title: string }> = [
   { group: "picker", title: "Entry/Picker" },
   { group: "exits", title: "Exit Advisor" },
@@ -95,6 +193,8 @@ interface GroupPanelProps {
   readonly error: string | undefined;
   readonly onSave: (group: RuleSettingsGroup, patch: Record<string, unknown>) => Promise<void>;
   readonly onReset: (group: RuleSettingsGroup) => Promise<void>;
+  /** On-screen regime indicators (Phase 32-06, B3) -- only consumed by the "regime" panel. */
+  readonly regimeIndicators: ReadonlyArray<RegimeIndicator> | undefined;
 }
 
 function GroupPanel({
@@ -106,9 +206,13 @@ function GroupPanel({
   error,
   onSave,
   onReset,
+  regimeIndicators,
 }: GroupPanelProps): React.ReactElement {
   const rows = flattenNumeric(effectiveGroup);
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const previewMutation = useRuleSettingsPreview();
+  const [regimePreview, setRegimePreview] = useState<ReadonlyArray<RegimeBandPreview> | undefined>(undefined);
+  const [previewParseError, setPreviewParseError] = useState<string | undefined>(undefined);
 
   function keyFor(row: LeafRow): string {
     return row.path.join(".");
@@ -118,7 +222,8 @@ function GroupPanel({
     setDraft((prev) => ({ ...prev, [keyFor(row)]: next }));
   }
 
-  async function handleSave(): Promise<void> {
+  // Shared by Save and Preview -- both act on the SAME staged group body (32-06 read_first).
+  function buildStagedGroup(): Record<string, unknown> {
     const patchRows = rows.map((row) => {
       const raw = draft[keyFor(row)];
       // A cleared field (user clicked in, deleted the value) sets draft to "", not undefined
@@ -127,8 +232,34 @@ function GroupPanel({
       const parsed = raw === undefined || raw === "" ? row.value : Number(raw);
       return { path: row.path, value: Number.isFinite(parsed) ? parsed : row.value };
     });
-    await onSave(group, unflatten(patchRows));
+    return unflatten(patchRows);
+  }
+
+  async function handleSave(): Promise<void> {
+    await onSave(group, buildStagedGroup());
     setDraft({});
+  }
+
+  // Explicit click only (no onChange auto-preview, T-32-13). Regime re-bands client-side
+  // (previewRegimeBands); picker/exits dry-run against the server preview endpoint.
+  //
+  // The staged body is validated (weight-sum-100, hysteresis pairs, unknown keys) by the SAME
+  // strict schema the PUT route enforces (T-32-05, identity reuse) -- a still-mid-edit staged
+  // group (e.g. only one of several weights nudged) can fail that validation. Caught locally
+  // rather than left as an unhandled rejection: it surfaces exactly like an HTTP failure.
+  async function handlePreview(): Promise<void> {
+    const staged = buildStagedGroup();
+    if (group === "regime") {
+      setRegimePreview(previewRegimeBands(toRegimeOverrides(staged), regimeIndicators ?? []));
+      return;
+    }
+    setPreviewParseError(undefined);
+    try {
+      const body = previewRuleOverridesRequest.parse({ [group]: staged });
+      await previewMutation.mutateAsync(body);
+    } catch {
+      setPreviewParseError(`Couldn't preview ${group} settings.`);
+    }
   }
 
   return (
@@ -202,24 +333,71 @@ function GroupPanel({
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
         {error !== undefined && <span className="font-mono text-[9px] text-down">{error}</span>}
-        <Button
-          variant="primary"
-          size="xs"
-          className="ml-auto"
-          onClick={() => {
-            // fire-and-forget: the hook owns pending/error state for this group.
-            void handleSave();
-          }}
-        >
-          Save
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              // fire-and-forget: mutation/regimePreview state owns pending/error/result.
+              void handlePreview();
+            }}
+          >
+            Preview
+          </Button>
+          <Button
+            variant="primary"
+            size="xs"
+            onClick={() => {
+              // fire-and-forget: the hook owns pending/error state for this group.
+              void handleSave();
+            }}
+          >
+            Save
+          </Button>
+        </div>
       </div>
+      {group === "regime" ? (
+        regimePreview !== undefined && (
+          <div data-testid={`preview-${group}`} className="mt-2 flex flex-col gap-1 rounded-[3px] bg-raise p-2">
+            {regimePreview.map((p) => (
+              <div key={p.id} className="font-mono text-[9px] text-txt">
+                {regimeIndicators?.find((i) => i.id === p.id)?.label ?? p.id}: {p.before} → {p.after}
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        <>
+          {previewMutation.isPending && (
+            <div data-testid={`preview-${group}`} className="mt-2 font-mono text-[9px] text-dim">
+              Previewing…
+            </div>
+          )}
+          {(previewMutation.isError || previewParseError !== undefined) && (
+            <div data-testid={`preview-${group}`} className="mt-2 font-mono text-[9px] text-down">
+              {previewParseError ?? `Couldn't preview ${group} settings.`}
+            </div>
+          )}
+          {previewMutation.data !== undefined && (
+            <div data-testid={`preview-${group}`} className="mt-2 flex flex-col gap-1 rounded-[3px] bg-raise p-2">
+              <div className="font-mono text-[8px] uppercase tracking-wide text-dim">
+                {previewMutation.data.asOf !== null
+                  ? `Snapshot as of ${previewMutation.data.asOf}`
+                  : "No stored snapshot yet"}
+              </div>
+              {group === "picker" && renderPickerPreview(previewMutation.data.picker)}
+              {group === "exits" && renderExitsPreview(previewMutation.data.exits)}
+            </div>
+          )}
+        </>
+      )}
     </Panel>
   );
 }
 
 export function RuleSettingsModal(): React.ReactElement {
   const { defaults, overrides, effective, errors, saveGroup, resetGroup } = useRuleSettings();
+  const regimeBoard = useRegimeBoard();
 
   return (
     <Dialog>
@@ -247,6 +425,7 @@ export function RuleSettingsModal(): React.ReactElement {
                 error={errors[group]}
                 onSave={saveGroup}
                 onReset={resetGroup}
+                regimeIndicators={regimeBoard.data}
               />
             ))}
           </div>

@@ -1,5 +1,6 @@
 /**
- * RuleSettingsModal.test.tsx — TDD suite for the Phase 29-14 gear-icon settings modal.
+ * RuleSettingsModal.test.tsx — TDD suite for the Phase 29-14 gear-icon settings modal,
+ * extended in Phase 32-06 for the staged-change Preview flow (B1/B2/B3/B5/B7).
  *
  * Behaviors under test:
  *   - The gear trigger opens the modal (closed until clicked, mirrors Overview.test.tsx's
@@ -9,19 +10,46 @@
  *     default value alongside.
  *   - Each group's reset button calls resetGroup(group).
  *   - Saving an edited knob calls saveGroup(group, patch).
+ *   - Preview (32-06): staging a picker weight -> movers old->new; staging a universe knob
+ *     -> the server's honest note (no fake movers); staging a regime threshold -> band
+ *     before->after computed client-side; an unstaged group -> "No change."; Save unregressed.
  */
+import { useState } from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
-import type { GetRuleSettingsResponse } from "@morai/contracts";
+import { render, screen, cleanup, fireEvent, within, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type {
+  GetRuleSettingsResponse,
+  PreviewRuleOverridesResponse,
+  RegimeIndicator,
+  PickerCandidate,
+} from "@morai/contracts";
 import { RULE_EXPLAINERS } from "@morai/contracts";
 import { assertDefined } from "@morai/shared";
 
-const { mockUseRuleSettings, mockSaveGroup, mockResetGroup } = vi.hoisted(() => ({
+const {
+  mockUseRuleSettings,
+  mockSaveGroup,
+  mockResetGroup,
+  mockUseRuleSettingsPreview,
+  mockPreviewMutateAsync,
+  mockUseRegimeBoard,
+} = vi.hoisted(() => ({
   mockUseRuleSettings: vi.fn(),
   mockSaveGroup: vi.fn(() => Promise.resolve()),
   mockResetGroup: vi.fn(() => Promise.resolve()),
+  mockUseRuleSettingsPreview: vi.fn(),
+  mockPreviewMutateAsync: vi.fn(),
+  mockUseRegimeBoard: vi.fn(),
 }));
 vi.mock("../hooks/useRuleSettings.ts", () => ({ useRuleSettings: mockUseRuleSettings }));
+vi.mock("../hooks/useRegimeBoard.ts", () => ({ useRegimeBoard: mockUseRegimeBoard }));
+// previewRegimeBands stays REAL (importOriginal) -- only the network-backed mutation hook is
+// faked, so the regime test exercises the actual client-side re-band logic.
+vi.mock("../hooks/useRuleSettingsPreview.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../hooks/useRuleSettingsPreview.ts")>();
+  return { ...actual, useRuleSettingsPreview: mockUseRuleSettingsPreview };
+});
 
 import { RuleSettingsModal } from "./RuleSettingsModal.tsx";
 
@@ -92,6 +120,96 @@ function baseReturn() {
   };
 }
 
+const REGIME_INDICATORS: ReadonlyArray<RegimeIndicator> = [
+  {
+    id: "vix-term-structure",
+    label: "VIX/VIX3M Term Structure",
+    value: 0.92,
+    band: "warning",
+    bandWarn: 0.9,
+    bandCrisis: 0.95,
+    asOf: "2026-07-09",
+    source: "test",
+    rationale: "test",
+  },
+  {
+    id: "vvix",
+    label: "VVIX",
+    value: 108,
+    band: "warning",
+    bandWarn: 100,
+    bandCrisis: 115,
+    asOf: "2026-07-09",
+    source: "test",
+    rationale: "test",
+  },
+];
+
+const SCORED_CANDIDATE: PickerCandidate = {
+  id: "7500P-2026-08-03-2026-08-31",
+  name: "7500P 2026-08-03 / 2026-08-31",
+  score: 72,
+  breakdown: [{ criterion: "slope", weight: 10, rawValue: 0.05, contribution: 80 }],
+  debit: 4585,
+  theta: 12.3,
+  vega: 45.1,
+  delta: -30.2,
+  fwdIv: 0.155,
+  fwdIvGuard: "ok",
+  slope: 0.08,
+  fwdEdge: 5.1,
+  expectedMove: 200,
+  frontEvents: [],
+  backEvents: [],
+  frontLeg: { strike: 7500, putCall: "P", dte: 21, iv: 0.15 },
+  backLeg: { strike: 7500, putCall: "P", dte: 45, iv: 0.16 },
+  context: [],
+  bucket: "standard",
+  exitPlan: {
+    profitTargetPct: 0.25,
+    stopPct: 0.175,
+    manageShortDte: 21,
+    closeByExpiry: "2026-08-02",
+    thetaCapturePct: null,
+  },
+};
+
+/** A controllable fake useMutation -- resolves `response` (or throws when `shouldError`) and
+ *  updates isPending/isError/data reactively via a real useState, so the component's render
+ *  reflects the mutation lifecycle exactly like the real hook would. */
+function makePreviewMutationMock(response: PreviewRuleOverridesResponse | undefined, shouldError = false) {
+  return function usePreviewMutationMock() {
+    const [state, setState] = useState<{
+      isPending: boolean;
+      isError: boolean;
+      data: PreviewRuleOverridesResponse | undefined;
+    }>({ isPending: false, isError: false, data: undefined });
+
+    return {
+      ...state,
+      mutateAsync: async (body: unknown): Promise<PreviewRuleOverridesResponse> => {
+        mockPreviewMutateAsync(body);
+        if (shouldError) {
+          setState({ isPending: false, isError: true, data: undefined });
+          throw new Error("preview failed");
+        }
+        assertDefined(response, "makePreviewMutationMock response");
+        setState({ isPending: false, isError: false, data: response });
+        return response;
+      },
+    };
+  };
+}
+
+function renderModal(): void {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <RuleSettingsModal />
+    </QueryClientProvider>,
+  );
+}
+
 describe("RuleSettingsModal", () => {
   afterEach(() => {
     cleanup();
@@ -100,7 +218,9 @@ describe("RuleSettingsModal", () => {
 
   it("stays closed until the gear trigger is clicked, then renders three engine groups", () => {
     mockReturn();
-    render(<RuleSettingsModal />);
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    mockUseRegimeBoard.mockReturnValue({ data: undefined });
+    renderModal();
 
     expect(screen.queryByTestId("settings-group-picker")).toBeNull();
 
@@ -116,7 +236,9 @@ describe("RuleSettingsModal", () => {
 
   it("shows both effective and default for an overridden knob", () => {
     mockReturn();
-    render(<RuleSettingsModal />);
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    mockUseRegimeBoard.mockReturnValue({ data: undefined });
+    renderModal();
     fireEvent.click(screen.getByTestId("settings-trigger"));
 
     const pickerGroup = screen.getByTestId("settings-group-picker");
@@ -127,7 +249,9 @@ describe("RuleSettingsModal", () => {
 
   it("reset button calls resetGroup for that group", () => {
     mockReturn();
-    render(<RuleSettingsModal />);
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    mockUseRegimeBoard.mockReturnValue({ data: undefined });
+    renderModal();
     fireEvent.click(screen.getByTestId("settings-trigger"));
 
     const pickerGroup = screen.getByTestId("settings-group-picker");
@@ -138,7 +262,9 @@ describe("RuleSettingsModal", () => {
 
   it("save calls saveGroup with the edited group patch", () => {
     mockReturn();
-    render(<RuleSettingsModal />);
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    mockUseRegimeBoard.mockReturnValue({ data: undefined });
+    renderModal();
     fireEvent.click(screen.getByTestId("settings-trigger"));
 
     const pickerGroup = screen.getByTestId("settings-group-picker");
@@ -157,7 +283,9 @@ describe("RuleSettingsModal", () => {
   // Number("") === 0 previously slipped past the Number.isFinite guard.
   it("clearing a field before Save falls back to the effective value, not 0", () => {
     mockReturn();
-    render(<RuleSettingsModal />);
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    mockUseRegimeBoard.mockReturnValue({ data: undefined });
+    renderModal();
     fireEvent.click(screen.getByTestId("settings-trigger"));
 
     const pickerGroup = screen.getByTestId("settings-group-picker");
@@ -178,7 +306,9 @@ describe("RuleSettingsModal", () => {
   // RULE_EXPLAINERS keyed by [group, ...row.path].join(".") -- never an inline copy string.
   it("renders each representative knob's registry summary caption and affected-surface tag", () => {
     mockReturn();
-    render(<RuleSettingsModal />);
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    mockUseRegimeBoard.mockReturnValue({ data: undefined });
+    renderModal();
     fireEvent.click(screen.getByTestId("settings-trigger"));
 
     const pickerWeightsSlope = RULE_EXPLAINERS["picker.weights.slope"];
@@ -201,7 +331,9 @@ describe("RuleSettingsModal", () => {
   // direction + unit copy on focus, keeping the trigger keyboard-focusable.
   it("info-icon popover surfaces the registry direction + unit for a representative row on focus", async () => {
     mockReturn();
-    render(<RuleSettingsModal />);
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    mockUseRegimeBoard.mockReturnValue({ data: undefined });
+    renderModal();
     fireEvent.click(screen.getByTestId("settings-trigger"));
 
     const exitsPlus15Arm = RULE_EXPLAINERS["exits.take.plus15Arm"];
@@ -212,5 +344,140 @@ describe("RuleSettingsModal", () => {
 
     expect(await screen.findByText(new RegExp(exitsPlus15Arm.direction.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).toBeTruthy();
     expect(await screen.findByText(new RegExp(exitsPlus15Arm.unit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).toBeTruthy();
+  });
+});
+
+// 32-06: explicit Preview button (B1/B2/B3/B5/B7) -- picker/exits dry-run against the server
+// preview endpoint, regime re-bands client-side from on-screen indicator values.
+describe("RuleSettingsModal — Preview", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("staging a weight and clicking Preview renders the movers list (old -> new)", async () => {
+    mockReturn();
+    mockUseRegimeBoard.mockReturnValue({ data: REGIME_INDICATORS });
+    const response: PreviewRuleOverridesResponse = {
+      asOf: "2026-07-09",
+      picker: {
+        candidates: [{ ...SCORED_CANDIDATE, oldScore: 62 }],
+        gate: null,
+        sizing: null,
+        universeNote: null,
+      },
+      exits: null,
+    };
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(response));
+    renderModal();
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const pickerGroup = screen.getByTestId("settings-group-picker");
+    // weights must sum to exactly 100 (ruleOverrides refinement, T-32-05 identity reuse) --
+    // nudge slope up and fwdEdge down by the same amount so the staged body stays valid.
+    fireEvent.change(screen.getByLabelText("Weights Slope"), { target: { value: "15" } });
+    fireEvent.change(screen.getByLabelText("Weights Fwd Edge"), { target: { value: "20" } });
+    fireEvent.click(within(pickerGroup).getByText("Preview"));
+
+    await waitFor(() => expect(within(pickerGroup).getByTestId("preview-picker")).toBeTruthy());
+    const previewPanel = within(pickerGroup).getByTestId("preview-picker");
+    expect(previewPanel.textContent).toContain("62");
+    expect(previewPanel.textContent).toContain("72");
+    expect(previewPanel.textContent).toContain("Snapshot as of 2026-07-09");
+    expect(mockPreviewMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        picker: expect.objectContaining({ weights: expect.objectContaining({ slope: 15, fwdEdge: 20 }) }),
+      }),
+    );
+  });
+
+  it("staging a universe knob and clicking Preview renders the honest note only (no fake movers)", async () => {
+    mockReturn();
+    mockUseRegimeBoard.mockReturnValue({ data: REGIME_INDICATORS });
+    const response: PreviewRuleOverridesResponse = {
+      asOf: "2026-07-09",
+      picker: {
+        candidates: [],
+        gate: null,
+        sizing: null,
+        universeNote: "Affects next compute cycle, not reflected in this dry-run re-score.",
+      },
+      exits: null,
+    };
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(response));
+    renderModal();
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const pickerGroup = screen.getByTestId("settings-group-picker");
+    const frontDteMinInput = screen.getByLabelText("Front Dte Min");
+    fireEvent.change(frontDteMinInput, { target: { value: "25" } });
+    fireEvent.click(within(pickerGroup).getByText("Preview"));
+
+    await waitFor(() => expect(within(pickerGroup).getByTestId("preview-picker")).toBeTruthy());
+    const previewPanel = within(pickerGroup).getByTestId("preview-picker");
+    expect(previewPanel.textContent).toContain("Affects next compute cycle");
+    expect(previewPanel.textContent).not.toContain("62");
+  });
+
+  it("an unstaged picker group preview renders 'No change.'", async () => {
+    mockReturn();
+    mockUseRegimeBoard.mockReturnValue({ data: REGIME_INDICATORS });
+    const response: PreviewRuleOverridesResponse = {
+      asOf: "2026-07-09",
+      picker: {
+        candidates: [{ ...SCORED_CANDIDATE, oldScore: SCORED_CANDIDATE.score }],
+        gate: null,
+        sizing: null,
+        universeNote: null,
+      },
+      exits: null,
+    };
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(response));
+    renderModal();
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const pickerGroup = screen.getByTestId("settings-group-picker");
+    fireEvent.click(within(pickerGroup).getByText("Preview"));
+
+    await waitFor(() => expect(within(pickerGroup).getByTestId("preview-picker")).toBeTruthy());
+    expect(within(pickerGroup).getByTestId("preview-picker").textContent).toContain("No change.");
+  });
+
+  it("staging a regime threshold and clicking Preview renders band before -> after (client-side)", () => {
+    mockReturn();
+    mockUseRegimeBoard.mockReturnValue({ data: REGIME_INDICATORS });
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    renderModal();
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const regimeGroup = screen.getByTestId("settings-group-regime");
+    // VVIX indicator's on-screen value is 108, stored band "warning" (crisis threshold 115).
+    // Staging vvixCrisis down to 105 (< 108) re-bands it to "crisis" against the staged
+    // threshold -- proves the re-band is computed from the STAGED value, not the stored one.
+    const vvixCrisisInput = screen.getByLabelText("Vvix Crisis");
+    fireEvent.change(vvixCrisisInput, { target: { value: "105" } });
+    fireEvent.click(within(regimeGroup).getByText("Preview"));
+
+    const previewPanel = within(regimeGroup).getByTestId("preview-regime");
+    expect(previewPanel.textContent).toContain("VVIX");
+    expect(previewPanel.textContent).toContain("warning");
+    expect(previewPanel.textContent).toContain("crisis");
+    // never calls the server mutation for the regime group (client-side only, T-32-12)
+    expect(mockPreviewMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("Save still works unregressed alongside the new Preview button", () => {
+    mockReturn();
+    mockUseRegimeBoard.mockReturnValue({ data: REGIME_INDICATORS });
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    renderModal();
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const pickerGroup = screen.getByTestId("settings-group-picker");
+    const maxOpenInput = screen.getByLabelText("Max Open Calendars");
+    fireEvent.change(maxOpenInput, { target: { value: "9" } });
+    fireEvent.click(within(pickerGroup).getByText("Save"));
+
+    expect(mockSaveGroup).toHaveBeenCalledWith("picker", expect.objectContaining({ maxOpenCalendars: 9 }));
   });
 });
