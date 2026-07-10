@@ -139,7 +139,10 @@ describe("previewRegimeBands", () => {
     },
   ];
 
-  const STAGED: RegimeRuleOverrides = {
+  // Fully-populated (non-optional) fixture -- avoids `!` non-null assertions when reading
+  // fields below (typescript.md forbids `!`); STAGED narrows to RegimeRuleOverrides at the
+  // previewRegimeBands call site since every optional field is structurally compatible.
+  const STAGED: Required<RegimeRuleOverrides> = {
     vixTermStructureWarn: 0.85,
     vixTermStructureCrisis: 0.93,
     vvixWarn: 90,
@@ -156,16 +159,16 @@ describe("previewRegimeBands", () => {
     const byId = new Map(result.map((r) => [r.id, r]));
 
     expect(byId.get("vix-term-structure")?.after).toBe(
-      bandVixTermStructure(0.92, { warn: STAGED.vixTermStructureWarn!, crisis: STAGED.vixTermStructureCrisis! }),
+      bandVixTermStructure(0.92, { warn: STAGED.vixTermStructureWarn, crisis: STAGED.vixTermStructureCrisis }),
     );
     expect(byId.get("vvix")?.after).toBe(
-      bandVvix(108, { warn: STAGED.vvixWarn!, crisis: STAGED.vvixCrisis! }),
+      bandVvix(108, { warn: STAGED.vvixWarn, crisis: STAGED.vvixCrisis }),
     );
     expect(byId.get("vix9d-vix")?.after).toBe(
-      bandVix9dRatio(1.05, { warn: STAGED.vix9dRatioWarn!, crisis: STAGED.vix9dRatioCrisis! }),
+      bandVix9dRatio(1.05, { warn: STAGED.vix9dRatioWarn, crisis: STAGED.vix9dRatioCrisis }),
     );
     expect(byId.get("hy-oas")?.after).toBe(
-      bandHyOas(3.4, { warn: STAGED.hyOasWarn!, crisis: STAGED.hyOasCrisis! }),
+      bandHyOas(3.4, { warn: STAGED.hyOasWarn, crisis: STAGED.hyOasCrisis }),
     );
   });
 
