@@ -7,20 +7,28 @@
  * Four indicators, four named-constant thresholds — no rules-engine/DSL, no composite
  * fragility score (24-RESEARCH.md Anti-Patterns). Each function is total over the reals
  * and monotonic non-decreasing in its input (proven by regime.test.ts fast-check).
+ *
+ * Phase 29-06: each band function takes an optional `{warn, crisis}` override, falling back
+ * to its named constant per field — omission reproduces today's banding byte-identically.
  */
 
 export type RegimeBand = "calm" | "warning" | "crisis";
+
+/** Optional per-call threshold override (Phase 29-06) — omission uses the module constant. */
+export type RegimeThresholds = { readonly warn: number; readonly crisis: number };
 
 // ─── VIX/VIX3M term-structure ratio ─────────────────────────────────────────────
 // Confirmed by independent sources against the user's own tos-studies-learnings.md prior
 // (24-RESEARCH.md Indicator 1 — no refinement needed).
 
-const VIX_TERM_STRUCTURE_WARN = 0.9;
-const VIX_TERM_STRUCTURE_CRISIS = 0.95;
+export const VIX_TERM_STRUCTURE_WARN = 0.9;
+export const VIX_TERM_STRUCTURE_CRISIS = 0.95;
 
-export function bandVixTermStructure(ratio: number): RegimeBand {
-  if (ratio >= VIX_TERM_STRUCTURE_CRISIS) return "crisis";
-  if (ratio >= VIX_TERM_STRUCTURE_WARN) return "warning";
+export function bandVixTermStructure(ratio: number, thresholds?: RegimeThresholds): RegimeBand {
+  const crisis = thresholds?.crisis ?? VIX_TERM_STRUCTURE_CRISIS;
+  const warn = thresholds?.warn ?? VIX_TERM_STRUCTURE_WARN;
+  if (ratio >= crisis) return "crisis";
+  if (ratio >= warn) return "warning";
   return "calm";
 }
 
@@ -28,12 +36,14 @@ export function bandVixTermStructure(ratio: number): RegimeBand {
 // 100 warn confirmed directly by multiple sources; 115 crisis is the user's own TOS-tested
 // interpolation of the cited 110-120 elevated→extreme-fear zone (24-RESEARCH.md Indicator 2).
 
-const VVIX_WARN = 100;
-const VVIX_CRISIS = 115;
+export const VVIX_WARN = 100;
+export const VVIX_CRISIS = 115;
 
-export function bandVvix(level: number): RegimeBand {
-  if (level >= VVIX_CRISIS) return "crisis";
-  if (level >= VVIX_WARN) return "warning";
+export function bandVvix(level: number, thresholds?: RegimeThresholds): RegimeBand {
+  const crisis = thresholds?.crisis ?? VVIX_CRISIS;
+  const warn = thresholds?.warn ?? VVIX_WARN;
+  if (level >= crisis) return "crisis";
+  if (level >= warn) return "warning";
   return "calm";
 }
 
@@ -42,12 +52,14 @@ export function bandVvix(level: number): RegimeBand {
 // ratio logic (24-RESEARCH.md Indicator 3, Assumption A1). Display-only this phase, no hard
 // gate — flag for a dedicated backtest before any future Phase-28 gate-wiring.
 
-const VIX9D_RATIO_WARN = 1.0;
-const VIX9D_RATIO_CRISIS = 1.1;
+export const VIX9D_RATIO_WARN = 1.0;
+export const VIX9D_RATIO_CRISIS = 1.1;
 
-export function bandVix9dRatio(ratio: number): RegimeBand {
-  if (ratio >= VIX9D_RATIO_CRISIS) return "crisis";
-  if (ratio >= VIX9D_RATIO_WARN) return "warning";
+export function bandVix9dRatio(ratio: number, thresholds?: RegimeThresholds): RegimeBand {
+  const crisis = thresholds?.crisis ?? VIX9D_RATIO_CRISIS;
+  const warn = thresholds?.warn ?? VIX9D_RATIO_WARN;
+  if (ratio >= crisis) return "crisis";
+  if (ratio >= warn) return "warning";
   return "calm";
 }
 
@@ -56,11 +68,13 @@ export function bandVix9dRatio(ratio: number): RegimeBand {
 // TOS study (24-RESEARCH.md Indicator 5, Assumption A2). Absolute-level band (not a moving
 // average) so it needs zero warm-up history on ship day.
 
-const HY_OAS_WARN = 3.0;
-const HY_OAS_CRISIS = 5.0;
+export const HY_OAS_WARN = 3.0;
+export const HY_OAS_CRISIS = 5.0;
 
-export function bandHyOas(percent: number): RegimeBand {
-  if (percent >= HY_OAS_CRISIS) return "crisis";
-  if (percent >= HY_OAS_WARN) return "warning";
+export function bandHyOas(percent: number, thresholds?: RegimeThresholds): RegimeBand {
+  const crisis = thresholds?.crisis ?? HY_OAS_CRISIS;
+  const warn = thresholds?.warn ?? HY_OAS_WARN;
+  if (percent >= crisis) return "crisis";
+  if (percent >= warn) return "warning";
   return "calm";
 }
