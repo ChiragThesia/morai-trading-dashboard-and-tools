@@ -307,7 +307,7 @@ by a gear-icon modal in the top bar grouped by engine with reset-to-defaults per
 an override reproduces today's behavior byte-identically (backtest leakage-oracle safe).
 **Requirements**: none mapped — user-added phase; scope defined by 29-CONTEXT.md locked decisions
 **Depends on:** Phase 28
-**Plans:** 10/14 plans executed
+**Plans:** 11/14 plans executed
 
 Plans:
 **Wave 1**
@@ -331,7 +331,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 29-10-PLAN.md — Picker consumption wiring: fresh read + config thread + effective ruleSet stamp
-- [ ] 29-12-PLAN.md — Regime consumption wiring: fresh read per request + banding
+- [x] 29-12-PLAN.md — Regime consumption wiring: fresh read per request + banding
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

@@ -5,15 +5,15 @@ milestone_name: Picker Intelligence
 current_phase: 29
 current_phase_name: Runtime Rule Settings
 status: executing
-stopped_at: Completed 29-10-PLAN.md
-last_updated: "2026-07-10T05:28:46.653Z"
+stopped_at: Completed 29-12-PLAN.md
+last_updated: "2026-07-10T05:36:44.436Z"
 last_activity: 2026-07-10
-last_activity_desc: Completed 29-10-PLAN.md (compute-picker rule config wiring)
+last_activity_desc: Completed 29-12-PLAN.md (regime board runtime overrides wiring)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 40
-  completed_plans: 36
+  completed_plans: 37
   percent: 75
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 29 (Runtime Rule Settings) — EXECUTING
-Plan: 10 of 14 complete (07, 08, 09 also complete — wave 4 dependency order: 10 depended on 07/08/09)
+Plan: 11 of 14 complete (07, 08, 09, 10, 12 complete — wave-based dependency order, not strictly sequential; 12 depended on 06/08/09)
 Status: Ready to execute next plan
-Last activity: 2026-07-10 — Completed 29-10-PLAN.md (compute-picker rule config wiring)
+Last activity: 2026-07-10 — Completed 29-12-PLAN.md (regime board runtime overrides wiring)
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -281,6 +281,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 29 P09 | 22min | 2 tasks | 8 files |
 | Phase 29 P08 | 25min | 2 tasks | 10 files |
 | Phase 29 P10 | 25min | 2 tasks | 6 files |
+| Phase 29 P12 | 10min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -404,6 +405,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 29-08]: RuleOverrides (contracts) → StoredRuleOverrides (core JsonObject) conversion uses a JSON.parse(JSON.stringify(...)) round-trip behind a typed isJsonObject guard to drop zod's optional `| undefined` fields under exactOptionalPropertyTypes — zero as/any
 - [Phase ?]: [Phase 29-10]: readRuleOverrides errors/malformed picker groups degrade to resolvePickerRuleConfig(undefined) defaults, never fail compute-picker — matches the file's best-effort convention (readDailySpotCloses/readPickerSlopeHistory), distinct from the gate's fail-CLOSED posture
 - [Phase ?]: [Phase 29-10]: autoTuneTargetDelta gained an optional ladder param and ScoringParams gained debitBand — plumbing the plan's own objective threading map required but files_modified omitted (candidate-selection.ts, scoring.ts)
+- [Phase ?]: 29-12: readRuleOverrides read AFTER the readMacroObservations early-return — a macro-read failure short-circuits without an unnecessary overrides read
+- [Phase ?]: 29-12: isRegimeRuleOverrides narrows a flat 8-field optional-number group (no nested sub-objects) — simpler than picker's multi-shape isPickerRuleOverrides guard
 
 ### Pending Todos
 
@@ -460,11 +463,9 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T05:28:37.108Z
-Stopped at: Completed 29-10-PLAN.md
+Last session: 2026-07-10T05:36:44.425Z
+Stopped at: Completed 29-12-PLAN.md
 Resume file: 
-
-- Next: continue Phase 29 wave 3 (remaining plans depend on 29-08's rule-overrides persistence)
 
 ## Operator Next Steps
 
