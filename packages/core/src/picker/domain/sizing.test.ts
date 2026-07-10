@@ -13,8 +13,8 @@
 
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { VIX_LADDER } from "./entry-gate.ts";
-import { SIZING_TIERS, resolveSizingTier } from "./sizing.ts";
+import { VIX_LADDER, resolveVixLadder } from "./entry-gate.ts";
+import { SIZING_TIERS, resolveSizingTier, DEFAULT_TIER_CONTRACTS } from "./sizing.ts";
 
 describe("SIZING_TIERS", () => {
   it("reuses VIX_LADDER's edges exactly -- one shared ladder, never a second band system", () => {
@@ -92,5 +92,54 @@ describe("resolveSizingTier", () => {
         expect(SIZING_TIERS).toContainEqual(resolved);
       }),
     );
+  });
+
+  // ─── override path (29-04, RUNTIME-*) ───────────────────────────────────────
+
+  it("DEFAULT_TIER_CONTRACTS is exported and matches the registry's own default counts", () => {
+    expect(DEFAULT_TIER_CONTRACTS).toEqual({ low: 2, normal: 2, elevated: 1, crisis: 0 });
+  });
+
+  it("omitting the override reproduces today's tier lookup for a sampled set of VIX values", () => {
+    for (const vix of [5, 17, 23, 30]) {
+      expect(resolveSizingTier(vix)).toEqual(resolveSizingTier(vix, undefined));
+    }
+  });
+
+  it("contracts override changes only the resolved row's contract count", () => {
+    const row = resolveSizingTier(22, { contracts: { elevated: 3 } });
+    expect(row?.tier).toBe("elevated");
+    expect(row?.contracts).toBe(3);
+  });
+
+  it("a contracts override for a DIFFERENT tier leaves this vix's row unchanged", () => {
+    const row = resolveSizingTier(22, { contracts: { low: 5 } });
+    expect(row?.tier).toBe("elevated");
+    expect(row?.contracts).toBe(1);
+  });
+
+  it("ladder override resolves the tier against the overridden boundaries", () => {
+    // vix=18 is "normal" under the default ladder but "elevated" once elevatedMin drops to 15.
+    const row = resolveSizingTier(18, { ladder: { elevatedMin: 15 } });
+    expect(row?.tier).toBe("elevated");
+    expect(row?.contracts).toBe(1);
+  });
+
+  it("combined ladder + contracts override compose correctly", () => {
+    const row = resolveSizingTier(18, { ladder: { elevatedMin: 15 }, contracts: { elevated: 4 } });
+    expect(row?.tier).toBe("elevated");
+    expect(row?.contracts).toBe(4);
+  });
+
+  it("null/NaN vix still resolves null with an override present", () => {
+    expect(resolveSizingTier(null, { contracts: { low: 5 } })).toBeNull();
+    expect(resolveSizingTier(Number.NaN, { contracts: { low: 5 } })).toBeNull();
+  });
+
+  it("the override path's ladder rebuild matches resolveVixLadder's own contiguous rows", () => {
+    const overriddenLadder = resolveVixLadder({ elevatedMin: 15 });
+    const row = resolveSizingTier(18, { ladder: { elevatedMin: 15 } });
+    const expectedTierRow = overriddenLadder.find((r) => 18 >= r.min && 18 < r.max);
+    expect(row?.tier).toBe(expectedTierRow?.tier);
   });
 });

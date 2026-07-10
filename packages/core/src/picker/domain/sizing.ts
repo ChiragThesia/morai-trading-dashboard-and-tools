@@ -16,8 +16,8 @@
  * `./entry-gate.ts` sibling (intra-context domain import, no cross-context/framework deps).
  */
 
-import { VIX_LADDER } from "./entry-gate.ts";
-import type { VixTier } from "./entry-gate.ts";
+import { VIX_LADDER, resolveVixLadder } from "./entry-gate.ts";
+import type { VixTier, VixLadderOverride } from "./entry-gate.ts";
 
 export type SizingTierRow = {
   readonly tier: VixTier;
@@ -33,7 +33,7 @@ export type SizingTierRow = {
  * (volatilitybox.com-cited tier shape). UAT-pending; edit this table directly to change
  * live sizing — never derive it from a formula.
  */
-const DEFAULT_TIER_CONTRACTS: Readonly<Record<VixTier, number>> = {
+export const DEFAULT_TIER_CONTRACTS: Readonly<Record<VixTier, number>> = {
   low: 2,
   normal: 2,
   elevated: 1,
@@ -56,14 +56,35 @@ export const SIZING_TIERS: ReadonlyArray<SizingTierRow> = VIX_LADDER.map((row) =
   rationale: TIER_RATIONALE[row.tier],
 }));
 
+export type SizingTierOverride = {
+  readonly ladder?: VixLadderOverride;
+  readonly contracts?: Partial<Record<VixTier, number>>;
+};
+
 /**
  * resolveSizingTier — the row whose half-open [vixMin, vixMax) contains `vix`. A null/NaN
  * vix (GATE BLIND / gate-read-error / cold-start) resolves no recommendation (null), never
  * a guessed tier (T-28-11). VIX_LADDER's four tiers are contiguous and non-overlapping
  * (entry-gate.test.ts asserts this), so every finite, non-negative `vix` resolves exactly
  * one row.
+ *
+ * With `override` (29-04, RUNTIME-*), rebuilds the tier rows from
+ * `resolveVixLadder(override.ladder)` and `{ ...DEFAULT_TIER_CONTRACTS, ...override.contracts }`
+ * instead of reading the frozen module-level SIZING_TIERS. Omitting `override` reproduces
+ * today's SIZING_TIERS lookup byte-identically.
  */
-export function resolveSizingTier(vix: number | null): SizingTierRow | null {
+export function resolveSizingTier(vix: number | null, override?: SizingTierOverride): SizingTierRow | null {
   if (vix === null || !Number.isFinite(vix)) return null;
-  return SIZING_TIERS.find((row) => vix >= row.vixMin && vix < row.vixMax) ?? null;
+  if (override === undefined) {
+    return SIZING_TIERS.find((row) => vix >= row.vixMin && vix < row.vixMax) ?? null;
+  }
+  const contracts = { ...DEFAULT_TIER_CONTRACTS, ...override.contracts };
+  const rows: ReadonlyArray<SizingTierRow> = resolveVixLadder(override.ladder).map((row) => ({
+    tier: row.tier,
+    vixMin: row.min,
+    vixMax: row.max,
+    contracts: contracts[row.tier],
+    rationale: TIER_RATIONALE[row.tier],
+  }));
+  return rows.find((row) => vix >= row.vixMin && vix < row.vixMax) ?? null;
 }
