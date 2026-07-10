@@ -15,7 +15,7 @@
 import { useStatus } from "../hooks/useStatus.ts";
 import { RegimeBoard } from "../components/RegimeBoard.tsx";
 import { CotCard } from "../components/CotCard.tsx";
-import { Panel, SectionLabel } from "../components/system/index.tsx";
+import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
 
 function SystemHealth(): React.ReactElement {
@@ -50,8 +50,8 @@ export function MarketRail(): React.ReactElement {
       <div className="mt-3 flex flex-col gap-3 lg:mt-0">
         <RegimeBoard dense />
         <CotCard />
-        <Panel className="p-4">
-          <SectionLabel className="mb-3">System health</SectionLabel>
+        <Panel>
+          <PanelHeading title="System health" />
           <SystemHealth />
         </Panel>
       </div>
