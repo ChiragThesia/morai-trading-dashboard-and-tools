@@ -382,11 +382,20 @@ Plans:
 
 ### Phase 32: Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** The Rule Settings modal explains every knob (what it gates/scores, its unit, its
+direction of effect) and which engine output it changes, and shows a staged-change impact preview
+BEFORE save — dry-run re-scoring the latest picker snapshot for candidate/gate/sizing deltas, live
+re-evaluating open-position exit verdicts, and client-side re-banding regime values — so the trader
+sees what each change will do before committing. Knob semantics unchanged; preview never persists.
+**Requirements**: none (user-added phase; covered by 32-CONTEXT locked decisions B1–B9)
 **Depends on:** Phase 31
-**Plans:** 0 plans
+**Plans:** 6 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 32 to break down)
+- [ ] 32-01-PLAN.md — Contracts: explainer registry (schema-derived completeness) + preview request/response schema
+- [ ] 32-02-PLAN.md — Picker preview use-case (score/gate/sizing re-resolve + universe honest-note, byte-parity)
+- [ ] 32-03-PLAN.md — Exit preview use-case (live evaluateExit current-vs-staged, structural no-persist)
+- [ ] 32-04-PLAN.md — Combined preview use-case + POST /api/settings/rules/preview + MCP twin + wiring
+- [ ] 32-05-PLAN.md — Modal explainer surface: per-knob captions/popovers + affected-surface tags (Tooltip first consumer)
+- [ ] 32-06-PLAN.md — Modal preview flow: hook + Preview button + picker/exit/regime deltas + staleness
