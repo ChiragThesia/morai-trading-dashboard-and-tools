@@ -5,16 +5,16 @@ milestone_name: Picker Intelligence
 current_phase: 32
 current_phase_name: Rule Settings modal v2 — explain what you touch
 status: in-progress
-stopped_at: Completed 32-01-PLAN.md
-last_updated: "2026-07-10T19:17:00.909Z"
+stopped_at: Completed 32-02-PLAN.md
+last_updated: "2026-07-10T19:33:03.557Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 32 Plan 01 complete
+last_activity_desc: Phase 32 Plan 02 complete
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 9
   total_plans: 54
-  completed_plans: 49
-  percent: 91
+  completed_plans: 50
+  percent: 93
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 32 — Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
-Plan: 32-01 complete (of 6) — contract-package foundations: RULE_EXPLAINERS registry + preview request/response schema
-Status: In progress — 32-02..32-06 remaining
-Last activity: 2026-07-10 — Phase 32 Plan 01 complete
+Plan: 32-02 complete (of 6) — picker preview use-case (B1): re-score/re-resolve/honest-note per knob group
+Status: In progress — 32-03..32-06 remaining
+Last activity: 2026-07-10 — Phase 32 Plan 02 complete
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -298,6 +298,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 31 P01 | ~20min | 2 tasks tasks | 3 files files |
 | Phase 31 P02 | 6m | 2 tasks | 8 files |
 | Phase 32 P01 | 1min | 2 tasks | 6 files |
+| Phase 32 P02 | ~20min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -447,6 +448,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 31-02: bandWarn/bandCrisis required (not optional) on regimeIndicator — fail-loud on a stale response
 - [Phase ?]: 31-02: gauge marker color reads server-computed indicator.band verbatim, never recomputed client-side
 - [Phase ?]: Explainer registry keyed by ruleConfig's real 43 dotted leaf paths; completeness enforced by a recursive schema walk, never a hand-copied path array
+- [Phase 32]: 32-02: absent staged picker group falls back to STORED overrides (not code defaults) for the effective config -- this is what makes the byte-parity property hold
+- [Phase 32]: 32-02: gate re-resolve reconstructs synthetic MacroSeriesRow[VIXCLS,VXVCLS] from the stored PickerGate's already-resolved vix/vix3m/asOf scalars (no readMacroObservations dep) so resolveEntryGate is reused verbatim with zero new I/O
 
 ### Pending Todos
 
@@ -503,7 +506,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T19:16:20.434Z
+Last session: 2026-07-10T19:32:26.807Z
 Stopped at: Completed 31-02-PLAN.md
 Resume file: 
 
