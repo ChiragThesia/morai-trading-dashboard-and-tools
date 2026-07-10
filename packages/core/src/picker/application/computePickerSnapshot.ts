@@ -37,9 +37,13 @@ import { realizedVol } from "../domain/realized-vol.ts";
 import { RULE_SET_METADATA } from "../domain/rules.ts";
 import type { ScoredCandidate } from "../domain/types.ts";
 import { resolveEntryGate, businessDaysSince, applyGatePenaltyScore } from "../domain/entry-gate.ts";
-import type { EntryGateState } from "../domain/entry-gate.ts";
+import type { EntryGateState, VixLadderOverride } from "../domain/entry-gate.ts";
 import { maxOpenTripped, cooldownActive, cooldownCutoff, COOLDOWN_BIZDAYS, LOSS_COOLDOWN_PCT } from "../domain/brakes.ts";
 import { resolveSizingTier } from "../domain/sizing.ts";
+import type { SizingTierOverride } from "../domain/sizing.ts";
+import { resolvePickerRuleConfig } from "../domain/rule-config.ts";
+import type { PickerRuleOverrides } from "../domain/rule-config.ts";
+import type { BreakdownCriterion } from "../domain/types.ts";
 import type {
   ChainQuoteForPicker,
   EconomicEvent,
@@ -66,6 +70,10 @@ import type {
   ForReadingMacroObservations,
   ForReadingRecentClosedCalendars,
 } from "../../journal/index.ts";
+// 29-10 (RUNTIME-*): cross-context read of the settings bounded context's own driven port —
+// same "application ports only, never domain" convention as the journal imports above.
+// settings/ has no index.ts barrel (29-09 decision), so this imports the ports.ts file directly.
+import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
 
 // ─── Tunables (D-03/D-17; documented, not empirically calibrated) ──────────────
 
@@ -110,6 +118,12 @@ export type ComputePickerSnapshotDeps = {
   readonly readRecentClosedCalendars: ForReadingRecentClosedCalendars;
   /** The previously persisted snapshot — self-read for the gate's arm/disarm hysteresis (28-03). */
   readonly readPickerSnapshot: ForReadingPickerSnapshot;
+  /**
+   * Runtime rule-settings overrides (29-10, RUNTIME-*) — read FRESH inside the use-case body
+   * on every run (mirrors `readMacroObservations`'s fresh-per-invocation shape), never cached
+   * in the composition-root closure, so a mid-day settings change takes effect next cycle.
+   */
+  readonly readRuleOverrides: ForReadingRuleOverrides;
   /** Risk-free rate (decimal), supplied from config. */
   readonly rate: number;
   /** Continuous dividend yield (decimal), supplied from config. */
@@ -278,10 +292,75 @@ export function cooldownUntilFrom(closedAtIso: string): string {
  * SAME cohort VIX the gate already resolved (`gate.vix`) — one shared read, no second macro
  * lookup. `tier`/`contracts` are null together whenever `resolveSizingTier` finds no tier
  * (null/NaN vix — GATE BLIND/gate-read-error/cold-start), never a guessed tier (T-28-11).
+ * `sizingOverride` (29-10, RUNTIME-*) threads the resolved rule config's ladder/contracts
+ * override — omitting it reproduces today's SIZING_TIERS lookup byte-identically.
  */
-function toPickerSizing(vix: number | null): PickerSizing {
-  const resolved = resolveSizingTier(vix);
+function toPickerSizing(vix: number | null, sizingOverride?: SizingTierOverride): PickerSizing {
+  const resolved = resolveSizingTier(vix, sizingOverride);
   return { tier: resolved?.tier ?? null, contracts: resolved?.contracts ?? null, vix };
+}
+
+// ─── Rule-overrides wiring helpers (29-10, RUNTIME-*) ───────────────────────────
+
+/**
+ * Narrows the untyped `picker` group read back from storage into `PickerRuleOverrides`. A
+ * type guard, not a rebuild: the shape was already Zod-validated at the PUT boundary (29-13)
+ * before ever being persisted, so this only needs to satisfy the type system on read, not
+ * re-validate. Rejects the WHOLE group on any field-type mismatch — falls back to defaults,
+ * never a guessed partial (matches resolvePickerRuleConfig's own never-a-fresh-literal rule).
+ */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOptionalNumber(value: unknown): boolean {
+  return value === undefined || typeof value === "number";
+}
+
+/** All present values are numbers; unknown keys are harmless (resolvePickerRuleConfig only
+ * ever reads its own named sub-fields via `?.`). */
+function isOptionalNumberRecord(value: unknown): boolean {
+  return value === undefined || (isPlainRecord(value) && Object.values(value).every((v) => typeof v === "number"));
+}
+
+const PICKER_NUMBER_FIELDS = [
+  "deltaBandMin",
+  "deltaBandMax",
+  "frontDteMin",
+  "frontDteMax",
+  "backDteMinGap",
+  "backDteMaxGap",
+  "debitIdealMin",
+  "debitIdealMax",
+  "maxOpenCalendars",
+] as const;
+
+function isPickerRuleOverrides(value: unknown): value is PickerRuleOverrides {
+  if (!isPlainRecord(value)) return false;
+  return (
+    PICKER_NUMBER_FIELDS.every((field) => isOptionalNumber(value[field])) &&
+    isOptionalNumberRecord(value["weights"]) &&
+    isOptionalNumberRecord(value["sizingContracts"]) &&
+    isOptionalNumberRecord(value["vixLadder"])
+  );
+}
+
+/** The 9 active score criteria — the only `RULE_SET_METADATA` ids `config.weights` covers
+ * (gate/experimental ids like "liquidity"/"slopePercentile" fall through to `rule.weight`). */
+const BREAKDOWN_CRITERIA: ReadonlySet<string> = new Set<string>([
+  "slope",
+  "fwdEdge",
+  "gexFit",
+  "eventAdjustment",
+  "beVsEm",
+  "deltaNeutral",
+  "thetaVega",
+  "vrp",
+  "debitFit",
+]);
+
+function isBreakdownCriterion(id: string): id is BreakdownCriterion {
+  return BREAKDOWN_CRITERIA.has(id);
 }
 
 /**
@@ -396,6 +475,17 @@ export function makeComputePickerSnapshotUseCase(
   deps: ComputePickerSnapshotDeps,
 ): ForRunningComputePicker {
   return async (): Promise<Result<void, StorageError>> => {
+    // ── Step 0: Resolve the runtime rule config FRESH per run (29-10, RUNTIME-*) — never
+    // cached in the factory closure above, mirrors readMacroObservations' per-invocation
+    // shape (a mid-day settings change takes effect next cycle). A read failure degrades to
+    // defaults (never fails the whole job over an optional-customization glitch — distinct
+    // from the gate's own fail-CLOSED posture at Step 3d, since omission is always safe by
+    // the merge design itself); a malformed stored group narrows to `undefined` the same way. ──
+    const overridesResult = await deps.readRuleOverrides();
+    const pickerOverridesRaw = overridesResult.ok ? overridesResult.value["picker"] : undefined;
+    const pickerOverrides = isPickerRuleOverrides(pickerOverridesRaw) ? pickerOverridesRaw : undefined;
+    const config = resolvePickerRuleConfig(pickerOverrides);
+
     // ── Step 1: Read the latest chain cohort ─────────────────────────────────
     const chainResult = await deps.readChainForPicker();
     if (!chainResult.ok) return err(chainResult.error);
@@ -450,7 +540,7 @@ export function makeComputePickerSnapshotUseCase(
     } else {
       const openCount = openCalendarsResult.value.length;
       const recentClosed = recentClosedResult.value;
-      const maxOpenBrake = maxOpenTripped(openCount);
+      const maxOpenBrake = maxOpenTripped(openCount, config.maxOpenCalendars);
       const cooldownBrake = cooldownActive(recentClosed);
       const previousGate =
         previousSnapshotResult.ok && previousSnapshotResult.value !== null
@@ -463,6 +553,7 @@ export function makeComputePickerSnapshotUseCase(
         maxOpenBrake,
         cooldownBrake,
         previousState: previousGate,
+        vixLadder: config.vixLadder,
       });
 
       // ponytail: re-filters the SAME -25% trigger cooldownActive already checked, just to find
@@ -504,10 +595,18 @@ export function makeComputePickerSnapshotUseCase(
     // 28-04 (PLAY-05): autoTuneTargetDelta nudges the band's deep edge toward the far-OTM
     // edge as the cohort VIX rises (the SAME vix the gate already resolved) — a universe-
     // membership preference, never a scoring criterion (RULE_SET_METADATA untouched).
+    // 29-10 (RUNTIME-*): every band/window/weight below threads the resolved `config` —
+    // omitting overrides reproduces today's live universe/score byte-identically (each seam's
+    // own `?? CONSTANT` fallback, unchanged by this plan).
     const { candidates: raw, gateDrops } = selectCandidates(chain, events, {
       r: deps.rate,
       q: deps.dividendYield,
-      effectiveDeltaMin: autoTuneTargetDelta(gate.vix),
+      effectiveDeltaMin: autoTuneTargetDelta(gate.vix, config.vixLadder),
+      deltaMax: config.deltaBand.max,
+      frontDteMin: config.frontDte.min,
+      frontDteMax: config.frontDte.max,
+      backDteMinGap: config.backDteGap.min,
+      backDteMaxGap: config.backDteGap.max,
     });
     const gexContextForScoring = gexContextStatus === "ok" ? gexContext : null;
     let scored = scoreCalendarCandidates(raw, gexContextForScoring, {
@@ -515,6 +614,8 @@ export function makeComputePickerSnapshotUseCase(
       q: deps.dividendYield,
       realizedVol20,
       slopeHistory,
+      weights: config.weights,
+      debitBand: config.debitBand,
     });
     if (eventsContextStatus !== "ok") {
       scored = scored.map(zeroEventAdjustment);
@@ -530,13 +631,18 @@ export function makeComputePickerSnapshotUseCase(
     const { candidates: rawEvent } = selectEventCandidates(chain, events, {
       r: deps.rate,
       q: deps.dividendYield,
-      effectiveDeltaMin: autoTuneTargetDelta(gate.vix),
+      effectiveDeltaMin: autoTuneTargetDelta(gate.vix, config.vixLadder),
+      deltaMax: config.deltaBand.max,
+      frontDteMin: config.frontDte.min,
+      frontDteMax: config.frontDte.max,
     });
     let scoredEvent = scoreEventCandidates(rawEvent, gexContextForScoring, {
       r: deps.rate,
       q: deps.dividendYield,
       realizedVol20,
       slopeHistory,
+      weights: config.weights,
+      debitBand: config.debitBand,
     });
     if (eventsContextStatus !== "ok") {
       scoredEvent = scoredEvent.map(zeroEventAdjustment);
@@ -557,6 +663,16 @@ export function makeComputePickerSnapshotUseCase(
           ...rankedEvent.map((c) => toPickerCandidateDomain(c, "event-calendar")),
         ]
       : [];
+
+    // 29-10 (RUNTIME-*): sizing's ladder override threads the RAW picker `vixLadder` boundary
+    // patch (not the already-resolved `config.vixLadder` rows) — `resolveSizingTier` rebuilds
+    // its own rows from the same boundaries via `resolveVixLadder`, the ONE ladder-rebuild
+    // source (29-04); omitting overrides reproduces today's SIZING_TIERS lookup byte-identically.
+    const vixLadderOverride: VixLadderOverride | undefined = pickerOverrides?.vixLadder;
+    const sizingOverride: SizingTierOverride = {
+      ...(vixLadderOverride !== undefined ? { ladder: vixLadderOverride } : {}),
+      contracts: config.sizingContracts,
+    };
 
     // ── Step 6: Assemble the snapshot ────────────────────────────────────────
     const gexForSnapshot =
@@ -605,13 +721,16 @@ export function makeComputePickerSnapshotUseCase(
       gex: gexForSnapshot,
       events: eventsForSnapshot,
       candidates,
-      // The registry rows this snapshot was scored with — the UI methodology panel's
-      // single source of truth (rules.ts).
+      // The registry rows this snapshot was ACTUALLY scored with — T-29-14: stamps the
+      // EFFECTIVE weight (config.weights, the same object passed to scoreCalendarCandidates
+      // above), never the compile-time RULE_SET_METADATA weight, so the UI methodology panel
+      // never misrepresents an overridden run. Gate/experimental ids (not a BreakdownCriterion,
+      // e.g. "liquidity"/"slopePercentile") fall through to `rule.weight` (always 0) unchanged.
       ruleSet: RULE_SET_METADATA.map((rule) => ({
         id: rule.id,
         label: rule.label,
         kind: rule.kind,
-        weight: rule.weight,
+        weight: isBreakdownCriterion(rule.id) ? config.weights[rule.id] : rule.weight,
         status: rule.status,
         rationale: rule.rationale,
       })),
@@ -620,7 +739,7 @@ export function makeComputePickerSnapshotUseCase(
       // The market-level entry gate + anti-criteria brakes (28-03, PLAY-01/PLAY-02).
       gate,
       // VIX-tiered sizing (28-04, PLAY-03) -- resolved from the SAME cohort VIX the gate read.
-      sizing: toPickerSizing(gate.vix),
+      sizing: toPickerSizing(gate.vix, sizingOverride),
     };
 
     // ── Step 7: Persist (D-06 append-only; observedAt = cohort data time, NEVER now()) ──

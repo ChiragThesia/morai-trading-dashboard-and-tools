@@ -98,6 +98,13 @@ export type ScoringParams = {
    * (every live call site) reproduces today's live score/breakdown byte-identically.
    */
   readonly weights?: Partial<Record<BreakdownCriterion, number>>;
+  /**
+   * debitFit ideal-band override (29-10 runtime rule settings) — threaded verbatim into
+   * `debitFitFraction`'s own `band` param. Omitting this field reproduces today's
+   * DEBIT_IDEAL_MIN/MAX band byte-identically (rules.ts's own `band?.idealMin ?? CONSTANT`
+   * fallback).
+   */
+  readonly debitBand?: { readonly idealMin?: number; readonly idealMax?: number };
 };
 
 /**
@@ -187,7 +194,7 @@ function scoreOne(
   // Promoted 2026-07-09 (user lock; PICK-04 re-arbitrates): θ/vega + VRP become scored terms.
   const thetaVegaFrac = thetaVegaFraction(candidate.theta, candidate.vega);
   const vrpFrac = vrpFraction(ivF, params.realizedVol20 ?? null);
-  const debitFrac = debitFitFraction(candidate.debit);
+  const debitFrac = debitFitFraction(candidate.debit, params.debitBand);
 
   const breakdown: ReadonlyArray<BreakdownEntry> = [
     { criterion: "slope", weight: wSlope, rawValue: candidate.slope, contribution: slopeFraction * 100 },

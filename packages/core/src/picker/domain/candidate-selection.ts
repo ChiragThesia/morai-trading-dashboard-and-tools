@@ -36,7 +36,7 @@ import { assertDefined } from "@morai/shared";
 import { bsmGreeks, bsmPrice } from "@morai/quant";
 import { isLiquidQuote } from "./rules.ts";
 import { VIX_LADDER } from "./entry-gate.ts";
-import type { VixTier } from "./entry-gate.ts";
+import type { VixLadderRow, VixTier } from "./entry-gate.ts";
 import type { ChainQuoteForPicker, EconomicEvent } from "../application/ports.ts";
 import type { DeltaRung, RawCandidate } from "./types.ts";
 
@@ -96,28 +96,32 @@ export const PEAK_THETA_DAYS = 5;
 // universe-membership preference `selectCandidates` consumes via `effectiveDeltaMin`.
 // ─────────────────────────────────────────────────────────────
 
-function vixLadderFloor(tier: VixTier): number {
-  const row = VIX_LADDER.find((r) => r.tier === tier);
-  assertDefined(row, `candidate-selection: VIX_LADDER missing tier "${tier}"`);
+function vixLadderFloor(ladder: ReadonlyArray<VixLadderRow>, tier: VixTier): number {
+  const row = ladder.find((r) => r.tier === tier);
+  assertDefined(row, `candidate-selection: ladder missing tier "${tier}"`);
   return row.min;
 }
 
-/** Tilt range: VIX_LADDER's normal floor (15) to its crisis floor (25) — the SAME ladder the
- * gate/sizing use. Past 25 the gate hard-blocks entries anyway, so tilting further is moot. */
-const AUTOTUNE_VIX_FLOOR = vixLadderFloor("normal");
-const AUTOTUNE_VIX_CEILING = vixLadderFloor("crisis");
-
 /**
  * autoTuneTargetDelta — the VIX-tuned deep (min) band edge. Linear from DELTA_BAND_MIN at/
- * below AUTOTUNE_VIX_FLOOR to DELTA_BAND_MAX at/above AUTOTUNE_VIX_CEILING; null/NaN vix (no
- * tilt) returns DELTA_BAND_MIN unchanged. ALWAYS inside [DELTA_BAND_MIN, DELTA_BAND_MAX]
- * (fast-check proven) — the tilt can only narrow the band from its deep end, never widen it
- * past the original edges (PLAY-05: "never pushes the effective delta outside the band").
+ * below the ladder's normal floor (15 by default) to DELTA_BAND_MAX at/above the ladder's
+ * crisis floor (25 by default); null/NaN vix (no tilt) returns DELTA_BAND_MIN unchanged.
+ * ALWAYS inside [DELTA_BAND_MIN, DELTA_BAND_MAX] (fast-check proven) — the tilt can only
+ * narrow the band from its deep end, never widen it past the original edges (PLAY-05: "never
+ * pushes the effective delta outside the band"). Optional `ladder` (29-10 runtime rule
+ * settings) feeds an overridden tier boundary set — defaults to VIX_LADDER (the SAME ladder
+ * the gate/sizing use by default), reproducing today's tilt range byte-identically when
+ * omitted.
  */
-export function autoTuneTargetDelta(vix: number | null): number {
-  if (vix === null || !Number.isFinite(vix) || vix <= AUTOTUNE_VIX_FLOOR) return DELTA_BAND_MIN;
-  if (vix >= AUTOTUNE_VIX_CEILING) return DELTA_BAND_MAX;
-  const fraction = (vix - AUTOTUNE_VIX_FLOOR) / (AUTOTUNE_VIX_CEILING - AUTOTUNE_VIX_FLOOR);
+export function autoTuneTargetDelta(
+  vix: number | null,
+  ladder: ReadonlyArray<VixLadderRow> = VIX_LADDER,
+): number {
+  const floor = vixLadderFloor(ladder, "normal");
+  const ceiling = vixLadderFloor(ladder, "crisis");
+  if (vix === null || !Number.isFinite(vix) || vix <= floor) return DELTA_BAND_MIN;
+  if (vix >= ceiling) return DELTA_BAND_MAX;
+  const fraction = (vix - floor) / (ceiling - floor);
   return DELTA_BAND_MIN + fraction * (DELTA_BAND_MAX - DELTA_BAND_MIN);
 }
 

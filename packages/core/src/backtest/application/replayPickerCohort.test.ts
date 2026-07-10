@@ -159,6 +159,9 @@ async function buildStoredRow(overrides: {
     readOpenCalendars: async () => ok([]),
     readRecentClosedCalendars: async () => ok([]),
     readPickerSnapshot: async () => ok(null),
+    // 29-10: no rule overrides in the leakage-oracle fixture — the merge's own omission
+    // fallback (resolvePickerRuleConfig) reproduces every live default byte-identically.
+    readRuleOverrides: async () => ok({}),
     rate: R,
     dividendYield: Q,
     now: () => NOW,

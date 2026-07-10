@@ -34,6 +34,7 @@ import {
 import { selectCandidates } from "../domain/candidate-selection.ts";
 import { scoreCalendarCandidates } from "../domain/scoring.ts";
 import { cooldownCutoff } from "../domain/brakes.ts";
+import { RULE_SET_METADATA, WEIGHT_SLOPE } from "../domain/rules.ts";
 import type {
   ChainQuoteForPicker,
   EconomicEvent,
@@ -55,6 +56,8 @@ import type {
   MacroObservationRow,
   RecentClosedCalendar,
 } from "../../journal/index.ts";
+import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
+import type { StoredRuleOverrides } from "../../settings/domain/merge.ts";
 
 const R = 0.04;
 const Q = 0.013;
@@ -224,6 +227,11 @@ function fakeReadPickerSnapshot(row: PickerSnapshotRow | null): ForReadingPicker
   return async (): Promise<Result<PickerSnapshotRow | null, StorageError>> => ok(row);
 }
 
+/** 29-10: fresh-per-run rule-overrides read. Defaults to `{}` (no overrides). */
+function fakeReadRuleOverrides(overrides: StoredRuleOverrides): ForReadingRuleOverrides {
+  return async () => ok(overrides);
+}
+
 /** A minimal persisted PickerSnapshotRow carrying only the `gate` field a hysteresis
  * self-read test cares about — the rest of the snapshot is never touched by resolveEntryGate. */
 function previousSnapshotWithGate(gate: PickerGate): PickerSnapshotRow {
@@ -293,6 +301,7 @@ function baseDeps(overrides: {
   readonly recentClosedReadError?: boolean;
   readonly previousSnapshot?: PickerSnapshotRow | null;
   readonly now?: () => Date;
+  readonly ruleOverrides?: StoredRuleOverrides;
 }) {
   const { persistPickerSnapshot, rows } = makeRecordingPersist();
   // Note: `??` would coalesce an explicit `null` (missing-GEX fixture) back to the default --
@@ -336,6 +345,7 @@ function baseDeps(overrides: {
       readOpenCalendars,
       readRecentClosedCalendars,
       readPickerSnapshot: fakeReadPickerSnapshot(previousSnapshot),
+      readRuleOverrides: fakeReadRuleOverrides(overrides.ruleOverrides ?? {}),
       rate: R,
       dividendYield: Q,
       now: overrides.now ?? (() => NOW),
@@ -966,6 +976,86 @@ describe("rule registry in the snapshot (rules.ts)", () => {
     const ah = baseDeps({ chain: shifted });
     await makeComputePickerSnapshotUseCase(ah.deps)();
     expect(ah.rows[0]?.snapshot.marketSession).toBe("after-hours");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Runtime rule-settings overrides (29-10, RUNTIME-*) — readRuleOverrides threading,
+// effective-weight ruleSet stamp, byte-identical omission, read-error degradation.
+// ─────────────────────────────────────────────────────────────
+describe("makeComputePickerSnapshotUseCase — runtime rule overrides (29-10)", () => {
+  it("no rule overrides -> ruleSet stamps the compile-time RULE_SET_METADATA weights unchanged (byte-identical omission, T-29-05/T-29-14)", async () => {
+    const { deps, rows } = baseDeps({});
+    const result = await makeComputePickerSnapshotUseCase(deps)();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    expect(row.snapshot.ruleSet).toEqual(
+      RULE_SET_METADATA.map((rule) => ({
+        id: rule.id,
+        label: rule.label,
+        kind: rule.kind,
+        weight: rule.weight,
+        status: rule.status,
+        rationale: rule.rationale,
+      })),
+    );
+  });
+
+  it("a picker override changes gate/brake behavior AND stamps the EFFECTIVE ruleSet weights, siblings untouched (T-29-14)", async () => {
+    const openCalendars = Array.from({ length: 6 }, (_v, i) => openCalendar(`c${i}`));
+    const { deps, rows } = baseDeps({
+      openCalendars,
+      ruleOverrides: { picker: { maxOpenCalendars: 8, weights: { fwdEdge: 40 } } },
+    });
+    const result = await makeComputePickerSnapshotUseCase(deps)();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    // Default MAX_OPEN_CALENDARS=6 would trip the brake at 6 open calendars; the override (8)
+    // does not.
+    expect(row.snapshot.gate.brakes.maxOpen).toBe(false);
+
+    // ruleSet stamps the EFFECTIVE fwdEdge weight, not the compile-time constant — and every
+    // sibling criterion's weight stays at its default (only fwdEdge was overridden).
+    const fwdEdgeRow = row.snapshot.ruleSet.find((r) => r.id === "fwdEdge");
+    expect(fwdEdgeRow?.weight).toBe(40);
+    const slopeRow = row.snapshot.ruleSet.find((r) => r.id === "slope");
+    expect(slopeRow?.weight).toBe(WEIGHT_SLOPE);
+    // Gate/experimental ids are never touched by the weights override.
+    const liquidityRow = row.snapshot.ruleSet.find((r) => r.id === "liquidity");
+    expect(liquidityRow?.weight).toBe(0);
+  });
+
+  it("a readRuleOverrides read error degrades to defaults rather than failing the whole job (T-29-15)", async () => {
+    const { deps, rows } = baseDeps({});
+    const useCase = makeComputePickerSnapshotUseCase({
+      ...deps,
+      readRuleOverrides: async () => err({ kind: "storage-error", message: "settings read failed" }),
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    const row = rows[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    // Same as the omission case: a read failure never fails compute-picker, it just falls
+    // back to the compile-time defaults.
+    expect(row.snapshot.ruleSet).toEqual(
+      RULE_SET_METADATA.map((rule) => ({
+        id: rule.id,
+        label: rule.label,
+        kind: rule.kind,
+        weight: rule.weight,
+        status: rule.status,
+        rationale: rule.rationale,
+      })),
+    );
   });
 });
 
