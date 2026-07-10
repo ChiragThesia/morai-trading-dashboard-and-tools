@@ -18,6 +18,7 @@
 import { describe, it, expect } from "vitest";
 import { ok, err } from "@morai/shared";
 import type { ForReadingMacroObservations, MacroObservationRow, StorageError } from "../../journal/index.ts";
+import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
 import { makeGetRegimeBoardUseCase } from "./getRegimeBoard.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -25,6 +26,9 @@ import { makeGetRegimeBoardUseCase } from "./getRegimeBoard.ts";
 function row(seriesId: string, date: string, value: number): MacroObservationRow {
   return { seriesId, date, value, source: seriesId === "VVIX" || seriesId === "VIX9D" ? "cboe" : "fred" };
 }
+
+/** No stored overrides — the fresh-per-request default (29-12). */
+const noOverrides: ForReadingRuleOverrides = async () => ok({});
 
 const FULL_ROWS: ReadonlyArray<MacroObservationRow> = [
   // VIXCLS: latest 2026-07-08 (18.0), older 2026-07-01 (17.0)
@@ -45,7 +49,7 @@ const FULL_ROWS: ReadonlyArray<MacroObservationRow> = [
 describe("makeGetRegimeBoardUseCase", () => {
   it("computes vix-term-structure from the latest VIXCLS/VXVCLS rows, asOf = OLDER date", async () => {
     const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -63,7 +67,7 @@ describe("makeGetRegimeBoardUseCase", () => {
 
   it("computes vvix from the latest VVIX row, asOf = that row's date", async () => {
     const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -79,7 +83,7 @@ describe("makeGetRegimeBoardUseCase", () => {
 
   it("computes vix9d-vix from the latest VIX9D/VIXCLS rows, asOf = OLDER date", async () => {
     const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -95,7 +99,7 @@ describe("makeGetRegimeBoardUseCase", () => {
 
   it("computes hy-oas from the latest BAMLH0A0HYM2 row, asOf = that row's date", async () => {
     const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -111,7 +115,7 @@ describe("makeGetRegimeBoardUseCase", () => {
 
   it("carries non-empty source + rationale strings for every indicator (BOARD-02)", async () => {
     const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -129,7 +133,7 @@ describe("makeGetRegimeBoardUseCase", () => {
   it("OMITS vix-term-structure when VXVCLS has no row — never fabricates (T-24-09)", async () => {
     const rows = FULL_ROWS.filter((r) => r.seriesId !== "VXVCLS");
     const readMacroObservations: ForReadingMacroObservations = async () => ok(rows);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -143,7 +147,7 @@ describe("makeGetRegimeBoardUseCase", () => {
   it("OMITS vix9d-vix when VIX9D has no row — never fabricates (T-24-09)", async () => {
     const rows = FULL_ROWS.filter((r) => r.seriesId !== "VIX9D");
     const readMacroObservations: ForReadingMacroObservations = async () => ok(rows);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -159,7 +163,7 @@ describe("makeGetRegimeBoardUseCase", () => {
       r.seriesId === "VIXCLS" && r.date === "2026-07-08" ? { ...r, value: 0 } : r,
     );
     const readMacroObservations: ForReadingMacroObservations = async () => ok(rows);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -175,7 +179,7 @@ describe("makeGetRegimeBoardUseCase", () => {
 
   it("returns ok([]) when the store is empty", async () => {
     const readMacroObservations: ForReadingMacroObservations = async () => ok([]);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
@@ -188,13 +192,62 @@ describe("makeGetRegimeBoardUseCase", () => {
   it("propagates StorageError from the repo unchanged", async () => {
     const storageError: StorageError = { kind: "storage-error", message: "db down" };
     const readMacroObservations: ForReadingMacroObservations = async () => err(storageError);
-    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides: noOverrides });
 
     const result = await getRegimeBoard();
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error).toEqual(storageError);
+    }
+  });
+
+  // ─── Runtime rule-settings overrides (29-12, RUNTIME-*) ────────────────────────
+
+  it("reads overrides fresh on every call — invoked once per getRegimeBoard() invocation", async () => {
+    const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
+    let callCount = 0;
+    const readRuleOverrides: ForReadingRuleOverrides = async () => {
+      callCount += 1;
+      return ok({});
+    };
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides });
+
+    await getRegimeBoard();
+    await getRegimeBoard();
+
+    expect(callCount).toBe(2);
+  });
+
+  it("a regime override rebands the vvix indicator on the next call", async () => {
+    const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
+    // VVIX value is 89.0 — below the default warn=100 (calm) but above an overridden warn=80.
+    const readRuleOverrides: ForReadingRuleOverrides = async () => ok({ regime: { vvixWarn: 80 } });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides });
+
+    const result = await getRegimeBoard();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const indicator = result.value.find((i) => i.id === "vvix");
+      expect(indicator?.band).toBe("warning");
+    }
+  });
+
+  it("a readRuleOverrides read error degrades to defaults — never crashes the board (T-29-15)", async () => {
+    const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
+    const readRuleOverrides: ForReadingRuleOverrides = async () =>
+      err({ kind: "storage-error", message: "settings read failed" });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides });
+
+    const result = await getRegimeBoard();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // defaults (VVIX_WARN=100) — 89.0 stays "calm", board still ships
+      const indicator = result.value.find((i) => i.id === "vvix");
+      expect(indicator?.band).toBe("calm");
+      expect(result.value).toHaveLength(4);
     }
   });
 });

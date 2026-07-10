@@ -30,8 +30,11 @@ import type {
   MacroObservationRow,
   StorageError,
 } from "../../journal/index.ts";
+import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
 import { bandVixTermStructure, bandVvix, bandVix9dRatio, bandHyOas } from "../domain/regime.ts";
 import type { RegimeBand } from "../domain/regime.ts";
+import { resolveRegimeRuleConfig } from "../domain/rule-config.ts";
+import type { RegimeRuleOverrides } from "../domain/rule-config.ts";
 
 // ─── Domain shapes ──────────────────────────────────────────────────────────
 
@@ -51,6 +54,7 @@ export type RegimeIndicatorOut = {
 
 export type GetRegimeBoardDeps = {
   readonly readMacroObservations: ForReadingMacroObservations;
+  readonly readRuleOverrides: ForReadingRuleOverrides;
 };
 
 /** ForRunningGetRegimeBoard — driver port returned by makeGetRegimeBoardUseCase. */
@@ -97,6 +101,14 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
       return result;
     }
 
+    // Runtime rule-settings overrides (29-12, RUNTIME-*) — read FRESH per request (no worker
+    // job, no snapshot; this use-case computes live per HTTP/MCP call). A read failure or
+    // malformed stored group degrades to defaults, never crashes the board (T-29-15).
+    const overridesResult = await deps.readRuleOverrides();
+    const regimeOverridesRaw = overridesResult.ok ? overridesResult.value["regime"] : undefined;
+    const regimeOverrides = isRegimeRuleOverrides(regimeOverridesRaw) ? regimeOverridesRaw : undefined;
+    const config = resolveRegimeRuleConfig(regimeOverrides);
+
     const latest = latestRowPerSeries(result.value);
     const indicators: Array<RegimeIndicatorOut> = [];
 
@@ -109,7 +121,7 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
           id: "vix-term-structure",
           ...META["vix-term-structure"],
           value,
-          band: bandVixTermStructure(value),
+          band: bandVixTermStructure(value, config.vixTermStructure),
           asOf: olderDate(vixCls.date, vxvcls.date),
           inputs: { VIXCLS: vixCls.value, VXVCLS: vxvcls.value },
         });
@@ -122,7 +134,7 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
         id: "vvix",
         ...META.vvix,
         value: vvix.value,
-        band: bandVvix(vvix.value),
+        band: bandVvix(vvix.value, config.vvix),
         asOf: vvix.date,
         inputs: { VVIX: vvix.value },
       });
@@ -136,7 +148,7 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
           id: "vix9d-vix",
           ...META["vix9d-vix"],
           value,
-          band: bandVix9dRatio(value),
+          band: bandVix9dRatio(value, config.vix9dRatio),
           asOf: olderDate(vix9d.date, vixCls.date),
           inputs: { VIX9D: vix9d.value, VIXCLS: vixCls.value },
         });
@@ -149,7 +161,7 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
         id: "hy-oas",
         ...META["hy-oas"],
         value: hyOas.value,
-        band: bandHyOas(hyOas.value),
+        band: bandHyOas(hyOas.value, config.hyOas),
         asOf: hyOas.date,
         inputs: { BAMLH0A0HYM2: hyOas.value },
       });
@@ -157,6 +169,36 @@ export function makeGetRegimeBoardUseCase(deps: GetRegimeBoardDeps): ForRunningG
 
     return ok(indicators);
   };
+}
+
+// ─── Rule-overrides narrowing (29-12, RUNTIME-*) ────────────────────────────────
+// Narrows the untyped `regime` group read back from storage into `RegimeRuleOverrides`. The
+// shape was already Zod-validated at the PUT boundary (29-13) before persisting, so this only
+// needs to satisfy the type system on read. Rejects the WHOLE group on any field-type mismatch
+// — falls back to defaults, never a guessed partial (mirrors picker's isPickerRuleOverrides,
+// computePickerSnapshot.ts).
+
+const REGIME_NUMBER_FIELDS = [
+  "vixTermStructureWarn",
+  "vixTermStructureCrisis",
+  "vvixWarn",
+  "vvixCrisis",
+  "vix9dRatioWarn",
+  "vix9dRatioCrisis",
+  "hyOasWarn",
+  "hyOasCrisis",
+] as const;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRegimeRuleOverrides(value: unknown): value is RegimeRuleOverrides {
+  if (!isPlainRecord(value)) return false;
+  return REGIME_NUMBER_FIELDS.every((field) => {
+    const fieldValue = value[field];
+    return fieldValue === undefined || typeof fieldValue === "number";
+  });
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
