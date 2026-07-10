@@ -5,15 +5,15 @@ milestone_name: Picker Intelligence
 current_phase: 30
 current_phase_name: both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut
 status: executing
-stopped_at: Completed 30-04-PLAN.md
-last_updated: "2026-07-10T14:49:22.415Z"
+stopped_at: Completed 30-05-PLAN.md
+last_updated: "2026-07-10T15:20:00.000Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 29 complete, transitioned to Phase 30
+last_activity_desc: 30-05 complete — POST /api/picker/analyze + analyze_ad_hoc_calendar MCP tool + server wiring
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 46
-  completed_plans: 44
+  completed_plans: 45
   percent: 70
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 30 — Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent (both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut), and pasted calendars must get real entry analysis (engine scoring) instead of 'Pasted calendar — not engine-scored' in WHY THIS CALENDAR / ENTRY-EXIT PLAN panels
-Plan: Not started
+Plan: 30-05 complete (5 of 6 plans done — 30-06 remaining)
 Status: In progress
-Last activity: 2026-07-10 — Phase 29 complete, transitioned to Phase 30
+Last activity: 2026-07-10 — 30-05 complete: POST /api/picker/analyze + analyze_ad_hoc_calendar MCP tool + server composition-root wiring
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -291,6 +291,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 30 P03 | 8min | 2 tasks | 5 files |
 | Phase 30 P02 | 12min | 2 tasks | 6 files |
 | Phase 30 P04 | 25min | 2 tasks | 6 files |
+| Phase 30 P05 | ~35min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -430,6 +431,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 30-02]: computePayoffDomain's strike anchors are filtered through includedForT0 — an excluded/non-convergent position must not widen the domain since it never contributes to either curve
 - [Phase 30]: 30-04: no application/index.ts barrel created -- no such file exists anywhere in this codebase; re-exports land in picker/index.ts + top-level packages/core/src/index.ts matching every other bounded context's precedent
 - [Phase 30]: 30-04: isPickerRuleOverrides exported from computePickerSnapshot.ts alongside toPickerCandidateDomain/applyGatePenalty/zeroEventAdjustment so the ad-hoc use-case resolves fresh rule overrides via the SAME narrowing logic, never a second copy
+- [Phase ?]: 30-05: both scored:true and scored:false map to HTTP 200 (binding #2) -- overrides 30-PATTERNS.md's discretionary 404-no-snapshot suggestion
+- [Phase ?]: 30-05: registerAnalyzeAdHocCalendarTool registered in server.ts not main.ts -- matches every existing MCP tool's registration split
+- [Phase ?]: 30-05: added defaulted BSM_DIVIDEND_YIELD/BSM_RATE_FALLBACK to apps/server/src/config.ts matching the worker's own defaults -- no new required Railway env var
 
 ### Pending Todos
 
@@ -486,7 +490,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T14:45:44.443Z
+Last session: 2026-07-10T15:04:27.942Z
 Stopped at: Completed 30-04-PLAN.md
 Resume file: 
 
