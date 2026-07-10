@@ -14,6 +14,12 @@
  * `isExitRuleOverrides` + its field-guard helpers below are a verbatim COPY of
  * computeExitAdvice.ts's own narrowing (not an import — that file isn't in this plan's
  * files_modified list, and exits/ has no shared "narrow-overrides" module of its own).
+ * Intentionally NOT consolidated with `apps/server/src/adapters/rule-overrides-bridge.ts`
+ * (WR-01, 32-REVIEW.md): the hexagon law (architecture-boundaries §2) forbids `packages/core`
+ * from importing `apps/server` adapter code at all, in either direction — this narrowing is
+ * also structurally different (it type-guards actual field names against an untyped *stored*
+ * JSON blob, not a plain-record shape-guard on an already-Zod-validated request body), so it
+ * would be a weak consolidation candidate even if the import direction were legal.
  *
  * Hexagon law (architecture-boundaries §2): imports only @morai/shared, this context's own
  * domain/application siblings, and the settings context's own application port (rule 7 —

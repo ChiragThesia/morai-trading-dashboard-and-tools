@@ -29,7 +29,6 @@ import {
   previewRuleOverridesRequest,
   previewRuleOverridesResponse,
 } from "@morai/contracts";
-import type { PreviewRuleOverridesRequest } from "@morai/contracts";
 import type {
   ForGettingStatus,
   ForListingCalendars,
@@ -53,45 +52,14 @@ import type {
   ForRunningGetRuleSettings,
   ForRunningSetRuleOverrides,
   ForRunningPreviewRuleOverrides,
-  RulePreviewInput,
-  PickerRuleOverrides,
-  ExitRuleOverrides,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
-import { toOverridesPatch } from "../rule-overrides-bridge.ts";
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** zValidator-equivalent Zod safeParse already validated the FULL body against
- *  `previewRuleOverridesRequest` before this predicate runs — it just re-affirms the
- *  JSON-round-tripped clone's runtime shape for the compiler (exactOptionalPropertyTypes),
- *  never re-validates field-by-field. Same idiom as settings.routes.ts's own toPreviewInput
- *  (32-04) — duplicated verbatim (this task's files_modified scope excludes the shared
- *  rule-overrides-bridge.ts, 32-03 precedent). */
-function isPickerRuleOverridesShape(value: unknown): value is PickerRuleOverrides {
-  return isPlainRecord(value);
-}
-function isExitRuleOverridesShape(value: unknown): value is ExitRuleOverrides {
-  return isPlainRecord(value);
-}
-
-/** toPreviewInput — narrows a validated `previewRuleOverridesRequest` body into the core
- *  combined use-case's `RulePreviewInput` (MCP-02: the SAME conversion settings.routes.ts's
- *  POST /api/settings/rules/preview applies to the identical body, so HTTP and MCP feed the
- *  combined use-case identically — byte-parity). */
-function toPreviewInput(body: PreviewRuleOverridesRequest): RulePreviewInput {
-  const cloned: unknown = JSON.parse(JSON.stringify(body));
-  if (!isPlainRecord(cloned)) return {};
-  const picker = cloned["picker"];
-  const exits = cloned["exits"];
-  return {
-    ...(isPickerRuleOverridesShape(picker) ? { picker } : {}),
-    ...(isExitRuleOverridesShape(exits) ? { exits } : {}),
-  };
-}
+// WR-01 (32-REVIEW.md): both toOverridesPatch (PUT path) and toPreviewInput (preview path) are
+// the ONE consolidated seam shared with settings.routes.ts — MCP-02 byte-parity is now
+// structural (both adapters call the same functions), not just "the same conversion applied
+// twice."
+import { toOverridesPatch, toPreviewInput } from "../rule-overrides-bridge.ts";
 
 /**
  * registerStatusTool — registers the get_status MCP tool on the given McpServer.

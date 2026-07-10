@@ -7,58 +7,12 @@ import {
   previewRuleOverridesRequest,
   previewRuleOverridesResponse,
 } from "@morai/contracts";
-import type { PreviewRuleOverridesRequest } from "@morai/contracts";
 import type {
   ForRunningGetRuleSettings,
   ForRunningSetRuleOverrides,
   ForRunningPreviewRuleOverrides,
-  RulePreviewInput,
-  PickerRuleOverrides,
-  ExitRuleOverrides,
 } from "@morai/core";
-import { toOverridesPatch } from "../rule-overrides-bridge.ts";
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** zValidator already validated the FULL body against `previewRuleOverridesRequest` (the same
- *  `.strict()`-at-every-level `pickerOverrides`/`exitsOverrides` schemas the PUT route uses) —
- *  these predicates just re-affirm the JSON-round-tripped clone's runtime shape for the
- *  compiler; they never re-validate field-by-field. */
-function isPickerRuleOverridesShape(value: unknown): value is PickerRuleOverrides {
-  return isPlainRecord(value);
-}
-function isExitRuleOverridesShape(value: unknown): value is ExitRuleOverrides {
-  return isPlainRecord(value);
-}
-
-/**
- * toPreviewInput — narrows a validated `previewRuleOverridesRequest` body (each group
- * optional-and-nullable, PUT's own `ruleOverrides` shape, T-32-05) into the core combined
- * use-case's `RulePreviewInput` (each group optional-only). A `null` group (the PUT route's
- * reset-per-group sentinel) has no meaning for a preview — it degrades to "not staged" (absent),
- * the SAME as the key being omitted entirely, never a fabricated defaults-branch call.
- *
- * A JSON round-trip (same idiom as rule-overrides-bridge.ts's `toOverridesPatch`, WR-01) drops
- * the zod-inferred `| undefined` from optional fields so the clone structurally satisfies
- * `PickerRuleOverrides`/`ExitRuleOverrides` under `exactOptionalPropertyTypes` — zValidator
- * already validated this exact shape at the HTTP boundary, so `isPlainRecord` re-affirms the
- * runtime type for the compiler, never re-validates it.
- *
- * Duplicated verbatim in the MCP tool (tools.ts) — this task's files_modified scope excludes
- * the shared rule-overrides-bridge.ts (32-03 precedent: copy, don't touch an out-of-scope file).
- */
-function toPreviewInput(body: PreviewRuleOverridesRequest): RulePreviewInput {
-  const cloned: unknown = JSON.parse(JSON.stringify(body));
-  if (!isPlainRecord(cloned)) return {};
-  const picker = cloned["picker"];
-  const exits = cloned["exits"];
-  return {
-    ...(isPickerRuleOverridesShape(picker) ? { picker } : {}),
-    ...(isExitRuleOverridesShape(exits) ? { exits } : {}),
-  };
-}
+import { toOverridesPatch, toPreviewInput } from "../rule-overrides-bridge.ts";
 
 /**
  * settingsRoutes — factory returning a Hono router for the GET/PUT /api/settings/rules
