@@ -73,6 +73,16 @@ export type ScenarioParams = {
   readonly divYield: number;
 };
 
+/**
+ * The spot-price window a payoff curve/chart is computed and drawn over (D-01, Phase 30).
+ * Shared by scenario-engine's data grid and PayoffChart's x-scale so both always follow
+ * the SAME window — fixing only one clips the curve (Pitfall 1).
+ */
+export type SpotDomain = {
+  readonly min: number;
+  readonly max: number;
+};
+
 /** GEX key levels feeding the scenario strip (D-06). Any may be absent (null). */
 export type ScenarioStripLevels = {
   readonly putWall: number | null;
@@ -147,11 +157,11 @@ const SCENARIO_STRIP_DEDUP_EPSILON = 1e-6;
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
-/** Build an evenly-spaced spot grid */
-function buildSpotGrid(): ReadonlyArray<number> {
+/** Build an evenly-spaced spot grid spanning the given domain (D-01, Phase 30). */
+function buildSpotGrid(domain: SpotDomain): ReadonlyArray<number> {
   const spots: number[] = [];
   for (let i = 0; i <= SPOT_GRID_STEPS; i++) {
-    spots.push(SPOT_GRID_MIN + ((SPOT_GRID_MAX - SPOT_GRID_MIN) * i) / SPOT_GRID_STEPS);
+    spots.push(domain.min + ((domain.max - domain.min) * i) / SPOT_GRID_STEPS);
   }
   return spots;
 }
@@ -206,7 +216,7 @@ function entryNetPrice(
  * OCC format: "SPX   260808P07425000" — chars 13-20 = "07425000" → 7425
  * Falls back to 0 if symbol is malformed; caller should handle.
  */
-function extractStrike(pos: AnalyzerPosition): number {
+export function extractStrike(pos: AnalyzerPosition): number {
   const sym = pos.occSymbol;
   if (sym.length !== 21) return 0;
   // OCC positions 13–20 (0-indexed): the 8-char strike field in thousandths
@@ -385,6 +395,32 @@ function positionGreeksAt(
 // ─── Public functions ─────────────────────────────────────────────────────────
 
 /**
+ * Find zero-crossings in a payoff curve (breakeven strikes).
+ * Moved here from PayoffChart.tsx (Task 1, Phase 30) — the domain-fitting wide-pass in
+ * payoff-domain.ts needs the same breakeven detector the chart uses; one shared function,
+ * not a second copy.
+ */
+export function findZeroCrossings(curve: ReadonlyArray<PayoffPoint>): ReadonlyArray<number> {
+  const crossings: number[] = [];
+  for (let i = 1; i < curve.length; i++) {
+    const prev = curve[i - 1];
+    const curr = curve[i];
+    if (prev === undefined || curr === undefined) continue;
+    const a = prev.pl;
+    const b = curr.pl;
+    if ((a < 0 && b >= 0) || (a >= 0 && b < 0)) {
+      // Linear interpolation to find crossing
+      const x = prev.spot + (curr.spot - prev.spot) * (-a / (b - a));
+      crossings.push(x);
+    }
+  }
+  // Deduplicate crossings closer than 10 points
+  return crossings.filter(
+    (x, i, arr) => arr.findIndex((y) => Math.abs(y - x) < 10) === i,
+  );
+}
+
+/**
  * repriceScenario — the core client-side re-pricing engine.
  *
  * Given a list of Analyzer positions and scenario slider values, returns:
@@ -400,6 +436,7 @@ function positionGreeksAt(
 export function repriceScenario(
   positions: ReadonlyArray<AnalyzerPosition>,
   params: ScenarioParams,
+  domain: SpotDomain = { min: SPOT_GRID_MIN, max: SPOT_GRID_MAX },
 ): ScenarioResult {
   const { spot, daysForward, ivShift, rate, divYield } = params;
 
@@ -407,7 +444,7 @@ export function repriceScenario(
   // For the scenario: entry is always computed at spot=liveSpot, day=0, ivShift=0
   const liveSpot = spot; // when daysForward=0 and ivShift=0, spot IS the live spot
 
-  const spots = buildSpotGrid();
+  const spots = buildSpotGrid(domain);
 
   // ── Payoff curve (T+daysForward) ─────────────────────────────────────────
   const payoffCurve: PayoffPoint[] = spots.map((S) => ({

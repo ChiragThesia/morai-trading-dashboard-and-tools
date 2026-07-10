@@ -17,7 +17,7 @@ import * as fc from "fast-check";
 import { bsmGreeks } from "@morai/quant";
 import { parseOccSymbol } from "@morai/shared";
 import { computePositionGreeks } from "./position-greeks.ts";
-import { repriceScenario, t0ExcludedPositions, buildScenarioStrip } from "./scenario-engine.ts";
+import { repriceScenario, t0ExcludedPositions, buildScenarioStrip, findZeroCrossings } from "./scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams } from "./scenario-engine.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -214,6 +214,42 @@ describe("repriceScenario — payoff shape", () => {
     const spots = result.payoffCurve.map((p) => p.spot);
     expect(Math.min(...spots)).toBeLessThanOrEqual(6950);
     expect(Math.max(...spots)).toBeGreaterThanOrEqual(7850);
+  });
+});
+
+// ─── Task 1 (Phase 30, D-01): domain-aware spot grid ───────────────────────────
+
+describe("repriceScenario — domain param (D-01, Phase 30)", () => {
+  it("with no domain arg, reproduces today's 6900–7900 grid byte-identically (default preserved)", () => {
+    const withDomain = repriceScenario([LIVE_POS], BASE_PARAMS, { min: 6900, max: 7900 });
+    const withoutDomain = repriceScenario([LIVE_POS], BASE_PARAMS);
+    expect(withoutDomain.payoffCurve).toEqual(withDomain.payoffCurve);
+    expect(withoutDomain.expirationCurve).toEqual(withDomain.expirationCurve);
+  });
+
+  it("an explicit domain moves the payoff grid's first/last spot to match (SPOT_GRID_STEPS unchanged)", () => {
+    const result = repriceScenario([LIVE_POS], BASE_PARAMS, { min: 7100, max: 7600 });
+    const spots = result.payoffCurve.map((p) => p.spot);
+    expect(spots[0]).toBeCloseTo(7100, 6);
+    expect(spots[spots.length - 1]).toBeCloseTo(7600, 6);
+    expect(spots.length).toBe(171); // SPOT_GRID_STEPS (170) + 1
+  });
+});
+
+describe("findZeroCrossings — relocated from PayoffChart.tsx (exported, Task 1)", () => {
+  it("finds a single crossing for a simple linear-through-zero curve", () => {
+    const curve = [
+      { spot: 7000, pl: -100 },
+      { spot: 7400, pl: 0 },
+      { spot: 7800, pl: 100 },
+    ];
+    expect(findZeroCrossings(curve)).toEqual([7400]);
+  });
+
+  it("finds both crossings of an actual calendar payoff curve", () => {
+    const result = repriceScenario([LIVE_POS], BASE_PARAMS);
+    const crossings = findZeroCrossings(result.expirationCurve);
+    expect(crossings.length).toBeGreaterThanOrEqual(1);
   });
 });
 

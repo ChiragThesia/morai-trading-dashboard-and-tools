@@ -28,6 +28,7 @@ import { scaleLinear } from "@visx/scale";
 import { LinearGradient } from "@visx/gradient";
 import { Group } from "@visx/group";
 import { localPoint } from "@visx/event";
+import { findZeroCrossings } from "../../lib/scenario-engine.ts";
 import type { PayoffPoint } from "../../lib/scenario-engine.ts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -172,27 +173,6 @@ function pinMarker(
 
 function buildYScale(lo: number, hi: number, innerHeight: number) {
   return scaleLinear({ domain: [lo, hi], range: [innerHeight, 0] });
-}
-
-/** Find zero-crossings in a payoff curve (breakeven strikes) */
-function findZeroCrossings(curve: ReadonlyArray<PayoffPoint>): ReadonlyArray<number> {
-  const crossings: number[] = [];
-  for (let i = 1; i < curve.length; i++) {
-    const prev = curve[i - 1];
-    const curr = curve[i];
-    if (prev === undefined || curr === undefined) continue;
-    const a = prev.pl;
-    const b = curr.pl;
-    if ((a < 0 && b >= 0) || (a >= 0 && b < 0)) {
-      // Linear interpolation to find crossing
-      const x = prev.spot + (curr.spot - prev.spot) * (-a / (b - a));
-      crossings.push(x);
-    }
-  }
-  // Deduplicate crossings closer than 10 points
-  return crossings.filter(
-    (x, i, arr) => arr.findIndex((y) => Math.abs(y - x) < 10) === i,
-  );
 }
 
 /**
