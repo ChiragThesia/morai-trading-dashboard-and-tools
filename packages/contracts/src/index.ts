@@ -173,6 +173,7 @@ export type {
 // GET/PUT /api/settings/rules routes + get_rule_settings/set_rule_overrides MCP tools)
 export {
   ruleOverrides,
+  ruleConfig,
   getRuleSettingsResponse,
   setRuleOverridesRequest,
   setRuleOverridesResponse,
@@ -184,3 +185,17 @@ export type {
   SetRuleOverridesRequest,
   SetRuleOverridesResponse,
 } from "./rule-settings.ts";
+
+// Per-knob explainer registry (Phase 32, Plan 01 — B6: single typed source of trader-facing
+// knob copy, keyed by the same dotted paths ruleConfig.shape walks to).
+export { RULE_EXPLAINERS } from "./rule-explainers.ts";
+export type { RuleExplainer, RuleAffectedSurface } from "./rule-explainers.ts";
+
+// Staged-change preview contracts (Phase 32, Plan 01 — B4/B5/B7: ONE schema shared by the
+// future preview HTTP route and its MCP twin).
+export { previewRuleOverridesRequest, previewRuleOverridesResponse } from "./rule-preview.ts";
+export type {
+  PreviewRuleOverridesRequest,
+  PreviewPickerCandidate,
+  PreviewRuleOverridesResponse,
+} from "./rule-preview.ts";
