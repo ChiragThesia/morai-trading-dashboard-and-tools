@@ -68,6 +68,28 @@ describe("computePayoffDomain — the user's 7500P repro", () => {
   });
 });
 
+describe("computePayoffDomain — all positions excluded (WR-01 regression)", () => {
+  it("falls back to {spot - 500, spot + 500} when every position is excluded, not {min: spot, max: spot}", () => {
+    const positions = [
+      { ...makePosition("p1", 7000), included: false },
+      { ...makePosition("p2", 7600), included: false },
+    ];
+    const domain = computePayoffDomain(positions, 7300, paramsAt(7300));
+
+    expect(domain).toEqual({ min: 6800, max: 7800 });
+    expect(Number.isFinite(domain.min)).toBe(true);
+    expect(Number.isFinite(domain.max)).toBe(true);
+    expect(domain.max).toBeGreaterThan(domain.min);
+  });
+
+  it("falls back the same way when every position is non-convergent (both legs) rather than user-excluded", () => {
+    const positions = [{ ...makePosition("p1", 7000), frontIvStatus: "non-convergent" as const, backIvStatus: "non-convergent" as const }];
+    const domain = computePayoffDomain(positions, 7300, paramsAt(7300));
+
+    expect(domain).toEqual({ min: 6800, max: 7800 });
+  });
+});
+
 describe("computePayoffDomain — multi-position book (Pitfall 4)", () => {
   it("spans both strikes' tents simultaneously (7000 and 7600)", () => {
     const positions = [makePosition("p1", 7000), makePosition("p2", 7600)];

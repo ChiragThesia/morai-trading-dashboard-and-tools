@@ -45,8 +45,14 @@ export function computePayoffDomain(
   // bookPLAtExpiry use) may anchor the domain — an excluded or non-convergent leg must
   // not widen the tent it never draws (CR-01 domain-fitting regression, Phase 30).
   const contributing = positions.filter(includedForT0);
+  if (contributing.length === 0) {
+    // Every position excluded/non-convergent (WR-01) — same fallback as the empty-book
+    // case, never a zero-width {min: spot, max: spot} domain (that produces NaN in
+    // PayoffChart's d3 xScale).
+    return { min: spot - FALLBACK_HALF_WIDTH, max: spot + FALLBACK_HALF_WIDTH };
+  }
   const strikes = contributing.map(extractStrike);
-  const baseAnchors = strikes.length > 0 ? [...strikes, spot] : [spot];
+  const baseAnchors = [...strikes, spot];
   const baseLo = Math.min(...baseAnchors);
   const baseHi = Math.max(...baseAnchors);
 
