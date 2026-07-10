@@ -26,6 +26,7 @@ import {
 } from "jose";
 import type { JWTVerifyGetKey } from "jose";
 import { ok } from "@morai/shared";
+import { CORS_ALLOW_HEADERS, CORS_ALLOW_METHODS } from "./cors-policy.ts";
 import type { ForRunningGetGex } from "@morai/core";
 import { gexRoutes } from "./gex.routes.ts";
 import type { ForGettingStatus } from "@morai/core";
@@ -93,13 +94,15 @@ function buildAuthApp(getKey: JWTVerifyGetKey) {
   const app = new Hono();
 
   // Pitfall 7: CORS must be FIRST — before the auth group.
+  // Methods/headers come from the SHARED policy module (same one main.ts wires) so this
+  // test exercises the real policy — a hand-copied list here let a missing PUT ship (29).
   app.use(
     "/*",
     cors({
       origin: TEST_WEB_ORIGIN,
       credentials: true,
-      allowHeaders: ["Authorization", "Content-Type"],
-      allowMethods: ["GET", "POST", "OPTIONS"],
+      allowHeaders: CORS_ALLOW_HEADERS,
+      allowMethods: CORS_ALLOW_METHODS,
     }),
   );
 
@@ -247,6 +250,24 @@ describe("CORS headers (SC-4 / T-08-AUTH3 / Pitfall 7)", () => {
     });
     const allowCredentials = res.headers.get("Access-Control-Allow-Credentials");
     expect(allowCredentials).toBe("true");
+  });
+
+  it("(f) preflight for PUT from WEB_ORIGIN → Access-Control-Allow-Methods includes PUT (settings/journal writes)", async () => {
+    // Regression for the 2026-07-10 prod failure: browser PUT /api/settings/rules from
+    // morai.wtf died in preflight with "Method PUT is not allowed by
+    // Access-Control-Allow-Methods". PUT routes exist (settings, journal event rules),
+    // so the shared policy must allow it.
+    const app = buildAuthApp(keys.localJwks);
+    const res = await app.request("/api/settings/rules", {
+      method: "OPTIONS",
+      headers: {
+        Origin: TEST_WEB_ORIGIN,
+        "Access-Control-Request-Method": "PUT",
+        "Access-Control-Request-Headers": "Authorization, Content-Type",
+      },
+    });
+    const allowMethods = res.headers.get("Access-Control-Allow-Methods") ?? "";
+    expect(allowMethods).toContain("PUT");
   });
 
   it("(e) request from different origin does NOT receive WEB_ORIGIN allow-origin header", async () => {

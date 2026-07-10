@@ -70,6 +70,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createRemoteJWKSet } from "jose";
 import { makeSupabaseJwtAuth } from "./adapters/http/supabase-auth.ts";
+import { CORS_ALLOW_HEADERS, CORS_ALLOW_METHODS } from "./adapters/http/cors-policy.ts";
 import { bearerAuth } from "./adapters/mcp/bearer.ts";
 import { statusRoutes } from "./adapters/http/status.routes.ts";
 import { withRefreshExpiryWarning } from "./adapters/refresh-expiry-warner.ts";
@@ -432,8 +433,8 @@ app.use(
   cors({
     origin: config.WEB_ORIGIN,
     credentials: true,
-    allowHeaders: ["Authorization", "Content-Type"],
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: CORS_ALLOW_HEADERS,
+    allowMethods: CORS_ALLOW_METHODS,
   }),
 );
 
