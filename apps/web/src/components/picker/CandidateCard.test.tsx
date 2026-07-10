@@ -329,6 +329,120 @@ describe("CandidateCard — pasted variant (paste-redesign)", () => {
   });
 });
 
+describe("CandidateCard — scored pasted variant (Phase 30-06, D-02, Pitfall 8)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function makeScoredPastedCandidate(): PickerCandidate {
+    return {
+      id: "pasted-1",
+      name: "7500P adhoc",
+      score: 62,
+      breakdown: SHUFFLED_BREAKDOWN,
+      debit: 4585,
+      theta: 12.3,
+      vega: 45.1,
+      delta: -30.2,
+      fwdIv: 0.153,
+      fwdIvGuard: "ok",
+      slope: 0.253841,
+      fwdEdge: -0.028487,
+      expectedMove: 224.657,
+      frontEvents: [],
+      backEvents: [],
+      frontLeg: leg(7500, 0.15, 21),
+      backLeg: leg(7500, 0.16, 45),
+      context: [],
+      bucket: "standard",
+      exitPlan: {
+        profitTargetPct: 0.25,
+        stopPct: 0.175,
+        manageShortDte: 21,
+        closeByExpiry: "2026-08-02",
+        thetaCapturePct: null,
+      },
+    };
+  }
+
+  it("shows the real numeric score AND the PASTED badge when pasted=true and breakdown.length > 0", () => {
+    render(
+      <CandidateCard
+        candidate={makeScoredPastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("PASTED")).toBeTruthy();
+    expect(screen.getByText("62")).toBeTruthy();
+  });
+
+  it("shows the real theta/vega subline (not the DTE/debit/IV-only pasted subline) when scored", () => {
+    render(
+      <CandidateCard
+        candidate={makeScoredPastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(screen.getByText(/θ \+12\.3\/d/)).toBeTruthy();
+    expect(screen.getByText(/vega \+45/)).toBeTruthy();
+  });
+
+  it("renders the breakdown bars for a scored pasted card (unconditional on breakdown, untouched by this change)", () => {
+    const { container } = render(
+      <CandidateCard
+        candidate={makeScoredPastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    expect(container.querySelectorAll('[data-testid^="breakdown-bar-fill-"]').length).toBe(4);
+  });
+
+  it("still renders the remove '×' button for a scored pasted card when onRemove is provided", () => {
+    const onRemove = vi.fn();
+    render(
+      <CandidateCard
+        candidate={makeScoredPastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+        onRemove={onRemove}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("remove-pasted-pasted-1"));
+    expect(onRemove).toHaveBeenCalledWith(makeScoredPastedCandidate());
+  });
+});
+
 describe("CandidateCard — click delegation", () => {
   afterEach(() => {
     cleanup();

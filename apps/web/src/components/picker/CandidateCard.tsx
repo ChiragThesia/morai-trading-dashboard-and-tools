@@ -158,29 +158,30 @@ export function CandidateCard({
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-display text-sm font-bold text-txt">{candidate.name}</span>
-        {pasted ? (
-          <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1">
+          {pasted && (
             <span className="rounded-sm bg-violet/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-violet">
               PASTED
             </span>
-            {onRemove !== undefined && (
-              <Button
-                variant="destructive"
-                data-testid={`remove-pasted-${candidate.id}`}
-                title="Remove this pasted calendar"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove(candidate);
-                }}
-                className="px-1 text-[10px] leading-none"
-              >
-                {"×"}
-              </Button>
-            )}
-          </span>
-        ) : (
-          <span className="font-display text-sm font-bold text-violet">{candidate.score}</span>
-        )}
+          )}
+          {candidate.breakdown.length > 0 && (
+            <span className="font-display text-sm font-bold text-violet">{candidate.score}</span>
+          )}
+          {pasted && onRemove !== undefined && (
+            <Button
+              variant="destructive"
+              data-testid={`remove-pasted-${candidate.id}`}
+              title="Remove this pasted calendar"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(candidate);
+              }}
+              className="px-1 text-[10px] leading-none"
+            >
+              {"×"}
+            </Button>
+          )}
+        </span>
       </div>
 
       {!pasted && candidate.bucket === "event-calendar" && (
@@ -193,7 +194,7 @@ export function CandidateCard({
       )}
 
       <div className="mt-0.5 font-mono text-[9px] text-dim">
-        {pasted ? (
+        {candidate.breakdown.length === 0 ? (
           `DTE ${candidate.frontLeg.dte}/${candidate.backLeg.dte} · debit $${candidate.debit.toFixed(0)} · IV ${(candidate.frontLeg.iv * 100).toFixed(1)}%`
         ) : (
           <>
