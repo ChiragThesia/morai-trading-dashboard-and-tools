@@ -32,9 +32,12 @@ export const COOLDOWN_BIZDAYS = 2;
 // maxOpenTripped
 // ─────────────────────────────────────────────────────────────
 
-/** maxOpenTripped — true once open calendar count reaches MAX_OPEN_CALENDARS (>=, not >). */
-export function maxOpenTripped(openCount: number): boolean {
-  return openCount >= MAX_OPEN_CALENDARS;
+/**
+ * maxOpenTripped — true once open calendar count reaches the max (>=, not >). `max` defaults
+ * to `MAX_OPEN_CALENDARS` (29-03 runtime rule settings override seam) when omitted.
+ */
+export function maxOpenTripped(openCount: number, max?: number): boolean {
+  return openCount >= (max ?? MAX_OPEN_CALENDARS);
 }
 
 // ─────────────────────────────────────────────────────────────

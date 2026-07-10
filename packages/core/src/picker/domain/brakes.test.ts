@@ -63,6 +63,19 @@ describe("maxOpenTripped", () => {
   it("is false at 0", () => {
     expect(maxOpenTripped(0)).toBe(false);
   });
+
+  it("omitting max reproduces the MAX_OPEN_CALENDARS behavior byte-identically (29-03)", () => {
+    for (const count of [0, 5, 6, 7]) {
+      expect(maxOpenTripped(count, undefined)).toBe(maxOpenTripped(count));
+      expect(maxOpenTripped(count, MAX_OPEN_CALENDARS)).toBe(maxOpenTripped(count));
+    }
+  });
+
+  it("trips at an overridden max, not MAX_OPEN_CALENDARS (29-03)", () => {
+    expect(maxOpenTripped(8, 8)).toBe(true);
+    expect(maxOpenTripped(7, 8)).toBe(false);
+    expect(maxOpenTripped(6, 8)).toBe(false); // would trip at the default 6, but not at 8
+  });
 });
 
 // ─── cooldownActive ─────────────────────────────────────────────────────────
