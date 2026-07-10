@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 31
-current_phase_name: γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text
+current_phase_name: Risk Profile KISS redesign + macro gauges
 status: executing
-stopped_at: Completed 30-06-PLAN.md
-last_updated: "2026-07-10T18:19:57.608Z"
+stopped_at: Completed 31-01-PLAN.md
+last_updated: "2026-07-10T18:27:12.498Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 30 complete, transitioned to Phase 31
+last_activity_desc: Completed 31-01-PLAN.md (Risk Profile marker collision fix)
 progress:
   total_phases: 10
   completed_phases: 8
-  total_plans: 46
-  completed_plans: 46
-  percent: 80
+  total_plans: 49
+  completed_plans: 47
+  percent: 96
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 30 — Analyzer pasted-calendar fix
+**Current focus:** Phase 31 — Risk Profile KISS redesign + macro gauges
 
 ## Current Position
 
-Phase: 31 — Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10) — PLUS left-rail macro readability: replace raw-number rows (VIX/VVIX/ratios/HY OAS/rates) with compact linear band-gauges (bullet style: value marker on a warn/crisis-banded track; NOT circular dials — space + scannability), user proposal 2026-07-10
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-10 — Phase 30 complete, transitioned to Phase 31
+Phase: 31 (Risk Profile KISS redesign + macro gauges) — EXECUTING
+Plan: 2 of 2
+Status: Executing Phase 31 — 31-01 complete, 31-02 next
+Last activity: 2026-07-10 — Completed 31-01-PLAN.md (Risk Profile marker collision fix)
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -294,6 +294,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 30 P04 | 25min | 2 tasks | 6 files |
 | Phase 30 P05 | ~35min | 2 tasks | 7 files |
 | Phase 30 P06 | ~30min | 3 tasks | 8 files |
+| Phase 31 P01 | ~20min | 2 tasks tasks | 3 files files |
 
 ## Accumulated Context
 
@@ -439,6 +440,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 30-06: isPastedId() removed entirely -- all 4 gates (3 note-gates + Risk-profile subline) key off candidate.breakdown.length===0 instead of the pasted id
 - [Phase ?]: 30-06: a failed POST /api/picker/analyze adds no card (mirrors a parse failure) -- id/seq reservation deferred so a failed request never consumes a pasted-N sequence number
 - [Phase ?]: 30-06: apps/web has no msw dependency -- useAnalyzeCalendar.test.ts mirrors useRuleSettings.test.ts's apiFetch-mock harness instead of the plan's msw note
+- [Phase ?]: 31-01: PinnedMarker reworked from {x,label,anchorEnd} to {x,clampedTo} -- fixed-lane single-glyph edge arrows (EDGE_ARROW_LANE_Y) replace in-chart wall/flip text labels entirely (KISS collision fix, DEFECT-1)
 
 ### Pending Todos
 
@@ -495,10 +497,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T15:22:34.974Z
-Stopped at: Completed 30-06-PLAN.md
+Last session: 2026-07-10T18:27:12.487Z
+Stopped at: Completed 31-01-PLAN.md
 Resume file: 
-
-None
 
 - Plan the first v1.3 phase with /gsd-plan-phase 23 (VIX3M Ingestion)
