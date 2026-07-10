@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import { ok, err } from "@morai/shared";
 import type {
   ForRunningGetPicker,
+  ForAnalyzingAdHocCalendar,
   PickerSnapshotRow,
   ForRunningGetCalendarEventsWithRules,
   ForRunningSetRuleTags,
@@ -24,6 +25,7 @@ import type {
 } from "@morai/core";
 import {
   pickerSnapshotResponse,
+  analyzeAdHocCalendarResponse,
   getEventsWithRulesResponse,
   setRuleTagsResponse,
   exitsResponse,
@@ -35,6 +37,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import {
   registerGetPickerCandidatesTool,
+  registerAnalyzeAdHocCalendarTool,
   registerGetRuleTagsTool,
   registerSetRuleTagsTool,
   registerGetExitAdviceTool,
@@ -109,6 +112,117 @@ describe("get_picker_candidates MCP tool", () => {
 
   it("returns 'internal error' text on a storage error (never throws)", async () => {
     const text = await callGetPickerCandidates(getPickerErr);
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db connection failed");
+  });
+});
+
+// ── analyze_ad_hoc_calendar MCP tool (Phase 30, plan 30-05, D-02) ──────────────
+
+/** A fully valid analyzeAdHocCalendarRequest body (7500P calendar, no client-supplied spot). */
+const VALID_ANALYZE_ARGS = {
+  putCall: "P" as const,
+  strike: 7500,
+  frontDte: 7,
+  backDte: 30,
+  qty: 1,
+  frontIv: 0.15,
+  backIv: 0.17,
+  debit: 1.5,
+  frontExpiry: "2026-07-08",
+  backExpiry: "2026-07-29",
+};
+
+/** A scored PickerCandidateDomain the ad-hoc use-case would return for VALID_ANALYZE_ARGS. */
+const ANALYZED_CANDIDATE = {
+  id: "adhoc-5D-7500-2026-07-08-2026-07-29",
+  name: "7500P 2026-07-08 / 2026-07-29",
+  score: 62,
+  breakdown: [{ criterion: "slope" as const, weight: 40, rawValue: 0.02, contribution: 35 }],
+  debit: 150,
+  theta: 5.2,
+  vega: 12.1,
+  delta: -0.05,
+  fwdIv: 0.16,
+  fwdIvGuard: "ok" as const,
+  slope: 0.02,
+  fwdEdge: 0.01,
+  expectedMove: 90,
+  frontEvents: [],
+  backEvents: [],
+  context: [],
+  bucket: "standard" as const,
+  frontLeg: { strike: 7500, putCall: "P" as const, dte: 7, iv: 0.15 },
+  backLeg: { strike: 7500, putCall: "P" as const, dte: 30, iv: 0.17 },
+  exitPlan: {
+    profitTargetPct: 0.25,
+    stopPct: 0.175,
+    manageShortDte: 3,
+    closeByExpiry: "2026-07-08",
+    thetaCapturePct: null,
+  },
+};
+
+describe("analyze_ad_hoc_calendar MCP tool", () => {
+  it("returns the scored candidate for a valid PUT-calendar input", async () => {
+    const analyzeAdHocCalendar: ForAnalyzingAdHocCalendar = async () =>
+      ok({ scored: true, candidate: ANALYZED_CANDIDATE });
+
+    const text = await callTool(
+      (server) => registerAnalyzeAdHocCalendarTool(server, analyzeAdHocCalendar),
+      "analyze_ad_hoc_calendar",
+      VALID_ANALYZE_ARGS,
+    );
+
+    const parsed = analyzeAdHocCalendarResponse.parse(JSON.parse(text));
+    expect(parsed.scored).toBe(true);
+    expect(parsed.candidate?.id).toBe(ANALYZED_CANDIDATE.id);
+    expect(parsed.reason).toBeNull();
+  });
+
+  it("returns {scored:false, reason} when no snapshot exists yet, never throws (binding #2)", async () => {
+    const analyzeAdHocCalendar: ForAnalyzingAdHocCalendar = async () =>
+      ok({ scored: false, reason: "no-snapshot" });
+
+    const text = await callTool(
+      (server) => registerAnalyzeAdHocCalendarTool(server, analyzeAdHocCalendar),
+      "analyze_ad_hoc_calendar",
+      VALID_ANALYZE_ARGS,
+    );
+
+    const parsed = analyzeAdHocCalendarResponse.parse(JSON.parse(text));
+    expect(parsed.scored).toBe(false);
+    expect(parsed.candidate).toBeNull();
+    expect(parsed.reason).toBe("no-snapshot");
+  });
+
+  it("returns an 'invalid params' error content payload for backDte <= frontDte, never throws", async () => {
+    let called = false;
+    const analyzeAdHocCalendar: ForAnalyzingAdHocCalendar = async () => {
+      called = true;
+      return ok({ scored: true, candidate: ANALYZED_CANDIDATE });
+    };
+
+    const text = await callToolHandlerDirect(
+      (server) => registerAnalyzeAdHocCalendarTool(server, analyzeAdHocCalendar),
+      "analyze_ad_hoc_calendar",
+      { ...VALID_ANALYZE_ARGS, backDte: 5 },
+    );
+
+    expect(JSON.parse(text)).toMatchObject({ error: "invalid params" });
+    expect(called).toBe(false);
+  });
+
+  it("returns 'internal error' text on a storage error (never throws, T-30-16)", async () => {
+    const analyzeAdHocCalendar: ForAnalyzingAdHocCalendar = async () =>
+      err({ kind: "storage-error" as const, message: "db connection failed" });
+
+    const text = await callTool(
+      (server) => registerAnalyzeAdHocCalendarTool(server, analyzeAdHocCalendar),
+      "analyze_ad_hoc_calendar",
+      VALID_ANALYZE_ARGS,
+    );
+
     expect(text).toBe("internal error");
     expect(text).not.toContain("db connection failed");
   });

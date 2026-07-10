@@ -28,6 +28,8 @@ import {
   makePostgresCalendarEventAnnotationsRepo,
   makePostgresExitVerdictsRepo,
   makePostgresRuleOverridesRepo,
+  makePostgresEconomicEventsRepo,
+  makePostgresPickerHistoryRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -54,6 +56,7 @@ import {
   makeGetExitAdviceUseCase,
   makeGetRuleSettingsUseCase,
   makeSetRuleOverridesUseCase,
+  makeAnalyzeAdHocCalendarUseCase,
   resolvePickerRuleConfig,
   resolveExitRuleConfig,
   resolveRegimeRuleConfig,
@@ -63,6 +66,8 @@ import type {
   ForReadingHeldPositions,
   ForReadingLatestSnapshotPerOpenCalendar,
   LatestSnapshotForOpenCalendar,
+  GexContextForPicker,
+  GexSnapshotRow,
 } from "@morai/core";
 import { ok } from "@morai/shared";
 import { PgBoss } from "pg-boss";
@@ -300,6 +305,49 @@ const getPicker = makeGetPickerUseCase({
   readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
 });
 
+// D-02 / MCP-02 (30-05): analyze-ad-hoc-calendar use-case — shared by POST /picker/analyze +
+// the analyze_ad_hoc_calendar MCP tool. Reuses the EXISTING gexSnapshotRepo + pickerSnapshotRepo
+// + ruleOverridesRepo instances built above; economicEventsRepo/pickerHistoryRepo are the two
+// repos this route needs that no prior server use-case built yet — mirrors
+// apps/worker/src/main.ts's readGexContextForPicker/economicEventsRepo/pickerHistoryRepo wiring
+// (:544-591) exactly, so ad-hoc scoring reads the SAME shapes the engine's own compute-picker
+// job reads.
+function toAbsGammaStrike(row: GexSnapshotRow): number | null {
+  if (row.strikes.length === 0) return null;
+  const strongest = row.strikes.reduce((max, s) => (Math.abs(s.gex) > Math.abs(max.gex) ? s : max));
+  return strongest.k;
+}
+const readGexContextForPicker = async () => {
+  const result = await gexSnapshotRepo.readGexSnapshot();
+  if (!result.ok) return result;
+  if (result.value === null) return ok(null);
+  const row = result.value;
+  const context: GexContextForPicker = {
+    flip: row.flip,
+    callWall: row.callWall,
+    putWall: row.putWall,
+    netGammaAtSpot: row.netGammaAtSpot,
+    absGammaStrike: toAbsGammaStrike(row),
+    nearTermFlip: row.nearTerm?.flip ?? null,
+    nearTermCallWall: row.nearTerm?.callWall ?? null,
+    nearTermPutWall: row.nearTerm?.putWall ?? null,
+    computedAt: row.computedAt,
+  };
+  return ok(context);
+};
+const economicEventsRepo = makePostgresEconomicEventsRepo(db);
+const pickerHistoryRepo = makePostgresPickerHistoryRepo(db);
+const analyzeAdHocCalendar = makeAnalyzeAdHocCalendarUseCase({
+  readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
+  readGexContext: readGexContextForPicker,
+  readEconomicEvents: economicEventsRepo.readEconomicEvents,
+  readDailySpotCloses: pickerHistoryRepo.readDailySpotCloses,
+  readPickerSlopeHistory: pickerHistoryRepo.readPickerSlopeHistory,
+  readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
+  rate: config.BSM_RATE_FALLBACK,
+  dividendYield: config.BSM_DIVIDEND_YIELD,
+});
+
 // EXIT-08 / MCP-02 (26-05): get-exit-advice read use-case — shared by GET /api/exits +
 // get_exit_advice MCP tool over the ONE exitsResponse contract. Reuses calendarsRepo +
 // calendarSnapshotsRepo (already built above), adapted into the exits-owned
@@ -465,7 +513,8 @@ const apiRouter = new Hono()
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex))
   // PICK-02 (19-07): GET /api/picker/candidates — stored-row read (D-04, never recomputed)
-  .route("/", pickerRoutes(getPicker))
+  // D-02 (30-05): POST /api/picker/analyze — ad-hoc pasted-calendar scoring
+  .route("/", pickerRoutes(getPicker, analyzeAdHocCalendar))
   // EXIT-08 (26-05): GET /api/exits — read-time exit-advice snapshot (MCP-02)
   .route("/", exitRoutes(getExitAdvice))
   // RUNTIME-* (29-13): GET/PUT /api/settings/rules — curated rule-override surface (MCP-02)
@@ -515,6 +564,8 @@ app.route("/api", jobsGroup);
 // MAC-02 / MCP-02 (14-06): get_macro tool added here — same getMacro use-case as the HTTP route.
 // PICK-02 / MCP-02 (19-07): get_picker_candidates tool added here — same getPicker use-case
 // as the HTTP route.
+// D-02 / MCP-02 (30-05): analyze_ad_hoc_calendar tool added here — same analyzeAdHocCalendar
+// use-case as POST /api/picker/analyze.
 // BOARD-03 / MCP-02 (24-04): get_regime tool added here — same getRegimeBoard use-case as the
 // HTTP route.
 const mcpRouter = makeMcpRouter(
@@ -540,6 +591,7 @@ const mcpRouter = makeMcpRouter(
   getExitAdvice,
   getRuleSettings,
   setRuleOverrides,
+  analyzeAdHocCalendar,
 );
 app.route("", mcpRouter);
 

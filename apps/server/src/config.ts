@@ -31,6 +31,10 @@ const configSchema = z.object({
   // e.g. "http://sidecar.railway.internal:8000" on Railway; "http://localhost:8000" locally.
   // NOTE: Set this on the Railway server service (same value as the worker's SIDECAR_URL).
   SIDECAR_URL: z.string().url("SIDECAR_URL must be a valid URL"),
+  // Phase 30 (30-05): ad-hoc analyze use-case BSM inputs — same defaults as the worker's
+  // compute-picker wiring (config.ts), so pasted-calendar scoring matches engine scoring.
+  BSM_DIVIDEND_YIELD: z.coerce.number().nonnegative().default(0.013),
+  BSM_RATE_FALLBACK: z.coerce.number().nonnegative().default(0.045),
 });
 
 export type Config = z.infer<typeof configSchema>;

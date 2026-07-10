@@ -13,6 +13,7 @@ import type {
   ForRunningGetMacro,
   ForRunningGetRegimeBoard,
   ForRunningGetPicker,
+  ForAnalyzingAdHocCalendar,
   ForGettingPositions,
   ForGettingTransactions,
   ForGettingOrders,
@@ -37,6 +38,7 @@ import {
   registerGetMacroTool,
   registerGetRegimeTool,
   registerGetPickerCandidatesTool,
+  registerAnalyzeAdHocCalendarTool,
   registerGetPositionsTool,
   registerGetTransactionsTool,
   registerGetOrdersTool,
@@ -90,6 +92,9 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  * RUNTIME-* / MCP-02 (Phase 29, 29-13): get_rule_settings + set_rule_overrides registered
  *         here — share getRuleSettingsResponse/setRuleOverridesRequest/setRuleOverridesResponse
  *         with GET/PUT /api/settings/rules; injected as optional for backward compat.
+ * D-02 / MCP-02 (Phase 30, 30-05): analyze_ad_hoc_calendar registered here — shares
+ *         analyzeAdHocCalendarRequest/Response with POST /api/picker/analyze; injected as
+ *         optional for backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -114,6 +119,7 @@ export function makeMcpRouter(
   getExitAdvice?: ForRunningGetExitAdvice,
   getRuleSettings?: ForRunningGetRuleSettings,
   setRuleOverrides?: ForRunningSetRuleOverrides,
+  analyzeAdHocCalendar?: ForAnalyzingAdHocCalendar,
 ): Hono {
   const router = new Hono();
 
@@ -149,6 +155,11 @@ export function makeMcpRouter(
     // is available (Phase 19)
     if (getPicker !== undefined) {
       registerGetPickerCandidatesTool(server, getPicker);
+    }
+    // D-02 / MCP-02: analyze_ad_hoc_calendar tool — optional, wired when the
+    // analyzeAdHocCalendar use-case is available (Phase 30, 30-05)
+    if (analyzeAdHocCalendar !== undefined) {
+      registerAnalyzeAdHocCalendarTool(server, analyzeAdHocCalendar);
     }
     // BRK-02 / MCP-02: trader data tools (optional — wired when trader adapters are available)
     if (getPositions !== undefined) {

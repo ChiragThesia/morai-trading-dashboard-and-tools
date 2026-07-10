@@ -16,6 +16,8 @@ import {
   macroQuery,
   regimeResponse,
   pickerSnapshotResponse,
+  analyzeAdHocCalendarRequest,
+  analyzeAdHocCalendarResponse,
   getEventsWithRulesResponse,
   setRuleTagsRequest,
   setRuleTagsResponse,
@@ -40,6 +42,7 @@ import type {
   ForGettingTransactions,
   ForGettingOrders,
   ForRunningGetPicker,
+  ForAnalyzingAdHocCalendar,
   ForRunningGetCalendarEventsWithRules,
   ForRunningSetRuleTags,
   ForRunningGetCalendarLifecycle,
@@ -618,6 +621,63 @@ export function registerGetPickerCandidatesTool(
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerAnalyzeAdHocCalendarTool — registers the analyze_ad_hoc_calendar MCP tool
+ * (Phase 30, D-02).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: safeParse args (the SAME analyzeAdHocCalendarRequest schema used by
+ * POST /api/picker/analyze, incl. the 30-03 `.strict()`/backDte>frontDte refine) → call
+ * use-case → map Result → parse through analyzeAdHocCalendarResponse → return content.
+ *
+ * MCP-02: the SAME analyzeAdHocCalendarRequest/Response schemas used by the HTTP route are
+ * used here. A one-sided field rename fails `bun run typecheck`.
+ *
+ * Binding #2 (D-02): scored:false (context unavailable, e.g. no stored snapshot) is still a
+ * structured, successful payload — never a thrown error.
+ * T-30-16: a StorageError maps to flat "internal error" text — no DB internals leaked.
+ */
+export function registerAnalyzeAdHocCalendarTool(
+  server: McpServer,
+  analyzeAdHocCalendar: ForAnalyzingAdHocCalendar,
+): void {
+  server.registerTool(
+    "analyze_ad_hoc_calendar",
+    {
+      title: "Analyze Ad-Hoc Calendar",
+      description:
+        "Scores one pasted (TOS-order) PUT calendar through the real picker engine, reusing the latest stored snapshot's gate/sizing/context. Returns {scored:true, candidate} with a full engine-scored candidate, or {scored:false, reason} when scoring context is unavailable (e.g. no snapshot yet) — never a hard error.",
+      inputSchema: analyzeAdHocCalendarRequest.shape,
+    },
+    async (args) => {
+      // Reuse the SAME analyzeAdHocCalendarRequest schema as the HTTP route body (MCP-02) —
+      // the 30-03 refines (backDte>frontDte, .strict() no-spot) run here identically.
+      const parsed = analyzeAdHocCalendarRequest.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "invalid params" }) }],
+        };
+      }
+
+      const result = await analyzeAdHocCalendar(parsed.data);
+      if (!result.ok) {
+        // T-30-16: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      // Binding #2: both scored:true and scored:false are a structured success payload.
+      const analysis = result.value;
+      const payload = analysis.scored
+        ? { scored: true as const, candidate: analysis.candidate, reason: null }
+        : { scored: false as const, candidate: null, reason: analysis.reason };
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(analyzeAdHocCalendarResponse.parse(payload)) }],
       };
     },
   );
