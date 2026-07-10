@@ -344,14 +344,19 @@ Plans:
 
 ### Phase 30: Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent (both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut), and pasted calendars must get real entry analysis (engine scoring) instead of 'Pasted calendar — not engine-scored' in WHY THIS CALENDAR / ENTRY-EXIT PLAN panels
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Analyzer pasted calendars fit the payoff graph to their full tent (both tails + both breakevens, no fixed 6900–7900) and receive real engine scoring — score + factor bars + θ GATE chip + entry-gate verdict + exit plan — identical to engine-suggested candidates; PUT calendars this phase, calls + context-unavailable pastes keep the honest unscored fallback.
+**Requirements**: user-added defect-fix phase (no REQ IDs) — D-01 (payoff x-domain fit), D-02 (ad-hoc engine scoring)
 **Depends on:** Phase 29
-**Plans:** 0 plans
+**Plans:** 6 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 30 to break down)
+- [ ] 30-01-PLAN.md — Domain-fit primitives: computePayoffDomain + domain-aware scenario grid + PayoffChart domain prop (D-01)
+- [ ] 30-02-PLAN.md — Thread the domain into Analyzer + Overview payoff charts; combined-book non-regression (D-01)
+- [ ] 30-03-PLAN.md — Analyze request/response contracts + extracted resolveEventExit helper (D-02)
+- [ ] 30-04-PLAN.md — makeAnalyzeAdHocCalendarUseCase: score one ad-hoc PUT calendar with engine parity, reused gate/sizing (D-02)
+- [ ] 30-05-PLAN.md — POST /api/picker/analyze route + analyze_ad_hoc_calendar MCP tool + server wiring (D-02)
+- [ ] 30-06-PLAN.md — Client paste flow: ISO expiries + useAnalyzeCalendar hook + breakdown-gated panels + CandidateCard fix (D-02)
 
 ### Phase 31: Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10) — PLUS left-rail macro readability: replace raw-number rows (VIX/VVIX/ratios/HY OAS/rates) with compact linear band-gauges (bullet style: value marker on a warn/crisis-banded track; NOT circular dials — space + scannability), user proposal 2026-07-10
 
