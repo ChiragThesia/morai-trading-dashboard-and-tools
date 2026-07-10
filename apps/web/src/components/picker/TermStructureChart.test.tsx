@@ -1,14 +1,20 @@
 /**
- * TermStructureChart.test.tsx — TDD RED for the picker's "Term structure + your legs" mini-chart
- * (ANLZ-03, D-01b). Covers the UI-SPEC contract: term-structure polyline, amber event markers,
- * front/back leg dots, the forward-IV bracket (present for a normal candidate), and the
- * guard-case bracket omission + `guard` tag (T-18-10: no throw/NaN/fabricated bracket).
+ * TermStructureChart.test.tsx — re-expressed against the Recharts DOM (33-04). Covers the
+ * UI-SPEC contract: term-structure Line, amber event ReferenceLines, front/back leg
+ * ReferenceDots, the forward-IV bracket (ReferenceLine segment, present for a normal
+ * candidate), and the guard-case bracket omission + `guard` tag (T-18-10: no throw/NaN/
+ * fabricated bracket). Coordinate-exact leg-dot assertions (33-03-era xScale/yScale) are
+ * re-expressed to color + relative-position intent — Recharts owns the scale math now.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import { mockResponsiveContainer } from "../test/recharts-test-utils.tsx";
+
+mockResponsiveContainer();
+
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { PickerCandidate } from "@morai/contracts";
-import { TermStructureChart, xScale, yScale } from "./TermStructureChart.tsx";
+import { TermStructureChart } from "./TermStructureChart.tsx";
 
 const { termStructure, events } = pickerSnapshotFixture;
 const ASOF = pickerSnapshotFixture.asOf; // "2026-07-02" — reference date the DTE fields are relative to
@@ -47,20 +53,21 @@ describe("TermStructureChart — term line + event markers + leg dots", () => {
     expect(legend.textContent).toContain("◂b");
   });
 
-  it("renders the front leg dot at the correct x/y (coral, DTE/IV-scaled)", () => {
+  it("renders the front leg dot coral, left of the back leg dot (front DTE < back DTE)", () => {
     render(<TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />);
-    const dot = screen.getByTestId("term-structure-leg-dot-front");
-    expect(Number(dot.getAttribute("cx"))).toBeCloseTo(xScale(NORMAL.frontLeg.dte), 5);
-    expect(Number(dot.getAttribute("cy"))).toBeCloseTo(yScale(NORMAL.frontLeg.iv), 5);
-    expect(dot.getAttribute("fill")).toBe("#ef5350");
+    const front = screen.getByTestId("term-structure-leg-dot-front");
+    const back = screen.getByTestId("term-structure-leg-dot-back");
+    expect(front.getAttribute("fill")).toBe("#ef5350");
+    expect(Number(front.getAttribute("cx"))).toBeLessThan(Number(back.getAttribute("cx")));
   });
 
-  it("renders the back leg dot at the correct x/y (teal, DTE/IV-scaled)", () => {
+  it("renders the back leg dot teal, higher than the front leg dot (back IV > front IV)", () => {
     render(<TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />);
-    const dot = screen.getByTestId("term-structure-leg-dot-back");
-    expect(Number(dot.getAttribute("cx"))).toBeCloseTo(xScale(NORMAL.backLeg.dte), 5);
-    expect(Number(dot.getAttribute("cy"))).toBeCloseTo(yScale(NORMAL.backLeg.iv), 5);
-    expect(dot.getAttribute("fill")).toBe("#26a69a");
+    const front = screen.getByTestId("term-structure-leg-dot-front");
+    const back = screen.getByTestId("term-structure-leg-dot-back");
+    expect(back.getAttribute("fill")).toBe("#26a69a");
+    // Higher IV sits higher on the chart, i.e. a smaller pixel y.
+    expect(Number(back.getAttribute("cy"))).toBeLessThan(Number(front.getAttribute("cy")));
   });
 });
 
@@ -71,17 +78,13 @@ describe("TermStructureChart — event placement is driven by asOf (WR-03)", () 
     const ev = [{ date: "2026-07-22", name: "TEST" }];
 
     render(<TermStructureChart termStructure={termStructure} events={ev} asOf="2026-07-02" candidate={NORMAL} />);
-    const earlyLine = screen
-      .getByTestId("term-structure-event-2026-07-22-TEST")
-      .querySelector("line");
-    const earlyX = Number(earlyLine?.getAttribute("x1"));
+    const earlyLine = screen.getByTestId("term-structure-event-2026-07-22-TEST");
+    const earlyX = Number(earlyLine.getAttribute("x1"));
     cleanup();
 
     render(<TermStructureChart termStructure={termStructure} events={ev} asOf="2026-07-12" candidate={NORMAL} />);
-    const lateLine = screen
-      .getByTestId("term-structure-event-2026-07-22-TEST")
-      .querySelector("line");
-    const lateX = Number(lateLine?.getAttribute("x1"));
+    const lateLine = screen.getByTestId("term-structure-event-2026-07-22-TEST");
+    const lateX = Number(lateLine.getAttribute("x1"));
 
     // A later snapshot date → smaller DTE for the same absolute event → smaller x.
     // Only holds if placement is driven by the passed asOf, not a module constant.
@@ -95,7 +98,7 @@ describe("TermStructureChart — forward-IV bracket (normal candidate)", () => {
   it("renders a forward-IV bracket between the two leg x-positions", () => {
     render(<TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />);
     const bracket = screen.getByTestId("term-structure-fwd-bracket");
-    expect(bracket).toBeTruthy();
+    expect(bracket.getAttribute("stroke")).toBe("#5b9cf6");
     expect(screen.queryByTestId("term-structure-guard-tag")).toBeNull();
   });
 });
@@ -120,11 +123,14 @@ describe("TermStructureChart — guard case (fwdIv null, T-18-10)", () => {
   });
 
   it("renders the guard tag ON-canvas (not clipped above the viewport) — WR-02", () => {
-    // The guard candidate's front IV (0.155) sits at the very top of the IV axis, so
-    // Math.min(frontY, backY) - 18 pushes the tag above y=0 and the SVG viewport clips
-    // it — the one cue the guard branch exists to show. The tag must stay in [0, H].
-    const H = 150;
-    render(<TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={GUARD} />);
+    // GUARD's front IV (0.155) sits at the very top of the fixed IV axis, so the naive
+    // placement (min(frontY, backY) - 22px) would push the tag above the plot area — the
+    // guard branch clamps it back on-canvas, the one cue this branch exists to show.
+    const { container } = render(
+      <TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={GUARD} />,
+    );
+    const svg = container.querySelector(".recharts-surface");
+    const chartHeight = Number(svg?.getAttribute("height"));
     const tag = screen.getByTestId("term-structure-guard-tag");
     const rect = tag.querySelector("rect");
     const text = tag.querySelector("text");
@@ -134,8 +140,8 @@ describe("TermStructureChart — guard case (fwdIv null, T-18-10)", () => {
     const rectH = Number(rect?.getAttribute("height"));
     const textY = Number(text?.getAttribute("y"));
     expect(rectY).toBeGreaterThanOrEqual(0);
-    expect(rectY + rectH).toBeLessThanOrEqual(H);
+    expect(rectY + rectH).toBeLessThanOrEqual(chartHeight);
     expect(textY).toBeGreaterThanOrEqual(0);
-    expect(textY).toBeLessThanOrEqual(H);
+    expect(textY).toBeLessThanOrEqual(chartHeight);
   });
 });
