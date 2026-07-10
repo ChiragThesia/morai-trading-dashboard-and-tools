@@ -23,6 +23,9 @@ export type {
   ForReadingPickerSlopeHistory,
   ForRunningComputePicker,
   ForRunningGetPicker,
+  AdHocCalendarInput,
+  AdHocCalendarAnalysis,
+  ForAnalyzingAdHocCalendar,
 } from "./application/ports.ts";
 
 // PICK-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
@@ -32,6 +35,10 @@ export { makeGetPickerUseCase } from "./application/getPicker.ts";
 // PICK-01/PICK-03 (19-08): compute-picker use-case — chain-triggered by compute-gex-snapshot
 // (D-04); reads chain+GEX+events, scores candidates, persists exactly one snapshot row.
 export { makeComputePickerSnapshotUseCase } from "./application/computePickerSnapshot.ts";
+// D-02 (30-04): ad-hoc analyze use-case — scores ONE user-pasted PUT calendar through the
+// SAME engine path as auto-surfaced candidates (T-30-10 parity); the ONE apps→core wiring
+// point 30-05's HTTP route + MCP tool need.
+export { makeAnalyzeAdHocCalendarUseCase } from "./application/analyzeAdHocCalendar.ts";
 // PICK-04 (27-02): additive reuse exports — the backtest harness must reuse (never
 // reimplement) these pure picker domain functions/types. Zero live-behavior change; every
 // live call site is unaffected by this barrel wiring.

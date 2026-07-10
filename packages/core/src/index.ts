@@ -377,12 +377,18 @@ export type {
   ForReadingPickerSlopeHistory,
   ForRunningComputePicker,
   ForRunningGetPicker,
+  AdHocCalendarInput,
+  AdHocCalendarAnalysis,
+  ForAnalyzingAdHocCalendar,
 } from "./picker/index.ts";
 // PICK-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
 // get_picker_candidates MCP tool over the ONE pickerSnapshotResponse contract (MCP-02).
 export { makeGetPickerUseCase } from "./picker/index.ts";
 // PICK-01/PICK-03 (19-08): compute-picker use-case — chain-triggered by compute-gex-snapshot (D-04).
 export { makeComputePickerSnapshotUseCase } from "./picker/index.ts";
+// D-02 (30-04): ad-hoc analyze use-case — scores ONE user-pasted PUT calendar with byte-parity
+// to the engine (T-30-10); the 30-05 HTTP route + MCP tool import this from @morai/core.
+export { makeAnalyzeAdHocCalendarUseCase } from "./picker/index.ts";
 // PICK-04 (27-02): additive reuse exports — the backtest harness reuses these SAME pure
 // picker domain functions (BT-01's "zero reimplementation" lock), not a second copy. No
 // live call site changes; every existing picker test stays green.

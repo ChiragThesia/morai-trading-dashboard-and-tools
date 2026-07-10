@@ -1,22 +1,23 @@
 /**
- * analyzeAdHocCalendar tests (Phase 30, Plan 04, Task 1, D-02) — per tdd.md's numerical-code
- * rule (fast-check property test) plus example tests for the core scoring parity guarantee.
+ * analyzeAdHocCalendar tests (Phase 30, Plan 04, D-02) — per tdd.md's numerical-code rule
+ * (fast-check property test) plus example tests for scoring parity, degradation, and port
+ * hygiene.
  *
  * Covers:
- *   - Byte-parity vs `scoreCalendarCandidates` on the equivalent RawCandidate (fast-check over
- *     strike/iv/dte/debit ranges) -- T-30-10.
- *   - Gate-penalty parity: score(0.5) = round(0.5 * score(1)) -- A3.
- *   - Stale-events zeroing: eventsContextStatus !== "ok" -> eventAdjustment zeroed -- D-17.
- *   - Flat-IV paste (frontIv === backIv) surfaces slope rawValue 0 honestly -- Pitfall 6.
- *   - readPickerSnapshot StorageError propagates unchanged, never a throw.
- *
- * Task 2 (degradation, gate-blocked-still-scores, port hygiene) lands in a follow-up commit
- * in this same file.
+ *   - Task 1: byte-parity vs `scoreCalendarCandidates` on the equivalent RawCandidate
+ *     (fast-check over strike/iv/dte/debit ranges, T-30-10); gate-penalty parity (A3);
+ *     stale-events zeroing (D-17); flat-IV slope surfaced honestly (Pitfall 6);
+ *     readPickerSnapshot StorageError propagates unchanged.
+ *   - Task 2: no-snapshot degradation (ok({scored:false, reason:"no-snapshot"}), no throw, no
+ *     extra reads fire); gate BLOCKED still scores (binding #1 — never hide the analysis); port
+ *     hygiene (deps structurally exclude the cohort-gate reads; call-count spy on the 6 reads
+ *     actually provided, T-30-09).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fc from "fast-check";
 import { ok, err } from "@morai/shared";
+import type { Result } from "@morai/shared";
 import { bsmGreeks } from "@morai/quant";
 import { makeAnalyzeAdHocCalendarUseCase } from "./analyzeAdHocCalendar.ts";
 import type { AnalyzeAdHocCalendarDeps } from "./analyzeAdHocCalendar.ts";
@@ -270,5 +271,89 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
     const deps = makeDeps({ readPickerSnapshot: async () => err(storageError) });
     const result = await makeAnalyzeAdHocCalendarUseCase(deps)(SAMPLE_INPUT);
     expect(result).toEqual(err(storageError));
+  });
+
+  it("no snapshot yet -> ok({scored:false, reason:'no-snapshot'}), never a throw, no further reads fire (D-02)", async () => {
+    const readPickerSnapshot = vi.fn(async (): Promise<Result<PickerSnapshotRow | null, StorageError>> => ok(null));
+    const readGexContext = vi.fn(async (): Promise<Result<GexContextForPicker | null, StorageError>> => ok(null));
+    const readEconomicEvents = vi.fn(
+      async (): Promise<Result<ReadonlyArray<EconomicEvent>, StorageError>> => ok([]),
+    );
+    const readRuleOverrides = vi.fn(
+      async (): Promise<Result<StoredRuleOverrides, StorageError>> => ok(EMPTY_OVERRIDES),
+    );
+    const deps = makeDeps({ readPickerSnapshot, readGexContext, readEconomicEvents, readRuleOverrides });
+
+    const result = await makeAnalyzeAdHocCalendarUseCase(deps)(SAMPLE_INPUT);
+    expect(result).toEqual(ok({ scored: false, reason: "no-snapshot" }));
+    expect(readPickerSnapshot).toHaveBeenCalledTimes(1);
+    expect(readGexContext).not.toHaveBeenCalled();
+    expect(readEconomicEvents).not.toHaveBeenCalled();
+    expect(readRuleOverrides).not.toHaveBeenCalled();
+  });
+
+  it("gate BLOCKED still returns scored:true with the penalty applied (binding #1 -- never hide the analysis)", async () => {
+    const blockedGate: PickerGate = { ...OPEN_GATE, state: "blocked", penaltyMultiplier: 0, reasons: ["vixBlocked"] };
+    const deps = makeDeps({ readPickerSnapshot: async () => ok(snapshotRow({ gate: blockedGate })) });
+    const result = await makeAnalyzeAdHocCalendarUseCase(deps)(SAMPLE_INPUT);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.scored).toBe(true);
+    if (!result.value.scored) return;
+    expect(result.value.candidate.score).toBe(0); // penaltyMultiplier 0 -- still an analysis, not a withheld one.
+  });
+
+  it("port hygiene: deps structurally exclude the cohort-gate reads (T-30-09) and only the 6 provided reads fire", async () => {
+    const readPickerSnapshot = vi.fn(async (): Promise<Result<PickerSnapshotRow | null, StorageError>> =>
+      ok(snapshotRow()),
+    );
+    const readGexContext = vi.fn(
+      async (): Promise<Result<GexContextForPicker | null, StorageError>> => ok(GEX_CONTEXT),
+    );
+    const readEconomicEvents = vi.fn(
+      async (): Promise<Result<ReadonlyArray<EconomicEvent>, StorageError>> => ok([]),
+    );
+    const readDailySpotCloses = vi.fn(
+      async (): Promise<Result<ReadonlyArray<number>, StorageError>> => ok([]),
+    );
+    const readPickerSlopeHistory = vi.fn(
+      async (): Promise<Result<ReadonlyArray<number>, StorageError>> => ok([]),
+    );
+    const readRuleOverrides = vi.fn(
+      async (): Promise<Result<StoredRuleOverrides, StorageError>> => ok(EMPTY_OVERRIDES),
+    );
+    const deps: AnalyzeAdHocCalendarDeps = {
+      readPickerSnapshot,
+      readGexContext,
+      readEconomicEvents,
+      readDailySpotCloses,
+      readPickerSlopeHistory,
+      readRuleOverrides,
+      rate: R,
+      dividendYield: Q,
+    };
+    // Structural hygiene: `AnalyzeAdHocCalendarDeps` has exactly these 8 fields -- no
+    // resolveEntryGate/readChainForPicker/readMacroObservations/readOpenCalendars/
+    // readRecentClosedCalendars can even be threaded in (compile-time exclusion, T-30-09).
+    expect(Object.keys(deps).sort()).toEqual(
+      [
+        "dividendYield",
+        "rate",
+        "readDailySpotCloses",
+        "readEconomicEvents",
+        "readGexContext",
+        "readPickerSlopeHistory",
+        "readPickerSnapshot",
+        "readRuleOverrides",
+      ].sort(),
+    );
+
+    await makeAnalyzeAdHocCalendarUseCase(deps)(SAMPLE_INPUT);
+    expect(readPickerSnapshot).toHaveBeenCalledTimes(1);
+    expect(readGexContext).toHaveBeenCalledTimes(1);
+    expect(readEconomicEvents).toHaveBeenCalledTimes(1);
+    expect(readDailySpotCloses).toHaveBeenCalledTimes(1);
+    expect(readPickerSlopeHistory).toHaveBeenCalledTimes(1);
+    expect(readRuleOverrides).toHaveBeenCalledTimes(1);
   });
 });
