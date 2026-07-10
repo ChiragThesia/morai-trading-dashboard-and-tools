@@ -39,6 +39,15 @@ export { makeComputePickerSnapshotUseCase } from "./application/computePickerSna
 // SAME engine path as auto-surfaced candidates (T-30-10 parity); the ONE apps→core wiring
 // point 30-05's HTTP route + MCP tool need.
 export { makeAnalyzeAdHocCalendarUseCase } from "./application/analyzeAdHocCalendar.ts";
+// B1 (32-02): picker branch of the staged-change dry-run preview — re-scores the latest
+// stored snapshot's candidates against staged picker overrides, never persists, never reads
+// the chain (T-32-01). Top-level @morai/core barrel wiring is Plan 04's own scope.
+export { makePreviewPickerRuleOverridesUseCase } from "./application/previewPickerRuleOverrides.ts";
+export type {
+  ForPreviewingPickerRuleOverrides,
+  PickerPreviewDeps,
+  PickerPreviewResult,
+} from "./application/ports.ts";
 // PICK-04 (27-02): additive reuse exports — the backtest harness must reuse (never
 // reimplement) these pure picker domain functions/types. Zero live-behavior change; every
 // live call site is unaffected by this barrel wiring.
