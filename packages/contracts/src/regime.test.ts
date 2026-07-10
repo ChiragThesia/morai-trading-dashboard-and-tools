@@ -13,6 +13,8 @@ const validIndicator = {
   label: "VIX/VIX3M",
   value: 0.87,
   band: "calm",
+  bandWarn: 0.9,
+  bandCrisis: 0.95,
   asOf: "2026-07-09",
   source: "FRED VIXCLS/VXVCLS",
   rationale: "warn >=0.90, crisis >=0.95 — systemtrader.co backwardation study",
@@ -57,6 +59,18 @@ describe("regimeIndicator", () => {
       ...validIndicator,
       inputs: { vix: "16.2" },
     });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an indicator missing bandWarn — required, not optional (T-31-04)", () => {
+    const { bandWarn: _bandWarn, ...withoutBandWarn } = validIndicator;
+    const result = regimeIndicator.safeParse(withoutBandWarn);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an indicator missing bandCrisis — required, not optional (T-31-04)", () => {
+    const { bandCrisis: _bandCrisis, ...withoutBandCrisis } = validIndicator;
+    const result = regimeIndicator.safeParse(withoutBandCrisis);
     expect(result.success).toBe(false);
   });
 });

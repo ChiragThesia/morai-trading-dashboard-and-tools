@@ -332,6 +332,8 @@ const regimeIndicator = {
   label: "VIX/VIX3M Term Structure",
   value: 0.9,
   band: "warning" as const,
+  bandWarn: 0.9,
+  bandCrisis: 0.95,
   asOf: "2026-07-07",
   source: "eco3min.fr",
   rationale: "0.90 warn / 0.95 crisis.",

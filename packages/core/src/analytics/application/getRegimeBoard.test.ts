@@ -59,6 +59,8 @@ describe("makeGetRegimeBoardUseCase", () => {
       expect(indicator).toBeDefined();
       expect(indicator?.value).toBeCloseTo(0.9);
       expect(indicator?.band).toBe("warning");
+      expect(indicator?.bandWarn).toBe(0.9);
+      expect(indicator?.bandCrisis).toBe(0.95);
       // OLDER of 2026-07-08 (VIXCLS latest) and 2026-07-07 (VXVCLS latest) = 2026-07-07
       expect(indicator?.asOf).toBe("2026-07-07");
       expect(indicator?.inputs).toEqual({ VIXCLS: 18.0, VXVCLS: 20.0 });
@@ -76,6 +78,8 @@ describe("makeGetRegimeBoardUseCase", () => {
       const indicator = result.value.find((i) => i.id === "vvix");
       expect(indicator?.value).toBe(89.0);
       expect(indicator?.band).toBe("calm");
+      expect(indicator?.bandWarn).toBe(100);
+      expect(indicator?.bandCrisis).toBe(115);
       expect(indicator?.asOf).toBe("2026-07-08");
       expect(indicator?.inputs).toEqual({ VVIX: 89.0 });
     }
@@ -92,6 +96,8 @@ describe("makeGetRegimeBoardUseCase", () => {
       const indicator = result.value.find((i) => i.id === "vix9d-vix");
       expect(indicator?.value).toBeCloseTo(1.1);
       expect(indicator?.band).toBe("crisis");
+      expect(indicator?.bandWarn).toBe(1.0);
+      expect(indicator?.bandCrisis).toBe(1.1);
       expect(indicator?.asOf).toBe("2026-07-08");
       expect(indicator?.inputs).toEqual({ VIX9D: 19.8, VIXCLS: 18.0 });
     }
@@ -108,6 +114,8 @@ describe("makeGetRegimeBoardUseCase", () => {
       const indicator = result.value.find((i) => i.id === "hy-oas");
       expect(indicator?.value).toBe(3.5);
       expect(indicator?.band).toBe("warning");
+      expect(indicator?.bandWarn).toBe(3.0);
+      expect(indicator?.bandCrisis).toBe(5.0);
       expect(indicator?.asOf).toBe("2026-07-06");
       expect(indicator?.inputs).toEqual({ BAMLH0A0HYM2: 3.5 });
     }
@@ -231,6 +239,23 @@ describe("makeGetRegimeBoardUseCase", () => {
     if (result.ok) {
       const indicator = result.value.find((i) => i.id === "vvix");
       expect(indicator?.band).toBe("warning");
+    }
+  });
+
+  it("a regime override shifts bandWarn on the response — proves the field tracks effective config, not a constant (T-31-04)", async () => {
+    const readMacroObservations: ForReadingMacroObservations = async () => ok(FULL_ROWS);
+    const readRuleOverrides: ForReadingRuleOverrides = async () =>
+      ok({ regime: { vvixWarn: 80, vvixCrisis: 110 } });
+    const getRegimeBoard = makeGetRegimeBoardUseCase({ readMacroObservations, readRuleOverrides });
+
+    const result = await getRegimeBoard();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const indicator = result.value.find((i) => i.id === "vvix");
+      // default VVIX_WARN=100/VVIX_CRISIS=115 (regime.ts) — the override values must win.
+      expect(indicator?.bandWarn).toBe(80);
+      expect(indicator?.bandCrisis).toBe(110);
     }
   });
 
