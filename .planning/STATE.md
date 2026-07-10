@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 29
-current_phase_name: entry/picker weights + bands, exit advisor rungs, regime bands
+current_phase: 30
+current_phase_name: Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent, pasted calendars get real engine entry analysis
 status: executing
-stopped_at: Completed 30-02-PLAN.md
-last_updated: "2026-07-10T14:27:02.934Z"
+stopped_at: Completed 30-04-PLAN.md
+last_updated: "2026-07-10T14:45:44.455Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 28 complete, transitioned to Phase 29
+last_activity_desc: 30-04 (ad-hoc analyze use-case, D-02) complete — byte-parity scoring proven via fast-check
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 46
   completed_plans: 44
-  percent: 70
+  percent: 96
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 29 — Runtime Rule Settings — curated ~20-knob settings surface (entry/picker weights + bands, exit advisor rungs, regime bands) stored as JSONB overrides over code defaults, gear-icon modal in top bar
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-10 — Phase 28 complete, transitioned to Phase 29
+Phase: 30 — Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent, pasted calendars get real engine entry analysis (D-01 domain-fit + D-02 ad-hoc scoring)
+Plan: 04 of 06 complete (next: 30-05, HTTP/MCP adapters)
+Status: In progress
+Last activity: 2026-07-10 — 30-04 (ad-hoc analyze use-case, D-02) complete — byte-parity scoring proven via fast-check
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -289,6 +289,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 30 P01 | 15min | 3 tasks | 8 files |
 | Phase 30 P03 | 8min | 2 tasks | 5 files |
 | Phase 30 P02 | 12min | 2 tasks | 6 files |
+| Phase 30 P04 | 25min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -426,6 +427,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 30-03]: resolveEventExit extracted verbatim (same day-number math, same earliest-event selection) into an exported pure function; selectCandidates calls it with zero behavior change
 - [Phase 30-03]: barrel-exported both new contract schemas through packages/contracts/src/index.ts (plumbing not itemized in files_modified) so 30-04/30-05 can import them from @morai/contracts
 - [Phase 30-02]: computePayoffDomain's strike anchors are filtered through includedForT0 — an excluded/non-convergent position must not widen the domain since it never contributes to either curve
+- [Phase 30]: 30-04: no application/index.ts barrel created -- no such file exists anywhere in this codebase; re-exports land in picker/index.ts + top-level packages/core/src/index.ts matching every other bounded context's precedent
+- [Phase 30]: 30-04: isPickerRuleOverrides exported from computePickerSnapshot.ts alongside toPickerCandidateDomain/applyGatePenalty/zeroEventAdjustment so the ad-hoc use-case resolves fresh rule overrides via the SAME narrowing logic, never a second copy
 
 ### Pending Todos
 
@@ -482,8 +485,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T14:26:48.108Z
-Stopped at: Completed 30-02-PLAN.md
+Last session: 2026-07-10T14:45:44.443Z
+Stopped at: Completed 30-04-PLAN.md
 Resume file: 
 
 None
