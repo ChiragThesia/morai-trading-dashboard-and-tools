@@ -133,3 +133,7 @@ None — no external service configuration required.
 ---
 *Phase: 29-runtime-rule-settings*
 *Completed: 2026-07-10*
+
+## Self-Check: PASSED
+
+All 5 created/modified files found on disk; all 3 commit hashes (`641db88`, `10fc1c7`, `ad7e7ca`) found in git log.
