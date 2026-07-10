@@ -389,7 +389,7 @@ re-evaluating open-position exit verdicts, and client-side re-banding regime val
 sees what each change will do before committing. Knob semantics unchanged; preview never persists.
 **Requirements**: none (user-added phase; covered by 32-CONTEXT locked decisions B1–B9)
 **Depends on:** Phase 31
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -401,7 +401,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 32-04-PLAN.md — Combined preview use-case + POST /api/settings/rules/preview + MCP twin + wiring
-- [ ] 32-05-PLAN.md — Modal explainer surface: per-knob captions/popovers + affected-surface tags (Tooltip first consumer)
+- [x] 32-05-PLAN.md — Modal explainer surface: per-knob captions/popovers + affected-surface tags (Tooltip first consumer)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
