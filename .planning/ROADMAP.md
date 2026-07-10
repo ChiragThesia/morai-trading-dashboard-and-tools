@@ -307,7 +307,7 @@ by a gear-icon modal in the top bar grouped by engine with reset-to-defaults per
 an override reproduces today's behavior byte-identically (backtest leakage-oracle safe).
 **Requirements**: none mapped — user-added phase; scope defined by 29-CONTEXT.md locked decisions
 **Depends on:** Phase 28
-**Plans:** 7/14 plans executed
+**Plans:** 8/14 plans executed
 
 Plans:
 **Wave 1**
@@ -322,7 +322,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 29-07-PLAN.md — resolvePickerRuleConfig merge fn (fast-check, byte-identical omission)
-- [ ] 29-09-PLAN.md — Settings core: ports + getRuleSettings/setRuleOverrides + merge helpers
+- [x] 29-09-PLAN.md — Settings core: ports + getRuleSettings/setRuleOverrides + merge helpers
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
