@@ -6,14 +6,14 @@ current_phase: 29
 current_phase_name: Runtime Rule Settings
 status: executing
 stopped_at: Completed 29-12-PLAN.md
-last_updated: "2026-07-10T05:36:44.436Z"
+last_updated: "2026-07-10T05:43:45.015Z"
 last_activity: 2026-07-10
 last_activity_desc: Completed 29-12-PLAN.md (regime board runtime overrides wiring)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 40
-  completed_plans: 37
+  completed_plans: 38
   percent: 75
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 29 (Runtime Rule Settings) — EXECUTING
-Plan: 11 of 14 complete (07, 08, 09, 10, 12 complete — wave-based dependency order, not strictly sequential; 12 depended on 06/08/09)
+Plan: 12 of 14 complete (07, 08, 09, 10, 12 complete — wave-based dependency order, not strictly sequential; 12 depended on 06/08/09)
 Status: Ready to execute next plan
 Last activity: 2026-07-10 — Completed 29-12-PLAN.md (regime board runtime overrides wiring)
 
@@ -282,6 +282,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 29 P08 | 25min | 2 tasks | 10 files |
 | Phase 29 P10 | 25min | 2 tasks | 6 files |
 | Phase 29 P12 | 10min | 2 tasks | 3 files |
+| Phase 29 P11 | 20min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -407,6 +408,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: [Phase 29-10]: autoTuneTargetDelta gained an optional ladder param and ScoringParams gained debitBand — plumbing the plan's own objective threading map required but files_modified omitted (candidate-selection.ts, scoring.ts)
 - [Phase ?]: 29-12: readRuleOverrides read AFTER the readMacroObservations early-return — a macro-read failure short-circuits without an unnecessary overrides read
 - [Phase ?]: 29-12: isRegimeRuleOverrides narrows a flat 8-field optional-number group (no nested sub-objects) — simpler than picker's multi-shape isPickerRuleOverrides guard
+- [Phase ?]: compute-exit-advice wired exclusively into worker ComputeExitAdviceDeps, not server GetExitAdviceDeps
 
 ### Pending Todos
 
@@ -463,10 +465,10 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T05:36:44.425Z
+Last session: 2026-07-10T05:43:13.304Z
 Stopped at: Completed 29-12-PLAN.md
 Resume file: 
 
-## Operator Next Steps
+None
 
 - Plan the first v1.3 phase with /gsd-plan-phase 23 (VIX3M Ingestion)
