@@ -23,6 +23,7 @@ import type {
   ForRunningGetExitAdvice,
   ForRunningGetRuleSettings,
   ForRunningSetRuleOverrides,
+  ForRunningPreviewRuleOverrides,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -49,6 +50,7 @@ import {
   registerGetExitAdviceTool,
   registerGetRuleSettingsTool,
   registerSetRuleOverridesTool,
+  registerPreviewRuleOverridesTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -95,6 +97,10 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  * D-02 / MCP-02 (Phase 30, 30-05): analyze_ad_hoc_calendar registered here — shares
  *         analyzeAdHocCalendarRequest/Response with POST /api/picker/analyze; injected as
  *         optional for backward compat with existing call sites.
+ * B4/B8 / MCP-02 (Phase 32, 32-04): preview_rule_overrides registered here — shares
+ *         previewRuleOverridesRequest/Response AND the combined previewRuleOverrides use-case
+ *         with POST /api/settings/rules/preview (byte-parity, no duplicated orchestration);
+ *         injected as optional for backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -120,6 +126,7 @@ export function makeMcpRouter(
   getRuleSettings?: ForRunningGetRuleSettings,
   setRuleOverrides?: ForRunningSetRuleOverrides,
   analyzeAdHocCalendar?: ForAnalyzingAdHocCalendar,
+  previewRuleOverrides?: ForRunningPreviewRuleOverrides,
 ): Hono {
   const router = new Hono();
 
@@ -205,6 +212,11 @@ export function makeMcpRouter(
     }
     if (setRuleOverrides !== undefined) {
       registerSetRuleOverridesTool(server, setRuleOverrides);
+    }
+    // B4/B8 / MCP-02: preview_rule_overrides tool — optional, wired when the combined preview
+    // use-case is available (Phase 32, 32-04)
+    if (previewRuleOverrides !== undefined) {
+      registerPreviewRuleOverridesTool(server, previewRuleOverrides);
     }
     return { server, transport };
   }

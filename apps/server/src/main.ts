@@ -591,6 +591,8 @@ app.route("/api", jobsGroup);
 // use-case as POST /api/picker/analyze.
 // BOARD-03 / MCP-02 (24-04): get_regime tool added here — same getRegimeBoard use-case as the
 // HTTP route.
+// B4/B8 / MCP-02 (32-04): preview_rule_overrides tool added here — same combined
+// previewRuleOverrides use-case as POST /api/settings/rules/preview.
 const mcpRouter = makeMcpRouter(
   config,
   statusPort,
@@ -615,6 +617,7 @@ const mcpRouter = makeMcpRouter(
   getRuleSettings,
   setRuleOverrides,
   analyzeAdHocCalendar,
+  previewRuleOverrides,
 );
 app.route("", mcpRouter);
 

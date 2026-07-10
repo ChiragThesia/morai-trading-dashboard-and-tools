@@ -22,6 +22,8 @@ import type {
   ExitAdviceSnapshot,
   ForRunningGetRuleSettings,
   ForRunningSetRuleOverrides,
+  ForRunningPreviewRuleOverrides,
+  PickerPreviewResult,
 } from "@morai/core";
 import {
   pickerSnapshotResponse,
@@ -31,6 +33,7 @@ import {
   exitsResponse,
   getRuleSettingsResponse,
   setRuleOverridesResponse,
+  previewRuleOverridesResponse,
 } from "@morai/contracts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -43,6 +46,7 @@ import {
   registerGetExitAdviceTool,
   registerGetRuleSettingsTool,
   registerSetRuleOverridesTool,
+  registerPreviewRuleOverridesTool,
 } from "./tools.ts";
 import { exitRoutes } from "../http/exits.routes.ts";
 import { settingsRoutes } from "../http/settings.routes.ts";
@@ -648,8 +652,10 @@ describe("get_rule_settings MCP tool", () => {
 
     const noopSetRuleOverrides: ForRunningSetRuleOverrides = async () =>
       ok({ overrides: {}, effective: RULE_DEFAULTS });
+    const noopPreviewRuleOverrides: ForRunningPreviewRuleOverrides = async () =>
+      ok({ asOf: null, picker: null, exits: null });
     const app = new Hono();
-    app.route("/api", settingsRoutes(getRuleSettingsOk, noopSetRuleOverrides));
+    app.route("/api", settingsRoutes(getRuleSettingsOk, noopSetRuleOverrides, noopPreviewRuleOverrides));
     const res = await app.request("/api/settings/rules");
     const routePayload: unknown = await res.json();
 
@@ -738,5 +744,126 @@ describe("set_rule_overrides MCP tool", () => {
     expect(captured).toEqual({ picker: null });
     const parsed = setRuleOverridesResponse.parse(JSON.parse(text));
     expect(parsed.effective.picker).toEqual(RULE_DEFAULTS.picker);
+  });
+});
+
+// ── preview_rule_overrides MCP tool (Phase 32, Plan 04, B4/B8) ──────────────────
+
+const AVAILABLE_PICKER_PREVIEW: PickerPreviewResult = {
+  available: true,
+  asOf: "2026-07-01",
+  candidates: [],
+  gate: {
+    before: {
+      vix: 10,
+      vix3m: 20,
+      ratio: 0.5,
+      asOf: "2026-07-01",
+      state: "open",
+      penaltyMultiplier: 1,
+      brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+      reasons: [],
+    },
+    after: {
+      vix: 10,
+      vix3m: 20,
+      ratio: 0.5,
+      asOf: "2026-07-01",
+      state: "open",
+      penaltyMultiplier: 1,
+      brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+      reasons: [],
+    },
+  },
+  sizing: {
+    before: { tier: "low", contracts: 2, vix: 10 },
+    after: { tier: "low", contracts: 2, vix: 10 },
+  },
+  universeNote: null,
+};
+
+describe("preview_rule_overrides MCP tool", () => {
+  it("returns previewRuleOverridesResponse-valid content for a staged picker body", async () => {
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () =>
+      ok({ asOf: "2026-07-01", picker: AVAILABLE_PICKER_PREVIEW, exits: null });
+
+    const text = await callTool(
+      (server) => registerPreviewRuleOverridesTool(server, previewRuleOverrides),
+      "preview_rule_overrides",
+      { picker: { deltaBandMax: -0.2 } },
+    );
+
+    const parsed = previewRuleOverridesResponse.parse(JSON.parse(text));
+    expect(parsed.asOf).toBe("2026-07-01");
+    expect(parsed.picker).not.toBeNull();
+  });
+
+  it("returns 'internal error' text on a storage error (never throws)", async () => {
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () =>
+      err({ kind: "storage-error" as const, message: "db down" });
+
+    const text = await callTool(
+      (server) => registerPreviewRuleOverridesTool(server, previewRuleOverrides),
+      "preview_rule_overrides",
+      { picker: { deltaBandMax: -0.2 } },
+    );
+
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db down");
+  });
+
+  it("returns an 'invalid params' error content payload for a bad weight sum, never throws", async () => {
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () =>
+      ok({ asOf: null, picker: null, exits: null });
+
+    const text = await callToolHandlerDirect(
+      (server) => registerPreviewRuleOverridesTool(server, previewRuleOverrides),
+      "preview_rule_overrides",
+      {
+        picker: {
+          weights: {
+            slope: 10,
+            fwdEdge: 25,
+            gexFit: 10,
+            eventAdjustment: 5,
+            beVsEm: 15,
+            deltaNeutral: 15,
+            thetaVega: 10,
+            vrp: 5,
+            debitFit: 10, // sums to 105
+          },
+        },
+      },
+    );
+
+    expect(JSON.parse(text)).toMatchObject({ error: "invalid params" });
+  });
+
+  it("MCP-02 parity (byte-parity): the tool returns the SAME payload as POST /api/settings/rules/preview for the SAME empty-groups body", async () => {
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () =>
+      ok({ asOf: null, picker: null, exits: null });
+
+    const text = await callTool(
+      (server) => registerPreviewRuleOverridesTool(server, previewRuleOverrides),
+      "preview_rule_overrides",
+      {},
+    );
+    const toolPayload: unknown = JSON.parse(text);
+
+    const app = new Hono();
+    app.route(
+      "/api",
+      settingsRoutes(getRuleSettingsOk, async () => ok({ overrides: {}, effective: RULE_DEFAULTS }), previewRuleOverrides),
+    );
+    const res = await app.request("/api/settings/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const routePayload: unknown = await res.json();
+
+    expect(() => previewRuleOverridesResponse.parse(toolPayload)).not.toThrow();
+    expect(() => previewRuleOverridesResponse.parse(routePayload)).not.toThrow();
+    expect(toolPayload).toStrictEqual(routePayload);
   });
 });

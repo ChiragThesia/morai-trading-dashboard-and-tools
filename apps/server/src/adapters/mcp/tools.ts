@@ -26,7 +26,10 @@ import {
   getRuleSettingsResponse,
   setRuleOverridesRequest,
   setRuleOverridesResponse,
+  previewRuleOverridesRequest,
+  previewRuleOverridesResponse,
 } from "@morai/contracts";
+import type { PreviewRuleOverridesRequest } from "@morai/contracts";
 import type {
   ForGettingStatus,
   ForListingCalendars,
@@ -49,10 +52,46 @@ import type {
   ForRunningGetExitAdvice,
   ForRunningGetRuleSettings,
   ForRunningSetRuleOverrides,
+  ForRunningPreviewRuleOverrides,
+  RulePreviewInput,
+  PickerRuleOverrides,
+  ExitRuleOverrides,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
 import { toOverridesPatch } from "../rule-overrides-bridge.ts";
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** zValidator-equivalent Zod safeParse already validated the FULL body against
+ *  `previewRuleOverridesRequest` before this predicate runs — it just re-affirms the
+ *  JSON-round-tripped clone's runtime shape for the compiler (exactOptionalPropertyTypes),
+ *  never re-validates field-by-field. Same idiom as settings.routes.ts's own toPreviewInput
+ *  (32-04) — duplicated verbatim (this task's files_modified scope excludes the shared
+ *  rule-overrides-bridge.ts, 32-03 precedent). */
+function isPickerRuleOverridesShape(value: unknown): value is PickerRuleOverrides {
+  return isPlainRecord(value);
+}
+function isExitRuleOverridesShape(value: unknown): value is ExitRuleOverrides {
+  return isPlainRecord(value);
+}
+
+/** toPreviewInput — narrows a validated `previewRuleOverridesRequest` body into the core
+ *  combined use-case's `RulePreviewInput` (MCP-02: the SAME conversion settings.routes.ts's
+ *  POST /api/settings/rules/preview applies to the identical body, so HTTP and MCP feed the
+ *  combined use-case identically — byte-parity). */
+function toPreviewInput(body: PreviewRuleOverridesRequest): RulePreviewInput {
+  const cloned: unknown = JSON.parse(JSON.stringify(body));
+  if (!isPlainRecord(cloned)) return {};
+  const picker = cloned["picker"];
+  const exits = cloned["exits"];
+  return {
+    ...(isPickerRuleOverridesShape(picker) ? { picker } : {}),
+    ...(isExitRuleOverridesShape(exits) ? { exits } : {}),
+  };
+}
 
 /**
  * registerStatusTool — registers the get_status MCP tool on the given McpServer.
@@ -1183,6 +1222,67 @@ export function registerSetRuleOverridesTool(
       }
 
       const payload = setRuleOverridesResponse.parse(result.value);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerPreviewRuleOverridesTool — registers the preview_rule_overrides MCP tool (Phase 32,
+ * Plan 04, B4/B8).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: safeParse args (the SAME previewRuleOverridesRequest schema used by POST
+ * /api/settings/rules/preview, identity-reused from setRuleOverridesRequest) → convert via
+ * toPreviewInput → call the combined use-case → map Result → parse through
+ * previewRuleOverridesResponse → return content.
+ *
+ * MCP-02: the SAME previewRuleOverridesRequest/Response schemas AND the SAME combined
+ * previewRuleOverrides use-case that POST /api/settings/rules/preview calls are used here — a
+ * one-sided field rename fails `bun run typecheck`; a behavior drift is structurally impossible
+ * since both adapters call the identical use-case instance (B4's "one seam").
+ *
+ * This is a read-only compute over the same trust boundary as get_rule_settings/
+ * set_rule_overrides (T-32-03) — the bearer-gated /mcp mount (server.ts) is the auth
+ * mitigation. Never persists (T-32-01/T-32-02 — the combined use-case's deps carry no write
+ * port).
+ */
+export function registerPreviewRuleOverridesTool(
+  server: McpServer,
+  previewRuleOverrides: ForRunningPreviewRuleOverrides,
+): void {
+  server.registerTool(
+    "preview_rule_overrides",
+    {
+      title: "Preview Rule Overrides",
+      description:
+        "Dry-runs staged picker/exits rule-override edits: re-scores the latest stored picker snapshot and re-evaluates every open exit verdict against the staged values, WITHOUT saving anything. Same validation and same combined use-case as POST /api/settings/rules/preview. A group omitted from the request is not previewed (its response branch is null).",
+      inputSchema: previewRuleOverridesRequest.shape,
+    },
+    async (args) => {
+      // Reuse the SAME previewRuleOverridesRequest schema as the HTTP route body (MCP-02).
+      const parsed = previewRuleOverridesRequest.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "invalid params" }) }],
+        };
+      }
+
+      const result = await previewRuleOverrides(toPreviewInput(parsed.data));
+      if (!result.ok) {
+        // T-32-09: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      const { asOf, picker, exits } = result.value;
+      const pickerBranch =
+        picker === null || !picker.available
+          ? null
+          : { candidates: picker.candidates, gate: picker.gate, sizing: picker.sizing, universeNote: picker.universeNote };
+      const payload = previewRuleOverridesResponse.parse({ asOf, picker: pickerBranch, exits });
+
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
