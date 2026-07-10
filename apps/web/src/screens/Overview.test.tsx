@@ -189,6 +189,46 @@ const CAL_BACK = {
 /** Matches pair-calendars.ts's key format: `${underlyingSymbol}|${strike}|${type}`. */
 const CAL_ROW_KEY = "$SPX|7425|P";
 
+/** A pair of calendars at widely-different strikes (D-01, Phase 30) — proves the combined-book
+ *  domain brackets a multi-strike book rather than clipping to a single candidate's tent
+ *  (Pitfall 4: computePayoffDomain must take the FULL positions list). */
+const CAL3_FRONT = {
+  occSymbol: "SPXW  301120P07000000",
+  putCall: "P" as const,
+  longQty: 0,
+  shortQty: 1,
+  averagePrice: 40,
+  marketValue: -4000,
+  underlyingSymbol: "$SPX",
+};
+const CAL3_BACK = {
+  occSymbol: "SPXW  301130P07000000",
+  putCall: "P" as const,
+  longQty: 1,
+  shortQty: 0,
+  averagePrice: 50,
+  marketValue: 5000,
+  underlyingSymbol: "$SPX",
+};
+const CAL4_FRONT = {
+  occSymbol: "SPXW  301120P07600000",
+  putCall: "P" as const,
+  longQty: 0,
+  shortQty: 1,
+  averagePrice: 55,
+  marketValue: -5500,
+  underlyingSymbol: "$SPX",
+};
+const CAL4_BACK = {
+  occSymbol: "SPXW  301130P07600000",
+  putCall: "P" as const,
+  longQty: 1,
+  shortQty: 0,
+  averagePrice: 65,
+  marketValue: 6500,
+  underlyingSymbol: "$SPX",
+};
+
 /** A second, distinct calendar pair fixture (different strike) — used to prove that
  *  excluding ONE calendar leaves the OTHER's contribution on the chart curves (OVW-06). */
 const CAL2_FRONT = {
@@ -632,6 +672,21 @@ describe("Overview screen", () => {
 
       expect(withNonConvergent.todayCurve).toEqual(convergentOnly.todayCurve);
       expect(withNonConvergent.expirationCurve).toEqual(convergentOnly.expirationCurve);
+    });
+
+    it("D-01: combined book at widely-different strikes (7000/7600) gets a domain that brackets BOTH — no clip (Pitfall 4)", () => {
+      setPositions([CAL3_FRONT, CAL3_BACK, CAL4_FRONT, CAL4_BACK]);
+      render(<Overview />);
+
+      const props = latestPayoffChartProps();
+      expect(props.domain.min).toBeLessThanOrEqual(7000);
+      expect(props.domain.max).toBeGreaterThanOrEqual(7600);
+      // The data grid follows the SAME window as the chart scale (Pitfall 1) — the curve's
+      // own endpoints are exactly the domain bounds, not an independently-clipped window.
+      const firstSpot = props.todayCurve[0]?.spot;
+      const lastSpot = props.todayCurve.at(-1)?.spot;
+      expect(firstSpot).toBe(props.domain.min);
+      expect(lastSpot).toBe(props.domain.max);
     });
   });
 

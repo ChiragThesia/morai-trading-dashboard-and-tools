@@ -247,7 +247,13 @@ function isIvExcludedFromT0(pos: AnalyzerPosition): boolean {
   return pos.frontIvStatus === "non-convergent" || pos.backIvStatus === "non-convergent";
 }
 
-function includedForT0(pos: AnalyzerPosition): boolean {
+/**
+ * Whether a position contributes to the T+0/@exp book pl — same predicate `bookPL`/
+ * `bookPLAtExpiry` use internally. Exported so `payoff-domain.ts`'s anchor-strike
+ * selection matches exactly (a non-convergent/excluded position must not widen the
+ * domain any more than it moves the curve — Phase 30 CR-01 domain-fitting regression).
+ */
+export function includedForT0(pos: AnalyzerPosition): boolean {
   return pos.included && !isIvExcludedFromT0(pos);
 }
 

@@ -22,6 +22,7 @@ import {
   buildScenarioStrip,
 } from "../lib/scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams, PayoffPoint } from "../lib/scenario-engine.ts";
+import { computePayoffDomain } from "../lib/payoff-domain.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
@@ -915,6 +916,20 @@ export function Overview(): React.ReactElement {
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  // ONE domain, computed from the FULL combined book (Pitfall 4: never a single-candidate
+  // slice) — shared by the data grid (repriceScenario, both curves below) and the chart
+  // scale (<PayoffChart domain=>) so neither clips relative to the other (Pitfall 1).
+  const payoffDomain = useMemo(() => {
+    const params: ScenarioParams = {
+      spot,
+      daysForward: dateControl.daysForward,
+      ivShift: 0,
+      rate: DEFAULT_RATE,
+      divYield: DEFAULT_DIV,
+    };
+    return computePayoffDomain(calendarPositions, spot, params);
+  }, [calendarPositions, spot, dateControl.daysForward]);
+
   const scenario = useMemo(() => {
     const params: ScenarioParams = {
       spot,
@@ -923,8 +938,8 @@ export function Overview(): React.ReactElement {
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
-    return repriceScenario(calendarPositions, params);
-  }, [calendarPositions, spot, dateControl.daysForward]);
+    return repriceScenario(calendarPositions, params, payoffDomain);
+  }, [calendarPositions, spot, dateControl.daysForward, payoffDomain]);
 
   const positionSetSignature = calendarPositions
     .map((p) => `${p.id}:${p.frontIvStatus ?? "ok"}:${p.backIvStatus ?? "ok"}:${p.included}`)
@@ -961,8 +976,8 @@ export function Overview(): React.ReactElement {
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
-    return repriceScenario([highlightedPosition], params);
-  }, [highlightedPosition, spot, dateControl.daysForward]);
+    return repriceScenario([highlightedPosition], params, payoffDomain);
+  }, [highlightedPosition, spot, dateControl.daysForward, payoffDomain]);
 
   const excludedFromT0 = t0ExcludedPositions(calendarPositions);
 
@@ -1141,9 +1156,7 @@ export function Overview(): React.ReactElement {
               expirationCurve={scenario.expirationCurve}
               rollCurve={null}
               gex={gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null}
-              // ponytail: literal placeholder matches the old hardcoded grid; real
-              // computePayoffDomain wiring lands in 30-02 (this plan ships primitives only).
-              domain={{ min: 6900, max: 7900 }}
+              domain={payoffDomain}
               spot={spot}
               toggles={toggles}
               fitY={false}

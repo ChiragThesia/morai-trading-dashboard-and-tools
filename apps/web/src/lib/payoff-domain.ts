@@ -16,7 +16,7 @@
  * Pure function, no DOM, no I/O. No any/as/!.
  */
 
-import { repriceScenario, findZeroCrossings, extractStrike } from "./scenario-engine.ts";
+import { repriceScenario, findZeroCrossings, extractStrike, includedForT0 } from "./scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams, SpotDomain } from "./scenario-engine.ts";
 
 /** Empty-position fallback half-width (T-30-01: never produce a NaN/degenerate domain). */
@@ -41,8 +41,12 @@ export function computePayoffDomain(
     return { min: spot - FALLBACK_HALF_WIDTH, max: spot + FALLBACK_HALF_WIDTH };
   }
 
-  const strikes = positions.map(extractStrike);
-  const baseAnchors = [...strikes, spot];
+  // Only positions that actually contribute pl (same `includedForT0` predicate bookPL/
+  // bookPLAtExpiry use) may anchor the domain — an excluded or non-convergent leg must
+  // not widen the tent it never draws (CR-01 domain-fitting regression, Phase 30).
+  const contributing = positions.filter(includedForT0);
+  const strikes = contributing.map(extractStrike);
+  const baseAnchors = strikes.length > 0 ? [...strikes, spot] : [spot];
   const baseLo = Math.min(...baseAnchors);
   const baseHi = Math.max(...baseAnchors);
 
