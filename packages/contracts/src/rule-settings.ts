@@ -56,7 +56,11 @@ const vixLadderShape = z
     elevatedMin: z.number(),
     crisisMin: z.number(),
   })
-  .strict();
+  .strict()
+  .refine((v) => v.normalMin < v.elevatedMin && v.elevatedMin < v.crisisMin, {
+    path: ["crisisMin"],
+    message: "vixLadder boundaries must be strictly ascending (normalMin < elevatedMin < crisisMin)",
+  });
 
 /** Sizing tier contract counts, keyed by the same VixTier the VIX ladder resolves to. */
 const sizingContractsShape = z
@@ -151,6 +155,13 @@ const exitsOverrides = z
 // regime group
 // ─────────────────────────────────────────────────────────────
 
+/** A warn/crisis pair only needs ordering-checked when BOTH sides of THIS request supply it —
+ * a single-sided partial can't be validated against the stored/default counterpart at the
+ * contract layer (29-REVIEW.md CR-02 fix note). */
+function validWarnCrisisPair(warn: number | undefined, crisis: number | undefined): boolean {
+  return warn === undefined || crisis === undefined || warn < crisis;
+}
+
 const regimeOverrides = z
   .object({
     vixTermStructureWarn: z.number().optional(),
@@ -162,7 +173,23 @@ const regimeOverrides = z
     hyOasWarn: z.number().optional(),
     hyOasCrisis: z.number().optional(),
   })
-  .strict();
+  .strict()
+  .refine((r) => validWarnCrisisPair(r.vixTermStructureWarn, r.vixTermStructureCrisis), {
+    path: ["vixTermStructureCrisis"],
+    message: "vixTermStructure warn must be < crisis",
+  })
+  .refine((r) => validWarnCrisisPair(r.vvixWarn, r.vvixCrisis), {
+    path: ["vvixCrisis"],
+    message: "vvix warn must be < crisis",
+  })
+  .refine((r) => validWarnCrisisPair(r.vix9dRatioWarn, r.vix9dRatioCrisis), {
+    path: ["vix9dRatioCrisis"],
+    message: "vix9dRatio warn must be < crisis",
+  })
+  .refine((r) => validWarnCrisisPair(r.hyOasWarn, r.hyOasCrisis), {
+    path: ["hyOasCrisis"],
+    message: "hyOas warn must be < crisis",
+  });
 
 // ─────────────────────────────────────────────────────────────
 // ruleOverrides — the top-level partial, per-group-nullable override object

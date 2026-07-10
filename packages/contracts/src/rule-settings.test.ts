@@ -177,6 +177,79 @@ describe("ruleOverrides — exits.stop hysteresis pairs", () => {
   });
 });
 
+// ─── vixLadder ordering invariant (CR-02, 29-REVIEW.md) — normalMin < elevatedMin < crisisMin ──
+
+describe("ruleOverrides — picker.vixLadder ordering invariant", () => {
+  it("accepts a strictly-ascending ladder", () => {
+    const result = ruleOverrides.safeParse({
+      picker: { vixLadder: { normalMin: 15, elevatedMin: 20, crisisMin: 25 } },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects normalMin >= elevatedMin", () => {
+    const result = ruleOverrides.safeParse({
+      picker: { vixLadder: { normalMin: 20, elevatedMin: 20, crisisMin: 25 } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects elevatedMin >= crisisMin", () => {
+    const result = ruleOverrides.safeParse({
+      picker: { vixLadder: { normalMin: 15, elevatedMin: 25, crisisMin: 25 } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a fully inverted ladder", () => {
+    const result = ruleOverrides.safeParse({
+      picker: { vixLadder: { normalMin: 25, elevatedMin: 20, crisisMin: 15 } },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ─── regime warn < crisis invariant (CR-02, 29-REVIEW.md) — each of the 4 indicator pairs ──
+
+describe("ruleOverrides — regime warn < crisis invariant", () => {
+  it("accepts a correctly-ordered vixTermStructure pair", () => {
+    const result = ruleOverrides.safeParse({
+      regime: { vixTermStructureWarn: 0.9, vixTermStructureCrisis: 0.95 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects vixTermStructureWarn >= vixTermStructureCrisis", () => {
+    const result = ruleOverrides.safeParse({
+      regime: { vixTermStructureWarn: 0.95, vixTermStructureCrisis: 0.9 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects vvixWarn >= vvixCrisis", () => {
+    const result = ruleOverrides.safeParse({ regime: { vvixWarn: 100, vvixCrisis: 90 } });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects vix9dRatioWarn >= vix9dRatioCrisis", () => {
+    const result = ruleOverrides.safeParse({ regime: { vix9dRatioWarn: 1.1, vix9dRatioCrisis: 1.0 } });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects hyOasWarn >= hyOasCrisis", () => {
+    const result = ruleOverrides.safeParse({ regime: { hyOasWarn: 5.0, hyOasCrisis: 3.0 } });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a single-sided partial (only warn) -- cannot be ordering-checked in isolation", () => {
+    expect(ruleOverrides.safeParse({ regime: { vvixWarn: 100 } }).success).toBe(true);
+  });
+
+  it("accepts a single-sided partial (only crisis) -- cannot be ordering-checked in isolation", () => {
+    expect(ruleOverrides.safeParse({ regime: { vvixCrisis: 115 } }).success).toBe(true);
+  });
+});
+
 // ─── Excluded knobs never parse ──────────────────────────────────────────────────
 
 describe("ruleOverrides — excluded knobs have no schema field", () => {
