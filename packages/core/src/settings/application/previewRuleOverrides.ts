@@ -17,6 +17,13 @@ import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForPreviewingPickerRuleOverrides, PickerPreviewResult } from "../../picker/application/ports.ts";
 import type { ForPreviewingExitRuleOverrides, ExitPreviewResult } from "../../exits/application/ports.ts";
+// PickerRuleOverrides/ExitRuleOverrides are re-exported through each context's OWN public
+// barrel (picker/index.ts, exits/index.ts) — the same surface the top-level @morai/core barrel
+// itself re-exports them through (see index.ts's "29-13" section). Importing from the context
+// barrel (not `../domain/rule-config.ts` directly) keeps this a cross-context application-layer
+// read, never a domain/ import (architecture-boundaries §7).
+import type { PickerRuleOverrides } from "../../picker/index.ts";
+import type { ExitRuleOverrides } from "../../exits/index.ts";
 import type { StorageError } from "./ports.ts";
 
 export type PreviewRuleOverridesDeps = {
@@ -24,15 +31,10 @@ export type PreviewRuleOverridesDeps = {
   readonly previewExit: ForPreviewingExitRuleOverrides;
 };
 
-/**
- * RulePreviewInput — the core-side staged override groups from the in-flight edit. A group is
- * typed via `Parameters<>` of the engine's OWN driver port (rather than importing
- * `PickerRuleOverrides`/`ExitRuleOverrides` from picker/exits `domain/` directly) so this file
- * never crosses the hexagon boundary except through the already-injected application ports.
- */
+/** RulePreviewInput — the core-side staged override groups from the in-flight edit. */
 export type RulePreviewInput = {
-  readonly picker?: Parameters<ForPreviewingPickerRuleOverrides>[0];
-  readonly exits?: Parameters<ForPreviewingExitRuleOverrides>[0];
+  readonly picker?: PickerRuleOverrides;
+  readonly exits?: ExitRuleOverrides;
 };
 
 /**
