@@ -4,9 +4,9 @@ milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 31
 current_phase_name: γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text
-status: verifying
+status: executing
 stopped_at: Completed 30-06-PLAN.md
-last_updated: "2026-07-10T15:57:08.537Z"
+last_updated: "2026-07-10T18:19:57.608Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 30 complete, transitioned to Phase 31
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 31 — Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10) — PLUS left-rail macro readability: replace raw-number rows (VIX/VVIX/ratios/HY OAS/rates) with compact linear band-gauges (bullet style: value marker on a warn/crisis-banded track; NOT circular dials — space + scannability), user proposal 2026-07-10
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-07-10 — Phase 30 complete, transitioned to Phase 31
 
 ## Open follow-ups (not phase-22 blockers)

@@ -445,7 +445,7 @@ defects are the requirement surface:
 | A2 | 3-row (not 2-lane-alternating) vertical stacking is the simplest provably-correct label layout for up to 3 simultaneous markers | Architecture Patterns §1 | If a future 5th+ marker type is added, more rows accumulate vertically above the chart's top edge — acceptable since CONTEXT caps the marker set at flip/putWall/callWall/spot(unlabeled) = effectively 3 labels max today |
 | A3 | The `tracking-[0.08em]` vs `0.09em` inconsistency in `RegimeBoard.tsx` is out of CONTEXT's locked scope and should be planner-discretion, not auto-fixed | Common Pitfalls #3 | If left unfixed, a minor visual inconsistency persists; if silently "fixed" as a drive-by, violates the repo's `workflow.md` "no drive-by refactors" rule — safer to flag than to silently touch |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the gauge track show 3 discrete color segments (calm/warn/crisis bands) or 1 neutral
    track + 2 tick marks + 1 value marker?**
