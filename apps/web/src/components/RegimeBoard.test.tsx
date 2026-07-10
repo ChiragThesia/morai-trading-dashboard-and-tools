@@ -228,6 +228,27 @@ describe("RegimeBoard", () => {
           const left = parseFloat(marker.style.left);
           expect(left).toBeGreaterThanOrEqual(0);
           expect(left).toBeLessThanOrEqual(100);
+
+          // CR-01 regression guard: warn/crisis band segments must clamp the same way the
+          // marker does. An out-of-axis bandWarn/bandCrisis must never produce a negative
+          // CSS width (invalid CSS, silently dropped by the browser) or an out-of-[0,100]
+          // `left`. DOM order is [warn segment, crisis segment, marker].
+          const gauge = screen.getByTestId("regime-gauge-vix-term-structure");
+          const segments = gauge.querySelectorAll<HTMLElement>(":scope > div");
+          const warnSegment = segments[0];
+          const crisisSegment = segments[1];
+          assertDefined(warnSegment, "warn segment present");
+          assertDefined(crisisSegment, "crisis segment present");
+          const warnLeft = parseFloat(warnSegment.style.left);
+          const warnWidth = parseFloat(warnSegment.style.width);
+          const crisisLeft = parseFloat(crisisSegment.style.left);
+          const crisisWidth = parseFloat(crisisSegment.style.width);
+          expect(warnLeft).toBeGreaterThanOrEqual(0);
+          expect(warnLeft).toBeLessThanOrEqual(100);
+          expect(warnWidth).toBeGreaterThanOrEqual(0);
+          expect(crisisLeft).toBeGreaterThanOrEqual(0);
+          expect(crisisLeft).toBeLessThanOrEqual(100);
+          expect(crisisWidth).toBeGreaterThanOrEqual(0);
         },
       ),
       { numRuns: 50 },

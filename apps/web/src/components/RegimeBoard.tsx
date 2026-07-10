@@ -67,8 +67,9 @@ const SHORT_LABELS: Record<string, string> = {
   "hy-oas": "HY OAS",
 };
 
-/** Percent position of `value` on `[min, max]` — NOT clamped (band-segment positions are
- *  trusted to sit inside the configured axis). */
+/** Percent position of `value` on `[min, max]` — NOT clamped. Only `clampedAxisPct` (below)
+ *  is safe for on-track positioning (marker, band segments); raw output can fall outside
+ *  [0, 100] when `value` is outside `[min, max]`. */
 function axisPct(value: number, min: number, max: number): number {
   return ((value - min) / (max - min)) * 100;
 }
@@ -95,8 +96,11 @@ function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean 
   // ponytail: all 4 live regimeIndicator ids are in GAUGE_SCALE; this fallback only guards a
   // future 5th indicator id shipping before its GAUGE_SCALE entry does.
   const scale = GAUGE_SCALE[indicator.id] ?? { min: 0, max: Math.max(indicator.bandCrisis, indicator.value, 1) };
-  const warnPct = axisPct(indicator.bandWarn, scale.min, scale.max);
-  const crisisPct = axisPct(indicator.bandCrisis, scale.min, scale.max);
+  // Clamped like the marker (CR-01): an effective bandWarn/bandCrisis outside GAUGE_SCALE
+  // (Phase-29 override, or a real print past the fixed axis) must never yield a negative
+  // CSS width — it saturates at the axis edge instead.
+  const warnPct = clampedAxisPct(indicator.bandWarn, scale.min, scale.max);
+  const crisisPct = clampedAxisPct(indicator.bandCrisis, scale.min, scale.max);
   const valuePct = clampedAxisPct(indicator.value, scale.min, scale.max);
 
   return (
