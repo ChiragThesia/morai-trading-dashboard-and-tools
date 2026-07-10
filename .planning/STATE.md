@@ -5,15 +5,15 @@ milestone_name: Picker Intelligence
 current_phase: 29
 current_phase_name: entry/picker weights + bands, exit advisor rungs, regime bands
 status: executing
-stopped_at: Completed 30-03-PLAN.md
-last_updated: "2026-07-10T14:04:28.733Z"
+stopped_at: Completed 30-02-PLAN.md
+last_updated: "2026-07-10T14:27:02.934Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 28 complete, transitioned to Phase 29
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 46
-  completed_plans: 42
+  completed_plans: 44
   percent: 70
 ---
 
@@ -288,6 +288,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 29 P14 | ~20min | 2 tasks | 5 files |
 | Phase 30 P01 | 15min | 3 tasks | 8 files |
 | Phase 30 P03 | 8min | 2 tasks | 5 files |
+| Phase 30 P02 | 12min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -424,6 +425,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 30-03]: analyzeAdHocCalendarRequest omits spot entirely and is .strict() so a client-supplied spot key is rejected (T-30-06 threat mitigation)
 - [Phase 30-03]: resolveEventExit extracted verbatim (same day-number math, same earliest-event selection) into an exported pure function; selectCandidates calls it with zero behavior change
 - [Phase 30-03]: barrel-exported both new contract schemas through packages/contracts/src/index.ts (plumbing not itemized in files_modified) so 30-04/30-05 can import them from @morai/contracts
+- [Phase 30-02]: computePayoffDomain's strike anchors are filtered through includedForT0 — an excluded/non-convergent position must not widen the domain since it never contributes to either curve
 
 ### Pending Todos
 
@@ -480,8 +482,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T14:02:32.303Z
-Stopped at: Completed 30-03-PLAN.md
+Last session: 2026-07-10T14:26:48.108Z
+Stopped at: Completed 30-02-PLAN.md
 Resume file: 
 
 None

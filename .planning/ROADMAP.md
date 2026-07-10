@@ -347,7 +347,7 @@ Plans:
 **Goal:** Analyzer pasted calendars fit the payoff graph to their full tent (both tails + both breakevens, no fixed 6900–7900) and receive real engine scoring — score + factor bars + θ GATE chip + entry-gate verdict + exit plan — identical to engine-suggested candidates; PUT calendars this phase, calls + context-unavailable pastes keep the honest unscored fallback.
 **Requirements**: user-added defect-fix phase (no REQ IDs) — D-01 (payoff x-domain fit), D-02 (ad-hoc engine scoring)
 **Depends on:** Phase 29
-**Plans:** 2/6 plans executed
+**Plans:** 3/6 plans executed
 
 Plans:
 **Wave 1**
@@ -357,7 +357,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 30-02-PLAN.md — Thread the domain into Analyzer + Overview payoff charts; combined-book non-regression (D-01)
+- [x] 30-02-PLAN.md — Thread the domain into Analyzer + Overview payoff charts; combined-book non-regression (D-01)
 - [ ] 30-04-PLAN.md — makeAnalyzeAdHocCalendarUseCase: score one ad-hoc PUT calendar with engine parity, reused gate/sizing (D-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
