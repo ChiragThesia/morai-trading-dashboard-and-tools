@@ -1,8 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
-import type { ForRunningGetRuleSettings, ForRunningSetRuleOverrides, StorageError } from "@morai/core";
-import { getRuleSettingsResponse, setRuleOverridesResponse } from "@morai/contracts";
+import type {
+  ForRunningGetRuleSettings,
+  ForRunningSetRuleOverrides,
+  ForRunningPreviewRuleOverrides,
+  PickerPreviewResult,
+  StorageError,
+} from "@morai/core";
+import { getRuleSettingsResponse, setRuleOverridesResponse, previewRuleOverridesResponse } from "@morai/contracts";
 import { settingsRoutes } from "./settings.routes.ts";
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -68,14 +74,18 @@ const DEFAULTS = {
 function buildTestApp(
   getRuleSettings: ForRunningGetRuleSettings,
   setRuleOverrides: ForRunningSetRuleOverrides,
+  previewRuleOverrides: ForRunningPreviewRuleOverrides = noopPreviewRuleOverrides,
 ) {
   const app = new Hono();
-  app.route("/api", settingsRoutes(getRuleSettings, setRuleOverrides));
+  app.route("/api", settingsRoutes(getRuleSettings, setRuleOverrides, previewRuleOverrides));
   return app;
 }
 
 const noopSetRuleOverrides: ForRunningSetRuleOverrides = async () =>
   ok({ overrides: {}, effective: DEFAULTS });
+
+const noopPreviewRuleOverrides: ForRunningPreviewRuleOverrides = async () =>
+  ok({ asOf: null, picker: null, exits: null });
 
 describe("GET /api/settings/rules", () => {
   it("returns 200 with { defaults, overrides, effective }", async () => {
@@ -234,6 +244,188 @@ describe("PUT /api/settings/rules", () => {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ picker: { deltaBandMin: -0.4 } }),
+    });
+
+    expect(res.status).toBe(500);
+    const body: unknown = await res.json();
+    expect(body).toMatchObject({ error: "internal" });
+    expect(JSON.stringify(body)).not.toContain("DB down");
+  });
+});
+
+describe("POST /api/settings/rules/preview", () => {
+  const okGetRuleSettings: ForRunningGetRuleSettings = async () =>
+    ok({ defaults: DEFAULTS, overrides: {}, effective: DEFAULTS });
+
+  const AVAILABLE_PICKER: PickerPreviewResult = {
+    available: true,
+    asOf: "2026-07-01",
+    candidates: [],
+    gate: {
+      before: {
+        vix: 10,
+        vix3m: 20,
+        ratio: 0.5,
+        asOf: "2026-07-01",
+        state: "open",
+        penaltyMultiplier: 1,
+        brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+        reasons: [],
+      },
+      after: {
+        vix: 10,
+        vix3m: 20,
+        ratio: 0.5,
+        asOf: "2026-07-01",
+        state: "open",
+        penaltyMultiplier: 1,
+        brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+        reasons: [],
+      },
+    },
+    sizing: {
+      before: { tier: "low", contracts: 2, vix: 10 },
+      after: { tier: "low", contracts: 2, vix: 10 },
+    },
+    universeNote: null,
+  };
+
+  it("200 + snapshot asOf for a valid picker-weights body", async () => {
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () =>
+      ok({ asOf: "2026-07-01", picker: AVAILABLE_PICKER, exits: null });
+    const app = buildTestApp(okGetRuleSettings, noopSetRuleOverrides, previewRuleOverrides);
+
+    const res = await app.request("/api/settings/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ picker: { weights: DEFAULTS.picker.weights } }),
+    });
+
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    const parsed = previewRuleOverridesResponse.parse(body);
+    expect(parsed.asOf).toBe("2026-07-01");
+    expect(parsed.picker).not.toBeNull();
+  });
+
+  it("a staged universe knob returns the honest note, never a fabricated candidate diff", async () => {
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () =>
+      ok({
+        asOf: "2026-07-01",
+        picker: { ...AVAILABLE_PICKER, universeNote: "Affects the next compute cycle — no live candidate re-selection without a chain re-read." },
+        exits: null,
+      });
+    const app = buildTestApp(okGetRuleSettings, noopSetRuleOverrides, previewRuleOverrides);
+
+    const res = await app.request("/api/settings/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ picker: { deltaBandMax: -0.2 } }),
+    });
+
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    const parsed = previewRuleOverridesResponse.parse(body);
+    expect(parsed.picker?.universeNote).toMatch(/next compute cycle/i);
+  });
+
+  it("an empty-but-present picker group byte-parity: newScore === oldScore, group reaches the use-case (not dropped as absent)", async () => {
+    let captured: unknown = null;
+    const candidate = {
+      id: "cand-1",
+      name: "cand-1",
+      score: 72,
+      breakdown: [],
+      debit: 4000,
+      theta: 1,
+      vega: 1,
+      delta: 0,
+      fwdIv: 0.15,
+      fwdIvGuard: "ok" as const,
+      slope: 0.1,
+      fwdEdge: 0.01,
+      expectedMove: 100,
+      frontEvents: [],
+      backEvents: [],
+      context: [],
+      bucket: "standard" as const,
+      frontLeg: { strike: 7500, putCall: "P" as const, dte: 30, iv: 0.14 },
+      backLeg: { strike: 7500, putCall: "P" as const, dte: 56, iv: 0.155 },
+      exitPlan: { profitTargetPct: 0.5, stopPct: -0.5, manageShortDte: 21, closeByExpiry: "2026-07-31", thetaCapturePct: 1 },
+      oldScore: 72,
+    };
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async (input) => {
+      captured = input;
+      return ok({ asOf: "2026-07-01", picker: { ...AVAILABLE_PICKER, candidates: [candidate] }, exits: null });
+    };
+    const app = buildTestApp(okGetRuleSettings, noopSetRuleOverrides, previewRuleOverrides);
+
+    const res = await app.request("/api/settings/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ picker: {} }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(captured).toEqual({ picker: {} });
+    const body: unknown = await res.json();
+    const parsed = previewRuleOverridesResponse.parse(body);
+    const [previewed] = parsed.picker?.candidates ?? [];
+    expect(previewed).toBeDefined();
+    expect(previewed?.score).toBe(previewed?.oldScore);
+  });
+
+  it("returns 400 on an unknown top-level key (contract .strict())", async () => {
+    let called = false;
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () => {
+      called = true;
+      return ok({ asOf: null, picker: null, exits: null });
+    };
+    const app = buildTestApp(okGetRuleSettings, noopSetRuleOverrides, previewRuleOverrides);
+
+    const res = await app.request("/api/settings/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ foo: "bar" }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(called).toBe(false);
+  });
+
+  it("never persists: two identical requests return identical output (no stored side effect)", async () => {
+    let callCount = 0;
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () => {
+      callCount += 1;
+      return ok({ asOf: "2026-07-01", picker: AVAILABLE_PICKER, exits: null });
+    };
+    const app = buildTestApp(okGetRuleSettings, noopSetRuleOverrides, previewRuleOverrides);
+
+    const body = JSON.stringify({ picker: { deltaBandMax: -0.2 } });
+    const res1 = await app.request("/api/settings/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    const res2 = await app.request("/api/settings/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+
+    expect(await res1.json()).toEqual(await res2.json());
+    expect(callCount).toBe(2);
+  });
+
+  it("returns 500 when the use-case returns a storage error", async () => {
+    const storageError: StorageError = { kind: "storage-error", message: "DB down" };
+    const previewRuleOverrides: ForRunningPreviewRuleOverrides = async () => err(storageError);
+    const app = buildTestApp(okGetRuleSettings, noopSetRuleOverrides, previewRuleOverrides);
+
+    const res = await app.request("/api/settings/rules/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ picker: {} }),
     });
 
     expect(res.status).toBe(500);

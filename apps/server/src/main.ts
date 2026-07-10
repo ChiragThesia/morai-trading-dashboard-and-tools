@@ -57,6 +57,9 @@ import {
   makeGetRuleSettingsUseCase,
   makeSetRuleOverridesUseCase,
   makeAnalyzeAdHocCalendarUseCase,
+  makePreviewPickerRuleOverridesUseCase,
+  makePreviewExitRuleOverridesUseCase,
+  makePreviewRuleOverridesUseCase,
   resolvePickerRuleConfig,
   resolveExitRuleConfig,
   resolveRegimeRuleConfig,
@@ -404,6 +407,25 @@ const getExitAdvice = makeGetExitAdviceUseCase({
   now: () => new Date(),
 });
 
+// B4/B7/B8 (32-04): staged-change dry-run preview — shared by POST /api/settings/rules/preview
+// + the preview_rule_overrides MCP tool. Reuses the ALREADY-BUILT pickerSnapshotRepo/
+// ruleOverridesRepo/calendarsRepo/exit-read closures above; zero new repos, never persists
+// (T-32-01/T-32-02 — neither preview deps type carries a write port).
+const previewPicker = makePreviewPickerRuleOverridesUseCase({
+  readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
+  readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
+  readOpenCalendars: calendarsRepo.getOpenCalendars,
+});
+const previewExit = makePreviewExitRuleOverridesUseCase({
+  readHeldPositions: readHeldPositionsForExits,
+  readLatestSnapshotPerOpenCalendar: readLatestSnapshotForExits,
+  readLatestVerdictsPerCalendar: exitVerdictsRepo.readLatestVerdictsPerCalendar,
+  readEconomicEvents: economicEventsRepo.readEconomicEvents,
+  readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
+  now: () => new Date(),
+});
+const previewRuleOverrides = makePreviewRuleOverridesUseCase({ previewPicker, previewExit });
+
 // RULE-01 / MCP-02 (20-10): get-events-with-rules read use-case + set-rule-tags write
 // use-case — shared by GET/PUT /api/journal/*/rules and the get_rule_tags/set_rule_tags
 // MCP tools over the ONE journal-rules contract schema set (D-13).
@@ -518,7 +540,8 @@ const apiRouter = new Hono()
   // EXIT-08 (26-05): GET /api/exits — read-time exit-advice snapshot (MCP-02)
   .route("/", exitRoutes(getExitAdvice))
   // RUNTIME-* (29-13): GET/PUT /api/settings/rules — curated rule-override surface (MCP-02)
-  .route("/", settingsRoutes(getRuleSettings, setRuleOverrides));
+  // B4/B7 (32-04): POST /api/settings/rules/preview — staged-change dry-run, never persists
+  .route("/", settingsRoutes(getRuleSettings, setRuleOverrides, previewRuleOverrides));
 
 // Phase 12 (12-05): streaming — build shared deps before route mounts.
 const sidecarReconciler = makeSidecarPositionReconciler({
