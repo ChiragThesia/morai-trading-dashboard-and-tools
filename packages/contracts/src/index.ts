@@ -164,3 +164,19 @@ export type {
   ExitRuleSetEntry,
   ExitsResponse,
 } from "./exits.ts";
+
+// Rule-settings contracts (Phase 29, Plan 29-02 — MCP-02: ONE schema source for the future
+// GET/PUT /api/settings/rules routes + get_rule_settings/set_rule_overrides MCP tools)
+export {
+  ruleOverrides,
+  getRuleSettingsResponse,
+  setRuleOverridesRequest,
+  setRuleOverridesResponse,
+} from "./rule-settings.ts";
+export type {
+  RuleOverrides,
+  RuleConfig,
+  GetRuleSettingsResponse,
+  SetRuleOverridesRequest,
+  SetRuleOverridesResponse,
+} from "./rule-settings.ts";
