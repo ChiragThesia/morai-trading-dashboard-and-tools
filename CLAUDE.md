@@ -73,5 +73,6 @@ bun run migrate
 
 ## Current State
 
-Pre-code. Architecture doc set complete; scaffolding not started. **Do not write
-application code until task explicitly moves to implementation.**
+Live. Backend + web are built and deployed (Railway API/worker · Supabase · Vercel web,
+morai.wtf); milestones v1.0–v1.2 shipped, v1.3 in progress. Application code is active —
+follow the TDD red→green + hexagonal-boundary rules above for every change.
