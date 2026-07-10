@@ -5,16 +5,16 @@ milestone_name: Picker Intelligence
 current_phase: 29
 current_phase_name: Runtime Rule Settings
 status: executing
-stopped_at: Phase 29 planned — 14 plans / 6 waves, plan-checker passed
-last_updated: "2026-07-10T04:13:43.024Z"
+stopped_at: Completed 29-04-PLAN.md
+last_updated: "2026-07-10T04:23:07.116Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 29 execution started
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 40
-  completed_plans: 29
-  percent: 73
+  completed_plans: 30
+  percent: 75
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 29 (Runtime Rule Settings) — EXECUTING
-Plan: 4 of 14
+Plan: 5 of 14
 Status: Ready to execute
 Last activity: 2026-07-10 — Phase 29 execution started
 
@@ -274,6 +274,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 29 P01 | 4min | 2 tasks | 3 files |
 | Phase 29 P02 | 12min | 1 tasks | 3 files |
 | Phase 29 P03 | 6min | 3 tasks | 6 files |
+| Phase 29 P04 | 12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -385,6 +386,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 29]: 29-02: exits.take/exits.stop use flat arm/disarm field names (plus15Arm/plus15Disarm etc.), not nested {arm,disarm} pairs, per plan action text
 - [Phase 29]: 29-03: deltaMin clamp bounds against the effective (possibly overridden) deltaMax, not the DELTA_BAND_MAX constant
 - [Phase 29]: 29-03: debitFitFraction cheap-floor/expensive-zero edges stay code-only constants; only the ideal-band midpoint is overridable
+- [Phase 29-04]: resolveEntryGate's vixTier output field is optional (not required) so computePickerSnapshot.ts's toEntryGateState() needed zero out-of-scope changes — keeps this plan's files_modified scope to exactly entry-gate/sizing + tests
+- [Phase 29-04]: resolveEntryGate's vixLadder param takes pre-built ReadonlyArray<VixLadderRow> rows, not raw boundary overrides -- callers call resolveVixLadder() first, then pass rows in — matches the plan's own literal type spec; keeps resolveEntryGate agnostic of the raw override shape
 
 ### Pending Todos
 
@@ -441,9 +444,9 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T04:11:23.635Z
-Stopped at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
-Resume file: .planning/ROADMAP.md (v1.3 section)
+Last session: 2026-07-10T04:23:07.106Z
+Stopped at: Completed 29-04-PLAN.md
+Resume file: None
 
 - Next: /gsd-plan-phase 23 (VIX3M Ingestion)
 
