@@ -6,14 +6,14 @@ current_phase: 29
 current_phase_name: Runtime Rule Settings
 status: executing
 stopped_at: Completed 29-04-PLAN.md
-last_updated: "2026-07-10T04:38:52.619Z"
+last_updated: "2026-07-10T04:46:43.348Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 29 execution started
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 40
-  completed_plans: 32
+  completed_plans: 33
   percent: 75
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 29 (Runtime Rule Settings) — EXECUTING
-Plan: 7 of 14
+Plan: 8 of 14
 Status: Ready to execute
 Last activity: 2026-07-10 — Phase 29 execution started
 
@@ -277,6 +277,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 29 P04 | 12min | 2 tasks | 4 files |
 | Phase 29 P05 | ~15min | 2 tasks | 4 files |
 | Phase 29 P06 | 4min | 2 tasks | 4 files |
+| Phase 29 P07 | 8min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -393,6 +394,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 29-05: resolveTakeRung/resolveStopRung use an explicit switch on rung.label (no lookup table, no as casts) to stay within typescript.md strictness
 - [Phase ?]: 29-05: evalStop/evalTake gained an optional rungs param defaulting to STOP_RUNGS/TAKE_RUNGS so only evaluateExit's own call sites needed to pass config.stopRungs/config.takeRungs
 - [Phase ?]: 29-06: exported the eight WARN/CRISIS constants from regime.ts (were module-private) so rule-config.ts can reference them by name in its ?? fallback idiom
+- [Phase ?]: 29-07: PickerRuleOverrides uses flat field names matching the contracts pickerOverrides group; PickerRuleConfig uses the plan-pinned nested shape; single-field isolation proven via 12 deterministic tests, idempotency via a real fast-check property over all 12 fields
 
 ### Pending Todos
 
@@ -449,7 +451,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T04:38:03.919Z
+Last session: 2026-07-10T04:45:51.200Z
 Stopped at: Completed 29-04-PLAN.md
 Resume file: None
 
