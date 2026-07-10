@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import * as fc from "fast-check";
+
+import { mockResponsiveContainer } from "../test/recharts-test-utils.tsx";
+
+mockResponsiveContainer();
 
 import {
   PayoffChart,
+  PayoffTooltipContent,
   computeYDomain,
   buildXTicks,
   buildXScale,
@@ -15,10 +20,12 @@ import type { PayoffChartToggles, PayoffChartProps } from "./PayoffChart.tsx";
 import type { PayoffPoint } from "../../lib/scenario-engine.ts";
 
 /**
- * PayoffChart — D-05 row-highlight dual-curve dim + D-02 T+0 exclusion note.
- *
- * Mirrors GexBars.test.tsx's render/assert conventions (@testing-library/react,
- * no echarts here so no mock needed — visx renders plain SVG under jsdom).
+ * PayoffChart — Recharts DOM re-expression (33-06). Preserves every locked behavior's
+ * intent from the pre-migration visx suite (D-05 dim, D-02 note, D-03 colors, ANLZ-02
+ * compare/EM-band, WR-03 lock/fitY, profit zone, BE pills, GEX wall edge-pin, crosshair)
+ * against the Recharts DOM shape. Element-level EM-band/BE-bar/edge-arrow assertions live
+ * in PayoffChartMarks.test.tsx (33-02) — this file keeps only assembled-chart concerns:
+ * z-order placement and wall-line structural clip.
  */
 
 const TOGGLES: PayoffChartToggles = {
@@ -58,11 +65,11 @@ const HUGE_EXP_CURVE: PayoffPoint[] = [
   { spot: 7900, pl: 50_000 },
 ];
 
-/** Grid-line y-axis labels only (text-anchor="end" is unique to them). */
+/** Y-axis grid-tick labels (native Recharts YAxis ticks, formatted via fmtPl). */
 function getGridLabels(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('text[text-anchor="end"]')).map(
-    (el) => el.textContent ?? "",
-  );
+  return Array.from(
+    container.querySelectorAll(".recharts-yAxis .recharts-cartesian-axis-tick-value"),
+  ).map((el) => el.textContent ?? "");
 }
 
 /** Matches the curve fixtures above (6900-7900) — every existing test keeps exercising the real path (Pitfall 3). */
@@ -183,13 +190,8 @@ describe("PayoffChart — compareCurve overlay (ANLZ-02)", () => {
     { spot: 7900, pl: 250 },
   ];
 
-  it("renders no extra path when compareCurve is null or omitted (Overview regression guard)", () => {
-    const { container: baselineContainer } = render(<PayoffChart {...baseProps()} />);
-    const baselineCount = baselineContainer.querySelectorAll("path").length;
-    cleanup();
-
-    const { container } = render(<PayoffChart {...baseProps()} compareCurve={null} />);
-    expect(container.querySelectorAll("path").length).toBe(baselineCount);
+  it("renders no compare-curve element when compareCurve is null or omitted (Overview regression guard)", () => {
+    render(<PayoffChart {...baseProps()} compareCurve={null} />);
     expect(screen.queryByTestId("compare-curve")).toBeNull();
 
     cleanup();
@@ -197,20 +199,12 @@ describe("PayoffChart — compareCurve overlay (ANLZ-02)", () => {
     expect(screen.queryByTestId("compare-curve")).toBeNull();
   });
 
-  it("renders exactly one dashed-amber path when compareCurve is supplied (no T+0 twin)", () => {
-    const { container: baselineContainer } = render(<PayoffChart {...baseProps()} />);
-    const baselineCount = baselineContainer.querySelectorAll("path").length;
-    cleanup();
-
-    const { container } = render(
-      <PayoffChart {...baseProps()} compareCurve={COMPARE_CURVE} />,
-    );
+  it("renders exactly one dashed-amber compare-curve element when compareCurve is supplied", () => {
+    render(<PayoffChart {...baseProps()} compareCurve={COMPARE_CURVE} />);
     const compare = screen.getByTestId("compare-curve");
-    expect(compare.tagName.toLowerCase()).toBe("path");
     expect(compare.getAttribute("stroke")).toBe("#f0b429");
     expect(compare.getAttribute("stroke-dasharray")).not.toBeNull();
-    expect(container.querySelectorAll('[data-testid="compare-curve"]').length).toBe(1);
-    expect(container.querySelectorAll("path").length).toBe(baselineCount + 1);
+    expect(screen.getAllByTestId("compare-curve").length).toBe(1);
   });
 
   it("honors a compareCurveColor override", () => {
@@ -225,7 +219,7 @@ describe("PayoffChart — compareCurve overlay (ANLZ-02)", () => {
   });
 });
 
-describe("PayoffChart — expectedMoveBand (ANLZ-02)", () => {
+describe("PayoffChart — expectedMoveBand (ANLZ-02) — marks-layer wiring, z-order only", () => {
   afterEach(() => {
     cleanup();
   });
@@ -241,53 +235,12 @@ describe("PayoffChart — expectedMoveBand (ANLZ-02)", () => {
     expect(screen.queryByTestId("em-band")).toBeNull();
   });
 
-  it("renders two ticks at spot±em (via xScale) and a connector at the existing zero-P&L y", () => {
-    const { container } = render(
-      <PayoffChart {...baseProps()} expectedMoveBand={EM_BAND} />,
-    );
-
-    const xScale = buildXScale(INNER_W, DOMAIN);
-    const expectedLowerX = xScale(EM_BAND.spot - EM_BAND.em);
-    const expectedUpperX = xScale(EM_BAND.spot + EM_BAND.em);
-
-    // The existing "Zero line" layer's own <line> is the source of truth for
-    // zeroY (reused, not recomputed) — its stroke color is the ZERO_LINE constant.
-    const zeroLine = container.querySelector('line[stroke="#46556a"]');
-    expect(zeroLine).not.toBeNull();
-    const zeroY = zeroLine?.getAttribute("y1") ?? null;
-    expect(zeroY).not.toBeNull();
-
-    const lowerTick = screen.getByTestId("em-band-tick-lower");
-    const upperTick = screen.getByTestId("em-band-tick-upper");
-    const connector = screen.getByTestId("em-band-connector");
-
-    expect(Number(lowerTick.getAttribute("x1"))).toBeCloseTo(expectedLowerX, 6);
-    expect(Number(upperTick.getAttribute("x1"))).toBeCloseTo(expectedUpperX, 6);
-    expect(connector.getAttribute("y1")).toBe(zeroY);
-    expect(connector.getAttribute("y2")).toBe(zeroY);
+  it("renders the em-band group when expectedMoveBand is supplied", () => {
+    render(<PayoffChart {...baseProps()} expectedMoveBand={EM_BAND} />);
+    expect(screen.queryByTestId("em-band")).not.toBeNull();
   });
 
-  it("clamps EM-band ticks/connector/label into the plot when ±1σ exceeds the fitted domain (no page-wide bleed)", () => {
-    // Regression: Phase 30's tent-fitted domains are often narrower than spot±1σ.
-    // Unclamped xScale coords + the SVG's overflow:visible drew the connector across
-    // the entire page (user screenshot 2026-07-10). Every EM x-coordinate must stay
-    // inside [0, INNER_W].
-    const wideBand = { spot: (DOMAIN.min + DOMAIN.max) / 2, em: (DOMAIN.max - DOMAIN.min) * 5 };
-    render(<PayoffChart {...baseProps()} expectedMoveBand={wideBand} />);
-
-    const xs = [
-      ...["x1", "x2"].map((a) => Number(screen.getByTestId("em-band-tick-lower").getAttribute(a))),
-      ...["x1", "x2"].map((a) => Number(screen.getByTestId("em-band-tick-upper").getAttribute(a))),
-      ...["x1", "x2"].map((a) => Number(screen.getByTestId("em-band-connector").getAttribute(a))),
-      Number(screen.getByTestId("em-band-label").getAttribute("x")),
-    ];
-    for (const x of xs) {
-      expect(x).toBeGreaterThanOrEqual(0);
-      expect(x).toBeLessThanOrEqual(INNER_W);
-    }
-  });
-
-  it("places the EM-band group before the T+0/@exp curve layers in SVG source order (never occludes a curve)", () => {
+  it("places the em-band group before the T+0/@exp curve layers in DOM source order (A1: marks paint under curves, never occlude one)", () => {
     render(<PayoffChart {...baseProps()} expectedMoveBand={EM_BAND} />);
 
     const band = screen.getByTestId("em-band");
@@ -304,16 +257,50 @@ describe("PayoffChart — expectedMoveBand (ANLZ-02)", () => {
   });
 });
 
+describe("PayoffChart — 9-layer z-order (A1, proven empirically in 33-01: zIndex bands + JSX tiebreak)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("profit-zone fill precedes the T+0 curve line in DOM order (Area zIndex 100 < Line zIndex 400)", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={{ ...TOGGLES, showProfitZone: true }}
+      />,
+    );
+    const zone = screen.getByTestId("profit-zone");
+    const t0 = screen.getByTestId("net-book-t0-curve");
+    expect(zone.compareDocumentPosition(t0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("wall lines precede the T+0 curve line in DOM order (same zIndex band 400 — JSX order is the tiebreak)", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={{ ...TOGGLES, showWalls: true }}
+        gex={{ callWall: 7600, putWall: 7400, flip: 7486 }}
+      />,
+    );
+    const wall = screen.getByTestId("wall-line-call");
+    const t0 = screen.getByTestId("net-book-t0-curve");
+    expect(wall.compareDocumentPosition(t0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("the spot line renders after the T+0 curve line in DOM order (locked stack: T+0 line -> spot)", () => {
+    render(<PayoffChart {...baseProps()} />);
+    const t0 = screen.getByTestId("net-book-t0-curve");
+    const spotLine = screen.getByTestId("spot-line");
+    expect(t0.compareDocumentPosition(spotLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe("computeYDomain — combined-curve y-axis (OVW-04)", () => {
   it("returns the fallback domain when both curves are empty", () => {
     expect(computeYDomain([], [])).toEqual({ lo: -500, hi: 500 });
   });
 
   it("scans the today curve so a tall today curve is not dropped in favor of a small @exp tent", () => {
-    // WR-04: the today curve carries the MORE extreme values here (exp is ±100), so every
-    // assertion below can ONLY pass if computeYDomain actually scans its first argument.
-    // The previous version had exp dwarf today, so a regression that ignored todayCurve
-    // still passed — vacuous. Making today the extreme makes the scan load-bearing.
     const tallToday: PayoffPoint[] = [
       { spot: 6900, pl: -20_000 },
       { spot: 7400, pl: 0 },
@@ -327,12 +314,9 @@ describe("computeYDomain — combined-curve y-axis (OVW-04)", () => {
 
     const { lo, hi } = computeYDomain(tallToday, smallExp);
 
-    // Only satisfiable if the today curve IS scanned (exp alone spans ±100).
     expect(lo).toBeLessThanOrEqual(-20_000);
     expect(hi).toBeGreaterThanOrEqual(20_000);
 
-    // And the combined domain must equal the today-only scan (today dwarfs exp),
-    // proving the exp curve did not silently replace the today scan.
     const todayOnly = computeYDomain(tallToday, tallToday);
     expect(lo).toBeCloseTo(todayOnly.lo, 6);
     expect(hi).toBeCloseTo(todayOnly.hi, 6);
@@ -364,6 +348,14 @@ describe("buildXTicks — derived round-number x-axis ticks (OVW-04)", () => {
   });
 });
 
+describe("buildXScale — pure 0-based linear scale (unchanged contract, PayoffChartMarks depends on it)", () => {
+  it("maps the domain endpoints to [0, innerWidth]", () => {
+    const xScale = buildXScale(INNER_W, DOMAIN);
+    expect(xScale(DOMAIN.min)).toBeCloseTo(0, 6);
+    expect(xScale(DOMAIN.max)).toBeCloseTo(INNER_W, 6);
+  });
+});
+
 describe("PayoffChart — WR-03 y-domain lock + fitY without render-phase side effects", () => {
   afterEach(() => {
     cleanup();
@@ -371,7 +363,7 @@ describe("PayoffChart — WR-03 y-domain lock + fitY without render-phase side e
 
   it("locks the y-domain on mount and does NOT rescale when curves change but positionSetSignature is unchanged", () => {
     const { container, rerender } = render(<PayoffChart {...baseProps()} />);
-    const initialTopLabel = getGridLabels(container)[5];
+    const initialLabels = getGridLabels(container);
 
     rerender(
       <PayoffChart
@@ -381,12 +373,12 @@ describe("PayoffChart — WR-03 y-domain lock + fitY without render-phase side e
       />,
     );
 
-    expect(getGridLabels(container)[5]).toBe(initialTopLabel);
+    expect(getGridLabels(container)).toEqual(initialLabels);
   });
 
   it("recomputes the y-domain when positionSetSignature changes (lock-on-signature still works)", () => {
     const { container, rerender } = render(<PayoffChart {...baseProps()} />);
-    const initialTopLabel = getGridLabels(container)[5];
+    const initialLabels = getGridLabels(container);
 
     rerender(
       <PayoffChart
@@ -397,7 +389,7 @@ describe("PayoffChart — WR-03 y-domain lock + fitY without render-phase side e
       />,
     );
 
-    expect(getGridLabels(container)[5]).not.toBe(initialTopLabel);
+    expect(getGridLabels(container)).not.toEqual(initialLabels);
   });
 
   it("fitY forces a refit even when positionSetSignature is unchanged, and calls onFitYConsumed exactly once", () => {
@@ -405,7 +397,7 @@ describe("PayoffChart — WR-03 y-domain lock + fitY without render-phase side e
     const { container, rerender } = render(
       <PayoffChart {...baseProps()} onFitYConsumed={onFitYConsumed} />,
     );
-    const initialTopLabel = getGridLabels(container)[5];
+    const initialLabels = getGridLabels(container);
 
     rerender(
       <PayoffChart
@@ -418,7 +410,7 @@ describe("PayoffChart — WR-03 y-domain lock + fitY without render-phase side e
     );
 
     expect(onFitYConsumed).toHaveBeenCalledTimes(1);
-    expect(getGridLabels(container)[5]).not.toBe(initialTopLabel);
+    expect(getGridLabels(container)).not.toEqual(initialLabels);
   });
 
   it("does not trigger a 'Cannot update a component while rendering a different component' warning when fitY fires the parent callback", () => {
@@ -461,7 +453,7 @@ describe("PayoffChart — curve-color props (OVW-04, D-03 scoped brand override)
     expect(exp.getAttribute("stroke")).toBe("#7b8696");
   });
 
-  it("passing todayCurveColor/expirationCurveColor sets those strokes on the respective LinePaths", () => {
+  it("passing todayCurveColor/expirationCurveColor sets those strokes on the respective curves", () => {
     render(
       <PayoffChart
         {...baseProps()}
@@ -493,7 +485,7 @@ describe("PayoffChart — curve-color props (OVW-04, D-03 scoped brand override)
   });
 });
 
-describe("PayoffChart — breakeven pills + red markers (TOS-style)", () => {
+describe("PayoffChart — breakeven pills (TOS-style, plain HTML overlay — D-09, unchanged)", () => {
   afterEach(cleanup);
 
   it("renders BE pills above the chart with the today and @exp breakeven strikes", () => {
@@ -505,23 +497,11 @@ describe("PayoffChart — breakeven pills + red markers (TOS-style)", () => {
     expect(exp).toContain("7400"); // EXP_CURVE crosses zero at 7400
   });
 
-  it("draws short red vertical BE markers in the chart (CORAL stroke, not full-height dashed text)", () => {
-    const { container } = render(<PayoffChart {...baseProps()} />);
-    const markers = container.querySelectorAll(
-      '[data-testid="be-marker-t0"], [data-testid="be-marker-exp"]',
-    );
-    expect(markers.length).toBeGreaterThan(0);
-    expect(markers[0]?.getAttribute("stroke")).toBe("#ef5350");
-    // No more in-chart "BE·T0" text labels (moved to the pills).
-    expect(container.textContent).not.toContain("BE·T0");
-  });
-
-  it("hides @exp BE pills + markers when showExpiration is off", () => {
+  it("hides @exp BE pills when showExpiration is off", () => {
     const { container } = render(
       <PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showExpiration: false }} />,
     );
     expect(container.querySelectorAll('[data-testid="be-pill-exp"]').length).toBe(0);
-    expect(container.querySelectorAll('[data-testid="be-marker-exp"]').length).toBe(0);
     // today BEs still shown
     expect(container.querySelectorAll('[data-testid="be-pill-t0"]').length).toBeGreaterThan(0);
   });
@@ -530,68 +510,26 @@ describe("PayoffChart — breakeven pills + red markers (TOS-style)", () => {
 describe("PayoffChart — profit zone toggle", () => {
   afterEach(cleanup);
 
-  it("renders a non-empty @exp profit-zone fill when showProfitZone is on", () => {
-    const { container } = render(
-      <PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showProfitZone: true }} />,
-    );
-    const zone = container.querySelector('[data-testid="profit-zone"]');
-    expect(zone).not.toBeNull();
-    // Path must actually describe a region (EXP_CURVE is profitable above 7400).
-    expect((zone?.getAttribute("d") ?? "").length).toBeGreaterThan(0);
+  it("renders the profit-zone element when showProfitZone is on", () => {
+    render(<PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showProfitZone: true }} />);
+    expect(screen.queryByTestId("profit-zone")).not.toBeNull();
   });
 
-  it("removes the profit-zone fill when showProfitZone is off", () => {
-    const { container } = render(
-      <PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showProfitZone: false }} />,
-    );
-    expect(container.querySelector('[data-testid="profit-zone"]')).toBeNull();
+  it("removes the profit-zone element when showProfitZone is off", () => {
+    render(<PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showProfitZone: false }} />);
+    expect(screen.queryByTestId("profit-zone")).toBeNull();
   });
 });
 
-describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not bleed past the plot)", () => {
+describe("PayoffChart — GEX wall structural clip (allowDataOverflow + auto clipPath replaces the hand pinMarker clamp)", () => {
   afterEach(() => {
     cleanup();
   });
 
   const WALL_TOGGLES: PayoffChartToggles = { ...TOGGLES, showWalls: true };
-  const xScale = buildXScale(INNER_W, DOMAIN);
 
-  it("pins an out-of-domain call wall (8000 > X_MAX) to the right edge; no label text", () => {
-    const { container } = render(
-      <PayoffChart
-        {...baseProps()}
-        toggles={WALL_TOGGLES}
-        gex={{ callWall: 8000, putWall: 7400, flip: 7486 }}
-      />,
-    );
-
-    // No in-chart wall-label text survives the KISS fix (delete-label strategy).
-    expect(screen.queryByText(/wall/i)).toBeNull();
-
-    // The line itself is clamped inside the plot — never past INNER_W
-    const line = container.querySelector('[data-testid="wall-line-call"]');
-    expect(line).not.toBeNull();
-    expect(Number(line?.getAttribute("x1"))).toBeLessThanOrEqual(INNER_W);
-  });
-
-  it("pins an out-of-domain put wall (6800 < X_MIN) to the left edge; no label text", () => {
-    const { container } = render(
-      <PayoffChart
-        {...baseProps()}
-        toggles={WALL_TOGGLES}
-        gex={{ callWall: 7600, putWall: 6800, flip: 7486 }}
-      />,
-    );
-
-    expect(screen.queryByText(/wall/i)).toBeNull();
-
-    const line = container.querySelector('[data-testid="wall-line-put"]');
-    expect(line).not.toBeNull();
-    expect(Number(line?.getAttribute("x1"))).toBeGreaterThanOrEqual(0);
-  });
-
-  it("renders in-domain walls at their true x with no label text (unchanged line geometry)", () => {
-    const { container } = render(
+  it("in-domain walls render with the correct stroke color and no label text", () => {
+    render(
       <PayoffChart
         {...baseProps()}
         toggles={WALL_TOGGLES}
@@ -600,35 +538,60 @@ describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not blee
     );
 
     expect(screen.queryByText(/wall/i)).toBeNull();
-    expect(screen.queryByText(/γflip/i)).toBeNull();
-
-    const call = container.querySelector('[data-testid="wall-line-call"]');
-    const put = container.querySelector('[data-testid="wall-line-put"]');
-    expect(Number(call?.getAttribute("x1"))).toBeCloseTo(xScale(7600), 5);
-    expect(Number(put?.getAttribute("x1"))).toBeCloseTo(xScale(7400), 5);
-  });
-});
-
-describe("PayoffChart — GEX wall markers: KISS collision fix (delete labels, fixed-lane edge arrows)", () => {
-  afterEach(() => {
-    cleanup();
+    expect(screen.getByTestId("wall-line-call").getAttribute("stroke")).toBe("#26a69a");
+    expect(screen.getByTestId("wall-line-put").getAttribute("stroke")).toBe("#ef5350");
+    expect(screen.getByTestId("wall-line-flip").getAttribute("stroke")).toBe("#f0b429");
   });
 
-  const WALL_TOGGLES: PayoffChartToggles = { ...TOGGLES, showWalls: true };
+  it("an off-domain call wall (8000 > domain.max 7900) renders inside a structurally-clipped ancestor sized to the plot area, not a hand-clamped coordinate", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={WALL_TOGGLES}
+        gex={{ callWall: 8000, putWall: 7400, flip: 7486 }}
+      />,
+    );
 
-  it("EDGE_ARROW_LANE_Y assigns three distinct y lanes to flip/call/put", () => {
-    const keys: ReadonlyArray<"flip" | "call" | "put"> = ["flip", "call", "put"];
-    const lanes = keys.map((k) => EDGE_ARROW_LANE_Y[k]);
-    expect(new Set(lanes).size).toBe(3);
-    expect(lanes).toEqual([8, 16, 24]);
+    // No in-chart wall-label text (KISS fix carries over).
+    expect(screen.queryByText(/wall/i)).toBeNull();
+
+    const line = screen.getByTestId("wall-line-call");
+    // Real structural clipping: the element (or its closest clipped ancestor) carries a
+    // clip-path resolving to a <clipPath><rect> in <defs> sized to the plot area
+    // (SVG dims minus PAD margins) — this FAILS under the old hand-clamp approach, which
+    // produced an unclipped coordinate with no clip-path at all.
+    const clipped = line.closest("[clip-path]");
+    expect(clipped).not.toBeNull();
+    if (clipped === null) throw new Error("unreachable");
+    const clipPathAttr = clipped.getAttribute("clip-path");
+    expect(clipPathAttr).not.toBeNull();
+    if (clipPathAttr === null) throw new Error("unreachable");
+    const idMatch = /url\(#([^)]+)\)/.exec(clipPathAttr);
+    expect(idMatch).not.toBeNull();
+    if (idMatch === null) throw new Error("unreachable");
+    const clipId = idMatch[1];
+    expect(clipId).toBeDefined();
+    if (clipId === undefined) throw new Error("unreachable");
+
+    const svg = line.closest("svg");
+    expect(svg).not.toBeNull();
+    if (svg === null) throw new Error("unreachable");
+    const clipRect = svg.querySelector(`defs clipPath#${CSS.escape(clipId)} rect`);
+    expect(clipRect).not.toBeNull();
+    if (clipRect === null) throw new Error("unreachable");
+
+    // Plot area = SVG dims minus PAD margins (PAD.left=56/right=14/top=14/bottom=24,
+    // SVG_W=1000/SVG_H=470 -> width=930, height=432).
+    expect(Number(clipRect.getAttribute("width"))).toBeCloseTo(930, 5);
+    expect(Number(clipRect.getAttribute("height"))).toBeCloseTo(432, 5);
   });
 
-  it("fast-check: zero wall/flip label text nodes for arbitrary in-domain levels", () => {
+  it("fast-check: zero wall-label text nodes for arbitrary in-domain/out-of-domain levels", () => {
     fc.assert(
       fc.property(
-        fc.float({ min: Math.fround(7100), max: Math.fround(8050), noNaN: true }),
-        fc.float({ min: Math.fround(7100), max: Math.fround(8050), noNaN: true }),
-        fc.float({ min: Math.fround(7100), max: Math.fround(8050), noNaN: true }),
+        fc.float({ min: Math.fround(6800), max: Math.fround(8050), noNaN: true }),
+        fc.float({ min: Math.fround(6800), max: Math.fround(8050), noNaN: true }),
+        fc.float({ min: Math.fround(6800), max: Math.fround(8050), noNaN: true }),
         (put, call, flip) => {
           const { unmount } = render(
             <PayoffChart
@@ -639,7 +602,6 @@ describe("PayoffChart — GEX wall markers: KISS collision fix (delete labels, f
             />,
           );
           expect(screen.queryByText(/wall/i)).toBeNull();
-          expect(screen.queryByText(/γflip/i)).toBeNull();
           unmount();
           return true;
         },
@@ -647,117 +609,84 @@ describe("PayoffChart — GEX wall markers: KISS collision fix (delete labels, f
       { numRuns: 50 },
     );
   });
-
-  it("real-repro 2026-07-10: flip 7488 / putWall 7500 / spot 7544 / callWall 7550 on 7100–8050 — zero wall-label text, lines at true x", () => {
-    const domain = { min: 7100, max: 8050 };
-    const xScale = buildXScale(INNER_W, domain);
-    const { container } = render(
-      <PayoffChart
-        {...baseProps()}
-        domain={domain}
-        spot={7544}
-        toggles={WALL_TOGGLES}
-        gex={{ callWall: 7550, putWall: 7500, flip: 7488 }}
-      />,
-    );
-
-    expect(screen.queryByText(/wall/i)).toBeNull();
-    expect(screen.queryByText(/γflip/i)).toBeNull();
-
-    const put = container.querySelector('[data-testid="wall-line-put"]');
-    const call = container.querySelector('[data-testid="wall-line-call"]');
-    const flip = container.querySelector('[data-testid="wall-line-flip"]');
-    expect(Number(put?.getAttribute("x1"))).toBeCloseTo(xScale(7500), 5);
-    expect(Number(call?.getAttribute("x1"))).toBeCloseTo(xScale(7550), 5);
-    expect(Number(flip?.getAttribute("x1"))).toBeCloseTo(xScale(7488), 5);
-  });
-
-  it("off-domain call wall (8200 > domain.max 8050) renders a single '›' glyph in the call lane (y=16), no label text", () => {
-    const domain = { min: 7100, max: 8050 };
-    const xScale = buildXScale(INNER_W, domain);
-    const { container } = render(
-      <PayoffChart
-        {...baseProps()}
-        domain={domain}
-        toggles={WALL_TOGGLES}
-        gex={{ callWall: 8200, putWall: 7500, flip: 7488 }}
-      />,
-    );
-
-    expect(screen.queryByText(/wall/i)).toBeNull();
-    const arrow = screen.getByText("›");
-    expect(arrow.getAttribute("y")).toBe("16");
-    expect(arrow.getAttribute("text-anchor")).toBe("end");
-    expect(Number(arrow.getAttribute("x"))).toBeCloseTo(xScale(domain.max) - 3, 5);
-
-    const line = container.querySelector('[data-testid="wall-line-call"]');
-    expect(Number(line?.getAttribute("x1"))).toBeCloseTo(xScale(domain.max), 5);
-  });
-
-  it("off-domain put wall (6800 < domain.min 7100) renders a single '‹' glyph in the put lane (y=24), no label text", () => {
-    const domain = { min: 7100, max: 8050 };
-    const xScale = buildXScale(INNER_W, domain);
-    render(
-      <PayoffChart
-        {...baseProps()}
-        domain={domain}
-        toggles={WALL_TOGGLES}
-        gex={{ callWall: 7600, putWall: 6800, flip: 7488 }}
-      />,
-    );
-
-    expect(screen.queryByText(/wall/i)).toBeNull();
-    const arrow = screen.getByText("‹");
-    expect(arrow.getAttribute("y")).toBe("24");
-    expect(arrow.getAttribute("text-anchor")).toBe("start");
-    expect(Number(arrow.getAttribute("x"))).toBeCloseTo(xScale(domain.min) + 3, 5);
-  });
 });
 
-describe("PayoffChart — crosshair inverts through the domain xScale (D-01, Phase 30)", () => {
+describe("PayoffChart — native Tooltip crosshair content (D-10, D-12: typed content component, no manual localPoint block)", () => {
   afterEach(() => {
     cleanup();
   });
 
-  // jsdom doesn't lay out SVG, so stub getBoundingClientRect/clientLeft/clientTop the way a
-  // real browser would post-layout (same technique as LifecycleChart.test.tsx's svgOf/firePointerMove).
-  function svgOf(container: HTMLElement): SVGSVGElement {
-    const svg = container.querySelector("svg");
-    expect(svg).not.toBeNull();
-    if (svg === null) throw new Error("unreachable");
-    const rect: DOMRect = {
-      x: 0,
-      y: 0,
-      width: 1000, // SVG_W — 1:1 logical/rendered pixel mapping
-      height: 470,
-      top: 0,
-      left: 0,
-      right: 1000,
-      bottom: 470,
-      toJSON: () => "",
-    };
-    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue(rect);
-    Object.defineProperty(svg, "clientLeft", { value: 0, configurable: true });
-    Object.defineProperty(svg, "clientTop", { value: 0, configurable: true });
-    return svg;
-  }
+  it("PayoffTooltipContent reports the hovered spot from the payload label, not a hardcoded value", () => {
+    render(
+      <PayoffTooltipContent
+        active
+        payload={[{ graphicalItemId: "today", name: "today", value: 123.4 }]}
+        label={7550}
+        coordinate={undefined}
+        accessibilityLayer={false}
+        activeIndex={null}
+        gex={null}
+      />,
+    );
+    expect(screen.getByText("SPX")).toBeTruthy();
+    expect(screen.getByText("7550")).toBeTruthy();
+  });
 
-  function firePointerMove(svg: SVGSVGElement, clientX: number, clientY: number): void {
-    fireEvent(svg, new MouseEvent("pointermove", { clientX, clientY, bubbles: true }));
-  }
+  it("PayoffTooltipContent formats P&L from the payload value (teal for positive, coral for negative)", () => {
+    const { unmount } = render(
+      <PayoffTooltipContent
+        active
+        payload={[{ graphicalItemId: "today", name: "today", value: 1234 }]}
+        label={7500}
+        coordinate={undefined}
+        accessibilityLayer={false}
+        activeIndex={null}
+        gex={null}
+      />,
+    );
+    expect(screen.getByText("+$1.2k")).toBeTruthy();
+    unmount();
 
-  it("reports a hover at the right plot edge as ≈ domain.max, not the old hardcoded 7900", () => {
-    const narrowDomain = { min: 7100, max: 7600 };
-    const { container } = render(<PayoffChart {...baseProps()} domain={narrowDomain} />);
-    const svg = svgOf(container);
+    render(
+      <PayoffTooltipContent
+        active
+        payload={[{ graphicalItemId: "today", name: "today", value: -500 }]}
+        label={7300}
+        coordinate={undefined}
+        accessibilityLayer={false}
+        activeIndex={null}
+        gex={null}
+      />,
+    );
+    expect(screen.getByText("−$500")).toBeTruthy();
+  });
 
-    // PAD.left=56, INNER_W=930 (SVG_W 1000 - PAD.left 56 - PAD.right 14) — clientX at the
-    // right plot edge is PAD.left + INNER_W.
-    firePointerMove(svg, 56 + INNER_W, 100);
+  it("PayoffTooltipContent renders nothing when inactive or payload is empty", () => {
+    const { container: c1 } = render(
+      <PayoffTooltipContent
+        active={false}
+        payload={[{ graphicalItemId: "today", name: "today", value: 1 }]}
+        label={7500}
+        coordinate={undefined}
+        accessibilityLayer={false}
+        activeIndex={null}
+        gex={null}
+      />,
+    );
+    expect(c1.firstChild).toBeNull();
 
-    const tooltip = screen.getByTestId("payoff-tooltip");
-    const spans = tooltip.querySelectorAll("span");
-    expect(spans[0]?.textContent).toBe("SPX");
-    expect(Number(spans[1]?.textContent)).toBe(narrowDomain.max);
+    cleanup();
+    const { container: c2 } = render(
+      <PayoffTooltipContent
+        active
+        payload={[]}
+        label={7500}
+        coordinate={undefined}
+        accessibilityLayer={false}
+        activeIndex={null}
+        gex={null}
+      />,
+    );
+    expect(c2.firstChild).toBeNull();
   });
 });
