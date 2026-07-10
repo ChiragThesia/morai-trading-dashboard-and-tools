@@ -49,6 +49,7 @@ import {
   makePostgresPickerSnapshotRepo,
   makePostgresPickerHistoryRepo,
   makePostgresExitVerdictsRepo,
+  makePostgresRuleOverridesRepo,
 } from "@morai/adapters";
 import {
   makeFetchChainUseCase,
@@ -200,6 +201,10 @@ const fetchVix9dQuote = makeCboeVix9dAdapter({
   userAgent: USER_AGENT,
 });
 const macroObsRepo = makePostgresMacroObservationsRepo(db);
+// 29-10 (RUNTIME-*): runtime rule-settings overrides repo — the use-case reads this FRESH on
+// every compute-picker run (never cached here); constructing the repo function once at boot
+// is composition-root wiring, not caching the data itself.
+const ruleOverridesRepo = makePostgresRuleOverridesRepo(db);
 const fetchMacroSeriesUseCase = makeFetchMacroSeries({
   fetchFredSeries,
   fetchVvixQuote,
@@ -580,6 +585,7 @@ const computePickerSnapshotUseCase = makeComputePickerSnapshotUseCase({
   readOpenCalendars: calendarsRepo.getOpenCalendars,
   readRecentClosedCalendars: calendarEventsRepo.readRecentClosedCalendars,
   readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
+  readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
   rate: config.BSM_RATE_FALLBACK,
   dividendYield: config.BSM_DIVIDEND_YIELD,
   now: () => new Date(),
