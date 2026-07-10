@@ -1125,9 +1125,10 @@ export function Overview(): React.ReactElement {
               toggles={toggles}
               onToggle={handleToggle}
             />
-            {/* Curve-color key (T+0 / @exp / γ flip / walls) — MORAI violet/gray palette,
-                not TOS neon (OVW-04). The toggle chips above control visibility; this maps
-                color → meaning. */}
+            {/* Curve-color key (T+0 / @exp / γ flip / call wall / put wall) — MORAI
+                violet/gray palette, not TOS neon (OVW-04). The toggle chips above
+                control visibility; this maps color → meaning (31-01: replaces the
+                removed in-chart wall/flip text labels — KISS collision fix). */}
             <div className="mb-1 flex flex-wrap gap-3 font-mono text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-0.5 w-3.5 rounded-full bg-violet" />
@@ -1143,7 +1144,11 @@ export function Overview(): React.ReactElement {
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-0.5 w-3.5 rounded-full bg-up" />
-                walls
+                call wall
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-down" />
+                put wall
               </span>
             </div>
             {/* MORAI default curve palette (violet T+0 / gray @exp) — same as the Analyzer's
