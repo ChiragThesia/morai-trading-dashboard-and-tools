@@ -370,14 +370,15 @@ Plans:
 
 ### Phase 31: Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10) — PLUS left-rail macro readability: replace raw-number rows (VIX/VVIX/ratios/HY OAS/rates) with compact linear band-gauges (bullet style: value marker on a warn/crisis-banded track; NOT circular dials — space + scannability), user proposal 2026-07-10
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Overview reads clean on the tightest-clustered day and the macro rail reads at a glance — two presentation-only fixes: (1) Risk Profile wall/flip markers can never overlap into unreadable text (in-chart labels deleted, off-domain walls use fixed non-overlapping lanes; fix lives in the shared PayoffChart so Analyzer benefits too), and (2) the 4 banded MARKET REGIME rows become linear bullet gauges banded from the Phase-29-effective thresholds. No GEX math, no wall-picking, no regime-banding math changed.
+**Requirements**: DEFECT-1 (marker collision), DEFECT-2 (macro band-gauges) — user-added, presentation-only; no REQUIREMENTS.md IDs
 **Depends on:** Phase 30
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 31 to break down)
+- [ ] 31-01-PLAN.md — Marker collision KISS fix: delete in-chart wall labels, fixed-lane edge arrows, 3-swatch Overview legend (PayoffChart shared → Analyzer too)
+- [ ] 31-02-PLAN.md — Macro band-gauges: additive bandWarn/bandCrisis contract fields from effective config + RegimeGauge (role=meter banded bullet) for the 4 regime rows
 
 ### Phase 32: Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
 
