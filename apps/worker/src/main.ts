@@ -679,6 +679,9 @@ const computeExitAdviceUseCase = makeComputeExitAdviceUseCase({
   readEconomicEvents: economicEventsRepo.readEconomicEvents,
   readChainForRoll: readChainForRollForExits,
   persistExitVerdict: exitVerdictsRepo.insertExitVerdict,
+  // 29-11 (RUNTIME-*): reuses the single ruleOverridesRepo instance constructed above (shared
+  // with the compute-picker wiring at line 588) — pure composition-root wiring, no new repo.
+  readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
   now: () => new Date(),
 });
 
