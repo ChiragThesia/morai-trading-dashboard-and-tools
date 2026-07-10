@@ -42,7 +42,7 @@ Hexagonal (ports & adapters) + DDD-lite. Full doc set: `docs/architecture/` (sta
 | Driven adapters (DB, Schwab, CBOE, queue) | `packages/adapters/` | core ports, shared |
 | Driving adapters (HTTP, MCP, job handlers) | inside `apps/*` | core, adapters, contracts |
 | API contracts (Zod) | `packages/contracts/` | zod, shared |
-| Web UI (deferred) | `apps/web/` | contracts only (HTTP via Hono RPC) |
+| Web UI | `apps/web/` | contracts (HTTP via Hono RPC) + core pure functions (no ports/adapters; eslint boundaries enforce) |
 
 ## Stack
 
