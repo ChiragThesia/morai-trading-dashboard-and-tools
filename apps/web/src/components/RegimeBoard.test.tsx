@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import * as fc from "fast-check";
 import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { RegimeResponse, PickerGate } from "@morai/contracts";
@@ -37,6 +38,8 @@ const INDICATORS: RegimeResponse = [
     label: "VIX/VIX3M Term Structure",
     value: 0.92,
     band: "warning",
+    bandWarn: 0.9,
+    bandCrisis: 0.95,
     asOf: "2026-07-08",
     source: "eco3min.fr, systemtrader.co",
     rationale: "0.90 warn / 0.95 crisis, confirmed by independent sources.",
@@ -46,6 +49,8 @@ const INDICATORS: RegimeResponse = [
     label: "VVIX",
     value: 89.0,
     band: "calm",
+    bandWarn: 100,
+    bandCrisis: 115,
     asOf: "2026-07-08",
     source: "SpotGamma, TOS Indicators",
     rationale: "100 warn confirmed directly by 4 independent sources.",
@@ -55,6 +60,8 @@ const INDICATORS: RegimeResponse = [
     label: "VIX9D/VIX",
     value: 1.15,
     band: "crisis",
+    bandWarn: 1.0,
+    bandCrisis: 1.1,
     asOf: "2026-07-08",
     source: "topstep.com, macroption.com, cboe.com",
     rationale: "[ASSUMED] structural analogy to the VIX/VIX3M ratio.",
@@ -64,6 +71,8 @@ const INDICATORS: RegimeResponse = [
     label: "HY OAS (Credit Spread)",
     value: 3.4,
     band: "warning",
+    bandWarn: 3.0,
+    bandCrisis: 5.0,
     asOf: "2026-07-07",
     source: "eco3min.fr, macroradar.io, convextrade.com",
     rationale: "Synthesized from 3 practitioner sources.",
@@ -150,11 +159,79 @@ describe("RegimeBoard", () => {
     // calm → quiet default text, NOT the loud up/green token; abnormal bands carry the color.
     expect(screen.getByTestId("regime-value-vvix").className).toContain("text-txt");
     expect(screen.getByTestId("regime-value-vvix").className).not.toContain("text-up");
-    expect(screen.getByTestId("regime-band-vvix").className).not.toContain("bg-up");
+    expect(screen.getByTestId("regime-gauge-marker-vvix").className).not.toContain("bg-up");
     expect(screen.getByTestId("regime-value-vix-term-structure").className).toContain("text-amber");
-    expect(screen.getByTestId("regime-band-vix-term-structure").className).toContain("bg-amber");
+    expect(screen.getByTestId("regime-gauge-marker-vix-term-structure").className).toContain("bg-amber");
     expect(screen.getByTestId("regime-value-vix9d-vix").className).toContain("text-down");
-    expect(screen.getByTestId("regime-band-vix9d-vix").className).toContain("bg-down");
+    expect(screen.getByTestId("regime-gauge-marker-vix9d-vix").className).toContain("bg-down");
+  });
+
+  it("renders a role=meter gauge per indicator, band-colored marker, aria carrying value/band (DEFECT-2)", () => {
+    setRegimeBoard(INDICATORS);
+    render(<RegimeBoard />);
+
+    for (const ind of INDICATORS) {
+      const gauge = screen.getByTestId(`regime-gauge-${ind.id}`);
+      expect(gauge.getAttribute("role")).toBe("meter");
+      expect(gauge.getAttribute("aria-valuenow")).toBe(String(ind.value));
+      expect(gauge.getAttribute("aria-valuetext")).toBe(`${ind.value.toFixed(2)} — ${ind.band}`);
+      expect(gauge.getAttribute("aria-label")).toBe(`${ind.label} gauge`);
+    }
+
+    // Removed: the standalone band dot double-encoded the marker's color signal.
+    expect(screen.queryByTestId("regime-band-vvix")).toBeNull();
+
+    // Marker color reads the server band, not a client recomputation.
+    expect(screen.getByTestId("regime-gauge-marker-vvix").className).toContain("bg-txt");
+    expect(screen.getByTestId("regime-gauge-marker-vix-term-structure").className).toContain("bg-amber");
+    expect(screen.getByTestId("regime-gauge-marker-vix9d-vix").className).toContain("bg-down");
+  });
+
+  it("positions band segments from response bandWarn/bandCrisis (not client threshold constants)", () => {
+    setRegimeBoard(INDICATORS);
+    render(<RegimeBoard />);
+
+    // vix-term-structure: GAUGE_SCALE 0.6-1.2, bandWarn 0.9 → 50%, bandCrisis 0.95 → 58.33%
+    const gauge = screen.getByTestId("regime-gauge-vix-term-structure");
+    const segments = gauge.querySelectorAll<HTMLElement>(":scope > div");
+    const warnSegment = segments[0];
+    const crisisSegment = segments[1];
+    assertDefined(warnSegment, "warn segment present");
+    assertDefined(crisisSegment, "crisis segment present");
+    expect(parseFloat(warnSegment.style.left)).toBeCloseTo(50, 5);
+    expect(parseFloat(crisisSegment.style.left)).toBeCloseTo(58.333, 1);
+  });
+
+  it("clamps the marker position at both axis ends (fast-check: value/min/max never overflow [0,100]%)", () => {
+    fc.assert(
+      fc.property(
+        fc.float({ min: Math.fround(-1000), max: Math.fround(1000), noNaN: true }),
+        fc.float({ min: Math.fround(-1000), max: Math.fround(1000), noNaN: true }),
+        fc.float({ min: Math.fround(-1000), max: Math.fround(1000), noNaN: true }),
+        (value, min, max) => {
+          if (max <= min) return; // degenerate scale, not a real GAUGE_SCALE entry
+          cleanup();
+          const indicator = {
+            ...INDICATORS[0],
+            id: "vix-term-structure",
+            value,
+            band: "calm" as const,
+            bandWarn: min,
+            bandCrisis: max,
+          };
+          setRegimeBoard([indicator]);
+          render(<RegimeBoard />);
+          const marker = screen.getByTestId("regime-gauge-marker-vix-term-structure");
+          // GAUGE_SCALE for vix-term-structure is fixed (0.6-1.2) — the marker clamps to that
+          // axis regardless of the arbitrary bandWarn/bandCrisis fed in, so `left` is always
+          // a valid clamped percentage string in [0, 100].
+          const left = parseFloat(marker.style.left);
+          expect(left).toBeGreaterThanOrEqual(0);
+          expect(left).toBeLessThanOrEqual(100);
+        },
+      ),
+      { numRuns: 50 },
+    );
   });
 
   it("dedupes per-indicator 'as of' captions into one freshness footer, noting date exceptions", () => {
