@@ -263,7 +263,7 @@ const regimeConfig = z
   })
   .strict();
 
-const ruleConfig = z
+export const ruleConfig = z
   .object({
     picker: pickerConfig,
     exits: exitsConfig,
