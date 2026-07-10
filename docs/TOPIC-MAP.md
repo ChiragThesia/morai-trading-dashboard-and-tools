@@ -25,6 +25,7 @@ Read in order. Source of truth for how Morai works.
 | [deployment.md](architecture/deployment.md) | Railway topology, config, token persistence, observability |
 | [streaming-fanout.md](architecture/streaming-fanout.md) | SSE fan-out pipeline, opaque ticket auth (D-01), BSM recompute (D-02), STRM-04 display-only invariant, Z-suffix timestamp contract |
 | [backtest-harness.md](architecture/backtest-harness.md) | Operator-CLI backtest: three replay paths (leakage oracle, 13-trade exit reproduction, hypothetical entry+exit), point-in-time discipline, reuse-the-live-engine rule, n=13 honesty rule, never-writes-weights boundary |
+| [rule-overrides.md](architecture/rule-overrides.md) | Runtime rule overrides: JSONB layer merged over compile-time constants at consumption time |
 
 ## Operations (`docs/operations/`)
 
