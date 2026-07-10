@@ -24,6 +24,8 @@
 import { ok, isWithinRth, isNyseHoliday } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { evaluateExit } from "../domain/evaluate-exit.ts";
+import { resolveExitRuleConfig } from "../domain/rule-config.ts";
+import type { ExitRuleOverrides } from "../domain/rule-config.ts";
 import type { MarketContext, PreviousVerdict, RollCandidateQuote } from "../domain/types.ts";
 import type {
   ChainQuoteForRoll,
@@ -37,6 +39,11 @@ import type {
   ForRunningComputeExitAdvice,
   StorageError,
 } from "./ports.ts";
+// 29-11 (RUNTIME-*): cross-context read of the settings bounded context's own driven port —
+// same "application ports only, never domain" convention 29-10 established for the picker's
+// readRuleOverrides wiring. settings/ has no index.ts barrel (29-09 decision), so this imports
+// the ports.ts file directly.
+import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
 
 export type ComputeExitAdviceDeps = {
   readonly readHeldPositions: ForReadingHeldPositions;
@@ -45,9 +52,50 @@ export type ComputeExitAdviceDeps = {
   readonly readEconomicEvents: ForReadingEconomicEvents;
   readonly readChainForRoll: ForReadingChainForRoll;
   readonly persistExitVerdict: ForPersistingExitVerdict;
+  /**
+   * Runtime rule-settings overrides (29-11, RUNTIME-*) — read FRESH inside the use-case body
+   * on every run (mirrors 29-10's `readMacroObservations`/`readRuleOverrides` fresh-per-
+   * invocation shape), never cached in the composition-root closure, so a mid-day rung change
+   * takes effect next compute-exit-advice cycle.
+   */
+  readonly readRuleOverrides: ForReadingRuleOverrides;
   /** Clock injection — cohort observedAt + the evaluator's staleness gate. Never wall-clock inline. */
   readonly now: () => Date;
 };
+
+// ─── Rule-overrides wiring helpers (29-11, RUNTIME-*) ───────────────────────────
+
+/**
+ * Narrows the untyped `exits` group read back from storage into `ExitRuleOverrides`. A type
+ * guard, not a rebuild: the shape was already Zod-validated at the PUT boundary (29-13) before
+ * ever being persisted, so this only needs to satisfy the type system on read, not re-validate.
+ * Rejects the WHOLE group on any field-type mismatch — falls back to defaults, never a guessed
+ * partial (matches resolveExitRuleConfig's own never-a-fresh-literal rule, mirrors 29-10's
+ * `isPickerRuleOverrides`).
+ */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOptionalNumber(value: unknown): boolean {
+  return value === undefined || typeof value === "number";
+}
+
+const TAKE_OVERRIDE_FIELDS = ["plus15Arm", "plus15Disarm", "plus10Arm", "plus10Disarm", "plus5Arm", "plus5Disarm"] as const;
+const STOP_OVERRIDE_FIELDS = ["minus50Arm", "minus50Disarm", "minus25Arm", "minus25Disarm"] as const;
+
+function isTakeOverrides(value: unknown): boolean {
+  return value === undefined || (isPlainRecord(value) && TAKE_OVERRIDE_FIELDS.every((field) => isOptionalNumber(value[field])));
+}
+
+function isStopOverrides(value: unknown): boolean {
+  return value === undefined || (isPlainRecord(value) && STOP_OVERRIDE_FIELDS.every((field) => isOptionalNumber(value[field])));
+}
+
+function isExitRuleOverrides(value: unknown): value is ExitRuleOverrides {
+  if (!isPlainRecord(value)) return false;
+  return isTakeOverrides(value["take"]) && isStopOverrides(value["stop"]);
+}
 
 /** Filters chain-for-roll quotes down to the calendar's own strike and maps to the evaluator's shape. */
 function toRollCandidates(
@@ -72,6 +120,16 @@ function hasChanged(current: { readonly verdict: string; readonly rung: string |
 
 export function makeComputeExitAdviceUseCase(deps: ComputeExitAdviceDeps): ForRunningComputeExitAdvice {
   return async (): Promise<Result<void, StorageError>> => {
+    // Resolve the runtime exit-rung config FRESH per run (29-11, RUNTIME-*) — never cached in
+    // the factory closure above. A read failure (or a malformed stored `exits` group) degrades
+    // to resolveExitRuleConfig(undefined) — the compile-time TAKE_RUNGS/STOP_RUNGS defaults —
+    // rather than failing the whole cycle over an optional-customization glitch (matches 29-10's
+    // picker degradation posture, T-29-15).
+    const overridesResult = await deps.readRuleOverrides();
+    const exitOverridesRaw = overridesResult.ok ? overridesResult.value["exits"] : undefined;
+    const exitOverrides = isExitRuleOverrides(exitOverridesRaw) ? exitOverridesRaw : undefined;
+    const exitConfig = resolveExitRuleConfig(exitOverrides);
+
     const positionsResult = await deps.readHeldPositions();
     if (!positionsResult.ok) return positionsResult;
 
@@ -128,7 +186,7 @@ export function makeComputeExitAdviceUseCase(deps: ComputeExitAdviceDeps): ForRu
               ruleId: previousRow.verdict.ruleId,
             };
 
-      const verdict = evaluateExit(position, context, previousVerdict);
+      const verdict = evaluateExit(position, context, previousVerdict, exitConfig);
 
       // EXIT-09: only verdict CHANGES surface as alerts; STOP/EXIT_PRE_EVENT escalate distinctly.
       // `changed` is computed ONCE here and used both for the console.warn gate below AND

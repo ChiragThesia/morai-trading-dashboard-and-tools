@@ -36,6 +36,8 @@ import type {
   LatestSnapshotForCalendar,
   StorageError,
 } from "./ports.ts";
+import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
+import type { StoredRuleOverrides } from "../../settings/domain/merge.ts";
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
 
@@ -92,6 +94,11 @@ function fakeReadChainForRoll(
   return async (): Promise<Result<ReadonlyArray<ChainQuoteForRoll>, StorageError>> => ok(quotes);
 }
 
+/** 29-11: fresh-per-run rule-overrides read. Defaults to `{}` (no overrides). */
+function fakeReadRuleOverrides(overrides: StoredRuleOverrides = {}): ForReadingRuleOverrides {
+  return async () => ok(overrides);
+}
+
 function makePersistSpy(): { readonly persist: ForPersistingExitVerdict; readonly calls: ExitVerdictRow[] } {
   const calls: ExitVerdictRow[] = [];
   const persist: ForPersistingExitVerdict = async (row) => {
@@ -119,6 +126,7 @@ describe("computeExitAdvice — one verdict per open calendar", () => {
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -139,6 +147,7 @@ describe("computeExitAdvice — one verdict per open calendar", () => {
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"), // 35 min after the snapshot
     });
 
@@ -157,6 +166,7 @@ describe("computeExitAdvice — one verdict per open calendar", () => {
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -179,6 +189,7 @@ describe("computeExitAdvice — hysteresis self-read feeds evaluateExit", () => 
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -212,6 +223,7 @@ describe("computeExitAdvice — hysteresis self-read feeds evaluateExit", () => 
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -257,6 +269,7 @@ describe("computeExitAdvice — change detection", () => {
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -291,6 +304,7 @@ describe("computeExitAdvice — change detection", () => {
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -327,6 +341,7 @@ describe("computeExitAdvice — change detection", () => {
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -360,6 +375,7 @@ describe("computeExitAdvice — change detection", () => {
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -388,6 +404,7 @@ describe("computeExitAdvice — indicative pass-through", () => {
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => afterHoursTime,
     });
 
@@ -419,6 +436,7 @@ describe("computeExitAdvice — partial-failure surfaces err for pg-boss retry",
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: fakeReadChainForRoll(),
       persistExitVerdict: failingPersist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
@@ -443,12 +461,111 @@ describe("computeExitAdvice — chain-for-roll read failure degrades gracefully"
       readEconomicEvents: fakeReadEvents(),
       readChainForRoll: failingChain,
       persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
       now: () => new Date("2026-07-09T15:05:00.000Z"),
     });
 
     const result = await useCase();
     expect(result.ok).toBe(true);
     expect(calls).toHaveLength(1);
+  });
+});
+
+// ─── Runtime rule-settings overrides (29-11, RUNTIME-*) ──────────────────────────
+//
+// readRuleOverrides threading: fresh-per-run read, byte-identical omission, overridden
+// rung firing, read-error degradation. Mirrors 29-10's picker "runtime rule overrides"
+// describe block shape.
+
+describe("computeExitAdvice — runtime rule overrides (29-11)", () => {
+  it("no exits override -> the fired verdict matches the compile-time TAKE_RUNGS byte-identically (byte-identical omission, T-29-05)", async () => {
+    const { persist, calls } = makePersistSpy();
+    // pnlPct = (4140 - 4000) / 4000 = 3.5% — below the default +5% arm (0.05) → no TAKE rung fires.
+    const useCase = makeComputeExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition({ openNetDebit: 4000 })]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot({ netMark: 4140 })]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([]),
+      readEconomicEvents: fakeReadEvents(),
+      readChainForRoll: fakeReadChainForRoll(),
+      persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
+      now: () => new Date("2026-07-09T15:05:00.000Z"),
+    });
+
+    await useCase();
+    expect(calls[0]?.verdict.verdict).toBe("HOLD");
+    expect(calls[0]?.verdict.rung).toBeNull();
+  });
+
+  it("an exits.take.plus5Arm override lowers the +5% arm threshold and changes the fired rung on the next run (T-29-16)", async () => {
+    const { persist, calls } = makePersistSpy();
+    // Same 3.5% pnlPct as the omission case above — but the override lowers the +5% arm to 3%,
+    // so this cycle now fires TAKE +5% where the compile-time default would not.
+    const useCase = makeComputeExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition({ openNetDebit: 4000 })]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot({ netMark: 4140 })]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([]),
+      readEconomicEvents: fakeReadEvents(),
+      readChainForRoll: fakeReadChainForRoll(),
+      persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides({ exits: { take: { plus5Arm: 0.03 } } }),
+      now: () => new Date("2026-07-09T15:05:00.000Z"),
+    });
+
+    await useCase();
+    expect(calls[0]?.verdict.verdict).toBe("TAKE");
+    expect(calls[0]?.verdict.rung).toBe("+5%");
+  });
+
+  it("a readRuleOverrides read error degrades to the compile-time defaults rather than failing the whole cycle (T-29-15)", async () => {
+    const { persist, calls } = makePersistSpy();
+    const useCase = makeComputeExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition({ openNetDebit: 4000 })]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([makeSnapshot({ netMark: 4140 })]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([]),
+      readEconomicEvents: fakeReadEvents(),
+      readChainForRoll: fakeReadChainForRoll(),
+      persistExitVerdict: persist,
+      readRuleOverrides: async () => err<StorageError>({ kind: "storage-error", message: "settings read failed" }),
+      now: () => new Date("2026-07-09T15:05:00.000Z"),
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    // Same as the omission case: a read failure never fails compute-exit-advice, it just falls
+    // back to the compile-time defaults (below the default +5% arm → no TAKE rung fires).
+    expect(calls[0]?.verdict.verdict).toBe("HOLD");
+    expect(calls[0]?.verdict.rung).toBeNull();
+  });
+
+  it("readRuleOverrides is called once per run, before the per-position loop — the same resolved config applies to every position that run", async () => {
+    let callCount = 0;
+    const trackedReadRuleOverrides: ForReadingRuleOverrides = async () => {
+      callCount += 1;
+      return ok({ exits: { take: { plus5Arm: 0.03 } } });
+    };
+    const positions = [makePosition({ calendarId: "cal-1" }), makePosition({ calendarId: "cal-2" })];
+    const snapshots = [
+      makeSnapshot({ calendarId: "cal-1", netMark: 4140 }), // 3.5% — fires TAKE +5% only under the override
+      makeSnapshot({ calendarId: "cal-2", netMark: 4140 }),
+    ];
+    const { persist, calls } = makePersistSpy();
+
+    const useCase = makeComputeExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions(positions),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots(snapshots),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([]),
+      readEconomicEvents: fakeReadEvents(),
+      readChainForRoll: fakeReadChainForRoll(),
+      persistExitVerdict: persist,
+      readRuleOverrides: trackedReadRuleOverrides,
+      now: () => new Date("2026-07-09T15:05:00.000Z"),
+    });
+
+    await useCase();
+    expect(callCount).toBe(1); // fresh-per-RUN, not fresh-per-position
+    expect(calls).toHaveLength(2);
+    expect(calls.every((c) => c.verdict.verdict === "TAKE" && c.verdict.rung === "+5%")).toBe(true);
   });
 });
 
