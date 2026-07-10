@@ -392,10 +392,17 @@ sees what each change will do before committing. Knob semantics unchanged; previ
 **Plans:** 6 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 32-01-PLAN.md — Contracts: explainer registry (schema-derived completeness) + preview request/response schema
 - [ ] 32-02-PLAN.md — Picker preview use-case (score/gate/sizing re-resolve + universe honest-note, byte-parity)
 - [ ] 32-03-PLAN.md — Exit preview use-case (live evaluateExit current-vs-staged, structural no-persist)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 32-04-PLAN.md — Combined preview use-case + POST /api/settings/rules/preview + MCP twin + wiring
 - [ ] 32-05-PLAN.md — Modal explainer surface: per-knob captions/popovers + affected-surface tags (Tooltip first consumer)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 32-06-PLAN.md — Modal preview flow: hook + Preview button + picker/exit/regime deltas + staleness

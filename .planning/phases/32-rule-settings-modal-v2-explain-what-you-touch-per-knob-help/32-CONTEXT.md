@@ -50,6 +50,18 @@ results, redesigning modal layout beyond what the explainers/preview require.
   contract's knob paths; rendered in the modal; NOT scattered inline strings. Hemingway
   style, trader-facing (this user trades SPX calendars; write for him).
 
+
+### Binding legend (traceability — used as requirement IDs in plan frontmatter)
+- **B1** previewability per knob group (score/gate-sizing/universe-honest-note)
+- **B2** exit preview built live (evaluateExit current-vs-staged)
+- **B3** regime preview client-side via core band fns + parity test
+- **B4** one combined preview endpoint mirroring PUT group shape
+- **B5** wire shape: full re-scored list, old score inline, client diffs
+- **B6** one typed explainer registry, schema-derived completeness
+- **B7** explicit-click preview + byte-parity (empty staged == stored)
+- **B8** v1 modal unregressed + Phase 27 untouched
+- **B9** zero new deps (Tooltip primitive first consumer)
+
 ### Claude's Discretion
 - Explainer UI: inline caption under each field vs info-icon popover vs both (space-aware
   — the modal is long; consider group intros + short per-field captions).

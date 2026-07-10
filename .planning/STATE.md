@@ -6,7 +6,7 @@ current_phase: 31
 current_phase_name: Risk Profile KISS redesign + macro gauges
 status: executing
 stopped_at: Completed 31-01-PLAN.md
-last_updated: "2026-07-10T18:27:12.498Z"
+last_updated: "2026-07-10T18:36:04.881Z"
 last_activity: 2026-07-10
 last_activity_desc: Completed 31-01-PLAN.md (Risk Profile marker collision fix)
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 31 (Risk Profile KISS redesign + macro gauges) — EXECUTING
 Plan: 2 of 2
-Status: Executing Phase 31 — 31-01 complete, 31-02 next
+Status: Ready to execute
 Last activity: 2026-07-10 — Completed 31-01-PLAN.md (Risk Profile marker collision fix)
 
 ## Open follow-ups (not phase-22 blockers)
