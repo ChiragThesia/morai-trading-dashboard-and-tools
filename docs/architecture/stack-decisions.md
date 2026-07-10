@@ -31,6 +31,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D22 | Python schwab-py sidecar | `apps/sidecar/` — FastAPI + schwab-py; sole Schwab auth + REST proxy + streamer; internal Railway network only | Medium (Python service + Railway topology) | TS stack fully covers Schwab streaming natively |
 | D23 | SSE fan-out + opaque ticket auth | In-process `Set<SSEStreamingApi>` fan-out in `apps/server`; single-use ~30s UUID ticket for `GET /api/stream` (EventSource cannot send `Authorization` headers — D-01) | Low (single server, in-memory state fits single Railway instance per D11) | Multi-user scale OR Supabase Realtime covers the use-case |
 | D24 | RULE-01 annotation storage | `calendar_event_annotations` keyed by `fill_ids_hash`, deliberately NO foreign key to `calendar_events` | Low (plain table, no FK to manage) | `rebuildJournal` stops being delete-then-reinsert |
+| D25 | Runtime rule overrides (Phase 29) | `rule_overrides` — single-row JSONB deltas-over-defaults table, keyed by fixed literal id `"default"` (mirrors `broker_tokens.app_id`, no DB CHECK constraint). **Overrides Phase 28 T-28-11** — constants stay the DEFAULTS; the row is an explicit layer merged over them at consumption time. | Low (drop the row, code defaults remain authoritative) | A curated knob needs per-calendar or per-user scope |
 
 ## D1 — Bun
 
@@ -389,3 +390,38 @@ would remove the reason for the no-FK design.
 
 **References**: Phase 20 RESEARCH.md Pitfall 3; `packages/adapters/src/postgres/schema.ts`
 (`calendarEventAnnotations`); `packages/adapters/src/postgres/migrations/0017_calendar_event_annotations.sql`.
+
+## D25 — Runtime rule overrides: single-row JSONB layer, overrides T-28-11 (Phase 29)
+
+**Context**: Phase 28 (T-28-11) locked the compile-time constants file as the only visible,
+user-editable source of trading-rule truth — explicitly rejecting a hidden default or a UI
+config screen. Phase 29 needs curated runtime edits (~20 knobs across the picker, exit
+advisor, and regime-band engines) without redeploying for every threshold tweak.
+
+**Decision**: Add `rule_overrides`, a single-row table with one JSONB column, keyed by a
+fixed literal id `"default"` — the same singleton convention `broker_tokens.app_id` already
+uses. No DB CHECK constraint enforces the single row; the composition root always reads/
+writes that one key. The row stores only deltas over the code defaults, Zod-validated on
+both read and write (T-19-10 convention).
+
+**This explicitly overrides T-28-11.** The constants in `packages/core` remain the DEFAULTS
+— they are not deleted, not hidden, and stay the values every function falls back to. The
+`rule_overrides` row is an explicit, visible layer merged over them at consumption time
+(worker job start for the picker and exit advisor, server request time for regime bands).
+A user can see, in the settings modal, exactly which knobs are overridden and what the
+default would otherwise be — the override is never silent.
+
+**Why now**: Curating ~20 high-level knobs (delta band, DTE windows, scoring weights,
+VIX ladder, sizing tiers, exit rungs, regime thresholds) across three engines without a
+per-value column explosion. See `rule-overrides.md` for the merge architecture, the full
+curated-knob list, and the excluded (code-only) knob list.
+
+**Swap cost**: Low. Delete the row and every engine reverts to its compile-time constants —
+no schema change required to disable the feature.
+
+**Revisit trigger**: A curated knob needs per-calendar or per-user scope (single global row
+no longer sufficient).
+
+**References**: `.planning/phases/29-runtime-rule-settings-curated-20-knob-settings-surface-entry/29-CONTEXT.md`
+(Governance override); `docs/architecture/rule-overrides.md`;
+`packages/adapters/src/postgres/schema.ts` (`ruleOverrides`, once added).
