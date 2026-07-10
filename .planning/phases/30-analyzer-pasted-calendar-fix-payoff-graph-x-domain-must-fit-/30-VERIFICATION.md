@@ -1,7 +1,7 @@
 ---
 phase: 30-analyzer-pasted-calendar-fix-payoff-graph-x-domain-must-fit-
 verified: 2026-07-10T15:49:59Z
-status: human_needed
+status: passed
 score: 26/26 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -28,7 +28,7 @@ tool, with 200 `{scored:false}` degradation, byte-parity to engine scoring, snap
 gate/sizing reused verbatim, fresh rule overrides.
 
 **Verified:** 2026-07-10T15:49:59Z
-**Status:** human_needed
+**Status:** passed — 3 human items verified live 2026-07-10 (see 30-UAT.md)
 **Re-verification:** No — initial verification
 
 ## Goal Achievement

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 30
-current_phase_name: both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut
+current_phase: 31
+current_phase_name: γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text
 status: verifying
 stopped_at: Completed 30-06-PLAN.md
-last_updated: "2026-07-10T15:22:34.987Z"
+last_updated: "2026-07-10T15:57:08.537Z"
 last_activity: 2026-07-10
-last_activity_desc: "30-05 complete: POST /api/picker/analyze + analyze_ad_hoc_calendar MCP tool + server composition-root wiring"
+last_activity_desc: Phase 30 complete, transitioned to Phase 31
 progress:
   total_phases: 10
   completed_phases: 8
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 30 — Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent (both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut), and pasted calendars must get real entry analysis (engine scoring) instead of 'Pasted calendar — not engine-scored' in WHY THIS CALENDAR / ENTRY-EXIT PLAN panels
-Plan: 30-06 complete (6 of 6 plans done — phase complete)
+Phase: 31 — Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10) — PLUS left-rail macro readability: replace raw-number rows (VIX/VVIX/ratios/HY OAS/rates) with compact linear band-gauges (bullet style: value marker on a warn/crisis-banded track; NOT circular dials — space + scannability), user proposal 2026-07-10
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-10 — 30-06 complete: paste flow scores PUT calendars via POST /api/picker/analyze; all 4 not-engine-scored gates now key off candidate.breakdown.length===0; CandidateCard shows a scored pasted card's real score/subline (Pitfall 8)
+Last activity: 2026-07-10 — Phase 30 complete, transitioned to Phase 31
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -165,6 +165,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 24 | 5 | - | - |
 | 28 | 6 | - | - |
 | 29 | 14 | - | - |
+| 30 | 6 | - | - |
 
 **Recent Trend:**
 
