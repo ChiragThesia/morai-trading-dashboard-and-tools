@@ -380,6 +380,9 @@ export type {
   AdHocCalendarInput,
   AdHocCalendarAnalysis,
   ForAnalyzingAdHocCalendar,
+  ForPreviewingPickerRuleOverrides,
+  PickerPreviewDeps,
+  PickerPreviewResult,
 } from "./picker/index.ts";
 // PICK-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
 // get_picker_candidates MCP tool over the ONE pickerSnapshotResponse contract (MCP-02).
@@ -389,6 +392,9 @@ export { makeComputePickerSnapshotUseCase } from "./picker/index.ts";
 // D-02 (30-04): ad-hoc analyze use-case — scores ONE user-pasted PUT calendar with byte-parity
 // to the engine (T-30-10); the 30-05 HTTP route + MCP tool import this from @morai/core.
 export { makeAnalyzeAdHocCalendarUseCase } from "./picker/index.ts";
+// B1 (32-02): picker branch of the staged-change dry-run preview — 32-04's server composition
+// root wires this into the combined settings-context preview use-case.
+export { makePreviewPickerRuleOverridesUseCase } from "./picker/index.ts";
 // PICK-04 (27-02): additive reuse exports — the backtest harness reuses these SAME pure
 // picker domain functions (BT-01's "zero reimplementation" lock), not a second copy. No
 // live call site changes; every existing picker test stays green.
@@ -459,12 +465,19 @@ export type {
   ExitRuleSetEntry,
   ExitAdviceSnapshot,
   ForRunningGetExitAdvice,
+  ExitPreviewEntry,
+  ExitPreviewResult,
+  ExitPreviewDeps,
+  ForPreviewingExitRuleOverrides,
 } from "./exits/index.ts";
 // 26-04: computeExitAdvice (terminal-job use-case, chain-triggered by compute-picker) +
 // getExitAdvice (read use-case — 26-05's HTTP route + MCP tool will share this over the
 // exitsResponse contract, MCP-02).
 export { makeComputeExitAdviceUseCase, makeGetExitAdviceUseCase } from "./exits/index.ts";
 export type { ComputeExitAdviceDeps, GetExitAdviceDeps } from "./exits/index.ts";
+// B2 (32-03): exits branch of the staged-change dry-run preview — 32-04's server composition
+// root wires this into the combined settings-context preview use-case.
+export { makePreviewExitRuleOverridesUseCase } from "./exits/index.ts";
 // PICK-04 (27-02): additive reuse exports — the backtest harness reuses the SAME pure exit
 // evaluator + rule registry (BT-01's lock), not a second copy. exits/index.ts already
 // barrels these; this thread was the only missing hop up to @morai/core.
@@ -554,6 +567,15 @@ export type {
   SetRuleOverridesDeps,
   ForRunningSetRuleOverrides,
 } from "./settings/application/setRuleOverrides.ts";
+// B4 (32-04): combined picker/exits staged-change preview use-case — the ONE seam both
+// POST /api/settings/rules/preview and its MCP twin call (no duplicated orchestration).
+export { makePreviewRuleOverridesUseCase } from "./settings/application/previewRuleOverrides.ts";
+export type {
+  PreviewRuleOverridesDeps,
+  RulePreviewInput,
+  RulePreviewResult,
+  ForRunningPreviewRuleOverrides,
+} from "./settings/application/previewRuleOverrides.ts";
 
 // 29-13: the three engines' own resolve functions — the ONE wiring point (apps → core) the
 // server composition root calls with no overrides to compute the settings surface's
