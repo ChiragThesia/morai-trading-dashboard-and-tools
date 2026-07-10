@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 32
-current_phase_name: Rule Settings modal v2 — explain what you touch
+current_phase_name: what it gates/scores, unit, direction of effect
 status: in-progress
 stopped_at: Completed 32-03-PLAN.md
-last_updated: "2026-07-10T19:43:48.208Z"
+last_updated: "2026-07-10T20:05:34.149Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 32 Plan 03 complete
 progress:
   total_phases: 11
   completed_phases: 9
   total_plans: 54
-  completed_plans: 51
-  percent: 94
+  completed_plans: 52
+  percent: 82
 ---
 
 # Project State
@@ -300,6 +300,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 32 P01 | 1min | 2 tasks | 6 files |
 | Phase 32 P02 | ~20min | 2 tasks | 5 files |
 | Phase 32 P03 | 35min | 2 tasks | 4 files |
+| Phase 32 P04 | ~1h | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -453,6 +454,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 32]: 32-02: gate re-resolve reconstructs synthetic MacroSeriesRow[VIXCLS,VXVCLS] from the stored PickerGate's already-resolved vix/vix3m/asOf scalars (no readMacroObservations dep) so resolveEntryGate is reused verbatim with zero new I/O
 - [Phase 32]: 32-03: isExitRuleOverrides is a verbatim COPY into previewExitRuleOverrides.ts, not an import from computeExitAdvice.ts — the plan's files_modified list scoped this task to exactly 3 files and computeExitAdvice.ts wasn't one of them
 - [Phase 32]: 32-03: exit preview evaluates every open position TWICE via the same evaluateExit (current effective config, staged config) with rollChain.candidates=[] always -- a TAKE/STOP rung change never drives a ROLL suggestion, keeping the preview structurally read-only
+- [Phase 32]: 32-04: a group absent from the combined preview use-case's input yields a null response branch (never computed); an empty-but-present group falls back to the stored effective config (byte-parity)
+- [Phase 32]: 32-04: toPreviewInput duplicates a JSON round-trip + shape-guard bridge in both the HTTP route and MCP tool (32-03 precedent) rather than extending toOverridesPatch, which returns an index-signature type incompatible with the domain-typed preview ports
 
 ### Pending Todos
 
@@ -509,7 +512,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T19:43:48.196Z
+Last session: 2026-07-10T20:05:10.411Z
 Stopped at: Completed 32-03-PLAN.md
 Resume file: 
 None
