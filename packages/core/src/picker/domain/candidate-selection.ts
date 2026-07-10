@@ -106,23 +106,26 @@ function vixLadderFloor(ladder: ReadonlyArray<VixLadderRow>, tier: VixTier): num
  * autoTuneTargetDelta — the VIX-tuned deep (min) band edge. Linear from DELTA_BAND_MIN at/
  * below the ladder's normal floor (15 by default) to DELTA_BAND_MAX at/above the ladder's
  * crisis floor (25 by default); null/NaN vix (no tilt) returns DELTA_BAND_MIN unchanged.
- * ALWAYS inside [DELTA_BAND_MIN, DELTA_BAND_MAX] (fast-check proven) — the tilt can only
- * narrow the band from its deep end, never widen it past the original edges (PLAY-05: "never
- * pushes the effective delta outside the band"). Optional `ladder` (29-10 runtime rule
+ * ALWAYS inside [deltaMin, deltaMax] (fast-check proven at the default edges) — the tilt can
+ * only narrow the band from its deep end, never widen it past the original edges (PLAY-05:
+ * "never pushes the effective delta outside the band"). Optional `ladder` (29-10 runtime rule
  * settings) feeds an overridden tier boundary set — defaults to VIX_LADDER (the SAME ladder
- * the gate/sizing use by default), reproducing today's tilt range byte-identically when
- * omitted.
+ * the gate/sizing use by default). Optional `deltaMin`/`deltaMax` (CR-01, 29-REVIEW.md) feed
+ * the resolved `config.deltaBand` range the interpolation travels within — defaulting to
+ * DELTA_BAND_MIN/DELTA_BAND_MAX reproduces today's tilt range byte-identically when omitted.
  */
 export function autoTuneTargetDelta(
   vix: number | null,
   ladder: ReadonlyArray<VixLadderRow> = VIX_LADDER,
+  deltaMin: number = DELTA_BAND_MIN,
+  deltaMax: number = DELTA_BAND_MAX,
 ): number {
   const floor = vixLadderFloor(ladder, "normal");
   const ceiling = vixLadderFloor(ladder, "crisis");
-  if (vix === null || !Number.isFinite(vix) || vix <= floor) return DELTA_BAND_MIN;
-  if (vix >= ceiling) return DELTA_BAND_MAX;
+  if (vix === null || !Number.isFinite(vix) || vix <= floor) return deltaMin;
+  if (vix >= ceiling) return deltaMax;
   const fraction = (vix - floor) / (ceiling - floor);
-  return DELTA_BAND_MIN + fraction * (DELTA_BAND_MAX - DELTA_BAND_MIN);
+  return deltaMin + fraction * (deltaMax - deltaMin);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -204,6 +207,13 @@ export type SelectCandidatesParams = {
    */
   readonly deltaMax?: number;
   /**
+   * Optional deep (min) band edge override (CR-01, 29-REVIEW.md — `config.deltaBand.min`).
+   * Defaults to `DELTA_BAND_MIN` when omitted, reproducing today's live universe byte-
+   * identically. This is the clamp FLOOR `effectiveDeltaMin` can never go below, and the
+   * fallback value used when `effectiveDeltaMin` itself is omitted.
+   */
+  readonly deltaMin?: number;
+  /**
    * Optional front-leg DTE window override (29-03 runtime rule settings). Both default to
    * `FRONT_DTE_MIN`/`FRONT_DTE_MAX` when omitted, reproducing today's live universe
    * byte-identically.
@@ -251,10 +261,8 @@ export function selectCandidates(
 
   const { r, q } = params;
   const deltaMax = params.deltaMax ?? DELTA_BAND_MAX;
-  const deltaMin = Math.min(
-    Math.max(params.effectiveDeltaMin ?? DELTA_BAND_MIN, DELTA_BAND_MIN),
-    deltaMax,
-  );
+  const deltaMinFloor = params.deltaMin ?? DELTA_BAND_MIN;
+  const deltaMin = Math.min(Math.max(params.effectiveDeltaMin ?? deltaMinFloor, deltaMinFloor), deltaMax);
   const gapMin = params.backDteMinGap ?? BACK_DTE_MIN_GAP;
   const gapMax = params.backDteMaxGap ?? BACK_DTE_MAX_GAP;
   const frontDteMin = params.frontDteMin ?? FRONT_DTE_MIN;

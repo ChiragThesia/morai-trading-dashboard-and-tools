@@ -601,7 +601,8 @@ export function makeComputePickerSnapshotUseCase(
     const { candidates: raw, gateDrops } = selectCandidates(chain, events, {
       r: deps.rate,
       q: deps.dividendYield,
-      effectiveDeltaMin: autoTuneTargetDelta(gate.vix, config.vixLadder),
+      effectiveDeltaMin: autoTuneTargetDelta(gate.vix, config.vixLadder, config.deltaBand.min, config.deltaBand.max),
+      deltaMin: config.deltaBand.min,
       deltaMax: config.deltaBand.max,
       frontDteMin: config.frontDte.min,
       frontDteMax: config.frontDte.max,
@@ -631,7 +632,8 @@ export function makeComputePickerSnapshotUseCase(
     const { candidates: rawEvent } = selectEventCandidates(chain, events, {
       r: deps.rate,
       q: deps.dividendYield,
-      effectiveDeltaMin: autoTuneTargetDelta(gate.vix, config.vixLadder),
+      effectiveDeltaMin: autoTuneTargetDelta(gate.vix, config.vixLadder, config.deltaBand.min, config.deltaBand.max),
+      deltaMin: config.deltaBand.min,
       deltaMax: config.deltaBand.max,
       frontDteMin: config.frontDte.min,
       frontDteMax: config.frontDte.max,

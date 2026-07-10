@@ -1031,6 +1031,31 @@ describe("makeComputePickerSnapshotUseCase — runtime rule overrides (29-10)", 
     expect(liquidityRow?.weight).toBe(0);
   });
 
+  it("a deltaBandMin override actually narrows the emitted candidate universe (CR-01, 29-REVIEW.md)", async () => {
+    // Calm-VIX baseline (macro default = VIXCLS 15) -> autoTuneTargetDelta's own tilt is a
+    // no-op, so any change in the universe is attributable ONLY to the deltaBandMin override,
+    // not the VIX tilt (already covered separately above).
+    const withDefault = baseDeps({});
+    const defaultResult = await makeComputePickerSnapshotUseCase(withDefault.deps)();
+    expect(defaultResult.ok).toBe(true);
+    const defaultRow = withDefault.rows[0];
+    expect(defaultRow).toBeDefined();
+    if (defaultRow === undefined) return;
+
+    const withOverride = baseDeps({ ruleOverrides: { picker: { deltaBandMin: -0.35 } } });
+    const overrideResult = await makeComputePickerSnapshotUseCase(withOverride.deps)();
+    expect(overrideResult.ok).toBe(true);
+    const overrideRow = withOverride.rows[0];
+    expect(overrideRow).toBeDefined();
+    if (overrideRow === undefined) return;
+
+    // Before the CR-01 fix, deltaBandMin was validated/persisted/echoed but never actually
+    // read by the candidate-selection call graph -- these two universes were byte-identical.
+    expect(overrideRow.snapshot.candidates.length).toBeLessThan(defaultRow.snapshot.candidates.length);
+    const overrideStrikes = new Set(overrideRow.snapshot.candidates.map((c) => c.frontLeg.strike));
+    expect(overrideStrikes.has(7500)).toBe(false); // the deepest strike, tilted out by the narrower floor
+  });
+
   it("a readRuleOverrides read error degrades to defaults rather than failing the whole job (T-29-15)", async () => {
     const { deps, rows } = baseDeps({});
     const useCase = makeComputePickerSnapshotUseCase({

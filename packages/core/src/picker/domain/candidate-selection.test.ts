@@ -29,6 +29,7 @@ import {
   BACK_DTE_MAX_GAP,
   FILL_WIDTH_FRACTION,
 } from "./candidate-selection.ts";
+import { VIX_LADDER } from "./entry-gate.ts";
 import type { ChainQuoteForPicker, EconomicEvent } from "../application/ports.ts";
 
 const SPOT = 7500;
@@ -415,6 +416,26 @@ describe("autoTuneTargetDelta", () => {
       }),
     );
   });
+
+  // CR-01 (29-REVIEW.md): the interpolation range itself must be overridable -- omitting
+  // deltaMin/deltaMax reproduces the DELTA_BAND_MIN/MAX behavior byte-identically, an
+  // override actually shifts the whole [min, max] the tilt travels within.
+  it("omitting deltaMin/deltaMax reproduces DELTA_BAND_MIN/MAX byte-identically", () => {
+    for (const vix of [10, 15, 20, 25, 40, null]) {
+      expect(autoTuneTargetDelta(vix, VIX_LADDER)).toBe(
+        autoTuneTargetDelta(vix, VIX_LADDER, DELTA_BAND_MIN, DELTA_BAND_MAX),
+      );
+    }
+  });
+
+  it("an overridden deltaMin/deltaMax shifts the floor, ceiling, AND the interpolated midpoint", () => {
+    expect(autoTuneTargetDelta(10, VIX_LADDER, -0.4, -0.35)).toBe(-0.4); // below floor -> deltaMin
+    expect(autoTuneTargetDelta(30, VIX_LADDER, -0.4, -0.35)).toBe(-0.35); // above ceiling -> deltaMax
+    const mid = autoTuneTargetDelta(20, VIX_LADDER, -0.4, -0.35);
+    expect(mid).toBeCloseTo((-0.4 + -0.35) / 2, 9);
+    // Provably NOT the compile-time-constant midpoint -- the override actually moved the range.
+    expect(mid).not.toBeCloseTo((DELTA_BAND_MIN + DELTA_BAND_MAX) / 2, 2);
+  });
 });
 
 describe("selectCandidates — effectiveDeltaMin (28-04, PLAY-05 wiring)", () => {
@@ -500,11 +521,12 @@ describe("selectCandidates — deltaMax / frontDteMin / frontDteMax (29-03 runti
     return chain;
   }
 
-  it("omitting deltaMax/frontDteMin/frontDteMax reproduces the pre-change universe byte-identically", () => {
+  it("omitting deltaMin/deltaMax/frontDteMin/frontDteMax reproduces the pre-change universe byte-identically", () => {
     const withDefault = selectCandidates(denseChain(), [], { r: R, q: Q });
     const withExplicitDefaults = selectCandidates(denseChain(), [], {
       r: R,
       q: Q,
+      deltaMin: DELTA_BAND_MIN,
       deltaMax: DELTA_BAND_MAX,
       frontDteMin: FRONT_DTE_MIN,
       frontDteMax: FRONT_DTE_MAX,
@@ -520,6 +542,30 @@ describe("selectCandidates — deltaMax / frontDteMin / frontDteMax (29-03 runti
       const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
       expect(d).toBeLessThanOrEqual(-0.35 + 1e-9);
     }
+  });
+
+  // CR-01 (29-REVIEW.md): `deltaMin` (config.deltaBand.min) previously had NO parameter at
+  // all -- the clamp floor was hardcoded to DELTA_BAND_MIN regardless of what a caller
+  // supplied, so this override was silently a no-op. It must now actually narrow the deep
+  // edge of the universe, mirroring deltaMax's shallow-edge behavior above.
+  it("a shallower deltaMin excludes the deepest (nearest-the-money) strikes past the new floor", () => {
+    const full = selectCandidates(denseChain(), [], { r: R, q: Q });
+    const narrowed = selectCandidates(denseChain(), [], { r: R, q: Q, deltaMin: -0.35 });
+    expect(narrowed.candidates.length).toBeLessThan(full.candidates.length);
+    for (const c of narrowed.candidates) {
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      expect(d).toBeGreaterThanOrEqual(-0.35 - 1e-9);
+    }
+  });
+
+  it("an omitted effectiveDeltaMin falls back to the overridden deltaMin, not the hardcoded DELTA_BAND_MIN", () => {
+    const withOverrideFloor = selectCandidates(denseChain(), [], { r: R, q: Q, deltaMin: -0.35 });
+    const explicitEffective = selectCandidates(denseChain(), [], {
+      r: R,
+      q: Q,
+      effectiveDeltaMin: -0.35,
+    });
+    expect(withOverrideFloor.candidates).toEqual(explicitEffective.candidates);
   });
 
   it("frontDteMin/frontDteMax shift the front-DTE window", () => {
@@ -538,6 +584,13 @@ describe("selectCandidates — deltaMax / frontDteMin / frontDteMax (29-03 runti
     const clampedAbove = selectCandidates(chain, [], { r: R, q: Q, deltaMax: -0.4, effectiveDeltaMin: -0.35 });
     const explicitAtMax = selectCandidates(chain, [], { r: R, q: Q, deltaMax: -0.4, effectiveDeltaMin: -0.4 });
     expect(clampedAbove.candidates).toEqual(explicitAtMax.candidates);
+  });
+
+  it("effectiveDeltaMin below the overridden deltaMin clamps up to deltaMin, not the wider DELTA_BAND_MIN", () => {
+    const chain = denseChain();
+    const clampedBelow = selectCandidates(chain, [], { r: R, q: Q, deltaMin: -0.4, effectiveDeltaMin: -0.49 });
+    const explicitAtMin = selectCandidates(chain, [], { r: R, q: Q, deltaMin: -0.4, effectiveDeltaMin: -0.4 });
+    expect(clampedBelow.candidates).toEqual(explicitAtMin.candidates);
   });
 });
 
