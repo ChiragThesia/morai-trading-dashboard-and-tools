@@ -38,6 +38,7 @@ import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
 import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { repriceScenario } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
+import { computePayoffDomain } from "../lib/payoff-domain.ts";
 import { computeProjectionBounds } from "../lib/date-projection.ts";
 import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
 import { usePicker } from "../hooks/usePicker.ts";
@@ -587,9 +588,14 @@ export function Analyzer(): React.ReactElement {
     [bookCandidates],
   );
 
+  const payoffDomain = useMemo(
+    () => computePayoffDomain(combinedPositions, spot, params),
+    [combinedPositions, spot, params],
+  );
+
   const scenarioResult = useMemo(
-    () => (combinedPositions.length === 0 ? null : repriceScenario(combinedPositions, params)),
-    [combinedPositions, params],
+    () => (combinedPositions.length === 0 ? null : repriceScenario(combinedPositions, params, payoffDomain)),
+    [combinedPositions, params, payoffDomain],
   );
 
   // Book totals (sum of debits/greeks) for the header summary when 2+ calendars are combined.
@@ -768,9 +774,7 @@ export function Analyzer(): React.ReactElement {
                   putWall: snapshot?.gex.putWall ?? null,
                   flip: snapshot?.gex.flip ?? null,
                 }}
-                // ponytail: literal placeholder matches the old hardcoded grid; real
-                // computePayoffDomain wiring lands in 30-02 (this plan ships primitives only).
-                domain={{ min: 6900, max: 7900 }}
+                domain={payoffDomain}
                 spot={spot}
                 toggles={toggles}
                 fitY={false}

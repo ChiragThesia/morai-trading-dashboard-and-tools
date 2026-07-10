@@ -90,6 +90,7 @@ import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
 import { repriceScenario, buildScenarioStrip } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
+import { computePayoffDomain } from "../lib/payoff-domain.ts";
 import { parseTosOrder } from "../lib/tos-parser.ts";
 import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candidate.ts";
 
@@ -272,7 +273,9 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
   it("feeds candidateToAnalyzerPosition(selected) into repriceScenario and passes the picker curve colors", () => {
     render(<Analyzer />);
 
-    const expected = repriceScenario([candidateToAnalyzerPosition(TOP)], PARAMS);
+    const positions = [candidateToAnalyzerPosition(TOP)];
+    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
+    const expected = repriceScenario(positions, PARAMS, domain);
     const props = latestPayoffChartProps();
 
     expect(props.todayCurve).toEqual(expected.payoffCurve);
@@ -287,7 +290,9 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
 
     fireEvent.click(screen.getByTestId(`candidate-card-${SECOND.id}`));
 
-    const expected = repriceScenario([candidateToAnalyzerPosition(SECOND)], PARAMS);
+    const positions = [candidateToAnalyzerPosition(SECOND)];
+    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
+    const expected = repriceScenario(positions, PARAMS, domain);
     const props = latestPayoffChartProps();
     expect(props.todayCurve).toEqual(expected.payoffCurve);
   });
@@ -305,10 +310,9 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
     fireEvent.click(within(secondCard).getByText("⊕ Combine"));
 
     // Combined book = [selected TOP, combined SECOND], summed by the one engine (Overview's path).
-    const expected = repriceScenario(
-      [candidateToAnalyzerPosition(TOP), candidateToAnalyzerPosition(SECOND)],
-      PARAMS,
-    );
+    const positions = [candidateToAnalyzerPosition(TOP), candidateToAnalyzerPosition(SECOND)];
+    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
+    const expected = repriceScenario(positions, PARAMS, domain);
     const props = latestPayoffChartProps();
     expect(props.todayCurve).toEqual(expected.payoffCurve);
     expect(props.expirationCurve).toEqual(expected.expirationCurve);
@@ -323,7 +327,9 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
     fireEvent.click(within(secondCard).getByText("⊕ Combine"));
     fireEvent.click(within(secondCard).getByText("✓ Combined"));
 
-    const selectedOnly = repriceScenario([candidateToAnalyzerPosition(TOP)], PARAMS);
+    const onlyPositions = [candidateToAnalyzerPosition(TOP)];
+    const onlyDomain = computePayoffDomain(onlyPositions, PARAMS.spot, PARAMS);
+    const selectedOnly = repriceScenario(onlyPositions, PARAMS, onlyDomain);
     expect(latestPayoffChartProps().todayCurve).toEqual(selectedOnly.payoffCurve);
   });
 
@@ -370,7 +376,8 @@ describe("Analyzer — ScenarioStrip (Task 3, ANLZ-02/D-06)", () => {
     render(<Analyzer />);
 
     const position = candidateToAnalyzerPosition(TOP);
-    const expected = repriceScenario([position], PARAMS);
+    const domain = computePayoffDomain([position], PARAMS.spot, PARAMS);
+    const expected = repriceScenario([position], PARAMS, domain);
     const levels = {
       putWall: pickerSnapshotFixture.gex.putWall,
       flip: pickerSnapshotFixture.gex.flip,
@@ -491,7 +498,9 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     const parsed = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
     if (parsed === null) throw new Error("expected PASTE_EXAMPLE to parse");
     const pastedCandidate = parsedCalendarToPickerCandidate(parsed, "pasted-1");
-    const expected = repriceScenario([candidateToAnalyzerPosition(pastedCandidate)], PARAMS);
+    const pastedPositions = [candidateToAnalyzerPosition(pastedCandidate)];
+    const pastedDomain = computePayoffDomain(pastedPositions, PARAMS.spot, PARAMS);
+    const expected = repriceScenario(pastedPositions, PARAMS, pastedDomain);
 
     const props = latestPayoffChartProps();
     expect(props.todayCurve).toEqual(expected.payoffCurve);
