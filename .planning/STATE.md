@@ -6,15 +6,15 @@ current_phase: 29
 current_phase_name: Runtime Rule Settings
 status: executing
 stopped_at: Phase 29 planned — 14 plans / 6 waves, plan-checker passed
-last_updated: "2026-07-10T03:56:51.471Z"
+last_updated: "2026-07-10T04:04:59.917Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 29 execution started
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 40
-  completed_plans: 27
-  percent: 68
+  completed_plans: 28
+  percent: 70
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 29 (Runtime Rule Settings) — EXECUTING
-Plan: 2 of 14
+Plan: 3 of 14
 Status: Ready to execute
 Last activity: 2026-07-10 — Phase 29 execution started
 
@@ -272,6 +272,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 19 P09 | ~20min | 3 tasks | 6 files |
 | Phase 20 P01 | 15min | 2 tasks | 4 files |
 | Phase 29 P01 | 4min | 2 tasks | 3 files |
+| Phase 29 P02 | 12min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -378,6 +379,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 20-01]: dropped an automated "no Date.now()/no React import" source-text purity test (import.meta.url did not resolve to file:// scheme in this repo's Vitest config) — verified the same property manually via grep instead
 - [Phase 20-01]: NOT marking WATCH-01 complete in REQUIREMENTS.md despite it appearing in this plan's requirements frontmatter — 20-01 ships only the contract schema + pure derivation foundation; the user-facing three-state badge ships in 20-03 per ROADMAP.md ("WATCH-01 ships" annotation), matching the 18-01/19-04 precedent
 - [Phase ?]: 29-01: rule_overrides is a single-row JSONB table keyed by fixed literal id 'default' (mirrors broker_tokens.app_id, no DB CHECK constraint); this explicitly overrides Phase 28 T-28-11 -- constants remain DEFAULTS, overrides row is an explicit visible layer merged at consumption time
+- [Phase 29]: 29-02: weight-sum enforced as HARD VALIDATION (reject non-100), not server-side normalization
+- [Phase 29]: 29-02: picker.weights all-9-or-none needs no separate completeness refine — Zod's own required-field check on the non-optional pickerWeightsShape object does it
+- [Phase 29]: 29-02: exits.take/exits.stop use flat arm/disarm field names (plus15Arm/plus15Disarm etc.), not nested {arm,disarm} pairs, per plan action text
 
 ### Pending Todos
 
@@ -434,7 +438,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T03:55:57.440Z
+Last session: 2026-07-10T04:02:23.338Z
 Stopped at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
 Resume file: .planning/ROADMAP.md (v1.3 section)
 

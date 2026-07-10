@@ -307,13 +307,13 @@ by a gear-icon modal in the top bar grouped by engine with reset-to-defaults per
 an override reproduces today's behavior byte-identically (backtest leakage-oracle safe).
 **Requirements**: none mapped — user-added phase; scope defined by 29-CONTEXT.md locked decisions
 **Depends on:** Phase 28
-**Plans:** 1/14 plans executed
+**Plans:** 2/14 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 29-01-PLAN.md — Docs-before-code: rule_overrides decision + rule-overrides.md + TOPIC-MAP (T-28-11 override)
-- [ ] 29-02-PLAN.md — Contract: rule-settings Zod schema (whitelist, weight-sum + hysteresis-pair refines)
+- [x] 29-02-PLAN.md — Contract: rule-settings Zod schema (whitelist, weight-sum + hysteresis-pair refines)
 - [ ] 29-03-PLAN.md — Picker scalar seams: candidate-selection deltaMax/frontDte, rules debitFit, brakes maxOpen
 - [ ] 29-04-PLAN.md — Picker ladder/sizing seams: resolveVixLadder + resolveEntryGate ladder + resolveSizingTier override
 - [ ] 29-05-PLAN.md — Exits seam + resolveExitRuleConfig (evaluateExit 4th config arg)
