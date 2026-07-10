@@ -527,3 +527,24 @@ export type {
   RunBacktestDeps,
   RunBacktestParams,
 } from "./backtest/index.ts";
+
+// ─── Settings bounded context (Phase 29, Plan 09) ──────────────────────────────
+// Thin cross-cutting settings context: storage-facing ports + the pure merge helpers backing
+// the GET/PUT rule-settings surface (29-13). StorageError is NOT re-exported a second time
+// under that name — structurally identical to journal's (already exported above), same
+// convention as exits/backtest (see their own header comments).
+export type { RuleConfig, StoredRuleOverrides, RuleOverridesPatch } from "./settings/domain/merge.ts";
+export { computeEffective, mergeStoredOverrides } from "./settings/domain/merge.ts";
+export type { ForReadingRuleOverrides, ForWritingRuleOverrides } from "./settings/application/ports.ts";
+export { makeGetRuleSettingsUseCase } from "./settings/application/getRuleSettings.ts";
+export type {
+  GetRuleSettingsResult,
+  GetRuleSettingsDeps,
+  ForRunningGetRuleSettings,
+} from "./settings/application/getRuleSettings.ts";
+export { makeSetRuleOverridesUseCase } from "./settings/application/setRuleOverrides.ts";
+export type {
+  SetRuleOverridesResult,
+  SetRuleOverridesDeps,
+  ForRunningSetRuleOverrides,
+} from "./settings/application/setRuleOverrides.ts";
