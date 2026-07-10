@@ -100,6 +100,66 @@ CLI, map MORAI palette hex values directly into each chart's local `ChartConfig`
 reuse), and add one shared `mockResponsiveContainer()` test helper before touching any
 chart's test file.
 
+## Decisions
+
+- **D-01:** Pin `recharts@^3.9.2` as the single new dependency [VERIFIED: npm
+  registry]. Do not install a `2.x` or pre-release (`alpha`/`beta`/`canary`) tag —
+  `latest` is the version shadcn/ui's official chart docs target.
+- **D-02:** Scaffold theming/container plumbing via the shadcn CLI
+  (`bunx shadcn@latest add chart`), not hand-written. Commit the generated
+  `apps/web/src/components/ui/chart.tsx` unmodified; extend via `ChartConfig` +
+  composition only, per the official "no wrapping abstraction" convention.
+- **D-03:** Container/responsive strategy: every chart wraps in `ChartContainer`
+  (→ `ResponsiveContainer` internally). No hand-rolled `viewBox`/width-tracking. For
+  `GammaProfile`'s fixed-pixel full/compact variants, pass explicit numeric
+  `width`/`height` through to `ChartContainer` rather than relying on 100%-responsive
+  sizing, matching its current fixed-size usage.
+- **D-04:** Every x-axis (`PayoffChart`, `TermStructureChart`, `GexBars`'s value axis)
+  MUST be `type="number"` with an explicit `domain` and `allowDataOverflow={true}` —
+  never the categorical default. This is the direct re-expression of Phase 30's
+  domain-fidelity lock (Pitfalls 2 and 3).
+- **D-05:** Split-color fills (PayoffChart T+0/profit-zone, GammaProfile gamma) use the
+  linearGradient-offset-split technique (Pattern 2) — a like-for-like port of the
+  gradient trick the current visx code already implements, not a new invention.
+- **D-06:** The `TermStructureChart` forward-IV bracket uses `ReferenceLine`'s native
+  `segment` prop (Pattern 3), replacing the hand-drawn partial-width SVG path string.
+- **D-07:** GEX/flip/put-wall/call-wall/spot reference marks use `ReferenceLine`
+  (full-width verticals) across all charts; per-bar GEX/OI sign coloring in `GexBars`
+  uses `Cell` (Pattern reuse, direct port of the existing conditional-color logic).
+- **D-08:** The only elements requiring a custom `Customized` layer (no native
+  primitive covers them) are: PayoffChart's KISS edge-arrow glyphs, its short BE-marker
+  bars, and its EM-band ticks+connector (Pattern 4). Everything else in CONTEXT.md's
+  "custom-layer strategy" question resolves to a native Recharts prop — see Open
+  Question 2.
+- **D-09:** BE pills and the scenario strip stay unchanged plain-HTML overlays outside
+  the `<svg>` — they already are today and were never chart-library concerns.
+- **D-10:** Crosshair/hover uses Recharts' native `<Tooltip>` + `cursor` prop with a
+  custom typed `content` component (Code Examples), replacing the current manual
+  `localPoint`/`getBoundingClientRect`/scale-invert block (~50 line deletion).
+- **D-11:** Set `isAnimationActive={false}` on every series/reference component across
+  all 4 charts, for both test determinism and parity with the current zero-animation
+  visx/ECharts behavior (Pitfall 5).
+- **D-12:** Custom Tooltip/Customized/label render functions MUST use concrete generic
+  type parameters (e.g. `TooltipContentProps<number, "pl">`), never
+  `TooltipContentProps<any, any>` (Pitfall 6, project no-`any` rule).
+- **D-13:** Do not remove `@visx/*`, `echarts`, or `echarts-for-react` from
+  `apps/web/package.json` — all three remain load-bearing for out-of-scope charts
+  (`LifecycleChart.tsx`, `EquityCurve.tsx`, `MiniLine.tsx` on visx; `GexByExpiry.tsx`
+  on echarts) after this phase (Pitfall 7).
+- **D-14:** `GexBars` uses `<BarChart layout="vertical">` (Recharts' naming for
+  horizontal bars) with `XAxis type="number"` (value) / `YAxis type="category"`
+  (strikes) to reproduce its current horizontal-bar layout (Pitfall 8).
+- **D-15:** Test harness: add one shared `apps/web/src/components/test/recharts-test-utils.tsx`
+  helper mocking `ResponsiveContainer` to a fixed pixel size, imported by all 4 chart
+  test files — reuses this repo's existing per-file `vi.mock` precedent
+  (`GexBars.test.tsx`'s current `echarts-for-react` mock) rather than introducing a new
+  global `setupFiles` mechanism.
+- **D-16:** Migration order: `PayoffChart.tsx` first (highest element count/complexity,
+  proves every technique — split-gradient fill, `Customized` layers, native Tooltip,
+  numeric domain+overflow — that the other three charts then reuse), followed by
+  `GammaProfile.tsx` (subset of PayoffChart's techniques), then `TermStructureChart.tsx`
+  and `GexBars.tsx` in either order (each independent, smaller element sets).
+
 ## Architectural Responsibility Map
 
 | Capability | Primary Tier | Secondary Tier | Rationale |
