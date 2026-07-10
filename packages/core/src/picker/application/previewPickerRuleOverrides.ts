@@ -87,8 +87,10 @@ function rescoreCandidate(
  * Rebuilds `resolveEntryGate`'s raw `MacroSeriesRow` input from the stored gate's ALREADY-
  * resolved scalars — this preview has no `readMacroObservations` dep (T-32-01 structural
  * exclusion), so `resolveEntryGate` is fed the one shape it needs reconstructed, never a
- * second hand-rolled tier/hysteresis implementation. Empty when the stored gate has no
- * reading (GATE BLIND / read-error) — `resolveEntryGate` then reproduces that same blind state.
+ * second hand-rolled tier/hysteresis implementation. Only called for a NON-blind stored gate
+ * (CR-01: the use-case body below short-circuits a blind gate before ever reaching this
+ * function) — a genuinely-blind gate cannot be "re-derived" honestly since this preview has no
+ * fresh macro read to distinguish freshly-blind from a still-stale reading.
  */
 function reconstructMacroRows(gate: PickerGate): ReadonlyArray<MacroSeriesRow> {
   if (gate.vix === null || gate.vix3m === null || gate.asOf === null) return [];
@@ -126,7 +128,13 @@ export function makePreviewPickerRuleOverridesUseCase(
     );
 
     // ── Gate branch: one fresh open-calendars count read is the ONLY live I/O this branch
-    // needs (T-32-01) — everything else re-derives from the stored gate's own scalars. ──
+    // needs (T-32-01) — everything else re-derives from the stored gate's own scalars.
+    // CR-01: when the STORED gate is already `blind` (macroMissing OR macroStale), the preview
+    // has no fresh macro read to know whether that staleness has since resolved -- it cannot
+    // honestly re-derive freshness, only replay the same reading. Re-resolving with the gate's
+    // own `asOf` as a fake "now" always reads as "0 days old" and silently un-blinds a
+    // genuinely-stale gate (the bug this short-circuit exists to prevent). No staged knob --
+    // ladder, maxOpen, sizing -- can cure staleness, so the stored gate is reproduced verbatim. ──
     const openCalendarsResult = await deps.readOpenCalendars();
     if (!openCalendarsResult.ok) return err(openCalendarsResult.error);
     const openCount = openCalendarsResult.value.length;
@@ -134,15 +142,22 @@ export function makePreviewPickerRuleOverridesUseCase(
     // Cooldown is not an editable knob (28-CONTEXT.md) — reused verbatim from the stored gate.
     const cooldownBrake = snapshot.gate.brakes.cooldown;
 
-    const gateState = resolveEntryGate({
-      rows: reconstructMacroRows(snapshot.gate),
-      nowIso: snapshot.gate.asOf ?? snapshot.asOf,
-      maxOpenBrake,
-      cooldownBrake,
-      previousState: toEntryGateState(snapshot.gate),
-      vixLadder: config.vixLadder,
-    });
-    const gateAfter = toPickerGate(gateState, maxOpenBrake, cooldownBrake, snapshot.gate.brakes.cooldownUntil);
+    const gateAfter: PickerGate =
+      snapshot.gate.state === "blind"
+        ? snapshot.gate
+        : toPickerGate(
+            resolveEntryGate({
+              rows: reconstructMacroRows(snapshot.gate),
+              nowIso: snapshot.gate.asOf ?? snapshot.asOf,
+              maxOpenBrake,
+              cooldownBrake,
+              previousState: toEntryGateState(snapshot.gate),
+              vixLadder: config.vixLadder,
+            }),
+            maxOpenBrake,
+            cooldownBrake,
+            snapshot.gate.brakes.cooldownUntil,
+          );
 
     // ── Sizing branch: resolveSizingTier from the SAME re-resolved gate vix (28-04 precedent). ──
     const sizingOverride: SizingTierOverride = {

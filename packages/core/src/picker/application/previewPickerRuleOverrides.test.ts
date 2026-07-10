@@ -23,11 +23,13 @@ import type {
   ForReadingPickerSnapshot,
   PickerCandidateDomain,
   PickerGate,
+  PickerSizing,
   PickerSnapshot,
   PickerSnapshotRow,
   StorageError,
 } from "./ports.ts";
 import { debitFitFraction } from "../domain/rules.ts";
+import { resolveSizingTier } from "../domain/sizing.ts";
 import type { ForGettingOpenCalendars } from "../../journal/index.ts";
 import type { Calendar } from "../../journal/index.ts";
 import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
@@ -50,6 +52,30 @@ const OPEN_GATE: PickerGate = {
   brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
   reasons: [],
 };
+
+/** CR-01 fixture: a stored gate that is BLIND due to stale (not missing) macro data -- the
+ *  byte-parity property must hold for this fixture too (gate.after === gate.before), never
+ *  silently re-resolving to a live state via the asOf-as-nowIso surrogate. */
+const STALE_BLIND_GATE: PickerGate = {
+  vix: 30,
+  vix3m: 20,
+  ratio: 1.5,
+  asOf: SNAPSHOT_ASOF,
+  state: "blind",
+  penaltyMultiplier: 0,
+  brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+  reasons: ["macroStale"],
+};
+
+/** The sizing a stored gate would ACTUALLY have been persisted with (mirrors
+ *  computePickerSnapshot.ts's `toPickerSizing(gate.vix, ...)`, default sizingContracts) --
+ *  keeps a gate fixture's `sizing` internally consistent with its own `vix` (the fast-check
+ *  gateArb byte-parity property needs this, or `sizing.after` legitimately diverges from a
+ *  fixture's arbitrarily-mismatched `sizing.before`). */
+function sizingForGate(gate: PickerGate): PickerSizing {
+  const resolved = resolveSizingTier(gate.vix);
+  return { tier: resolved?.tier ?? null, contracts: resolved?.contracts ?? null, vix: gate.vix };
+}
 
 const BREAKDOWN_CRITERIA = [
   "slope",
@@ -164,9 +190,12 @@ describe("makePreviewPickerRuleOverridesUseCase", () => {
       debitFit: fc.double({ min: 0, max: 100, noNaN: true }), // overwritten by debitFitFraction in makeCandidate
     });
     const debitArb = fc.double({ min: 0, max: 10000, noNaN: true });
+    // CR-01: exercise both a live-open stored gate and a stale-blind one -- the byte-parity
+    // guarantee must hold identically for the blind fixture (never silently un-blinded).
+    const gateArb = fc.constantFrom(OPEN_GATE, STALE_BLIND_GATE);
 
     await fc.assert(
-      fc.asyncProperty(weightArb, contributionArb, debitArb, async (weights, contributions, debit) => {
+      fc.asyncProperty(weightArb, contributionArb, debitArb, gateArb, async (weights, contributions, debit, gate) => {
         const candidate = makeCandidate("cand-1", debit, weights, contributions);
         // Stored overrides carry the SAME weights + debit band the candidate was scored with --
         // reproducing the effective config an ABSENT staged group falls back to (T-32-01).
@@ -174,7 +203,7 @@ describe("makePreviewPickerRuleOverridesUseCase", () => {
           picker: { weights, debitIdealMin: 3200, debitIdealMax: 5000 },
         };
         const deps = makeDeps({
-          readPickerSnapshot: async () => ok(snapshotRow({ candidates: [candidate] })),
+          readPickerSnapshot: async () => ok(snapshotRow({ candidates: [candidate], gate, sizing: sizingForGate(gate) })),
           readRuleOverrides: async () => ok(storedOverrides),
         });
         const preview = makePreviewPickerRuleOverridesUseCase(deps);
@@ -194,6 +223,32 @@ describe("makePreviewPickerRuleOverridesUseCase", () => {
         expect(result.value.sizing.after).toEqual(result.value.sizing.before);
       }),
     );
+  });
+
+  it("CR-01: a stored blind gate (macroStale) stays blind in preview even with a staged vixLadder override -- the preview cannot know fresher-than-stored freshness, so it must not silently un-blind a stale gate", async () => {
+    // vix=30 would resolve to a live "blocked" state if resolveEntryGate were re-run with
+    // nowIso reset to "0 days old" (the CR-01 bug) -- proves the fix isn't accidentally
+    // correct just because the reconstructed state happens to match.
+    const staleBlindGate: PickerGate = {
+      vix: 30,
+      vix3m: 20,
+      ratio: 1.5,
+      asOf: SNAPSHOT_ASOF,
+      state: "blind",
+      penaltyMultiplier: 0,
+      brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+      reasons: ["macroStale"],
+    };
+    const deps = makeDeps({
+      readPickerSnapshot: async () => ok(snapshotRow({ gate: staleBlindGate })),
+    });
+    const result = await makePreviewPickerRuleOverridesUseCase(deps)({ vixLadder: { crisisMin: 100 } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.available).toBe(true);
+    if (!result.value.available) return;
+    expect(result.value.gate.after.state).toBe("blind");
+    expect(result.value.gate.after).toEqual(staleBlindGate);
   });
 
   it("cold start: no stored snapshot yet -> ok({available:false}), never a throw", async () => {
