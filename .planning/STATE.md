@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 25
-current_phase_name: Data-Quality Ops Rider
-status: planning
-stopped_at: v1.3 ROADMAP.md created — 6 phases (23-28), 28/28 requirements mapped, no orphans
-last_updated: "2026-07-09T18:31:58.885Z"
+current_phase: 29
+current_phase_name: Runtime Rule Settings
+status: ready-to-execute
+stopped_at: Phase 29 planned — 14 plans / 6 waves, plan-checker passed
+last_updated: "2026-07-10T03:50:24.828Z"
 last_activity: 2026-07-09
-last_activity_desc: Phase 24 complete, transitioned to Phase 25
+last_activity_desc: Phase 29 planned (14 plans, 6 waves), ready to execute
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 26
+  total_phases: 7
+  completed_phases: 5
+  total_plans: 40
   completed_plans: 26
-  percent: 100
+  percent: 65
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 25 of 28 (Data-Quality Ops Rider)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-07-09 — Phase 24 complete, transitioned to Phase 25
+Phase: 29 of 29 (Runtime Rule Settings)
+Plan: Not started (14 plans, 6 waves)
+Status: Ready to execute
+Last activity: 2026-07-09 — Phase 29 planned (plan-checker passed); Phase 28 executed earlier, gate decisions live
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -290,6 +290,13 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
   exit advisor → PICK-04 backtest harness (n=13 refutation-only) → playbook crisis gates/
   anti-criteria/sizing. `.planning/research/SUMMARY.md` confirms the dependency order across all
   4 research files; 28/28 requirements mapped, no orphans.
+
+- Phase 29 added (2026-07-09): Runtime Rule Settings — curated ~20-knob settings surface
+  (entry/picker weights + bands, exit advisor rungs, regime warn/crisis bands) stored as a single
+  JSONB overrides row merged over code defaults (worker job start + server request time);
+  gear-icon modal in the top bar. User-approved override of T-28-11 (constants-file-as-only-source).
+  Hysteresis arm/disarm pairs edited as validated pairs; normalizers, event penalties, gexFit
+  credits, liquidity internals stay code-only.
 
 ### Decisions
 

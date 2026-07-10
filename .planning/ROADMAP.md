@@ -310,6 +310,7 @@ an override reproduces today's behavior byte-identically (backtest leakage-oracl
 **Plans:** 14 plans (6 waves)
 
 Plans:
+**Wave 1**
 
 - [ ] 29-01-PLAN.md — Docs-before-code: rule_overrides decision + rule-overrides.md + TOPIC-MAP (T-28-11 override)
 - [ ] 29-02-PLAN.md — Contract: rule-settings Zod schema (whitelist, weight-sum + hysteresis-pair refines)
@@ -317,11 +318,26 @@ Plans:
 - [ ] 29-04-PLAN.md — Picker ladder/sizing seams: resolveVixLadder + resolveEntryGate ladder + resolveSizingTier override
 - [ ] 29-05-PLAN.md — Exits seam + resolveExitRuleConfig (evaluateExit 4th config arg)
 - [ ] 29-06-PLAN.md — Regime seam + resolveRegimeRuleConfig (four band thresholds)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 29-07-PLAN.md — resolvePickerRuleConfig merge fn (fast-check, byte-identical omission)
-- [ ] 29-08-PLAN.md — Storage: ruleOverrides table + migration 0022 [BLOCKING] + repo + memory twin
 - [ ] 29-09-PLAN.md — Settings core: ports + getRuleSettings/setRuleOverrides + merge helpers
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 29-08-PLAN.md — Storage: ruleOverrides table + migration 0022 [BLOCKING] + repo + memory twin
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 29-10-PLAN.md — Picker consumption wiring: fresh read + config thread + effective ruleSet stamp
-- [ ] 29-11-PLAN.md — Exits consumption wiring: fresh read + evaluateExit config (worker root)
 - [ ] 29-12-PLAN.md — Regime consumption wiring: fresh read per request + banding
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 29-11-PLAN.md — Exits consumption wiring: fresh read + evaluateExit config (worker root)
 - [ ] 29-13-PLAN.md — Server surface: GET/PUT /api/settings/rules + MCP tools + engine-computed defaults
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 29-14-PLAN.md — Web: useRuleSettings hook + gear-icon settings modal (human-verify)
