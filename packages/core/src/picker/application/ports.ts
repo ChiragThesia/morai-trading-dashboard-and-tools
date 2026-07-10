@@ -307,3 +307,40 @@ export type ForRunningComputePicker = () => Promise<Result<void, StorageError>>;
  * Called by the HTTP route and MCP tool; returns the latest stored snapshot or null.
  */
 export type ForRunningGetPicker = () => Promise<Result<PickerSnapshotRow | null, StorageError>>;
+
+// ─── Ad-hoc analyze (Phase 30, Plan 04, D-02) ───────────────────────────────────
+
+/**
+ * AdHocCalendarInput — one user-pasted PUT calendar leg pair, already Zod-validated at the
+ * 30-05 HTTP/MCP boundary (`analyzeAdHocCalendarRequest`, 30-03). Deliberately structural
+ * (not imported from `@morai/contracts`) — the hexagon never imports the contracts package.
+ */
+export type AdHocCalendarInput = {
+  readonly putCall: "P";
+  readonly strike: number;
+  readonly frontDte: number;
+  readonly backDte: number;
+  readonly frontIv: number;
+  readonly backIv: number;
+  readonly debit: number;
+  readonly qty: number;
+  readonly frontExpiry: string; // YYYY-MM-DD
+  readonly backExpiry: string; // YYYY-MM-DD
+};
+
+/**
+ * AdHocCalendarAnalysis — the scored candidate, or a documented degradation reason
+ * (D-02 binding #2: no snapshot yet → `{scored:false, reason:"no-snapshot"}`, never a throw).
+ */
+export type AdHocCalendarAnalysis =
+  | { readonly scored: true; readonly candidate: PickerCandidateDomain }
+  | { readonly scored: false; readonly reason: string };
+
+/**
+ * ForAnalyzingAdHocCalendar — driver port for the ad-hoc analyze use-case factory (30-04).
+ * Scores ONE pasted PUT calendar with byte-parity to the engine, reusing the latest
+ * snapshot's gate/sizing/context verbatim (T-28-10) — never persists (T-19-17).
+ */
+export type ForAnalyzingAdHocCalendar = (
+  input: AdHocCalendarInput,
+) => Promise<Result<AdHocCalendarAnalysis, StorageError>>;

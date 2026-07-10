@@ -206,7 +206,9 @@ function resolveEventsContextStatus(
  * scoring.ts's `scoreOne` uses internally, so this is a pure post-scoring override, never a
  * second scoring formula.
  */
-function zeroEventAdjustment(candidate: ScoredCandidate): ScoredCandidate {
+// 30-04 (D-02): exported for reuse by the ad-hoc analyze use-case (T-30-10 parity — one
+// zeroing formula, never a second copy).
+export function zeroEventAdjustment(candidate: ScoredCandidate): ScoredCandidate {
   const breakdown = candidate.breakdown.map((entry) =>
     entry.criterion === "eventAdjustment" ? { ...entry, rawValue: 0, contribution: 0 } : entry,
   );
@@ -335,7 +337,9 @@ const PICKER_NUMBER_FIELDS = [
   "maxOpenCalendars",
 ] as const;
 
-function isPickerRuleOverrides(value: unknown): value is PickerRuleOverrides {
+// 30-04 (D-02): exported so the ad-hoc analyze use-case resolves the SAME fresh Phase-29
+// overrides the engine does — never a second narrowing copy.
+export function isPickerRuleOverrides(value: unknown): value is PickerRuleOverrides {
   if (!isPlainRecord(value)) return false;
   return (
     PICKER_NUMBER_FIELDS.every((field) => isOptionalNumber(value[field])) &&
@@ -370,7 +374,9 @@ function isBreakdownCriterion(id: string): id is BreakdownCriterion {
  * A no-op at multiplier 1 (open state, or the read-error/blind/blocked paths where the whole
  * candidate list is zeroed out downstream anyway).
  */
-function applyGatePenalty(candidate: ScoredCandidate, multiplier: number): ScoredCandidate {
+// 30-04 (D-02): exported for reuse by the ad-hoc analyze use-case (T-30-10 parity — one
+// gate-penalty formula, never a second copy).
+export function applyGatePenalty(candidate: ScoredCandidate, multiplier: number): ScoredCandidate {
   return { ...candidate, score: applyGatePenaltyScore(candidate.score, multiplier) };
 }
 
@@ -387,8 +393,12 @@ export function rankAndCapCandidates(
     .slice(0, topN);
 }
 
-/** Map a domain ScoredCandidate onto the application/contracts PickerCandidateDomain shape. */
-function toPickerCandidateDomain(
+/**
+ * Map a domain ScoredCandidate onto the application/contracts PickerCandidateDomain shape.
+ * 30-04 (D-02): exported for reuse by the ad-hoc analyze use-case — one mapping, never a
+ * second copy.
+ */
+export function toPickerCandidateDomain(
   candidate: ScoredCandidate,
   bucket: "standard" | "event-calendar",
 ): PickerCandidateDomain {
