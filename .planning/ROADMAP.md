@@ -296,3 +296,32 @@ a missing library). Decision: fix vendored TS now (add `strikeCount`/`fromDate`/
 **reject** the Python `schwab-py` sidecar for the pure-TS hexagon (v1.0 decision, now superseded
 by v1.1 arch for streaming ownership — the sidecar is the right answer for streaming but not
 for the hexagon core). Revisit TS client adoption behind ports, version-pinned, human-verify gate.
+
+### Phase 29: Runtime Rule Settings — curated ~20-knob settings surface (entry/picker weights + bands, exit advisor rungs, regime bands) stored as JSONB overrides over code defaults, gear-icon modal in top bar
+
+**Goal:** Make the hard-coded trading rule thresholds adjustable at runtime. A curated ~20-knob
+subset (entry/picker weights + bands, exit-advisor TAKE/STOP rungs, regime warn/crisis bands)
+becomes editable through a single JSONB overrides row merged over the code defaults at consumption
+time (worker compute-picker/compute-exit-advice job start, server regime request time), surfaced
+by a gear-icon modal in the top bar grouped by engine with reset-to-defaults per group. Omitting
+an override reproduces today's behavior byte-identically (backtest leakage-oracle safe).
+**Requirements**: none mapped — user-added phase; scope defined by 29-CONTEXT.md locked decisions
+**Depends on:** Phase 28
+**Plans:** 14 plans (6 waves)
+
+Plans:
+
+- [ ] 29-01-PLAN.md — Docs-before-code: rule_overrides decision + rule-overrides.md + TOPIC-MAP (T-28-11 override)
+- [ ] 29-02-PLAN.md — Contract: rule-settings Zod schema (whitelist, weight-sum + hysteresis-pair refines)
+- [ ] 29-03-PLAN.md — Picker scalar seams: candidate-selection deltaMax/frontDte, rules debitFit, brakes maxOpen
+- [ ] 29-04-PLAN.md — Picker ladder/sizing seams: resolveVixLadder + resolveEntryGate ladder + resolveSizingTier override
+- [ ] 29-05-PLAN.md — Exits seam + resolveExitRuleConfig (evaluateExit 4th config arg)
+- [ ] 29-06-PLAN.md — Regime seam + resolveRegimeRuleConfig (four band thresholds)
+- [ ] 29-07-PLAN.md — resolvePickerRuleConfig merge fn (fast-check, byte-identical omission)
+- [ ] 29-08-PLAN.md — Storage: ruleOverrides table + migration 0022 [BLOCKING] + repo + memory twin
+- [ ] 29-09-PLAN.md — Settings core: ports + getRuleSettings/setRuleOverrides + merge helpers
+- [ ] 29-10-PLAN.md — Picker consumption wiring: fresh read + config thread + effective ruleSet stamp
+- [ ] 29-11-PLAN.md — Exits consumption wiring: fresh read + evaluateExit config (worker root)
+- [ ] 29-12-PLAN.md — Regime consumption wiring: fresh read per request + banding
+- [ ] 29-13-PLAN.md — Server surface: GET/PUT /api/settings/rules + MCP tools + engine-computed defaults
+- [ ] 29-14-PLAN.md — Web: useRuleSettings hook + gear-icon settings modal (human-verify)
