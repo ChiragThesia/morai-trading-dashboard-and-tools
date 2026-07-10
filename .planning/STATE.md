@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 31
 current_phase_name: Risk Profile KISS redesign + macro gauges
-status: executing
-stopped_at: Completed 31-01-PLAN.md
-last_updated: "2026-07-10T18:36:04.881Z"
+status: verifying
+stopped_at: Completed 31-02-PLAN.md
+last_updated: "2026-07-10T18:40:25.277Z"
 last_activity: 2026-07-10
 last_activity_desc: Completed 31-01-PLAN.md (Risk Profile marker collision fix)
 progress:
   total_phases: 10
-  completed_phases: 8
-  total_plans: 49
-  completed_plans: 47
-  percent: 96
+  completed_phases: 9
+  total_plans: 54
+  completed_plans: 48
+  percent: 89
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 Phase: 31 (Risk Profile KISS redesign + macro gauges) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-10 — Completed 31-01-PLAN.md (Risk Profile marker collision fix)
 
 ## Open follow-ups (not phase-22 blockers)
@@ -295,6 +295,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 30 P05 | ~35min | 2 tasks | 7 files |
 | Phase 30 P06 | ~30min | 3 tasks | 8 files |
 | Phase 31 P01 | ~20min | 2 tasks tasks | 3 files files |
+| Phase 31 P02 | 6m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -441,6 +442,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 30-06: a failed POST /api/picker/analyze adds no card (mirrors a parse failure) -- id/seq reservation deferred so a failed request never consumes a pasted-N sequence number
 - [Phase ?]: 30-06: apps/web has no msw dependency -- useAnalyzeCalendar.test.ts mirrors useRuleSettings.test.ts's apiFetch-mock harness instead of the plan's msw note
 - [Phase ?]: 31-01: PinnedMarker reworked from {x,label,anchorEnd} to {x,clampedTo} -- fixed-lane single-glyph edge arrows (EDGE_ARROW_LANE_Y) replace in-chart wall/flip text labels entirely (KISS collision fix, DEFECT-1)
+- [Phase ?]: 31-02: bandWarn/bandCrisis required (not optional) on regimeIndicator — fail-loud on a stale response
+- [Phase ?]: 31-02: gauge marker color reads server-computed indicator.band verbatim, never recomputed client-side
 
 ### Pending Todos
 
@@ -497,8 +500,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T18:27:12.487Z
-Stopped at: Completed 31-01-PLAN.md
+Last session: 2026-07-10T18:40:25.264Z
+Stopped at: Completed 31-02-PLAN.md
 Resume file: 
 
-- Plan the first v1.3 phase with /gsd-plan-phase 23 (VIX3M Ingestion)
+None

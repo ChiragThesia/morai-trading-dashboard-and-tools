@@ -373,12 +373,12 @@ Plans:
 **Goal:** Overview reads clean on the tightest-clustered day and the macro rail reads at a glance — two presentation-only fixes: (1) Risk Profile wall/flip markers can never overlap into unreadable text (in-chart labels deleted, off-domain walls use fixed non-overlapping lanes; fix lives in the shared PayoffChart so Analyzer benefits too), and (2) the 4 banded MARKET REGIME rows become linear bullet gauges banded from the Phase-29-effective thresholds. No GEX math, no wall-picking, no regime-banding math changed.
 **Requirements**: DEFECT-1 (marker collision), DEFECT-2 (macro band-gauges) — user-added, presentation-only; no REQUIREMENTS.md IDs
 **Depends on:** Phase 30
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 
 - [x] 31-01-PLAN.md — Marker collision KISS fix: delete in-chart wall labels, fixed-lane edge arrows, 3-swatch Overview legend (PayoffChart shared → Analyzer too)
-- [ ] 31-02-PLAN.md — Macro band-gauges: additive bandWarn/bandCrisis contract fields from effective config + RegimeGauge (role=meter banded bullet) for the 4 regime rows
+- [x] 31-02-PLAN.md — Macro band-gauges: additive bandWarn/bandCrisis contract fields from effective config + RegimeGauge (role=meter banded bullet) for the 4 regime rows
 
 ### Phase 32: Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
 
