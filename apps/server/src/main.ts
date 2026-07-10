@@ -27,6 +27,7 @@ import {
   makePostgresCalendarEventsRepo,
   makePostgresCalendarEventAnnotationsRepo,
   makePostgresExitVerdictsRepo,
+  makePostgresRuleOverridesRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -185,11 +186,18 @@ const getMacro = makeGetMacroUseCase({
   readMacroObservations: macroObservationsRepo.readMacroObservations,
 });
 
+// 29-12 (RUNTIME-*): runtime rule-settings overrides repo — the regime board reads this FRESH
+// on every request (never cached here); constructing the repo function once at boot is
+// composition-root wiring, not caching the data itself. Single instance, reused by the
+// settings surface (29-13) when it lands.
+const ruleOverridesRepo = makePostgresRuleOverridesRepo(db);
+
 // BOARD-01/02/03 / MCP-02 (24-04): get-regime-board read use-case — shared by
 // GET /api/analytics/regime + get_regime MCP tool over the ONE regimeResponse contract.
 // Reuses the EXISTING macroObservationsRepo (zero new repo, 24-RESEARCH.md).
 const getRegimeBoard = makeGetRegimeBoardUseCase({
   readMacroObservations: macroObservationsRepo.readMacroObservations,
+  readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
 });
 
 // PICK-02 / MCP-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
