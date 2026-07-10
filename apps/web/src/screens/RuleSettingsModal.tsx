@@ -11,8 +11,10 @@
  * <Button> primitive (Phase 21) per CONTEXT.md's lock — no hand-rolled modal or inputs.
  */
 import { useState } from "react";
-import { Settings } from "lucide-react";
+import { Settings, Info } from "lucide-react";
+import { RULE_EXPLAINERS } from "@morai/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog.tsx";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip.tsx";
 import { Button, Panel, PanelHeading } from "../components/system/index.tsx";
 import { useRuleSettings } from "../hooks/useRuleSettings.ts";
 import type { RuleSettingsGroup } from "../hooks/useRuleSettings.ts";
@@ -71,6 +73,11 @@ function humanize(segment: string): string {
 
 function pathLabel(path: ReadonlyArray<string>): string {
   return path.map(humanize).join(" ");
+}
+
+/** Registry key for a row: group-prefixed dotted path, matching RULE_EXPLAINERS. */
+function explainerKey(group: RuleSettingsGroup, row: LeafRow): string {
+  return [group, ...row.path].join(".");
 }
 
 const GROUPS: ReadonlyArray<{ readonly group: RuleSettingsGroup; readonly title: string }> = [
@@ -146,10 +153,36 @@ function GroupPanel({
           const overridden = lookupLeaf(overridesGroup, row.path) !== undefined;
           const defaultValue = lookupLeaf(defaultsGroup, row.path);
           const label = pathLabel(row.path);
+          const explainer = RULE_EXPLAINERS[explainerKey(group, row)];
           return (
-            <div key={keyFor(row)} className="flex items-center justify-between gap-2">
-              <span className="font-mono text-[10px] text-dim">{label}</span>
-              <div className="flex items-center gap-2">
+            <div key={keyFor(row)} className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <div className="flex items-center gap-1">
+                  <span className="font-mono text-[10px] text-dim">{label}</span>
+                  {explainer !== undefined && (
+                    <Tooltip>
+                      <TooltipTrigger
+                        aria-label={`${label} details`}
+                        className="text-dim/70 hover:text-txt"
+                      >
+                        <Info className="h-3 w-3" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {explainer.direction} ({explainer.unit})
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+                {explainer !== undefined && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] text-dim">{explainer.summary}</span>
+                    <span className="shrink-0 rounded-[3px] bg-raise px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-dim">
+                      {explainer.affects}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
                 <input
                   type="number"
                   aria-label={label}
@@ -201,21 +234,23 @@ export function RuleSettingsModal(): React.ReactElement {
         <DialogHeader>
           <DialogTitle>Rule settings</DialogTitle>
         </DialogHeader>
-        <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
-          {GROUPS.map(({ group, title }) => (
-            <GroupPanel
-              key={group}
-              group={group}
-              title={title}
-              effectiveGroup={effective?.[group]}
-              defaultsGroup={defaults?.[group]}
-              overridesGroup={overrides?.[group]}
-              error={errors[group]}
-              onSave={saveGroup}
-              onReset={resetGroup}
-            />
-          ))}
-        </div>
+        <TooltipProvider>
+          <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
+            {GROUPS.map(({ group, title }) => (
+              <GroupPanel
+                key={group}
+                group={group}
+                title={title}
+                effectiveGroup={effective?.[group]}
+                defaultsGroup={defaults?.[group]}
+                overridesGroup={overrides?.[group]}
+                error={errors[group]}
+                onSave={saveGroup}
+                onReset={resetGroup}
+              />
+            ))}
+          </div>
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   );

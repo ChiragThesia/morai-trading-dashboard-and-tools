@@ -13,6 +13,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import type { GetRuleSettingsResponse } from "@morai/contracts";
+import { RULE_EXPLAINERS } from "@morai/contracts";
+import { assertDefined } from "@morai/shared";
 
 const { mockUseRuleSettings, mockSaveGroup, mockResetGroup } = vi.hoisted(() => ({
   mockUseRuleSettings: vi.fn(),
@@ -170,5 +172,45 @@ describe("RuleSettingsModal", () => {
       "picker",
       expect.objectContaining({ maxOpenCalendars: 8 }),
     );
+  });
+
+  // B6: every knob row renders its registry caption + affected-surface tag, sourced from
+  // RULE_EXPLAINERS keyed by [group, ...row.path].join(".") -- never an inline copy string.
+  it("renders each representative knob's registry summary caption and affected-surface tag", () => {
+    mockReturn();
+    render(<RuleSettingsModal />);
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const pickerWeightsSlope = RULE_EXPLAINERS["picker.weights.slope"];
+    const exitsPlus15Arm = RULE_EXPLAINERS["exits.take.plus15Arm"];
+    const regimeVvixWarn = RULE_EXPLAINERS["regime.vvixWarn"];
+    assertDefined(pickerWeightsSlope, "picker.weights.slope explainer present");
+    assertDefined(exitsPlus15Arm, "exits.take.plus15Arm explainer present");
+    assertDefined(regimeVvixWarn, "regime.vvixWarn explainer present");
+
+    expect(screen.getByText(pickerWeightsSlope.summary)).toBeTruthy();
+    expect(screen.getByText(exitsPlus15Arm.summary)).toBeTruthy();
+    expect(screen.getByText(regimeVvixWarn.summary)).toBeTruthy();
+
+    expect(screen.getAllByText(pickerWeightsSlope.affects).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(exitsPlus15Arm.affects).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(regimeVvixWarn.affects).length).toBeGreaterThan(0);
+  });
+
+  // B9: the info-icon popover (Tooltip primitive's first consumer) surfaces the registry
+  // direction + unit copy on focus, keeping the trigger keyboard-focusable.
+  it("info-icon popover surfaces the registry direction + unit for a representative row on focus", async () => {
+    mockReturn();
+    render(<RuleSettingsModal />);
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const exitsPlus15Arm = RULE_EXPLAINERS["exits.take.plus15Arm"];
+    assertDefined(exitsPlus15Arm, "exits.take.plus15Arm explainer present");
+
+    const trigger = screen.getByLabelText("Take Plus15 Arm details");
+    fireEvent.focus(trigger);
+
+    expect(await screen.findByText(new RegExp(exitsPlus15Arm.direction.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).toBeTruthy();
+    expect(await screen.findByText(new RegExp(exitsPlus15Arm.unit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).toBeTruthy();
   });
 });
