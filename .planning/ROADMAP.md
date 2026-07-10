@@ -406,3 +406,14 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 32-06-PLAN.md — Modal preview flow: hook + Preview button + picker/exit/regime deltas + staleness
+
+### Phase 33: Chart engine migration — replace hand-rolled SVG charts with Recharts via shadcn chart primitives (project already shadcn base-nova): PayoffChart (dual curves, fan, profit-zone shading, wall/flip reference lines, EM band, crosshair tooltip, scenario strip), term-structure chart, dealer-gamma profile, GEX-by-strike bars. Keep scenario-engine/payoff-domain data layer pure (presentation swap only); native clipping/responsive/tooltips kill the overflow bug class (EM-band page-bleed 2563bd6, marker label pile-up Phase 31) permanently; visual parity with current design tokens
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 32
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 33 to break down)
