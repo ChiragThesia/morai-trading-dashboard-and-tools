@@ -91,7 +91,7 @@ export function CotCard(): React.ReactElement {
             >
               <span
                 className={cn(
-                  "w-[68px] shrink-0 font-display font-semibold tracking-[0.06em] uppercase",
+                  "w-[68px] shrink-0 font-display font-semibold tracking-[0.09em] uppercase",
                   c.headline === true ? "text-txt" : "text-dim",
                 )}
               >
