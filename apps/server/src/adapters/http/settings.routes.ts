@@ -1,23 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { getRuleSettingsResponse, setRuleOverridesRequest, setRuleOverridesResponse } from "@morai/contracts";
-import type { SetRuleOverridesRequest } from "@morai/contracts";
-import type { ForRunningGetRuleSettings, ForRunningSetRuleOverrides, RuleOverridesPatch } from "@morai/core";
-
-// The zod-inferred request body (packages/contracts' RuleOverrides — a mapped type) does not
-// structurally satisfy RuleOverridesPatch's plain index signature (mapped types don't get TS's
-// implicit-index-signature leniency that a hand-written type gets). A JSON round-trip drops the
-// zod-inferred `| undefined` from optional fields so the clone structurally satisfies the index
-// signature — same idiom as the postgres/memory rule-overrides repos' own toJsonSafe (no `as`,
-// no `any`).
-function isRuleOverridesPatch(value: unknown): value is RuleOverridesPatch {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function toOverridesPatch(body: SetRuleOverridesRequest): RuleOverridesPatch {
-  const cloned: unknown = JSON.parse(JSON.stringify(body));
-  return isRuleOverridesPatch(cloned) ? cloned : {};
-}
+import type { ForRunningGetRuleSettings, ForRunningSetRuleOverrides } from "@morai/core";
+import { toOverridesPatch } from "../rule-overrides-bridge.ts";
 
 /**
  * settingsRoutes — factory returning a Hono router for the GET/PUT /api/settings/rules

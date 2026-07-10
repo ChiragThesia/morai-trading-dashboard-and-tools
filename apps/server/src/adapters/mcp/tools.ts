@@ -25,7 +25,6 @@ import {
   setRuleOverridesRequest,
   setRuleOverridesResponse,
 } from "@morai/contracts";
-import type { SetRuleOverridesRequest } from "@morai/contracts";
 import type {
   ForGettingStatus,
   ForListingCalendars,
@@ -47,10 +46,10 @@ import type {
   ForRunningGetExitAdvice,
   ForRunningGetRuleSettings,
   ForRunningSetRuleOverrides,
-  RuleOverridesPatch,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
+import { toOverridesPatch } from "../rule-overrides-bridge.ts";
 
 /**
  * registerStatusTool — registers the get_status MCP tool on the given McpServer.
@@ -1044,21 +1043,6 @@ export function registerGetExitAdviceTool(
       };
     },
   );
-}
-
-// The zod-inferred set_rule_overrides body (packages/contracts' RuleOverrides — a mapped
-// type) does not structurally satisfy RuleOverridesPatch's plain index signature (mapped
-// types don't get TS's implicit-index-signature leniency a hand-written type gets). A JSON
-// round-trip drops the zod-inferred `| undefined` from optional fields so the clone
-// structurally satisfies the index signature — same idiom as settings.routes.ts's own
-// toOverridesPatch / the postgres/memory rule-overrides repos' toJsonSafe (no `as`, no `any`).
-function isRuleOverridesPatch(value: unknown): value is RuleOverridesPatch {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function toOverridesPatch(body: SetRuleOverridesRequest): RuleOverridesPatch {
-  const cloned: unknown = JSON.parse(JSON.stringify(body));
-  return isRuleOverridesPatch(cloned) ? cloned : {};
 }
 
 /**
