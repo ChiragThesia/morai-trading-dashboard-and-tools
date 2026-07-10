@@ -302,12 +302,12 @@ export function RegimeBoard({ dense = false }: { dense?: boolean } = {}): React.
   return (
     <Panel className="flex flex-col gap-2" data-testid="regime-board">
       <PanelHeading title="Market regime" />
+      {gateChip}
       <div className={cn("grid grid-cols-2 gap-2", !dense && "md:grid-cols-4")}>
         {data.map((indicator) => (
           <Chip key={indicator.id} indicator={indicator} dense={dense} />
         ))}
       </div>
-      {gateChip}
       {ratesRow}
     </Panel>
   );
