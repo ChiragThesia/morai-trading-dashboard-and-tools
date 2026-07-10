@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 30
 current_phase_name: both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut
-status: executing
-stopped_at: Completed 30-05-PLAN.md
-last_updated: "2026-07-10T15:20:00.000Z"
+status: verifying
+stopped_at: Completed 30-06-PLAN.md
+last_updated: "2026-07-10T15:22:34.987Z"
 last_activity: 2026-07-10
-last_activity_desc: 30-05 complete — POST /api/picker/analyze + analyze_ad_hoc_calendar MCP tool + server wiring
+last_activity_desc: "30-05 complete: POST /api/picker/analyze + analyze_ad_hoc_calendar MCP tool + server composition-root wiring"
 progress:
   total_phases: 10
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 46
-  completed_plans: 45
-  percent: 70
+  completed_plans: 46
+  percent: 80
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 30 — Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent (both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut), and pasted calendars must get real entry analysis (engine scoring) instead of 'Pasted calendar — not engine-scored' in WHY THIS CALENDAR / ENTRY-EXIT PLAN panels
-Plan: 30-05 complete (5 of 6 plans done — 30-06 remaining)
-Status: In progress
-Last activity: 2026-07-10 — 30-05 complete: POST /api/picker/analyze + analyze_ad_hoc_calendar MCP tool + server composition-root wiring
+Plan: 30-06 complete (6 of 6 plans done — phase complete)
+Status: Phase complete — ready for verification
+Last activity: 2026-07-10 — 30-06 complete: paste flow scores PUT calendars via POST /api/picker/analyze; all 4 not-engine-scored gates now key off candidate.breakdown.length===0; CandidateCard shows a scored pasted card's real score/subline (Pitfall 8)
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -292,6 +292,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 30 P02 | 12min | 2 tasks | 6 files |
 | Phase 30 P04 | 25min | 2 tasks | 6 files |
 | Phase 30 P05 | ~35min | 2 tasks | 7 files |
+| Phase 30 P06 | ~30min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -434,6 +435,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 30-05: both scored:true and scored:false map to HTTP 200 (binding #2) -- overrides 30-PATTERNS.md's discretionary 404-no-snapshot suggestion
 - [Phase ?]: 30-05: registerAnalyzeAdHocCalendarTool registered in server.ts not main.ts -- matches every existing MCP tool's registration split
 - [Phase ?]: 30-05: added defaulted BSM_DIVIDEND_YIELD/BSM_RATE_FALLBACK to apps/server/src/config.ts matching the worker's own defaults -- no new required Railway env var
+- [Phase ?]: 30-06: isPastedId() removed entirely -- all 4 gates (3 note-gates + Risk-profile subline) key off candidate.breakdown.length===0 instead of the pasted id
+- [Phase ?]: 30-06: a failed POST /api/picker/analyze adds no card (mirrors a parse failure) -- id/seq reservation deferred so a failed request never consumes a pasted-N sequence number
+- [Phase ?]: 30-06: apps/web has no msw dependency -- useAnalyzeCalendar.test.ts mirrors useRuleSettings.test.ts's apiFetch-mock harness instead of the plan's msw note
 
 ### Pending Todos
 
@@ -490,8 +494,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T15:04:27.942Z
-Stopped at: Completed 30-04-PLAN.md
+Last session: 2026-07-10T15:22:34.974Z
+Stopped at: Completed 30-06-PLAN.md
 Resume file: 
 
 None

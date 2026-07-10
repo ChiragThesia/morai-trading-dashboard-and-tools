@@ -347,7 +347,7 @@ Plans:
 **Goal:** Analyzer pasted calendars fit the payoff graph to their full tent (both tails + both breakevens, no fixed 6900–7900) and receive real engine scoring — score + factor bars + θ GATE chip + entry-gate verdict + exit plan — identical to engine-suggested candidates; PUT calendars this phase, calls + context-unavailable pastes keep the honest unscored fallback.
 **Requirements**: user-added defect-fix phase (no REQ IDs) — D-01 (payoff x-domain fit), D-02 (ad-hoc engine scoring)
 **Depends on:** Phase 29
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 **Wave 1**
@@ -366,7 +366,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 30-06-PLAN.md — Client paste flow: ISO expiries + useAnalyzeCalendar hook + breakdown-gated panels + CandidateCard fix (D-02)
+- [x] 30-06-PLAN.md — Client paste flow: ISO expiries + useAnalyzeCalendar hook + breakdown-gated panels + CandidateCard fix (D-02)
 
 ### Phase 31: Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10) — PLUS left-rail macro readability: replace raw-number rows (VIX/VVIX/ratios/HY OAS/rates) with compact linear band-gauges (bullet style: value marker on a warn/crisis-banded track; NOT circular dials — space + scannability), user proposal 2026-07-10
 
