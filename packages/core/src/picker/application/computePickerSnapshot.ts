@@ -240,7 +240,9 @@ const GATE_READ_ERROR: PickerGate = {
  * `previousState` — only `.reasons` is actually read by the hysteresis walk (previousLabelFor
  * in entry-gate.ts), but the parameter type requires the full shape.
  */
-function toEntryGateState(gate: PickerGate): EntryGateState {
+// 32-02 (B1): exported so the picker preview use-case reconstructs the SAME EntryGateState
+// shape from a stored PickerGate — one projection, never a second copy.
+export function toEntryGateState(gate: PickerGate): EntryGateState {
   return {
     vix: gate.vix,
     vix3m: gate.vix3m,
@@ -255,7 +257,9 @@ function toEntryGateState(gate: PickerGate): EntryGateState {
 
 /** Project resolveEntryGate's pure output + the two brake booleans/cooldownUntil into the
  * persisted PickerGate wire shape. */
-function toPickerGate(
+// 32-02 (B1): exported so the picker preview use-case projects its re-resolved EntryGateState
+// back into the wire PickerGate shape — the SAME projection compute-picker uses.
+export function toPickerGate(
   state: EntryGateState,
   maxOpenBrake: boolean,
   cooldownBrake: boolean,

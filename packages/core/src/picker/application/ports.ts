@@ -1,9 +1,15 @@
 // Picker bounded context — driven ports + row domain types.
-// Hexagon law (architecture-boundaries §2): this file imports ONLY @morai/shared. No ORM, no
-// node builtins, no contracts-package import, no other context's domain. StorageError/FetchError
-// are re-declared locally (analytics/journal precedent — no cross-context import).
+// Hexagon law (architecture-boundaries §2): this file imports ONLY @morai/shared, plus (32-02)
+// the journal/settings contexts' own APPLICATION ports for PickerPreviewDeps (rule 7 cross-
+// context read, same convention analyzeAdHocCalendar.ts/computePickerSnapshot.ts already
+// established) and this context's own domain/rule-config.ts sibling. No ORM, no node builtins,
+// no contracts-package import, no other context's domain. StorageError/FetchError are
+// re-declared locally (analytics/journal precedent — no cross-context import).
 
 import type { Result } from "@morai/shared";
+import type { ForGettingOpenCalendars } from "../../journal/index.ts";
+import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
+import type { PickerRuleOverrides } from "../domain/rule-config.ts";
 
 // ─── Domain errors (local; mirror the analytics/journal shapes) ────────────────
 
@@ -344,3 +350,46 @@ export type AdHocCalendarAnalysis =
 export type ForAnalyzingAdHocCalendar = (
   input: AdHocCalendarInput,
 ) => Promise<Result<AdHocCalendarAnalysis, StorageError>>;
+
+// ─── Picker preview (Phase 32, Plan 02, B1) ─────────────────────────────────────
+
+/**
+ * PickerPreviewResult — the picker branch of the staged-change dry-run preview. Cold start (no
+ * stored snapshot yet) degrades to `{available:false}`, mirroring AdHocCalendarAnalysis's
+ * scored:false shape — never a throw.
+ */
+export type PickerPreviewResult =
+  | { readonly available: false }
+  | {
+      readonly available: true;
+      readonly asOf: string;
+      /** Each stored candidate re-scored under the staged/effective config, plus its
+       *  pre-staged stored score (B5) — never a fabricated candidate list. */
+      readonly candidates: ReadonlyArray<PickerCandidateDomain & { readonly oldScore: number }>;
+      readonly gate: { readonly before: PickerGate; readonly after: PickerGate };
+      readonly sizing: { readonly before: PickerSizing; readonly after: PickerSizing };
+      /** Honest "affects next compute cycle" note when a universe-membership knob (delta
+       *  band / DTE window) is staged — NEVER a fabricated candidate in/out diff (Pitfall 1). */
+      readonly universeNote: string | null;
+    };
+
+/**
+ * PickerPreviewDeps — bounded-read deps mirroring AnalyzeAdHocCalendarDeps's structural
+ * exclusion (T-32-01): no persist port, no chain/gex/events read. Only the stored snapshot,
+ * the stored rule overrides, and a fresh open-calendars count (the one live read the maxOpen
+ * brake needs).
+ */
+export type PickerPreviewDeps = {
+  readonly readPickerSnapshot: ForReadingPickerSnapshot;
+  readonly readRuleOverrides: ForReadingRuleOverrides;
+  readonly readOpenCalendars: ForGettingOpenCalendars;
+};
+
+/**
+ * ForPreviewingPickerRuleOverrides — driver port for the picker preview use-case (32-02, B1).
+ * `staged` is the picker override group from the in-flight edit (or absent, which reproduces
+ * the stored effective config byte-identically).
+ */
+export type ForPreviewingPickerRuleOverrides = (
+  staged?: PickerRuleOverrides,
+) => Promise<Result<PickerPreviewResult, StorageError>>;
