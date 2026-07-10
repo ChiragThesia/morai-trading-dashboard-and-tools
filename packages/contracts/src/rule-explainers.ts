@@ -44,7 +44,12 @@ export const RULE_EXPLAINERS: Readonly<Record<string, RuleExplainer>> = {
   "picker.deltaBandMax": {
     summary: "Upper edge of the short-put delta band.",
     unit: "delta (Δ)",
-    direction: "Higher (toward −0.30) = closer-to-the-money candidates allowed.",
+    // CR-02: deltas are negative -- deltaBandMax's default (−0.30) is already the SHALLOW
+    // (further-OTM) edge, not the near-ATM one (that's deltaBandMin, −0.49 by default). Raising
+    // deltaBandMax admits deltas LESS negative than today's default, i.e. further out of the
+    // money (candidate-selection.ts: DELTA_BAND_MIN=-0.49, DELTA_BAND_MAX=-0.3, filter keeps
+    // deltaMin <= delta <= deltaMax).
+    direction: "Higher (less negative, away from −0.49) = further-out-of-the-money candidates allowed.",
     affects: PICKER,
   },
   "picker.frontDteMin": {
@@ -151,15 +156,22 @@ export const RULE_EXPLAINERS: Readonly<Record<string, RuleExplainer>> = {
     affects: PICKER,
   },
   "picker.vixLadder.elevatedMin": {
-    summary: "VIX level where the ladder leaves \"normal\" and enters \"elevated\" (penalty band starts here).",
+    summary: "VIX level where the ladder leaves \"normal\" and enters \"elevated\" (sizing tier boundary).",
     unit: "VIX",
-    direction: "Higher = VIX must climb further before the entry-gate penalty band and sizing haircut start.",
+    // CR-02: the ladder tiers sizing/display ONLY -- the entry gate's own penalty-band trigger
+    // is a fixed constant (VIX_PENALTY_FLOOR=20, entry-gate.ts) that this knob does NOT move
+    // (ResolveEntryGateInput.vixLadder doc comment, entry-gate.ts:236-240).
+    direction:
+      "Higher = VIX must climb further before sizing drops to the elevated-tier contract count. Does not move the entry gate's own penalty-band trigger (fixed at VIX 20).",
     affects: PICKER,
   },
   "picker.vixLadder.crisisMin": {
-    summary: "VIX level where the ladder enters \"crisis\" (hard entry block, zero sizing).",
+    summary: "VIX level where the ladder enters \"crisis\" (sizing drops to zero contracts).",
     unit: "VIX",
-    direction: "Higher = VIX must climb further before new entries are hard-blocked.",
+    // CR-02: same fixed-constant caveat as elevatedMin above -- the hard entry block is
+    // VIX_BLOCK_ARM=25 (entry-gate.ts), unmoved by this ladder knob.
+    direction:
+      "Higher = VIX must climb further before sizing drops to zero. Does not move the entry gate's own hard-block trigger (fixed at VIX 25).",
     affects: PICKER,
   },
 
