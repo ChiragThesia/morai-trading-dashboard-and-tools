@@ -5,16 +5,16 @@ milestone_name: Picker Intelligence
 current_phase: 32
 current_phase_name: what it gates/scores, unit, direction of effect
 status: in-progress
-stopped_at: Completed 32-03-PLAN.md
-last_updated: "2026-07-10T20:13:07.540Z"
+stopped_at: Completed 32-06-PLAN.md
+last_updated: "2026-07-10T20:31:37.134Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 32 Plan 03 complete
 progress:
   total_phases: 11
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 54
-  completed_plans: 53
-  percent: 82
+  completed_plans: 54
+  percent: 91
 ---
 
 # Project State
@@ -302,6 +302,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 32 P03 | 35min | 2 tasks | 4 files |
 | Phase 32 P04 | ~1h | 3 tasks | 9 files |
 | Phase 32 P05 | 30m | 2 tasks | 2 files |
+| Phase 32 P06 | 45m | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -458,6 +459,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 32]: 32-04: a group absent from the combined preview use-case's input yields a null response branch (never computed); an empty-but-present group falls back to the stored effective config (byte-parity)
 - [Phase 32]: 32-04: toPreviewInput duplicates a JSON round-trip + shape-guard bridge in both the HTTP route and MCP tool (32-03 precedent) rather than extending toOverridesPatch, which returns an index-signature type incompatible with the domain-typed preview ports
 - [Phase ?]: Tasks 1+2 of 32-05 combined into one commit -- both touch the same GroupPanel row JSX block
+- [Phase 32]: Preview validates the staged body with the same strict schema the PUT route uses (weight-sum-100 included); a still-mid-edit staged group surfaces as a preview error, not an unhandled rejection — Keeps client-side preview honest about what would actually be accepted, and avoids crashing the modal on a realistic partial-edit click
+- [Phase 32]: Regime band classifiers re-exported through the top @morai/core barrel so the client-side preview imports the real functions, not a hand-copy — T-32-12 mandates parity by construction; the functions previously only crossed analytics/index.ts's inner barrel
 
 ### Pending Todos
 
@@ -514,7 +517,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T20:12:32.015Z
-Stopped at: Completed 32-03-PLAN.md
+Last session: 2026-07-10T20:31:37.123Z
+Stopped at: Completed 32-06-PLAN.md
 Resume file: 
 None

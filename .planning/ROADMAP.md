@@ -389,7 +389,7 @@ re-evaluating open-position exit verdicts, and client-side re-banding regime val
 sees what each change will do before committing. Knob semantics unchanged; preview never persists.
 **Requirements**: none (user-added phase; covered by 32-CONTEXT locked decisions B1–B9)
 **Depends on:** Phase 31
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 **Wave 1**
@@ -405,7 +405,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 32-06-PLAN.md — Modal preview flow: hook + Preview button + picker/exit/regime deltas + staleness
+- [x] 32-06-PLAN.md — Modal preview flow: hook + Preview button + picker/exit/regime deltas + staleness
 
 ### Phase 33: Chart engine migration — replace hand-rolled SVG charts with Recharts via shadcn chart primitives (project already shadcn base-nova): PayoffChart (dual curves, fan, profit-zone shading, wall/flip reference lines, EM band, crosshair tooltip, scenario strip), term-structure chart, dealer-gamma profile, GEX-by-strike bars. Keep scenario-engine/payoff-domain data layer pure (presentation swap only); native clipping/responsive/tooltips kill the overflow bug class (EM-band page-bleed 2563bd6, marker label pile-up Phase 31) permanently; visual parity with current design tokens
 
