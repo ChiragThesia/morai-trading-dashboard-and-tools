@@ -285,6 +285,50 @@ describe("makePreviewPickerRuleOverridesUseCase", () => {
     expect(result.value.candidates.map((c) => c.id)).toEqual(["cand-1"]);
   });
 
+  it("full-form staging: universe keys PRESENT but equal to their baseline effective values do NOT set universeNote (client sends the whole form)", async () => {
+    // Regression (live UAT 2026-07-10): the modal POSTs the complete flattened form state,
+    // so every universe key is present at its CURRENT value. Presence alone must not fire
+    // the honest note — only a value that DIFFERS from the baseline effective config does.
+    const candidate = makeCandidate(
+      "cand-1",
+      4000,
+      {
+        slope: 10,
+        fwdEdge: 10,
+        gexFit: 10,
+        eventAdjustment: 10,
+        beVsEm: 10,
+        deltaNeutral: 10,
+        thetaVega: 10,
+        vrp: 10,
+        debitFit: 20,
+      },
+      // Asymmetric contributions: shifting weight from slope (90) to vrp (10) MUST move the score.
+      { slope: 90, fwdEdge: 50, gexFit: 50, eventAdjustment: 50, beVsEm: 50, deltaNeutral: 50, thetaVega: 50, vrp: 10, debitFit: 50 },
+    );
+    const deps = makeDeps({ readPickerSnapshot: async () => ok(snapshotRow({ candidates: [candidate] })) });
+    // Universe keys at their code-default (== baseline) values + a real weight change.
+    const result = await makePreviewPickerRuleOverridesUseCase(deps)({
+      deltaBandMin: -0.49,
+      deltaBandMax: -0.3,
+      frontDteMin: 21,
+      frontDteMax: 36,
+      backDteMinGap: 15,
+      backDteMaxGap: 90,
+      weights: { slope: 5, fwdEdge: 10, gexFit: 10, eventAdjustment: 10, beVsEm: 10, deltaNeutral: 10, thetaVega: 10, vrp: 15, debitFit: 20 },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.available).toBe(true);
+    if (!result.value.available) return;
+    expect(result.value.universeNote).toBeNull();
+    // The weight change must surface as a real mover (score !== oldScore).
+    const cand = result.value.candidates[0];
+    expect(cand).toBeDefined();
+    if (cand === undefined) return;
+    expect(cand.score).not.toBe(cand.oldScore);
+  });
+
   it("no staged universe knob -> universeNote is null", async () => {
     const deps = makeDeps();
     const result = await makePreviewPickerRuleOverridesUseCase(deps)({ maxOpenCalendars: 2 });

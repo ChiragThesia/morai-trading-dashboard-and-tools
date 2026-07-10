@@ -171,9 +171,24 @@ export function makePreviewPickerRuleOverridesUseCase(
       vix: gateAfter.vix,
     };
 
-    // ── Universe branch: an honest note, never a fabricated candidate diff (Pitfall 1). ──
+    // ── Universe branch: an honest note, never a fabricated candidate diff (Pitfall 1).
+    // A universe key counts as staged only when its value DIFFERS from the baseline
+    // effective config — the modal POSTs the complete form, so every key arrives present
+    // at its current value (live UAT regression, 2026-07-10). Presence alone is not a change. ──
+    const baseline = resolvePickerRuleConfig(storedPickerOverrides);
+    const baselineUniverse: Record<(typeof UNIVERSE_KEYS)[number], number> = {
+      deltaBandMin: baseline.deltaBand.min,
+      deltaBandMax: baseline.deltaBand.max,
+      frontDteMin: baseline.frontDte.min,
+      frontDteMax: baseline.frontDte.max,
+      backDteMinGap: baseline.backDteGap.min,
+      backDteMaxGap: baseline.backDteGap.max,
+    };
     const universeNote =
-      staged !== undefined && UNIVERSE_KEYS.some((key) => staged[key] !== undefined) ? UNIVERSE_NOTE : null;
+      staged !== undefined &&
+      UNIVERSE_KEYS.some((key) => staged[key] !== undefined && staged[key] !== baselineUniverse[key])
+        ? UNIVERSE_NOTE
+        : null;
 
     return ok({
       available: true,
