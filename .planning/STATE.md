@@ -291,6 +291,10 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
   anti-criteria/sizing. `.planning/research/SUMMARY.md` confirms the dependency order across all
   4 research files; 28/28 requirements mapped, no orphans.
 
+- Phase 30 added (2026-07-09): Analyzer pasted-calendar fix — payoff graph x-domain fits the
+  full tent (tails + BEs clipped today; user screenshot 2026-07-09 shows 7500P pasted with apex
+  at right edge, left tail cut), and pasted calendars get real engine entry analysis instead of
+  "Pasted calendar — not engine-scored" placeholders.
 - Phase 29 added (2026-07-09): Runtime Rule Settings — curated ~20-knob settings surface
   (entry/picker weights + bands, exit advisor rungs, regime warn/crisis bands) stored as a single
   JSONB overrides row merged over code defaults (worker job start + server request time);
