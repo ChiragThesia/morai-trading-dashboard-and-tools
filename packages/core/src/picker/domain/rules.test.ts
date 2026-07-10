@@ -31,6 +31,9 @@ import {
   WEIGHT_SLOPE,
   WEIGHT_DELTA_NEUTRAL,
   GEX_WALL_PIN_PTS,
+  DEBIT_IDEAL_MIN,
+  DEBIT_IDEAL_MAX,
+  DEBIT_CHEAP_CREDIT,
 } from "./rules.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
 
@@ -256,5 +259,29 @@ describe("debitFitFraction (user ideal $3.2k-5k, cheap ok, expensive fades)", ()
   it("weights v4.1: slope 10 pays for debitFit 5 — sum still 100", () => {
     expect(WEIGHT_SLOPE).toBe(10);
     expect(WEIGHT_DEBIT_FIT).toBe(5);
+  });
+});
+
+describe("debitFitFraction — optional ideal-band override (29-03 runtime rule settings)", () => {
+  it("omitting the band reproduces today's fraction byte-identically for the same debit", () => {
+    for (const debit of [500, 2000, 2600, 3200, 4000, 5000, 6250, 7500, 12000]) {
+      expect(debitFitFraction(debit, undefined)).toBe(debitFitFraction(debit));
+      expect(debitFitFraction(debit, { idealMin: DEBIT_IDEAL_MIN, idealMax: DEBIT_IDEAL_MAX })).toBe(
+        debitFitFraction(debit),
+      );
+    }
+  });
+
+  it("a shifted ideal band moves the plateau window", () => {
+    // Default plateau is [3200,5000] -> 4000 is 1. Shift the band up so 4000 is now BELOW it.
+    expect(debitFitFraction(4000)).toBe(1);
+    expect(debitFitFraction(4000, { idealMin: 5000, idealMax: 6000 })).toBeLessThan(1);
+    // 5500 sits inside the shifted band -> full credit.
+    expect(debitFitFraction(5500, { idealMin: 5000, idealMax: 6000 })).toBe(1);
+  });
+
+  it("the excluded cheap-floor/expensive-zero edges are unchanged by the override", () => {
+    expect(debitFitFraction(500, { idealMin: 5000, idealMax: 6000 })).toBeCloseTo(DEBIT_CHEAP_CREDIT, 10);
+    expect(debitFitFraction(12000, { idealMin: 1000, idealMax: 2000 })).toBe(0);
   });
 });

@@ -214,17 +214,21 @@ export function deltaNeutralFraction(netDelta: number): number {
  * $3.2k-5k, gentle decay to a 0.7 floor at ≤$2k (cheapness is a virtue; structurally-odd
  * cheap candidates are caught by other rules), steep decay to 0 at ≥$7.5k.
  */
-export function debitFitFraction(debit: number): number {
-  if (debit >= DEBIT_IDEAL_MIN && debit <= DEBIT_IDEAL_MAX) return 1;
-  if (debit < DEBIT_IDEAL_MIN) {
+export function debitFitFraction(
+  debit: number,
+  band?: { readonly idealMin?: number; readonly idealMax?: number },
+): number {
+  const idealMin = band?.idealMin ?? DEBIT_IDEAL_MIN;
+  const idealMax = band?.idealMax ?? DEBIT_IDEAL_MAX;
+  if (debit >= idealMin && debit <= idealMax) return 1;
+  if (debit < idealMin) {
     if (debit <= DEBIT_CHEAP_FLOOR) return DEBIT_CHEAP_CREDIT;
     return (
-      DEBIT_CHEAP_CREDIT +
-      ((debit - DEBIT_CHEAP_FLOOR) / (DEBIT_IDEAL_MIN - DEBIT_CHEAP_FLOOR)) * (1 - DEBIT_CHEAP_CREDIT)
+      DEBIT_CHEAP_CREDIT + ((debit - DEBIT_CHEAP_FLOOR) / (idealMin - DEBIT_CHEAP_FLOOR)) * (1 - DEBIT_CHEAP_CREDIT)
     );
   }
   if (debit >= DEBIT_EXPENSIVE_ZERO) return 0;
-  return (DEBIT_EXPENSIVE_ZERO - debit) / (DEBIT_EXPENSIVE_ZERO - DEBIT_IDEAL_MAX);
+  return (DEBIT_EXPENSIVE_ZERO - debit) / (DEBIT_EXPENSIVE_ZERO - idealMax);
 }
 
 /** `thetaVega` scored fraction: linear 0→1 up to THETA_VEGA_FULL; 0 when vega is 0/negative ratio. */
