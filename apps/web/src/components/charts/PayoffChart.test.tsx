@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import * as fc from "fast-check";
 
-import { PayoffChart, computeYDomain, buildXTicks, buildXScale, INNER_W } from "./PayoffChart.tsx";
+import {
+  PayoffChart,
+  computeYDomain,
+  buildXTicks,
+  buildXScale,
+  INNER_W,
+  EDGE_ARROW_LANE_Y,
+} from "./PayoffChart.tsx";
 import type { PayoffChartToggles, PayoffChartProps } from "./PayoffChart.tsx";
 import type { PayoffPoint } from "../../lib/scenario-engine.ts";
 
@@ -528,7 +536,7 @@ describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not blee
   const WALL_TOGGLES: PayoffChartToggles = { ...TOGGLES, showWalls: true };
   const xScale = buildXScale(INNER_W, DOMAIN);
 
-  it("pins an out-of-domain call wall (8000 > X_MAX) to the right edge with an arrow label", () => {
+  it("pins an out-of-domain call wall (8000 > X_MAX) to the right edge; no label text", () => {
     const { container } = render(
       <PayoffChart
         {...baseProps()}
@@ -537,8 +545,8 @@ describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not blee
       />,
     );
 
-    // Label carries the true level + arrow so the pin is legible
-    expect(screen.getByText("call wall 8000 →")).toBeTruthy();
+    // No in-chart wall-label text survives the KISS fix (delete-label strategy).
+    expect(screen.queryByText(/wall/i)).toBeNull();
 
     // The line itself is clamped inside the plot — never past INNER_W
     const line = container.querySelector('[data-testid="wall-line-call"]');
@@ -546,7 +554,7 @@ describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not blee
     expect(Number(line?.getAttribute("x1"))).toBeLessThanOrEqual(INNER_W);
   });
 
-  it("pins an out-of-domain put wall (6800 < X_MIN) to the left edge with an arrow label", () => {
+  it("pins an out-of-domain put wall (6800 < X_MIN) to the left edge; no label text", () => {
     const { container } = render(
       <PayoffChart
         {...baseProps()}
@@ -555,14 +563,14 @@ describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not blee
       />,
     );
 
-    expect(screen.getByText("← put wall 6800")).toBeTruthy();
+    expect(screen.queryByText(/wall/i)).toBeNull();
 
     const line = container.querySelector('[data-testid="wall-line-put"]');
     expect(line).not.toBeNull();
     expect(Number(line?.getAttribute("x1"))).toBeGreaterThanOrEqual(0);
   });
 
-  it("renders in-domain walls at their true x with the plain labels (unchanged behavior)", () => {
+  it("renders in-domain walls at their true x with no label text (unchanged line geometry)", () => {
     const { container } = render(
       <PayoffChart
         {...baseProps()}
@@ -571,13 +579,118 @@ describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not blee
       />,
     );
 
-    expect(screen.getByText("call wall")).toBeTruthy();
-    expect(screen.getByText("put wall")).toBeTruthy();
+    expect(screen.queryByText(/wall/i)).toBeNull();
+    expect(screen.queryByText(/γflip/i)).toBeNull();
 
     const call = container.querySelector('[data-testid="wall-line-call"]');
     const put = container.querySelector('[data-testid="wall-line-put"]');
     expect(Number(call?.getAttribute("x1"))).toBeCloseTo(xScale(7600), 5);
     expect(Number(put?.getAttribute("x1"))).toBeCloseTo(xScale(7400), 5);
+  });
+});
+
+describe("PayoffChart — GEX wall markers: KISS collision fix (delete labels, fixed-lane edge arrows)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const WALL_TOGGLES: PayoffChartToggles = { ...TOGGLES, showWalls: true };
+
+  it("EDGE_ARROW_LANE_Y assigns three distinct y lanes to flip/call/put", () => {
+    const keys: ReadonlyArray<"flip" | "call" | "put"> = ["flip", "call", "put"];
+    const lanes = keys.map((k) => EDGE_ARROW_LANE_Y[k]);
+    expect(new Set(lanes).size).toBe(3);
+    expect(lanes).toEqual([8, 16, 24]);
+  });
+
+  it("fast-check: zero wall/flip label text nodes for arbitrary in-domain levels", () => {
+    fc.assert(
+      fc.property(
+        fc.float({ min: Math.fround(7100), max: Math.fround(8050), noNaN: true }),
+        fc.float({ min: Math.fround(7100), max: Math.fround(8050), noNaN: true }),
+        fc.float({ min: Math.fround(7100), max: Math.fround(8050), noNaN: true }),
+        (put, call, flip) => {
+          const { unmount } = render(
+            <PayoffChart
+              {...baseProps()}
+              domain={{ min: 7100, max: 8050 }}
+              toggles={WALL_TOGGLES}
+              gex={{ callWall: call, putWall: put, flip }}
+            />,
+          );
+          expect(screen.queryByText(/wall/i)).toBeNull();
+          expect(screen.queryByText(/γflip/i)).toBeNull();
+          unmount();
+          return true;
+        },
+      ),
+      { numRuns: 50 },
+    );
+  });
+
+  it("real-repro 2026-07-10: flip 7488 / putWall 7500 / spot 7544 / callWall 7550 on 7100–8050 — zero wall-label text, lines at true x", () => {
+    const domain = { min: 7100, max: 8050 };
+    const xScale = buildXScale(INNER_W, domain);
+    const { container } = render(
+      <PayoffChart
+        {...baseProps()}
+        domain={domain}
+        spot={7544}
+        toggles={WALL_TOGGLES}
+        gex={{ callWall: 7550, putWall: 7500, flip: 7488 }}
+      />,
+    );
+
+    expect(screen.queryByText(/wall/i)).toBeNull();
+    expect(screen.queryByText(/γflip/i)).toBeNull();
+
+    const put = container.querySelector('[data-testid="wall-line-put"]');
+    const call = container.querySelector('[data-testid="wall-line-call"]');
+    const flip = container.querySelector('[data-testid="wall-line-flip"]');
+    expect(Number(put?.getAttribute("x1"))).toBeCloseTo(xScale(7500), 5);
+    expect(Number(call?.getAttribute("x1"))).toBeCloseTo(xScale(7550), 5);
+    expect(Number(flip?.getAttribute("x1"))).toBeCloseTo(xScale(7488), 5);
+  });
+
+  it("off-domain call wall (8200 > domain.max 8050) renders a single '›' glyph in the call lane (y=16), no label text", () => {
+    const domain = { min: 7100, max: 8050 };
+    const xScale = buildXScale(INNER_W, domain);
+    const { container } = render(
+      <PayoffChart
+        {...baseProps()}
+        domain={domain}
+        toggles={WALL_TOGGLES}
+        gex={{ callWall: 8200, putWall: 7500, flip: 7488 }}
+      />,
+    );
+
+    expect(screen.queryByText(/wall/i)).toBeNull();
+    const arrow = screen.getByText("›");
+    expect(arrow.getAttribute("y")).toBe("16");
+    expect(arrow.getAttribute("text-anchor")).toBe("end");
+    expect(Number(arrow.getAttribute("x"))).toBeCloseTo(xScale(domain.max) - 3, 5);
+
+    const line = container.querySelector('[data-testid="wall-line-call"]');
+    expect(Number(line?.getAttribute("x1"))).toBeCloseTo(xScale(domain.max), 5);
+  });
+
+  it("off-domain put wall (6800 < domain.min 7100) renders a single '‹' glyph in the put lane (y=24), no label text", () => {
+    const domain = { min: 7100, max: 8050 };
+    const xScale = buildXScale(INNER_W, domain);
+    render(
+      <PayoffChart
+        {...baseProps()}
+        domain={domain}
+        toggles={WALL_TOGGLES}
+        gex={{ callWall: 7600, putWall: 6800, flip: 7488 }}
+      />,
+    );
+
+    expect(screen.queryByText(/wall/i)).toBeNull();
+    const arrow = screen.getByText("‹");
+    expect(arrow.getAttribute("y")).toBe("24");
+    expect(arrow.getAttribute("text-anchor")).toBe("start");
+    expect(Number(arrow.getAttribute("x"))).toBeCloseTo(xScale(domain.min) + 3, 5);
   });
 });
 

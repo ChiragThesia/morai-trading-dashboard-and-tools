@@ -142,6 +142,18 @@ const CROSSHAIR_COLOR = "#8a98ad";
 
 const FAN_COLORS = ["#7c6fd6", "#6f86c9", "#5f93b8"] as const;
 
+/**
+ * KISS collision fix (31-01, DEFECT-1): fixed vertical lane per wall series
+ * for the off-domain single-glyph edge arrow. Three distinct y values means
+ * two arrows clamped to the same edge can never share a bounding box —
+ * provable by construction, not by measurement (jsdom can't measure SVG text).
+ */
+export const EDGE_ARROW_LANE_Y: Record<"flip" | "call" | "put", number> = {
+  flip: 8,
+  call: 16,
+  put: 24,
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function buildXScale(innerWidth: number, domain: { readonly min: number; readonly max: number }) {
@@ -150,29 +162,28 @@ function buildXScale(innerWidth: number, domain: { readonly min: number; readonl
 
 type PinnedMarker = {
   readonly x: number;
-  readonly label: string;
-  readonly anchorEnd: boolean;
+  readonly clampedTo: "min" | "max" | null;
 };
 
 /**
  * Edge-pin a GEX wall/flip marker into the x-domain. The chart SVG overflows
  * visibly, so an out-of-domain level (e.g. a call wall above domain.max)
  * would otherwise draw PAST the plot into neighboring layout. Pinned markers
- * clamp to the domain edge and carry the true level + arrow in the label.
+ * clamp to the domain edge; `clampedTo` drives the fixed-lane edge-arrow
+ * render (no in-chart text label — KISS collision fix, DEFECT-1).
  */
 function pinMarker(
-  name: string,
   value: number,
   xScale: (v: number) => number,
   domain: { readonly min: number; readonly max: number },
 ): PinnedMarker {
   if (value > domain.max) {
-    return { x: xScale(domain.max), label: `${name} ${value.toFixed(0)} →`, anchorEnd: true };
+    return { x: xScale(domain.max), clampedTo: "max" };
   }
   if (value < domain.min) {
-    return { x: xScale(domain.min), label: `← ${name} ${value.toFixed(0)}`, anchorEnd: false };
+    return { x: xScale(domain.min), clampedTo: "min" };
   }
-  return { x: xScale(value), label: name, anchorEnd: false };
+  return { x: xScale(value), clampedTo: null };
 }
 
 function buildYScale(lo: number, hi: number, innerHeight: number) {
@@ -680,18 +691,24 @@ export function PayoffChart({
             />
           )}
 
-          {/* ── Layer 6: GEX wall lines — edge-pinned into the x-domain ────── */}
+          {/* ── Layer 6: GEX wall lines — edge-pinned into the x-domain.
+              No in-chart text label (KISS collision fix, DEFECT-1): the dashed
+              line is the only in-chart signal, so it can never pile up into
+              unreadable overlapping text. An off-domain wall renders a single
+              glyph arrow in a fixed per-series lane (EDGE_ARROW_LANE_Y) instead
+              — the exact numeric value lives in the Key Levels panel /
+              ScenarioStrip / crosshair tooltip. ── */}
           {toggles.showWalls && gex !== null && (
             <>
               {(
                 [
-                  { key: "put", name: "put wall", value: gex.putWall, color: CORAL },
-                  { key: "call", name: "call wall", value: gex.callWall, color: TEAL },
-                  { key: "flip", name: "γflip", value: gex.flip, color: AMBER },
+                  { key: "put", value: gex.putWall, color: CORAL },
+                  { key: "call", value: gex.callWall, color: TEAL },
+                  { key: "flip", value: gex.flip, color: AMBER },
                 ] as const
-              ).map(({ key, name, value, color }) => {
+              ).map(({ key, value, color }) => {
                 if (value === null) return null;
-                const marker = pinMarker(name, value, xScale, domain);
+                const marker = pinMarker(value, xScale, domain);
                 return (
                   <g key={`wall-${key}`}>
                     <line
@@ -705,16 +722,18 @@ export function PayoffChart({
                       strokeDasharray="2 3"
                       opacity={0.6}
                     />
-                    <text
-                      x={marker.anchorEnd ? marker.x - 3 : marker.x + 3}
-                      y={10}
-                      fill={color}
-                      fontSize={9}
-                      fontFamily="JetBrains Mono, monospace"
-                      textAnchor={marker.anchorEnd ? "end" : "start"}
-                    >
-                      {marker.label}
-                    </text>
+                    {marker.clampedTo !== null && (
+                      <text
+                        x={marker.clampedTo === "max" ? marker.x - 3 : marker.x + 3}
+                        y={EDGE_ARROW_LANE_Y[key]}
+                        fill={color}
+                        fontSize={9}
+                        fontFamily="JetBrains Mono, monospace"
+                        textAnchor={marker.clampedTo === "max" ? "end" : "start"}
+                      >
+                        {marker.clampedTo === "max" ? "›" : "‹"}
+                      </text>
+                    )}
                   </g>
                 );
               })}
