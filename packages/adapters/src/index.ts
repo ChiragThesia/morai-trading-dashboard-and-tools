@@ -135,6 +135,12 @@ export type { PostgresBacktestHistoryRepo } from "./postgres/repos/backtest-hist
 export { makePostgresBacktestRunsRepo } from "./postgres/repos/backtest-runs.ts";
 export type { PostgresBacktestRunsRepo } from "./postgres/repos/backtest-runs.ts";
 
+// Phase 29 (29-08): rule-overrides repo — postgres + in-memory twin (architecture-boundaries §8)
+export { makePostgresRuleOverridesRepo } from "./postgres/repos/rule-overrides.ts";
+export type { PostgresRuleOverridesRepo } from "./postgres/repos/rule-overrides.ts";
+export { makeMemoryRuleOverridesRepo } from "./memory/rule-overrides.ts";
+export type { MemoryRuleOverridesRepo } from "./memory/rule-overrides.ts";
+
 // Picker rule engine: history reads for the experimental vrp/slopePercentile rules —
 // postgres + in-memory twin (architecture-boundaries §8)
 export { makePostgresPickerHistoryRepo } from "./postgres/repos/picker-history.ts";
