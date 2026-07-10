@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 29
-current_phase_name: Runtime Rule Settings
-status: executed-awaiting-deploy
+current_phase: 30
+current_phase_name: Analyzer pasted-calendar fix
+status: executing
 stopped_at: Phase 29 executed — 14/14 plans, verifier 9/9 must-haves (human_needed), code review 2C/2W all fixed, UAT 1/2 passed (item 2 needs prod deploy + one RTH compute-picker cycle)
-last_updated: "2026-07-10T06:28:47.514Z"
+last_updated: "2026-07-10T13:55:17.880Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 29 executed + verified + code-review-fixed + visual UAT passed; NOT deployed yet
+last_activity_desc: Phase 30 execution started
 progress:
-  total_phases: 8
+  total_phases: 10
   completed_phases: 7
-  total_plans: 40
-  completed_plans: 40
-  percent: 88
+  total_plans: 46
+  completed_plans: 41
+  percent: 70
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 29 — Runtime Rule Settings
+**Current focus:** Phase 30 — Analyzer pasted-calendar fix
 
 ## Current Position
 
-Phase: 29 (Runtime Rule Settings) — EXECUTING
-Plan: 14 of 14 complete (07, 08, 09, 10, 12 complete — wave-based dependency order, not strictly sequential; 12 depended on 06/08/09)
-Status: Ready to execute next plan
-Last activity: 2026-07-10 — Completed 29-12-PLAN.md (regime board runtime overrides wiring)
+Phase: 30 (Analyzer pasted-calendar fix) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-07-10 — Phase 30 execution started
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -285,6 +285,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 29 P11 | 20min | 2 tasks | 3 files |
 | Phase 29 P13 | 35min | 3 tasks | 9 files |
 | Phase 29 P14 | ~20min | 2 tasks | 5 files |
+| Phase 30 P01 | 15min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -415,6 +416,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 29-13: resolveExitRuleConfig/resolveRegimeRuleConfig were missing from the top @morai/core barrel (only resolvePickerRuleConfig was exported) — added to exits/index.ts + analytics/index.ts + top barrel, the ONE apps-to-core wiring point Task 3 needed
 - [Phase ?]: Editing sends the full edited group object on Save, not a leaf-level patch — every leaf is already rendered from effective, and the server's weight-sum/hysteresis refinements require complete sub-objects anyway
 - [Phase ?]: flatten/lookup/unflatten helpers in RuleSettingsModal.tsx operate on unknown-typed params (never an index-signature type) to sidestep the zod mapped-type-vs-index-signature TS incompatibility documented in 29-13
+- [Phase ?]: 30-01: repriceScenario's domain param defaults to the old SPOT_GRID_MIN/MAX constants so every existing caller needs zero changes
+- [Phase ?]: 30-01: findZeroCrossings moved (not duplicated) from PayoffChart.tsx into scenario-engine.ts as a shared export for payoff-domain.ts's wide-pass
+- [Phase ?]: 30-01: Analyzer.tsx/Overview.tsx PayoffChart call sites pass a literal {min:6900,max:7900} placeholder domain (ponytail-flagged) since domain became required in this plan but real computePayoffDomain screen-wiring is deferred to 30-02
 
 ### Pending Todos
 
@@ -471,7 +475,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T06:28:47.504Z
+Last session: 2026-07-10T13:54:32.783Z
 Stopped at: Completed 29-14-PLAN.md
 Resume file: 
 
