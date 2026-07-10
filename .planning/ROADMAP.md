@@ -350,12 +350,22 @@ Plans:
 **Plans:** 6 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 30-01-PLAN.md — Domain-fit primitives: computePayoffDomain + domain-aware scenario grid + PayoffChart domain prop (D-01)
-- [ ] 30-02-PLAN.md — Thread the domain into Analyzer + Overview payoff charts; combined-book non-regression (D-01)
 - [ ] 30-03-PLAN.md — Analyze request/response contracts + extracted resolveEventExit helper (D-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 30-02-PLAN.md — Thread the domain into Analyzer + Overview payoff charts; combined-book non-regression (D-01)
 - [ ] 30-04-PLAN.md — makeAnalyzeAdHocCalendarUseCase: score one ad-hoc PUT calendar with engine parity, reused gate/sizing (D-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 30-05-PLAN.md — POST /api/picker/analyze route + analyze_ad_hoc_calendar MCP tool + server wiring (D-02)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 30-06-PLAN.md — Client paste flow: ISO expiries + useAnalyzeCalendar hook + breakdown-gated panels + CandidateCard fix (D-02)
 
 ### Phase 31: Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10) — PLUS left-rail macro readability: replace raw-number rows (VIX/VVIX/ratios/HY OAS/rates) with compact linear band-gauges (bullet style: value marker on a warn/crisis-banded track; NOT circular dials — space + scannability), user proposal 2026-07-10
