@@ -339,14 +339,15 @@ describe("makePreviewPickerRuleOverridesUseCase", () => {
       { slope: 10, fwdEdge: 25, gexFit: 10, eventAdjustment: 5, beVsEm: 15, deltaNeutral: 15, thetaVega: 10, vrp: 5, debitFit: 5 },
       { slope: 80, fwdEdge: 40, gexFit: 50, eventAdjustment: 0, beVsEm: 50, deltaNeutral: 90, thetaVega: 60, vrp: 0, debitFit: 50 },
     );
-    // Stored event score: Σ (w×0.9 × c)/100 + 10×bonus(=1).
+    // Real stored shape (verified against all 8 live event candidates 2026-07-10):
+    // breakdown carries STANDARD weights; stored score = Σ(w×c)/100 + 10×bonus — the
+    // engine normalizes by weight sum, so the event registry's ×0.9 cancels.
     const eventScoreRaw =
-      standard.breakdown.reduce((sum, e) => sum + (e.weight * 0.9 * e.contribution) / 100, 0) + 10;
+      standard.breakdown.reduce((sum, e) => sum + (e.weight * e.contribution) / 100, 0) + 10;
     const eventCandidate: typeof standard = {
       ...standard,
       bucket: "event-calendar",
       score: Math.min(100, Math.max(0, Math.round(eventScoreRaw))),
-      breakdown: standard.breakdown.map((e) => ({ ...e, weight: e.weight * 0.9 })),
       context: [{ id: "backEventBonus", label: "Event in back window", value: 1, note: "calibrating" }],
     };
     const deps = makeDeps({ readPickerSnapshot: async () => ok(snapshotRow({ candidates: [eventCandidate] })) });
