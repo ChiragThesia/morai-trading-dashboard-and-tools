@@ -4,11 +4,11 @@ milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 29
 current_phase_name: Runtime Rule Settings
-status: executing
-stopped_at: Completed 29-14-PLAN.md
+status: executed-awaiting-deploy
+stopped_at: Phase 29 executed — 14/14 plans, verifier 9/9 must-haves (human_needed), code review 2C/2W all fixed, UAT 1/2 passed (item 2 needs prod deploy + one RTH compute-picker cycle)
 last_updated: "2026-07-10T06:28:47.514Z"
 last_activity: 2026-07-10
-last_activity_desc: Completed 29-12-PLAN.md (regime board runtime overrides wiring)
+last_activity_desc: Phase 29 executed + verified + code-review-fixed + visual UAT passed; NOT deployed yet
 progress:
   total_phases: 8
   completed_phases: 7
