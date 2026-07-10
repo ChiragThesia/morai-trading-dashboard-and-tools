@@ -21,6 +21,7 @@ import {
   selectEventCandidates,
   haircutFill,
   autoTuneTargetDelta,
+  resolveEventExit,
   DELTA_BAND_MIN,
   DELTA_BAND_MAX,
   FRONT_DTE_MIN,
@@ -644,5 +645,53 @@ describe("selectEventCandidates (28-05, PLAY-04 event-calendar bucket)", () => {
       backDteMaxGap: BACK_DTE_MAX_GAP,
     });
     expect(withDefault.candidates).toEqual(withExplicit.candidates);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// resolveEventExit (Phase 30, Plan 03 — extracted from selectCandidates' inline
+// event-blackout loop so the ad-hoc use-case (30-04) reuses the exact same
+// exitBeforeIso/eventInPeakTheta logic instead of a second copy).
+// ─────────────────────────────────────────────────────────────
+
+describe("resolveEventExit", () => {
+  it("a tier-1 event within EVENT_BLACKOUT_DAYS before the front expiry sets exitBeforeIso to the day BEFORE it", () => {
+    const events: EconomicEvent[] = [{ date: "2026-07-29", name: "FOMC", source: "seed" }];
+    const result = resolveEventExit("2026-07-31", events);
+    expect(result.exitBeforeIso).toBe("2026-07-28");
+  });
+
+  it("no event within the window leaves exitBeforeIso null", () => {
+    const events: EconomicEvent[] = [{ date: "2026-07-21", name: "FOMC", source: "seed" }];
+    const result = resolveEventExit("2026-07-31", events);
+    expect(result.exitBeforeIso).toBeNull();
+  });
+
+  it("picks the EARLIEST qualifying event when multiple fall within the blackout window", () => {
+    const events: EconomicEvent[] = [
+      { date: "2026-07-30", name: "CPI", source: "seed" },
+      { date: "2026-07-29", name: "FOMC", source: "seed" },
+    ];
+    const result = resolveEventExit("2026-07-31", events);
+    expect(result.exitBeforeIso).toBe("2026-07-28");
+  });
+
+  it("an event within PEAK_THETA_DAYS before front expiry sets eventInPeakTheta true", () => {
+    const events: EconomicEvent[] = [{ date: "2026-07-27", name: "NFP", source: "seed" }];
+    const result = resolveEventExit("2026-07-31", events);
+    expect(result.eventInPeakTheta).toBe(true);
+  });
+
+  it("an event outside both windows leaves both fields at their no-op defaults", () => {
+    const events: EconomicEvent[] = [{ date: "2026-06-01", name: "NFP", source: "seed" }];
+    const result = resolveEventExit("2026-07-31", events);
+    expect(result.exitBeforeIso).toBeNull();
+    expect(result.eventInPeakTheta).toBe(false);
+  });
+
+  it("no events at all leaves both fields at their no-op defaults", () => {
+    const result = resolveEventExit("2026-07-31", []);
+    expect(result.exitBeforeIso).toBeNull();
+    expect(result.eventInPeakTheta).toBe(false);
   });
 });

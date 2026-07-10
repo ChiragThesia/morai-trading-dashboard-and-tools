@@ -165,6 +165,34 @@ export function legSpansEvents(
 }
 
 /**
+ * resolveEventExit — the tier-1 event-blackout → hard-exit stamp (Phase 30, Plan 03,
+ * extracted from selectCandidates' inline loop so the ad-hoc use-case (30-04) reuses the
+ * exact same logic instead of a second copy — Don't Hand-Roll). A tier-1 event within
+ * `EVENT_BLACKOUT_DAYS` before `frontExpiryIso` stamps `exitBeforeIso` to the day BEFORE
+ * the EARLIEST such event (2026-07-09 playbook: no longer an entry BLOCK, an exit rule);
+ * an event within `PEAK_THETA_DAYS` sets `eventInPeakTheta` true (scoring doubles the
+ * event penalty when the forced exit collides with peak decay). No qualifying event in
+ * either window leaves both fields at their no-op defaults (null / false).
+ */
+export function resolveEventExit(
+  frontExpiryIso: string,
+  events: ReadonlyArray<EconomicEvent>,
+): { exitBeforeIso: string | null; eventInPeakTheta: boolean } {
+  const feDay = isoDayNumber(frontExpiryIso);
+  let exitBeforeIso: string | null = null;
+  let eventInPeakTheta = false;
+  for (const ev of events) {
+    const evDay = isoDayNumber(ev.date);
+    if (evDay <= feDay && feDay - evDay <= EVENT_BLACKOUT_DAYS) {
+      const dayBefore = new Date((evDay - 1) * 86_400_000).toISOString().slice(0, 10);
+      if (exitBeforeIso === null || dayBefore < exitBeforeIso) exitBeforeIso = dayBefore;
+    }
+    if (evDay <= feDay && feDay - evDay <= PEAK_THETA_DAYS) eventInPeakTheta = true;
+  }
+  return { exitBeforeIso, eventInPeakTheta };
+}
+
+/**
  * ORATS 2-leg fill haircut (Phase 26, extracted from selectCandidates' private buyFill/sellFill
  * closures — Pitfall 2): a buyer pays UP toward the ask, a seller receives DOWN toward the bid,
  * each crossing FILL_WIDTH_FRACTION of the bid-ask width off the natural side. Exported so ROLL
@@ -330,17 +358,7 @@ export function selectCandidates(
     // Playbook EVT discipline (2026-07-09 — was an entry BLOCK, now an exit rule): a tier-1
     // event within EVENT_BLACKOUT_DAYS before this front expiry stamps a hard exit on the day
     // BEFORE the earliest such event; eventAdjustment (w10) still penalizes the score.
-    const feDay = isoDayNumber(fe);
-    let exitBeforeIso: string | null = null;
-    let eventInPeakTheta = false;
-    for (const ev of events) {
-      const evDay = isoDayNumber(ev.date);
-      if (evDay <= feDay && feDay - evDay <= EVENT_BLACKOUT_DAYS) {
-        const dayBefore = new Date((evDay - 1) * 86_400_000).toISOString().slice(0, 10);
-        if (exitBeforeIso === null || dayBefore < exitBeforeIso) exitBeforeIso = dayBefore;
-      }
-      if (evDay <= feDay && feDay - evDay <= PEAK_THETA_DAYS) eventInPeakTheta = true;
-    }
+    const { exitBeforeIso, eventInPeakTheta } = resolveEventExit(fe, events);
 
     // Band membership (NOT nearest-target): every strike whose front delta is in the band.
     for (const frontQuote of frontQuotesRaw) {
