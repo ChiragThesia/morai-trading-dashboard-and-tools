@@ -353,7 +353,7 @@ Plans:
 
 - [ ] TBD (run /gsd-plan-phase 30 to break down)
 
-### Phase 31: Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10)
+### Phase 31: Overview Risk Profile KISS redesign — marker/label collision fix (γflip + put wall + call wall + spot crammed within ~60pts overlap into unreadable text), simplify chart chrome per KISS; decide wall-picking policy for 0DTE-dominated days (exclude/discount same-day OI vs keep); no change to GEX math (flip 7488 < putWall 7500 verified data-consistent 2026-07-10) — PLUS left-rail macro readability: replace raw-number rows (VIX/VVIX/ratios/HY OAS/rates) with compact linear band-gauges (bullet style: value marker on a warn/crisis-banded track; NOT circular dials — space + scannability), user proposal 2026-07-10
 
 **Goal:** [To be planned]
 **Requirements**: TBD
@@ -363,3 +363,14 @@ Plans:
 Plans:
 
 - [ ] TBD (run /gsd-plan-phase 31 to break down)
+
+### Phase 32: Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 31
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 32 to break down)
