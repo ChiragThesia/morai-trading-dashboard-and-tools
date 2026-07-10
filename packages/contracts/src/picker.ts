@@ -322,3 +322,50 @@ export const pickerSnapshotResponse = z.object({
 });
 
 export type PickerSnapshotResponse = z.infer<typeof pickerSnapshotResponse>;
+
+// ─── Ad-hoc analyze (Phase 30, D-02; MCP-02: ONE schema shared by POST /picker/analyze
+// and the analyze_ad_hoc_calendar MCP tool) ──────────────────────────────────────
+
+/**
+ * analyzeAdHocCalendarRequest — a pasted (TOS-order) calendar's two legs, scored through
+ * the real engine (30-04). Puts only this phase (D-03/Pitfall 5) — `putCall` is a literal,
+ * not the `pickerCandidateLeg` enum. Deliberately carries NO `spot` field: the server
+ * derives spot from the latest stored snapshot, never a client-supplied price
+ * (T-30-06 threat mitigation). `.strict()` rejects any extra key, including `spot`.
+ */
+export const analyzeAdHocCalendarRequest = z
+  .object({
+    putCall: z.literal("P"),
+    strike: z.number().finite().positive(),
+    frontDte: z.number().int().positive(),
+    backDte: z.number().int().positive(),
+    qty: z.number().int().positive(),
+    frontIv: z.number().finite().positive(),
+    backIv: z.number().finite().positive(),
+    debit: z.number().finite(),
+    /** ISO 8601 date. */
+    frontExpiry: z.string(),
+    /** ISO 8601 date. */
+    backExpiry: z.string(),
+  })
+  .strict()
+  .refine((v) => v.backDte > v.frontDte, {
+    path: ["backDte"],
+    message: "backDte must be greater than frontDte",
+  });
+
+export type AnalyzeAdHocCalendarRequest = z.infer<typeof analyzeAdHocCalendarRequest>;
+
+/**
+ * analyzeAdHocCalendarResponse — wraps the existing `pickerCandidate` schema (binding #2):
+ * `scored: true` carries a full engine-scored candidate; `scored: false` degrades to
+ * `candidate: null` + a human-readable `reason` (e.g. no stored snapshot yet) rather than
+ * a hard error (30-CONTEXT.md "Failure posture").
+ */
+export const analyzeAdHocCalendarResponse = z.object({
+  scored: z.boolean(),
+  candidate: pickerCandidate.nullable(),
+  reason: z.string().nullable(),
+});
+
+export type AnalyzeAdHocCalendarResponse = z.infer<typeof analyzeAdHocCalendarResponse>;

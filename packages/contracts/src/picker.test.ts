@@ -8,7 +8,13 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { breakdownEntry, pickerCandidate, pickerSnapshotResponse } from "./picker.ts";
+import {
+  breakdownEntry,
+  pickerCandidate,
+  pickerSnapshotResponse,
+  analyzeAdHocCalendarRequest,
+  analyzeAdHocCalendarResponse,
+} from "./picker.ts";
 import { pickerSnapshotFixture } from "./__fixtures__/picker-candidates.fixture.ts";
 
 // Oracle payload — one real candidate from mockups/playground-v4.html buildCandidates()
@@ -305,5 +311,77 @@ describe("pickerCandidate.bucket (28-05, PLAY-04 event-calendar bucket — addit
 
   it("rejects an out-of-enum bucket value", () => {
     expect(() => pickerCandidate.parse({ ...oraclePayload, bucket: "premium" })).toThrow();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// analyzeAdHocCalendarRequest/Response (Phase 30, D-02, MCP-02 additive) — the shared
+// POST /picker/analyze route + MCP tool schema. Puts-only (D-03), NO client-supplied
+// spot (threat mitigation — server derives it from the latest snapshot).
+// ─────────────────────────────────────────────────────────────
+
+describe("analyzeAdHocCalendarRequest", () => {
+  const validBody = {
+    putCall: "P",
+    strike: 7500,
+    frontDte: 7,
+    backDte: 35,
+    qty: 1,
+    frontIv: 0.15,
+    backIv: 0.15,
+    debit: 12.5,
+    frontExpiry: "2026-07-17",
+    backExpiry: "2026-08-14",
+  };
+
+  it("parses a valid PUT ad-hoc calendar body", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse(validBody)).not.toThrow();
+  });
+
+  it("rejects putCall 'C' (puts only, D-03)", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, putCall: "C" })).toThrow();
+  });
+
+  it("rejects strike <= 0", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, strike: 0 })).toThrow();
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, strike: -7500 })).toThrow();
+  });
+
+  it("rejects non-finite frontIv/backIv", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, frontIv: Infinity })).toThrow();
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, backIv: Number.NaN })).toThrow();
+  });
+
+  it("rejects non-finite debit", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, debit: Infinity })).toThrow();
+  });
+
+  it("rejects frontDte/backDte non-integer or <= 0", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, frontDte: 7.5 })).toThrow();
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, frontDte: 0 })).toThrow();
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, backDte: -5 })).toThrow();
+  });
+
+  it("rejects backDte <= frontDte", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, frontDte: 35, backDte: 35 })).toThrow();
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, frontDte: 35, backDte: 7 })).toThrow();
+  });
+
+  it("rejects an extra 'spot' key (.strict() — never trust a client-supplied spot)", () => {
+    expect(() => analyzeAdHocCalendarRequest.parse({ ...validBody, spot: 7500 })).toThrow();
+  });
+});
+
+describe("analyzeAdHocCalendarResponse", () => {
+  it("parses a scored response ({scored:true, candidate:<valid pickerCandidate>, reason:null})", () => {
+    expect(() =>
+      analyzeAdHocCalendarResponse.parse({ scored: true, candidate: oraclePayload, reason: null }),
+    ).not.toThrow();
+  });
+
+  it("parses an unscored response ({scored:false, candidate:null, reason:'no-snapshot'})", () => {
+    expect(() =>
+      analyzeAdHocCalendarResponse.parse({ scored: false, candidate: null, reason: "no-snapshot" }),
+    ).not.toThrow();
   });
 });

@@ -127,6 +127,8 @@ export {
   pickerGexContext,
   pickerEvent,
   pickerSnapshotResponse,
+  analyzeAdHocCalendarRequest,
+  analyzeAdHocCalendarResponse,
 } from "./picker.ts";
 export type {
   PickerCandidateLeg,
@@ -141,6 +143,8 @@ export type {
   PickerGateBrakes,
   PickerSizing,
   PickerSnapshotResponse,
+  AnalyzeAdHocCalendarRequest,
+  AnalyzeAdHocCalendarResponse,
 } from "./picker.ts";
 export { pickerSnapshotFixture } from "./__fixtures__/picker-candidates.fixture.ts";
 
