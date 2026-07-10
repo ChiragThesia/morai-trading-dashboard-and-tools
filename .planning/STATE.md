@@ -5,16 +5,16 @@ milestone_name: Picker Intelligence
 current_phase: 32
 current_phase_name: Rule Settings modal v2 — explain what you touch
 status: in-progress
-stopped_at: Completed 32-02-PLAN.md
-last_updated: "2026-07-10T19:33:03.557Z"
+stopped_at: Completed 32-03-PLAN.md
+last_updated: "2026-07-10T19:43:48.208Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 32 Plan 02 complete
+last_activity_desc: Phase 32 Plan 03 complete
 progress:
   total_phases: 11
   completed_phases: 9
   total_plans: 54
-  completed_plans: 50
-  percent: 93
+  completed_plans: 51
+  percent: 94
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 32 — Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
-Plan: 32-02 complete (of 6) — picker preview use-case (B1): re-score/re-resolve/honest-note per knob group
-Status: In progress — 32-03..32-06 remaining
-Last activity: 2026-07-10 — Phase 32 Plan 02 complete
+Plan: 32-03 complete (of 6) — exit preview use-case (B2): current-vs-staged verdict pairs via evaluateExit twice, structurally never persists
+Status: In progress — 32-04..32-06 remaining
+Last activity: 2026-07-10 — Phase 32 Plan 03 complete
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -299,6 +299,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 31 P02 | 6m | 2 tasks | 8 files |
 | Phase 32 P01 | 1min | 2 tasks | 6 files |
 | Phase 32 P02 | ~20min | 2 tasks | 5 files |
+| Phase 32 P03 | 35min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -450,6 +451,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: Explainer registry keyed by ruleConfig's real 43 dotted leaf paths; completeness enforced by a recursive schema walk, never a hand-copied path array
 - [Phase 32]: 32-02: absent staged picker group falls back to STORED overrides (not code defaults) for the effective config -- this is what makes the byte-parity property hold
 - [Phase 32]: 32-02: gate re-resolve reconstructs synthetic MacroSeriesRow[VIXCLS,VXVCLS] from the stored PickerGate's already-resolved vix/vix3m/asOf scalars (no readMacroObservations dep) so resolveEntryGate is reused verbatim with zero new I/O
+- [Phase 32]: 32-03: isExitRuleOverrides is a verbatim COPY into previewExitRuleOverrides.ts, not an import from computeExitAdvice.ts — the plan's files_modified list scoped this task to exactly 3 files and computeExitAdvice.ts wasn't one of them
+- [Phase 32]: 32-03: exit preview evaluates every open position TWICE via the same evaluateExit (current effective config, staged config) with rollChain.candidates=[] always -- a TAKE/STOP rung change never drives a ROLL suggestion, keeping the preview structurally read-only
 
 ### Pending Todos
 
@@ -506,8 +509,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T19:32:26.807Z
-Stopped at: Completed 31-02-PLAN.md
+Last session: 2026-07-10T19:43:48.196Z
+Stopped at: Completed 32-03-PLAN.md
 Resume file: 
-
 None
