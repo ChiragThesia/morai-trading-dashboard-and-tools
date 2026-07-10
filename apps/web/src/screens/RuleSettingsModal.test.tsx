@@ -197,6 +197,11 @@ function makePreviewMutationMock(response: PreviewRuleOverridesResponse | undefi
         setState({ isPending: false, isError: false, data: response });
         return response;
       },
+      // WR-02: mirrors react-query's real useMutation().reset() -- clears back to idle so a
+      // component-level `previewMutation.reset()` call is observable in a test.
+      reset: () => {
+        setState({ isPending: false, isError: false, data: undefined });
+      },
     };
   };
 }
@@ -464,6 +469,56 @@ describe("RuleSettingsModal — Preview", () => {
     expect(previewPanel.textContent).toContain("crisis");
     // never calls the server mutation for the regime group (client-side only, T-32-12)
     expect(mockPreviewMutateAsync).not.toHaveBeenCalled();
+  });
+
+  // WR-02 (32-REVIEW.md): a rendered Preview panel must not linger after the underlying state
+  // changes (Save applies the staged values) -- a stale diff would describe a transition that
+  // already happened.
+  it("WR-02: Save clears the rendered preview panel (mutation reset)", async () => {
+    mockReturn();
+    mockUseRegimeBoard.mockReturnValue({ data: REGIME_INDICATORS });
+    const response: PreviewRuleOverridesResponse = {
+      asOf: "2026-07-09",
+      picker: {
+        candidates: [{ ...SCORED_CANDIDATE, oldScore: 62 }],
+        gate: null,
+        sizing: null,
+        universeNote: null,
+      },
+      exits: null,
+    };
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(response));
+    renderModal();
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const pickerGroup = screen.getByTestId("settings-group-picker");
+    fireEvent.change(screen.getByLabelText("Weights Slope"), { target: { value: "15" } });
+    fireEvent.change(screen.getByLabelText("Weights Fwd Edge"), { target: { value: "20" } });
+    fireEvent.click(within(pickerGroup).getByText("Preview"));
+    await waitFor(() => expect(within(pickerGroup).getByTestId("preview-picker")).toBeTruthy());
+
+    fireEvent.click(within(pickerGroup).getByText("Save"));
+
+    await waitFor(() => expect(within(pickerGroup).queryByTestId("preview-picker")).toBeNull());
+  });
+
+  // WR-02 (32-REVIEW.md): same stale-panel problem on the Reset-per-group path.
+  it("WR-02: Reset clears a rendered regime preview panel", async () => {
+    mockReturn();
+    mockUseRegimeBoard.mockReturnValue({ data: REGIME_INDICATORS });
+    mockUseRuleSettingsPreview.mockImplementation(makePreviewMutationMock(undefined));
+    renderModal();
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const regimeGroup = screen.getByTestId("settings-group-regime");
+    const vvixCrisisInput = screen.getByLabelText("Vvix Crisis");
+    fireEvent.change(vvixCrisisInput, { target: { value: "105" } });
+    fireEvent.click(within(regimeGroup).getByText("Preview"));
+    expect(within(regimeGroup).getByTestId("preview-regime")).toBeTruthy();
+
+    fireEvent.click(within(regimeGroup).getByText("Reset to defaults"));
+
+    await waitFor(() => expect(within(regimeGroup).queryByTestId("preview-regime")).toBeNull());
   });
 
   it("Save still works unregressed alongside the new Preview button", () => {

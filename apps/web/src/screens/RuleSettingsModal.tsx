@@ -238,6 +238,13 @@ function GroupPanel({
   async function handleSave(): Promise<void> {
     await onSave(group, buildStagedGroup());
     setDraft({});
+    // WR-02 (32-REVIEW.md): a rendered Preview panel describes staged-vs-current at the moment
+    // Preview was clicked -- once Save applies those values, "current" has moved and the old
+    // diff is stale (it now describes a transition that already happened). Clear both preview
+    // states (server-backed picker/exits mutation + client-side regime re-band) so the panel
+    // disappears rather than lingering.
+    previewMutation.reset();
+    setRegimePreview(undefined);
   }
 
   // Explicit click only (no onChange auto-preview, T-32-13). Regime re-bands client-side
@@ -272,7 +279,12 @@ function GroupPanel({
             size="xs"
             onClick={() => {
               // fire-and-forget: the hook owns pending/error state for this group.
-              void onReset(group);
+              // WR-02 (32-REVIEW.md): same stale-panel problem as Save -- once Reset resolves,
+              // any rendered preview described a diff against the pre-reset baseline.
+              void onReset(group).then(() => {
+                previewMutation.reset();
+                setRegimePreview(undefined);
+              });
             }}
           >
             Reset to defaults
