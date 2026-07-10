@@ -409,11 +409,17 @@ Plans:
 
 ### Phase 33: Chart engine migration — replace hand-rolled SVG charts with Recharts via shadcn chart primitives (project already shadcn base-nova): PayoffChart (dual curves, fan, profit-zone shading, wall/flip reference lines, EM band, crosshair tooltip, scenario strip), term-structure chart, dealer-gamma profile, GEX-by-strike bars. Keep scenario-engine/payoff-domain data layer pure (presentation swap only); native clipping/responsive/tooltips kill the overflow bug class (EM-band page-bleed 2563bd6, marker label pile-up Phase 31) permanently; visual parity with current design tokens
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** The four in-scope charts (PayoffChart, TermStructureChart, GammaProfile, GexBars) render through Recharts (shadcn chart primitives) with the overflow/bleed bug class killed structurally — clipping by construction, not hand-clamps — while the scenario-engine/payoff-domain data layer stays byte-identical and the MORAI design tokens + every locked behavior (domain fidelity, 9-layer z-order, guard cases) are preserved.
+**Requirements**: CHART-01, CHART-02, CHART-03, CHART-04, CHART-05, CHART-06
 **Depends on:** Phase 32
-**Plans:** 0 plans
+**Plans:** 7 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 33 to break down)
+- [ ] 33-01-PLAN.md — Foundation: recharts@3.9.2 pin + shadcn ui/chart.tsx + test harness + A1 z-order spike + docs D3 reconcile
+- [ ] 33-02-PLAN.md — PayoffChartMarks custom layer: EM band + BE markers + edge arrows (2563bd6 clamp regression as a unit test)
+- [ ] 33-03-PLAN.md — GammaProfile → Recharts (split teal/coral fill, flip/spot lines, compact+full) + new test
+- [ ] 33-04-PLAN.md — TermStructureChart → Recharts (forward-IV bracket via segment, guard case) + re-express test
+- [ ] 33-05-PLAN.md — GexBars → Recharts (horizontal bars, per-bar Cell colors, wall/spot lines) + re-express test
+- [ ] 33-06-PLAN.md — PayoffChart core swap: numeric domain fidelity + 9-layer z-order + native tooltip + wire marks
+- [ ] 33-07-PLAN.md — Integration sweep: dead-code removal (4 charts), deps retained, full test + typecheck + lint green
