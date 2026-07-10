@@ -31,7 +31,9 @@ import {
   ROLL_REPLACEMENT_DTE_MIN,
   ROLL_REPLACEMENT_DTE_MAX,
 } from "./exit-rules.ts";
-import type { ExitRuleId } from "./exit-rules.ts";
+import type { ExitRuleId, ExitRung } from "./exit-rules.ts";
+import { resolveExitRuleConfig } from "./rule-config.ts";
+import type { ExitRuleConfig } from "./rule-config.ts";
 import type {
   HeldPosition,
   MarketContext,
@@ -81,8 +83,12 @@ function wasArmed(previousVerdict: PreviousVerdict, ruleId: ExitRuleId, rung: st
   return previousVerdict !== null && previousVerdict.ruleId === ruleId && previousVerdict.rung === rung;
 }
 
-function evalStop(pnlPct: number, previousVerdict: PreviousVerdict): RuleHit | null {
-  for (const rung of STOP_RUNGS) {
+function evalStop(
+  pnlPct: number,
+  previousVerdict: PreviousVerdict,
+  rungs: ReadonlyArray<ExitRung> = STOP_RUNGS,
+): RuleHit | null {
+  for (const rung of rungs) {
     const freshArm = pnlPct <= rung.arm;
     const heldArmed = wasArmed(previousVerdict, "stop", rung.label) && pnlPct <= rung.disarm;
     if (freshArm || heldArmed) {
@@ -153,8 +159,12 @@ function evalTerm(frontIv: number, backIv: number, previousVerdict: PreviousVerd
   };
 }
 
-function evalTake(pnlPct: number, previousVerdict: PreviousVerdict): RuleHit | null {
-  for (const rung of TAKE_RUNGS) {
+function evalTake(
+  pnlPct: number,
+  previousVerdict: PreviousVerdict,
+  rungs: ReadonlyArray<ExitRung> = TAKE_RUNGS,
+): RuleHit | null {
+  for (const rung of rungs) {
     const freshArm = pnlPct >= rung.arm;
     const heldArmed = wasArmed(previousVerdict, "take", rung.label) && pnlPct >= rung.disarm;
     if (freshArm || heldArmed) {
@@ -223,6 +233,7 @@ export function evaluateExit(
   position: HeldPosition,
   context: MarketContext,
   previousVerdict: PreviousVerdict,
+  config: ExitRuleConfig = resolveExitRuleConfig(),
 ): ExitVerdict {
   // P&L basis (EXIT-02): derived ONLY from the passed ledger fields, never recomputed elsewhere.
   // CR-01: a NULL/zero openNetDebit resolves the ratio to ±Infinity/NaN. Left raw it would (a)
@@ -256,7 +267,7 @@ export function evaluateExit(
   for (const ruleId of EXIT_PRECEDENCE) {
     switch (ruleId) {
       case "stop":
-        hit = evalStop(pnlPct, previousVerdict);
+        hit = evalStop(pnlPct, previousVerdict, config.stopRungs);
         break;
       case "evt":
         hit = evtHit;
@@ -268,7 +279,7 @@ export function evaluateExit(
         hit = evalTerm(context.frontIv, context.backIv, previousVerdict);
         break;
       case "take":
-        hit = evalTake(pnlPct, previousVerdict);
+        hit = evalTake(pnlPct, previousVerdict, config.takeRungs);
         break;
       case "roll":
         hit = evalRoll(position, context, context.dteFront, pnlPct);

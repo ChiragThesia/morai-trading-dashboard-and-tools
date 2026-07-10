@@ -15,6 +15,7 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { evaluateExit } from "./evaluate-exit.ts";
+import { resolveExitRuleConfig } from "./rule-config.ts";
 import { haircutFill } from "../../picker/domain/candidate-selection.ts";
 import {
   TAKE_RUNGS,
@@ -624,5 +625,49 @@ describe("evaluateExit — spot=0 gap row is indicative (WR-01)", () => {
     const result = evaluateExit(position, context, null);
     expect(result.indicative).toBe(true);
     expect(result.escalate).toBe(false);
+  });
+});
+
+// ─── Optional config arg (Phase 29-05) ───────────────────────────────────────
+
+describe("evaluateExit — optional config arg (Phase 29-05)", () => {
+  const cohortNow = new Date("2026-07-20T15:00:00.000Z");
+
+  it("omitting config vs explicitly passing resolveExitRuleConfig() is byte-identical", () => {
+    const position = makePosition({ openNetDebit: 4000 });
+    const context = makeContext({ cohortNow, snapshotTime: cohortNow, netMark: 4400, spot: position.strike, dteFront: 30 });
+    const withoutConfig = evaluateExit(position, context, null);
+    const withDefaultConfig = evaluateExit(position, context, null, resolveExitRuleConfig());
+    expect(withDefaultConfig).toEqual(withoutConfig);
+  });
+
+  it("overridden +5% take arm fires at +3% P&L where the default rungs would not", () => {
+    const position = makePosition({ openNetDebit: 4000 });
+    const context = makeContext({ cohortNow, snapshotTime: cohortNow, netMark: 4120, spot: position.strike, dteFront: 30 }); // +3%
+    const defaultResult = evaluateExit(position, context, null);
+    expect(defaultResult.ruleId).not.toBe("take");
+
+    const overridden = evaluateExit(position, context, null, resolveExitRuleConfig({ take: { plus5Arm: 0.03 } }));
+    expect(overridden.verdict).toBe("TAKE");
+    expect(overridden.rung).toBe("+5%");
+  });
+
+  it("hysteresis hold-armed still honored with an overridden STOP rung", () => {
+    const position = makePosition({ openNetDebit: 4000 });
+    const config = resolveExitRuleConfig({ stop: { minus25Arm: -0.3, minus25Disarm: -0.28 } });
+
+    const armContext = makeContext({ cohortNow, snapshotTime: cohortNow, netMark: 2800, spot: position.strike, dteFront: 30 }); // -30%
+    const armResult = evaluateExit(position, armContext, null, config);
+    expect(armResult.verdict).toBe("STOP");
+    expect(armResult.rung).toBe("-25%");
+
+    const previous = toPreviousVerdict(armResult);
+    const hoverContext = makeContext({ cohortNow, snapshotTime: cohortNow, netMark: 2840, spot: position.strike, dteFront: 30 }); // -29%, inside [arm,disarm]
+    const hoverResult = evaluateExit(position, hoverContext, previous, config);
+    expect(hoverResult.rung).toBe("-25%");
+
+    const disarmedContext = makeContext({ cohortNow, snapshotTime: cohortNow, netMark: 2920, spot: position.strike, dteFront: 30 }); // -27%, past overridden disarm
+    const disarmedResult = evaluateExit(position, disarmedContext, toPreviousVerdict(hoverResult), config);
+    expect(disarmedResult.rung).not.toBe("-25%");
   });
 });
