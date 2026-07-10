@@ -468,6 +468,79 @@ describe("selectCandidates — effectiveDeltaMin (28-04, PLAY-05 wiring)", () =>
 // post-filtered to candidates whose back leg owns an event the front leg does not.
 // ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// deltaMax / frontDteMin / frontDteMax (29-03 runtime override seams) — mirror the
+// effectiveDeltaMin/backDteMinGap/backDteMaxGap idiom above; omission MUST reproduce
+// today's universe byte-identically (BT-02 leakage-oracle correctness).
+// ─────────────────────────────────────────────────────────────
+
+describe("selectCandidates — deltaMax / frontDteMin / frontDteMax (29-03 runtime override seams)", () => {
+  function denseChain(): ChainQuoteForPicker[] {
+    const iv = 0.15;
+    const strikes = [7550, 7525, 7500, 7475, 7450, 7425, 7400, 7375, 7350, 7325, 7300, 7275, 7250];
+    const chain: ChainQuoteForPicker[] = [];
+    for (const expiration of ["2026-07-31", "2026-08-26"]) {
+      for (const strike of strikes) {
+        chain.push(chainQuote(strike, expiration, iv));
+      }
+    }
+    return chain;
+  }
+
+  function frontWindowChain(): ChainQuoteForPicker[] {
+    const iv = 0.15;
+    const strikes = [7500, 7475, 7450, 7425, 7400];
+    const chain: ChainQuoteForPicker[] = [];
+    // today = 2026-07-01 -> dte 20 / 30 / 40 / 66.
+    for (const expiration of ["2026-07-21", "2026-07-31", "2026-08-10", "2026-09-05"]) {
+      for (const strike of strikes) {
+        chain.push(chainQuote(strike, expiration, iv));
+      }
+    }
+    return chain;
+  }
+
+  it("omitting deltaMax/frontDteMin/frontDteMax reproduces the pre-change universe byte-identically", () => {
+    const withDefault = selectCandidates(denseChain(), [], { r: R, q: Q });
+    const withExplicitDefaults = selectCandidates(denseChain(), [], {
+      r: R,
+      q: Q,
+      deltaMax: DELTA_BAND_MAX,
+      frontDteMin: FRONT_DTE_MIN,
+      frontDteMax: FRONT_DTE_MAX,
+    });
+    expect(withExplicitDefaults.candidates).toEqual(withDefault.candidates);
+  });
+
+  it("a narrower deltaMax excludes shallow (far-OTM) strikes past the new edge", () => {
+    const full = selectCandidates(denseChain(), [], { r: R, q: Q });
+    const narrowed = selectCandidates(denseChain(), [], { r: R, q: Q, deltaMax: -0.35 });
+    expect(narrowed.candidates.length).toBeLessThan(full.candidates.length);
+    for (const c of narrowed.candidates) {
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      expect(d).toBeLessThanOrEqual(-0.35 + 1e-9);
+    }
+  });
+
+  it("frontDteMin/frontDteMax shift the front-DTE window", () => {
+    const chain = frontWindowChain();
+    const withDefault = selectCandidates(chain, [], { r: R, q: Q });
+    expect(withDefault.candidates.length).toBeGreaterThan(0);
+    expect(withDefault.candidates.every((c) => c.frontLeg.expiration === "2026-07-31")).toBe(true);
+
+    const shifted = selectCandidates(chain, [], { r: R, q: Q, frontDteMin: 15, frontDteMax: 25 });
+    expect(shifted.candidates.length).toBeGreaterThan(0);
+    expect(shifted.candidates.every((c) => c.frontLeg.expiration === "2026-07-21")).toBe(true);
+  });
+
+  it("effectiveDeltaMin above the overridden deltaMax clamps to deltaMax, not the wider DELTA_BAND_MAX", () => {
+    const chain = denseChain();
+    const clampedAbove = selectCandidates(chain, [], { r: R, q: Q, deltaMax: -0.4, effectiveDeltaMin: -0.35 });
+    const explicitAtMax = selectCandidates(chain, [], { r: R, q: Q, deltaMax: -0.4, effectiveDeltaMin: -0.4 });
+    expect(clampedAbove.candidates).toEqual(explicitAtMax.candidates);
+  });
+});
+
 describe("selectEventCandidates (28-05, PLAY-04 event-calendar bucket)", () => {
   function chainWithGaps(): ChainQuoteForPicker[] {
     const iv = 0.15;

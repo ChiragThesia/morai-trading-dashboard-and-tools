@@ -193,6 +193,19 @@ export type SelectCandidatesParams = {
    */
   readonly backDteMinGap?: number;
   readonly backDteMaxGap?: number;
+  /**
+   * Optional far-OTM (max) band edge override (29-03 runtime rule settings). Defaults to
+   * `DELTA_BAND_MAX` when omitted, reproducing today's live universe byte-identically. The
+   * `effectiveDeltaMin` clamp below is bounded by this effective max, never past it.
+   */
+  readonly deltaMax?: number;
+  /**
+   * Optional front-leg DTE window override (29-03 runtime rule settings). Both default to
+   * `FRONT_DTE_MIN`/`FRONT_DTE_MAX` when omitted, reproducing today's live universe
+   * byte-identically.
+   */
+  readonly frontDteMin?: number;
+  readonly frontDteMax?: number;
 };
 
 /** Per-gate drop counts — logged by the use-case so gating is never a silent cap. */
@@ -233,12 +246,15 @@ export function selectCandidates(
   }
 
   const { r, q } = params;
+  const deltaMax = params.deltaMax ?? DELTA_BAND_MAX;
   const deltaMin = Math.min(
     Math.max(params.effectiveDeltaMin ?? DELTA_BAND_MIN, DELTA_BAND_MIN),
-    DELTA_BAND_MAX,
+    deltaMax,
   );
   const gapMin = params.backDteMinGap ?? BACK_DTE_MIN_GAP;
   const gapMax = params.backDteMaxGap ?? BACK_DTE_MAX_GAP;
+  const frontDteMin = params.frontDteMin ?? FRONT_DTE_MIN;
+  const frontDteMax = params.frontDteMax ?? FRONT_DTE_MAX;
 
   // Cohort spot: average underlyingPrice across the whole cohort (GEX precedent).
   const spot = chain.reduce((sum, quote) => sum + quote.underlyingPrice, 0) / chain.length;
@@ -294,7 +310,7 @@ export function selectCandidates(
 
   for (const fe of expiries) {
     const tf = daysBetween(asOfIso, fe);
-    if (tf < FRONT_DTE_MIN || tf > FRONT_DTE_MAX) continue;
+    if (tf < frontDteMin || tf > frontDteMax) continue;
 
     const frontQuotesRaw = byExpiry.get(fe);
     assertDefined(frontQuotesRaw, "selectCandidates: frontQuotesRaw (fe came from byExpiry.keys())");
@@ -317,7 +333,7 @@ export function selectCandidates(
     // Band membership (NOT nearest-target): every strike whose front delta is in the band.
     for (const frontQuote of frontQuotesRaw) {
       const delta = bsmGreeks(spot, frontQuote.strike, tf / 365, frontQuote.iv, r, q, "P").delta;
-      if (delta < deltaMin || delta > DELTA_BAND_MAX) continue;
+      if (delta < deltaMin || delta > deltaMax) continue;
       const K = frontQuote.strike;
       const ivF = frontQuote.iv;
 
