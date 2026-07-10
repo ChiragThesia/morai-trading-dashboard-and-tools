@@ -389,12 +389,12 @@ re-evaluating open-position exit verdicts, and client-side re-banding regime val
 sees what each change will do before committing. Knob semantics unchanged; preview never persists.
 **Requirements**: none (user-added phase; covered by 32-CONTEXT locked decisions B1–B9)
 **Depends on:** Phase 31
-**Plans:** 6 plans
+**Plans:** 1/6 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 32-01-PLAN.md — Contracts: explainer registry (schema-derived completeness) + preview request/response schema
+- [x] 32-01-PLAN.md — Contracts: explainer registry (schema-derived completeness) + preview request/response schema
 - [ ] 32-02-PLAN.md — Picker preview use-case (score/gate/sizing re-resolve + universe honest-note, byte-parity)
 - [ ] 32-03-PLAN.md — Exit preview use-case (live evaluateExit current-vs-staged, structural no-persist)
 

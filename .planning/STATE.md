@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 32
-current_phase_name: what it gates/scores, unit, direction of effect
-status: verifying
-stopped_at: Completed 31-02-PLAN.md
-last_updated: "2026-07-10T19:02:56.897Z"
+current_phase_name: Rule Settings modal v2 — explain what you touch
+status: in-progress
+stopped_at: Completed 32-01-PLAN.md
+last_updated: "2026-07-10T19:17:00.909Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 31 complete, transitioned to Phase 32
+last_activity_desc: Phase 32 Plan 01 complete
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 54
-  completed_plans: 48
-  percent: 89
+  completed_plans: 49
+  percent: 91
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 32 — Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-07-10 — Phase 31 complete, transitioned to Phase 32
+Plan: 32-01 complete (of 6) — contract-package foundations: RULE_EXPLAINERS registry + preview request/response schema
+Status: In progress — 32-02..32-06 remaining
+Last activity: 2026-07-10 — Phase 32 Plan 01 complete
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -297,6 +297,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 30 P06 | ~30min | 3 tasks | 8 files |
 | Phase 31 P01 | ~20min | 2 tasks tasks | 3 files files |
 | Phase 31 P02 | 6m | 2 tasks | 8 files |
+| Phase 32 P01 | 1min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -445,6 +446,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 31-01: PinnedMarker reworked from {x,label,anchorEnd} to {x,clampedTo} -- fixed-lane single-glyph edge arrows (EDGE_ARROW_LANE_Y) replace in-chart wall/flip text labels entirely (KISS collision fix, DEFECT-1)
 - [Phase ?]: 31-02: bandWarn/bandCrisis required (not optional) on regimeIndicator — fail-loud on a stale response
 - [Phase ?]: 31-02: gauge marker color reads server-computed indicator.band verbatim, never recomputed client-side
+- [Phase ?]: Explainer registry keyed by ruleConfig's real 43 dotted leaf paths; completeness enforced by a recursive schema walk, never a hand-copied path array
 
 ### Pending Todos
 
@@ -501,7 +503,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T18:40:25.264Z
+Last session: 2026-07-10T19:16:20.434Z
 Stopped at: Completed 31-02-PLAN.md
 Resume file: 
 
