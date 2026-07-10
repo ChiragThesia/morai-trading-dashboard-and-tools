@@ -9,7 +9,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 |---|---|---|---|---|
 | D1 | Runtime + pkg mgr | Bun | Low | Bun-specific blocker in a critical lib |
 | D2 | Backend HTTP | Hono + Zod | Low (inbound adapter) | Need for websockets at scale beyond Hono support |
-| D3 | Frontend + charting | React + Vite + TS + Tailwind v4 + shadcn/ui · visx + uPlot + ECharts for charts (see D3 section) | Medium | — |
+| D3 | Frontend + charting | React + Vite + TS + Tailwind v4 + shadcn/ui · Recharts (4 charts, Phase 33) + visx + uPlot + ECharts for the rest (see D3 section) | Medium | — |
 | D4 | Data fetching (web) | TanStack Query + Hono RPC client | Low | — |
 | D5 | Database | Postgres 16 (hosted on **Supabase**) | Low (outbound adapter) | — |
 | D6 | ORM / DAO | Drizzle | Low | — |
@@ -53,18 +53,27 @@ application use-cases, serialize results. **No business logic in routes — ever
 **Why**: Team familiarity, prior art from old dashboard, shadcn gives composable primitives we own
 (copy-in, not dependency).
 
-**Charting libraries (locked by D-05 + UI-SPEC, Phase 9):** Three libraries cover five distinct chart
-types. Recharts was the initial placeholder. The UI-SPEC locked these three after mockup iteration
-(see `mockups/playground-v3.html`). Recharts cannot handle synced greek-strip small-multiples or
-gradient-fill payoff z-order — both are hard requirements for the trading dashboard.
+**Charting libraries — Recharts adopted for 4 charts (Phase 33, 2026-07-10), visx/uPlot/ECharts
+retained for the rest.** Phase 9's UI-SPEC originally locked visx/uPlot/ECharts and recorded
+Recharts as superseded. Hand-rolled SVG charts kept producing the same bug class (overflow/bleed
+outside the plot area, marker pile-up, fixed-domain clipping — each fix a hand-clamp). User
+directive (Phase 33 CONTEXT.md) overrides the Phase 9 decision: adopt Recharts, wired through
+shadcn chart primitives (`ChartContainer`/`ChartTooltipContent`/CSS-variable theming), for its
+native clipping, responsive containers, and built-in tooltips — killing the bug class structurally
+instead of patching it.
 
 | Library | Package(s) | Chart types |
 |---|---|---|
-| **visx** | `@visx/shape`, `@visx/gradient`, `@visx/event`, `@visx/scale`, `@visx/axis`, `@visx/group`, `@visx/tooltip` | Payoff chart, net-gamma profile, equity curve, term/skew minis — SVG with crosshair |
-| **uPlot** | `uplot`, `uplot-react` | Greek strips (Δ/Γ/Θ/Vega) — 4-panel synced small multiples, high-performance canvas |
-| **Apache ECharts** | `echarts`, `echarts-for-react` | GEX by-strike bars, P&L heatmap, GEX-by-expiry bars |
+| **Recharts** | `recharts`, shadcn `ui/chart.tsx` | PayoffChart, TermStructureChart, GammaProfile, GexBars (in-scope Phase 33 charts) |
+| **visx** | `@visx/shape`, `@visx/gradient`, `@visx/event`, `@visx/scale`, `@visx/axis`, `@visx/group`, `@visx/tooltip` | LifecycleChart (greek-strip sync), EquityCurve, MiniLine — retained, out of Phase 33 scope |
+| **uPlot** | `uplot`, `uplot-react` | Greek strips (Δ/Γ/Θ/Vega) — 4-panel synced small multiples, high-performance canvas — retained |
+| **Apache ECharts** | `echarts`, `echarts-for-react` | GexByExpiry — retained; GexBars migrates OFF echarts onto Recharts in Phase 33 |
 
-**Recharts**: superseded. Not used. The locked UI-SPEC (D-05) records the swap reason.
+**Swap cost**: Low for the 4 Phase-33 charts (presentation-only swap, data layer untouched). See
+Phase 33 CONTEXT.md and RESEARCH.md for the full pitfall/pattern catalog (jsdom `ResponsiveContainer`
+sizing, numeric-axis domain/overflow, JSX-order z-control).
+**Revisit trigger**: LifecycleChart/EquityCurve/MiniLine/GexByExpiry migrate to Recharts only if a
+later phase proves the pattern extends cleanly — never at cost to the 4 in-scope charts.
 
 ## D4 — TanStack Query + Hono RPC client
 
