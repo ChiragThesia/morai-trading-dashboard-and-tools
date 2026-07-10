@@ -13,7 +13,7 @@ export {
   bandVix9dRatio,
   bandHyOas,
 } from "./domain/regime.ts";
-export type { RegimeBand } from "./domain/regime.ts";
+export type { RegimeBand, RegimeThresholds } from "./domain/regime.ts";
 
 // Use-cases (06-04: term-structure half of compute-analytics + the read forwarder)
 export { makeComputeAnalyticsUseCase } from "./application/computeAnalytics.ts";

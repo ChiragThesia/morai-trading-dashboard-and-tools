@@ -586,3 +586,13 @@ export { resolveExitRuleConfig } from "./exits/index.ts";
 export type { ExitRuleConfig, ExitRuleOverrides } from "./exits/index.ts";
 export { resolveRegimeRuleConfig } from "./analytics/index.ts";
 export type { RegimeRuleConfig, RegimeRuleOverrides } from "./analytics/index.ts";
+
+// 32-06: regime band classifiers, re-exported so the web modal's client-side preview re-band
+// imports the ACTUAL core functions (no hand-copy) — parity by construction (T-32-12).
+export {
+  bandVixTermStructure,
+  bandVvix,
+  bandVix9dRatio,
+  bandHyOas,
+} from "./analytics/index.ts";
+export type { RegimeBand, RegimeThresholds } from "./analytics/index.ts";
