@@ -5,15 +5,15 @@ milestone_name: Picker Intelligence
 current_phase: 30
 current_phase_name: Analyzer pasted-calendar fix
 status: executing
-stopped_at: Phase 29 executed — 14/14 plans, verifier 9/9 must-haves (human_needed), code review 2C/2W all fixed, UAT 1/2 passed (item 2 needs prod deploy + one RTH compute-picker cycle)
-last_updated: "2026-07-10T13:55:17.880Z"
+stopped_at: Completed 30-03-PLAN.md
+last_updated: "2026-07-10T14:02:32.316Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 30 execution started
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 46
-  completed_plans: 41
+  completed_plans: 42
   percent: 70
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 30 (Analyzer pasted-calendar fix) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-07-10 — Phase 30 execution started
 
@@ -286,6 +286,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 29 P13 | 35min | 3 tasks | 9 files |
 | Phase 29 P14 | ~20min | 2 tasks | 5 files |
 | Phase 30 P01 | 15min | 3 tasks | 8 files |
+| Phase 30 P03 | 8min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -419,6 +420,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 30-01: repriceScenario's domain param defaults to the old SPOT_GRID_MIN/MAX constants so every existing caller needs zero changes
 - [Phase ?]: 30-01: findZeroCrossings moved (not duplicated) from PayoffChart.tsx into scenario-engine.ts as a shared export for payoff-domain.ts's wide-pass
 - [Phase ?]: 30-01: Analyzer.tsx/Overview.tsx PayoffChart call sites pass a literal {min:6900,max:7900} placeholder domain (ponytail-flagged) since domain became required in this plan but real computePayoffDomain screen-wiring is deferred to 30-02
+- [Phase 30-03]: analyzeAdHocCalendarRequest omits spot entirely and is .strict() so a client-supplied spot key is rejected (T-30-06 threat mitigation)
+- [Phase 30-03]: resolveEventExit extracted verbatim (same day-number math, same earliest-event selection) into an exported pure function; selectCandidates calls it with zero behavior change
+- [Phase 30-03]: barrel-exported both new contract schemas through packages/contracts/src/index.ts (plumbing not itemized in files_modified) so 30-04/30-05 can import them from @morai/contracts
 
 ### Pending Todos
 
@@ -475,8 +479,8 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T13:54:32.783Z
-Stopped at: Completed 29-14-PLAN.md
+Last session: 2026-07-10T14:02:32.303Z
+Stopped at: Completed 30-03-PLAN.md
 Resume file: 
 
 None

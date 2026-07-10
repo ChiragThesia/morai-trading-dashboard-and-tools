@@ -347,13 +347,13 @@ Plans:
 **Goal:** Analyzer pasted calendars fit the payoff graph to their full tent (both tails + both breakevens, no fixed 6900–7900) and receive real engine scoring — score + factor bars + θ GATE chip + entry-gate verdict + exit plan — identical to engine-suggested candidates; PUT calendars this phase, calls + context-unavailable pastes keep the honest unscored fallback.
 **Requirements**: user-added defect-fix phase (no REQ IDs) — D-01 (payoff x-domain fit), D-02 (ad-hoc engine scoring)
 **Depends on:** Phase 29
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 30-01-PLAN.md — Domain-fit primitives: computePayoffDomain + domain-aware scenario grid + PayoffChart domain prop (D-01)
-- [ ] 30-03-PLAN.md — Analyze request/response contracts + extracted resolveEventExit helper (D-02)
+- [x] 30-03-PLAN.md — Analyze request/response contracts + extracted resolveEventExit helper (D-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
