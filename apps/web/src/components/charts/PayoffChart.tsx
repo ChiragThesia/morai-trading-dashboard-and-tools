@@ -57,6 +57,12 @@ export interface PayoffChartProps {
   rollCurve: ReadonlyArray<PayoffPoint> | null;
   /** GEX walls for reference lines */
   gex: PayoffChartGex | null;
+  /**
+   * X-domain the x-scale, ticks, GEX wall pinning, and crosshair hover all derive from
+   * (D-01, Phase 30). Replaces the old hardcoded 6900/7900 module constants — callers
+   * compute this via `computePayoffDomain` (payoff-domain.ts).
+   */
+  domain: { readonly min: number; readonly max: number };
   /** Current live spot price (blue vertical + dot) */
   spot: number;
   /** Toggle visibility flags */
@@ -124,9 +130,6 @@ const PAD = { left: 56, right: 14, top: 14, bottom: 24 };
 const INNER_W = SVG_W - PAD.left - PAD.right;
 const INNER_H = SVG_H - PAD.top - PAD.bottom;
 
-const X_MIN = 6900;
-const X_MAX = 7900;
-
 const VIOLET = "#a78bfa";
 const TEAL = "#26a69a";
 const CORAL = "#ef5350";
@@ -141,8 +144,8 @@ const FAN_COLORS = ["#7c6fd6", "#6f86c9", "#5f93b8"] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function buildXScale(innerWidth: number) {
-  return scaleLinear({ domain: [X_MIN, X_MAX], range: [0, innerWidth] });
+function buildXScale(innerWidth: number, domain: { readonly min: number; readonly max: number }) {
+  return scaleLinear({ domain: [domain.min, domain.max], range: [0, innerWidth] });
 }
 
 type PinnedMarker = {
@@ -153,7 +156,7 @@ type PinnedMarker = {
 
 /**
  * Edge-pin a GEX wall/flip marker into the x-domain. The chart SVG overflows
- * visibly, so an out-of-domain level (e.g. call wall 8000 with X_MAX 7900)
+ * visibly, so an out-of-domain level (e.g. a call wall above domain.max)
  * would otherwise draw PAST the plot into neighboring layout. Pinned markers
  * clamp to the domain edge and carry the true level + arrow in the label.
  */
@@ -161,12 +164,13 @@ function pinMarker(
   name: string,
   value: number,
   xScale: (v: number) => number,
+  domain: { readonly min: number; readonly max: number },
 ): PinnedMarker {
-  if (value > X_MAX) {
-    return { x: xScale(X_MAX), label: `${name} ${value.toFixed(0)} →`, anchorEnd: true };
+  if (value > domain.max) {
+    return { x: xScale(domain.max), label: `${name} ${value.toFixed(0)} →`, anchorEnd: true };
   }
-  if (value < X_MIN) {
-    return { x: xScale(X_MIN), label: `← ${name} ${value.toFixed(0)}`, anchorEnd: false };
+  if (value < domain.min) {
+    return { x: xScale(domain.min), label: `← ${name} ${value.toFixed(0)}`, anchorEnd: false };
   }
   return { x: xScale(value), label: name, anchorEnd: false };
 }
@@ -210,7 +214,7 @@ function computeYDomain(
 /**
  * Derive evenly-spaced round-number x-axis ticks from the live domain
  * (OVW-04) — replaces a hardcoded literal tick array that can drift out of
- * sync with X_MIN/X_MAX.
+ * sync with the chart's domain prop (D-01, Phase 30).
  */
 function buildXTicks(min: number, max: number, targetCount = 5): ReadonlyArray<number> {
   const rawStep = (max - min) / targetCount;
@@ -243,6 +247,7 @@ export function PayoffChart({
   expirationCurve,
   rollCurve,
   gex,
+  domain,
   spot,
   toggles,
   fitY,
@@ -297,7 +302,7 @@ export function PayoffChart({
     }
   }, [fitY, todayCurve, baseExpirationCurve, onFitYConsumed]);
 
-  const xScale = useMemo(() => buildXScale(INNER_W), []);
+  const xScale = useMemo(() => buildXScale(INNER_W, domain), [domain]);
   const yScale = useMemo(() => buildYScale(yDomain.lo, yDomain.hi, INNER_H), [yDomain]);
 
   const getX = useCallback((p: PayoffPoint) => xScale(p.spot), [xScale]);
@@ -352,7 +357,9 @@ export function PayoffChart({
         return;
       }
 
-      const hoveredSpot = X_MIN + (innerX / INNER_W) * (X_MAX - X_MIN);
+      // Invert through the SAME xScale used to plot the curves — one source of truth
+      // for the domain↔pixel mapping (D-01, Pitfall 2), not a re-derived interpolation.
+      const hoveredSpot = xScale.invert(innerX);
       const nearest = todayCurve.reduce<PayoffPoint | null>((best, p) => {
         if (best === null) return p;
         return Math.abs(p.spot - hoveredSpot) < Math.abs(best.spot - hoveredSpot) ? p : best;
@@ -361,7 +368,7 @@ export function PayoffChart({
 
       setCrosshair({ x: logicalX, spot: hoveredSpot, pl, renderedWidth: svgRect.width });
     },
-    [todayCurve],
+    [todayCurve, xScale],
   );
 
   const handlePointerLeave = useCallback(() => setCrosshair(null), []);
@@ -376,9 +383,9 @@ export function PayoffChart({
     return lines;
   }, [yDomain, yScale]);
 
-  // X-axis ticks: derived round numbers from the live domain (OVW-04) —
-  // replaces a hardcoded literal array that could drift from X_MIN/X_MAX.
-  const xTicks = useMemo(() => buildXTicks(X_MIN, X_MAX), []);
+  // X-axis ticks: derived round numbers from the live domain prop (OVW-04, D-01) —
+  // replaces a hardcoded literal array that could drift from the chart's own scale.
+  const xTicks = useMemo(() => buildXTicks(domain.min, domain.max), [domain]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100%", flex: 1, minHeight: 300 }}>
@@ -684,7 +691,7 @@ export function PayoffChart({
                 ] as const
               ).map(({ key, name, value, color }) => {
                 if (value === null) return null;
-                const marker = pinMarker(name, value, xScale);
+                const marker = pinMarker(name, value, xScale, domain);
                 return (
                   <g key={`wall-${key}`}>
                     <line

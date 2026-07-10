@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 import { PayoffChart, computeYDomain, buildXTicks, buildXScale, INNER_W } from "./PayoffChart.tsx";
 import type { PayoffChartToggles, PayoffChartProps } from "./PayoffChart.tsx";
@@ -57,6 +57,9 @@ function getGridLabels(container: HTMLElement): string[] {
   );
 }
 
+/** Matches the curve fixtures above (6900-7900) — every existing test keeps exercising the real path (Pitfall 3). */
+const DOMAIN = { min: 6900, max: 7900 };
+
 function baseProps(): PayoffChartProps {
   return {
     todayCurve: TODAY_CURVE,
@@ -64,6 +67,7 @@ function baseProps(): PayoffChartProps {
     expirationCurve: EXP_CURVE,
     rollCurve: null,
     gex: null,
+    domain: DOMAIN,
     spot: 7381,
     toggles: TOGGLES,
     fitY: false,
@@ -234,7 +238,7 @@ describe("PayoffChart — expectedMoveBand (ANLZ-02)", () => {
       <PayoffChart {...baseProps()} expectedMoveBand={EM_BAND} />,
     );
 
-    const xScale = buildXScale(INNER_W);
+    const xScale = buildXScale(INNER_W, DOMAIN);
     const expectedLowerX = xScale(EM_BAND.spot - EM_BAND.em);
     const expectedUpperX = xScale(EM_BAND.spot + EM_BAND.em);
 
@@ -522,7 +526,7 @@ describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not blee
   });
 
   const WALL_TOGGLES: PayoffChartToggles = { ...TOGGLES, showWalls: true };
-  const xScale = buildXScale(INNER_W);
+  const xScale = buildXScale(INNER_W, DOMAIN);
 
   it("pins an out-of-domain call wall (8000 > X_MAX) to the right edge with an arrow label", () => {
     const { container } = render(
@@ -574,5 +578,53 @@ describe("PayoffChart — GEX wall edge-pin (out-of-domain markers must not blee
     const put = container.querySelector('[data-testid="wall-line-put"]');
     expect(Number(call?.getAttribute("x1"))).toBeCloseTo(xScale(7600), 5);
     expect(Number(put?.getAttribute("x1"))).toBeCloseTo(xScale(7400), 5);
+  });
+});
+
+describe("PayoffChart — crosshair inverts through the domain xScale (D-01, Phase 30)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  // jsdom doesn't lay out SVG, so stub getBoundingClientRect/clientLeft/clientTop the way a
+  // real browser would post-layout (same technique as LifecycleChart.test.tsx's svgOf/firePointerMove).
+  function svgOf(container: HTMLElement): SVGSVGElement {
+    const svg = container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    if (svg === null) throw new Error("unreachable");
+    const rect: DOMRect = {
+      x: 0,
+      y: 0,
+      width: 1000, // SVG_W — 1:1 logical/rendered pixel mapping
+      height: 470,
+      top: 0,
+      left: 0,
+      right: 1000,
+      bottom: 470,
+      toJSON: () => "",
+    };
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue(rect);
+    Object.defineProperty(svg, "clientLeft", { value: 0, configurable: true });
+    Object.defineProperty(svg, "clientTop", { value: 0, configurable: true });
+    return svg;
+  }
+
+  function firePointerMove(svg: SVGSVGElement, clientX: number, clientY: number): void {
+    fireEvent(svg, new MouseEvent("pointermove", { clientX, clientY, bubbles: true }));
+  }
+
+  it("reports a hover at the right plot edge as ≈ domain.max, not the old hardcoded 7900", () => {
+    const narrowDomain = { min: 7100, max: 7600 };
+    const { container } = render(<PayoffChart {...baseProps()} domain={narrowDomain} />);
+    const svg = svgOf(container);
+
+    // PAD.left=56, INNER_W=930 (SVG_W 1000 - PAD.left 56 - PAD.right 14) — clientX at the
+    // right plot edge is PAD.left + INNER_W.
+    firePointerMove(svg, 56 + INNER_W, 100);
+
+    const tooltip = screen.getByTestId("payoff-tooltip");
+    const spans = tooltip.querySelectorAll("span");
+    expect(spans[0]?.textContent).toBe("SPX");
+    expect(Number(spans[1]?.textContent)).toBe(narrowDomain.max);
   });
 });

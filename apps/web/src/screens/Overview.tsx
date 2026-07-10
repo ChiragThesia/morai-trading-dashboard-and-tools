@@ -1141,6 +1141,9 @@ export function Overview(): React.ReactElement {
               expirationCurve={scenario.expirationCurve}
               rollCurve={null}
               gex={gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null}
+              // ponytail: literal placeholder matches the old hardcoded grid; real
+              // computePayoffDomain wiring lands in 30-02 (this plan ships primitives only).
+              domain={{ min: 6900, max: 7900 }}
               spot={spot}
               toggles={toggles}
               fitY={false}
