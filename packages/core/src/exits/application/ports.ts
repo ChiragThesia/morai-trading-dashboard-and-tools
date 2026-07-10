@@ -10,7 +10,11 @@
 // anywhere in this repo; keep it that way here.
 
 import type { Result } from "@morai/shared";
-import type { ExitVerdict, HeldPosition, Tier1Event } from "../domain/types.ts";
+import type { ExitVerdict, ExitVerdictKind, ExitMetric, HeldPosition, Tier1Event } from "../domain/types.ts";
+import type { ExitRuleOverrides } from "../domain/rule-config.ts";
+// 32-03 (B2): cross-context read of the settings bounded context's own driven port, same
+// convention computeExitAdvice.ts's Deps type already established (29-11, RUNTIME-*).
+import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
 
 /** StorageError — driven-port failure for exits reads/writes (structurally mirrors journal's). */
 export type StorageError = {
@@ -145,3 +149,53 @@ export type ExitAdviceSnapshot = {
 
 /** ForRunningGetExitAdvice — the read use-case's driver port. ok(null) at cold start. */
 export type ForRunningGetExitAdvice = () => Promise<Result<ExitAdviceSnapshot | null, StorageError>>;
+
+// ─── Exit preview (Phase 32, Plan 03, B2) ──────────────────────────────────────
+
+/**
+ * ExitPreviewEntry — one open calendar's current-vs-staged verdict pair (mirrors contracts'
+ * `previewExitEntry` field-for-field). `current` carries no `metric` (matches the contract —
+ * only the staged side's metric is surfaced, since that's the value the UI diffs against).
+ */
+export type ExitPreviewEntry = {
+  readonly calendarId: string;
+  readonly current: {
+    readonly verdict: ExitVerdictKind;
+    readonly rung: string | null;
+    readonly ruleId: string;
+  };
+  readonly staged: {
+    readonly verdict: ExitVerdictKind;
+    readonly rung: string | null;
+    readonly ruleId: string;
+    readonly metric: ExitMetric;
+  };
+};
+
+/** ExitPreviewResult — the exits branch of the staged-change dry-run preview: one entry per
+ *  open calendar that has a snapshot this cohort (same safe-skip as computeExitAdvice.ts). */
+export type ExitPreviewResult = ReadonlyArray<ExitPreviewEntry>;
+
+/**
+ * ExitPreviewDeps — bounded-read deps mirroring PickerPreviewDeps's structural exclusion
+ * (T-32-02): NO `persistExitVerdict`, NO `readChainForRoll` (rung changes never affect a ROLL
+ * suggestion, and omitting the chain read keeps the preview bounded + read-only).
+ */
+export type ExitPreviewDeps = {
+  readonly readHeldPositions: ForReadingHeldPositions;
+  readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendar;
+  readonly readLatestVerdictsPerCalendar: ForReadingLatestVerdictsPerCalendar;
+  readonly readEconomicEvents: ForReadingEconomicEvents;
+  readonly readRuleOverrides: ForReadingRuleOverrides;
+  /** Clock injection — cohort observedAt + the evaluator's staleness gate. Never wall-clock inline. */
+  readonly now: () => Date;
+};
+
+/**
+ * ForPreviewingExitRuleOverrides — driver port for the exit preview use-case (32-03, B2).
+ * `staged` is the exits override group from the in-flight edit (or absent, which reproduces
+ * the stored effective config byte-identically — an ABSENT staged group makes staged===current).
+ */
+export type ForPreviewingExitRuleOverrides = (
+  staged?: ExitRuleOverrides,
+) => Promise<Result<ExitPreviewResult, StorageError>>;
