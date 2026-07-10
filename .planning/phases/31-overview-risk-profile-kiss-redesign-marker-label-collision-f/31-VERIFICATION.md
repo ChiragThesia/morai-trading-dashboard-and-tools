@@ -1,7 +1,7 @@
 ---
 phase: 31-overview-risk-profile-kiss-redesign-marker-label-collision-f
 verified: 2026-07-10T14:05:00Z
-status: human_needed
+status: passed
 score: 9/9 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -27,7 +27,7 @@ band segments + aria (post-review fixes f8932b0/2d91435), ENTRY GATE/rates/COT u
 deps.
 
 **Verified:** 2026-07-10T14:05:00Z
-**Status:** human_needed
+**Status:** passed — perceptual items verified live 2026-07-10 (see 31-UAT.md)
 **Re-verification:** No — initial verification
 
 ## Goal Achievement

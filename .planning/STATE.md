@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 31
-current_phase_name: Risk Profile KISS redesign + macro gauges
+current_phase: 32
+current_phase_name: what it gates/scores, unit, direction of effect
 status: verifying
 stopped_at: Completed 31-02-PLAN.md
-last_updated: "2026-07-10T18:40:25.277Z"
+last_updated: "2026-07-10T19:02:56.897Z"
 last_activity: 2026-07-10
-last_activity_desc: Completed 31-01-PLAN.md (Risk Profile marker collision fix)
+last_activity_desc: Phase 31 complete, transitioned to Phase 32
 progress:
   total_phases: 10
   completed_phases: 9
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 31 (Risk Profile KISS redesign + macro gauges) — EXECUTING
-Plan: 2 of 2
+Phase: 32 — Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-10 — Completed 31-01-PLAN.md (Risk Profile marker collision fix)
+Last activity: 2026-07-10 — Phase 31 complete, transitioned to Phase 32
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -166,6 +166,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 28 | 6 | - | - |
 | 29 | 14 | - | - |
 | 30 | 6 | - | - |
+| 31 | 2 | - | - |
 
 **Recent Trend:**
 
