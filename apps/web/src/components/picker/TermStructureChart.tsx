@@ -1,20 +1,34 @@
 /**
  * TermStructureChart — the picker's "Term structure + your legs" mini-chart (ANLZ-03, D-01b).
  *
- * Inline SVG (~310×150, fixture-fixed axis DTE 0-82 / IV 8%-15.5% — not auto-scaled, mirrors
- * `PayoffChart.tsx`'s hand-rolled-SVG precedent, UI-SPEC Registry Safety): the ATM-IV
- * term-structure polyline, amber dashed vertical event markers, front (coral) + back (teal) leg
- * dots, and a blue dashed forward-IV bracket between the two leg x-positions — **omitted** when
- * `candidate.fwdIv` is null (guard case, T-18-10) in favor of a small amber `guard` tag next to
- * the leg dots. No throw, no NaN, no fabricated bracket over an undefined forward IV.
+ * Recharts (~760×230, fixture-fixed axis DTE 0-82 / IV 8%-15.5% — not auto-scaled, mirrors
+ * `PayoffChart.tsx`'s fixed-domain precedent, UI-SPEC Registry Safety): the ATM-IV
+ * term-structure Line, amber dashed event ReferenceLines, front (coral) + back (teal) leg
+ * ReferenceDots, and a blue dashed forward-IV bracket (ReferenceLine `segment`) between the
+ * two leg x-positions — **omitted** when `candidate.fwdIv` is null (guard case, T-18-10) in
+ * favor of a small amber `guard` tag next to the leg dots. No throw, no NaN, no fabricated
+ * bracket over an undefined forward IV.
+ *
+ * Migrated off hand-rolled inline SVG to Recharts — Phase 33 (33-04).
  */
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ReferenceLine,
+  ReferenceDot,
+  useXAxisScale,
+  useYAxisScale,
+  usePlotArea,
+} from "recharts";
+import { ChartContainer } from "../ui/chart.tsx";
+import type { ChartConfig } from "../ui/chart.tsx";
 import type { PickerCandidate, PickerEvent, TermStructurePoint } from "@morai/contracts";
 
-// Native viewBox sized for the center-column panel; the container caps its width (below) so it
-// renders at ~these px instead of ballooning when stretched across the full column.
 const W = 760;
 const H = 230;
-const PAD = { left: 50, right: 22, top: 30, bottom: 40 };
 
 const DTE_MIN = 0;
 const DTE_MAX = 82;
@@ -28,24 +42,14 @@ const AMBER = "#f0b429";
 const GRID_LINE = "#222839";
 const TERM_LINE = "#9aa3b8";
 const AXIS_LABEL = "#67708a";
+const MONO = "JetBrains Mono, monospace";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-const GRID_TICKS: ReadonlyArray<{ readonly iv: number; readonly label: string }> = [
-  { iv: 0.09, label: "9" },
-  { iv: 0.12, label: "12" },
-  { iv: 0.15, label: "15" },
-];
-
+const IV_TICKS: ReadonlyArray<number> = [0.09, 0.12, 0.15];
 const X_TICKS: ReadonlyArray<number> = [0, 20, 40, 60, 80];
 
-export function xScale(dte: number): number {
-  return PAD.left + ((dte - DTE_MIN) / (DTE_MAX - DTE_MIN)) * (W - PAD.left - PAD.right);
-}
-
-export function yScale(iv: number): number {
-  return PAD.top + ((IV_MAX - iv) / (IV_MAX - IV_MIN)) * (H - PAD.top - PAD.bottom);
-}
+const chartConfig = { iv: { label: "ATM IV", color: TERM_LINE } } satisfies ChartConfig;
 
 /** Parse an ISO 8601 date (YYYY-MM-DD) into a UTC-midnight epoch-ms value. */
 function isoDateToUtcMs(iso: string): number {
@@ -62,8 +66,50 @@ function eventDte(iso: string, referenceMs: number): number {
   return Math.round((isoDateToUtcMs(iso) - referenceMs) / 86_400_000);
 }
 
-function buildTermLinePath(points: ReadonlyArray<TermStructurePoint>): string {
-  return points.map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.dte)} ${yScale(p.iv)}`).join("");
+interface GuardTagProps {
+  readonly frontDte: number;
+  readonly frontIv: number;
+  readonly backDte: number;
+  readonly backIv: number;
+}
+
+/**
+ * Guard tag (T-18-10 / WR-02): the fwdIv-null badge. No native Recharts primitive draws a
+ * rounded-rect background behind text at a pixel-space-clamped position, so this is the one
+ * genuinely non-standard mark on this chart (D-08) — it reads the chart's own axis scales via
+ * Recharts 3.x hooks instead of hand-rolling pixel math.
+ */
+function GuardTag({ frontDte, frontIv, backDte, backIv }: GuardTagProps): React.ReactElement | null {
+  const xScale = useXAxisScale();
+  const yScale = useYAxisScale();
+  const plotArea = usePlotArea();
+  if (xScale === undefined || yScale === undefined || plotArea === undefined) return null;
+  const frontX = xScale(frontDte);
+  const backX = xScale(backDte);
+  const frontY = yScale(frontIv);
+  const backY = yScale(backIv);
+  if (frontX === undefined || backX === undefined || frontY === undefined || backY === undefined) return null;
+  const midX = (frontX + backX) / 2;
+  // Clamp into the plot area so the tag never clips above the chart (WR-02): when the higher
+  // leg sits at IV_MAX, the raw `min(frontY, backY) - 22` goes above the plot top.
+  const tagY = Math.max(plotArea.y, Math.min(frontY, backY) - 22);
+  return (
+    <g data-testid="term-structure-guard-tag">
+      <rect
+        x={midX - 24}
+        y={tagY}
+        width={48}
+        height={17}
+        rx={3}
+        fill="rgba(240,180,41,0.14)"
+        stroke={AMBER}
+        strokeWidth={1}
+      />
+      <text x={midX} y={tagY + 12} fill={AMBER} fontSize={11} textAnchor="middle" fontFamily={MONO}>
+        guard
+      </text>
+    </g>
+  );
 }
 
 export interface TermStructureChartProps {
@@ -81,22 +127,15 @@ export function TermStructureChart({
   candidate,
 }: TermStructureChartProps): React.ReactElement {
   const referenceMs = isoDateToUtcMs(asOf);
-  const frontX = xScale(candidate.frontLeg.dte);
-  const backX = xScale(candidate.backLeg.dte);
-  const frontY = yScale(candidate.frontLeg.iv);
-  const backY = yScale(candidate.backLeg.iv);
   const fwdIv = candidate.fwdIv;
-  const bracketMidX = (frontX + backX) / 2;
-  // Clamp into the drawable band so the guard tag never clips above the SVG viewport
-  // (WR-02): when the higher leg dot sits near the top (front IV == IV_MAX), the raw
-  // `min(frontY, backY) - 18` goes negative and the default viewport clipping hides it.
-  const guardTagY = Math.max(PAD.top, Math.min(frontY, backY) - 22);
+  const frontDte = candidate.frontLeg.dte;
+  const backDte = candidate.backLeg.dte;
+  const frontIv = candidate.frontLeg.iv;
+  const backIv = candidate.backLeg.iv;
 
   // Dated event legend below the chart — each scheduled event with its calendar date, tagged by
   // which leg spans it (classified by DTE: front ≤ front expiry, back ≤ back expiry, else later).
   // Fixture data today; a live economic calendar arrives with the Phase-19 picker engine.
-  const frontDte = candidate.frontLeg.dte;
-  const backDte = candidate.backLeg.dte;
   const legendEvents = events
     .map((ev) => {
       const [, moStr, dayStr] = ev.date.split("-");
@@ -115,155 +154,101 @@ export function TermStructureChart({
 
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-1.5">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        style={{ width: "100%", display: "block" }}
-        role="img"
-        aria-label="Term structure and leg placement"
-      >
-        {/* Gridlines */}
-        {GRID_TICKS.map(({ iv, label }) => (
-          <g key={label}>
-            <line
-              x1={PAD.left}
-              y1={yScale(iv)}
-              x2={W - PAD.right}
-              y2={yScale(iv)}
-              stroke={GRID_LINE}
-              strokeWidth={1}
-            />
-            <text
-              x={PAD.left - 8}
-              y={yScale(iv) + 4}
-              fill={AXIS_LABEL}
-              fontSize={12}
-              textAnchor="end"
-              fontFamily="JetBrains Mono, monospace"
-            >
-              {label}
-            </text>
-          </g>
-        ))}
+      <ChartContainer config={chartConfig} className="aspect-[760/230] w-full">
+        {/* Explicit width/height: required under jsdom (mockResponsiveContainer strips
+            ResponsiveContainerContext, per 33-03's GammaProfile finding); a real browser
+            measures the aspect-[760/230] box above via ResponsiveContainer and takes
+            priority over these, so the chart stays fluid in the app. */}
+        <LineChart data={termStructure} width={W} height={H} margin={{ top: 30, right: 22, bottom: 40, left: 50 }}>
+          <CartesianGrid horizontal vertical={false} stroke={GRID_LINE} />
+          <XAxis
+            type="number"
+            dataKey="dte"
+            domain={[DTE_MIN, DTE_MAX]}
+            allowDataOverflow
+            ticks={X_TICKS}
+            tickFormatter={(v: number): string => `${v}d`}
+            tick={{ fill: AXIS_LABEL, fontSize: 12, fontFamily: MONO }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            type="number"
+            domain={[IV_MIN, IV_MAX]}
+            allowDataOverflow
+            ticks={IV_TICKS}
+            tickFormatter={(v: number): string => String(Math.round(v * 100))}
+            tick={{ fill: AXIS_LABEL, fontSize: 12, fontFamily: MONO }}
+            tickLine={false}
+            axisLine={false}
+          />
 
-        {/* Event markers */}
-        {events.map((ev) => {
-          const dte = eventDte(ev.date, referenceMs);
-          if (dte < DTE_MIN || dte > DTE_MAX) return null;
-          const x = xScale(dte);
-          return (
-            <g key={`${ev.date}-${ev.name}`} data-testid={`term-structure-event-${ev.date}-${ev.name}`}>
-              <line
-                x1={x}
-                y1={PAD.top}
-                x2={x}
-                y2={H - PAD.bottom}
+          {events.map((ev) => {
+            const dte = eventDte(ev.date, referenceMs);
+            if (dte < DTE_MIN || dte > DTE_MAX) return null;
+            return (
+              <ReferenceLine
+                key={`${ev.date}-${ev.name}`}
+                data-testid={`term-structure-event-${ev.date}-${ev.name}`}
+                x={dte}
                 stroke={AMBER}
-                strokeWidth={1}
                 strokeDasharray="2 5"
                 opacity={0.3}
               />
-              {/* Event names + dates live in the dated legend below the chart, not on-canvas
-                  (they overlapped when events clustered). A small amber dot marks the line. */}
-              <circle cx={x} cy={PAD.top} r={2.4} fill={AMBER} opacity={0.7} />
-            </g>
-          );
-        })}
+            );
+          })}
 
-        {/* Term-structure polyline */}
-        <path
-          data-testid="term-structure-line"
-          d={buildTermLinePath(termStructure)}
-          stroke={TERM_LINE}
-          strokeWidth={2.4}
-          fill="none"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
+          <Line
+            data-testid="term-structure-line"
+            type="linear"
+            dataKey="iv"
+            dot={false}
+            stroke={TERM_LINE}
+            strokeWidth={2.4}
+            isAnimationActive={false}
+          />
 
-        {/* X-axis DTE labels */}
-        {X_TICKS.map((t) => (
-          <text
-            key={t}
-            x={xScale(t)}
-            y={H - 12}
-            fill={AXIS_LABEL}
-            fontSize={12}
-            textAnchor="middle"
-            fontFamily="JetBrains Mono, monospace"
-          >
-            {`${t}d`}
-          </text>
-        ))}
-
-        {/* Forward-IV bracket (omitted for the guard case) or the guard tag */}
-        {fwdIv !== null ? (
-          <g data-testid="term-structure-fwd-bracket">
-            <path
-              d={`M${frontX} ${yScale(fwdIv)}H${backX}`}
+          {fwdIv !== null ? (
+            <ReferenceLine
+              data-testid="term-structure-fwd-bracket"
+              segment={[
+                { x: frontDte, y: fwdIv },
+                { x: backDte, y: fwdIv },
+              ]}
               stroke={BLUE}
-              strokeWidth={1.8}
               strokeDasharray="4 3"
+              label={{
+                value: `fwd ${(fwdIv * 100).toFixed(1)}%`,
+                position: "insideBottom",
+                fill: BLUE,
+                fontSize: 12,
+                fontFamily: MONO,
+              }}
             />
-            <text
-              x={bracketMidX}
-              y={yScale(fwdIv) + 16}
-              fill={BLUE}
-              fontSize={12}
-              textAnchor="middle"
-              fontFamily="JetBrains Mono, monospace"
-            >
-              {`fwd ${(fwdIv * 100).toFixed(1)}%`}
-            </text>
-          </g>
-        ) : (
-          <g data-testid="term-structure-guard-tag">
-            <rect
-              x={bracketMidX - 24}
-              y={guardTagY}
-              width={48}
-              height={17}
-              rx={3}
-              fill="rgba(240,180,41,0.14)"
-              stroke={AMBER}
-              strokeWidth={1}
-            />
-            <text
-              x={bracketMidX}
-              y={guardTagY + 12}
-              fill={AMBER}
-              fontSize={11}
-              textAnchor="middle"
-              fontFamily="JetBrains Mono, monospace"
-            >
-              guard
-            </text>
-          </g>
-        )}
+          ) : (
+            <GuardTag frontDte={frontDte} frontIv={frontIv} backDte={backDte} backIv={backIv} />
+          )}
 
-        {/* Leg dots — front (coral/down), back (teal/up) */}
-        <circle data-testid="term-structure-leg-dot-front" cx={frontX} cy={frontY} r={5.5} fill={CORAL} />
-        <text
-          x={frontX}
-          y={frontY - 11}
-          fill={CORAL}
-          fontSize={12}
-          textAnchor="middle"
-          fontFamily="JetBrains Mono, monospace"
-        >
-          short f
-        </text>
-        <circle data-testid="term-structure-leg-dot-back" cx={backX} cy={backY} r={5.5} fill={TEAL} />
-        <text
-          x={backX}
-          y={backY - 11}
-          fill={TEAL}
-          fontSize={12}
-          textAnchor="middle"
-          fontFamily="JetBrains Mono, monospace"
-        >
-          long b
-        </text>
-      </svg>
+          <ReferenceDot
+            data-testid="term-structure-leg-dot-front"
+            x={frontDte}
+            y={frontIv}
+            r={5.5}
+            fill={CORAL}
+            stroke="none"
+            label={{ value: "short f", position: "top", offset: 8, fill: CORAL, fontSize: 12, fontFamily: MONO }}
+          />
+          <ReferenceDot
+            data-testid="term-structure-leg-dot-back"
+            x={backDte}
+            y={backIv}
+            r={5.5}
+            fill={TEAL}
+            stroke="none"
+            label={{ value: "long b", position: "top", offset: 8, fill: TEAL, fontSize: 12, fontFamily: MONO }}
+          />
+        </LineChart>
+      </ChartContainer>
       <div className="flex flex-wrap items-center gap-1.5" data-testid="term-structure-legend">
         {legendEvents.map((e) => {
           const color = e.leg === "front" ? CORAL : e.leg === "back" ? TEAL : AXIS_LABEL;
