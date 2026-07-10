@@ -28,6 +28,7 @@ import {
   extractVixPair,
   businessDaysSince,
   resolveEntryGate,
+  resolveVixLadder,
   applyGatePenaltyScore,
 } from "./entry-gate.ts";
 import type { EntryGateState, MacroSeriesRow } from "./entry-gate.ts";
@@ -377,5 +378,103 @@ describe("VIX_LADDER", () => {
       }),
       { numRuns: 200 },
     );
+  });
+});
+
+// ─── resolveVixLadder — 29-04 (RUNTIME-*, ladder override seam) ─────────────
+
+describe("resolveVixLadder", () => {
+  it("omission deep-equals VIX_LADDER unchanged", () => {
+    expect(resolveVixLadder()).toEqual(VIX_LADDER);
+  });
+
+  it("overridden boundaries rebuild contiguous rows -- each row's max = the next row's min", () => {
+    const ladder = resolveVixLadder({ normalMin: 14, elevatedMin: 22, crisisMin: 30 });
+    expect(ladder).toEqual([
+      { tier: "low", min: 0, max: 14 },
+      { tier: "normal", min: 14, max: 22 },
+      { tier: "elevated", min: 22, max: 30 },
+      { tier: "crisis", min: 30, max: Number.POSITIVE_INFINITY },
+    ]);
+  });
+
+  it("partial override only moves the given boundary, others stay at the default", () => {
+    const ladder = resolveVixLadder({ elevatedMin: 22 });
+    expect(ladder).toEqual([
+      { tier: "low", min: 0, max: 15 },
+      { tier: "normal", min: 15, max: 22 },
+      { tier: "elevated", min: 22, max: 25 },
+      { tier: "crisis", min: 25, max: Number.POSITIVE_INFINITY },
+    ]);
+  });
+
+  it("fast-check: overridden ladder stays contiguous, no gap/overlap, for any ascending boundaries", () => {
+    fc.assert(
+      fc.property(
+        fc.tuple(fc.double({ min: 1, max: 10, noNaN: true }), fc.double({ min: 1, max: 10, noNaN: true }), fc.double({ min: 1, max: 10, noNaN: true })),
+        ([a, b, c]) => {
+          const normalMin = a;
+          const elevatedMin = normalMin + b;
+          const crisisMin = elevatedMin + c;
+          const ladder = resolveVixLadder({ normalMin, elevatedMin, crisisMin });
+          for (let i = 1; i < ladder.length; i += 1) {
+            const prev = ladder[i - 1];
+            const curr = ladder[i];
+            expect(prev).toBeDefined();
+            expect(curr).toBeDefined();
+            if (prev !== undefined && curr !== undefined) {
+              expect(curr.min).toBe(prev.max);
+            }
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});
+
+// ─── resolveEntryGate — vixLadder override seam ─────────────────────────────
+
+describe("resolveEntryGate — vixLadder override (29-04)", () => {
+  it("omitting vixLadder is byte-identical to today's gate for the same inputs", () => {
+    const withoutOverride = resolveEntryGate(makeInput({ vix: 22, vix3m: 40 }));
+    const explicitDefault = resolveEntryGate({ ...makeInput({ vix: 22, vix3m: 40 }), vixLadder: VIX_LADDER });
+    expect(withoutOverride).toEqual(explicitDefault);
+  });
+
+  it("default ladder resolves the vix into VIX_LADDER's own tier", () => {
+    const state = resolveEntryGate(makeInput({ vix: 22, vix3m: 40 }));
+    expect(state.vixTier).toBe("elevated");
+  });
+
+  it("an overridden ladder resolves the SAME vix into the overridden tier", () => {
+    // vix=22 is "elevated" under the default ladder but "crisis" once crisisMin drops to 20.
+    const overriddenLadder = resolveVixLadder({ normalMin: 10, elevatedMin: 15, crisisMin: 20 });
+    const state = resolveEntryGate({
+      ...makeInput({ vix: 22, vix3m: 40 }),
+      vixLadder: overriddenLadder,
+    });
+    expect(state.vixTier).toBe("crisis");
+  });
+
+  it("vixTier is null when the gate is blind (no vix reading)", () => {
+    const state = resolveEntryGate(
+      makeInput({ rowsOverride: [{ seriesId: "VIXCLS", date: "2026-07-08", value: 12 }] }),
+    );
+    expect(state.state).toBe("blind");
+    expect(state.vixTier).toBeNull();
+  });
+
+  it("the hysteresis/penalty constants are untouched by a ladder override", () => {
+    // VIX 25 still hard-blocks (VIX_BLOCK_ARM=25) even with an overridden ladder that moves
+    // the low/normal/elevated/crisis tier boundaries -- gate arm/disarm points stay code-only.
+    const overriddenLadder = resolveVixLadder({ normalMin: 5, elevatedMin: 10, crisisMin: 12 });
+    const state = resolveEntryGate({
+      ...makeInput({ vix: 25, vix3m: 40 }),
+      vixLadder: overriddenLadder,
+    });
+    expect(state.state).toBe("blocked");
+    expect(VIX_BLOCK_ARM).toBe(25);
+    expect(VIX_PENALTY_FLOOR).toBe(20);
   });
 });

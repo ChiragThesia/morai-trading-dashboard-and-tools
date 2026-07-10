@@ -40,6 +40,37 @@ export const VIX_LADDER: ReadonlyArray<VixLadderRow> = [
   { tier: "crisis", min: 25, max: Number.POSITIVE_INFINITY },
 ];
 
+export type VixLadderOverride = {
+  readonly normalMin?: number;
+  readonly elevatedMin?: number;
+  readonly crisisMin?: number;
+};
+
+/**
+ * resolveVixLadder — rebuilds the four contiguous half-open [min,max) VIX_LADDER rows from
+ * optional boundary overrides (29-04, RUNTIME-*). Omission reproduces VIX_LADDER unchanged;
+ * each row's `max` is always the next row's `min` (T-29-07: never a gap/overlap). This is the
+ * ONE ladder-rebuild source the merge fn (29-07), resolveEntryGate, and sizing.ts all consume —
+ * never a second, independently-edited ladder.
+ */
+export function resolveVixLadder(override?: VixLadderOverride): ReadonlyArray<VixLadderRow> {
+  const normalMin = override?.normalMin ?? 15;
+  const elevatedMin = override?.elevatedMin ?? 20;
+  const crisisMin = override?.crisisMin ?? 25;
+  return [
+    { tier: "low", min: 0, max: normalMin },
+    { tier: "normal", min: normalMin, max: elevatedMin },
+    { tier: "elevated", min: elevatedMin, max: crisisMin },
+    { tier: "crisis", min: crisisMin, max: Number.POSITIVE_INFINITY },
+  ];
+}
+
+/** The ladder row containing `vix`, or null when `vix` is null (GATE BLIND / no reading). */
+function resolveVixTier(vix: number | null, ladder: ReadonlyArray<VixLadderRow>): VixTier | null {
+  if (vix === null) return null;
+  return ladder.find((row) => vix >= row.min && vix < row.max)?.tier ?? null;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Hysteresis rungs — mirrors exits/domain/exit-rules.ts's {label, arm, disarm} ExitRung shape,
 // oriented higher-is-worse. USER-LOCKED arm/disarm (28-CONTEXT.md); penalty-band values
@@ -186,6 +217,12 @@ export type EntryGateState = {
   readonly penaltyMultiplier: number;
   readonly entriesAllowed: boolean;
   readonly reasons: ReadonlyArray<string>;
+  /**
+   * The VIX_LADDER (or overridden ladder, 29-04) tier `vix` falls into — null when there's no
+   * vix reading (GATE BLIND). Optional: older callers reconstructing EntryGateState from a
+   * persisted PickerGate (computePickerSnapshot.ts's toEntryGateState) never set it.
+   */
+  readonly vixTier?: VixTier | null;
 };
 
 export type ResolveEntryGateInput = {
@@ -195,6 +232,12 @@ export type ResolveEntryGateInput = {
   readonly cooldownBrake: boolean;
   /** Previous cycle's gate state, self-read from picker_snapshot (Plan 03) — null on first run. */
   readonly previousState: EntryGateState | null;
+  /**
+   * Optional VIX ladder (29-04, RUNTIME-*) for tier resolution only — defaults to VIX_LADDER.
+   * Does NOT affect the block/penalty hysteresis rungs below (VIX_BLOCK_ARM, VIX_PENALTY_FLOOR
+   * stay code-only per the resolved research open question); ladder tiers move independently.
+   */
+  readonly vixLadder?: ReadonlyArray<VixLadderRow>;
 };
 
 /** A rung is "held armed" from the prior cycle only if that SAME metric+label fired last time. */
@@ -243,7 +286,7 @@ function bandMultiplier(value: number, floor: number, ceiling: number): number {
  * (GATE_BLIND_MAX_BIZDAYS), and passes the two anti-criteria brakes through unconditionally.
  */
 export function resolveEntryGate(input: ResolveEntryGateInput): EntryGateState {
-  const { rows, nowIso, maxOpenBrake, cooldownBrake, previousState } = input;
+  const { rows, nowIso, maxOpenBrake, cooldownBrake, previousState, vixLadder = VIX_LADDER } = input;
   const reasons: string[] = [];
   if (maxOpenBrake) reasons.push("maxOpen");
   if (cooldownBrake) reasons.push("cooldown");
@@ -260,6 +303,7 @@ export function resolveEntryGate(input: ResolveEntryGateInput): EntryGateState {
       penaltyMultiplier: 0,
       entriesAllowed: false,
       reasons: [...reasons, "macroMissing"],
+      vixTier: null,
     };
   }
 
@@ -274,9 +318,11 @@ export function resolveEntryGate(input: ResolveEntryGateInput): EntryGateState {
       penaltyMultiplier: 0,
       entriesAllowed: false,
       reasons: [...reasons, "macroStale"],
+      vixTier: null,
     };
   }
 
+  const vixTier = resolveVixTier(vix, vixLadder);
   const vixLabel = resolveRung(vix, VIX_GATE_RUNGS, previousLabelFor(previousState, "vix"));
   const ratioLabel = resolveRung(ratio, RATIO_GATE_RUNGS, previousLabelFor(previousState, "ratio"));
   if (vixLabel !== null) reasons.push(`vix${vixLabel === "blocked" ? "Blocked" : "Penalty"}`);
@@ -292,6 +338,7 @@ export function resolveEntryGate(input: ResolveEntryGateInput): EntryGateState {
       penaltyMultiplier: 0,
       entriesAllowed: false,
       reasons,
+      vixTier,
     };
   }
 
@@ -309,6 +356,7 @@ export function resolveEntryGate(input: ResolveEntryGateInput): EntryGateState {
     penaltyMultiplier: multiplier,
     entriesAllowed: !brakeTripped,
     reasons,
+    vixTier,
   };
 }
 
