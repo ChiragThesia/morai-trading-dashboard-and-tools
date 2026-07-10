@@ -1,7 +1,7 @@
 ---
 phase: 32-rule-settings-modal-v2-explain-what-you-touch-per-knob-help
 verified: 2026-07-10T16:05:00Z
-status: human_needed
+status: passed
 score: 9/9 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -21,7 +21,7 @@ human_verification:
 
 **Phase Goal:** Rule Settings modal v2 — every knob carries a correct explainer (what/unit/direction, affected surface) from the RULE_EXPLAINERS registry (43 paths, schema-derived completeness); explicit-click staged-change preview: picker weights/debit re-score stored candidates, gate/sizing re-resolve (stored BLIND passes through verbatim — post-fix c064009), 6 universe knobs honest note, exit rungs re-evaluate live positions, regime re-bands client-side via core fns; one POST /api/settings/rules/preview + preview_rule_overrides MCP tool; byte-parity empty==stored; never persists; v1 modal unregressed; zero new deps.
 **Verified:** 2026-07-10T16:05:00Z
-**Status:** human_needed
+**Status:** passed — live items verified 2026-07-10 (see 32-UAT.md; 2 preview-honesty bugs caught+fixed live: 0d8c153, a7e4fe9)
 **Re-verification:** No — initial verification
 
 ## Goal Achievement

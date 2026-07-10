@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 32
-current_phase_name: what it gates/scores, unit, direction of effect
-status: in-progress
+current_phase: 33
+current_phase_name: project already shadcn base-nova
+status: executing
 stopped_at: Completed 32-06-PLAN.md
-last_updated: "2026-07-10T20:31:37.134Z"
+last_updated: "2026-07-10T21:30:40.977Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 32 Plan 03 complete
+last_activity_desc: Phase 32 complete, transitioned to Phase 33
 progress:
   total_phases: 11
   completed_phases: 10
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 32 — Rule Settings modal v2 — explain-what-you-touch: per-knob help (what it gates/scores, unit, direction of effect), which engine output it changes, and a staged-change impact preview (dry-run scoring against latest snapshot showing candidate/gate deltas BEFORE save); current modal shows bare numbers with zero context (user feedback 2026-07-10)
-Plan: 32-03 complete (of 6) — exit preview use-case (B2): current-vs-staged verdict pairs via evaluateExit twice, structurally never persists
+Phase: 33 — Chart engine migration — replace hand-rolled SVG charts with Recharts via shadcn chart primitives (project already shadcn base-nova): PayoffChart (dual curves, fan, profit-zone shading, wall/flip reference lines, EM band, crosshair tooltip, scenario strip), term-structure chart, dealer-gamma profile, GEX-by-strike bars. Keep scenario-engine/payoff-domain data layer pure (presentation swap only); native clipping/responsive/tooltips kill the overflow bug class (EM-band page-bleed 2563bd6, marker label pile-up Phase 31) permanently; visual parity with current design tokens
+Plan: Not started
 Status: In progress — 32-04..32-06 remaining
-Last activity: 2026-07-10 — Phase 32 Plan 03 complete
+Last activity: 2026-07-10 — Phase 32 complete, transitioned to Phase 33
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -167,6 +167,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 29 | 14 | - | - |
 | 30 | 6 | - | - |
 | 31 | 2 | - | - |
+| 32 | 6 | - | - |
 
 **Recent Trend:**
 
