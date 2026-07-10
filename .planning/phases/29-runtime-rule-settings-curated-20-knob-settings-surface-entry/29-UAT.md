@@ -1,5 +1,5 @@
 ---
-status: testing
+status: passed
 phase: 29-runtime-rule-settings
 source: [29-VERIFICATION.md]
 started: 2026-07-10T09:05:00Z
@@ -8,13 +8,10 @@ updated: 2026-07-10T09:05:00Z
 
 ## Current Test
 
-number: 2
-name: Mid-day override takes effect next compute-picker cycle
-expected: |
-  Set an override via the modal (or PUT /api/settings/rules) during the trading day;
-  the next 30-min compute-picker run uses it and the new picker snapshot's ruleSet
-  metadata shows the EFFECTIVE (overridden) value.
-awaiting: prod deploy + next RTH compute-picker cycle
+number: —
+name: All tests resolved
+expected: —
+awaiting: —
 
 ## Tests
 
@@ -25,14 +22,14 @@ result_detail: agent-verified
 
 ### 2. Mid-day override takes effect next compute-picker cycle
 expected: Set an override via the modal (or PUT /api/settings/rules) during the trading day; the next 30-min compute-picker run uses it and the new picker snapshot's ruleSet metadata shows the EFFECTIVE (overridden) value.
-result: [pending — requires prod deploy, then one RTH compute-picker cycle]
+result: PASSED 2026-07-10 (agent-driven, live prod). Deployed 12:41Z; CORS PUT fix shipped 13:03Z (a1c3e81). Sequence: (1) debitIdealMax 5000→4999 saved 13:05Z via modal — persisted across sessions, modal showed "default 5000" annotation; band-edge $1 move deliberately unobservable in outputs, so (2) observable weight swap slope 10→9 / vrp 5→6 saved 14:12Z; the 14:30:46Z RTH compute-picker snapshot stamped ruleSet slope=9, vrp=6 (sum 100) — worker read overrides fresh mid-day and stamped EFFECTIVE values. (3) All overrides reset to defaults via per-group Reset (PUT 200) at 14:50Z; modal confirmed baseline. Note: ruleSet stamps effective WEIGHTS only (T-29-14); band/ladder labels remain static metadata text — logged as Phase 32 modal-v2 consideration.
 
 ## Summary
 
 total: 2
-passed: 1
+passed: 2
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 

@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 30
-current_phase_name: Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent, pasted calendars get real engine entry analysis
+current_phase_name: both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut
 status: executing
 stopped_at: Completed 30-04-PLAN.md
-last_updated: "2026-07-10T14:45:44.455Z"
+last_updated: "2026-07-10T14:49:22.415Z"
 last_activity: 2026-07-10
-last_activity_desc: 30-04 (ad-hoc analyze use-case, D-02) complete — byte-parity scoring proven via fast-check
+last_activity_desc: Phase 29 complete, transitioned to Phase 30
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 46
   completed_plans: 44
-  percent: 96
+  percent: 70
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 30 — Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent, pasted calendars get real engine entry analysis (D-01 domain-fit + D-02 ad-hoc scoring)
-Plan: 04 of 06 complete (next: 30-05, HTTP/MCP adapters)
+Phase: 30 — Analyzer pasted-calendar fix — payoff graph x-domain must fit the full tent (both tails + BEs currently clipped, e.g. 7500P pasted shows apex at right edge and left tail cut), and pasted calendars must get real entry analysis (engine scoring) instead of 'Pasted calendar — not engine-scored' in WHY THIS CALENDAR / ENTRY-EXIT PLAN panels
+Plan: Not started
 Status: In progress
-Last activity: 2026-07-10 — 30-04 (ad-hoc analyze use-case, D-02) complete — byte-parity scoring proven via fast-check
+Last activity: 2026-07-10 — Phase 29 complete, transitioned to Phase 30
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -164,6 +164,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 27 | 6 | - | - |
 | 24 | 5 | - | - |
 | 28 | 6 | - | - |
+| 29 | 14 | - | - |
 
 **Recent Trend:**
 

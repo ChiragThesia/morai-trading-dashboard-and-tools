@@ -307,7 +307,7 @@ by a gear-icon modal in the top bar grouped by engine with reset-to-defaults per
 an override reproduces today's behavior byte-identically (backtest leakage-oracle safe).
 **Requirements**: none mapped — user-added phase; scope defined by 29-CONTEXT.md locked decisions
 **Depends on:** Phase 28
-**Plans:** 6/6 plans complete
+**Plans:** 14/14 plans complete
 
 Plans:
 **Wave 1**
