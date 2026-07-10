@@ -218,6 +218,32 @@ describe("parseTosOrder: Rule 5 — two-date scan + ascending sort", () => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// frontExpiry/backExpiry — ISO expiry dates (Phase 30, D-02 — the ad-hoc analyze
+// endpoint needs real expiry dates, not just DTE counts, Pitfall 7).
+// ─────────────────────────────────────────────────────────────
+describe("parseTosOrder: frontExpiry/backExpiry ISO dates", () => {
+  it("returns exact ISO frontExpiry/backExpiry for '19 JUL 26 / 16 AUG 26'", () => {
+    const r = parseTosOrder(
+      "BUY +1 CALENDAR SPX 7500 PUT 16 AUG 26/19 JUL 26",
+      TODAY,
+      SPOT,
+      RATE,
+    );
+    expect(r).not.toBeNull();
+    if (!r) return;
+    expect(r.frontExpiry).toBe("2026-07-19");
+    expect(r.backExpiry).toBe("2026-08-16");
+  });
+
+  it("frontExpiry is always < backExpiry, matching frontDte < backDte", () => {
+    const r = parseTosOrder(CANONICAL, TODAY, SPOT, RATE);
+    expect(r).not.toBeNull();
+    if (!r) return;
+    expect(r.frontExpiry < r.backExpiry).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
 // Rule 6 — DTE validation: front > 0, back > front → null on rejection
 // ─────────────────────────────────────────────────────────────
 describe("parseTosOrder: Rule 6 — DTE validation", () => {

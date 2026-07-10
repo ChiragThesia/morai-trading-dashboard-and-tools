@@ -65,6 +65,10 @@ export type ParsedCalendar = {
   readonly frontDte: number;
   /** Days to back (later) expiry from today. Always > frontDte. */
   readonly backDte: number;
+  /** Front (earlier) expiry, ISO 8601 date (YYYY-MM-DD). Always < backExpiry. */
+  readonly frontExpiry: string;
+  /** Back (later) expiry, ISO 8601 date (YYYY-MM-DD). Always > frontExpiry. */
+  readonly backExpiry: string;
   /**
    * Flat implied IV (decimal) such that BSM(back,iv)−BSM(front,iv)≈debit.
    * Defaults to 0.15 (15%) when no debit is provided.
@@ -145,6 +149,10 @@ export function parseTosOrder(
   const frontMs: number = rawDates[0] ?? 0;
   const backMs: number = rawDates[1] ?? 0;
   if (frontMs === 0 || backMs === 0) return null;
+  // ISO expiry dates (Pitfall 7 — derived from the same frontMs/backMs, never reconstructed
+  // server-side from asOf+dte, which is a calendar-day bug class).
+  const frontExpiry = new Date(frontMs).toISOString().slice(0, 10);
+  const backExpiry = new Date(backMs).toISOString().slice(0, 10);
 
   // ── Rule 6: DTE validation ───────────────────────────────────
   const todayMs = Date.UTC(
@@ -179,5 +187,5 @@ export function parseTosOrder(
 
   // ── Rule 9: both PUT and CALL are supported (handled by Rule 2 above) ──
 
-  return { underlying, qty, type, strike, debit, frontDte, backDte, iv };
+  return { underlying, qty, type, strike, debit, frontDte, backDte, frontExpiry, backExpiry, iv };
 }
