@@ -136,24 +136,38 @@ describe("RegimeBoard", () => {
     ).toBeDefined();
   });
 
-  it("renders one chip per present indicator, with band-colored value + dot and an as-of date", () => {
+  it("renders one compact row per present indicator; band = value color only when abnormal (calm stays quiet)", () => {
     setRegimeBoard(INDICATORS);
     render(<RegimeBoard />);
 
     for (const ind of INDICATORS) {
       expect(screen.getByTestId(`regime-chip-${ind.id}`)).toBeDefined();
-      const value = screen.getByTestId(`regime-value-${ind.id}`);
-      expect(value.textContent).toContain(ind.value.toFixed(2));
-      expect(screen.getByTestId(`regime-asof-${ind.id}`).textContent).toBe(`as of ${ind.asOf}`);
+      expect(screen.getByTestId(`regime-value-${ind.id}`).textContent).toContain(ind.value.toFixed(2));
+      // Per-row "as of" caption is gone — deduped into one freshness footer.
+      expect(screen.queryByTestId(`regime-asof-${ind.id}`)).toBeNull();
     }
 
-    // calm → up token, warning → amber token, crisis → down token (dot + value).
-    expect(screen.getByTestId("regime-band-vvix").className).toContain("bg-up");
-    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-up");
-    expect(screen.getByTestId("regime-band-vix-term-structure").className).toContain("bg-amber");
+    // calm → quiet default text, NOT the loud up/green token; abnormal bands carry the color.
+    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-txt");
+    expect(screen.getByTestId("regime-value-vvix").className).not.toContain("text-up");
+    expect(screen.getByTestId("regime-band-vvix").className).not.toContain("bg-up");
     expect(screen.getByTestId("regime-value-vix-term-structure").className).toContain("text-amber");
-    expect(screen.getByTestId("regime-band-vix9d-vix").className).toContain("bg-down");
+    expect(screen.getByTestId("regime-band-vix-term-structure").className).toContain("bg-amber");
     expect(screen.getByTestId("regime-value-vix9d-vix").className).toContain("text-down");
+    expect(screen.getByTestId("regime-band-vix9d-vix").className).toContain("bg-down");
+  });
+
+  it("dedupes per-indicator 'as of' captions into one freshness footer, noting date exceptions", () => {
+    setRegimeBoard(INDICATORS);
+    render(<RegimeBoard />);
+
+    for (const ind of INDICATORS) {
+      expect(screen.queryByTestId(`regime-asof-${ind.id}`)).toBeNull();
+    }
+    const footer = screen.getByTestId("regime-freshness");
+    // Newest regime date is the headline; the one older indicator (hy-oas 07-07) is noted inline.
+    expect(footer.textContent).toContain("2026-07-08");
+    expect(footer.textContent).toContain("2026-07-07");
   });
 
   it("renders exactly 2 chips for 2-of-4 present indicators — no placeholder/dash chip", () => {
@@ -260,7 +274,7 @@ describe("RegimeBoard — merged rates row (post-v1.3 FRED macro absorption)", (
     expect(screen.queryByTestId("rate-chip-VVIX")).toBeNull();
   });
 
-  it("renders indicator/gate tiles as rectangular (rounded-lg), and only the rates row as pill-shaped (rounded-full)", () => {
+  it("renders regime indicators and rates as compact rows — no cards, no pills; only the gate stays a framed tile", () => {
     setRegimeBoard(INDICATORS);
     setMacro(MACRO_DATA);
     setPickerGate({
@@ -275,11 +289,13 @@ describe("RegimeBoard — merged rates row (post-v1.3 FRED macro absorption)", (
     });
     render(<RegimeBoard />);
 
-    expect(screen.getByTestId("regime-chip-vvix").className).toContain("rounded-lg");
+    // Regime indicators are rows now, not rounded cards or pills.
+    expect(screen.getByTestId("regime-chip-vvix").className).not.toContain("rounded-lg");
     expect(screen.getByTestId("regime-chip-vvix").className).not.toContain("rounded-full");
-    expect(screen.getByTestId("gate-chip").className).toContain("rounded-lg");
-    expect(screen.getByTestId("gate-chip").className).not.toContain("rounded-full");
-    expect(screen.getByTestId("rate-chip-DFF").className).toContain("rounded-full");
+    // Rates are compact label/value rows, not the rejected fat pills.
+    expect(screen.getByTestId("rate-chip-DFF").className).not.toContain("rounded-full");
+    // The entry gate stays a framed tile at the top — it is THE signal.
+    expect(screen.getByTestId("gate-chip").className).toContain("rounded");
   });
 
   it("renders the rates row alongside the loading/error/empty regime-board states (independent data source)", () => {

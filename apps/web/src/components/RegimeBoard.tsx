@@ -13,63 +13,59 @@ import { cn } from "@/lib/utils";
 import type { RegimeBand, RegimeIndicator, PickerGate, MacroResponse, MacroSeriesId } from "@morai/contracts";
 
 /**
- * RegimeBoard — the "Market regime" board (Phase 24, BOARD-01/02; merged with the former
- * FRED macro card in the post-v1.3 tweak) plus the picker's entry-gate tile (Phase 28,
- * PLAY-01, 28-06).
+ * RegimeBoard — the "Market regime" rail panel. Reworked (market-rail-ux.md) into ONE
+ * scannable typographic column instead of card-per-datum, after the earlier card/pill
+ * rendering was rejected twice for having no hierarchy (everything large/bold/teal) and
+ * metadata spam ("as of" on every tile).
  *
- * A Panel with an internal "Market regime" PanelHeading, holding two rows:
- *   - Row 1: `grid grid-cols-2 gap-2 md:grid-cols-4` of Chip-shaped regime indicators, one
- *     per PRESENT indicator (a missing series is silently omitted — never a fabricated
- *     dash chip, T-24-09), plus the entry-gate tile.
- *   - Row 2: raw FRED rates/curve backdrop chips (RateChip) — Fed Funds, SOFR, 1M, 3M,
- *     10Y−2Y, 10Y−3M. The bare VIX/VVIX chips the old MacroCard rendered are dropped —
- *     VVIX is already a banded regime indicator above and VIX lives in the entry-gate
- *     chip + pill header.
+ * Top → bottom, three visual tiers (loud → quiet):
+ *   - Entry gate (28-06): the SIGNAL — a framed compact tile, state word colored by state,
+ *     VIX·ratio·as-of on a dim second line. `state: "blind"` keeps the filled `bg-downd`
+ *     alarm treatment (loudest thing in the rail). Read straight from `usePicker().gate`.
+ *   - Regime indicators: compact label-left / value-right ROWS. Band is signaled by VALUE
+ *     COLOR only-when-abnormal — calm = quiet `text-txt`, warning = amber, crisis = down —
+ *     so the eye lands on the one deviating value. ⓘ provenance tooltip kept, visually quiet.
+ *   - Rates (former MacroCard): a 2-col label/value grid, dimmer + smaller than regime
+ *     values (backdrop tier). Pills removed — they were the rejected look.
+ * A single freshness footer dedupes the four repeated per-indicator "as of" captions.
  *
- * The indicator chips and the entry-gate tile are rectangular (rounded-lg, the Panel/
- * MetricChip bordered-tile convention) — they carry 3 lines of card-sized content, and
- * rounded-full pills only read right for single-line chips. The rates row below stays
- * pill-shaped (rounded-full) since those are single-line label+value chips.
- * Each indicator chip: SHORT label + ⓘ provenance tooltip (payload's own source +
- * rationale, BOARD-02) / band dot + value / as-of date. Reuses the existing "IV n/a"
- * Badge+Tooltip interaction verbatim (Overview.tsx) — no new atom, no new token.
- *
- * The entry-gate tile (GateChip, 28-06) reads `PickerSnapshotResponse.gate` straight
- * from `usePicker()`, and the rates row reads `useMacro()` — both separate data sources
- * from the regime indicators above, so they render independently of the regime board's
- * own loading/error/empty states and are silently omitted (never fabricated) when no
- * data is available yet. `state: "blind"` (GATE BLIND, the never-silent age-tolerance
- * fail-closed flag) reuses the same `bg-downd`/`ring-down` "genuine alarm" filled
- * treatment LiveStatusBadge's STALLED state and MetricChip's `alert` prop already
- * established — louder than the plain `text-down` "blocked" state, no new visual
- * language.
+ * Banding logic, GATE BLIND independence (WR-02), tooltip provenance, and a11y are
+ * unchanged — this is a density/hierarchy rework, not a data change.
  */
 
+/** Value color is the band signal, ONLY when abnormal (NN/g: color marks what warrants
+ *  attention). Calm stays quiet (default text, neutral dot); warning/amber, crisis/down. */
 const BAND_CLASSES: Record<RegimeBand, { dot: string; text: string }> = {
-  calm: { dot: "bg-up", text: "text-up" },
+  calm: { dot: "bg-line2", text: "text-txt" },
   warning: { dot: "bg-amber", text: "text-amber" },
   crisis: { dot: "bg-down", text: "text-down" },
 };
 
-/** Dense-mode label shortening (never wrap a 3-line rectangular tile) — the full name
- *  isn't lost, it's still legible in the indicator's own `label` at non-dense width. */
+/** Dense-mode label shortening (keeps rows single-line) — also used for the freshness
+ *  footer's date-exception tags. The full name stays legible at non-dense width. */
 const SHORT_LABELS: Record<string, string> = {
   "vix-term-structure": "VIX/VIX3M",
   "hy-oas": "HY OAS",
 };
 
-function Chip({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean }): React.ReactElement {
+function shortLabel(indicator: RegimeIndicator, dense: boolean): string {
+  return dense ? (SHORT_LABELS[indicator.id] ?? indicator.label) : indicator.label;
+}
+
+/** One regime indicator = one compact row: label left, value right (mono tabular so the
+ *  values line up in a scannable column). Only an abnormal band adds color + weight. */
+function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean }): React.ReactElement {
   const band = BAND_CLASSES[indicator.band];
-  const label = dense ? (SHORT_LABELS[indicator.id] ?? indicator.label) : indicator.label;
+  const abnormal = indicator.band !== "calm";
 
   return (
     <div
-      className="flex flex-col gap-0.5 rounded-lg bg-raise/40 px-2 py-1.5 ring-1 ring-line"
+      className="flex items-center justify-between gap-2 py-1"
       data-testid={`regime-chip-${indicator.id}`}
     >
-      <div className="flex items-center gap-1">
-        <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
-          {label}
+      <div className="flex min-w-0 items-center gap-1">
+        <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+          {shortLabel(indicator, dense)}
         </span>
         <TooltipProvider>
           <Tooltip>
@@ -102,23 +98,21 @@ function Chip({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean
       </div>
       <div className="flex items-center gap-1.5">
         <span
-          className={cn("size-1.5 rounded-full", band.dot)}
+          className={cn("size-1.5 shrink-0 rounded-full", band.dot)}
           data-testid={`regime-band-${indicator.id}`}
           aria-hidden="true"
         />
         <span
-          className={cn("font-display text-base font-bold tabular-nums", band.text)}
+          className={cn(
+            "font-mono text-[13px] tabular-nums",
+            band.text,
+            abnormal && "font-semibold",
+          )}
           data-testid={`regime-value-${indicator.id}`}
         >
           {indicator.value.toFixed(2)}
         </span>
       </div>
-      <span
-        className="font-mono text-[10px] text-dim"
-        data-testid={`regime-asof-${indicator.id}`}
-      >
-        as of {indicator.asOf}
-      </span>
     </div>
   );
 }
@@ -147,11 +141,11 @@ function brakeLabel(brakes: PickerGate["brakes"]): string | null {
   return names.length === 0 ? null : names.join(", ");
 }
 
-/** GateChip — the picker's entry-gate tile (28-06, PLAY-01/T-28-17). Every value is read
- *  straight from `PickerSnapshotResponse.gate` — no client-side band recomputation.
- *  `state: "blind"` gets the SAME filled `bg-downd`/`ring-down` alarm treatment
- *  LiveStatusBadge's STALLED state already established — louder than "blocked", which
- *  only colors the state label/dot. */
+/** GateChip — the picker's entry-gate tile (28-06, PLAY-01/T-28-17), the rail's top SIGNAL.
+ *  Every value is read straight from `PickerSnapshotResponse.gate` — no client-side band
+ *  recomputation. Compact two-line tile: label + state on line one, VIX·ratio·as-of dim on
+ *  line two. `state: "blind"` keeps the filled `bg-downd`/`ring-down` alarm treatment
+ *  (louder than "blocked", which only colors the state label). */
 function GateChip({ gate }: { gate: PickerGate }): React.ReactElement {
   const isBlind = gate.state === "blind";
   const brake = brakeLabel(gate.brakes);
@@ -159,29 +153,31 @@ function GateChip({ gate }: { gate: PickerGate }): React.ReactElement {
   return (
     <div
       className={cn(
-        "flex flex-col gap-0.5 rounded-lg px-2 py-1.5 ring-1",
+        "flex flex-col gap-1 rounded-lg px-2.5 py-2 ring-1",
         isBlind ? "bg-downd ring-down/40" : "bg-raise/40 ring-line",
       )}
       data-testid="gate-chip"
     >
-      <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
-        Entry gate
-      </span>
-      <span
-        className={cn(
-          "font-display text-base font-bold tabular-nums uppercase",
-          GATE_STATE_TEXT_CLASS[gate.state],
-        )}
-        data-testid="gate-state"
-      >
-        {GATE_STATE_LABEL[gate.state]}
-      </span>
-      <span className="font-mono text-[10px] text-dim" data-testid="gate-metrics">
-        {`VIX ${gate.vix === null ? "—" : gate.vix.toFixed(2)} · ratio ${gate.ratio === null ? "—" : gate.ratio.toFixed(2)}`}
-      </span>
-      <span className="font-mono text-[10px] text-dim" data-testid="gate-asof">
-        {`as of ${gate.asOf ?? "—"}`}
-      </span>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+          Entry gate
+        </span>
+        <span
+          className={cn(
+            "font-display text-sm font-bold tabular-nums uppercase",
+            GATE_STATE_TEXT_CLASS[gate.state],
+          )}
+          data-testid="gate-state"
+        >
+          {GATE_STATE_LABEL[gate.state]}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2 font-mono text-[10px] text-dim">
+        <span data-testid="gate-metrics">
+          {`VIX ${gate.vix === null ? "—" : gate.vix.toFixed(2)} · ratio ${gate.ratio === null ? "—" : gate.ratio.toFixed(2)}`}
+        </span>
+        <span data-testid="gate-asof">{`as of ${gate.asOf ?? "—"}`}</span>
+      </div>
       {brake !== null && (
         <span className="font-mono text-[10px] text-amber" data-testid="gate-brake">
           {`brake: ${brake}`}
@@ -210,43 +206,42 @@ function fmtRate(data: MacroResponse, id: MacroSeriesId): string {
   return latest === undefined ? "—" : `${latest.value.toFixed(2)}%`;
 }
 
-/** RateChip — a raw backdrop value pill, following MetricChip's exact classes
- *  (components/system/index.tsx) but pill-shaped (rounded-full) for this merged panel. */
-function RateChip({ id, label, value }: { id: MacroSeriesId; label: string; value: string }): React.ReactElement {
+/** RateRow — a backdrop value as a compact label/value row (not a pill). Dimmer + smaller
+ *  than the regime values above so the rates read as context, not signal. */
+function RateRow({ id, label, value }: { id: MacroSeriesId; label: string; value: string }): React.ReactElement {
   return (
-    <div
-      className="flex items-center gap-1.5 rounded-full bg-raise/40 px-3 py-1.5 ring-1 ring-line"
-      data-testid={`rate-chip-${id}`}
-    >
-      <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase">
+    <div className="flex items-center justify-between gap-2" data-testid={`rate-chip-${id}`}>
+      <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
         {label}
       </span>
-      <span className="font-display text-base font-bold tabular-nums text-txt">{value}</span>
+      <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{value}</span>
     </div>
   );
 }
 
-/** `dense` packs the regime pills into a fixed 2×2 grid (no md:4-across) for the narrow
- *  left MarketRail; the default keeps the 4-across desktop layout the standalone board uses. */
+/** `dense` shortens long indicator labels for the narrow left MarketRail; layout is the
+ *  same scannable row column at every width now (the old 2×2 / 4-across card grid is gone). */
 export function RegimeBoard({ dense = false }: { dense?: boolean } = {}): React.ReactElement {
   const { data, isPending, isError } = useRegimeBoard();
   // The entry-gate tile (28-06) is a separate data source (usePicker) from the regime
-  // indicators above — silently omitted (T-24-09 "never a fabricated chip") when no
-  // snapshot has been computed yet, and rendered in EVERY branch below (WR-02: never
-  // suppressed by the regime board's own unrelated loading/error/empty state).
+  // indicators — silently omitted (T-24-09 "never a fabricated chip") when no snapshot
+  // exists yet, and rendered in EVERY branch below (WR-02: never suppressed by the regime
+  // board's own unrelated loading/error/empty state).
   const { data: pickerSnapshot } = usePicker();
   const gate = pickerSnapshot?.gate ?? null;
   const gateChip = gate !== null ? <GateChip gate={gate} /> : null;
 
   // The rates row (former MacroCard) is a third, independent data source (useMacro) —
-  // same "silently omit, never fabricate" treatment as the gate chip, rendered in EVERY
-  // branch below.
+  // same "silently omit, never fabricate" treatment, rendered in EVERY branch below.
   const { data: macro } = useMacro();
   const ratesRow =
     macro !== undefined && Object.keys(macro).length > 0 ? (
-      <div className="flex flex-wrap gap-2" data-testid="regime-rates-row">
+      <div
+        className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-line pt-2"
+        data-testid="regime-rates-row"
+      >
         {RATES.map((r) => (
-          <RateChip key={r.id} id={r.id} label={r.label} value={fmtRate(macro, r.id)} />
+          <RateRow key={r.id} id={r.id} label={r.label} value={fmtRate(macro, r.id)} />
         ))}
       </div>
     ) : null;
@@ -299,16 +294,27 @@ export function RegimeBoard({ dense = false }: { dense?: boolean } = {}): React.
     );
   }
 
+  // Freshness footer: dedupe the per-indicator "as of" captions into one line. Newest date
+  // is the headline; any indicator on an older date is noted inline (honest about the mix).
+  const newest = data.map((i) => i.asOf).reduce((m, d) => (d > m ? d : m));
+  const stale = data.filter((i) => i.asOf !== newest);
+  const freshness =
+    `EOD · as of ${newest}` +
+    stale.map((i) => ` · ${SHORT_LABELS[i.id] ?? i.label} ${i.asOf}`).join("");
+
   return (
     <Panel className="flex flex-col gap-2" data-testid="regime-board">
       <PanelHeading title="Market regime" />
       {gateChip}
-      <div className={cn("grid grid-cols-2 gap-2", !dense && "md:grid-cols-4")}>
+      <div className="flex flex-col divide-y divide-line/60">
         {data.map((indicator) => (
-          <Chip key={indicator.id} indicator={indicator} dense={dense} />
+          <Row key={indicator.id} indicator={indicator} dense={dense} />
         ))}
       </div>
       {ratesRow}
+      <span className="font-mono text-[10px] text-dim" data-testid="regime-freshness">
+        {freshness}
+      </span>
     </Panel>
   );
 }

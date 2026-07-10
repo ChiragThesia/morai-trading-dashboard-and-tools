@@ -64,11 +64,15 @@ describe("MarketRail", () => {
     expect(screen.getByText("System status loading…")).toBeDefined();
   });
 
-  it("renders the regime pills in a dense 2×2 grid (no md:4-across) for the narrow rail", () => {
+  it("renders the regime indicators as a stacked compact-row list (not a card grid) in the narrow rail", () => {
     mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
     const { container } = render(<MarketRail />);
-    const grid = container.querySelector('[data-testid="regime-board"] .grid');
-    expect(grid?.className).toContain("grid-cols-2");
-    expect(grid?.className).not.toContain("md:grid-cols-4");
+    const board = container.querySelector('[data-testid="regime-board"]');
+    expect(board).not.toBeNull();
+    for (const ind of INDICATORS) {
+      expect(screen.getByTestId(`regime-chip-${ind.id}`)).toBeDefined();
+    }
+    // No 4-across desktop card grid inside the narrow rail — rows, scanned top-to-bottom.
+    expect(board?.innerHTML).not.toContain("md:grid-cols-4");
   });
 });
