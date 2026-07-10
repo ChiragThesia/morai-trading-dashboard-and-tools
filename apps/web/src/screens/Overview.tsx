@@ -37,7 +37,7 @@ import {
   VerdictDetailBody,
 } from "./HeldPositionsPanel.tsx";
 import { ExitRulesPanel } from "./ExitRulesPanel.tsx";
-import { Panel, PanelHeading, SectionLabel, Stat, MetricChip, Button } from "../components/system/index.tsx";
+import { Panel, PanelHeading, Stat, MetricChip, Button } from "../components/system/index.tsx";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -690,7 +690,7 @@ function GexRail({
           {keyLevelsFor(gex).map((lvl) => (
             <div
               key={lvl.label}
-              className="flex items-center justify-between gap-2 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+              className="flex items-center justify-between gap-2 rounded-lg bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
             >
               <span className={cn(lvl.colorClass, "font-display font-semibold tracking-[0.09em] uppercase")}>
                 {lvl.label}
@@ -747,7 +747,7 @@ function PillHeader({
   const curveSlope = latestMacroValue(macro, "T10Y2Y");
 
   return (
-    <div className="sticky top-0 z-10 -mx-3.5 flex flex-wrap items-center gap-2 border-b border-line bg-bg/90 px-3.5 py-2 backdrop-blur">
+    <div className="sticky top-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-b border-line bg-bg/90 px-4 py-2 backdrop-blur">
       <MetricChip label="SPX" value={gex !== undefined ? gex.spot.toFixed(1) : "—"} valueClassName="text-blue" />
       <MetricChip
         label="net γ /1%"
@@ -1051,12 +1051,12 @@ export function Overview(): React.ReactElement {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1480px] flex-col gap-5 p-3.5">
+    <div className="flex flex-col gap-5 px-4 py-4">
       <PillHeader gex={gex} cotLev={cotLev} macro={macro} bookPnl={bookPnl} />
 
       {/* ── Three-column Launchpad shell: MarketRail (left) / hero + positions (center) /
           GEX rail (right). Mobile stacks in DOM order: rail → hero → positions → GEX. ── */}
-      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[280px_minmax(0,1fr)_320px] lg:items-start">
+      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[320px_minmax(0,1fr)_360px] lg:items-start">
         {/* LEFT — persistent market context rail */}
         <MarketRail />
 
@@ -1064,36 +1064,39 @@ export function Overview(): React.ReactElement {
         <div className="flex min-w-0 flex-col gap-3">
           {/* Payoff hero */}
           <Panel>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <SectionLabel>Risk profile — combined book</SectionLabel>
-                {gex !== undefined && (
+            <PanelHeading
+              className="flex-wrap"
+              title="Risk profile — combined book"
+              badge={
+                <div className="flex flex-wrap items-center gap-2">
+                  {gex !== undefined && (
+                    <div
+                      className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+                      data-testid="gex-freshness"
+                    >
+                      <span className={cn("size-1.5 rounded-full", gexFresh ? "bg-up" : "bg-amber")} />
+                      <span className="text-dim">GEX as of</span>
+                      <span className="text-txt">{gexAsOf}</span>
+                      {gexAgeMs !== null && (
+                        <span className={gexFresh ? "text-up" : "text-amber"}>· {relAge(gexAgeMs)}</span>
+                      )}
+                    </div>
+                  )}
                   <div
                     className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
-                    data-testid="gex-freshness"
+                    data-testid="live-mark-freshness"
                   >
-                    <span className={cn("size-1.5 rounded-full", gexFresh ? "bg-up" : "bg-amber")} />
-                    <span className="text-dim">GEX as of</span>
-                    <span className="text-txt">{gexAsOf}</span>
-                    {gexAgeMs !== null && (
-                      <span className={gexFresh ? "text-up" : "text-amber"}>· {relAge(gexAgeMs)}</span>
+                    <span className={cn("size-1.5 rounded-full", markFresh ? "bg-up" : "bg-amber")} />
+                    <span className="text-dim">mark as of</span>
+                    <span className="text-txt">{markAsOf}</span>
+                    {markAgeMs !== null && (
+                      <span className={markFresh ? "text-up" : "text-amber"}>· {relAge(markAgeMs)}</span>
                     )}
                   </div>
-                )}
-                <div
-                  className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
-                  data-testid="live-mark-freshness"
-                >
-                  <span className={cn("size-1.5 rounded-full", markFresh ? "bg-up" : "bg-amber")} />
-                  <span className="text-dim">mark as of</span>
-                  <span className="text-txt">{markAsOf}</span>
-                  {markAgeMs !== null && (
-                    <span className={markFresh ? "text-up" : "text-amber"}>· {relAge(markAgeMs)}</span>
-                  )}
                 </div>
-              </div>
-              <span className="font-mono text-[10px] text-dim">view-only · Analyzer →</span>
-            </div>
+              }
+              action={<span className="font-mono text-[10px] text-dim">view-only · Analyzer →</span>}
+            />
             {/* OVW-05 + follow-on: shared control strip — forward date projection (projects
                 scenario.payoffCurve via daysForward; @exp unaffected, D-01) + series toggles.
                 The static legend it replaced is now the interactive toggle chips. */}
@@ -1185,30 +1188,34 @@ export function Overview(): React.ReactElement {
           {/* Docked positions table — verdicts join into the VERDICT column; the exit-rules
               ladder opens from the header dialog button */}
           <Panel>
-            <div className="mb-2 flex items-center gap-2">
-              <SectionLabel>Positions</SectionLabel>
-              <LiveStatusBadge
-                status={liveStatus}
-                lastTickAt={liveLastTickAt}
-                isRth={liveIsRth}
-                hasReceivedFirstTick={liveHasReceivedFirstTick}
-                isReconnecting={liveIsReconnecting}
-                onReconnect={liveReconnectNow}
-              />
-              {exitsSnapshot !== null && (
-                <Dialog>
-                  <DialogTrigger
-                    data-testid="exit-rules-trigger"
-                    className="ml-auto rounded-md bg-raise/40 px-2.5 py-1 font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase ring-1 ring-line hover:text-txt"
-                  >
-                    Exit rules ▸
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <ExitRulesPanel ruleSet={exitsSnapshot.ruleSet} />
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
+            <PanelHeading
+              title="Positions"
+              badge={
+                <LiveStatusBadge
+                  status={liveStatus}
+                  lastTickAt={liveLastTickAt}
+                  isRth={liveIsRth}
+                  hasReceivedFirstTick={liveHasReceivedFirstTick}
+                  isReconnecting={liveIsReconnecting}
+                  onReconnect={liveReconnectNow}
+                />
+              }
+              action={
+                exitsSnapshot !== null && (
+                  <Dialog>
+                    <DialogTrigger
+                      data-testid="exit-rules-trigger"
+                      className="rounded-md bg-raise/40 px-2.5 py-1 font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase ring-1 ring-line hover:text-txt"
+                    >
+                      Exit rules ▸
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <ExitRulesPanel ruleSet={exitsSnapshot.ruleSet} />
+                    </DialogContent>
+                  </Dialog>
+                )
+              }
+            />
             <PositionsTable
               positions={positions}
               spot={spot}
