@@ -52,6 +52,11 @@ import {
   makeSpotObserver,
   makeGetCalendarLifecycleUseCase,
   makeGetExitAdviceUseCase,
+  makeGetRuleSettingsUseCase,
+  makeSetRuleOverridesUseCase,
+  resolvePickerRuleConfig,
+  resolveExitRuleConfig,
+  resolveRegimeRuleConfig,
 } from "@morai/core";
 import type {
   Calendar,
@@ -71,6 +76,7 @@ import { withRefreshExpiryWarning } from "./adapters/refresh-expiry-warner.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
 import { journalRulesRoutes } from "./adapters/http/journal-rules.routes.ts";
+import { settingsRoutes } from "./adapters/http/settings.routes.ts";
 import { journalLifecycleRoutes } from "./adapters/http/journal-lifecycle.routes.ts";
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
 import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
@@ -198,6 +204,91 @@ const ruleOverridesRepo = makePostgresRuleOverridesRepo(db);
 const getRegimeBoard = makeGetRegimeBoardUseCase({
   readMacroObservations: macroObservationsRepo.readMacroObservations,
   readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
+});
+
+// RUNTIME-* / MCP-02 (29-13): get/set-rule-settings use-cases — shared by GET/PUT
+// /api/settings/rules + the get_rule_settings/set_rule_overrides MCP tools. `defaults` is
+// computed ONCE at boot by calling each engine's own resolve function with NO overrides,
+// then flattened into the contracts' flat ruleConfig shape — the ONE apps→core wiring point
+// (architecture-boundaries.md allows apps → core) so the displayed defaults never drift from
+// the compile-time constants (T-29-18). Reuses the SAME ruleOverridesRepo as the regime board.
+const pickerRuleDefaults = resolvePickerRuleConfig();
+const exitRuleDefaults = resolveExitRuleConfig();
+const regimeRuleDefaults = resolveRegimeRuleConfig();
+
+function findVixLadderMin(tier: "normal" | "elevated" | "crisis"): number {
+  const row = pickerRuleDefaults.vixLadder.find((r) => r.tier === tier);
+  if (row === undefined) throw new Error(`vix ladder default missing the ${tier} tier`);
+  return row.min;
+}
+
+function findExitRung(rungs: typeof exitRuleDefaults.takeRungs, label: string) {
+  const rung = rungs.find((r) => r.label === label);
+  if (rung === undefined) throw new Error(`exit rung default missing label ${label}`);
+  return rung;
+}
+
+const take15 = findExitRung(exitRuleDefaults.takeRungs, "+15%");
+const take10 = findExitRung(exitRuleDefaults.takeRungs, "+10%");
+const take5 = findExitRung(exitRuleDefaults.takeRungs, "+5%");
+const stop50 = findExitRung(exitRuleDefaults.stopRungs, "-50%");
+const stop25 = findExitRung(exitRuleDefaults.stopRungs, "-25%");
+
+const ruleSettingsDefaults = {
+  picker: {
+    deltaBandMin: pickerRuleDefaults.deltaBand.min,
+    deltaBandMax: pickerRuleDefaults.deltaBand.max,
+    frontDteMin: pickerRuleDefaults.frontDte.min,
+    frontDteMax: pickerRuleDefaults.frontDte.max,
+    backDteMinGap: pickerRuleDefaults.backDteGap.min,
+    backDteMaxGap: pickerRuleDefaults.backDteGap.max,
+    weights: pickerRuleDefaults.weights,
+    debitIdealMin: pickerRuleDefaults.debitBand.idealMin,
+    debitIdealMax: pickerRuleDefaults.debitBand.idealMax,
+    vixLadder: {
+      normalMin: findVixLadderMin("normal"),
+      elevatedMin: findVixLadderMin("elevated"),
+      crisisMin: findVixLadderMin("crisis"),
+    },
+    maxOpenCalendars: pickerRuleDefaults.maxOpenCalendars,
+    sizingContracts: pickerRuleDefaults.sizingContracts,
+  },
+  exits: {
+    take: {
+      plus15Arm: take15.arm,
+      plus15Disarm: take15.disarm,
+      plus10Arm: take10.arm,
+      plus10Disarm: take10.disarm,
+      plus5Arm: take5.arm,
+      plus5Disarm: take5.disarm,
+    },
+    stop: {
+      minus50Arm: stop50.arm,
+      minus50Disarm: stop50.disarm,
+      minus25Arm: stop25.arm,
+      minus25Disarm: stop25.disarm,
+    },
+  },
+  regime: {
+    vixTermStructureWarn: regimeRuleDefaults.vixTermStructure.warn,
+    vixTermStructureCrisis: regimeRuleDefaults.vixTermStructure.crisis,
+    vvixWarn: regimeRuleDefaults.vvix.warn,
+    vvixCrisis: regimeRuleDefaults.vvix.crisis,
+    vix9dRatioWarn: regimeRuleDefaults.vix9dRatio.warn,
+    vix9dRatioCrisis: regimeRuleDefaults.vix9dRatio.crisis,
+    hyOasWarn: regimeRuleDefaults.hyOas.warn,
+    hyOasCrisis: regimeRuleDefaults.hyOas.crisis,
+  },
+};
+
+const getRuleSettings = makeGetRuleSettingsUseCase({
+  readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
+  defaults: ruleSettingsDefaults,
+});
+const setRuleOverrides = makeSetRuleOverridesUseCase({
+  readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
+  writeRuleOverrides: ruleOverridesRepo.writeRuleOverrides,
+  defaults: ruleSettingsDefaults,
 });
 
 // PICK-02 / MCP-02 (19-07): get-picker read use-case — shared by GET /api/picker/candidates +
@@ -375,7 +466,9 @@ const apiRouter = new Hono()
   // PICK-02 (19-07): GET /api/picker/candidates — stored-row read (D-04, never recomputed)
   .route("/", pickerRoutes(getPicker))
   // EXIT-08 (26-05): GET /api/exits — read-time exit-advice snapshot (MCP-02)
-  .route("/", exitRoutes(getExitAdvice));
+  .route("/", exitRoutes(getExitAdvice))
+  // RUNTIME-* (29-13): GET/PUT /api/settings/rules — curated rule-override surface (MCP-02)
+  .route("/", settingsRoutes(getRuleSettings, setRuleOverrides));
 
 // Phase 12 (12-05): streaming — build shared deps before route mounts.
 const sidecarReconciler = makeSidecarPositionReconciler({
@@ -444,6 +537,8 @@ const mcpRouter = makeMcpRouter(
   getCalendarLifecycle,
   getRegimeBoard,
   getExitAdvice,
+  getRuleSettings,
+  setRuleOverrides,
 );
 app.route("", mcpRouter);
 

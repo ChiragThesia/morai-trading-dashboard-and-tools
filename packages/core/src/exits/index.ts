@@ -63,3 +63,8 @@ export { makeComputeExitAdviceUseCase } from "./application/computeExitAdvice.ts
 export type { ComputeExitAdviceDeps } from "./application/computeExitAdvice.ts";
 export { makeGetExitAdviceUseCase } from "./application/getExitAdvice.ts";
 export type { GetExitAdviceDeps } from "./application/getExitAdvice.ts";
+
+// 29-05 (Runtime Rule Settings): the exits merge fn — 29-13's server composition root
+// destructures this to build the settings surface's injected `defaults`.
+export { resolveExitRuleConfig } from "./domain/rule-config.ts";
+export type { ExitRuleConfig, ExitRuleOverrides } from "./domain/rule-config.ts";

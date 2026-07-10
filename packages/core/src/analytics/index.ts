@@ -68,3 +68,8 @@ export type {
   ForRunningGetRegimeBoard,
   RegimeIndicatorOut,
 } from "./application/getRegimeBoard.ts";
+
+// 29-06 (Runtime Rule Settings): the regime merge fn — 29-13's server composition root
+// destructures this to build the settings surface's injected `defaults`.
+export { resolveRegimeRuleConfig } from "./domain/rule-config.ts";
+export type { RegimeRuleConfig, RegimeRuleOverrides } from "./domain/rule-config.ts";

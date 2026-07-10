@@ -548,3 +548,13 @@ export type {
   SetRuleOverridesDeps,
   ForRunningSetRuleOverrides,
 } from "./settings/application/setRuleOverrides.ts";
+
+// 29-13: the three engines' own resolve functions — the ONE wiring point (apps → core) the
+// server composition root calls with no overrides to compute the settings surface's
+// injected `defaults`, so the displayed defaults never drift from the compile-time constants.
+export { resolvePickerRuleConfig } from "./picker/index.ts";
+export type { PickerRuleConfig, PickerRuleOverrides } from "./picker/index.ts";
+export { resolveExitRuleConfig } from "./exits/index.ts";
+export type { ExitRuleConfig, ExitRuleOverrides } from "./exits/index.ts";
+export { resolveRegimeRuleConfig } from "./analytics/index.ts";
+export type { RegimeRuleConfig, RegimeRuleOverrides } from "./analytics/index.ts";
