@@ -21,7 +21,11 @@ import {
   setRuleTagsResponse,
   lifecycleResponse,
   exitsResponse,
+  getRuleSettingsResponse,
+  setRuleOverridesRequest,
+  setRuleOverridesResponse,
 } from "@morai/contracts";
+import type { SetRuleOverridesRequest } from "@morai/contracts";
 import type {
   ForGettingStatus,
   ForListingCalendars,
@@ -41,6 +45,9 @@ import type {
   ForRunningSetRuleTags,
   ForRunningGetCalendarLifecycle,
   ForRunningGetExitAdvice,
+  ForRunningGetRuleSettings,
+  ForRunningSetRuleOverrides,
+  RuleOverridesPatch,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -1032,6 +1039,106 @@ export function registerGetExitAdviceTool(
         ruleSet: snapshot.ruleSet,
       });
 
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+// The zod-inferred set_rule_overrides body (packages/contracts' RuleOverrides — a mapped
+// type) does not structurally satisfy RuleOverridesPatch's plain index signature (mapped
+// types don't get TS's implicit-index-signature leniency a hand-written type gets). A JSON
+// round-trip drops the zod-inferred `| undefined` from optional fields so the clone
+// structurally satisfies the index signature — same idiom as settings.routes.ts's own
+// toOverridesPatch / the postgres/memory rule-overrides repos' toJsonSafe (no `as`, no `any`).
+function isRuleOverridesPatch(value: unknown): value is RuleOverridesPatch {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toOverridesPatch(body: SetRuleOverridesRequest): RuleOverridesPatch {
+  const cloned: unknown = JSON.parse(JSON.stringify(body));
+  return isRuleOverridesPatch(cloned) ? cloned : {};
+}
+
+/**
+ * registerGetRuleSettingsTool — registers the get_rule_settings MCP tool (Phase 29-13,
+ * RUNTIME-*).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: call use-case → parse result through getRuleSettingsResponse → return content.
+ *
+ * MCP-02: the SAME getRuleSettingsResponse schema used by GET /api/settings/rules is used
+ * here — a one-sided field rename fails `bun run typecheck`.
+ */
+export function registerGetRuleSettingsTool(
+  server: McpServer,
+  getRuleSettings: ForRunningGetRuleSettings,
+): void {
+  server.registerTool(
+    "get_rule_settings",
+    {
+      title: "Get Rule Settings",
+      description:
+        "Returns the curated runtime rule-setting knobs for the picker/exits/regime engines — { defaults, overrides, effective }. Same payload as GET /api/settings/rules.",
+      // No input parameters — returns the full computed-on-read settings surface.
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getRuleSettings();
+      if (!result.ok) {
+        // T-29-16: flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      const payload = getRuleSettingsResponse.parse(result.value);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerSetRuleOverridesTool — registers the set_rule_overrides MCP tool (Phase 29-13,
+ * RUNTIME-*).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: safeParse args (the SAME setRuleOverridesRequest schema used by the PUT route,
+ * incl. the 29-02 weight-sum/hysteresis-pair refines) → call use-case → map Result → parse
+ * through setRuleOverridesResponse → return content.
+ *
+ * This is the same trust-boundary write as PUT /api/settings/rules (T-29-17/02/03/04) — the
+ * bearer-gated /mcp mount (server.ts) is the auth mitigation for this tool.
+ */
+export function registerSetRuleOverridesTool(
+  server: McpServer,
+  setRuleOverrides: ForRunningSetRuleOverrides,
+): void {
+  server.registerTool(
+    "set_rule_overrides",
+    {
+      title: "Set Rule Overrides",
+      description:
+        "Sets runtime rule-setting overrides for the picker/exits/regime engines. Same validation (unknown-key rejection, weight-sum, hysteresis pairs) as PUT /api/settings/rules. A group set to null resets that group to defaults.",
+      inputSchema: setRuleOverridesRequest.shape,
+    },
+    async (args) => {
+      // Reuse the SAME setRuleOverridesRequest schema as the HTTP route body (MCP-02) — the
+      // 29-02 refines run here identically to the PUT route.
+      const parsed = setRuleOverridesRequest.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "invalid params" }) }],
+        };
+      }
+
+      const result = await setRuleOverrides(toOverridesPatch(parsed.data));
+      if (!result.ok) {
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      const payload = setRuleOverridesResponse.parse(result.value);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };

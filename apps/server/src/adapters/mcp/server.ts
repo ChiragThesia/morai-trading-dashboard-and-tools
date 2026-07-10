@@ -20,6 +20,8 @@ import type {
   ForRunningSetRuleTags,
   ForRunningGetCalendarLifecycle,
   ForRunningGetExitAdvice,
+  ForRunningGetRuleSettings,
+  ForRunningSetRuleOverrides,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -43,6 +45,8 @@ import {
   registerSetRuleTagsTool,
   registerGetJournalLifecycleTool,
   registerGetExitAdviceTool,
+  registerGetRuleSettingsTool,
+  registerSetRuleOverridesTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -83,6 +87,9 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  *         call sites.
  * EXIT-08 / MCP-02 (Phase 26, 26-05): get_exit_advice registered here — shares exitsResponse
  *         with GET /api/exits; injected as optional for backward compat with existing call sites.
+ * RUNTIME-* / MCP-02 (Phase 29, 29-13): get_rule_settings + set_rule_overrides registered
+ *         here — share getRuleSettingsResponse/setRuleOverridesRequest/setRuleOverridesResponse
+ *         with GET/PUT /api/settings/rules; injected as optional for backward compat.
  */
 export function makeMcpRouter(
   config: Config,
@@ -105,6 +112,8 @@ export function makeMcpRouter(
   getCalendarLifecycle?: ForRunningGetCalendarLifecycle,
   getRegimeBoard?: ForRunningGetRegimeBoard,
   getExitAdvice?: ForRunningGetExitAdvice,
+  getRuleSettings?: ForRunningGetRuleSettings,
+  setRuleOverrides?: ForRunningSetRuleOverrides,
 ): Hono {
   const router = new Hono();
 
@@ -177,6 +186,14 @@ export function makeMcpRouter(
     // use-case is available (Phase 26, 26-05)
     if (getExitAdvice !== undefined) {
       registerGetExitAdviceTool(server, getExitAdvice);
+    }
+    // RUNTIME-* / MCP-02: get_rule_settings + set_rule_overrides tools — optional, wired
+    // when the settings use-cases are available (Phase 29, 29-13)
+    if (getRuleSettings !== undefined) {
+      registerGetRuleSettingsTool(server, getRuleSettings);
+    }
+    if (setRuleOverrides !== undefined) {
+      registerSetRuleOverridesTool(server, setRuleOverrides);
     }
     return { server, transport };
   }

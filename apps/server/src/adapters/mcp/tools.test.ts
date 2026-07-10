@@ -19,12 +19,16 @@ import type {
   CalendarNotFound,
   ForRunningGetExitAdvice,
   ExitAdviceSnapshot,
+  ForRunningGetRuleSettings,
+  ForRunningSetRuleOverrides,
 } from "@morai/core";
 import {
   pickerSnapshotResponse,
   getEventsWithRulesResponse,
   setRuleTagsResponse,
   exitsResponse,
+  getRuleSettingsResponse,
+  setRuleOverridesResponse,
 } from "@morai/contracts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -34,8 +38,11 @@ import {
   registerGetRuleTagsTool,
   registerSetRuleTagsTool,
   registerGetExitAdviceTool,
+  registerGetRuleSettingsTool,
+  registerSetRuleOverridesTool,
 } from "./tools.ts";
 import { exitRoutes } from "../http/exits.routes.ts";
+import { settingsRoutes } from "../http/settings.routes.ts";
 import { Hono } from "hono";
 
 // ── Test doubles ──────────────────────────────────────────────────────────────
@@ -434,5 +441,188 @@ describe("get_exit_advice MCP tool", () => {
     expect(() => exitsResponse.parse(toolPayload)).not.toThrow();
     expect(() => exitsResponse.parse(routePayload)).not.toThrow();
     expect(toolPayload).toStrictEqual(routePayload);
+  });
+});
+
+// ── get_rule_settings / set_rule_overrides MCP tools (Phase 29-13, RUNTIME-*) ────
+
+const RULE_DEFAULTS = {
+  picker: {
+    deltaBandMin: -0.49,
+    deltaBandMax: -0.3,
+    frontDteMin: 21,
+    frontDteMax: 36,
+    backDteMinGap: 15,
+    backDteMaxGap: 90,
+    weights: {
+      slope: 10,
+      fwdEdge: 25,
+      gexFit: 10,
+      eventAdjustment: 5,
+      beVsEm: 15,
+      deltaNeutral: 15,
+      thetaVega: 10,
+      vrp: 5,
+      debitFit: 5,
+    },
+    debitIdealMin: 3200,
+    debitIdealMax: 5000,
+    vixLadder: { normalMin: 15, elevatedMin: 20, crisisMin: 25 },
+    maxOpenCalendars: 6,
+    sizingContracts: { low: 2, normal: 2, elevated: 1, crisis: 0 },
+  },
+  exits: {
+    take: {
+      plus15Arm: 0.15,
+      plus15Disarm: 0.13,
+      plus10Arm: 0.1,
+      plus10Disarm: 0.08,
+      plus5Arm: 0.05,
+      plus5Disarm: 0.03,
+    },
+    stop: { minus50Arm: -0.5, minus50Disarm: -0.48, minus25Arm: -0.25, minus25Disarm: -0.23 },
+  },
+  regime: {
+    vixTermStructureWarn: 0.9,
+    vixTermStructureCrisis: 0.95,
+    vvixWarn: 100,
+    vvixCrisis: 115,
+    vix9dRatioWarn: 1.0,
+    vix9dRatioCrisis: 1.1,
+    hyOasWarn: 3.0,
+    hyOasCrisis: 5.0,
+  },
+};
+
+const getRuleSettingsOk: ForRunningGetRuleSettings = async () =>
+  ok({ defaults: RULE_DEFAULTS, overrides: {}, effective: RULE_DEFAULTS });
+
+const getRuleSettingsErr: ForRunningGetRuleSettings = async () =>
+  err({ kind: "storage-error" as const, message: "db connection failed" });
+
+describe("get_rule_settings MCP tool", () => {
+  it("returns getRuleSettingsResponse-valid content", async () => {
+    const text = await callTool(
+      (server) => registerGetRuleSettingsTool(server, getRuleSettingsOk),
+      "get_rule_settings",
+      {},
+    );
+
+    const parsed = getRuleSettingsResponse.parse(JSON.parse(text));
+    expect(parsed.defaults.picker.deltaBandMin).toBe(-0.49);
+    expect(parsed.overrides).toEqual({});
+  });
+
+  it("returns 'internal error' text on a storage error (never throws)", async () => {
+    const text = await callTool(
+      (server) => registerGetRuleSettingsTool(server, getRuleSettingsErr),
+      "get_rule_settings",
+      {},
+    );
+
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db connection failed");
+  });
+
+  it("MCP-02 parity: the tool's payload validates against the SAME schema GET /api/settings/rules emits", async () => {
+    const text = await callTool(
+      (server) => registerGetRuleSettingsTool(server, getRuleSettingsOk),
+      "get_rule_settings",
+      {},
+    );
+    const toolPayload: unknown = JSON.parse(text);
+
+    const noopSetRuleOverrides: ForRunningSetRuleOverrides = async () =>
+      ok({ overrides: {}, effective: RULE_DEFAULTS });
+    const app = new Hono();
+    app.route("/api", settingsRoutes(getRuleSettingsOk, noopSetRuleOverrides));
+    const res = await app.request("/api/settings/rules");
+    const routePayload: unknown = await res.json();
+
+    expect(() => getRuleSettingsResponse.parse(toolPayload)).not.toThrow();
+    expect(() => getRuleSettingsResponse.parse(routePayload)).not.toThrow();
+    expect(toolPayload).toStrictEqual(routePayload);
+  });
+});
+
+describe("set_rule_overrides MCP tool", () => {
+  it("returns setRuleOverridesResponse-valid content on a valid write", async () => {
+    const overridden = { picker: { deltaBandMin: -0.4 } };
+    const effective = { ...RULE_DEFAULTS, picker: { ...RULE_DEFAULTS.picker, deltaBandMin: -0.4 } };
+    const setRuleOverrides: ForRunningSetRuleOverrides = async () =>
+      ok({ overrides: overridden, effective });
+
+    const text = await callTool(
+      (server) => registerSetRuleOverridesTool(server, setRuleOverrides),
+      "set_rule_overrides",
+      { picker: { deltaBandMin: -0.4 } },
+    );
+
+    const parsed = setRuleOverridesResponse.parse(JSON.parse(text));
+    expect(parsed.effective.picker.deltaBandMin).toBe(-0.4);
+  });
+
+  it("returns an 'invalid params' error content payload for a bad weight sum, never throws", async () => {
+    // Reflect-direct call: inputSchema.shape.picker carries the SAME pickerOverrides schema
+    // (incl. its own weight-sum refine), so the MCP SDK's own shape validation would reject
+    // this at the transport layer before the handler runs — this exercises the handler's OWN
+    // setRuleOverridesRequest.safeParse fallback directly (mirrors the get_rule_tags/
+    // set_rule_tags "invalid input the SDK itself would reject" precedent).
+    const setRuleOverrides: ForRunningSetRuleOverrides = async () =>
+      ok({ overrides: {}, effective: RULE_DEFAULTS });
+
+    const text = await callToolHandlerDirect(
+      (server) => registerSetRuleOverridesTool(server, setRuleOverrides),
+      "set_rule_overrides",
+      {
+        picker: {
+          weights: {
+            slope: 10,
+            fwdEdge: 25,
+            gexFit: 10,
+            eventAdjustment: 5,
+            beVsEm: 15,
+            deltaNeutral: 15,
+            thetaVega: 10,
+            vrp: 5,
+            debitFit: 10, // sums to 105
+          },
+        },
+      },
+    );
+
+    expect(JSON.parse(text)).toMatchObject({ error: "invalid params" });
+  });
+
+  it("returns 'internal error' text on a storage error (never throws)", async () => {
+    const setRuleOverrides: ForRunningSetRuleOverrides = async () =>
+      err({ kind: "storage-error" as const, message: "db down" });
+
+    const text = await callTool(
+      (server) => registerSetRuleOverridesTool(server, setRuleOverrides),
+      "set_rule_overrides",
+      { picker: { deltaBandMin: -0.4 } },
+    );
+
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db down");
+  });
+
+  it("MCP-02 parity: shares the SAME contract as PUT /api/settings/rules for a { picker: null } reset", async () => {
+    let captured: unknown = null;
+    const setRuleOverrides: ForRunningSetRuleOverrides = async (patch) => {
+      captured = patch;
+      return ok({ overrides: {}, effective: RULE_DEFAULTS });
+    };
+
+    const text = await callTool(
+      (server) => registerSetRuleOverridesTool(server, setRuleOverrides),
+      "set_rule_overrides",
+      { picker: null },
+    );
+
+    expect(captured).toEqual({ picker: null });
+    const parsed = setRuleOverridesResponse.parse(JSON.parse(text));
+    expect(parsed.effective.picker).toEqual(RULE_DEFAULTS.picker);
   });
 });
