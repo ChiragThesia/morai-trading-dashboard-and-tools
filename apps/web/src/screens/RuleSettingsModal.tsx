@@ -114,7 +114,10 @@ function GroupPanel({
   async function handleSave(): Promise<void> {
     const patchRows = rows.map((row) => {
       const raw = draft[keyFor(row)];
-      const parsed = raw === undefined ? row.value : Number(raw);
+      // A cleared field (user clicked in, deleted the value) sets draft to "", not undefined
+      // -- Number("") === 0, so treat it the same as untouched (WR-02, 29-REVIEW.md): fall
+      // back to the current effective value rather than silently saving 0.
+      const parsed = raw === undefined || raw === "" ? row.value : Number(raw);
       return { path: row.path, value: Number.isFinite(parsed) ? parsed : row.value };
     });
     await onSave(group, unflatten(patchRows));

@@ -149,4 +149,26 @@ describe("RuleSettingsModal", () => {
       expect.objectContaining({ maxOpenCalendars: 9 }),
     );
   });
+
+  // WR-02 (29-REVIEW.md): clicking into a field and clearing it (draft becomes "", not
+  // undefined) must fall back to the current effective value, never silently save 0 --
+  // Number("") === 0 previously slipped past the Number.isFinite guard.
+  it("clearing a field before Save falls back to the effective value, not 0", () => {
+    mockReturn();
+    render(<RuleSettingsModal />);
+    fireEvent.click(screen.getByTestId("settings-trigger"));
+
+    const pickerGroup = screen.getByTestId("settings-group-picker");
+    const maxOpenInput = screen.getByLabelText("Max Open Calendars");
+    fireEvent.change(maxOpenInput, { target: { value: "9" } });
+    fireEvent.change(maxOpenInput, { target: { value: "" } });
+    fireEvent.click(within(pickerGroup).getByText("Save"));
+
+    // effective.picker.maxOpenCalendars is 8 in this fixture (SETTINGS.effective) -- a
+    // cleared field must reproduce it, not the empty-string-coerced-to-0 bug.
+    expect(mockSaveGroup).toHaveBeenCalledWith(
+      "picker",
+      expect.objectContaining({ maxOpenCalendars: 8 }),
+    );
+  });
 });
