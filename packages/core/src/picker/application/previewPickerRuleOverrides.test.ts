@@ -329,6 +329,38 @@ describe("makePreviewPickerRuleOverridesUseCase", () => {
     expect(cand.score).not.toBe(cand.oldScore);
   });
 
+  it("event-bucket candidate: empty staging reproduces the stored event score EXACTLY (event weights + backEventBonus, never standard weights)", async () => {
+    // Regression (live UAT 2026-07-10): event-bucket candidates are scored with the
+    // event registry (standard weights ×0.9 + backEventBonus 10). Re-scoring them with
+    // STANDARD weights silently dropped ~10 points per candidate in preview deltas.
+    const standard = makeCandidate(
+      "evt-1",
+      4000,
+      { slope: 10, fwdEdge: 25, gexFit: 10, eventAdjustment: 5, beVsEm: 15, deltaNeutral: 15, thetaVega: 10, vrp: 5, debitFit: 5 },
+      { slope: 80, fwdEdge: 40, gexFit: 50, eventAdjustment: 0, beVsEm: 50, deltaNeutral: 90, thetaVega: 60, vrp: 0, debitFit: 50 },
+    );
+    // Stored event score: Σ (w×0.9 × c)/100 + 10×bonus(=1).
+    const eventScoreRaw =
+      standard.breakdown.reduce((sum, e) => sum + (e.weight * 0.9 * e.contribution) / 100, 0) + 10;
+    const eventCandidate: typeof standard = {
+      ...standard,
+      bucket: "event-calendar",
+      score: Math.min(100, Math.max(0, Math.round(eventScoreRaw))),
+      breakdown: standard.breakdown.map((e) => ({ ...e, weight: e.weight * 0.9 })),
+      context: [{ id: "backEventBonus", label: "Event in back window", value: 1, note: "calibrating" }],
+    };
+    const deps = makeDeps({ readPickerSnapshot: async () => ok(snapshotRow({ candidates: [eventCandidate] })) });
+    const result = await makePreviewPickerRuleOverridesUseCase(deps)(undefined);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.available).toBe(true);
+    if (!result.value.available) return;
+    const cand = result.value.candidates[0];
+    expect(cand).toBeDefined();
+    if (cand === undefined) return;
+    expect(cand.score).toBe(cand.oldScore);
+  });
+
   it("no staged universe knob -> universeNote is null", async () => {
     const deps = makeDeps();
     const result = await makePreviewPickerRuleOverridesUseCase(deps)({ maxOpenCalendars: 2 });

@@ -409,22 +409,44 @@ export const WEIGHT_BACK_EVENT_BONUS = 10;
 const EVENT_BUCKET_SCALE = (100 - WEIGHT_BACK_EVENT_BONUS) / 100;
 
 /**
+ * Derive the event-bucket weight set from ANY standard 9-weight set: each weight scaled by
+ * EVENT_BUCKET_SCALE so the 9 + WEIGHT_BACK_EVENT_BONUS sum to 100. Single source of the
+ * derivation — consumed by EVENT_SCORE_WEIGHTS below (compile-time defaults) and by the
+ * Phase-32 preview when re-scoring event-bucket candidates under STAGED weights.
+ */
+export function deriveEventScoreWeights(
+  weights: Record<BreakdownCriterion, number>,
+): Record<BreakdownCriterion, number> {
+  return {
+    slope: weights.slope * EVENT_BUCKET_SCALE,
+    fwdEdge: weights.fwdEdge * EVENT_BUCKET_SCALE,
+    gexFit: weights.gexFit * EVENT_BUCKET_SCALE,
+    eventAdjustment: weights.eventAdjustment * EVENT_BUCKET_SCALE,
+    beVsEm: weights.beVsEm * EVENT_BUCKET_SCALE,
+    deltaNeutral: weights.deltaNeutral * EVENT_BUCKET_SCALE,
+    thetaVega: weights.thetaVega * EVENT_BUCKET_SCALE,
+    vrp: weights.vrp * EVENT_BUCKET_SCALE,
+    debitFit: weights.debitFit * EVENT_BUCKET_SCALE,
+  };
+}
+
+/**
  * Bucket-scoped score weights for the 9 primary criteria — consumed by scoring.ts's
  * `scoreEventCandidates` via `scoreCalendarCandidates`'s existing per-criterion weights
  * ablation seam (T-27-03). Reuses the primary scoring formulas verbatim; never a second
  * scoring engine.
  */
-export const EVENT_SCORE_WEIGHTS: Partial<Record<BreakdownCriterion, number>> = {
-  slope: WEIGHT_SLOPE * EVENT_BUCKET_SCALE,
-  fwdEdge: WEIGHT_FWD_EDGE * EVENT_BUCKET_SCALE,
-  gexFit: WEIGHT_GEX_FIT * EVENT_BUCKET_SCALE,
-  eventAdjustment: WEIGHT_EVENT * EVENT_BUCKET_SCALE,
-  beVsEm: WEIGHT_BE_VS_EM * EVENT_BUCKET_SCALE,
-  deltaNeutral: WEIGHT_DELTA_NEUTRAL * EVENT_BUCKET_SCALE,
-  thetaVega: WEIGHT_THETA_VEGA * EVENT_BUCKET_SCALE,
-  vrp: WEIGHT_VRP * EVENT_BUCKET_SCALE,
-  debitFit: WEIGHT_DEBIT_FIT * EVENT_BUCKET_SCALE,
-};
+export const EVENT_SCORE_WEIGHTS: Partial<Record<BreakdownCriterion, number>> = deriveEventScoreWeights({
+  slope: WEIGHT_SLOPE,
+  fwdEdge: WEIGHT_FWD_EDGE,
+  gexFit: WEIGHT_GEX_FIT,
+  eventAdjustment: WEIGHT_EVENT,
+  beVsEm: WEIGHT_BE_VS_EM,
+  deltaNeutral: WEIGHT_DELTA_NEUTRAL,
+  thetaVega: WEIGHT_THETA_VEGA,
+  vrp: WEIGHT_VRP,
+  debitFit: WEIGHT_DEBIT_FIT,
+});
 
 const netThetaGate = RULE_SET_METADATA.find((r) => r.id === "net-theta-positive");
 assertDefined(netThetaGate, "rules.ts: net-theta-positive row missing from RULE_SET_METADATA");

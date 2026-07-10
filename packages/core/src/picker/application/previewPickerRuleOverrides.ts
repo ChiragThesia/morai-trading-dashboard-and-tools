@@ -27,7 +27,7 @@
 
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { debitFitFraction } from "../domain/rules.ts";
+import { debitFitFraction, deriveEventScoreWeights, WEIGHT_BACK_EVENT_BONUS } from "../domain/rules.ts";
 import { resolvePickerRuleConfig } from "../domain/rule-config.ts";
 import type { PickerRuleOverrides } from "../domain/rule-config.ts";
 import type { BreakdownCriterion } from "../domain/types.ts";
@@ -73,12 +73,23 @@ function rescoreCandidate(
   weights: Record<BreakdownCriterion, number>,
   debitBand: { readonly idealMin: number; readonly idealMax: number },
 ): PickerCandidateDomain & { readonly oldScore: number } {
+  // Event-bucket candidates are scored with the EVENT registry (staged weights scaled by
+  // EVENT_BUCKET_SCALE + WEIGHT_BACK_EVENT_BONUS × stored bonus value) — re-weighting them
+  // with the standard set silently dropped the bonus and faked a ~10-point delta in every
+  // preview (live UAT regression, 2026-07-10). Same derivation scoring.ts uses; never a
+  // second scoring formula.
+  const isEventBucket = candidate.bucket === "event-calendar";
+  const effectiveWeights = isEventBucket ? deriveEventScoreWeights(weights) : weights;
+  const bonusEntry = candidate.context.find((entry) => entry.id === "backEventBonus");
+  const bonusTerm = isEventBucket ? WEIGHT_BACK_EVENT_BONUS * (bonusEntry?.value ?? 0) : 0;
   const breakdown = candidate.breakdown.map((entry) =>
     entry.criterion === "debitFit"
       ? { ...entry, contribution: debitFitFraction(candidate.debit, debitBand) * 100 }
       : entry,
   );
-  const rawScore = breakdown.reduce((sum, entry) => sum + (weights[entry.criterion] * entry.contribution) / 100, 0);
+  const rawScore =
+    breakdown.reduce((sum, entry) => sum + (effectiveWeights[entry.criterion] * entry.contribution) / 100, 0) +
+    bonusTerm;
   const score = Math.min(100, Math.max(0, Math.round(rawScore)));
   return { ...candidate, breakdown, score, oldScore: candidate.score };
 }
