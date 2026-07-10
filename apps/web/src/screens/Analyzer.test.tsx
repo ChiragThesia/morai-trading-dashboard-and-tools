@@ -46,11 +46,11 @@
  * zero-filtered states the synchronous fixture never needed.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, act } from "@testing-library/react";
 import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { PickerSnapshotResponse } from "@morai/contracts";
+import type { PickerSnapshotResponse, PickerCandidate } from "@morai/contracts";
 
 vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../components/charts/PayoffChart.tsx")>();
@@ -66,6 +66,20 @@ const { mockRepull } = vi.hoisted(() => ({
   mockRepull: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isSuccess: false, isError: false })),
 }));
 vi.mock("../hooks/useRepullChains.ts", () => ({ useRepullChains: mockRepull }));
+
+// useAnalyzeCalendar (Phase 30-06, D-02) needs a QueryClient too — mocked to a controllable
+// mutateAsync stub (its own request/response/error handling is covered in
+// useAnalyzeCalendar.test.ts). Defaults to scored:false so every pre-existing paste test in
+// this suite keeps exercising the unscored-fallback path unchanged; individual tests override
+// via mockAnalyzeCalendarMutateAsync.mockResolvedValueOnce/.mockRejectedValueOnce.
+const { mockAnalyzeCalendarMutateAsync } = vi.hoisted(() => ({
+  mockAnalyzeCalendarMutateAsync: vi.fn(() =>
+    Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
+  ),
+}));
+vi.mock("../hooks/useAnalyzeCalendar.ts", () => ({
+  useAnalyzeCalendar: () => ({ mutateAsync: mockAnalyzeCalendarMutateAsync }),
+}));
 
 /** Loose shape covering only the fields Analyzer.tsx actually reads off the query result. */
 type MockPickerResult = Pick<
@@ -443,6 +457,9 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    mockAnalyzeCalendarMutateAsync.mockImplementation(() =>
+      Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
+    );
   });
 
   // Dates far in the future so this suite never goes stale relative to "today". Distinct
@@ -451,10 +468,17 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7450 PUT @45.85 LMT GTC";
   const PASTE_EXAMPLE_2 =
     "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7500 PUT @52.10 LMT GTC";
+  const PASTE_EXAMPLE_CALL =
+    "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7600 CALL @38.20 LMT GTC";
 
-  function paste(text: string): void {
+  // PUT pastes now route through useAnalyzeCalendar's async mutateAsync (mocked above) —
+  // `await act(...)` flushes the resolved/rejected promise + the resulting state update.
+  async function paste(text: string): Promise<void> {
     fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: text } });
-    fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+      await Promise.resolve();
+    });
   }
 
   it("mounts the paste-to-analyze input at the top of the Suggested calendars panel (no separate top chart)", () => {
@@ -466,23 +490,26 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(screen.queryByTestId("adhoc-analyze")).toBeNull();
   });
 
-  it("Analyze on a valid paste ADDS a PASTED card at the top of the rail, auto-selects it, and clears the input", () => {
+  it("Analyze on a valid paste ADDS a PASTED card at the top of the rail, auto-selects it, and clears the input", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE);
 
     const cards = screen.getAllByTestId(/^candidate-card-/);
     expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted-1");
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
     within(screen.getByTestId("candidate-card-pasted-1")).getByText("PASTED");
     expect(screen.getByTestId("picker-paste-input")).toHaveProperty("value", "");
+    expect(mockAnalyzeCalendarMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ putCall: "P", strike: 7450 }),
+    );
   });
 
-  it("a second Analyze ADDS a second PASTED card (both coexist, pinned in paste order) and auto-selects the new one", () => {
+  it("a second Analyze ADDS a second PASTED card (both coexist, pinned in paste order) and auto-selects the new one", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
-    paste(PASTE_EXAMPLE_2);
+    await paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE_2);
 
     const cards = screen.getAllByTestId(/^candidate-card-/);
     expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted-1");
@@ -490,10 +517,10 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7500P · pasted");
   });
 
-  it("the pasted candidate drives the shared center Risk-profile chart via the same candidate→position→repriceScenario path", () => {
+  it("the pasted candidate drives the shared center Risk-profile chart via the same candidate→position→repriceScenario path", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE);
 
     const parsed = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
     if (parsed === null) throw new Error("expected PASTE_EXAMPLE to parse");
@@ -507,11 +534,11 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(props.expirationCurve).toEqual(expected.expirationCurve);
   });
 
-  it("shows the parse-error copy when the pasted text doesn't parse, without disturbing existing pasted cards", () => {
+  it("shows the parse-error copy when the pasted text doesn't parse, without disturbing existing pasted cards", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
-    paste("not an order");
+    await paste(PASTE_EXAMPLE);
+    await paste("not an order");
 
     expect(screen.getByTestId("picker-paste-error")).toBeTruthy();
     // The earlier successful paste is untouched by the failed second attempt.
@@ -519,11 +546,11 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(screen.queryByTestId("candidate-card-pasted-2")).toBeNull();
   });
 
-  it("each pasted card's × removes just that card, cleans its combine state, and re-selects the top-ranked scored candidate when it was selected", () => {
+  it("each pasted card's × removes just that card, cleans its combine state, and re-selects the top-ranked scored candidate when it was selected", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
-    paste(PASTE_EXAMPLE_2);
+    await paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE_2);
     // pasted-2 is auto-selected; combine it too, then remove it.
     fireEvent.click(within(screen.getByTestId("candidate-card-pasted-2")).getByText("⊕ Combine"));
 
@@ -537,11 +564,11 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(screen.queryByTestId("combined-book-summary")).toBeNull();
   });
 
-  it("removing a pasted card that is NOT selected leaves the current selection untouched", () => {
+  it("removing a pasted card that is NOT selected leaves the current selection untouched", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
-    paste(PASTE_EXAMPLE_2);
+    await paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE_2);
     // Select pasted-1 explicitly (pasted-2 is auto-selected by the second paste).
     fireEvent.click(screen.getByTestId("candidate-card-pasted-1"));
 
@@ -550,11 +577,11 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
   });
 
-  it("⊕ Combine on two pasted calendars sums both debits into the combined-book summary", () => {
+  it("⊕ Combine on two pasted calendars sums both debits into the combined-book summary", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
-    paste(PASTE_EXAMPLE_2);
+    await paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE_2);
     // pasted-2 is selected; combine pasted-1 into it.
     fireEvent.click(within(screen.getByTestId("candidate-card-pasted-1")).getByText("⊕ Combine"));
 
@@ -569,11 +596,11 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(summary.textContent).toContain(`$${(debit1 + debit2).toFixed(0)}`);
   });
 
-  it("Clear all removes every pasted card and re-selects the top-ranked scored candidate", () => {
+  it("Clear all removes every pasted card and re-selects the top-ranked scored candidate", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
-    paste(PASTE_EXAMPLE_2);
+    await paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE_2);
     expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
     expect(screen.getByTestId("candidate-card-pasted-2")).toBeTruthy();
 
@@ -584,23 +611,67 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
   });
 
-  it("the Clear all button only renders once at least one calendar has been pasted", () => {
+  it("the Clear all button only renders once at least one calendar has been pasted", async () => {
     render(<Analyzer />);
     expect(screen.queryByTestId("picker-paste-clear-all")).toBeNull();
 
-    paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE);
     expect(screen.getByTestId("picker-paste-clear-all")).toBeTruthy();
   });
 
-  it("Why / Scoring checklist / Entry-exit show a 'not engine-scored' note when a pasted candidate is selected", () => {
+  it("Why / Scoring checklist / Entry-exit show a 'not engine-scored' note when a scored:false pasted PUT is selected", async () => {
     render(<Analyzer />);
 
-    paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE);
 
     expect(screen.getAllByText("Pasted calendar — not engine-scored.").length).toBe(3);
     expect(screen.queryByTestId("scoring-checklist")).toBeNull();
     expect(screen.queryByTestId("entryexit-value-debit")).toBeNull();
     expect(screen.queryByTestId("whypanel-forward-edge-sentence")).toBeNull();
+  });
+
+  it("a pasted CALL never calls the endpoint — unscored fallback with the 'not engine-scored' note (D-03)", async () => {
+    render(<Analyzer />);
+
+    await paste(PASTE_EXAMPLE_CALL);
+
+    expect(mockAnalyzeCalendarMutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
+    expect(screen.getAllByText("Pasted calendar — not engine-scored.").length).toBe(3);
+  });
+
+  it("scored:true renders the real breakdown bars, θ GATE, WHY THIS CALENDAR, and ENTRY/EXIT PLAN — the placeholder disappears (D-02)", async () => {
+    const scoredCandidate: PickerCandidate = {
+      ...TOP,
+      id: "adhoc-30D-7450-2030-12-01-2030-12-31",
+      name: "7450P adhoc",
+    };
+    mockAnalyzeCalendarMutateAsync.mockImplementationOnce(() =>
+      Promise.resolve({ scored: true, candidate: scoredCandidate, reason: null }),
+    );
+
+    render(<Analyzer />);
+    await paste(PASTE_EXAMPLE);
+
+    // Provenance kept (pasted-prefix id + PASTED badge) even though it's scored.
+    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
+    within(screen.getByTestId("candidate-card-pasted-1")).getByText("PASTED");
+    // The "not engine-scored" placeholder is gone; real panels render.
+    expect(screen.queryByText("Pasted calendar — not engine-scored.")).toBeNull();
+    expect(screen.getByTestId("scoring-checklist")).toBeTruthy();
+    expect(screen.getByTestId("whypanel-forward-edge-sentence")).toBeTruthy();
+  });
+
+  it("a network/HTTP error surfaces the paste-error copy, not a crash, and adds no card", async () => {
+    mockAnalyzeCalendarMutateAsync.mockImplementationOnce(() =>
+      Promise.reject(new Error("POST /api/picker/analyze failed: 500")),
+    );
+
+    render(<Analyzer />);
+    await paste(PASTE_EXAMPLE);
+
+    expect(screen.getByTestId("picker-paste-error")).toBeTruthy();
+    expect(screen.queryByTestId("candidate-card-pasted-1")).toBeNull();
   });
 });
 

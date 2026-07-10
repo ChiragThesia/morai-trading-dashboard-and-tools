@@ -43,6 +43,7 @@ import { computeProjectionBounds } from "../lib/date-projection.ts";
 import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
 import { usePicker } from "../hooks/usePicker.ts";
 import { useRepullChains } from "../hooks/useRepullChains.ts";
+import { useAnalyzeCalendar } from "../hooks/useAnalyzeCalendar.ts";
 import { parseTosOrder } from "../lib/tos-parser.ts";
 import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candidate.ts";
 
@@ -57,16 +58,14 @@ const TODAY_CURVE_COLOR = "#5b9cf6";
 const EXPIRATION_CURVE_COLOR = "#a78bfa";
 
 /** Id prefix for a user-pasted calendar (multi-paste redesign: several can coexist, each with a
- * unique `pasted-${n}` id assigned in paste order). */
+ * unique `pasted-${n}` id assigned in paste order, kept for provenance even when the server
+ * scores the calendar — see handlePasteAnalyze). */
 const PASTED_ID_PREFIX = "pasted-";
 
-function isPastedId(id: string): boolean {
-  return id.startsWith(PASTED_ID_PREFIX);
-}
-
 /** Honest copy shown wherever engine-scored content would otherwise render for a pasted
- * candidate — a paste is never scored/ranked, so this replaces WhyPanel/ScoringMethodologyPanel/
- * EntryExitPlan content rather than fabricate scored-looking numbers for it. */
+ * candidate that came back `scored:false` (or a pasted CALL, D-03 — never sent to the
+ * endpoint) — `candidate.breakdown.length === 0` is the gate (Pitfall 8), not the pasted id,
+ * so a successfully SCORED pasted candidate renders the same panels an engine candidate does. */
 const PASTED_NOT_SCORED_NOTE = "Pasted calendar — not engine-scored.";
 
 const PASTE_ERROR_COPY =
@@ -304,7 +303,7 @@ function ScoringMethodologyPanel({
       </div>
     );
   }
-  if (isPastedId(candidate.id)) {
+  if (candidate.breakdown.length === 0) {
     return (
       <div data-testid="scoring-pills">
         <span className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</span>
@@ -407,12 +406,12 @@ export interface RightColumnProps {
  * reads the live snapshot's GEX context (Phase 19: never the frozen fixture).
  */
 function RightColumn({ candidate, gex, sizing }: RightColumnProps): React.ReactElement {
-  const isPasted = candidate !== null && isPastedId(candidate.id);
+  const notScored = candidate !== null && candidate.breakdown.length === 0;
   return (
     <div className="flex flex-col gap-3">
       <Panel>
         <PanelHeading title="Why this calendar" />
-        {isPasted ? (
+        {notScored ? (
           <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
         ) : (
           candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />
@@ -420,7 +419,7 @@ function RightColumn({ candidate, gex, sizing }: RightColumnProps): React.ReactE
       </Panel>
       <Panel>
         <PanelHeading title="Entry / exit plan" />
-        {isPasted ? (
+        {notScored ? (
           <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
         ) : (
           candidate !== null && <EntryExitPlan candidate={candidate} sizing={sizing} />
@@ -530,6 +529,10 @@ export function Analyzer(): React.ReactElement {
     [spot, dateControl.daysForward],
   );
 
+  // POST /api/picker/analyze (D-02) — pasting a PUT calendar scores it through the real
+  // engine; a pasted CALL (D-03) never reaches the endpoint (puts-only, binding #6).
+  const analyzeCalendar = useAnalyzeCalendar();
+
   const handlePasteAnalyze = useCallback((): void => {
     const parsed = parseTosOrder(pasteText, today, spot, DEFAULT_RATE);
     if (parsed === null) {
@@ -537,14 +540,55 @@ export function Analyzer(): React.ReactElement {
       return;
     }
     setPasteError(null);
-    const nextSeq = pastedSeq + 1;
-    const id = `${PASTED_ID_PREFIX}${nextSeq}`;
-    const candidate = parsedCalendarToPickerCandidate(parsed, id);
-    setPastedCandidates((prev) => [...prev, candidate]);
-    setPastedSeq(nextSeq);
-    setSelectedId(id);
     setPasteText("");
-  }, [pasteText, today, spot, pastedSeq]);
+
+    // Reserves the next id/seq and adds the card — kept together so a failed request never
+    // consumes a seq number or selects a card that was never added (mirrors the parse-failure
+    // no-op above).
+    const addCandidate = (candidate: PickerCandidate): void => {
+      setPastedSeq((prevSeq) => {
+        const nextSeq = prevSeq + 1;
+        const id = `${PASTED_ID_PREFIX}${nextSeq}`;
+        // Keep the pasted-prefix id for provenance even on a scored response (the server
+        // assigns its own `adhoc-*` id — not used client-side).
+        setPastedCandidates((prev) => [...prev, { ...candidate, id }]);
+        setSelectedId(id);
+        return nextSeq;
+      });
+    };
+
+    if (parsed.type === "C") {
+      // Calls are never sent to the endpoint (D-03) — unscored fallback only.
+      addCandidate(parsedCalendarToPickerCandidate(parsed, ""));
+      return;
+    }
+
+    void analyzeCalendar
+      .mutateAsync({
+        putCall: "P",
+        strike: parsed.strike,
+        frontDte: parsed.frontDte,
+        backDte: parsed.backDte,
+        qty: parsed.qty,
+        frontIv: parsed.iv,
+        backIv: parsed.iv,
+        debit: parsed.debit ?? 0,
+        frontExpiry: parsed.frontExpiry,
+        backExpiry: parsed.backExpiry,
+      })
+      .then((result) => {
+        addCandidate(
+          result.scored && result.candidate !== null
+            ? result.candidate
+            : parsedCalendarToPickerCandidate(parsed, ""),
+        );
+      })
+      .catch(() => {
+        // Network/HTTP failure (not scored:false, which resolves normally above) — the
+        // existing paste-error copy, not a crash; no card is added (mirrors a parse failure).
+        setPasteError(PASTE_ERROR_COPY);
+      });
+  }, [pasteText, today, spot, analyzeCalendar]);
 
   const handleRemovePasted = useCallback((candidate: PickerCandidate): void => {
     setPastedCandidates((prev) => prev.filter((c) => c.id !== candidate.id));
@@ -742,7 +786,7 @@ export function Analyzer(): React.ReactElement {
               <span className="text-violet" data-testid="risk-profile-selected-name">
                 {selected.name}
               </span>
-              {isPastedId(selected.id)
+              {selected.breakdown.length === 0
                 ? ` · debit $${selected.debit.toFixed(0)}`
                 : ` · debit $${selected.debit.toFixed(0)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(0)}`}
               {bookCount > 1 && (
