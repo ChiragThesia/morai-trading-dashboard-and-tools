@@ -267,6 +267,26 @@ describe("PayoffChart — expectedMoveBand (ANLZ-02)", () => {
     expect(connector.getAttribute("y2")).toBe(zeroY);
   });
 
+  it("clamps EM-band ticks/connector/label into the plot when ±1σ exceeds the fitted domain (no page-wide bleed)", () => {
+    // Regression: Phase 30's tent-fitted domains are often narrower than spot±1σ.
+    // Unclamped xScale coords + the SVG's overflow:visible drew the connector across
+    // the entire page (user screenshot 2026-07-10). Every EM x-coordinate must stay
+    // inside [0, INNER_W].
+    const wideBand = { spot: (DOMAIN.min + DOMAIN.max) / 2, em: (DOMAIN.max - DOMAIN.min) * 5 };
+    render(<PayoffChart {...baseProps()} expectedMoveBand={wideBand} />);
+
+    const xs = [
+      ...["x1", "x2"].map((a) => Number(screen.getByTestId("em-band-tick-lower").getAttribute(a))),
+      ...["x1", "x2"].map((a) => Number(screen.getByTestId("em-band-tick-upper").getAttribute(a))),
+      ...["x1", "x2"].map((a) => Number(screen.getByTestId("em-band-connector").getAttribute(a))),
+      Number(screen.getByTestId("em-band-label").getAttribute("x")),
+    ];
+    for (const x of xs) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(INNER_W);
+    }
+  });
+
   it("places the EM-band group before the T+0/@exp curve layers in SVG source order (never occludes a curve)", () => {
     render(<PayoffChart {...baseProps()} expectedMoveBand={EM_BAND} />);
 

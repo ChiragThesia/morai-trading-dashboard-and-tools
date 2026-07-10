@@ -563,39 +563,43 @@ export function PayoffChart({
 
           {/* ── ±1σ expected-move band: ticks + connector at the zero-P&L
                line (ANLZ-02) — placed before all curve layers so it never
-               occludes the T+0/@exp curves (UI-SPEC z-order). ────────────── */}
+               occludes the T+0/@exp curves (UI-SPEC z-order). Every x is
+               clamped into [0, INNER_W]: tent-fitted domains (Phase 30) are
+               often narrower than spot±1σ, and the SVG overflows visibly, so
+               an unclamped connector bleeds across the whole page. A tick
+               clamped to the edge reads as "band continues past the view". ── */}
           {expectedMoveBand !== null && (
             <g data-testid="em-band">
               <line
                 data-testid="em-band-tick-lower"
-                x1={xScale(expectedMoveBand.spot - expectedMoveBand.em)}
+                x1={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot - expectedMoveBand.em)))}
                 y1={zeroY - 6}
-                x2={xScale(expectedMoveBand.spot - expectedMoveBand.em)}
+                x2={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot - expectedMoveBand.em)))}
                 y2={zeroY + 6}
                 stroke={BLUE}
                 strokeWidth={1.2}
               />
               <line
                 data-testid="em-band-tick-upper"
-                x1={xScale(expectedMoveBand.spot + expectedMoveBand.em)}
+                x1={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot + expectedMoveBand.em)))}
                 y1={zeroY - 6}
-                x2={xScale(expectedMoveBand.spot + expectedMoveBand.em)}
+                x2={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot + expectedMoveBand.em)))}
                 y2={zeroY + 6}
                 stroke={BLUE}
                 strokeWidth={1.2}
               />
               <line
                 data-testid="em-band-connector"
-                x1={xScale(expectedMoveBand.spot - expectedMoveBand.em)}
+                x1={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot - expectedMoveBand.em)))}
                 y1={zeroY}
-                x2={xScale(expectedMoveBand.spot + expectedMoveBand.em)}
+                x2={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot + expectedMoveBand.em)))}
                 y2={zeroY}
                 stroke={BLUE}
                 strokeWidth={1}
               />
               <text
                 data-testid="em-band-label"
-                x={xScale(expectedMoveBand.spot)}
+                x={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot)))}
                 y={zeroY - 9}
                 fill={BLUE}
                 fontSize={9}
