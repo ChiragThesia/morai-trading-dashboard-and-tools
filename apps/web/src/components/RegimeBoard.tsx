@@ -34,11 +34,30 @@ import type { RegimeBand, RegimeIndicator, PickerGate, MacroResponse, MacroSerie
  */
 
 /** Value color is the band signal, ONLY when abnormal (NN/g: color marks what warrants
- *  attention). Calm stays quiet (default text, neutral dot); warning/amber, crisis/down. */
-const BAND_CLASSES: Record<RegimeBand, { dot: string; text: string }> = {
-  calm: { dot: "bg-line2", text: "text-txt" },
-  warning: { dot: "bg-amber", text: "text-amber" },
-  crisis: { dot: "bg-down", text: "text-down" },
+ *  attention). Calm stays quiet (default text); warning/amber, crisis/down. */
+const BAND_CLASSES: Record<RegimeBand, { text: string }> = {
+  calm: { text: "text-txt" },
+  warning: { text: "text-amber" },
+  crisis: { text: "text-down" },
+};
+
+/** Gauge marker color reads the server-computed band — never recomputed from value/thresholds
+ *  client-side (T-31-05). Not BAND_CLASSES.dot (removed): calm needs a visible-but-unaccented
+ *  color to read as a positioned marker, not the old dim `bg-line2` dot's near-invisible calm. */
+const MARKER_CLASSES: Record<RegimeBand, string> = {
+  calm: "bg-txt",
+  warning: "bg-amber",
+  crisis: "bg-down",
+};
+
+/** Fixed per-indicator visual axis (where the ruler starts/ends) — NOT semantic thresholds.
+ *  Warn/crisis band positions come from the response (indicator.bandWarn/bandCrisis), Phase-29
+ *  overrides-aware; this map only bounds the gauge's min/max (31-UI-SPEC.md §2). */
+const GAUGE_SCALE: Record<string, { min: number; max: number }> = {
+  "vix-term-structure": { min: 0.6, max: 1.2 },
+  vvix: { min: 70, max: 150 },
+  "vix9d-vix": { min: 0.7, max: 1.3 },
+  "hy-oas": { min: 1.5, max: 8.0 },
 };
 
 /** Dense-mode label shortening (keeps rows single-line) — also used for the freshness
@@ -48,60 +67,74 @@ const SHORT_LABELS: Record<string, string> = {
   "hy-oas": "HY OAS",
 };
 
+/** Percent position of `value` on `[min, max]` — NOT clamped (band-segment positions are
+ *  trusted to sit inside the configured axis). */
+function axisPct(value: number, min: number, max: number): number {
+  return ((value - min) / (max - min)) * 100;
+}
+
+/** Clamped percent position — used for the marker only, so a value outside the visual axis
+ *  still pins to an axis end instead of overflowing the track (the printed numeric value on
+ *  line 1 is never clamped, only this marker position). */
+function clampedAxisPct(value: number, min: number, max: number): number {
+  return Math.min(100, Math.max(0, axisPct(value, min, max)));
+}
+
 function shortLabel(indicator: RegimeIndicator, dense: boolean): string {
   return dense ? (SHORT_LABELS[indicator.id] ?? indicator.label) : indicator.label;
 }
 
-/** One regime indicator = one compact row: label left, value right (mono tabular so the
- *  values line up in a scannable column). Only an abnormal band adds color + weight. */
+/** One regime indicator = one compact two-line row: label + value (mono tabular, only an
+ *  abnormal band adds color + weight), then a banded bullet gauge — value marker on a
+ *  warn/crisis-banded track — so proximity to the edge reads at a glance (DEFECT-2). Band
+ *  edges come from the response's bandWarn/bandCrisis (Phase-29 effective config, threaded
+ *  by getRegimeBoard.ts); GAUGE_SCALE is only the client-side visual axis. */
 function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean }): React.ReactElement {
   const band = BAND_CLASSES[indicator.band];
   const abnormal = indicator.band !== "calm";
+  // ponytail: all 4 live regimeIndicator ids are in GAUGE_SCALE; this fallback only guards a
+  // future 5th indicator id shipping before its GAUGE_SCALE entry does.
+  const scale = GAUGE_SCALE[indicator.id] ?? { min: 0, max: Math.max(indicator.bandCrisis, indicator.value, 1) };
+  const warnPct = axisPct(indicator.bandWarn, scale.min, scale.max);
+  const crisisPct = axisPct(indicator.bandCrisis, scale.min, scale.max);
+  const valuePct = clampedAxisPct(indicator.value, scale.min, scale.max);
 
   return (
-    <div
-      className="flex items-center justify-between gap-2 py-1"
-      data-testid={`regime-chip-${indicator.id}`}
-    >
-      <div className="flex min-w-0 items-center gap-1">
-        <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
-          {shortLabel(indicator, dense)}
-        </span>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger
-              data-testid={`regime-why-${indicator.id}`}
-              aria-label={`${indicator.label} source and rationale`}
-              style={{
-                display: "inline-flex",
-                cursor: "default",
-                background: "transparent",
-                border: "none",
-                padding: 0,
-              }}
-            >
-              <Badge
-                variant="outline"
-                className="border-line2 px-1 py-0 font-mono text-[9px] text-dim"
+    <div className="flex flex-col gap-1 py-1.5" data-testid={`regime-chip-${indicator.id}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+            {shortLabel(indicator, dense)}
+          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger
+                data-testid={`regime-why-${indicator.id}`}
+                aria-label={`${indicator.label} source and rationale`}
+                style={{
+                  display: "inline-flex",
+                  cursor: "default",
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                }}
               >
-                ⓘ
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>
-              <div className="flex max-w-xs flex-col gap-1 font-mono text-xs leading-[1.45] text-muted-foreground">
-                <span>{indicator.source}</span>
-                <span>{indicator.rationale}</span>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span
-          className={cn("size-1.5 shrink-0 rounded-full", band.dot)}
-          data-testid={`regime-band-${indicator.id}`}
-          aria-hidden="true"
-        />
+                <Badge
+                  variant="outline"
+                  className="border-line2 px-1 py-0 font-mono text-[9px] text-dim"
+                >
+                  ⓘ
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex max-w-xs flex-col gap-1 font-mono text-xs leading-[1.45] text-muted-foreground">
+                  <span>{indicator.source}</span>
+                  <span>{indicator.rationale}</span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
         <span
           className={cn(
             "font-mono text-[13px] tabular-nums",
@@ -112,6 +145,33 @@ function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean 
         >
           {indicator.value.toFixed(2)}
         </span>
+      </div>
+      <div
+        role="meter"
+        className="relative h-1.5 w-full overflow-hidden rounded-full bg-line2"
+        aria-valuenow={indicator.value}
+        aria-valuemin={scale.min}
+        aria-valuemax={scale.max}
+        aria-valuetext={`${indicator.value.toFixed(2)} — ${indicator.band}`}
+        aria-label={`${indicator.label} gauge`}
+        data-testid={`regime-gauge-${indicator.id}`}
+      >
+        <div
+          className="absolute inset-y-0 bg-amber/30"
+          style={{ left: `${warnPct}%`, width: `${crisisPct - warnPct}%` }}
+        />
+        <div
+          className="absolute inset-y-0 bg-down/30"
+          style={{ left: `${crisisPct}%`, width: `${100 - crisisPct}%` }}
+        />
+        <div
+          className={cn(
+            "absolute top-1/2 h-2.5 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full",
+            MARKER_CLASSES[indicator.band],
+          )}
+          style={{ left: `${valuePct}%` }}
+          data-testid={`regime-gauge-marker-${indicator.id}`}
+        />
       </div>
     </div>
   );
