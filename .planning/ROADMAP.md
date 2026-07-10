@@ -307,7 +307,7 @@ by a gear-icon modal in the top bar grouped by engine with reset-to-defaults per
 an override reproduces today's behavior byte-identically (backtest leakage-oracle safe).
 **Requirements**: none mapped — user-added phase; scope defined by 29-CONTEXT.md locked decisions
 **Depends on:** Phase 28
-**Plans:** 12/14 plans executed
+**Plans:** 13/14 plans executed
 
 Plans:
 **Wave 1**
@@ -336,7 +336,7 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 29-11-PLAN.md — Exits consumption wiring: fresh read + evaluateExit config (worker root)
-- [ ] 29-13-PLAN.md — Server surface: GET/PUT /api/settings/rules + MCP tools + engine-computed defaults
+- [x] 29-13-PLAN.md — Server surface: GET/PUT /api/settings/rules + MCP tools + engine-computed defaults
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
