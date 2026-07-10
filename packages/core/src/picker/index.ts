@@ -55,3 +55,6 @@ export type {
 } from "./domain/types.ts";
 export { realizedVol } from "./domain/realized-vol.ts";
 export { rankAndCapCandidates, PICKER_TOP_N } from "./application/computePickerSnapshot.ts";
+// 29-07 (Runtime Rule Settings): the picker merge fn the worker wiring (29-10) destructures.
+export { resolvePickerRuleConfig } from "./domain/rule-config.ts";
+export type { PickerRuleConfig, PickerRuleOverrides } from "./domain/rule-config.ts";
