@@ -148,6 +148,20 @@ export default tseslint.config(
     },
   },
 
+  // shadcn-generated ui primitives (apps/web/src/components/ui/**) — scaffolded by the
+  // shadcn CLI and committed unmodified (Phase 33 D-02: "no wrapping abstraction",
+  // extend only via composition/config). They don't follow this repo's strict-TS
+  // conventions; relaxing just the two rules the generator's own patterns trip
+  // (concrete generic defaults read as nullable-conditional checks, internal payload
+  // narrowing needs a cast) keeps no-explicit-any and no-non-null-assertion enforced.
+  {
+    files: ["apps/web/src/components/ui/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/consistent-type-assertions": "off",
+      "@typescript-eslint/strict-boolean-expressions": "off",
+    },
+  },
+
   // Test files, vitest config, contract harnesses, and globalSetup — not in tsconfig emit
   // scope; use project:false to avoid "file not in project" parse errors.
   // Applies syntactic strict rules only (no type-aware rules that need parserOptions.project).
