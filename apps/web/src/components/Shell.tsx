@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { AuthExpiredBanner } from "./AuthExpiredBanner.tsx";
+import { RuleSettingsModal } from "../screens/RuleSettingsModal.tsx";
 
 // ─── Screen registry ─────────────────────────────────────────────────────────
 
@@ -90,6 +91,8 @@ export function Shell({
           </nav>
         </div>
 
+        {/* Right: settings gear (Phase 29-14) */}
+        <RuleSettingsModal />
       </header>
 
       {/* Active screen content area */}
