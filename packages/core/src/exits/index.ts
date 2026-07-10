@@ -33,6 +33,10 @@ export type {
   ExitRuleSetEntry,
   ExitAdviceSnapshot,
   ForRunningGetExitAdvice,
+  ExitPreviewEntry,
+  ExitPreviewResult,
+  ExitPreviewDeps,
+  ForPreviewingExitRuleOverrides,
 } from "./application/ports.ts";
 
 // ─── Exit rule registry (Phase 26, Plan 02) ────────────────────────────────
@@ -63,6 +67,11 @@ export { makeComputeExitAdviceUseCase } from "./application/computeExitAdvice.ts
 export type { ComputeExitAdviceDeps } from "./application/computeExitAdvice.ts";
 export { makeGetExitAdviceUseCase } from "./application/getExitAdvice.ts";
 export type { GetExitAdviceDeps } from "./application/getExitAdvice.ts";
+
+// ─── Exit preview use-case (Phase 32, Plan 03, B2) ─────────────────────────
+// Top-level @morai/core barrel (packages/core/src/index.ts) is OWNED by Plan 04 (avoids a
+// Wave-1 barrel-edit conflict with Plan 02) — do not re-export there from this plan.
+export { makePreviewExitRuleOverridesUseCase } from "./application/previewExitRuleOverrides.ts";
 
 // 29-05 (Runtime Rule Settings): the exits merge fn — 29-13's server composition root
 // destructures this to build the settings surface's injected `defaults`.
