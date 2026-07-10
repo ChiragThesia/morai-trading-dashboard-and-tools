@@ -1,8 +1,7 @@
-import { AreaClosed, LinePath } from "@visx/shape";
-import { curveMonotoneX } from "@visx/curve";
-import { scaleLinear } from "@visx/scale";
-import { LinearGradient } from "@visx/gradient";
-import { Group } from "@visx/group";
+import { useId } from "react";
+import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ReferenceDot } from "recharts";
+import { ChartContainer } from "../ui/chart.tsx";
+import type { ChartConfig } from "../ui/chart.tsx";
 import type { GexSnapshotEntry } from "@morai/contracts";
 
 /**
@@ -11,12 +10,12 @@ import type { GexSnapshotEntry } from "@morai/contracts";
  * UI-SPEC "Market screen" anchor: 720×230px (full) or 300×130px (compact for Analyzer right panel).
  *
  * Renders the net-gamma-profile curve from gexSnapshotEntry.profile[{spot, gamma}]:
- *   - Teal fill above zero (positive gamma, DAMPEN regime)
- *   - Coral fill below zero (negative gamma, AMPLIFY regime)
- *   - Amber vertical dashed line at γ-flip level (flip)
- *   - Blue vertical solid line at current spot
+ *   - Teal fill above zero (positive gamma, DAMPEN regime), coral fill below zero (AMPLIFY
+ *     regime) — a single Area with a split-gradient offset at the zero-gamma crossing.
+ *   - Amber vertical dashed ReferenceLine at γ-flip level (flip), only when non-null.
+ *   - Blue vertical solid ReferenceLine at current spot + a ReferenceDot at the zero baseline.
  *
- * Chart library: visx (AreaClosed + LinePath + LinearGradient — locked by UI-SPEC).
+ * Chart library: Recharts (shadcn ChartContainer), migrated off @visx — Phase 33.
  * No any/as/! — all types from GexSnapshotEntry.
  */
 
@@ -52,10 +51,14 @@ const COMPACT_HEIGHT = 130;
 
 const MARGIN = { top: 16, right: 16, bottom: 24, left: 16 };
 
+const chartConfig = {
+  gamma: { label: "Net γ", color: TEAL },
+} satisfies ChartConfig;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * GammaProfile — visx net gamma profile (compact + full sizes).
+ * GammaProfile — Recharts net gamma profile (compact + full sizes).
  *
  * compact=true → 300×130px (Analyzer right panel)
  * compact=false (default) → 720×230px (Market screen anchor)
@@ -68,15 +71,14 @@ export function GammaProfile({
   height,
   compact = false,
 }: GammaProfileProps): React.ReactElement | null {
+  // useId must run unconditionally before the null-guard early return (rules of hooks).
+  const gradientId = `gamma-fill-${useId().replace(/:/g, "")}`;
+
   if (profile.length < 2) return null;
 
   const svgWidth = width ?? (compact ? COMPACT_WIDTH : FULL_WIDTH);
   const svgHeight = height ?? (compact ? COMPACT_HEIGHT : FULL_HEIGHT);
 
-  const innerWidth = svgWidth - MARGIN.left - MARGIN.right;
-  const innerHeight = svgHeight - MARGIN.top - MARGIN.bottom;
-
-  // Scales
   const spotValues = profile.map((p) => p.spot);
   const gammaValues = profile.map((p) => p.gamma);
 
@@ -85,177 +87,74 @@ export function GammaProfile({
   const minGamma = Math.min(0, ...gammaValues);
   const maxGamma = Math.max(0, ...gammaValues);
   const gammaPad = Math.max(Math.abs(maxGamma - minGamma) * 0.05, 1);
+  const yLo = minGamma - gammaPad;
+  const yHi = maxGamma + gammaPad;
 
-  const xScale = scaleLinear({
-    domain: [minSpot, maxSpot],
-    range: [0, innerWidth],
-  });
+  // Split-gradient offset: fraction of the y-domain (top=0%) that is >= 0 (RESEARCH Pattern 2 / D-05).
+  const splitOffset = yHi <= 0 ? 0 : yLo >= 0 ? 1 : yHi / (yHi - yLo);
 
-  const yScale = scaleLinear({
-    domain: [minGamma - gammaPad, maxGamma + gammaPad],
-    range: [innerHeight, 0],
-  });
-
-  const getX = (p: { spot: number; gamma: number }): number => xScale(p.spot);
-  const getY = (p: { spot: number; gamma: number }): number => yScale(p.gamma);
-
-  const zeroY = yScale(0);
-
-  // Split profile into above-zero and below-zero regions for separate fills
-  // We use two AreaClosed charts clipped to the above/below zero halves.
-  // Upper region: gamma > 0 (teal)
-  // Lower region: gamma < 0 (coral)
-
-  // Spot x position
-  const spotX = xScale(spot);
-
-  // Flip x position (when non-null)
-  const flipX = flip !== null ? xScale(flip) : null;
-
+  const dashedStroke = compact ? "4 3" : "6 4";
   const lineStroke = compact ? 1 : 1.5;
-  const dashedStroke = compact ? "4,3" : "6,4";
 
   return (
-    <svg
-      width={svgWidth}
-      height={svgHeight}
-      aria-label="Net dealer gamma profile"
-      role="img"
-      style={{ overflow: "visible", background: "transparent" }}
-    >
-      {/* Gradient definitions */}
-      <LinearGradient
-        id="gamma-teal-fill"
-        from={TEAL}
-        to={TEAL}
-        fromOpacity={0.3}
-        toOpacity={0.05}
-        vertical
-      />
-      <LinearGradient
-        id="gamma-coral-fill"
-        from={CORAL}
-        to={CORAL}
-        fromOpacity={0.05}
-        toOpacity={0.3}
-        vertical
-      />
+    <ChartContainer config={chartConfig} style={{ width: svgWidth, height: svgHeight }}>
+      {/* Explicit width/height: ChartContainer's ResponsiveContainer takes priority when
+          it measures a real size (browser), but falls back to these under jsdom where
+          ResizeObserver/context sizing isn't available (matches 33-01's zorder-spike
+          precedent) — required for GammaProfile's fixed-pixel compact/full sizes anyway. */}
+      <AreaChart data={profile} width={svgWidth} height={svgHeight} margin={MARGIN}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset={splitOffset} stopColor={TEAL} stopOpacity={0.3} />
+            <stop offset={splitOffset} stopColor={CORAL} stopOpacity={0.3} />
+          </linearGradient>
+        </defs>
 
-      <Group left={MARGIN.left} top={MARGIN.top}>
-        {/* Zero baseline */}
-        <line
-          x1={0}
-          x2={innerWidth}
-          y1={zeroY}
-          y2={zeroY}
-          stroke={ZERO_LINE}
-          strokeWidth={1}
+        <XAxis
+          type="number"
+          dataKey="spot"
+          domain={[minSpot, maxSpot]}
+          allowDataOverflow
+          hide={compact}
+          ticks={[minSpot, maxSpot]}
+          tickFormatter={(v: number): string => v.toFixed(0)}
+          tick={{ fill: "#566273", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+          tickLine={false}
+          axisLine={false}
         />
+        <YAxis type="number" domain={[yLo, yHi]} allowDataOverflow hide />
 
-        {/* Teal area fill above zero (positive gamma — DAMPEN) */}
-        <AreaClosed
-          data={profile}
-          x={getX}
-          y={(p) => Math.min(getY(p), zeroY)}
-          y0={zeroY}
-          yScale={yScale}
-          curve={curveMonotoneX}
-          fill="url(#gamma-teal-fill)"
-        />
+        <ReferenceLine y={0} stroke={ZERO_LINE} className="gamma-zero-line" />
 
-        {/* Coral area fill below zero (negative gamma — AMPLIFY) */}
-        <AreaClosed
-          data={profile}
-          x={getX}
-          y={(p) => Math.max(getY(p), zeroY)}
-          y0={zeroY}
-          yScale={yScale}
-          curve={curveMonotoneX}
-          fill="url(#gamma-coral-fill)"
-        />
-
-        {/* The gamma profile line */}
-        <LinePath
-          data={profile}
-          x={getX}
-          y={getY}
-          curve={curveMonotoneX}
+        <Area
+          type="monotone"
+          dataKey="gamma"
+          className="gamma-area"
           stroke={TEAL}
           strokeWidth={lineStroke}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          // Above zero → teal, below zero → coral via gradient trick
+          fill={`url(#${gradientId})`}
+          isAnimationActive={false}
         />
 
-        {/* Gamma flip vertical dashed line (amber) */}
-        {flipX !== null && (
-          <line
-            x1={flipX}
-            x2={flipX}
-            y1={0}
-            y2={innerHeight}
+        {flip !== null && (
+          <ReferenceLine
+            x={flip}
+            className="gamma-flip-line"
             stroke={AMBER}
-            strokeWidth={1}
             strokeDasharray={dashedStroke}
           />
         )}
 
-        {/* Spot vertical solid line (blue) */}
-        <line
-          x1={spotX}
-          x2={spotX}
-          y1={0}
-          y2={innerHeight}
-          stroke={BLUE}
-          strokeWidth={compact ? 1 : 1.5}
-        />
-
-        {/* Spot dot at zero line */}
-        <circle
-          cx={spotX}
-          cy={zeroY}
+        <ReferenceLine x={spot} className="gamma-spot-line" stroke={BLUE} strokeWidth={lineStroke} />
+        <ReferenceDot
+          x={spot}
+          y={0}
           r={compact ? 3 : 4}
+          className="gamma-spot-dot"
           fill={BLUE}
+          stroke="none"
         />
-
-        {/* Axis labels (compact skips them for space) */}
-        {!compact && (
-          <>
-            {/* X-axis min/max labels */}
-            <text
-              x={0}
-              y={innerHeight + 16}
-              fill="#566273"
-              fontSize={9}
-              fontFamily="JetBrains Mono, monospace"
-              textAnchor="start"
-            >
-              {minSpot.toFixed(0)}
-            </text>
-            <text
-              x={innerWidth}
-              y={innerHeight + 16}
-              fill="#566273"
-              fontSize={9}
-              fontFamily="JetBrains Mono, monospace"
-              textAnchor="end"
-            >
-              {maxSpot.toFixed(0)}
-            </text>
-            {/* Zero label */}
-            <text
-              x={-4}
-              y={zeroY + 4}
-              fill={ZERO_LINE}
-              fontSize={9}
-              fontFamily="JetBrains Mono, monospace"
-              textAnchor="end"
-            >
-              0
-            </text>
-          </>
-        )}
-      </Group>
-    </svg>
+      </AreaChart>
+    </ChartContainer>
   );
 }

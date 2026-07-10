@@ -53,7 +53,7 @@ describe("GammaProfile", () => {
     expect(colors).toContain(TEAL);
     expect(colors).toContain(CORAL);
 
-    const area = container.querySelector(".gamma-area");
+    const area = container.querySelector(".gamma-area path.recharts-area-area");
     expect(area).not.toBeNull();
     expect(area?.getAttribute("fill") ?? "").toContain("url(#");
   });
@@ -63,7 +63,7 @@ describe("GammaProfile", () => {
       <GammaProfile profile={MIXED_PROFILE} spot={7375} flip={7350} />,
     );
 
-    const flipLine = container.querySelector(".gamma-flip-line");
+    const flipLine = container.querySelector(".gamma-flip-line line");
     expect(flipLine).not.toBeNull();
     expect(flipLine?.getAttribute("stroke")).toBe(AMBER);
     expect(flipLine?.getAttribute("stroke-dasharray")).toBeTruthy();
@@ -82,16 +82,16 @@ describe("GammaProfile", () => {
       <GammaProfile profile={MIXED_PROFILE} spot={7375} flip={null} />,
     );
 
-    const spotLine = container.querySelector(".gamma-spot-line");
+    const spotLine = container.querySelector(".gamma-spot-line line");
     expect(spotLine).not.toBeNull();
     expect(spotLine?.getAttribute("stroke")).toBe(BLUE);
     expect(spotLine?.getAttribute("stroke-dasharray")).toBeFalsy();
 
-    const spotDot = container.querySelector(".gamma-spot-dot");
+    const spotDot = container.querySelector(".gamma-spot-dot circle");
     expect(spotDot).not.toBeNull();
-    expect(spotDot?.tagName.toLowerCase()).toBe("circle");
     expect(spotDot?.getAttribute("fill")).toBe(BLUE);
-    expect(spotDot?.getAttribute("cy")).toBe(spotDot?.closest("svg")?.querySelector(".gamma-zero-line")?.getAttribute("y1"));
+    const zeroLine = container.querySelector(".gamma-zero-line line");
+    expect(spotDot?.getAttribute("cy")).toBe(zeroLine?.getAttribute("y1"));
   });
 
   it("renders full size at 720x230 by default", () => {
