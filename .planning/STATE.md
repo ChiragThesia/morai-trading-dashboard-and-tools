@@ -5,15 +5,15 @@ milestone_name: Picker Intelligence
 current_phase: 29
 current_phase_name: Runtime Rule Settings
 status: executing
-stopped_at: Completed 29-04-PLAN.md
-last_updated: "2026-07-10T04:57:14.972Z"
+stopped_at: Completed 29-08-PLAN.md
+last_updated: "2026-07-10T05:07:56Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 29 execution started
+last_activity_desc: Completed 29-08 (rule-overrides persistence — postgres repo + memory twin + migration 0022)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 40
-  completed_plans: 34
+  completed_plans: 35
   percent: 75
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 29 (Runtime Rule Settings) — EXECUTING
-Plan: 9 of 14
-Status: Ready to execute
-Last activity: 2026-07-10 — Phase 29 execution started
+Plan: 08 of 14 complete (9 also complete, out of dependency order — 08 depended on 09)
+Status: Ready to execute next plan
+Last activity: 2026-07-10 — Completed 29-08-PLAN.md (rule-overrides persistence)
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -279,6 +279,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 29 P06 | 4min | 2 tasks | 4 files |
 | Phase 29 P07 | 8min | 1 tasks | 3 files |
 | Phase 29 P09 | 22min | 2 tasks | 8 files |
+| Phase 29 P08 | 25min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -398,6 +399,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 29-07: PickerRuleOverrides uses flat field names matching the contracts pickerOverrides group; PickerRuleConfig uses the plan-pinned nested shape; single-field isolation proven via 12 deterministic tests, idempotency via a real fast-check property over all 12 fields
 - [Phase ?]: computeEffective/mergeStoredOverrides use a generic JsonObject-shaped deep-merge (no picker/exits/regime field names) so the settings context never imports contracts or engine domain code — engine-agnostic by construction, zero as casts
 - [Phase ?]: Deep (not group-level shallow) recursion at every nesting level — correct for both picker's atomic all-or-none sub-objects and exits' partial per-rung patches with the same merge function
+- [Phase 29-08]: added packages/adapters/src/__contract__/rule-overrides.contract.ts (not itemized in the plan's files_modified list) — matches the codebase-wide convention every other multi-adapter repo uses for its shared contract-test logic
+- [Phase 29-08]: RuleOverrides (contracts) → StoredRuleOverrides (core JsonObject) conversion uses a JSON.parse(JSON.stringify(...)) round-trip behind a typed isJsonObject guard to drop zod's optional `| undefined` fields under exactOptionalPropertyTypes — zero as/any
 
 ### Pending Todos
 
@@ -454,11 +457,11 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T04:56:38.193Z
-Stopped at: Completed 29-04-PLAN.md
+Last session: 2026-07-10T05:07:56Z
+Stopped at: Completed 29-08-PLAN.md
 Resume file: None
 
-- Next: /gsd-plan-phase 23 (VIX3M Ingestion)
+- Next: continue Phase 29 wave 3 (remaining plans depend on 29-08's rule-overrides persistence)
 
 ## Operator Next Steps
 

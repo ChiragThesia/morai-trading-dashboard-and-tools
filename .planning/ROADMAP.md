@@ -307,7 +307,7 @@ by a gear-icon modal in the top bar grouped by engine with reset-to-defaults per
 an override reproduces today's behavior byte-identically (backtest leakage-oracle safe).
 **Requirements**: none mapped — user-added phase; scope defined by 29-CONTEXT.md locked decisions
 **Depends on:** Phase 28
-**Plans:** 8/14 plans executed
+**Plans:** 9/14 plans executed
 
 Plans:
 **Wave 1**
@@ -326,7 +326,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 29-08-PLAN.md — Storage: ruleOverrides table + migration 0022 [BLOCKING] + repo + memory twin
+- [x] 29-08-PLAN.md — Storage: ruleOverrides table + migration 0022 [BLOCKING] + repo + memory twin
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
