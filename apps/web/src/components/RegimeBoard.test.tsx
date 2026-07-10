@@ -180,6 +180,24 @@ describe("RegimeBoard", () => {
     expect(await screen.findByText(hyOas.rationale)).toBeDefined();
   });
 
+  it("shortens long indicator labels in dense mode so tiles never wrap; full labels stay outside dense mode", () => {
+    setRegimeBoard(INDICATORS);
+    const { unmount } = render(<RegimeBoard dense />);
+    expect(screen.getByTestId("regime-chip-vix-term-structure").textContent).toContain("VIX/VIX3M");
+    expect(screen.getByTestId("regime-chip-vix-term-structure").textContent).not.toContain(
+      "VIX/VIX3M Term Structure",
+    );
+    expect(screen.getByTestId("regime-chip-hy-oas").textContent).toContain("HY OAS");
+    expect(screen.getByTestId("regime-chip-hy-oas").textContent).not.toContain("Credit Spread");
+    unmount();
+
+    render(<RegimeBoard />);
+    expect(screen.getByTestId("regime-chip-vix-term-structure").textContent).toContain(
+      "VIX/VIX3M Term Structure",
+    );
+    expect(screen.getByTestId("regime-chip-hy-oas").textContent).toContain("HY OAS (Credit Spread)");
+  });
+
   it("renders the 'Market regime' panel heading in every state (loading/error/empty/populated)", () => {
     setRegimeBoard(undefined, { isPending: true });
     const { unmount } = render(<RegimeBoard />);
@@ -242,7 +260,7 @@ describe("RegimeBoard — merged rates row (post-v1.3 FRED macro absorption)", (
     expect(screen.queryByTestId("rate-chip-VVIX")).toBeNull();
   });
 
-  it("renders both the indicator/gate row and the rates row as pill-shaped (rounded-full) chips", () => {
+  it("renders indicator/gate tiles as rectangular (rounded-lg), and only the rates row as pill-shaped (rounded-full)", () => {
     setRegimeBoard(INDICATORS);
     setMacro(MACRO_DATA);
     setPickerGate({
@@ -257,8 +275,10 @@ describe("RegimeBoard — merged rates row (post-v1.3 FRED macro absorption)", (
     });
     render(<RegimeBoard />);
 
-    expect(screen.getByTestId("regime-chip-vvix").className).toContain("rounded-full");
-    expect(screen.getByTestId("gate-chip").className).toContain("rounded-full");
+    expect(screen.getByTestId("regime-chip-vvix").className).toContain("rounded-lg");
+    expect(screen.getByTestId("regime-chip-vvix").className).not.toContain("rounded-full");
+    expect(screen.getByTestId("gate-chip").className).toContain("rounded-lg");
+    expect(screen.getByTestId("gate-chip").className).not.toContain("rounded-full");
     expect(screen.getByTestId("rate-chip-DFF").className).toContain("rounded-full");
   });
 

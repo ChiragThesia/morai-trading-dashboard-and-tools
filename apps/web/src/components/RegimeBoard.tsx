@@ -26,10 +26,13 @@ import type { RegimeBand, RegimeIndicator, PickerGate, MacroResponse, MacroSerie
  *     VVIX is already a banded regime indicator above and VIX lives in the entry-gate
  *     chip + pill header.
  *
- * All chips in both rows are pill-shaped (rounded-full) per the merge's visual spec.
- * Each indicator chip: label + ⓘ provenance tooltip (payload's own source + rationale,
- * BOARD-02) / band dot + value / as-of date. Reuses the existing "IV n/a" Badge+Tooltip
- * interaction verbatim (Overview.tsx) — no new atom, no new token.
+ * The indicator chips and the entry-gate tile are rectangular (rounded-lg, the Panel/
+ * MetricChip bordered-tile convention) — they carry 3 lines of card-sized content, and
+ * rounded-full pills only read right for single-line chips. The rates row below stays
+ * pill-shaped (rounded-full) since those are single-line label+value chips.
+ * Each indicator chip: SHORT label + ⓘ provenance tooltip (payload's own source +
+ * rationale, BOARD-02) / band dot + value / as-of date. Reuses the existing "IV n/a"
+ * Badge+Tooltip interaction verbatim (Overview.tsx) — no new atom, no new token.
  *
  * The entry-gate tile (GateChip, 28-06) reads `PickerSnapshotResponse.gate` straight
  * from `usePicker()`, and the rates row reads `useMacro()` — both separate data sources
@@ -48,17 +51,25 @@ const BAND_CLASSES: Record<RegimeBand, { dot: string; text: string }> = {
   crisis: { dot: "bg-down", text: "text-down" },
 };
 
-function Chip({ indicator }: { indicator: RegimeIndicator }): React.ReactElement {
+/** Dense-mode label shortening (never wrap a 3-line rectangular tile) — the full name
+ *  isn't lost, it's still legible in the indicator's own `label` at non-dense width. */
+const SHORT_LABELS: Record<string, string> = {
+  "vix-term-structure": "VIX/VIX3M",
+  "hy-oas": "HY OAS",
+};
+
+function Chip({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean }): React.ReactElement {
   const band = BAND_CLASSES[indicator.band];
+  const label = dense ? (SHORT_LABELS[indicator.id] ?? indicator.label) : indicator.label;
 
   return (
     <div
-      className="flex flex-col gap-0.5 rounded-full bg-raise/40 px-2 py-1.5"
+      className="flex flex-col gap-0.5 rounded-lg bg-raise/40 px-2 py-1.5 ring-1 ring-line"
       data-testid={`regime-chip-${indicator.id}`}
     >
       <div className="flex items-center gap-1">
         <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
-          {indicator.label}
+          {label}
         </span>
         <TooltipProvider>
           <Tooltip>
@@ -148,8 +159,8 @@ function GateChip({ gate }: { gate: PickerGate }): React.ReactElement {
   return (
     <div
       className={cn(
-        "flex flex-col gap-0.5 rounded-full px-2 py-1.5",
-        isBlind ? "bg-downd ring-1 ring-down/40" : "bg-raise/40",
+        "flex flex-col gap-0.5 rounded-lg px-2 py-1.5 ring-1",
+        isBlind ? "bg-downd ring-down/40" : "bg-raise/40 ring-line",
       )}
       data-testid="gate-chip"
     >
@@ -293,10 +304,10 @@ export function RegimeBoard({ dense = false }: { dense?: boolean } = {}): React.
       <PanelHeading title="Market regime" />
       <div className={cn("grid grid-cols-2 gap-2", !dense && "md:grid-cols-4")}>
         {data.map((indicator) => (
-          <Chip key={indicator.id} indicator={indicator} />
+          <Chip key={indicator.id} indicator={indicator} dense={dense} />
         ))}
-        {gateChip}
       </div>
+      {gateChip}
       {ratesRow}
     </Panel>
   );
