@@ -15,7 +15,7 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { bsmGreeks, bsmPrice } from "@morai/quant";
-import { parseOccSymbol } from "@morai/shared";
+import { parseOccSymbol, settlementTimestamp } from "@morai/shared";
 import { computePositionGreeks } from "./position-greeks.ts";
 import { repriceScenario, t0ExcludedPositions, buildScenarioStrip, findZeroCrossings } from "./scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams } from "./scenario-engine.ts";
@@ -125,8 +125,8 @@ describe("repriceScenario — kernel parity (D-01)", () => {
     // must equal direct bsmGreeks call AND the Plan-06 position-greeks helper.
 
     // Compute T in years for the back leg (the open leg at DTE days forward = 0)
-    // Back leg: backDte - 0 = 69 days remaining
-    const backT = LIVE_POS.backDte / 365;
+    // Back leg: backDte - 0 = 69 days remaining. 365.25-day year (D-02, 34-02).
+    const backT = LIVE_POS.backDte / 365.25;
 
     const directGreeks = bsmGreeks(SPOT, LIVE_POS.occSymbol ? 7425 : 7425, backT, IV, R, Q, "P");
 
@@ -138,8 +138,10 @@ describe("repriceScenario — kernel parity (D-01)", () => {
 
     // Per-position delta should be within 1e-4 of direct bsmGreeks (back leg only for calendar delta)
     // For a calendar: the net greek is back - front (both legs via same kernel)
-    // At 0 days forward: backT = 69/365, frontT = 45/365
-    const frontT = LIVE_POS.frontDte / 365;
+    // At 0 days forward: backT = 69/365.25, frontT = 45/365.25 — this doubles as the
+    // no-new-fields regression proof: LIVE_POS carries none of the 34-02 optional
+    // fields, so repriceScenario must match this oracle save the 365→365.25 divisor.
+    const frontT = LIVE_POS.frontDte / 365.25;
     const frontGreeks = bsmGreeks(SPOT, 7425, frontT, IV, R, Q, "P");
     const expectedDelta = directGreeks.delta - frontGreeks.delta;
     const expectedGamma = directGreeks.gamma - frontGreeks.gamma;
@@ -155,7 +157,7 @@ describe("repriceScenario — kernel parity (D-01)", () => {
     // actually equals a direct bsmGreeks call on the SAME inputs the helper uses —
     // a real parity check, not a value compared to itself. computePositionGreeks
     // derives T from the OCC expiry (parseOccSymbol + Date.now(), 365.25-day year),
-    // NOT from backDte/365, so we reprice with that same expiry-derived T and strike.
+    // NOT from backDte, so we reprice with that same expiry-derived T and strike.
     const netQty = 1;
     const pgResult = computePositionGreeks({
       occSymbol: LIVE_POS.occSymbol,
@@ -182,6 +184,71 @@ describe("repriceScenario — kernel parity (D-01)", () => {
       expect(pgResult.value.greeks.theta).toBeCloseTo(helperKernel.theta * netQty, 6);
       expect(pgResult.value.greeks.vega).toBeCloseTo(helperKernel.vega * netQty, 6);
     }
+  });
+});
+
+// ─── (34-02) Kernel-parity with fractional DTE + per-leg carry (Pattern 3) ─────
+
+describe("repriceScenario — kernel parity with fractional DTE + per-leg carry (34-02)", () => {
+  it("per-position greeks equal a direct bsmGreeks call using T computed independently via settlementTimestamp and per-leg rate/divYield", () => {
+    const now = new Date("2026-06-28T00:00:00Z");
+    const frontOccSymbol = "SPXW  260807P07425000";
+    const backOccSymbol = "SPXW  260831P07425000";
+    const frontParsed = parseOccSymbol(frontOccSymbol);
+    const backParsed = parseOccSymbol(backOccSymbol);
+    expect(frontParsed.ok).toBe(true);
+    expect(backParsed.ok).toBe(true);
+    if (!frontParsed.ok || !backParsed.ok) return;
+
+    const MS_PER_DAY = 86_400_000;
+    const DAYS_PER_YEAR = 365.25;
+    const frontDteExact =
+      (settlementTimestamp(frontParsed.value.root, frontParsed.value.expiry).getTime() - now.getTime()) /
+      MS_PER_DAY;
+    const backDteExact =
+      (settlementTimestamp(backParsed.value.root, backParsed.value.expiry).getTime() - now.getTime()) /
+      MS_PER_DAY;
+
+    const frontRate = 0.05;
+    const frontDivYield = 0.02;
+    const backRate = 0.04;
+    const backDivYield = 0.01;
+
+    const pos: AnalyzerPosition = {
+      id: "carry-1",
+      name: "Fractional DTE + per-leg carry",
+      live: true,
+      occSymbol: backOccSymbol,
+      putCall: "P",
+      frontDte: Math.ceil(frontDteExact), // whole-day fallback — must be ignored, exact wins
+      backDte: Math.ceil(backDteExact),
+      frontDteExact,
+      backDteExact,
+      frontIv: 0.145,
+      backIv: 0.15,
+      frontRate,
+      frontDivYield,
+      backRate,
+      backDivYield,
+      qty: 1,
+      included: true,
+    };
+
+    const spot = 7381;
+    const params: ScenarioParams = { spot, daysForward: 0, ivShift: 0, rate: 0.043, divYield: 0.013 };
+    const result = repriceScenario([pos], params);
+    const scenarioPosGreeks = result.positionGreeks.find((pg) => pg.id === "carry-1");
+    expect(scenarioPosGreeks).toBeDefined();
+    if (scenarioPosGreeks === undefined) return;
+
+    const K = 7425;
+    const directFront = bsmGreeks(spot, K, frontDteExact / DAYS_PER_YEAR, pos.frontIv, frontRate, frontDivYield, "P");
+    const directBack = bsmGreeks(spot, K, backDteExact / DAYS_PER_YEAR, pos.backIv, backRate, backDivYield, "P");
+
+    expect(scenarioPosGreeks.delta).toBeCloseTo(directBack.delta - directFront.delta, 8);
+    expect(scenarioPosGreeks.gamma).toBeCloseTo(directBack.gamma - directFront.gamma, 8);
+    expect(scenarioPosGreeks.theta).toBeCloseTo(directBack.theta - directFront.theta, 8);
+    expect(scenarioPosGreeks.vega).toBeCloseTo(directBack.vega - directFront.vega, 8);
   });
 });
 
@@ -559,14 +626,14 @@ describe("expirationCurve — mixed-expiry book prices at ONE horizon (TOS parit
       let expected = 0;
       for (const pos of [EARLY_POS, LATE_POS]) {
         const K = pos.id === "early-1" ? 7425 : 7200;
-        const backT = Math.max((pos.backDte - horizon) / 365, 1e-6);
-        const frontT = Math.max((pos.frontDte - horizon) / 365, 0);
+        const backT = Math.max((pos.backDte - horizon) / 365.25, 1e-6);
+        const frontT = Math.max((pos.frontDte - horizon) / 365.25, 0);
         const net =
           bsmPrice(point.spot, K, backT, pos.backIv, R, Q, "P") -
           bsmPrice(point.spot, K, frontT, pos.frontIv, R, Q, "P");
         const entry =
-          bsmPrice(SPOT, K, pos.backDte / 365, pos.backIv, R, Q, "P") -
-          bsmPrice(SPOT, K, pos.frontDte / 365, pos.frontIv, R, Q, "P");
+          bsmPrice(SPOT, K, pos.backDte / 365.25, pos.backIv, R, Q, "P") -
+          bsmPrice(SPOT, K, pos.frontDte / 365.25, pos.frontIv, R, Q, "P");
         expected += (net - entry) * 100;
       }
 
@@ -591,8 +658,8 @@ describe("entry anchoring — actual fill basis when available (TOS parity, 2026
     );
 
     const netNow =
-      bsmPrice(atSpot.spot, 7425, LIVE_POS.backDte / 365, IV, R, Q, "P") -
-      bsmPrice(atSpot.spot, 7425, LIVE_POS.frontDte / 365, IV, R, Q, "P");
+      bsmPrice(atSpot.spot, 7425, LIVE_POS.backDte / 365.25, IV, R, Q, "P") -
+      bsmPrice(atSpot.spot, 7425, LIVE_POS.frontDte / 365.25, IV, R, Q, "P");
     expect(atSpot.pl).toBeCloseTo((netNow - entryNet) * 100, 6);
     // and the anchor genuinely differs from the model-entry default of ~$0 at spot
     expect(Math.abs(atSpot.pl)).toBeGreaterThan(1);
