@@ -473,3 +473,14 @@ Plans:
 - [x] 35.1-02-PLAN.md — MobileHero + MobileRiskPanel: hero-first P&L, one-row chart chrome, ⋯ dialog, full-bleed chart, freshness caption (wave 2)
 - [x] 35.1-03-PLAN.md — PositionCard re-hierarchy + mobile positions section: heading, card list, footer total, exit states (wave 3)
 - [x] 35.1-04-PLAN.md — MobileMarketSection + MarketRail summary copy + D-12 desktop dead-branch cleanup + integration gate (wave 4)
+
+### Phase 36: Analyzer + Journal mobile redesign — same dedicated-mobile-tree treatment as 35.1 Overview: Analyzer mobile flow (paste-first, scorecard hero, slim chart chrome, no hollow panels), Journal mobile flow (trade cards, full-width lifecycle charts, demoted rebuild), desktop untouched
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 35
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 36 to break down)

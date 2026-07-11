@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 35.1
-status: phase_complete
+status: executing
 stopped_at: Phase 35.1 complete (all v1.3 phases closed — milestone-close ceremony pending)
-last_updated: "2026-07-11T19:26:12.176Z"
+last_updated: "2026-07-11T19:44:29.286Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 35.1 complete
+last_activity_desc: Phase 36 execution started (Analyzer + Journal mobile)
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 14
   total_plans: 76
   completed_plans: 76
-  percent: 100
-current_phase_name: mobile-overview-complete-redesign
+  percent: 93
+current_phase: 36
+current_phase_name: analyzer-journal-mobile-redesign
 ---
 
 # Project State
@@ -24,14 +24,14 @@ current_phase_name: mobile-overview-complete-redesign
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 35.1 — mobile Overview complete redesign (dedicated mobile-only components)
+**Current focus:** Phase 36 — Analyzer + Journal mobile redesign
 
 ## Current Position
 
-Phase: 35.1
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-11 — Phase 35.1 complete
+Phase: 36 — EXECUTING
+Plan: 1 of ?
+Status: Executing Phase 36
+Last activity: 2026-07-11 — Phase 36 execution started
 
 ## Open follow-ups (not phase-22 blockers)
 
