@@ -551,3 +551,81 @@ describe("Journal screen — rule-tag control (RULE-01)", () => {
     expect(screen.queryByTestId("rule-tags-pill")).toBeNull();
   });
 });
+
+// ── 35-05: mobile stack order (flex-col lg:grid port, un-clip below lg) ──
+describe("Journal — mobile stack order (35-05: flex-col lg:grid, un-clip below lg)", () => {
+  beforeEach(() => {
+    mockUseRuleTags.mockReturnValue(emptyRuleTagsResult());
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("starts flex flex-col and gates grid/h-full/overflow-hidden behind lg: (not unconditional)", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    mockUseLifecycle.mockReturnValue({
+      data: { snapshots: [] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
+
+    renderJournal([makeHistoryTrade()]);
+
+    const positions = screen.getByTestId("journal-positions");
+    expect(positions.className).toContain("flex");
+    expect(positions.className).toContain("flex-col");
+    expect(positions.className).not.toMatch(/(?<!lg:)\boverflow-hidden\b/u);
+    expect(positions.className).toContain("lg:overflow-hidden");
+    expect(positions.className).toContain("lg:grid");
+    expect(positions.className).toContain("lg:h-full");
+    expect(positions.className).toContain("lg:grid-cols-[250px_minmax(0,1fr)_290px]");
+  });
+
+  it("gates each column's overflow-y-auto/min-h-0 behind lg: (normal document flow below lg)", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    mockUseLifecycle.mockReturnValue({
+      data: { snapshots: [] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
+
+    renderJournal([makeHistoryTrade()]);
+
+    const trades = screen.getByTestId("journal-trades-column");
+    expect(trades.className).toContain("lg:overflow-y-auto");
+    expect(trades.className).toContain("lg:min-h-0");
+    expect(trades.className).not.toMatch(/(?<!lg:)\boverflow-y-auto\b/u);
+
+    const lifecycle = screen.getByTestId("journal-lifecycle-column");
+    expect(lifecycle.className).toContain("lg:overflow-y-auto");
+    expect(lifecycle.className).toContain("lg:min-h-0");
+
+    const rail = screen.getByTestId("journal-rail-column");
+    expect(rail.className).toContain("lg:overflow-y-auto");
+    expect(rail.className).toContain("lg:min-h-0");
+  });
+
+  it("keeps the three columns in the same DOM order (Trades -> Lifecycle -> reactive rail)", () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    mockUseLifecycle.mockReturnValue({
+      data: { snapshots: [] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
+
+    renderJournal([makeHistoryTrade()]);
+
+    const positions = screen.getByTestId("journal-positions");
+    const children = Array.from(positions.children);
+    const tradesIdx = children.indexOf(screen.getByTestId("journal-trades-column"));
+    const lifecycleIdx = children.indexOf(screen.getByTestId("journal-lifecycle-column"));
+    const railIdx = children.indexOf(screen.getByTestId("journal-rail-column"));
+    expect(tradesIdx).toBeLessThan(lifecycleIdx);
+    expect(lifecycleIdx).toBeLessThan(railIdx);
+  });
+});
