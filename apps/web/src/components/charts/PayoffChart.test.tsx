@@ -298,6 +298,70 @@ describe("PayoffChart — 9-layer z-order (A1, proven empirically in 33-01: zInd
     const spotLine = screen.getByTestId("spot-line");
     expect(t0.compareDocumentPosition(spotLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  // CR-01: the pre-migration component painted BE-marker bars and edge-arrow glyphs ON TOP
+  // of the profit-zone fill, both T+0 fills, the fan/tent/roll/compare curves, and the GEX
+  // wall lines -- only ever under the final T+0 stroke. The Customized/PayoffChartMarks
+  // wiring above (which paints under EVERY zIndex band by construction) inverted that
+  // relationship for these two marks. These three tests assert the old on-top relationship
+  // holds against the same fixtures the "precedes" tests above use.
+  const MARK_PARITY_TOGGLES: PayoffChartToggles = {
+    ...TOGGLES,
+    showProfitZone: true,
+    showExpiration: true,
+    showWalls: true,
+  };
+
+  it("be-marker-t0 renders on top of (after, in DOM order) the profit-zone fill, wall lines, and the expiration tent curve", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={MARK_PARITY_TOGGLES}
+        gex={{ callWall: 7600, putWall: 7400, flip: 7486 }}
+      />,
+    );
+    const marker = screen.getByTestId("be-marker-t0");
+    const zone = screen.getByTestId("profit-zone");
+    const wall = screen.getByTestId("wall-line-call");
+    const tent = screen.getByTestId("net-book-exp-curve");
+    expect(zone.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(wall.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tent.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("be-marker-exp renders on top of (after, in DOM order) the profit-zone fill, wall lines, and the expiration tent curve", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={MARK_PARITY_TOGGLES}
+        gex={{ callWall: 7600, putWall: 7400, flip: 7486 }}
+      />,
+    );
+    const marker = screen.getByTestId("be-marker-exp");
+    const zone = screen.getByTestId("profit-zone");
+    const wall = screen.getByTestId("wall-line-call");
+    const tent = screen.getByTestId("net-book-exp-curve");
+    expect(zone.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(wall.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tent.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("the off-domain edge-arrow glyph renders on top of (after, in DOM order) the profit-zone fill, wall lines, and the expiration tent curve", () => {
+    render(
+      <PayoffChart
+        {...baseProps()}
+        toggles={MARK_PARITY_TOGGLES}
+        gex={{ callWall: 7600, putWall: 6500, flip: 7486 }}
+      />,
+    );
+    const arrow = screen.getByText("‹");
+    const zone = screen.getByTestId("profit-zone");
+    const wall = screen.getByTestId("wall-line-call");
+    const tent = screen.getByTestId("net-book-exp-curve");
+    expect(zone.compareDocumentPosition(arrow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(wall.compareDocumentPosition(arrow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tent.compareDocumentPosition(arrow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe("computeYDomain — combined-curve y-axis (OVW-04)", () => {

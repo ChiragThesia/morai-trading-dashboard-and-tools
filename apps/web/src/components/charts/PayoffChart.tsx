@@ -3,17 +3,22 @@
  *
  * UI-SPEC "Analyzer screen" payoff chart — locked z-order (bottom to top, proven
  * empirically in 33-01: Recharts renders by per-type zIndex band, JSX order only
- * breaks ties WITHIN a band — Area=100, Line/ReferenceLine=400, ReferenceDot=600.
- * The Customized marks layer paints before every band regardless of JSX position,
- * which is exactly what "never occlude a curve" requires — no workaround needed):
+ * breaks ties WITHIN a band — Area=100, Line/ReferenceLine=400, ReferenceDot=600):
  *   1. Profit zone teal fill (where @exp P&L >= 0)
  *   2. T+0 curve: #a78bfa (violet), 2.6px, teal-above / coral-below gradient fill
  *   3. Dated fan curves (+7/+14/+21d) when toggled
  *   4. Expiration tent dashed when toggled
  *   5. Amber roll overlay / ANLZ-02 compare overlay when active
  *   6. GEX wall lines when toggled (structurally clipped, not hand-pinned)
- *   7. PayoffChartMarks: EM band + BE-marker bars + KISS edge-arrow glyphs (paints
- *      before every zIndex band by construction — always under the curves)
+ *   7. PayoffChartMarks split in two (CR-01, 33-REVIEW): the EM band stays in a
+ *      <Customized> layer, which paints before every zIndex band by construction —
+ *      correct, it was already under every curve pre-migration. The BE-marker bars
+ *      and edge-arrow glyphs paint ON TOP of layers 1-6 in the pre-migration
+ *      component (only the final T+0 stroke painted over them), so they're wired
+ *      through a <ZIndexLayer zIndex={DefaultZIndexes.line}> placed after the wall
+ *      lines in JSX — same shared zIndex-400 band as Line/ReferenceLine, JSX order
+ *      is the tiebreak (33-01), landing them above walls/fills/fan/tent/roll/compare
+ *      and below only the final T+0 curve.
  *   8. T+0 curve (on top of walls/highlighted overlays within the shared zIndex-400 band)
  *   9. Spot vertical blue line + circle dot at T+0 value
  *
@@ -36,6 +41,8 @@ import {
   YAxis,
   Tooltip,
   Customized,
+  ZIndexLayer,
+  DefaultZIndexes,
 } from "recharts";
 import type { TooltipContentProps } from "recharts";
 import { ChartContainer } from "../ui/chart.tsx";
@@ -613,8 +620,11 @@ export function PayoffChart({
 
             <ReferenceLine y={0} stroke={ZERO_LINE} strokeWidth={1.1} />
 
-            {/* PayoffChartMarks (EM band + BE bars + edge arrows) — before every curve
-                layer by construction (see comment above). */}
+            {/* EM band only — before every curve layer by construction (Customized paints
+                before every zIndex band regardless of JSX position), matching the
+                pre-migration component's under-everything EM-band position (33-06). BE bars
+                and edge arrows are suppressed here (empty strikes / null gex) — they render
+                further below in a ZIndexLayer (CR-01, see top-of-file comment). */}
             <Customized
               component={
                 <g transform={`translate(${PAD.left},${PAD.top})`}>
@@ -624,9 +634,9 @@ export function PayoffChart({
                     zeroY={zeroY}
                     domain={domain}
                     expectedMoveBand={expectedMoveBand}
-                    beTodayStrikes={beToday}
-                    beExpStrikes={beExp}
-                    gex={marksGex}
+                    beTodayStrikes={[]}
+                    beExpStrikes={[]}
+                    gex={null}
                   />
                 </g>
               }
@@ -762,6 +772,28 @@ export function PayoffChart({
                   />
                 );
               })}
+
+            {/* CR-01 (33-REVIEW): BE-marker bars + edge-arrow glyphs, placed after the wall
+                lines in JSX so they share the ReferenceLine/Line zIndex-400 band and win the
+                JSX-order tiebreak (33-01) — on top of the profit-zone/T+0 fills (zIndex 100,
+                a different band, always painted first) and on top of the
+                fan/tent/roll/compare curves + wall lines (same band, earlier in JSX), under
+                only the final T+0 stroke below. ZIndexLayer applies no transform of its own
+                (same as Customized/Layer, 33-06), hence the translate wrapper. */}
+            <ZIndexLayer zIndex={DefaultZIndexes.line}>
+              <g transform={`translate(${PAD.left},${PAD.top})`}>
+                <PayoffChartMarks
+                  xScale={marksXScale}
+                  innerWidth={INNER_W}
+                  zeroY={zeroY}
+                  domain={domain}
+                  expectedMoveBand={null}
+                  beTodayStrikes={beToday}
+                  beExpStrikes={beExp}
+                  gex={marksGex}
+                />
+              </g>
+            </ZIndexLayer>
 
             {/* ── Layer 2 (on top): T+0 curve violet #a78bfa ─────────────────────────── */}
             {todayCurve.length > 0 && (
