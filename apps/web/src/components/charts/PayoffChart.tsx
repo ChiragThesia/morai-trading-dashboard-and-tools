@@ -365,7 +365,7 @@ function PayoffChartGrid({
           <g key={value}>
             <line x1={0} y1={y} x2={scales.innerWidth} y2={y} stroke={GRID_LINE} strokeWidth={1} />
             <text x={-6} y={y + 3} fill={AXIS_LABEL} fontSize={10} textAnchor="end" fontFamily={MONO}>
-              {fmtPl(value)}
+              {value === 0 ? "$0" : fmtPl(value)}
             </text>
           </g>
         );
@@ -555,12 +555,16 @@ export function PayoffChart({
     return nearest?.pl ?? 0;
   }, [todayCurve, spot]);
 
-  // Y-axis grid ticks: 6 evenly-spaced values across the locked y-domain (unchanged intent).
+  // Y-axis grid ticks: round-step multiples anchored at $0 (2026-07-10 request) —
+  // replaces 6 evenly-spaced arbitrary values (e.g. "-$362") that never labeled the
+  // zero line. Ticks are multiples of a round step, so 0 is always a tick whenever
+  // the domain straddles it.
   const gridTickValues = useMemo(() => {
+    const rawStep = (yDomain.hi - yDomain.lo) / 6;
+    const roundSteps = [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+    const step = roundSteps.find((s) => s >= rawStep) ?? roundSteps[roundSteps.length - 1] ?? rawStep;
     const values: number[] = [];
-    for (let i = 0; i <= 5; i++) {
-      values.push(yDomain.lo + (yDomain.hi - yDomain.lo) * (i / 5));
-    }
+    for (let v = Math.ceil(yDomain.lo / step) * step; v <= yDomain.hi; v += step) values.push(v);
     return values;
   }, [yDomain]);
 

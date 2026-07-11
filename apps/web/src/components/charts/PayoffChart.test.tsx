@@ -851,3 +851,32 @@ describe("PayoffChart — BE values as x-axis numbers (2026-07-10 request)", () 
     expect(container.querySelectorAll('[data-testid="be-axis-label-t0"]').length).toBe(1);
   });
 });
+
+describe("PayoffChart — y-axis round ticks anchored at zero (2026-07-10 request)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  // Fixture curves span ±400 → padded y-domain ≈ ±544 → round step ladder gives
+  // multiples of a round step, and 0 is always a multiple when the domain straddles it.
+
+  it("renders a $0 y-axis label (the zero line is labeled, not just drawn)", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    const zero = [...container.querySelectorAll("text")].filter((t) => t.textContent === "$0");
+    expect(zero.length).toBe(1);
+  });
+
+  it("y-axis tick labels are round-step multiples, never arbitrary evenly-spaced values", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    const yLabels = [...container.querySelectorAll("text")]
+      .filter((t) => t.getAttribute("text-anchor") === "end")
+      .map((t) => t.textContent ?? "");
+    expect(yLabels.length).toBeGreaterThanOrEqual(3);
+    // every label parses back to a multiple of 50 (all round steps are ≥50)
+    for (const label of yLabels) {
+      const value = Number(label.replace(/[+$k,−]/g, (m) => (m === "k" ? "e3" : m === "−" ? "-" : "")));
+      expect(Number.isFinite(value)).toBe(true);
+      expect(Math.abs(value % 50)).toBeLessThan(1e-6);
+    }
+  });
+});
