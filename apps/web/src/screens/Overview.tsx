@@ -8,6 +8,8 @@ import { useLiveStream } from "../hooks/useLiveStream.ts";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { computePositionGreeks } from "../lib/position-greeks.ts";
 import { resolveLivePositionRow } from "../lib/live-position-greeks.ts";
+import { usd, signed, signedUsd, signClass } from "../lib/position-format.ts";
+import type { Row, ExpiryCell } from "../lib/position-format.ts";
 import { pairPositionsIntoCalendars, bookUnrealizedPnl, dteExact } from "../lib/pair-calendars.ts";
 import type { CalendarGroup } from "../lib/pair-calendars.ts";
 import { parseOccSymbol } from "@morai/shared";
@@ -228,41 +230,7 @@ function netGreeksForLegs(
   return acc;
 }
 
-/**
- * Truncate a non-negative number to `dp` decimals WITHOUT rounding, padded to `dp` places.
- * Round at dp+2 first (kills float noise like 186.5799999) then string-slice — so the
- * displayed digits never round the value up.
- */
-function truncFixed(absV: number, dp: number): string {
-  const s = absV.toFixed(dp + 2);
-  const dot = s.indexOf(".");
-  return dp === 0 ? s.slice(0, dot) : s.slice(0, dot + 1 + dp);
-}
-
-function signed(v: number, dp = 3): string {
-  return `${v >= 0 ? "+" : "−"}${truncFixed(Math.abs(v), dp)}`;
-}
-
-function signedUsd(v: number, dp = 3): string {
-  return `${v >= 0 ? "+" : "−"}$${truncFixed(Math.abs(v), dp)}`;
-}
-
-/** Dollar value without a forced + sign (negatives keep the − minus). */
-function usd(v: number, dp = 3): string {
-  return `${v < 0 ? "−" : ""}$${truncFixed(Math.abs(v), dp)}`;
-}
-
-function signClass(v: number): string {
-  return v >= 0 ? "text-up" : "text-down";
-}
-
 // ─── Positions table (docked, TOS-style) ──────────────────────────────────────
-
-/** Structured expiry/DTE cell (OVW-03). */
-type ExpiryCell = {
-  readonly line1: string;
-  readonly line2: string;
-};
 
 type ExpiryCellInput =
   | {
@@ -309,13 +277,6 @@ export function formatExpiryCell(input: ExpiryCellInput): ExpiryCell {
     line2: `${input.dteFront}d/${input.dteBack}d · ${input.dteBack - input.dteFront}d wide`,
   };
 }
-
-type Row = {
-  key: string;
-  label: string;
-  expiry: ExpiryCell;
-  legs: ReadonlyArray<BrokerPositionResponse>;
-};
 
 function buildRows(positions: ReadonlyArray<BrokerPositionResponse>): Row[] {
   const { calendars, singles } = pairPositionsIntoCalendars(positions, new Date());
