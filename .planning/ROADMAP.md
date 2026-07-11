@@ -423,3 +423,14 @@ Plans:
 - [x] 33-05-PLAN.md — GexBars → Recharts (horizontal bars, per-bar Cell colors, wall/spot lines) + re-express test
 - [x] 33-06-PLAN.md — PayoffChart core swap: numeric domain fidelity + 9-layer z-order + native tooltip + wire marks
 - [x] 33-07-PLAN.md — Integration sweep: dead-code removal (4 charts), deps retained, full test + typecheck + lint green
+
+### Phase 34: TOS-parity scenario model — close the T+0 gap to TOS Analyze: fractional DTE (exact SPX settlement timestamps, not integer calendar days), parity-implied carry per expiry from the stored chain (replace flat r/q guesses), researched decision on smile-aware scenario IV (chain leg_observations has per-strike IVs), and an RTH parity-measurement UAT gate: BE today within a few points of TOS with live marks. Data-layer (scenario-engine + pair-calendars DTE + quant kernel inputs); chart untouched.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 33
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 34 to break down)
