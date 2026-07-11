@@ -227,6 +227,18 @@ describe("AnalyzerMobile — paste block (D-18) + rail legend", () => {
     expect(screen.queryByTestId("candidate-card-pasted-1")).toBeNull();
   });
 
+  it("WR-01 (catch #26): pasting during snapshot cold-start renders NO chart block — spot would be the 0 fallback", async () => {
+    mockUsePickerReturn({ data: null, isPending: false, isError: false });
+    render(<Analyzer />);
+
+    await paste(PASTE_EXAMPLE);
+
+    // Whatever the paste path yields without a snapshot, the chart block must NOT
+    // price the book at the spot=0 fallback or fabricate `schwab ·` provenance.
+    expect(mockPayoffChart).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("analyzer-mobile-caption")).toBeNull();
+  });
+
   it("the rail legend renders below the cards when candidates are present", () => {
     render(<Analyzer />);
     const legend = screen.getByTestId("rail-legend");

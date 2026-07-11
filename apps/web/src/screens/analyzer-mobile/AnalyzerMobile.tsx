@@ -305,8 +305,10 @@ export function AnalyzerMobile(): React.ReactElement {
         bookVega={bookVega}
       />
 
-      {/* ── Chart block (D-09) — one chrome row + full-bleed PayoffChart + caption. ── */}
-      {selected !== null && scenarioResult !== null && (
+      {/* ── Chart block (D-09) — one chrome row + full-bleed PayoffChart + caption.
+          Gated on snapshot: without it, spot is the 0 fallback and the chart would price
+          the book at S=0 with fabricated provenance (review WR-01, catch #26). ── */}
+      {selected !== null && scenarioResult !== null && snapshot !== null && (
         <MobileAnalyzerChart
           selected={selected}
           scenarioResult={scenarioResult}

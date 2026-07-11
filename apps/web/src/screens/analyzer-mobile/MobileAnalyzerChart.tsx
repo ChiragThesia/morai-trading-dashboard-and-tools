@@ -26,7 +26,9 @@ function noop(): void {}
 export interface MobileAnalyzerChartProps {
   readonly selected: PickerCandidate;
   readonly scenarioResult: ScenarioResult;
-  readonly snapshot: PickerSnapshotResponse | null;
+  /** Non-null by the caller's chart-block gate (WR-01/catch #26): the chart never
+   *  prices without a snapshot, so provenance is never fabricated here. */
+  readonly snapshot: PickerSnapshotResponse;
   readonly payoffDomain: SpotDomain;
   readonly spot: number;
   readonly toggles: PayoffChartToggles;
@@ -49,8 +51,8 @@ export function MobileAnalyzerChart({
   positionSetSignature,
 }: MobileAnalyzerChartProps): React.ReactElement {
   // Worst-of caption dot: fresh only when both context statuses are "ok" AND session is RTH.
-  const session = snapshot?.marketSession ?? "rth";
-  const contextsOk = snapshot?.gexContextStatus === "ok" && snapshot?.eventsContextStatus === "ok";
+  const session = snapshot.marketSession;
+  const contextsOk = snapshot.gexContextStatus === "ok" && snapshot.eventsContextStatus === "ok";
   const freshDot = contextsOk && session === "rth";
 
   return (
@@ -66,9 +68,9 @@ export function MobileAnalyzerChart({
           expirationCurve={scenarioResult.expirationCurve}
           rollCurve={null}
           gex={{
-            callWall: snapshot?.gex.callWall ?? null,
-            putWall: snapshot?.gex.putWall ?? null,
-            flip: snapshot?.gex.flip ?? null,
+            callWall: snapshot.gex.callWall,
+            putWall: snapshot.gex.putWall,
+            flip: snapshot.gex.flip,
           }}
           domain={payoffDomain}
           spot={spot}
@@ -93,7 +95,7 @@ export function MobileAnalyzerChart({
       >
         <span className={cn("size-1.5 shrink-0 rounded-full", freshDot ? "bg-up" : "bg-amber")} />
         <span className="truncate">
-          {snapshot?.source ?? "schwab"} · {snapshot?.asOf ?? ""}
+          {snapshot.source} · {snapshot.asOf}
           {session === "after-hours" && " · AH — indicative"}
         </span>
       </div>
