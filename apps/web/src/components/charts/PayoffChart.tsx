@@ -320,6 +320,9 @@ interface PayoffChartGridProps {
   beExp: ReadonlyArray<number>;
   beTodayColor: string;
   beExpColor: string;
+  /** T+0 P&L at the live spot, rendered as a sign-colored readout pinned to the
+   *  spot line's top ("how much are we making right now" at a glance). */
+  spotReadout: { readonly spot: number; readonly pl: number } | null;
 }
 
 /** Grid tick labels within this many px of a BE number are dropped (BE wins the lane). */
@@ -343,9 +346,22 @@ function PayoffChartGrid({
   beExp,
   beTodayColor,
   beExpColor,
+  spotReadout,
 }: PayoffChartGridProps): React.ReactElement | null {
   const scales = usePlotScales();
   if (scales === null) return null;
+  const readout = ((): { x: number; anchor: "start" | "end"; text: string; color: string } | null => {
+    if (spotReadout === null) return null;
+    const px = scales.xScale(spotReadout.spot);
+    if (px < 0 || px > scales.innerWidth) return null;
+    const nearRightEdge = px > scales.innerWidth - 90;
+    return {
+      x: nearRightEdge ? px - 8 : px + 8,
+      anchor: nearRightEdge ? "end" : "start",
+      text: fmtPl(spotReadout.pl),
+      color: spotReadout.pl >= 0 ? TEAL : CORAL,
+    };
+  })();
   const beLabels = [
     ...beToday.map((v) => ({ v, color: beTodayColor, tid: "be-axis-label-t0" })),
     ...beExp.map((v) => ({ v, color: beExpColor, tid: "be-axis-label-exp" })),
@@ -398,6 +414,20 @@ function PayoffChartGrid({
           {Math.round(v)}
         </text>
       ))}
+      {readout !== null && (
+        <text
+          data-testid="spot-pl-readout"
+          x={readout.x}
+          y={12}
+          fill={readout.color}
+          fontSize={11}
+          fontWeight={700}
+          textAnchor={readout.anchor}
+          fontFamily={MONO}
+        >
+          {readout.text}
+        </text>
+      )}
     </g>
   );
 }
@@ -726,6 +756,7 @@ export function PayoffChart({
               beExp={toggles.showExpiration ? beExp : []}
               beTodayColor={todayCurveColor}
               beExpColor={expirationCurveColor}
+              spotReadout={todayCurve.length > 0 ? { spot, pl: plAtSpot } : null}
             />
 
             <ReferenceLine y={0} stroke={ZERO_LINE} strokeWidth={1.1} />

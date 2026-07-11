@@ -880,3 +880,21 @@ describe("PayoffChart — y-axis round ticks anchored at zero (2026-07-10 reques
     }
   });
 });
+
+describe("PayoffChart — spot P&L readout (2026-07-10 request)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders the T+0 P&L at spot as a colored readout pinned to the spot line", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    const readout = container.querySelector('[data-testid="spot-pl-readout"]');
+    expect(readout).not.toBeNull();
+    if (readout === null) return;
+    // baseProps: spot=7381, TODAY_CURVE nearest point pl ≈ -11 (interp grid near 7381)
+    // → negative readout in coral. Assert format + sign-color, not exact grid value.
+    expect(readout.textContent).toMatch(/^[+−]\$\d/);
+    const negative = (readout.textContent ?? "").startsWith("−");
+    expect(readout.getAttribute("fill")).toBe(negative ? "#ef5350" : "#26a69a");
+  });
+});
