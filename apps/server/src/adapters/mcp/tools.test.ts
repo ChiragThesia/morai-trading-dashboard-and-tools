@@ -24,6 +24,8 @@ import type {
   ForRunningSetRuleOverrides,
   ForRunningPreviewRuleOverrides,
   PickerPreviewResult,
+  ForRunningGetGex,
+  GexSnapshotRow,
 } from "@morai/core";
 import {
   pickerSnapshotResponse,
@@ -34,6 +36,7 @@ import {
   getRuleSettingsResponse,
   setRuleOverridesResponse,
   previewRuleOverridesResponse,
+  gexSnapshotResponse,
 } from "@morai/contracts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -47,6 +50,7 @@ import {
   registerGetRuleSettingsTool,
   registerSetRuleOverridesTool,
   registerPreviewRuleOverridesTool,
+  registerGetGexTool,
 } from "./tools.ts";
 import { exitRoutes } from "../http/exits.routes.ts";
 import { settingsRoutes } from "../http/settings.routes.ts";
@@ -865,5 +869,59 @@ describe("preview_rule_overrides MCP tool", () => {
     expect(() => previewRuleOverridesResponse.parse(toolPayload)).not.toThrow();
     expect(() => previewRuleOverridesResponse.parse(routePayload)).not.toThrow();
     expect(toolPayload).toStrictEqual(routePayload);
+  });
+});
+
+// ─── get_gex MCP tool (34-04, TOSP-02: impliedCarry passthrough, rule 9) ──────────
+
+const GEX_STORED_ROW: GexSnapshotRow = {
+  cycleTime: new Date("2026-06-24T15:00:00.000Z"),
+  spot: 5500,
+  flip: 5450.5,
+  callWall: 5600,
+  putWall: 5400,
+  netGammaAtSpot: -1.2,
+  profile: [{ spot: 5500, gamma: -1.2 }],
+  strikes: [{ k: 5500, gex: -1.2, coi: 800, poi: 900, vol: 300 }],
+  byExpiry: [{ date: "2026-06-28", gex: -0.8 }],
+  nearTerm: null,
+  impliedCarry: [{ expiration: "2026-06-28", rate: 0.045, divYield: 0.013 }],
+  computedAt: new Date("2026-06-24T15:00:01.000Z"),
+};
+
+const getGexOk: ForRunningGetGex = async () => ok(GEX_STORED_ROW);
+const getGexNoCarry: ForRunningGetGex = async () => ok({ ...GEX_STORED_ROW, impliedCarry: null });
+
+async function callGetGex(getGex: ForRunningGetGex): Promise<string> {
+  const server = new McpServer({ name: "test", version: "0.0.1" });
+  registerGetGexTool(server, getGex);
+
+  const client = new Client({ name: "test-client", version: "0.0.1" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+
+  const result = await client.callTool({ name: "get_gex", arguments: {} });
+  const first = result.content[0];
+  if (first === undefined || first.type !== "text") {
+    throw new Error("expected text content from get_gex");
+  }
+  return first.text;
+}
+
+describe("get_gex MCP tool", () => {
+  it("returns gexSnapshotResponse-valid content including impliedCarry", async () => {
+    const text = await callGetGex(getGexOk);
+    const payload: unknown = JSON.parse(text);
+    const parsed = gexSnapshotResponse.parse(payload);
+    expect(parsed.impliedCarry).toEqual([
+      { expiration: "2026-06-28", rate: 0.045, divYield: 0.013 },
+    ]);
+  });
+
+  it("serializes impliedCarry: null when unresolved", async () => {
+    const text = await callGetGex(getGexNoCarry);
+    const payload: unknown = JSON.parse(text);
+    const parsed = gexSnapshotResponse.parse(payload);
+    expect(parsed.impliedCarry).toBeNull();
   });
 });

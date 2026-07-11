@@ -29,11 +29,19 @@ const STORED_ROW = {
     { date: "2026-07-19", gex: 0.3 },
   ],
   nearTerm: { callWall: 5550, putWall: 5400, flip: 5460 },
+  // 34-04 (TOSP-02): per-expiry resolved carry — FRED rate + parity-implied divYield.
+  impliedCarry: [{ expiration: "2026-06-28", rate: 0.045, divYield: 0.013 }],
   computedAt: new Date("2026-06-24T15:00:01.000Z"),
 };
 
+/** Same as STORED_ROW but with impliedCarry null (macro/ATM-pair unresolved, or legacy row). */
+const STORED_ROW_NO_CARRY = { ...STORED_ROW, impliedCarry: null };
+
 /** Returns the stored GEX snapshot row */
 const getGexOk: ForRunningGetGex = async () => ok(STORED_ROW);
+
+/** Returns the stored row with impliedCarry null */
+const getGexOkNoCarry: ForRunningGetGex = async () => ok(STORED_ROW_NO_CARRY);
 
 /** Returns null — no snapshot computed yet */
 const getGexNull: ForRunningGetGex = async () => ok(null);
@@ -70,6 +78,17 @@ describe("GET /analytics/gex", () => {
     expect(parsed.strikes).toHaveLength(2);
     expect(parsed.byExpiry).toHaveLength(2);
     expect(parsed.computedAt).toBe("2026-06-24T15:00:01.000Z");
+    expect(parsed.impliedCarry).toEqual([
+      { expiration: "2026-06-28", rate: 0.045, divYield: 0.013 },
+    ]);
+  });
+
+  it("serializes impliedCarry: null when unresolved (macro/ATM-pair miss, or legacy row)", async () => {
+    const app = buildTestApp(getGexOkNoCarry);
+    const res = await app.request("/analytics/gex");
+    const body: unknown = await res.json();
+    const parsed = gexSnapshotResponse.parse(body);
+    expect(parsed.impliedCarry).toBeNull();
   });
 
   it("returns 404 {error:'no-snapshot'} when getGex returns null", async () => {
