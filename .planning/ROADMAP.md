@@ -449,13 +449,27 @@ Plans:
 **Goal:** Mobile-first responsive re-composition of Overview, Analyzer, and Journal below the `lg:` (1024px) breakpoint — condensed KPI strip (priority row + scroll rail), demoted collapsible MarketRail, table-to-card positions, un-clipped Analyzer/Journal grids, 44px touch targets, safe-area insets — so the first phone screen answers "how am I doing" with no scroll or horizontal clipping, while desktop (≥1024px) stays pixel-identical. (D-01 corrects the original `<768px` directive to the codebase's only live boundary, `lg:`/1024px.)
 **Requirements**: MOBILE-01, MOBILE-02, MOBILE-03, MOBILE-04, MOBILE-05, MOBILE-06
 **Depends on:** Phase 34
-**Plans:** 6 plans
+**Plans:** 6/6 plans complete
 
 Plans:
 
-- [ ] 35-01-PLAN.md — Shared chrome primitives: ChipRail + Button touch size + PayoffControls scroll-not-wrap (wave 1)
-- [ ] 35-02-PLAN.md — Cross-cutting fixes: MarketRail open-bug + Shell nav-touch/100dvh + AuthExpiredBanner safe-area (wave 1)
-- [ ] 35-03-PLAN.md — Overview mobile structure: PillHeader KPI split + grid stack order + full-bleed chart (wave 2)
-- [ ] 35-04-PLAN.md — Overview positions → tap-expandable PositionCards, dual-render table/card (wave 3)
-- [ ] 35-05-PLAN.md — Analyzer display:contents/order + Journal flex-col grid port (un-clip) (wave 2)
-- [ ] 35-06-PLAN.md — Integration gate: full suite/typecheck/lint + desktop tripwires + 390px UAT (wave 4)
+- [x] 35-01-PLAN.md — Shared chrome primitives: ChipRail + Button touch size + PayoffControls scroll-not-wrap (wave 1)
+- [x] 35-02-PLAN.md — Cross-cutting fixes: MarketRail open-bug + Shell nav-touch/100dvh + AuthExpiredBanner safe-area (wave 1)
+- [x] 35-03-PLAN.md — Overview mobile structure: PillHeader KPI split + grid stack order + full-bleed chart (wave 2)
+- [x] 35-04-PLAN.md — Overview positions → tap-expandable PositionCards, dual-render table/card (wave 3)
+- [x] 35-05-PLAN.md — Analyzer display:contents/order + Journal flex-col grid port (un-clip) (wave 2)
+- [x] 35-06-PLAN.md — Integration gate: full suite/typecheck/lint + desktop tripwires + 390px UAT (wave 4)
+
+### Phase 35.1: Mobile Overview complete redesign — dedicated mobile-only component tree (screens/mobile) behind useIsDesktop; hero-first P&L, full-bleed chart with minimal chrome, purpose-built market section; desktop untouched (INSERTED)
+
+**Goal:** The mobile Overview reads as a designed mobile app screen, not a compressed dashboard: a dedicated mobile-only component tree (screens/overview-mobile behind useIsDesktop) with hero-first BOOK P&L, a full-bleed payoff chart behind exactly one control row, re-hierarchied position cards with a footer total, and a purpose-built market section (headline numbers, no shrunken charts) — while desktop ≥1024px render output stays byte-identical.
+**Requirements**: MOBILE-07, MOBILE-08, MOBILE-09, MOBILE-10
+**Depends on:** Phase 35
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 35.1-01-PLAN.md — useOverviewModel extraction + Overview useIsDesktop switch + PayoffChart additive props + desktop-test matchMedia migration (wave 1)
+- [ ] 35.1-02-PLAN.md — MobileHero + MobileRiskPanel: hero-first P&L, one-row chart chrome, ⋯ dialog, full-bleed chart, freshness caption (wave 2)
+- [ ] 35.1-03-PLAN.md — PositionCard re-hierarchy + mobile positions section: heading, card list, footer total, exit states (wave 3)
+- [ ] 35.1-04-PLAN.md — MobileMarketSection + MarketRail summary copy + D-12 desktop dead-branch cleanup + integration gate (wave 4)
