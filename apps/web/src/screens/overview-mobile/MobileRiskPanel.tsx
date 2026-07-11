@@ -13,30 +13,14 @@
  */
 import { cn } from "@/lib/utils";
 import type { GexSnapshotEntry } from "@morai/contracts";
-import { Button, buttonClass } from "../../components/system/index.tsx";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { PayoffChart } from "../../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../../components/charts/PayoffChart.tsx";
+import { MobileChartControls } from "../../components/charts/MobileChartControls.tsx";
 import type { PayoffPoint, SpotDomain } from "../../lib/scenario-engine.ts";
 import type { PayoffDateControl } from "../../hooks/usePayoffDateControl.ts";
-import {
-  parseLocalDateInput,
-  toDateInputValue,
-  daysBetween,
-} from "../../lib/date-projection.ts";
 import { relAge } from "../Market.tsx";
 
 const noop = (): void => {};
-
-const DIALOG_TITLE_CLASS =
-  "font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase";
-
-/** Quick projection jumps: label → whole-day offset from today. */
-const QUICK_JUMPS: ReadonlyArray<{ readonly label: string; readonly offset: number }> = [
-  { label: "+1w", offset: 7 },
-  { label: "+2w", offset: 14 },
-  { label: "+1m", offset: 30 },
-];
 
 export interface MobileRiskPanelProps {
   readonly scenario: {
@@ -77,31 +61,6 @@ export function MobileRiskPanel({
   excludedFromT0Count,
   freshness,
 }: MobileRiskPanelProps): React.ReactElement {
-  // All date math anchors on LOCAL-constructed dates (catch #22 / RESEARCH Pitfall 1).
-  const todayLocal = parseLocalDateInput(bounds.minIso);
-  const maxLocal = parseLocalDateInput(bounds.maxIso);
-  const maxDays = todayLocal !== null && maxLocal !== null ? daysBetween(todayLocal, maxLocal) : 0;
-
-  const isoAtOffset = (n: number): string => {
-    if (todayLocal === null) return bounds.minIso;
-    return toDateInputValue(
-      new Date(todayLocal.getFullYear(), todayLocal.getMonth(), todayLocal.getDate() + n),
-    );
-  };
-
-  // daysForward is the CLAMPED offset — the pill always tells the truth the chart shows.
-  const offset = dateControl.daysForward;
-  const projected = offset !== 0;
-  const pillDate =
-    todayLocal === null
-      ? dateControl.dateInputValue
-      : new Date(
-          todayLocal.getFullYear(),
-          todayLocal.getMonth(),
-          todayLocal.getDate() + offset,
-        ).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const pillLabel = `${pillDate} · ${projected ? `+${String(offset)}d` : "today"}`;
-
   // Same {callWall,putWall,flip} mapping as the desktop call site.
   const gexWalls =
     gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null;
@@ -111,158 +70,13 @@ export function MobileRiskPanel({
 
   return (
     <section>
-      {/* ONE slim control row: ghost ‹ [date pill] › left, ⋯ right. */}
-      <div className="flex items-center gap-1 px-4">
-        <Button
-          size="touch"
-          variant="ghost"
-          className="px-2 text-txt"
-          onClick={() => { dateControl.stepDate(-1); }}
-          aria-label="Previous day"
-        >
-          ‹
-        </Button>
-        {/* Projection dialog (D-09: real portal state, never a CSS reveal). */}
-        <Dialog>
-          <DialogTrigger
-            data-testid="date-pill"
-            aria-label="Projection date"
-            className={cn(
-              buttonClass({ size: "touch", variant: "ghost" }),
-              "px-2 font-mono text-[11px] text-txt",
-              projected && "text-violet ring-1 ring-violet",
-            )}
-          >
-            {pillLabel}
-          </DialogTrigger>
-          <DialogContent className="max-w-xs">
-            <DialogTitle className={DIALOG_TITLE_CLASS}>Projection</DialogTitle>
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  size="touch"
-                  variant="secondary"
-                  disabled={!projected}
-                  onClick={dateControl.resetDate}
-                >
-                  Today
-                </Button>
-                {QUICK_JUMPS.map(({ label, offset: jump }) => (
-                  <Button
-                    key={label}
-                    size="touch"
-                    variant="secondary"
-                    disabled={jump > maxDays}
-                    onClick={() => { dateControl.setDate(isoAtOffset(jump)); }}
-                  >
-                    {label}
-                  </Button>
-                ))}
-                <Button
-                  size="touch"
-                  variant="secondary"
-                  disabled={maxDays === 0}
-                  onClick={() => { dateControl.setDate(bounds.maxIso); }}
-                  className="col-span-2"
-                >
-                  Expiry
-                </Button>
-              </div>
-              <div data-testid="date-readout" className="font-mono text-[11px] text-txt">
-                {pillLabel}
-              </div>
-              <input
-                type="range"
-                data-testid="date-slider"
-                aria-label="Days forward"
-                min={0}
-                max={maxDays}
-                value={offset}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  dateControl.setDate(isoAtOffset(Number.isFinite(n) ? n : 0));
-                }}
-                className="w-full accent-violet"
-              />
-              <input
-                type="date"
-                data-testid="date-picker-input"
-                min={bounds.minIso}
-                max={bounds.maxIso}
-                value={dateControl.dateInputValue}
-                onChange={(e) => { dateControl.setDate(e.target.value); }}
-                style={{ colorScheme: "dark" }}
-                className="min-h-11 w-full rounded-[3px] border border-line2 bg-raise px-[7px] py-0.5 font-mono text-[11px] text-txt focus-visible:border-violet focus-visible:ring-2 focus-visible:ring-violet/40 focus-visible:outline-none"
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
-        <Button
-          size="touch"
-          variant="ghost"
-          className="px-2 text-txt"
-          onClick={() => { dateControl.stepDate(1); }}
-          aria-label="Next day"
-        >
-          ›
-        </Button>
-        <div className="ml-auto">
-          {/* ⋯ overflow Dialog — ALL series toggles live here (D-09). */}
-          <Dialog>
-            <DialogTrigger
-              aria-label="More chart options"
-              className={buttonClass({ size: "touch" })}
-            >
-              ⋯
-            </DialogTrigger>
-            <DialogContent className="max-w-xs">
-              <DialogTitle className={DIALOG_TITLE_CLASS}>Chart</DialogTitle>
-              <div className="flex flex-col gap-2">
-                <Button
-                  size="touch"
-                  variant="toggle"
-                  active={toggles.showExpiration}
-                  aria-pressed={toggles.showExpiration}
-                  onClick={() => { onToggle("showExpiration"); }}
-                  className="w-full"
-                >
-                  @ exp
-                </Button>
-                <Button
-                  size="touch"
-                  variant="toggle"
-                  active={toggles.showFan}
-                  aria-pressed={toggles.showFan}
-                  onClick={() => { onToggle("showFan"); }}
-                  className="w-full"
-                >
-                  Fan
-                </Button>
-                <Button
-                  size="touch"
-                  variant="toggle"
-                  active={toggles.showWalls}
-                  aria-pressed={toggles.showWalls}
-                  onClick={() => { onToggle("showWalls"); }}
-                  className="w-full"
-                >
-                  Walls
-                </Button>
-                <Button
-                  size="touch"
-                  variant="toggle"
-                  active={toggles.showProfitZone}
-                  aria-pressed={toggles.showProfitZone}
-                  onClick={() => { onToggle("showProfitZone"); }}
-                  className="w-full"
-                >
-                  Profit zone
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+      {/* ONE slim control row — shared chrome extracted to MobileChartControls (D-05). */}
+      <MobileChartControls
+        dateControl={dateControl}
+        bounds={bounds}
+        toggles={toggles}
+        onToggle={onToggle}
+      />
 
       {/* Chart — full-bleed (the section owns px-0; row and caption own px-4, D-05/D-06). */}
       <div data-testid="mobile-payoff" className="mt-2 w-full">
