@@ -128,6 +128,24 @@ describe("Button — shared control-affordance primitive (Phase 21)", () => {
     expect(screen.getByText("Analyze").className).toContain("text-[10px]");
   });
 
+  it("size=xs keeps its exact desktop box unchanged (guard against touch-entry drift)", () => {
+    render(<Button size="xs">Analyze</Button>);
+    const el = screen.getByText("Analyze");
+    expect(el.className).toContain("px-[7px]");
+    expect(el.className).toContain("py-0.5");
+    expect(el.className).toContain("text-[9px]");
+  });
+
+  it("size=touch is >=44px tall below lg: and reverts to the exact xs box at lg:", () => {
+    render(<Button size="touch">Today</Button>);
+    const el = screen.getByText("Today");
+    expect(el.className).toContain("min-h-11");
+    expect(el.className).toContain("lg:min-h-0");
+    expect(el.className).toContain("lg:px-[7px]");
+    expect(el.className).toContain("lg:py-0.5");
+    expect(el.className).toContain("lg:text-[9px]");
+  });
+
   it("passes through native button props: type, onClick, data-testid, className", () => {
     render(
       <Button data-testid="my-btn" className="custom-class" type="submit">
