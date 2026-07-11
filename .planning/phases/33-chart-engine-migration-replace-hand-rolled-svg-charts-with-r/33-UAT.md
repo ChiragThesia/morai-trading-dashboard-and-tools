@@ -50,3 +50,17 @@ the explicit ComposedChart width/height props mask container collapse — the gr
 pattern's 19th verified catch, and the first only catchable in a real layout engine.
 Fix: definite `aspect-ratio: ${SVG_W} / ${SVG_H}` on ChartContainer, never a percentage
 height; regression test pins the style contract.
+
+**Catch #20 (user-reported post-close, fixed ecf7138):** BE bars/grid labels/EM band/
+edge arrows visibly off the curves on morai.wtf — two coordinate systems on one chart.
+Recharts rendered curves at the real ResponsiveContainer size (1160×545) while all
+hand-rendered layers were positioned by buildXScale/buildYScale closures over the fixed
+SVG_W/SVG_H (1000×470) constants. jsdom always renders at exactly 1000×470 (mock strips
+ResponsiveContainer, explicit chart dims rule) where the two systems coincide — so 3175
+tests stayed green while every scale-driven mark drifted ~16% in the browser. Fix: all
+custom layers derive geometry from recharts' own useXAxisScale/useYAxisScale/usePlotArea
+hooks inside the chart tree (TermStructureChart GuardTag pattern); new
+PayoffChart.resize.test.tsx clones the chart at 580×273 through the RC mock and asserts
+native ReferenceLine and hand-rendered grid label agree on x for the same domain value.
+Live pixel-verified post-deploy: grid deltas 0.0px, BE bars within 0.5px of the native
+scale's predictions.
