@@ -576,8 +576,8 @@ describe("Journal screen — rule-tag control (RULE-01)", () => {
   });
 });
 
-// ── 35-05: mobile stack order (flex-col lg:grid port, un-clip below lg) ──
-describe("Journal — mobile stack order (35-05: flex-col lg:grid, un-clip below lg)", () => {
+// ── 36 D-17: desktop grid post-cleanup (reflow arms removed — this tree only mounts ≥1024px) ──
+describe("Journal — desktop grid post-cleanup (36 D-17)", () => {
   beforeEach(() => {
     stubDesktopMatchMedia();
     mockUseRuleTags.mockReturnValue(emptyRuleTagsResult());
@@ -589,7 +589,7 @@ describe("Journal — mobile stack order (35-05: flex-col lg:grid, un-clip below
     vi.clearAllMocks();
   });
 
-  it("starts flex flex-col and gates grid/h-full/overflow-hidden behind lg: (not unconditional)", () => {
+  it("puts journal-positions on a plain grid — no flex-col reflow arm, no lg:-gated variants", () => {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     mockUseLifecycle.mockReturnValue({
       data: { snapshots: [] },
@@ -601,16 +601,19 @@ describe("Journal — mobile stack order (35-05: flex-col lg:grid, un-clip below
     renderJournal([makeHistoryTrade()]);
 
     const positions = screen.getByTestId("journal-positions");
-    expect(positions.className).toContain("flex");
-    expect(positions.className).toContain("flex-col");
-    expect(positions.className).not.toMatch(/(?<!lg:)\boverflow-hidden\b/u);
-    expect(positions.className).toContain("lg:overflow-hidden");
-    expect(positions.className).toContain("lg:grid");
-    expect(positions.className).toContain("lg:h-full");
-    expect(positions.className).toContain("lg:grid-cols-[250px_minmax(0,1fr)_290px]");
+    const classes = positions.className.split(/\s+/u);
+    expect(classes).toContain("grid");
+    expect(classes).toContain("h-full");
+    expect(classes).toContain("grid-cols-[250px_minmax(0,1fr)_290px]");
+    expect(classes).toContain("gap-3");
+    expect(classes).toContain("overflow-hidden");
+    expect(classes).toContain("p-3");
+    // The reflow arm is gone: no flex column, no lg:-prefixed variants.
+    expect(positions.className).not.toContain("flex");
+    expect(positions.className).not.toContain("lg:");
   });
 
-  it("gates each column's overflow-y-auto/min-h-0 behind lg: (normal document flow below lg)", () => {
+  it("gives each column plain min-h-0 + overflow-y-auto (no lg: prefixes)", () => {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     mockUseLifecycle.mockReturnValue({
       data: { snapshots: [] },
@@ -621,18 +624,17 @@ describe("Journal — mobile stack order (35-05: flex-col lg:grid, un-clip below
 
     renderJournal([makeHistoryTrade()]);
 
-    const trades = screen.getByTestId("journal-trades-column");
-    expect(trades.className).toContain("lg:overflow-y-auto");
-    expect(trades.className).toContain("lg:min-h-0");
-    expect(trades.className).not.toMatch(/(?<!lg:)\boverflow-y-auto\b/u);
-
-    const lifecycle = screen.getByTestId("journal-lifecycle-column");
-    expect(lifecycle.className).toContain("lg:overflow-y-auto");
-    expect(lifecycle.className).toContain("lg:min-h-0");
-
-    const rail = screen.getByTestId("journal-rail-column");
-    expect(rail.className).toContain("lg:overflow-y-auto");
-    expect(rail.className).toContain("lg:min-h-0");
+    for (const testId of [
+      "journal-trades-column",
+      "journal-lifecycle-column",
+      "journal-rail-column",
+    ]) {
+      const column = screen.getByTestId(testId);
+      const classes = column.className.split(/\s+/u);
+      expect(classes).toContain("min-h-0");
+      expect(classes).toContain("overflow-y-auto");
+      expect(column.className).not.toContain("lg:");
+    }
   });
 
   it("keeps the three columns in the same DOM order (Trades -> Lifecycle -> reactive rail)", () => {

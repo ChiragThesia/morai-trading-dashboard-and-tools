@@ -909,8 +909,8 @@ describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.rul
   });
 });
 
-// ── 35-05: mobile stack order (display:contents + order-*, DOM byte-identical) ──
-describe("Analyzer — mobile stack order (35-05: display:contents + order-*, full-bleed chart)", () => {
+// ── 36 D-17: desktop grid post-cleanup (reflow arms removed — this tree only mounts ≥1024px) ──
+describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
   beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
@@ -918,38 +918,36 @@ describe("Analyzer — mobile stack order (35-05: display:contents + order-*, fu
     Reflect.deleteProperty(window, "matchMedia");
   });
 
-  it("flattens the inner rail/chart/right container via display:contents (lg:grid restores it at lg)", () => {
+  it("puts analyzer-inner-grid on a plain grid — no display:contents, no lg:-gated variants", () => {
     render(<Analyzer />);
 
     const innerGrid = screen.getByTestId("analyzer-inner-grid");
-    expect(innerGrid.className).toContain("contents");
-    expect(innerGrid.className).toContain("lg:grid");
-    expect(innerGrid.className).toContain("lg:grid-cols-[300px_minmax(0,1fr)_330px]");
-    // The inline gridTemplateColumns style is gone — columns move to the class only.
+    const classes = innerGrid.className.split(/\s+/u);
+    expect(classes).toContain("grid");
+    expect(classes).toContain("grid-cols-[300px_minmax(0,1fr)_330px]");
+    expect(classes).toContain("gap-4");
+    // The reflow arm is gone: no display:contents, no lg:-prefixed grid variants, no inline style.
+    expect(innerGrid.className).not.toContain("contents");
+    expect(innerGrid.className).not.toContain("lg:");
     expect(innerGrid.getAttribute("style")).toBeNull();
   });
 
-  it("threads order-* onto scorecard / rail / center / right (mobile paints rail -> scorecard -> chart+term -> right)", () => {
+  it("carries no CSS order utilities on the scorecard / rail / center / right wrappers", () => {
     render(<Analyzer />);
 
-    const scorecard = screen.getByTestId("analyzer-scorecard-wrapper");
-    expect(scorecard.className).toContain("order-2");
-    expect(scorecard.className).toContain("lg:order-none");
-
-    const rail = screen.getByTestId("analyzer-rail-wrapper");
-    expect(rail.className).toContain("order-1");
-    expect(rail.className).toContain("lg:order-none");
-
-    const center = screen.getByTestId("analyzer-center-column");
-    expect(center.className).toContain("order-3");
-    expect(center.className).toContain("lg:order-none");
-
-    const right = screen.getByTestId("analyzer-right-wrapper");
-    expect(right.className).toContain("order-4");
-    expect(right.className).toContain("lg:order-none");
+    for (const testId of [
+      "analyzer-scorecard-wrapper",
+      "analyzer-rail-wrapper",
+      "analyzer-center-column",
+      "analyzer-right-wrapper",
+    ]) {
+      const wrapper = screen.getByTestId(testId);
+      expect(wrapper.className).not.toContain("order-");
+      expect(wrapper.className).not.toContain("lg:");
+    }
   });
 
-  it("keeps DOM order scorecard -> rail -> center -> right unchanged (only paint order changes via CSS order)", () => {
+  it("keeps DOM order scorecard -> rail -> center -> right unchanged", () => {
     render(<Analyzer />);
 
     const outer = screen.getByTestId("analyzer-scorecard-wrapper").parentElement;
@@ -968,12 +966,12 @@ describe("Analyzer — mobile stack order (35-05: display:contents + order-*, fu
     expect(centerIdx).toBeLessThan(rightIdx);
   });
 
-  it("makes the payoff chart full-bleed below lg (-mx-3 lg:mx-0)", () => {
-    render(<Analyzer />);
+  it("drops the full-bleed chart wrapper — no negative-margin bleed remains in the payoff center", () => {
+    const { container } = render(<Analyzer />);
 
-    const bleed = screen.getByTestId("analyzer-payoff-chart-bleed");
-    expect(bleed.className).toContain("-mx-3");
-    expect(bleed.className).toContain("lg:mx-0");
+    // The 35-05 mobile-bleed wrapper is gone (PayoffChart renders directly in its Panel).
+    expect(screen.queryByTestId("analyzer-payoff-chart-bleed")).toBeNull();
+    expect(container.querySelector('[class*="-mx-3"]')).toBeNull();
   });
 });
 

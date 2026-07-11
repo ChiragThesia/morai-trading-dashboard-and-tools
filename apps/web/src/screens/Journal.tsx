@@ -284,10 +284,10 @@ function JournalDesktop({ trades }: JournalProps): React.ReactElement {
   return (
     <div
       data-testid="journal-positions"
-      className="flex flex-col gap-3 p-3 lg:grid lg:h-full lg:grid-cols-[250px_minmax(0,1fr)_290px] lg:overflow-hidden"
+      className="grid h-full grid-cols-[250px_minmax(0,1fr)_290px] gap-3 overflow-hidden p-3"
     >
       {/* ── Left column — trade list ─────────────────────────────────────── */}
-      <div data-testid="journal-trades-column" className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+      <div data-testid="journal-trades-column" className="flex flex-col gap-3 min-h-0 overflow-y-auto">
         <Panel>
           {/* Heading */}
           <PanelHeading
@@ -339,7 +339,7 @@ function JournalDesktop({ trades }: JournalProps): React.ReactElement {
       </div>
 
       {/* ── Center column — lifecycle ─────────────────────────────────────── */}
-      <div data-testid="journal-lifecycle-column" className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+      <div data-testid="journal-lifecycle-column" className="flex flex-col gap-3 min-h-0 overflow-y-auto">
         {selectedTrade !== null && (
           <LifecycleSection
             trade={selectedTrade}
@@ -355,7 +355,7 @@ function JournalDesktop({ trades }: JournalProps): React.ReactElement {
       </div>
 
       {/* ── Right column — reactive rail + notes ──────────────────────────── */}
-      <div data-testid="journal-rail-column" className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+      <div data-testid="journal-rail-column" className="flex flex-col gap-3 min-h-0 overflow-y-auto">
         <PnlBridgeCard snapshots={snapshots} hoveredIndex={hoveredIndex} />
         <EdgeCard snapshots={snapshots} />
         <GreeksNowCard snapshots={snapshots} />
