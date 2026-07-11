@@ -22,8 +22,7 @@
  *
  * No any/as/!.
  */
-import { useCallback, useMemo, useState } from "react";
-import type { PickerCandidate, BreakdownEntry, PickerGexContext, RuleSetEntry, PickerSizing } from "@morai/contracts";
+import type { PickerCandidate, PickerGexContext, RuleSetEntry, PickerSizing } from "@morai/contracts";
 import { cn } from "@/lib/utils";
 import { CandidateCard } from "../components/picker/CandidateCard.tsx";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
@@ -31,44 +30,23 @@ import { TermStructureChart } from "../components/picker/TermStructureChart.tsx"
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
 import { Panel, PanelHeading, Button, MetricChip } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
-import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
-import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
-import { buildTosCalendarOrder } from "../lib/tos-order.ts";
-import { repriceScenario } from "../lib/scenario-engine.ts";
-import type { ScenarioParams } from "../lib/scenario-engine.ts";
-import { computePayoffDomain } from "../lib/payoff-domain.ts";
-import { computeProjectionBounds } from "../lib/date-projection.ts";
-import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
-import { usePicker } from "../hooks/usePicker.ts";
-import { useRepullChains } from "../hooks/useRepullChains.ts";
-import { useAnalyzeCalendar } from "../hooks/useAnalyzeCalendar.ts";
-import { parseTosOrder } from "../lib/tos-parser.ts";
-import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candidate.ts";
+import {
+  useAnalyzerModel,
+  scoreStatus,
+  CHIP_LABELS,
+  FALLBACK_SCORE_ITEMS,
+  EXPERIMENTAL_SHORT,
+  PASTED_NOT_SCORED_NOTE,
+  TODAY_CURVE_COLOR,
+  EXPIRATION_CURVE_COLOR,
+} from "./analyzer-mobile/useAnalyzerModel.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const DEFAULT_RATE = 0.045;
-const DEFAULT_DIV = 0.013;
-
-/** ANLZ-02 picker curve colors (UI-SPEC Color table — distinct from both Overview's TOS
- * override and the old Analyzer's own defaults). */
-const TODAY_CURVE_COLOR = "#5b9cf6";
-const EXPIRATION_CURVE_COLOR = "#a78bfa";
-
-/** Id prefix for a user-pasted calendar (multi-paste redesign: several can coexist, each with a
- * unique `pasted-${n}` id assigned in paste order, kept for provenance even when the server
- * scores the calendar — see handlePasteAnalyze). */
-const PASTED_ID_PREFIX = "pasted-";
-
-/** Honest copy shown wherever engine-scored content would otherwise render for a pasted
- * candidate that came back `scored:false` (or a pasted CALL, D-03 — never sent to the
- * endpoint) — `candidate.breakdown.length === 0` is the gate (Pitfall 8), not the pasted id,
- * so a successfully SCORED pasted candidate renders the same panels an engine candidate does. */
-const PASTED_NOT_SCORED_NOTE = "Pasted calendar — not engine-scored.";
-
-const PASTE_ERROR_COPY =
-  "Couldn't read that. Paste a TOS calendar order, e.g. BUY +1 CALENDAR SPX 100 18 SEP 26 [AM]/14 AUG 26 7425 PUT @48.75 LMT GTC";
+//
+// The picker curve colors, the not-scored note, the chip labels/weights helper, and the
+// paste-error copy now live in analyzer-mobile/useAnalyzerModel.ts (D-02, single source —
+// both trees import them). This file re-imports the ones its desktop view still renders.
 
 function noop(): void {}
 
@@ -242,41 +220,8 @@ interface ScoringMethodologyPanelProps {
   readonly marketSession: "rth" | "after-hours";
 }
 
-/** Fallback labels when the snapshot predates the rule registry (ruleSet empty). */
-const FALLBACK_SCORE_ITEMS: ReadonlyArray<{ readonly key: BreakdownEntry["criterion"]; readonly label: string }> = [
-  { key: "fwdEdge", label: "Forward-vol edge" },
-  { key: "slope", label: "Term-structure slope" },
-  { key: "eventAdjustment", label: "Event exposure" },
-  { key: "gexFit", label: "GEX fit" },
-  { key: "beVsEm", label: "Breakeven vs EM" },
-];
-
-// Weight-relative status: contribution is already the 0-100 share of the criterion's weight.
-function scoreStatus(contribution: number): { readonly icon: string; readonly cls: string } {
-  if (contribution >= (200 / 3)) return { icon: "✓", cls: "text-up" };
-  if (contribution >= (100 / 3)) return { icon: "~", cls: "text-amber" };
-  return { icon: "✗", cls: "text-down" };
-}
-
-/** Short chip labels — the ruleSet's verbose labels stay in WhyPanel/docs; chips scan fast. */
-const CHIP_LABELS: Record<string, string> = {
-  fwdEdge: "FWD-IV EDGE",
-  slope: "SLOPE",
-  gexFit: "GEX FIT",
-  eventAdjustment: "EVENT RISK",
-  beVsEm: "BE : EM",
-  deltaNeutral: "Δ NEUTRAL",
-  thetaVega: "θ/VEGA",
-  vrp: "VRP",
-  debitFit: "DEBIT",
-};
-
-const EXPERIMENTAL_SHORT: Record<string, string> = {
-  vrp: "VRP",
-  slopePercentile: "SLP%",
-  backEventBonus: "EVT",
-  thetaVega: "θ/V",
-};
+// FALLBACK_SCORE_ITEMS, scoreStatus, CHIP_LABELS, EXPERIMENTAL_SHORT now live in
+// analyzer-mobile/useAnalyzerModel.ts (D-02, single source) — imported above.
 
 function ScoringMethodologyPanel({
   candidate,
@@ -434,222 +379,46 @@ function RightColumn({ candidate, gex, sizing }: RightColumnProps): React.ReactE
  * Analyzer — exported named export (D-04: full replacement, same export name/signature).
  */
 export function Analyzer(): React.ReactElement {
-  const { data, isPending, isError, refetch } = usePicker();
-  // Unify `undefined` (never-settled) and `null` (404 cold start) into one `null` sentinel —
-  // downstream logic only needs to distinguish "no snapshot" from "a real snapshot".
-  const snapshot = data ?? null;
-
-  const sortedCandidates = useMemo<ReadonlyArray<PickerCandidate>>(() => {
-    if (snapshot === null) return [];
-    return [...snapshot.candidates].sort((a, b) => b.score - a.score);
-  }, [snapshot]);
-
-  const spot = snapshot?.spot ?? 0;
-
-  const [selectedId, setSelectedId] = useState<string>("");
-  // Combined-book multi-select: extra calendars ⊕-Combine'd with the selected one and summed
-  // into one net payoff (see bookCandidates/combinedPositions below).
-  const [combinedIds, setCombinedIds] = useState<ReadonlySet<string>>(new Set());
-
-  // ── Pasted calendars (multi-paste redesign): any number of "PASTED"-badged cards pinned atop
-  // the rail in paste order, each with a unique `pasted-${n}` id from the monotonic `pastedSeq`
-  // counter. Each Analyze ADDS a card; each card's own × (onRemovePasted) or "Clear all"
-  // (onClearAllPasted) removes it. Every pasted card drives the SAME
-  // candidate→position→repriceScenario payoff path as every scored candidate. ──
-  const [pastedCandidates, setPastedCandidates] = useState<ReadonlyArray<PickerCandidate>>([]);
-  const [pastedSeq, setPastedSeq] = useState(0);
-  const [pasteText, setPasteText] = useState<string>("");
-  const [pasteError, setPasteError] = useState<string | null>(null);
-
-  const railCandidates = useMemo<ReadonlyArray<PickerCandidate>>(
-    () => [...pastedCandidates, ...sortedCandidates],
-    [pastedCandidates, sortedCandidates],
-  );
-
-  const selected = useMemo<PickerCandidate | null>(() => {
-    const found = railCandidates.find((c) => c.id === selectedId);
-    return found ?? railCandidates[0] ?? null;
-  }, [selectedId, railCandidates]);
-
-  const handleSelect = useCallback((candidate: PickerCandidate) => {
-    setSelectedId(candidate.id);
-  }, []);
-
-  const handleToggleCombine = useCallback((candidate: PickerCandidate) => {
-    setCombinedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(candidate.id)) next.delete(candidate.id);
-      else next.add(candidate.id);
-      return next;
-    });
-  }, []);
-
-  // ── Payoff center (ANLZ-02, D-02): one engine, one adapter — repriceScenario is the sole
-  // pricing path. The selected candidate plus any ⊕-Combine'd ones are SUMMED into a net
-  // combined-book payoff (the same array-of-positions path Overview uses for the live book). ──
-
-  const selectedPosition = useMemo(
-    () => (selected === null ? null : candidateToAnalyzerPosition(selected)),
-    [selected],
-  );
-
-  // Forward date projection + series toggles (shared with Overview via PayoffControls /
-  // usePayoffDateControl). The T+0 curve projects up to the selected candidate's front expiry;
-  // the @exp curve is unaffected (D-01, bookPLAtExpiry ignores daysForward).
-  const today = useMemo(() => new Date(), []);
-  const bounds = useMemo(
-    () => computeProjectionBounds(selectedPosition === null ? [] : [selectedPosition.frontDte], today),
-    [selectedPosition, today],
-  );
-  const dateControl = usePayoffDateControl(today, bounds.maxDaysForward);
-  const [toggles, setToggles] = useState<PayoffChartToggles>({
-    showFan: false,
-    showExpiration: true,
-    showWalls: true,
-    showProfitZone: true,
-  });
-  const handleToggle = useCallback((key: keyof PayoffChartToggles): void => {
-    setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
-
-  // Copy-out: the selected candidate as a paste-ready TOS calendar order. copiedId tracks the
-  // last-copied candidate so the button reads "Copied ✓" until a different candidate is selected.
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const handleCopyCandidate = useCallback(
-    (candidate: PickerCandidate): void => {
-      void navigator.clipboard?.writeText(buildTosCalendarOrder(candidate, snapshot?.asOf ?? ""));
-      setCopiedId(candidate.id);
-    },
-    [snapshot],
-  );
-
-  const params = useMemo<ScenarioParams>(
-    () => ({ spot, daysForward: dateControl.daysForward, ivShift: 0, rate: DEFAULT_RATE, divYield: DEFAULT_DIV }),
-    [spot, dateControl.daysForward],
-  );
-
-  // POST /api/picker/analyze (D-02) — pasting a PUT calendar scores it through the real
-  // engine; a pasted CALL (D-03) never reaches the endpoint (puts-only, binding #6).
-  const analyzeCalendar = useAnalyzeCalendar();
-
-  const handlePasteAnalyze = useCallback((): void => {
-    const parsed = parseTosOrder(pasteText, today, spot, DEFAULT_RATE);
-    if (parsed === null) {
-      setPasteError(PASTE_ERROR_COPY);
-      return;
-    }
-    setPasteError(null);
-    setPasteText("");
-
-    // Reserves the next id/seq and adds the card — kept together so a failed request never
-    // consumes a seq number or selects a card that was never added (mirrors the parse-failure
-    // no-op above).
-    const addCandidate = (candidate: PickerCandidate): void => {
-      setPastedSeq((prevSeq) => {
-        const nextSeq = prevSeq + 1;
-        const id = `${PASTED_ID_PREFIX}${nextSeq}`;
-        // Keep the pasted-prefix id for provenance even on a scored response (the server
-        // assigns its own `adhoc-*` id — not used client-side).
-        setPastedCandidates((prev) => [...prev, { ...candidate, id }]);
-        setSelectedId(id);
-        return nextSeq;
-      });
-    };
-
-    if (parsed.type === "C") {
-      // Calls are never sent to the endpoint (D-03) — unscored fallback only.
-      addCandidate(parsedCalendarToPickerCandidate(parsed, ""));
-      return;
-    }
-
-    void analyzeCalendar
-      .mutateAsync({
-        putCall: "P",
-        strike: parsed.strike,
-        frontDte: parsed.frontDte,
-        backDte: parsed.backDte,
-        qty: parsed.qty,
-        frontIv: parsed.iv,
-        backIv: parsed.iv,
-        debit: parsed.debit ?? 0,
-        frontExpiry: parsed.frontExpiry,
-        backExpiry: parsed.backExpiry,
-      })
-      .then((result) => {
-        addCandidate(
-          result.scored && result.candidate !== null
-            ? result.candidate
-            : parsedCalendarToPickerCandidate(parsed, ""),
-        );
-      })
-      .catch(() => {
-        // Network/HTTP failure (not scored:false, which resolves normally above) — the
-        // existing paste-error copy, not a crash; no card is added (mirrors a parse failure).
-        setPasteError(PASTE_ERROR_COPY);
-      });
-  }, [pasteText, today, spot, analyzeCalendar]);
-
-  const handleRemovePasted = useCallback((candidate: PickerCandidate): void => {
-    setPastedCandidates((prev) => prev.filter((c) => c.id !== candidate.id));
-    setCombinedIds((prev) => {
-      if (!prev.has(candidate.id)) return prev;
-      const next = new Set(prev);
-      next.delete(candidate.id);
-      return next;
-    });
-    setSelectedId((prev) => (prev === candidate.id ? "" : prev));
-  }, []);
-
-  const handleClearAllPasted = useCallback((): void => {
-    const removedIds = new Set(pastedCandidates.map((c) => c.id));
-    if (removedIds.size === 0) return;
-    setPastedCandidates([]);
-    setCombinedIds((prev) => {
-      const next = new Set(prev);
-      let changed = false;
-      for (const id of removedIds) {
-        if (next.delete(id)) changed = true;
-      }
-      return changed ? next : prev;
-    });
-    setSelectedId((prev) => (removedIds.has(prev) ? "" : prev));
-    setPasteText("");
-    setPasteError(null);
-  }, [pastedCandidates]);
-
-  // The combined book = the selected candidate (always) + any ⊕-Combine'd calendars — pooled
-  // over railCandidates so a ⊕-Combine'd pasted card is included even when a scored candidate
-  // is the one selected.
-  const bookCandidates = useMemo<ReadonlyArray<PickerCandidate>>(() => {
-    if (selected === null) return [];
-    const extra = railCandidates.filter((c) => combinedIds.has(c.id) && c.id !== selected.id);
-    return [selected, ...extra];
-  }, [selected, railCandidates, combinedIds]);
-
-  const combinedPositions = useMemo(
-    () => bookCandidates.map(candidateToAnalyzerPosition),
-    [bookCandidates],
-  );
-
-  const payoffDomain = useMemo(
-    () => computePayoffDomain(combinedPositions, spot, params),
-    [combinedPositions, spot, params],
-  );
-
-  const scenarioResult = useMemo(
-    () => (combinedPositions.length === 0 ? null : repriceScenario(combinedPositions, params, payoffDomain)),
-    [combinedPositions, params, payoffDomain],
-  );
-
-  // Book totals (sum of debits/greeks) for the header summary when 2+ calendars are combined.
-  const bookCount = bookCandidates.length;
-  const bookDebit = bookCandidates.reduce((sum, c) => sum + c.debit, 0);
-  const bookTheta = bookCandidates.reduce((sum, c) => sum + c.theta, 0);
-  const bookVega = bookCandidates.reduce((sum, c) => sum + c.vega, 0);
-  const positionSetSignature = combinedPositions.map((p) => p.id).join("|");
+  // All state/derivation lives in useAnalyzerModel (D-02, single source shared with the
+  // mobile tree). This desktop view consumes the model slices; the switch that picks which
+  // tree mounts lands in Task 3.
+  const {
+    snapshot,
+    isLoading,
+    isError,
+    refetch,
+    sortedCandidates,
+    pastedCandidates,
+    pasteText,
+    setPasteText,
+    pasteError,
+    handlePasteAnalyze,
+    handleRemovePasted,
+    handleClearAllPasted,
+    selected,
+    selectedId,
+    handleSelect,
+    combinedIds,
+    handleToggleCombine,
+    copiedId,
+    handleCopyCandidate,
+    selectedPosition,
+    bounds,
+    dateControl,
+    toggles,
+    handleToggle,
+    payoffDomain,
+    scenarioResult,
+    spot,
+    bookCount,
+    bookDebit,
+    bookTheta,
+    bookVega,
+    positionSetSignature,
+    repull,
+  } = useAnalyzerModel();
 
   // Re-pull chains control — lives with the rail it refreshes (heading action slot).
-  const repull = useRepullChains();
   const repullControl = (
     <div className="flex items-center gap-1.5">
       {repull.isSuccess && (
@@ -677,7 +446,7 @@ export function Analyzer(): React.ReactElement {
   // ── Rail body: five mutually-exclusive states (D-18/D-19), precedence
   // loading → error → cold-start → zero-filtered (inside CandidateRail) → populated. ──
   let railBody: React.ReactElement;
-  if (isPending && data === undefined) {
+  if (isLoading) {
     railBody = (
       <Panel>
         <PanelHeading title="Suggested calendars" />
