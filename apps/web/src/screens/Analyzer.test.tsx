@@ -115,6 +115,26 @@ function latestPayoffChartProps(): PayoffChartProps {
   return call[0];
 }
 
+/**
+ * D-16 desktop matchMedia stub (the Overview.test.tsx pattern) — jsdom has no matchMedia, so
+ * useIsDesktop() reports mobile by default and Analyzer mounts the mobile tree. Every
+ * pre-existing desktop-tree describe installs this in beforeEach to keep exercising
+ * AnalyzerDesktop byte-identically; each deletes it in afterEach via
+ * `Reflect.deleteProperty(window, "matchMedia")`.
+ */
+function stubDesktopMatchMedia(): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query === "(min-width: 1024px)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }),
+  });
+}
+
 /** Matches Analyzer.tsx's fixed scenario params (D-02: no scenario sliders on this
  * fixture-only, view-only screen — spot/rate/divYield are the frozen snapshot constants). */
 const PARAMS: ScenarioParams = {
@@ -145,9 +165,11 @@ beforeEach(() => {
 });
 
 describe("Analyzer — ranked candidate rail (Task 2)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   it("renders one CandidateCard per fixture candidate, ordered score-descending", () => {
@@ -182,9 +204,11 @@ describe("Analyzer — ranked candidate rail (Task 2)", () => {
 });
 
 describe("Analyzer — per-candidate scoring checklist", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   it("renders a checklist row per rubric factor plus the theta constraint for the selected calendar", () => {
@@ -277,9 +301,11 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
 });
 
 describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   it("feeds candidateToAnalyzerPosition(selected) into repriceScenario and passes the picker curve colors", () => {
@@ -359,9 +385,11 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
 });
 
 describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   it("renders the three locked right-column headings", () => {
@@ -401,9 +429,11 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
 });
 
 describe("Analyzer — pasted calendars (multi-paste)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
     mockAnalyzeCalendarMutateAsync.mockImplementation(() =>
       Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
     );
@@ -623,9 +653,11 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
 });
 
 describe("Analyzer — copy TOS order (copy-out)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   it("copies the selected candidate's TOS calendar order to the clipboard", () => {
@@ -652,9 +684,11 @@ describe("Analyzer — copy TOS order (copy-out)", () => {
 });
 
 describe("Analyzer — payoff controls (shared date projection + series toggles)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   it("renders the shared date-projection picker", () => {
@@ -685,9 +719,11 @@ describe("Analyzer — payoff controls (shared date projection + series toggles)
 });
 
 describe("Analyzer — live-data states (Task 2, 19-09-PLAN.md, D-18/D-19)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   it("loading: shows text-only 'Loading candidates…' when isPending && data === undefined", () => {
@@ -769,9 +805,11 @@ describe("Analyzer — live-data states (Task 2, 19-09-PLAN.md, D-18/D-19)", () 
 });
 
 describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.ruleSet)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   const RULESET = [
@@ -873,9 +911,11 @@ describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.rul
 
 // ── 35-05: mobile stack order (display:contents + order-*, DOM byte-identical) ──
 describe("Analyzer — mobile stack order (35-05: display:contents + order-*, full-bleed chart)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
   });
 
   it("flattens the inner rail/chart/right container via display:contents (lg:grid restores it at lg)", () => {
@@ -934,5 +974,47 @@ describe("Analyzer — mobile stack order (35-05: display:contents + order-*, fu
     const bleed = screen.getByTestId("analyzer-payoff-chart-bleed");
     expect(bleed.className).toContain("-mx-3");
     expect(bleed.className).toContain("lg:mx-0");
+  });
+});
+
+// ── 36: useIsDesktop switch + jsdom-defaults-mobile (D-01/D-16) ──
+describe("Analyzer branch — D-01/D-16 (36)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
+  });
+
+  it("J1: default jsdom render mounts the MOBILE tree — no desktop grid / chips / rail", () => {
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("analyzer-mobile-root")).toBeTruthy();
+    expect(screen.queryByTestId("analyzer-inner-grid")).toBeNull();
+    expect(screen.queryByTestId("scoring-pills")).toBeNull();
+    expect(screen.queryByText("Suggested calendars")).toBeNull();
+  });
+
+  it("J2: matchMedia-stubbed desktop renders today's tree (byte-identity guard)", () => {
+    stubDesktopMatchMedia();
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("analyzer-inner-grid")).toBeTruthy();
+    expect(screen.queryByTestId("analyzer-mobile-root")).toBeNull();
+    // Desktop structural content: rail heading, scorecard chip strip, copy button, right column.
+    expect(screen.getByText("Suggested calendars")).toBeTruthy();
+    expect(screen.getByTestId("scoring-pills")).toBeTruthy();
+    expect(screen.getByTestId("copy-tos-order")).toBeTruthy();
+    expect(screen.getByText("Why this calendar")).toBeTruthy();
+    expect(screen.getByText("Term structure + your legs")).toBeTruthy();
+    expect(screen.getByText("Entry / exit plan")).toBeTruthy();
+  });
+
+  it("J9 (desktop half): the desktop PayoffChart call site passes neither mobile chart prop", () => {
+    stubDesktopMatchMedia();
+    render(<Analyzer />);
+
+    const props = latestPayoffChartProps();
+    expect(props.showBePills).toBeUndefined();
+    expect(props.aspectRatio).toBeUndefined();
   });
 });

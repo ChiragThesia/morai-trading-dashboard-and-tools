@@ -31,6 +31,8 @@ import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
 import { Panel, PanelHeading, Button, MetricChip } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
+import { useIsDesktop } from "../hooks/useIsDesktop.ts";
+import { AnalyzerMobile } from "./analyzer-mobile/AnalyzerMobile.tsx";
 import {
   useAnalyzerModel,
   scoreStatus,
@@ -376,12 +378,23 @@ function RightColumn({ candidate, gex, sizing }: RightColumnProps): React.ReactE
 // ─── Main Analyzer (picker) screen ─────────────────────────────────────────────
 
 /**
- * Analyzer — exported named export (D-04: full replacement, same export name/signature).
+ * Analyzer — the thin switch (D-01, verbatim Overview pattern): exactly one tree mounts at a
+ * time. Desktop (≥1024px) renders AnalyzerDesktop (today's JSX, byte-identical DOM); below
+ * 1024px the dedicated mobile tree. Same public export name/signature — App.tsx wiring
+ * unchanged. `CandidateRail` stays exported for direct unit testing.
  */
 export function Analyzer(): React.ReactElement {
+  const isDesktop = useIsDesktop();
+  return isDesktop ? <AnalyzerDesktop /> : <AnalyzerMobile />;
+}
+
+/**
+ * AnalyzerDesktop — today's Analyzer picker screen (D-01: renamed in-file, JSX untouched).
+ * Consumes the shared useAnalyzerModel like the mobile tree does.
+ */
+function AnalyzerDesktop(): React.ReactElement {
   // All state/derivation lives in useAnalyzerModel (D-02, single source shared with the
-  // mobile tree). This desktop view consumes the model slices; the switch that picks which
-  // tree mounts lands in Task 3.
+  // mobile tree). This desktop view consumes the model slices.
   const {
     snapshot,
     isLoading,
