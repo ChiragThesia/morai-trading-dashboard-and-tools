@@ -71,6 +71,8 @@ function makeSnapshotRow(cycleTime: Date, overrides: Partial<GexSnapshotRow> = {
       { date: "2026-06-27", gex: -12345678.9 },
     ],
     nearTerm: { callWall: 7600, putWall: 7400, flip: 7490.5 },
+    // 34-04 (TOSP-02): null by default — non-null set explicitly by the round-trip test below.
+    impliedCarry: null,
     computedAt: cycleTime,
     ...overrides,
   };
@@ -366,6 +368,34 @@ export function runGexSnapshotContractTests(
     });
   });
 
+  // 34-04 (TOSP-02): impliedCarry — per-expiry resolved {expiration, rate, divYield}.
+  describe("impliedCarry — round-trip (34-04)", () => {
+    it("round-trips a non-null impliedCarry", async () => {
+      const row = makeSnapshotRow(T1, {
+        impliedCarry: [
+          { expiration: "2026-06-27", rate: 0.045, divYield: 0.013 },
+          { expiration: "2026-07-17", rate: 0.044, divYield: 0.012 },
+        ],
+      });
+      await repo.persistGexSnapshot(row);
+
+      const result = await repo.readGexSnapshot();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value?.impliedCarry).toEqual(row.impliedCarry);
+    });
+
+    it("a legacy/absent impliedCarry reads back null", async () => {
+      const row = makeSnapshotRow(T2, { impliedCarry: null });
+      await repo.persistGexSnapshot(row);
+
+      const result = await repo.readGexSnapshot();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value?.impliedCarry).toBeNull();
+    });
+  });
+
   // CR-02 regression: computedAt must round-trip faithfully and MUST NOT be
   // silently substituted with cycleTime on read.
   //
@@ -450,6 +480,7 @@ export function runGexSnapshotContractTests(
         strikes: [{ k: 7412.5, gex: 1230277553.8, coi: 69015, poi: 39475, vol: 108490 }],
         byExpiry: [{ date: "2026-06-27", gex: -12345678.9 }],
         nearTerm: null,
+        impliedCarry: null,
         computedAt: new Date("2026-06-23T14:07:42Z").toISOString(),
       };
       // Must not throw (previously threw: Expected number to be an integer)

@@ -32,6 +32,8 @@ const oraclePayload = {
     { date: "2026-07-17", gex: 9876543.2 },
   ],
   nearTerm: { callWall: 7600, putWall: 7400, flip: 7490.5 },
+  // 34-04 (TOSP-02): resolved per-expiry carry — FRED-interpolated rate + parity-implied divYield.
+  impliedCarry: [{ expiration: "2026-06-27", rate: 0.045, divYield: 0.013 }],
   computedAt: "2026-06-23T14:00:24.000Z",
 };
 
@@ -92,6 +94,20 @@ describe("gexSnapshotEntry", () => {
         ...oraclePayload,
         nearTerm: { callWall: 7600, putWall: null, flip: null },
       }),
+    ).not.toThrow();
+  });
+
+  // 34-04 (TOSP-02): impliedCarry — per-expiry resolved {rate, divYield}.
+  it("parsed result includes impliedCarry (resolved per-expiry rate + divYield)", () => {
+    const parsed = gexSnapshotEntry.parse(oraclePayload);
+    expect(parsed.impliedCarry).toEqual([
+      { expiration: "2026-06-27", rate: 0.045, divYield: 0.013 },
+    ]);
+  });
+
+  it("accepts null impliedCarry (macro/ATM-pair unresolved, or pre-0023 snapshot)", () => {
+    expect(() =>
+      gexSnapshotEntry.parse({ ...oraclePayload, impliedCarry: null }),
     ).not.toThrow();
   });
 });
