@@ -152,6 +152,7 @@ For the orchestrator's end-of-phase UAT (`gsd-verify-work`), run at both 1024px+
 - [ ] PayoffControls' 5 buttons render at their EXACT pre-phase box at ≥lg (`px-[7px] py-0.5 text-[9px]`, `min-h-0`) — devtools-diff a `size="touch"` button's computed box model against an untouched `xs` button on the same page (catches any drift in the hand-typed `SIZE_CLASS.touch` `lg:` triplet).
 - [ ] Analyzer: scorecard banner full-width above the 300px/1fr/330px grid (via `order-none` + inner `lg:grid`), exact original DOM nesting.
 - [ ] Journal: 250px/1fr/290px three-pane layout with independent per-column scroll inside a fixed-height viewport, exactly as today.
+- [ ] Analyzer/Journal center column (`minmax(0,1fr)` track, WR-01 accepted deviation): eyeball the center column's width at 1440px against the pre-phase bare-`1fr` baseline — `minmax(0,1fr)` overrides the implicit `auto` minimum, so a wide unbreakable string in the center column could shrink it below its pre-phase width. Flag if it visibly narrows.
 - [ ] Shell nav tabs: `min-h-8` (32px) height at ≥lg, unchanged.
 - [ ] No visual diff in a side-by-side screenshot vs the pre-phase baseline at 1280px.
 
