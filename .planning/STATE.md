@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 33
-current_phase_name: project already shadcn base-nova
-status: executing
-stopped_at: Completed 32-06-PLAN.md
-last_updated: "2026-07-10T21:30:40.977Z"
-last_activity: 2026-07-10
-last_activity_desc: Phase 32 complete, transitioned to Phase 33
+status: phase_complete
+stopped_at: Phase 33 verified + live-UAT passed (v1.3 all phases complete)
+last_updated: "2026-07-11T01:16:45.708Z"
+last_activity: 2026-07-11
+last_activity_desc: Phase 33 complete
 progress:
   total_phases: 11
-  completed_phases: 10
-  total_plans: 54
-  completed_plans: 54
-  percent: 91
+  completed_phases: 11
+  total_plans: 61
+  completed_plans: 61
+  percent: 100
+current_phase_name: chart-engine-migration
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 31 — Risk Profile KISS redesign + macro gauges
+**Current focus:** Phase null
 
 ## Current Position
 
-Phase: 33 — Chart engine migration — replace hand-rolled SVG charts with Recharts via shadcn chart primitives (project already shadcn base-nova): PayoffChart (dual curves, fan, profit-zone shading, wall/flip reference lines, EM band, crosshair tooltip, scenario strip), term-structure chart, dealer-gamma profile, GEX-by-strike bars. Keep scenario-engine/payoff-domain data layer pure (presentation swap only); native clipping/responsive/tooltips kill the overflow bug class (EM-band page-bleed 2563bd6, marker label pile-up Phase 31) permanently; visual parity with current design tokens
+Phase: 33
 Plan: Not started
-Status: In progress — 32-04..32-06 remaining
-Last activity: 2026-07-10 — Phase 32 complete, transitioned to Phase 33
+Status: Executing Phase null
+Last activity: 2026-07-11 — Phase 33 complete
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -168,6 +168,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 30 | 6 | - | - |
 | 31 | 2 | - | - |
 | 32 | 6 | - | - |
+| 33 | 7 | - | - |
 
 **Recent Trend:**
 

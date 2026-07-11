@@ -412,14 +412,14 @@ Plans:
 **Goal:** The four in-scope charts (PayoffChart, TermStructureChart, GammaProfile, GexBars) render through Recharts (shadcn chart primitives) with the overflow/bleed bug class killed structurally — clipping by construction, not hand-clamps — while the scenario-engine/payoff-domain data layer stays byte-identical and the MORAI design tokens + every locked behavior (domain fidelity, 9-layer z-order, guard cases) are preserved.
 **Requirements**: CHART-01, CHART-02, CHART-03, CHART-04, CHART-05, CHART-06
 **Depends on:** Phase 32
-**Plans:** 7 plans
+**Plans:** 7/7 plans complete
 
 Plans:
 
-- [ ] 33-01-PLAN.md — Foundation: recharts@3.9.2 pin + shadcn ui/chart.tsx + test harness + A1 z-order spike + docs D3 reconcile
-- [ ] 33-02-PLAN.md — PayoffChartMarks custom layer: EM band + BE markers + edge arrows (2563bd6 clamp regression as a unit test)
-- [ ] 33-03-PLAN.md — GammaProfile → Recharts (split teal/coral fill, flip/spot lines, compact+full) + new test
-- [ ] 33-04-PLAN.md — TermStructureChart → Recharts (forward-IV bracket via segment, guard case) + re-express test
-- [ ] 33-05-PLAN.md — GexBars → Recharts (horizontal bars, per-bar Cell colors, wall/spot lines) + re-express test
-- [ ] 33-06-PLAN.md — PayoffChart core swap: numeric domain fidelity + 9-layer z-order + native tooltip + wire marks
-- [ ] 33-07-PLAN.md — Integration sweep: dead-code removal (4 charts), deps retained, full test + typecheck + lint green
+- [x] 33-01-PLAN.md — Foundation: recharts@3.9.2 pin + shadcn ui/chart.tsx + test harness + A1 z-order spike + docs D3 reconcile
+- [x] 33-02-PLAN.md — PayoffChartMarks custom layer: EM band + BE markers + edge arrows (2563bd6 clamp regression as a unit test)
+- [x] 33-03-PLAN.md — GammaProfile → Recharts (split teal/coral fill, flip/spot lines, compact+full) + new test
+- [x] 33-04-PLAN.md — TermStructureChart → Recharts (forward-IV bracket via segment, guard case) + re-express test
+- [x] 33-05-PLAN.md — GexBars → Recharts (horizontal bars, per-bar Cell colors, wall/spot lines) + re-express test
+- [x] 33-06-PLAN.md — PayoffChart core swap: numeric domain fidelity + 9-layer z-order + native tooltip + wire marks
+- [x] 33-07-PLAN.md — Integration sweep: dead-code removal (4 charts), deps retained, full test + typecheck + lint green
