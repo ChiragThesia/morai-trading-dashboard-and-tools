@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { bsmGreeks } from "@morai/quant";
+import { bsmGreeks, bsmPrice } from "@morai/quant";
 import { parseOccSymbol } from "@morai/shared";
 import { computePositionGreeks } from "./position-greeks.ts";
 import { repriceScenario, t0ExcludedPositions, buildScenarioStrip, findZeroCrossings } from "./scenario-engine.ts";
@@ -510,5 +510,67 @@ describe("buildScenarioStrip — bounded key-level set (D-06 / D-07)", () => {
     const expectedDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     const expectedLabel = expectedDate.toLocaleString(undefined, { month: "short", day: "numeric" });
     expect(strip.expiryLabel).toBe(expectedLabel);
+  });
+});
+
+describe("expirationCurve — mixed-expiry book prices at ONE horizon (TOS parity, 2026-07-10)", () => {
+  // Two calendars with DIFFERENT front expiries. The @exp curve is labeled with the
+  // book's EARLIEST front expiry (expiryLabel = min frontDte), so every position must
+  // be priced at that same date — the later calendar's front leg still has 45d of time
+  // value left. The old per-position-own-expiry sum credited the later calendar its
+  // full tent max (a date 45d further out), inflating the curve mid-strikes and
+  // shifting both breakevens vs. TOS's single-date evaluation.
+  const EARLY_POS: AnalyzerPosition = {
+    id: "early-1",
+    name: "7425P early",
+    live: true,
+    occSymbol: "SPX   260808P07425000",
+    putCall: "P",
+    frontDte: 45,
+    backDte: 69,
+    frontIv: 0.145,
+    backIv: 0.145,
+    qty: 1,
+    included: true,
+  };
+  const LATE_POS: AnalyzerPosition = {
+    id: "late-1",
+    name: "7200P late",
+    live: true,
+    occSymbol: "SPX   260922P07200000",
+    putCall: "P",
+    frontDte: 90,
+    backDte: 120,
+    frontIv: 0.15,
+    backIv: 0.148,
+    qty: 1,
+    included: true,
+  };
+
+  it("every position is evaluated at the book's earliest front expiry, later front legs keep their remaining time value", () => {
+    const result = repriceScenario([EARLY_POS, LATE_POS], BASE_PARAMS);
+    const horizon = 45; // min(frontDte) across the included book
+
+    for (const S of [7000, 7200, 7425, 7600]) {
+      const point = result.expirationCurve.reduce((best, p) =>
+        Math.abs(p.spot - S) < Math.abs(best.spot - S) ? p : best,
+      );
+
+      let expected = 0;
+      for (const pos of [EARLY_POS, LATE_POS]) {
+        const K = pos.id === "early-1" ? 7425 : 7200;
+        const backT = Math.max((pos.backDte - horizon) / 365, 1e-6);
+        const frontT = Math.max((pos.frontDte - horizon) / 365, 0);
+        const net =
+          bsmPrice(point.spot, K, backT, pos.backIv, R, Q, "P") -
+          bsmPrice(point.spot, K, frontT, pos.frontIv, R, Q, "P");
+        const entry =
+          bsmPrice(SPOT, K, pos.backDte / 365, pos.backIv, R, Q, "P") -
+          bsmPrice(SPOT, K, pos.frontDte / 365, pos.frontIv, R, Q, "P");
+        expected += (net - entry) * 100;
+      }
+
+      expect(point.pl).toBeCloseTo(expected, 6);
+    }
   });
 });

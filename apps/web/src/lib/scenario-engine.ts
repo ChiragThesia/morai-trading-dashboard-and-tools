@@ -126,7 +126,7 @@ export type ScenarioResult = {
   readonly payoffCurve: ReadonlyArray<PayoffPoint>;
   /** Fan curves for +7/+14/+21d ([] when daysForward already exceeds them) */
   readonly fanCurves: ReadonlyArray<{ readonly days: number; readonly curve: ReadonlyArray<PayoffPoint> }>;
-  /** Expiration tent curve (at each position's front expiry) */
+  /** Expiration tent curve (whole book at the earliest included front expiry) */
   readonly expirationCurve: ReadonlyArray<PayoffPoint>;
   /** Per-position greeks at the current slider spot (combined book at each spot step) */
   readonly positionGreeks: ReadonlyArray<PositionGreeks>;
@@ -299,10 +299,16 @@ function bookPL(
 }
 
 /**
- * Book P&L for the expiration profile: compute at each position's front expiry
- * (the calendar ends at the front expiry date).
+ * Book P&L for the expiration profile: the WHOLE book priced at ONE horizon — the
+ * earliest included front expiry (the same date `expiryLabel` shows). Later calendars'
+ * front legs still have time value at that date and are priced with their remaining
+ * frontT > 0, exactly like TOS's single-date "@ Expiration" line.
  *
- * Matches playground-v3 bookExp().
+ * The playground-v3 bookExp() this ported evaluated each position at its OWN front
+ * expiry instead — fine for a single calendar (identical when the book has one front
+ * expiry), physically meaningless for a mixed-expiry book: it summed P&L from
+ * different dates, crediting later calendars their full own-expiry tent (TOS-parity
+ * fix, 2026-07-10).
  */
 function bookPLAtExpiry(
   positions: ReadonlyArray<AnalyzerPosition>,
@@ -311,10 +317,12 @@ function bookPLAtExpiry(
   divYield: number,
   liveSpot: number,
 ): number {
+  const included = positions.filter(includedForExpiry);
+  if (included.length === 0) return 0;
+  const horizon = Math.min(...included.map((pos) => pos.frontDte));
   let total = 0;
-  for (const pos of positions) {
-    if (!includedForExpiry(pos)) continue;
-    const net = calendarNetPrice(pos, S, pos.frontDte, 0, rate, divYield);
+  for (const pos of included) {
+    const net = calendarNetPrice(pos, S, horizon, 0, rate, divYield);
     const entry = entryNetPrice(pos, liveSpot, rate, divYield);
     total += (net - entry) * 100 * pos.qty;
   }
