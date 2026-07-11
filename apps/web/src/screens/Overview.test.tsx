@@ -20,7 +20,8 @@ import type { StreamLiveGreekEvent, ExitsResponse, GexSnapshotResponse } from "@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { toDateInputValue } from "../lib/date-projection.ts";
 import { pairPositionsIntoCalendars, bookUnrealizedPnl } from "../lib/pair-calendars.ts";
-import { signedUsd } from "../lib/position-format.ts";
+import { resolveLivePositionRow } from "../lib/live-position-greeks.ts";
+import { usd, signedUsd } from "../lib/position-format.ts";
 import { DEFAULT_RATE, DEFAULT_DIV } from "../lib/resolve-carry.ts";
 
 // 17.1-03 (OVW-06): spy-wrap PayoffChart so tests can inspect the exact curve/signature
@@ -1542,5 +1543,124 @@ describe("Overview branch — D-01/D-10 (35.1)", () => {
       toDateInputValue(expected),
     );
     expect(mockPayoffChart.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+
+  // ── 35.1-03: mobile positions section — heading, card list, footer, exit states ──
+
+  it("positions heading row: SectionLabel + LiveStatusBadge + the Exit rules ▸ trigger when a snapshot is set", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    expect(screen.getByText("Positions")).toBeDefined();
+    expect(screen.getByText("QUIET")).toBeDefined();
+    expect(screen.getByTestId("exit-rules-trigger").textContent).toBe("Exit rules ▸");
+  });
+
+  it("card list: one position-card per calendar row, no <table>; tap expands the greeks grid un-gated (no verdict), tap again collapses", () => {
+    // Default useExits data is null → verdictByRowKey empty — the expand must NOT need a verdict.
+    setExitsReturn({ data: null });
+    setPositions([CAL_FRONT, CAL_BACK, CAL2_FRONT, CAL2_BACK]);
+    render(<Overview />);
+
+    expect(screen.getAllByTestId(/^position-card-/)).toHaveLength(2);
+    expect(screen.queryByRole("table")).toBeNull();
+
+    const card = screen.getByTestId(`position-card-${CAL_ROW_KEY}`);
+    expect(within(card).queryByText("Δ")).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: /7425P/ }));
+    expect(within(card).getByText("Δ")).toBeDefined();
+    fireEvent.click(within(card).getByRole("button", { name: /7425P/ }));
+    expect(within(card).queryByText("Δ")).toBeNull();
+  });
+
+  it("J11: unchecking a card's checkbox moves the footer to 1/2 included, dims the card, AND moves the chart's positionSetSignature — one lifted state", () => {
+    setPositions([CAL_FRONT, CAL_BACK, CAL2_FRONT, CAL2_BACK]);
+    render(<Overview />);
+
+    expect(screen.getByTestId("mobile-positions-footer").textContent).toContain("2/2 included");
+    expect(latestPayoffChartProps().positionSetSignature).toContain(`${CAL_ROW_KEY}:ok:ok:true`);
+
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Include 7425P in risk profile & total" }),
+    );
+
+    expect(screen.getByTestId("mobile-positions-footer").textContent).toContain("1/2 included");
+    expect(screen.getByTestId(`position-card-${CAL_ROW_KEY}`).className).toContain("opacity-40");
+    expect(latestPayoffChartProps().positionSetSignature).toContain(`${CAL_ROW_KEY}:ok:ok:false`);
+  });
+
+  it("J11 (footer format): Net {usd} · {signed unreal} · n/m included — computed via resolveLivePositionRow over the included legs (D-11)", () => {
+    setPositions([CAL_FRONT, CAL_BACK, CAL2_FRONT, CAL2_BACK]);
+    render(<Overview />);
+
+    const total = resolveLivePositionRow(
+      [CAL_FRONT, CAL_BACK, CAL2_FRONT, CAL2_BACK],
+      GEX_FIXTURE.spot,
+      new Map(),
+    );
+    const unrealText = total.unreal === null ? "—" : signedUsd(total.unreal);
+    expect(screen.getByTestId("mobile-positions-footer").textContent).toBe(
+      `Net ${usd(total.netVal)} · ${unrealText} · 2/2 included`,
+    );
+  });
+
+  it("empty state: the exact no-positions copy renders and the footer does not", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    expect(
+      screen.getByText(
+        "No open positions. Register a calendar via the API or paste a TOS order in the Analyzer.",
+      ),
+    ).toBeDefined();
+    expect(screen.queryByTestId("mobile-positions-footer")).toBeNull();
+  });
+
+  it("exit error branch: Couldn't load exit verdicts. + Retry wired to refetch (mobile tree)", () => {
+    setPositions([]);
+    const refetch = vi.fn();
+    setExitsReturn({ data: undefined, isPending: false, isError: true, refetch });
+    render(<Overview />);
+
+    const errorBlock = screen.getByTestId("held-positions-error");
+    expect(errorBlock.textContent).toContain("Couldn't load exit verdicts.");
+    fireEvent.click(within(errorBlock).getByText("Retry"));
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  it("exit cold-start branch: Exit advisor warming up — and no Exit rules trigger without a snapshot", () => {
+    setPositions([]);
+    setExitsReturn({ data: null });
+    render(<Overview />);
+
+    expect(screen.getByTestId("held-positions-cold-start").textContent).toContain(
+      "Exit advisor warming up",
+    );
+    expect(screen.queryByTestId("exit-rules-trigger")).toBeNull();
+  });
+
+  it("unlinked verdicts render under the mobile card list; a matched verdict joins its card instead", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    setExitsReturn({ data: EXITS_FIXTURE });
+    render(<Overview />);
+
+    expect(screen.getByText("Unlinked verdicts")).toBeDefined();
+    // cal-hold matches the 7425P row → joined into the card (chip), not the unlinked list.
+    expect(screen.queryByTestId("held-position-cal-hold")).toBeNull();
+    expect(screen.getByTestId("held-position-cal-take")).toBeDefined();
+    const card = screen.getByTestId(`position-card-${CAL_ROW_KEY}`);
+    expect(within(card).getByTestId("held-position-verdict-cal-hold")).toBeDefined();
+  });
+
+  it("J5 extension: mobile-payoff precedes the first position card in DOM order", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const payoff = screen.getByTestId("mobile-payoff");
+    const card = screen.getByTestId(`position-card-${CAL_ROW_KEY}`);
+    const follows =
+      (payoff.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(follows).toBe(true);
   });
 });
