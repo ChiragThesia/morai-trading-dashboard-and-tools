@@ -139,13 +139,14 @@ export function GammaProfile({
         {flip !== null && (
           <ReferenceLine
             x={flip}
+            ifOverflow="hidden"
             className="gamma-flip-line"
             stroke={AMBER}
             strokeDasharray={dashedStroke}
           />
         )}
 
-        <ReferenceLine x={spot} className="gamma-spot-line" stroke={BLUE} strokeWidth={lineStroke} />
+        <ReferenceLine x={spot} ifOverflow="hidden" className="gamma-spot-line" stroke={BLUE} strokeWidth={lineStroke} />
         <ReferenceDot
           x={spot}
           y={0}

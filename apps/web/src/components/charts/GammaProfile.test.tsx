@@ -77,6 +77,26 @@ describe("GammaProfile", () => {
     expect(container.querySelector(".gamma-flip-line")).toBeNull();
   });
 
+  // WR-01: MIXED_PROFILE's x-domain is [minSpot, maxSpot] = [7300, 7450] — a flip/spot value
+  // outside that range used to still draw (visx's overflow:visible), just past the nominal
+  // plot bounds. ReferenceLine's default ifOverflow="discard" silently omits an off-domain
+  // line entirely instead; ifOverflow="hidden" keeps it rendered (structurally clipped).
+  it("still renders a flip reference line when flip is outside the profile's own domain (WR-01, ifOverflow=hidden parity)", () => {
+    const { container } = render(
+      <GammaProfile profile={MIXED_PROFILE} spot={7375} flip={7500} />,
+    );
+
+    expect(container.querySelector(".gamma-flip-line line")).not.toBeNull();
+  });
+
+  it("still renders the spot reference line when spot is outside the profile's own domain (WR-01, ifOverflow=hidden parity)", () => {
+    const { container } = render(
+      <GammaProfile profile={MIXED_PROFILE} spot={7500} flip={null} />,
+    );
+
+    expect(container.querySelector(".gamma-spot-line line")).not.toBeNull();
+  });
+
   it("renders a solid blue spot reference line and a spot dot at the zero baseline", () => {
     const { container } = render(
       <GammaProfile profile={MIXED_PROFILE} spot={7375} flip={null} />,
