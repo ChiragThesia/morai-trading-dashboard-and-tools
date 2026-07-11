@@ -13,11 +13,49 @@
  * No any/as/!.
  */
 import { useState } from "react";
-import { cn } from "@/lib/utils";
 import { CandidateCard } from "../../components/picker/CandidateCard.tsx";
+import { WhyPanel } from "../../components/picker/WhyPanel.tsx";
+import { TermStructureChart } from "../../components/picker/TermStructureChart.tsx";
+import { EntryExitPlan } from "../../components/picker/EntryExitPlan.tsx";
 import { Button, SectionLabel } from "../../components/system/index.tsx";
 import { MobileScorecard } from "./MobileScorecard.tsx";
-import { useAnalyzerModel } from "./useAnalyzerModel.ts";
+import { MobileAnalyzerChart } from "./MobileAnalyzerChart.tsx";
+import { useAnalyzerModel, PASTED_NOT_SCORED_NOTE } from "./useAnalyzerModel.ts";
+
+/**
+ * Disclosure — a closed-by-default native `<details>` whose body mounts ONLY when the real `open`
+ * attribute is set (catch #24: the content is React-gated on the toggle event, never CSS-revealed
+ * behind a closed disclosure). Summary styled per the Typography table (10px tracked uppercase).
+ */
+function Disclosure({
+  summary,
+  children,
+}: {
+  readonly summary: string;
+  readonly children: React.ReactNode;
+}): React.ReactElement {
+  // Controlled: React owns the real `open` attribute (never a CSS reveal — catch #24). The
+  // summary's default toggle is cancelled so the state is the single source (synchronous, so the
+  // body mounts the instant the user opens it — jsdom fires the native `toggle` event async).
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="group border-t border-line/40" open={open}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((v) => !v);
+        }}
+        className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 py-3 font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase [&::-webkit-details-marker]:hidden"
+      >
+        <span aria-hidden className="transition-transform group-open:rotate-90">
+          ▸
+        </span>
+        <span>{summary}</span>
+      </summary>
+      {open && <div className="pb-3">{children}</div>}
+    </details>
+  );
+}
 
 export function AnalyzerMobile(): React.ReactElement {
   const {
@@ -40,10 +78,18 @@ export function AnalyzerMobile(): React.ReactElement {
     handleToggleCombine,
     copiedId,
     handleCopyCandidate,
+    bounds,
+    dateControl,
+    toggles,
+    handleToggle,
+    payoffDomain,
+    scenarioResult,
+    spot,
     bookCount,
     bookDebit,
     bookTheta,
     bookVega,
+    positionSetSignature,
     repull,
   } = useAnalyzerModel();
 
@@ -259,7 +305,56 @@ export function AnalyzerMobile(): React.ReactElement {
         bookVega={bookVega}
       />
 
-      {/* Chart block + term/why/plan disclosures land in plan 36-03 (D-09/D-10). */}
+      {/* ── Chart block (D-09) — one chrome row + full-bleed PayoffChart + caption. ── */}
+      {selected !== null && scenarioResult !== null && (
+        <MobileAnalyzerChart
+          selected={selected}
+          scenarioResult={scenarioResult}
+          snapshot={snapshot}
+          payoffDomain={payoffDomain}
+          spot={spot}
+          toggles={toggles}
+          onToggle={handleToggle}
+          dateControl={dateControl}
+          bounds={bounds}
+          positionSetSignature={positionSetSignature}
+        />
+      )}
+
+      {/* ── Term/Why/Plan disclosures (D-10) — render whenever a candidate is selected (catch #23:
+          never gated on scoring); a not-scored candidate shows the pasted-note inside each. ── */}
+      {selected !== null && (
+        <section className="px-4">
+          <Disclosure summary="Term structure + your legs">
+            {selected.breakdown.length === 0 ? (
+              <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+            ) : (
+              snapshot !== null && (
+                <TermStructureChart
+                  termStructure={snapshot.termStructure}
+                  events={snapshot.events}
+                  asOf={snapshot.asOf}
+                  candidate={selected}
+                />
+              )
+            )}
+          </Disclosure>
+          <Disclosure summary="Why this calendar">
+            {selected.breakdown.length === 0 ? (
+              <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+            ) : (
+              snapshot !== null && <WhyPanel candidate={selected} gex={snapshot.gex} />
+            )}
+          </Disclosure>
+          <Disclosure summary="Entry / exit plan">
+            {selected.breakdown.length === 0 ? (
+              <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+            ) : (
+              <EntryExitPlan candidate={selected} sizing={snapshot?.sizing ?? null} />
+            )}
+          </Disclosure>
+        </section>
+      )}
     </div>
   );
 }

@@ -9,7 +9,8 @@
  * J5 candidates fold · J6 bare rail states · D-18 iOS-zoom paste input.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act, within } from "@testing-library/react";
+import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { PickerSnapshotResponse } from "@morai/contracts";
@@ -54,6 +55,28 @@ function mockUsePickerReturn(overrides: Partial<MockPickerResult>): void {
 }
 
 import { Analyzer } from "../Analyzer.tsx";
+import { PayoffChart } from "../../components/charts/PayoffChart.tsx";
+import type { PayoffChartProps } from "../../components/charts/PayoffChart.tsx";
+
+const mockPayoffChart = vi.mocked(PayoffChart);
+
+/** Props of the most recent PayoffChart render (throws if it never rendered). */
+function latestPayoffChartProps(): PayoffChartProps {
+  const call = mockPayoffChart.mock.calls.at(-1);
+  assertDefined(call, "PayoffChart rendered at least once");
+  return call[0];
+}
+
+const SORTED = [...pickerSnapshotFixture.candidates].sort((a, b) => b.score - a.score);
+const TOP = SORTED[0];
+if (TOP === undefined) throw new Error("fixture must carry at least one candidate");
+
+/** Toggle a native <details> by clicking its summary (jsdom flips `open` + fires toggle). */
+function toggleDisclosure(label: string): void {
+  const summary = screen.getByText(label).closest("summary");
+  assertDefined(summary, `summary for ${label}`);
+  fireEvent.click(summary);
+}
 
 // Far-future dates so this suite never goes stale relative to "today".
 const PASTE_EXAMPLE =
@@ -127,12 +150,13 @@ describe("AnalyzerMobile — J6 rail states (bare prompts, no hollow shells)", (
   });
 
   it("J6e no hollow shells: mobile-score / caption / disclosures absent in every non-selected state", () => {
-    for (const overrides of [
+    const states: ReadonlyArray<Partial<MockPickerResult>> = [
       { data: undefined, isPending: true },
       { data: undefined, isError: true },
       { data: null },
       { data: { ...pickerSnapshotFixture, candidates: [] } },
-    ] as ReadonlyArray<Partial<MockPickerResult>>) {
+    ];
+    for (const overrides of states) {
       mockUsePickerReturn(overrides);
       const { container } = render(<Analyzer />);
       expect(container.querySelector('[data-testid="mobile-score"]')).toBeNull();
@@ -215,5 +239,122 @@ describe("AnalyzerMobile — paste block (D-18) + rail legend", () => {
     expect(screen.queryByTestId("picker-paste-clear-all")).toBeNull();
     await paste(PASTE_EXAMPLE);
     expect(screen.getByTestId("picker-paste-clear-all")).toBeTruthy();
+  });
+});
+
+describe("AnalyzerMobile — J9 chart props + J8 controls + caption (D-09)", () => {
+  it("J9: PayoffChart receives the picker colors, EM band, and the three 35.1 mobile props", () => {
+    render(<Analyzer />);
+    const props = latestPayoffChartProps();
+    expect(props.todayCurveColor).toBe("#5b9cf6");
+    expect(props.expirationCurveColor).toBe("#a78bfa");
+    expect(props.expectedMoveBand).toEqual({ spot: pickerSnapshotFixture.spot, em: TOP.expectedMove });
+    expect(props.showBePills).toBe(false);
+    expect(props.aspectRatio).toBe(1.3);
+    expect(props.highlightedPositionId).toBeNull();
+  });
+
+  it("J8: date-pill + Projection dialog (slider max from Analyzer's own bounds) + › advances the pill", () => {
+    render(<Analyzer />);
+    const pill = screen.getByTestId("date-pill");
+    expect(pill.textContent).toContain("today");
+
+    // › steps the projected date — asserted BEFORE opening the modal (an open dialog inerts
+    // the control row behind it, so the stepper is unreachable while it's open).
+    fireEvent.click(screen.getByRole("button", { name: "Next day" }));
+    expect(screen.getByTestId("date-pill").textContent).toContain("+1d");
+
+    // The pill opens the Projection dialog; the slider is bounded by Analyzer's own maxDays.
+    fireEvent.click(screen.getByTestId("date-pill"));
+    const slider = screen.getByTestId<HTMLInputElement>("date-slider");
+    expect(Number(slider.max)).toBeGreaterThan(0);
+    expect(screen.getByTestId("date-picker-input")).toBeTruthy();
+  });
+
+  it("caption: worst-of dot + '{source} · {asOf}', bg-up when both contexts ok and rth", () => {
+    render(<Analyzer />);
+    const caption = screen.getByTestId("analyzer-mobile-caption");
+    expect(caption.textContent).toContain(`${pickerSnapshotFixture.source} · ${pickerSnapshotFixture.asOf}`);
+    expect(caption.querySelector(".bg-up")).not.toBeNull();
+    expect(caption.textContent).not.toContain("AH — indicative");
+  });
+
+  it("caption: after-hours appends ' · AH — indicative' with an amber dot", () => {
+    mockUsePickerReturn({ data: { ...pickerSnapshotFixture, marketSession: "after-hours" } });
+    render(<Analyzer />);
+    const caption = screen.getByTestId("analyzer-mobile-caption");
+    expect(caption.textContent).toContain("AH — indicative");
+    expect(caption.querySelector(".bg-amber")).not.toBeNull();
+  });
+});
+
+describe("AnalyzerMobile — J10 disclosures (D-10, catches #23/#24)", () => {
+  it("J10a: exactly three closed <details> with the verbatim summaries", () => {
+    render(<Analyzer />);
+    const details = document.querySelectorAll("details");
+    expect(details.length).toBe(3);
+    for (const d of details) expect(d.hasAttribute("open")).toBe(false);
+    expect(screen.getByText("Term structure + your legs")).toBeTruthy();
+    expect(screen.getByText("Why this calendar")).toBeTruthy();
+    expect(screen.getByText("Entry / exit plan")).toBeTruthy();
+  });
+
+  it("J10b: opening each details mounts TermStructureChart / WhyPanel / EntryExitPlan (closed → absent)", () => {
+    render(<Analyzer />);
+    expect(screen.queryByTestId("term-structure-line")).toBeNull();
+    expect(screen.queryByTestId("whypanel-forward-edge-sentence")).toBeNull();
+    expect(screen.queryByTestId("entryexit-value-debit")).toBeNull();
+
+    toggleDisclosure("Term structure + your legs");
+    expect(screen.getByTestId("term-structure-line")).toBeTruthy();
+
+    toggleDisclosure("Why this calendar");
+    expect(screen.getByTestId("whypanel-forward-edge-sentence")).toBeTruthy();
+
+    toggleDisclosure("Entry / exit plan");
+    expect(screen.getByTestId("entryexit-value-debit")).toBeTruthy();
+  });
+
+  it("J10c: a not-scored pasted candidate shows the not-scored note inside each opened details", async () => {
+    render(<Analyzer />);
+    await paste(PASTE_EXAMPLE);
+
+    toggleDisclosure("Term structure + your legs");
+    toggleDisclosure("Why this calendar");
+    toggleDisclosure("Entry / exit plan");
+    // Each of the three opened disclosures shows the not-scored note in place of its component.
+    const details = document.querySelectorAll("details");
+    expect(details.length).toBe(3);
+    for (const d of details) {
+      expect(within(d).getByText("Pasted calendar — not engine-scored.")).toBeTruthy();
+    }
+    expect(screen.queryByTestId("term-structure-line")).toBeNull();
+  });
+});
+
+describe("AnalyzerMobile — J4 DOM order + null-candidate guard", () => {
+  it("J4: paste input precedes card list precedes mobile-score precedes date-pill precedes first <details>", () => {
+    render(<Analyzer />);
+    const input = screen.getByTestId("picker-paste-input");
+    const firstCard = screen.getAllByTestId(/^candidate-card-/)[0];
+    const score = screen.getByTestId("mobile-score");
+    const pill = screen.getByTestId("date-pill");
+    const firstDetails = document.querySelector("details");
+    assertDefined(firstCard, "a candidate card renders");
+    assertDefined(firstDetails, "a details renders");
+
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(input.compareDocumentPosition(firstCard) & FOLLOWING).toBeTruthy();
+    expect(firstCard.compareDocumentPosition(score) & FOLLOWING).toBeTruthy();
+    expect(score.compareDocumentPosition(pill) & FOLLOWING).toBeTruthy();
+    expect(pill.compareDocumentPosition(firstDetails) & FOLLOWING).toBeTruthy();
+  });
+
+  it("no candidate selected (zero-filtered, no paste): no chart row, no caption, no <details>", () => {
+    mockUsePickerReturn({ data: { ...pickerSnapshotFixture, candidates: [] } });
+    const { container } = render(<Analyzer />);
+    expect(screen.queryByTestId("date-pill")).toBeNull();
+    expect(screen.queryByTestId("analyzer-mobile-caption")).toBeNull();
+    expect(container.querySelector("details")).toBeNull();
   });
 });
