@@ -519,7 +519,9 @@ describe("Overview screen", () => {
       });
       setPositions([CAL_FRONT, CAL_BACK]);
       render(<Overview />);
-      expect(screen.getByText("IV n/a")).toBeDefined();
+      // Scoped to the desktop table (35-04: the mobile card list renders the same badge
+      // text off the same row, an expected duplication in jsdom with no real media query).
+      expect(within(screen.getByRole("table")).getByText("IV n/a")).toBeDefined();
       expect(screen.getByTestId("t0-exclusion-note")).toBeDefined();
       expect(screen.getByText(/T\+0 excludes 1 position: IV n\/a/)).toBeDefined();
     });
@@ -607,7 +609,11 @@ describe("Overview screen", () => {
       const beforeTodayCurve = before.todayCurve;
       const beforeExpirationCurve = before.expirationCurve;
 
-      const checkbox = screen.getByRole("checkbox", { name: "Include 7425P in risk profile & total" });
+      // Scoped to the desktop table (35-04: the mobile card list renders a sibling checkbox
+      // with the same accessible name off the same row).
+      const checkbox = within(screen.getByRole("table")).getByRole("checkbox", {
+        name: "Include 7425P in risk profile & total",
+      });
       fireEvent.click(checkbox);
 
       const after = latestPayoffChartProps();
@@ -637,7 +643,11 @@ describe("Overview screen", () => {
     it("checkbox accessible name matches the UI-SPEC copywriting contract", () => {
       setPositions([CAL_FRONT, CAL_BACK]);
       render(<Overview />);
-      expect(screen.getByRole("checkbox", { name: "Include 7425P in risk profile & total" })).toBeDefined();
+      // Scoped to the desktop table (35-04: the mobile card list's checkbox carries the
+      // exact same accessible name — byte-identical parity, per the UI-SPEC).
+      expect(
+        within(screen.getByRole("table")).getByRole("checkbox", { name: "Include 7425P in risk profile & total" }),
+      ).toBeDefined();
     });
 
     it("one checkbox click updates BOTH the Net included/total count AND the chart curve props from a single interaction", () => {
@@ -648,7 +658,11 @@ describe("Overview screen", () => {
       expect(screen.getByText(/2\/2/)).toBeDefined();
       const beforeCurve = latestPayoffChartProps().todayCurve;
 
-      fireEvent.click(screen.getByRole("checkbox", { name: "Include 7425P in risk profile & total" }));
+      // Scoped to the desktop table (35-04: the mobile card list renders a sibling checkbox
+      // with the same accessible name off the same row).
+      fireEvent.click(
+        within(screen.getByRole("table")).getByRole("checkbox", { name: "Include 7425P in risk profile & total" }),
+      );
 
       // Same interaction updates the table total...
       expect(screen.getByText(/1\/2/)).toBeDefined();
@@ -863,7 +877,10 @@ describe("Overview screen", () => {
       setPositions([CAL_FRONT, CAL_BACK]);
       render(<Overview />);
       expect(screen.getByText("Nov 20 → Nov 30")).toBeDefined();
-      expect(screen.getByText(/10d wide/)).toBeDefined();
+      // Scoped to the desktop table (35-04: the mobile card's expiry line concatenates
+      // line1/line2 as sibling text nodes in one div, whose full textContent also contains
+      // "10d wide" and would otherwise double-match the regex).
+      expect(within(screen.getByRole("table")).getByText(/10d wide/)).toBeDefined();
     });
 
     it("a single-leg row shows its one expiry and DTE, no calendar width", () => {
@@ -1310,5 +1327,38 @@ describe("Overview — mobile stack order (35-03: order-*, full-bleed chart, vie
     const viewOnly = screen.getByText("view-only · Analyzer →");
     expect(viewOnly.className).toContain("hidden");
     expect(viewOnly.className).toContain("lg:inline");
+  });
+});
+
+// ── 35-04: positions dual render — table hidden lg:table + card list lg:hidden ──
+describe("Overview — positions dual render (35-04: table hidden lg:table + card list lg:hidden)", () => {
+  beforeEach(() => {
+    mockResolveLegIv.mockImplementation(() => ok(0.2));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("the positions <table> is display:none below lg (hidden lg:table)", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const table = screen.getByRole("table");
+    expect(table.className).toContain("hidden");
+    expect(table.className).toContain("lg:table");
+  });
+
+  it("a lg:hidden card list renders one PositionCard per row, off the same rows the table uses", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const cardList = screen.getByTestId("positions-card-list");
+    expect(cardList.className).toContain("lg:hidden");
+
+    const cards = screen.getAllByTestId(/^position-card-/);
+    const rows = screen.getAllByTestId(/^position-row-/);
+    expect(cards).toHaveLength(rows.length);
+    expect(screen.getByTestId(`position-card-${CAL_ROW_KEY}`).textContent).toContain("7425P");
   });
 });

@@ -30,6 +30,7 @@ import { GammaProfile } from "../components/charts/GammaProfile.tsx";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import { relAge, GEX_FRESH_MS } from "./Market.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
+import { PositionCard } from "../components/PositionCard.tsx";
 import { MarketRail } from "./MarketRail.tsx";
 import {
   HeldPositionsPanel,
@@ -393,7 +394,8 @@ function PositionsTable({
   const includedCount = rows.filter((r) => !excluded.has(r.key)).length;
 
   return (
-    <table className="w-full border-collapse font-mono text-[11px] tabular-nums">
+    <>
+    <table className="hidden w-full border-collapse font-mono text-[11px] tabular-nums lg:table">
       <thead>
         <tr>
           <th className="border-b border-line px-2 py-1" aria-label="Include in total" />
@@ -604,6 +606,33 @@ function PositionsTable({
         </tr>
       </tbody>
     </table>
+    {/* Mobile card list (35-04) — same rows, display:none paired with the table above so a
+        screen reader never announces a position twice. */}
+    <div data-testid="positions-card-list" className="flex flex-col gap-2 lg:hidden">
+      {rows.map((r) => {
+        const included = !excluded.has(r.key);
+        const ivNa = ivNaByRowKey.get(r.key) === true;
+        const verdict = verdictByRowKey.get(r.label) ?? null;
+        const expanded = expandedRowKey === r.key && verdict !== null;
+        return (
+          <PositionCard
+            key={r.key}
+            row={r}
+            spot={spot}
+            liveGreeks={liveGreeks}
+            liveStatus={liveStatus}
+            ivNa={ivNa}
+            verdict={verdict}
+            marketSession={verdictMarketSession}
+            expanded={expanded}
+            onSelect={onSelectRow}
+            included={included}
+            onToggleIncluded={onToggleExcluded}
+          />
+        );
+      })}
+    </div>
+    </>
   );
 }
 
