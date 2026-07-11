@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { assertDefined } from "@morai/shared";
-import { pairPositionsIntoCalendars, bookUnrealizedPnl } from "./pair-calendars.ts";
+import { pairPositionsIntoCalendars, bookUnrealizedPnl, dteExact } from "./pair-calendars.ts";
 import type { BrokerPositionResponse } from "@morai/contracts";
 
 /**
@@ -61,6 +61,45 @@ describe("pairPositionsIntoCalendars", () => {
     const single = out.singles[0];
     assertDefined(single, "single present");
     expect(single.occSymbol).toBe(orphan.occSymbol);
+  });
+});
+
+describe("dteExact — settlement-aware fractional days", () => {
+  // PM-settled oracle, hand-derived per the AM/PM rule (root SPXW → always PM) and
+  // cross-checked against 34-01's own verified settlement-timestamp oracle: 2026-07-17
+  // 16:00 ET (EDT, UTC-4) → 2026-07-17T20:00:00Z. `now` is the prior evening (during the
+  // overnight session), so the whole-day dte() would ceil to a full day while dteExact
+  // reports the true 22h remaining as a fraction of a day.
+  it("returns fractional days derived from the settlement instant, not a rounded whole day", () => {
+    const occSymbol = "SPXW  260717P07425000";
+    const now = new Date(Date.UTC(2026, 6, 16, 22, 0, 0));
+    const settlementMs = Date.UTC(2026, 6, 17, 20, 0, 0); // hand-derived PM-settled oracle
+    const expected = (settlementMs - now.getTime()) / 86_400_000; // 22h / 24h = 0.91666...
+
+    expect(dteExact(occSymbol, now)).toBeCloseTo(expected, 10);
+    expect(dteExact(occSymbol, now)).toBeLessThan(1); // NOT rounded up to a whole day
+  });
+
+  it("clamps to 0 for a settlement instant already in the past (never negative)", () => {
+    const occSymbol = "SPXW  260717P07425000";
+    const now = new Date(Date.UTC(2026, 7, 1, 0, 0, 0)); // Aug 1, after the Jul 17 settlement
+    expect(dteExact(occSymbol, now)).toBe(0);
+  });
+
+  it("degrades to dte()'s value (0) for an unparseable OCC symbol — never throws, never NaN", () => {
+    const now = new Date("2026-06-28T00:00:00Z");
+    expect(dteExact("NOT-A-VALID-OCC-SYMBOL", now)).toBe(0);
+    expect(Number.isNaN(dteExact("NOT-A-VALID-OCC-SYMBOL", now))).toBe(false);
+  });
+});
+
+describe("dte() (via CalendarGroup) — unchanged whole-day integers", () => {
+  it("dteFront/dteBack stay whole-day integers after dteExact is added", () => {
+    const out = pairPositionsIntoCalendars([FRONT, BACK], NOW);
+    const cal = out.calendars[0];
+    assertDefined(cal, "calendar present");
+    expect(Number.isInteger(cal.dteFront)).toBe(true);
+    expect(Number.isInteger(cal.dteBack)).toBe(true);
   });
 });
 
