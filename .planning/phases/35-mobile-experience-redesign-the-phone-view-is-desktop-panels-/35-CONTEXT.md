@@ -49,7 +49,10 @@ broker dashboards) for:
 
 ## Constraints (locked)
 
-- Desktop unchanged at ≥768px (Tailwind `md:` boundary already in use).
+- Desktop unchanged at the code's REAL breakpoint: `lg:` / ≥1024px (research D-01 —
+  `md:` appears nowhere in screens/; only `lg:` branches exist, so 1024px is the
+  zero-regression cutover and <1024px is the mobile-improvement surface). CONTEXT
+  originally said 768px in error.
 - No new heavy dependencies; Tailwind + existing shadcn primitives + existing charts.
   (Recharts is already responsive via ResponsiveContainer/aspect-ratio — reuse.)
 - Data layer untouched: this is layout/presentation + at most new pure view components.
