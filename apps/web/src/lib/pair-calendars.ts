@@ -10,7 +10,7 @@
  *   unreal = marketValue − averagePrice · (longQty − shortQty) · 100
  * The calendar's netUnreal sums both legs.
  */
-import { assertDefined, parseOccSymbol } from "@morai/shared";
+import { assertDefined, parseOccSymbol, settlementTimestamp } from "@morai/shared";
 import type { BrokerPositionResponse } from "@morai/contracts";
 
 export type CalendarGroup = {
@@ -63,6 +63,20 @@ function dte(occSymbol: string, now: Date): number {
   if (!parsed.ok) return 0;
   const ms = parsed.value.expiry.getTime() - now.getTime();
   return Math.max(0, Math.ceil(ms / 86_400_000));
+}
+
+/**
+ * Settlement-aware fractional days from `now` to the leg's exact settlement instant
+ * (09:30 ET for AM-settled standard SPX, 16:00 ET otherwise — `settlementTimestamp`).
+ * Exact twin of `dte()`; `dte()` itself stays whole-day for display/sort. Degrades to
+ * `dte()`'s whole-day value on an unparseable OCC symbol — never throws, never NaN.
+ */
+export function dteExact(occSymbol: string, now: Date): number {
+  const parsed = parseOccSymbol(occSymbol);
+  if (!parsed.ok) return dte(occSymbol, now);
+  const settlement = settlementTimestamp(parsed.value.root, parsed.value.expiry);
+  const ms = settlement.getTime() - now.getTime();
+  return Math.max(0, ms / 86_400_000);
 }
 
 /**
