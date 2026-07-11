@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
+current_phase: 36
 status: executing
 stopped_at: Phase 35.1 complete (all v1.3 phases closed — milestone-close ceremony pending)
-last_updated: "2026-07-11T19:44:29.286Z"
+last_updated: "2026-07-11T21:35:45.564Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 36 execution started (Analyzer + Journal mobile)
+last_activity_desc: Phase 36 execution started
 progress:
   total_phases: 15
-  completed_phases: 14
-  total_plans: 76
-  completed_plans: 76
-  percent: 93
-current_phase: 36
+  completed_phases: 15
+  total_plans: 81
+  completed_plans: 81
+  percent: 100
 current_phase_name: analyzer-journal-mobile-redesign
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 36 — EXECUTING
-Plan: 1 of ?
-Status: Executing Phase 36
-Last activity: 2026-07-11 — Phase 36 execution started
+Plan: 5 of 5
+Status: 36-05 executed (all 5 plans done); C1-C10 + C7 screenshots PENDING-ORCHESTRATOR, C11 phone check PENDING-USER
+Last activity: 2026-07-11 — 36-05 D-17 desktop dead-branch cleanup + J16 gate green
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -311,6 +311,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 35.1 P02 | 14min | 3 tasks | 6 files |
 | Phase 35.1 P03 | 8min | 2 tasks | 5 files |
 | Phase 35.1 P04 | 16min | 3 tasks | 7 files |
+| Phase 36 P05 | 12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -475,6 +476,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase 35.1]: 35.1-02: mobile hero spot = gex?.spot ?? null, never the model's 5800 engine fallback (Copywriting Contract per-segment — rule)
 - [Phase ?]: 35.1-03: footer/chart/card inclusion off ONE lifted excluded set + resolveLivePositionRow — single-click test proves no drift (T-35.1-05)
 - [Phase ?]: 35.1-04: MobileMarketSection = stat grids not shrunken charts (D-08); mobile-market testid; gex-unavailable plain line; D-12 bleed wrapper dropped entirely
+- [Phase ?]: Phase-36 D-17: removed the Phase-35 responsive reflow arms (order-*/display:contents/-mx-3 bleed/lg:-gated variants) from both desktop trees; guarded RED-first, full suite + typecheck + lint green
+- [Phase ?]: 36-05 C1-C10 chrome-devtools items + C7 1440px before/after screenshots deferred PENDING-ORCHESTRATOR (executor has no browser tools); baseline commit 2e9eb33, after eb3a44f; C11 phone check PENDING-USER
 
 ### Pending Todos
 
@@ -531,7 +534,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-11T18:15:21.191Z
+Last session: 2026-07-11T21:34:17.403Z
 Stopped at: Completed 35.1-01-PLAN.md
 Resume file: 
 None
