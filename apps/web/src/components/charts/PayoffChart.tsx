@@ -555,13 +555,16 @@ export function PayoffChart({
 
         <ChartContainer
           config={chartConfig}
-          style={{ width: "100%", height: "100%" }}
+          style={{ width: "100%", aspectRatio: `${SVG_W} / ${SVG_H}` }}
           className="aspect-auto"
         >
-          {/* Explicit width/height: required under jsdom (mockResponsiveContainer strips
-              ResponsiveContainerContext, per 33-03's GammaProfile finding); a real browser
-              measures the "aspect-auto w-full h-full" box above via ResponsiveContainer
-              and takes priority over these, so the chart stays fluid in the app. */}
+          {/* Definite aspect-ratio, never height:100%: the old <svg viewBox> sized itself
+              by intrinsic ratio when the percentage-height chain broke; a div has no such
+              fallback, so height:100% collapsed to 0 in the real browser and the chart
+              never mounted (live-UAT regression 2026-07-10). Explicit width/height on
+              ComposedChart below: required under jsdom (mockResponsiveContainer strips
+              ResponsiveContainerContext, per 33-03); the real browser's ResponsiveContainer
+              measures this container and takes priority, so the chart stays fluid. */}
           <ComposedChart
             width={SVG_W}
             height={SVG_H}

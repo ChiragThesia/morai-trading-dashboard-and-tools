@@ -790,3 +790,20 @@ describe("PayoffChart — native Tooltip crosshair content (D-10, D-12: typed co
     expect(c2.firstChild).toBeNull();
   });
 });
+
+describe("PayoffChart — container sizing (live-UAT regression 2026-07-10)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("ChartContainer carries a definite aspect-ratio instead of a percentage height (a div has no SVG intrinsic-ratio fallback — height:100% collapsed to 0 in the real browser and the chart never mounted)", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    const chartContainer = container.querySelector("[data-chart]");
+    expect(chartContainer).not.toBeNull();
+    if (chartContainer === null || !(chartContainer instanceof HTMLElement)) {
+      throw new Error("ChartContainer [data-chart] element missing");
+    }
+    expect(chartContainer.style.aspectRatio).toBe("1000 / 470");
+    expect(chartContainer.style.height).not.toBe("100%");
+  });
+});
