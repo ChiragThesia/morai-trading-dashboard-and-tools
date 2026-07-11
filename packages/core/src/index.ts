@@ -245,6 +245,8 @@ export type { ForGettingOrders, GetOrdersDeps } from "./brokerage/index.ts";
 // NOT re-exported here to avoid a duplicate-export. Analytics row types + ports follow.
 // Analytics domain functions (06-03)
 export { interpolateRiskReversal, percentileRank } from "./analytics/index.ts";
+// Parity-implied carry solver (Phase 34, Plan 34-03 — TOSP-02)
+export { impliedDivYield } from "./analytics/index.ts";
 // Analytics use-cases (06-04: term-structure half + read forwarder)
 export {
   makeComputeAnalyticsUseCase,

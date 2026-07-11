@@ -6,6 +6,9 @@
 export { interpolateRiskReversal } from "./domain/risk-reversal.ts";
 export { percentileRank } from "./domain/percentile-rank.ts";
 
+// Parity-implied carry solver (Phase 34, Plan 34-03 — TOSP-02)
+export { impliedDivYield } from "./domain/implied-carry.ts";
+
 // Regime banding domain (Phase 24, BOARD-01/02) — pure calm/warning/crisis classifiers
 export {
   bandVixTermStructure,
