@@ -32,7 +32,8 @@ describe("impliedDivYield — parity round-trip oracle", () => {
 
     const recovered = impliedDivYield(callMark, putMark, S, K, T, r);
     expect(recovered).not.toBeNull();
-    expect(recovered as number).toBeCloseTo(q, 9);
+    if (recovered === null) return;
+    expect(recovered).toBeCloseTo(q, 9);
   });
 });
 
@@ -53,7 +54,8 @@ describe("impliedDivYield — fast-check round-trip property", () => {
 
           const recovered = impliedDivYield(callMark, putMark, spot, strike, T, r);
           expect(recovered).not.toBeNull();
-          expect(recovered as number).toBeCloseTo(q, 6);
+          if (recovered === null) return;
+          expect(recovered).toBeCloseTo(q, 6);
         },
       ),
       { numRuns: 200 },
