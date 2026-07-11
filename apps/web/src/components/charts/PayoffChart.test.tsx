@@ -807,3 +807,47 @@ describe("PayoffChart — container sizing (live-UAT regression 2026-07-10)", ()
     expect(chartContainer.style.height).not.toBe("100%");
   });
 });
+
+describe("PayoffChart — BE values as x-axis numbers (2026-07-10 request)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  // TODAY_CURVE and EXP_CURVE both cross zero exactly at 7400 — which is also a
+  // derived grid tick for DOMAIN 6900-7900, so this fixture exercises both the
+  // labels themselves and the colliding-grid-tick suppression.
+
+  it("renders today/@exp breakevens as colored numbers in the x-axis lane", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+
+    const t0Labels = [...container.querySelectorAll('[data-testid="be-axis-label-t0"]')];
+    expect(t0Labels.length).toBe(1);
+    const t0 = t0Labels[0];
+    if (t0 === undefined) throw new Error("t0 BE axis label missing");
+    expect(t0.textContent).toBe("7400");
+    expect(t0.getAttribute("fill")).toBe("#a78bfa");
+
+    const expLabels = [...container.querySelectorAll('[data-testid="be-axis-label-exp"]')];
+    expect(expLabels.length).toBe(1);
+    const exp = expLabels[0];
+    if (exp === undefined) throw new Error("exp BE axis label missing");
+    expect(exp.textContent).toBe("7400");
+    expect(exp.getAttribute("fill")).toBe("#7b8696");
+  });
+
+  it("suppresses a plain grid tick label that would collide with a BE number", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    const plain7400 = [...container.querySelectorAll("text")].filter(
+      (t) => t.textContent === "7400" && t.getAttribute("data-testid") === null,
+    );
+    expect(plain7400.length).toBe(0);
+  });
+
+  it("hides @exp BE numbers when the expiration curve is toggled off", () => {
+    const { container } = render(
+      <PayoffChart {...baseProps()} toggles={{ ...TOGGLES, showExpiration: false }} />,
+    );
+    expect(container.querySelectorAll('[data-testid="be-axis-label-exp"]').length).toBe(0);
+    expect(container.querySelectorAll('[data-testid="be-axis-label-t0"]').length).toBe(1);
+  });
+});

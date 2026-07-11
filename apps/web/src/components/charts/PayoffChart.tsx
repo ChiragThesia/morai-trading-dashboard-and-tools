@@ -315,7 +315,15 @@ function PayoffMarksLayer({
 interface PayoffChartGridProps {
   gridTickValues: ReadonlyArray<number>;
   xTicks: ReadonlyArray<number>;
+  /** Breakeven spots rendered as colored numbers in the x-axis tick lane. */
+  beToday: ReadonlyArray<number>;
+  beExp: ReadonlyArray<number>;
+  beTodayColor: string;
+  beExpColor: string;
 }
+
+/** Grid tick labels within this many px of a BE number are dropped (BE wins the lane). */
+const BE_LABEL_CLEARANCE_PX = 30;
 
 /**
  * Grid lines + axis tick labels, hand-rendered (not native Recharts XAxis/YAxis tick
@@ -328,9 +336,27 @@ interface PayoffChartGridProps {
  * their numeric scale + domain + the auto clipPath — this component draws the SAME visual
  * grid the pre-migration component drew, positioned by usePlotScales (catch #20).
  */
-function PayoffChartGrid({ gridTickValues, xTicks }: PayoffChartGridProps): React.ReactElement | null {
+function PayoffChartGrid({
+  gridTickValues,
+  xTicks,
+  beToday,
+  beExp,
+  beTodayColor,
+  beExpColor,
+}: PayoffChartGridProps): React.ReactElement | null {
   const scales = usePlotScales();
   if (scales === null) return null;
+  const beLabels = [
+    ...beToday.map((v) => ({ v, color: beTodayColor, tid: "be-axis-label-t0" })),
+    ...beExp.map((v) => ({ v, color: beExpColor, tid: "be-axis-label-exp" })),
+  ].filter(({ v }) => {
+    const px = scales.xScale(v);
+    return px >= 0 && px <= scales.innerWidth;
+  });
+  const bePx = beLabels.map(({ v }) => scales.xScale(v));
+  const keptXTicks = xTicks.filter((s) =>
+    bePx.every((px) => Math.abs(px - scales.xScale(s)) > BE_LABEL_CLEARANCE_PX),
+  );
   return (
     <g transform={`translate(${scales.plotX},${scales.plotY})`}>
       {gridTickValues.map((value) => {
@@ -344,7 +370,7 @@ function PayoffChartGrid({ gridTickValues, xTicks }: PayoffChartGridProps): Reac
           </g>
         );
       })}
-      {xTicks.map((s) => (
+      {keptXTicks.map((s) => (
         <text
           key={s}
           x={scales.xScale(s)}
@@ -355,6 +381,21 @@ function PayoffChartGrid({ gridTickValues, xTicks }: PayoffChartGridProps): Reac
           fontFamily={MONO}
         >
           {s}
+        </text>
+      ))}
+      {beLabels.map(({ v, color, tid }) => (
+        <text
+          key={`${tid}-${v}`}
+          data-testid={tid}
+          x={scales.xScale(v)}
+          y={scales.innerHeight + 16}
+          fill={color}
+          fontSize={10}
+          fontWeight={600}
+          textAnchor="middle"
+          fontFamily={MONO}
+        >
+          {Math.round(v)}
         </text>
       ))}
     </g>
@@ -674,7 +715,14 @@ export function PayoffChart({
               axisLine={false}
             />
 
-            <PayoffChartGrid gridTickValues={gridTickValues} xTicks={xTicks} />
+            <PayoffChartGrid
+              gridTickValues={gridTickValues}
+              xTicks={xTicks}
+              beToday={beToday}
+              beExp={toggles.showExpiration ? beExp : []}
+              beTodayColor={todayCurveColor}
+              beExpColor={expirationCurveColor}
+            />
 
             <ReferenceLine y={0} stroke={ZERO_LINE} strokeWidth={1.1} />
 
