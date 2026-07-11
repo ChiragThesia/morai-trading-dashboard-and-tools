@@ -78,7 +78,7 @@ export function Shell({
                     handleNavigate(tab);
                   }}
                   className={cn(
-                    "min-h-8 min-w-11 cursor-pointer rounded-md border-b-2 px-3 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] uppercase transition-colors outline-none focus-visible:ring-2 focus-visible:ring-violet",
+                    "min-h-11 min-w-11 lg:min-h-8 cursor-pointer rounded-md border-b-2 px-3 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] uppercase transition-colors outline-none focus-visible:ring-2 focus-visible:ring-violet",
                     isActive
                       ? "border-violet bg-violet/10 text-violet"
                       : "border-transparent text-dim hover:text-txt",
@@ -96,7 +96,7 @@ export function Shell({
       </header>
 
       {/* Active screen content area */}
-      <main className="min-h-[calc(100vh-48px)]">{children}</main>
+      <main className="min-h-[calc(100dvh-48px)]">{children}</main>
 
       {/* AUTH_EXPIRED banner — always mounted when authenticated, self-shows/hides */}
       <AuthExpiredBanner />
