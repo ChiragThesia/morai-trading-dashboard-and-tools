@@ -1,5 +1,5 @@
 ---
-status: passed_pending_user_phone_check
+status: user_check_failed_superseded_by_35.1
 phase: 35-mobile-experience-redesign
 source: [35-VERIFICATION.md, 35-06-SUMMARY.md checklists]
 started: 2026-07-11T16:00:00Z
@@ -34,8 +34,14 @@ result_detail: agent-verified live
 
 ## Summary
 
-total: 3 · passed: 3 · issues: 0 · pending: 1 (user phone re-take of the two
-original screenshot scenarios — the phase's origin complaint)
+total: 3 · passed: 3 · issues: 0 · pending: 0
+
+**User phone check: FAILED (2026-07-11).** Verbatim: "still look ass, if you have to
+design components for mobile only then do that, but I want mobile friendly view now.
+COMPLETE re-design one flow." Diagnosis: the phase's core constraint (reuse desktop
+DOM, adapt with responsive classes) capped the outcome at "desktop panels reflowed" —
+technically correct (all 3 agent checks passed) but not a mobile design. Superseded by
+Phase 35.1: dedicated mobile-only component tree for the Overview flow.
 
 ## Gaps
 
