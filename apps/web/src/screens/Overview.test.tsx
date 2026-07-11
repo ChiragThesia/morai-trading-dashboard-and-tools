@@ -1501,20 +1501,16 @@ describe("Overview branch — D-01/D-10 (35.1)", () => {
     expect(latestPayoffChartProps().toggles.showFan).toBe(true);
   });
 
-  it("J6 (integration): Next day advances the date input one day and re-renders the chart off it", () => {
+  it("J6 (integration): Next day advances the date pill to +1d and re-renders the chart off it", () => {
     setPositions([CAL_FRONT, CAL_BACK]);
     render(<Overview />);
 
-    const before = screen.getByTestId<HTMLInputElement>("date-picker-input").value;
+    expect(screen.getByTestId("date-pill").textContent).toContain("· today");
     const callsBefore = mockPayoffChart.mock.calls.length;
 
     fireEvent.click(screen.getByRole("button", { name: "Next day" }));
 
-    const expected = new Date(`${before}T12:00:00`);
-    expected.setDate(expected.getDate() + 1);
-    expect(screen.getByTestId<HTMLInputElement>("date-picker-input").value).toBe(
-      toDateInputValue(expected),
-    );
+    expect(screen.getByTestId("date-pill").textContent).toContain("+1d");
     expect(mockPayoffChart.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
