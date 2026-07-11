@@ -101,6 +101,23 @@ describe("TermStructureChart — forward-IV bracket (normal candidate)", () => {
     expect(bracket.getAttribute("stroke")).toBe("#5b9cf6");
     expect(screen.queryByTestId("term-structure-guard-tag")).toBeNull();
   });
+
+  // WR-02: the old component drew the "fwd XX.X%" label 16px BELOW the bracket line
+  // (yScale(fwdIv) + 16). A zero-height ReferenceLine `segment` + position="insideBottom"
+  // computes y - offset instead of y + offset, flipping the label above the line. Assert
+  // the sign of the offset: the label's y must be greater than (below) the line's y.
+  it("places the forward-IV bracket label below the bracket line, not above it (WR-02)", () => {
+    render(<TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />);
+    const bracket = screen.getByTestId("term-structure-fwd-bracket");
+    const lineY = Number(bracket.getAttribute("y1"));
+    // getByText resolves to the <tspan> holding the text content; the y coordinate lives on
+    // its parent <text> element.
+    const labelText = screen.getByText(/^fwd /).closest("text");
+    expect(labelText).not.toBeNull();
+    if (labelText === null) throw new Error("unreachable");
+    const labelY = Number(labelText.getAttribute("y"));
+    expect(labelY).toBeGreaterThan(lineY);
+  });
 });
 
 describe("TermStructureChart — guard case (fwdIv null, T-18-10)", () => {

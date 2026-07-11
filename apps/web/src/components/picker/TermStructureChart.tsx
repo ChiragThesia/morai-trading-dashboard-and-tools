@@ -219,7 +219,12 @@ export function TermStructureChart({
               strokeDasharray="4 3"
               label={{
                 value: `fwd ${(fwdIv * 100).toFixed(1)}%`,
-                position: "insideBottom",
+                // WR-02: "insideBottom" on a zero-height segment computes y - offset (the
+                // label sits ABOVE the line). "bottom" computes y + height + offset, which
+                // for height=0 is y + offset — clearing 16px below, matching the
+                // pre-migration yScale(fwdIv) + 16 placement.
+                position: "bottom",
+                offset: 16,
                 fill: BLUE,
                 fontSize: 12,
                 fontFamily: MONO,
