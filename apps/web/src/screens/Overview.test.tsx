@@ -1362,3 +1362,25 @@ describe("Overview — positions dual render (35-04: table hidden lg:table + car
     expect(screen.getByTestId(`position-card-${CAL_ROW_KEY}`).textContent).toContain("7425P");
   });
 });
+
+// ── 35-06: integration gate — no-horizontal-overflow smoke guard ────────────────
+// jsdom reports a fixed window.innerWidth (1024 in this project's config) and never
+// computes real layout (no wrap/clip/scroll geometry) — this assertion only catches a
+// gross, unconditional wider-than-viewport element (e.g. a missing lg: revert on a
+// fixed-width child). It is NOT proof of the mobile 390px no-h-scroll requirement;
+// that proof is the manual chrome-devtools checklist recorded in 35-06-SUMMARY.md.
+describe("Overview — no-horizontal-overflow smoke guard (35-06)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("document does not report a wider scrollWidth than clientWidth after mount (jsdom-blind regression tripwire)", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+  });
+});
