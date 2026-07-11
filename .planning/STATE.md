@@ -5,14 +5,14 @@ milestone_name: Picker Intelligence
 current_phase: 35.1
 status: executing
 stopped_at: Completed 35.1-01-PLAN.md (structural foundation — switch + model + chart props)
-last_updated: "2026-07-11T17:45:28.767Z"
+last_updated: "2026-07-11T17:58:41.561Z"
 last_activity: 2026-07-11
 last_activity_desc: 35.1-01 executed (Overview switch + useOverviewModel + PayoffChart props)
 progress:
   total_phases: 14
   completed_phases: 13
   total_plans: 76
-  completed_plans: 74
+  completed_plans: 75
   percent: 93
 current_phase_name: mobile-overview-complete-redesign
 ---
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 35.1
-Plan: 2 of 04 complete
+Plan: 3 of 04 complete
 Status: Ready to execute
 Last activity: 2026-07-11 — 35.1-01 executed (Overview switch + useOverviewModel + PayoffChart props)
 
@@ -307,6 +307,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 32 P06 | 45m | 2 tasks | 6 files |
 | Phase 35.1 P01 | 17min | 3 tasks | 6 files |
 | Phase 35.1 P02 | 14min | 3 tasks | 6 files |
+| Phase 35.1 P03 | 8min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -469,6 +470,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 35.1-01: PayoffChart aspectRatio default renders the literal '1000 / 470' template string — byte-identical no-prop render
 - [Phase 35.1]: 35.1-02: MobileRiskPanel scenario prop typed as the two-curve structural slice — full ScenarioResult flows through, tests stay a 3-point fixture
 - [Phase 35.1]: 35.1-02: mobile hero spot = gex?.spot ?? null, never the model's 5800 engine fallback (Copywriting Contract per-segment — rule)
+- [Phase ?]: 35.1-03: footer/chart/card inclusion off ONE lifted excluded set + resolveLivePositionRow — single-click test proves no drift (T-35.1-05)
 
 ### Pending Todos
 
@@ -525,7 +527,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-11T17:44:37.157Z
+Last session: 2026-07-11T17:57:48.074Z
 Stopped at: Completed 35.1-01-PLAN.md
 Resume file: 
 None

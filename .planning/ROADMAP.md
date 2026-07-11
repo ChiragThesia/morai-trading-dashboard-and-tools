@@ -465,11 +465,11 @@ Plans:
 **Goal:** The mobile Overview reads as a designed mobile app screen, not a compressed dashboard: a dedicated mobile-only component tree (screens/overview-mobile behind useIsDesktop) with hero-first BOOK P&L, a full-bleed payoff chart behind exactly one control row, re-hierarchied position cards with a footer total, and a purpose-built market section (headline numbers, no shrunken charts) — while desktop ≥1024px render output stays byte-identical.
 **Requirements**: MOBILE-07, MOBILE-08, MOBILE-09, MOBILE-10
 **Depends on:** Phase 35
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 
 - [x] 35.1-01-PLAN.md — useOverviewModel extraction + Overview useIsDesktop switch + PayoffChart additive props + desktop-test matchMedia migration (wave 1)
 - [x] 35.1-02-PLAN.md — MobileHero + MobileRiskPanel: hero-first P&L, one-row chart chrome, ⋯ dialog, full-bleed chart, freshness caption (wave 2)
-- [ ] 35.1-03-PLAN.md — PositionCard re-hierarchy + mobile positions section: heading, card list, footer total, exit states (wave 3)
+- [x] 35.1-03-PLAN.md — PositionCard re-hierarchy + mobile positions section: heading, card list, footer total, exit states (wave 3)
 - [ ] 35.1-04-PLAN.md — MobileMarketSection + MarketRail summary copy + D-12 desktop dead-branch cleanup + integration gate (wave 4)
