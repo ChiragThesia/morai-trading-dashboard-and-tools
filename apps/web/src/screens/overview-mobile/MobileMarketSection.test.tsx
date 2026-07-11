@@ -173,8 +173,10 @@ describe("MobileMarketSection (D-08 / J13)", () => {
     ).toBeDefined();
     expect(within(section).queryByText("Key levels")).toBeNull();
     expect(within(section).queryByText("net γ /1%")).toBeNull();
-    // Macro + net book greeks grids still render (spec §7 note).
-    expect(within(section).getByText("Net book greeks")).toBeDefined();
+    // Net book greeks are priced at gex.spot — without gex they'd show
+    // fallback-spot values (WR-01), so the grid hides like desktop GexRail.
+    expect(within(section).queryByText("Net book greeks")).toBeNull();
+    // Macro grid doesn't depend on gex — still renders.
     expect(within(section).getByText("Macro")).toBeDefined();
   });
 

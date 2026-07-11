@@ -79,17 +79,19 @@ export function MobileMarketSection({
               }
             />
           </div>
+
+          {/* Net book greeks — verbatim from GexRail. Inside the gex branch because
+              railGreeks are priced at gex.spot; without gex the fallback spot would
+              show plausible-but-wrong values (desktop GexRail hides the whole rail). */}
+          <SectionLabel tone="dim">Net book greeks</SectionLabel>
+          <div className="grid grid-cols-2 gap-2">
+            <Stat label="Net Δ" value={signed(railGreeks.delta)} valueClassName={signClass(railGreeks.delta)} />
+            <Stat label="Net Γ" value={signed(railGreeks.gamma)} />
+            <Stat label="Net Θ/d" value={signedUsd(railGreeks.theta)} valueClassName={signClass(railGreeks.theta)} />
+            <Stat label="Net Vega" value={signedUsd(railGreeks.vega)} valueClassName={signClass(railGreeks.vega)} />
+          </div>
         </>
       )}
-
-      {/* Net book greeks — verbatim from GexRail. */}
-      <SectionLabel tone="dim">Net book greeks</SectionLabel>
-      <div className="grid grid-cols-2 gap-2">
-        <Stat label="Net Δ" value={signed(railGreeks.delta)} valueClassName={signClass(railGreeks.delta)} />
-        <Stat label="Net Γ" value={signed(railGreeks.gamma)} />
-        <Stat label="Net Θ/d" value={signedUsd(railGreeks.theta)} valueClassName={signClass(railGreeks.theta)} />
-        <Stat label="Net Vega" value={signedUsd(railGreeks.vega)} valueClassName={signClass(railGreeks.vega)} />
-      </div>
 
       {/* Macro — the same formatting the header chips used. */}
       <SectionLabel tone="dim">Macro</SectionLabel>
