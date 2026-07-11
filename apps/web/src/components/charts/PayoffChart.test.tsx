@@ -612,6 +612,32 @@ describe("PayoffChart — GEX wall structural clip (allowDataOverflow + auto cli
     expect(screen.getByTestId("wall-line-flip").getAttribute("stroke")).toBe("#f0b429");
   });
 
+  // WR-03: pre-migration regression test ("real-repro 2026-07-10") asserted an in-domain
+  // wall's actual pixel x, not just its color -- restored here. Wall x1 is margin-offset
+  // (PAD.left + xScale(value)); PAD.left is read off the chart's own structural clip-path
+  // rect rather than hardcoded, so this stays correct if PAD ever changes.
+  it("in-domain walls render at their true x position (not a coordinate drift)", () => {
+    const domain = { min: 7100, max: 8050 };
+    const { container } = render(
+      <PayoffChart
+        {...baseProps()}
+        domain={domain}
+        toggles={WALL_TOGGLES}
+        gex={{ callWall: 7550, putWall: 7500, flip: 7488 }}
+      />,
+    );
+
+    const clipRect = container.querySelector("defs clipPath rect");
+    expect(clipRect).not.toBeNull();
+    if (clipRect === null) throw new Error("unreachable");
+    const padLeft = Number(clipRect.getAttribute("x"));
+    const xScale = buildXScale(INNER_W, domain);
+
+    expect(Number(screen.getByTestId("wall-line-put").getAttribute("x1"))).toBeCloseTo(padLeft + xScale(7500), 5);
+    expect(Number(screen.getByTestId("wall-line-call").getAttribute("x1"))).toBeCloseTo(padLeft + xScale(7550), 5);
+    expect(Number(screen.getByTestId("wall-line-flip").getAttribute("x1"))).toBeCloseTo(padLeft + xScale(7488), 5);
+  });
+
   it("an off-domain call wall (8000 > domain.max 7900) renders inside a structurally-clipped ancestor sized to the plot area, not a hand-clamped coordinate", () => {
     render(
       <PayoffChart
