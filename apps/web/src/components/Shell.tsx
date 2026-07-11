@@ -96,7 +96,7 @@ export function Shell({
       </header>
 
       {/* Active screen content area */}
-      <main className="min-h-[calc(100dvh-48px)]">{children}</main>
+      <main className="min-h-[calc(100vh-48px)] min-h-[calc(100dvh-48px)]">{children}</main>
 
       {/* AUTH_EXPIRED banner — always mounted when authenticated, self-shows/hides */}
       <AuthExpiredBanner />
