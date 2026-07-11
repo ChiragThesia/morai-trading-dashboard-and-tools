@@ -107,3 +107,22 @@ describe("makeSyncTransactionsHandler", () => {
     expect(syncTransactionsUseCase).not.toHaveBeenCalled();
   });
 });
+
+describe("makeSyncTransactionsHandler — null job.data (prod regression 2026-07-09/10)", () => {
+  it("runs the use-case when job.data is null instead of throwing", async () => {
+    const rth = new Date("2026-06-11T15:00:00Z"); // Thursday 11:00 ET, inside RTH
+    const syncTransactionsUseCase = vi.fn().mockResolvedValue(ok(undefined));
+    const handler = makeSyncTransactionsHandler({ syncTransactionsUseCase, now: () => rth });
+
+    const job: Job<unknown> = {
+      id: "test-null-payload",
+      name: "sync-transactions",
+      data: null,
+      expireInSeconds: 900,
+      heartbeatSeconds: null,
+      signal: new AbortController().signal,
+    };
+    await handler([job]);
+    expect(syncTransactionsUseCase).toHaveBeenCalledOnce();
+  });
+});

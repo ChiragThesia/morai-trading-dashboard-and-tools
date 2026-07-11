@@ -384,14 +384,17 @@ const fetchTransactionsResolved = async (
   return transactionsAdapter.fetchTransactions(hashResult.value, from, to);
 };
 
-// Window: last 7 days through today (YYYY-MM-DD). Re-syncing the same window is idempotent
-// (deterministic fill ids + onConflictDoNothing), so an overlapping window is safe.
-const txWindowTo = new Date().toISOString().slice(0, 10);
-const txWindowFrom = (() => {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
-  return d.toISOString().slice(0, 10);
-})();
+// Window: last 7 days through today (YYYY-MM-DD), computed PER RUN — boot-time constants
+// froze the window for the process lifetime, so fills after boot day were never pulled
+// and closed calendars stayed open (unlinked-verdicts pile-up, fixed 2026-07-10).
+// Re-syncing an overlapping window is idempotent (deterministic fill ids +
+// onConflictDoNothing), so the trailing window self-heals missed cycles.
+const trailingTxWindow = (): { from: string; to: string } => {
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - 7);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+};
 
 const syncTransactionsUseCase = makeSyncTransactionsUseCase({
   fetchTransactions: fetchTransactionsResolved,
@@ -399,8 +402,7 @@ const syncTransactionsUseCase = makeSyncTransactionsUseCase({
   // C1: injected sha256 hasher → deterministic UUID fill ids.
   hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
   accountHash: "resolved-at-call-time", // ignored by fetchTransactionsResolved (resolver wins)
-  from: txWindowFrom,
-  to: txWindowTo,
+  window: trailingTxWindow,
   now: () => new Date(),
 });
 

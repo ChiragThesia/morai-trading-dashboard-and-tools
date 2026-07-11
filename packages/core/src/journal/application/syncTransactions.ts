@@ -55,8 +55,15 @@ export type SyncTransactionsDeps = {
   // Injected sha256-hex hasher (C1) — used to derive deterministic UUID fill ids.
   readonly hashFillIds: HashFillIds;
   readonly accountHash: string;
-  readonly from: string; // YYYY-MM-DD
-  readonly to: string; // YYYY-MM-DD
+  /**
+   * The [from, to] date window (YYYY-MM-DD) to pull, evaluated on EVERY run — never
+   * static strings captured at composition time. The worker once wired boot-time
+   * constants here, so a long-running process re-synced the same frozen window forever
+   * and fills after boot day were never ingested (stale-open calendars / unlinked
+   * verdicts, fixed 2026-07-10). Re-pulling an overlapping window is idempotent
+   * (deterministic fill ids + onConflictDoNothing).
+   */
+  readonly window: () => { readonly from: string; readonly to: string };
   readonly now: () => Date;
 };
 
@@ -94,11 +101,8 @@ export function makeSyncTransactionsUseCase(
   deps: SyncTransactionsDeps,
 ): ForRunningSyncTransactions {
   return async (): Promise<Result<void, StorageError>> => {
-    const txResult = await deps.fetchTransactions(
-      deps.accountHash,
-      deps.from,
-      deps.to,
-    );
+    const { from, to } = deps.window();
+    const txResult = await deps.fetchTransactions(deps.accountHash, from, to);
 
     if (!txResult.ok) {
       // AUTH_EXPIRED → degrade (worker does not abort); transient FetchError → retryable err.

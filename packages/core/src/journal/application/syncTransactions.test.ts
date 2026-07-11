@@ -116,8 +116,7 @@ function testHashFillIds(ids: ReadonlyArray<string>): string {
 
 const baseDeps = {
   accountHash: "ACCT-HASH",
-  from: "2026-06-01",
-  to: "2026-06-30",
+  window: () => ({ from: "2026-06-01", to: "2026-06-30" }),
   now: () => new Date("2026-06-20T00:00:00Z"),
   hashFillIds: testHashFillIds,
 };
@@ -264,5 +263,38 @@ describe("makeSyncTransactionsUseCase — A4 fills source", () => {
     const result = await run();
     expect(result.ok).toBe(false);
     expect(captured).toHaveLength(0);
+  });
+});
+
+describe("makeSyncTransactionsUseCase — per-run window (auto-pull, 2026-07-10)", () => {
+  // The worker wired from/to as module constants computed once at BOOT, so a
+  // long-running worker re-synced the same frozen 7-day window forever — fills after
+  // boot day were never pulled and closed calendars stayed open in the journal
+  // (the UNLINKED VERDICTS pile-up). The window is now a thunk evaluated on EVERY
+  // run, so each 10-min RTH cycle pulls a fresh trailing window.
+  it("evaluates the window thunk on every run and passes the fresh window to fetchTransactions", async () => {
+    const seen: Array<{ from: string; to: string }> = [];
+    const fetchTransactions: ForFetchingTransactions = (_accountHash, from, to) => {
+      seen.push({ from, to });
+      return Promise.resolve(ok([]));
+    };
+    const { writeFills } = makeCapturingWriteFills();
+
+    let day = 8;
+    const run = makeSyncTransactionsUseCase({
+      ...baseDeps,
+      fetchTransactions,
+      writeFills,
+      window: () => ({ from: `2026-07-0${day - 7}`, to: `2026-07-0${day}` }),
+    });
+
+    await run();
+    day = 9;
+    await run();
+
+    expect(seen).toEqual([
+      { from: "2026-07-01", to: "2026-07-08" },
+      { from: "2026-07-02", to: "2026-07-09" },
+    ]);
   });
 });

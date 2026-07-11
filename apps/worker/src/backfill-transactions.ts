@@ -111,8 +111,8 @@ export async function runBackfill(
       writeFills: deps.writeFills,
       hashFillIds: deps.hashFillIds,
       accountHash: deps.accountHash,
-      from: window.from,
-      to: window.to,
+      // Operator-supplied chunk: a static window thunk is correct here (one-shot CLI).
+      window: () => ({ from: window.from, to: window.to }),
       now: deps.now,
     });
     const result = await runChunk();

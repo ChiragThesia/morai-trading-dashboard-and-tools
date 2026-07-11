@@ -361,8 +361,7 @@ describe("journal oracle — real-transaction openNetDebit/closeNetCredit regres
       writeFills: fillsRepo.writeFills,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
-      from: "2026-04-01",
-      to: "2026-07-31",
+      window: () => ({ from: "2026-04-01", to: "2026-07-31" }),
       now: () => new Date("2026-07-05T14:00:00Z"),
     });
     const txResult = await syncTransactions();
@@ -487,8 +486,7 @@ describe("journal oracle — closed-status auto-transition (round 5, bug 2)", ()
       writeFills: fillsRepo.writeFills,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
-      from: "2026-04-01",
-      to: "2026-07-31",
+      window: () => ({ from: "2026-04-01", to: "2026-07-31" }),
       now: () => new Date("2026-07-05T14:00:00Z"),
     });
     const txResult = await syncTransactions();
@@ -600,8 +598,7 @@ describe("journal oracle — scoped rebuild-journal convergence for the shared-l
       writeFills: fillsRepo.writeFills,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
-      from: "2026-05-01",
-      to: "2026-06-30",
+      window: () => ({ from: "2026-05-01", to: "2026-06-30" }),
       now: () => new Date("2026-07-05T14:00:00Z"),
     });
     const txResult = await syncTransactions();

@@ -36,8 +36,8 @@ export type SyncFillsHandlerDeps = {
  */
 export function makeSyncFillsHandler(
   deps: SyncFillsHandlerDeps,
-): (jobs: ReadonlyArray<Job | undefined>) => Promise<void> {
-  return async ([job]: ReadonlyArray<Job | undefined>): Promise<void> => {
+): (jobs: ReadonlyArray<Job<unknown> | undefined>) => Promise<void> {
+  return async ([job]: ReadonlyArray<Job<unknown> | undefined>): Promise<void> => {
     // Pitfall 2 (pg-boss v12): array element can be undefined
     if (job === undefined) return;
 
@@ -48,8 +48,11 @@ export function makeSyncFillsHandler(
       return;
     }
 
-    // T-05-19: Zod-parse payload at handler boundary (parse-don't-cast)
-    const payloadResult = syncFillsPayload.safeParse(job.data);
+    // T-05-19: Zod-parse payload at handler boundary (parse-don't-cast).
+    // pg-boss delivers data:null on some cron fires (prod regression 2026-07-09/10:
+    // "expected object, received null") — a null/absent payload IS the normal
+    // full-sweep payload, so it is treated as {}.
+    const payloadResult = syncFillsPayload.safeParse(job.data ?? {});
     if (!payloadResult.success) {
       throw new Error(`sync-fills: invalid payload: ${payloadResult.error.message}`);
     }

@@ -109,3 +109,25 @@ describe("makeSyncFillsHandler", () => {
     expect(syncFillsUseCase).not.toHaveBeenCalled();
   });
 });
+
+describe("makeSyncFillsHandler — null job.data (prod regression 2026-07-09/10)", () => {
+  // pg-boss cron fires deliver data:null on some paths; Zod's object schema rejects null
+  // with "expected object, received null" — the exact recurring prod error. A null/absent
+  // payload IS the normal full-sweep payload; the handler must treat it as {}.
+  it("runs the use-case when job.data is null instead of throwing", async () => {
+    const rth = new Date("2026-06-11T15:00:00Z"); // Thursday 11:00 ET, inside RTH
+    const syncFillsUseCase = vi.fn().mockResolvedValue(ok(undefined));
+    const handler = makeSyncFillsHandler({ syncFillsUseCase, now: () => rth });
+
+    const job: Job<unknown> = {
+      id: "test-null-payload",
+      name: "sync-fills",
+      data: null,
+      expireInSeconds: 900,
+      heartbeatSeconds: null,
+      signal: new AbortController().signal,
+    };
+    await handler([job]);
+    expect(syncFillsUseCase).toHaveBeenCalledOnce();
+  });
+});

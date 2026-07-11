@@ -117,8 +117,7 @@ describe("journal end-to-end (SC4 + SC5) against the real in-memory repo path", 
       writeFills: fillsRepo.writeFills,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
-      from: "2026-06-01",
-      to: "2026-06-30",
+      window: () => ({ from: "2026-06-01", to: "2026-06-30" }),
       now: () => new Date("2026-06-20T14:00:00Z"),
     });
     const txResult = await syncTransactions();
@@ -248,8 +247,7 @@ describe("journal end-to-end (SC4 + SC5) against the real in-memory repo path", 
       writeFills: fillsRepo.writeFills,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
-      from: "2026-06-01",
-      to: "2026-06-30",
+      window: () => ({ from: "2026-06-01", to: "2026-06-30" }),
       now: () => new Date("2026-06-20T14:00:00Z"),
     });
     await syncTransactions();
