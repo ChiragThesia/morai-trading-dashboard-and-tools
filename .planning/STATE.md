@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 33
-status: phase_complete
-stopped_at: Phase 33 verified + live-UAT passed (v1.3 all phases complete)
-last_updated: "2026-07-11T01:16:45.708Z"
+current_phase: 35.1
+status: executing
+stopped_at: Completed 35.1-01-PLAN.md (structural foundation — switch + model + chart props)
+last_updated: "2026-07-11T17:29:12.534Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 33 complete
+last_activity_desc: 35.1-01 executed (Overview switch + useOverviewModel + PayoffChart props)
 progress:
-  total_phases: 11
-  completed_phases: 11
-  total_plans: 61
-  completed_plans: 61
-  percent: 100
-current_phase_name: chart-engine-migration
+  total_phases: 14
+  completed_phases: 13
+  total_plans: 76
+  completed_plans: 73
+  percent: 96
+current_phase_name: mobile-overview-complete-redesign
 ---
 
 # Project State
@@ -24,14 +24,14 @@ current_phase_name: chart-engine-migration
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase null
+**Current focus:** Phase 35.1 — mobile Overview complete redesign (dedicated mobile-only components)
 
 ## Current Position
 
-Phase: 33
-Plan: Not started
-Status: Executing Phase null
-Last activity: 2026-07-11 — Phase 33 complete
+Phase: 35.1
+Plan: 01 of 04 complete
+Status: Executing Phase 35.1
+Last activity: 2026-07-11 — 35.1-01 executed (Overview switch + useOverviewModel + PayoffChart props)
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -305,6 +305,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 32 P04 | ~1h | 3 tasks | 9 files |
 | Phase 32 P05 | 30m | 2 tasks | 2 files |
 | Phase 32 P06 | 45m | 2 tasks | 6 files |
+| Phase 35.1 P01 | 17min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -463,6 +464,8 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: Tasks 1+2 of 32-05 combined into one commit -- both touch the same GroupPanel row JSX block
 - [Phase 32]: Preview validates the staged body with the same strict schema the PUT route uses (weight-sum-100 included); a still-mid-edit staged group surfaces as a preview error, not an unhandled rejection — Keeps client-side preview honest about what would actually be accepted, and avoids crashing the modal on a realistic partial-edit click
 - [Phase 32]: Regime band classifiers re-exported through the top @morai/core barrel so the client-side preview imports the real functions, not a hand-copy — T-32-12 mandates parity by construction; the functions previously only crossed analytics/index.ts's inner barrel
+- [Phase ?]: 35.1-01: OverviewDesktop destructures useOverviewModel to pre-extraction local names — desktop JSX byte-identical by construction
+- [Phase ?]: 35.1-01: PayoffChart aspectRatio default renders the literal '1000 / 470' template string — byte-identical no-prop render
 
 ### Pending Todos
 
@@ -519,7 +522,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-10T20:31:37.123Z
-Stopped at: Completed 32-06-PLAN.md
+Last session: 2026-07-11T17:28:46.675Z
+Stopped at: Completed 35.1-01-PLAN.md
 Resume file: 
 None
