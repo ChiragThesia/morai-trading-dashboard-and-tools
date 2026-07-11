@@ -9,8 +9,9 @@
  * and "Book & system" full-width sections. BOOK SUMMARY is intentionally dropped — net greeks
  * already live in the GEX rail's "Net book greeks" tile and book P&L in the pill ticker.
  *
- * On narrow viewports the rail is a collapsible `<details>` (open by default); the toggle
- * summary is hidden at `lg` where the rail is always shown as a fixed column.
+ * On narrow viewports the rail is a collapsible `<details>` (closed by default); the toggle
+ * summary is hidden at `lg` where the rail is force-shown as a fixed column via
+ * `lg:[&>div]:!block`, regardless of the details' runtime open state.
  */
 import { useStatus } from "../hooks/useStatus.ts";
 import { RegimeBoard } from "../components/RegimeBoard.tsx";
@@ -41,10 +42,13 @@ function SystemHealth(): React.ReactElement {
   );
 }
 
-export function MarketRail(): React.ReactElement {
+export function MarketRail({ className }: { className?: string }): React.ReactElement {
   return (
-    <details open className="group flex flex-col gap-3" data-testid="market-rail">
-      <summary className="cursor-pointer list-none font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase lg:hidden">
+    <details
+      className={cn("group flex flex-col gap-3 lg:[&>div]:!block", className)}
+      data-testid="market-rail"
+    >
+      <summary className="cursor-pointer list-none font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase lg:hidden lg:pointer-events-none">
         Market
       </summary>
       <div className="mt-3 flex flex-col gap-3 lg:mt-0">

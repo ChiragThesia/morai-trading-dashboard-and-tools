@@ -79,4 +79,18 @@ describe("MarketRail", () => {
     // No 4-across desktop card grid inside the narrow rail — rows, scanned top-to-bottom.
     expect(board?.innerHTML).not.toContain("md:grid-cols-4");
   });
+
+  it("defaults closed — no hardcoded open attribute (Pitfall 1 regression guard)", () => {
+    mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
+    render(<MarketRail />);
+
+    expect(screen.getByTestId("market-rail").hasAttribute("open")).toBe(false);
+  });
+
+  it("merges a passed className onto the details element", () => {
+    mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
+    render(<MarketRail className="order-2 lg:order-1" />);
+
+    expect(screen.getByTestId("market-rail").className).toContain("order-2");
+  });
 });
