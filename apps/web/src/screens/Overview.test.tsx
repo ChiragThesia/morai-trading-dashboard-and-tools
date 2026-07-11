@@ -960,8 +960,8 @@ describe("Pill header — 0DTE γ pill", () => {
   });
 });
 
-// ── 35-03: PillHeader mobile priority row + secondary ChipRail, de-stickied below lg ──
-describe("PillHeader — mobile priority row + secondary ChipRail (35-03)", () => {
+// ── 35.1-04 D-12: PillHeader is desktop-only — the Phase 35 mobile arms are deleted ──
+describe("PillHeader — desktop-only full chip row (35.1-04 D-12)", () => {
   beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
@@ -969,54 +969,45 @@ describe("PillHeader — mobile priority row + secondary ChipRail (35-03)", () =
     vi.clearAllMocks();
   });
 
-  it("renders a priority row (lg:hidden) holding exactly the four priority chips: SPX, net γ /1%, VIX, book", () => {
+  it("renders ONLY the full row with all ten chips — no priority row, no secondary ChipRail", () => {
     setPositions([]);
     render(<Overview />);
 
-    const priority = screen.getByTestId("pill-header-priority");
-    expect(priority.className).toContain("lg:hidden");
-    expect(within(priority).getByText("SPX")).toBeDefined();
-    expect(within(priority).getByText("net γ /1%")).toBeDefined();
-    expect(within(priority).getByText("VIX")).toBeDefined();
-    expect(within(priority).getByText("book")).toBeDefined();
-    expect(within(priority).getAllByText(/^(SPX|net γ \/1%|VIX|book)$/).length).toBe(4);
+    expect(screen.queryByTestId("pill-header-priority")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Additional market metrics" })).toBeNull();
+
+    const full = screen.getByTestId("pill-header-full");
+    for (const label of [
+      "SPX",
+      "net γ /1%",
+      "0DTE γ",
+      "γ flip",
+      "VIX",
+      "VVIX",
+      "Fed funds",
+      "10y−2y",
+      "COT lev",
+      "book",
+    ]) {
+      expect(within(full).getByText(label)).toBeDefined();
+    }
   });
 
-  it("renders a secondary ChipRail (role=group, 'Additional market metrics', lg:hidden) with the six remaining chips", () => {
-    setPositions([]);
-    render(<Overview />);
-
-    const rail = screen.getByRole("group", { name: "Additional market metrics" });
-    expect(rail.className).toContain("lg:hidden");
-    expect(within(rail).getByText("0DTE γ")).toBeDefined();
-    expect(within(rail).getByText("γ flip")).toBeDefined();
-    expect(within(rail).getByText("VVIX")).toBeDefined();
-    expect(within(rail).getByText("Fed funds")).toBeDefined();
-    expect(within(rail).getByText("10y−2y")).toBeDefined();
-    expect(within(rail).getByText("COT lev")).toBeDefined();
-  });
-
-  it("keeps the full 10-chip row (hidden lg:flex) rendering all ten chips exactly as today", () => {
+  it("the full row is a plain flex-wrap row and the wrapper is unconditionally sticky (no static/lg: split)", () => {
     setPositions([]);
     render(<Overview />);
 
     const full = screen.getByTestId("pill-header-full");
-    expect(full.className).toContain("hidden");
-    expect(full.className).toContain("lg:flex");
-    expect(within(full).getByText("COT lev")).toBeDefined();
-    expect(within(full).getByText("Fed funds")).toBeDefined();
-    expect(within(full).getByText("SPX")).toBeDefined();
-    expect(within(full).getByText("book")).toBeDefined();
-  });
-
-  it("de-stickies the PillHeader wrapper below lg — class begins with static, gates sticky behind lg:", () => {
-    setPositions([]);
-    render(<Overview />);
+    expect(full.className).not.toContain("hidden");
+    expect(full.className).not.toContain("lg:flex");
+    expect(full.className).toContain("flex");
 
     const wrapper = screen.getByTestId("pill-header");
-    expect(wrapper.className.startsWith("static")).toBe(true);
-    expect(wrapper.className).toContain("lg:sticky");
-    expect(wrapper.className).not.toMatch(/(?:^|\s)sticky(?:\s|$)/);
+    expect(wrapper.className).toContain("sticky");
+    expect(wrapper.className).not.toContain("lg:sticky");
+    expect(wrapper.className).not.toMatch(/(?:^|\s)static(?:\s|$)/);
+    expect(wrapper.className).toContain("backdrop-blur");
+    expect(wrapper.className).not.toContain("lg:backdrop-blur");
   });
 });
 
@@ -1349,13 +1340,11 @@ describe("Overview — mobile stack order (35-03: order-*, full-bleed chart, vie
     expect(marketIdx).toBeLessThan(centerIdx);
   });
 
-  it("makes the payoff chart full-bleed below lg (-mx-3 lg:mx-0)", () => {
+  it("the Phase 35 payoff-chart bleed wrapper is gone from the desktop tree (35.1-04 D-12)", () => {
     setPositions([]);
     render(<Overview />);
 
-    const bleed = screen.getByTestId("payoff-chart-bleed");
-    expect(bleed.className).toContain("-mx-3");
-    expect(bleed.className).toContain("lg:mx-0");
+    expect(screen.queryByTestId("payoff-chart-bleed")).toBeNull();
   });
 
   it("hides the 'view-only · Analyzer →' chrome below lg (hidden lg:inline)", () => {
@@ -1368,8 +1357,8 @@ describe("Overview — mobile stack order (35-03: order-*, full-bleed chart, vie
   });
 });
 
-// ── 35-04: positions dual render — table hidden lg:table + card list lg:hidden ──
-describe("Overview — positions dual render (35-04: table hidden lg:table + card list lg:hidden)", () => {
+// ── 35.1-04 D-12: the desktop table is the ONLY positions render — card-list twin deleted ──
+describe("Overview — desktop positions render (35.1-04 D-12: plain table, no card-list twin)", () => {
   beforeEach(() => {
     stubDesktopMatchMedia();
     mockResolveLegIv.mockImplementation(() => ok(0.2));
@@ -1380,40 +1369,22 @@ describe("Overview — positions dual render (35-04: table hidden lg:table + car
     vi.clearAllMocks();
   });
 
-  it("the positions <table> is display:none below lg (hidden lg:table)", () => {
+  it("the positions <table> renders un-gated — no hidden/lg:table display pairing", () => {
     setPositions([CAL_FRONT, CAL_BACK]);
     render(<Overview />);
 
     const table = screen.getByRole("table");
-    expect(table.className).toContain("hidden");
-    expect(table.className).toContain("lg:table");
+    expect(table.className).not.toContain("hidden");
+    expect(table.className).not.toContain("lg:table");
+    expect(screen.getByTestId(`position-row-${CAL_ROW_KEY}`)).toBeDefined();
   });
 
-  it("a lg:hidden card list renders one PositionCard per row, off the same rows the table uses", () => {
+  it("no PositionCard list mounts in the desktop tree (mobile cards live in OverviewMobile only)", () => {
     setPositions([CAL_FRONT, CAL_BACK]);
     render(<Overview />);
 
-    const cardList = screen.getByTestId("positions-card-list");
-    expect(cardList.className).toContain("lg:hidden");
-
-    const cards = screen.getAllByTestId(/^position-card-/);
-    const rows = screen.getAllByTestId(/^position-row-/);
-    expect(cards).toHaveLength(rows.length);
-    expect(screen.getByTestId(`position-card-${CAL_ROW_KEY}`).textContent).toContain("7425P");
-  });
-
-  it("CR-01: tapping a mobile card with no linked verdict still reveals the Δ/Γ/Θ/Vega grid", () => {
-    // Default mockUseExits() returns data: null → verdictByRowKey is empty for every row —
-    // exercises the exact "no exit verdict yet" state that must not block the mobile expand.
-    setPositions([CAL_FRONT, CAL_BACK]);
-    render(<Overview />);
-
-    const card = screen.getByTestId(`position-card-${CAL_ROW_KEY}`);
-    expect(within(card).queryByText("Δ")).toBeNull();
-
-    fireEvent.click(within(card).getByRole("button", { name: /7425P/ }));
-
-    expect(within(card).getByText("Δ")).toBeDefined();
+    expect(screen.queryByTestId("positions-card-list")).toBeNull();
+    expect(screen.queryAllByTestId(/^position-card-/)).toHaveLength(0);
   });
 });
 

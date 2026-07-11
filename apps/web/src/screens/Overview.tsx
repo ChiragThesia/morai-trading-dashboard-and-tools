@@ -19,7 +19,6 @@ import type { NetGreeks } from "./overview-mobile/useOverviewModel.ts";
 import { OverviewMobile } from "./overview-mobile/OverviewMobile.tsx";
 import { useIsDesktop } from "../hooks/useIsDesktop.ts";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
-import { PositionCard } from "../components/PositionCard.tsx";
 import { MarketRail } from "./MarketRail.tsx";
 import {
   HeldPositionsPanel,
@@ -28,7 +27,7 @@ import {
   VerdictDetailBody,
 } from "./HeldPositionsPanel.tsx";
 import { ExitRulesPanel } from "./ExitRulesPanel.tsx";
-import { Panel, PanelHeading, Stat, MetricChip, Button, ChipRail } from "../components/system/index.tsx";
+import { Panel, PanelHeading, Stat, MetricChip, Button } from "../components/system/index.tsx";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -59,7 +58,8 @@ export { formatExpiryCell, buildCalendarPosition } from "./overview-mobile/useOv
  *      broker row fall to an "Unlinked verdicts" list under the table (never dropped). The
  *      exit-rules ladder opens from an "Exit rules ▸" dialog button in the Positions header.
  *   4. RIGHT — 320px GEX rail (dealer γ profile, GEX by strike, key levels, net book greeks).
- *   5. Mobile — stacks ticker → MarketRail (collapsible) → hero → positions+verdicts → GEX.
+ *   5. Mobile — a dedicated tree (OverviewMobile, 35.1 D-01); this desktop tree only
+ *      mounts at ≥1024px, so it carries no responsive mobile arms (D-12).
  *
  * D-06 constraint: exactly one live-stream consumer on this surface. useLiveStream()
  * is called (inside useOverviewModel) and threaded into the payoff hero + docked
@@ -157,8 +157,7 @@ function PositionsTable({
   const includedCount = rows.filter((r) => !excluded.has(r.key)).length;
 
   return (
-    <>
-    <table className="hidden w-full border-collapse font-mono text-[11px] tabular-nums lg:table">
+    <table className="w-full border-collapse font-mono text-[11px] tabular-nums table">
       <thead>
         <tr>
           <th className="border-b border-line px-2 py-1" aria-label="Include in total" />
@@ -369,35 +368,6 @@ function PositionsTable({
         </tr>
       </tbody>
     </table>
-    {/* Mobile card list (35-04) — same rows, display:none paired with the table above so a
-        screen reader never announces a position twice. */}
-    <div data-testid="positions-card-list" className="flex flex-col gap-2 lg:hidden">
-      {rows.map((r) => {
-        const included = !excluded.has(r.key);
-        const ivNa = ivNaByRowKey.get(r.key) === true;
-        const verdict = verdictByRowKey.get(r.label) ?? null;
-        // Un-gated by verdict — the greeks grid is the ONLY way to see Δ/Γ/Θ/Vega on mobile,
-        // unlike the desktop table's verdict-detail-row gate above (which has nothing else to show).
-        const expanded = expandedRowKey === r.key;
-        return (
-          <PositionCard
-            key={r.key}
-            row={r}
-            spot={spot}
-            liveGreeks={liveGreeks}
-            ivNa={ivNa}
-            verdict={verdict}
-            marketSession={verdictMarketSession}
-            expanded={expanded}
-            onSelect={onSelectRow}
-            included={included}
-            onToggleIncluded={onToggleExcluded}
-            verdictObservedAt={verdictObservedAt}
-          />
-        );
-      })}
-    </div>
-    </>
   );
 }
 
@@ -489,71 +459,12 @@ function PillHeader({
   return (
     <div
       data-testid="pill-header"
-      className="static lg:sticky lg:top-0 lg:z-10 -mx-4 border-b border-line bg-bg/90 px-4 py-2 lg:backdrop-blur"
+      className="sticky top-0 z-10 -mx-4 border-b border-line bg-bg/90 px-4 py-2 backdrop-blur"
     >
-      {/* Mobile priority row (35-03) — SPX / net γ / VIX / book, one line, no wrap */}
-      <div data-testid="pill-header-priority" className="flex flex-nowrap items-center gap-1 lg:hidden">
-        <MetricChip
-          label="SPX"
-          value={gex !== undefined ? gex.spot.toFixed(1) : "—"}
-          valueClassName="text-blue"
-          className="px-2 py-1 gap-1"
-        />
-        <MetricChip
-          label="net γ /1%"
-          value={gex !== undefined ? fmtGammaCompact(gex.netGammaAtSpot) : "—"}
-          alert={regime === "AMPLIFY"}
-          valueClassName={regime === null ? "text-muted-foreground" : regime === "AMPLIFY" ? "text-down" : "text-up"}
-          className="px-2 py-1 gap-1"
-        />
-        <MetricChip label="VIX" value={vix !== null ? vix.toFixed(2) : "—"} className="px-2 py-1 gap-1" />
-        <MetricChip
-          label="book"
-          value={signedUsd(bookPnl, 0)}
-          valueClassName={signClass(bookPnl)}
-          className="ml-auto px-2 py-1 gap-1"
-        />
-      </div>
-
-      {/* Mobile secondary ChipRail (35-03) — the other 6 metrics, scroll-snap, edge-peek */}
-      <ChipRail ariaLabel="Additional market metrics" className="mt-2 lg:mt-0 lg:hidden">
-        {/* 0DTE γ — today's expiry only (byExpiry rollup); "—" once it rolls off */}
-        <MetricChip
-          label="0DTE γ"
-          value={zeroDte !== null ? fmtGammaCompact(zeroDte) : "—"}
-          valueClassName={
-            zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-down" : "text-up"
-          }
-          className="snap-start shrink-0"
-        />
-        <MetricChip
-          label="γ flip"
-          value={gex !== undefined && gex.flip !== null ? gex.flip.toFixed(0) : "—"}
-          valueClassName="text-amber"
-          className="snap-start shrink-0"
-        />
-        <MetricChip label="VVIX" value={vvix !== null ? vvix.toFixed(1) : "—"} className="snap-start shrink-0" />
-        <MetricChip
-          label="Fed funds"
-          value={dff !== null ? `${dff.toFixed(2)}%` : "—"}
-          className="snap-start shrink-0"
-        />
-        <MetricChip
-          label="10y−2y"
-          value={curveSlope !== null ? `${curveSlope >= 0 ? "+" : ""}${curveSlope.toFixed(2)}` : "—"}
-          valueClassName={curveSlope !== null ? signClass(curveSlope) : "text-muted-foreground"}
-          className="snap-start shrink-0"
-        />
-        <MetricChip
-          label="COT lev"
-          value={cotLev !== null ? signed(cotLev, 0) : "—"}
-          valueClassName={cotLev !== null ? signClass(cotLev) : "text-muted-foreground"}
-          className="snap-start shrink-0"
-        />
-      </ChipRail>
-
-      {/* Desktop full row — unchanged, all 10 chips, single flex-wrap row */}
-      <div data-testid="pill-header-full" className="hidden lg:flex lg:flex-wrap lg:items-center lg:gap-2">
+      {/* Full row — all 10 chips, single flex-wrap row (35.1 D-12: the component only
+          mounts at ≥1024px now; the Phase 35 mobile priority row + secondary ChipRail
+          were display:none dead branches and are gone). */}
+      <div data-testid="pill-header-full" className="flex flex-wrap items-center gap-2">
         <MetricChip label="SPX" value={gex !== undefined ? gex.spot.toFixed(1) : "—"} valueClassName="text-blue" />
         <MetricChip
           label="net γ /1%"
@@ -807,27 +718,24 @@ function OverviewDesktop(): React.ReactElement {
                 PayoffChart, which passes neither color prop. The TOS graph *logic* (combined
                 curve, date projection, axis scaling) is emulated; the TOS neon palette is
                 intentionally not (OVW-04, user decision — MORAI look, TOS behavior). */}
-            {/* Full-bleed below lg (negates Panel's p-3 horizontal inset); reverts at lg */}
-            <div data-testid="payoff-chart-bleed" className="-mx-3 lg:mx-0">
-              <PayoffChart
-                todayCurve={scenario.payoffCurve}
-                fanCurves={[]}
-                expirationCurve={scenario.expirationCurve}
-                rollCurve={null}
-                gex={gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null}
-                domain={payoffDomain}
-                spot={spot}
-                toggles={toggles}
-                fitY={false}
-                onFitYConsumed={noop}
-                positionSetSignature={positionSetSignature}
-                baseExpirationCurve={scenario.expirationCurve}
-                highlightedPositionId={highlightedRowKey}
-                highlightedTodayCurve={highlightedScenario?.payoffCurve ?? null}
-                highlightedExpirationCurve={highlightedScenario?.expirationCurve ?? null}
-                excludedFromT0Count={excludedFromT0Count}
-              />
-            </div>
+            <PayoffChart
+              todayCurve={scenario.payoffCurve}
+              fanCurves={[]}
+              expirationCurve={scenario.expirationCurve}
+              rollCurve={null}
+              gex={gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null}
+              domain={payoffDomain}
+              spot={spot}
+              toggles={toggles}
+              fitY={false}
+              onFitYConsumed={noop}
+              positionSetSignature={positionSetSignature}
+              baseExpirationCurve={scenario.expirationCurve}
+              highlightedPositionId={highlightedRowKey}
+              highlightedTodayCurve={highlightedScenario?.payoffCurve ?? null}
+              highlightedExpirationCurve={highlightedScenario?.expirationCurve ?? null}
+              excludedFromT0Count={excludedFromT0Count}
+            />
           </Panel>
 
           {/* Docked positions table — verdicts join into the VERDICT column; the exit-rules
