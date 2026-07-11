@@ -91,6 +91,7 @@ function makeLeg(overrides: Partial<LegObsForGex> = {}): LegObsForGex {
     bsmGamma: "0.001",
     bsmIv: "0.14",
     openInterest: 1000,
+    mark: "1.75",
     contractType: "C",
     strike: 7400000, // ×1000 convention
     expiration: "2026-06-27",

@@ -75,7 +75,7 @@ describe.skipIf(shouldSkip)("postgres gex-snapshot adapter", () => {
             INSERT INTO leg_observations
               (time, contract, bid, ask, mark, underlying_price, bsm_iv, bsm_gamma, open_interest, volume, source)
             VALUES
-              (${leg.time.toISOString()}::timestamptz, ${leg.contract}, '1.5', '2.0', '1.75',
+              (${leg.time.toISOString()}::timestamptz, ${leg.contract}, '1.5', '2.0', ${leg.mark},
                ${String(leg.underlyingPrice)}, ${leg.bsmIv}, ${leg.bsmGamma}, ${leg.openInterest}, 0, 'cboe')
             ON CONFLICT DO NOTHING
           `);

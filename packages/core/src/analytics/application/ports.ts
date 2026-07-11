@@ -203,6 +203,8 @@ export type LegObsForGex = {
   readonly strike: number;
   /** YYYY-MM-DD expiration date. */
   readonly expiration: string;
+  /** Raw option mark (string, numeric PG column) — 34-03, parity-solver input. */
+  readonly mark: string;
 };
 
 /**

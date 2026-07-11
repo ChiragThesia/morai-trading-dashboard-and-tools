@@ -112,6 +112,8 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
           bsmGamma: legObservations.bsmGamma,
           bsmIv: legObservations.bsmIv,
           openInterest: legObservations.openInterest,
+          // Raw mark — 34-03, parity-solver input (leg_observations.mark, already notNull).
+          mark: legObservations.mark,
           // JOIN fields from contracts (Pitfall 2)
           contractType: contracts.contractType,
           strike: contracts.strike,
@@ -137,6 +139,7 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
         bsmGamma: row.bsmGamma, // numeric string or null (null when not computed)
         bsmIv: row.bsmIv,       // numeric string or null
         openInterest: row.openInterest,
+        mark: row.mark, // numeric string (notNull) — 34-03 parity-solver input
         contractType: row.contractType,
         strike: row.strike, // ×1000 integer convention (e.g. 7400000)
         expiration: row.expiration, // YYYY-MM-DD from date column
