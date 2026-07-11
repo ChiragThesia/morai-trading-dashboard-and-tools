@@ -22,7 +22,8 @@ import { useStatus } from "../hooks/useStatus.ts";
  * - position: fixed; bottom: 0; left: 0; right: 0; z-index: 100
  * - background: #180f10 (blood-dark)
  * - border-top: 1px solid #5a2b2e
- * - padding: 8px 16px
+ * - padding: 8px 16px (bottom padding clears the iOS home-indicator safe area via
+ *   `max(8px, env(safe-area-inset-bottom))`, 35-UI-SPEC.md "Safe-area insets")
  * - text: body token (12px JetBrains Mono), color: #ef5350 (coral)
  * - `auth setup` in a <code> element: bg #3e1f23, padding 1px 4px, border-radius 3px
  * - NO dismiss button — banner persists until AUTH_EXPIRED clears
@@ -70,7 +71,10 @@ export function AuthExpiredBanner() {
           zIndex: 100,
           backgroundColor: "#180f10",
           borderTop: "1px solid #5a2b2e",
-          padding: "8px 16px",
+          paddingTop: "8px",
+          paddingLeft: "16px",
+          paddingRight: "16px",
+          paddingBottom: "max(8px, env(safe-area-inset-bottom))",
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
           fontSize: "12px",
           lineHeight: 1.45,
@@ -106,7 +110,10 @@ export function AuthExpiredBanner() {
           zIndex: 100,
           backgroundColor: "#231a08",
           borderTop: "1px solid #5a4a1f",
-          padding: "8px 16px",
+          paddingTop: "8px",
+          paddingLeft: "16px",
+          paddingRight: "16px",
+          paddingBottom: "max(8px, env(safe-area-inset-bottom))",
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
           fontSize: "12px",
           lineHeight: 1.45,

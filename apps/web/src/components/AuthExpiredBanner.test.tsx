@@ -121,6 +121,18 @@ describe("AuthExpiredBanner", () => {
     // No close/dismiss button exists per spec
     expect(screen.queryByRole("button")).toBeNull();
   });
+
+  it("clears the iOS home-indicator safe area on the red branch", () => {
+    setStatusData(makeStatusData("AUTH_EXPIRED"));
+
+    render(<AuthExpiredBanner />);
+
+    const style = screen.getByRole("alert").style;
+    expect(style.paddingBottom).toContain("env(safe-area-inset-bottom)");
+    expect(style.paddingTop).toBe("8px");
+    expect(style.paddingLeft).toBe("16px");
+    expect(style.paddingRight).toBe("16px");
+  });
 });
 
 describe("AuthExpiredBanner amber pre-expiry state (AUTH-05)", () => {
@@ -172,6 +184,18 @@ describe("AuthExpiredBanner amber pre-expiry state (AUTH-05)", () => {
 
     render(<AuthExpiredBanner />);
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("clears the iOS home-indicator safe area on the amber branch", () => {
+    setStatusData(makeStatusData("fresh", { trader: 3600 }));
+
+    render(<AuthExpiredBanner />);
+
+    const style = screen.getByRole("alert").style;
+    expect(style.paddingBottom).toContain("env(safe-area-inset-bottom)");
+    expect(style.paddingTop).toBe("8px");
+    expect(style.paddingLeft).toBe("16px");
+    expect(style.paddingRight).toBe("16px");
   });
 
   it("shows a banner when market is AUTH_EXPIRED and trader is fresh", () => {
