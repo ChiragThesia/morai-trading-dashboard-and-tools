@@ -164,10 +164,10 @@ function computeImpliedCarry(
     const rootParsed = parseOccSymbol(firstLeg.contract);
     if (!rootParsed.ok) continue; // degrade: unparseable contract, skip this expiry
 
-    const expiryDate = new Date(`${expiration}T00:00:00.000Z`);
-    if (Number.isNaN(expiryDate.getTime())) continue;
-
-    const settlement = settlementTimestamp(rootParsed.value.root, expiryDate);
+    // CR-01: use parseOccSymbol's own LOCAL-constructed expiry (not a UTC-anchored
+    // re-derivation from the string) — settlementTimestamp reads its argument with LOCAL
+    // getters, so local-construct + local-read is the only TZ-invariant round trip.
+    const settlement = settlementTimestamp(rootParsed.value.root, rootParsed.value.expiry);
     const T = (settlement.getTime() - cycleTime.getTime()) / MS_PER_YEAR;
     if (T <= 0) continue;
 

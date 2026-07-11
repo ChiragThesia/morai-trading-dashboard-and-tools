@@ -380,7 +380,11 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
 
   // Independent oracle: T computed directly via settlementTimestamp (not via the SUT's own
   // carry step), mirroring 34-02's "don't couple the oracle to the implementation" method.
-  const EXPIRY_DATE = new Date(`${CARRY_EXPIRY}T00:00:00.000Z`);
+  // WR-02: EXPIRY_DATE is LOCAL-constructed (new Date(y, m0, d), matching parseOccSymbol's
+  // own construction) rather than the UTC-anchored `${CARRY_EXPIRY}T00:00:00.000Z` string the
+  // SUT used to build internally — so this oracle can't drift wrong in lockstep with a
+  // UTC/local round-trip bug in the SUT (CR-01).
+  const EXPIRY_DATE = new Date(2026, 5, 27); // June 27 2026, local — month is 0-indexed
   const SETTLEMENT = settlementTimestamp("SPXW", EXPIRY_DATE);
   const CARRY_T = (SETTLEMENT.getTime() - CYCLE_TIME.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
 
