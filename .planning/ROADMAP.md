@@ -446,11 +446,16 @@ Plans:
 
 ### Phase 35: Mobile experience redesign — the phone view is desktop panels naively stacked in source order: 9 ticker chips wrap into a 4-row blob, the market rail (regime/COT) buries the payoff hero and positions below the fold, the positions table clips columns into horizontal scroll, chart header chips wrap badly. Research mobile trading-app UX patterns (summary-first hierarchy, tables-to-cards, progressive disclosure, sticky KPI strip, bottom nav vs top tabs, touch targets) and produce a UI-SPEC-driven mobile-first layout for Overview/Analyzer/Journal at <768px without changing desktop
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Mobile-first responsive re-composition of Overview, Analyzer, and Journal below the `lg:` (1024px) breakpoint — condensed KPI strip (priority row + scroll rail), demoted collapsible MarketRail, table-to-card positions, un-clipped Analyzer/Journal grids, 44px touch targets, safe-area insets — so the first phone screen answers "how am I doing" with no scroll or horizontal clipping, while desktop (≥1024px) stays pixel-identical. (D-01 corrects the original `<768px` directive to the codebase's only live boundary, `lg:`/1024px.)
+**Requirements**: MOBILE-01, MOBILE-02, MOBILE-03, MOBILE-04, MOBILE-05, MOBILE-06
 **Depends on:** Phase 34
-**Plans:** 0 plans
+**Plans:** 6 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 35 to break down)
+- [ ] 35-01-PLAN.md — Shared chrome primitives: ChipRail + Button touch size + PayoffControls scroll-not-wrap (wave 1)
+- [ ] 35-02-PLAN.md — Cross-cutting fixes: MarketRail open-bug + Shell nav-touch/100dvh + AuthExpiredBanner safe-area (wave 1)
+- [ ] 35-03-PLAN.md — Overview mobile structure: PillHeader KPI split + grid stack order + full-bleed chart (wave 2)
+- [ ] 35-04-PLAN.md — Overview positions → tap-expandable PositionCards, dual-render table/card (wave 3)
+- [ ] 35-05-PLAN.md — Analyzer display:contents/order + Journal flex-col grid port (un-clip) (wave 2)
+- [ ] 35-06-PLAN.md — Integration gate: full suite/typecheck/lint + desktop tripwires + 390px UAT (wave 4)
