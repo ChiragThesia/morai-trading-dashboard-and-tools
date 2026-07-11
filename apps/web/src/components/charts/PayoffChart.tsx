@@ -1,35 +1,49 @@
 /**
- * PayoffChart — visx payoff / risk profile chart with full 9-layer z-order
+ * PayoffChart — Recharts payoff / risk profile chart with full 9-layer z-order
  *
- * UI-SPEC "Analyzer screen" payoff chart — locked z-order (bottom to top):
- *   1. Profit zone teal fill (where T+0 P&L >= 0)
+ * UI-SPEC "Analyzer screen" payoff chart — locked z-order (bottom to top, proven
+ * empirically in 33-01: Recharts renders by per-type zIndex band, JSX order only
+ * breaks ties WITHIN a band — Area=100, Line/ReferenceLine=400, ReferenceDot=600.
+ * The Customized marks layer paints before every band regardless of JSX position,
+ * which is exactly what "never occlude a curve" requires — no workaround needed):
+ *   1. Profit zone teal fill (where @exp P&L >= 0)
  *   2. T+0 curve: #a78bfa (violet), 2.6px, teal-above / coral-below gradient fill
  *   3. Dated fan curves (+7/+14/+21d) when toggled
  *   4. Expiration tent dashed when toggled
- *   5. Amber roll overlay when active
- *   6. GEX wall lines when toggled
- *   7. Expiration BE dashed lines (gray, labeled "BE {strike}")
- *   8. T+0 BE dashed lines (violet, labeled "BE·T0 {strike}")
+ *   5. Amber roll overlay / ANLZ-02 compare overlay when active
+ *   6. GEX wall lines when toggled (structurally clipped, not hand-pinned)
+ *   7. PayoffChartMarks: EM band + BE-marker bars + KISS edge-arrow glyphs (paints
+ *      before every zIndex band by construction — always under the curves)
+ *   8. T+0 curve (on top of walls/highlighted overlays within the shared zIndex-400 band)
  *   9. Spot vertical blue line + circle dot at T+0 value
  *
  * TOS-stable y-axis: computed once from the expiration profile on position-set change.
  * "fit Y" resets on demand.
- * Crosshair: gray vertical line on pointermove + fixed HTML tooltip.
+ * Crosshair: native Recharts <Tooltip> + typed content component reading the payload.
  *
- * Chart library: visx (LinePath/AreaClosed/LinearGradient/localPoint — locked by UI-SPEC).
- * SVG viewport: 1000×470 logical, preserveAspectRatio none.
+ * Chart library: Recharts (shadcn ChartContainer) — migrated off @visx, Phase 33 (33-06).
  * No any/as/!.
  */
 
-import { useMemo, useCallback, useEffect, useRef, useState } from "react";
-import { LinePath } from "@visx/shape";
-import { curveMonotoneX } from "@visx/curve";
-import { scaleLinear } from "@visx/scale";
-import { LinearGradient } from "@visx/gradient";
-import { Group } from "@visx/group";
-import { localPoint } from "@visx/event";
+import { useMemo, useEffect, useState } from "react";
+import {
+  ComposedChart,
+  Area,
+  Line,
+  ReferenceLine,
+  ReferenceDot,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Customized,
+} from "recharts";
+import type { TooltipContentProps } from "recharts";
+import { ChartContainer } from "../ui/chart.tsx";
+import type { ChartConfig } from "../ui/chart.tsx";
 import { findZeroCrossings } from "../../lib/scenario-engine.ts";
 import type { PayoffPoint } from "../../lib/scenario-engine.ts";
+import { PayoffChartMarks, EDGE_ARROW_LANE_Y } from "./PayoffChartMarks.tsx";
+import type { PayoffChartMarksGex } from "./PayoffChartMarks.tsx";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,55 +153,30 @@ const GRAY_MUTED = "#7b8696";
 const ZERO_LINE = "#46556a";
 const GRID_LINE = "#19212e";
 const CROSSHAIR_COLOR = "#8a98ad";
+const AXIS_LABEL = "#566273";
+const MONO = "JetBrains Mono, monospace";
 
 const FAN_COLORS = ["#7c6fd6", "#6f86c9", "#5f93b8"] as const;
 
-/**
- * KISS collision fix (31-01, DEFECT-1): fixed vertical lane per wall series
- * for the off-domain single-glyph edge arrow. Three distinct y values means
- * two arrows clamped to the same edge can never share a bounding box —
- * provable by construction, not by measurement (jsdom can't measure SVG text).
- */
-export const EDGE_ARROW_LANE_Y: Record<"flip" | "call" | "put", number> = {
-  flip: 8,
-  call: 16,
-  put: 24,
-};
+const chartConfig = {} satisfies ChartConfig;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function buildXScale(innerWidth: number, domain: { readonly min: number; readonly max: number }) {
-  return scaleLinear({ domain: [domain.min, domain.max], range: [0, innerWidth] });
-}
-
-type PinnedMarker = {
-  readonly x: number;
-  readonly clampedTo: "min" | "max" | null;
-};
-
 /**
- * Edge-pin a GEX wall/flip marker into the x-domain. The chart SVG overflows
- * visibly, so an out-of-domain level (e.g. a call wall above domain.max)
- * would otherwise draw PAST the plot into neighboring layout. Pinned markers
- * clamp to the domain edge; `clampedTo` drives the fixed-lane edge-arrow
- * render (no in-chart text label — KISS collision fix, DEFECT-1).
+ * Pure 0-based linear scale, [domain.min, domain.max] -> [0, innerWidth]. No @visx/scale
+ * (Pitfall 7 excludes @visx from the removed set, but this migration retires it from
+ * PayoffChart specifically). Contract UNCHANGED: PayoffChartMarks.test.tsx (33-02) imports
+ * this directly and depends on the 0-based (not margin-offset) output.
  */
-function pinMarker(
-  value: number,
-  xScale: (v: number) => number,
-  domain: { readonly min: number; readonly max: number },
-): PinnedMarker {
-  if (value > domain.max) {
-    return { x: xScale(domain.max), clampedTo: "max" };
-  }
-  if (value < domain.min) {
-    return { x: xScale(domain.min), clampedTo: "min" };
-  }
-  return { x: xScale(value), clampedTo: null };
+function buildXScale(innerWidth: number, domain: { readonly min: number; readonly max: number }) {
+  const span = domain.max - domain.min;
+  return (value: number): number => ((value - domain.min) / span) * innerWidth;
 }
 
+/** Pure 0-based linear scale, [lo, hi] -> [innerHeight, 0] (SVG y grows down). */
 function buildYScale(lo: number, hi: number, innerHeight: number) {
-  return scaleLinear({ domain: [lo, hi], range: [innerHeight, 0] });
+  const span = hi - lo;
+  return (value: number): number => innerHeight - ((value - lo) / span) * innerHeight;
 }
 
 /**
@@ -247,10 +236,139 @@ function fmtPl(v: number): string {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+// ─── Grid chrome (hand-rendered, D-01/Pitfall-driven) ──────────────────────────
+
+interface PayoffChartGridProps {
+  gridTickValues: ReadonlyArray<number>;
+  xTicks: ReadonlyArray<number>;
+  xScale: (v: number) => number;
+  yScale: (v: number) => number;
+}
+
+/**
+ * Grid lines + axis tick labels, hand-rendered (not native Recharts XAxis/YAxis tick
+ * chrome): native tick LABEL text renders through a zIndex portal (the "label" band,
+ * DefaultZIndexes.label=2000) that is not registered/populated synchronously on first
+ * render under jsdom, and the axis's own auto-computed label width silently expands the
+ * margin beyond the declared PAD (breaks the "plot area = SVG dims minus PAD" contract
+ * Phase 30/this migration relies on). XAxis/YAxis stay in the tree fully hidden
+ * (tick/tickLine/axisLine all off, width/height 0) purely to give Area/Line/ReferenceLine
+ * their numeric scale + domain + the auto clipPath — this component draws the SAME visual
+ * grid the pre-migration component drew, via the same buildXScale/buildYScale helpers.
+ */
+function PayoffChartGrid({ gridTickValues, xTicks, xScale, yScale }: PayoffChartGridProps): React.ReactElement {
+  return (
+    <g transform={`translate(${PAD.left},${PAD.top})`}>
+      {gridTickValues.map((value) => {
+        const y = yScale(value);
+        return (
+          <g key={value}>
+            <line x1={0} y1={y} x2={INNER_W} y2={y} stroke={GRID_LINE} strokeWidth={1} />
+            <text x={-6} y={y + 3} fill={AXIS_LABEL} fontSize={10} textAnchor="end" fontFamily={MONO}>
+              {fmtPl(value)}
+            </text>
+          </g>
+        );
+      })}
+      {xTicks.map((s) => (
+        <text
+          key={s}
+          x={xScale(s)}
+          y={INNER_H + 16}
+          fill={AXIS_LABEL}
+          fontSize={10}
+          textAnchor="middle"
+          fontFamily={MONO}
+        >
+          {s}
+        </text>
+      ))}
+    </g>
+  );
+}
+
+// ─── Tooltip content (D-10, D-12: native Tooltip + typed content, no manual crosshair) ──
+
+interface PayoffTooltipContentProps extends TooltipContentProps<number, "today"> {
+  gex: PayoffChartGex | null;
+}
+
+/**
+ * Typed Tooltip content (D-12: concrete generics, no any/as). Reads the hovered spot
+ * straight from `label` (the numeric x-axis value under the cursor) and the P&L from
+ * the "today" curve's payload entry — the direct replacement for the ~50-line manual
+ * localPoint/getBoundingClientRect/scale-invert block (D-10).
+ */
+export function PayoffTooltipContent({
+  active,
+  payload,
+  label,
+  gex,
+}: PayoffTooltipContentProps): React.ReactElement | null {
+  if (!active || payload.length === 0) return null;
+  const entry = payload.find((p) => p.name === "today") ?? payload[0];
+  if (entry === undefined || !isFiniteNumber(entry.value) || !isFiniteNumber(label)) return null;
+
+  const pl = entry.value;
+  const hoveredSpot = label;
+
+  return (
+    <div
+      data-testid="payoff-tooltip"
+      style={{
+        background: "rgba(8,11,16,0.97)",
+        border: "1px solid #27313f",
+        borderRadius: 8,
+        padding: "7px 9px",
+        fontSize: 10.5,
+        fontFamily: MONO,
+        minWidth: 150,
+        boxShadow: "0 8px 26px rgba(0,0,0,0.55)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "Space Grotesk, sans-serif",
+          fontWeight: 700,
+          fontSize: 13,
+          marginBottom: 3,
+          color: pl >= 0 ? TEAL : CORAL,
+        }}
+      >
+        {fmtPl(pl)}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+        <span>SPX</span>
+        <span style={{ color: "#d6dbe4", fontWeight: 500 }}>{Math.round(hoveredSpot)}</span>
+      </div>
+      {gex !== null && gex.putWall !== null && (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+          <span>vs put wall</span>
+          <span style={{ color: "#d6dbe4", fontWeight: 500 }}>
+            {((hoveredSpot - gex.putWall) >= 0 ? "+" : "") + (hoveredSpot - gex.putWall).toFixed(0)}
+          </span>
+        </div>
+      )}
+      {gex !== null && gex.callWall !== null && (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+          <span>vs call wall</span>
+          <span style={{ color: "#d6dbe4", fontWeight: 500 }}>
+            {((hoveredSpot - gex.callWall) >= 0 ? "+" : "") + (hoveredSpot - gex.callWall).toFixed(0)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * PayoffChart — renders the full 9-layer locked z-order visx payoff chart.
+ * PayoffChart — renders the full 9-layer locked z-order Recharts payoff chart.
  */
 export function PayoffChart({
   todayCurve,
@@ -313,26 +431,14 @@ export function PayoffChart({
     }
   }, [fitY, todayCurve, baseExpirationCurve, onFitYConsumed]);
 
-  const xScale = useMemo(() => buildXScale(INNER_W, domain), [domain]);
   const yScale = useMemo(() => buildYScale(yDomain.lo, yDomain.hi, INNER_H), [yDomain]);
-
-  const getX = useCallback((p: PayoffPoint) => xScale(p.spot), [xScale]);
-  const getY = useCallback((p: PayoffPoint) => yScale(p.pl), [yScale]);
-  const clampY = useCallback(
-    (p: PayoffPoint) => Math.max(0, Math.min(INNER_H, yScale(p.pl))),
-    [yScale],
-  );
-
   const zeroY = yScale(0);
-
-  // Spot x position
-  const spotX = xScale(spot);
 
   // Find crossings
   const beExp = useMemo(() => findZeroCrossings(expirationCurve), [expirationCurve]);
   const beToday = useMemo(() => findZeroCrossings(todayCurve), [todayCurve]);
 
-  // P&L at current spot (for dot + readout)
+  // P&L at current spot (for the spot dot's y position)
   const plAtSpot = useMemo(() => {
     const nearest = todayCurve.reduce<PayoffPoint | null>((best, p) => {
       if (best === null) return p;
@@ -341,67 +447,36 @@ export function PayoffChart({
     return nearest?.pl ?? 0;
   }, [todayCurve, spot]);
 
-  // Crosshair state
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [crosshair, setCrosshair] = useState<{
-    x: number;
-    spot: number;
-    pl: number;
-    renderedWidth: number;
-  } | null>(null);
-
-  const handlePointerMove = useCallback(
-    (event: React.PointerEvent<SVGSVGElement>) => {
-      const svg = svgRef.current;
-      if (svg === null) return;
-      const point = localPoint(svg, event);
-      if (point === null) return;
-
-      // localPoint returns coords relative to the SVG element
-      // We need to map from SVG pixel space back to logical coordinate
-      const svgRect = svg.getBoundingClientRect();
-      const scaleX = SVG_W / svgRect.width;
-      const logicalX = point.x * scaleX;
-      const innerX = logicalX - PAD.left;
-      if (innerX < 0 || innerX > INNER_W) {
-        setCrosshair(null);
-        return;
-      }
-
-      // Invert through the SAME xScale used to plot the curves — one source of truth
-      // for the domain↔pixel mapping (D-01, Pitfall 2), not a re-derived interpolation.
-      const hoveredSpot = xScale.invert(innerX);
-      const nearest = todayCurve.reduce<PayoffPoint | null>((best, p) => {
-        if (best === null) return p;
-        return Math.abs(p.spot - hoveredSpot) < Math.abs(best.spot - hoveredSpot) ? p : best;
-      }, null);
-      const pl = nearest?.pl ?? 0;
-
-      setCrosshair({ x: logicalX, spot: hoveredSpot, pl, renderedWidth: svgRect.width });
-    },
-    [todayCurve, xScale],
-  );
-
-  const handlePointerLeave = useCallback(() => setCrosshair(null), []);
-
-  // Grid lines (5 intervals)
-  const gridLines = useMemo(() => {
-    const lines: Array<{ y: number; value: number }> = [];
+  // Y-axis grid ticks: 6 evenly-spaced values across the locked y-domain (unchanged intent).
+  const gridTickValues = useMemo(() => {
+    const values: number[] = [];
     for (let i = 0; i <= 5; i++) {
-      const v = yDomain.lo + (yDomain.hi - yDomain.lo) * (i / 5);
-      lines.push({ y: yScale(v), value: v });
+      values.push(yDomain.lo + (yDomain.hi - yDomain.lo) * (i / 5));
     }
-    return lines;
-  }, [yDomain, yScale]);
+    return values;
+  }, [yDomain]);
 
   // X-axis ticks: derived round numbers from the live domain prop (OVW-04, D-01) —
   // replaces a hardcoded literal array that could drift from the chart's own scale.
   const xTicks = useMemo(() => buildXTicks(domain.min, domain.max), [domain]);
 
+  // PayoffChartMarks (33-02) is scale-driven (A2 fallback): a plain xScale closure
+  // over the SAME domain, not a recharts-internal read. Wired via <Customized>, which
+  // (like any custom child in recharts 3.x — confirmed empirically in 33-04) paints
+  // before every zIndex band regardless of JSX position, so it never occludes a curve
+  // by construction — no zIndex fight, no sibling-overlay fallback needed (33-06
+  // finding: the "never occlude" requirement and the native paint order coincide).
+  // <Customized>/<Layer> applies no transform of its own, so the marks are wrapped in
+  // a translate(PAD.left, PAD.top) group to align its 0-based coordinates with the
+  // actual (margin-offset) plot area recharts renders everything else in.
+  const marksXScale = useMemo(() => buildXScale(INNER_W, domain), [domain]);
+  const marksGex: PayoffChartMarksGex | null = toggles.showWalls ? gex : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100%", flex: 1, minHeight: 300 }}>
       {/* Breakeven pills — readable readouts above the chart (violet = today, gray = @exp),
-          so the values never overlap inside the plot. The in-chart markers are the red bars. */}
+          so the values never overlap inside the plot. The in-chart markers are the red bars
+          rendered by PayoffChartMarks. */}
       {(beToday.length > 0 || (toggles.showExpiration && beExp.length > 0)) && (
         <div
           data-testid="be-pills"
@@ -411,7 +486,7 @@ export function PayoffChart({
             alignItems: "center",
             gap: 6,
             marginBottom: 6,
-            fontFamily: "JetBrains Mono, monospace",
+            fontFamily: MONO,
             fontSize: 10,
           }}
         >
@@ -461,250 +536,212 @@ export function PayoffChart({
       )}
 
       <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 0 }}>
-      {/* D-02: net-book T+0 self-flag note — placed near the legend row position */}
-      {exclusionNoteText !== null && (
-        <div
-          data-testid="t0-exclusion-note"
-          className="pointer-events-none absolute right-2 top-1 text-[10px] text-amber"
+        {/* D-02: net-book T+0 self-flag note — placed near the legend row position */}
+        {exclusionNoteText !== null && (
+          <div
+            data-testid="t0-exclusion-note"
+            className="pointer-events-none absolute right-2 top-1 text-[10px] text-amber"
+          >
+            {exclusionNoteText}
+          </div>
+        )}
+
+        <ChartContainer
+          config={chartConfig}
+          style={{ width: "100%", height: "100%" }}
+          className="aspect-auto"
         >
-          {exclusionNoteText}
-        </div>
-      )}
+          {/* Explicit width/height: required under jsdom (mockResponsiveContainer strips
+              ResponsiveContainerContext, per 33-03's GammaProfile finding); a real browser
+              measures the "aspect-auto w-full h-full" box above via ResponsiveContainer
+              and takes priority over these, so the chart stays fluid in the app. */}
+          <ComposedChart
+            width={SVG_W}
+            height={SVG_H}
+            margin={PAD}
+            accessibilityLayer
+            role="img"
+            aria-label="Risk profile payoff chart"
+          >
+            <defs>
+              <linearGradient id="payoff-teal-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor={TEAL} stopOpacity={0.34} />
+                <stop offset="1" stopColor={TEAL} stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="payoff-coral-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor={CORAL} stopOpacity={0} />
+                <stop offset="1" stopColor={CORAL} stopOpacity={0.34} />
+              </linearGradient>
+              <linearGradient id="payoff-profit-zone-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor={TEAL} stopOpacity={0.13} />
+                <stop offset="1" stopColor={TEAL} stopOpacity={0} />
+              </linearGradient>
+              <filter id="payoff-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="b" />
+                <feMerge>
+                  <feMergeNode in="b" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
 
-      {/* SVG chart */}
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-        preserveAspectRatio="none"
-        style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
-        aria-label="Risk profile payoff chart"
-        role="img"
-      >
-        <defs>
-          {/* Gradient: teal above zero */}
-          <LinearGradient
-            id="payoff-teal-fill"
-            from={TEAL}
-            to={TEAL}
-            fromOpacity={0.34}
-            toOpacity={0}
-            vertical
-          />
-          {/* Gradient: coral below zero */}
-          <LinearGradient
-            id="payoff-coral-fill"
-            from={CORAL}
-            to={CORAL}
-            fromOpacity={0}
-            toOpacity={0.34}
-            vertical
-          />
-          {/* Glow filter for T+0 curve */}
-          <filter id="payoff-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="3" result="b" />
-            <feMerge>
-              <feMergeNode in="b" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        <Group left={PAD.left} top={PAD.top}>
-          {/* ── Grid lines ───────────────────────────────────────────────── */}
-          {gridLines.map(({ y, value }) => (
-            <g key={value}>
-              <line
-                x1={0}
-                y1={y}
-                x2={INNER_W}
-                y2={y}
-                stroke={GRID_LINE}
-                strokeWidth={1}
-              />
-              <text
-                x={-6}
-                y={y + 3}
-                fill="#566273"
-                fontSize={10}
-                textAnchor="end"
-                fontFamily="JetBrains Mono, monospace"
-              >
-                {fmtPl(value)}
-              </text>
-            </g>
-          ))}
-
-          {/* X-axis strike labels */}
-          {xTicks.map((s) => (
-            <text
-              key={s}
-              x={xScale(s)}
-              y={INNER_H + 16}
-              fill="#566273"
-              fontSize={10}
-              textAnchor="middle"
-              fontFamily="JetBrains Mono, monospace"
-            >
-              {s}
-            </text>
-          ))}
-
-          {/* Zero line */}
-          <line
-            x1={0}
-            y1={zeroY}
-            x2={INNER_W}
-            y2={zeroY}
-            stroke={ZERO_LINE}
-            strokeWidth={1.1}
-          />
-
-          {/* ── ±1σ expected-move band: ticks + connector at the zero-P&L
-               line (ANLZ-02) — placed before all curve layers so it never
-               occludes the T+0/@exp curves (UI-SPEC z-order). Every x is
-               clamped into [0, INNER_W]: tent-fitted domains (Phase 30) are
-               often narrower than spot±1σ, and the SVG overflows visibly, so
-               an unclamped connector bleeds across the whole page. A tick
-               clamped to the edge reads as "band continues past the view". ── */}
-          {expectedMoveBand !== null && (
-            <g data-testid="em-band">
-              <line
-                data-testid="em-band-tick-lower"
-                x1={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot - expectedMoveBand.em)))}
-                y1={zeroY - 6}
-                x2={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot - expectedMoveBand.em)))}
-                y2={zeroY + 6}
-                stroke={BLUE}
-                strokeWidth={1.2}
-              />
-              <line
-                data-testid="em-band-tick-upper"
-                x1={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot + expectedMoveBand.em)))}
-                y1={zeroY - 6}
-                x2={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot + expectedMoveBand.em)))}
-                y2={zeroY + 6}
-                stroke={BLUE}
-                strokeWidth={1.2}
-              />
-              <line
-                data-testid="em-band-connector"
-                x1={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot - expectedMoveBand.em)))}
-                y1={zeroY}
-                x2={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot + expectedMoveBand.em)))}
-                y2={zeroY}
-                stroke={BLUE}
-                strokeWidth={1}
-              />
-              <text
-                data-testid="em-band-label"
-                x={Math.max(0, Math.min(INNER_W, xScale(expectedMoveBand.spot)))}
-                y={zeroY - 9}
-                fill={BLUE}
-                fontSize={9}
-                textAnchor="middle"
-                fontFamily="JetBrains Mono, monospace"
-              >
-                {"±1σ EM"}
-              </text>
-            </g>
-          )}
-
-          {/* ── Layer 1: Profit zone fill — the profitable-at-expiration region (teal).
-               Uses the @exp curve, not T+0: a calendar's T+0 curve sits at ~$0 so its
-               profit band is an invisible sliver near spot; the @exp tent's positive area
-               (between the @exp breakevens) is the meaningful "where you make money" zone. ── */}
-          {toggles.showProfitZone && expirationCurve.length > 0 && (
-            <path
-              data-testid="profit-zone"
-              d={buildProfitZonePath(expirationCurve, xScale, zeroY, clampY)}
-              fill={`rgba(38,166,154,0.13)`}
+            {/* Fully hidden: establishes the numeric scale + domain + auto clipPath that
+                Area/Line/ReferenceLine consume. width=0/height=0 keeps the plot area
+                exactly SVG dims minus PAD (no auto-expansion for label measurement) —
+                visible grid lines + tick text are hand-rendered by PayoffChartGrid below. */}
+            <XAxis
+              type="number"
+              dataKey="spot"
+              domain={[domain.min, domain.max]}
+              allowDataOverflow
+              height={0}
+              tick={false}
+              tickLine={false}
+              axisLine={false}
             />
-          )}
-
-          {/* ── Layer 2: T+0 teal gradient fill above zero ───────────────── */}
-          {todayCurve.length > 0 && (
-            <>
-              <path
-                d={buildFillPath(todayCurve, xScale, zeroY, "above", clampY)}
-                fill="url(#payoff-teal-fill)"
-              />
-              <path
-                d={buildFillPath(todayCurve, xScale, zeroY, "below", clampY)}
-                fill="url(#payoff-coral-fill)"
-              />
-            </>
-          )}
-
-          {/* ── Layer 3: Dated fan curves (+7/+14/+21d) ───────────────────── */}
-          {toggles.showFan &&
-            fanCurves.map(({ days, curve }, i) => (
-              <LinePath
-                key={days}
-                data={[...curve]}
-                x={getX}
-                y={clampY}
-                curve={curveMonotoneX}
-                stroke={FAN_COLORS[i] ?? "#6f86c9"}
-                strokeWidth={1.3}
-                opacity={0.85}
-              />
-            ))}
-
-          {/* ── Layer 4: Expiration tent dashed ──────────────────────────── */}
-          {toggles.showExpiration && expirationCurve.length > 0 && (
-            <LinePath
-              data-testid="net-book-exp-curve"
-              data={[...expirationCurve]}
-              x={getX}
-              y={clampY}
-              curve={curveMonotoneX}
-              stroke={expirationCurveColor}
-              strokeWidth={1.4}
-              strokeDasharray="5 4"
-              opacity={0.7}
-              strokeOpacity={netBookStrokeOpacity}
+            <YAxis
+              type="number"
+              domain={[yDomain.lo, yDomain.hi]}
+              allowDataOverflow
+              width={0}
+              tick={false}
+              tickLine={false}
+              axisLine={false}
             />
-          )}
 
-          {/* ── Layer 5: Roll overlay amber ───────────────────────────────── */}
-          {rollCurve !== null && rollCurve.length > 0 && (
-            <LinePath
-              data={[...rollCurve]}
-              x={getX}
-              y={clampY}
-              curve={curveMonotoneX}
-              stroke={AMBER}
-              strokeWidth={2}
+            <PayoffChartGrid gridTickValues={gridTickValues} xTicks={xTicks} xScale={marksXScale} yScale={yScale} />
+
+            <ReferenceLine y={0} stroke={ZERO_LINE} strokeWidth={1.1} />
+
+            {/* PayoffChartMarks (EM band + BE bars + edge arrows) — before every curve
+                layer by construction (see comment above). */}
+            <Customized
+              component={
+                <g transform={`translate(${PAD.left},${PAD.top})`}>
+                  <PayoffChartMarks
+                    xScale={marksXScale}
+                    innerWidth={INNER_W}
+                    zeroY={zeroY}
+                    domain={domain}
+                    expectedMoveBand={expectedMoveBand}
+                    beTodayStrikes={beToday}
+                    beExpStrikes={beExp}
+                    gex={marksGex}
+                  />
+                </g>
+              }
             />
-          )}
 
-          {/* ── ⊕-compare overlay: single dashed amber front-expiry curve for a
-               second candidate (ANLZ-02) — own layer, distinct from rollCurve ── */}
-          {compareCurve !== null && compareCurve.length > 0 && (
-            <LinePath
-              data-testid="compare-curve"
-              data={[...compareCurve]}
-              x={getX}
-              y={clampY}
-              curve={curveMonotoneX}
-              stroke={compareCurveColor}
-              strokeWidth={1.6}
-              strokeDasharray="5 4"
-            />
-          )}
+            {/* ── Layer 1: Profit zone fill — the profitable-at-expiration region (teal).
+                 Uses the @exp curve, not T+0: a calendar's T+0 curve sits at ~$0 so its
+                 profit band is an invisible sliver near spot; the @exp tent's positive area
+                 is the meaningful "where you make money" zone. ── */}
+            {toggles.showProfitZone && expirationCurve.length > 0 && (
+              <Area
+                data-testid="profit-zone"
+                data={[...expirationCurve]}
+                dataKey="pl"
+                type="monotone"
+                baseValue={0}
+                stroke="none"
+                fill="url(#payoff-profit-zone-fill)"
+                isAnimationActive={false}
+              />
+            )}
 
-          {/* ── Layer 6: GEX wall lines — edge-pinned into the x-domain.
-              No in-chart text label (KISS collision fix, DEFECT-1): the dashed
-              line is the only in-chart signal, so it can never pile up into
-              unreadable overlapping text. An off-domain wall renders a single
-              glyph arrow in a fixed per-series lane (EDGE_ARROW_LANE_Y) instead
-              — the exact numeric value lives in the Key Levels panel /
-              ScenarioStrip / crosshair tooltip. ── */}
-          {toggles.showWalls && gex !== null && (
-            <>
-              {(
+            {/* ── Layer 2: T+0 teal/coral gradient fill above/below zero ────────────── */}
+            {todayCurve.length > 0 && (
+              <>
+                <Area
+                  data={[...todayCurve]}
+                  dataKey="pl"
+                  type="monotone"
+                  baseValue={0}
+                  stroke="none"
+                  fill="url(#payoff-teal-fill)"
+                  isAnimationActive={false}
+                />
+                <Area
+                  data={[...todayCurve]}
+                  dataKey="pl"
+                  type="monotone"
+                  baseValue={0}
+                  stroke="none"
+                  fill="url(#payoff-coral-fill)"
+                  isAnimationActive={false}
+                />
+              </>
+            )}
+
+            {/* ── Layer 3: Dated fan curves (+7/+14/+21d) ────────────────────────────── */}
+            {toggles.showFan &&
+              fanCurves.map(({ days, curve }, i) => (
+                <Line
+                  key={days}
+                  data={[...curve]}
+                  dataKey="pl"
+                  type="monotone"
+                  dot={false}
+                  stroke={FAN_COLORS[i] ?? "#6f86c9"}
+                  strokeWidth={1.3}
+                  strokeOpacity={0.85}
+                  isAnimationActive={false}
+                />
+              ))}
+
+            {/* ── Layer 4: Expiration tent dashed ────────────────────────────────────── */}
+            {toggles.showExpiration && expirationCurve.length > 0 && (
+              <Line
+                data-testid="net-book-exp-curve"
+                data={[...expirationCurve]}
+                dataKey="pl"
+                type="monotone"
+                dot={false}
+                stroke={expirationCurveColor}
+                strokeWidth={1.4}
+                strokeDasharray="5 4"
+                strokeOpacity={netBookStrokeOpacity}
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* ── Layer 5: Roll overlay amber ────────────────────────────────────────── */}
+            {rollCurve !== null && rollCurve.length > 0 && (
+              <Line
+                data={[...rollCurve]}
+                dataKey="pl"
+                type="monotone"
+                dot={false}
+                stroke={AMBER}
+                strokeWidth={2}
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* ── ⊕-compare overlay: single dashed amber front-expiry curve for a
+                 second candidate (ANLZ-02) — own layer, distinct from rollCurve ── */}
+            {compareCurve !== null && compareCurve.length > 0 && (
+              <Line
+                data-testid="compare-curve"
+                data={[...compareCurve]}
+                dataKey="pl"
+                type="monotone"
+                dot={false}
+                stroke={compareCurveColor}
+                strokeWidth={1.6}
+                strokeDasharray="5 4"
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* ── Layer 6: GEX wall lines — structurally clipped to the plot area
+                 (ifOverflow="hidden" + the axis's own allowDataOverflow clipPath),
+                 replacing the hand pinMarker clamp. No in-chart text label (KISS
+                 collision fix, DEFECT-1) — PayoffChartMarks renders the off-domain
+                 edge-arrow glyph instead. ── */}
+            {toggles.showWalls &&
+              gex !== null &&
+              (
                 [
                   { key: "put", value: gex.putWall, color: CORAL },
                   { key: "call", value: gex.callWall, color: TEAL },
@@ -712,291 +749,94 @@ export function PayoffChart({
                 ] as const
               ).map(({ key, value, color }) => {
                 if (value === null) return null;
-                const marker = pinMarker(value, xScale, domain);
                 return (
-                  <g key={`wall-${key}`}>
-                    <line
-                      data-testid={`wall-line-${key}`}
-                      x1={marker.x}
-                      y1={0}
-                      x2={marker.x}
-                      y2={INNER_H}
-                      stroke={color}
-                      strokeWidth={1}
-                      strokeDasharray="2 3"
-                      opacity={0.6}
-                    />
-                    {marker.clampedTo !== null && (
-                      <text
-                        x={marker.clampedTo === "max" ? marker.x - 3 : marker.x + 3}
-                        y={EDGE_ARROW_LANE_Y[key]}
-                        fill={color}
-                        fontSize={9}
-                        fontFamily="JetBrains Mono, monospace"
-                        textAnchor={marker.clampedTo === "max" ? "end" : "start"}
-                      >
-                        {marker.clampedTo === "max" ? "›" : "‹"}
-                      </text>
-                    )}
-                  </g>
+                  <ReferenceLine
+                    key={`wall-${key}`}
+                    data-testid={`wall-line-${key}`}
+                    x={value}
+                    ifOverflow="hidden"
+                    stroke={color}
+                    strokeWidth={1}
+                    strokeDasharray="2 3"
+                    opacity={0.6}
+                  />
                 );
               })}
-            </>
-          )}
 
-          {/* ── Breakeven markers: short red vertical bars at the zero line (TOS-style).
-              The values are labeled in the pill row above the chart, so there is no
-              in-chart text to overlap when strikes sit close together. ── */}
-          {toggles.showExpiration &&
-            beExp.map((x) => (
-              <line
-                key={`be-exp-${x}`}
-                data-testid="be-marker-exp"
-                x1={xScale(x)}
-                y1={zeroY - 9}
-                x2={xScale(x)}
-                y2={zeroY + 9}
-                stroke={CORAL}
-                strokeWidth={2}
+            {/* ── Layer 2 (on top): T+0 curve violet #a78bfa ─────────────────────────── */}
+            {todayCurve.length > 0 && (
+              <Line
+                data-testid="net-book-t0-curve"
+                name="today"
+                data={[...todayCurve]}
+                dataKey="pl"
+                type="monotone"
+                dot={false}
+                stroke={todayCurveColor}
+                strokeWidth={2.6}
+                strokeOpacity={netBookStrokeOpacity}
+                style={{ filter: "url(#payoff-glow)" }}
+                isAnimationActive={false}
               />
-            ))}
-          {beToday.map((x) => (
-            <line
-              key={`be-t0-${x}`}
-              data-testid="be-marker-t0"
-              x1={xScale(x)}
-              y1={zeroY - 9}
-              x2={xScale(x)}
-              y2={zeroY + 9}
-              stroke={CORAL}
-              strokeWidth={2}
-              opacity={0.75}
-            />
-          ))}
+            )}
 
-          {/* ── Layer 2 (on top): T+0 curve violet #a78bfa ───────────────── */}
-          {todayCurve.length > 0 && (
-            <LinePath
-              data-testid="net-book-t0-curve"
-              data={[...todayCurve]}
-              x={getX}
-              y={clampY}
-              curve={curveMonotoneX}
-              stroke={todayCurveColor}
-              strokeWidth={2.6}
-              filter="url(#payoff-glow)"
-              strokeOpacity={netBookStrokeOpacity}
-            />
-          )}
-
-          {/* ── Highlighted single-position curves (D-05) — same stroke tokens
-               as the net-book curves above, drawn at full emphasis on top ──── */}
-          {highlightActive &&
-            highlightedExpirationCurve !== null &&
-            highlightedExpirationCurve.length > 0 && (
-              <LinePath
+            {/* ── Highlighted single-position curves (D-05) — same stroke tokens
+                 as the net-book curves above, drawn at full emphasis on top ──────── */}
+            {highlightActive && highlightedExpirationCurve !== null && highlightedExpirationCurve.length > 0 && (
+              <Line
                 data-testid="highlighted-exp-curve"
                 data={[...highlightedExpirationCurve]}
-                x={getX}
-                y={clampY}
-                curve={curveMonotoneX}
+                dataKey="pl"
+                type="monotone"
+                dot={false}
                 stroke={GRAY_MUTED}
                 strokeWidth={1.4}
                 strokeDasharray="5 4"
+                isAnimationActive={false}
               />
             )}
-          {highlightActive &&
-            highlightedTodayCurve !== null &&
-            highlightedTodayCurve.length > 0 && (
-              <LinePath
+            {highlightActive && highlightedTodayCurve !== null && highlightedTodayCurve.length > 0 && (
+              <Line
                 data-testid="highlighted-t0-curve"
                 data={[...highlightedTodayCurve]}
-                x={getX}
-                y={clampY}
-                curve={curveMonotoneX}
+                dataKey="pl"
+                type="monotone"
+                dot={false}
                 stroke={VIOLET}
                 strokeWidth={2.6}
-                filter="url(#payoff-glow)"
+                style={{ filter: "url(#payoff-glow)" }}
+                isAnimationActive={false}
               />
             )}
 
-          {/* ── Layer 9: Spot vertical blue line + dot ────────────────────── */}
-          <line
-            x1={spotX}
-            y1={0}
-            x2={spotX}
-            y2={INNER_H}
-            stroke={BLUE}
-            strokeWidth={1.1}
-          />
-          <circle
-            cx={spotX}
-            cy={Math.max(0, Math.min(INNER_H, yScale(plAtSpot)))}
-            r={4.5}
-            fill={BLUE}
-            stroke="#0a0e14"
-            strokeWidth={2}
-          />
-
-          {/* ── Crosshair ────────────────────────────────────────────────── */}
-          {crosshair !== null && (
-            <line
-              x1={crosshair.x - PAD.left}
-              y1={0}
-              x2={crosshair.x - PAD.left}
-              y2={INNER_H}
-              stroke={CROSSHAIR_COLOR}
-              strokeWidth={1}
-              opacity={0.3}
-              pointerEvents="none"
+            {/* ── Layer 9: Spot vertical blue line + dot ─────────────────────────────── */}
+            <ReferenceLine data-testid="spot-line" x={spot} ifOverflow="hidden" stroke={BLUE} strokeWidth={1.1} />
+            <ReferenceDot
+              data-testid="spot-dot"
+              x={spot}
+              y={plAtSpot}
+              ifOverflow="hidden"
+              r={4.5}
+              fill={BLUE}
+              stroke="#0a0e14"
+              strokeWidth={2}
             />
-          )}
-        </Group>
-      </svg>
 
-      {/* Fixed tooltip (HTML, not SVG) */}
-      {crosshair !== null && (
-        <div
-          data-testid="payoff-tooltip"
-          style={{
-            position: "absolute",
-            top: 8,
-            // crosshair.x is in viewBox units [0, SVG_W]; the tooltip is an HTML
-            // element positioned in CSS pixels within the container, which fills
-            // the rendered SVG width. Map viewBox → rendered px so the tooltip
-            // tracks the crosshair line at any SVG render width (WR-03).
-            left: Math.min(
-              (crosshair.x / SVG_W) * crosshair.renderedWidth + 14,
-              crosshair.renderedWidth - 180,
-            ),
-            pointerEvents: "none",
-            background: "rgba(8,11,16,0.97)",
-            border: "1px solid #27313f",
-            borderRadius: 8,
-            padding: "7px 9px",
-            fontSize: 10.5,
-            fontFamily: "JetBrains Mono, monospace",
-            minWidth: 150,
-            boxShadow: "0 8px 26px rgba(0,0,0,0.55)",
-            zIndex: 10,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "Space Grotesk, sans-serif",
-              fontWeight: 700,
-              fontSize: 13,
-              marginBottom: 3,
-              color: crosshair.pl >= 0 ? TEAL : CORAL,
-            }}
-          >
-            {fmtPl(crosshair.pl)}
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
-            <span>SPX</span>
-            <span style={{ color: "#d6dbe4", fontWeight: 500 }}>{Math.round(crosshair.spot)}</span>
-          </div>
-          {gex !== null && gex.putWall !== null && (
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
-              <span>vs put wall</span>
-              <span style={{ color: "#d6dbe4", fontWeight: 500 }}>
-                {((crosshair.spot - gex.putWall) >= 0 ? "+" : "") + (crosshair.spot - gex.putWall).toFixed(0)}
-              </span>
-            </div>
-          )}
-          {gex !== null && gex.callWall !== null && (
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
-              <span>vs call wall</span>
-              <span style={{ color: "#d6dbe4", fontWeight: 500 }}>
-                {((crosshair.spot - gex.callWall) >= 0 ? "+" : "") + (crosshair.spot - gex.callWall).toFixed(0)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+            <Tooltip
+              cursor={{ stroke: CROSSHAIR_COLOR, strokeWidth: 1, opacity: 0.3 }}
+              content={<PayoffTooltipContent gex={gex} />}
+              isAnimationActive={false}
+            />
+          </ComposedChart>
+        </ChartContainer>
       </div>
     </div>
   );
 }
 
-// ─── Path helpers ─────────────────────────────────────────────────────────────
-
-/** Build the profit zone fill path (where pl >= 0) */
-function buildProfitZonePath(
-  curve: ReadonlyArray<PayoffPoint>,
-  xScale: (v: number) => number,
-  zeroY: number,
-  clampY: (p: PayoffPoint) => number,
-): string {
-  if (curve.length === 0) return "";
-
-  // Build the entire curve as a filled region clamped to [zeroY, top]
-  let inProfit = false;
-  let regionStart = 0;
-  let path = "";
-
-  for (let i = 0; i < curve.length; i++) {
-    const p = curve[i];
-    if (p === undefined) continue;
-    const isProfitable = p.pl >= 0;
-
-    if (isProfitable && !inProfit) {
-      inProfit = true;
-      regionStart = xScale(p.spot);
-      path += `M${regionStart} ${zeroY}`;
-    }
-
-    if (inProfit) {
-      const y = Math.min(clampY(p), zeroY);
-      path += `L${xScale(p.spot)} ${y}`;
-    }
-
-    if (!isProfitable && inProfit) {
-      inProfit = false;
-      const prev = curve[i - 1];
-      if (prev !== undefined) {
-        path += `L${xScale(prev.spot)} ${zeroY}Z `;
-      }
-    }
-  }
-
-  if (inProfit) {
-    const last = curve[curve.length - 1];
-    if (last !== undefined) {
-      path += `L${xScale(last.spot)} ${zeroY}Z`;
-    }
-  }
-
-  return path;
-}
-
-/** Build fill path above or below zero line */
-function buildFillPath(
-  curve: ReadonlyArray<PayoffPoint>,
-  xScale: (v: number) => number,
-  zeroY: number,
-  side: "above" | "below",
-  clampY: (p: PayoffPoint) => number,
-): string {
-  if (curve.length === 0) return "";
-  const first = curve[0];
-  const last = curve[curve.length - 1];
-  if (first === undefined || last === undefined) return "";
-
-  let d = `M${xScale(first.spot)} ${zeroY}`;
-  for (const p of curve) {
-    const y =
-      side === "above"
-        ? Math.min(clampY(p), zeroY) // above = y <= zeroY
-        : Math.max(clampY(p), zeroY); // below = y >= zeroY
-    d += `L${xScale(p.spot)} ${y}`;
-  }
-  d += `L${xScale(last.spot)} ${zeroY}Z`;
-  return d;
-}
+// EDGE_ARROW_LANE_Y re-exported (not redeclared) so PayoffChart.test.tsx's existing
+// import keeps resolving — PayoffChartMarks owns the constant (33-02).
+export { EDGE_ARROW_LANE_Y };
 
 // Re-export for testing
 export { findZeroCrossings, computeYDomain, buildXTicks, buildXScale, INNER_W };
-
-// AreaClosed/AreaStack imported for potential future gradient-fill usage per visx pattern
-// (referenced in the import list above — removing would lose access to these visx APIs)

@@ -65,11 +65,16 @@ const HUGE_EXP_CURVE: PayoffPoint[] = [
   { spot: 7900, pl: 50_000 },
 ];
 
-/** Y-axis grid-tick labels (native Recharts YAxis ticks, formatted via fmtPl). */
+/**
+ * Y-axis grid-tick labels — hand-rendered (not native Recharts axis tick chrome, see
+ * PayoffChartGrid in PayoffChart.tsx: native tick label text renders through a zIndex
+ * portal not populated synchronously under jsdom, and auto-expands the margin beyond
+ * PAD). text-anchor="end" is unique to these labels among the chart's rendered text.
+ */
 function getGridLabels(container: HTMLElement): string[] {
-  return Array.from(
-    container.querySelectorAll(".recharts-yAxis .recharts-cartesian-axis-tick-value"),
-  ).map((el) => el.textContent ?? "");
+  return Array.from(container.querySelectorAll('text[text-anchor="end"]')).map(
+    (el) => el.textContent ?? "",
+  );
 }
 
 /** Matches the curve fixtures above (6900-7900) — every existing test keeps exercising the real path (Pitfall 3). */
@@ -576,7 +581,12 @@ describe("PayoffChart — GEX wall structural clip (allowDataOverflow + auto cli
     const svg = line.closest("svg");
     expect(svg).not.toBeNull();
     if (svg === null) throw new Error("unreachable");
-    const clipRect = svg.querySelector(`defs clipPath#${CSS.escape(clipId)} rect`);
+    const clipPathEl = Array.from(svg.querySelectorAll("defs clipPath")).find(
+      (el) => el.getAttribute("id") === clipId,
+    );
+    expect(clipPathEl).not.toBeUndefined();
+    if (clipPathEl === undefined) throw new Error("unreachable");
+    const clipRect = clipPathEl.querySelector("rect");
     expect(clipRect).not.toBeNull();
     if (clipRect === null) throw new Error("unreachable");
 
