@@ -59,7 +59,6 @@ function baseProps(): React.ComponentProps<typeof PositionCard> {
     row: ROW,
     spot: 5800,
     liveGreeks: EMPTY_LIVE_GREEKS,
-    liveStatus: "quiet",
     ivNa: false,
     verdict: null,
     marketSession: "rth",

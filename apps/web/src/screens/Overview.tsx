@@ -622,7 +622,6 @@ function PositionsTable({
             row={r}
             spot={spot}
             liveGreeks={liveGreeks}
-            liveStatus={liveStatus}
             ivNa={ivNa}
             verdict={verdict}
             marketSession={verdictMarketSession}

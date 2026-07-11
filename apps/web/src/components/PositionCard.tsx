@@ -19,13 +19,11 @@ import { Stat } from "./system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { cn } from "@/lib/utils";
 import type { StreamLiveGreekEvent, HeldPositionVerdict } from "@morai/contracts";
-import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 
 export type PositionCardProps = {
   readonly row: Row;
   readonly spot: number;
   readonly liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>;
-  readonly liveStatus: LiveStreamStatus;
   readonly ivNa: boolean;
   readonly verdict: HeldPositionVerdict | null;
   readonly marketSession: "rth" | "after-hours";
