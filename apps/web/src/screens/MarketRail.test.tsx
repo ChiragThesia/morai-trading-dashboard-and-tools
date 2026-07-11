@@ -94,3 +94,49 @@ describe("MarketRail", () => {
     expect(screen.getByTestId("market-rail").className).toContain("order-2");
   });
 });
+
+describe("MarketRail — desktop force-open via matchMedia (live-UAT catch 2026-07-11)", () => {
+  // A closed <details> hides its content in the UA's internal slot — CSS display
+  // overrides on children (`lg:[&>div]:!block`) CANNOT reveal it in a real browser,
+  // so at ≥1024px the whole left rail rendered EMPTY (jsdom class assertions were
+  // structurally blind to this). The rail must set the `open` attribute itself when
+  // the desktop media query matches.
+  afterEach(() => {
+    cleanup();
+    // each test that stubs matchMedia restores it
+    Reflect.deleteProperty(window, "matchMedia");
+  });
+
+  it("sets the open attribute when (min-width: 1024px) matches", () => {
+    const listeners: Array<() => void> = [];
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: query === "(min-width: 1024px)",
+        media: query,
+        addEventListener: (_: string, cb: () => void) => listeners.push(cb),
+        removeEventListener: () => undefined,
+      }),
+    });
+    mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
+    render(<MarketRail />);
+    expect(screen.getByTestId("market-rail").hasAttribute("open")).toBe(true);
+  });
+
+  it("stays closed by default when matchMedia reports non-desktop", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
+    });
+    mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
+    render(<MarketRail />);
+    expect(screen.getByTestId("market-rail").hasAttribute("open")).toBe(false);
+  });
+});

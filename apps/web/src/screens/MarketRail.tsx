@@ -10,10 +10,12 @@
  * already live in the GEX rail's "Net book greeks" tile and book P&L in the pill ticker.
  *
  * On narrow viewports the rail is a collapsible `<details>` (closed by default); the toggle
- * summary is hidden at `lg` where the rail is force-shown as a fixed column via
- * `lg:[&>div]:!block`, regardless of the details' runtime open state.
+ * summary is hidden at `lg` where the rail is force-opened via the real `open`
+ * attribute driven by useIsDesktop (CSS alone cannot reveal a closed <details> —
+ * live-UAT catch 2026-07-11).
  */
 import { useStatus } from "../hooks/useStatus.ts";
+import { useIsDesktop } from "../hooks/useIsDesktop.ts";
 import { RegimeBoard } from "../components/RegimeBoard.tsx";
 import { CotCard } from "../components/CotCard.tsx";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
@@ -43,9 +45,14 @@ function SystemHealth(): React.ReactElement {
 }
 
 export function MarketRail({ className }: { className?: string }): React.ReactElement {
+  // A closed <details> hides content in the UA's internal slot — CSS child-display
+  // overrides can't reveal it (live-UAT catch 2026-07-11). At lg: the rail must
+  // carry the real `open` attribute; below lg it stays uncontrolled (user-toggled).
+  const isDesktop = useIsDesktop();
   return (
     <details
-      className={cn("group flex flex-col gap-3 lg:[&>div]:!block", className)}
+      open={isDesktop || undefined}
+      className={cn("group flex flex-col gap-3", className)}
       data-testid="market-rail"
     >
       <summary className="cursor-pointer list-none font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase lg:hidden lg:pointer-events-none">
