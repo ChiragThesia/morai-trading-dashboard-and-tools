@@ -384,6 +384,26 @@ describe("CandidateCard — scored pasted variant (Phase 30-06, D-02, Pitfall 8)
     expect(screen.getByText("62")).toBeTruthy();
   });
 
+  it("meta line wraps its event chips (flex-wrap container — adjacent inline spans have no soft-wrap points and blew the page to 533px at 390px, Phase-36 C2)", () => {
+    const { container } = render(
+      <CandidateCard
+        candidate={makeScoredPastedCandidate()}
+        selected={false}
+        combined={false}
+        pasted
+        {...SNAPSHOT_PROPS}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        copied={false}
+        onCopy={() => {}}
+      />,
+    );
+
+    const meta = container.querySelector(".text-\\[9px\\].text-dim");
+    expect(meta).not.toBeNull();
+    expect(meta?.className).toContain("flex-wrap");
+  });
+
   it("shows the real theta/vega subline (not the DTE/debit/IV-only pasted subline) when scored", () => {
     render(
       <CandidateCard

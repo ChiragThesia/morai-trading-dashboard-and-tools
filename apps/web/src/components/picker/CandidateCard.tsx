@@ -193,7 +193,10 @@ export function CandidateCard({
         </span>
       )}
 
-      <div className="mt-0.5 font-mono text-[9px] text-dim">
+      {/* flex-wrap: the chip spans are adjacent inline boxes with no whitespace between
+          them — no soft-wrap points — so a chip-heavy candidate rendered one unbreakable
+          line (533px page at 390px, Phase-36 C2). Flex items wrap at every boundary. */}
+      <div className="mt-0.5 flex flex-wrap items-center gap-y-0.5 font-mono text-[9px] text-dim">
         {candidate.breakdown.length === 0 ? (
           `DTE ${candidate.frontLeg.dte}/${candidate.backLeg.dte} · debit $${candidate.debit.toFixed(0)} · IV ${(candidate.frontLeg.iv * 100).toFixed(1)}%`
         ) : (
