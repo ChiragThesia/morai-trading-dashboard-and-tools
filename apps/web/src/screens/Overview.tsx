@@ -36,7 +36,7 @@ import {
   VerdictDetailBody,
 } from "./HeldPositionsPanel.tsx";
 import { ExitRulesPanel } from "./ExitRulesPanel.tsx";
-import { Panel, PanelHeading, Stat, MetricChip, Button } from "../components/system/index.tsx";
+import { Panel, PanelHeading, Stat, MetricChip, Button, ChipRail } from "../components/system/index.tsx";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -764,46 +764,113 @@ function PillHeader({
   const curveSlope = latestMacroValue(macro, "T10Y2Y");
 
   return (
-    <div className="sticky top-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-b border-line bg-bg/90 px-4 py-2 backdrop-blur">
-      <MetricChip label="SPX" value={gex !== undefined ? gex.spot.toFixed(1) : "—"} valueClassName="text-blue" />
-      <MetricChip
-        label="net γ /1%"
-        value={gex !== undefined ? fmtGammaCompact(gex.netGammaAtSpot) : "—"}
-        alert={regime === "AMPLIFY"}
-        valueClassName={regime === null ? "text-muted-foreground" : regime === "AMPLIFY" ? "text-down" : "text-up"}
-      />
-      {/* 0DTE γ — today's expiry only (byExpiry rollup); "—" once it rolls off */}
-      <MetricChip
-        label="0DTE γ"
-        value={zeroDte !== null ? fmtGammaCompact(zeroDte) : "—"}
-        valueClassName={
-          zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-down" : "text-up"
-        }
-      />
-      <MetricChip
-        label="γ flip"
-        value={gex !== undefined && gex.flip !== null ? gex.flip.toFixed(0) : "—"}
-        valueClassName="text-amber"
-      />
-      <MetricChip label="VIX" value={vix !== null ? vix.toFixed(2) : "—"} />
-      <MetricChip label="VVIX" value={vvix !== null ? vvix.toFixed(1) : "—"} />
-      <MetricChip label="Fed funds" value={dff !== null ? `${dff.toFixed(2)}%` : "—"} />
-      <MetricChip
-        label="10y−2y"
-        value={curveSlope !== null ? `${curveSlope >= 0 ? "+" : ""}${curveSlope.toFixed(2)}` : "—"}
-        valueClassName={curveSlope !== null ? signClass(curveSlope) : "text-muted-foreground"}
-      />
-      <MetricChip
-        label="COT lev"
-        value={cotLev !== null ? signed(cotLev, 0) : "—"}
-        valueClassName={cotLev !== null ? signClass(cotLev) : "text-muted-foreground"}
-      />
-      <MetricChip
-        label="book"
-        value={signedUsd(bookPnl, 0)}
-        valueClassName={signClass(bookPnl)}
-        className="ml-auto"
-      />
+    <div
+      data-testid="pill-header"
+      className="static lg:sticky lg:top-0 lg:z-10 -mx-4 border-b border-line bg-bg/90 px-4 py-2 lg:backdrop-blur"
+    >
+      {/* Mobile priority row (35-03) — SPX / net γ / VIX / book, one line, no wrap */}
+      <div data-testid="pill-header-priority" className="flex flex-nowrap items-center gap-1 lg:hidden">
+        <MetricChip
+          label="SPX"
+          value={gex !== undefined ? gex.spot.toFixed(1) : "—"}
+          valueClassName="text-blue"
+          className="px-2 py-1 gap-1"
+        />
+        <MetricChip
+          label="net γ /1%"
+          value={gex !== undefined ? fmtGammaCompact(gex.netGammaAtSpot) : "—"}
+          alert={regime === "AMPLIFY"}
+          valueClassName={regime === null ? "text-muted-foreground" : regime === "AMPLIFY" ? "text-down" : "text-up"}
+          className="px-2 py-1 gap-1"
+        />
+        <MetricChip label="VIX" value={vix !== null ? vix.toFixed(2) : "—"} className="px-2 py-1 gap-1" />
+        <MetricChip
+          label="book"
+          value={signedUsd(bookPnl, 0)}
+          valueClassName={signClass(bookPnl)}
+          className="ml-auto px-2 py-1 gap-1"
+        />
+      </div>
+
+      {/* Mobile secondary ChipRail (35-03) — the other 6 metrics, scroll-snap, edge-peek */}
+      <ChipRail ariaLabel="Additional market metrics" className="mt-2 lg:mt-0 lg:hidden">
+        {/* 0DTE γ — today's expiry only (byExpiry rollup); "—" once it rolls off */}
+        <MetricChip
+          label="0DTE γ"
+          value={zeroDte !== null ? fmtGammaCompact(zeroDte) : "—"}
+          valueClassName={
+            zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-down" : "text-up"
+          }
+          className="snap-start shrink-0"
+        />
+        <MetricChip
+          label="γ flip"
+          value={gex !== undefined && gex.flip !== null ? gex.flip.toFixed(0) : "—"}
+          valueClassName="text-amber"
+          className="snap-start shrink-0"
+        />
+        <MetricChip label="VVIX" value={vvix !== null ? vvix.toFixed(1) : "—"} className="snap-start shrink-0" />
+        <MetricChip
+          label="Fed funds"
+          value={dff !== null ? `${dff.toFixed(2)}%` : "—"}
+          className="snap-start shrink-0"
+        />
+        <MetricChip
+          label="10y−2y"
+          value={curveSlope !== null ? `${curveSlope >= 0 ? "+" : ""}${curveSlope.toFixed(2)}` : "—"}
+          valueClassName={curveSlope !== null ? signClass(curveSlope) : "text-muted-foreground"}
+          className="snap-start shrink-0"
+        />
+        <MetricChip
+          label="COT lev"
+          value={cotLev !== null ? signed(cotLev, 0) : "—"}
+          valueClassName={cotLev !== null ? signClass(cotLev) : "text-muted-foreground"}
+          className="snap-start shrink-0"
+        />
+      </ChipRail>
+
+      {/* Desktop full row — unchanged, all 10 chips, single flex-wrap row */}
+      <div data-testid="pill-header-full" className="hidden lg:flex lg:flex-wrap lg:items-center lg:gap-2">
+        <MetricChip label="SPX" value={gex !== undefined ? gex.spot.toFixed(1) : "—"} valueClassName="text-blue" />
+        <MetricChip
+          label="net γ /1%"
+          value={gex !== undefined ? fmtGammaCompact(gex.netGammaAtSpot) : "—"}
+          alert={regime === "AMPLIFY"}
+          valueClassName={regime === null ? "text-muted-foreground" : regime === "AMPLIFY" ? "text-down" : "text-up"}
+        />
+        {/* 0DTE γ — today's expiry only (byExpiry rollup); "—" once it rolls off */}
+        <MetricChip
+          label="0DTE γ"
+          value={zeroDte !== null ? fmtGammaCompact(zeroDte) : "—"}
+          valueClassName={
+            zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-down" : "text-up"
+          }
+        />
+        <MetricChip
+          label="γ flip"
+          value={gex !== undefined && gex.flip !== null ? gex.flip.toFixed(0) : "—"}
+          valueClassName="text-amber"
+        />
+        <MetricChip label="VIX" value={vix !== null ? vix.toFixed(2) : "—"} />
+        <MetricChip label="VVIX" value={vvix !== null ? vvix.toFixed(1) : "—"} />
+        <MetricChip label="Fed funds" value={dff !== null ? `${dff.toFixed(2)}%` : "—"} />
+        <MetricChip
+          label="10y−2y"
+          value={curveSlope !== null ? `${curveSlope >= 0 ? "+" : ""}${curveSlope.toFixed(2)}` : "—"}
+          valueClassName={curveSlope !== null ? signClass(curveSlope) : "text-muted-foreground"}
+        />
+        <MetricChip
+          label="COT lev"
+          value={cotLev !== null ? signed(cotLev, 0) : "—"}
+          valueClassName={cotLev !== null ? signClass(cotLev) : "text-muted-foreground"}
+        />
+        <MetricChip
+          label="book"
+          value={signedUsd(bookPnl, 0)}
+          valueClassName={signClass(bookPnl)}
+          className="ml-auto"
+        />
+      </div>
     </div>
   );
 }

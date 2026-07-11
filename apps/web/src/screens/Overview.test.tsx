@@ -904,9 +904,70 @@ describe("Pill header — 0DTE γ pill", () => {
     setPositions([]);
     render(<Overview />);
 
-    // GEX_FIXTURE computedAt 2026-06-29 + byExpiry entry for that date
-    expect(screen.getByText("0DTE γ")).toBeDefined();
-    expect(screen.getByText("−$9.8B")).toBeDefined();
+    // GEX_FIXTURE computedAt 2026-06-29 + byExpiry entry for that date. Scoped to the
+    // full 10-chip row (35-03 duplicates this chip into the mobile secondary rail too —
+    // both exist in jsdom regardless of viewport, so an unscoped getByText now matches twice).
+    const fullRow = screen.getByTestId("pill-header-full");
+    expect(within(fullRow).getByText("0DTE γ")).toBeDefined();
+    expect(within(fullRow).getByText("−$9.8B")).toBeDefined();
+  });
+});
+
+// ── 35-03: PillHeader mobile priority row + secondary ChipRail, de-stickied below lg ──
+describe("PillHeader — mobile priority row + secondary ChipRail (35-03)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders a priority row (lg:hidden) holding exactly the four priority chips: SPX, net γ /1%, VIX, book", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    const priority = screen.getByTestId("pill-header-priority");
+    expect(priority.className).toContain("lg:hidden");
+    expect(within(priority).getByText("SPX")).toBeDefined();
+    expect(within(priority).getByText("net γ /1%")).toBeDefined();
+    expect(within(priority).getByText("VIX")).toBeDefined();
+    expect(within(priority).getByText("book")).toBeDefined();
+    expect(within(priority).getAllByText(/^(SPX|net γ \/1%|VIX|book)$/).length).toBe(4);
+  });
+
+  it("renders a secondary ChipRail (role=group, 'Additional market metrics', lg:hidden) with the six remaining chips", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    const rail = screen.getByRole("group", { name: "Additional market metrics" });
+    expect(rail.className).toContain("lg:hidden");
+    expect(within(rail).getByText("0DTE γ")).toBeDefined();
+    expect(within(rail).getByText("γ flip")).toBeDefined();
+    expect(within(rail).getByText("VVIX")).toBeDefined();
+    expect(within(rail).getByText("Fed funds")).toBeDefined();
+    expect(within(rail).getByText("10y−2y")).toBeDefined();
+    expect(within(rail).getByText("COT lev")).toBeDefined();
+  });
+
+  it("keeps the full 10-chip row (hidden lg:flex) rendering all ten chips exactly as today", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    const full = screen.getByTestId("pill-header-full");
+    expect(full.className).toContain("hidden");
+    expect(full.className).toContain("lg:flex");
+    expect(within(full).getByText("COT lev")).toBeDefined();
+    expect(within(full).getByText("Fed funds")).toBeDefined();
+    expect(within(full).getByText("SPX")).toBeDefined();
+    expect(within(full).getByText("book")).toBeDefined();
+  });
+
+  it("de-stickies the PillHeader wrapper below lg — class begins with static, gates sticky behind lg:", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    const wrapper = screen.getByTestId("pill-header");
+    expect(wrapper.className.startsWith("static")).toBe(true);
+    expect(wrapper.className).toContain("lg:sticky");
+    expect(wrapper.className).not.toMatch(/(?:^|\s)sticky(?:\s|$)/);
   });
 });
 
