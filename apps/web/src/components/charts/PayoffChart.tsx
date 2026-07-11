@@ -43,6 +43,9 @@ import {
   Customized,
   ZIndexLayer,
   DefaultZIndexes,
+  useXAxisScale,
+  useYAxisScale,
+  usePlotArea,
 } from "recharts";
 import type { TooltipContentProps } from "recharts";
 import { ChartContainer } from "../ui/chart.tsx";
@@ -50,7 +53,7 @@ import type { ChartConfig } from "../ui/chart.tsx";
 import { findZeroCrossings } from "../../lib/scenario-engine.ts";
 import type { PayoffPoint } from "../../lib/scenario-engine.ts";
 import { PayoffChartMarks, EDGE_ARROW_LANE_Y } from "./PayoffChartMarks.tsx";
-import type { PayoffChartMarksGex } from "./PayoffChartMarks.tsx";
+import type { PayoffChartMarksGex, PayoffChartMarksProps } from "./PayoffChartMarks.tsx";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -180,12 +183,6 @@ function buildXScale(innerWidth: number, domain: { readonly min: number; readonl
   return (value: number): number => ((value - domain.min) / span) * innerWidth;
 }
 
-/** Pure 0-based linear scale, [lo, hi] -> [innerHeight, 0] (SVG y grows down). */
-function buildYScale(lo: number, hi: number, innerHeight: number) {
-  const span = hi - lo;
-  return (value: number): number => innerHeight - ((value - lo) / span) * innerHeight;
-}
-
 /**
  * Compute y-domain from BOTH the today/date curve and the @exp curve
  * (TOS-stable y-axis logic) — combined so a near-flat today curve is never
@@ -247,13 +244,77 @@ function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
+// ─── Hook-driven plot geometry (single source of truth, catch #20) ─────────────
+
+interface PlotScales {
+  xScale: (v: number) => number;
+  yScale: (v: number) => number;
+  innerWidth: number;
+  innerHeight: number;
+  zeroY: number;
+  plotX: number;
+  plotY: number;
+}
+
+/**
+ * Custom-layer geometry read from recharts' OWN axis scales + plot area via hooks
+ * inside the chart tree (TermStructureChart's GuardTag pattern) — never
+ * buildXScale/buildYScale over the SVG_W/SVG_H constants. In the real browser
+ * ResponsiveContainer resizes the chart away from those constants, so every
+ * constant-space mark (grid labels, BE bars, EM band, edge arrows) drifted off the
+ * recharts-rendered curves while jsdom (always exactly SVG_W x SVG_H) stayed green
+ * (live-UAT catch #20, 2026-07-10). Returns 0-based scales matching
+ * PayoffChartMarks' contract; callers wrap output in translate(plotX, plotY).
+ */
+function usePlotScales(): PlotScales | null {
+  const xAxisScale = useXAxisScale();
+  const yAxisScale = useYAxisScale();
+  const plotArea = usePlotArea();
+  if (xAxisScale === undefined || yAxisScale === undefined || plotArea === undefined) return null;
+  const xScale = (v: number): number => (xAxisScale(v) ?? 0) - plotArea.x;
+  const yScale = (v: number): number => (yAxisScale(v) ?? 0) - plotArea.y;
+  return {
+    xScale,
+    yScale,
+    innerWidth: plotArea.width,
+    innerHeight: plotArea.height,
+    zeroY: yScale(0),
+    plotX: plotArea.x,
+    plotY: plotArea.y,
+  };
+}
+
+/** In-tree adapter feeding PayoffChartMarks its 0-based scales from usePlotScales. */
+function PayoffMarksLayer({
+  domain,
+  expectedMoveBand,
+  beTodayStrikes,
+  beExpStrikes,
+  gex,
+}: Omit<PayoffChartMarksProps, "xScale" | "innerWidth" | "zeroY">): React.ReactElement | null {
+  const scales = usePlotScales();
+  if (scales === null) return null;
+  return (
+    <g transform={`translate(${scales.plotX},${scales.plotY})`}>
+      <PayoffChartMarks
+        xScale={scales.xScale}
+        innerWidth={scales.innerWidth}
+        zeroY={scales.zeroY}
+        domain={domain}
+        expectedMoveBand={expectedMoveBand}
+        beTodayStrikes={beTodayStrikes}
+        beExpStrikes={beExpStrikes}
+        gex={gex}
+      />
+    </g>
+  );
+}
+
 // ─── Grid chrome (hand-rendered, D-01/Pitfall-driven) ──────────────────────────
 
 interface PayoffChartGridProps {
   gridTickValues: ReadonlyArray<number>;
   xTicks: ReadonlyArray<number>;
-  xScale: (v: number) => number;
-  yScale: (v: number) => number;
 }
 
 /**
@@ -265,16 +326,18 @@ interface PayoffChartGridProps {
  * Phase 30/this migration relies on). XAxis/YAxis stay in the tree fully hidden
  * (tick/tickLine/axisLine all off, width/height 0) purely to give Area/Line/ReferenceLine
  * their numeric scale + domain + the auto clipPath — this component draws the SAME visual
- * grid the pre-migration component drew, via the same buildXScale/buildYScale helpers.
+ * grid the pre-migration component drew, positioned by usePlotScales (catch #20).
  */
-function PayoffChartGrid({ gridTickValues, xTicks, xScale, yScale }: PayoffChartGridProps): React.ReactElement {
+function PayoffChartGrid({ gridTickValues, xTicks }: PayoffChartGridProps): React.ReactElement | null {
+  const scales = usePlotScales();
+  if (scales === null) return null;
   return (
-    <g transform={`translate(${PAD.left},${PAD.top})`}>
+    <g transform={`translate(${scales.plotX},${scales.plotY})`}>
       {gridTickValues.map((value) => {
-        const y = yScale(value);
+        const y = scales.yScale(value);
         return (
           <g key={value}>
-            <line x1={0} y1={y} x2={INNER_W} y2={y} stroke={GRID_LINE} strokeWidth={1} />
+            <line x1={0} y1={y} x2={scales.innerWidth} y2={y} stroke={GRID_LINE} strokeWidth={1} />
             <text x={-6} y={y + 3} fill={AXIS_LABEL} fontSize={10} textAnchor="end" fontFamily={MONO}>
               {fmtPl(value)}
             </text>
@@ -284,8 +347,8 @@ function PayoffChartGrid({ gridTickValues, xTicks, xScale, yScale }: PayoffChart
       {xTicks.map((s) => (
         <text
           key={s}
-          x={xScale(s)}
-          y={INNER_H + 16}
+          x={scales.xScale(s)}
+          y={scales.innerHeight + 16}
           fill={AXIS_LABEL}
           fontSize={10}
           textAnchor="middle"
@@ -438,9 +501,6 @@ export function PayoffChart({
     }
   }, [fitY, todayCurve, baseExpirationCurve, onFitYConsumed]);
 
-  const yScale = useMemo(() => buildYScale(yDomain.lo, yDomain.hi, INNER_H), [yDomain]);
-  const zeroY = yScale(0);
-
   // Find crossings
   const beExp = useMemo(() => findZeroCrossings(expirationCurve), [expirationCurve]);
   const beToday = useMemo(() => findZeroCrossings(todayCurve), [todayCurve]);
@@ -467,16 +527,11 @@ export function PayoffChart({
   // replaces a hardcoded literal array that could drift from the chart's own scale.
   const xTicks = useMemo(() => buildXTicks(domain.min, domain.max), [domain]);
 
-  // PayoffChartMarks (33-02) is scale-driven (A2 fallback): a plain xScale closure
-  // over the SAME domain, not a recharts-internal read. Wired via <Customized>, which
-  // (like any custom child in recharts 3.x — confirmed empirically in 33-04) paints
-  // before every zIndex band regardless of JSX position, so it never occludes a curve
-  // by construction — no zIndex fight, no sibling-overlay fallback needed (33-06
-  // finding: the "never occlude" requirement and the native paint order coincide).
-  // <Customized>/<Layer> applies no transform of its own, so the marks are wrapped in
-  // a translate(PAD.left, PAD.top) group to align its 0-based coordinates with the
-  // actual (margin-offset) plot area recharts renders everything else in.
-  const marksXScale = useMemo(() => buildXScale(INNER_W, domain), [domain]);
+  // PayoffChartMarks (33-02) keeps its plain-closure xScale contract, but the closures
+  // now come from usePlotScales() INSIDE the chart tree (PayoffMarksLayer adapter) —
+  // recharts' own axis scales + plot area, alive to ResponsiveContainer resizes
+  // (catch #20). Paint order unchanged: <Customized> for the EM band (before every
+  // zIndex band), ZIndexLayer for BE bars/edge arrows (CR-01).
   const marksGex: PayoffChartMarksGex | null = toggles.showWalls ? gex : null;
 
   return (
@@ -619,7 +674,7 @@ export function PayoffChart({
               axisLine={false}
             />
 
-            <PayoffChartGrid gridTickValues={gridTickValues} xTicks={xTicks} xScale={marksXScale} yScale={yScale} />
+            <PayoffChartGrid gridTickValues={gridTickValues} xTicks={xTicks} />
 
             <ReferenceLine y={0} stroke={ZERO_LINE} strokeWidth={1.1} />
 
@@ -630,18 +685,13 @@ export function PayoffChart({
                 further below in a ZIndexLayer (CR-01, see top-of-file comment). */}
             <Customized
               component={
-                <g transform={`translate(${PAD.left},${PAD.top})`}>
-                  <PayoffChartMarks
-                    xScale={marksXScale}
-                    innerWidth={INNER_W}
-                    zeroY={zeroY}
-                    domain={domain}
-                    expectedMoveBand={expectedMoveBand}
-                    beTodayStrikes={[]}
-                    beExpStrikes={[]}
-                    gex={null}
-                  />
-                </g>
+                <PayoffMarksLayer
+                  domain={domain}
+                  expectedMoveBand={expectedMoveBand}
+                  beTodayStrikes={[]}
+                  beExpStrikes={[]}
+                  gex={null}
+                />
               }
             />
 
@@ -784,18 +834,13 @@ export function PayoffChart({
                 only the final T+0 stroke below. ZIndexLayer applies no transform of its own
                 (same as Customized/Layer, 33-06), hence the translate wrapper. */}
             <ZIndexLayer zIndex={DefaultZIndexes.line}>
-              <g transform={`translate(${PAD.left},${PAD.top})`}>
-                <PayoffChartMarks
-                  xScale={marksXScale}
-                  innerWidth={INNER_W}
-                  zeroY={zeroY}
-                  domain={domain}
-                  expectedMoveBand={null}
-                  beTodayStrikes={beToday}
-                  beExpStrikes={beExp}
-                  gex={marksGex}
-                />
-              </g>
+              <PayoffMarksLayer
+                domain={domain}
+                expectedMoveBand={null}
+                beTodayStrikes={beToday}
+                beExpStrikes={beExp}
+                gex={marksGex}
+              />
             </ZIndexLayer>
 
             {/* ── Layer 2 (on top): T+0 curve violet #a78bfa ─────────────────────────── */}
