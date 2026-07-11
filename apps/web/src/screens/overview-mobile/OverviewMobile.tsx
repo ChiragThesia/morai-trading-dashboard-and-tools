@@ -1,8 +1,8 @@
 /**
  * OverviewMobile — the dedicated mobile Overview tree (35.1, <1024px branch of the
  * Overview switch). Hero-first per UI-SPEC §Screen Composition: MobileHero →
- * MobileRiskPanel → positions section (heading + card list + footer total + exitsBody);
- * MobileMarketSection lands in plan 04.
+ * MobileRiskPanel → positions section (heading + card list + footer total + exitsBody) →
+ * MobileMarketSection (key levels + stat grids + closed rail disclosure).
  * No horizontal padding on the root; sections own their px-4 (the chart section owns px-0).
  *
  * The exitsBody five state branches (loading / error / warming-up / empty / unlinked)
@@ -13,6 +13,7 @@ import { useMemo } from "react";
 import { useOverviewModel } from "./useOverviewModel.ts";
 import { MobileHero } from "./MobileHero.tsx";
 import { MobileRiskPanel } from "./MobileRiskPanel.tsx";
+import { MobileMarketSection } from "./MobileMarketSection.tsx";
 import { PositionCard } from "../../components/PositionCard.tsx";
 import { LiveStatusBadge } from "../../components/LiveStatusBadge.tsx";
 import { SectionLabel, Button } from "../../components/system/index.tsx";
@@ -183,7 +184,17 @@ export function OverviewMobile(): React.ReactElement {
         )}
         {exitsBody !== null && <div className="mt-3">{exitsBody}</div>}
       </section>
-      {/* Plan 04: MobileMarketSection. */}
+      {/* Market section (35.1-04, D-08): key levels + stat grids + closed rail disclosure. */}
+      <MobileMarketSection
+        gex={m.gex}
+        railGreeks={m.railGreeks}
+        zeroDte={m.zeroDte}
+        regime={m.regime}
+        vvix={m.macroValues.vvix}
+        dff={m.macroValues.dff}
+        curveSlope={m.macroValues.curveSlope}
+        cotLev={m.cotLev}
+      />
     </div>
   );
 }

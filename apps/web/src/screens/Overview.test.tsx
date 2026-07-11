@@ -1452,14 +1452,16 @@ describe("Overview branch — D-01/D-10 (35.1)", () => {
     Reflect.deleteProperty(window, "matchMedia");
   });
 
-  it("J1 (root): default jsdom (no matchMedia) renders the mobile tree root — desktop pill-header/table/rail do not mount", () => {
+  it("J1 (root): default jsdom (no matchMedia) renders the mobile tree root — desktop pill-header/table do not mount", () => {
     setPositions([POS]);
     render(<Overview />);
 
     expect(screen.getByTestId("overview-mobile-root")).toBeDefined();
     expect(screen.queryByTestId("pill-header")).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.queryByTestId("market-rail")).toBeNull();
+    // 35.1-04: market-rail now mounts in the mobile tree too (inside the market section,
+    // closed) — it is no longer a desktop-tree tell. Assert it is the CLOSED disclosure.
+    expect(screen.getByTestId("market-rail").hasAttribute("open")).toBe(false);
   });
 
   it("J2 (byte-identity guard): the desktop matchMedia stub renders today's desktop tree with identical structure", () => {
@@ -1662,5 +1664,22 @@ describe("Overview branch — D-01/D-10 (35.1)", () => {
     const follows =
       (payoff.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     expect(follows).toBe(true);
+  });
+
+  // ── 35.1-04: MobileMarketSection composed as the last section ──────────────
+
+  it("J5 (complete): hero precedes chart precedes first card precedes the market section root", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const hero = screen.getByTestId("mobile-hero");
+    const payoff = screen.getByTestId("mobile-payoff");
+    const card = screen.getByTestId(`position-card-${CAL_ROW_KEY}`);
+    const market = screen.getByTestId("mobile-market");
+    const precedes = (a: Element, b: Element): boolean =>
+      (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(precedes(hero, payoff)).toBe(true);
+    expect(precedes(payoff, card)).toBe(true);
+    expect(precedes(card, market)).toBe(true);
   });
 });
