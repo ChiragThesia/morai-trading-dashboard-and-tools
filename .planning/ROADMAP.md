@@ -476,11 +476,15 @@ Plans:
 
 ### Phase 36: Analyzer + Journal mobile redesign — same dedicated-mobile-tree treatment as 35.1 Overview: Analyzer mobile flow (paste-first, scorecard hero, slim chart chrome, no hollow panels), Journal mobile flow (trade cards, full-width lifecycle charts, demoted rebuild), desktop untouched
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Mobile Analyzer and Journal read as designed mobile app screens, not compressed dashboards: dedicated mobile-only trees (screens/analyzer-mobile, screens/journal-mobile behind useIsDesktop) — Analyzer paste-first with candidates fold, scorecard verdict hero, full-bleed chart behind one slim shared chrome row, and closed detail disclosures; Journal with PositionCard-idiom trade cards, the lifecycle chart at designed 840px width in a full-bleed pan container, Rebuild demoted behind ⋯, and footnotes behind a disclosure — while desktop ≥1024px render output stays byte-identical (screenshot-gated D-17 cleanup).
+**Requirements**: MOBILE-11 (Analyzer mobile flow), MOBILE-12 (Journal mobile flow), MOBILE-13 (shared chrome extraction + desktop byte-identity + dead-branch cleanup)
 **Depends on:** Phase 35
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 36 to break down)
+- [ ] 36-01-PLAN.md — Analyzer switch + useAnalyzerModel + MobileChartControls extraction + desktop-test migration (wave 1)
+- [ ] 36-02-PLAN.md — AnalyzerMobile tree: paste block, candidates fold, MobileScorecard, chart block, disclosures (wave 2)
+- [ ] 36-03-PLAN.md — Journal switch + useJournalModel + desktop-test migration (wave 1)
+- [ ] 36-04-PLAN.md — JournalMobile tree: TradeCard, History fold, MobileLifecycle pan mount + ⋯ Rebuild, rail stack (wave 2)
+- [ ] 36-05-PLAN.md — D-17 desktop dead-branch cleanup (screenshot-gated) + integration gate C1-C10 + C11 handoff (wave 3)
