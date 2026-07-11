@@ -153,6 +153,14 @@ function buildCalendarPosition(
 ): CalendarPositionBuild {
   const front = resolveLeg(cal.front, spot, liveGreeks, now);
   const back = resolveLeg(cal.back, spot, liveGreeks, now);
+  // Actual fill basis (points per contract): anchors the payoff curves to the REAL
+  // entry so they show true open P&L at spot, like TOS — not the model entry re-priced
+  // at the live spot (which pins T+0 to $0 at spot and, on a near-flat calendar curve,
+  // shifts the breakevens by hundreds of points).
+  const entryNet =
+    cal.back.averagePrice !== null && cal.front.averagePrice !== null
+      ? cal.back.averagePrice - cal.front.averagePrice
+      : null;
   return {
     position: {
       id: cal.key,
@@ -166,6 +174,7 @@ function buildCalendarPosition(
       backIv: back.iv,
       qty: Math.max(1, Math.abs(cal.back.longQty - cal.back.shortQty)),
       included,
+      entryNet,
       frontIvStatus: front.status,
       backIvStatus: back.status,
     },

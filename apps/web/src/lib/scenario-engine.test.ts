@@ -574,3 +574,35 @@ describe("expirationCurve — mixed-expiry book prices at ONE horizon (TOS parit
     }
   });
 });
+
+describe("entry anchoring — actual fill basis when available (TOS parity, 2026-07-10)", () => {
+  // Without entryNet the engine re-prices a model entry AT THE LIVE SPOT, which forces
+  // T+0 P&L ≡ $0 at spot by construction. A live position carries its real fill basis
+  // (broker averagePrice); anchoring to it makes the curve show actual open P&L at spot
+  // (TOS behavior) — on a near-flat calendar T+0 curve, that vertical shift moves the
+  // breakevens by hundreds of points.
+  it("with entryNet set, T+0 P&L at the live spot equals (model net now − actual entry) × 100 × qty", () => {
+    const entryNet = 3.5; // points per contract, below today's model net → open profit
+    const pos: AnalyzerPosition = { ...LIVE_POS, entryNet };
+    const result = repriceScenario([pos], BASE_PARAMS);
+
+    const atSpot = result.payoffCurve.reduce((best, p) =>
+      Math.abs(p.spot - SPOT) < Math.abs(best.spot - SPOT) ? p : best,
+    );
+
+    const netNow =
+      bsmPrice(atSpot.spot, 7425, LIVE_POS.backDte / 365, IV, R, Q, "P") -
+      bsmPrice(atSpot.spot, 7425, LIVE_POS.frontDte / 365, IV, R, Q, "P");
+    expect(atSpot.pl).toBeCloseTo((netNow - entryNet) * 100, 6);
+    // and the anchor genuinely differs from the model-entry default of ~$0 at spot
+    expect(Math.abs(atSpot.pl)).toBeGreaterThan(1);
+  });
+
+  it("without entryNet, the model-entry fallback keeps T+0 ≈ $0 at the live spot (pasted/synthetic positions)", () => {
+    const result = repriceScenario([LIVE_POS], BASE_PARAMS);
+    const atSpot = result.payoffCurve.reduce((best, p) =>
+      Math.abs(p.spot - SPOT) < Math.abs(best.spot - SPOT) ? p : best,
+    );
+    expect(Math.abs(atSpot.pl)).toBeLessThan(10);
+  });
+});

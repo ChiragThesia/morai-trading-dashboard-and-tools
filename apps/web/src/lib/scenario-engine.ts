@@ -50,6 +50,14 @@ export type AnalyzerPosition = {
   /** Whether this position is included in the combined book */
   readonly included: boolean;
   /**
+   * Actual fill basis: calendar net debit in points per contract (back avg − front avg
+   * from broker fills). When set, P&L anchors to the REAL entry (TOS behavior — the
+   * curve shows true open P&L at spot). When absent (pasted/synthetic positions, or
+   * missing broker marks), falls back to the model entry re-priced at the live spot,
+   * which pins T+0 to $0 at spot ("what if I entered now").
+   */
+  readonly entryNet?: number | null;
+  /**
    * Front-leg IV convergence status (Pitfall 1 / D-02). Optional — callers that
    * haven't wired the calibration result yet (e.g. existing Analyzer construction
    * sites) omit it, which is treated as "ok" (pre-change behavior).
@@ -292,7 +300,7 @@ function bookPL(
   for (const pos of positions) {
     if (!includedForT0(pos)) continue;
     const net = calendarNetPrice(pos, S, daysForward, ivShift, rate, divYield);
-    const entry = entryNetPrice(pos, liveSpot, rate, divYield);
+    const entry = pos.entryNet ?? entryNetPrice(pos, liveSpot, rate, divYield);
     total += (net - entry) * 100 * pos.qty;
   }
   return total;
@@ -323,7 +331,7 @@ function bookPLAtExpiry(
   let total = 0;
   for (const pos of included) {
     const net = calendarNetPrice(pos, S, horizon, 0, rate, divYield);
-    const entry = entryNetPrice(pos, liveSpot, rate, divYield);
+    const entry = pos.entryNet ?? entryNetPrice(pos, liveSpot, rate, divYield);
     total += (net - entry) * 100 * pos.qty;
   }
   return total;
