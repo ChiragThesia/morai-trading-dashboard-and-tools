@@ -158,6 +158,26 @@ function setLiveStream(
   });
 }
 
+/**
+ * 35.1 D-10: desktop matchMedia stub (the MarketRail.test.tsx pattern) — jsdom has no
+ * matchMedia, so useIsDesktop() reports mobile by default and Overview mounts the mobile
+ * tree. Pre-existing desktop-tree describes install this in beforeEach to keep exercising
+ * OverviewDesktop byte-identically; each installing describe deletes it in afterEach via
+ * `Reflect.deleteProperty(window, "matchMedia")`.
+ */
+function stubDesktopMatchMedia(): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query === "(min-width: 1024px)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }),
+  });
+}
+
 /** Fixture position: short 7425P on SPXW. */
 const POS = {
   occSymbol: "SPXW  260807P07425000",
@@ -386,8 +406,12 @@ const EXITS_FIXTURE: ExitsResponse = {
 };
 
 describe("Overview screen", () => {
+  // 35.1 D-10: every pre-existing describe in this file asserts desktop-tree output —
+  // the stub keeps them exercising OverviewDesktop (jsdom default is now the mobile tree).
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
     // Reset useLiveStream to default quiet/empty-map state after each test
     mockUseLiveStream.mockReturnValue({
@@ -894,8 +918,10 @@ describe("Overview screen", () => {
 });
 
 describe("GEX rail — near-term (≤45d) key levels", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -912,8 +938,10 @@ describe("GEX rail — near-term (≤45d) key levels", () => {
 });
 
 describe("Pill header — 0DTE γ pill", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -932,8 +960,10 @@ describe("Pill header — 0DTE γ pill", () => {
 
 // ── 35-03: PillHeader mobile priority row + secondary ChipRail, de-stickied below lg ──
 describe("PillHeader — mobile priority row + secondary ChipRail (35-03)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -989,8 +1019,10 @@ describe("PillHeader — mobile priority row + secondary ChipRail (35-03)", () =
 });
 
 describe("Overview — held positions + exit rules panels (moved from Analyzer, 26-06-PLAN.md, EXIT-07/EXIT-09/EXIT-10)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -1155,12 +1187,14 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
 
 describe("Overview — verdict-in-row join (overview-layout-redesign.md §Join design)", () => {
   beforeEach(() => {
+    stubDesktopMatchMedia();
     // Calendars must build so the 7425P row exists (buildRows is IV-independent, but keep
     // calibration deterministic to avoid non-convergent noise elsewhere on the surface).
     mockResolveLegIv.mockImplementation(() => ok(0.2));
   });
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -1278,8 +1312,10 @@ describe("buildCalendarPosition (34-05: fractional DTE + per-leg carry)", () => 
 
 // ── 35-03: mobile grid stack order + full-bleed chart + view-only chrome hidden ──
 describe("Overview — mobile stack order (35-03: order-*, full-bleed chart, view-only hidden)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -1333,10 +1369,12 @@ describe("Overview — mobile stack order (35-03: order-*, full-bleed chart, vie
 // ── 35-04: positions dual render — table hidden lg:table + card list lg:hidden ──
 describe("Overview — positions dual render (35-04: table hidden lg:table + card list lg:hidden)", () => {
   beforeEach(() => {
+    stubDesktopMatchMedia();
     mockResolveLegIv.mockImplementation(() => ok(0.2));
   });
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -1384,8 +1422,10 @@ describe("Overview — positions dual render (35-04: table hidden lg:table + car
 // fixed-width child). It is NOT proof of the mobile 390px no-h-scroll requirement;
 // that proof is the manual chrome-devtools checklist recorded in 35-06-SUMMARY.md.
 describe("Overview — no-horizontal-overflow smoke guard (35-06)", () => {
+  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -1396,5 +1436,53 @@ describe("Overview — no-horizontal-overflow smoke guard (35-06)", () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+  });
+});
+
+// ── 35.1: Overview root branch — mobile tree by default, desktop tree under the stub ──
+describe("Overview branch — D-01/D-10 (35.1)", () => {
+  beforeEach(() => {
+    mockResolveLegIv.mockImplementation(() => ok(0.2));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
+  });
+
+  it("J1 (root): default jsdom (no matchMedia) renders the mobile tree root — desktop pill-header/table/rail do not mount", () => {
+    setPositions([POS]);
+    render(<Overview />);
+
+    expect(screen.getByTestId("overview-mobile-root")).toBeDefined();
+    expect(screen.queryByTestId("pill-header")).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByTestId("market-rail")).toBeNull();
+  });
+
+  it("J2 (byte-identity guard): the desktop matchMedia stub renders today's desktop tree with identical structure", () => {
+    stubDesktopMatchMedia();
+    setPositions([POS]);
+    render(<Overview />);
+
+    expect(screen.getByTestId("pill-header")).toBeDefined();
+    expect(screen.queryByTestId("overview-mobile-root")).toBeNull();
+    expect(screen.getByRole("table")).toBeDefined();
+    expect(screen.getByTestId("overview-center-column")).toBeDefined();
+    expect(screen.getByTestId("overview-gex-column")).toBeDefined();
+    expect(screen.getByTestId("market-rail")).toBeDefined();
+    // GexRail structural content still present.
+    expect(screen.getByText("Key levels")).toBeDefined();
+    expect(screen.getByText("Net book greeks")).toBeDefined();
+  });
+
+  it("J14 (Overview half): under the desktop stub the call site passes neither new chart prop", () => {
+    stubDesktopMatchMedia();
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const props = latestPayoffChartProps();
+    expect(props.showBePills).toBeUndefined();
+    expect(props.aspectRatio).toBeUndefined();
   });
 });

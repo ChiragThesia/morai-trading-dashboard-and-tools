@@ -16,6 +16,8 @@ import {
   latestMacroValue,
 } from "./overview-mobile/useOverviewModel.ts";
 import type { NetGreeks } from "./overview-mobile/useOverviewModel.ts";
+import { OverviewMobile } from "./overview-mobile/OverviewMobile.tsx";
+import { useIsDesktop } from "../hooks/useIsDesktop.ts";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
 import { PositionCard } from "../components/PositionCard.tsx";
 import { MarketRail } from "./MarketRail.tsx";
@@ -597,7 +599,14 @@ function PillHeader({
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
 
+/** The thin root switch (35.1 D-01, UI-SPEC §1): exactly ONE tree mounts per viewport
+ *  state, so useOverviewModel's useLiveStream call stays the single stream consumer. */
 export function Overview(): React.ReactElement {
+  const isDesktop = useIsDesktop();
+  return isDesktop ? <OverviewDesktop /> : <OverviewMobile />;
+}
+
+function OverviewDesktop(): React.ReactElement {
   // 35.1 D-02: the shared model hook owns ALL state/derivation. Locals are destructured
   // to the pre-extraction names so the JSX below stays byte-identical to the pre-35.1
   // render — same elements, classes, testids, order.
