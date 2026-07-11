@@ -19,7 +19,8 @@ import { ok, err, assertDefined } from "@morai/shared";
 import type { StreamLiveGreekEvent, ExitsResponse, GexSnapshotResponse } from "@morai/contracts";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { toDateInputValue } from "../lib/date-projection.ts";
-import { pairPositionsIntoCalendars } from "../lib/pair-calendars.ts";
+import { pairPositionsIntoCalendars, bookUnrealizedPnl } from "../lib/pair-calendars.ts";
+import { signedUsd } from "../lib/position-format.ts";
 import { DEFAULT_RATE, DEFAULT_DIV } from "../lib/resolve-carry.ts";
 
 // 17.1-03 (OVW-06): spy-wrap PayoffChart so tests can inspect the exact curve/signature
@@ -1484,5 +1485,62 @@ describe("Overview branch — D-01/D-10 (35.1)", () => {
     const props = latestPayoffChartProps();
     expect(props.showBePills).toBeUndefined();
     expect(props.aspectRatio).toBeUndefined();
+  });
+
+  // ── 35.1-02: MobileHero + MobileRiskPanel composed into the mobile root ──────
+
+  it("J1 (complete): the mobile hero renders by default; pill-header still absent", () => {
+    setPositions([POS]);
+    render(<Overview />);
+
+    expect(screen.getByTestId("mobile-hero")).toBeDefined();
+    expect(screen.queryByTestId("pill-header")).toBeNull();
+  });
+
+  it("J5 (hero→chart half): mobile-hero precedes mobile-payoff in DOM order", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const hero = screen.getByTestId("mobile-hero");
+    const payoff = screen.getByTestId("mobile-payoff");
+    const follows =
+      (hero.compareDocumentPosition(payoff) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(follows).toBe(true);
+  });
+
+  it("hero wiring: mobile-hero-value is signedUsd(bookUnrealizedPnl(positions), 0) — no second P&L path (D-03)", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const expected = signedUsd(bookUnrealizedPnl([CAL_FRONT, CAL_BACK]), 0);
+    expect(screen.getByTestId("mobile-hero-value").textContent).toBe(expected);
+  });
+
+  it("J7 (shared-state proof): ⋯ → Fan flips the SAME toggles object the chart receives — no second store", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+    expect(latestPayoffChartProps().toggles.showFan).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "More chart options" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fan" }));
+
+    expect(latestPayoffChartProps().toggles.showFan).toBe(true);
+  });
+
+  it("J6 (integration): Next day advances the date input one day and re-renders the chart off it", () => {
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const before = screen.getByTestId<HTMLInputElement>("date-picker-input").value;
+    const callsBefore = mockPayoffChart.mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Next day" }));
+
+    const expected = new Date(`${before}T12:00:00`);
+    expected.setDate(expected.getDate() + 1);
+    expect(screen.getByTestId<HTMLInputElement>("date-picker-input").value).toBe(
+      toDateInputValue(expected),
+    );
+    expect(mockPayoffChart.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 });
