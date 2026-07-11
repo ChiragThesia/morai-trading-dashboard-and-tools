@@ -16,9 +16,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { ok, err, assertDefined } from "@morai/shared";
-import type { StreamLiveGreekEvent, ExitsResponse } from "@morai/contracts";
+import type { StreamLiveGreekEvent, ExitsResponse, GexSnapshotResponse } from "@morai/contracts";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { toDateInputValue } from "../lib/date-projection.ts";
+import { pairPositionsIntoCalendars } from "../lib/pair-calendars.ts";
+import { DEFAULT_RATE, DEFAULT_DIV } from "../lib/resolve-carry.ts";
 
 // 17.1-03 (OVW-06): spy-wrap PayoffChart so tests can inspect the exact curve/signature
 // props Overview hands it — the real component still renders (importOriginal), this only
@@ -102,7 +104,7 @@ vi.mock("../hooks/useExits.ts", () => ({
   useExits: vi.fn(() => ({ data: null, isPending: false, isError: false, refetch: vi.fn() })),
 }));
 
-import { Overview, formatExpiryCell } from "./Overview.tsx";
+import { Overview, formatExpiryCell, buildCalendarPosition } from "./Overview.tsx";
 import { usePositions } from "../hooks/usePositions.ts";
 import { useLiveStream } from "../hooks/useLiveStream.ts";
 import { useExits } from "../hooks/useExits.ts";
@@ -583,6 +585,17 @@ describe("Overview screen", () => {
   describe("OVW-06: unified calendar inclusion (single lifted source of truth)", () => {
     beforeEach(() => {
       mockResolveLegIv.mockImplementation(() => ok(0.2));
+      // 34-05: buildCalendarPosition's dteExact() is wall-clock-fractional (no longer
+      // whole-day-ceiled) — pin the clock so the two separately-mounted renders these
+      // tests compare (cleanup() + render() pairs) share the identical `now`, matching
+      // what they were written to prove (exclusion equivalence), not clock drift between
+      // two `new Date()` calls milliseconds apart.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-07-11T14:00:00Z"));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
     });
 
     it("unchecking a calendar row removes its contribution from BOTH payoff curves and moves positionSetSignature", () => {
@@ -1132,5 +1145,55 @@ describe("Overview — verdict-in-row join (overview-layout-redesign.md §Join d
 
     expect(screen.queryByTestId("held-position-verdict-cal-hold")).toBeNull();
     expect(screen.getByTestId("held-positions-cold-start")).toBeDefined();
+  });
+});
+
+// ── 34-05: buildCalendarPosition — fractional DTE + per-leg carry wiring ──────
+describe("buildCalendarPosition (34-05: fractional DTE + per-leg carry)", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const NOW = new Date("2026-07-11T14:00:00Z");
+  // CAL_FRONT expires 2030-11-20, CAL_BACK 2030-11-30 (far future — plenty of
+  // fractional headroom so frontDteExact/backDteExact never round to an integer).
+  const CARRY_GEX: GexSnapshotResponse = {
+    ...GEX_FIXTURE,
+    impliedCarry: [
+      { expiration: "2030-11-20", rate: 0.0512, divYield: 0.0141 },
+      { expiration: "2030-11-30", rate: 0.049, divYield: 0.0138 },
+    ],
+  };
+
+  it("wires fractional frontDteExact/backDteExact and per-leg carry from the GEX impliedCarry", () => {
+    mockResolveLegIv.mockImplementation(() => ok(0.2));
+    const { calendars } = pairPositionsIntoCalendars([CAL_FRONT, CAL_BACK], NOW);
+    const cal = calendars[0];
+    assertDefined(cal, "calendar present");
+
+    const built = buildCalendarPosition(cal, 7400, new Map(), NOW, true, CARRY_GEX);
+
+    expect(built.position.frontDteExact).not.toBe(cal.dteFront);
+    expect(built.position.backDteExact).not.toBe(cal.dteBack);
+    expect(built.position.frontDteExact).toBeCloseTo(cal.dteFront, 0);
+    expect(built.position.backDteExact).toBeCloseTo(cal.dteBack, 0);
+    expect(built.position.frontRate).toBe(0.0512);
+    expect(built.position.frontDivYield).toBe(0.0141);
+    expect(built.position.backRate).toBe(0.049);
+    expect(built.position.backDivYield).toBe(0.0138);
+  });
+
+  it("falls back to DEFAULT_RATE/DEFAULT_DIV per leg when gex is undefined", () => {
+    mockResolveLegIv.mockImplementation(() => ok(0.2));
+    const { calendars } = pairPositionsIntoCalendars([CAL_FRONT, CAL_BACK], NOW);
+    const cal = calendars[0];
+    assertDefined(cal, "calendar present");
+
+    const built = buildCalendarPosition(cal, 7400, new Map(), NOW, true, undefined);
+
+    expect(built.position.frontRate).toBe(DEFAULT_RATE);
+    expect(built.position.frontDivYield).toBe(DEFAULT_DIV);
+    expect(built.position.backRate).toBe(DEFAULT_RATE);
+    expect(built.position.backDivYield).toBe(DEFAULT_DIV);
   });
 });
