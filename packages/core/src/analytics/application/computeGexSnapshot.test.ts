@@ -16,7 +16,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { ok, err } from "@morai/shared";
+import { ok, err, settlementTimestamp } from "@morai/shared";
+import { bsmPrice } from "@morai/quant";
 import { makeComputeGexSnapshotUseCase } from "./computeGexSnapshot.ts";
 import { buildProfile } from "../domain/gex.ts";
 import type {
@@ -25,6 +26,10 @@ import type {
   LegObsForGex,
   GexSnapshotRow,
 } from "./ports.ts";
+import type { ForReadingMacroObservations, MacroObservationRow } from "../../journal/index.ts";
+
+// 34-04 (TOSP-02): shared no-op macro stub for tests that don't care about impliedCarry.
+const EMPTY_MACRO_STUB: ForReadingMacroObservations = async () => ok([]);
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -79,6 +84,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: makeReadLegsStub([]),
       persistGexSnapshot: makePersistSpy().persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
     expect(typeof useCase).toBe("function");
   });
@@ -89,6 +95,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: makeReadLegsStub(FIXTURE_LEGS),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     const result = await useCase();
@@ -102,6 +109,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: makeReadLegsStub(FIXTURE_LEGS),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     await useCase();
@@ -130,6 +138,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: makeReadLegsStub(FIXTURE_LEGS),
       persistGexSnapshot: spy.persist,
       now: () => NOW, // distinct from CYCLE_TIME
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     await useCase();
@@ -148,6 +157,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: makeReadLegsStub(FIXTURE_LEGS),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     const result = await useCase();
@@ -165,6 +175,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: failingRead,
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     const result = await useCase();
@@ -179,6 +190,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: makeReadLegsStub([]),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     const result = await useCase();
@@ -206,6 +218,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: makeReadLegsStub(allCallLegs),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     await useCase();
@@ -236,6 +249,7 @@ describe("makeComputeGexSnapshotUseCase", () => {
       readLegObsForGex: makeReadLegsStub(FIXTURE_LEGS),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     await useCase();
@@ -280,6 +294,7 @@ describe("side-specific walls, bracketing spot (SpotGamma convention)", () => {
       readLegObsForGex: makeReadLegsStub(legs),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     await useCase();
@@ -312,6 +327,7 @@ describe("near-term (≤45d DTE) level set", () => {
       readLegObsForGex: makeReadLegsStub(legs),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     await useCase();
@@ -341,6 +357,7 @@ describe("near-term (≤45d DTE) level set", () => {
       readLegObsForGex: makeReadLegsStub(legs),
       persistGexSnapshot: spy.persist,
       now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
     });
 
     await useCase();
@@ -349,5 +366,123 @@ describe("near-term (≤45d DTE) level set", () => {
     if (row === undefined) return;
 
     expect(row.nearTerm).toBeNull();
+  });
+});
+
+// ─── impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04, TOSP-02) ─────
+
+describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04, TOSP-02)", () => {
+  const CARRY_EXPIRY = "2026-06-27";
+  const CARRY_STRIKE = 7400; // ATM: strike === spot, simplest bracket pick
+  const KNOWN_R = 0.045;
+  const KNOWN_Q = 0.013;
+  const SIGMA = 0.14;
+
+  // Independent oracle: T computed directly via settlementTimestamp (not via the SUT's own
+  // carry step), mirroring 34-02's "don't couple the oracle to the implementation" method.
+  const EXPIRY_DATE = new Date(`${CARRY_EXPIRY}T00:00:00.000Z`);
+  const SETTLEMENT = settlementTimestamp("SPXW", EXPIRY_DATE);
+  const CARRY_T = (SETTLEMENT.getTime() - CYCLE_TIME.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+
+  const CALL_MARK = bsmPrice(CARRY_STRIKE, CARRY_STRIKE, CARRY_T, SIGMA, KNOWN_R, KNOWN_Q, "C");
+  const PUT_MARK = bsmPrice(CARRY_STRIKE, CARRY_STRIKE, CARRY_T, SIGMA, KNOWN_R, KNOWN_Q, "P");
+
+  const CARRY_LEGS: ReadonlyArray<LegObsForGex> = [
+    makeLeg({
+      contract: "SPXW  260627C07400000",
+      contractType: "C",
+      strike: 7400000,
+      expiration: CARRY_EXPIRY,
+      underlyingPrice: CARRY_STRIKE,
+      mark: String(CALL_MARK),
+      bsmGamma: "0.001",
+    }),
+    makeLeg({
+      contract: "SPXW  260627P07400000",
+      contractType: "P",
+      strike: 7400000,
+      expiration: CARRY_EXPIRY,
+      underlyingPrice: CARRY_STRIKE,
+      mark: String(PUT_MARK),
+      bsmGamma: "0.001",
+    }),
+  ];
+
+  // Flat DGS1MO = DGS3MO = 4.5% — interpolation is constant regardless of the exact DTE
+  // bracket, so this oracle isolates the parity recovery without also pinning down the
+  // interpolation's day-count bracket math.
+  const FLAT_RATE_MACRO: ReadonlyArray<MacroObservationRow> = [
+    { seriesId: "DGS1MO", date: "2026-06-20", value: 4.5, source: "fred" },
+    { seriesId: "DGS3MO", date: "2026-06-20", value: 4.5, source: "fred" },
+  ];
+  const flatRateMacroStub: ForReadingMacroObservations = async () => ok(FLAT_RATE_MACRO);
+
+  it("recovers a known (r, q) from forward-priced ATM marks over the live FRED curve", async () => {
+    const spy = makePersistSpy();
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(CARRY_LEGS),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+      readMacroObservations: flatRateMacroStub,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    expect(row.impliedCarry).not.toBeNull();
+    const entry = row.impliedCarry?.find((e) => e.expiration === CARRY_EXPIRY);
+    expect(entry).toBeDefined();
+    if (entry === undefined) return;
+    expect(entry.rate).toBeCloseTo(KNOWN_R, 6);
+    expect(entry.divYield).toBeCloseTo(KNOWN_Q, 6);
+  });
+
+  it("degrades impliedCarry to null when the macro read errs (GEX still persists)", async () => {
+    const spy = makePersistSpy();
+    const failingMacro: ForReadingMacroObservations = async () =>
+      err({ kind: "storage-error", message: "macro DB down" });
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(CARRY_LEGS),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+      readMacroObservations: failingMacro,
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true); // GEX must still persist despite the macro failure
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.impliedCarry).toBeNull();
+  });
+
+  it("degrades impliedCarry to null when no expiry has an ATM call+put pair", async () => {
+    const spy = makePersistSpy();
+    // Only a call at this strike — no put to pair with (no ATM bracket).
+    const callOnlyLegs: ReadonlyArray<LegObsForGex> = [
+      makeLeg({
+        contract: "SPXW  260627C07400000",
+        contractType: "C",
+        strike: 7400000,
+        expiration: CARRY_EXPIRY,
+        underlyingPrice: CARRY_STRIKE,
+        mark: String(CALL_MARK),
+        bsmGamma: "0.001",
+      }),
+    ];
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(callOnlyLegs),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+      readMacroObservations: flatRateMacroStub,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    expect(row.impliedCarry).toBeNull();
   });
 });
