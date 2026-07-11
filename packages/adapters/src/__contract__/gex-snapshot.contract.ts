@@ -40,6 +40,8 @@ export type GexSnapshotSeedContext = {
     contractType: "C" | "P";
     strike: number;
     expiration: string;
+    /** Raw option mark — 34-03, parity-solver input. */
+    mark: string;
   }>) => Promise<void>;
 };
 
@@ -226,6 +228,34 @@ export function runGexSnapshotContractTests(
       // Memory twin returns [] (no seeded data); Postgres path may have more assertions inline
       expect(Array.isArray(result.value)).toBe(true);
     });
+
+    // 34-03 (TOSP-02): the parity solver needs the raw mark — widen the read to carry it
+    // through unchanged, same cohort, zero new queries.
+    it("returns the raw mark for each leg in the cohort", async () => {
+      const cycleTime = new Date("2026-06-23T14:00:00Z");
+      await seed.seedLegs([
+        {
+          time: cycleTime,
+          contract: "SPXW  260627C07400000",
+          underlyingPrice: 7381,
+          bsmGamma: "0.001",
+          bsmIv: "0.14",
+          openInterest: 1000,
+          contractType: "C",
+          strike: 7400000,
+          expiration: "2026-06-27",
+          mark: "12.35",
+        },
+      ]);
+
+      const result = await repo.readLegObsForGex();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const leg = result.value.find((l) => l.contract === "SPXW  260627C07400000");
+      expect(leg).toBeDefined();
+      expect(leg?.mark).toBe("12.35");
+    });
   });
 
   // chain-window-narrow-regression: one logical fetch cycle now lands as TWO nearby
@@ -255,6 +285,7 @@ export function runGexSnapshotContractTests(
       bsmIv: "0.14",
       openInterest: 1000,
       expiration: "2026-06-27",
+      mark: "1.75",
     };
 
     async function seedDualSourceCycle(): Promise<void> {
