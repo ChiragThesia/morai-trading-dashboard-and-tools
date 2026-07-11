@@ -749,21 +749,30 @@ export function Analyzer(): React.ReactElement {
 
   return (
     <div className="flex flex-col gap-4 bg-bg p-3">
-      {/* ── Top strip: the engine's scorecard chips for the selected calendar ── */}
-      <ScoringMethodologyPanel
-        candidate={selected}
-        ruleSet={snapshot?.ruleSet ?? []}
-        gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 }}
-        marketSession={snapshot?.marketSession ?? "rth"}
-      />
-      <div className="grid gap-4" style={{ gridTemplateColumns: "300px 1fr 330px" }}>
+      {/* ── Top strip: the engine's scorecard chips for the selected calendar ──
+          Mobile stack order (35-05): order-2 paints this after the rail below lg. */}
+      <div data-testid="analyzer-scorecard-wrapper" className="order-2 lg:order-none">
+        <ScoringMethodologyPanel
+          candidate={selected}
+          ruleSet={snapshot?.ruleSet ?? []}
+          gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 }}
+          marketSession={snapshot?.marketSession ?? "rth"}
+        />
+      </div>
+      {/* `contents` flattens this box below lg, promoting rail/center/right to flex-items of
+          the outer column above (so order-* can interleave scorecard between them without
+          moving any JSX); `lg:grid` restores today's exact 300px/1fr/330px grid at lg. */}
+      <div
+        data-testid="analyzer-inner-grid"
+        className="contents lg:grid lg:grid-cols-[300px_minmax(0,1fr)_330px] lg:gap-4"
+      >
       {/* ── Left column: ranked rail ── */}
-      <div className="flex flex-col gap-3">
+      <div data-testid="analyzer-rail-wrapper" className="order-1 lg:order-none flex flex-col gap-3">
         {railBody}
       </div>
 
       {/* ── Center column: payoff graph + term structure (both charts, stacked) ── */}
-      <div className="flex min-w-0 flex-col gap-3">
+      <div data-testid="analyzer-center-column" className="order-3 lg:order-none flex min-w-0 flex-col gap-3">
         <Panel>
           <div className="mb-1 flex items-center justify-between gap-2">
             <PanelHeading title="Risk profile" />
@@ -807,27 +816,30 @@ export function Analyzer(): React.ReactElement {
                 toggles={toggles}
                 onToggle={handleToggle}
               />
-              <PayoffChart
-                todayCurve={scenarioResult.payoffCurve}
-                fanCurves={[]}
-                expirationCurve={scenarioResult.expirationCurve}
-                rollCurve={null}
-                gex={{
-                  callWall: snapshot?.gex.callWall ?? null,
-                  putWall: snapshot?.gex.putWall ?? null,
-                  flip: snapshot?.gex.flip ?? null,
-                }}
-                domain={payoffDomain}
-                spot={spot}
-                toggles={toggles}
-                fitY={false}
-                onFitYConsumed={noop}
-                positionSetSignature={positionSetSignature}
-                baseExpirationCurve={scenarioResult.expirationCurve}
-                todayCurveColor={TODAY_CURVE_COLOR}
-                expirationCurveColor={EXPIRATION_CURVE_COLOR}
-                expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
-              />
+              {/* Full-bleed below lg (negates Panel's p-3 horizontal inset); reverts at lg */}
+              <div data-testid="analyzer-payoff-chart-bleed" className="-mx-3 lg:mx-0">
+                <PayoffChart
+                  todayCurve={scenarioResult.payoffCurve}
+                  fanCurves={[]}
+                  expirationCurve={scenarioResult.expirationCurve}
+                  rollCurve={null}
+                  gex={{
+                    callWall: snapshot?.gex.callWall ?? null,
+                    putWall: snapshot?.gex.putWall ?? null,
+                    flip: snapshot?.gex.flip ?? null,
+                  }}
+                  domain={payoffDomain}
+                  spot={spot}
+                  toggles={toggles}
+                  fitY={false}
+                  onFitYConsumed={noop}
+                  positionSetSignature={positionSetSignature}
+                  baseExpirationCurve={scenarioResult.expirationCurve}
+                  todayCurveColor={TODAY_CURVE_COLOR}
+                  expirationCurveColor={EXPIRATION_CURVE_COLOR}
+                  expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
+                />
+              </div>
             </>
           )}
         </Panel>
@@ -846,7 +858,9 @@ export function Analyzer(): React.ReactElement {
       </div>
 
       {/* ── Right column: why-panel / entry-exit-plan ─── */}
-      <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
+      <div data-testid="analyzer-right-wrapper" className="order-4 lg:order-none">
+        <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
+      </div>
       </div>
     </div>
   );

@@ -870,3 +870,69 @@ describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.rul
     expect(screen.queryByTestId("session-badge")).toBeNull();
   });
 });
+
+// ── 35-05: mobile stack order (display:contents + order-*, DOM byte-identical) ──
+describe("Analyzer — mobile stack order (35-05: display:contents + order-*, full-bleed chart)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("flattens the inner rail/chart/right container via display:contents (lg:grid restores it at lg)", () => {
+    render(<Analyzer />);
+
+    const innerGrid = screen.getByTestId("analyzer-inner-grid");
+    expect(innerGrid.className).toContain("contents");
+    expect(innerGrid.className).toContain("lg:grid");
+    expect(innerGrid.className).toContain("lg:grid-cols-[300px_minmax(0,1fr)_330px]");
+    // The inline gridTemplateColumns style is gone — columns move to the class only.
+    expect(innerGrid.getAttribute("style")).toBeNull();
+  });
+
+  it("threads order-* onto scorecard / rail / center / right (mobile paints rail -> scorecard -> chart+term -> right)", () => {
+    render(<Analyzer />);
+
+    const scorecard = screen.getByTestId("analyzer-scorecard-wrapper");
+    expect(scorecard.className).toContain("order-2");
+    expect(scorecard.className).toContain("lg:order-none");
+
+    const rail = screen.getByTestId("analyzer-rail-wrapper");
+    expect(rail.className).toContain("order-1");
+    expect(rail.className).toContain("lg:order-none");
+
+    const center = screen.getByTestId("analyzer-center-column");
+    expect(center.className).toContain("order-3");
+    expect(center.className).toContain("lg:order-none");
+
+    const right = screen.getByTestId("analyzer-right-wrapper");
+    expect(right.className).toContain("order-4");
+    expect(right.className).toContain("lg:order-none");
+  });
+
+  it("keeps DOM order scorecard -> rail -> center -> right unchanged (only paint order changes via CSS order)", () => {
+    render(<Analyzer />);
+
+    const outer = screen.getByTestId("analyzer-scorecard-wrapper").parentElement;
+    assertDefined(outer, "outer flex column present");
+    const innerGrid = screen.getByTestId("analyzer-inner-grid");
+    const outerChildren = Array.from(outer.children);
+    expect(outerChildren.indexOf(screen.getByTestId("analyzer-scorecard-wrapper"))).toBeLessThan(
+      outerChildren.indexOf(innerGrid),
+    );
+
+    const innerChildren = Array.from(innerGrid.children);
+    const railIdx = innerChildren.indexOf(screen.getByTestId("analyzer-rail-wrapper"));
+    const centerIdx = innerChildren.indexOf(screen.getByTestId("analyzer-center-column"));
+    const rightIdx = innerChildren.indexOf(screen.getByTestId("analyzer-right-wrapper"));
+    expect(railIdx).toBeLessThan(centerIdx);
+    expect(centerIdx).toBeLessThan(rightIdx);
+  });
+
+  it("makes the payoff chart full-bleed below lg (-mx-3 lg:mx-0)", () => {
+    render(<Analyzer />);
+
+    const bleed = screen.getByTestId("analyzer-payoff-chart-bleed");
+    expect(bleed.className).toContain("-mx-3");
+    expect(bleed.className).toContain("lg:mx-0");
+  });
+});
