@@ -206,13 +206,35 @@ function renderJournal(trades?: ReadonlyArray<{
   );
 }
 
+/**
+ * 36 D-16: desktop matchMedia stub (the Overview.test.tsx / MarketRail.test.tsx pattern) —
+ * jsdom has no matchMedia, so useIsDesktop() reports mobile by default and Journal mounts
+ * the mobile tree. Pre-existing desktop-tree describes install this in beforeEach to keep
+ * exercising JournalDesktop byte-identically; each installing describe deletes it in
+ * afterEach via `Reflect.deleteProperty(window, "matchMedia")`.
+ */
+function stubDesktopMatchMedia(): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query === "(min-width: 1024px)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }),
+  });
+}
+
 describe("Journal screen", () => {
   beforeEach(() => {
+    stubDesktopMatchMedia();
     mockUseRuleTags.mockReturnValue(emptyRuleTagsResult());
   });
 
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.resetAllMocks();
   });
 
@@ -391,6 +413,7 @@ describe("Journal screen", () => {
 
 describe("Journal screen — rule-tag control (RULE-01)", () => {
   beforeEach(() => {
+    stubDesktopMatchMedia();
     mockUseLifecycle.mockReturnValue(
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       {
@@ -404,6 +427,7 @@ describe("Journal screen — rule-tag control (RULE-01)", () => {
 
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.resetAllMocks();
   });
 
@@ -555,11 +579,13 @@ describe("Journal screen — rule-tag control (RULE-01)", () => {
 // ── 35-05: mobile stack order (flex-col lg:grid port, un-clip below lg) ──
 describe("Journal — mobile stack order (35-05: flex-col lg:grid, un-clip below lg)", () => {
   beforeEach(() => {
+    stubDesktopMatchMedia();
     mockUseRuleTags.mockReturnValue(emptyRuleTagsResult());
   });
 
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
@@ -627,5 +653,59 @@ describe("Journal — mobile stack order (35-05: flex-col lg:grid, un-clip below
     const railIdx = children.indexOf(screen.getByTestId("journal-rail-column"));
     expect(tradesIdx).toBeLessThan(lifecycleIdx);
     expect(lifecycleIdx).toBeLessThan(railIdx);
+  });
+});
+
+// ── 36 D-03/D-16: useIsDesktop switch — mobile default, stubbed desktop guard ──
+describe("Journal branch — D-03/D-16 (36)", () => {
+  beforeEach(() => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    mockUseLifecycle.mockReturnValue({
+      data: { snapshots: [] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useLifecycle>);
+    mockUseRuleTags.mockReturnValue(emptyRuleTagsResult());
+  });
+
+  afterEach(() => {
+    cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
+    vi.resetAllMocks();
+  });
+
+  it("renders the dedicated mobile tree by default (jsdom), not the desktop grid (J3)", () => {
+    renderJournal([makeHistoryTrade()]);
+
+    expect(screen.getByTestId("journal-mobile-root")).toBeDefined();
+    expect(screen.queryByTestId("journal-positions")).toBeNull();
+    // Desktop-only affordances are absent from the mobile tree.
+    expect(screen.queryByText("history")).toBeNull();
+    expect(screen.queryByText(/Attribution is a 2nd-order approximation/)).toBeNull();
+  });
+
+  it("renders today's desktop tree byte-identically under the matchMedia stub (J3 guard)", () => {
+    stubDesktopMatchMedia();
+
+    renderJournal([makeHistoryTrade()]);
+
+    expect(screen.getByTestId("journal-positions")).toBeDefined();
+    expect(screen.getByTestId("journal-trades-column")).toBeDefined();
+    expect(screen.getByTestId("journal-lifecycle-column")).toBeDefined();
+    expect(screen.getByTestId("journal-rail-column")).toBeDefined();
+    expect(screen.queryByTestId("journal-mobile-root")).toBeNull();
+    // Desktop keeps ALL of today's affordances: rebuild in the heading row, the Trades
+    // panel, and the history chip on the row.
+    expect(screen.getByText(/Rebuild journal/i)).toBeDefined();
+    expect(screen.getByText("Trades")).toBeDefined();
+    expect(screen.getByText("history")).toBeDefined();
+  });
+
+  it("renders the two verbatim empty-state lines from the mobile tree for [] (J3)", () => {
+    renderJournal([]);
+
+    expect(screen.getByText("No journal history yet.")).toBeDefined();
+    expect(screen.getByText("Trades before Jun 12 have entry/exit only.")).toBeDefined();
   });
 });

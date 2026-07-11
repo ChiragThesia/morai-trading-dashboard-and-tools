@@ -33,6 +33,8 @@ import { BeatsCard } from "../components/BeatsCard.tsx";
 import { RebuildButton } from "../components/RebuildButton.tsx";
 import { Panel, PanelHeading, SectionLabel, Button } from "../components/system/index.tsx";
 import type { LifecycleResponse } from "@morai/contracts";
+import { useIsDesktop } from "../hooks/useIsDesktop.ts";
+import { JournalMobile } from "./journal-mobile/JournalMobile.tsx";
 import {
   useJournalModel,
   fmtDate,
@@ -234,7 +236,14 @@ function TradeRow({
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
+/** The thin root switch (36 D-03, UI-SPEC §5): exactly ONE tree mounts per viewport
+ *  state, so useJournalModel's useLifecycle/useRuleTags calls stay the single consumer. */
 export function Journal({ trades }: JournalProps): React.ReactElement {
+  const isDesktop = useIsDesktop();
+  return isDesktop ? <JournalDesktop trades={trades} /> : <JournalMobile trades={trades} />;
+}
+
+function JournalDesktop({ trades }: JournalProps): React.ReactElement {
   // 36 D-04: the shared model hook owns ALL state/derivation. Locals are destructured to
   // the pre-extraction names so the JSX below stays byte-identical to the pre-refactor
   // render — same elements, classes, testids, order (the OverviewDesktop precedent).

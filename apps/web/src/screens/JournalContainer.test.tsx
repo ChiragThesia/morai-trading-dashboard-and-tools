@@ -16,7 +16,7 @@
  *   - rpc.ts / supabase.ts: prevent real network calls
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
@@ -122,11 +122,34 @@ function renderWithProvider(ui: React.ReactElement): ReturnType<typeof render> {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
+/**
+ * 36 D-16: Journal is now a useIsDesktop switch → jsdom (no matchMedia) mounts the mobile
+ * tree by default, whose trade list lands in plan 36-04. These assertions exercise the
+ * desktop tree's trade rows, so stub the desktop media query (the Journal.test.tsx pattern).
+ */
+function stubDesktopMatchMedia(): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query === "(min-width: 1024px)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }),
+  });
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("JournalContainer", () => {
+  beforeEach(() => {
+    stubDesktopMatchMedia();
+  });
+
   afterEach(() => {
     cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
     vi.clearAllMocks();
   });
 
