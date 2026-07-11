@@ -1145,11 +1145,11 @@ export function Overview(): React.ReactElement {
       {/* ── Three-column Launchpad shell: MarketRail (left) / hero + positions (center) /
           GEX rail (right). Mobile stacks in DOM order: rail → hero → positions → GEX. ── */}
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[320px_minmax(0,1fr)_360px] lg:items-start">
-        {/* LEFT — persistent market context rail */}
-        <MarketRail />
+        {/* LEFT — persistent market context rail (order-2 below lg: paints after the hero) */}
+        <MarketRail className="order-2 lg:order-1" />
 
         {/* CENTER — payoff hero + docked positions table + exit-advisor status */}
-        <div className="flex min-w-0 flex-col gap-3">
+        <div data-testid="overview-center-column" className="order-1 flex min-w-0 flex-col gap-3 lg:order-2">
           {/* Payoff hero */}
           <Panel>
             <PanelHeading
@@ -1183,7 +1183,7 @@ export function Overview(): React.ReactElement {
                   </div>
                 </div>
               }
-              action={<span className="font-mono text-[10px] text-dim">view-only · Analyzer →</span>}
+              action={<span className="hidden font-mono text-[10px] text-dim lg:inline">view-only · Analyzer →</span>}
             />
             {/* OVW-05 + follow-on: shared control strip — forward date projection (projects
                 scenario.payoffCurve via daysForward; @exp unaffected, D-01) + series toggles.
@@ -1228,24 +1228,27 @@ export function Overview(): React.ReactElement {
                 PayoffChart, which passes neither color prop. The TOS graph *logic* (combined
                 curve, date projection, axis scaling) is emulated; the TOS neon palette is
                 intentionally not (OVW-04, user decision — MORAI look, TOS behavior). */}
-            <PayoffChart
-              todayCurve={scenario.payoffCurve}
-              fanCurves={[]}
-              expirationCurve={scenario.expirationCurve}
-              rollCurve={null}
-              gex={gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null}
-              domain={payoffDomain}
-              spot={spot}
-              toggles={toggles}
-              fitY={false}
-              onFitYConsumed={noop}
-              positionSetSignature={positionSetSignature}
-              baseExpirationCurve={scenario.expirationCurve}
-              highlightedPositionId={highlightedRowKey}
-              highlightedTodayCurve={highlightedScenario?.payoffCurve ?? null}
-              highlightedExpirationCurve={highlightedScenario?.expirationCurve ?? null}
-              excludedFromT0Count={excludedFromT0.count}
-            />
+            {/* Full-bleed below lg (negates Panel's p-3 horizontal inset); reverts at lg */}
+            <div data-testid="payoff-chart-bleed" className="-mx-3 lg:mx-0">
+              <PayoffChart
+                todayCurve={scenario.payoffCurve}
+                fanCurves={[]}
+                expirationCurve={scenario.expirationCurve}
+                rollCurve={null}
+                gex={gex !== undefined ? { callWall: gex.callWall, putWall: gex.putWall, flip: gex.flip } : null}
+                domain={payoffDomain}
+                spot={spot}
+                toggles={toggles}
+                fitY={false}
+                onFitYConsumed={noop}
+                positionSetSignature={positionSetSignature}
+                baseExpirationCurve={scenario.expirationCurve}
+                highlightedPositionId={highlightedRowKey}
+                highlightedTodayCurve={highlightedScenario?.payoffCurve ?? null}
+                highlightedExpirationCurve={highlightedScenario?.expirationCurve ?? null}
+                excludedFromT0Count={excludedFromT0.count}
+              />
+            </div>
           </Panel>
 
           {/* Docked positions table — verdicts join into the VERDICT column; the exit-rules
@@ -1302,7 +1305,7 @@ export function Overview(): React.ReactElement {
         </div>
 
         {/* RIGHT — GEX rail (untouched) */}
-        <div className="flex flex-col gap-3">
+        <div data-testid="overview-gex-column" className="order-3 flex flex-col gap-3">
           <GexRail gex={gex} railGreeks={railGreeks} />
         </div>
       </div>

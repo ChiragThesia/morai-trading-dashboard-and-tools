@@ -1258,3 +1258,57 @@ describe("buildCalendarPosition (34-05: fractional DTE + per-leg carry)", () => 
     expect(built.position.backDivYield).toBe(DEFAULT_DIV);
   });
 });
+
+// ── 35-03: mobile grid stack order + full-bleed chart + view-only chrome hidden ──
+describe("Overview — mobile stack order (35-03: order-*, full-bleed chart, view-only hidden)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("threads order-* onto MarketRail / center column / GEX column so the hero paints above the collapsed rail below lg", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    const rail = screen.getByTestId("market-rail");
+    expect(rail.className).toContain("order-2");
+    expect(rail.className).toContain("lg:order-1");
+
+    const center = screen.getByTestId("overview-center-column");
+    expect(center.className).toContain("order-1");
+    expect(center.className).toContain("lg:order-2");
+
+    const gexCol = screen.getByTestId("overview-gex-column");
+    expect(gexCol.className).toContain("order-3");
+  });
+
+  it("keeps MarketRail first in DOM order — only visual (paint) order changes via CSS order", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    const grid = screen.getByTestId("market-rail").parentElement;
+    assertDefined(grid, "grid wrapper present");
+    const children = Array.from(grid.children);
+    const marketIdx = children.indexOf(screen.getByTestId("market-rail"));
+    const centerIdx = children.indexOf(screen.getByTestId("overview-center-column"));
+    expect(marketIdx).toBeLessThan(centerIdx);
+  });
+
+  it("makes the payoff chart full-bleed below lg (-mx-3 lg:mx-0)", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    const bleed = screen.getByTestId("payoff-chart-bleed");
+    expect(bleed.className).toContain("-mx-3");
+    expect(bleed.className).toContain("lg:mx-0");
+  });
+
+  it("hides the 'view-only · Analyzer →' chrome below lg (hidden lg:inline)", () => {
+    setPositions([]);
+    render(<Overview />);
+
+    const viewOnly = screen.getByText("view-only · Analyzer →");
+    expect(viewOnly.className).toContain("hidden");
+    expect(viewOnly.className).toContain("lg:inline");
+  });
+});
