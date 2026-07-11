@@ -12,3 +12,4 @@ export { parseOccSymbol, formatOccSymbol } from "./occ-symbol.ts";
 export { percentileRank } from "./percentile-rank.ts";
 export { isWithinRth } from "./rth-window.ts";
 export { isNyseHoliday } from "./nyse-holidays.ts";
+export { settlementTimestamp } from "./settlement-timestamp.ts";
