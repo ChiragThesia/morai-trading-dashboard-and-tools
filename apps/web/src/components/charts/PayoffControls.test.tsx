@@ -91,3 +91,17 @@ describe("PayoffControls — series toggles", () => {
     expect(onToggle).toHaveBeenNthCalledWith(2, "showExpiration");
   });
 });
+
+describe("PayoffControls — mobile chrome (ChipRail + touch buttons)", () => {
+  it("wraps the strip in a role=group ChipRail named 'Chart date and series controls'", () => {
+    renderControls();
+    expect(
+      screen.getByRole("group", { name: "Chart date and series controls" }),
+    ).toBeDefined();
+  });
+
+  it("renders a toggle button at the touch-target height (min-h-11)", () => {
+    renderControls();
+    expect(screen.getByTestId("toggle-showFan").className).toContain("min-h-11");
+  });
+});

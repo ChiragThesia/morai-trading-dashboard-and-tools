@@ -9,7 +9,7 @@
  * usePayoffDateControl + a useState<PayoffChartToggles>) and feeds daysForward into its own
  * scenario engine — this component never touches the engine or the date-projection lib.
  */
-import { Button } from "../system/index.tsx";
+import { Button, ChipRail } from "../system/index.tsx";
 import type { PayoffChartToggles } from "./PayoffChart.tsx";
 
 /** Chip order + labels. Keyed by the exact PayoffChartToggles field so clicks emit the key,
@@ -51,9 +51,17 @@ export function PayoffControls({
   onToggle,
 }: PayoffControlsProps): React.ReactElement {
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-2 font-mono text-[9px] text-dim">
-      <span>Date:</span>
-      <Button onClick={() => { onStepDate(-1); }} aria-label="Previous day">
+    <ChipRail
+      ariaLabel="Chart date and series controls"
+      className="mb-2 items-center font-mono text-[9px] text-dim"
+    >
+      <span className="shrink-0 snap-start">Date:</span>
+      <Button
+        size="touch"
+        onClick={() => { onStepDate(-1); }}
+        aria-label="Previous day"
+        className="shrink-0 snap-start"
+      >
         ‹
       </Button>
       <input
@@ -64,30 +72,39 @@ export function PayoffControls({
         value={dateInputValue}
         onChange={(e) => { onDateChange(e.target.value); }}
         style={{ colorScheme: "dark" }}
-        className="rounded-[3px] border border-line2 bg-raise px-[7px] py-0.5 font-mono text-[11px] text-txt focus-visible:border-violet focus-visible:ring-2 focus-visible:ring-violet/40 focus-visible:outline-none"
+        className="shrink-0 snap-start rounded-[3px] border border-line2 bg-raise px-[7px] py-0.5 font-mono text-[11px] text-txt focus-visible:border-violet focus-visible:ring-2 focus-visible:ring-violet/40 focus-visible:outline-none"
       />
-      <Button onClick={() => { onStepDate(1); }} aria-label="Next day">
+      <Button
+        size="touch"
+        onClick={() => { onStepDate(1); }}
+        aria-label="Next day"
+        className="shrink-0 snap-start"
+      >
         ›
       </Button>
-      <Button onClick={onResetDate}>Today</Button>
+      <Button size="touch" onClick={onResetDate} className="shrink-0 snap-start">
+        Today
+      </Button>
 
-      <span className="mx-0.5 h-3 w-px bg-line2" aria-hidden="true" />
+      <span className="mx-0.5 h-3 w-px shrink-0 snap-start bg-line2" aria-hidden="true" />
 
       {TOGGLE_META.map(({ key, label }) => {
         const on = toggles[key];
         return (
           <Button
             key={key}
+            size="touch"
             variant="toggle"
             active={on}
             data-testid={`toggle-${key}`}
             aria-pressed={on}
             onClick={() => { onToggle(key); }}
+            className="shrink-0 snap-start"
           >
             {label}
           </Button>
         );
       })}
-    </div>
+    </ChipRail>
   );
 }
