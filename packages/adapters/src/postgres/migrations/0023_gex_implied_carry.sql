@@ -1,0 +1,1 @@
+ALTER TABLE "gex_snapshots" ADD COLUMN "implied_carry" jsonb;

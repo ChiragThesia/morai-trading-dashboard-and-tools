@@ -74,6 +74,23 @@ export const gexSnapshotEntry = z.object({
       flip: z.number().nullable(),
     })
     .nullable(),
+  /**
+   * Per-expiry resolved carry — FRED-interpolated risk-free rate AND the put-call-parity
+   * implied dividend yield solved against it, over the ATM-bracket call/put marks GEX
+   * already reads. Null when the macro read fails or no expiry has a usable ATM pair, and
+   * on snapshots computed before this field shipped (34-04, TOSP-02). Both r AND q are
+   * emitted together so a downstream consumer can re-price with the EXACT r the q was
+   * solved against — no client/server rate drift.
+   */
+  impliedCarry: z
+    .array(
+      z.object({
+        expiration: z.string(),
+        rate: z.number(),
+        divYield: z.number(),
+      }),
+    )
+    .nullable(),
   /** ISO 8601 datetime when this snapshot was computed. */
   computedAt: z.string().datetime(),
 });

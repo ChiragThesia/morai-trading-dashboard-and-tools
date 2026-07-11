@@ -63,6 +63,16 @@ const nearTermSchema = z
   })
   .nullable();
 
+const impliedCarrySchema = z
+  .array(
+    z.object({
+      expiration: z.string(),
+      rate: z.number(),
+      divYield: z.number(),
+    }),
+  )
+  .nullable();
+
 export type PostgresGexSnapshotRepo = {
   readonly readLegObsForGex: ForReadingLegObsForGex;
   readonly persistGexSnapshot: ForPersistingGexSnapshot;
@@ -178,6 +188,7 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
         strikes: row.strikes,
         byExpiry: row.byExpiry,
         nearTerm: row.nearTerm,
+        impliedCarry: row.impliedCarry,
         computedAt: row.computedAt,
       };
       const { cycleTime: _pk, ...updates } = values;
@@ -218,16 +229,19 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
       const byExpiryParsed = byExpirySchema.safeParse(row.byExpiry);
       // near_term is nullable (and null on pre-0019 rows) — undefined/null map to null.
       const nearTermParsed = nearTermSchema.safeParse(row.nearTerm ?? null);
+      // implied_carry is nullable (and null on pre-0023 rows) — undefined/null map to null.
+      const impliedCarryParsed = impliedCarrySchema.safeParse(row.impliedCarry ?? null);
 
       if (
         !profileParsed.success ||
         !strikesParsed.success ||
         !byExpiryParsed.success ||
-        !nearTermParsed.success
+        !nearTermParsed.success ||
+        !impliedCarryParsed.success
       ) {
         return err<StorageError>({
           kind: "storage-error",
-          message: `JSONB parse failed: profile=${!profileParsed.success}, strikes=${!strikesParsed.success}, byExpiry=${!byExpiryParsed.success}, nearTerm=${!nearTermParsed.success}`,
+          message: `JSONB parse failed: profile=${!profileParsed.success}, strikes=${!strikesParsed.success}, byExpiry=${!byExpiryParsed.success}, nearTerm=${!nearTermParsed.success}, impliedCarry=${!impliedCarryParsed.success}`,
         });
       }
 
@@ -243,6 +257,7 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
         strikes: strikesParsed.data,
         byExpiry: byExpiryParsed.data,
         nearTerm: nearTermParsed.data,
+        impliedCarry: impliedCarryParsed.data,
         computedAt: row.computedAt,
       };
 

@@ -241,6 +241,18 @@ export type GexSnapshotRow = {
     readonly putWall: number | null;
     readonly flip: number | null;
   } | null;
+  /**
+   * Per-expiry resolved carry — FRED-interpolated risk-free rate AND the put-call-parity
+   * implied dividend yield solved against it, over the ATM-bracket call/put marks GEX
+   * already reads. Null when the macro read fails or no expiry has a usable ATM pair
+   * (34-04, TOSP-02). Both r AND q are emitted per expiry so a downstream consumer can
+   * re-price with the EXACT r the q was solved against — no client/server rate drift.
+   */
+  readonly impliedCarry: ReadonlyArray<{
+    readonly expiration: string;
+    readonly rate: number;
+    readonly divYield: number;
+  }> | null;
   readonly computedAt: Date;
 };
 

@@ -391,6 +391,14 @@ export const gexSnapshots = pgTable("gex_snapshots", {
     readonly putWall: number | null;
     readonly flip: number | null;
   } | null>(),
+  // Per-expiry resolved carry (FRED-interpolated rate + parity-implied divYield) —
+  // nullable: null when the macro read fails or no expiry has a usable ATM pair, and on
+  // rows written before migration 0023 (Phase 34, Plan 34-04, TOSP-02).
+  impliedCarry: jsonb("implied_carry").$type<ReadonlyArray<{
+    readonly expiration: string;
+    readonly rate: number;
+    readonly divYield: number;
+  }> | null>(),
   // When the snapshot was COMPUTED (wall-clock from deps.now()), distinct from cycleTime
   // (the data-cycle anchor). Persisted so the dashboard can show true freshness.
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull(),

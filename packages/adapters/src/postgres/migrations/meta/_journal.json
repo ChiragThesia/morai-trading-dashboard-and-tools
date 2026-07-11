@@ -162,6 +162,13 @@
       "when": 1783659694662,
       "tag": "0022_rule_overrides",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1783749678715,
+      "tag": "0023_gex_implied_carry",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,7 @@ const FIXTURE_ROW: GexSnapshotRow = {
     { date: "2026-06-27", gex: -12345678.9 },
     { date: "2026-07-17", gex: 9876543.2 },
   ],
+  impliedCarry: [{ expiration: "2026-06-27", rate: 0.045, divYield: 0.013 }],
   computedAt: new Date("2026-06-23T14:00:24Z"),
 };
 
