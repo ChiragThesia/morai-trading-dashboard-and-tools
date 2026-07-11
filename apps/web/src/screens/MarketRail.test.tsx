@@ -80,6 +80,13 @@ describe("MarketRail", () => {
     expect(board?.innerHTML).not.toContain("md:grid-cols-4");
   });
 
+  it("J12a (35.1 D-14): the summary reads 'Regime · COT · health' — the rail sits inside a section already headed MARKET", () => {
+    mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
+    render(<MarketRail />);
+
+    expect(screen.getByText("Regime · COT · health")).toBeDefined();
+  });
+
   it("defaults closed — no hardcoded open attribute (Pitfall 1 regression guard)", () => {
     mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
     render(<MarketRail />);

@@ -56,7 +56,7 @@ export function MarketRail({ className }: { className?: string }): React.ReactEl
       data-testid="market-rail"
     >
       <summary className="cursor-pointer list-none font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase lg:hidden lg:pointer-events-none">
-        Market
+        Regime · COT · health
       </summary>
       <div className="mt-3 flex flex-col gap-3 lg:mt-0">
         <RegimeBoard dense />
