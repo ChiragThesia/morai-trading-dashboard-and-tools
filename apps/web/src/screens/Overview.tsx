@@ -392,6 +392,7 @@ function PositionsTable({
             onSelect={onSelectRow}
             included={included}
             onToggleIncluded={onToggleExcluded}
+            verdictObservedAt={verdictObservedAt}
           />
         );
       })}
