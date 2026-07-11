@@ -8,9 +8,11 @@ import { useLiveStream } from "../hooks/useLiveStream.ts";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { computePositionGreeks } from "../lib/position-greeks.ts";
 import { resolveLivePositionRow } from "../lib/live-position-greeks.ts";
-import { pairPositionsIntoCalendars, bookUnrealizedPnl } from "../lib/pair-calendars.ts";
+import { pairPositionsIntoCalendars, bookUnrealizedPnl, dteExact } from "../lib/pair-calendars.ts";
 import type { CalendarGroup } from "../lib/pair-calendars.ts";
 import { parseOccSymbol } from "@morai/shared";
+import { resolveCarry, DEFAULT_RATE, DEFAULT_DIV } from "../lib/resolve-carry.ts";
+import { toDateInputValue } from "../lib/date-projection.ts";
 import { classifyRegime, zeroDteGex } from "../lib/gex-regime.ts";
 import { resolveLegIv } from "../lib/iv-calibration.ts";
 import type { LiveTick } from "../lib/iv-calibration.ts";
@@ -78,8 +80,6 @@ import type { StreamLiveGreekEvent, HeldPositionVerdict } from "@morai/contracts
  */
 
 const DEFAULT_IV = 0.18;
-const DEFAULT_RATE = 0.045;
-const DEFAULT_DIV = 0.013;
 /** Live-mark badge freshness threshold (D-03) — independent of LiveStatusBadge's
  *  connection state; a reconnected stream can still have a >5min-old last tick. */
 const LIVE_MARK_FRESH_MS = 5 * 60 * 1000;
@@ -135,20 +135,35 @@ type CalendarPositionBuild = {
   readonly ivNa: boolean;
 };
 
+/** A leg's expiry as the GEX impliedCarry lookup key (YYYY-MM-DD, local calendar day —
+ *  matches parseOccSymbol's local-Date construction, per RESEARCH Pitfall 1 / date-
+ *  projection.ts's `toDateInputValue` precedent). "" (never a carry match) on an
+ *  unparseable OCC symbol, which correctly degrades resolveCarry to the DEFAULTs. */
+function legExpiryKey(occSymbol: string): string {
+  const parsed = parseOccSymbol(occSymbol);
+  return parsed.ok ? toDateInputValue(parsed.value.expiry) : "";
+}
+
 /** Build one AnalyzerPosition from a paired calendar, calibrating both legs' IV.
  *  `included` (OVW-06) is the row checkbox state lifted from PositionsTable — the single
  *  source of truth for whether this calendar contributes to the payoff curves AND the
  *  table total. It is NOT the IV-convergence gate (frontIvStatus/backIvStatus below,
- *  which the scenario engine applies independently via includedForT0/includedForExpiry). */
-function buildCalendarPosition(
+ *  which the scenario engine applies independently via includedForT0/includedForExpiry).
+ *  34-05: also sets the settlement-aware fractional DTE (dteExact) and each leg's own
+ *  parity-implied carry (resolveCarry over `gex`) — degrading to DEFAULT_RATE/DEFAULT_DIV
+ *  when gex/impliedCarry/the leg's expiry entry is unavailable. */
+export function buildCalendarPosition(
   cal: CalendarGroup,
   spot: number,
   liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>,
   now: Date,
   included: boolean,
+  gex: GexSnapshotEntry | undefined,
 ): CalendarPositionBuild {
   const front = resolveLeg(cal.front, spot, liveGreeks, now);
   const back = resolveLeg(cal.back, spot, liveGreeks, now);
+  const frontCarry = resolveCarry(gex, legExpiryKey(cal.front.occSymbol));
+  const backCarry = resolveCarry(gex, legExpiryKey(cal.back.occSymbol));
   // Actual fill basis (points per contract): anchors the payoff curves to the REAL
   // entry so they show true open P&L at spot, like TOS — not the model entry re-priced
   // at the live spot (which pins T+0 to $0 at spot and, on a near-flat calendar curve,
@@ -166,8 +181,14 @@ function buildCalendarPosition(
       putCall: cal.optionType,
       frontDte: cal.dteFront,
       backDte: cal.dteBack,
+      frontDteExact: dteExact(cal.front.occSymbol, now),
+      backDteExact: dteExact(cal.back.occSymbol, now),
       frontIv: front.iv,
       backIv: back.iv,
+      frontRate: frontCarry.rate,
+      frontDivYield: frontCarry.divYield,
+      backRate: backCarry.rate,
+      backDivYield: backCarry.divYield,
       qty: Math.max(1, Math.abs(cal.back.longQty - cal.back.shortQty)),
       included,
       entryNet,
@@ -862,9 +883,9 @@ export function Overview(): React.ReactElement {
   const calendarBuild = useMemo(
     () =>
       calendars.map((cal) =>
-        buildCalendarPosition(cal, spot, liveGreeks, new Date(), !excludedCalendars.has(cal.key)),
+        buildCalendarPosition(cal, spot, liveGreeks, new Date(), !excludedCalendars.has(cal.key), gex),
       ),
-    [calendars, spot, liveGreeks, excludedCalendars],
+    [calendars, spot, liveGreeks, excludedCalendars, gex],
   );
   const calendarPositions = useMemo<ReadonlyArray<AnalyzerPosition>>(
     () => calendarBuild.map((b) => b.position),
