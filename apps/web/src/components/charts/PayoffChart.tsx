@@ -143,6 +143,17 @@ export interface PayoffChartProps {
    * at the zero-P&L line. Defaults to null (absent-safe).
    */
   expectedMoveBand?: { spot: number; em: number } | null;
+  /**
+   * D-06 (35.1): hide the BE readout pill row above the plot (mobile passes false;
+   * BE axis labels are unaffected). Default true — desktop Overview and Analyzer
+   * render exactly as today.
+   */
+  showBePills?: boolean;
+  /**
+   * D-06 (35.1): CSS aspect-ratio for the ChartContainer. Default SVG_W / SVG_H
+   * (≈2.13) — today's exact value. Mobile passes 1.3 for a taller phone-width plot.
+   */
+  aspectRatio?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -533,7 +544,12 @@ export function PayoffChart({
   compareCurve = null,
   compareCurveColor = AMBER,
   expectedMoveBand = null,
+  showBePills = true,
+  aspectRatio,
 }: PayoffChartProps): React.ReactElement {
+  // D-06 (35.1): the DEFAULT stays the literal `${SVG_W} / ${SVG_H}` template so the
+  // no-prop render is byte-identical to today; a passed prop renders its numeric value.
+  const aspectRatioStyle = aspectRatio === undefined ? `${SVG_W} / ${SVG_H}` : String(aspectRatio);
   // D-05: a highlight is active whenever a row id is supplied. The net-book
   // curves dim (chart-layer stroke-opacity) — never removed, never the
   // PositionsTable opacity-40 row-exclusion class.
@@ -614,7 +630,7 @@ export function PayoffChart({
       {/* Breakeven pills — readable readouts above the chart (violet = today, gray = @exp),
           so the values never overlap inside the plot. The in-chart markers are the red bars
           rendered by PayoffChartMarks. */}
-      {(beToday.length > 0 || (toggles.showExpiration && beExp.length > 0)) && (
+      {showBePills && (beToday.length > 0 || (toggles.showExpiration && beExp.length > 0)) && (
         <div
           data-testid="be-pills"
           style={{
@@ -685,7 +701,7 @@ export function PayoffChart({
 
         <ChartContainer
           config={chartConfig}
-          style={{ width: "100%", aspectRatio: `${SVG_W} / ${SVG_H}` }}
+          style={{ width: "100%", aspectRatio: aspectRatioStyle }}
           className="aspect-auto"
         >
           {/* Definite aspect-ratio, never height:100%: the old <svg viewBox> sized itself

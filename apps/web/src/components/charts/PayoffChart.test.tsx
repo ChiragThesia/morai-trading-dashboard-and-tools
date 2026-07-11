@@ -898,3 +898,39 @@ describe("PayoffChart — spot P&L readout (2026-07-10 request)", () => {
     expect(readout.getAttribute("fill")).toBe(negative ? "#ef5350" : "#26a69a");
   });
 });
+
+describe("PayoffChart — D-06 additive mobile props (35.1)", () => {
+  afterEach(cleanup);
+
+  /** ChartContainer root element (shadcn chart.tsx renders data-slot="chart"). */
+  function chartRoot(container: HTMLElement): HTMLElement {
+    const el = container.querySelector('[data-slot="chart"]');
+    if (el === null || !(el instanceof HTMLElement)) {
+      throw new Error('ChartContainer [data-slot="chart"] element missing');
+    }
+    return el;
+  }
+
+  it("J8 default: rendering with neither new prop keeps the be-pills row (fixture curves cross zero)", () => {
+    render(<PayoffChart {...baseProps()} />);
+    expect(screen.getByTestId("be-pills")).toBeDefined();
+  });
+
+  it("J8 off: showBePills={false} removes ONLY the pill row — BE-on-axis labels still render", () => {
+    const { container } = render(<PayoffChart {...baseProps()} showBePills={false} />);
+    expect(screen.queryByTestId("be-pills")).toBeNull();
+    // The axis BE labels are unconditional internals — only the pill row is gated.
+    expect(container.querySelectorAll('[data-testid="be-axis-label-t0"]').length).toBe(1);
+    expect(container.querySelectorAll('[data-testid="be-axis-label-exp"]').length).toBe(1);
+  });
+
+  it("J9 default: ChartContainer aspect-ratio is today's exact `1000 / 470` string", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    expect(chartRoot(container).style.aspectRatio).toBe("1000 / 470");
+  });
+
+  it("J9 override: aspectRatio={1.3} renders the numeric value on the ChartContainer", () => {
+    const { container } = render(<PayoffChart {...baseProps()} aspectRatio={1.3} />);
+    expect(chartRoot(container).style.aspectRatio).toBe("1.3");
+  });
+});
