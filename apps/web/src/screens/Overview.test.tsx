@@ -1361,6 +1361,20 @@ describe("Overview — positions dual render (35-04: table hidden lg:table + car
     expect(cards).toHaveLength(rows.length);
     expect(screen.getByTestId(`position-card-${CAL_ROW_KEY}`).textContent).toContain("7425P");
   });
+
+  it("CR-01: tapping a mobile card with no linked verdict still reveals the Δ/Γ/Θ/Vega grid", () => {
+    // Default mockUseExits() returns data: null → verdictByRowKey is empty for every row —
+    // exercises the exact "no exit verdict yet" state that must not block the mobile expand.
+    setPositions([CAL_FRONT, CAL_BACK]);
+    render(<Overview />);
+
+    const card = screen.getByTestId(`position-card-${CAL_ROW_KEY}`);
+    expect(within(card).queryByText("Δ")).toBeNull();
+
+    fireEvent.click(within(card).getByRole("button", { name: /7425P/ }));
+
+    expect(within(card).getByText("Δ")).toBeDefined();
+  });
 });
 
 // ── 35-06: integration gate — no-horizontal-overflow smoke guard ────────────────

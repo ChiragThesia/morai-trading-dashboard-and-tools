@@ -613,7 +613,9 @@ function PositionsTable({
         const included = !excluded.has(r.key);
         const ivNa = ivNaByRowKey.get(r.key) === true;
         const verdict = verdictByRowKey.get(r.label) ?? null;
-        const expanded = expandedRowKey === r.key && verdict !== null;
+        // Un-gated by verdict — the greeks grid is the ONLY way to see Δ/Γ/Θ/Vega on mobile,
+        // unlike the desktop table's verdict-detail-row gate above (which has nothing else to show).
+        const expanded = expandedRowKey === r.key;
         return (
           <PositionCard
             key={r.key}
