@@ -115,7 +115,7 @@ function pickAtmBracketPair(
   const byStrike = new Map<number, { call?: number; put?: number }>();
   for (const leg of legs) {
     const mark = Number(leg.mark);
-    if (!Number.isFinite(mark)) continue;
+    if (!Number.isFinite(mark) || mark <= 0) continue;
     const entry = byStrike.get(leg.strike) ?? {};
     if (leg.contractType === "C") entry.call = mark;
     else entry.put = mark;

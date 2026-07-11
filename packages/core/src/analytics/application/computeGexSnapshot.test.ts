@@ -439,6 +439,43 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
     expect(entry.divYield).toBeCloseTo(KNOWN_Q, 6);
   });
 
+  it("rejects a zero-mark leg at the ATM strike instead of feeding a stale-zero mark into parity (WR-01)", async () => {
+    const spy = makePersistSpy();
+    const zeroMarkLegs: ReadonlyArray<LegObsForGex> = [
+      makeLeg({
+        contract: "SPXW  260627C07400000",
+        contractType: "C",
+        strike: 7400000,
+        expiration: CARRY_EXPIRY,
+        underlyingPrice: CARRY_STRIKE,
+        mark: "0", // stale/no-liquidity zero mark — must not feed the parity solve
+        bsmGamma: "0.001",
+      }),
+      makeLeg({
+        contract: "SPXW  260627P07400000",
+        contractType: "P",
+        strike: 7400000,
+        expiration: CARRY_EXPIRY,
+        underlyingPrice: CARRY_STRIKE,
+        mark: String(PUT_MARK),
+        bsmGamma: "0.001",
+      }),
+    ];
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(zeroMarkLegs),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+      readMacroObservations: flatRateMacroStub,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    // No other strike to fall back to — must degrade to null, not a silently-wrong q.
+    expect(row.impliedCarry).toBeNull();
+  });
+
   it("degrades impliedCarry to null when the macro read errs (GEX still persists)", async () => {
     const spy = makePersistSpy();
     const failingMacro: ForReadingMacroObservations = async () =>
