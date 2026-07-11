@@ -1,7 +1,8 @@
 ---
 phase: 35-mobile-experience-redesign-the-phone-view-is-desktop-panels-
-verified: 2026-07-11T11:15:00Z
-status: human_needed
+verified: 2026-07-11T21:30:00Z
+status: passed
+human_verification_result: "All 3 human items completed 2026-07-11: (1) desktop tripwires run at 1440px via chrome-devtools — passed after catch #24 fix bda2254 (recorded 35-UAT.md); (2) 390x844 mobile UAT run — passed (35-UAT.md); (3) user phone check — first attempt FAILED (reflow ≠ mobile design) → Phase 35.1 rebuilt Overview on this phase's foundations → user PASSED 2026-07-11 ('phone looks good')."
 score: 23/23 must-haves verified
 behavior_unverified: 0
 overrides_applied: 1
@@ -30,10 +31,9 @@ MarketRail, table-to-card positions, un-clipped Analyzer/Journal grids, 44px tou
 insets — so the first phone screen answers "how am I doing" with no scroll or horizontal clipping,
 while desktop (≥1024px) stays pixel-identical (one disclosed exception: `minmax(0,1fr)`, WR-01).
 **Verified:** 2026-07-11T11:15:00Z
-**Status:** human_needed — every code-level must-have is verified directly against the current
-codebase (not from SUMMARY claims); the phase's own manual UAT checklists (390px + desktop tripwire +
-user phone check) are explicitly deferred by all six plans to this end-of-phase gate and have not yet
-been run.
+**Status:** passed — every code-level must-have verified against the current codebase; all three
+deferred human checks completed 2026-07-11 (desktop tripwires + 390px UAT in 35-UAT.md; user phone
+check passed after the Phase 35.1 Overview rebuild).
 **Re-verification:** No — initial verification
 
 ## Goal Achievement

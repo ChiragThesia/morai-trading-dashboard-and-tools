@@ -1,9 +1,13 @@
 ---
-status: user_check_failed_superseded_by_35.1
+status: passed
 phase: 35-mobile-experience-redesign
 source: [35-VERIFICATION.md, 35-06-SUMMARY.md checklists]
 started: 2026-07-11T16:00:00Z
-updated: 2026-07-11T16:25:00Z
+updated: 2026-07-11T21:30:00Z
+resolution: first user phone check FAILED (reflow ≠ mobile design) → Phase 35.1 rebuilt
+  the Overview flow on top of this phase's foundations (useIsDesktop, ChipRail,
+  Button.touch, PositionCard, Analyzer/Journal un-clip, Shell/safe-area fixes — all
+  still shipped and live); user phone check PASSED 2026-07-11 after 35.1 round 2.
 ---
 
 ## Tests (chrome-devtools emulation, bundle index-9sIDPLrA.js)

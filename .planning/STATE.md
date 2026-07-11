@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 35.1
-status: executing
-stopped_at: Completed 35.1-01-PLAN.md (structural foundation — switch + model + chart props)
-last_updated: "2026-07-11T18:15:52.830Z"
+status: phase_complete
+stopped_at: Phase 35.1 complete (all v1.3 phases closed — milestone-close ceremony pending)
+last_updated: "2026-07-11T19:26:12.176Z"
 last_activity: 2026-07-11
-last_activity_desc: 35.1-01 executed (Overview switch + useOverviewModel + PayoffChart props)
+last_activity_desc: Phase 35.1 complete
 progress:
   total_phases: 14
   completed_phases: 14
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 35.1
-Plan: 4 of 04 complete
+Plan: Not started
 Status: Ready to execute
-Last activity: 2026-07-11 — 35.1-01 executed (Overview switch + useOverviewModel + PayoffChart props)
+Last activity: 2026-07-11 — Phase 35.1 complete
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -169,6 +169,8 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 31 | 2 | - | - |
 | 32 | 6 | - | - |
 | 33 | 7 | - | - |
+| 35 | 6 | - | - |
+| 35.1 | 4 | - | - |
 
 **Recent Trend:**
 
