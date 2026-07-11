@@ -576,12 +576,6 @@ describe("Overview screen", () => {
       const netBookCurve = container.querySelector('[data-testid="net-book-t0-curve"]');
       expect(netBookCurve?.getAttribute("stroke-opacity")).toBe("0.3");
     });
-
-    it("the scenario-strip @exp column header names the front expiry date (D-07)", () => {
-      setPositions([CAL_FRONT, CAL_BACK]);
-      render(<Overview />);
-      expect(screen.getByText(/@ exp \(/)).toBeDefined();
-    });
   });
 
   // ── 17.1-03 (OVW-06): lifted calendar inclusion drives BOTH chart curves ────

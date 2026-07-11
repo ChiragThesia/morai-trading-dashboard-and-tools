@@ -25,8 +25,6 @@
  *     violet) and rollCurve={null} (single payoff path, D-02).
  *   - ⊕ Combine sums the selected + combined calendars into one net payoff; toggling off reverts.
  *   - expectedMoveBand is passed as { spot: fixtureSpot, em: selected.expectedMove }.
- *   - ScenarioStrip renders the buildScenarioStrip-derived key levels for the selected
- *     candidate (put wall / γ flip / spot / call wall / candidate strike, deduped).
  *
  * 17.1-03/Overview.test.tsx precedent: spy-wrap PayoffChart (importOriginal) so tests can
  * inspect the exact props Analyzer hands it — the real component still renders.
@@ -102,7 +100,7 @@ import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
-import { repriceScenario, buildScenarioStrip } from "../lib/scenario-engine.ts";
+import { repriceScenario } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
 import { computePayoffDomain } from "../lib/payoff-domain.ts";
 import { parseTosOrder } from "../lib/tos-parser.ts";
@@ -357,57 +355,6 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
     const summary = screen.getByTestId("combined-book-summary");
     expect(summary.textContent).toContain("+ 1 more");
     expect(summary.textContent).toContain(`$${(TOP.debit + SECOND.debit).toFixed(0)}`);
-  });
-});
-
-describe("Analyzer — ScenarioStrip (Task 3, ANLZ-02/D-06)", () => {
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-  });
-
-  it("renders exactly the buildScenarioStrip-derived key levels for the selected candidate", () => {
-    render(<Analyzer />);
-
-    const position = candidateToAnalyzerPosition(TOP);
-    const levels = {
-      putWall: pickerSnapshotFixture.gex.putWall,
-      flip: pickerSnapshotFixture.gex.flip,
-      callWall: pickerSnapshotFixture.gex.callWall,
-    };
-    const expectedStrip = buildScenarioStrip(levels, [position], pickerSnapshotFixture.spot);
-
-    const strip = screen.getByTestId("scenario-strip");
-    for (const lvl of expectedStrip.levels) {
-      expect(within(strip).getByTestId(`scenario-strip-level-${lvl}`)).toBeTruthy();
-    }
-    expect(strip.querySelectorAll('[data-testid^="scenario-strip-level-"]').length).toBe(
-      expectedStrip.levels.length,
-    );
-  });
-
-  it("T+0/@exp cell values come from the SAME repriceScenario curves the payoff chart drew (no second pricing path)", () => {
-    render(<Analyzer />);
-
-    const position = candidateToAnalyzerPosition(TOP);
-    const domain = computePayoffDomain([position], PARAMS.spot, PARAMS);
-    const expected = repriceScenario([position], PARAMS, domain);
-    const levels = {
-      putWall: pickerSnapshotFixture.gex.putWall,
-      flip: pickerSnapshotFixture.gex.flip,
-      callWall: pickerSnapshotFixture.gex.callWall,
-    };
-    const expectedStrip = buildScenarioStrip(levels, [position], pickerSnapshotFixture.spot);
-    const firstLevel = expectedStrip.levels[0];
-    if (firstLevel === undefined) throw new Error("expected at least one scenario-strip level");
-
-    const nearestT0 = expected.payoffCurve.reduce((best, p) =>
-      Math.abs(p.spot - firstLevel) < Math.abs(best.spot - firstLevel) ? p : best,
-    );
-
-    const cell = screen.getByTestId(`scenario-strip-t0-${firstLevel}`);
-    const sign = nearestT0.pl >= 0 ? "+" : "−";
-    expect(cell.textContent).toBe(`${sign}$${Math.abs(nearestT0.pl).toFixed(0)}`);
   });
 });
 

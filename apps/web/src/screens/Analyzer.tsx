@@ -26,7 +26,6 @@ import { useCallback, useMemo, useState } from "react";
 import type { PickerCandidate, BreakdownEntry, PickerGexContext, RuleSetEntry, PickerSizing } from "@morai/contracts";
 import { cn } from "@/lib/utils";
 import { CandidateCard } from "../components/picker/CandidateCard.tsx";
-import { ScenarioStrip } from "../components/picker/ScenarioStrip.tsx";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
@@ -828,17 +827,6 @@ export function Analyzer(): React.ReactElement {
                 todayCurveColor={TODAY_CURVE_COLOR}
                 expirationCurveColor={EXPIRATION_CURVE_COLOR}
                 expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
-              />
-              <ScenarioStrip
-                position={selectedPosition}
-                levels={{
-                  putWall: snapshot?.gex.putWall ?? null,
-                  flip: snapshot?.gex.flip ?? null,
-                  callWall: snapshot?.gex.callWall ?? null,
-                }}
-                spot={spot}
-                todayCurve={scenarioResult.payoffCurve}
-                expirationCurve={scenarioResult.expirationCurve}
               />
             </>
           )}

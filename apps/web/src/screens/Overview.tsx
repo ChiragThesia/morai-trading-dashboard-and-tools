@@ -16,12 +16,8 @@ import { resolveLegIv } from "../lib/iv-calibration.ts";
 import type { LiveTick } from "../lib/iv-calibration.ts";
 import { computeProjectionBounds } from "../lib/date-projection.ts";
 import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
-import {
-  repriceScenario,
-  t0ExcludedPositions,
-  buildScenarioStrip,
-} from "../lib/scenario-engine.ts";
-import type { AnalyzerPosition, ScenarioParams, PayoffPoint } from "../lib/scenario-engine.ts";
+import { repriceScenario, t0ExcludedPositions } from "../lib/scenario-engine.ts";
+import type { AnalyzerPosition, ScenarioParams } from "../lib/scenario-engine.ts";
 import { computePayoffDomain } from "../lib/payoff-domain.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
@@ -180,16 +176,6 @@ function buildCalendarPosition(
     },
     ivNa: front.ivNa || back.ivNa,
   };
-}
-
-/** Nearest-point lookup on a payoff curve — used by the scenario strip (D-06/D-07)
- *  to read T+0/@exp values at GEX/strike levels without re-exporting bookPL. */
-function nearestCurveValue(curve: ReadonlyArray<PayoffPoint>, level: number): number {
-  let best: PayoffPoint | null = null;
-  for (const p of curve) {
-    if (best === null || Math.abs(p.spot - level) < Math.abs(best.spot - level)) best = p;
-  }
-  return best?.pl ?? 0;
 }
 
 /** Sum position greeks across legs, scaled to position terms (per-share × netQty × 100).
@@ -990,16 +976,6 @@ export function Overview(): React.ReactElement {
 
   const excludedFromT0 = t0ExcludedPositions(calendarPositions);
 
-  const scenarioStrip = useMemo(
-    () =>
-      buildScenarioStrip(
-        { putWall: gex?.putWall ?? null, flip: gex?.flip ?? null, callWall: gex?.callWall ?? null },
-        calendarPositions,
-        spot,
-      ),
-    [calendarPositions, spot, gex],
-  );
-
   // ── Staleness (D-03/D-04) — two independent channels, same visual grammar. ──
   const gexTs = gex !== undefined ? new Date(gex.computedAt) : null;
   const gexAgeMs = gexTs !== null ? Date.now() - gexTs.getTime() : null;
@@ -1182,37 +1158,6 @@ export function Overview(): React.ReactElement {
               highlightedExpirationCurve={highlightedScenario?.expirationCurve ?? null}
               excludedFromT0Count={excludedFromT0.count}
             />
-            {scenarioStrip.levels.length > 0 && (
-              <div
-                className="mt-2 grid items-center gap-1 text-right font-mono text-[10px]"
-                style={{ gridTemplateColumns: `70px repeat(${scenarioStrip.levels.length}, 1fr)` }}
-              >
-                <span className="text-left text-dim">SPX →</span>
-                {scenarioStrip.levels.map((lvl) => (
-                  <span key={`lvl-${lvl}`} className="text-dim">{Math.round(lvl)}</span>
-                ))}
-                <span className="text-left text-dim">T+0</span>
-                {scenarioStrip.levels.map((lvl) => {
-                  const v = nearestCurveValue(scenario.payoffCurve, lvl);
-                  return (
-                    <span key={`t0-${lvl}`} className={cn("rounded-sm bg-raise px-1.5 py-0.5", signClass(v))}>
-                      {signedUsd(v, 0)}
-                    </span>
-                  );
-                })}
-                <span className="text-left text-dim">
-                  {scenarioStrip.expiryLabel !== "" ? `@ exp (${scenarioStrip.expiryLabel})` : "@ exp"}
-                </span>
-                {scenarioStrip.levels.map((lvl) => {
-                  const v = nearestCurveValue(scenario.expirationCurve, lvl);
-                  return (
-                    <span key={`exp-${lvl}`} className={cn("rounded-sm bg-raise px-1.5 py-0.5", signClass(v))}>
-                      {signedUsd(v, 0)}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
           </Panel>
 
           {/* Docked positions table — verdicts join into the VERDICT column; the exit-rules
