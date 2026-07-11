@@ -16,7 +16,7 @@
  * Hexagon law (architecture-boundaries §2): imports only @morai/shared + local ports/domain.
  */
 
-import { ok, err } from "@morai/shared";
+import { ok, err, parseOccSymbol, settlementTimestamp } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type {
   ForReadingLegObsForGex,
@@ -25,7 +25,11 @@ import type {
   LegObsForGex,
   StorageError,
 } from "./ports.ts";
+// Cross-context application port (architecture-boundaries rule 7 — same convention
+// analytics/application/getRegimeBoard.ts established for ForReadingMacroObservations).
+import type { ForReadingMacroObservations, MacroObservationRow } from "../../journal/index.ts";
 import { dollarGamma, strikeGex, buildProfile, findFlip, pickWalls } from "../domain/gex.ts";
+import { impliedDivYield } from "../domain/implied-carry.ts";
 
 // ─── Spot grid constants (from RESEARCH Pattern 3 + playground-v3 oracle) ────
 
@@ -37,6 +41,14 @@ const GRID_STEP = 20;
 
 /** Near-term level-set horizon: legs with calendar DTE ≤ this feed nearTerm. */
 const NEAR_TERM_MAX_DTE_DAYS = 45;
+
+// 34-04 (TOSP-02): matches the client's DAYS_PER_YEAR convention (D-02, scenario-engine.ts)
+// so the T calibrated here and the T re-priced client-side use the same day-count.
+const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+
+/** DGS1MO/DGS3MO interpolation bracket, in days (34-RESEARCH.md Pattern 2). */
+const RATE_BRACKET_LOW_DAYS = 30;
+const RATE_BRACKET_HIGH_DAYS = 90;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -64,11 +76,127 @@ function buildSpotGrid(spot: number): ReadonlyArray<number> {
   return grid;
 }
 
+/**
+ * interpolateShortRate — the FRED DGS1MO/DGS3MO short-rate curve, linearly interpolated to
+ * a leg's fractional DTE and clamped to the [30d, 90d] bracket (34-RESEARCH.md Pattern 2).
+ * FRED reports percent (e.g. 4.5) — divided by 100 for the BSM-decimal convention. Null
+ * when either series has no row (macro read succeeded but the series hasn't been fetched).
+ */
+function interpolateShortRate(
+  macroRows: ReadonlyArray<MacroObservationRow>,
+  dteDays: number,
+): number | null {
+  let oneMo: MacroObservationRow | undefined;
+  let threeMo: MacroObservationRow | undefined;
+  for (const row of macroRows) {
+    if (row.seriesId === "DGS1MO" && (oneMo === undefined || row.date > oneMo.date)) oneMo = row;
+    if (row.seriesId === "DGS3MO" && (threeMo === undefined || row.date > threeMo.date)) threeMo = row;
+  }
+  if (oneMo === undefined || threeMo === undefined) return null;
+
+  const t = Math.min(
+    Math.max((dteDays - RATE_BRACKET_LOW_DAYS) / (RATE_BRACKET_HIGH_DAYS - RATE_BRACKET_LOW_DAYS), 0),
+    1,
+  );
+  const percent = oneMo.value + (threeMo.value - oneMo.value) * t;
+  return Number.isFinite(percent) ? percent / 100 : null;
+}
+
+/**
+ * pickAtmBracketPair — the strike nearest spot carrying BOTH a call and a put mark (the
+ * ATM-bracket pair the parity solve needs).
+ * ponytail: single nearest strike, not RESEARCH's 2-3-strike average — same well-conditioned
+ * one-unknown solve with less code; add averaging if UAT shows single-strike noise.
+ */
+function pickAtmBracketPair(
+  legs: ReadonlyArray<LegObsForGex>,
+  spot: number,
+): { readonly strike: number; readonly callMark: number; readonly putMark: number } | null {
+  const byStrike = new Map<number, { call?: number; put?: number }>();
+  for (const leg of legs) {
+    const mark = Number(leg.mark);
+    if (!Number.isFinite(mark)) continue;
+    const entry = byStrike.get(leg.strike) ?? {};
+    if (leg.contractType === "C") entry.call = mark;
+    else entry.put = mark;
+    byStrike.set(leg.strike, entry);
+  }
+
+  let best: { strike: number; callMark: number; putMark: number } | null = null;
+  let bestDist = Infinity;
+  for (const [strikeThousandths, pair] of byStrike) {
+    if (pair.call === undefined || pair.put === undefined) continue;
+    const strike = strikeThousandths / 1000; // ×1000 convention → points
+    const dist = Math.abs(strike - spot);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { strike, callMark: pair.call, putMark: pair.put };
+    }
+  }
+  return best;
+}
+
+/**
+ * computeImpliedCarry — per-expiry {rate, divYield}: r interpolated from the live FRED
+ * DGS1MO/DGS3MO curve, q solved via put-call parity over the ATM-bracket marks already in
+ * the cohort (34-RESEARCH.md Pattern 2, TOSP-02). Degrades an individual expiry to no entry
+ * (never a throw, never NaN) on an unparseable contract, a non-positive T, missing FRED
+ * series, or no ATM pair; the whole field is null when nothing solves.
+ */
+function computeImpliedCarry(
+  legs: ReadonlyArray<LegObsForGex>,
+  spot: number,
+  cycleTime: Date,
+  macroRows: ReadonlyArray<MacroObservationRow>,
+): GexSnapshotRow["impliedCarry"] {
+  const byExpiry = new Map<string, LegObsForGex[]>();
+  for (const leg of legs) {
+    const group = byExpiry.get(leg.expiration);
+    if (group === undefined) byExpiry.set(leg.expiration, [leg]);
+    else group.push(leg);
+  }
+
+  const entries: Array<{ expiration: string; rate: number; divYield: number }> = [];
+  for (const [expiration, group] of byExpiry) {
+    const firstLeg = group[0];
+    if (firstLeg === undefined) continue;
+
+    const rootParsed = parseOccSymbol(firstLeg.contract);
+    if (!rootParsed.ok) continue; // degrade: unparseable contract, skip this expiry
+
+    const expiryDate = new Date(`${expiration}T00:00:00.000Z`);
+    if (Number.isNaN(expiryDate.getTime())) continue;
+
+    const settlement = settlementTimestamp(rootParsed.value.root, expiryDate);
+    const T = (settlement.getTime() - cycleTime.getTime()) / MS_PER_YEAR;
+    if (T <= 0) continue;
+
+    const r = interpolateShortRate(macroRows, T * 365.25);
+    if (r === null) continue;
+
+    const pair = pickAtmBracketPair(group, spot);
+    if (pair === null) continue;
+
+    const q = impliedDivYield(pair.callMark, pair.putMark, spot, pair.strike, T, r);
+    if (q === null) continue;
+
+    entries.push({ expiration, rate: r, divYield: q });
+  }
+
+  return entries.length > 0 ? entries : null;
+}
+
 export type ComputeGexSnapshotDeps = {
   /** Read the latest leg_observations cohort for GEX computation. */
   readonly readLegObsForGex: ForReadingLegObsForGex;
   /** Persist a GexSnapshotRow (idempotent via onConflictDoNothing at the repo). */
   readonly persistGexSnapshot: ForPersistingGexSnapshot;
+  /**
+   * Read the live macro curve (FRED DGS1MO/DGS3MO) for the per-expiry carry resolve
+   * (34-04, TOSP-02). A read failure degrades impliedCarry to null — never fails the
+   * whole GEX snapshot.
+   */
+  readonly readMacroObservations: ForReadingMacroObservations;
   /**
    * Clock injection — now() bounds resolution ONLY (architecture-boundaries §2).
    * NEVER used as the persisted cycle_time (06-06 / CR-01/CR-02 design).
@@ -182,6 +310,13 @@ export function makeComputeGexSnapshotUseCase(
       }
     }
 
+    // ── Step 8c: per-expiry implied carry (FRED rate + parity-implied divYield) ──
+    // A macro-read failure degrades to null — GEX must still persist (T-34-03).
+    const macroResult = await deps.readMacroObservations();
+    const impliedCarry = macroResult.ok
+      ? computeImpliedCarry(legs, spot, cycleTime, macroResult.value)
+      : null;
+
     // ── Step 9: Build and persist the snapshot row ────────────────────────────
     const row: GexSnapshotRow = {
       cycleTime,
@@ -195,6 +330,7 @@ export function makeComputeGexSnapshotUseCase(
       strikes: strikeEntries.map((e) => ({ k: e.k, gex: e.gex, coi: e.coi, poi: e.poi, vol: e.vol })),
       byExpiry,
       nearTerm,
+      impliedCarry,
       computedAt: deps.now(),
     };
 

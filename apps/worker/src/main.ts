@@ -254,6 +254,9 @@ const gexRepo = makePostgresGexSnapshotRepo(db);
 const computeGexSnapshotUseCase = makeComputeGexSnapshotUseCase({
   readLegObsForGex: gexRepo.readLegObsForGex,
   persistGexSnapshot: gexRepo.persistGexSnapshot,
+  // 34-04 (TOSP-02): per-expiry implied carry resolves r from the live FRED curve
+  // already ingested by the macro job — same macroObsRepo used above.
+  readMacroObservations: macroObsRepo.readMacroObservations,
   now: () => new Date(),
 });
 
