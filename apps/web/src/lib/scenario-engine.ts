@@ -41,10 +41,26 @@ export type AnalyzerPosition = {
   readonly frontDte: number;
   /** Days to back (later/long) expiry from today */
   readonly backDte: number;
+  /**
+   * Settlement-aware fractional days to the front expiry (pair-calendars.ts's
+   * `dteExact`, 34-02). Optional — when omitted, pricing falls back to the whole-day
+   * `frontDte` (picker/pasted paths, Pitfall 4). Display (`frontDte`) stays integer.
+   */
+  readonly frontDteExact?: number;
+  /** Settlement-aware fractional days to the back expiry. Same fallback contract. */
+  readonly backDteExact?: number;
   /** Flat implied IV for the front leg (decimal, e.g. 0.145 = 14.5%) */
   readonly frontIv: number;
   /** Flat implied IV for the back leg (decimal) */
   readonly backIv: number;
+  /**
+   * Per-leg carry (34-02, parity-implied). Optional — omitted callers fall back to
+   * `ScenarioParams.rate`/`divYield` (today's flat single-pair pricing, unchanged).
+   */
+  readonly frontRate?: number;
+  readonly frontDivYield?: number;
+  readonly backRate?: number;
+  readonly backDivYield?: number;
   /** Quantity (positive integer) */
   readonly qty: number;
   /** Whether this position is included in the combined book */
@@ -163,6 +179,13 @@ const SCENARIO_STRIP_MAX_POSITION_STRIKES = 4;
 /** Two strikes within this tolerance (dollars) are treated as the same column. */
 const SCENARIO_STRIP_DEDUP_EPSILON = 1e-6;
 
+/**
+ * Day-count year (34-02, D-02): matches iv-calibration.ts/position-greeks.ts's
+ * 365.25-day year so the IV that gets calibrated and the IV that gets re-priced here
+ * share the identical T convention (Pitfall 1).
+ */
+const DAYS_PER_YEAR = 365.25;
+
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
 /** Build an evenly-spaced spot grid spanning the given domain (D-01, Phase 30). */
@@ -172,6 +195,15 @@ function buildSpotGrid(domain: SpotDomain): ReadonlyArray<number> {
     spots.push(domain.min + ((domain.max - domain.min) * i) / SPOT_GRID_STEPS);
   }
   return spots;
+}
+
+/**
+ * Resolve a leg's fractional DTE: prefer the settlement-aware exact value when the
+ * caller supplied it (live book, 34-02), else fall back to the existing whole-day
+ * integer (picker/pasted paths, Pitfall 4).
+ */
+function resolveDte(exact: number | undefined, whole: number): number {
+  return exact ?? whole;
 }
 
 /**
@@ -195,12 +227,17 @@ function calendarNetPrice(
 ): number {
   const K = strike ?? extractStrike(pos);
   const ivShiftDecimal = ivShift / 100;
-  const backT = Math.max((pos.backDte - daysForward) / 365, 1e-6);
-  const frontDte = overrideFrontDte ?? pos.frontDte;
-  const frontT = Math.max((frontDte - daysForward) / 365, 0);
+  const backDte = resolveDte(pos.backDteExact, pos.backDte);
+  const backT = Math.max((backDte - daysForward) / DAYS_PER_YEAR, 1e-6);
+  const frontDte = overrideFrontDte ?? resolveDte(pos.frontDteExact, pos.frontDte);
+  const frontT = Math.max((frontDte - daysForward) / DAYS_PER_YEAR, 0);
 
-  const backPrice = bsmPrice(S, K, backT, pos.backIv + ivShiftDecimal, rate, divYield, pos.putCall);
-  const frontPrice = bsmPrice(S, K, frontT, pos.frontIv + ivShiftDecimal, rate, divYield, pos.putCall);
+  const backPrice = bsmPrice(
+    S, K, backT, pos.backIv + ivShiftDecimal, pos.backRate ?? rate, pos.backDivYield ?? divYield, pos.putCall,
+  );
+  const frontPrice = bsmPrice(
+    S, K, frontT, pos.frontIv + ivShiftDecimal, pos.frontRate ?? rate, pos.frontDivYield ?? divYield, pos.putCall,
+  );
 
   return backPrice - frontPrice;
 }
@@ -240,7 +277,7 @@ export function extractStrike(pos: AnalyzerPosition): number {
  * The system's instrument is always a two-leg calendar, so "non-convergent" must be
  * tracked and excluded per leg, not per position. Both the T+0 and the @exp aggregates
  * are computed as `net − entry`, and `entry` (entryNetPrice) re-prices BOTH legs at
- * T+0 (frontT = frontDte/365 > 0). So a usable IV on a leg is required to form the
+ * T+0 (frontT = frontDte/365.25 > 0). So a usable IV on a leg is required to form the
  * entry basis even for @exp, where the *net* term alone would not need it:
  *   - Front leg non-convergent → T+0 net needs the front IV, AND the @exp entry basis
  *     re-prices the front leg at frontT>0 which also needs it. In production a
@@ -248,7 +285,7 @@ export function extractStrike(pos: AnalyzerPosition): number {
  *     the front leg's entry time value (bsmPrice with sigma=0 → forward-intrinsic, or
  *     0/0=NaN when S===K and r===q) → a wrong @exp number. Exclude from BOTH curves.
  *   - Back leg non-convergent → BOTH curves are unsafe (the back leg has real remaining
- *     time value at every horizon: backT = max((backDte - daysForward)/365, 1e-6) > 0).
+ *     time value at every horizon: backT = max((backDte - daysForward)/365.25, 1e-6) > 0).
  * Net: any leg non-convergent → excluded from BOTH T+0 and @exp.
  */
 function isIvExcludedFromT0(pos: AnalyzerPosition): boolean {
@@ -361,14 +398,18 @@ function bookGreekAt(
   for (const pos of positions) {
     if (!includedForT0(pos)) continue; // D-02: also drop non-convergent legs (WR-01)
     const K = extractStrike(pos);
-    const backT = Math.max((pos.backDte - daysForward) / 365, 1e-6);
-    const frontT = Math.max((pos.frontDte - daysForward) / 365, 0);
+    const backT = Math.max((resolveDte(pos.backDteExact, pos.backDte) - daysForward) / DAYS_PER_YEAR, 1e-6);
+    const frontT = Math.max((resolveDte(pos.frontDteExact, pos.frontDte) - daysForward) / DAYS_PER_YEAR, 0);
+    const backRate = pos.backRate ?? rate;
+    const backDivYield = pos.backDivYield ?? divYield;
+    const frontRate = pos.frontRate ?? rate;
+    const frontDivYield = pos.frontDivYield ?? divYield;
 
-    const backG = bsmGreeks(S, K, backT, pos.backIv + ivShiftDecimal, rate, divYield, pos.putCall);
+    const backG = bsmGreeks(S, K, backT, pos.backIv + ivShiftDecimal, backRate, backDivYield, pos.putCall);
 
     const frontG =
       frontT > 0
-        ? bsmGreeks(S, K, frontT, pos.frontIv + ivShiftDecimal, rate, divYield, pos.putCall)
+        ? bsmGreeks(S, K, frontT, pos.frontIv + ivShiftDecimal, frontRate, frontDivYield, pos.putCall)
         : { delta: 0, gamma: 0, theta: 0, vega: 0 };
 
     // Calendar net: back − front (long back, short front)
@@ -396,13 +437,17 @@ function positionGreeksAt(
 ): PositionGreeks {
   const K = extractStrike(pos);
   const ivShiftDecimal = ivShift / 100;
-  const backT = Math.max((pos.backDte - daysForward) / 365, 1e-6);
-  const frontT = Math.max((pos.frontDte - daysForward) / 365, 0);
+  const backT = Math.max((resolveDte(pos.backDteExact, pos.backDte) - daysForward) / DAYS_PER_YEAR, 1e-6);
+  const frontT = Math.max((resolveDte(pos.frontDteExact, pos.frontDte) - daysForward) / DAYS_PER_YEAR, 0);
+  const backRate = pos.backRate ?? rate;
+  const backDivYield = pos.backDivYield ?? divYield;
+  const frontRate = pos.frontRate ?? rate;
+  const frontDivYield = pos.frontDivYield ?? divYield;
 
-  const backG = bsmGreeks(S, K, backT, pos.backIv + ivShiftDecimal, rate, divYield, pos.putCall);
+  const backG = bsmGreeks(S, K, backT, pos.backIv + ivShiftDecimal, backRate, backDivYield, pos.putCall);
   const frontG =
     frontT > 0
-      ? bsmGreeks(S, K, frontT, pos.frontIv + ivShiftDecimal, rate, divYield, pos.putCall)
+      ? bsmGreeks(S, K, frontT, pos.frontIv + ivShiftDecimal, frontRate, frontDivYield, pos.putCall)
       : { delta: 0, gamma: 0, theta: 0, vega: 0 };
 
   return {
