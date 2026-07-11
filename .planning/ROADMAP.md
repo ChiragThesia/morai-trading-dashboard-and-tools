@@ -426,11 +426,31 @@ Plans:
 
 ### Phase 34: TOS-parity scenario model — close the T+0 gap to TOS Analyze: fractional DTE (exact SPX settlement timestamps, not integer calendar days), parity-implied carry per expiry from the stored chain (replace flat r/q guesses), researched decision on smile-aware scenario IV (chain leg_observations has per-strike IVs), and an RTH parity-measurement UAT gate: BE today within a few points of TOS with live marks. Data-layer (scenario-engine + pair-calendars DTE + quant kernel inputs); chart untouched.
 
+**Goal:** The live-book T+0 payoff line tracks TOS Analyze to within a few BE points during RTH — the
+scenario engine prices each SPX calendar leg with exact settlement-aware fractional time-to-expiry and
+parity-implied per-expiry carry (FRED rate + chain-implied dividend yield), replacing whole-day DTE and
+flat r/q guesses; smile-aware scenario IV is a recorded DO-NOT-BUILD decision (TOS's default already
+matches this single-strike book).
+**Requirements**: TOSP-01 (settlement-aware fractional DTE), TOSP-02 (parity-implied per-expiry carry),
+TOSP-03 (smile-IV researched decision = DO NOT BUILD), TOSP-04 (RTH BE-today parity measurement gate)
+**Depends on:** Phase 33
+**Plans:** 5/5 plans complete
+
+Plans:
+
+- [x] 34-01-PLAN.md — settlement-timestamp shared helper (AM/PM SPX settlement, DST-safe)
+- [x] 34-02-PLAN.md — fractional DTE + per-leg-carry optional fields in the web scenario kernel
+- [x] 34-03-PLAN.md — parity implied-carry solver + LegObsForGex raw-mark widening
+- [x] 34-04-PLAN.md — server per-expiry impliedCarry field (compute + migration + route/MCP)
+- [x] 34-05-PLAN.md — resolve-carry + Overview wiring + smile decision + RTH UAT hook + full gate
+
+### Phase 35: Mobile experience redesign — the phone view is desktop panels naively stacked in source order: 9 ticker chips wrap into a 4-row blob, the market rail (regime/COT) buries the payoff hero and positions below the fold, the positions table clips columns into horizontal scroll, chart header chips wrap badly. Research mobile trading-app UX patterns (summary-first hierarchy, tables-to-cards, progressive disclosure, sticky KPI strip, bottom nav vs top tabs, touch targets) and produce a UI-SPEC-driven mobile-first layout for Overview/Analyzer/Journal at <768px without changing desktop
+
 **Goal:** [To be planned]
 **Requirements**: TBD
-**Depends on:** Phase 33
+**Depends on:** Phase 34
 **Plans:** 0 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 34 to break down)
+- [ ] TBD (run /gsd-plan-phase 35 to break down)
