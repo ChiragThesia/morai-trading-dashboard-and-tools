@@ -18,6 +18,8 @@ const PARSED: ParsedCalendar = {
   debit: 45.85,
   frontDte: 30,
   backDte: 58,
+  frontExpiry: "2026-07-31",
+  backExpiry: "2026-08-28",
   iv: 0.17,
 };
 

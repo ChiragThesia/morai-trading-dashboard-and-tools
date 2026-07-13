@@ -86,6 +86,7 @@ const SAMPLE_SNAPSHOT: GexSnapshotEntry = {
     { date: "2026-07-18", gex: -47.0 },
   ],
   nearTerm: null,
+  impliedCarry: null,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

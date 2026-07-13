@@ -101,6 +101,8 @@ function buildCandidate(params: {
     name: `${strike}P generated`,
     score: 50,
     breakdown: [],
+    context: [],
+    bucket: "standard",
     debit: computeDebit(strike, frontDte, backDte, frontIv, backIv),
     theta: 0,
     vega: 0,
@@ -119,6 +121,7 @@ function buildCandidate(params: {
       stopPct: 0.175,
       manageShortDte: 21,
       closeByExpiry: "2026-01-01",
+      thetaCapturePct: null,
     },
   };
 }

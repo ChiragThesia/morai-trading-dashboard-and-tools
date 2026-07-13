@@ -28,6 +28,8 @@ function candidate(overrides: {
     name: "test",
     score: 40,
     breakdown: [],
+    context: [],
+    bucket: "standard",
     debit: overrides.debit,
     theta: 40,
     vega: 300,
@@ -41,7 +43,13 @@ function candidate(overrides: {
     backEvents: [],
     frontLeg: leg(overrides.frontDte),
     backLeg: leg(overrides.backDte),
-    exitPlan: { profitTargetPct: 0.25, stopPct: 0.175, manageShortDte: 21, closeByExpiry: "2026-08-14" },
+    exitPlan: {
+      profitTargetPct: 0.25,
+      stopPct: 0.175,
+      manageShortDte: 21,
+      closeByExpiry: "2026-08-14",
+      thetaCapturePct: null,
+    },
   };
 }
 

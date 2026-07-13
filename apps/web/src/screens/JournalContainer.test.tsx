@@ -73,29 +73,50 @@ const mockUseCalendars = vi.mocked(useCalendars);
 function makeCalendarsResult(
   data: ListCalendarsResponse | undefined,
 ): UseQueryResult<ListCalendarsResponse, Error> {
-  return {
-    data,
+  const common = {
     error: null,
-    isLoading: data === undefined,
-    isError: false,
-    isPending: data === undefined,
-    isSuccess: data !== undefined,
     isLoadingError: false,
     isRefetchError: false,
     isStale: false,
     isFetched: true,
     isFetchedAfterMount: true,
     isFetching: false,
-    isInitialLoading: data === undefined,
     isPlaceholderData: false,
     isRefetching: false,
     failureCount: 0,
     failureReason: null,
     errorUpdatedAt: 0,
+    errorUpdateCount: 0,
     dataUpdatedAt: Date.now(),
-    status: data !== undefined ? "success" : "pending",
-    fetchStatus: "idle",
+    fetchStatus: "idle" as const,
+    isPaused: false,
+    isEnabled: true,
     refetch: vi.fn(),
+  } as const;
+  if (data === undefined) {
+    return {
+      ...common,
+      data: undefined,
+      isLoading: true,
+      isPending: true,
+      isSuccess: false,
+      isError: false,
+      isInitialLoading: true,
+      status: "pending",
+      // .promise is typed Promise<TData> even in the pending state (no TData exists yet
+      // here) — a never-resolving placeholder satisfies the type without a cast.
+      promise: new Promise<ListCalendarsResponse>(() => undefined),
+    };
+  }
+  return {
+    ...common,
+    data,
+    isLoading: false,
+    isPending: false,
+    isSuccess: true,
+    isError: false,
+    isInitialLoading: false,
+    status: "success",
     promise: Promise.resolve(data),
   };
 }

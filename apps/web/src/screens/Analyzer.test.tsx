@@ -48,7 +48,7 @@ import { render, screen, cleanup, fireEvent, within, act } from "@testing-librar
 import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { PickerSnapshotResponse, PickerCandidate } from "@morai/contracts";
+import type { PickerSnapshotResponse, PickerCandidate, AnalyzeAdHocCalendarResponse } from "@morai/contracts";
 
 vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../components/charts/PayoffChart.tsx")>();
@@ -71,8 +71,9 @@ vi.mock("../hooks/useRepullChains.ts", () => ({ useRepullChains: mockRepull }));
 // this suite keeps exercising the unscored-fallback path unchanged; individual tests override
 // via mockAnalyzeCalendarMutateAsync.mockResolvedValueOnce/.mockRejectedValueOnce.
 const { mockAnalyzeCalendarMutateAsync } = vi.hoisted(() => ({
-  mockAnalyzeCalendarMutateAsync: vi.fn(() =>
-    Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
+  mockAnalyzeCalendarMutateAsync: vi.fn(
+    (): Promise<AnalyzeAdHocCalendarResponse> =>
+      Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
   ),
 }));
 vi.mock("../hooks/useAnalyzeCalendar.ts", () => ({
@@ -827,7 +828,7 @@ describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.rul
     return {
       ...pickerSnapshotFixture,
       ruleSet: [...RULESET],
-      gateDrops: { liquidity: 3, netTheta: 2 },
+      gateDrops: { liquidity: 3, netTheta: 2, termInverted: 0, eventBlackout: 0 },
       candidates: pickerSnapshotFixture.candidates.map((c) => ({
         ...c,
         context: [

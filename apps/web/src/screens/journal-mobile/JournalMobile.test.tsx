@@ -60,6 +60,7 @@ vi.mock("../../components/PnlBridgeCard.tsx", async (importOriginal) => {
 
 // ─── Import screen + mocks (AFTER vi.mock hoisting) ──────────────────────────
 import { Journal } from "../Journal.tsx";
+import type { TradeSummary } from "./useJournalModel.tsx";
 import { useLifecycle } from "../../hooks/useLifecycle.ts";
 import { useRuleTags } from "../../hooks/useRuleTags.ts";
 import type { UseRuleTagsResult } from "../../hooks/useRuleTags.ts";
@@ -110,7 +111,7 @@ function makeSnapshot(overrides?: {
   };
 }
 
-function makeOpenTrade() {
+function makeOpenTrade(): TradeSummary {
   return {
     id: "t-open",
     calendarId: "cal-open",

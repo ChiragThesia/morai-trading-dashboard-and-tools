@@ -67,8 +67,8 @@ describe("ErrorBoundary", () => {
     );
     // At least one console.error call should include the thrown error
     const calls = consoleErrorSpy.mock.calls;
-    const hasErrorLog = calls.some((args) =>
-      args.some((a) => a instanceof Error && a.message === "test render crash"),
+    const hasErrorLog = calls.some((args: unknown[]) =>
+      args.some((a: unknown) => a instanceof Error && a.message === "test render crash"),
     );
     expect(hasErrorLog).toBe(true);
   });

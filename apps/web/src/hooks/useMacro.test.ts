@@ -57,8 +57,8 @@ describe("useMacro", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.DFF?.[0]?.value).toBe(4.33);
-    expect(result.current.data?.VIXCLS?.[0]?.value).toBe(18.9);
+    expect(result.current.data?.["DFF"]?.[0]?.value).toBe(4.33);
+    expect(result.current.data?.["VIXCLS"]?.[0]?.value).toBe(18.9);
     expect(mockApiFetch).toHaveBeenCalledWith("/api/analytics/macro");
   });
 
