@@ -67,6 +67,7 @@ function renderSection(overrides?: Partial<Parameters<typeof MobileMarketSection
       dff={4.33}
       curveSlope={-0.12}
       cotLev={-50000}
+      spot={GEX_FIXTURE.spot}
       {...overrides}
     />,
   );
@@ -178,6 +179,15 @@ describe("MobileMarketSection (D-08 / J13)", () => {
     expect(within(section).queryByText("Net book greeks")).toBeNull();
     // Macro grid doesn't depend on gex — still renders.
     expect(within(section).getByText("Macro")).toBeDefined();
+  });
+
+  it("J13e: a passed spot override makes the 'Spot' key-level row live-aware, not the raw gex.spot (LIVE-04, catch #20)", () => {
+    // Distinct from GEX_FIXTURE.spot (7381.12) and the 5800 engine fallback.
+    renderSection({ spot: 7402.875 });
+
+    const section = screen.getByTestId("mobile-market");
+    expect(within(section).getByText("7403")).toBeDefined();
+    expect(within(section).queryByText("7381")).toBeNull();
   });
 
   it("J13d: the MarketRail details renders inside the section, closed (no open attribute), summary reads Regime · COT · health", () => {

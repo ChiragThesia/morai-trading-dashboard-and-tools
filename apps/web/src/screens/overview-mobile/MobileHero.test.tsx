@@ -16,6 +16,7 @@ const BASE = {
   spot: 6842.1,
   vix: 14.32,
   regime: "DAMPEN" as const,
+  liveStatus: "quiet" as const,
 };
 
 describe("MobileHero — hero-first BOOK P&L (D-03, J3/J4)", () => {
@@ -62,6 +63,19 @@ describe("MobileHero — hero-first BOOK P&L (D-03, J3/J4)", () => {
     const hero = screen.getByTestId("mobile-hero");
     expect(hero.textContent).toContain("SPX —");
     expect(hero.textContent).toContain("VIX —");
+  });
+
+  it("LIVE-04: the SPX segment tints text-blue while liveStatus is live (catch #26 honest badge)", () => {
+    render(<MobileHero {...BASE} liveStatus="live" />);
+    const spotValue = screen.getByText("6842.1");
+    expect(spotValue.className).toContain("text-blue");
+  });
+
+  it("LIVE-04: the SPX segment stays EOD-styled (text-dim, no live tint) while liveStatus is quiet", () => {
+    render(<MobileHero {...BASE} liveStatus="quiet" />);
+    const spotValue = screen.getByText("6842.1");
+    expect(spotValue.className).toContain("text-dim");
+    expect(spotValue.className).not.toContain("text-blue");
   });
 
   it("J4b: null regime omits the regime segment entirely, including its · separator", () => {

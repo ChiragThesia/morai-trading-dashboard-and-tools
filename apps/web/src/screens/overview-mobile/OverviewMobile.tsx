@@ -103,14 +103,16 @@ export function OverviewMobile(): React.ReactElement {
 
   return (
     <div data-testid="overview-mobile-root" className="flex flex-col gap-6 pb-10">
-      {/* Hero spot comes from gex — null (→ "—") when the snapshot is absent, never the
-          model's 5800 pricing fallback (Copywriting Contract per-segment rule). */}
+      {/* Hero spot is the model's honest displaySpot (LIVE-04): live-or-EOD, null (→ "—")
+          when the snapshot is absent, never the model's 5800 pricing fallback
+          (Copywriting Contract per-segment rule). */}
       <MobileHero
         bookPnl={m.bookPnl}
         hasPositions={m.positions.length > 0}
-        spot={m.gex?.spot ?? null}
+        spot={m.displaySpot}
         vix={m.macroValues.vix}
         regime={m.regime}
+        liveStatus={m.liveStatus}
       />
       <MobileRiskPanel
         scenario={m.scenario}
@@ -194,6 +196,7 @@ export function OverviewMobile(): React.ReactElement {
         dff={m.macroValues.dff}
         curveSlope={m.macroValues.curveSlope}
         cotLev={m.cotLev}
+        spot={m.spot}
       />
     </div>
   );

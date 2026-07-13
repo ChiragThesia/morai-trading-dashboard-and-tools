@@ -25,6 +25,9 @@ export interface MobileMarketSectionProps {
   readonly dff: number | null;
   readonly curveSlope: number | null;
   readonly cotLev: number | null;
+  /** Live-aware engine spot (LIVE-04) — the other keyLevelsFor call site's override,
+   *  so the mobile "Spot" row matches the desktop rail + hero (one SPX number). */
+  readonly spot: number | null;
 }
 
 export function MobileMarketSection({
@@ -36,6 +39,7 @@ export function MobileMarketSection({
   dff,
   curveSlope,
   cotLev,
+  spot,
 }: MobileMarketSectionProps): React.ReactElement {
   return (
     <section data-testid="mobile-market" className="flex flex-col gap-3 px-4">
@@ -50,7 +54,7 @@ export function MobileMarketSection({
           {/* Key levels — the EXACT desktop rows (GexRail's key-levels block). */}
           <SectionLabel tone="dim">Key levels</SectionLabel>
           <div className="flex flex-col gap-1.5">
-            {keyLevelsFor(gex).map((lvl) => (
+            {keyLevelsFor(gex, spot ?? undefined).map((lvl) => (
               <div
                 key={lvl.label}
                 className="flex items-center justify-between gap-2 rounded-lg bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"

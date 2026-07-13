@@ -9,6 +9,7 @@
  */
 import { cn } from "@/lib/utils";
 import type { GexRegime } from "../../lib/gex-regime.ts";
+import type { LiveStreamStatus } from "../../hooks/useLiveStream.ts";
 import { signedUsd, signClass } from "../../lib/position-format.ts";
 
 export interface MobileHeroProps {
@@ -17,6 +18,9 @@ export interface MobileHeroProps {
   readonly spot: number | null;
   readonly vix: number | null;
   readonly regime: GexRegime | null;
+  /** Gates the SPX segment's live tint (LIVE-04) — never a silent stale-as-live claim
+   *  (catch #26). Optional so existing callers/tests default to the EOD styling. */
+  readonly liveStatus?: LiveStreamStatus;
 }
 
 export function MobileHero({
@@ -25,6 +29,7 @@ export function MobileHero({
   spot,
   vix,
   regime,
+  liveStatus,
 }: MobileHeroProps): React.ReactElement {
   return (
     <section data-testid="mobile-hero" className="px-4 pt-4">
@@ -42,7 +47,9 @@ export function MobileHero({
       </div>
       <div className="mt-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
         <span>SPX </span>
-        <span className="text-blue">{spot !== null ? spot.toFixed(1) : "—"}</span>
+        <span className={liveStatus === "live" ? "text-blue" : "text-dim"}>
+          {spot !== null ? spot.toFixed(1) : "—"}
+        </span>
         <span className="text-dim"> · </span>
         <span>VIX {vix !== null ? vix.toFixed(2) : "—"}</span>
         {regime !== null && (
