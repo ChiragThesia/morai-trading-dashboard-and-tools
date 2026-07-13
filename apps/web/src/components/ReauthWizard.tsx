@@ -114,9 +114,17 @@ export function ReauthWizard(): React.ReactElement {
   }, []);
 
   function handleAuthorize(app: ReauthApp): void {
-    void startReauth(app).then((response) => {
-      window.location.href = response.authUrl;
-    });
+    // Mirror the exchange path (WR-01): show `confirming` while /start is in flight and surface a
+    // rejection as the scoped `failure` step (failure copy + Retry) — a swallowed /start left the
+    // Authorize button silently dead with no feedback.
+    setState((prev) => ({ ...prev, statuses: { ...prev.statuses, [app]: "confirming" } }));
+    startReauth(app)
+      .then((response) => {
+        window.location.href = response.authUrl;
+      })
+      .catch(() => {
+        setState((prev) => ({ ...prev, statuses: { ...prev.statuses, [app]: "failure" } }));
+      });
   }
 
   function handleRetry(app: ReauthApp): void {

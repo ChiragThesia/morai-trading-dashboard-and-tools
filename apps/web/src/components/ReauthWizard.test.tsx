@@ -94,6 +94,21 @@ describe("ReauthWizard", () => {
     expect(screen.queryByText(/reconnect failed/)).toBeNull();
   });
 
+  it("surfaces a failed /start as the inline failure state + Retry, never a silent dead button (WR-01)", async () => {
+    mockStartReauth.mockRejectedValueOnce(new Error("start failed"));
+
+    render(<ReauthWizard />);
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Authorize with Schwab" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Trader reconnect failed — Schwab didn't confirm a fresh token."),
+      ).toBeDefined();
+    });
+    expect(screen.getByRole("button", { name: "Retry" })).toBeDefined();
+  });
+
   it("reaches the Done state (both chips filled) once market succeeds after trader already completed", async () => {
     // Simulate the cross-redirect persistence: trader already succeeded on a prior page load.
     sessionStorage.setItem("reauth-completed-apps", JSON.stringify(["trader"]));
