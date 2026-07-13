@@ -32,6 +32,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D23 | SSE fan-out + opaque ticket auth | In-process `Set<SSEStreamingApi>` fan-out in `apps/server`; single-use ~30s UUID ticket for `GET /api/stream` (EventSource cannot send `Authorization` headers — D-01) | Low (single server, in-memory state fits single Railway instance per D11) | Multi-user scale OR Supabase Realtime covers the use-case |
 | D24 | RULE-01 annotation storage | `calendar_event_annotations` keyed by `fill_ids_hash`, deliberately NO foreign key to `calendar_events` | Low (plain table, no FK to manage) | `rebuildJournal` stops being delete-then-reinsert |
 | D25 | Runtime rule overrides (Phase 29) | `rule_overrides` — single-row JSONB deltas-over-defaults table, keyed by fixed literal id `"default"` (mirrors `broker_tokens.app_id`, no DB CHECK constraint). **Overrides Phase 28 T-28-11** — constants stay the DEFAULTS; the row is an explicit layer merged over them at consumption time. | Low (drop the row, code defaults remain authoritative) | A curated knob needs per-calendar or per-user scope |
+| D27 | Live SPX spot + VIX-family fan-out; DISPLAY-LIVE/GATE-EOD law (Phase 38) | SPX spot rides the EXISTING greeks pipe (zero new Schwab calls); VIX family (`$VIX`/`$VVIX`/`$VIX9D`/`$VIX3M`) via a new sidecar `get_quotes` poll (~20s). Server fans out two new on-change-throttled SSE lanes (`spot`, `indices`) beside the existing ticks lane. **Law**: only DISPLAYED values ever live-tint — every gate (entry-gate verdict, stored `indicator.band`, hy-oas/FRED) keeps consuming stored EOD data, untouched. | Low (additive SSE lanes; sidecar poll loop) | A 5th regime indicator needs a live source OR the poll interval needs to shrink below ~20s |
 
 ## D1 — Bun
 
@@ -487,3 +488,67 @@ unnecessary.
 **References**: `.planning/phases/37-in-app-schwab-re-auth-wizard-hosted-oauth-flow-replacing-the/37-CONTEXT.md`;
 `docs/operations/schwab-reauth-runbook.md` (gains the UI path); `packages/adapters/src/postgres/schema.ts`
 (`reauthNonces`); `packages/adapters/src/postgres/migrations/0024_reauth_nonces.sql`.
+
+## D27 — Live SPX spot + VIX-family fan-out; the DISPLAY-LIVE/GATE-EOD law (Phase 38)
+
+**Context**: The sidecar already streams position-leg greeks over SSE (D22/D23) and the server
+already fans that out to the browser. The GEX/regime board only ever showed EOD (30-min snapshot
+or FRED) values for spot and the VIX family, even though a live SPX number and live VIX-family
+quotes were one small hop away from data already flowing.
+
+**What ships**:
+- **SPX spot — zero new Schwab calls.** `broadcastSpot` fires as a sibling call at the SAME
+  guarded `underlyingPrice > 0` site `observeSpot` already reads (`sidecar-sse.ts`) — the spot
+  value was already arriving on every greeks tick; this just also fans it out on its own SSE
+  lane. No new subscription, no new poll, no new Schwab quota consumed.
+- **VIX family — one small new REST poll.** `start_indices_poll(app)` (`apps/sidecar/streamer.py`)
+  calls Schwab's `get_quotes` for `$VIX`/`$VVIX`/`$VIX9D`/`$VIX3M` every ~20s (a batch call
+  confirmed live via the A1 probe, 38-A1-PROBE.md) and emits one Z-suffixed `indices` frame.
+  `quote.lastPrice` is used; `quote.quoteTime` is unreliable in the live response and is never
+  read — the frame is stamped from sidecar receipt time instead. No `is_rth`/`is_open` guard —
+  the poll runs continuously; the browser side decides what "live" means (below).
+- **Server fan-out** (`stream-fan-out.ts`): `bufferSpot`/`flushSpot` and `bufferIndices`/
+  `flushIndices` ride the SAME 1-second flush interval as the existing ticks lane, each with an
+  on-change throttle (skip re-sending an unchanged value/snapshot). `sidecar-sse.ts` dispatches a
+  parsed `indices` frame to `broadcastIndices` and returns early — it never reaches the option-tick
+  recompute path.
+- **Web seam** (`useLiveStream.ts` → `useOverviewModel.ts`): `liveSpot`/`liveIndices` carry their
+  OWN freshness stamp — a spot-only or indices-only frame never flips the greeks-stream badge live
+  (a live regression class this phase explicitly tests against, catch #26 lineage). The model
+  exposes a live-gated `spot`/`displaySpot` seam consumed by exactly one SPX number across the
+  desktop chip, GEX-rail markers, both Key-levels "Spot" rows, and the mobile hero.
+
+**The display-live/gate-EOD law** (DISPLAY-LIVE / GATE-EOD): live data is allowed to change what
+the UI *shows*, never what it *decides*. Concretely:
+- The regime rail's 3 broker-quotable rows (`vix-term-structure`, `vvix`, `vix9d-vix`) show a live
+  value with a **client-recomputed band** while `liveStatus==="live"` — but the entry-gate verdict
+  chip, the stored `indicator.band` on every row, and the `hy-oas` row (FRED-only, not
+  broker-quotable) NEVER read the live stream. They stay driven by the existing EOD
+  `macro_observations` / `/api/analytics/regime` path, unchanged.
+- FRED ingestion, the regime EOD compute job, and every stored gate/hysteresis calculation in
+  `packages/core` are untouched by this phase — grep-verified zero diff against
+  `getRegimeBoard.ts` and `useRegimeBoard.ts`.
+- On quiet/stalled (or outside RTH, since the poll has no `is_rth` guard but the browser's own
+  stream-liveness detector does), every live-tinted surface reverts to the stored EOD value with
+  the honest "EOD · as of …" styling — never a stale value shown as live (T-38-11).
+
+**Why this shape (not a second streaming session or a broader live regime engine)**: SPX spot
+piggybacks on data already in flight — a second Schwab subscription would be pure waste. The VIX
+family needs its own poll (indices aren't in the position-leg LEVELONE_OPTION stream), but a
+20-second REST poll is far cheaper than a second streaming session for 4 symbols that only need to
+feel "live," not tick-perfect. Keeping every gate/decision on the EOD path (rather than
+re-deriving trading decisions off a live tick) avoids a whole new class of live-data races in the
+one place (gates) where a wrong decision costs real money.
+
+**Swap cost**: Low. Both new SSE lanes are additive (same shape as the existing ticks lane); the
+sidecar poll is a standalone `asyncio` task cancelled/awaited in the same lifecycle block as
+`streamer_task`. Deleting either lane reverts the affected surface to its pre-38 EOD-only display
+with no schema change.
+
+**Revisit trigger**: a 5th regime indicator needs a live source, or the ~20s poll interval needs
+to shrink (e.g., a future feature wants sub-5s VIX-family freshness).
+
+**References**: `.planning/phases/38-live-spx-spot-across-the-app-fan-the-already-flowing-sidecar/`
+(38-CONTEXT.md, 38-RESEARCH.md, 38-A1-PROBE.md); `apps/sidecar/streamer.py` (`start_indices_poll`);
+`apps/server/src/adapters/http/stream-fan-out.ts`; `apps/web/src/hooks/useLiveStream.ts`;
+`apps/web/src/screens/overview-mobile/useOverviewModel.ts`; `apps/web/src/components/RegimeBoard.tsx`.
