@@ -36,11 +36,14 @@ fixes:
   CR-01: 6894e7c
   CR-02: 6894e7c
   WR-01: 048fddc
+  WR-02: a0554c5
   WR-03: a87bc9a
+  WR-04: 37c651f
 fixes_note: >-
   TS-side findings fixed (CR-01/CR-02 share one root-cause commit). WR-02 and
-  WR-04 are sidecar-Python findings handled separately. IN-01/IN-02/IN-03 are
-  optional/out-of-scope and left unchanged.
+  WR-04 are sidecar-Python findings, now fixed in two atomic commits (WR-04
+  37c651f, WR-02 a0554c5). IN-01/IN-02/IN-03 are optional/out-of-scope and
+  left unchanged.
 ---
 
 # Phase 37: Code Review Report
@@ -48,7 +51,7 @@ fixes_note: >-
 **Reviewed:** 2026-07-13
 **Depth:** deep (cross-file trace of the OAuth start/exchange call chains, contract seams, nonce lifecycle, and re-init lock invariants)
 **Files Reviewed:** 22
-**Status:** fixes_applied — the 4 TS findings (CR-01, CR-02, WR-01, WR-03) are fixed; WR-02/WR-04 are sidecar-Python findings handled separately, and IN-01/IN-02/IN-03 are optional/out-of-scope
+**Status:** fixes_applied — all 6 blocker/warning findings fixed (CR-01, CR-02, WR-01, WR-03 TS-side; WR-02, WR-04 sidecar-Python); IN-01/IN-02/IN-03 are optional/out-of-scope
 
 ## Summary
 
@@ -184,6 +187,8 @@ function handleAuthorize(app: ReauthApp): void {
 
 ### WR-02: `reinit_schwab_session` is not atomic and its failure is uncaught — half-initialized session with the lock still held
 
+**FIXED:** commit `a0554c5` — the client rebuild + task recreation is now wrapped: on failure it logs only the exception type, still recreates all three tasks (keepalive/streamer/indices) so the stream is never stranded, then re-raises. The exchange handler catches the reinit failure and returns `ok:false` (never claiming health) with a type-only log. Regression tests: reinit recreates-all-three-and-reraises on a rebuild blip (`test_reinit_recreates_tasks_and_reraises_on_client_init_failure`); the handler returns `ok:false` and logs type only (`test_reinit_failure_returns_ok_false_and_logs_type_only`).
+
 **File:** `apps/sidecar/main.py:145-176` (re-init), `apps/sidecar/reauth_admin.py:194-200` (caller)
 
 **Issue:** `reinit_schwab_session` cancels+awaits the old keepalive/streamer tasks, then calls
@@ -225,6 +230,8 @@ cross-redirect continuity for the app just authorized. Alternatively, stamp the 
 timestamp and ignore it after a few minutes.
 
 ### WR-04: re-init and lock-loss teardown mutate the same task slots without a guard — narrow two-streamer window
+
+**FIXED:** commit `37c651f` — reinit re-checks `has_lock` after the cancel/awaits and bails (returns `False`, no task recreation) if the lock was lost mid-reinit, so the acquire loop's fresh streamer stays the only live one and the two-streamer window is closed. Regression test drives a lock-loss during the await window and asserts no new tasks are created (`test_reinit_aborts_task_recreation_when_lock_lost_mid_reinit`).
 
 **File:** `apps/sidecar/main.py:145-176` (reinit) and `:265-285` (heartbeat finally + re-acquire)
 
