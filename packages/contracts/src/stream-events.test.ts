@@ -13,6 +13,8 @@ import {
   streamReconcileEvent,
   streamFillEvent,
   streamPingEvent,
+  streamSpotEvent,
+  streamIndicesEvent,
 } from "./stream-events.ts";
 
 // ─── streamTicketResponse ─────────────────────────────────────────────────────
@@ -179,6 +181,91 @@ describe("streamFillEvent", () => {
   it("rejects missing ts field", () => {
     const result = streamFillEvent.safeParse({
       activity: { MESSAGE_TYPE: "OrderFill" },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ─── streamSpotEvent ──────────────────────────────────────────────────────────
+
+describe("streamSpotEvent", () => {
+  it("accepts a valid payload with Z-suffix timestamp (non-round spot per catch #20)", () => {
+    const result = streamSpotEvent.safeParse({
+      spot: 5842.375,
+      ts: "2026-07-13T14:30:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a +00:00 suffix timestamp — chain_proxy.py Z-suffix contract", () => {
+    const result = streamSpotEvent.safeParse({
+      spot: 5842.375,
+      ts: "2026-07-13T14:30:00.000+00:00",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-number spot", () => {
+    const result = streamSpotEvent.safeParse({
+      spot: "5842.375",
+      ts: "2026-07-13T14:30:00.000Z",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a missing spot field", () => {
+    const result = streamSpotEvent.safeParse({ ts: "2026-07-13T14:30:00.000Z" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a missing ts field", () => {
+    const result = streamSpotEvent.safeParse({ spot: 5842.375 });
+    expect(result.success).toBe(false);
+  });
+
+  it("streamLiveGreekEvent still parses a known-good payload — additive, not breaking", () => {
+    const result = streamLiveGreekEvent.safeParse(validLiveGreekPayload);
+    expect(result.success).toBe(true);
+  });
+});
+
+// ─── streamIndicesEvent ───────────────────────────────────────────────────────
+
+describe("streamIndicesEvent", () => {
+  const validIndicesPayload = {
+    vix: 15.2,
+    vvix: 92.1,
+    vix9d: 14.8,
+    vix3m: 16.5,
+    ts: "2026-07-13T14:30:00.000Z",
+  };
+
+  it("accepts a valid payload with all four symbols present", () => {
+    const result = streamIndicesEvent.safeParse(validIndicesPayload);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts per-symbol nulls — Schwab omits rather than fabricates", () => {
+    const result = streamIndicesEvent.safeParse({
+      ...validIndicesPayload,
+      vvix: null,
+      vix9d: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a +00:00 suffix timestamp", () => {
+    const result = streamIndicesEvent.safeParse({
+      ...validIndicesPayload,
+      ts: "2026-07-13T14:30:00.000+00:00",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a string where a number|null is expected", () => {
+    const result = streamIndicesEvent.safeParse({
+      ...validIndicesPayload,
+      vix: "15.2",
     });
     expect(result.success).toBe(false);
   });
