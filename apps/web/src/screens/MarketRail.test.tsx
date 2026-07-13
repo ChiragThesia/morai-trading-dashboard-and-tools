@@ -1,8 +1,12 @@
+/// <reference types="bun" />
 /**
  * MarketRail.test.tsx — the left context rail composes existing pieces (RegimeBoard dense,
  * CotCard, system health) into one collapsible-on-mobile column. The regime board's own
  * behaviors (banding, tooltips, GATE BLIND independence) stay covered by RegimeBoard.test.tsx;
  * this file only asserts the composition + the dense 2×2 regime grid.
+ *
+ * apps/web's tsconfig sets `types: []` (keeps Node/Bun globals out of browser code); this
+ * file alone needs `node:fs` for the source-grep guard below, so it opts in locally.
  */
 import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, afterEach } from "vitest";

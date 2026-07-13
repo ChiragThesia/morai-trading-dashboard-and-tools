@@ -359,7 +359,7 @@ function RegimeBoardImpl({
 }: {
   dense?: boolean;
   liveIndices?: StreamIndicesEvent | null;
-  liveStatus?: LiveStreamStatus;
+  liveStatus?: LiveStreamStatus | undefined;
 } = {}): React.ReactElement {
   const { data, isPending, isError } = useRegimeBoard();
   // The entry-gate tile (28-06) is a separate data source (usePicker) from the regime

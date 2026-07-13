@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
+import type { UseQueryResult } from "@tanstack/react-query";
 import type { GexSnapshotEntry } from "@morai/contracts";
 
 vi.mock("../../hooks/useLiveStream.ts", () => ({
@@ -62,8 +63,61 @@ const GEX_FIXTURE: GexSnapshotEntry = {
   strikes: [],
   byExpiry: [{ date: "2026-06-29", gex: -9.8 }],
   nearTerm: null,
+  impliedCarry: null,
   computedAt: "2026-06-29T14:00:00.000Z",
 };
+
+// Full UseQueryResult shape (mirrors JournalContainer.test.tsx's makeCalendarsResult) —
+// mockUseGex.mockReturnValue is checked against the real useGex() return type, which
+// (built on useQuery) is a discriminated union that a partial { data } object can't satisfy.
+function makeGexResult(data: GexSnapshotEntry | undefined): UseQueryResult<GexSnapshotEntry, Error> {
+  const common = {
+    error: null,
+    isLoadingError: false,
+    isRefetchError: false,
+    isStale: false,
+    isFetched: true,
+    isFetchedAfterMount: true,
+    isFetching: false,
+    isPlaceholderData: false,
+    isRefetching: false,
+    failureCount: 0,
+    failureReason: null,
+    errorUpdatedAt: 0,
+    errorUpdateCount: 0,
+    dataUpdatedAt: Date.now(),
+    fetchStatus: "idle" as const,
+    isPaused: false,
+    isEnabled: true,
+    refetch: vi.fn(),
+  } as const;
+  if (data === undefined) {
+    return {
+      ...common,
+      data: undefined,
+      isLoading: true,
+      isPending: true,
+      isSuccess: false,
+      isError: false,
+      isInitialLoading: true,
+      status: "pending",
+      // .promise is typed Promise<TData> even in the pending state (no TData exists yet
+      // here) — a never-resolving placeholder satisfies the type without a cast.
+      promise: new Promise<GexSnapshotEntry>(() => undefined),
+    };
+  }
+  return {
+    ...common,
+    data,
+    isLoading: false,
+    isPending: false,
+    isSuccess: true,
+    isError: false,
+    isInitialLoading: false,
+    status: "success",
+    promise: Promise.resolve(data),
+  };
+}
 
 // Deliberately distinct from GEX_FIXTURE.spot (7381.12) and the 5800 engine default —
 // a test can only pass on the real live path (catch #20).
@@ -87,7 +141,7 @@ function setLiveStream(status: "live" | "quiet" | "stalled", liveSpot: number | 
 describe("useOverviewModel — live-aware spot seam (LIVE-04)", () => {
   beforeEach(() => {
     setLiveStream("quiet", null);
-    mockUseGex.mockReturnValue({ data: GEX_FIXTURE });
+    mockUseGex.mockReturnValue(makeGexResult(GEX_FIXTURE));
   });
 
   afterEach(() => {
@@ -115,7 +169,7 @@ describe("useOverviewModel — live-aware spot seam (LIVE-04)", () => {
 
   it("cold-start branch: gex undefined -> spot falls back to 5800, displaySpot is null (never 5800)", () => {
     setLiveStream("quiet", null);
-    mockUseGex.mockReturnValue({ data: undefined });
+    mockUseGex.mockReturnValue(makeGexResult(undefined));
 
     const { result } = renderHook(() => useOverviewModel());
 
