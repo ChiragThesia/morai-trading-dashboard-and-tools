@@ -158,11 +158,11 @@ async def reinit_schwab_session(app: FastAPI, cfg: object) -> bool:
     if not getattr(app.state, "has_lock", False):
         return False
 
-    for attr in ("keepalive_task", "streamer_task"):
+    for attr in ("keepalive_task", "streamer_task", "indices_poll_task"):
         t = getattr(app.state, attr, None)
         if t is not None:
             t.cancel()
-    for attr in ("keepalive_task", "streamer_task"):
+    for attr in ("keepalive_task", "streamer_task", "indices_poll_task"):
         t = getattr(app.state, attr, None)
         if t is not None:
             with suppress(asyncio.CancelledError):
@@ -170,9 +170,10 @@ async def reinit_schwab_session(app: FastAPI, cfg: object) -> bool:
 
     _init_schwab_clients(app, cfg)  # idempotent — already rebuilds both clients unconditionally
 
-    from streamer import start_streamer  # noqa: PLC0415 — mirrors the existing import site
+    from streamer import start_streamer, start_indices_poll  # noqa: PLC0415 — mirrors the existing import site
     app.state.keepalive_task = asyncio.create_task(_trader_token_keepalive(app))
     app.state.streamer_task = asyncio.create_task(start_streamer(app))
+    app.state.indices_poll_task = asyncio.create_task(start_indices_poll(app))
     return True
 
 
@@ -239,8 +240,12 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
         #     initialised (Pattern 1 / T-12-03-04: login-after-lock). Stored on app.state for
         #     the same reason as keepalive_task above. Cancelled alongside it in the finally
         #     block below.
-        from streamer import start_streamer  # noqa: PLC0415
+        from streamer import start_streamer, start_indices_poll  # noqa: PLC0415
         app.state.streamer_task = asyncio.create_task(start_streamer(app))
+
+        # 2d. Poll the VIX family via REST (LIVE-03, 38-02) — same lock-scoped lifecycle as
+        #     the streamer/keepalive tasks above; cancelled alongside them in the finally below.
+        app.state.indices_poll_task = asyncio.create_task(start_indices_poll(app))
 
         # 3. Heartbeat the lock session so the server-side idle reaper never kills THIS live
         #    holder. A failed ping means the connection (and the lock) is gone — tear down and
@@ -273,6 +278,9 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
             app.state.streamer_task.cancel()
             with suppress(asyncio.CancelledError):
                 await app.state.streamer_task
+            app.state.indices_poll_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await app.state.indices_poll_task
 
         # Lost the lock: stop acting as the writer (GW-04 — a stale writer + a new holder = two
         # writers → Schwab invalid_grant), drop the dead connection, loop back to re-acquire.
@@ -330,6 +338,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.degraded = True
     app.state.keepalive_task = None
     app.state.streamer_task = None
+    app.state.indices_poll_task = None
 
     # Start the background lock-acquire + client-init task. It owns app.state.lock_conn.
     task = asyncio.create_task(_acquire_lock_and_init(app, cfg))
@@ -371,6 +380,7 @@ app.state.db_url = ""
 app.state.market_app_id = "market"
 app.state.keepalive_task = None
 app.state.streamer_task = None
+app.state.indices_poll_task = None
 app.state.cfg = None
 
 # ── Routers ───────────────────────────────────────────────────────────────────
