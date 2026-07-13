@@ -598,3 +598,10 @@ export {
   bandHyOas,
 } from "./analytics/index.ts";
 export type { RegimeBand, RegimeThresholds } from "./analytics/index.ts";
+
+// ─── Reauth bounded context (Phase 37, Plan 02 — REAUTH-05) ───────────────────
+// Ports + thin passthrough use-cases for the two sidecar admin re-auth operations. The sidecar
+// HTTP adapter (packages/adapters) implements ForStartingReauth/ForExchangingReauth.
+export type { ReauthApp, ReauthError, ForStartingReauth, ForExchangingReauth } from "./reauth/index.ts";
+export { makeStartReauth, makeExchangeReauth } from "./reauth/index.ts";
+export type { StartReauthDeps, ExchangeReauthDeps } from "./reauth/index.ts";
