@@ -169,6 +169,13 @@
       "when": 1783749678715,
       "tag": "0023_gex_implied_carry",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783958998800,
+      "tag": "0024_reauth_nonces",
+      "breakpoints": true
     }
   ]
 }

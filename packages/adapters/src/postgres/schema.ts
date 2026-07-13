@@ -562,6 +562,19 @@ export const ruleOverrides = pgTable("rule_overrides", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
+// ─── 23. reauth_nonces — CSRF state for the in-app Schwab re-auth wizard (Phase 37) ──
+// Single-use CSRF nonce for the hosted OAuth wizard. Written ONLY by the Python
+// sidecar via psycopg2 — mirrors broker_tokens' split ownership (D22/D-02): Drizzle
+// tracks the DDL here, but no TS repo or in-memory twin exists for this table. The
+// sidecar validates + consumes a nonce atomically (DELETE ... RETURNING, replay-kill);
+// the 10-minute TTL is enforced at consumption time via the WHERE clause, not a sweep.
+
+export const reauthNonces = pgTable("reauth_nonces", {
+  state: text("state").primaryKey(),
+  appId: text("app_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
 // ─── Re-export sql helper used by partial index ───────────────────────────────
 import { sql } from "drizzle-orm";
 export { sql };
