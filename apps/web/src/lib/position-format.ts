@@ -4,32 +4,31 @@
  * (35-04). Extracted out of Overview.tsx so PositionCard doesn't import from Overview.tsx —
  * that would create an Overview → PositionCard → Overview runtime cycle.
  *
- * Moved verbatim (no output/behavior change) — same default `dp` args, same rounding.
+ * Money helpers show the exact value Schwab returns — no rounding, no fixed-decimal
+ * padding (user directive: "all the decimal points ... no rounding, exact numbers").
  */
 import type { BrokerPositionResponse } from "@morai/contracts";
 
 /**
- * Truncate a non-negative number to `dp` decimals WITHOUT rounding, padded to `dp` places.
- * Round at dp+2 first (kills float noise like 186.5799999) then string-slice — so the
- * displayed digits never round the value up.
+ * Exact decimal representation of a non-negative number — every real digit the
+ * value carries, no rounding, no padding. Rounds at 8dp first (kills float noise
+ * like 37.490000000000002) then trims trailing zeros/dot.
  */
-function truncFixed(absV: number, dp: number): string {
-  const s = absV.toFixed(dp + 2);
-  const dot = s.indexOf(".");
-  return dp === 0 ? s.slice(0, dot) : s.slice(0, dot + 1 + dp);
+function exactAbs(absV: number): string {
+  return absV.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-export function signed(v: number, dp = 3): string {
-  return `${v >= 0 ? "+" : "−"}${truncFixed(Math.abs(v), dp)}`;
+export function signed(v: number): string {
+  return `${v >= 0 ? "+" : "−"}${exactAbs(Math.abs(v))}`;
 }
 
-export function signedUsd(v: number, dp = 3): string {
-  return `${v >= 0 ? "+" : "−"}$${truncFixed(Math.abs(v), dp)}`;
+export function signedUsd(v: number): string {
+  return `${v >= 0 ? "+" : "−"}$${exactAbs(Math.abs(v))}`;
 }
 
 /** Dollar value without a forced + sign (negatives keep the − minus). */
-export function usd(v: number, dp = 3): string {
-  return `${v < 0 ? "−" : ""}$${truncFixed(Math.abs(v), dp)}`;
+export function usd(v: number): string {
+  return `${v < 0 ? "−" : ""}$${exactAbs(Math.abs(v))}`;
 }
 
 export function signClass(v: number): string {
