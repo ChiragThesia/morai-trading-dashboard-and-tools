@@ -33,7 +33,7 @@ Operator-facing runbooks for manual, non-automatable procedures.
 
 | Doc | Contents |
 |---|---|
-| [schwab-reauth-runbook.md](operations/schwab-reauth-runbook.md) | Weekly Schwab re-auth: when to run it, the two-step OAuth exchange, the mandatory sidecar restart, post-restart verification |
+| [schwab-reauth-runbook.md](operations/schwab-reauth-runbook.md) | Weekly Schwab re-auth: the in-app Reconnect wizard (primary path), the CLI OAuth exchange + sidecar restart (fallback), Railway deploy prerequisites, post-recovery verification |
 
 ## Docs on Docs (`docs/docs-on-docs/`)
 

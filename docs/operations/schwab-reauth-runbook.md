@@ -2,19 +2,51 @@
 
 Schwab refresh tokens hard-expire 7 days after issuance. No sliding window. When
 the clock runs out, the sidecar cannot refresh either app's access token and Schwab
-pulls pause. This runbook restores auth by running a local OAuth exchange and
-restarting the sidecar.
+pulls pause. This runbook restores auth from the browser, through the in-app
+Reconnect wizard. A CLI fallback stays available for when the app itself is down.
 
 ## When to Run This
 
 Run it when either signal appears:
 
-- **Amber warning.** `GET /api/status` shows `refreshExpiresIn` non-null for either
-  app. You're inside the T-24h window before expiry. Re-auth now, before it expires.
-- **Red alert.** `GET /api/status` shows `status: "AUTH_EXPIRED"` for either app, or
-  the web UI shows the AUTH_EXPIRED banner. Schwab pulls for that app are paused.
+- **Amber warning.** The web UI shows the AuthExpiredBanner in its amber state
+  (`GET /api/status` shows `refreshExpiresIn` non-null for either app). You're
+  inside the T-24h window before expiry. Re-auth now, before it expires.
+- **Red alert.** The banner shows red (`GET /api/status` shows `status:
+  "AUTH_EXPIRED"` for either app). Schwab pulls for that app are paused.
 
-Either signal, same fix: run the exchange, then restart the sidecar.
+Either signal, same fix: open the wizard from the banner and reconnect.
+
+## Primary Path: The In-App Wizard
+
+From any authenticated screen on morai.wtf:
+
+1. Click **Reconnect** on the AuthExpiredBanner (visible in both its amber and red
+   states).
+2. The wizard opens with a two-step indicator: **Trader (1/2)** then **Market
+   (2/2)**. Click **Authorize** on the Trader step. This opens Schwab's login page.
+3. Log into Schwab and authorize. Schwab redirects your browser back to
+   `https://morai.wtf` with `?code=&state=` in the URL. The app strips those
+   params from the address bar immediately, exchanges the code for a token behind
+   the scenes, and advances the wizard to the Market step automatically — no
+   confirm screen, no copy-pasting a URL.
+4. Click **Authorize** on the Market step and repeat: log in, authorize, land back
+   on morai.wtf, wizard advances to Done.
+5. Close the wizard. The AuthExpiredBanner clears within about 30 seconds (the
+   next `/api/status` poll picks up the fresh tokens).
+
+No terminal, no CLI, and no sidecar restart — the sidecar re-initializes its
+Schwab clients in-process the moment each exchange succeeds.
+
+**If one app's step fails** ("reconnect failed — Schwab didn't confirm a fresh
+token"), retry only that step. The other app's already-fresh token is untouched —
+same partial-failure isolation as the CLI's "do NOT restart the sidecar; re-run
+for the failed app" rule below.
+
+## Fallback: The CLI (`seed_token.py`)
+
+Use this only when the wizard itself is unavailable — for example, the app is
+down. It requires a terminal and Railway CLI access.
 
 ## Step 1: Get the Auth URLs
 
@@ -86,6 +118,28 @@ Check both signals:
 If both check out, recovery is complete. No code was rebuilt and no second
 streamer session opened — the Postgres advisory lock (GW-04) held through the
 restart.
+
+## Deploy Prerequisites (Railway)
+
+Set these before deploying the wizard — a missing or mismatched value fails
+every exchange:
+
+- `SIDECAR_ADMIN_TOKEN` — one strong random secret (16+ chars). Set the
+  **same value** on both the Railway `server` service and the `sidecar`
+  service. The server sends this as a header on the two admin endpoints; the
+  sidecar checks it with a constant-time compare. A mismatch 401s every
+  exchange.
+- `SCHWAB_WEB_CALLBACK_URL` — set to `https://morai.wtf` on the `sidecar`
+  service (the server doesn't need it). This must match the callback URL
+  registered on both Schwab Developer Portal apps exactly, or Schwab rejects
+  the exchange with a `redirect_uri` mismatch.
+
+Confirm `https://morai.wtf` is registered as a callback URL on **both** the
+trader and market Schwab apps (Schwab Developer Portal → each app → Callback
+URLs) before the first wizard run.
+
+Never commit an actual secret value — only the variable names and where they
+go, as above.
 
 ## Related
 
