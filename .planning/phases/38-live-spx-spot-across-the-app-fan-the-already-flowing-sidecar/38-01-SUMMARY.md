@@ -109,3 +109,8 @@ None - no external service configuration required.
 ---
 *Phase: 38-live-spx-spot-across-the-app-fan-the-already-flowing-sidecar*
 *Completed: 2026-07-13*
+
+## Self-Check: PASSED
+- FOUND: `.planning/phases/38-live-spx-spot-across-the-app-fan-the-already-flowing-sidecar/38-01-SUMMARY.md`
+- FOUND: commit `1112f38` (test)
+- FOUND: commit `ca121f6` (feat)
