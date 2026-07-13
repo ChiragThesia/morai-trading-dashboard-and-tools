@@ -204,12 +204,14 @@ export type {
 // server proxy routes; the exchange response is a bare `{ app, ok }`, no code/state echo).
 export {
   reauthStartRequest,
+  reauthStartSidecarResponse,
   reauthStartResponse,
   reauthExchangeRequest,
   reauthExchangeResponse,
 } from "./reauth.ts";
 export type {
   ReauthStartRequest,
+  ReauthStartSidecarResponse,
   ReauthStartResponse,
   ReauthExchangeRequest,
   ReauthExchangeResponse,

@@ -40,9 +40,12 @@ function parsedBody(init: RequestInit | undefined): unknown {
 
 describe("makeSidecarReauthAdapter", () => {
   describe("startReauth", () => {
-    it("POSTs {app} with the X-Sidecar-Admin-Token header, Zod-parses 200 into ok({authUrl})", async () => {
+    it("POSTs {app} with the X-Sidecar-Admin-Token header, Zod-parses the real 3-key sidecar body into ok({authUrl})", async () => {
+      // CR-01 regression: the sidecar's StartResponse ALWAYS carries {app, authUrl, state}
+      // (reauth_admin.py). The adapter must parse that exact body — a strict schema that omits
+      // `app` rejects the real sidecar and /reauth/start can never return 200 in production.
       const { fetch, calls } = makeCapturingFetch(
-        { authUrl: "https://api.schwabapi.com/oauth/authorize", state: "server-side-nonce" },
+        { app: "trader", authUrl: "https://api.schwabapi.com/oauth/authorize", state: "server-side-nonce" },
         200,
       );
       const adapter = makeSidecarReauthAdapter({ baseUrl: BASE_URL, adminToken: ADMIN_TOKEN, fetch });

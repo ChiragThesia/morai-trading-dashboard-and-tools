@@ -4,7 +4,7 @@
  * Mirrors useRuleSettings.test.ts's apiFetch-mock harness (apps/web has no msw — 30-06 decision).
  *
  * Behaviors under test:
- *   1. startReauth POSTs /api/reauth/start with { app }, parses + returns { authUrl, state }.
+ *   1. startReauth POSTs /api/reauth/start with { app }, parses + returns the slim { authUrl }.
  *   2. exchangeReauth POSTs /api/reauth/exchange with { redirectUrl }, parses + returns
  *      { app, ok }.
  *   3. A successful exchange (ok: true) invalidates the ["status"] query.
@@ -46,9 +46,13 @@ describe("useReauth", () => {
     vi.clearAllMocks();
   });
 
-  it("startReauth POSTs /api/reauth/start and returns the parsed authUrl/state", async () => {
+  it("startReauth POSTs /api/reauth/start and returns the parsed slim { authUrl } (no state)", async () => {
+    // CR-02 regression: the server route deliberately returns { authUrl } ONLY — the CSRF state
+    // never crosses into the browser (T-37-06). The hook must parse that real body; a schema that
+    // requires `state` rejects the genuine server response and the wizard's Authorize button
+    // silently does nothing.
     mockApiFetch.mockResolvedValueOnce(
-      makeOkResponse({ authUrl: "https://schwab.example/authorize?x=1", state: "nonce-1" }),
+      makeOkResponse({ authUrl: "https://schwab.example/authorize?x=1" }),
     );
 
     const { result } = renderHook(() => useReauth(), { wrapper });
@@ -62,7 +66,7 @@ describe("useReauth", () => {
       "/api/reauth/start",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ app: "trader" }) }),
     );
-    expect(response).toEqual({ authUrl: "https://schwab.example/authorize?x=1", state: "nonce-1" });
+    expect(response).toEqual({ authUrl: "https://schwab.example/authorize?x=1" });
   });
 
   it("exchangeReauth POSTs /api/reauth/exchange and returns the parsed {app, ok}", async () => {

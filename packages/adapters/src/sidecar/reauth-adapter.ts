@@ -21,7 +21,7 @@ import type { z } from "zod";
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForStartingReauth, ForExchangingReauth, ReauthApp, ReauthError } from "@morai/core";
-import { reauthStartResponse, reauthExchangeResponse } from "@morai/contracts";
+import { reauthStartSidecarResponse, reauthExchangeResponse } from "@morai/contracts";
 
 export type SidecarReauthAdapterDeps = {
   /** Base URL of the sidecar service (e.g. http://sidecar.railway.internal:8000). */
@@ -88,7 +88,7 @@ export function makeSidecarReauthAdapter(
         deps,
         "/sidecar/admin/reauth/start",
         { app },
-        reauthStartResponse,
+        reauthStartSidecarResponse,
       );
       if (!result.ok) return result;
       // Never forward `state` beyond this boundary (T-37-06) — the port only needs authUrl.

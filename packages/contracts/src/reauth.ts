@@ -13,10 +13,24 @@ export const reauthStartRequest = z
 
 export type ReauthStartRequest = z.infer<typeof reauthStartRequest>;
 
+// Sidecar→server wire shape: the sidecar's StartResponse always carries all three fields
+// (reauth_admin.py). The server adapter parses THIS, then narrows to { authUrl } before the
+// value crosses toward the browser — `state` (the CSRF nonce) never leaves the adapter (T-37-06).
+export const reauthStartSidecarResponse = z
+  .object({
+    app: z.enum(["trader", "market"]),
+    authUrl: z.string().url(),
+    state: z.string(),
+  })
+  .strict();
+
+export type ReauthStartSidecarResponse = z.infer<typeof reauthStartSidecarResponse>;
+
+// Server→browser wire shape: { authUrl } ONLY. Being `.strict()` and state-free, the schema
+// structurally cannot carry the CSRF state or an auth code into the browser (no-leak invariant).
 export const reauthStartResponse = z
   .object({
     authUrl: z.string().url(),
-    state: z.string(),
   })
   .strict();
 

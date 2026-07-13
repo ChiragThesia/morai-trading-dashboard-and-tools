@@ -9,6 +9,7 @@
 import { describe, it, expect } from "vitest";
 import {
   reauthStartRequest,
+  reauthStartSidecarResponse,
   reauthStartResponse,
   reauthExchangeRequest,
   reauthExchangeResponse,
@@ -29,22 +30,70 @@ describe("reauthStartRequest", () => {
   });
 });
 
-describe("reauthStartResponse", () => {
-  it("parses a valid authUrl + state", () => {
+describe("reauthStartSidecarResponse", () => {
+  it("parses the real 3-key sidecar body {app, authUrl, state}", () => {
+    // CR-01 regression: the sidecar's StartResponse always carries `app` — the adapter's schema
+    // MUST accept it, or /reauth/start 500s against the real sidecar.
     expect(() =>
-      reauthStartResponse.parse({ authUrl: "https://api.schwabapi.com/oauth/authorize", state: "nonce-1" }),
+      reauthStartSidecarResponse.parse({
+        app: "trader",
+        authUrl: "https://api.schwabapi.com/oauth/authorize",
+        state: "nonce-1",
+      }),
     ).not.toThrow();
   });
 
   it("rejects a non-URL authUrl", () => {
-    expect(() => reauthStartResponse.parse({ authUrl: "not-a-url", state: "nonce-1" })).toThrow();
+    expect(() =>
+      reauthStartSidecarResponse.parse({ app: "trader", authUrl: "not-a-url", state: "nonce-1" }),
+    ).toThrow();
+  });
+
+  it("rejects an unknown app value", () => {
+    expect(() =>
+      reauthStartSidecarResponse.parse({
+        app: "other",
+        authUrl: "https://api.schwabapi.com/oauth/authorize",
+        state: "nonce-1",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects an extra key (e.g. a code echo)", () => {
+    expect(() =>
+      reauthStartSidecarResponse.parse({
+        app: "trader",
+        authUrl: "https://api.schwabapi.com/oauth/authorize",
+        state: "nonce-1",
+        code: "leak",
+      }),
+    ).toThrow();
+  });
+});
+
+describe("reauthStartResponse", () => {
+  it("parses the real slim server body { authUrl } with no state", () => {
+    // CR-02 regression: the server route returns { authUrl } ONLY — the browser-facing schema
+    // MUST accept a state-free body, or the wizard's Authorize button silently dies.
+    expect(() =>
+      reauthStartResponse.parse({ authUrl: "https://api.schwabapi.com/oauth/authorize" }),
+    ).not.toThrow();
+  });
+
+  it("rejects a non-URL authUrl", () => {
+    expect(() => reauthStartResponse.parse({ authUrl: "not-a-url" })).toThrow();
+  });
+
+  it("rejects a state field — the CSRF nonce must never reach the browser (no-leak invariant)", () => {
+    expect(() =>
+      reauthStartResponse.parse({ authUrl: "https://api.schwabapi.com/oauth/authorize", state: "nonce-1" }),
+    ).toThrow();
   });
 
   it("rejects an extra key (e.g. a code echo)", () => {
     expect(() =>
       reauthStartResponse.parse({
         authUrl: "https://api.schwabapi.com/oauth/authorize",
-        state: "nonce-1",
         code: "leak",
       }),
     ).toThrow();

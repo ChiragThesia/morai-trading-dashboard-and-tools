@@ -1,6 +1,11 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { reauthStartRequest, reauthExchangeRequest, reauthExchangeResponse } from "@morai/contracts";
+import {
+  reauthStartRequest,
+  reauthStartResponse,
+  reauthExchangeRequest,
+  reauthExchangeResponse,
+} from "@morai/contracts";
 import type { ForStartingReauth, ForExchangingReauth } from "@morai/core";
 
 /**
@@ -29,10 +34,11 @@ export function reauthRoutes(startReauth: ForStartingReauth, exchangeReauth: For
     if (!result.ok) {
       return c.json({ error: "internal" }, 500);
     }
-    // Not reauthStartResponse.parse(): that schema validates the sidecar's raw wire body
-    // (which includes `state`, consumed inside reauth-adapter.ts). ForStartingReauth's Result
-    // deliberately narrows to { authUrl } only — the CSRF state never crosses into TS (T-37-06).
-    return c.json({ authUrl: result.value.authUrl });
+    // reauthStartResponse is now the slim { authUrl }-only browser-facing schema (the sidecar's
+    // 3-key wire shape lives in reauthStartSidecarResponse, consumed inside reauth-adapter.ts).
+    // Re-parsing here re-asserts the no-leak invariant at the edge — the strict schema cannot
+    // carry the CSRF state or an auth code even if the Result ever gained one (T-37-06).
+    return c.json(reauthStartResponse.parse(result.value));
   });
 
   router.post("/reauth/exchange", zValidator("json", reauthExchangeRequest), async (c) => {
