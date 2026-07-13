@@ -494,16 +494,16 @@ Plans:
 **Goal:** The operator reconnects Schwab entirely in-app — a banner-driven Reconnect wizard runs the hosted OAuth flow (trader then market), lands back on morai.wtf, exchanges the code silently, and re-inits the sidecar's clients + streamer in-process, so live data resumes with no CLI and no service restart.
 **Requirements**: REAUTH-01, REAUTH-02, REAUTH-03, REAUTH-04, REAUTH-05, REAUTH-06, REAUTH-07
 **Depends on:** Phase 36
-**Plans:** 7 plans (3 waves)
+**Plans:** 6/7 plans executed
 
 Plans:
 
-- [ ] 37-01-PLAN.md — docs-first decision + migration 0024 reauth_nonces (wave 1)
-- [ ] 37-02-PLAN.md — contracts + core reauth port/use-cases + sidecar adapter (wave 1)
-- [ ] 37-03-PLAN.md — sidecar re-init plumbing + refresh_issued_at writer + config secrets (wave 1)
-- [ ] 37-04-PLAN.md — sidecar admin endpoints: /start + /exchange (nonce, freshness gate, reinit) (wave 2)
-- [ ] 37-05-PLAN.md — server JWT-gated proxy routes + config + wiring (MCP scoped out) (wave 2)
-- [ ] 37-06-PLAN.md — web Reconnect wizard + callback capture/strip + banner (wave 2)
+- [x] 37-01-PLAN.md — docs-first decision + migration 0024 reauth_nonces (wave 1)
+- [x] 37-02-PLAN.md — contracts + core reauth port/use-cases + sidecar adapter (wave 1)
+- [x] 37-03-PLAN.md — sidecar re-init plumbing + refresh_issued_at writer + config secrets (wave 1)
+- [x] 37-04-PLAN.md — sidecar admin endpoints: /start + /exchange (nonce, freshness gate, reinit) (wave 2)
+- [x] 37-05-PLAN.md — server JWT-gated proxy routes + config + wiring (MCP scoped out) (wave 2)
+- [x] 37-06-PLAN.md — web Reconnect wizard + callback capture/strip + banner (wave 2)
 - [ ] 37-07-PLAN.md — integration gate + runbook UI path + deploy/env + live re-auth UAT (wave 3)
 
 ### Phase 38: Live market data via sidecar (SPX spot + VIX family) — sidecar becomes the sole LIVE market-data source (user-locked 2026-07-13): fan SPX spot out to browsers as an additive SSE event (on-change, max ~1/sec) and add live $VIX/$VVIX/$VIX9D/$VIX3M quotes via the sidecar for the regime rail — DISPLAY-LIVE, GATE-EOD LAW (entry gate/crisis bands/hysteresis keep consuming stored EOD macro_observations; FRED ingestion unchanged, history feeds backtest). useLiveStream exposes live values; all spot surfaces (header chip, payoff marker + T+0, gamma-profile marker, net greeks, mobile hero) + regime gauges go live with honest stale-fallback badges (catch #26). GEX walls/term-structure curves stay 30-min snapshot; Analyzer scoring stays snapshot-spot (marker-only live). AH/weekend honesty via existing quiet/stalled states.
