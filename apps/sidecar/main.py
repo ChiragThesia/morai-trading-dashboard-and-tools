@@ -150,7 +150,9 @@ async def reinit_schwab_session(app: FastAPI, cfg: object) -> bool:
 
     Returns False (no-op) if this instance is not currently the lock holder — the caller
     should report a transient failure rather than silently doing nothing (e.g. mid
-    rolling-deploy rollover, RESEARCH Pitfall 9).
+    rolling-deploy rollover, RESEARCH Pitfall 9). Also returns False if the lock is lost
+    mid-reinit (WR-04): the acquire loop then owns the fresh session, so recreating tasks
+    here would run two streamers at once.
 
     Old tasks are cancelled AND awaited before the new ones are created — never two live
     streamer sessions at once (GW-04 single-writer guarantee).
@@ -167,6 +169,18 @@ async def reinit_schwab_session(app: FastAPI, cfg: object) -> bool:
         if t is not None:
             with suppress(asyncio.CancelledError):
                 await t
+
+    # WR-04: the awaits above yield to the event loop. If the heartbeat detected lock loss
+    # during that window, its finally already tore these tasks down and the acquire loop is
+    # bringing up a FRESH streamer. Re-check has_lock and bail before creating a second set —
+    # two live streamer sessions against one market client is the GW-04 single-writer
+    # violation (Schwab invalid_grant). The acquire loop owns the fresh session from here.
+    if not getattr(app.state, "has_lock", False):
+        logger.warning(
+            "sidecar: advisory lock lost during reinit — aborting task recreation; "
+            "the acquire loop owns the fresh session"
+        )
+        return False
 
     _init_schwab_clients(app, cfg)  # idempotent — already rebuilds both clients unconditionally
 

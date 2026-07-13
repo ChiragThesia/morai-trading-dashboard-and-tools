@@ -118,3 +118,52 @@ async def test_reinit_cancels_old_tasks_and_creates_new_ones(monkeypatch) -> Non
             await t
         except asyncio.CancelledError:
             pass
+
+
+async def test_reinit_aborts_task_recreation_when_lock_lost_mid_reinit(monkeypatch) -> None:
+    """
+    WR-04: if the advisory lock is lost during the cancel/await window (the heartbeat
+    finally tore the old tasks down and the acquire loop is starting a FRESH streamer),
+    reinit must re-check has_lock AFTER the awaits and bail before creating a second set
+    of tasks — two live streamer sessions against one market client is the GW-04
+    single-writer violation.
+    """
+    init_recorder = MagicMock()
+    monkeypatch.setattr(main, "_init_schwab_clients", init_recorder)
+    monkeypatch.setattr(main, "_trader_token_keepalive", _sleeper)
+    monkeypatch.setattr(streamer, "start_streamer", _sleeper)
+    monkeypatch.setattr(streamer, "start_indices_poll", _sleeper)
+
+    app = types.SimpleNamespace(state=_make_app_state(has_lock=True))
+
+    async def _drop_lock_on_cancel(_: object) -> None:
+        # Models the heartbeat teardown racing reinit: when reinit cancels + awaits this
+        # old task, the lock is observed lost mid-await.
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            app.state.has_lock = False
+            raise
+
+    old_keepalive = asyncio.create_task(_drop_lock_on_cancel(None))
+    old_streamer = asyncio.create_task(_sleeper(None))
+    old_indices = asyncio.create_task(_sleeper(None))
+    app.state.keepalive_task = old_keepalive
+    app.state.streamer_task = old_streamer
+    app.state.indices_poll_task = old_indices
+
+    # Let the tasks reach their await points so cancel delivers CancelledError INTO the
+    # body (mirrors production, where these are long-running suspended tasks — not
+    # not-yet-started ones cancelled at entry).
+    await asyncio.sleep(0)
+
+    result = await main.reinit_schwab_session(app, cfg=object())
+
+    assert result is False
+    init_recorder.assert_not_called()  # bailed BEFORE rebuilding clients / creating tasks
+
+    # No fresh tasks were created — the slots still hold the (now-cancelled) old objects,
+    # so the acquire loop's fresh streamer is the only live one.
+    assert app.state.keepalive_task is old_keepalive
+    assert app.state.streamer_task is old_streamer
+    assert app.state.indices_poll_task is old_indices
