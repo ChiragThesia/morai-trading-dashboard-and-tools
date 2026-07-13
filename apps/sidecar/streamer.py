@@ -69,6 +69,21 @@ from websockets.exceptions import ConnectionClosed  # noqa: E402
 _RECONNECT_INITIAL_BACKOFF_S = 1.0
 _RECONNECT_MAX_BACKOFF_S = 30.0
 
+# ── VIX-family REST poll (LIVE-03, 38-02) ────────────────────────────────────
+# Symbols confirmed live against Schwab's /marketdata/v1/quotes (38-A1-PROBE.md,
+# 2026-07-13 RTH): all four return HTTP 200 in a single get_quotes() batch call,
+# keyed by the literal $-prefixed symbol, level in quote.lastPrice.
+INDICES_POLL_INTERVAL_S = 20.0
+
+INDICES_SYMBOLS = ["$VIX", "$VVIX", "$VIX9D", "$VIX3M"]
+
+_INDEX_SYMBOL_TO_FIELD = {
+    "$VIX": "vix",
+    "$VVIX": "vvix",
+    "$VIX9D": "vix9d",
+    "$VIX3M": "vix3m",
+}
+
 REQUIRED_OPTION_FIELDS = [
     StreamClient.LevelOneOptionFields.SYMBOL,
     StreamClient.LevelOneOptionFields.MARK,
@@ -466,3 +481,71 @@ async def start_streamer(app: object) -> None:
         # Backoff + jitter before reconnecting (avoid hammering Schwab on a flap).
         await asyncio.sleep(backoff + random.uniform(0, backoff))
         backoff = min(backoff * 2, _RECONNECT_MAX_BACKOFF_S)
+
+
+# ── VIX-family REST poll (LIVE-03, 38-02) ────────────────────────────────────
+
+
+def _extract_last_price(raw: dict, symbol: str) -> Optional[float]:
+    """
+    Pull one symbol's `quote.lastPrice` out of a get_quotes() response.
+
+    Degrades to None (never raises) when the symbol is absent or malformed —
+    omit-not-fabricate, so one bad/missing symbol never blanks the other three.
+    quote.quoteTime is unreliable (None in 38-A1-PROBE.md) and is never read here;
+    the frame's ts is stamped from sidecar receipt time via utc_now_z() instead.
+    """
+    quote = (raw.get(symbol) or {}).get("quote") or {}
+    value = quote.get("lastPrice")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_indices_frame(raw: dict) -> dict:
+    """Map a get_quotes() response for INDICES_SYMBOLS to a Z-suffixed indices frame."""
+    frame: dict = {"type": "indices", "ts": utc_now_z()}
+    for symbol, field in _INDEX_SYMBOL_TO_FIELD.items():
+        frame[field] = _extract_last_price(raw, symbol)
+    return frame
+
+
+async def start_indices_poll(app: object) -> None:
+    """
+    Background task: REST-poll the VIX family (LIVE-03) on a fixed ~20s interval and
+    emit one Z-suffixed `indices` frame onto event_queue per successful poll.
+
+    Reads `app.state.market_client` (quotes are market data, not trader — mirrors
+    chain_proxy.py's client choice), never trader_client. Runs on the SAME interval
+    regardless of RTH — no is_rth() guard; the client-side stale/quiet badge owns
+    staleness display (CONTEXT Area 1 Q4).
+
+    A get_quotes exception (incl. a malformed response body) is caught, logged by
+    type name only, and the loop continues — a bad poll never kills the task. A
+    QueueFull on put_nowait drops only that frame (mirrors _on_level_one_option's
+    guard). Degrades gracefully (logs a warning, keeps looping) when market_client
+    is None, so it recovers automatically once _init_schwab_clients re-inits it.
+    """
+    while True:
+        market_client = getattr(app.state, "market_client", None)
+        if market_client is None:
+            logger.warning(
+                "indices poll: market_client not available — degraded (waiting for re-init)"
+            )
+        else:
+            try:
+                resp = await market_client.get_quotes(INDICES_SYMBOLS)
+                frame = _build_indices_frame(resp.json())
+                try:
+                    event_queue.put_nowait(frame)
+                except asyncio.QueueFull:
+                    logger.warning("indices poll: event_queue full — dropping indices frame")
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "indices poll: get_quotes failed (%s) — continuing", type(exc).__name__
+                )
+
+        await asyncio.sleep(INDICES_POLL_INTERVAL_S)
