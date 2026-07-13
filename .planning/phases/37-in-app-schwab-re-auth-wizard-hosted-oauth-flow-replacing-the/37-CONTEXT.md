@@ -14,7 +14,9 @@ The server proxies those endpoints behind the existing Supabase JWT. The web
 `AuthExpiredBanner` grows a "Reconnect" wizard (trader → market, sequential). The CLI
 `seed_token.py` path stays as documented fallback. Schwab-side prerequisite already
 done: `https://morai.wtf` registered as an additional callback URL 2026-07-12
-(processes after market hours; live by 2026-07-14 session).
+(processes after market hours; live by 2026-07-14 session). User confirmed
+2026-07-13: registered on BOTH the trader and market Schwab apps (RESEARCH OQ1
+resolved — no per-app callback gap).
 
 Out of scope: auto-refresh without human login (Schwab requires interactive
 authorization every 7 days — hard ceiling), any change to the streamer/chain data
