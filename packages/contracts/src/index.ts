@@ -199,3 +199,18 @@ export type {
   PreviewPickerCandidate,
   PreviewRuleOverridesResponse,
 } from "./rule-preview.ts";
+
+// Re-auth wizard contracts (Phase 37, Plan 02 — REAUTH-05: ONE schema source for the future
+// server proxy routes; the exchange response is a bare `{ app, ok }`, no code/state echo).
+export {
+  reauthStartRequest,
+  reauthStartResponse,
+  reauthExchangeRequest,
+  reauthExchangeResponse,
+} from "./reauth.ts";
+export type {
+  ReauthStartRequest,
+  ReauthStartResponse,
+  ReauthExchangeRequest,
+  ReauthExchangeResponse,
+} from "./reauth.ts";
