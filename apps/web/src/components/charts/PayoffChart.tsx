@@ -50,6 +50,7 @@ import {
 import type { TooltipContentProps } from "recharts";
 import { ChartContainer } from "../ui/chart.tsx";
 import type { ChartConfig } from "../ui/chart.tsx";
+import { signedUsd } from "../../lib/position-format.ts";
 import { findZeroCrossings } from "../../lib/scenario-engine.ts";
 import type { PayoffPoint } from "../../lib/scenario-engine.ts";
 import { PayoffChartMarks, EDGE_ARROW_LANE_Y } from "./PayoffChartMarks.tsx";
@@ -242,13 +243,18 @@ function buildXTicks(min: number, max: number, targetCount = 5): ReadonlyArray<n
   return ticks;
 }
 
-/** Format a P&L value compactly */
+/** Format a P&L value compactly — AXIS TICK LABELS ONLY (structural chart furniture). */
 function fmtPl(v: number): string {
   const abs = Math.abs(v);
   const sign = v >= 0 ? "+" : "−";
   if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
   if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}k`;
   return `${sign}$${abs.toFixed(0)}`;
+}
+
+/** Exact P&L repr for human-read readouts (spot readout, crosshair tooltip) — no rounding. */
+function fmtPlExact(v: number): string {
+  return signedUsd(v);
 }
 
 function isFiniteNumber(v: unknown): v is number {
@@ -369,7 +375,7 @@ function PayoffChartGrid({
     return {
       x: nearRightEdge ? px - 8 : px + 8,
       anchor: nearRightEdge ? "end" : "start",
-      text: fmtPl(spotReadout.pl),
+      text: fmtPlExact(spotReadout.pl),
       color: spotReadout.pl >= 0 ? TEAL : CORAL,
     };
   })();
@@ -491,7 +497,7 @@ export function PayoffTooltipContent({
           color: pl >= 0 ? TEAL : CORAL,
         }}
       >
-        {fmtPl(pl)}
+        {fmtPlExact(pl)}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
         <span>SPX</span>

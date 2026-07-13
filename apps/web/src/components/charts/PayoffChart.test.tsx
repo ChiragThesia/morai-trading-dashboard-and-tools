@@ -732,11 +732,11 @@ describe("PayoffChart — native Tooltip crosshair content (D-10, D-12: typed co
     expect(screen.getByText("7550")).toBeTruthy();
   });
 
-  it("PayoffTooltipContent formats P&L from the payload value (teal for positive, coral for negative)", () => {
+  it("PayoffTooltipContent formats P&L from the payload value exactly, no compact k/M rounding (teal for positive, coral for negative)", () => {
     const { unmount } = render(
       <PayoffTooltipContent
         active
-        payload={[{ graphicalItemId: "today", name: "today", value: 1234 }]}
+        payload={[{ graphicalItemId: "today", name: "today", value: 1234.5678 }]}
         label={7500}
         coordinate={undefined}
         accessibilityLayer={false}
@@ -744,7 +744,7 @@ describe("PayoffChart — native Tooltip crosshair content (D-10, D-12: typed co
         gex={null}
       />,
     );
-    expect(screen.getByText("+$1.2k")).toBeTruthy();
+    expect(screen.getByText("+$1234.5678")).toBeTruthy();
     unmount();
 
     render(
