@@ -434,3 +434,56 @@ no longer sufficient).
 **References**: `.planning/phases/29-runtime-rule-settings-curated-20-knob-settings-surface-entry/29-CONTEXT.md`
 (Governance override); `docs/architecture/rule-overrides.md`;
 `packages/adapters/src/postgres/schema.ts` (`ruleOverrides`, once added).
+
+## D26 — In-app Schwab re-auth wizard: hosted OAuth, wizard-primary/CLI-fallback (Phase 37)
+
+**Context**: Schwab requires a fresh interactive OAuth dance every 7 days (hard ceiling,
+GW-01/D16). The only path today is the local CLI (`seed_token.py`, binds
+`127.0.0.1:8182` for the redirect) — an operator must run it by hand from a machine with
+repo access. `https://morai.wtf` is now registered as an additional Schwab callback URL
+on both the trader and market apps, making an in-app hosted flow possible.
+
+**Decision**: The in-app wizard becomes the PRIMARY re-auth path. The web
+`AuthExpiredBanner` grows a "Reconnect" flow: the sidecar mints a Schwab authorize URL,
+the browser does a full-page redirect to Schwab, and the sidecar exchanges the returned
+code for tokens in-process (same `token_store.py` encryption, same client re-init as the
+CLI dance already performs) — no service restart. The local CLI path (`seed_token.py`,
+`127.0.0.1:8182`) remains the documented fallback, unchanged, for when the hosted flow
+is unavailable.
+
+**New table `reauth_nonces` — Drizzle-tracked, Python-written**: the CSRF `state` value
+minted per re-auth attempt is persisted in a new `reauth_nonces` table (`state` PK,
+`app_id`, `created_at`), validated and deleted in one statement on exchange (single-use,
+10-minute TTL). This follows the exact split-ownership precedent `broker_tokens` already
+set (D22/D-02): the table is declared in `packages/adapters/src/postgres/schema.ts` for
+Drizzle migration tracking, but only the Python sidecar ever reads or writes it via
+psycopg2 — no TS repo, no in-memory twin.
+
+**New shared secret `SIDECAR_ADMIN_TOKEN`**: the sidecar has no auth today (Railway
+private networking only, GW-05). Its two new admin endpoints
+(`POST /sidecar/admin/reauth/start`, `POST /sidecar/admin/reauth/exchange`) mint and
+exchange OAuth tokens, so private networking alone is insufficient — a shared-secret
+header gates both. `SIDECAR_ADMIN_TOKEN` is a new Railway env var on BOTH `apps/server`
+and the sidecar.
+
+**New config `SCHWAB_WEB_CALLBACK_URL`**: the registered `https://morai.wtf` callback,
+used identically at authorize-URL-mint time and at exchange time (Schwab enforces exact
+`redirect_uri` match). New Railway env var on the sidecar (the only process that calls
+schwab-py).
+
+**Re-auth admin surface is HTTP-only, MCP explicitly OUT**: the server proxies the two
+sidecar admin endpoints behind the EXISTING Supabase JWT (`authReadGroup`, D20) — any
+authenticated user is the operator (single-user app, no new role system). No MCP tool
+mints or exchanges Schwab auth URLs; the re-auth surface is a browser-only wizard.
+
+**Swap cost**: Low. The hosted flow is additive — deleting the wizard's routes/UI
+reverts to CLI-only with no schema change (the `reauth_nonces` table would simply go
+unused). The CLI fallback's own callback registration (`127.0.0.1:8182`) is untouched.
+
+**Revisit trigger**: Schwab ships a non-interactive/service-account grant type (removes
+the 7-day interactive ceiling entirely) — the wizard and the CLI fallback both become
+unnecessary.
+
+**References**: `.planning/phases/37-in-app-schwab-re-auth-wizard-hosted-oauth-flow-replacing-the/37-CONTEXT.md`;
+`docs/operations/schwab-reauth-runbook.md` (gains the UI path); `packages/adapters/src/postgres/schema.ts`
+(`reauthNonces`); `packages/adapters/src/postgres/migrations/0024_reauth_nonces.sql`.
