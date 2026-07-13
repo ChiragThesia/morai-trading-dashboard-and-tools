@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
 current_phase: 36
-status: executing
-stopped_at: Phase 35.1 complete (all v1.3 phases closed — milestone-close ceremony pending)
-last_updated: "2026-07-11T21:35:45.564Z"
-last_activity: 2026-07-11
-last_activity_desc: Phase 36 execution started
+current_phase_name: analyzer-journal-mobile-redesign
+status: verifying
+stopped_at: Phase 34 closed (RTH parity passed 2026-07-13); Phase 36 executed, awaiting verification record + user phone check (C11)
+last_updated: "2026-07-13T14:36:54.976Z"
+last_activity: 2026-07-13
+last_activity_desc: Phase 34 complete, transitioned to Phase 35
 progress:
-  total_phases: 15
+  total_phases: 17
   completed_phases: 15
   total_plans: 81
   completed_plans: 81
-  percent: 100
-current_phase_name: analyzer-journal-mobile-redesign
+  percent: 88
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 36 — EXECUTING
-Plan: 5 of 5
-Status: 36-05 executed (all 5 plans done); C1-C10 + C7 screenshots PENDING-ORCHESTRATOR, C11 phone check PENDING-USER
-Last activity: 2026-07-11 — 36-05 D-17 desktop dead-branch cleanup + J16 gate green
+Phase: 36 — Analyzer + Journal mobile redesign (dedicated mobile trees)
+Plan: 5 of 5 executed
+Status: C1-C10 passed (agent UAT, commit 0098a33); VERIFICATION.md + C11 user phone check pending
+Last activity: 2026-07-13 — Phase 34 closed (RTH parity measurement passed)
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -171,6 +171,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 33 | 7 | - | - |
 | 35 | 6 | - | - |
 | 35.1 | 4 | - | - |
+| 34 | 5 | - | - |
 
 **Recent Trend:**
 

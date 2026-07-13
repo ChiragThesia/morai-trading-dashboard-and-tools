@@ -1,7 +1,8 @@
 ---
 phase: 34-tos-parity-scenario-model-close-the-t-0-gap-to-tos-analyze-f
 type: uat
-status: pending-rth-measurement
+status: passed
+measured: 2026-07-13 RTH
 ---
 
 # Phase 34 UAT — TOS-Parity Scenario Model
@@ -39,9 +40,19 @@ scope").
 
 | Book | BE-today TOS (low/high) | BE-today ours BEFORE | BE-today ours AFTER | Gap AFTER (points) |
 |------|--------------------------|------------------------|------------------------|---------------------|
-| 3-calendar book (CONTEXT.md baseline) | 7413.21 / 7690.62 | 7421 / 7673 | _(fill during RTH UAT)_ | _(fill during RTH UAT)_ |
+| 3-calendar book (CONTEXT.md baseline) | 7413.21 / 7690.62 | 7421 / 7673 | 7416 / 7686 | within a few points (user-confirmed) |
 
 BEFORE gap (recorded in 34-CONTEXT.md, pre-phase): low 8 points, high 18 points.
+
+**AFTER measurement (2026-07-13, live RTH session):** morai.wtf Overview payoff hero
+read BE-today 7416 / 7686 with live marks ("mark as of Jul 13, 09:33 AM · just now",
+positions badge LIVE). User compared TOS Analyze T+0 zero-crossings on the same
+combined book at the same moment and confirmed both breakevens match within a few
+points — the CONTEXT.md acceptance bar. Note: the live book has evolved since the
+CONTEXT.md baseline row (positions changed 07-10..07-13), so the BEFORE/AFTER columns
+are not same-book comparable; the gate is the same-moment TOS-vs-ours gap, which
+passed. Smile-IV revisit trigger (Section 1) NOT tripped — no vol-attributable
+residual observed.
 
 **Acceptance bar (user-locked, 34-CONTEXT.md "Hard requirements"):** BE-today within a
 few points of TOS Analyze on the same book, measured during RTH with live marks.
