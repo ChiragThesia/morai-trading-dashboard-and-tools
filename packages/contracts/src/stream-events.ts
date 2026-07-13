@@ -97,6 +97,41 @@ export const streamFillEvent = z.object({
 
 export type StreamFillEvent = z.infer<typeof streamFillEvent>;
 
+// ─── streamSpotEvent ──────────────────────────────────────────────────────────
+
+/**
+ * SSE "spot" event payload — dedicated live SPX spot lane (LIVE-01, Phase 38).
+ * Fanned out on-change, max 1/sec (server throttle) — never a keepalive of an
+ * unchanged value. Display-only: gates/verdicts keep reading EOD, never this stream.
+ */
+export const streamSpotEvent = z.object({
+  spot: z.number(),
+  /** ISO-8601 UTC timestamp. MUST end in "Z" — "+00:00" is rejected. */
+  ts: z.string().datetime(),
+});
+
+export type StreamSpotEvent = z.infer<typeof streamSpotEvent>;
+
+// ─── streamIndicesEvent ───────────────────────────────────────────────────────
+
+/**
+ * SSE "indices" event payload — VIX-family live quotes (LIVE-01, Phase 38).
+ * One batched event for all four regime symbols — they always poll together.
+ * Each field is nullable: a per-symbol Schwab failure omits that value rather
+ * than fabricating it (mirrors getRegimeBoard.ts). Display-only — regime gates
+ * and stored band verdicts keep reading EOD macro_observations, never this stream.
+ */
+export const streamIndicesEvent = z.object({
+  vix: z.number().nullable(),
+  vvix: z.number().nullable(),
+  vix9d: z.number().nullable(),
+  vix3m: z.number().nullable(),
+  /** ISO-8601 UTC timestamp. MUST end in "Z" — "+00:00" is rejected. */
+  ts: z.string().datetime(),
+});
+
+export type StreamIndicesEvent = z.infer<typeof streamIndicesEvent>;
+
 // ─── streamPingEvent ──────────────────────────────────────────────────────────
 
 /**
