@@ -31,6 +31,9 @@ const configSchema = z.object({
   // e.g. "http://sidecar.railway.internal:8000" on Railway; "http://localhost:8000" locally.
   // NOTE: Set this on the Railway server service (same value as the worker's SIDECAR_URL).
   SIDECAR_URL: z.string().url("SIDECAR_URL must be a valid URL"),
+  // Phase 37 (37-05): shared secret for the sidecar's re-auth admin surface (REAUTH-05).
+  // Same value set on the sidecar (37-03); Railway env setup on both services is owned by 37-07.
+  SIDECAR_ADMIN_TOKEN: z.string().min(16, "SIDECAR_ADMIN_TOKEN must be at least 16 chars"),
   // Phase 30 (30-05): ad-hoc analyze use-case BSM inputs — same defaults as the worker's
   // compute-picker wiring (config.ts), so pasted-calendar scoring matches engine scoring.
   BSM_DIVIDEND_YIELD: z.coerce.number().nonnegative().default(0.013),

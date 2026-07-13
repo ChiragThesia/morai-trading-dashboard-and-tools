@@ -19,6 +19,7 @@ Design constraints:
 
 import datetime
 import unittest.mock
+from typing import Optional
 
 import pytest
 import psycopg2
@@ -95,11 +96,26 @@ INSERT INTO broker_tokens (
 """
 
 
+# Mirror of packages/adapters/src/postgres/schema.ts § reauthNonces (migration 0024,
+# Phase 37). state is the CSRF nonce (PK); created_at anchors the 10-minute TTL enforced
+# at consume time (DELETE ... RETURNING app_id), never by a background sweep.
+_CREATE_REAUTH_NONCES_SQL = """
+DROP TABLE IF EXISTS reauth_nonces;
+
+CREATE TABLE reauth_nonces (
+    state      TEXT        PRIMARY KEY,
+    app_id     TEXT        NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+"""
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _setup_db() -> None:
     """
-    Session-scoped autouse fixture: creates the broker_tokens table (with pgcrypto)
-    and seeds one row for _APP_ID.  Runs once before any test in the session.
+    Session-scoped autouse fixture: creates the broker_tokens + reauth_nonces tables
+    (with pgcrypto) and seeds one broker_tokens row for _APP_ID.  Runs once before any
+    test in the session.
     """
     conn = psycopg2.connect(_DB_URL)
     conn.autocommit = True
@@ -107,8 +123,29 @@ def _setup_db() -> None:
         with conn.cursor() as cur:
             cur.execute(_CREATE_TABLE_SQL)
             cur.execute(_SEED_ROW_SQL, (_APP_ID, _ENC_KEY, _ENC_KEY))
+            cur.execute(_CREATE_REAUTH_NONCES_SQL)
     finally:
         conn.close()
+
+
+@pytest.fixture()
+def read_nonce(db_url: str):
+    """Callable(state) -> (app_id, created_at) or None — reads a reauth_nonces row so
+    tests can assert persistence (Phase 37 reauth wizard /start endpoint)."""
+
+    def _read(state: str) -> Optional[tuple]:
+        conn = psycopg2.connect(db_url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT app_id, created_at FROM reauth_nonces WHERE state = %s",
+                    (state,),
+                )
+                return cur.fetchone()
+        finally:
+            conn.close()
+
+    return _read
 
 
 @pytest.fixture()
