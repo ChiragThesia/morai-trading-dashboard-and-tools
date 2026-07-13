@@ -47,7 +47,7 @@ import type {
   MacroResponse,
   MacroSeriesId,
 } from "@morai/contracts";
-import type { StreamLiveGreekEvent, HeldPositionVerdict } from "@morai/contracts";
+import type { StreamLiveGreekEvent, StreamIndicesEvent, HeldPositionVerdict } from "@morai/contracts";
 
 const DEFAULT_IV = 0.18;
 /** Live-mark badge freshness threshold (D-03) — independent of LiveStatusBadge's
@@ -315,7 +315,17 @@ export function latestMacroValue(data: MacroResponse | undefined, id: MacroSerie
 export interface OverviewModel {
   readonly positions: ReadonlyArray<BrokerPositionResponse>;
   readonly rows: ReadonlyArray<Row>;
+  /** Live-aware engine spot: liveSpot while liveStatus==='live', else gex.spot ?? 5800
+   *  (unchanged fallback). Feeds payoff/scenario/greeks pricing — never rendered raw
+   *  in a header/hero chip (use displaySpot for that, catch #26). */
   readonly spot: number;
+  /** Honest display seam for the header/hero chip: live->liveSpot, else gex.spot, else
+   *  null ("—"). NEVER the 5800 engine fallback. */
+  readonly displaySpot: number | null;
+  /** Latest Zod-parsed live SPX spot tick (null until the first "spot" frame). */
+  readonly liveSpot: number | null;
+  /** Latest Zod-parsed VIX-family frame (null until the first "indices" frame). */
+  readonly liveIndices: StreamIndicesEvent | null;
   readonly gex: GexSnapshotEntry | undefined;
   readonly macro: MacroResponse | undefined;
   /** Mobile hero/market slices (one-line calls to shared lib fns; desktop PillHeader
@@ -389,7 +399,6 @@ export function useOverviewModel(): OverviewModel {
   const { data: cot } = useCot();
   const { data: macro } = useMacro();
   const positions = posData?.positions ?? [];
-  const spot = gex?.spot ?? 5800;
 
   // ── Held positions + exit rules (moved from Analyzer, EXIT-07/EXIT-09/EXIT-10):
   // same D-18/D-19-style state precedence Analyzer used — loading → error → cold-start
@@ -425,7 +434,17 @@ export function useOverviewModel(): OverviewModel {
     hasReceivedFirstTick: liveHasReceivedFirstTick,
     isReconnecting: liveIsReconnecting,
     reconnectNow: liveReconnectNow,
+    liveSpot,
+    liveIndices,
   } = useLiveStream();
+
+  // Live-aware engine spot (LIVE-04): live only while the stream itself is live AND a
+  // spot tick has arrived; else the unchanged 30-min GEX snapshot fallback — never a
+  // silent stale-as-live claim (catch #26). Feeds every payoff/scenario/greeks memo
+  // below (they already useMemo on spot, so this needs no signature change).
+  const spot = liveStatus === "live" && liveSpot !== null ? liveSpot : (gex?.spot ?? 5800);
+  // Honest display seam for the header/hero chip — NEVER the 5800 engine fallback.
+  const displaySpot = liveStatus === "live" && liveSpot !== null ? liveSpot : (gex?.spot ?? null);
 
   // ── Payoff hero positions (calendars only — the scenario engine models calendar
   // spreads; singles remain table-only rows) ──────────────────────────────────
@@ -599,6 +618,9 @@ export function useOverviewModel(): OverviewModel {
     positions,
     rows,
     spot,
+    displaySpot,
+    liveSpot,
+    liveIndices,
     gex,
     macro,
     macroValues,
