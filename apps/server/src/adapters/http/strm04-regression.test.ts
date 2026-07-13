@@ -32,6 +32,10 @@ import {
   registerClient,
   bufferTick,
   flushTicks,
+  bufferSpot,
+  flushSpot,
+  bufferIndices,
+  flushIndices,
   resetForTesting,
 } from "./stream-fan-out.ts";
 import type { SSEClient } from "./stream-fan-out.ts";
@@ -189,6 +193,61 @@ describe.skipIf(shouldSkip)(
           ts: "2026-06-28T10:00:00.000Z",
         });
         flushTicks();
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+        const afterRows = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM leg_observations`,
+        );
+        const after = extractCnt(afterRows[0]);
+
+        expect(after).toBe(before);
+      },
+      30_000,
+    );
+
+    it(
+      "spot lane (bufferSpot + flushSpot) writes zero leg_observations rows",
+      async () => {
+        if (!db) throw new Error("db not initialised");
+
+        const beforeRows = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM leg_observations`,
+        );
+        const before = extractCnt(beforeRows[0]);
+
+        const client = makeSilentClient();
+        registerClient(client);
+        bufferSpot(5842.375, "2026-06-28T10:00:00.000Z");
+        flushSpot();
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+        const afterRows = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM leg_observations`,
+        );
+        const after = extractCnt(afterRows[0]);
+
+        expect(after).toBe(before);
+      },
+      30_000,
+    );
+
+    it(
+      "indices lane (bufferIndices + flushIndices) writes zero leg_observations rows",
+      async () => {
+        if (!db) throw new Error("db not initialised");
+
+        const beforeRows = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM leg_observations`,
+        );
+        const before = extractCnt(beforeRows[0]);
+
+        const client = makeSilentClient();
+        registerClient(client);
+        bufferIndices(
+          { vix: 16.2, vvix: 88.5, vix9d: 15.1, vix3m: 17.8 },
+          "2026-06-28T10:00:00.000Z",
+        );
+        flushIndices();
         await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
         const afterRows = await db.execute(

@@ -23,11 +23,20 @@ import {
   unregisterClient,
   bufferTick,
   flushTicks,
+  bufferSpot,
+  flushSpot,
+  bufferIndices,
+  flushIndices,
   startFlushInterval,
   resetForTesting,
 } from "./stream-fan-out.ts";
 import type { SSEClient } from "./stream-fan-out.ts";
 import type { LiveGreekTick } from "@morai/core";
+
+// Non-round fixture values (catch #20 jsdom-honesty law) — never coincide with a
+// rounded production constant.
+const SPOT_A = 5842.375;
+const SPOT_B = 5859.125;
 
 // ─── Zod schemas for test assertions (parse-don't-cast) ──────────────────────
 const tickItem = z.object({ mark: z.number(), occSymbol: z.string() });
@@ -232,6 +241,220 @@ describe("stream-fan-out", () => {
       const handle = startFlushInterval();
       expect(handle).toBeTruthy();
       clearInterval(handle);
+    });
+  });
+
+  describe("bufferSpot / flushSpot — on-change throttle", () => {
+    it("flushes one named 'spot' event with { spot, ts } on first buffer", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      bufferSpot(SPOT_A, "2026-07-13T10:00:00.000Z");
+      flushSpot();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(1);
+      expect(client.calls[0]?.event).toBe("spot");
+      expect(JSON.parse(client.calls[0]?.data ?? "{}")).toEqual({
+        spot: SPOT_A,
+        ts: "2026-07-13T10:00:00.000Z",
+      });
+    });
+
+    it("buffering the SAME spot value again and flushing is a no-op", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      bufferSpot(SPOT_A, "2026-07-13T10:00:00.000Z");
+      flushSpot();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(1);
+
+      bufferSpot(SPOT_A, "2026-07-13T10:00:01.000Z"); // same value, later ts
+      flushSpot();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(1); // no second write
+    });
+
+    it("a CHANGED spot value sends again", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      bufferSpot(SPOT_A, "2026-07-13T10:00:00.000Z");
+      flushSpot();
+      await Promise.resolve();
+
+      bufferSpot(SPOT_B, "2026-07-13T10:00:01.000Z");
+      flushSpot();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(2);
+      expect(JSON.parse(client.calls[1]?.data ?? "{}")).toEqual({
+        spot: SPOT_B,
+        ts: "2026-07-13T10:00:01.000Z",
+      });
+    });
+
+    it("is a no-op when nothing buffered or no clients registered", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      flushSpot(); // nothing buffered
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(0);
+
+      unregisterClient(client);
+      bufferSpot(SPOT_A, "2026-07-13T10:00:00.000Z");
+      expect(() => flushSpot()).not.toThrow();
+    });
+
+    it("dead-client cleanup: aborted client is skipped and removed", async () => {
+      const deadClient = makeFakeClient();
+      const liveClient = makeFakeClient();
+      registerClient(deadClient);
+      registerClient(liveClient);
+      deadClient.aborted = true;
+      bufferSpot(SPOT_A, "2026-07-13T10:00:00.000Z");
+      flushSpot();
+      await Promise.resolve();
+      expect(deadClient.calls).toHaveLength(0);
+      expect(liveClient.calls).toHaveLength(1);
+    });
+
+    it("dead-client cleanup: a rejecting writeSSE removes the client", async () => {
+      const failClient = makeFakeClient();
+      const liveClient = makeFakeClient();
+      registerClient(failClient);
+      registerClient(liveClient);
+      failClient.reject = true;
+      bufferSpot(SPOT_A, "2026-07-13T10:00:00.000Z");
+      flushSpot();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(liveClient.calls).toHaveLength(1);
+
+      liveClient.calls.length = 0;
+      bufferSpot(SPOT_B, "2026-07-13T10:00:01.000Z");
+      flushSpot();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(liveClient.calls).toHaveLength(1); // failClient no longer attempted
+    });
+  });
+
+  describe("bufferIndices / flushIndices — on-change throttle", () => {
+    const VALUES_A = { vix: 16.2, vvix: 88.5, vix9d: 15.1, vix3m: 17.8 };
+    const VALUES_B = { vix: 18.4, vvix: 90.1, vix9d: 16.9, vix3m: 19.2 };
+
+    it("flushes one named 'indices' event with { vix, vvix, vix9d, vix3m, ts } on first buffer", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      bufferIndices(VALUES_A, "2026-07-13T10:00:00.000Z");
+      flushIndices();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(1);
+      expect(client.calls[0]?.event).toBe("indices");
+      expect(JSON.parse(client.calls[0]?.data ?? "{}")).toEqual({
+        ...VALUES_A,
+        ts: "2026-07-13T10:00:00.000Z",
+      });
+    });
+
+    it("buffering the SAME indices snapshot again and flushing is a no-op", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      bufferIndices(VALUES_A, "2026-07-13T10:00:00.000Z");
+      flushIndices();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(1);
+
+      bufferIndices(VALUES_A, "2026-07-13T10:00:01.000Z"); // same values, later ts
+      flushIndices();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(1); // no second write
+    });
+
+    it("a CHANGED indices snapshot (even one field) sends again", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      bufferIndices(VALUES_A, "2026-07-13T10:00:00.000Z");
+      flushIndices();
+      await Promise.resolve();
+
+      bufferIndices(VALUES_B, "2026-07-13T10:00:01.000Z");
+      flushIndices();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(2);
+      expect(JSON.parse(client.calls[1]?.data ?? "{}")).toEqual({
+        ...VALUES_B,
+        ts: "2026-07-13T10:00:01.000Z",
+      });
+    });
+
+    it("null fields are preserved (per-symbol omit, not fabricated)", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      const withNull = { vix: 16.2, vvix: null, vix9d: 15.1, vix3m: 17.8 };
+      bufferIndices(withNull, "2026-07-13T10:00:00.000Z");
+      flushIndices();
+      await Promise.resolve();
+      expect(JSON.parse(client.calls[0]?.data ?? "{}")).toEqual({
+        ...withNull,
+        ts: "2026-07-13T10:00:00.000Z",
+      });
+    });
+
+    it("is a no-op when nothing buffered or no clients registered", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      flushIndices(); // nothing buffered
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(0);
+
+      unregisterClient(client);
+      bufferIndices(VALUES_A, "2026-07-13T10:00:00.000Z");
+      expect(() => flushIndices()).not.toThrow();
+    });
+
+    it("dead-client cleanup: aborted client is skipped and removed", async () => {
+      const deadClient = makeFakeClient();
+      const liveClient = makeFakeClient();
+      registerClient(deadClient);
+      registerClient(liveClient);
+      deadClient.aborted = true;
+      bufferIndices(VALUES_A, "2026-07-13T10:00:00.000Z");
+      flushIndices();
+      await Promise.resolve();
+      expect(deadClient.calls).toHaveLength(0);
+      expect(liveClient.calls).toHaveLength(1);
+    });
+
+    it("dead-client cleanup: a rejecting writeSSE removes the client", async () => {
+      const failClient = makeFakeClient();
+      const liveClient = makeFakeClient();
+      registerClient(failClient);
+      registerClient(liveClient);
+      failClient.reject = true;
+      bufferIndices(VALUES_A, "2026-07-13T10:00:00.000Z");
+      flushIndices();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(liveClient.calls).toHaveLength(1);
+
+      liveClient.calls.length = 0;
+      bufferIndices(VALUES_B, "2026-07-13T10:00:01.000Z");
+      flushIndices();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(liveClient.calls).toHaveLength(1); // failClient no longer attempted
+    });
+  });
+
+  describe("resetForTesting — clears spot/indices state", () => {
+    it("clears the last-sent trackers so a repeated value sends fresh after reset", async () => {
+      const client = makeFakeClient();
+      registerClient(client);
+      bufferSpot(SPOT_A, "2026-07-13T10:00:00.000Z");
+      flushSpot();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(1);
+
+      resetForTesting();
+      registerClient(client); // resetForTesting cleared the client Set too — re-register
+      bufferSpot(SPOT_A, "2026-07-13T10:00:01.000Z"); // same value as before reset
+      flushSpot();
+      await Promise.resolve();
+      expect(client.calls).toHaveLength(2); // sends again — lastSentSpot was cleared
     });
   });
 });
