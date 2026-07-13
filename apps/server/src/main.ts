@@ -63,6 +63,8 @@ import {
   resolvePickerRuleConfig,
   resolveExitRuleConfig,
   resolveRegimeRuleConfig,
+  makeStartReauth,
+  makeExchangeReauth,
 } from "@morai/core";
 import type {
   Calendar,
@@ -86,6 +88,7 @@ import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
 import { journalRulesRoutes } from "./adapters/http/journal-rules.routes.ts";
 import { settingsRoutes } from "./adapters/http/settings.routes.ts";
+import { reauthRoutes } from "./adapters/http/reauth.routes.ts";
 import { journalLifecycleRoutes } from "./adapters/http/journal-lifecycle.routes.ts";
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
 import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
@@ -98,7 +101,7 @@ import { streamRoutes, makeStreamSseRouter } from "./adapters/http/stream.routes
 import { startFlushInterval, bufferTick } from "./adapters/http/stream-fan-out.ts";
 import { runSidecarStreamWithReconnect } from "./adapters/http/sidecar-sse.ts";
 import { recomputeLiveGreek } from "@morai/core";
-import { makeSidecarPositionReconciler } from "@morai/adapters";
+import { makeSidecarPositionReconciler, makeSidecarReauthAdapter } from "@morai/adapters";
 
 const config = bootConfig();
 
@@ -492,6 +495,17 @@ const enqueueJob = makeEnqueueJobUseCase({
   now: () => new Date(),
 });
 
+// REAUTH-05 (37-05): sidecar re-auth adapter + use-cases — shared by POST /api/reauth/{start,exchange}
+// (mounted below in the apiRouter chain, JWT-gated). Deliberately NOT registered as an MCP tool
+// (CONTEXT decision) — a tool that mints Schwab authorize URLs is a privileged surface kept HTTP-only.
+const reauthAdapter = makeSidecarReauthAdapter({
+  fetch: globalThis.fetch,
+  baseUrl: config.SIDECAR_URL,
+  adminToken: config.SIDECAR_ADMIN_TOKEN,
+});
+const startReauth = makeStartReauth({ startReauth: reauthAdapter.startReauth });
+const exchangeReauth = makeExchangeReauth({ exchangeReauth: reauthAdapter.exchangeReauth });
+
 // Build the Hono app
 const app = new Hono();
 
@@ -541,7 +555,10 @@ const apiRouter = new Hono()
   .route("/", exitRoutes(getExitAdvice))
   // RUNTIME-* (29-13): GET/PUT /api/settings/rules — curated rule-override surface (MCP-02)
   // B4/B7 (32-04): POST /api/settings/rules/preview — staged-change dry-run, never persists
-  .route("/", settingsRoutes(getRuleSettings, setRuleOverrides, previewRuleOverrides));
+  .route("/", settingsRoutes(getRuleSettings, setRuleOverrides, previewRuleOverrides))
+  // REAUTH-05 (37-05): POST /api/reauth/{start,exchange} — JWT-gated proxy to the sidecar admin
+  // surface (operator-only, any authed user). MCP intentionally excluded (HTTP-only surface).
+  .route("/", reauthRoutes(startReauth, exchangeReauth));
 
 // Phase 12 (12-05): streaming — build shared deps before route mounts.
 const sidecarReconciler = makeSidecarPositionReconciler({

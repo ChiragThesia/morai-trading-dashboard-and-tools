@@ -91,6 +91,9 @@ export type { SidecarChainAdapter } from "./sidecar/chain-adapter.ts";
 // Phase 12 (12-05): real ForReconcilingPositions over GET /sidecar/positions (STRM-05)
 export { makeSidecarPositionReconciler } from "./sidecar/positions-reconciler.ts";
 export type { SidecarPositionReconcilerDeps } from "./sidecar/positions-reconciler.ts";
+// Phase 37 (37-02/37-05): real ForStartingReauth/ForExchangingReauth over the sidecar admin surface
+export { makeSidecarReauthAdapter } from "./sidecar/reauth-adapter.ts";
+export type { SidecarReauthAdapterDeps } from "./sidecar/reauth-adapter.ts";
 export { makeFredRateAdapter, makeFredSeriesAdapter } from "./http/fred.ts";
 // Phase 14 (14-03): CBOE VVIX index-quote adapter — ForFetchingVvixQuote (MAC-01, D-15)
 export { makeCboeVvixAdapter } from "./http/cboe-vvix.ts";
