@@ -19,6 +19,12 @@ vi.mock("../hooks/useStatus.ts", () => ({
   useStatus: vi.fn(),
 }));
 
+// ReauthWizard's own machinery (Dialog, useReauth, sessionStorage) is covered by
+// ReauthWizard.test.tsx — here we only need its Reconnect trigger button to exist.
+vi.mock("./ReauthWizard.tsx", () => ({
+  ReauthWizard: () => <button type="button">Reconnect</button>,
+}));
+
 import { useStatus } from "../hooks/useStatus.ts";
 
 const mockUseStatus = vi.mocked(useStatus);
@@ -73,18 +79,15 @@ describe("AuthExpiredBanner", () => {
     cleanup();
   });
 
-  it("renders the locked banner copy when tokenFreshness is AUTH_EXPIRED", () => {
+  it("renders the locked banner copy + Reconnect button when tokenFreshness is AUTH_EXPIRED", () => {
     setStatusData(makeStatusData("AUTH_EXPIRED"));
 
     render(<AuthExpiredBanner />);
 
     // The banner must contain the locked AUTH_EXPIRED copy
     expect(screen.getByRole("alert")).toBeDefined();
-    expect(screen.getByText(/Schwab auth expired/)).toBeDefined();
-    expect(screen.getByText(/reconnect/)).toBeDefined();
-    // The `auth setup` portion must be in a <code> element
-    expect(screen.getByRole("code")).toBeDefined();
-    expect(screen.getByRole("code").textContent).toBe("auth setup");
+    expect(screen.getByText("Schwab auth expired. Live data may be stale.")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeDefined();
   });
 
   it("renders nothing (null) when tokenFreshness is fresh", () => {
@@ -114,12 +117,13 @@ describe("AuthExpiredBanner", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders no dismiss/close button", () => {
+  it("renders only the Reconnect control, no separate dismiss/close button", () => {
     setStatusData(makeStatusData("AUTH_EXPIRED"));
 
     render(<AuthExpiredBanner />);
-    // No close/dismiss button exists per spec
-    expect(screen.queryByRole("button")).toBeNull();
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.textContent).toBe("Reconnect");
   });
 
   it("clears the iOS home-indicator safe area on the red branch", () => {
@@ -144,13 +148,14 @@ describe("AuthExpiredBanner amber pre-expiry state (AUTH-05)", () => {
     cleanup();
   });
 
-  it("renders an amber alert when trader is near-expiry and no app is AUTH_EXPIRED", () => {
+  it("renders an amber alert + Reconnect button when trader is near-expiry and no app is AUTH_EXPIRED", () => {
     setStatusData(makeStatusData("fresh", { trader: 3600 }));
 
     render(<AuthExpiredBanner />);
 
     expect(screen.getByRole("alert")).toBeDefined();
     expect(screen.getByText(/expires soon/i)).toBeDefined();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeDefined();
   });
 
   it("renders an amber alert for market-only near-expiry (trader fresh)", () => {
@@ -179,11 +184,13 @@ describe("AuthExpiredBanner amber pre-expiry state (AUTH-05)", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders no dismiss/close button in the amber state", () => {
+  it("renders only the Reconnect control, no separate dismiss/close button in the amber state", () => {
     setStatusData(makeStatusData("fresh", { trader: 3600 }));
 
     render(<AuthExpiredBanner />);
-    expect(screen.queryByRole("button")).toBeNull();
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.textContent).toBe("Reconnect");
   });
 
   it("clears the iOS home-indicator safe area on the amber branch", () => {
@@ -204,9 +211,10 @@ describe("AuthExpiredBanner amber pre-expiry state (AUTH-05)", () => {
     render(<AuthExpiredBanner />);
 
     // A market-only expiry must NOT go silent (review WR-02) — the amber
-    // surface stays up with market-expiry copy pointing at the runbook.
+    // surface stays up with market-expiry copy + a Reconnect entry point.
     expect(screen.getByRole("alert")).toBeDefined();
     expect(screen.getByText(/market app auth expired/i)).toBeDefined();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeDefined();
   });
 
   it("renders the red banner (precedence) when trader and market are both AUTH_EXPIRED", () => {

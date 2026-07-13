@@ -1,4 +1,5 @@
 import { useStatus } from "../hooks/useStatus.ts";
+import { ReauthWizard } from "./ReauthWizard.tsx";
 
 /**
  * AuthExpiredBanner — UI-02: fixed bottom banner when Schwab auth has expired.
@@ -25,15 +26,16 @@ import { useStatus } from "../hooks/useStatus.ts";
  * - padding: 8px 16px (bottom padding clears the iOS home-indicator safe area via
  *   `max(8px, env(safe-area-inset-bottom))`, 35-UI-SPEC.md "Safe-area insets")
  * - text: body token (12px JetBrains Mono), color: #ef5350 (coral)
- * - `auth setup` in a <code> element: bg #3e1f23, padding 1px 4px, border-radius 3px
- * - NO dismiss button — banner persists until AUTH_EXPIRED clears
+ * - NO separate dismiss button — banner persists until AUTH_EXPIRED clears; the
+ *   Reconnect button (37-UI-SPEC.md) is the CTA, not a dismiss control
  *
- * Copy (locked by UI-SPEC copywriting contract):
- * "Schwab auth expired. Run `auth setup` to reconnect. Live data may be stale."
+ * Copy (locked by 37-UI-SPEC.md copywriting contract, supersedes the old CLI-runbook
+ * copy — see docs/operations/schwab-reauth-runbook.md for the CLI fallback):
+ * "Schwab auth expired. Live data may be stale." + Reconnect
  *
  * Amber copy/styling (Claude's Discretion, CONTEXT.md D-03): follows the same
  * role="alert" + fixed-bottom + JetBrains Mono precedent with an amber palette,
- * distinct from the red tones above. References the operator re-auth runbook.
+ * distinct from the red tones above, with the same Reconnect entry point.
  */
 export function AuthExpiredBanner() {
   const { data } = useStatus();
@@ -81,19 +83,8 @@ export function AuthExpiredBanner() {
           color: "#ef5350",
         }}
       >
-        Schwab auth expired. Run{" "}
-        <code
-          role="code"
-          style={{
-            fontFamily: "inherit",
-            backgroundColor: "#3e1f23",
-            padding: "1px 4px",
-            borderRadius: "3px",
-          }}
-        >
-          auth setup
-        </code>{" "}
-        to reconnect. Live data may be stale.
+        Schwab auth expired. Live data may be stale.
+        <ReauthWizard />
       </div>
     );
   }
@@ -121,20 +112,9 @@ export function AuthExpiredBanner() {
         }}
       >
         {isMarketExpired
-          ? "Schwab market app auth expired — chain data fell back to CBOE. Re-auth per "
-          : "Schwab auth expires soon. Re-auth within 24 hours to avoid an outage. See "}
-        <code
-          role="code"
-          style={{
-            fontFamily: "inherit",
-            backgroundColor: "#3e2f0f",
-            padding: "1px 4px",
-            borderRadius: "3px",
-          }}
-        >
-          docs/operations/schwab-reauth-runbook.md
-        </code>
-        .
+          ? "Schwab market app auth expired — chain data fell back to CBOE."
+          : "Schwab auth expires soon. Reconnect within 24 hours to avoid an outage."}
+        <ReauthWizard />
       </div>
     );
   }
