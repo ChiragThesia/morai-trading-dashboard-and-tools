@@ -508,11 +508,17 @@ Plans:
 
 ### Phase 38: Live market data via sidecar (SPX spot + VIX family) — sidecar becomes the sole LIVE market-data source (user-locked 2026-07-13): fan SPX spot out to browsers as an additive SSE event (on-change, max ~1/sec) and add live $VIX/$VVIX/$VIX9D/$VIX3M quotes via the sidecar for the regime rail — DISPLAY-LIVE, GATE-EOD LAW (entry gate/crisis bands/hysteresis keep consuming stored EOD macro_observations; FRED ingestion unchanged, history feeds backtest). useLiveStream exposes live values; all spot surfaces (header chip, payoff marker + T+0, gamma-profile marker, net greeks, mobile hero) + regime gauges go live with honest stale-fallback badges (catch #26). GEX walls/term-structure curves stay 30-min snapshot; Analyzer scoring stays snapshot-spot (marker-only live). AH/weekend honesty via existing quiet/stalled states.
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** The sidecar is the sole LIVE market-data source: SPX spot is fanned to every browser as an additive on-change SSE event (~1/sec, zero new Schwab calls) and drives every spot surface (header chip, payoff marker + T+0, gamma-profile marker, net greeks, mobile hero); the regime rail's VIX/VVIX/ratio gauges show live values via a ~20s sidecar poll — all with honest stale-fallback badges (catch #26) and the DISPLAY-LIVE/GATE-EOD LAW keeping every gate, crisis band, and hysteresis on the stored EOD macro_observations.
+**Requirements**: LIVE-01, LIVE-02, LIVE-03, LIVE-04, LIVE-05
 **Depends on:** Phase 36 (independent of Phase 37)
-**Plans:** 0 plans
+**Plans:** 7 plans (5 waves)
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 38 to break down)
+- [ ] 38-01-PLAN.md — contracts: additive streamSpotEvent + streamIndicesEvent (Z-suffix) (wave 1)
+- [ ] 38-02-PLAN.md — sidecar VIX-family get_quotes poll loop + A1 symbol smoke-test checkpoint (wave 1)
+- [ ] 38-03-PLAN.md — server spot+indices fan-out (on-change ~1/sec) + sidecar-sse dispatch + main.ts (wave 2)
+- [ ] 38-04-PLAN.md — web hook + model seam: useLiveStream liveSpot/liveIndices + live-aware model spot (wave 2)
+- [ ] 38-05-PLAN.md — spot display consumers: header chip + GEX markers + mobile hero, honest badge (wave 3)
+- [ ] 38-06-PLAN.md — regime gauges display-live/gate-EOD (RegimeBoard + MarketRail + Overview prop) (wave 4)
+- [ ] 38-07-PLAN.md — integration gate + Railway/Vercel deploy + live RTH UAT (wave 5)

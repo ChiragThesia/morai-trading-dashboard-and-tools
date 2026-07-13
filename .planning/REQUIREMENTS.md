@@ -123,6 +123,46 @@ without a service restart. Requirements derived from `37-CONTEXT.md` locked deci
       `SIDECAR_ADMIN_TOKEN` + `SCHWAB_WEB_CALLBACK_URL` are set on both Railway services before
       deploy; the next real re-auth (~2026-07-20) is performed through the wizard as the human UAT.
 
+### Live market data via sidecar (Phase 38, added 2026-07-13)
+
+The sidecar becomes the sole LIVE market-data source. Two flows: fan SPX spot out to browsers
+as an additive SSE event, and add live VIX-family quotes for the regime rail — DISPLAY-LIVE,
+GATE-EOD. Requirements derived from `38-CONTEXT.md` locked decisions (Areas 1 & 2, Q1–Q4);
+no separate discuss-phase requirement IDs existed until now.
+
+- [ ] **LIVE-01**: Additive stream contract — `streamSpotEvent {spot, ts}` and
+      `streamIndicesEvent {vix, vvix, vix9d, vix3m, ts}` in `packages/contracts/src/stream-events.ts`,
+      each `ts` a `z.string().datetime()` that REJECTS `+00:00` and requires a trailing `Z`.
+      New events only — `streamLiveGreekEvent`/`streamPingEvent` unchanged so old clients are
+      unaffected (CONTEXT Area 1 Q1, WR-03 additive-only precedent).
+- [ ] **LIVE-02**: SPX spot is fanned to browsers with ZERO new Schwab calls — the server
+      broadcasts the already-arriving `underlyingPrice` (sidecar-sse.ts `observeSpot` site) as a
+      named `spot` SSE event, coalesced on-change with a max of ~1 frame/sec per symbol; no
+      unchanged-value keepalives (CONTEXT Area 1 Q2). A malformed/late frame never severs the
+      stream for other browsers (swallow-and-log, CR-01/T-12-05-04).
+- [ ] **LIVE-03**: The sidecar polls `$VIX/$VVIX/$VIX9D/$VIX3M` via `market_client.get_quotes`
+      on a fixed ~20s interval (no RTH gate on the poll — CONTEXT Area 1 Q4), reads `lastPrice`
+      (bid/ask/mark may be absent for indices), tolerates a per-symbol failure without dropping
+      the others, and emits one Z-suffixed `indices` frame onto the existing `event_queue`. The
+      exact Schwab ticker strings/response shape are verified live (`get_quotes` smoke test) BEFORE
+      the parser is built around them (Assumption A1, Open Question 1).
+- [ ] **LIVE-04**: `useLiveStream` exposes `liveSpot`/`liveIndices` on their own freshness stamp
+      (a spot-only feed never paints the greeks badge live). EVERY spot surface — header SPX chip,
+      Overview payoff spot marker + T+0 recompute, gamma-profile marker, net-greeks, mobile hero —
+      reads ONE live-aware spot seam (both `useOverviewModel` spot AND the direct `gex.spot` reads
+      in `Overview.tsx` collapse onto it, Pitfall 1). Honest badge: the live value shows ONLY while
+      stream status is `live`; quiet/stalled falls back to the stored EOD/snapshot value with
+      existing stale styling — never a silent `liveSpot ?? gex.spot` lie (catch #26, CONTEXT Area 2
+      Q1/Q2).
+- [ ] **LIVE-05**: DISPLAY-LIVE / GATE-EOD LAW — the regime rail's three broker-quotable gauges
+      (`vix-term-structure` = VIX/VIX3M, `vvix`, `vix9d-vix` = VIX9D/VIX) display live values with
+      band coloring recomputed client-side from the live value against the response's effective
+      `bandWarn`/`bandCrisis` (the same `@morai/core` banders the server uses). The entry-gate
+      verdict chip, the stored `indicator.band`, and the `/api/analytics/regime` EOD
+      `macro_observations` source stay UNTOUCHED; `hy-oas` stays FRED; FRED ingestion is unchanged.
+      Live tint only while status is `live`; the "EOD · as of…" footer reverts on quiet/stalled
+      (CONTEXT Area 2 Q1/Q2, v1.3 flapping risk #3).
+
 ## Future Requirements
 
 Deferred. Tracked but not in the v1.3 roadmap.
@@ -184,6 +224,11 @@ Explicit exclusions with reasoning.
 | REAUTH-05 | Phase 37 | Planned |
 | REAUTH-06 | Phase 37 | Planned |
 | REAUTH-07 | Phase 37 | Planned |
+| LIVE-01 | Phase 38 | Planned |
+| LIVE-02 | Phase 38 | Planned |
+| LIVE-03 | Phase 38 | Planned |
+| LIVE-04 | Phase 38 | Planned |
+| LIVE-05 | Phase 38 | Planned |
 
 **Coverage:** 28/28 v1.3 requirements mapped, 0 orphans. Phase order:
 23 (VIX3M, first-and-alone) → 24 (regime board) → 25 (ops rider) → 26 (exit advisor) →
