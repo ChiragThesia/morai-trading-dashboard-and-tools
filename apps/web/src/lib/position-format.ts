@@ -10,11 +10,14 @@
 import type { BrokerPositionResponse } from "@morai/contracts";
 
 /**
- * Exact decimal representation of a non-negative number — every real digit the
- * value carries, no rounding, no padding. Rounds at 8dp first (kills float noise
- * like 37.490000000000002) then trims trailing zeros/dot.
+ * Exact decimal representation of a number — every real digit it carries, no
+ * rounding, no padding. Rounds at 8dp first (kills float noise like
+ * 37.490000000000002) then trims trailing zeros/dot. Native `-` sign passes
+ * through untouched (toFixed's own), so callers embedding this in a sentence
+ * that supplies its own +/$ literal (Analyzer/MobileScorecard debit/vega) can
+ * call it directly on the raw value.
  */
-function exactAbs(absV: number): string {
+export function exactAbs(absV: number): string {
   return absV.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
 }
 

@@ -101,6 +101,7 @@ import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
+import { exactAbs } from "../lib/position-format.ts";
 import { repriceScenario } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
 import { computePayoffDomain } from "../lib/payoff-domain.ts";
@@ -381,7 +382,7 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
 
     const summary = screen.getByTestId("combined-book-summary");
     expect(summary.textContent).toContain("+ 1 more");
-    expect(summary.textContent).toContain(`$${(TOP.debit + SECOND.debit).toFixed(0)}`);
+    expect(summary.textContent).toContain(`$${exactAbs(TOP.debit + SECOND.debit)}`);
   });
 });
 
@@ -571,7 +572,7 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
 
     const summary = screen.getByTestId("combined-book-summary");
     expect(summary.textContent).toContain("+ 1 more");
-    expect(summary.textContent).toContain(`$${(debit1 + debit2).toFixed(0)}`);
+    expect(summary.textContent).toContain(`$${exactAbs(debit1 + debit2)}`);
   });
 
   it("Clear all removes every pasted card and re-selects the top-ranked scored candidate", async () => {

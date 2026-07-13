@@ -13,6 +13,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { PickerCandidate, RuleSetEntry } from "@morai/contracts";
+import { exactAbs } from "../../lib/position-format.ts";
 import { MobileScorecard } from "./MobileScorecard.tsx";
 
 const SORTED = [...pickerSnapshotFixture.candidates].sort((a, b) => b.score - a.score);
@@ -34,7 +35,7 @@ const BASE = {
 
 /** The verbatim desktop selected-name context tail for a scored candidate. */
 function contextTail(c: PickerCandidate): string {
-  return ` · debit $${c.debit.toFixed(0)} · θ ${c.theta >= 0 ? "+" : ""}${c.theta.toFixed(1)}/d · vega +${c.vega.toFixed(0)}`;
+  return ` · debit $${exactAbs(c.debit)} · θ ${c.theta >= 0 ? "+" : ""}${c.theta.toFixed(1)}/d · vega +${exactAbs(c.vega)}`;
 }
 
 const REGISTRY_RULESET: ReadonlyArray<RuleSetEntry> = [
