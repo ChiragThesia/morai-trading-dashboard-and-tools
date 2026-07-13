@@ -772,3 +772,169 @@ class TestZSuffixUtility:
         assert isinstance(ts, str)
         assert ts.endswith("Z"), f"utc_now_z() must end with Z, got {ts!r}"
         assert "+00:00" not in ts, "utc_now_z() must not contain +00:00"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 2 (38-02): start_indices_poll — get_quotes REST poll loop (LIVE-03)
+#
+# Confirmed live (38-A1-PROBE.md, 2026-07-13 RTH): $VIX/$VVIX/$VIX9D/$VIX3M all
+# return HTTP 200 in a single get_quotes() batch call, keyed by the literal
+# $-prefixed symbol, level in quote.lastPrice. quote.quoteTime is unreliable
+# (None in the probe) — ts is stamped from sidecar receipt time, never quoteTime.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_quotes_resp(raw: dict):
+    resp = MagicMock()
+    resp.json = MagicMock(return_value=raw)
+    return resp
+
+
+class TestIndicesPoll:
+    """start_indices_poll: one get_quotes iteration → one Z-suffixed indices frame."""
+
+    def test_emits_indices_frame_with_all_symbols(self):
+        from streamer import start_indices_poll, event_queue
+
+        while not event_queue.empty():
+            event_queue.get_nowait()
+
+        raw = {
+            "$VIX": {"assetMainType": "INDEX", "quote": {"lastPrice": 17.17}},
+            "$VVIX": {"assetMainType": "INDEX", "quote": {"lastPrice": 94.59}},
+            "$VIX9D": {"assetMainType": "INDEX", "quote": {"lastPrice": 15.1}},
+            "$VIX3M": {"assetMainType": "INDEX", "quote": {"lastPrice": 19.66}},
+        }
+        market_client = AsyncMock()
+        market_client.get_quotes = AsyncMock(return_value=_make_quotes_resp(raw))
+        app = MagicMock()
+        app.state.market_client = market_client
+
+        with patch("streamer.asyncio.sleep", new=AsyncMock(side_effect=asyncio.CancelledError())):
+            async def _run():
+                try:
+                    await start_indices_poll(app)
+                except asyncio.CancelledError:
+                    pass
+
+            asyncio.run(_run())
+
+        assert not event_queue.empty()
+        frame = event_queue.get_nowait()
+        assert frame["type"] == "indices"
+        assert frame["vix"] == 17.17
+        assert frame["vvix"] == 94.59
+        assert frame["vix9d"] == 15.1
+        assert frame["vix3m"] == 19.66
+        assert frame["ts"].endswith("Z"), f"ts must end in Z, got {frame['ts']}"
+
+    def test_missing_symbol_maps_to_none_others_present(self):
+        from streamer import start_indices_poll, event_queue
+
+        while not event_queue.empty():
+            event_queue.get_nowait()
+
+        raw = {
+            "$VIX": {"quote": {"lastPrice": 17.17}},
+            "$VVIX": {"quote": {"lastPrice": 94.59}},
+            "$VIX9D": {"quote": {"lastPrice": 15.1}},
+            # $VIX3M intentionally absent from the response
+        }
+        market_client = AsyncMock()
+        market_client.get_quotes = AsyncMock(return_value=_make_quotes_resp(raw))
+        app = MagicMock()
+        app.state.market_client = market_client
+
+        with patch("streamer.asyncio.sleep", new=AsyncMock(side_effect=asyncio.CancelledError())):
+            async def _run():
+                try:
+                    await start_indices_poll(app)
+                except asyncio.CancelledError:
+                    pass
+
+            asyncio.run(_run())
+
+        frame = event_queue.get_nowait()
+        assert frame["vix3m"] is None, "a missing symbol must map to None, not raise"
+        assert frame["vix"] == 17.17
+        assert frame["vvix"] == 94.59
+        assert frame["vix9d"] == 15.1
+
+    def test_get_quotes_exception_swallowed_loop_continues(self):
+        """A get_quotes throw must not raise out of the task, and no frame is pushed."""
+        from streamer import start_indices_poll, event_queue
+
+        while not event_queue.empty():
+            event_queue.get_nowait()
+
+        market_client = AsyncMock()
+        market_client.get_quotes = AsyncMock(side_effect=RuntimeError("boom"))
+        app = MagicMock()
+        app.state.market_client = market_client
+
+        sleep_calls = []
+
+        async def _fake_sleep(_seconds):
+            sleep_calls.append(1)
+            raise asyncio.CancelledError()
+
+        with patch("streamer.asyncio.sleep", new=_fake_sleep):
+            async def _run():
+                try:
+                    await start_indices_poll(app)
+                except asyncio.CancelledError:
+                    pass
+
+            asyncio.run(_run())
+
+        assert event_queue.empty(), "an exception must not push a partial/garbage frame"
+        assert len(sleep_calls) == 1, "loop must reach sleep (continue) after the exception"
+
+    def test_queue_full_drops_frame_without_raising(self):
+        """A QueueFull on put_nowait is caught — the poll task must not crash."""
+        from streamer import start_indices_poll
+
+        raw = {
+            "$VIX": {"quote": {"lastPrice": 17.17}},
+            "$VVIX": {"quote": {"lastPrice": 94.59}},
+            "$VIX9D": {"quote": {"lastPrice": 15.1}},
+            "$VIX3M": {"quote": {"lastPrice": 19.66}},
+        }
+        market_client = AsyncMock()
+        market_client.get_quotes = AsyncMock(return_value=_make_quotes_resp(raw))
+        app = MagicMock()
+        app.state.market_client = market_client
+
+        with patch("streamer.event_queue") as mock_queue, patch(
+            "streamer.asyncio.sleep", new=AsyncMock(side_effect=asyncio.CancelledError())
+        ):
+            mock_queue.put_nowait = MagicMock(side_effect=asyncio.QueueFull())
+
+            async def _run():
+                try:
+                    await start_indices_poll(app)
+                except asyncio.CancelledError:
+                    pass
+
+            asyncio.run(_run())  # no assertion needed — QueueFull must not propagate
+
+    def test_degrades_when_market_client_none(self):
+        """No market_client (not-seeded / lock-loss) → warn + keep looping, never raise."""
+        from streamer import start_indices_poll
+
+        app = MagicMock()
+        app.state.market_client = None
+
+        with patch("streamer.asyncio.sleep", new=AsyncMock(side_effect=asyncio.CancelledError())):
+            async def _run():
+                try:
+                    await start_indices_poll(app)
+                except asyncio.CancelledError:
+                    pass
+
+            asyncio.run(_run())  # no exception raised = graceful degrade
+
+    def test_indices_poll_interval_constant(self):
+        from streamer import INDICES_POLL_INTERVAL_S
+
+        assert INDICES_POLL_INTERVAL_S == 20.0
