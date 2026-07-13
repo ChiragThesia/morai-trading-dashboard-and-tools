@@ -31,7 +31,16 @@ findings:
   warning: 4
   info: 3
   total: 9
-status: issues_found
+status: fixes_applied
+fixes:
+  CR-01: 6894e7c
+  CR-02: 6894e7c
+  WR-01: 048fddc
+  WR-03: a87bc9a
+fixes_note: >-
+  TS-side findings fixed (CR-01/CR-02 share one root-cause commit). WR-02 and
+  WR-04 are sidecar-Python findings handled separately. IN-01/IN-02/IN-03 are
+  optional/out-of-scope and left unchanged.
 ---
 
 # Phase 37: Code Review Report
@@ -39,7 +48,7 @@ status: issues_found
 **Reviewed:** 2026-07-13
 **Depth:** deep (cross-file trace of the OAuth start/exchange call chains, contract seams, nonce lifecycle, and re-init lock invariants)
 **Files Reviewed:** 22
-**Status:** issues_found
+**Status:** fixes_applied — the 4 TS findings (CR-01, CR-02, WR-01, WR-03) are fixed; WR-02/WR-04 are sidecar-Python findings handled separately, and IN-01/IN-02/IN-03 are optional/out-of-scope
 
 ## Summary
 
@@ -69,6 +78,8 @@ reentrancy), and three INFO items.
 ## Critical Issues
 
 ### CR-01: `/reauth/start` adapter rejects the real sidecar response — `.strict()` trips on the `app` key
+
+**FIXED:** commit `6894e7c` — split the conflated schema into `reauthStartSidecarResponse` `{app,authUrl,state}` (adapter parse). Adapter regression test now feeds the real 3-key sidecar body.
 
 **File:** `packages/adapters/src/sidecar/reauth-adapter.ts:91` (schema), `packages/contracts/src/reauth.ts:16-21` (contract), `apps/sidecar/reauth_admin.py:76-110` (producer)
 
@@ -114,6 +125,8 @@ Then add a test whose fetch stub returns the exact three-key body the sidecar em
 
 ### CR-02: `/reauth/start` web hook rejects the real server response — required `state` is (correctly) absent
 
+**FIXED:** commit `6894e7c` (same root cause as CR-01) — slim `reauthStartResponse` is now `{authUrl}`-only; the route re-parses through it and the hook parses the real state-free body. Hook + contract regression tests feed the real server body.
+
 **File:** `apps/web/src/hooks/useReauth.ts:33` (parse), `apps/server/src/adapters/http/reauth.routes.ts:35` (producer), `packages/contracts/src/reauth.ts:16-21` (contract)
 
 **Issue:** The server route deliberately returns `{ authUrl }` only, with no `state`
@@ -145,6 +158,8 @@ from the `ReauthStartResponse` type consumers. Add one integration-style test th
 ## Warnings
 
 ### WR-01: `handleAuthorize` swallows a failed `/start` — the button dies silently
+
+**FIXED:** commit `048fddc` — `handleAuthorize` now sets `confirming` before navigating and `failure` on rejection, reusing the existing failure copy + Retry. Regression test mocks a `/start` rejection and asserts the failure copy + Retry render.
 
 **File:** `apps/web/src/components/ReauthWizard.tsx:116-120`
 
@@ -188,6 +203,8 @@ re-raise only after ensuring the streamer is restarted. At minimum, surface the 
 distinctly from exchange success so the wizard/status don't claim health.
 
 ### WR-03: stale `reauth-completed-apps` can skip a genuinely-expired app within a same-tab cycle
+
+**FIXED:** commit `a87bc9a` — the banner now derives the live AUTH_EXPIRED set from `/api/status` tokenFreshness and passes it to the wizard as `expiredApps`; `computeInitialState` pre-fills an app `success` only when sessionStorage records it AND its live token is not expired. Regression test: both apps expired + sessionStorage `["trader"]` starts at the trader step.
 
 **File:** `apps/web/src/components/ReauthWizard.tsx:43-74`
 
