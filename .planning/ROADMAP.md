@@ -488,3 +488,25 @@ Plans:
 - [x] 36-03-PLAN.md — Journal switch + useJournalModel + desktop-test migration (wave 1)
 - [x] 36-04-PLAN.md — JournalMobile tree: TradeCard, History fold, MobileLifecycle pan mount + ⋯ Rebuild, rail stack (wave 2)
 - [x] 36-05-PLAN.md — D-17 desktop dead-branch cleanup (screenshot-gated) + integration gate C1-C10 + C11 handoff (wave 3)
+
+### Phase 37: In-app Schwab re-auth wizard — hosted OAuth flow replacing the local CLI dance: sidecar admin endpoints (authorize URL + code exchange + in-process client re-init, token_store encryption, no restart), server proxy behind Supabase JWT (operator-only), web Reconnect wizard on the AUTH_EXPIRED/T-24h banner (trader→market sequential, state CSRF check, auto-exchange on morai.wtf callback landing; dedicated /reauth/callback path). Never log the auth code. Runbook gains UI path, CLI stays fallback.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 36
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 37 to break down)
+
+### Phase 38: Live SPX spot across the app — fan the already-flowing sidecar underlyingPrice tick out to browsers: additive streamSpotEvent {spot, ts} contract, server broadcast at the sidecar-sse observeSpot site (on-change, max ~1/sec), sidecar dedicated $SPX index quote subscription so spot ticks without open positions, useLiveStream exposes liveSpot, all screens (header SPX chip, payoff spot marker + T+0, gamma profile marker, net greeks) consume liveSpot with honest snapshot-fallback badge (catch #26: gate display, never silent fallback). GEX walls/term-structure curves stay 30-min snapshot (out of scope). AH/weekend honesty via existing quiet/stalled states.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 36 (independent of Phase 37)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 38 to break down)

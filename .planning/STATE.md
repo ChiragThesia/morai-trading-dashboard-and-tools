@@ -344,6 +344,23 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
   Hysteresis arm/disarm pairs edited as validated pairs; normalizers, event penalties, gexFit
   credits, liquidity internals stay code-only.
 
+- Phase 37 added (2026-07-13): In-app Schwab re-auth wizard — hosted OAuth flow replacing the
+  local CLI dance. Sidecar admin endpoints (authorize URL + code exchange + in-process client
+  re-init via token_store encryption, no restart), server proxy behind Supabase JWT
+  (operator-only), web Reconnect wizard on the AUTH_EXPIRED/T-24h banner (trader→market
+  sequential, state CSRF check, auto-exchange on morai.wtf callback landing; dedicated
+  /reauth/callback path). `https://morai.wtf` registered as extra Schwab callback 2026-07-12
+  (processes after market hours); 127.0.0.1:8182 stays for the CLI fallback. Never log the
+  auth code.
+
+- Phase 38 added (2026-07-13): Live SPX spot across the app. Sidecar underlyingPrice already
+  reaches the server per option tick (sidecar-sse observeSpot site) but is dropped before
+  browser fan-out — add additive streamSpotEvent {spot, ts} contract, server broadcast
+  (on-change, max ~1/sec), dedicated $SPX index quote subscription in the sidecar so spot
+  ticks without open positions, useLiveStream liveSpot + honest snapshot-fallback badge
+  (catch #26). GEX walls/term-structure curves stay 30-min snapshot; ~1-sec Schwab streamer
+  conflation is the liveness ceiling (same as positions LIVE).
+
 ### Decisions
 
 Cleared at v1.1 close — full log in PROJECT.md Key Decisions table; per-plan decisions in
