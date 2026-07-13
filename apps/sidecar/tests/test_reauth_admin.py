@@ -352,6 +352,48 @@ class TestReauthExchange:
             assert secret_redirect not in message
             assert "invalid_grant" not in message  # str(exc) never logged — type name only
 
+    async def test_reinit_failure_returns_ok_false_and_logs_type_only(
+        self, monkeypatch, db_url, caplog
+    ):
+        """WR-02: a successful token write followed by a reinit_schwab_session raise must
+        NOT claim health — the handler catches the reinit failure, returns {app, ok:false},
+        and logs only the exception type name (never streamer internals)."""
+        import main
+        from reauth_admin import ExchangeBody, reauth_exchange
+
+        cfg = _make_cfg(db_url)
+        req = _make_fake_request(cfg)
+        state = "reinit-fail-state"
+        _insert_nonce(db_url, state, "trader")
+
+        monkeypatch.setattr(
+            schwab.auth, "get_auth_context", lambda key, cb, state=None: _FakeAuthContext(state=state)
+        )
+        sample_token = _sample_token()
+        monkeypatch.setattr(
+            schwab.auth,
+            "client_from_received_url",
+            lambda key, secret, ctx, received_url, token_write_func, **kw: token_write_func(sample_token),
+        )
+        reinit_mock = AsyncMock(
+            side_effect=RuntimeError("SENSITIVE-streamer-detail-should-never-be-logged")
+        )
+        monkeypatch.setattr(main, "reinit_schwab_session", reinit_mock)
+
+        with caplog.at_level(logging.ERROR):
+            result = await reauth_exchange(
+                req,
+                ExchangeBody(redirectUrl=f"https://morai.wtf/?code=abc&state={state}"),
+                x_sidecar_admin_token=cfg.SIDECAR_ADMIN_TOKEN,
+            )
+
+        assert result.app == "trader"
+        assert result.ok is False  # token anchored, but the stream re-init failed → not healthy
+        reinit_mock.assert_awaited_once()
+
+        for record in caplog.records:
+            assert "SENSITIVE-streamer-detail-should-never-be-logged" not in record.getMessage()
+
     async def test_ok_false_when_refresh_issued_at_not_freshly_anchored(self, monkeypatch, db_url):
         """
         Defensive freshness re-check: even when the exchange call raises nothing, ok is

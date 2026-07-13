@@ -196,5 +196,16 @@ async def reauth_exchange(
     # (mirrors main.py's own lazy `from streamer import start_streamer`).
     from main import reinit_schwab_session
 
-    await reinit_schwab_session(request.app, cfg)
+    # WR-02: the token is written+anchored, but the session re-init can still fail (e.g. a
+    # DB blip rebuilding the Schwab clients). A reinit raise must NOT let us claim health —
+    # surface ok:false and log only the type name (T-37-02), never str(exc)/streamer detail.
+    try:
+        await reinit_schwab_session(request.app, cfg)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "reauth reinit failed for app_id=%s (%s) — token written but stream not "
+            "reinitialised",
+            app_id, type(exc).__name__,
+        )
+        return ExchangeResponse(app=app_id, ok=False)
     return ExchangeResponse(app=app_id, ok=fresh)

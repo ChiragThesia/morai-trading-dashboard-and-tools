@@ -155,7 +155,9 @@ async def reinit_schwab_session(app: FastAPI, cfg: object) -> bool:
     here would run two streamers at once.
 
     Old tasks are cancelled AND awaited before the new ones are created — never two live
-    streamer sessions at once (GW-04 single-writer guarantee).
+    streamer sessions at once (GW-04 single-writer guarantee). If the client rebuild fails
+    the tasks are still recreated (never strand the stream) and the error is re-raised so
+    the caller can surface it (WR-02).
     """
     if not getattr(app.state, "has_lock", False):
         return False
@@ -182,12 +184,31 @@ async def reinit_schwab_session(app: FastAPI, cfg: object) -> bool:
         )
         return False
 
-    _init_schwab_clients(app, cfg)  # idempotent — already rebuilds both clients unconditionally
+    # WR-02: rebuild the clients, then recreate all three tasks. If _init_schwab_clients
+    # raises a non-ValueError (e.g. a DB blip when client_from_access_functions reads the
+    # token), we must STILL recreate the tasks — leaving the lock held with zero tasks
+    # strands the stream, and the lock-loss self-heal only fires on ACTUAL lock loss. The
+    # tasks read their clients off app.state at run time and tolerate a stale/None client,
+    # so recreate-with-existing-clients keeps the stream alive; we re-raise afterwards so the
+    # exchange handler surfaces ok:false instead of falsely reporting health.
+    init_error: Optional[Exception] = None
+    try:
+        _init_schwab_clients(app, cfg)  # idempotent — rebuilds both clients unconditionally
+    except Exception as exc:  # noqa: BLE001 — surface the type, never strand the stream
+        init_error = exc
+        logger.error(
+            "sidecar: reinit client rebuild failed (%s) — recreating tasks with the "
+            "existing clients so the stream is not stranded, then surfacing the failure",
+            type(exc).__name__,
+        )
 
     from streamer import start_streamer, start_indices_poll  # noqa: PLC0415 — mirrors the existing import site
     app.state.keepalive_task = asyncio.create_task(_trader_token_keepalive(app))
     app.state.streamer_task = asyncio.create_task(start_streamer(app))
     app.state.indices_poll_task = asyncio.create_task(start_indices_poll(app))
+
+    if init_error is not None:
+        raise init_error
     return True
 
 

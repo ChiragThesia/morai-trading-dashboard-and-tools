@@ -19,6 +19,8 @@ import asyncio
 import types
 from unittest.mock import MagicMock
 
+import pytest
+
 import main
 import streamer
 
@@ -114,6 +116,60 @@ async def test_reinit_cancels_old_tasks_and_creates_new_ones(monkeypatch) -> Non
     app.state.keepalive_task.cancel()
     app.state.streamer_task.cancel()
     for t in (app.state.keepalive_task, app.state.streamer_task):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
+
+
+async def test_reinit_recreates_tasks_and_reraises_on_client_init_failure(monkeypatch) -> None:
+    """
+    WR-02: if _init_schwab_clients raises a non-ValueError (e.g. a DB blip inside
+    client_from_access_functions), reinit must NOT strand the stream. It still recreates
+    all THREE tasks (keepalive/streamer/indices) with the existing clients, then re-raises
+    so the exchange handler can surface ok:false. Leaving the lock held with zero tasks is
+    the stranding bug — the lock-loss self-heal only fires on ACTUAL lock loss.
+    """
+    def _boom(app: object, cfg: object) -> None:
+        raise RuntimeError("db connectivity blip during client rebuild")
+
+    monkeypatch.setattr(main, "_init_schwab_clients", _boom)
+    monkeypatch.setattr(main, "_trader_token_keepalive", _sleeper)
+    monkeypatch.setattr(streamer, "start_streamer", _sleeper)
+    monkeypatch.setattr(streamer, "start_indices_poll", _sleeper)
+
+    old_keepalive = asyncio.create_task(_sleeper(None))
+    old_streamer = asyncio.create_task(_sleeper(None))
+    old_indices = asyncio.create_task(_sleeper(None))
+    lock_conn = MagicMock()
+    app = types.SimpleNamespace(
+        state=_make_app_state(
+            has_lock=True,
+            keepalive_task=old_keepalive,
+            streamer_task=old_streamer,
+            indices_poll_task=old_indices,
+            lock_conn=lock_conn,
+        )
+    )
+
+    with pytest.raises(RuntimeError):
+        await main.reinit_schwab_session(app, cfg=object())
+
+    # Despite the client-rebuild failure, all three tasks were recreated (stream not stranded).
+    assert app.state.keepalive_task is not old_keepalive
+    assert app.state.streamer_task is not old_streamer
+    assert app.state.indices_poll_task is not old_indices
+    assert not app.state.keepalive_task.done()
+    assert not app.state.streamer_task.done()
+    assert not app.state.indices_poll_task.done()
+
+    # The advisory lock is never touched — even on a rebuild failure.
+    assert app.state.has_lock is True
+    assert app.state.lock_conn is lock_conn
+    lock_conn.close.assert_not_called()
+
+    for t in (app.state.keepalive_task, app.state.streamer_task, app.state.indices_poll_task):
+        t.cancel()
         try:
             await t
         except asyncio.CancelledError:
