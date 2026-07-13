@@ -49,7 +49,7 @@ describe("ReauthWizard", () => {
   });
 
   it("stays closed by default and opens the trader idle step from the Reconnect trigger", () => {
-    render(<ReauthWizard />);
+    render(<ReauthWizard expiredApps={["trader", "market"]} />);
 
     expect(screen.queryByText(/Click Authorize with Schwab/)).toBeNull();
 
@@ -63,7 +63,7 @@ describe("ReauthWizard", () => {
     mockConsumeCapturedRedirect.mockReturnValueOnce(FAKE_REDIRECT);
     mockExchangeReauth.mockResolvedValueOnce({ app: "trader", ok: true });
 
-    render(<ReauthWizard />);
+    render(<ReauthWizard expiredApps={["trader", "market"]} />);
 
     expect(mockExchangeReauth).toHaveBeenCalledWith(FAKE_REDIRECT);
 
@@ -79,7 +79,7 @@ describe("ReauthWizard", () => {
     mockConsumeCapturedRedirect.mockReturnValueOnce(FAKE_REDIRECT);
     mockExchangeReauth.mockResolvedValueOnce({ app: "trader", ok: false });
 
-    render(<ReauthWizard />);
+    render(<ReauthWizard expiredApps={["trader", "market"]} />);
 
     await waitFor(() => {
       expect(
@@ -97,7 +97,7 @@ describe("ReauthWizard", () => {
   it("surfaces a failed /start as the inline failure state + Retry, never a silent dead button (WR-01)", async () => {
     mockStartReauth.mockRejectedValueOnce(new Error("start failed"));
 
-    render(<ReauthWizard />);
+    render(<ReauthWizard expiredApps={["trader", "market"]} />);
     fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
     fireEvent.click(screen.getByRole("button", { name: "Authorize with Schwab" }));
 
@@ -109,13 +109,26 @@ describe("ReauthWizard", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeDefined();
   });
 
+  it("starts at trader when trader is genuinely expired, even if sessionStorage claims trader done (WR-03)", () => {
+    // A stale completed-set from a prior 7-day cycle claims trader finished...
+    sessionStorage.setItem("reauth-completed-apps", JSON.stringify(["trader"]));
+
+    // ...but live token freshness says trader is AUTH_EXPIRED again. The wizard must NOT skip it.
+    render(<ReauthWizard expiredApps={["trader", "market"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+
+    expect(screen.getByText("Click Authorize with Schwab to reconnect the trader app.")).toBeDefined();
+    expect(screen.queryByText(/reconnect the market app/)).toBeNull();
+  });
+
   it("reaches the Done state (both chips filled) once market succeeds after trader already completed", async () => {
     // Simulate the cross-redirect persistence: trader already succeeded on a prior page load.
     sessionStorage.setItem("reauth-completed-apps", JSON.stringify(["trader"]));
     mockConsumeCapturedRedirect.mockReturnValueOnce(FAKE_REDIRECT);
     mockExchangeReauth.mockResolvedValueOnce({ app: "market", ok: true });
 
-    render(<ReauthWizard />);
+    // Trader is live-fresh (only market expired), so the completed-set legitimately seeds it success.
+    render(<ReauthWizard expiredApps={["market"]} />);
 
     await waitFor(() => {
       expect(screen.getByText("Reconnected. Live data resumes on the next status check.")).toBeDefined();
@@ -129,7 +142,7 @@ describe("ReauthWizard", () => {
     mockConsumeCapturedRedirect.mockReturnValueOnce(FAKE_REDIRECT);
     mockExchangeReauth.mockResolvedValueOnce({ app: "trader", ok: true });
 
-    const { container } = render(<ReauthWizard />);
+    const { container } = render(<ReauthWizard expiredApps={["trader", "market"]} />);
 
     await waitFor(() => {
       expect(screen.getByText("Click Authorize with Schwab to reconnect the market app.")).toBeDefined();

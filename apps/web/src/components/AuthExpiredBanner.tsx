@@ -1,4 +1,5 @@
 import { useStatus } from "../hooks/useStatus.ts";
+import type { ReauthApp } from "../hooks/useReauth.ts";
 import { ReauthWizard } from "./ReauthWizard.tsx";
 
 /**
@@ -46,6 +47,13 @@ export function AuthExpiredBanner() {
   }
 
   const { trader, market } = data.tokenFreshness;
+
+  // WR-03: the live set of AUTH_EXPIRED apps, handed to the wizard so its initial step is seeded
+  // from real freshness (never a stale sessionStorage completed-set alone).
+  const expiredApps: ReadonlyArray<ReauthApp> = [
+    ...(trader.status === "AUTH_EXPIRED" ? (["trader"] as const) : []),
+    ...(market.status === "AUTH_EXPIRED" ? (["market"] as const) : []),
+  ];
 
   // Red gate: trader-only, unchanged from the pre-existing behavior (see doc comment above).
   const isExpired = trader.status === "AUTH_EXPIRED";

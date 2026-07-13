@@ -7,9 +7,16 @@
  *
  * Cross-redirect continuity: each OAuth leg is a full same-tab navigation away and back, which
  * destroys all React state, so a small `sessionStorage` record of which apps have already
- * succeeded is the only way a fresh mount (after the market leg's redirect) knows trader already
- * finished and should resume at the Market step with its chip filled. The exchange response's
- * `app` field (server-determined from its own nonce lookup) drives the actual state transition;
+ * succeeded lets a fresh mount (after the market leg's redirect) resume at the Market step with
+ * the Trader chip filled. The exchange response's `app` field (server-determined from its own
+ * nonce lookup) drives the actual state transition.
+ *
+ * WR-03: sessionStorage is continuity only, never the freshness authority. The initial seed also
+ * consults the live `expiredApps` (derived from /api/status tokenFreshness by the banner): an app
+ * is pre-filled `success` only when the completed-set lists it AND its live token is not
+ * AUTH_EXPIRED. That stops a stale completed-set (left over from a prior 7-day cycle) from skipping
+ * an app that has genuinely re-expired.
+ *
  * ponytail: sessionStorage here is a plain completed-apps set (not itself keyed by the OAuth
  * state nonce) — sufficient for a strictly-sequential 2-step wizard, add per-nonce tracking only
  * if a non-sequential resume path is ever introduced.
@@ -61,15 +68,19 @@ function persistCompletedApp(app: ReauthApp): void {
   }
 }
 
-function computeInitialState(): WizardState {
+function computeInitialState(expiredApps: ReadonlySet<ReauthApp>): WizardState {
   const completed = readCompletedApps();
+  // WR-03: pre-fill an app `success` only when sessionStorage recorded it AND its live token is
+  // not AUTH_EXPIRED — a genuinely re-expired app is never skipped by a stale completed-set.
+  const seededSuccess = (app: ReauthApp): boolean => completed.has(app) && !expiredApps.has(app);
+  const currentStep: ReauthApp = STEP_ORDER.find((app) => !seededSuccess(app)) ?? "market";
   return {
-    currentStep: completed.has("trader") ? "market" : "trader",
+    currentStep,
     statuses: {
-      trader: completed.has("trader") ? "success" : "idle",
-      market: completed.has("market") ? "success" : "idle",
+      trader: seededSuccess("trader") ? "success" : "idle",
+      market: seededSuccess("market") ? "success" : "idle",
     },
-    done: completed.has("trader") && completed.has("market"),
+    done: STEP_ORDER.every(seededSuccess),
   };
 }
 
@@ -77,10 +88,15 @@ function nextStep(app: ReauthApp): ReauthApp | "done" {
   return app === "trader" ? "market" : "done";
 }
 
-export function ReauthWizard(): React.ReactElement {
+interface ReauthWizardProps {
+  /** Apps whose live token is AUTH_EXPIRED (from /api/status tokenFreshness, via the banner). */
+  readonly expiredApps: ReadonlyArray<ReauthApp>;
+}
+
+export function ReauthWizard({ expiredApps }: ReauthWizardProps): React.ReactElement {
   const { startReauth, exchangeReauth } = useReauth();
   const [open, setOpen] = useState(false);
-  const [state, setState] = useState<WizardState>(computeInitialState);
+  const [state, setState] = useState<WizardState>(() => computeInitialState(new Set(expiredApps)));
 
   useEffect(() => {
     const redirect = consumeCapturedRedirect();
