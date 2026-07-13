@@ -87,6 +87,42 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **PLAY-05**: autoTuneTargetDelta: VIX-tuned target-delta preference applied to the band
       scan (additive, after crisis-gate infra lands)
 
+### In-app Schwab re-auth wizard (Phase 37, added 2026-07-13)
+
+Operational hardening added mid-milestone: replace the local CLI OAuth dance with an in-app,
+banner-driven Reconnect wizard so the operator re-auths Schwab from the browser (or phone)
+without a service restart. Requirements derived from `37-CONTEXT.md` locked decisions +
+`37-UI-SPEC.md` (no separate discuss-phase requirement IDs existed until now).
+
+- [ ] **REAUTH-01**: Sidecar exposes two admin endpoints — `POST /sidecar/admin/reauth/start`
+      (mints a Schwab authorize URL per app via `get_auth_context`, no local callback server)
+      and `POST /sidecar/admin/reauth/exchange` (exchanges the returned redirect URL for tokens
+      via `client_from_received_url`, written through the existing `token_store` encryption).
+      Both endpoints require the `SIDECAR_ADMIN_TOKEN` shared-secret header.
+- [ ] **REAUTH-02**: The OAuth CSRF `state` is a single-use Postgres nonce (`reauth_nonces`,
+      migration 0024) with a 10-minute TTL, validated AND consumed atomically on exchange
+      (`DELETE ... RETURNING`) so a replayed exchange can never succeed twice.
+- [ ] **REAUTH-03**: Per-app success is a `refresh_issued_at` freshness re-check (anchored within
+      5 minutes), never a bare HTTP 200; the wizard's exchange writer anchors `refresh_issued_at`
+      so the AUTH_EXPIRED banner actually clears.
+- [ ] **REAUTH-04**: After a successful exchange the sidecar re-inits its Schwab clients AND
+      cancels+recreates the streamer/keepalive background tasks in-process while holding the
+      advisory lock (no restart, never two live streamer sessions); trader-success + market-failure
+      keeps trader's fresh token and offers retry of only the failed app.
+- [ ] **REAUTH-05**: The server proxies `/api/reauth/{start,exchange}` behind the existing Supabase
+      JWT (operator-only, any authed user), forwarding with the admin-token header; error responses
+      are generic (never echo the code/state/redirect URL). No MCP tool mints or exchanges auth
+      URLs — this privileged surface is HTTP-only (MCP explicitly scoped out).
+- [ ] **REAUTH-06**: The web `AuthExpiredBanner` gains a **Reconnect** button (both red and amber
+      states) opening a modal wizard (Trader 1/2 → Market 2/2 per UI-SPEC); on the `morai.wtf`
+      callback landing the SPA captures `?code=&state=`, strips them via `history.replaceState`
+      before any render, and auto-resumes/exchanges silently; the code/redirect URL never renders
+      or logs anywhere in our stack.
+- [ ] **REAUTH-07**: Docs + deploy: `stack-decisions.md` records the wizard-as-primary /
+      CLI-as-fallback decision; `schwab-reauth-runbook.md` gains the UI path (CLI stays fallback);
+      `SIDECAR_ADMIN_TOKEN` + `SCHWAB_WEB_CALLBACK_URL` are set on both Railway services before
+      deploy; the next real re-auth (~2026-07-20) is performed through the wizard as the human UAT.
+
 ## Future Requirements
 
 Deferred. Tracked but not in the v1.3 roadmap.
@@ -141,6 +177,13 @@ Explicit exclusions with reasoning.
 | PLAY-03 | Phase 28 | Complete |
 | PLAY-04 | Phase 28 | Complete |
 | PLAY-05 | Phase 28 | Complete |
+| REAUTH-01 | Phase 37 | Planned |
+| REAUTH-02 | Phase 37 | Planned |
+| REAUTH-03 | Phase 37 | Planned |
+| REAUTH-04 | Phase 37 | Planned |
+| REAUTH-05 | Phase 37 | Planned |
+| REAUTH-06 | Phase 37 | Planned |
+| REAUTH-07 | Phase 37 | Planned |
 
 **Coverage:** 28/28 v1.3 requirements mapped, 0 orphans. Phase order:
 23 (VIX3M, first-and-alone) → 24 (regime board) → 25 (ops rider) → 26 (exit advisor) →
