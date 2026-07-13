@@ -10,7 +10,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip.tsx";
 import { cn } from "@/lib/utils";
-import type { RegimeBand, RegimeIndicator, PickerGate, MacroResponse, MacroSeriesId } from "@morai/contracts";
+import { bandVixTermStructure, bandVvix, bandVix9dRatio } from "@morai/core";
+import type {
+  RegimeBand,
+  RegimeIndicator,
+  PickerGate,
+  MacroResponse,
+  MacroSeriesId,
+  StreamIndicesEvent,
+} from "@morai/contracts";
+import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 
 /**
  * RegimeBoard — the "Market regime" rail panel. Reworked (market-rail-ux.md) into ONE
@@ -42,13 +51,47 @@ const BAND_CLASSES: Record<RegimeBand, { text: string }> = {
 };
 
 /** Gauge marker color reads the server-computed band — never recomputed from value/thresholds
- *  client-side (T-31-05). Not BAND_CLASSES.dot (removed): calm needs a visible-but-unaccented
- *  color to read as a positioned marker, not the old dim `bg-line2` dot's near-invisible calm. */
+ *  client-side (T-31-05), EXCEPT the scoped Phase-38 live-display override below (CONTEXT
+ *  Area 2 Q1): while live, the 3 broker-quotable rows recompute this from the live value.
+ *  Not BAND_CLASSES.dot (removed): calm needs a visible-but-unaccented color to read as a
+ *  positioned marker, not the old dim `bg-line2` dot's near-invisible calm. */
 const MARKER_CLASSES: Record<RegimeBand, string> = {
   calm: "bg-txt",
   warning: "bg-amber",
   crisis: "bg-down",
 };
+
+/** id → live-band function (T-31-05 scoped display-only exception, CONTEXT Area 2 Q1).
+ *  Mirrors useRuleSettingsPreview.ts's REGIME_BAND_FNS lookup, restricted to the 3
+ *  broker-quotable ids — hy-oas is deliberately absent, it stays FRED-only, never live. */
+const LIVE_BAND_FNS: Record<string, (value: number, thresholds: { warn: number; crisis: number }) => RegimeBand> = {
+  "vix-term-structure": bandVixTermStructure,
+  vvix: bandVvix,
+  "vix9d-vix": bandVix9dRatio,
+};
+
+/** Live value for one broker-quotable id from the batched indices frame. Null on a
+ *  per-symbol Schwab failure or a non-finite ratio (divide-by-zero) — never fabricated;
+ *  the row degrades to its EOD value alone. Ids outside the 3 broker-quotable rows
+ *  (hy-oas) always return null — not broker-quotable, stays FRED. */
+function liveValueFor(id: string, liveIndices: StreamIndicesEvent): number | null {
+  switch (id) {
+    case "vix-term-structure": {
+      if (liveIndices.vix === null || liveIndices.vix3m === null) return null;
+      const ratio = liveIndices.vix / liveIndices.vix3m;
+      return Number.isFinite(ratio) ? ratio : null;
+    }
+    case "vvix":
+      return liveIndices.vvix;
+    case "vix9d-vix": {
+      if (liveIndices.vix9d === null || liveIndices.vix === null) return null;
+      const ratio = liveIndices.vix9d / liveIndices.vix;
+      return Number.isFinite(ratio) ? ratio : null;
+    }
+    default:
+      return null;
+  }
+}
 
 /** Fixed per-indicator visual axis (where the ruler starts/ends) — NOT semantic thresholds.
  *  Warn/crisis band positions come from the response (indicator.bandWarn/bandCrisis), Phase-29
@@ -90,21 +133,38 @@ function shortLabel(indicator: RegimeIndicator, dense: boolean): string {
  *  warn/crisis-banded track — so proximity to the edge reads at a glance (DEFECT-2). Band
  *  edges come from the response's bandWarn/bandCrisis (Phase-29 effective config, threaded
  *  by getRegimeBoard.ts); GAUGE_SCALE is only the client-side visual axis. */
-function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean }): React.ReactElement {
-  const band = BAND_CLASSES[indicator.band];
-  const abnormal = indicator.band !== "calm";
+function Row({
+  indicator,
+  dense,
+  liveValue = null,
+  liveBand = null,
+}: {
+  indicator: RegimeIndicator;
+  dense: boolean;
+  /** Live-tinted value for the 3 broker-quotable rows while the stream is live — null
+   *  (quiet/stalled, non-broker-quotable id, or a per-symbol failure) falls back to the
+   *  stored EOD `indicator.value` (honest, never fabricated). */
+  liveValue?: number | null;
+  /** Client-recomputed band for `liveValue` (T-31-05 scoped display-only exception) —
+   *  null falls back to the stored EOD `indicator.band`. */
+  liveBand?: RegimeBand | null;
+}): React.ReactElement {
+  const value = liveValue ?? indicator.value;
+  const displayBand = liveBand ?? indicator.band;
+  const band = BAND_CLASSES[displayBand];
+  const abnormal = displayBand !== "calm";
   // ponytail: all 4 live regimeIndicator ids are in GAUGE_SCALE; this fallback only guards a
   // future 5th indicator id shipping before its GAUGE_SCALE entry does.
-  const scale = GAUGE_SCALE[indicator.id] ?? { min: 0, max: Math.max(indicator.bandCrisis, indicator.value, 1) };
+  const scale = GAUGE_SCALE[indicator.id] ?? { min: 0, max: Math.max(indicator.bandCrisis, value, 1) };
   // Clamped like the marker (CR-01): an effective bandWarn/bandCrisis outside GAUGE_SCALE
   // (Phase-29 override, or a real print past the fixed axis) must never yield a negative
   // CSS width — it saturates at the axis edge instead.
   const warnPct = clampedAxisPct(indicator.bandWarn, scale.min, scale.max);
   const crisisPct = clampedAxisPct(indicator.bandCrisis, scale.min, scale.max);
-  const valuePct = clampedAxisPct(indicator.value, scale.min, scale.max);
+  const valuePct = clampedAxisPct(value, scale.min, scale.max);
   // WR-01: aria-valuenow must stay within [aria-valuemin, aria-valuemax] per the meter role
   // contract. aria-valuetext below still carries the true, unclamped value for AT users.
-  const clampedValue = Math.min(scale.max, Math.max(scale.min, indicator.value));
+  const clampedValue = Math.min(scale.max, Math.max(scale.min, value));
 
   return (
     <div className="flex flex-col gap-1 py-1.5" data-testid={`regime-chip-${indicator.id}`}>
@@ -150,7 +210,7 @@ function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean 
           )}
           data-testid={`regime-value-${indicator.id}`}
         >
-          {indicator.value.toFixed(2)}
+          {value.toFixed(2)}
         </span>
       </div>
       <div
@@ -159,7 +219,7 @@ function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean 
         aria-valuenow={clampedValue}
         aria-valuemin={scale.min}
         aria-valuemax={scale.max}
-        aria-valuetext={`${indicator.value.toFixed(2)} — ${indicator.band}`}
+        aria-valuetext={`${value.toFixed(2)} — ${displayBand}`}
         aria-label={`${indicator.label} gauge`}
         data-testid={`regime-gauge-${indicator.id}`}
       >
@@ -174,7 +234,7 @@ function Row({ indicator, dense }: { indicator: RegimeIndicator; dense: boolean 
         <div
           className={cn(
             "absolute top-1/2 h-2.5 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full",
-            MARKER_CLASSES[indicator.band],
+            MARKER_CLASSES[displayBand],
           )}
           style={{ left: `${valuePct}%` }}
           data-testid={`regime-gauge-marker-${indicator.id}`}
@@ -287,8 +347,19 @@ function RateRow({ id, label, value }: { id: MacroSeriesId; label: string; value
 }
 
 /** `dense` shortens long indicator labels for the narrow left MarketRail; layout is the
- *  same scannable row column at every width now (the old 2×2 / 4-across card grid is gone). */
-export function RegimeBoard({ dense = false }: { dense?: boolean } = {}): React.ReactElement {
+ *  same scannable row column at every width now (the old 2×2 / 4-across card grid is gone).
+ *  `liveIndices`/`liveStatus` (Phase 38, LIVE-05) are the display-live/gate-EOD overlay: while
+ *  `liveStatus==="live"`, the 3 broker-quotable rows show a live value + client-recomputed
+ *  band; the entry gate, stored `indicator.band`, and hy-oas never read them. */
+export function RegimeBoard({
+  dense = false,
+  liveIndices = null,
+  liveStatus,
+}: {
+  dense?: boolean;
+  liveIndices?: StreamIndicesEvent | null;
+  liveStatus?: LiveStreamStatus;
+} = {}): React.ReactElement {
   const { data, isPending, isError } = useRegimeBoard();
   // The entry-gate tile (28-06) is a separate data source (usePicker) from the regime
   // indicators — silently omitted (T-24-09 "never a fabricated chip") when no snapshot
@@ -369,18 +440,52 @@ export function RegimeBoard({ dense = false }: { dense?: boolean } = {}): React.
     `EOD · as of ${newest}` +
     stale.map((i) => ` · ${SHORT_LABELS[i.id] ?? i.label} ${i.asOf}`).join("");
 
+  // Live-tint overlay (LIVE-05, display-live/gate-EOD LAW): a per-row live value gated on
+  // liveStatus==="live"; a per-symbol null (Schwab failure for that one input) degrades only
+  // that row to EOD — never a silent live/EOD mix hidden as "live" (catch #26).
+  const liveById =
+    liveStatus === "live" && liveIndices !== null
+      ? new Map(data.map((indicator) => [indicator.id, liveValueFor(indicator.id, liveIndices)]))
+      : new Map<string, number | null>();
+  const anyLive = Array.from(liveById.values()).some((v) => v !== null);
+  const showLiveFooter = liveStatus === "live" && anyLive;
+
   return (
     <Panel className="flex flex-col gap-2" data-testid="regime-board">
       <PanelHeading title="Market regime" />
       {gateChip}
       <div className="flex flex-col divide-y divide-line/60">
-        {data.map((indicator) => (
-          <Row key={indicator.id} indicator={indicator} dense={dense} />
-        ))}
+        {data.map((indicator) => {
+          const liveValue = liveById.get(indicator.id) ?? null;
+          const bandFn = LIVE_BAND_FNS[indicator.id];
+          const liveBand =
+            liveValue !== null && bandFn !== undefined
+              ? bandFn(liveValue, { warn: indicator.bandWarn, crisis: indicator.bandCrisis })
+              : null;
+          return (
+            <Row
+              key={indicator.id}
+              indicator={indicator}
+              dense={dense}
+              liveValue={liveValue}
+              liveBand={liveBand}
+            />
+          );
+        })}
       </div>
       {ratesRow}
-      <span className="font-mono text-[10px] text-dim" data-testid="regime-freshness">
-        {freshness}
+      <span
+        className="flex items-center gap-1 font-mono text-[10px] text-dim"
+        data-testid="regime-freshness"
+      >
+        {showLiveFooter ? (
+          <>
+            <span className="live-dot" aria-hidden="true" />
+            LIVE
+          </>
+        ) : (
+          freshness
+        )}
       </span>
     </Panel>
   );

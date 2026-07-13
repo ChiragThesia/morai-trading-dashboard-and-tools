@@ -524,3 +524,84 @@ describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
     expect(screen.getByTestId("gate-chip").className).toContain("bg-downd");
   });
 });
+
+describe("RegimeBoard — live display value + client band recompute (Phase 38-06, LIVE-05, display-live/gate-EOD LAW)", () => {
+  // Distinct from every EOD fixture value (catch #20): vix-term-structure EOD 0.92/warning,
+  // vvix EOD 89.00/calm, vix9d-vix EOD 1.15/crisis.
+  const LIVE_INDICES = {
+    vix: 21.7,
+    vix3m: 20.9,
+    vvix: 120.3,
+    vix9d: 23.5,
+    ts: "2026-07-13T14:32:00Z",
+  };
+
+  beforeEach(() => {
+    setPickerGate();
+    setMacro();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("shows a live value + client-recomputed band for the 3 broker-quotable rows while liveStatus is live", () => {
+    setRegimeBoard(INDICATORS);
+    render(<RegimeBoard liveIndices={LIVE_INDICES} liveStatus="live" />);
+
+    // vvix: EOD 89.00/calm -> live 120.30 (>= VVIX_CRISIS 115) -> crisis
+    expect(screen.getByTestId("regime-value-vvix").textContent).toBe("120.30");
+    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-down");
+    expect(screen.getByTestId("regime-gauge-marker-vvix").className).toContain("bg-down");
+
+    // vix-term-structure: EOD 0.92/warning -> live 21.7/20.9=1.04 (>= crisis 0.95) -> crisis
+    expect(screen.getByTestId("regime-value-vix-term-structure").textContent).toBe("1.04");
+    expect(screen.getByTestId("regime-value-vix-term-structure").className).toContain("text-down");
+
+    // vix9d-vix: EOD 1.15/crisis -> live 23.5/21.7=1.08 (>= warn 1.0, < crisis 1.1) -> warning
+    expect(screen.getByTestId("regime-value-vix9d-vix").textContent).toBe("1.08");
+    expect(screen.getByTestId("regime-value-vix9d-vix").className).toContain("text-amber");
+
+    // Footer flips to a live marker — never a silent live/EOD mix (catch #26)
+    expect(screen.getByTestId("regime-freshness").textContent).toBe("LIVE");
+  });
+
+  it("stays on the EOD value/band and the 'EOD · as of …' footer while liveStatus is quiet, even with liveIndices present", () => {
+    setRegimeBoard(INDICATORS);
+    render(<RegimeBoard liveIndices={LIVE_INDICES} liveStatus="quiet" />);
+
+    expect(screen.getByTestId("regime-value-vvix").textContent).toBe("89.00");
+    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-txt");
+    expect(screen.getByTestId("regime-freshness").textContent).toContain("EOD · as of 2026-07-08");
+  });
+
+  it("never lets liveIndices reach the gate chip or the hy-oas row (separate FRED-only sources)", () => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate({
+      vix: 18,
+      vix3m: 20,
+      ratio: 0.9,
+      asOf: "2026-07-09",
+      state: "open",
+      penaltyMultiplier: 1,
+      brakes: { maxOpen: false, cooldown: false, cooldownUntil: null },
+      reasons: [],
+    });
+    render(<RegimeBoard liveIndices={LIVE_INDICES} liveStatus="live" />);
+
+    expect(screen.getByTestId("gate-metrics").textContent).toBe("VIX 18.00 · ratio 0.90");
+    expect(screen.getByTestId("regime-value-hy-oas").textContent).toBe("3.40");
+    expect(screen.getByTestId("regime-value-hy-oas").className).toContain("text-amber");
+  });
+
+  it("degrades only the affected row to EOD when one required live input is null (per-symbol Schwab failure)", () => {
+    setRegimeBoard(INDICATORS);
+    render(<RegimeBoard liveIndices={{ ...LIVE_INDICES, vix3m: null }} liveStatus="live" />);
+
+    // vix-term-structure needs vix3m -> falls back to EOD, untouched
+    expect(screen.getByTestId("regime-value-vix-term-structure").textContent).toBe("0.92");
+    // vvix has no dependency on vix3m -> still live
+    expect(screen.getByTestId("regime-value-vvix").textContent).toBe("120.30");
+  });
+});
