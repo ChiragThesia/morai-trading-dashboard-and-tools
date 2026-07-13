@@ -105,6 +105,16 @@ class FakeEventSource {
     this.dispatchNamedEvent("ping", data);
   }
 
+  /** Server sends event:"spot" carrying { spot, ts } (Phase 38 LIVE-04). */
+  dispatchSpot(data: unknown): void {
+    this.dispatchNamedEvent("spot", data);
+  }
+
+  /** Server sends event:"indices" carrying { vix, vvix, vix9d, vix3m, ts } (Phase 38 LIVE-04). */
+  dispatchIndices(data: unknown): void {
+    this.dispatchNamedEvent("indices", data);
+  }
+
   /** Test helper: fire the onerror handler. */
   dispatchError(): void {
     this.onerror?.(new Event("error"));
@@ -139,6 +149,22 @@ function makeSubscribeResponse(ok = true) {
     json: () => Promise.resolve({}),
   };
 }
+
+/** A valid streamSpotEvent payload — non-round so a test can only pass on the live
+ *  path, never by coincidence with a rounded fallback constant (catch #20). */
+const SAMPLE_SPOT = {
+  spot: 5842.375,
+  ts: "2026-06-28T14:30:00.000Z",
+};
+
+/** A valid streamIndicesEvent payload — non-round values (catch #20). */
+const SAMPLE_INDICES = {
+  vix: 16.42,
+  vvix: 91.37,
+  vix9d: 15.88,
+  vix3m: 17.05,
+  ts: "2026-06-28T14:30:00.000Z",
+};
 
 /** A valid streamLiveGreekEvent payload. */
 const SAMPLE_TICK = {
@@ -219,6 +245,8 @@ describe("useLiveStream", () => {
     expect(result.current.lastTickAt).toBeNull();
     expect(result.current.greeks.size).toBe(0);
     expect(result.current.isReconnecting).toBe(false);
+    expect(result.current.liveSpot).toBeNull();
+    expect(result.current.liveIndices).toBeNull();
   });
 
   // ── 3. Ping wiring ────────────────────────────────────────────────────────
@@ -278,6 +306,98 @@ describe("useLiveStream", () => {
     expect(result.current.greeks.size).toBe(2);
     expect(result.current.greeks.get(SAMPLE_TICK.occSymbol)).toMatchObject({ mark: 47.2 });
     expect(result.current.greeks.get(second.occSymbol)).toMatchObject({ mark: 12.3 });
+  });
+
+  // ── 4b. "spot"/"indices" events (Phase 38 LIVE-04) ───────────────────────
+
+  it("a 'spot' event updates liveSpot", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    act(() => { es0().dispatchSpot(SAMPLE_SPOT); });
+
+    expect(result.current.liveSpot).toBe(SAMPLE_SPOT.spot);
+  });
+
+  it("drops a malformed JSON 'spot' frame and retains last-known-good liveSpot", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    act(() => { es0().dispatchSpot(SAMPLE_SPOT); });
+    expect(result.current.liveSpot).toBe(SAMPLE_SPOT.spot);
+
+    act(() => {
+      const event = new MessageEvent("spot", { data: "{not valid json" });
+      es0().listeners.get("spot")?.forEach((h) => h(event));
+    });
+    expect(result.current.liveSpot).toBe(SAMPLE_SPOT.spot); // retained, not cleared
+  });
+
+  it("drops a bad-shape 'spot' frame (e.g. a +00:00 ts) and retains last-known-good liveSpot", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    act(() => { es0().dispatchSpot(SAMPLE_SPOT); });
+    expect(result.current.liveSpot).toBe(SAMPLE_SPOT.spot);
+
+    act(() => {
+      // streamSpotEvent.ts's z.string().datetime() rejects a "+00:00" suffix.
+      es0().dispatchSpot({ spot: 9999.5, ts: "2026-06-28T14:30:00.000+00:00" });
+    });
+    expect(result.current.liveSpot).toBe(SAMPLE_SPOT.spot); // retained, not overwritten
+  });
+
+  it("a 'spot' event does not set hasReceivedFirstTick or affect status — own freshness stamp, never the greeks clock (catch #26)", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    act(() => { es0().dispatchPing({ isRth: true }); });
+    act(() => { es0().dispatchSpot(SAMPLE_SPOT); });
+
+    // No "ticks" frame has ever arrived — a spot-only feed must not paint the greeks
+    // badge live, even though isRth is true and a spot tick just landed.
+    expect(result.current.hasReceivedFirstTick).toBe(false);
+    expect(result.current.liveSpot).toBe(SAMPLE_SPOT.spot);
+  });
+
+  it("an 'indices' event updates liveIndices, preserving a per-symbol null", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    act(() => { es0().dispatchIndices(SAMPLE_INDICES); });
+    expect(result.current.liveIndices).toEqual(SAMPLE_INDICES);
+
+    act(() => {
+      es0().dispatchIndices({ ...SAMPLE_INDICES, vix9d: null });
+    });
+    expect(result.current.liveIndices).toEqual({ ...SAMPLE_INDICES, vix9d: null });
+  });
+
+  it("drops a malformed JSON 'indices' frame and retains last-known-good liveIndices", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    act(() => { es0().dispatchIndices(SAMPLE_INDICES); });
+    expect(result.current.liveIndices).toEqual(SAMPLE_INDICES);
+
+    act(() => {
+      const event = new MessageEvent("indices", { data: "{not valid json" });
+      es0().listeners.get("indices")?.forEach((h) => h(event));
+    });
+    expect(result.current.liveIndices).toEqual(SAMPLE_INDICES); // retained
+  });
+
+  it("drops a bad-shape 'indices' frame (e.g. a +00:00 ts) and retains last-known-good liveIndices", async () => {
+    const { result } = renderHook(() => useLiveStream());
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    act(() => { es0().dispatchIndices(SAMPLE_INDICES); });
+    expect(result.current.liveIndices).toEqual(SAMPLE_INDICES);
+
+    act(() => {
+      es0().dispatchIndices({ ...SAMPLE_INDICES, ts: "2026-06-28T14:30:00.000+00:00" });
+    });
+    expect(result.current.liveIndices).toEqual(SAMPLE_INDICES); // retained
   });
 
   // ── 5. Interval-driven status derivation (Pattern 1) ─────────────────────

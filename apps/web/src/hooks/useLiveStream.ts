@@ -36,8 +36,14 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { streamLiveGreekEvent, streamPingEvent, streamTicketResponse } from "@morai/contracts";
-import type { StreamLiveGreekEvent } from "@morai/contracts";
+import {
+  streamLiveGreekEvent,
+  streamPingEvent,
+  streamTicketResponse,
+  streamSpotEvent,
+  streamIndicesEvent,
+} from "@morai/contracts";
+import type { StreamLiveGreekEvent, StreamIndicesEvent } from "@morai/contracts";
 import { apiFetch } from "../lib/rpc.ts";
 import { deriveStreamStatus } from "../lib/deriveStreamStatus.ts";
 
@@ -84,6 +90,13 @@ export type UseLiveStreamResult = {
   hasReceivedFirstTick: boolean;
   /** True while a manual reconnectNow() call is in flight. */
   isReconnecting: boolean;
+  /** Latest Zod-parsed live SPX spot tick (null until the first "spot" frame). Own
+   *  freshness stamp, separate from the greeks clock — a spot-only feed never flips
+   *  the greeks badge to live (Phase 38 LIVE-04, catch #26). */
+  liveSpot: number | null;
+  /** Latest Zod-parsed VIX-family frame (null until the first "indices" frame);
+   *  per-symbol nulls are preserved (a single failed symbol, never fabricated). */
+  liveIndices: StreamIndicesEvent | null;
   /**
    * Manual force-reconnect (D-17, STALLED badge action). Cancels the pending
    * exponential-backoff timer, then reconnects immediately with a fresh ticket.
@@ -117,12 +130,17 @@ export function useLiveStream(): UseLiveStreamResult {
   const [isRth, setIsRth] = useState<boolean | null>(null);
   const [hasReceivedFirstTick, setHasReceivedFirstTick] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [liveSpot, setLiveSpot] = useState<number | null>(null);
+  const [liveIndices, setLiveIndices] = useState<StreamIndicesEvent | null>(null);
 
   // useRef for EventSource — mutation does not trigger re-render.
   const esRef = useRef<EventSource | null>(null);
   // Elapsed-time anchor for deriveStreamStatus: last valid tick, or the start of the
   // most recent connection attempt if no tick has arrived yet (Pattern 1).
   const lastTickOrConnectAtRef = useRef<number>(Date.now());
+  // Spot's OWN freshness anchor — deliberately separate from lastTickOrConnectAtRef so
+  // a spot-only feed never flips the greeks badge to live (catch #26).
+  const lastSpotAtRef = useRef<number | null>(null);
   const isRthRef = useRef<boolean | null>(null);
   const hasReceivedFirstTickRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -257,6 +275,38 @@ export function useLiveStream(): UseLiveStreamResult {
           lastTickOrConnectAtRef.current = Date.now();
           setLastTickAt(new Date());
         });
+
+        // event:"spot" → dedicated live SPX spot lane (Phase 38 LIVE-04). Own freshness
+        // stamp — does NOT touch lastTickOrConnectAtRef/hasReceivedFirstTick, so a
+        // spot-only feed never paints the greeks badge live (catch #26).
+        es.addEventListener("spot", (event: Event): void => {
+          if (!(event instanceof MessageEvent)) return;
+          let raw: unknown;
+          try {
+            raw = JSON.parse(event.data);
+          } catch {
+            return; // malformed JSON — drop, retain last-known-good liveSpot
+          }
+          const parsed = streamSpotEvent.safeParse(raw);
+          if (!parsed.success) return; // malformed shape — drop, retain last-known-good
+          lastSpotAtRef.current = Date.now();
+          setLiveSpot(parsed.data.spot);
+        });
+
+        // event:"indices" → VIX-family live quotes (Phase 38 LIVE-04). Display-only —
+        // regime gates keep reading EOD macro_observations, never this stream.
+        es.addEventListener("indices", (event: Event): void => {
+          if (!(event instanceof MessageEvent)) return;
+          let raw: unknown;
+          try {
+            raw = JSON.parse(event.data);
+          } catch {
+            return; // malformed JSON — drop, retain last-known-good liveIndices
+          }
+          const parsed = streamIndicesEvent.safeParse(raw);
+          if (!parsed.success) return; // malformed shape — drop, retain last-known-good
+          setLiveIndices(parsed.data);
+        });
       } finally {
         connectInFlightRef.current = false;
       }
@@ -349,6 +399,8 @@ export function useLiveStream(): UseLiveStreamResult {
     isRth,
     hasReceivedFirstTick,
     isReconnecting,
+    liveSpot,
+    liveIndices,
     reconnectNow,
     subscribeAdHoc,
   };

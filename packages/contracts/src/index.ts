@@ -92,6 +92,8 @@ export {
   streamLiveGreekEvent,
   streamReconcileEvent,
   streamFillEvent,
+  streamSpotEvent,
+  streamIndicesEvent,
   streamPingEvent,
 } from "./stream-events.ts";
 export type {
@@ -100,6 +102,8 @@ export type {
   StreamReconcilePosition,
   StreamReconcileEvent,
   StreamFillEvent,
+  StreamSpotEvent,
+  StreamIndicesEvent,
   StreamPingEvent,
 } from "./stream-events.ts";
 
