@@ -43,6 +43,8 @@ vi.mock("../hooks/useLiveStream.ts", () => ({
     isReconnecting: false,
     reconnectNow: vi.fn(),
     subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+    liveSpot: null,
+    liveIndices: null,
   })),
   StreamMintError: class StreamMintError extends Error {
     constructor(status: number) { super(String(status)); this.name = "StreamMintError"; }
@@ -147,6 +149,7 @@ function setPositions(positions: unknown): void {
 function setLiveStream(
   status: "live" | "quiet" | "stalled",
   greeks: ReadonlyMap<string, StreamLiveGreekEvent>,
+  liveSpot: number | null = null,
 ): void {
   mockUseLiveStream.mockReturnValue({
     greeks,
@@ -157,6 +160,8 @@ function setLiveStream(
     isReconnecting: false,
     reconnectNow: vi.fn(),
     subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+    liveSpot,
+    liveIndices: null,
   });
 }
 
@@ -425,6 +430,8 @@ describe("Overview screen", () => {
       isReconnecting: false,
       reconnectNow: vi.fn(),
       subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+      liveSpot: null,
+      liveIndices: null,
     });
   });
 
@@ -589,6 +596,8 @@ describe("Overview screen", () => {
         isReconnecting: false,
         reconnectNow: vi.fn(),
         subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+        liveSpot: null,
+        liveIndices: null,
       });
       setPositions([]);
       const { container } = render(<Overview />);
@@ -957,6 +966,54 @@ describe("Pill header — 0DTE γ pill", () => {
     const fullRow = screen.getByTestId("pill-header-full");
     expect(within(fullRow).getByText("0DTE γ")).toBeDefined();
     expect(within(fullRow).getByText("−$9.8B")).toBeDefined();
+  });
+});
+
+// ── LIVE-04 (38-05): one SPX number across the SPX chip, Key-levels Spot row, and the
+// payoff hero's spot — live when the stream is live, honestly EOD otherwise (catch #26). ──
+describe("LIVE-04: live-aware spot on the SPX chip + Key-levels Spot row + payoff hero (38-05)", () => {
+  beforeEach(stubDesktopMatchMedia);
+  afterEach(() => {
+    cleanup();
+    Reflect.deleteProperty(window, "matchMedia");
+    vi.clearAllMocks();
+  });
+
+  // Distinct from GEX_FIXTURE.spot (7381.12) and the 5800 engine fallback (catch #20).
+  const LIVE_SPOT = 7395.625;
+
+  it("status live: the SPX chip, the Key-levels Spot row, and PayoffChart's spot prop all read the live value", () => {
+    setPositions([]);
+    setLiveStream("live", new Map(), LIVE_SPOT);
+    render(<Overview />);
+
+    const fullRow = screen.getByTestId("pill-header-full");
+    expect(within(fullRow).getByText("7395.6")).toBeDefined();
+    expect(screen.getByText("7396")).toBeDefined(); // Key-levels "Spot" row, toFixed(0)
+    expect(latestPayoffChartProps().spot).toBe(LIVE_SPOT);
+  });
+
+  it("status quiet: the chip and the Spot row fall back to GEX_FIXTURE.spot even with a live tick already buffered", () => {
+    setPositions([]);
+    setLiveStream("quiet", new Map(), LIVE_SPOT);
+    render(<Overview />);
+
+    const fullRow = screen.getByTestId("pill-header-full");
+    expect(within(fullRow).getByText(GEX_FIXTURE.spot.toFixed(1))).toBeDefined();
+    expect(screen.getByText(GEX_FIXTURE.spot.toFixed(0))).toBeDefined();
+    expect(latestPayoffChartProps().spot).toBe(GEX_FIXTURE.spot);
+  });
+
+  it("the SPX chip carries a live-dot marker only while status is live — no bespoke badge, no silent stale-as-live claim (catch #26)", () => {
+    setPositions([]);
+    setLiveStream("live", new Map(), LIVE_SPOT);
+    render(<Overview />);
+    expect(screen.getByTestId("pill-header-full").querySelector(".live-dot")).not.toBeNull();
+
+    cleanup();
+    setLiveStream("quiet", new Map(), LIVE_SPOT);
+    render(<Overview />);
+    expect(screen.getByTestId("pill-header-full").querySelector(".live-dot")).toBeNull();
   });
 });
 

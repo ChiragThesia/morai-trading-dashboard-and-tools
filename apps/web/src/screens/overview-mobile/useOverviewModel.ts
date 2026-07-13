@@ -280,11 +280,15 @@ export function buildRows(positions: ReadonlyArray<BrokerPositionResponse>): Row
 
 export function keyLevelsFor(
   gex: GexSnapshotEntry,
+  spot?: number,
 ): ReadonlyArray<{ label: string; value: number | null; colorClass: string }> {
   return [
     { label: "Call Wall", value: gex.callWall, colorClass: "text-up" },
     { label: "γ flip", value: gex.flip, colorClass: "text-amber" },
-    { label: "Spot", value: gex.spot, colorClass: "text-blue" },
+    // LIVE-04: an optional live-aware override for the "Spot" row (Overview.tsx's GEX
+    // rail + MobileMarketSection, the two keyLevelsFor call sites) — default preserves
+    // every existing caller's behavior (gex.spot, unchanged).
+    { label: "Spot", value: spot ?? gex.spot, colorClass: "text-blue" },
     { label: "Put Wall", value: gex.putWall, colorClass: "text-down" },
     // Near-term (≤45d DTE) set — the intraday-relevant walls when far-dated OI
     // dominates the all-expiry levels. Absent on pre-0019 snapshots.

@@ -376,9 +376,13 @@ function PositionsTable({
 function GexRail({
   gex,
   railGreeks,
+  spot,
 }: {
   gex: GexSnapshotEntry | undefined;
   railGreeks: NetGreeks;
+  /** Live-aware engine spot (LIVE-04) — GexRail only renders inside the gex-defined
+   *  branch below, so this is always a real number here, never the 5800 fallback. */
+  spot: number;
 }): React.ReactElement {
   if (gex === undefined) {
     return (
@@ -392,14 +396,14 @@ function GexRail({
     <>
       <Panel>
         <PanelHeading title="Dealer γ profile" />
-        <GammaProfile profile={gex.profile} spot={gex.spot} flip={gex.flip} compact />
+        <GammaProfile profile={gex.profile} spot={spot} flip={gex.flip} compact />
       </Panel>
       <Panel>
         <PanelHeading title="GEX by strike" />
         <GexBars
           mode="gex"
           strikes={gex.strikes}
-          spot={gex.spot}
+          spot={spot}
           callWall={gex.callWall}
           putWall={gex.putWall}
           height={200}
@@ -409,7 +413,7 @@ function GexRail({
       <Panel>
         <PanelHeading title="Key levels" />
         <div className="flex flex-col gap-1.5">
-          {keyLevelsFor(gex).map((lvl) => (
+          {keyLevelsFor(gex, spot).map((lvl) => (
             <div
               key={lvl.label}
               className="flex items-center justify-between gap-2 rounded-lg bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
@@ -442,11 +446,17 @@ function PillHeader({
   cotLev,
   macro,
   bookPnl,
+  displaySpot,
+  liveStatus,
 }: {
   gex: GexSnapshotEntry | undefined;
   cotLev: number | null;
   macro: MacroResponse | undefined;
   bookPnl: number;
+  /** Honest live-or-EOD spot for the SPX chip (LIVE-04) — never the 5800 fallback. */
+  displaySpot: number | null;
+  /** Gates the chip's live tint + dot marker — never a silent stale-as-live claim (catch #26). */
+  liveStatus: LiveStreamStatus;
 }): React.ReactElement {
   const regime = gex !== undefined ? classifyRegime(gex.netGammaAtSpot) : null;
   // 0DTE net gamma — today's expiry from the byExpiry rollup ($Bn/1% units)
@@ -465,7 +475,15 @@ function PillHeader({
           mounts at ≥1024px now; the Phase 35 mobile priority row + secondary ChipRail
           were display:none dead branches and are gone). */}
       <div data-testid="pill-header-full" className="flex flex-wrap items-center gap-2">
-        <MetricChip label="SPX" value={gex !== undefined ? gex.spot.toFixed(1) : "—"} valueClassName="text-blue" />
+        <MetricChip
+          label={
+            <span className="inline-flex items-center gap-1">
+              {liveStatus === "live" && <span className="live-dot" aria-hidden="true" />}SPX
+            </span>
+          }
+          value={displaySpot !== null ? displaySpot.toFixed(1) : "—"}
+          valueClassName={liveStatus === "live" ? "text-blue" : "text-dim"}
+        />
         <MetricChip
           label="net γ /1%"
           value={gex !== undefined ? fmtGammaCompact(gex.netGammaAtSpot) : "—"}
@@ -525,6 +543,7 @@ function OverviewDesktop(): React.ReactElement {
   const {
     positions,
     spot,
+    displaySpot,
     gex,
     macro,
     cotLev,
@@ -630,7 +649,14 @@ function OverviewDesktop(): React.ReactElement {
 
   return (
     <div className="flex flex-col gap-5 px-4 py-4">
-      <PillHeader gex={gex} cotLev={cotLev} macro={macro} bookPnl={bookPnl} />
+      <PillHeader
+        gex={gex}
+        cotLev={cotLev}
+        macro={macro}
+        bookPnl={bookPnl}
+        displaySpot={displaySpot}
+        liveStatus={liveStatus}
+      />
 
       {/* ── Three-column Launchpad shell: MarketRail (left) / hero + positions (center) /
           GEX rail (right). Mobile stacks in DOM order: rail → hero → positions → GEX. ── */}
@@ -793,7 +819,7 @@ function OverviewDesktop(): React.ReactElement {
 
         {/* RIGHT — GEX rail (untouched) */}
         <div data-testid="overview-gex-column" className="order-3 flex flex-col gap-3">
-          <GexRail gex={gex} railGreeks={railGreeks} />
+          <GexRail gex={gex} railGreeks={railGreeks} spot={spot} />
         </div>
       </div>
     </div>
