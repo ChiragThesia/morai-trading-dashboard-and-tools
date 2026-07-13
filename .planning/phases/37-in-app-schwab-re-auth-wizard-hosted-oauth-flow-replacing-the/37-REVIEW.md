@@ -31,19 +31,27 @@ findings:
   warning: 4
   info: 3
   total: 9
-status: fixes_applied
+status: fixes_verified
 fixes:
   CR-01: 6894e7c
   CR-02: 6894e7c
   WR-01: 048fddc
   WR-02: a0554c5
-  WR-03: a87bc9a
+  WR-03: a87bc9a + 6fbfe76
   WR-04: 37c651f
 fixes_note: >-
   TS-side findings fixed (CR-01/CR-02 share one root-cause commit). WR-02 and
   WR-04 are sidecar-Python findings, now fixed in two atomic commits (WR-04
   37c651f, WR-02 a0554c5). IN-01/IN-02/IN-03 are optional/out-of-scope and
-  left unchanged.
+  left unchanged. Reviewer delta re-check 2026-07-13: 4 fixes verified as-is;
+  one NEW blocker found in a87bc9a (expiredApps computed in AuthExpiredBanner
+  but never passed — WR-03 inert in prod, TS2741 in apps/web's own tsc which
+  root typecheck does not cover) — fixed 6fbfe76, both render sites wired,
+  apps/web AuthExpiredBanner tsc errors 0, 21 reauth component tests green.
+  All six findings now verified closed. PROCESS NOTE for future gates: run
+  `cd apps/web && bunx tsc --noEmit` in addition to root typecheck; apps/web
+  is not in root project references and carries ~42 pre-existing errors
+  (itemize at the 38-07 gate).
 ---
 
 # Phase 37: Code Review Report
