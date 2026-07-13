@@ -519,7 +519,14 @@ to "gauge omitted/absent," never a crash or an incorrect gate/trading decision) 
 existing `getRegimeBoard.ts`-style "omit rather than fabricate" discipline is straightforward to
 carry into the client-side live path.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+- **Q1 → RESOLVED at planning:** deferred to the 38-02 Task-1 A1 `checkpoint:human-verify` —
+  a one-time live `get_quotes(["$SPX","$VIX","$VVIX","$VIX9D","$VIX3M"])` smoke-test confirms the
+  exact symbols/response shape/failure mode BEFORE the poll parser is built (defensive defaults if
+  unreachable).
+- **Q2 → RESOLVED at planning:** apply the live-aware spot to BOTH `GammaProfile` and `GexBars`
+  markers (38-05 Task 1) for visual consistency within the GEX rail — one spot number per column.
 
 1. **Exact Schwab REST symbol/response shape for `$VIX3M`/`$VIX9D`/`$VVIX`**
    - What we know: `$SPX` is proven live in this codebase; the `$`-prefix convention for cash
