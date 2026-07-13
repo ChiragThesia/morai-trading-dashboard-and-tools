@@ -33,6 +33,15 @@ class SidecarConfig(BaseSettings):
     SCHWAB_MARKET_APP_KEY: str
     SCHWAB_MARKET_APP_SECRET: str
 
+    # Shared secret gating the sidecar's admin endpoints (Phase 37 reauth wizard).
+    # The sidecar has no auth today — required, no code default (it is a secret).
+    SIDECAR_ADMIN_TOKEN: str
+
+    # Registered hosted OAuth callback for the wizard's authorize/exchange calls
+    # (Phase 37). Defaulted to the known registered value so existing deploys don't
+    # break; overridable per Railway env if a different callback is registered.
+    SCHWAB_WEB_CALLBACK_URL: str = "https://morai.wtf"
+
     # Port to bind uvicorn on Railway.  Railway sets $PORT at deploy time.
     PORT: int = 8000
 
