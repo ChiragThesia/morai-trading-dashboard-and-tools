@@ -500,7 +500,7 @@ Plans:
 
 - [ ] TBD (run /gsd-plan-phase 37 to break down)
 
-### Phase 38: Live SPX spot across the app — fan the already-flowing sidecar underlyingPrice tick out to browsers: additive streamSpotEvent {spot, ts} contract, server broadcast at the sidecar-sse observeSpot site (on-change, max ~1/sec), sidecar dedicated $SPX index quote subscription so spot ticks without open positions, useLiveStream exposes liveSpot, all screens (header SPX chip, payoff spot marker + T+0, gamma profile marker, net greeks) consume liveSpot with honest snapshot-fallback badge (catch #26: gate display, never silent fallback). GEX walls/term-structure curves stay 30-min snapshot (out of scope). AH/weekend honesty via existing quiet/stalled states.
+### Phase 38: Live market data via sidecar (SPX spot + VIX family) — sidecar becomes the sole LIVE market-data source (user-locked 2026-07-13): fan SPX spot out to browsers as an additive SSE event (on-change, max ~1/sec) and add live $VIX/$VVIX/$VIX9D/$VIX3M quotes via the sidecar for the regime rail — DISPLAY-LIVE, GATE-EOD LAW (entry gate/crisis bands/hysteresis keep consuming stored EOD macro_observations; FRED ingestion unchanged, history feeds backtest). useLiveStream exposes live values; all spot surfaces (header chip, payoff marker + T+0, gamma-profile marker, net greeks, mobile hero) + regime gauges go live with honest stale-fallback badges (catch #26). GEX walls/term-structure curves stay 30-min snapshot; Analyzer scoring stays snapshot-spot (marker-only live). AH/weekend honesty via existing quiet/stalled states.
 
 **Goal:** [To be planned]
 **Requirements**: TBD
