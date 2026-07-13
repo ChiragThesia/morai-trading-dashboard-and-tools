@@ -92,7 +92,7 @@ export function AuthExpiredBanner() {
         }}
       >
         Schwab auth expired. Live data may be stale.
-        <ReauthWizard />
+        <ReauthWizard expiredApps={expiredApps} />
       </div>
     );
   }
@@ -122,7 +122,7 @@ export function AuthExpiredBanner() {
         {isMarketExpired
           ? "Schwab market app auth expired — chain data fell back to CBOE."
           : "Schwab auth expires soon. Reconnect within 24 hours to avoid an outage."}
-        <ReauthWizard />
+        <ReauthWizard expiredApps={expiredApps} />
       </div>
     );
   }
