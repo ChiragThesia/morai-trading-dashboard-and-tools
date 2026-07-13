@@ -111,7 +111,6 @@ export function ReauthWizard(): React.ReactElement {
       });
     // Runs once per mount: consumeCapturedRedirect() is a module-level one-shot (Task 1) — a
     // StrictMode double-invoke's second call observes `null` and no-ops here (RESEARCH Pitfall 5).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleAuthorize(app: ReauthApp): void {

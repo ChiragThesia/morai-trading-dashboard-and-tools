@@ -16,6 +16,8 @@ const BASE_VALID_ENV = {
   WEB_ORIGIN: "http://localhost:5173",
   // Phase 12 (12-05): sidecar URL — required on server service for SSE + reconcile + subscribe proxy
   SIDECAR_URL: "http://sidecar.railway.internal:8000",
+  // Phase 37 (37-05): shared secret for the sidecar admin re-auth endpoints
+  SIDECAR_ADMIN_TOKEN: "a-valid-admin-token-1234",
 };
 
 describe("parseConfig", () => {
