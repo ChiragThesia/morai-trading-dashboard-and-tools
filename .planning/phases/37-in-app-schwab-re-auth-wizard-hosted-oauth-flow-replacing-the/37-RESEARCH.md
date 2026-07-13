@@ -723,10 +723,13 @@ unchanged.
 verified against the codebase's own working code) — they are deployment/registration details
 that depend on state in the Schwab Developer Portal this research cannot inspect directly.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Is `https://morai.wtf` registered as a callback URL on both the trader AND market Schwab
-   apps, or only one?**
+1. **RESOLVED 2026-07-13 — user confirmed the callback is registered on BOTH the trader and
+   market Schwab apps** (recorded in 37-CONTEXT.md). 37-07's test-trader-first-then-market
+   sequencing stays as belt-and-braces. Original question:
+   Is `https://morai.wtf` registered as a callback URL on both the trader AND market Schwab
+   apps, or only one?
    - What we know: CONTEXT.md states "`https://morai.wtf` registered as an additional callback
      URL 2026-07-12 (processes after market hours); live by 2026-07-14 session" — singular
      phrasing, doesn't disambiguate per-app.
@@ -737,9 +740,11 @@ that depend on state in the Schwab Developer Portal this research cannot inspect
      trader app's wizard step first; if it works, immediately test market before assuming both
      are configured identically.
 
-2. **Does `SCHWAB_MARKET_CALLBACK_URL`/`SCHWAB_TRADER_CALLBACK_URL` (the existing CLI
+2. **RESOLVED — treated as low-risk per its own recommendation** (multiple redirect URIs are
+   supported; CLI fallback unaffected while its original entry remains registered). Original
+   question: Does `SCHWAB_MARKET_CALLBACK_URL`/`SCHWAB_TRADER_CALLBACK_URL` (the existing CLI
    127.0.0.1:8182 values) need to coexist with the new web callback URL in the same app
-   registration, or does adding the new URL risk disturbing the existing CLI fallback?**
+   registration, or does adding the new URL risk disturbing the existing CLI fallback?
    - What we know: Schwab apps support multiple registered redirect URIs simultaneously (this
      is why CONTEXT.md calls morai.wtf an "additional" callback URL, not a replacement).
    - What's unclear: whether Schwab enforces any additional per-URL scoping (e.g., HTTPS-only
