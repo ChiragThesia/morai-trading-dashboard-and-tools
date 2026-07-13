@@ -379,11 +379,13 @@ from health import router as health_router  # noqa: E402
 from chain_proxy import router as chain_router  # noqa: E402
 from stream_proxy import router as stream_router  # noqa: E402
 from positions_proxy import router as positions_router  # noqa: E402
+from reauth_admin import router as reauth_admin_router  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(chain_router)
 app.include_router(stream_router)
 app.include_router(positions_router)
+app.include_router(reauth_admin_router)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
