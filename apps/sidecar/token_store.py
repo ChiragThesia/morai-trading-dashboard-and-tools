@@ -31,6 +31,7 @@ Security constraints (V6 / T-11-04-01, T-11-04-02)
 import json
 import logging
 import datetime
+import time
 from typing import Callable
 
 import psycopg2
@@ -176,3 +177,83 @@ def make_token_callbacks(
         )
 
     return token_read_func, token_write_func
+
+
+# UPSERT shape lifted from seed_token.py's `_make_seed_writer` (same 8-column write,
+# one anchoring writer instead of a hand-copy) — anchors refresh_issued_at on every call,
+# unlike token_write_func above which deliberately never touches it.
+_REAUTH_UPSERT_SQL = """
+    INSERT INTO broker_tokens
+        (app_id, token_json, access_token, refresh_token,
+         issued_at, refresh_issued_at, expires_at, updated_at)
+    VALUES
+        (%(app_id)s, %(token_json)s,
+         pgp_sym_encrypt(%(access)s, %(key)s),
+         pgp_sym_encrypt(%(refresh)s, %(key)s),
+         %(now)s, %(now)s, %(expires)s, %(now)s)
+    ON CONFLICT (app_id) DO UPDATE SET
+        token_json        = EXCLUDED.token_json,
+        access_token      = EXCLUDED.access_token,
+        refresh_token     = EXCLUDED.refresh_token,
+        issued_at         = EXCLUDED.issued_at,
+        refresh_issued_at = EXCLUDED.refresh_issued_at,
+        expires_at        = EXCLUDED.expires_at,
+        updated_at        = EXCLUDED.updated_at
+"""
+
+
+def make_reauth_writer(db_url: str, app_id: str, encryption_key: str) -> Callable[[dict], None]:
+    """
+    Return a schwab-py write callback for the in-app re-auth wizard (Phase 37, REAUTH-03).
+
+    Unlike token_write_func above (which deliberately never touches refresh_issued_at, to
+    protect the 7-day TTL from routine access-token rotation), this writer ANCHORS
+    refresh_issued_at = now() on every call — a fresh OAuth dance must reset the 7-day
+    clock, or the wizard's own freshness gate (refresh_issued_at within 5 minutes) never
+    passes.
+
+    Tolerates both shapes schwab-py may hand the callback: the wrapped
+    {creation_timestamp, token:{...}} blob, or the raw token dict (wrapped here before
+    writing — token_json stores the wrapped form client_from_access_functions expects).
+
+    Security: encryption_key and token values are passed ONLY as bound %s params (never
+    an f-string). Logs only app_id + issued_at, never a token value (V6).
+    """
+
+    def write(blob: dict, *_args: object, **_kwargs: object) -> None:
+        if "token" in blob and isinstance(blob["token"], dict):
+            wrapped = blob
+        else:
+            wrapped = {"creation_timestamp": int(time.time()), "token": blob}
+        inner = wrapped["token"]
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        expires_at_dt = datetime.datetime.fromtimestamp(
+            inner["expires_at"], tz=datetime.timezone.utc
+        )
+
+        conn = psycopg2.connect(db_url)
+        try:
+            with conn, conn.cursor() as cur:
+                cur.execute(
+                    _REAUTH_UPSERT_SQL,
+                    {
+                        "app_id": app_id,
+                        "token_json": json.dumps(wrapped),
+                        "access": inner["access_token"],
+                        "refresh": inner["refresh_token"],
+                        "key": encryption_key,
+                        "now": now,
+                        "expires": expires_at_dt,
+                    },
+                )
+        finally:
+            conn.close()
+
+        # Log only app_id + issued_at — never token values (V6 / T-37-02)
+        logger.info(
+            "make_reauth_writer: wrote token for app_id=%s refresh_issued_at anchored to %s",
+            app_id,
+            now.isoformat(),
+        )
+
+    return write
