@@ -142,6 +142,40 @@ def _init_schwab_clients(app: FastAPI, cfg: object) -> None:
         )
 
 
+async def reinit_schwab_session(app: FastAPI, cfg: object) -> bool:
+    """
+    Cancel + recreate the keepalive/streamer tasks and rebuild both Schwab clients from
+    freshly-written tokens, WITHOUT ever touching the advisory lock (Phase 37 REAUTH-04,
+    T-37-05). Called by the re-auth wizard's exchange route after a successful token write.
+
+    Returns False (no-op) if this instance is not currently the lock holder — the caller
+    should report a transient failure rather than silently doing nothing (e.g. mid
+    rolling-deploy rollover, RESEARCH Pitfall 9).
+
+    Old tasks are cancelled AND awaited before the new ones are created — never two live
+    streamer sessions at once (GW-04 single-writer guarantee).
+    """
+    if not getattr(app.state, "has_lock", False):
+        return False
+
+    for attr in ("keepalive_task", "streamer_task"):
+        t = getattr(app.state, attr, None)
+        if t is not None:
+            t.cancel()
+    for attr in ("keepalive_task", "streamer_task"):
+        t = getattr(app.state, attr, None)
+        if t is not None:
+            with suppress(asyncio.CancelledError):
+                await t
+
+    _init_schwab_clients(app, cfg)  # idempotent — already rebuilds both clients unconditionally
+
+    from streamer import start_streamer  # noqa: PLC0415 — mirrors the existing import site
+    app.state.keepalive_task = asyncio.create_task(_trader_token_keepalive(app))
+    app.state.streamer_task = asyncio.create_task(start_streamer(app))
+    return True
+
+
 async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
     """
     Supervisory background task: (re)acquire the advisory lock, init the schwab clients, then
@@ -196,15 +230,17 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
         _init_schwab_clients(app, cfg)
 
         # 2b. Keep the trader token fresh so server-direct positions/orders/transactions reads
-        #     don't 401 (the trader client is otherwise never exercised). Cancelled on lock
-        #     loss/shutdown in the finally below.
-        keepalive_task = asyncio.create_task(_trader_token_keepalive(app))
+        #     don't 401 (the trader client is otherwise never exercised). Stored on app.state
+        #     (not just a local var) so reinit_schwab_session (Phase 37) can cancel+recreate it
+        #     after a wizard re-auth. Cancelled on lock loss/shutdown in the finally below.
+        app.state.keepalive_task = asyncio.create_task(_trader_token_keepalive(app))
 
         # 2c. Start the live Schwab stream — ONLY after the lock is held and clients are
-        #     initialised (Pattern 1 / T-12-03-04: login-after-lock). Cancelled alongside
-        #     keepalive_task in the finally block below.
+        #     initialised (Pattern 1 / T-12-03-04: login-after-lock). Stored on app.state for
+        #     the same reason as keepalive_task above. Cancelled alongside it in the finally
+        #     block below.
         from streamer import start_streamer  # noqa: PLC0415
-        streamer_task = asyncio.create_task(start_streamer(app))
+        app.state.streamer_task = asyncio.create_task(start_streamer(app))
 
         # 3. Heartbeat the lock session so the server-side idle reaper never kills THIS live
         #    holder. A failed ping means the connection (and the lock) is gone — tear down and
@@ -228,13 +264,15 @@ async def _acquire_lock_and_init(app: FastAPI, cfg: object) -> None:
                 )
         finally:
             # Stop the keep-alive and streamer whenever we leave the heartbeat —
-            # on lock loss OR shutdown.
-            keepalive_task.cancel()
+            # on lock loss OR shutdown. Read off app.state (not a local var) since
+            # reinit_schwab_session may have replaced these with fresh task objects
+            # during this lock cycle — cancel whichever are current.
+            app.state.keepalive_task.cancel()
             with suppress(asyncio.CancelledError):
-                await keepalive_task
-            streamer_task.cancel()
+                await app.state.keepalive_task
+            app.state.streamer_task.cancel()
             with suppress(asyncio.CancelledError):
-                await streamer_task
+                await app.state.streamer_task
 
         # Lost the lock: stop acting as the writer (GW-04 — a stale writer + a new holder = two
         # writers → Schwab invalid_grant), drop the dead connection, loop back to re-acquire.
@@ -280,12 +318,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         raise
 
     # Reset app.state for this lifespan run; clients/lock arrive via the background task.
+    # cfg is stored here (not just this closure) so route handlers — which only receive
+    # Request, not the lifespan closure — can read it (Phase 37 admin routes; mirrors
+    # app.state.db_url below).
+    app.state.cfg = cfg
     app.state.db_url = cfg.DATABASE_URL
     app.state.market_app_id = "market"
     app.state.has_lock = False
     app.state.trader_client = None
     app.state.market_client = None
     app.state.degraded = True
+    app.state.keepalive_task = None
+    app.state.streamer_task = None
 
     # Start the background lock-acquire + client-init task. It owns app.state.lock_conn.
     task = asyncio.create_task(_acquire_lock_and_init(app, cfg))
@@ -325,6 +369,9 @@ app.state.degraded = True
 app.state.has_lock = False
 app.state.db_url = ""
 app.state.market_app_id = "market"
+app.state.keepalive_task = None
+app.state.streamer_task = None
+app.state.cfg = None
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 
