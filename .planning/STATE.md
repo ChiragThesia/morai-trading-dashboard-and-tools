@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 36
-current_phase_name: analyzer-journal-mobile-redesign
-status: verifying
-stopped_at: Phase 34 closed (RTH parity passed 2026-07-13); Phase 36 executed, awaiting verification record + user phone check (C11)
-last_updated: "2026-07-13T14:36:54.976Z"
+current_phase: 37
+current_phase_name: in-app-schwab-reauth-wizard
+status: planning
+stopped_at: Phases 34+36 closed 2026-07-13; Phase 37 context+UI-SPEC done, research/patterns running
+last_updated: "2026-07-13T15:22:08.674Z"
 last_activity: 2026-07-13
-last_activity_desc: Phase 34 complete, transitioned to Phase 35
+last_activity_desc: Phase 36 complete (C11 waived), transitioned to Phase 37
 progress:
   total_phases: 17
-  completed_phases: 15
+  completed_phases: 16
   total_plans: 81
   completed_plans: 81
-  percent: 88
+  percent: 94
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 36 — Analyzer + Journal mobile redesign
+**Current focus:** Phase 37 — In-app Schwab re-auth wizard
 
 ## Current Position
 
-Phase: 36 — Analyzer + Journal mobile redesign (dedicated mobile trees)
-Plan: 5 of 5 executed
-Status: C1-C10 passed (agent UAT, commit 0098a33); VERIFICATION.md + C11 user phone check pending
-Last activity: 2026-07-13 — Phase 34 closed (RTH parity measurement passed)
+Phase: 37 — In-app Schwab re-auth wizard — hosted OAuth flow replacing the local CLI dance: sidecar admin endpoints (authorize URL + code exchange + in-process client re-init, token_store encryption, no restart), server proxy behind Supabase JWT (operator-only), web Reconnect wizard on the AUTH_EXPIRED/T-24h banner (trader→market sequential, state CSRF check, auto-exchange on morai.wtf callback landing; dedicated /reauth/callback path). Never log the auth code. Runbook gains UI path, CLI stays fallback.
+Plan: Not started (context + UI-SPEC approved; researcher + pattern-mapper running)
+Status: Phase 36 closed — verifier 23/23 passed, C11 waived by user (mobile rework deferred)
+Last activity: 2026-07-13 — Phase 36 complete, transitioned to Phase 37
 
 ## Open follow-ups (not phase-22 blockers)
 
@@ -172,6 +172,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 35 | 6 | - | - |
 | 35.1 | 4 | - | - |
 | 34 | 5 | - | - |
+| 36 | 5 | - | - |
 
 **Recent Trend:**
 
