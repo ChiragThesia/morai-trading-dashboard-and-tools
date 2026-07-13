@@ -97,7 +97,7 @@ describe("TradeCard — J11 (36 D-11)", () => {
     const { rerender } = render(
       <TradeCard trade={closedHistoryTrade()} isSelected={false} tagLabels={[]} onSelect={noop} />,
     );
-    const pos = screen.getByText("+$395.00");
+    const pos = screen.getByText("+$395");
     expect(pos.className).toContain("font-mono");
     expect(pos.className).toContain("text-base");
     expect(pos.className).toContain("font-bold");
@@ -105,7 +105,7 @@ describe("TradeCard — J11 (36 D-11)", () => {
     expect(pos.className).toContain("text-up");
 
     rerender(<TradeCard trade={closedPreJun12Trade()} isSelected={false} tagLabels={[]} onSelect={noop} />);
-    const neg = screen.getByText("−$101.00");
+    const neg = screen.getByText("−$101");
     expect(neg.className).toContain("text-down");
 
     rerender(<TradeCard trade={closedNoPnlTrade()} isSelected={false} tagLabels={[]} onSelect={noop} />);

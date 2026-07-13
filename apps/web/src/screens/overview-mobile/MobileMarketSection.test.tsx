@@ -146,7 +146,7 @@ describe("MobileMarketSection (D-08 / J13)", () => {
     expect(within(section).getByText("10y−2y")).toBeDefined();
     expect(within(section).getByText("-0.12")).toBeDefined();
     expect(within(section).getByText("COT lev")).toBeDefined();
-    expect(within(section).getByText(signed(-50000, 0))).toBeDefined();
+    expect(within(section).getByText(signed(-50000))).toBeDefined();
   });
 
   it("J13a: Macro grid renders — for every null value", () => {

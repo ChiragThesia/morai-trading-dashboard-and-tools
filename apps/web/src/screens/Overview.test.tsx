@@ -1539,11 +1539,11 @@ describe("Overview branch — D-01/D-10 (35.1)", () => {
     expect(follows).toBe(true);
   });
 
-  it("hero wiring: mobile-hero-value is signedUsd(bookUnrealizedPnl(positions), 0) — no second P&L path (D-03)", () => {
+  it("hero wiring: mobile-hero-value is signedUsd(bookUnrealizedPnl(positions)) — no second P&L path (D-03)", () => {
     setPositions([CAL_FRONT, CAL_BACK]);
     render(<Overview />);
 
-    const expected = signedUsd(bookUnrealizedPnl([CAL_FRONT, CAL_BACK]), 0);
+    const expected = signedUsd(bookUnrealizedPnl([CAL_FRONT, CAL_BACK]));
     expect(screen.getByTestId("mobile-hero-value").textContent).toBe(expected);
   });
 

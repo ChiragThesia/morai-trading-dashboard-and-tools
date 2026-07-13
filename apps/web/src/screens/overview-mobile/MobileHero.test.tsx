@@ -20,17 +20,17 @@ const BASE = {
 };
 
 describe("MobileHero — hero-first BOOK P&L (D-03, J3/J4)", () => {
-  it("J3a: positive book P&L renders signedUsd(bookPnl, 0) with text-up", () => {
+  it("J3a: positive book P&L renders signedUsd(bookPnl) with text-up", () => {
     render(<MobileHero {...BASE} />);
     const value = screen.getByTestId("mobile-hero-value");
-    expect(value.textContent).toBe(signedUsd(1204, 0));
+    expect(value.textContent).toBe(signedUsd(1204));
     expect(value.className).toContain("text-up");
   });
 
   it("J3b: negative book P&L renders with text-down", () => {
     render(<MobileHero {...BASE} bookPnl={-350} />);
     const value = screen.getByTestId("mobile-hero-value");
-    expect(value.textContent).toBe(signedUsd(-350, 0));
+    expect(value.textContent).toBe(signedUsd(-350));
     expect(value.className).toContain("text-down");
   });
 

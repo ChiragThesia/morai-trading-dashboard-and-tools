@@ -43,7 +43,7 @@ export function MobileHero({
           hasPositions ? signClass(bookPnl) : "text-txt",
         )}
       >
-        {hasPositions ? signedUsd(bookPnl, 0) : "—"}
+        {hasPositions ? signedUsd(bookPnl) : "—"}
       </div>
       <div className="mt-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
         <span>SPX </span>

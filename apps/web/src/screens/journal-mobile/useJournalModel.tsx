@@ -13,6 +13,7 @@
  */
 import { useState } from "react";
 import { enterRuleTag, exitRuleTag, rollRuleTag } from "@morai/core";
+import { signedUsd } from "../../lib/position-format.ts";
 import { useLifecycle } from "../../hooks/useLifecycle.ts";
 import { useRuleTags } from "../../hooks/useRuleTags.ts";
 import type { UseRuleTagsResult } from "../../hooks/useRuleTags.ts";
@@ -48,13 +49,12 @@ export function fmtDate(iso: string): string {
   });
 }
 
-/** Format realized P&L with sign */
+/** Format realized P&L with sign, exact decimals (no rounding). */
 export function fmtPnl(val: string | null): string {
   if (val === null) return "open";
   const n = parseFloat(val);
   if (!Number.isFinite(n)) return "—";
-  const sign = n >= 0 ? "+" : "−";
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  return signedUsd(n);
 }
 
 /** Format a snapshot time as "MMM DD HH:MM" */

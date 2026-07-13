@@ -109,7 +109,7 @@ export function MobileMarketSection({
         />
         <Stat
           label="COT lev"
-          value={cotLev !== null ? signed(cotLev, 0) : "—"}
+          value={cotLev !== null ? signed(cotLev) : "—"}
           valueClassName={cotLev !== null ? signClass(cotLev) : "text-muted-foreground"}
         />
       </div>

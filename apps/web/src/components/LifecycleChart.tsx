@@ -3,6 +3,7 @@ import { LinePath } from "@visx/shape";
 import { curveLinear } from "@visx/curve";
 import { scaleLinear, scalePoint } from "@visx/scale";
 import { localPoint } from "@visx/event";
+import { signedUsd } from "../lib/position-format.ts";
 import type { LifecycleResponse } from "@morai/contracts";
 
 /**
@@ -244,11 +245,6 @@ function buildGapAwareBandPath(bands: ReadonlyArray<Band | null>): string {
       return `M${top} L${bottom} Z`;
     })
     .join(" ");
-}
-
-function fmtSignedDollars(n: number): string {
-  const sign = n >= 0 ? "+" : "-";
-  return `${sign}$${Math.abs(n).toFixed(0)}`;
 }
 
 interface CrosshairState {
@@ -731,28 +727,28 @@ export function LifecycleChart({
                 style={{ display: "flex", justifyContent: "space-between", gap: 14, color: COLOR_TXT, fontWeight: 700 }}
               >
                 <span>net P&amp;L</span>
-                <span>{fmtSignedDollars(hoveredPoint.net)}</span>
+                <span>{signedUsd(hoveredPoint.net)}</span>
               </div>
               <div
                 data-testid="tooltip-row-theta"
                 style={{ display: "flex", justifyContent: "space-between", gap: 14, color: COLOR_UP }}
               >
                 <span>theta</span>
-                <span>{fmtSignedDollars(hoveredPoint.heroValues.theta)}</span>
+                <span>{signedUsd(hoveredPoint.heroValues.theta)}</span>
               </div>
               <div
                 data-testid="tooltip-row-vega"
                 style={{ display: "flex", justifyContent: "space-between", gap: 14, color: COLOR_BLUE }}
               >
                 <span>vega</span>
-                <span>{fmtSignedDollars(hoveredPoint.heroValues.vega)}</span>
+                <span>{signedUsd(hoveredPoint.heroValues.vega)}</span>
               </div>
               <div
                 data-testid="tooltip-row-deltaGamma"
                 style={{ display: "flex", justifyContent: "space-between", gap: 14, color: COLOR_VIOLET }}
               >
                 <span>delta-gamma</span>
-                <span>{fmtSignedDollars(hoveredPoint.heroValues.deltaGamma)}</span>
+                <span>{signedUsd(hoveredPoint.heroValues.deltaGamma)}</span>
               </div>
               <div
                 data-testid="tooltip-row-forwardVol"

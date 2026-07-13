@@ -513,12 +513,12 @@ function PillHeader({
         />
         <MetricChip
           label="COT lev"
-          value={cotLev !== null ? signed(cotLev, 0) : "—"}
+          value={cotLev !== null ? signed(cotLev) : "—"}
           valueClassName={cotLev !== null ? signClass(cotLev) : "text-muted-foreground"}
         />
         <MetricChip
           label="book"
-          value={signedUsd(bookPnl, 0)}
+          value={signedUsd(bookPnl)}
           valueClassName={signClass(bookPnl)}
           className="ml-auto"
         />

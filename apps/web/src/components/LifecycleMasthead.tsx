@@ -1,4 +1,5 @@
 import { Panel } from "./system/index.tsx";
+import { signedUsd } from "../lib/position-format.ts";
 import type { LifecycleResponse } from "@morai/contracts";
 
 /**
@@ -24,11 +25,6 @@ function lastNonGap(
     if (s !== undefined && !s.isGap) return s;
   }
   return snapshots[snapshots.length - 1];
-}
-
-function fmtSignedDollars(n: number): string {
-  const sign = n >= 0 ? "+" : "−";
-  return `${sign}$${Math.abs(n).toFixed(0)}`;
 }
 
 export interface LifecycleMastheadProps {
@@ -59,7 +55,7 @@ export function LifecycleMasthead({
 
   const readSentence =
     cumTheta !== null && forwardVol !== null
-      ? `Forward vol is holding at ${forwardVol.toFixed(1)}%; theta has banked ${fmtSignedDollars(cumTheta)} so far.`
+      ? `Forward vol is holding at ${forwardVol.toFixed(1)}%; theta has banked ${signedUsd(cumTheta)} so far.`
       : "Building the lifecycle — check back after the next snapshot.";
 
   return (
@@ -79,7 +75,7 @@ export function LifecycleMasthead({
             Net P&amp;L
           </span>
           <span className={`font-display text-[15px] font-bold tabular-nums ${pnlClass}`}>
-            {fmtSignedDollars(netPnl)}
+            {signedUsd(netPnl)}
           </span>
         </div>
       </div>

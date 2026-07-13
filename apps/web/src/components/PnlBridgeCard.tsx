@@ -1,4 +1,5 @@
 import { Panel, PanelHeading } from "./system/index.tsx";
+import { signedUsd } from "../lib/position-format.ts";
 import type { LifecycleResponse } from "@morai/contracts";
 
 /**
@@ -20,11 +21,6 @@ function lastNonGapIndex(snapshots: LifecycleResponse["snapshots"]): number | nu
     if (s !== undefined && !s.isGap) return i;
   }
   return null;
-}
-
-function fmtSignedDollars(n: number): string {
-  const sign = n >= 0 ? "+" : "−";
-  return `${sign}$${Math.abs(n).toFixed(0)}`;
 }
 
 function fmtDay(iso: string): string {
@@ -92,14 +88,14 @@ export function PnlBridgeCard({
             <span
               className={`tabular-nums font-semibold ${row.value < 0 ? "text-down" : row.colorClass}`}
             >
-              {row.key === "entry" ? "$0" : fmtSignedDollars(row.value)}
+              {row.key === "entry" ? "$0" : signedUsd(row.value)}
             </span>
           </div>
         ))}
         <div className="mt-1 flex items-center justify-between border-t border-line pt-1.5 font-mono text-[11px] font-bold">
           <span className="text-txt">Net</span>
           <span className={`tabular-nums ${net < 0 ? "text-down" : "text-txt"}`}>
-            {fmtSignedDollars(net)}
+            {signedUsd(net)}
           </span>
         </div>
       </div>
