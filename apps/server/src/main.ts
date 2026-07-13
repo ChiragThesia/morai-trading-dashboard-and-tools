@@ -98,7 +98,7 @@ import { exitRoutes } from "./adapters/http/exits.routes.ts";
 import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
 import { streamRoutes, makeStreamSseRouter } from "./adapters/http/stream.routes.ts";
-import { startFlushInterval, bufferTick } from "./adapters/http/stream-fan-out.ts";
+import { startFlushInterval, bufferTick, bufferSpot, bufferIndices } from "./adapters/http/stream-fan-out.ts";
 import { runSidecarStreamWithReconnect } from "./adapters/http/sidecar-sse.ts";
 import { recomputeLiveGreek } from "@morai/core";
 import { makeSidecarPositionReconciler, makeSidecarReauthAdapter } from "@morai/adapters";
@@ -673,6 +673,11 @@ void runSidecarStreamWithReconnect(config.SIDECAR_URL, {
   recompute: recomputeLiveGreek,
   bufferTick,
   observeSpot: (spot, tsIso) => void spotObserver.observe(spot, tsIso),
+  // LIVE-02 (Phase 38): dedicated fan-out lanes, siblings of observeSpot above —
+  // observeSpot keeps feeding SNAP-01 (a different consumer); these feed the new
+  // browser-facing "spot"/"indices" SSE events via the existing 1s flush interval.
+  broadcastSpot: (spot, ts) => bufferSpot(spot, ts),
+  broadcastIndices: (values, ts) => bufferIndices(values, ts),
   riskFreeRate: 0.045, // ponytail: SOFR proxy; add config field if FRED integration added
   dividendYield: 0.013, // ponytail: SPX 12m trailing yield proxy
   now: () => new Date(),
