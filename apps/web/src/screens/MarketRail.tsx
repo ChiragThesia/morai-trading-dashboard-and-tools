@@ -16,10 +16,12 @@
  */
 import { useStatus } from "../hooks/useStatus.ts";
 import { useIsDesktop } from "../hooks/useIsDesktop.ts";
+import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { RegimeBoard } from "../components/RegimeBoard.tsx";
 import { CotCard } from "../components/CotCard.tsx";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
+import type { StreamIndicesEvent } from "@morai/contracts";
 
 function SystemHealth(): React.ReactElement {
   const { data: status } = useStatus();
@@ -44,7 +46,18 @@ function SystemHealth(): React.ReactElement {
   );
 }
 
-export function MarketRail({ className }: { className?: string }): React.ReactElement {
+export function MarketRail({
+  className,
+  liveIndices = null,
+  liveStatus,
+}: {
+  className?: string;
+  /** Forwarded straight to RegimeBoard's live-tint overlay (LIVE-05) — MarketRail never
+   *  calls useLiveStream itself (D-06 one-hook-per-surface; a second hook would open a
+   *  second EventSource). The surface's single consumer (useOverviewModel) owns the hook. */
+  liveIndices?: StreamIndicesEvent | null;
+  liveStatus?: LiveStreamStatus;
+}): React.ReactElement {
   // A closed <details> hides content in the UA's internal slot — CSS child-display
   // overrides can't reveal it (live-UAT catch 2026-07-11). At lg: the rail must
   // carry the real `open` attribute; below lg it stays uncontrolled (user-toggled).
@@ -59,7 +72,7 @@ export function MarketRail({ className }: { className?: string }): React.ReactEl
         Regime · COT · health
       </summary>
       <div className="mt-3 flex flex-col gap-3 lg:mt-0">
-        <RegimeBoard dense />
+        <RegimeBoard dense liveIndices={liveIndices} liveStatus={liveStatus} />
         <CotCard />
         <Panel>
           <PanelHeading title="System health" />

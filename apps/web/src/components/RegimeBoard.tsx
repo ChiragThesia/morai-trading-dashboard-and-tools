@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useRegimeBoard } from "../hooks/useRegimeBoard.ts";
 import { usePicker } from "../hooks/usePicker.ts";
 import { useMacro } from "../hooks/useMacro.ts";
@@ -351,7 +352,7 @@ function RateRow({ id, label, value }: { id: MacroSeriesId; label: string; value
  *  `liveIndices`/`liveStatus` (Phase 38, LIVE-05) are the display-live/gate-EOD overlay: while
  *  `liveStatus==="live"`, the 3 broker-quotable rows show a live value + client-recomputed
  *  band; the entry gate, stored `indicator.band`, and hy-oas never read them. */
-export function RegimeBoard({
+function RegimeBoardImpl({
   dense = false,
   liveIndices = null,
   liveStatus,
@@ -490,3 +491,9 @@ export function RegimeBoard({
     </Panel>
   );
 }
+
+/** Memoized (RESEARCH Pitfall 4): MarketRail passes `liveIndices`/`liveStatus` straight
+ *  through from the model without allocating a new object per render, so a 1/sec spot
+ *  tick elsewhere on the Overview tree does not force this rail to re-render — only an
+ *  actual VIX-family poll frame (~20s) changes these props by reference. */
+export const RegimeBoard = memo(RegimeBoardImpl);

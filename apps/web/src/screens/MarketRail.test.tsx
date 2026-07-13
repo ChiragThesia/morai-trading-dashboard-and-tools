@@ -4,6 +4,7 @@
  * behaviors (banding, tooltips, GATE BLIND independence) stay covered by RegimeBoard.test.tsx;
  * this file only asserts the composition + the dense 2×2 regime grid.
  */
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
@@ -145,5 +146,39 @@ describe("MarketRail — desktop force-open via matchMedia (live-UAT catch 2026-
     mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
     render(<MarketRail />);
     expect(screen.getByTestId("market-rail").hasAttribute("open")).toBe(false);
+  });
+});
+
+describe("MarketRail — liveIndices/liveStatus forwarding (Phase 38-06, LIVE-05, D-06)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const LIVE_INDICES = { vix: 18.5, vvix: 92.1, vix9d: 19.2, vix3m: 19.8, ts: "2026-07-13T14:00:00Z" };
+
+  it("forwards liveIndices/liveStatus to RegimeBoard — the live regime value reaches the rail", () => {
+    mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
+    render(<MarketRail liveIndices={LIVE_INDICES} liveStatus="live" />);
+
+    // vvix EOD fixture is 89.00/calm; live 92.1 is a distinct, non-round value (catch #20)
+    // proving the live number flows through MarketRail into RegimeBoard.
+    expect(screen.getByTestId("regime-value-vvix").textContent).toBe("92.10");
+  });
+
+  it("never calls useLiveStream itself — receives liveIndices/liveStatus as props only (D-06 one-hook-per-surface)", () => {
+    const source = readFileSync("apps/web/src/screens/MarketRail.tsx", "utf-8");
+    expect(source).not.toContain("useLiveStream(");
+  });
+
+  it("RegimeBoard is memoized — an unchanged liveIndices/liveStatus reference on parent re-render does not re-run it (RESEARCH Pitfall 4)", () => {
+    mockUseRegimeBoard.mockReturnValue({ data: INDICATORS, isPending: false, isError: false });
+    const { rerender } = render(<MarketRail liveIndices={LIVE_INDICES} liveStatus="live" />);
+    const callsAfterMount = mockUseRegimeBoard.mock.calls.length;
+
+    // Simulates a 1/sec spot tick elsewhere on the Overview tree re-rendering the parent —
+    // same liveIndices object reference, same liveStatus string — RegimeBoard must not re-run.
+    rerender(<MarketRail liveIndices={LIVE_INDICES} liveStatus="live" />);
+    expect(mockUseRegimeBoard.mock.calls.length).toBe(callsAfterMount);
   });
 });

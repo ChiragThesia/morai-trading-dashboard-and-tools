@@ -550,6 +550,7 @@ function OverviewDesktop(): React.ReactElement {
     bookPnl,
     liveGreeks,
     liveStatus,
+    liveIndices,
     liveBadgeProps,
     ivNaByRowKey,
     verdictByRowKey,
@@ -662,7 +663,11 @@ function OverviewDesktop(): React.ReactElement {
           GEX rail (right). Mobile stacks in DOM order: rail → hero → positions → GEX. ── */}
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[320px_minmax(0,1fr)_360px] lg:items-start">
         {/* LEFT — persistent market context rail (order-2 below lg: paints after the hero) */}
-        <MarketRail className="order-2 lg:order-1" />
+        <MarketRail
+          className="order-2 lg:order-1"
+          liveIndices={liveIndices}
+          liveStatus={liveStatus}
+        />
 
         {/* CENTER — payoff hero + docked positions table + exit-advisor status */}
         <div data-testid="overview-center-column" className="order-1 flex min-w-0 flex-col gap-3 lg:order-2">
