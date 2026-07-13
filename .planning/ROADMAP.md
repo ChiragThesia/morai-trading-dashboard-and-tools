@@ -511,12 +511,12 @@ Plans:
 **Goal:** The sidecar is the sole LIVE market-data source: SPX spot is fanned to every browser as an additive on-change SSE event (~1/sec, zero new Schwab calls) and drives every spot surface (header chip, payoff marker + T+0, gamma-profile marker, net greeks, mobile hero); the regime rail's VIX/VVIX/ratio gauges show live values via a ~20s sidecar poll — all with honest stale-fallback badges (catch #26) and the DISPLAY-LIVE/GATE-EOD LAW keeping every gate, crisis band, and hysteresis on the stored EOD macro_observations.
 **Requirements**: LIVE-01, LIVE-02, LIVE-03, LIVE-04, LIVE-05
 **Depends on:** Phase 36 (independent of Phase 37)
-**Plans:** 1/7 plans executed
+**Plans:** 2/7 plans executed
 
 Plans:
 
 - [x] 38-01-PLAN.md — contracts: additive streamSpotEvent + streamIndicesEvent (Z-suffix) (wave 1)
-- [ ] 38-02-PLAN.md — sidecar VIX-family get_quotes poll loop + A1 symbol smoke-test checkpoint (wave 1)
+- [x] 38-02-PLAN.md — sidecar VIX-family get_quotes poll loop + A1 symbol smoke-test checkpoint (wave 1)
 - [ ] 38-03-PLAN.md — server spot+indices fan-out (on-change ~1/sec) + sidecar-sse dispatch + main.ts (wave 2)
 - [ ] 38-04-PLAN.md — web hook + model seam: useLiveStream liveSpot/liveIndices + live-aware model spot (wave 2)
 - [ ] 38-05-PLAN.md — spot display consumers: header chip + GEX markers + mobile hero, honest badge (wave 3)
