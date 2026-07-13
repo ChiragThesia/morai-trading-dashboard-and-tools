@@ -48,6 +48,31 @@ const sidecarTickSchema = z.object({
   ts: z.string(),
 });
 
+/**
+ * Permissive schema for a sidecar VIX-family "indices" frame (Phase 38, LIVE-02).
+ *
+ * Intentionally local to this adapter, like sidecarTickSchema above — the raw sidecar
+ * wire format, not the browser-facing streamIndicesEvent contract. Nullable fields:
+ * a per-symbol Schwab poll failure omits that value rather than fabricating it
+ * (mirrors the sidecar's own omit-not-fabricate discipline, 38-02-PLAN.md).
+ */
+const sidecarIndicesSchema = z.object({
+  type: z.literal("indices"),
+  vix: z.number().nullable(),
+  vvix: z.number().nullable(),
+  vix9d: z.number().nullable(),
+  vix3m: z.number().nullable(),
+  ts: z.string(),
+});
+
+/** VIX-family values passed to broadcastIndices — mirrors streamIndicesEvent minus ts. */
+export type IndicesValues = {
+  vix: number | null;
+  vvix: number | null;
+  vix9d: number | null;
+  vix3m: number | null;
+};
+
 // ─── Dependency types ─────────────────────────────────────────────────────────
 
 /**
@@ -75,6 +100,18 @@ export type ConnectToSidecarStreamDeps = {
    * event-snapshot detector (RTH gate → detectLargeMove → cooldown → enqueue).
    */
   readonly observeSpot?: (spot: number, ts: string) => void;
+  /**
+   * Fan-out spot lane (LIVE-02, Phase 38): the dedicated browser-facing "spot" SSE
+   * lane, fired at the SAME guarded tick site as observeSpot — a sibling broadcast,
+   * not a replacement. Wraps bufferSpot from stream-fan-out.ts (caller wires this in
+   * main.ts). observeSpot keeps feeding SNAP-01, a different consumer.
+   */
+  readonly broadcastSpot?: (spot: number, ts: string) => void;
+  /**
+   * Fan-out indices lane (LIVE-02, Phase 38): fired when a sidecar "indices" frame
+   * (VIX family) Zod-parses. Wraps bufferIndices from stream-fan-out.ts.
+   */
+  readonly broadcastIndices?: (values: IndicesValues, ts: string) => void;
   /** Risk-free rate (decimal). Caller caches from rate_observations; refresh every 30 min. */
   readonly riskFreeRate: number;
   /** Continuous dividend yield (decimal). Typical: BSM_DIVIDEND_YIELD = 0.013. */
@@ -241,6 +278,32 @@ function dispatchFrame(
   }
 
   // Zod safeParse at the trust boundary — no any/as/! (typescript.md).
+  //
+  // Indices frame check FIRST — order matters (PATTERNS.md): sidecarTickSchema would
+  // reject an indices frame's shape and drop it silently, so it must never see one.
+  const indicesResult = sidecarIndicesSchema.safeParse(parsed);
+  if (indicesResult.success) {
+    // REVIEW CR-01 discipline extended to the new lane — a throw here must not sever
+    // the stream for every browser.
+    try {
+      deps.broadcastIndices?.(
+        {
+          vix: indicesResult.data.vix,
+          vvix: indicesResult.data.vvix,
+          vix9d: indicesResult.data.vix9d,
+          vix3m: indicesResult.data.vix3m,
+        },
+        indicesResult.data.ts,
+      );
+    } catch (e: unknown) {
+      console.error(
+        "sidecar-sse: broadcastIndices threw (swallowed) —",
+        e instanceof Error ? e.name : "UnknownError",
+      );
+    }
+    return;
+  }
+
   const tickResult = sidecarTickSchema.safeParse(parsed);
   if (!tickResult.success) {
     // Unexpected shape (e.g. fill event, unknown future type) — drop silently.
@@ -263,6 +326,17 @@ function dispatchFrame(
     } catch (e: unknown) {
       console.error(
         "sidecar-sse: observeSpot threw (swallowed) —",
+        e instanceof Error ? e.name : "UnknownError",
+      );
+    }
+    // LIVE-02 (Phase 38): dedicated fan-out spot lane, a sibling broadcast at the
+    // SAME guard — observeSpot above keeps feeding SNAP-01, a different consumer.
+    // Same swallow-and-log discipline: a throw here must never sever the stream.
+    try {
+      deps.broadcastSpot?.(rawTick.underlyingPrice, rawTick.ts);
+    } catch (e: unknown) {
+      console.error(
+        "sidecar-sse: broadcastSpot threw (swallowed) —",
         e instanceof Error ? e.name : "UnknownError",
       );
     }

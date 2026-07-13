@@ -442,6 +442,265 @@ describe("connectToSidecarStream", () => {
     expect(callCount()).toBe(1);
     expect(calls).toHaveLength(1);
   });
+
+  // ─── broadcastSpot (Phase 38, LIVE-02) ────────────────────────────────────────
+
+  it("invokes broadcastSpot(underlyingPrice, ts) alongside observeSpot for a valid tick", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+    const broadcastSpotCalls: Array<{ spot: number; ts: string }> = [];
+    const broadcastSpot = (spot: number, ts: string): void => {
+      broadcastSpotCalls.push({ spot, ts });
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_TICK_PAYLOAD)),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      broadcastSpot,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(broadcastSpotCalls).toEqual([
+      { spot: VALID_TICK_PAYLOAD.underlyingPrice, ts: VALID_TICK_PAYLOAD.ts },
+    ]);
+  });
+
+  it("does NOT invoke broadcastSpot when underlyingPrice is null or <= 0", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+    const broadcastSpotCalls: Array<{ spot: number; ts: string }> = [];
+    const broadcastSpot = (spot: number, ts: string): void => {
+      broadcastSpotCalls.push({ spot, ts });
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify({ ...VALID_TICK_PAYLOAD, underlyingPrice: null })),
+      makeDataFrame(JSON.stringify({ ...VALID_TICK_PAYLOAD, underlyingPrice: 0 })),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      broadcastSpot,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(broadcastSpotCalls).toHaveLength(0);
+  });
+
+  it("does not throw when broadcastSpot is not provided", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_TICK_PAYLOAD)),
+    ]);
+
+    await expect(
+      connectToSidecarStream("http://sidecar.test.internal:8000", {
+        fetch: fakeFetch,
+        recompute,
+        bufferTick,
+        riskFreeRate: 0.045,
+        dividendYield: 0.013,
+        now: () => new Date("2026-06-10T10:00:00.000Z"),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("does NOT reject the stream when broadcastSpot throws — the frame still processes and observeSpot still fires", async () => {
+    const { spy: bufferTick, calls } = makeBufferTickSpy();
+    const { spy: recompute, callCount } = makeRecomputeSpy(CANNED_TICK);
+    const observeSpotCalls: Array<{ spot: number; ts: string }> = [];
+    const observeSpot = (spot: number, ts: string): void => {
+      observeSpotCalls.push({ spot, ts });
+    };
+    const throwingBroadcastSpot = (): void => {
+      throw new RangeError("boom");
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_TICK_PAYLOAD)),
+    ]);
+
+    await expect(
+      connectToSidecarStream("http://sidecar.test.internal:8000", {
+        fetch: fakeFetch,
+        recompute,
+        bufferTick,
+        observeSpot,
+        broadcastSpot: throwingBroadcastSpot,
+        riskFreeRate: 0.045,
+        dividendYield: 0.013,
+        now: () => new Date("2026-06-10T10:00:00.000Z"),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(callCount()).toBe(1);
+    expect(calls).toHaveLength(1);
+    expect(observeSpotCalls).toHaveLength(1); // observeSpot still fired despite the sibling throw
+  });
+
+  // ─── indices frame dispatch (Phase 38, LIVE-02) ───────────────────────────────
+
+  const VALID_INDICES_PAYLOAD = {
+    type: "indices",
+    vix: 16.2,
+    vvix: 88.5,
+    vix9d: 15.1,
+    vix3m: 17.8,
+    ts: FUTURE_DATE,
+  };
+
+  it("Zod-parses a valid indices frame and calls broadcastIndices, returning early (no tick path)", async () => {
+    const { spy: bufferTick, calls } = makeBufferTickSpy();
+    const { spy: recompute, callCount } = makeRecomputeSpy(CANNED_TICK);
+    const broadcastIndicesCalls: Array<{
+      values: { vix: number | null; vvix: number | null; vix9d: number | null; vix3m: number | null };
+      ts: string;
+    }> = [];
+    const broadcastIndices = (
+      values: { vix: number | null; vvix: number | null; vix9d: number | null; vix3m: number | null },
+      ts: string,
+    ): void => {
+      broadcastIndicesCalls.push({ values, ts });
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_INDICES_PAYLOAD)),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      broadcastIndices,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(broadcastIndicesCalls).toEqual([
+      {
+        values: { vix: 16.2, vvix: 88.5, vix9d: 15.1, vix3m: 17.8 },
+        ts: FUTURE_DATE,
+      },
+    ]);
+    // Never fell through to the option-tick path.
+    expect(callCount()).toBe(0);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("preserves null fields on an indices frame (per-symbol omit, not fabricated)", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+    const broadcastIndicesCalls: Array<{
+      values: { vix: number | null; vvix: number | null; vix9d: number | null; vix3m: number | null };
+      ts: string;
+    }> = [];
+    const broadcastIndices = (
+      values: { vix: number | null; vvix: number | null; vix9d: number | null; vix3m: number | null },
+      ts: string,
+    ): void => {
+      broadcastIndicesCalls.push({ values, ts });
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify({ ...VALID_INDICES_PAYLOAD, vvix: null })),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      broadcastIndices,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(broadcastIndicesCalls[0]?.values.vvix).toBeNull();
+  });
+
+  it("drops a malformed indices frame silently (bad shape) — no broadcastIndices call", async () => {
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+    const broadcastIndicesCalls: unknown[] = [];
+    const broadcastIndices = (): void => {
+      broadcastIndicesCalls.push({});
+    };
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify({ type: "indices", vix: "not-a-number" })),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      broadcastIndices,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(broadcastIndicesCalls).toHaveLength(0);
+  });
+
+  it("does NOT reject the stream when broadcastIndices throws", async () => {
+    const throwingBroadcastIndices = (): void => {
+      throw new RangeError("boom");
+    };
+    const { spy: bufferTick } = makeBufferTickSpy();
+    const { spy: recompute } = makeRecomputeSpy(CANNED_TICK);
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_INDICES_PAYLOAD)),
+    ]);
+
+    await expect(
+      connectToSidecarStream("http://sidecar.test.internal:8000", {
+        fetch: fakeFetch,
+        recompute,
+        bufferTick,
+        broadcastIndices: throwingBroadcastIndices,
+        riskFreeRate: 0.045,
+        dividendYield: 0.013,
+        now: () => new Date("2026-06-10T10:00:00.000Z"),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("an indices frame never reaches the option-tick schema (order matters)", async () => {
+    const { spy: bufferTick, calls } = makeBufferTickSpy();
+    const { spy: recompute, callCount } = makeRecomputeSpy(CANNED_TICK);
+
+    const fakeFetch = makeSseStreamFetch([
+      makeDataFrame(JSON.stringify(VALID_INDICES_PAYLOAD)),
+    ]);
+
+    await connectToSidecarStream("http://sidecar.test.internal:8000", {
+      fetch: fakeFetch,
+      recompute,
+      bufferTick,
+      riskFreeRate: 0.045,
+      dividendYield: 0.013,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    });
+
+    expect(callCount()).toBe(0);
+    expect(calls).toHaveLength(0);
+  });
 });
 
 // ─── REVIEW WR-02: self-healing reconnect loop ─────────────────────────────────
