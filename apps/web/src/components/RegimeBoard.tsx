@@ -2,7 +2,7 @@ import { memo } from "react";
 import { useRegimeBoard } from "../hooks/useRegimeBoard.ts";
 import { usePicker } from "../hooks/usePicker.ts";
 import { useMacro } from "../hooks/useMacro.ts";
-import { Panel, PanelHeading } from "./system/index.tsx";
+import { BulletGauge, Panel, PanelHeading } from "./system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
   Tooltip,
@@ -111,20 +111,6 @@ const SHORT_LABELS: Record<string, string> = {
   "hy-oas": "HY OAS",
 };
 
-/** Percent position of `value` on `[min, max]` — NOT clamped. Only `clampedAxisPct` (below)
- *  is safe for on-track positioning (marker, band segments); raw output can fall outside
- *  [0, 100] when `value` is outside `[min, max]`. */
-function axisPct(value: number, min: number, max: number): number {
-  return ((value - min) / (max - min)) * 100;
-}
-
-/** Clamped percent position — used for the marker only, so a value outside the visual axis
- *  still pins to an axis end instead of overflowing the track (the printed numeric value on
- *  line 1 is never clamped, only this marker position). */
-function clampedAxisPct(value: number, min: number, max: number): number {
-  return Math.min(100, Math.max(0, axisPct(value, min, max)));
-}
-
 function shortLabel(indicator: RegimeIndicator, dense: boolean): string {
   return dense ? (SHORT_LABELS[indicator.id] ?? indicator.label) : indicator.label;
 }
@@ -157,15 +143,6 @@ function Row({
   // ponytail: all 4 live regimeIndicator ids are in GAUGE_SCALE; this fallback only guards a
   // future 5th indicator id shipping before its GAUGE_SCALE entry does.
   const scale = GAUGE_SCALE[indicator.id] ?? { min: 0, max: Math.max(indicator.bandCrisis, value, 1) };
-  // Clamped like the marker (CR-01): an effective bandWarn/bandCrisis outside GAUGE_SCALE
-  // (Phase-29 override, or a real print past the fixed axis) must never yield a negative
-  // CSS width — it saturates at the axis edge instead.
-  const warnPct = clampedAxisPct(indicator.bandWarn, scale.min, scale.max);
-  const crisisPct = clampedAxisPct(indicator.bandCrisis, scale.min, scale.max);
-  const valuePct = clampedAxisPct(value, scale.min, scale.max);
-  // WR-01: aria-valuenow must stay within [aria-valuemin, aria-valuemax] per the meter role
-  // contract. aria-valuetext below still carries the true, unclamped value for AT users.
-  const clampedValue = Math.min(scale.max, Math.max(scale.min, value));
 
   return (
     <div className="flex flex-col gap-1 py-1.5" data-testid={`regime-chip-${indicator.id}`}>
@@ -214,33 +191,19 @@ function Row({
           {value.toFixed(2)}
         </span>
       </div>
-      <div
-        role="meter"
-        className="relative h-1.5 w-full overflow-hidden rounded-full bg-line2"
-        aria-valuenow={clampedValue}
-        aria-valuemin={scale.min}
-        aria-valuemax={scale.max}
-        aria-valuetext={`${value.toFixed(2)} — ${displayBand}`}
-        aria-label={`${indicator.label} gauge`}
-        data-testid={`regime-gauge-${indicator.id}`}
-      >
-        <div
-          className="absolute inset-y-0 bg-amber/30"
-          style={{ left: `${warnPct}%`, width: `${crisisPct - warnPct}%` }}
-        />
-        <div
-          className="absolute inset-y-0 bg-down/30"
-          style={{ left: `${crisisPct}%`, width: `${100 - crisisPct}%` }}
-        />
-        <div
-          className={cn(
-            "absolute top-1/2 h-2.5 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full",
-            MARKER_CLASSES[displayBand],
-          )}
-          style={{ left: `${valuePct}%` }}
-          data-testid={`regime-gauge-marker-${indicator.id}`}
-        />
-      </div>
+      <BulletGauge
+        variant="banded"
+        min={scale.min}
+        max={scale.max}
+        value={value}
+        bandWarn={indicator.bandWarn}
+        bandCrisis={indicator.bandCrisis}
+        markerColorClass={MARKER_CLASSES[displayBand]}
+        ariaLabel={`${indicator.label} gauge`}
+        ariaValueText={`${value.toFixed(2)} — ${displayBand}`}
+        testId={`regime-gauge-${indicator.id}`}
+        markerTestId={`regime-gauge-marker-${indicator.id}`}
+      />
     </div>
   );
 }
