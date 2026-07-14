@@ -688,3 +688,66 @@ describe("RegimeBoard — rate block gauges (39-02, GAUGE-02/GAUGE-05)", () => {
     expect(screen.queryByTestId("rate-gauge-DFF")).toBeNull();
   });
 });
+
+describe("RegimeBoard — teaching tooltips (39-02, GAUGE-04)", () => {
+  beforeEach(() => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate();
+    setMacro(MACRO_DATA);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("hovering regime-why-hy-oas shows its WHAT sentence AND still shows the server source + rationale (SOURCE line preserved)", async () => {
+    const user = userEvent.setup();
+    render(<RegimeBoard />);
+
+    await user.hover(screen.getByTestId("regime-why-hy-oas"));
+
+    expect(
+      await screen.findByText(
+        "ICE BofA US High Yield Option-Adjusted Spread — the extra yield high-yield corporate bonds pay over Treasuries, in percentage points.",
+      ),
+    ).toBeDefined();
+    const hyOas = INDICATORS.find((ind) => ind.id === "hy-oas");
+    assertDefined(hyOas, "hy-oas fixture present");
+    expect(await screen.findByText(hyOas.source)).toBeDefined();
+    expect(await screen.findByText(hyOas.rationale)).toBeDefined();
+  });
+
+  it("hovering rate-why-T10Y2Y shows its WHAT + the banded BANDS wording", async () => {
+    const user = userEvent.setup();
+    render(<RegimeBoard />);
+
+    await user.hover(screen.getByTestId("rate-why-T10Y2Y"));
+
+    expect(
+      await screen.findByText(
+        "The 10-year Treasury yield minus the 2-year Treasury yield — the classic yield-curve slope.",
+      ),
+    ).toBeDefined();
+    expect(
+      await screen.findByText(
+        "Calm above 0.0 (normal upward slope). Warning at or below 0.0 (inverted — the historically-cited recession precursor). Crisis at -0.50 or below (deep, sustained inversion) — [ASSUMED], a structural tier, not independently backtested.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("hovering rate-why-DFF shows its WHAT + the neutral 'position only' BANDS wording", async () => {
+    const user = userEvent.setup();
+    render(<RegimeBoard />);
+
+    await user.hover(screen.getByTestId("rate-why-DFF"));
+
+    expect(
+      await screen.findByText("The Federal Reserve's overnight bank lending rate — the rate the Fed sets directly."),
+    ).toBeDefined();
+    expect(
+      await screen.findByText("Track shows today's rate against a fixed 0%-8% range — position only, no verdict."),
+    ).toBeDefined();
+    expect(await screen.findByText("FRED series DFF, daily.")).toBeDefined();
+  });
+});

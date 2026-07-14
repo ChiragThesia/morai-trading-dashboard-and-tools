@@ -144,6 +144,124 @@ function shortLabel(indicator: RegimeIndicator, dense: boolean): string {
   return dense ? (SHORT_LABELS[indicator.id] ?? indicator.label) : indicator.label;
 }
 
+/** Teaching-tooltip copy (39-UI-SPEC.md "Tooltip Copy (LOCKED)") — WHAT/WHY/BANDS, rendered
+ *  verbatim, never paraphrased. Keyed by every regime id AND every rate id (GAUGE-04). Regime
+ *  rows layer this in front of the server's own source/rationale (unchanged SOURCE line); rate
+ *  rows have no server source, so RATE_SOURCE below supplies a static fourth line for them. */
+const TOOLTIP_COPY: Record<string, { what: string; why: string; bands: string }> = {
+  "vix-term-structure": {
+    what: `VIX divided by VIX3M — the ratio of near-term to three-month S&P 500 implied volatility.`,
+    why: `Ratios below 1 (contango) are the market's normal state. A ratio approaching or crossing 1 (backwardation) means near-term fear has spiked above longer-dated fear — a stress signal that hits short-dated vega hardest, calendars included.`,
+    bands: `Calm below 0.90. Warning 0.90-0.95 (contango compressing). Crisis at 0.95 or above (near backwardation).`,
+  },
+  vvix: {
+    what: `VVIX, the CBOE's volatility-of-volatility index — the implied volatility of VIX options.`,
+    why: `VVIX spikes when option markets expect VIX itself to move sharply — a leading tell for vol-of-vol risk that the VIX level alone misses, relevant to any vega-sensitive position.`,
+    bands: `Calm below 100. Warning 100-115 (elevated). Crisis at 115 or above (extreme-fear zone).`,
+  },
+  "vix9d-vix": {
+    what: `VIX9D divided by VIX — the ratio of 9-day to 30-day S&P 500 implied volatility.`,
+    why: `Same idea as VIX/VIX3M, but focused on the very front of the curve. A rising ratio flags fear concentrating in the next two weeks — the window that matters most for short-dated calendar legs.`,
+    bands: `Calm below 1.0. Warning 1.0-1.1. Crisis at 1.1 or above. These cuts are a structural analogy to VIX/VIX3M, not independently backtested — display-only (matches the existing [ASSUMED] disclosure in docs/architecture/regime-board.md).`,
+  },
+  "hy-oas": {
+    what: `ICE BofA US High Yield Option-Adjusted Spread — the extra yield high-yield corporate bonds pay over Treasuries, in percentage points.`,
+    why: `Widening credit spreads mean bond investors are demanding more compensation for default risk — a cross-asset stress signal that has historically coincided with or preceded broader market stress, the same evidence this indicator's bands were calibrated from.`,
+    bands: `Calm below 3.0%. Warning 3.0-5.0%. Crisis at 5.0% or above.`,
+  },
+  DFF: {
+    what: `The Federal Reserve's overnight bank lending rate — the rate the Fed sets directly.`,
+    why: `Every other rate on this rail prices off this one. Its level and direction set the macro backdrop for options carry and the cost of holding hedges overnight.`,
+    bands: `Track shows today's rate against a fixed 0%-8% range — position only, no verdict.`,
+  },
+  SOFR: {
+    what: `Secured Overnight Financing Rate — the repo-market rate that replaced LIBOR as the standard short-term benchmark.`,
+    why: `Tracks Fed funds closely. A persistent gap between the two is itself a funding-stress signal for money markets.`,
+    bands: `Track shows today's rate against a fixed 0%-8% range — position only, no verdict.`,
+  },
+  DGS1MO: {
+    what: `1-month Treasury bill yield — the shortest-dated U.S. government borrowing rate.`,
+    why: `Moves fastest with Fed-meeting expectations. A quick divergence from Fed funds/SOFR often prices in an imminent rate decision.`,
+    bands: `Track shows today's yield against a fixed 0%-8% range — position only, no verdict.`,
+  },
+  DGS3MO: {
+    what: `3-month Treasury bill yield.`,
+    why: `The other leg of the 10Y-3M spread below — its own level also reflects near-term Fed policy expectations.`,
+    bands: `Track shows today's yield against a fixed 0%-8% range — position only, no verdict.`,
+  },
+  T10Y2Y: {
+    what: `The 10-year Treasury yield minus the 2-year Treasury yield — the classic yield-curve slope.`,
+    why: `A positive spread is the market's normal state (long rates above short rates). A negative spread — inversion — has historically preceded U.S. recessions by 6-12 months, and a recession is the deepest, most correlated risk any short-vol equity position faces.`,
+    bands: `Calm above 0.0 (normal upward slope). Warning at or below 0.0 (inverted — the historically-cited recession precursor). Crisis at -0.50 or below (deep, sustained inversion) — [ASSUMED], a structural tier, not independently backtested.`,
+  },
+  T10Y3M: {
+    what: `The 10-year Treasury yield minus the 3-month Treasury bill yield — a second, shorter-horizon yield-curve slope, the spread the NY Fed's own recession-probability work watches most closely.`,
+    why: `Same inversion logic as 10Y-2Y, but the 3-month leg reacts faster to Fed policy — the two spreads inverting together is a stronger signal than either alone.`,
+    bands: `Calm above 0.0. Warning at or below 0.0 (inverted). Crisis at -0.50 or below (deep inversion) — [ASSUMED], same disclosure as 10Y-2Y.`,
+  },
+};
+
+/** Static SOURCE line for the 6 rate rows — they have no server-provided source field
+ *  (unlike the 4 regime rows, which keep `indicator.source`/`indicator.rationale`). */
+const RATE_SOURCE: Record<string, string> = {
+  DFF: `FRED series DFF, daily.`,
+  SOFR: `FRED series SOFR, daily.`,
+  DGS1MO: `FRED series DGS1MO, daily.`,
+  DGS3MO: `FRED series DGS3MO, daily.`,
+  T10Y2Y: `FRED series T10Y2Y, daily. Threshold rationale: knowledge-base/grouped-data/macro_rates.md ("Inverted curves... have historically preceded recessions by 6-12 months"); the -0.50 crisis tier is a structural analogy, same disclosure pattern as vix9d-vix/hy-oas in docs/architecture/regime-board.md.`,
+  T10Y3M: `FRED series T10Y3M, daily. Same threshold rationale as 10Y-2Y.`,
+};
+
+/** ⓘ tooltip trigger + 4-part WHAT/WHY/BANDS/SOURCE content (39-UI-SPEC.md "Tooltip layout"),
+ *  shared by regime rows and rate rows — one badge/tooltip idiom, one render path so the
+ *  locked copy is single-sourced. WHAT/WHY at the brighter `text-txt` (the teaching content);
+ *  BANDS at `text-muted-foreground`; SOURCE quietest at `text-dim`. */
+function InfoTooltip({
+  testId,
+  ariaLabel,
+  what,
+  why,
+  bands,
+  source,
+}: {
+  testId: string;
+  ariaLabel: string;
+  what: string;
+  why: string;
+  bands: string;
+  source: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger
+          data-testid={testId}
+          aria-label={ariaLabel}
+          style={{
+            display: "inline-flex",
+            cursor: "default",
+            background: "transparent",
+            border: "none",
+            padding: 0,
+          }}
+        >
+          <Badge variant="outline" className="border-line2 px-1 py-0 font-mono text-[10px] text-dim">
+            ⓘ
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="flex max-w-xs flex-col gap-1 font-mono text-xs leading-[1.45]">
+            <span className="text-txt">{what}</span>
+            <span className="text-txt">{why}</span>
+            <span className="text-muted-foreground">{bands}</span>
+            <div className="flex flex-col text-dim">{source}</div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 /** One regime indicator = one compact two-line row: label + value (mono tabular, only an
  *  abnormal band adds color + weight), then a banded bullet gauge — value marker on a
  *  warn/crisis-banded track — so proximity to the edge reads at a glance (DEFECT-2). Band
@@ -172,6 +290,7 @@ function Row({
   // ponytail: all 4 live regimeIndicator ids are in GAUGE_SCALE; this fallback only guards a
   // future 5th indicator id shipping before its GAUGE_SCALE entry does.
   const scale = GAUGE_SCALE[indicator.id] ?? { min: 0, max: Math.max(indicator.bandCrisis, value, 1) };
+  const copy = TOOLTIP_COPY[indicator.id] ?? { what: "", why: "", bands: "" };
 
   return (
     <div className="flex flex-col gap-1 py-1.5" data-testid={`regime-chip-${indicator.id}`}>
@@ -180,34 +299,19 @@ function Row({
           <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
             {shortLabel(indicator, dense)}
           </span>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger
-                data-testid={`regime-why-${indicator.id}`}
-                aria-label={`${indicator.label} source and rationale`}
-                style={{
-                  display: "inline-flex",
-                  cursor: "default",
-                  background: "transparent",
-                  border: "none",
-                  padding: 0,
-                }}
-              >
-                <Badge
-                  variant="outline"
-                  className="border-line2 px-1 py-0 font-mono text-[9px] text-dim"
-                >
-                  ⓘ
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className="flex max-w-xs flex-col gap-1 font-mono text-xs leading-[1.45] text-muted-foreground">
-                  <span>{indicator.source}</span>
-                  <span>{indicator.rationale}</span>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <InfoTooltip
+            testId={`regime-why-${indicator.id}`}
+            ariaLabel={`${indicator.label} source and rationale`}
+            what={copy.what}
+            why={copy.why}
+            bands={copy.bands}
+            source={
+              <>
+                <span>{indicator.source}</span>
+                <span>{indicator.rationale}</span>
+              </>
+            }
+          />
         </div>
         <span
           className={cn(
@@ -355,6 +459,8 @@ function RateGaugeRow({
   const valueText = fmtRate(data, id);
   const scale = RATE_GAUGE_SCALE[id] ?? null;
   const bands = RATE_BANDS[id] ?? null;
+  const copy = TOOLTIP_COPY[id] ?? { what: "", why: "", bands: "" };
+  const source = RATE_SOURCE[id] ?? "";
 
   let gauge: React.ReactElement | null = null;
   if (value !== null && scale !== null) {
@@ -395,9 +501,19 @@ function RateGaugeRow({
   return (
     <div className="flex flex-col gap-1 py-1.5" data-testid={`rate-chip-${id}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
-          {label}
-        </span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+            {label}
+          </span>
+          <InfoTooltip
+            testId={`rate-why-${id}`}
+            ariaLabel={`${label} explanation`}
+            what={copy.what}
+            why={copy.why}
+            bands={copy.bands}
+            source={source}
+          />
+        </div>
         <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{valueText}</span>
       </div>
       {gauge}
