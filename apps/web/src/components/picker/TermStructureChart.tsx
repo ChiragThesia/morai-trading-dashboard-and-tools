@@ -28,7 +28,7 @@ import type { ChartConfig } from "../ui/chart.tsx";
 import type { PickerCandidate, PickerEvent, TermStructurePoint } from "@morai/contracts";
 
 const W = 760;
-const H = 230;
+const H = 320;
 
 const DTE_MIN = 0;
 const DTE_MAX = 82;
@@ -154,10 +154,10 @@ export function TermStructureChart({
 
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-1.5">
-      <ChartContainer config={chartConfig} className="aspect-[760/230] w-full">
+      <ChartContainer config={chartConfig} className="aspect-[760/320] w-full">
         {/* Explicit width/height: required under jsdom (mockResponsiveContainer strips
             ResponsiveContainerContext, per 33-03's GammaProfile finding); a real browser
-            measures the aspect-[760/230] box above via ResponsiveContainer and takes
+            measures the aspect-[760/320] box above via ResponsiveContainer and takes
             priority over these, so the chart stays fluid in the app. */}
         <LineChart data={termStructure} width={W} height={H} margin={{ top: 30, right: 22, bottom: 40, left: 50 }}>
           <CartesianGrid horizontal vertical={false} stroke={GRID_LINE} />
@@ -193,7 +193,8 @@ export function TermStructureChart({
                 x={dte}
                 stroke={AMBER}
                 strokeDasharray="2 5"
-                opacity={0.3}
+                opacity={0.5}
+                label={{ value: ev.name, position: "top", fontSize: 10, fill: AMBER }}
               />
             );
           })}
@@ -238,19 +239,19 @@ export function TermStructureChart({
             data-testid="term-structure-leg-dot-front"
             x={frontDte}
             y={frontIv}
-            r={5.5}
+            r={7}
             fill={CORAL}
             stroke="none"
-            label={{ value: "short f", position: "top", offset: 8, fill: CORAL, fontSize: 12, fontFamily: MONO }}
+            label={{ value: "short f", position: "top", offset: 8, fill: CORAL, fontSize: 13, fontFamily: MONO }}
           />
           <ReferenceDot
             data-testid="term-structure-leg-dot-back"
             x={backDte}
             y={backIv}
-            r={5.5}
+            r={7}
             fill={TEAL}
             stroke="none"
-            label={{ value: "long b", position: "top", offset: 8, fill: TEAL, fontSize: 12, fontFamily: MONO }}
+            label={{ value: "long b", position: "top", offset: 8, fill: TEAL, fontSize: 13, fontFamily: MONO }}
           />
         </LineChart>
       </ChartContainer>

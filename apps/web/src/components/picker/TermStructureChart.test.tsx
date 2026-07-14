@@ -120,6 +120,36 @@ describe("TermStructureChart — forward-IV bracket (normal candidate)", () => {
   });
 });
 
+describe("TermStructureChart — taller chart + prominent leg markers + in-chart event labels (Phase 41, AUI-05)", () => {
+  afterEach(cleanup);
+
+  it("chart height grows to 320 for more vertical room", () => {
+    const { container } = render(
+      <TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />,
+    );
+    const svg = container.querySelector(".recharts-surface");
+    expect(Number(svg?.getAttribute("height"))).toBe(320);
+  });
+
+  it("leg dots grow to r=7 so the short/long leg markers read more prominently", () => {
+    render(<TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />);
+    const front = screen.getByTestId("term-structure-leg-dot-front");
+    const back = screen.getByTestId("term-structure-leg-dot-back");
+    expect(front.getAttribute("r")).toBe("7");
+    expect(back.getAttribute("r")).toBe("7");
+  });
+
+  it("each event ReferenceLine carries an in-chart label matching its below-chart legend name", () => {
+    const { container } = render(
+      <TermStructureChart termStructure={termStructure} events={events} asOf={ASOF} candidate={NORMAL} />,
+    );
+    // In-chart labels are SVG <text> nodes inside the plot; the legend below is plain HTML
+    // <span>s ("Jul 3 NFP") — querying only the SVG surface isolates the new in-chart label.
+    const svgTexts = Array.from(container.querySelectorAll(".recharts-surface text")).map((t) => t.textContent);
+    expect(svgTexts).toContain("NFP");
+  });
+});
+
 describe("TermStructureChart — guard case (fwdIv null, T-18-10)", () => {
   afterEach(cleanup);
 
