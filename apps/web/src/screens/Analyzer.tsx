@@ -302,7 +302,7 @@ export function CandidateRail({
           value={pasteText}
           onChange={(e) => { onPasteTextChange(e.target.value); }}
           placeholder="Paste a TOS calendar order…"
-          className="min-w-0 flex-1 rounded-[3px] border border-line2 bg-transparent px-2 py-1 font-mono text-[10px] text-txt"
+          className="min-w-0 flex-1 rounded-[3px] border border-line2 bg-transparent px-3 py-2 font-mono text-[12px] text-txt"
         />
         <Button variant="primary" size="sm" data-testid="picker-paste-analyze" onClick={onPasteAnalyze}>
           Analyze
