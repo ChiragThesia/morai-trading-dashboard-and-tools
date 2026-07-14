@@ -45,6 +45,7 @@ function normalCandidate(): RawCandidate {
     theta: 38.32,
     vega: 309.52,
     delta: 0.96,
+    gamma: -0.002,
     // Real debit = (bsmPrice(back) - bsmPrice(front)) * 100 for these params (verified via a
     // probe script against @morai/quant) -- not an arbitrary number, so findBreakevens below
     // sees a realistic payoff-at-front-expiry curve with genuine straddling breakevens.
@@ -69,6 +70,7 @@ function invertedCandidate(): RawCandidate {
     theta: 200,
     vega: 150,
     delta: -30,
+    gamma: -0.002,
     debit: 3000,
     slope: ((0.105 - 0.155) / (45 - 21)) * 365,
     frontEvents: ["FOMC"],
@@ -228,6 +230,7 @@ describe("scoreCalendarCandidates", () => {
           theta: 1, // sign/magnitude irrelevant to scoring -- selection already filtered theta<=0
           vega: 1,
           delta: -1,
+          gamma: -0.002,
           debit,
           slope: ((ivB - ivF) / (backDte - frontDte)) * 365,
           frontEvents: [],

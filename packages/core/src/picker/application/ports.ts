@@ -150,6 +150,8 @@ export type PickerCandidateDomain = {
   readonly theta: number;
   readonly vega: number;
   readonly delta: number;
+  /** Net position gamma — null only on pre-gamma stored snapshots (additive back-compat). */
+  readonly gamma: number | null;
   readonly fwdIv: number | null;
   readonly fwdIvGuard: "ok" | "inverted";
   readonly slope: number;

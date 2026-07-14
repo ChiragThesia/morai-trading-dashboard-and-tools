@@ -136,6 +136,7 @@ export function makeAnalyzeAdHocCalendarUseCase(
     const theta = (gB.theta - gF.theta) * 100;
     const vega = (gB.vega - gF.vega) * 100;
     const delta = (gB.delta - gF.delta) * 100;
+    const gamma = (gB.gamma - gF.gamma) * 100;
     const slope = ((ivB - ivF) / (tb - tf)) * 365;
 
     const frontEvents = legSpansEvents(fe, asOfIso, events);
@@ -158,6 +159,7 @@ export function makeAnalyzeAdHocCalendarUseCase(
       theta,
       vega,
       delta,
+      gamma,
       debit: input.debit * 100,
       slope,
       frontEvents,

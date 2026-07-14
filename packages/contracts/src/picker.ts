@@ -113,6 +113,9 @@ export const pickerCandidate = z.object({
   vega: z.number(),
   /** Net position delta ($/pt). */
   delta: z.number(),
+  /** Net position gamma (Δ change per point, ×100 multiplier). Nullable+defaulted so
+   *  pre-gamma stored snapshots still parse at the read seam (additive, Analyzer table). */
+  gamma: z.number().nullable().default(null),
   /**
    * Forward IV between the two legs (criterion 1). Null when the term structure is
    * inverted (radicand < 0) — never NaN. `fwdIvGuard === "inverted"` implies `fwdIv === null`.

@@ -416,6 +416,7 @@ export function toPickerCandidateDomain(
     theta: candidate.theta,
     vega: candidate.vega,
     delta: candidate.delta,
+    gamma: candidate.gamma,
     fwdIv: candidate.fwdIv,
     fwdIvGuard: candidate.fwdIvGuard,
     slope: candidate.slope,

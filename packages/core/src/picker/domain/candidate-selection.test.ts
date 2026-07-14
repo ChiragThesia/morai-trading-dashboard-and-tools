@@ -118,6 +118,24 @@ describe("legSpansEvents", () => {
 });
 
 describe("selectCandidates", () => {
+  it("every emitted candidate carries net gamma = (back γ − front γ) × 100 (Analyzer table column)", () => {
+    const iv = 0.15;
+    const chain: ChainQuoteForPicker[] = [];
+    for (const expiration of ["2026-07-31", "2026-08-26"]) {
+      for (const strike of [7500, 7450, 7400]) {
+        chain.push(chainQuote(strike, expiration, iv));
+      }
+    }
+    const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
+    expect(candidates.length).toBeGreaterThan(0);
+    for (const c of candidates) {
+      const gF = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P");
+      const gB = bsmGreeks(c.spot, c.backLeg.strike, c.backLeg.dte / 365, c.backLeg.iv, R, Q, "P");
+      expect(Number.isFinite(c.gamma)).toBe(true);
+      expect(c.gamma).toBeCloseTo((gB.gamma - gF.gamma) * 100, 9);
+    }
+  });
+
   it("band-scan: emits EVERY liquid 25-multiple whose front delta is inside [−0.55, −0.25]", () => {
     // Dense 25-pt grid: the old nearest-delta rungs skipped strikes whose delta fell between
     // rung targets (the user's real 7450 fill at Δ−0.43 was missed). Band MEMBERSHIP must

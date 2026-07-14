@@ -397,6 +397,7 @@ export function selectCandidates(
 
         const vega = (gB.vega - gF.vega) * 100;
         const netDelta = (gB.delta - gF.delta) * 100;
+        const netGamma = (gB.gamma - gF.gamma) * 100;
 
         // Debit from the actual market with the fill haircut — buy the back, sell the front.
         const debit = (haircutFill(backAtK, "buy") - haircutFill(frontQuote, "sell")) * 100;
@@ -420,6 +421,7 @@ export function selectCandidates(
           theta,
           vega,
           delta: netDelta,
+          gamma: netGamma,
           debit,
           slope,
           frontEvents,

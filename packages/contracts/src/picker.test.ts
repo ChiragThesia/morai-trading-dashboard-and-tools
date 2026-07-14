@@ -314,6 +314,22 @@ describe("pickerCandidate.bucket (28-05, PLAY-04 event-calendar bucket — addit
   });
 });
 
+describe("pickerCandidate.gamma (Analyzer greeks table — additive)", () => {
+  it("defaults to null when absent — old stored snapshots (pre-gamma) still parse", () => {
+    const parsed = pickerCandidate.parse(oraclePayload);
+    expect(parsed.gamma).toBeNull();
+  });
+
+  it("round-trips an explicit net-gamma value", () => {
+    const parsed = pickerCandidate.parse({ ...oraclePayload, gamma: -0.0123 });
+    expect(parsed.gamma).toBe(-0.0123);
+  });
+
+  it("rejects a non-numeric gamma", () => {
+    expect(() => pickerCandidate.parse({ ...oraclePayload, gamma: "big" })).toThrow();
+  });
+});
+
 // ─────────────────────────────────────────────────────────────
 // analyzeAdHocCalendarRequest/Response (Phase 30, D-02, MCP-02 additive) — the shared
 // POST /picker/analyze route + MCP tool schema. Puts-only (D-03), NO client-supplied

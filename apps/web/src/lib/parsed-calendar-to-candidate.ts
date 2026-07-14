@@ -24,6 +24,7 @@ export function parsedCalendarToPickerCandidate(parsed: ParsedCalendar, id: stri
     theta: 0,
     vega: 0,
     delta: 0,
+    gamma: null,
     fwdIv: null,
     fwdIvGuard: "ok",
     slope: 0,

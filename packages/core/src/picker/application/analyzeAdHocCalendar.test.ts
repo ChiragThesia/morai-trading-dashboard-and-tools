@@ -198,6 +198,7 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
             theta: (gB.theta - gF.theta) * 100,
             vega: (gB.vega - gF.vega) * 100,
             delta: (gB.delta - gF.delta) * 100,
+            gamma: (gB.gamma - gF.gamma) * 100,
             debit: debit * 100,
             slope: ((ivB - ivF) / (backDte - frontDte)) * 365,
             frontEvents: [],
@@ -222,6 +223,7 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
           expect(analysis.candidate.fwdIv).toBe(expectedScored.fwdIv);
           expect(analysis.candidate.exitPlan).toEqual(expectedScored.exitPlan);
           expect(analysis.candidate.debit).toBe(debit * 100);
+          expect(analysis.candidate.gamma).toBeCloseTo((gB.gamma - gF.gamma) * 100, 9);
         },
       ),
     );

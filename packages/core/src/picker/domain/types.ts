@@ -47,6 +47,8 @@ export type RawCandidate = {
   readonly vega: number;
   /** Net position delta ($/pt). */
   readonly delta: number;
+  /** Net position gamma (Δ change per point, ×100 contract multiplier). */
+  readonly gamma: number;
   /** Debit paid to enter (= max loss when closed by front expiry), dollars. */
   readonly debit: number;
   /** Term-structure slope between legs, annualized vol-pts/yr (criterion 2). */

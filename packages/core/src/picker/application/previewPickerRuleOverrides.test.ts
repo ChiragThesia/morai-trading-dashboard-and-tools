@@ -151,6 +151,7 @@ function makeCandidate(
     theta: 1,
     vega: 1,
     delta: 0,
+    gamma: -0.002,
     fwdIv: 0.15,
     fwdIvGuard: "ok",
     slope: 0.1,
