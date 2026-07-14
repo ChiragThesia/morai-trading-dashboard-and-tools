@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 export { Button, buttonClass } from "./Button.tsx";
 export type { ButtonProps, ButtonVariant, ButtonTone, ButtonSize } from "./Button.tsx";
 export { ChipRail } from "./ChipRail.tsx";
+export { BulletGauge } from "./BulletGauge.tsx";
+export type { BulletGaugeProps, BulletGaugeVariant } from "./BulletGauge.tsx";
 
 // ─── Atoms (Morai-specific, beyond shadcn) ────────────────────────────────────
 
