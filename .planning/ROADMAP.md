@@ -525,11 +525,14 @@ Plans:
 
 ### Phase 39: Market Regime rail — all rows as gauges + teaching tooltips: rates block (Fed funds, SOFR, 1M, 3M, 10Y−2Y, 10Y−3M) and COT positioning rows get bullet gauge tracks matching the existing regime-indicator gauges — evidence-aware: yield-curve spreads (10Y−2Y, 10Y−3M) get real warn/crisis inversion bands (documented evidence), Fed funds/SOFR/bills/COT get neutral position-only tracks (marker on a visual range, NO verdict colors — regime-board evidence law); every ⓘ tooltip rewritten to teach: WHAT the indicator measures (plain English, 1-2 sentences), WHY it matters for calendar trades (1-2 sentences), what the warn/crisis bands mean, existing source/provenance line kept at bottom. Explainer copy sourced from knowledge-base/ + docs/architecture regime evidence docs.
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Every row on the desktop Market Regime rail reads as a bullet gauge with a teaching ⓘ tooltip. The rates block (Fed Funds/SOFR/1M/3M render neutral position-only tracks with no verdict color; 10Y−2Y/10Y−3M render evidence-banded inversion tracks) and the COT rows (neutral, marker green/red by long/short net) join the four existing regime gauges on one shared BulletGauge, at one visual density. Every ⓘ teaches four parts — WHAT the dial measures, WHY it matters for SPX calendar trading, what the BANDS mean (or "position only"), and a quiet SOURCE line — with copy verbatim from the UI-SPEC. The yield-curve bands are client-visual-only (documented in the regime-board evidence doc first); the picker gate stays blind.
+**Requirements**: GAUGE-01, GAUGE-02, GAUGE-03, GAUGE-04, GAUGE-05
 **Depends on:** Phase 38
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 39 to break down)
+- [ ] 39-01-PLAN.md — docs evidence (t10y2y/t10y3m bands) + BulletGauge extraction + regime rows refactored zero-visual-change (wave 1)
+- [ ] 39-02-PLAN.md — rates block as gauges (neutral 4 + banded 2, RATE_BANDS gate-blind) + regime/rate 4-part teaching tooltips (wave 2)
+- [ ] 39-03-PLAN.md — COT rows as neutral direction-tinted gauges + typography + 4-part COT tooltips (wave 2)
+- [ ] 39-04-PLAN.md — integration gate (suite/typechecks/lint + cross-cutting law greps) + deploy (Vercel) + desktop UAT on morai.wtf (wave 3)

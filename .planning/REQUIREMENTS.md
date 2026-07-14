@@ -163,6 +163,45 @@ no separate discuss-phase requirement IDs existed until now.
       Live tint only while status is `live`; the "EOD · as of…" footer reverts on quiet/stalled
       (CONTEXT Area 2 Q1/Q2, v1.3 flapping risk #3).
 
+### Regime rail — all rows as gauges + teaching tooltips (Phase 39, added 2026-07-13)
+
+Extend the existing bullet-gauge idiom (Phase 31/38) to the rates block and COT rows, and
+rewrite every ⓘ tooltip to teach. Display-only rework — no backend, no contracts, no gate
+inputs. Requirements derived from `39-CONTEXT.md` locked decisions + the APPROVED
+`39-UI-SPEC.md` (rev 2); no separate discuss-phase requirement IDs existed until now.
+
+- [ ] **GAUGE-01**: The presentational bullet-gauge track (the `role="meter"` markup +
+      `axisPct`/`clampedAxisPct` math) is extracted from `RegimeBoard.tsx` into a shared
+      `apps/web/src/components/system/BulletGauge.tsx` with `banded` and `neutral` variants.
+      The four existing regime rows are refactored onto it with ZERO visual change — the
+      existing `RegimeBoard.test.tsx` gauge assertions (meter role, aria-* clamping, band
+      segment positions, marker color/testids) stay green UNMODIFIED as the regression guard.
+- [ ] **GAUGE-02**: The six rates rows (Fed Funds, SOFR, 1M, 3M, 10Y−2Y, 10Y−3M) render
+      bullet gauges. Fed Funds/SOFR/1M/3M are NEUTRAL position-only tracks — marker on a fixed
+      0–8% range, plain `bg-line2` track, `bg-dim` marker, NO band segments and NO verdict
+      colors (the regime-board evidence law: no verdict-coloring without documented research).
+      10Y−2Y/10Y−3M are BANDED via client-side `RATE_BANDS` named constants (calm `> 0.0` /
+      warning `≤ 0.0` / crisis `≤ -0.50` `[ASSUMED]`), display-only and evidence-documented —
+      never a picker/regime gate input (gate stays blind).
+- [ ] **GAUGE-03**: The five COT rows (Dealer, Asset Mgr, Leveraged, Other rept, Non-rept)
+      render NEUTRAL direction-tinted bullet gauges — plain `bg-line2` track, no band segments,
+      marker `bg-up` when net ≥ 0 / `bg-down` when net < 0 (the existing long/short convention,
+      never amber, no warning tier possible). The WoW `▲`/`▼` arrow + signed/magnitude
+      formatting are kept; axes are per-class fixed visual ranges. COT net/WoW typography moves
+      onto the shared secondary-value tier (11px).
+- [ ] **GAUGE-04**: Every gauge row's ⓘ tooltip renders the four-part teaching structure —
+      WHAT (plain English) / WHY (SPX-calendar relevance) / BANDS (thresholds, or "position
+      only" for neutral) / SOURCE (quiet provenance) — with the copy rendered VERBATIM from
+      `39-UI-SPEC.md`'s LOCKED tooltip payload (executors never paraphrase or invent financial
+      claims). The four existing regime rows keep their server-provided `source`/`rationale` as
+      the SOURCE line; rate/COT rows use the static SOURCE strings authored in the UI-SPEC.
+- [ ] **GAUGE-05**: The yield-curve inversion bands for `t10y2y`/`t10y3m` are added to
+      `docs/architecture/regime-board.md`'s evidence table BEFORE any component encodes them
+      (docs-before-code), with cited threshold rationale (`knowledge-base/grouped-data/macro_rates.md`)
+      and an `[ASSUMED]` disclosure on the −0.50 crisis tier. The picker gate and regime-gate
+      resolution take ZERO new inputs from these bands — they are a client-visual-only display
+      band (rates come from `useMacro`, not `useRegimeBoard`).
+
 ## Future Requirements
 
 Deferred. Tracked but not in the v1.3 roadmap.
@@ -229,6 +268,11 @@ Explicit exclusions with reasoning.
 | LIVE-03 | Phase 38 | Planned |
 | LIVE-04 | Phase 38 | Planned |
 | LIVE-05 | Phase 38 | Planned |
+| GAUGE-01 | Phase 39 | Planned |
+| GAUGE-02 | Phase 39 | Planned |
+| GAUGE-03 | Phase 39 | Planned |
+| GAUGE-04 | Phase 39 | Planned |
+| GAUGE-05 | Phase 39 | Planned |
 
 **Coverage:** 28/28 v1.3 requirements mapped, 0 orphans. Phase order:
 23 (VIX3M, first-and-alone) → 24 (regime board) → 25 (ops rider) → 26 (exit advisor) →
