@@ -143,3 +143,4 @@ None beyond the two deviations above.
 ---
 *Phase: 41-analyzer-desktop-redesign-ranked-table-verdict-hero-live-sidecar*
 *Completed: 2026-07-14*
+## Self-Check: PASSED
