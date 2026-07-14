@@ -440,6 +440,9 @@ export type {
 // getCalendarLifecycle use-case — thin forwarder over ForReadingJournal, mapping each row
 // through computeForwardVol + computeAttributionSeries (22-01/22-02/22-03).
 export { makeGetCalendarLifecycleUseCase } from "./journal/index.ts";
+// Phase 40 (HIST-02, D-03): the LOCKED gap predicate, reused by ForHealingSnapshot's
+// fill-only decision — never a second gap definition.
+export { isGapRow } from "./journal/index.ts";
 export type {
   LifecycleSnapshot,
   GetCalendarLifecycleDeps,

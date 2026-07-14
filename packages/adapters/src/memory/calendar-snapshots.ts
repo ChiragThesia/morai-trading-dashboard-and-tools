@@ -23,6 +23,7 @@ import type { Result } from "@morai/shared";
 import {
   computeSnapshotPnl,
   resolveRootCandidates,
+  isGapRow,
 } from "@morai/core";
 import type {
   ForPersistingSnapshot,
@@ -33,6 +34,8 @@ import type {
   ForRecomputingSnapshotPnl,
   ForReadingLatestSnapshotPerOpenCalendarForJournal,
   ForReadingFullSnapshotHistoryForCalendar,
+  ForHealingSnapshot,
+  ForDeletingSnapshotsOutsideWindow,
   LatestSnapshotForOpenCalendar,
   FullHistorySnapshotRow,
   SnapshotRow,
@@ -50,6 +53,8 @@ export type MemoryCalendarSnapshotsRepo = {
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
   readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
   readonly readFullSnapshotHistoryForCalendar: ForReadingFullSnapshotHistoryForCalendar;
+  readonly healSnapshot: ForHealingSnapshot;
+  readonly deleteSnapshotsOutsideWindow: ForDeletingSnapshotsOutsideWindow;
   /**
    * seedCalendar — register a calendarId as known so readJournal returns
    * ok([]) (not ok(null)) for it. Mirrors the FK enforced by the Postgres
@@ -217,6 +222,39 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok(rows);
   };
 
+  // healSnapshot (HIST-02, D-03): fill-only conditional write. INSERT when absent; UPDATE when
+  // the existing row IS a gap (isGapRow — the LOCKED predicate, never a second definition);
+  // NO-OP when the existing row is live (non-gap) — a live row always wins.
+  const healSnapshot: ForHealingSnapshot = async (
+    row: SnapshotRow,
+  ): Promise<Result<void, StorageError>> => {
+    const key = `${row.time.toISOString()}:${row.calendarId}`;
+    const existing = store.get(key);
+    if (existing === undefined || isGapRow(existing)) {
+      store.set(key, row);
+    }
+    return ok(undefined);
+  };
+
+  // deleteSnapshotsOutsideWindow (HIST-02, D-08): removes rows outside [openedAt, closedAt]
+  // for a calendar; closedAt null (open calendar) trims only the pre-openedAt side.
+  const deleteSnapshotsOutsideWindow: ForDeletingSnapshotsOutsideWindow = async (
+    calendarId: string,
+    openedAt: Date,
+    closedAt: Date | null,
+  ): Promise<Result<{ readonly deletedCount: number }, StorageError>> => {
+    let deletedCount = 0;
+    for (const [key, row] of store) {
+      if (row.calendarId !== calendarId) continue;
+      const t = row.time.getTime();
+      const outsideWindow = t < openedAt.getTime() || (closedAt !== null && t > closedAt.getTime());
+      if (!outsideWindow) continue;
+      store.delete(key);
+      deletedCount += 1;
+    }
+    return ok({ deletedCount });
+  };
+
   const seedCalendar = (id: string): void => {
     knownIds.add(id);
   };
@@ -241,6 +279,8 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     recomputeSnapshotPnl,
     readLatestSnapshotPerOpenCalendar,
     readFullSnapshotHistoryForCalendar,
+    healSnapshot,
+    deleteSnapshotsOutsideWindow,
     seedCalendar,
     seedLegSnapshot,
   };

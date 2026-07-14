@@ -17,7 +17,7 @@
 
 import { ok, err, parseOccSymbol, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { computeSnapshotPnl, resolveRootCandidates } from "@morai/core";
+import { computeSnapshotPnl, resolveRootCandidates, isGapRow } from "@morai/core";
 import type {
   ForPersistingSnapshot,
   ForReadingJournal,
@@ -27,6 +27,8 @@ import type {
   ForRecomputingSnapshotPnl,
   ForReadingLatestSnapshotPerOpenCalendarForJournal,
   ForReadingFullSnapshotHistoryForCalendar,
+  ForHealingSnapshot,
+  ForDeletingSnapshotsOutsideWindow,
   LatestSnapshotForOpenCalendar,
   FullHistorySnapshotRow,
   SnapshotRow,
@@ -34,7 +36,7 @@ import type {
   CalendarSnapshotForCycle,
   StorageError,
 } from "@morai/core";
-import { eq, and, lte, desc, asc, max, inArray } from "drizzle-orm";
+import { eq, and, lt, gt, or, lte, desc, asc, max, inArray } from "drizzle-orm";
 import { calendarSnapshots, legObservations, contracts, calendars } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -47,6 +49,8 @@ export type PostgresCalendarSnapshotsRepo = {
   readonly recomputeSnapshotPnl: ForRecomputingSnapshotPnl;
   readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
   readonly readFullSnapshotHistoryForCalendar: ForReadingFullSnapshotHistoryForCalendar;
+  readonly healSnapshot: ForHealingSnapshot;
+  readonly deleteSnapshotsOutsideWindow: ForDeletingSnapshotsOutsideWindow;
 };
 
 export function makePostgresCalendarSnapshotsRepo(
@@ -442,6 +446,93 @@ export function makePostgresCalendarSnapshotsRepo(
     }
   };
 
+  // ─── healSnapshot (HIST-02, D-03) ────────────────────────────────────────────
+  // Fill-only conditional write, atomic (SELECT-then-decide inside one transaction, mirroring
+  // recomputeSnapshotPnl's tx shape — so a concurrent live write can never be clobbered by a
+  // race). INSERT when no row exists for (calendar_id, time); UPDATE to the healed row when the
+  // existing row IS a gap (isGapRow — the LOCKED predicate from @morai/core's attribution.ts,
+  // never a second gap definition); NO-OP when the existing row is NOT a gap (a live row wins).
+  const healSnapshot: ForHealingSnapshot = async (
+    row: SnapshotRow,
+  ): Promise<Result<void, StorageError>> => {
+    try {
+      await db.transaction(async (tx) => {
+        const existingRows = await tx
+          .select()
+          .from(calendarSnapshots)
+          .where(
+            and(eq(calendarSnapshots.calendarId, row.calendarId), eq(calendarSnapshots.time, row.time)),
+          );
+
+        const existing = existingRows[0];
+        const values = {
+          spot: row.spot,
+          netMark: row.netMark,
+          frontMark: row.frontMark,
+          backMark: row.backMark,
+          frontIv: row.frontIv,
+          backIv: row.backIv,
+          frontIvRaw: row.frontIvRaw,
+          backIvRaw: row.backIvRaw,
+          netDelta: row.netDelta,
+          netGamma: row.netGamma,
+          netTheta: row.netTheta,
+          netVega: row.netVega,
+          termSlope: row.termSlope,
+          dteFront: row.dteFront,
+          dteBack: row.dteBack,
+          pnlOpen: row.pnlOpen,
+          source: row.source,
+          trigger: row.trigger ?? null,
+        };
+
+        if (existing === undefined) {
+          await tx.insert(calendarSnapshots).values({ time: row.time, calendarId: row.calendarId, ...values });
+          return;
+        }
+
+        if (!isGapRow(existing)) return; // live row wins — never overwritten (D-03)
+
+        await tx
+          .update(calendarSnapshots)
+          .set(values)
+          .where(
+            and(eq(calendarSnapshots.calendarId, row.calendarId), eq(calendarSnapshots.time, row.time)),
+          );
+      });
+      return ok(undefined);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
+  // ─── deleteSnapshotsOutsideWindow (HIST-02, D-08) ────────────────────────────
+  // Deletes rows outside [openedAt, closedAt] for a calendar; closedAt null (open calendar)
+  // trims only the pre-openedAt side. Returns the exact deleted count via RETURNING.
+  const deleteSnapshotsOutsideWindow: ForDeletingSnapshotsOutsideWindow = async (
+    calendarId: string,
+    openedAt: Date,
+    closedAt: Date | null,
+  ): Promise<Result<{ readonly deletedCount: number }, StorageError>> => {
+    try {
+      const windowPredicate =
+        closedAt === null
+          ? lt(calendarSnapshots.time, openedAt)
+          : or(lt(calendarSnapshots.time, openedAt), gt(calendarSnapshots.time, closedAt));
+
+      const deletedRows = await db
+        .delete(calendarSnapshots)
+        .where(and(eq(calendarSnapshots.calendarId, calendarId), windowPredicate))
+        .returning({ time: calendarSnapshots.time });
+
+      return ok({ deletedCount: deletedRows.length });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   return {
     persistSnapshot,
     readJournal,
@@ -451,6 +542,8 @@ export function makePostgresCalendarSnapshotsRepo(
     recomputeSnapshotPnl,
     readLatestSnapshotPerOpenCalendar,
     readFullSnapshotHistoryForCalendar,
+    healSnapshot,
+    deleteSnapshotsOutsideWindow,
   };
 }
 

@@ -24,6 +24,8 @@ import type {
   ForRecomputingSnapshotPnl,
   ForReadingLatestSnapshotPerOpenCalendarForJournal,
   ForReadingFullSnapshotHistoryForCalendar,
+  ForHealingSnapshot,
+  ForDeletingSnapshotsOutsideWindow,
   SnapshotRow,
   LegSnapshot,
   StorageError,
@@ -49,6 +51,10 @@ export type CalendarSnapshotsRepo = {
   readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendarForJournal;
   /** 27-03 (BT-03): every snapshot row for one calendar, ASC, any source/status */
   readonly readFullSnapshotHistoryForCalendar: ForReadingFullSnapshotHistoryForCalendar;
+  /** Phase 40 (HIST-02, D-03): fill-only conditional write — a live row always wins. */
+  readonly healSnapshot: ForHealingSnapshot;
+  /** Phase 40 (HIST-02, D-08): delete rows outside [openedAt, closedAt], return the exact count. */
+  readonly deleteSnapshotsOutsideWindow: ForDeletingSnapshotsOutsideWindow;
 };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -707,6 +713,133 @@ export function runCalendarSnapshotsContractTests(
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.value).toEqual([]);
+      });
+    });
+
+    describe("healSnapshot — fill-only conditional write (HIST-02, D-03)", () => {
+      it("inserts when no row exists for (calendarId, time)", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T19:00:00Z");
+        const row = makeSnapshotRow(time, CAL_ID, { netMark: "18" });
+
+        const result = await repo.healSnapshot(row);
+        expect(result.ok).toBe(true);
+
+        const count = await repo.countSnapshots(CAL_ID);
+        expect(count).toBe(1);
+        const journalResult = await repo.readJournal(CAL_ID);
+        expect(journalResult.ok).toBe(true);
+        if (!journalResult.ok) return;
+        expect(journalResult.value?.[0]?.netMark).toBe("18");
+      });
+
+      it("updates when the existing row IS a gap", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T19:00:00Z");
+        await repo.persistSnapshot(makeNanSnapshotRow(time, CAL_ID));
+
+        const healedRow = makeSnapshotRow(time, CAL_ID, { netMark: "42" });
+        const result = await repo.healSnapshot(healedRow);
+        expect(result.ok).toBe(true);
+
+        const journalResult = await repo.readJournal(CAL_ID);
+        expect(journalResult.ok).toBe(true);
+        if (!journalResult.ok) return;
+        const rows = journalResult.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.netMark).toBe("42");
+        expect(rows[0]?.frontIv).not.toBe("NaN");
+      });
+
+      it("no-ops when the existing row is live (non-gap) — a live row always wins (D-03)", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T19:00:00Z");
+        await repo.persistSnapshot(makeSnapshotRow(time, CAL_ID, { netMark: "15" }));
+
+        const attemptedHeal = makeSnapshotRow(time, CAL_ID, { netMark: "999" });
+        const result = await repo.healSnapshot(attemptedHeal);
+        expect(result.ok).toBe(true);
+
+        const journalResult = await repo.readJournal(CAL_ID);
+        expect(journalResult.ok).toBe(true);
+        if (!journalResult.ok) return;
+        const rows = journalResult.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows).toHaveLength(1);
+        // Untouched — the live value survives, never overwritten.
+        expect(rows[0]?.netMark).toBe("15");
+      });
+    });
+
+    describe("deleteSnapshotsOutsideWindow — D-08 windowed trim", () => {
+      it("trims rows outside [openedAt, closedAt] and preserves in-window rows", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const openedAt = new Date("2026-07-01T14:00:00Z");
+        const closedAt = new Date("2026-07-01T21:00:00Z");
+        const before = new Date("2026-07-01T13:00:00Z"); // before openedAt
+        const inWindow = new Date("2026-07-01T18:00:00Z");
+        const after = new Date("2026-07-01T22:00:00Z"); // after closedAt
+
+        await repo.persistSnapshot(makeSnapshotRow(before, CAL_ID));
+        await repo.persistSnapshot(makeSnapshotRow(inWindow, CAL_ID));
+        await repo.persistSnapshot(makeSnapshotRow(after, CAL_ID));
+
+        const result = await repo.deleteSnapshotsOutsideWindow(CAL_ID, openedAt, closedAt);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.deletedCount).toBe(2);
+
+        const journalResult = await repo.readJournal(CAL_ID);
+        expect(journalResult.ok).toBe(true);
+        if (!journalResult.ok) return;
+        const rows = journalResult.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.time.getTime()).toBe(inWindow.getTime());
+      });
+
+      it("open calendar (closedAt null) trims only the pre-openedAt side", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const openedAt = new Date("2026-07-01T14:00:00Z");
+        const before = new Date("2026-07-01T13:00:00Z");
+        const after = new Date("2026-07-02T14:00:00Z"); // far after openedAt — still open, must stay
+
+        await repo.persistSnapshot(makeSnapshotRow(before, CAL_ID));
+        await repo.persistSnapshot(makeSnapshotRow(after, CAL_ID));
+
+        const result = await repo.deleteSnapshotsOutsideWindow(CAL_ID, openedAt, null);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.deletedCount).toBe(1);
+
+        const journalResult = await repo.readJournal(CAL_ID);
+        expect(journalResult.ok).toBe(true);
+        if (!journalResult.ok) return;
+        const rows = journalResult.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.time.getTime()).toBe(after.getTime());
+      });
+
+      it("returns deletedCount 0 and leaves rows intact when nothing is outside the window", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const openedAt = new Date("2026-07-01T14:00:00Z");
+        const closedAt = new Date("2026-07-01T21:00:00Z");
+        const inWindow = new Date("2026-07-01T18:00:00Z");
+        await repo.persistSnapshot(makeSnapshotRow(inWindow, CAL_ID));
+
+        const result = await repo.deleteSnapshotsOutsideWindow(CAL_ID, openedAt, closedAt);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.deletedCount).toBe(0);
+
+        const count = await repo.countSnapshots(CAL_ID);
+        expect(count).toBe(1);
       });
     });
   });
