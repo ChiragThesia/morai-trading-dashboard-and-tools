@@ -772,6 +772,29 @@ export function runCalendarSnapshotsContractTests(
         // Untouched — the live value survives, never overwritten.
         expect(rows[0]?.netMark).toBe("15");
       });
+
+      // CR-01 (40-REVIEW.md): under READ COMMITTED, two concurrent healSnapshot calls on
+      // the same absent (calendarId, time) can both observe "no row" and both attempt an
+      // INSERT — the loser must never surface as an unhandled unique-violation StorageError.
+      // Promise.all is a deterministic proxy for the self-heal-cron-vs-live-writer race: it
+      // must resolve ok for both callers and leave exactly one row (fill-only semantics).
+      it("concurrent heals on the same absent key both resolve ok — exactly one row, no unhandled unique-violation (CR-01)", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T19:00:00Z");
+        const rowA = makeSnapshotRow(time, CAL_ID, { netMark: "11" });
+        const rowB = makeSnapshotRow(time, CAL_ID, { netMark: "22" });
+
+        const [resultA, resultB] = await Promise.all([
+          repo.healSnapshot(rowA),
+          repo.healSnapshot(rowB),
+        ]);
+
+        expect(resultA.ok).toBe(true);
+        expect(resultB.ok).toBe(true);
+
+        const count = await repo.countSnapshots(CAL_ID);
+        expect(count).toBe(1);
+      });
     });
 
     describe("deleteSnapshotsOutsideWindow — D-08 windowed trim", () => {

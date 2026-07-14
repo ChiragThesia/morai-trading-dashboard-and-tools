@@ -204,3 +204,100 @@ describe.skipIf(shouldSkip)("postgres resolveLegSnapshot — matches on contract
     expect(result.value?.underlyingPrice).toBeCloseTo(7381.12, 2);
   });
 });
+
+/**
+ * CR-01 (40-REVIEW.md) — deterministic proof of the healSnapshot INSERT-branch TOCTOU race.
+ *
+ * A plain Promise.all([healSnapshot(a), healSnapshot(b)]) does not reliably reproduce the race
+ * on a local Postgres (round trips are fast enough that one transaction usually completes
+ * before the other's SELECT runs) — so this test forces the exact interleaving deterministically:
+ * a "blocker" transaction inserts the row directly (bypassing healSnapshot) and stays open
+ * (uncommitted) until healSnapshot's own SELECT has already run. Under READ COMMITTED,
+ * healSnapshot's SELECT does not see the blocker's uncommitted row (correct MVCC visibility),
+ * so it takes the INSERT branch — exactly the TOCTOU window the review flagged. healSnapshot's
+ * INSERT then blocks on the blocker's row lock; releasing the blocker makes Postgres finalize
+ * the conflict, reproducing the real unhandled unique-violation the review described.
+ */
+describe.skipIf(shouldSkip)("postgres healSnapshot — concurrent INSERT race (CR-01)", () => {
+  let db: ReturnType<typeof makeDb>;
+
+  beforeAll(() => {
+    if (dbUrl) db = makeDb(dbUrl);
+  });
+
+  beforeEach(async () => {
+    if (db) await db.execute(sql`TRUNCATE TABLE calendar_snapshots, calendars CASCADE`);
+  });
+
+  it("a healSnapshot INSERT that loses the race to a concurrent writer resolves ok — never an unhandled unique-violation", async () => {
+    if (!db) return;
+    const calId = "12121212-1212-4121-8121-121212121212";
+    await db.execute(sql`
+      INSERT INTO calendars (id, underlying, strike, option_type, front_expiry, back_expiry, qty, status, opened_at, open_net_debit)
+      VALUES (${calId}::uuid, 'SPX', 5000000, 'C', '2026-07-18', '2026-09-19', 2, 'open', NOW(), '5.00')
+    `);
+    const time = new Date("2026-07-01T19:00:00Z");
+    const repo = makePostgresCalendarSnapshotsRepo(db);
+
+    // Gate the blocker's commit until healSnapshot's SELECT has had a chance to run.
+    let releaseBlocker: () => void = () => {};
+    const blockerGate = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+
+    // Blocker: raw INSERT of a LIVE (non-gap) row for the SAME (calendar_id, time) key, held
+    // open in its own uncommitted transaction — invisible to healSnapshot's SELECT, but its
+    // row lock makes healSnapshot's own INSERT block until this transaction commits.
+    const blockerDone = db.transaction(async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO calendar_snapshots (time, calendar_id, spot, net_mark, front_mark, back_mark, front_iv, back_iv, front_iv_raw, back_iv_raw, net_delta, net_gamma, net_theta, net_vega, term_slope, dte_front, dte_back, pnl_open, source)
+        VALUES (${time.toISOString()}::timestamptz, ${calId}::uuid, '5000', '999', '10', '25', '0.20', '0.25', '0.19', '0.24', '30', '0.6', '-360', '1240', '0.05', 17, 80, '2000', 'cboe')
+      `);
+      await blockerGate;
+    });
+
+    // Let the blocker's INSERT land before healSnapshot starts.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const healPromise = repo.healSnapshot({
+      time,
+      calendarId: calId,
+      spot: "5000",
+      netMark: "11",
+      frontMark: "10",
+      backMark: "25",
+      frontIv: "0.20",
+      backIv: "0.25",
+      frontIvRaw: "0.19",
+      backIvRaw: "0.24",
+      netDelta: "30",
+      netGamma: "0.6",
+      netTheta: "-360",
+      netVega: "1240",
+      termSlope: "0.05",
+      dteFront: 17,
+      dteBack: 80,
+      pnlOpen: "2000",
+      source: "cboe",
+    });
+
+    // Let healSnapshot's SELECT (and blocked INSERT attempt) run, then release the blocker.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    releaseBlocker();
+
+    const [healResult] = await Promise.all([healPromise, blockerDone]);
+
+    expect(healResult.ok).toBe(true);
+
+    // Fill-only semantics hold even after losing the race: the blocker's live (non-gap) row
+    // wins — healSnapshot's own values are never applied on top of it.
+    const journalResult = await repo.readJournal(calId);
+    expect(journalResult.ok).toBe(true);
+    if (!journalResult.ok) return;
+    const rows = journalResult.value;
+    expect(rows).not.toBeNull();
+    if (rows === null) return;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.netMark).toBe("999");
+  });
+});

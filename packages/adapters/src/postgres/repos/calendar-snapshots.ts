@@ -487,7 +487,33 @@ export function makePostgresCalendarSnapshotsRepo(
         };
 
         if (existing === undefined) {
-          await tx.insert(calendarSnapshots).values({ time: row.time, calendarId: row.calendarId, ...values });
+          // CR-01 (40-REVIEW.md): under READ COMMITTED, a concurrent healSnapshot call on the
+          // same (calendar_id, time) can also observe "no row" and INSERT first —
+          // onConflictDoNothing absorbs that race instead of surfacing an unhandled
+          // unique-violation. If we lost the race, re-read and apply the SAME fill-only
+          // decision as the existing-row branch below (mirrors persistSnapshot's idiom).
+          const inserted = await tx
+            .insert(calendarSnapshots)
+            .values({ time: row.time, calendarId: row.calendarId, ...values })
+            .onConflictDoNothing()
+            .returning({ time: calendarSnapshots.time });
+          if (inserted.length > 0) return; // we won the race
+
+          const racedRows = await tx
+            .select()
+            .from(calendarSnapshots)
+            .where(
+              and(eq(calendarSnapshots.calendarId, row.calendarId), eq(calendarSnapshots.time, row.time)),
+            );
+          const raced = racedRows[0];
+          if (raced === undefined || !isGapRow(raced)) return;
+
+          await tx
+            .update(calendarSnapshots)
+            .set(values)
+            .where(
+              and(eq(calendarSnapshots.calendarId, row.calendarId), eq(calendarSnapshots.time, row.time)),
+            );
           return;
         }
 
