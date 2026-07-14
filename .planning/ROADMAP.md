@@ -554,3 +554,14 @@ Plans:
 - [ ] 40-06-PLAN.md — HIST-03 self-heal-journal job (bounded-lookback, OPEN-only) + handler + schedule (wave 5)
 - [ ] 40-07-PLAN.md — HIST-04 repair use-case + pg-boss job + CLI + TRIGGERABLE_JOBS + on-register backfill (wave 6)
 - [ ] 40-08-PLAN.md — integration gate: suite/typecheck/lint + D-09 regression + diagnostic SQL + prod repair + lifecycle UAT (wave 7)
+
+### Phase 41: Analyzer cleanup — ranked candidate table + verdict hero + live sidecar data: kill the 17-card wall and chip-row scorecard; selection-driven detail panels, sticky layout, sane number precision, paste/term-structure polish, mobile parity via analyzer-mobile, and live sidecar-fed marks (explicit user override of Phase 38's snapshot-spot scoring lock)
+
+**Goal:** The Analyzer reads as one selection-driven screen: a ranked compact table of suggested calendars (score / strikes / dates / debit / Θ/d / event flag) where clicking a row loads the full detail — risk profile, term structure, WHY THIS CALENDAR, entry/exit plan — into stable center/right panels; a verdict hero (score + Θ headline, Edge/Risk/Fit factor groups) replaces the chip wall; every number renders at trading precision; the paste flow and term-structure chart read clean; the same idioms have designed mobile treatments through the analyzer-mobile tree; and the tab's marks/spot flow live from the sidecar with honest stale states.
+**Requirements**: AUI-01, AUI-02, AUI-03, AUI-04, AUI-05, AUI-06, AUI-07
+**Depends on:** Phase 38 (live sidecar stream seam), Phase 36 (analyzer-mobile tree), Phases 29-32 (picker UI)
+**Plans:** TBD
+
+Plans:
+
+- [ ] TBD (ui-phase → plan-phase)

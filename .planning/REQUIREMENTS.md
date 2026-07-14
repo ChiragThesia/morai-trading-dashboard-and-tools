@@ -279,6 +279,40 @@ the lifecycle chart already renders everything.
       series to ~19 rows/day with frozen marks); event-move rows stay distinct via the existing
       `trigger` field; rebuild/self-heal never writes rows outside `openedAt`..`closedAt`.
 
+### Analyzer cleanup — ranked table, verdict hero, live sidecar data (Phase 41, added 2026-07-14)
+
+User-driven redesign of the desktop Analyzer ("the analyze tab needs clean up and better
+UI/UX") with decisions locked live 2026-07-14. The candidate card wall, chip-row scorecard,
+dead columns, and raw-float noise go; the tab becomes selection-driven and reads live
+sidecar-fed data.
+
+- [ ] **AUI-01**: Suggested calendars render as a ranked, sortable compact TABLE — one row
+      per candidate (score, strikes/dates, debit, Θ/d, key event flag) — and clicking a row
+      loads that candidate into the center/right detail panels (risk profile chart, term
+      structure, WHY THIS CALENDAR, entry/exit plan). Selection state is visually explicit.
+      Combine/Copy affordances survive (row actions or detail-pane buttons).
+- [ ] **AUI-02**: The chip-row scorecard becomes a verdict hero + grouped factors: one
+      dominant verdict (score + Θ gate headline) with factors clustered under labeled groups
+      (Edge / Risk / Fit), reusing the existing pass/fail/partial marks. The calibrating
+      banner and dropped-quotes debug line move into a quiet ⓘ/footer, never a floating row.
+- [ ] **AUI-03**: Layout rebalance — center chart + right panels stay usable (sticky or
+      equivalent) while the candidate table scrolls; no dead columns; page height driven by
+      content, not by one skinny column.
+- [ ] **AUI-04**: Global display precision on the Analyzer: dollars whole, greeks ≤2dp,
+      theta/vega ≤1dp — no raw floats like `+61.9536112` anywhere on the tab.
+- [ ] **AUI-05**: Paste-flow polish — larger paste target with clear Analyze affordance;
+      term-structure chart gets more height, clearer short/long leg markers, and event chips
+      visually tied to the curve kinks.
+- [ ] **AUI-06**: Mobile parity — every new idiom (table, verdict hero, detail pane) has a
+      designed mobile treatment through the existing `analyzer-mobile` tree (Phase 36
+      conventions); desktop redesign never degrades the mobile flow.
+- [ ] **AUI-07**: Live sidecar-driven data — the Analyzer's marks/spot/risk-profile inputs
+      consume the live sidecar-fed stream (Phase 38 seam) rather than only the 30-min stored
+      cohort, with honest stale-fallback when the stream is quiet/stalled. EXPLICIT USER
+      OVERRIDE (2026-07-14) of Phase 38's "Analyzer scoring stays snapshot-spot" lock; the
+      DISPLAY-LIVE/GATE-EOD law still governs regime gates, and scoring provenance (as-of)
+      stays honest on every displayed number.
+
 ## Future Requirements
 
 Deferred. Tracked but not in the v1.3 roadmap.
@@ -355,6 +389,13 @@ Explicit exclusions with reasoning.
 | HIST-03 | Phase 40 | Planned |
 | HIST-04 | Phase 40 | Planned |
 | HIST-05 | Phase 40 | Planned |
+| AUI-01 | Phase 41 | Planned |
+| AUI-02 | Phase 41 | Planned |
+| AUI-03 | Phase 41 | Planned |
+| AUI-04 | Phase 41 | Planned |
+| AUI-05 | Phase 41 | Planned |
+| AUI-06 | Phase 41 | Planned |
+| AUI-07 | Phase 41 | Planned |
 
 **Coverage:** 28/28 v1.3 requirements mapped, 0 orphans. Phase order:
 23 (VIX3M, first-and-alone) → 24 (regime board) → 25 (ops rider) → 26 (exit advisor) →
