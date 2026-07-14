@@ -100,8 +100,18 @@ function makeNanSnapshotRow(time: Date, calendarId: string): SnapshotRow {
 type SeedContext = {
   /** Seed a calendar row into the calendars table (needed for readJournal FK) */
   seedCalendar: (id: string) => Promise<void>;
-  /** Seed a contract row into contracts table */
-  seedContract: (occ: OccSymbol, strike: number, expiration: string, optionType: "C" | "P") => Promise<void>;
+  /**
+   * Seed a contract row into contracts table. `root` defaults to "SPX" (existing callers'
+   * behavior); pass it explicitly to seed a contract under a DIFFERENT root than the
+   * calendar's stored underlying (HIST-01 mixed-root case).
+   */
+  seedContract: (
+    occ: OccSymbol,
+    strike: number,
+    expiration: string,
+    optionType: "C" | "P",
+    root?: string,
+  ) => Promise<void>;
   /** Seed a leg_observation row for a contract */
   seedObservation: (
     occ: OccSymbol,
@@ -227,6 +237,21 @@ export function runCalendarSnapshotsContractTests(
         if (!result.ok) return;
         expect(result.value).toBeNull();
       });
+
+      it("Pitfall-1 regression: includes a schwab_chain-sourced row (never dropped by mapSnapshotRow)", async () => {
+        await seed.seedCalendar(CAL_ID);
+        const time = new Date("2026-07-01T19:00:00Z");
+        await repo.persistSnapshot(makeSnapshotRow(time, CAL_ID, { source: "schwab_chain" }));
+
+        const result = await repo.readJournal(CAL_ID);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const rows = result.value;
+        expect(rows).not.toBeNull();
+        if (rows === null) return;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.source).toBe("schwab_chain");
+      });
     });
 
     describe("resolveLegSnapshot — hit/miss semantics", () => {
@@ -336,6 +361,38 @@ export function runCalendarSnapshotsContractTests(
         expect(leg.bsmIv).toBe("0.23");
         // time round-trips the LATEST seeded row (t2), not the earlier t1.
         expect(leg.time.getTime()).toBe(t2.getTime());
+      });
+
+      it("HIST-01: resolves under the sibling root when the calendar's stored root has no matching contract (mixed-root back leg)", async () => {
+        // The real contract is rooted "SPXW" (e.g. an EOM/weekly back leg), but the
+        // calendar is stored/queried under "SPX" (the front leg's root).
+        const occ = formatOccSymbol({
+          root: "SPXW",
+          expiry: new Date("2026-08-07T12:00:00Z"),
+          type: "P",
+          strike: 7425,
+        });
+        const obsTime = new Date("2026-07-01T19:00:00Z");
+        await seed.seedContract(occ, 7425000, "2026-08-07", "P", "SPXW");
+        await seed.seedObservation(
+          occ, obsTime,
+          169.4,   // mark
+          7381.12, // underlyingPrice
+          "0.1564", null, null, null, null,
+          0.15,    // ivRaw
+        );
+
+        const result = await repo.resolveLegSnapshot({
+          underlying: "SPX", // calendar's stored root — NOT the real contract's root
+          strike: 7425000,
+          optionType: "P",
+          expiry: "2026-08-07",
+        });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value).not.toBeNull();
+        expect(result.value?.mark).toBeCloseTo(169.4, 2);
+        expect(result.value?.bsmIv).toBe("0.1564");
       });
     });
 

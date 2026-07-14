@@ -75,11 +75,12 @@ describe.skipIf(shouldSkip)("postgres calendar-snapshots adapter", () => {
         strike: number,
         expiration: string,
         optionType: "C" | "P",
+        root = "SPX",
       ): Promise<void> => {
         if (!db) throw new Error("db not initialized");
         await db.execute(
           sql`INSERT INTO contracts (occ_symbol, underlying, root, contract_type, exercise_style, strike, expiration, multiplier)
-              VALUES (${occ}, 'SPX', 'SPX', ${optionType}, 'european', ${strike}, ${expiration}, 100)
+              VALUES (${occ}, 'SPX', ${root}, ${optionType}, 'european', ${strike}, ${expiration}, 100)
               ON CONFLICT DO NOTHING`,
         );
       },

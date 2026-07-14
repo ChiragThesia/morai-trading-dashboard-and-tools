@@ -17,7 +17,7 @@
 
 import { ok, err, parseOccSymbol, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { computeSnapshotPnl } from "@morai/core";
+import { computeSnapshotPnl, resolveRootCandidates } from "@morai/core";
 import type {
   ForPersistingSnapshot,
   ForReadingJournal,
@@ -34,7 +34,7 @@ import type {
   CalendarSnapshotForCycle,
   StorageError,
 } from "@morai/core";
-import { eq, and, lte, desc, asc, max } from "drizzle-orm";
+import { eq, and, lte, desc, asc, max, inArray } from "drizzle-orm";
 import { calendarSnapshots, legObservations, contracts, calendars } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -116,17 +116,7 @@ export function makePostgresCalendarSnapshotsRepo(
         .where(eq(calendarSnapshots.calendarId, calendarId))
         .orderBy(asc(calendarSnapshots.time));
 
-      const mapped: SnapshotRow[] = [];
-      for (const row of rows) {
-        const sr = mapSnapshotRow(row);
-        if (sr === null) {
-          // Unexpected source enum value — guard against silent misreport.
-          console.warn(`calendar-snapshots: skipping row with unknown source "${row.source}" for calendar ${calendarId}`);
-          continue;
-        }
-        mapped.push(sr);
-      }
-      return ok(mapped);
+      return ok(rows.map(mapSnapshotRow));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       return err<StorageError>({ kind: "storage-error", message });
@@ -149,12 +139,15 @@ export function makePostgresCalendarSnapshotsRepo(
       // "SPXW" while contracts.underlying is the index "SPX". Calendars are tracked by the
       // root ("SPXW"), so matching underlying would never hit (→ null legs → 0/NaN snapshots).
       // The root also disambiguates the SPX vs SPXW share of a strike/expiry (different settle).
+      // HIST-01: a calendar's two legs can carry DIFFERENT real roots even though
+      // calendars.underlying stores only one — try every candidate root (stored root
+      // first, then its sibling) instead of an exact match.
       const contractRows = await db
         .select({ occSymbol: contracts.occSymbol })
         .from(contracts)
         .where(
           and(
-            eq(contracts.root, query.underlying),
+            inArray(contracts.root, resolveRootCandidates(query.underlying)),
             eq(contracts.strike, query.strike), // both ×1000 int
             eq(contracts.expiration, query.expiry),
             eq(contracts.contractType, query.optionType),
@@ -465,13 +458,13 @@ export function makePostgresCalendarSnapshotsRepo(
 
 type RawSnapshotRow = typeof calendarSnapshots.$inferSelect;
 
-function mapSnapshotRow(row: RawSnapshotRow): SnapshotRow | null {
-  // snapshot_source enum can be "schwab_chain" | "cboe" | "computed_only".
-  // SnapshotRow.source is typed as the literal "cboe" — guard at runtime so
-  // an unexpected source value surfaces loudly rather than being silently
-  // coerced. (No implicit as-cast per typescript.md.)
-  if (row.source !== "cboe") return null;
-  const source = row.source; // narrowed to "cboe"
+function mapSnapshotRow(row: RawSnapshotRow): SnapshotRow {
+  // snapshot_source enum's third value ("computed_only") never actually lands in this
+  // column (the writer maps it to "cboe" before persisting) — mirror
+  // readLatestSnapshotPerOpenCalendar/readFullSnapshotHistoryForCalendar's inclusive
+  // mapping (Pitfall 1): never drop the row by source.
+  const source: "cboe" | "schwab_chain" =
+    row.source === "schwab_chain" ? "schwab_chain" : "cboe";
   // SNAP-01 / D-12: NULL (legacy rows, pre-0016) and any unexpected value default to
   // "scheduled" — the only other valid value is "event-move".
   const trigger: "scheduled" | "event-move" =

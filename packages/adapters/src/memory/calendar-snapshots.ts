@@ -22,6 +22,7 @@ import { ok } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import {
   computeSnapshotPnl,
+  resolveRootCandidates,
 } from "@morai/core";
 import type {
   ForPersistingSnapshot,
@@ -101,14 +102,22 @@ export function makeMemoryCalendarSnapshotsRepo(): MemoryCalendarSnapshotsRepo {
     return ok(rows);
   };
 
+  // HIST-01: a calendar's two legs can carry DIFFERENT real roots even though
+  // calendars.underlying (query.underlying) stores only one — try every candidate root
+  // (stored root first, then its sibling) instead of an exact match. Mirrors the
+  // Postgres twin's inArray(contracts.root, ...) fix.
   const resolveLegSnapshot: ForResolvingLegSnapshot = async (query: {
     readonly underlying: string;
     readonly strike: number;
     readonly optionType: "C" | "P";
     readonly expiry: string;
   }): Promise<Result<LegSnapshot | null, StorageError>> => {
-    const key = `${query.underlying}:${query.strike}:${query.optionType}:${query.expiry}`;
-    return ok(legStore.get(key) ?? null);
+    for (const root of resolveRootCandidates(query.underlying)) {
+      const key = `${root}:${query.strike}:${query.optionType}:${query.expiry}`;
+      const leg = legStore.get(key);
+      if (leg !== undefined) return ok(leg);
+    }
+    return ok(null);
   };
 
   // readSnapshotsForCycle (06-04) — most recent snapshot time ≤ snapshotTime, mapped to the
