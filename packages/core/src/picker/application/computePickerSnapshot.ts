@@ -31,8 +31,8 @@
 
 import { ok, err, assertDefined, isWithinRth, isNyseHoliday } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { selectCandidates, selectEventCandidates, autoTuneTargetDelta } from "../domain/candidate-selection.ts";
-import { scoreCalendarCandidates, scoreEventCandidates } from "../domain/scoring.ts";
+import { selectCandidates, autoTuneTargetDelta } from "../domain/candidate-selection.ts";
+import { scoreCalendarCandidates } from "../domain/scoring.ts";
 import { realizedVol } from "../domain/realized-vol.ts";
 import { RULE_SET_METADATA } from "../domain/rules.ts";
 import type { ScoredCandidate } from "../domain/types.ts";
@@ -640,45 +640,18 @@ export function makeComputePickerSnapshotUseCase(
     // zeroEventAdjustment's post-scoring-override shape. A no-op at multiplier 1 (open state). ──
     scored = scored.map((candidate) => applyGatePenalty(candidate, gate.penaltyMultiplier));
 
-    // ── Step 4c: event-calendar bucket (28-05, PLAY-04) — a second universe for short-gap
-    // (3-10d) calendars intentionally owning an event, scored with the bucket-scoped
-    // EVENT_SCORE_WEIGHTS registry. SAME gate/events-degradation/gate-penalty machinery as
-    // the primary universe — T-28-15: no second un-gated entry path. ──
-    const { candidates: rawEvent } = selectEventCandidates(chain, events, {
-      r: deps.rate,
-      q: deps.dividendYield,
-      effectiveDeltaMin: autoTuneTargetDelta(gate.vix, config.vixLadder, config.deltaBand.min, config.deltaBand.max),
-      deltaMin: config.deltaBand.min,
-      deltaMax: config.deltaBand.max,
-      frontDteMin: config.frontDte.min,
-      frontDteMax: config.frontDte.max,
-    });
-    let scoredEvent = scoreEventCandidates(rawEvent, gexContextForScoring, {
-      r: deps.rate,
-      q: deps.dividendYield,
-      realizedVol20,
-      slopeHistory,
-      weights: config.weights,
-      debitBand: config.debitBand,
-    });
-    if (eventsContextStatus !== "ok") {
-      scoredEvent = scoredEvent.map(zeroEventAdjustment);
-    }
-    scoredEvent = scoredEvent.map((candidate) => applyGatePenalty(candidate, gate.penaltyMultiplier));
+    // Event-calendar bucket (28-05, PLAY-04) RETIRED 2026-07-14 (user kill): the short-gap
+    // (3-10d) second universe recommended fuck-around-sized trades over the real 15-90d gap
+    // strategy, and its EVENT_SCORE_WEIGHTS scores outranked the primary universe on the
+    // merged Analyzer table. selectEventCandidates/scoreEventCandidates stay in the domain
+    // (tested, un-emitted); the `bucket` contract field stays for persisted-snapshot compat.
 
-    // ── Step 5: Rank (stable id tie-break) + cap at PICKER_TOP_N (D-03), each universe
-    // independently, then concatenate — the primary universe's own ranking is unaffected
-    // by the event bucket's presence. ──
+    // ── Step 5: Rank (stable id tie-break) + cap at PICKER_TOP_N (D-03). ──
     const ranked = rankAndCapCandidates(scored, PICKER_TOP_N);
-    const rankedEvent = rankAndCapCandidates(scoredEvent, PICKER_TOP_N);
-    // Blocked/blind/braked -> ship candidates: [] (Step 6 truth) for BOTH universes;
-    // termStructure/gex/events below stay populated regardless — the board and Analyzer
-    // keep their context.
+    // Blocked/blind/braked -> ship candidates: [] (Step 6 truth); termStructure/gex/events
+    // below stay populated regardless — the board and Analyzer keep their context.
     const candidates: ReadonlyArray<PickerCandidateDomain> = entriesAllowed
-      ? [
-          ...ranked.map((c) => toPickerCandidateDomain(c, "standard")),
-          ...rankedEvent.map((c) => toPickerCandidateDomain(c, "event-calendar")),
-        ]
+      ? ranked.map((c) => toPickerCandidateDomain(c, "standard"))
       : [];
 
     // 29-10 (RUNTIME-*): sizing's ladder override threads the RAW picker `vixLadder` boundary

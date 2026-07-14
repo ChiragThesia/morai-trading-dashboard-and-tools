@@ -1084,8 +1084,8 @@ describe("makeComputePickerSnapshotUseCase — runtime rule overrides (29-10)", 
   });
 });
 
-describe("makeComputePickerSnapshotUseCase — event-calendar bucket (28-05, PLAY-04)", () => {
-  it("tags primary candidates 'standard' and includes event-owning short-gap candidates tagged 'event-calendar'", async () => {
+describe("makeComputePickerSnapshotUseCase — event-calendar bucket retired (2026-07-14 user kill)", () => {
+  it("never emits event-calendar candidates — every candidate is 'standard' with gap in the [15,90]d window", async () => {
     const { deps, rows } = baseDeps({
       chain: realCandidateChainWithEventBucket(),
       events: EVENT_BUCKET_EVENTS,
@@ -1101,12 +1101,11 @@ describe("makeComputePickerSnapshotUseCase — event-calendar bucket (28-05, PLA
     const standard = row.snapshot.candidates.filter((c) => c.bucket === "standard");
     const eventBucket = row.snapshot.candidates.filter((c) => c.bucket === "event-calendar");
     expect(standard.length).toBeGreaterThan(0);
-    expect(eventBucket.length).toBeGreaterThan(0);
-    for (const c of eventBucket) {
-      expect(c.backEvents.length).toBeGreaterThan(0);
+    expect(eventBucket).toEqual([]);
+    for (const c of row.snapshot.candidates) {
       const gap = c.backLeg.dte - c.frontLeg.dte;
-      expect(gap).toBeGreaterThanOrEqual(3);
-      expect(gap).toBeLessThanOrEqual(10);
+      expect(gap).toBeGreaterThanOrEqual(15);
+      expect(gap).toBeLessThanOrEqual(90);
     }
   });
 
@@ -1147,7 +1146,7 @@ describe("makeComputePickerSnapshotUseCase — event-calendar bucket (28-05, PLA
     expect(row.snapshot.candidates).toEqual([]);
   });
 
-  it("primary universe ranking and eventAdjustment are unchanged by the event bucket's presence", async () => {
+  it("short-gap chain rows leave the emitted candidate list untouched (no second universe)", async () => {
     const withoutBucket = baseDeps({});
     const withBucket = baseDeps({
       chain: realCandidateChainWithEventBucket(),
@@ -1157,11 +1156,10 @@ describe("makeComputePickerSnapshotUseCase — event-calendar bucket (28-05, PLA
     await makeComputePickerSnapshotUseCase(withBucket.deps)();
 
     const primaryOnly = withoutBucket.rows[0]?.snapshot.candidates ?? [];
-    const primaryFromBucketRun = (withBucket.rows[0]?.snapshot.candidates ?? []).filter(
-      (c) => c.bucket === "standard",
-    );
+    const fromBucketRun = withBucket.rows[0]?.snapshot.candidates ?? [];
     // Same primary chain data underlies both runs (realCandidateChainWithEventBucket only
-    // ADDS a gap-8 back expiry) -- the primary top-N ranking is unaffected by its presence.
-    expect(primaryFromBucketRun.map((c) => c.id)).toEqual(primaryOnly.map((c) => c.id));
+    // ADDS a gap-8 back expiry) -- with the event bucket retired, the WHOLE emitted list
+    // (not just a standard-filtered view) is unaffected by short-gap rows.
+    expect(fromBucketRun.map((c) => c.id)).toEqual(primaryOnly.map((c) => c.id));
   });
 });
