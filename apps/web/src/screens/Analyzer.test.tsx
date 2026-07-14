@@ -298,7 +298,7 @@ describe("Analyzer — per-candidate scoring checklist", () => {
 
   it("changes per calendar — the guard candidate (fwdIv null) shows forward-vol edge as n/a", () => {
     render(<Analyzer />);
-    fireEvent.click(screen.getByTestId(`candidate-card-${GUARD.id}`));
+    fireEvent.click(screen.getByTestId(`candidate-row-${GUARD.id}`));
     expect(screen.getByTestId("checklist-fwdEdge").textContent).toContain("n/a");
   });
 
@@ -429,10 +429,10 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
     expect(props.rollCurve).toBeNull();
   });
 
-  it("re-prices against the newly-selected candidate when a different card is clicked", () => {
+  it("re-prices against the newly-selected candidate when a different row is clicked", () => {
     render(<Analyzer />);
 
-    fireEvent.click(screen.getByTestId(`candidate-card-${SECOND.id}`));
+    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
 
     const positions = [candidateToAnalyzerPosition(SECOND)];
     const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
@@ -450,8 +450,7 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
   it("⊕ Combine SUMS the selected + combined calendar into one net payoff curve", () => {
     render(<Analyzer />);
 
-    const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
-    fireEvent.click(within(secondCard).getByText("⊕ Combine"));
+    fireEvent.click(screen.getByTestId(`combine-${SECOND.id}`));
 
     // Combined book = [selected TOP, combined SECOND], summed by the one engine (Overview's path).
     const positions = [candidateToAnalyzerPosition(TOP), candidateToAnalyzerPosition(SECOND)];
@@ -467,9 +466,9 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
   it("toggling ⊕ Combine off returns to the selected-only curve", () => {
     render(<Analyzer />);
 
-    const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
-    fireEvent.click(within(secondCard).getByText("⊕ Combine"));
-    fireEvent.click(within(secondCard).getByText("✓ Combined"));
+    const combineButton = screen.getByTestId(`combine-${SECOND.id}`);
+    fireEvent.click(combineButton);
+    fireEvent.click(combineButton);
 
     const onlyPositions = [candidateToAnalyzerPosition(TOP)];
     const onlyDomain = computePayoffDomain(onlyPositions, PARAMS.spot, PARAMS);
@@ -481,8 +480,7 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
     render(<Analyzer />);
     expect(screen.queryByTestId("combined-book-summary")).toBeNull();
 
-    const secondCard = screen.getByTestId(`candidate-card-${SECOND.id}`);
-    fireEvent.click(within(secondCard).getByText("⊕ Combine"));
+    fireEvent.click(screen.getByTestId(`combine-${SECOND.id}`));
 
     const summary = screen.getByTestId("combined-book-summary");
     expect(summary.textContent).toContain("+ 1 more");
@@ -514,9 +512,9 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
     expect(screen.getByTestId("entryexit-value-debit")).toBeTruthy();
   });
 
-  it("re-wires the right column to the newly-selected candidate when a different card is clicked", () => {
+  it("re-wires the right column to the newly-selected candidate when a different row is clicked", () => {
     render(<Analyzer />);
-    fireEvent.click(screen.getByTestId(`candidate-card-${SECOND.id}`));
+    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
     expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toContain(
       `Front IV ${(SECOND.frontLeg.iv * 100).toFixed(1)}%`,
     );
@@ -524,7 +522,7 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
 
   it("selecting the guard candidate shows the guard sentence and the term-structure's omitted bracket + guard tag", () => {
     render(<Analyzer />);
-    fireEvent.click(screen.getByTestId(`candidate-card-${GUARD.id}`));
+    fireEvent.click(screen.getByTestId(`candidate-row-${GUARD.id}`));
 
     expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toBe(
       "Forward IV is undefined here — the term structure between these two legs is inverted (back-leg variance implies a negative forward radicand). This candidate is ranked on slope, GEX fit, and event adjustment only; the forward-edge criterion contributes 0.",
@@ -578,10 +576,10 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
 
     await paste(PASTE_EXAMPLE);
 
-    const cards = screen.getAllByTestId(/^candidate-card-/);
-    expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted-1");
+    const rows = screen.getAllByTestId(/^candidate-row-/);
+    expect(rows[0]?.getAttribute("data-testid")).toBe("candidate-row-pasted-1");
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
-    within(screen.getByTestId("candidate-card-pasted-1")).getByText("PASTED");
+    within(screen.getByTestId("candidate-row-pasted-1")).getByText("PASTED");
     expect(screen.getByTestId("picker-paste-input")).toHaveProperty("value", "");
     expect(mockAnalyzeCalendarMutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ putCall: "P", strike: 7450 }),
@@ -594,9 +592,9 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
 
-    const cards = screen.getAllByTestId(/^candidate-card-/);
-    expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted-1");
-    expect(cards[1]?.getAttribute("data-testid")).toBe("candidate-card-pasted-2");
+    const rows = screen.getAllByTestId(/^candidate-row-/);
+    expect(rows[0]?.getAttribute("data-testid")).toBe("candidate-row-pasted-1");
+    expect(rows[1]?.getAttribute("data-testid")).toBe("candidate-row-pasted-2");
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7500P · pasted");
   });
 
@@ -625,8 +623,8 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
 
     expect(screen.getByTestId("picker-paste-error")).toBeTruthy();
     // The earlier successful paste is untouched by the failed second attempt.
-    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
-    expect(screen.queryByTestId("candidate-card-pasted-2")).toBeNull();
+    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
+    expect(screen.queryByTestId("candidate-row-pasted-2")).toBeNull();
   });
 
   it("each pasted card's × removes just that card, cleans its combine state, and re-selects the top-ranked scored candidate when it was selected", async () => {
@@ -635,12 +633,12 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
     // pasted-2 is auto-selected; combine it too, then remove it.
-    fireEvent.click(within(screen.getByTestId("candidate-card-pasted-2")).getByText("⊕ Combine"));
+    fireEvent.click(screen.getByTestId("combine-pasted-2"));
 
     fireEvent.click(screen.getByTestId("remove-pasted-pasted-2"));
 
-    expect(screen.queryByTestId("candidate-card-pasted-2")).toBeNull();
-    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
+    expect(screen.queryByTestId("candidate-row-pasted-2")).toBeNull();
+    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
     // Selection fell back to the first rail candidate (pasted-1, still pinned atop scored ones).
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
     // Combine state for the removed card is gone, so combining pasted-1 doesn't drag it back in.
@@ -653,7 +651,7 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
     // Select pasted-1 explicitly (pasted-2 is auto-selected by the second paste).
-    fireEvent.click(screen.getByTestId("candidate-card-pasted-1"));
+    fireEvent.click(screen.getByTestId("candidate-row-pasted-1"));
 
     fireEvent.click(screen.getByTestId("remove-pasted-pasted-2"));
 
@@ -666,7 +664,7 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
     // pasted-2 is selected; combine pasted-1 into it.
-    fireEvent.click(within(screen.getByTestId("candidate-card-pasted-1")).getByText("⊕ Combine"));
+    fireEvent.click(screen.getByTestId("combine-pasted-1"));
 
     const parsed1 = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
     const parsed2 = parseTosOrder(PASTE_EXAMPLE_2, new Date(), pickerSnapshotFixture.spot, 0.045);
@@ -684,13 +682,13 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
 
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
-    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
-    expect(screen.getByTestId("candidate-card-pasted-2")).toBeTruthy();
+    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
+    expect(screen.getByTestId("candidate-row-pasted-2")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("picker-paste-clear-all"));
 
-    expect(screen.queryByTestId("candidate-card-pasted-1")).toBeNull();
-    expect(screen.queryByTestId("candidate-card-pasted-2")).toBeNull();
+    expect(screen.queryByTestId("candidate-row-pasted-1")).toBeNull();
+    expect(screen.queryByTestId("candidate-row-pasted-2")).toBeNull();
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
   });
 
@@ -719,7 +717,7 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE_CALL);
 
     expect(mockAnalyzeCalendarMutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
+    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
     expect(screen.getAllByText("Pasted calendar — not engine-scored.").length).toBe(3);
   });
 
@@ -737,8 +735,8 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE);
 
     // Provenance kept (pasted-prefix id + PASTED badge) even though it's scored.
-    expect(screen.getByTestId("candidate-card-pasted-1")).toBeTruthy();
-    within(screen.getByTestId("candidate-card-pasted-1")).getByText("PASTED");
+    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
+    within(screen.getByTestId("candidate-row-pasted-1")).getByText("PASTED");
     // The "not engine-scored" placeholder is gone; real panels render.
     expect(screen.queryByText("Pasted calendar — not engine-scored.")).toBeNull();
     expect(screen.getByTestId("scoring-checklist")).toBeTruthy();
@@ -754,7 +752,7 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE);
 
     expect(screen.getByTestId("picker-paste-error")).toBeTruthy();
-    expect(screen.queryByTestId("candidate-card-pasted-1")).toBeNull();
+    expect(screen.queryByTestId("candidate-row-pasted-1")).toBeNull();
   });
 });
 
@@ -777,13 +775,16 @@ describe("Analyzer — copy TOS order (copy-out)", () => {
     expect(screen.getByTestId("copy-tos-order").textContent).toContain("Copied");
   });
 
-  it("a rail card's ⧉ Copy copies that specific candidate — not the selected one", () => {
+  it("selecting a different row and Copy TOS order copies that candidate — not the previous selection", () => {
+    // Phase 41: per-row Copy is gone (Copy lives only in the detail-pane header now) — this
+    // proves per-candidate copy wiring still holds once that candidate becomes selected via a
+    // table row click (SECOND is not the default selection, TOP is).
     const writeText = vi.fn();
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 
     render(<Analyzer />);
-    // SECOND is not the default selection (TOP is), so this proves per-card wiring.
-    fireEvent.click(screen.getByTestId(`copy-tos-${SECOND.id}`));
+    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
+    fireEvent.click(screen.getByTestId("copy-tos-order"));
 
     expect(writeText).toHaveBeenCalledWith(buildTosCalendarOrder(SECOND, pickerSnapshotFixture.asOf));
   });
@@ -889,8 +890,8 @@ describe("Analyzer — live-data states (Task 2, 19-09-PLAN.md, D-18/D-19)", () 
   it("populated: renders the ranked rail from live data (no layout change from the fixture path)", () => {
     render(<Analyzer />);
 
-    const cards = screen.getAllByTestId(/^candidate-card-/);
-    expect(cards.length).toBe(pickerSnapshotFixture.candidates.length);
+    const rows = screen.getAllByTestId(/^candidate-row-/);
+    expect(rows.length).toBe(pickerSnapshotFixture.candidates.length);
     expect(screen.queryByTestId("picker-loading")).toBeNull();
     expect(screen.queryByTestId("picker-error")).toBeNull();
     expect(screen.queryByTestId("picker-empty-cold-start")).toBeNull();

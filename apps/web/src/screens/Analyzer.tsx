@@ -4,7 +4,8 @@
  *
  * UI-SPEC "Ranked candidate cards" / "Payoff center": 3-col grid (300px/1fr/330px, stacking
  * below 1280px in DOM order):
- *   Left (300px)  — "Suggested calendars": ranked CandidateCard rail (ANLZ-01, D-01/D-05),
+ *   Left (300px)  — "Suggested calendars": ranked candidate table (ANLZ-01, D-01/D-05,
+ *                   Phase 41 AUI-01/AUI-03),
  *                   now sourced from usePicker() with loading/error/cold-start/zero-filtered
  *                   states (19-UI-SPEC "Rail live-data states", D-18/D-19).
  *   Center (1fr)  — "Risk profile" (payoff center, wired in Task 3) + "Scoring methodology"
