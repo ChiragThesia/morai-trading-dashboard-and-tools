@@ -36,7 +36,7 @@ findings:
   warning: 2
   info: 1
   total: 4
-status: issues_found
+status: fixed
 ---
 
 # Phase 40: Code Review Report
@@ -129,6 +129,76 @@ The CLI path (`apps/worker/src/repair-journal-history.ts`) is NOT subject to thi
 
 ---
 
+## Fixes Applied
+
+Scope: critical + warning findings (Info is out of scope per fix policy).
+
+### CR-01: fixed — commit `d588a9f`
+
+`healSnapshot`'s INSERT branch in `packages/adapters/src/postgres/repos/calendar-snapshots.ts`
+now mirrors `persistSnapshot`'s `.onConflictDoNothing()` idiom: on a lost race it re-reads the
+row and applies the same fill-only gap-check/UPDATE decision, instead of surfacing an unhandled
+unique-violation.
+
+RED→GREEN: a plain `Promise.all([healSnapshot(a), healSnapshot(b)])` proxy did not reliably
+reproduce the race on local Postgres (round trips complete too fast to interleave), so the fix
+was proven with a deterministic lock-based regression test — an uncommitted "blocker"
+transaction holds the row open until `healSnapshot`'s own SELECT has run, forcing the exact
+TOCTOU window. That test failed for the right reason pre-fix (`healResult.ok === false`) and
+passes post-fix, alongside the originally-requested `Promise.all` observable-contract test, run
+against both the Postgres (testcontainers) and memory twins.
+
+Files: `packages/adapters/src/postgres/repos/calendar-snapshots.ts`,
+`packages/adapters/src/postgres/repos/calendar-snapshots.contract.test.ts`,
+`packages/adapters/src/__contract__/calendar-snapshots.contract.ts`.
+
+### WR-01: fixed — commit `8518c32`
+
+`rebuildCalendarHistory`'s per-slot loop now records a `healSnapshot` error and continues
+(`errorCount` on `RebuildCoverage`, additive) instead of aborting the whole calendar's rebuild.
+`selfHealJournal` aggregates `errorCount` across calendars; `repairJournalHistory` surfaces it
+per calendar on `CalendarRepairReport` and the operator CLI (`repair-journal-history.ts`) prints
+it; `registerOpenCalendars`' on-register backfill already tolerated a total rebuild failure
+non-fatally and now inherits the same per-slot resilience for free (`backfilledSlots` no longer
+nulls out on one colliding slot) — its doc comment is updated to describe this. Chose option
+(b)-lite per the fix guidance: `trigger_job`'s "all" scope stays unbounded (the CLI remains the
+sanctioned unbounded-repair path); no time-budget system was added (out of scope for this
+finding).
+
+A `resolveLegObservationForSlot` failure still aborts immediately — that is a data-fetch
+problem, not a benign per-slot write race, and was left untouched.
+
+Files: `packages/core/src/journal/application/rebuildCalendarHistory.ts` (+test),
+`packages/core/src/journal/application/selfHealJournal.ts` (+test),
+`packages/core/src/journal/application/repairJournalHistory.ts` (+test),
+`packages/core/src/journal/application/registerOpenCalendars.ts` (+test),
+`apps/worker/src/handlers/self-heal-journal.test.ts`, `apps/worker/src/repair-journal-history.ts`.
+
+### WR-02: fixed — commit `7a17430`
+
+The `KNOWN LIMITATION` comment in `registerOpenCalendars.ts` narrowed to the path that
+genuinely still derives front+back occSymbol from a single stored root:
+`packages/adapters/src/postgres/repos/fills.ts`'s `calendarLegSymbols` (and its memory twin),
+confirmed unchanged by HIST-01. The claim about `calendars.ts getOpenCalendarLegs` was removed
+— `resolveRootCandidates` already fixed that call site (and `resolveLegSnapshot`/
+`resolveLegObservationForSlot`) to try both candidate roots per leg.
+
+Files: `packages/core/src/journal/application/registerOpenCalendars.ts` (comment only, no
+behavior change).
+
+### Verification
+
+- `bun run test` on the affected suites (`calendar-snapshots.contract.test.ts` ×2 twins,
+  `packages/core/src/journal/**`, `apps/worker/src/handlers/**`,
+  `apps/worker/src/repair-journal-history.ts`, `apps/worker/src/register-open-calendars-cli.ts`):
+  570+ tests green.
+- `bun run typecheck` (`tsc --build --force`, full workspace): no errors.
+- `eslint .` (full repo): no errors.
+
+---
+
 _Reviewed: 2026-07-14_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Fixed: 2026-07-14_
+_Fixer: Claude (gsd-code-fixer)_
