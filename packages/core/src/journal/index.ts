@@ -270,3 +270,6 @@ export type {
   SkippedCalendarSummary,
   ForRunningRegisterOpenCalendars,
 } from "./application/registerOpenCalendars.ts";
+// Phase 40 (HIST-01): root-candidate resolution — pure domain fn reused by the four
+// existing root-mismatch call sites and the journal-history repair path (plans 02-07).
+export { resolveRootCandidates } from "./domain/occ-root.ts";
