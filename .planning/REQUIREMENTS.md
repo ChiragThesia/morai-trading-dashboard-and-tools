@@ -13,6 +13,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **OPS-01**: snapshot-calendars no longer writes empty/gap journal rows — open-calendar
       series are complete going forward (root-cause the ~74% gap-row windows)
+
 - [x] **OPS-02**: compute-bsm-greeks commits work in batches so a full-cohort drain survives the
       900s pg-boss handler cap without the timeout+retry dance
 
@@ -20,10 +21,12 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **MACRO-01**: VIX3M ingested daily from FRED (`VXVCLS`) into macro_observations alongside
       the existing 8 series
+
 - [x] **MACRO-02**: Regime/breadth indicator set researched online and admitted only with
       documented evidence (candidates: RSP:SPY equal-weight breadth ratio, VIX9D/VIX and
       VVIX/VIX ratios, term-structure state, FRED movement series) — each indicator carries a
       source + rationale in docs, mirroring picker-rules.md discipline
+
 - [x] **MACRO-03**: Evidence-admitted indicators are ingested/computed on a daily cadence with
       as-of dates stamped (EOD data never presented as intraday)
 
@@ -31,8 +34,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **BOARD-01**: Overview tab shows a visible regime/breadth board: each indicator with
       current value, threshold state (calm/warning/crisis banding), and as-of date
+
 - [x] **BOARD-02**: Each board indicator exposes its "why" (source + threshold rationale) the
       same way the Analyzer scorecard exposes rule provenance
+
 - [x] **BOARD-03**: Board data ships HTTP + MCP (MCP-02 convention)
 
 ### Exit advisor
@@ -40,22 +45,31 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **EXIT-01**: Every open calendar gets a verdict each pipeline cycle — HOLD / TAKE (with
       ladder rung +5/+10/+15%) / STOP (−25/−50%) / EXIT-pre-event — from a typed exit-rule
       registry mirroring rules.ts
+
 - [x] **EXIT-02**: Verdicts derive from the validated journal fill-ledger P&L basis (never a
       recomputed parallel P&L) and the latest calendar snapshot (netMark, term structure, greeks)
+
 - [x] **EXIT-03**: TERM trigger fires on live front−back IV inversion ≥0.5pp; GAMMA trigger on
       spot >2% off strike with front <7 DTE; EVT trigger on tier-1 event ≤3d from front expiry
+
 - [x] **EXIT-04**: Each verdict names the rule that fired and its raw metric (no bare verdicts,
       no fabricated confidence percentages)
+
 - [x] **EXIT-05**: Verdicts are session/staleness-gated with hysteresis banding — no flapping on
       AH-indicative marks or gap rows
+
 - [x] **EXIT-06**: ROLL verdict: when front <14 DTE, spot within ±1% of strike, profit <15%, and
       no blocking event — advisor suggests a haircut-priced replacement front (+14–21 DTE)
+
 - [x] **EXIT-07**: Analyzer shows a held-positions panel with per-calendar verdict chips + the
       exit ruleSet rendered from the engine (entry-methodology symmetry)
+
 - [x] **EXIT-08**: MCP tool answers "what should I do with my open calendars?" with the same
       verdict payloads
+
 - [x] **EXIT-09**: Only verdict CHANGES are surfaced as alerts; STOP and EXIT-pre-event escalate
       distinctly (no alert spam)
+
 - [x] **EXIT-10**: Advisor never executes — advise + alert only (STRM-04 read-only boundary)
 
 ### PICK-04 backtest harness
@@ -63,12 +77,16 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **BT-01**: Operator CLI replays stored chains (leg_observations since 2026-06-12) through
       the SAME pure entry + exit rule functions with point-in-time correctness (no lookahead;
       as-of ≤T filtering)
+
 - [x] **BT-02**: Replay of a historical cohort reproduces the recorded live picker_snapshot score
       for that cohort (leakage oracle — catches percentile leakage and late-solved-BSM lookahead)
+
 - [x] **BT-03**: Harness reproduces the 13 closed calendars' validated outcomes (direction +
       rough magnitude) with fill-haircut applied on entry AND exit — mechanics validation
+
 - [x] **BT-04**: Per-rule directional attribution + leave-one-rule-out ablation reported with
       every number stamped `n=` and date range; report persisted append-only (backtest_runs)
+
 - [x] **BT-05**: The harness never writes weights — outputs are directional evidence flags a
       human reads; weight promotion stays gated until n≥30 real closed trades
 
@@ -77,13 +95,17 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **PLAY-01**: Market-level crisis gates: picker computes nothing new to enter when VIX ≥ 25
       or VIX/VIX3M ≥ 0.95 (banded/dated — lean penalty-over-cliff per the retired-gate lessons;
       board shows the gate state)
+
 - [x] **PLAY-02**: Anti-criteria brakes: max open calendars, loss cooldown (recent realized loss
       pauses new entries), sustained-trend filter — thresholds from the trade-advisor playbook,
       confirmed with user at phase discuss
+
 - [x] **PLAY-03**: Sizing tiers: recommended contract count per VIX regime tier (discrete,
       user-set — never a derived optimum)
+
 - [x] **PLAY-04**: Event-calendar bucket: second universe path for short-gap (3–10d) calendars
       that intentionally own an event, scored with event-appropriate rules
+
 - [x] **PLAY-05**: autoTuneTargetDelta: VIX-tuned target-delta preference applied to the band
       scan (additive, after crisis-gate infra lands)
 
@@ -99,25 +121,31 @@ without a service restart. Requirements derived from `37-CONTEXT.md` locked deci
       and `POST /sidecar/admin/reauth/exchange` (exchanges the returned redirect URL for tokens
       via `client_from_received_url`, written through the existing `token_store` encryption).
       Both endpoints require the `SIDECAR_ADMIN_TOKEN` shared-secret header.
+
 - [ ] **REAUTH-02**: The OAuth CSRF `state` is a single-use Postgres nonce (`reauth_nonces`,
       migration 0024) with a 10-minute TTL, validated AND consumed atomically on exchange
       (`DELETE ... RETURNING`) so a replayed exchange can never succeed twice.
+
 - [ ] **REAUTH-03**: Per-app success is a `refresh_issued_at` freshness re-check (anchored within
       5 minutes), never a bare HTTP 200; the wizard's exchange writer anchors `refresh_issued_at`
       so the AUTH_EXPIRED banner actually clears.
+
 - [ ] **REAUTH-04**: After a successful exchange the sidecar re-inits its Schwab clients AND
       cancels+recreates the streamer/keepalive background tasks in-process while holding the
       advisory lock (no restart, never two live streamer sessions); trader-success + market-failure
       keeps trader's fresh token and offers retry of only the failed app.
+
 - [ ] **REAUTH-05**: The server proxies `/api/reauth/{start,exchange}` behind the existing Supabase
       JWT (operator-only, any authed user), forwarding with the admin-token header; error responses
       are generic (never echo the code/state/redirect URL). No MCP tool mints or exchanges auth
       URLs — this privileged surface is HTTP-only (MCP explicitly scoped out).
+
 - [ ] **REAUTH-06**: The web `AuthExpiredBanner` gains a **Reconnect** button (both red and amber
       states) opening a modal wizard (Trader 1/2 → Market 2/2 per UI-SPEC); on the `morai.wtf`
       callback landing the SPA captures `?code=&state=`, strips them via `history.replaceState`
       before any render, and auto-resumes/exchanges silently; the code/redirect URL never renders
       or logs anywhere in our stack.
+
 - [ ] **REAUTH-07**: Docs + deploy: `stack-decisions.md` records the wizard-as-primary /
       CLI-as-fallback decision; `schwab-reauth-runbook.md` gains the UI path (CLI stays fallback);
       `SIDECAR_ADMIN_TOKEN` + `SCHWAB_WEB_CALLBACK_URL` are set on both Railway services before
@@ -135,17 +163,20 @@ no separate discuss-phase requirement IDs existed until now.
       each `ts` a `z.string().datetime()` that REJECTS `+00:00` and requires a trailing `Z`.
       New events only — `streamLiveGreekEvent`/`streamPingEvent` unchanged so old clients are
       unaffected (CONTEXT Area 1 Q1, WR-03 additive-only precedent).
+
 - [ ] **LIVE-02**: SPX spot is fanned to browsers with ZERO new Schwab calls — the server
       broadcasts the already-arriving `underlyingPrice` (sidecar-sse.ts `observeSpot` site) as a
       named `spot` SSE event, coalesced on-change with a max of ~1 frame/sec per symbol; no
       unchanged-value keepalives (CONTEXT Area 1 Q2). A malformed/late frame never severs the
       stream for other browsers (swallow-and-log, CR-01/T-12-05-04).
+
 - [ ] **LIVE-03**: The sidecar polls `$VIX/$VVIX/$VIX9D/$VIX3M` via `market_client.get_quotes`
       on a fixed ~20s interval (no RTH gate on the poll — CONTEXT Area 1 Q4), reads `lastPrice`
       (bid/ask/mark may be absent for indices), tolerates a per-symbol failure without dropping
       the others, and emits one Z-suffixed `indices` frame onto the existing `event_queue`. The
       exact Schwab ticker strings/response shape are verified live (`get_quotes` smoke test) BEFORE
       the parser is built around them (Assumption A1, Open Question 1).
+
 - [ ] **LIVE-04**: `useLiveStream` exposes `liveSpot`/`liveIndices` on their own freshness stamp
       (a spot-only feed never paints the greeks badge live). EVERY spot surface — header SPX chip,
       Overview payoff spot marker + T+0 recompute, gamma-profile marker, net-greeks, mobile hero —
@@ -154,6 +185,7 @@ no separate discuss-phase requirement IDs existed until now.
       stream status is `live`; quiet/stalled falls back to the stored EOD/snapshot value with
       existing stale styling — never a silent `liveSpot ?? gex.spot` lie (catch #26, CONTEXT Area 2
       Q1/Q2).
+
 - [ ] **LIVE-05**: DISPLAY-LIVE / GATE-EOD LAW — the regime rail's three broker-quotable gauges
       (`vix-term-structure` = VIX/VIX3M, `vvix`, `vix9d-vix` = VIX9D/VIX) display live values with
       band coloring recomputed client-side from the live value against the response's effective
@@ -170,32 +202,36 @@ rewrite every ⓘ tooltip to teach. Display-only rework — no backend, no contr
 inputs. Requirements derived from `39-CONTEXT.md` locked decisions + the APPROVED
 `39-UI-SPEC.md` (rev 2); no separate discuss-phase requirement IDs existed until now.
 
-- [ ] **GAUGE-01**: The presentational bullet-gauge track (the `role="meter"` markup +
+- [x] **GAUGE-01**: The presentational bullet-gauge track (the `role="meter"` markup +
       `axisPct`/`clampedAxisPct` math) is extracted from `RegimeBoard.tsx` into a shared
       `apps/web/src/components/system/BulletGauge.tsx` with `banded` and `neutral` variants.
       The four existing regime rows are refactored onto it with ZERO visual change — the
       existing `RegimeBoard.test.tsx` gauge assertions (meter role, aria-* clamping, band
       segment positions, marker color/testids) stay green UNMODIFIED as the regression guard.
-- [ ] **GAUGE-02**: The six rates rows (Fed Funds, SOFR, 1M, 3M, 10Y−2Y, 10Y−3M) render
+
+- [x] **GAUGE-02**: The six rates rows (Fed Funds, SOFR, 1M, 3M, 10Y−2Y, 10Y−3M) render
       bullet gauges. Fed Funds/SOFR/1M/3M are NEUTRAL position-only tracks — marker on a fixed
       0–8% range, plain `bg-line2` track, `bg-dim` marker, NO band segments and NO verdict
       colors (the regime-board evidence law: no verdict-coloring without documented research).
       10Y−2Y/10Y−3M are BANDED via client-side `RATE_BANDS` named constants (calm `> 0.0` /
       warning `≤ 0.0` / crisis `≤ -0.50` `[ASSUMED]`), display-only and evidence-documented —
       never a picker/regime gate input (gate stays blind).
-- [ ] **GAUGE-03**: The five COT rows (Dealer, Asset Mgr, Leveraged, Other rept, Non-rept)
+
+- [x] **GAUGE-03**: The five COT rows (Dealer, Asset Mgr, Leveraged, Other rept, Non-rept)
       render NEUTRAL direction-tinted bullet gauges — plain `bg-line2` track, no band segments,
       marker `bg-up` when net ≥ 0 / `bg-down` when net < 0 (the existing long/short convention,
       never amber, no warning tier possible). The WoW `▲`/`▼` arrow + signed/magnitude
       formatting are kept; axes are per-class fixed visual ranges. COT net/WoW typography moves
       onto the shared secondary-value tier (11px).
-- [ ] **GAUGE-04**: Every gauge row's ⓘ tooltip renders the four-part teaching structure —
+
+- [x] **GAUGE-04**: Every gauge row's ⓘ tooltip renders the four-part teaching structure —
       WHAT (plain English) / WHY (SPX-calendar relevance) / BANDS (thresholds, or "position
       only" for neutral) / SOURCE (quiet provenance) — with the copy rendered VERBATIM from
       `39-UI-SPEC.md`'s LOCKED tooltip payload (executors never paraphrase or invent financial
       claims). The four existing regime rows keep their server-provided `source`/`rationale` as
       the SOURCE line; rate/COT rows use the static SOURCE strings authored in the UI-SPEC.
-- [ ] **GAUGE-05**: The yield-curve inversion bands for `t10y2y`/`t10y3m` are added to
+
+- [x] **GAUGE-05**: The yield-curve inversion bands for `t10y2y`/`t10y3m` are added to
       `docs/architecture/regime-board.md`'s evidence table BEFORE any component encodes them
       (docs-before-code), with cited threshold rationale (`knowledge-base/grouped-data/macro_rates.md`)
       and an `[ASSUMED]` disclosure on the −0.50 crisis tier. The picker gate and regime-gate
@@ -219,21 +255,25 @@ the lifecycle chart already renders everything.
       missing / IV inversion failure / BSM batch starvation) and fix so any leg with a usable
       mark in `leg_observations` gets IV + greeks. Honest-gap law stays: a leg with NO market
       data renders as a gap, never a fabricated value.
+
 - [ ] **HIST-02**: A pure rebuild use-case derives `calendar_snapshots` rows for a calendar
       from historical `leg_observations` — for each 30-min RTH slot between `openedAt` and
       `min(closedAt, now)`, resolve both legs' observations for that slot and build the row
       with the SAME pure functions the live writer uses (`computeLegPairMetrics`,
       `computeSnapshotPnl`) — no formula drift. Fill-only semantics: upserts never overwrite an
       existing non-gap row; gap rows MAY be replaced by healed non-gap rows.
+
 - [ ] **HIST-03**: Self-heal replaces "historical rows are never backfilled": a recurring
       worker job (chained after the existing snapshot/analytics cycle or scheduled) detects
       missing or gap slots for OPEN calendars over a bounded lookback and repairs them from
       `leg_observations` once usable data exists. The OPS-01 live freshness gate stays (never
       write stale marks as fresh) — but a skipped cycle now heals instead of scarring.
+
 - [ ] **HIST-04**: Operator repair path — a CLI (pattern: existing backfill/rebuild CLIs) that
       rebuilds the full journal history for one calendar or all calendars (one-time repair of
       the 17 existing calendars), and registration of a calendar (manual or auto) triggers a
       backfill from its `openedAt` so late registration never loses the entry-day story.
+
 - [ ] **HIST-05**: Series hygiene — at most one scheduled row per 30-min slot per calendar
       (today: hourly NaN row + a near-duplicate recompute row ~10-15 min later inflate the
       series to ~19 rows/day with frozen marks); event-move rows stay distinct via the existing

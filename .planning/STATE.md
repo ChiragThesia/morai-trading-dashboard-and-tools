@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 37
-current_phase_name: in-app-schwab-reauth-wizard
+current_phase: 40
+current_phase_name: journal-history-repair-never-lose-a-calendars-greek-vol-story
 status: planning
-stopped_at: Phases 34+36 closed 2026-07-13; Phase 37 context+UI-SPEC done, research/patterns running
-last_updated: "2026-07-13T15:22:08.674Z"
-last_activity: 2026-07-13
-last_activity_desc: Phase 36 complete (C11 waived), transitioned to Phase 37
+stopped_at: Phase 39 complete 2026-07-14; Phase 40 research running; 37/38 human gates deferred (time-locked)
+last_updated: "2026-07-14T06:11:32.830Z"
+last_activity: 2026-07-14
+last_activity_desc: Phase 39 complete, transitioned to Phase 40
 progress:
-  total_phases: 17
+  total_phases: 19
   completed_phases: 16
-  total_plans: 81
-  completed_plans: 81
-  percent: 94
+  total_plans: 99
+  completed_plans: 99
+  percent: 84
 ---
 
 # Project State
@@ -24,18 +24,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 37 — In-app Schwab re-auth wizard
+**Current focus:** Phase 40 — Journal history repair (the core-value data layer)
 
 ## Current Position
 
-Phase: 37 — In-app Schwab re-auth wizard — hosted OAuth flow replacing the local CLI dance: sidecar admin endpoints (authorize URL + code exchange + in-process client re-init, token_store encryption, no restart), server proxy behind Supabase JWT (operator-only), web Reconnect wizard on the AUTH_EXPIRED/T-24h banner (trader→market sequential, state CSRF check, auto-exchange on morai.wtf callback landing; dedicated /reauth/callback path). Never log the auth code. Runbook gains UI path, CLI stays fallback.
-Plan: Not started (context + UI-SPEC approved; researcher + pattern-mapper running)
-Status: Phase 36 closed — verifier 23/23 passed, C11 waived by user (mobile rework deferred)
-Last activity: 2026-07-13 — Phase 36 complete, transitioned to Phase 37
+Phase: 40 — Journal history repair — never lose a calendar's greek/vol story: root-cause the back-leg NaN poisoning every open-calendar snapshot, rebuild calendar_snapshots from the leg_observations archive (full chain stored since Jun 12), self-heal gaps instead of "never backfill", on-register backfill from openedAt, one-time repair of all existing calendars, and series hygiene (one scheduled row per 30-min slot)
+Plan: Not started (context committed; researcher running)
+Status: Phase 39 closed (verifier 8/8). Phases 37+38 executed+deployed, verification DEFERRED on time-locked human gates — 37 live re-auth UAT ~2026-07-20 (token expiry), 38 live RTH UAT next market open.
+Last activity: 2026-07-14 — Phase 39 complete, transitioned to Phase 40
+
+## Deferred Verification
+
+| Phase | State | Resume |
+|-------|-------|--------|
+| 37 | verification_deferred_human (live re-auth UAT ~07-20, token expiry) | /gsd-verify-work 37 |
+| 38 | verification_deferred_human (live RTH UAT at next market open) | /gsd-verify-work 38 |
 
 ## Open follow-ups (not phase-22 blockers)
 
-1. **Journal snapshot data ~74% gaps** — flagship open calendar (65aac62e) has 46 snapshots but only 12 non-gap (10 on Jul 01, 2 on Jul 03); Jun 23-26 all gap (spot=0/NaN), Jun 27-30 empty (worker-down window). The lifecycle feature works and renders honestly, but real-world richness is throttled by the `snapshot-calendars` job writing gap rows. Fix the snapshot pipeline so calendars accumulate clean non-gap series. **Now scheduled as Phase 25 (OPS-01).**
+1. **Journal snapshot data ~74% gaps** — flagship open calendar (65aac62e) has 46 snapshots but only 12 non-gap (10 on Jul 01, 2 on Jul 03); Jun 23-26 all gap (spot=0/NaN), Jun 27-30 empty (worker-down window). The lifecycle feature works and renders honestly, but real-world richness is throttled by the `snapshot-calendars` job writing gap rows. Fix the snapshot pipeline so calendars accumulate clean non-gap series. **Phase 25 (OPS-01) stopped gap-row WRITES but introduced silent skips + never-backfill; full repair now Phase 40 (HIST-01..05) — live diagnosis 2026-07-14: open calendars 100% gap (back-leg NaN), zero rows since Jul 8.**
 2. **`GET /api/journal//rules` → 401** — empty calendarId (Phase-20 `useRuleTags` missing the `enabled: !!calendarId` guard that `useLifecycle` got in 22-04). Fires once on Journal mount. Pre-existing, still open.
 
 ## Milestone v1.3 Summary
@@ -173,6 +180,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 35.1 | 4 | - | - |
 | 34 | 5 | - | - |
 | 36 | 5 | - | - |
+| 39 | 4 | - | - |
 
 **Recent Trend:**
 
