@@ -68,6 +68,7 @@ import type {
 import type {
   ForGettingOpenCalendars,
   ForReadingMacroObservations,
+  ForReadingRate,
   ForReadingRecentClosedCalendars,
 } from "../../journal/index.ts";
 // 29-10 (RUNTIME-*): cross-context read of the settings bounded context's own driven port —
@@ -124,7 +125,12 @@ export type ComputePickerSnapshotDeps = {
    * in the composition-root closure, so a mid-day settings change takes effect next cycle.
    */
   readonly readRuleOverrides: ForReadingRuleOverrides;
-  /** Risk-free rate (decimal), supplied from config. */
+  /**
+   * Latest DGS3MO rate row ≤ a date (journal MKT-02 port, cross-context application-port
+   * reuse) — the SAME rate source the chain's bsmIv inversion used (TOS parity, 2026-07-14).
+   */
+  readonly readRate: ForReadingRate;
+  /** Risk-free rate fallback (decimal) when no rate row exists ≤ the compute date (D-02). */
   readonly rate: number;
   /** Continuous dividend yield (decimal), supplied from config. */
   readonly dividendYield: number;
@@ -606,6 +612,17 @@ export function makeComputePickerSnapshotUseCase(
     const slopeHistoryResult = await deps.readPickerSlopeHistory(SLOPE_HISTORY_LIMIT);
     const slopeHistory = slopeHistoryResult.ok ? slopeHistoryResult.value : [];
 
+    // ── Step 3c: resolve r from the FRED DGS3MO rows (TOS parity, 2026-07-14) — the SAME
+    // rate source the chain's bsmIv inversion used (computeBsmGreeks D-02 shape): no row ≤
+    // the compute date, an unparseable value, or a failed read all degrade to the config
+    // fallback, never fail the compute. ──
+    let r = deps.rate;
+    const rateResult = await deps.readRate(etDateIso(deps.now()));
+    if (rateResult.ok && rateResult.value !== null) {
+      const parsedRate = parseFloat(rateResult.value);
+      if (isFinite(parsedRate)) r = parsedRate;
+    }
+
     // ── Step 4: Select + score (D-17: pass null gexContext whenever not "ok") ──
     // 28-04 (PLAY-05): autoTuneTargetDelta nudges the band's deep edge toward the far-OTM
     // edge as the cohort VIX rises (the SAME vix the gate already resolved) — a universe-
@@ -614,7 +631,7 @@ export function makeComputePickerSnapshotUseCase(
     // omitting overrides reproduces today's live universe/score byte-identically (each seam's
     // own `?? CONSTANT` fallback, unchanged by this plan).
     const { candidates: raw, gateDrops } = selectCandidates(chain, events, {
-      r: deps.rate,
+      r,
       q: deps.dividendYield,
       effectiveDeltaMin: autoTuneTargetDelta(gate.vix, config.vixLadder, config.deltaBand.min, config.deltaBand.max),
       deltaMin: config.deltaBand.min,
@@ -626,7 +643,7 @@ export function makeComputePickerSnapshotUseCase(
     });
     const gexContextForScoring = gexContextStatus === "ok" ? gexContext : null;
     let scored = scoreCalendarCandidates(raw, gexContextForScoring, {
-      r: deps.rate,
+      r,
       q: deps.dividendYield,
       realizedVol20,
       slopeHistory,

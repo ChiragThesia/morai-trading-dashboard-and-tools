@@ -56,6 +56,9 @@ import type {
 // Cross-context read of the settings bounded context's own application port — same convention
 // computePickerSnapshot.ts already established (29-10, RUNTIME-*).
 import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
+// Cross-context read of the journal context's rate port (MKT-02) — computePickerSnapshot.ts
+// precedent (application ports only, never domain).
+import type { ForReadingRate } from "../../journal/index.ts";
 
 export type AnalyzeAdHocCalendarDeps = {
   /** The latest persisted picker snapshot — gate/sizing/spot/asOf reused verbatim (T-28-10). */
@@ -71,7 +74,12 @@ export type AnalyzeAdHocCalendarDeps = {
   readonly readPickerSlopeHistory: ForReadingPickerSlopeHistory;
   /** Runtime rule-settings overrides (29-10), read FRESH per call — mirrors compute-picker. */
   readonly readRuleOverrides: ForReadingRuleOverrides;
-  /** Risk-free rate (decimal), supplied from config. */
+  /**
+   * Latest DGS3MO rate row ≤ the snapshot's asOf (journal MKT-02 port) — the SAME rate
+   * source the chain's bsmIv inversion used (TOS parity, 2026-07-14), mirrors compute-picker.
+   */
+  readonly readRate: ForReadingRate;
+  /** Risk-free rate fallback (decimal) when no rate row exists ≤ the asOf date (D-02). */
   readonly rate: number;
   /** Continuous dividend yield (decimal), supplied from config. */
   readonly dividendYield: number;
@@ -115,8 +123,16 @@ export function makeAnalyzeAdHocCalendarUseCase(
     const slopeHistory = slopeHistoryResult.ok ? slopeHistoryResult.value : [];
 
     // ── Step 4: build ONE RawCandidate, mirroring selectCandidates' own construction
-    // (candidate-selection.ts:370-411) exactly — the parity guarantee (T-30-10). ──
-    const { rate: r, dividendYield: q } = deps;
+    // (candidate-selection.ts:370-411) exactly — the parity guarantee (T-30-10). r resolves
+    // from the FRED DGS3MO rows (TOS parity, 2026-07-14; computeBsmGreeks D-02 shape) — no
+    // row, an unparseable value, or a failed read degrade to the config fallback. ──
+    const { dividendYield: q } = deps;
+    let r = deps.rate;
+    const rateResult = await deps.readRate(snapshot.asOf);
+    if (rateResult.ok && rateResult.value !== null) {
+      const parsedRate = parseFloat(rateResult.value);
+      if (isFinite(parsedRate)) r = parsedRate;
+    }
     const spot = snapshot.spot;
     const asOfIso = snapshot.asOf;
     const K = input.strike;

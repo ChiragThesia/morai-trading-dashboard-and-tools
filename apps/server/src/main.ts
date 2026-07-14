@@ -30,6 +30,7 @@ import {
   makePostgresRuleOverridesRepo,
   makePostgresEconomicEventsRepo,
   makePostgresPickerHistoryRepo,
+  makePostgresRateObservationsRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -350,6 +351,7 @@ const analyzeAdHocCalendar = makeAnalyzeAdHocCalendarUseCase({
   readDailySpotCloses: pickerHistoryRepo.readDailySpotCloses,
   readPickerSlopeHistory: pickerHistoryRepo.readPickerSlopeHistory,
   readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
+  readRate: makePostgresRateObservationsRepo(db).readRate,
   rate: config.BSM_RATE_FALLBACK,
   dividendYield: config.BSM_DIVIDEND_YIELD,
 });

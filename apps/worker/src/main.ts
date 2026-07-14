@@ -640,6 +640,7 @@ const computePickerSnapshotUseCase = makeComputePickerSnapshotUseCase({
   readRecentClosedCalendars: calendarEventsRepo.readRecentClosedCalendars,
   readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
   readRuleOverrides: ruleOverridesRepo.readRuleOverrides,
+  readRate: rateObsRepo.readRate,
   rate: config.BSM_RATE_FALLBACK,
   dividendYield: config.BSM_DIVIDEND_YIELD,
   now: () => new Date(),

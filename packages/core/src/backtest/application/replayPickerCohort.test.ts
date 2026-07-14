@@ -162,6 +162,9 @@ async function buildStoredRow(overrides: {
     // 29-10: no rule overrides in the leakage-oracle fixture — the merge's own omission
     // fallback (resolvePickerRuleConfig) reproduces every live default byte-identically.
     readRuleOverrides: async () => ok({}),
+    // 2026-07-14 (TOS parity): no rate row in the oracle fixture — the fallback `rate: R`
+    // keeps the replay/live parity byte-identical.
+    readRate: async () => ok(null),
     rate: R,
     dividendYield: Q,
     now: () => NOW,

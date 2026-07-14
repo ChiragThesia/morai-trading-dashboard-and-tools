@@ -302,6 +302,8 @@ function baseDeps(overrides: {
   readonly previousSnapshot?: PickerSnapshotRow | null;
   readonly now?: () => Date;
   readonly ruleOverrides?: StoredRuleOverrides;
+  readonly rateRow?: string | null;
+  readonly rateReadError?: boolean;
 }) {
   const { persistPickerSnapshot, rows } = makeRecordingPersist();
   // Note: `??` would coalesce an explicit `null` (missing-GEX fixture) back to the default --
@@ -346,6 +348,8 @@ function baseDeps(overrides: {
       readRecentClosedCalendars,
       readPickerSnapshot: fakeReadPickerSnapshot(previousSnapshot),
       readRuleOverrides: fakeReadRuleOverrides(overrides.ruleOverrides ?? {}),
+      readRate: async (): Promise<Result<string | null, StorageError>> =>
+        overrides.rateReadError === true ? err(storageError) : ok(overrides.rateRow ?? null),
       rate: R,
       dividendYield: Q,
       now: overrides.now ?? (() => NOW),
@@ -1080,6 +1084,44 @@ describe("makeComputePickerSnapshotUseCase — runtime rule overrides (29-10)", 
         status: rule.status,
         rationale: rule.rationale,
       })),
+    );
+  });
+});
+
+describe("makeComputePickerSnapshotUseCase — risk-free rate resolution (2026-07-14 TOS parity)", () => {
+  it("resolves r from the FRED rate row when one exists — deps.rate is only the no-row fallback", async () => {
+    const withFred = baseDeps({ rateRow: "0.06" }); // ≠ fallback R so greeks visibly diverge
+    const withFallback = baseDeps({});
+    await makeComputePickerSnapshotUseCase(withFred.deps)();
+    await makeComputePickerSnapshotUseCase(withFallback.deps)();
+
+    const fredCandidates = withFred.rows[0]?.snapshot.candidates ?? [];
+    const fallbackCandidates = withFallback.rows[0]?.snapshot.candidates ?? [];
+    expect(fredCandidates.length).toBeGreaterThan(0);
+    // A different r shifts the front delta, so the id's delta-label prefix moves too —
+    // match the strike/expiry pair by `name` and only on a pair PRESENT IN BOTH runs.
+    const shared = fredCandidates.find((c) => fallbackCandidates.some((f) => f.name === c.name));
+    expect(shared).toBeDefined();
+    if (shared === undefined) return;
+    const twin = fallbackCandidates.find((c) => c.name === shared.name);
+    expect(twin).toBeDefined();
+    if (twin === undefined) return;
+    // Same candidate, different r → different BSM greeks. Equal thetas mean the rate row
+    // was ignored and the static fallback silently won.
+    expect(Math.abs(shared.theta - twin.theta)).toBeGreaterThan(1e-9);
+  });
+
+  it("a rate read failure degrades to the fallback rate — never fails the compute (D-02 shape)", async () => {
+    const failing = baseDeps({ rateReadError: true });
+    const fallback = baseDeps({});
+    const result = await makeComputePickerSnapshotUseCase(failing.deps)();
+    await makeComputePickerSnapshotUseCase(fallback.deps)();
+
+    expect(result.ok).toBe(true);
+    const failingCandidates = failing.rows[0]?.snapshot.candidates ?? [];
+    const fallbackCandidates = fallback.rows[0]?.snapshot.candidates ?? [];
+    expect(failingCandidates.map((c) => ({ id: c.id, theta: c.theta }))).toEqual(
+      fallbackCandidates.map((c) => ({ id: c.id, theta: c.theta })),
     );
   });
 });

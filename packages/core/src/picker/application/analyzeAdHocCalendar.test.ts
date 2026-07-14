@@ -136,6 +136,7 @@ function makeDeps(overrides: Partial<AnalyzeAdHocCalendarDeps> = {}): AnalyzeAdH
     readDailySpotCloses,
     readPickerSlopeHistory,
     readRuleOverrides,
+    readRate: async () => ok(null),
     rate: R,
     dividendYield: Q,
     ...overrides,
@@ -342,7 +343,7 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
     expect(result.value.candidate.score).toBe(0); // penaltyMultiplier 0 -- still an analysis, not a withheld one.
   });
 
-  it("port hygiene: deps structurally exclude the cohort-gate reads (T-30-09) and only the 6 provided reads fire", async () => {
+  it("port hygiene: deps structurally exclude the cohort-gate reads (T-30-09) and only the 7 provided reads fire", async () => {
     const readPickerSnapshot = vi.fn(async (): Promise<Result<PickerSnapshotRow | null, StorageError>> =>
       ok(snapshotRow()),
     );
@@ -361,6 +362,7 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
     const readRuleOverrides = vi.fn(
       async (): Promise<Result<StoredRuleOverrides, StorageError>> => ok(EMPTY_OVERRIDES),
     );
+    const readRate = vi.fn(async (): Promise<Result<string | null, StorageError>> => ok(null));
     const deps: AnalyzeAdHocCalendarDeps = {
       readPickerSnapshot,
       readGexContext,
@@ -368,10 +370,11 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
       readDailySpotCloses,
       readPickerSlopeHistory,
       readRuleOverrides,
+      readRate,
       rate: R,
       dividendYield: Q,
     };
-    // Structural hygiene: `AnalyzeAdHocCalendarDeps` has exactly these 8 fields -- no
+    // Structural hygiene: `AnalyzeAdHocCalendarDeps` has exactly these 9 fields -- no
     // resolveEntryGate/readChainForPicker/readMacroObservations/readOpenCalendars/
     // readRecentClosedCalendars can even be threaded in (compile-time exclusion, T-30-09).
     expect(Object.keys(deps).sort()).toEqual(
@@ -383,6 +386,7 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
         "readGexContext",
         "readPickerSlopeHistory",
         "readPickerSnapshot",
+        "readRate",
         "readRuleOverrides",
       ].sort(),
     );
@@ -394,5 +398,37 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
     expect(readDailySpotCloses).toHaveBeenCalledTimes(1);
     expect(readPickerSlopeHistory).toHaveBeenCalledTimes(1);
     expect(readRuleOverrides).toHaveBeenCalledTimes(1);
+    expect(readRate).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves r from the FRED rate row when one exists — deps.rate is only the no-row fallback (2026-07-14 TOS parity)", async () => {
+    const input: AdHocCalendarInput = {
+      putCall: "P",
+      strike: 7500,
+      frontDte: 25,
+      backDte: 50,
+      frontIv: 0.13,
+      backIv: 0.14,
+      debit: 45,
+      qty: 1,
+      frontExpiry: addDaysIso(SNAPSHOT_ASOF, 25),
+      backExpiry: addDaysIso(SNAPSHOT_ASOF, 50),
+    };
+    const withFred = await makeAnalyzeAdHocCalendarUseCase(
+      makeDeps({ readRate: async () => ok("0.06") }),
+    )(input);
+    const withFallback = await makeAnalyzeAdHocCalendarUseCase(makeDeps())(input);
+
+    expect(withFred.ok).toBe(true);
+    expect(withFallback.ok).toBe(true);
+    if (!withFred.ok || !withFallback.ok) return;
+    expect(withFred.value.scored).toBe(true);
+    expect(withFallback.value.scored).toBe(true);
+    if (!withFred.value.scored || !withFallback.value.scored) return;
+    // Same input, different r → different BSM greeks. Equal thetas mean the rate row was
+    // ignored and the static fallback silently won.
+    expect(
+      Math.abs(withFred.value.candidate.theta - withFallback.value.candidate.theta),
+    ).toBeGreaterThan(1e-9);
   });
 });
