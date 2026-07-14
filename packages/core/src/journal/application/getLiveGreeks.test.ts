@@ -137,4 +137,32 @@ describe("makeGetLiveGreeksUseCase", () => {
     expect(capturedOccs).toContain(FRONT_OCC);
     expect(capturedOccs).toContain(BACK_OCC);
   });
+
+  it("HIST-01: resolves a mixed-root back leg under its sibling root (SPXW) when the calendar's stored root (SPX) has no observation", async () => {
+    const getCalendar: ForGettingCalendarById = async (_id) => ok(CALENDAR); // underlying: "SPX"
+    const frontLeg = makeLegSnapshot(FRONT_OCC);
+    const BACK_OCC_SPXW = formatOccSymbol({
+      root: "SPXW",
+      expiry: new Date("2026-09-18T12:00:00Z"),
+      type: "C",
+      strike: 7100,
+    });
+    const backLegSpxw = makeLegSnapshot(BACK_OCC_SPXW);
+    const getLatestLegObs: ForReadingLatestLegObs = async (occ) => {
+      if (occ === FRONT_OCC) return ok(frontLeg);
+      if (occ === BACK_OCC) return ok(null); // calendar's stored root — the real leg isn't here
+      if (occ === BACK_OCC_SPXW) return ok(backLegSpxw); // the leg's REAL, sibling root
+      return ok(null);
+    };
+    const getLiveGreeks = makeGetLiveGreeksUseCase({ getCalendar, getLatestLegObs });
+    const result = await getLiveGreeks(CALENDAR_ID);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.legs).toHaveLength(2);
+    const backEntry = result.value.legs.find((l) => l.occSymbol === BACK_OCC_SPXW);
+    expect(backEntry).toBeDefined();
+    if (!backEntry) return;
+    expect(backEntry.bsmIv).toBe("0.25");
+    expect(backEntry.bsmDelta).toBe("0.498");
+  });
 });

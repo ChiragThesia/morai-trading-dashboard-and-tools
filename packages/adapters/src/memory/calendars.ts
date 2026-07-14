@@ -1,5 +1,6 @@
 import { ok, err, formatOccSymbol } from "@morai/shared";
 import type { Result, OccSymbol } from "@morai/shared";
+import { resolveRootCandidates } from "@morai/core";
 import type {
   ForGettingOpenCalendars,
   ForPingingDb,
@@ -135,25 +136,32 @@ export function makeMemoryCalendarsRepo(): MemoryCalendarsRepo {
   const getOpenCalendarLegs: ForGettingOpenCalendarLegs = async (): Promise<
     Result<ReadonlyArray<OccSymbol>, StorageError>
   > => {
+    // HIST-01: a calendar's front/back legs can carry DIFFERENT OCC roots — build BOTH
+    // candidate-root symbols for each leg (costless over-inclusion, Set dedups). Mirrors
+    // the Postgres twin exactly (architecture-boundaries rule 8).
     const symbolSet = new Set<OccSymbol>();
     for (const calendar of store.values()) {
       if (calendar.status !== "open") continue;
       // OCC formatOccSymbol takes strike in points (not ×1000 int), so divide by 1000
       const strikePoints = calendar.strike / 1000;
-      const front = formatOccSymbol({
-        root: calendar.underlying === "SPXW" ? "SPXW" : "SPX",
-        expiry: new Date(calendar.frontExpiry + "T12:00:00Z"),
-        type: calendar.optionType,
-        strike: strikePoints,
-      });
-      const back = formatOccSymbol({
-        root: calendar.underlying === "SPXW" ? "SPXW" : "SPX",
-        expiry: new Date(calendar.backExpiry + "T12:00:00Z"),
-        type: calendar.optionType,
-        strike: strikePoints,
-      });
-      symbolSet.add(front);
-      symbolSet.add(back);
+      for (const root of resolveRootCandidates(calendar.underlying)) {
+        symbolSet.add(
+          formatOccSymbol({
+            root,
+            expiry: new Date(calendar.frontExpiry + "T12:00:00Z"),
+            type: calendar.optionType,
+            strike: strikePoints,
+          }),
+        );
+        symbolSet.add(
+          formatOccSymbol({
+            root,
+            expiry: new Date(calendar.backExpiry + "T12:00:00Z"),
+            type: calendar.optionType,
+            strike: strikePoints,
+          }),
+        );
+      }
     }
     return ok([...symbolSet]);
   };

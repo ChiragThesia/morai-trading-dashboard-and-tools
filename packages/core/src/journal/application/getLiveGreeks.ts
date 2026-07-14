@@ -1,10 +1,11 @@
-import { ok, err, formatOccSymbol } from "@morai/shared";
+import { ok, err, formatOccSymbol, assertDefined } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type {
   ForGettingCalendarById,
   ForReadingLatestLegObs,
   StorageError,
 } from "./ports.ts";
+import { resolveRootCandidates } from "../domain/occ-root.ts";
 
 // ─── Core output types ────────────────────────────────────────────────────────
 // Matches liveGreeksResponse in @morai/contracts; defined here in core
@@ -62,51 +63,56 @@ export function makeGetLiveGreeksUseCase(deps: GetLiveGreeksDeps): ForRunningGet
     }
 
     const cal = calResult.value;
-    // Step 2: construct OCC symbols for both legs
-    // Root: underlying === "SPXW" → "SPXW"; otherwise "SPX" (mirrors calendars.ts)
-    const root: "SPX" | "SPXW" = cal.underlying === "SPXW" ? "SPXW" : "SPX";
+    // Step 2: construct candidate OCC symbols for both legs. HIST-01: front/back can
+    // carry DIFFERENT real roots (e.g. SPX monthly front + SPXW EOM back) even though
+    // calendars.underlying stores only one — try the stored root first, then its sibling.
+    const roots = resolveRootCandidates(cal.underlying);
     const strikePoints = cal.strike / 1000; // ×1000 int → points
 
-    const frontOcc = formatOccSymbol({
-      root,
-      expiry: new Date(cal.frontExpiry + "T12:00:00Z"),
-      type: cal.optionType,
-      strike: strikePoints,
-    });
-    const backOcc = formatOccSymbol({
-      root,
-      expiry: new Date(cal.backExpiry + "T12:00:00Z"),
-      type: cal.optionType,
-      strike: strikePoints,
-    });
-
-    // Step 3+4: resolve each leg observation; missing → NaN fields
+    // Step 3+4: resolve each leg observation by trying each candidate root in order;
+    // first non-null hit wins. No candidate resolves → honest gap (D-04): NaN-stamp
+    // under the primary (calendar's stored) root, same occSymbol the old code reported.
     const legs: LegGreeks[] = [];
-    for (const occ of [frontOcc, backOcc]) {
-      const obsResult = await deps.getLatestLegObs(occ);
-      if (!obsResult.ok) return err(obsResult.error);
+    for (const expiry of [cal.frontExpiry, cal.backExpiry]) {
+      const candidates = roots.map((root) =>
+        formatOccSymbol({
+          root,
+          expiry: new Date(expiry + "T12:00:00Z"),
+          type: cal.optionType,
+          strike: strikePoints,
+        }),
+      );
+      const primaryOcc = candidates[0];
+      // resolveRootCandidates never returns an empty array, so candidates (built 1:1
+      // from roots) always has a first element — this satisfies noUncheckedIndexedAccess.
+      assertDefined(primaryOcc, "getLiveGreeks: resolveRootCandidates returned no roots");
 
-      const obs = obsResult.value;
-      if (obs === null) {
-        // No observation for this leg — NaN stamp all bsm fields
-        legs.push({
-          occSymbol: occ,
-          bsmIv: NAN_STAMP,
-          bsmDelta: NAN_STAMP,
-          bsmGamma: NAN_STAMP,
-          bsmTheta: NAN_STAMP,
-          bsmVega: NAN_STAMP,
-        });
-      } else {
-        legs.push({
+      let leg: LegGreeks | null = null;
+      for (const occ of candidates) {
+        const obsResult = await deps.getLatestLegObs(occ);
+        if (!obsResult.ok) return err(obsResult.error);
+        const obs = obsResult.value;
+        if (obs === null) continue;
+        leg = {
           occSymbol: occ,
           bsmIv: obs.bsmIv ?? NAN_STAMP,
           bsmDelta: obs.bsmDelta ?? NAN_STAMP,
           bsmGamma: obs.bsmGamma ?? NAN_STAMP,
           bsmTheta: obs.bsmTheta ?? NAN_STAMP,
           bsmVega: obs.bsmVega ?? NAN_STAMP,
-        });
+        };
+        break;
       }
+      legs.push(
+        leg ?? {
+          occSymbol: primaryOcc,
+          bsmIv: NAN_STAMP,
+          bsmDelta: NAN_STAMP,
+          bsmGamma: NAN_STAMP,
+          bsmTheta: NAN_STAMP,
+          bsmVega: NAN_STAMP,
+        },
+      );
     }
 
     return ok({ calendarId, legs });

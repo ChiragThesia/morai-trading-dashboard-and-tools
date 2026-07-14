@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { formatOccSymbol } from "@morai/shared";
 import type {
   ForGettingOpenCalendars,
   ForPingingDb,
@@ -392,9 +393,9 @@ export function runCalendarsContractTests(
         }
       });
 
-      it("returns front+back OCC symbols for each open calendar", async () => {
+      it("returns front+back OCC symbols for each open calendar (unambiguous root='SPXW')", async () => {
         const reg = await repo.registerCalendar({
-          underlying: "SPX",
+          underlying: "SPXW",
           strike: 7100000,
           optionType: "C",
           frontExpiry: "2026-02-21",
@@ -408,7 +409,8 @@ export function runCalendarsContractTests(
         const result = await repo.getOpenCalendarLegs();
         expect(result.ok).toBe(true);
         if (result.ok) {
-          // One open calendar → 2 OCC symbols (front + back leg)
+          // underlying='SPXW' is unambiguous (resolveRootCandidates returns one candidate) →
+          // exactly 2 OCC symbols (front + back leg), no sibling-root over-inclusion.
           expect(result.value).toHaveLength(2);
           // Each OCC symbol should be a 21-char string
           for (const sym of result.value) {
@@ -416,6 +418,38 @@ export function runCalendarsContractTests(
             expect(sym.length).toBe(21);
           }
         }
+      });
+
+      it("HIST-01: returns BOTH candidate-root symbols (SPX + SPXW) for each leg when underlying='SPX' (mixed-root calendar)", async () => {
+        const reg = await repo.registerCalendar({
+          underlying: "SPX",
+          strike: 7100000,
+          optionType: "C",
+          frontExpiry: "2026-02-21", // 3rd Friday of Feb 2026 -> real SPX-rooted monthly
+          backExpiry: "2026-03-30", // last trading day of Mar 2026, not a Friday -> real SPXW EOM root
+          qty: 1,
+          openNetDebit: 5.5,
+          openedAt: new Date("2026-01-02T14:30:00Z"),
+        });
+        expect(reg.ok).toBe(true);
+
+        const result = await repo.getOpenCalendarLegs();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        // Over-inclusion is free (Set-dedup) — SPX's candidates are [SPX, SPXW], so BOTH
+        // roots' front+back symbols are present: 4 distinct OCC symbols.
+        expect(result.value).toHaveLength(4);
+        const roots = result.value.map((sym) => sym.slice(0, 6).trimEnd());
+        expect(roots).toContain("SPX");
+        expect(roots).toContain("SPXW");
+        // The real SPXW-rooted back leg must be present — the D-04 bypass this fixes.
+        const backSpxw = formatOccSymbol({
+          root: "SPXW",
+          expiry: new Date("2026-03-30T12:00:00Z"),
+          type: "C",
+          strike: 7100,
+        });
+        expect(result.value).toContain(backSpxw);
       });
     });
   });

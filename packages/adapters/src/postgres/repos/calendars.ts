@@ -1,5 +1,6 @@
 import { ok, err, formatOccSymbol } from "@morai/shared";
 import type { Result, OccSymbol } from "@morai/shared";
+import { resolveRootCandidates } from "@morai/core";
 import type {
   ForGettingOpenCalendars,
   ForPingingDb,
@@ -342,24 +343,33 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
         .from(calendars)
         .where(eq(calendars.status, "open"));
 
+      // HIST-01: a calendar's front/back legs can carry DIFFERENT OCC roots (e.g. a
+      // standard-monthly SPX front + an EOM/weekly SPXW back), but calendars.underlying
+      // stores only one. Build BOTH candidate-root symbols for each leg — costless
+      // over-inclusion, the Set dedups — so the D-04 targeted-fetch allowlist always
+      // contains the leg's real root, whichever one that turns out to be.
       const symbolSet = new Set<OccSymbol>();
       for (const row of rows) {
         // OCC formatOccSymbol takes strike in points (not ×1000 int), so divide by 1000
         const strikePoints = row.strike / 1000;
-        const front = formatOccSymbol({
-          root: row.underlying === "SPXW" ? "SPXW" : "SPX",
-          expiry: new Date(row.frontExpiry + "T12:00:00Z"),
-          type: row.optionType,
-          strike: strikePoints,
-        });
-        const back = formatOccSymbol({
-          root: row.underlying === "SPXW" ? "SPXW" : "SPX",
-          expiry: new Date(row.backExpiry + "T12:00:00Z"),
-          type: row.optionType,
-          strike: strikePoints,
-        });
-        symbolSet.add(front);
-        symbolSet.add(back);
+        for (const root of resolveRootCandidates(row.underlying)) {
+          symbolSet.add(
+            formatOccSymbol({
+              root,
+              expiry: new Date(row.frontExpiry + "T12:00:00Z"),
+              type: row.optionType,
+              strike: strikePoints,
+            }),
+          );
+          symbolSet.add(
+            formatOccSymbol({
+              root,
+              expiry: new Date(row.backExpiry + "T12:00:00Z"),
+              type: row.optionType,
+              strike: strikePoints,
+            }),
+          );
+        }
       }
       return ok([...symbolSet]);
     } catch (e) {
