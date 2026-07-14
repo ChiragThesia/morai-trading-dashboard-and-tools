@@ -528,11 +528,11 @@ Plans:
 **Goal:** Every row on the desktop Market Regime rail reads as a bullet gauge with a teaching ⓘ tooltip. The rates block (Fed Funds/SOFR/1M/3M render neutral position-only tracks with no verdict color; 10Y−2Y/10Y−3M render evidence-banded inversion tracks) and the COT rows (neutral, marker green/red by long/short net) join the four existing regime gauges on one shared BulletGauge, at one visual density. Every ⓘ teaches four parts — WHAT the dial measures, WHY it matters for SPX calendar trading, what the BANDS mean (or "position only"), and a quiet SOURCE line — with copy verbatim from the UI-SPEC. The yield-curve bands are client-visual-only (documented in the regime-board evidence doc first); the picker gate stays blind.
 **Requirements**: GAUGE-01, GAUGE-02, GAUGE-03, GAUGE-04, GAUGE-05
 **Depends on:** Phase 38
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 
 - [x] 39-01-PLAN.md — docs evidence (t10y2y/t10y3m bands) + BulletGauge extraction + regime rows refactored zero-visual-change (wave 1)
 - [ ] 39-02-PLAN.md — rates block as gauges (neutral 4 + banded 2, RATE_BANDS gate-blind) + regime/rate 4-part teaching tooltips (wave 2)
-- [ ] 39-03-PLAN.md — COT rows as neutral direction-tinted gauges + typography + 4-part COT tooltips (wave 2)
+- [x] 39-03-PLAN.md — COT rows as neutral direction-tinted gauges + typography + 4-part COT tooltips (wave 2)
 - [ ] 39-04-PLAN.md — integration gate (suite/typechecks/lint + cross-cutting law greps) + deploy (Vercel) + desktop UAT on morai.wtf (wave 3)
