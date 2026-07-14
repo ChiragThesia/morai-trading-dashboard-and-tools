@@ -33,6 +33,9 @@ export { bsmPrice, bsmGreeks, bsmVega, invertIv, computeT, isThirdFriday, isWith
 // Phase 40 (HIST-01): root-candidate resolution — reused by packages/adapters and
 // packages/core journal call sites (plans 02/04).
 export { resolveRootCandidates } from "./journal/index.ts";
+// Phase 40 (HIST-05): 30-min RTH slot-boundary rounding — reused by snapshotCalendars.ts
+// (plan 03) and the rebuild use-case (plan 05).
+export { roundDownToRthSlot } from "./journal/index.ts";
 // SNAP-01 (20-04/20-06): cooldown predicate — composed in apps/server's onSpotObserved wiring.
 export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";

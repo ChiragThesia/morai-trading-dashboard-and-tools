@@ -273,3 +273,6 @@ export type {
 // Phase 40 (HIST-01): root-candidate resolution — pure domain fn reused by the four
 // existing root-mismatch call sites and the journal-history repair path (plans 02-07).
 export { resolveRootCandidates } from "./domain/occ-root.ts";
+// Phase 40 (HIST-05): 30-min RTH slot-boundary rounding — pure domain fn reused by
+// snapshotCalendars.ts (plan 03) and the rebuild use-case (plan 05).
+export { roundDownToRthSlot } from "./domain/rth-slot.ts";
