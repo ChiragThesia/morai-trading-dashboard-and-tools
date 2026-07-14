@@ -18,6 +18,8 @@ if (import.meta.main) {
     makeDb,
     makePostgresFillsRepo,
     makePostgresCalendarsRepo,
+    makePostgresCalendarSnapshotsRepo,
+    makePostgresLegObservationsRepo,
     makePostgresBrokerTokensRepo,
     makeAccountHashResolver,
     makeSchwabPositionsAdapter,
@@ -26,12 +28,15 @@ if (import.meta.main) {
     makeGetPositionsUseCase,
     makeRegisterCalendarUseCase,
     makeRegisterOpenCalendarsUseCase,
+    makeRebuildCalendarHistoryUseCase,
   } = await import("@morai/core");
 
   const config = bootWorkerConfig();
   const db = makeDb(config.DATABASE_URL);
   const fillsRepo = makePostgresFillsRepo(db);
   const calendarsRepo = makePostgresCalendarsRepo(db);
+  const calendarSnapshotsRepo = makePostgresCalendarSnapshotsRepo(db);
+  const legObsRepo = makePostgresLegObservationsRepo(db);
   const brokerTokensRepo = makePostgresBrokerTokensRepo(
     db,
     config.TOKEN_ENCRYPTION_KEY,
@@ -85,11 +90,21 @@ if (import.meta.main) {
     now: () => new Date(),
   });
 
+  // HIST-04 (40-07): mirrors apps/worker/src/main.ts's rebuildCalendarHistoryUseCase wiring —
+  // the same plan-05 engine self-heal-journal runs on a cron, reused here for the on-register
+  // backfill (non-fatal to registration; see registerOpenCalendars.ts).
+  const rebuildCalendarHistoryUseCase = makeRebuildCalendarHistoryUseCase({
+    resolveLegObservationForSlot: legObsRepo.resolveLegObservationForSlot,
+    healSnapshot: calendarSnapshotsRepo.healSnapshot,
+    now: () => new Date(),
+  });
+
   const registerOpenCalendars = makeRegisterOpenCalendarsUseCase({
     fetchOpenPositions: fetchOpenPositionLegs,
     listCalendars: calendarsRepo.listCalendars,
     readFillsByOccSymbols: fillsRepo.readFillsByOccSymbols,
     registerCalendar: registerCalendarUseCase,
+    rebuildCalendarHistory: rebuildCalendarHistoryUseCase,
     now: () => new Date(),
   });
 
@@ -105,7 +120,8 @@ if (import.meta.main) {
   for (const r of registered) {
     console.warn(
       `  + ${r.underlying} ${r.strike / 1000}${r.optionType} ${r.frontExpiry}/${r.backExpiry}  ` +
-        `openNetDebit=${r.openNetDebit.toFixed(4)}  id=${r.calendarId}  openedAtSource=${r.openedAtSource}`,
+        `openNetDebit=${r.openNetDebit.toFixed(4)}  id=${r.calendarId}  openedAtSource=${r.openedAtSource}  ` +
+        `backfilledSlots=${r.backfilledSlots ?? "FAILED (re-run via self-heal or repair CLI)"}`,
     );
   }
   process.exit(0);

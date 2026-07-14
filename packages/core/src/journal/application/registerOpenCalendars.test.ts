@@ -15,6 +15,12 @@ import type { Calendar, RawFill, StorageError, ForListingCalendars, ForReadingFi
 import { makeRegisterCalendarUseCase } from "./registerCalendar.ts";
 import { makeRegisterOpenCalendarsUseCase } from "./registerOpenCalendars.ts";
 import type { PositionLeg, ForFetchingOpenPositionLegs } from "./registerOpenCalendars.ts";
+import type { ForRunningRebuildCalendarHistory } from "./rebuildCalendarHistory.ts";
+
+// Backfill test stub — never called unless a test overrides it (existing tests above don't
+// exercise the backfill path, only the new HIST-04 on-register-backfill tests below do).
+const noopRebuildCalendarHistory: ForRunningRebuildCalendarHistory = async () =>
+  ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 });
 
 // ─── The 5 real open positions (register-open-calendars oracle) ────────────────
 function leg(overrides: Partial<PositionLeg> & { occSymbol: string }): PositionLeg {
@@ -100,6 +106,7 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
       listCalendars,
       readFillsByOccSymbols,
       registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
       now: () => NOW,
     });
 
@@ -174,6 +181,7 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
       listCalendars,
       readFillsByOccSymbols,
       registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
       now: () => NOW,
     });
 
@@ -233,6 +241,7 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
       listCalendars,
       readFillsByOccSymbols,
       registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
       now: () => NOW,
     });
 
@@ -292,6 +301,7 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
       listCalendars,
       readFillsByOccSymbols,
       registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
       now: () => NOW,
     });
 
@@ -372,6 +382,7 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
       listCalendars,
       readFillsByOccSymbols,
       registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
       now: () => NOW,
     });
 
@@ -429,6 +440,7 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
       listCalendars,
       readFillsByOccSymbols,
       registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
       now: () => NOW,
     });
 
@@ -461,6 +473,7 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
       listCalendars,
       readFillsByOccSymbols,
       registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
       now: () => NOW,
     });
 
@@ -483,11 +496,154 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
       listCalendars,
       readFillsByOccSymbols,
       registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
       now: () => NOW,
     });
 
     const result = await use();
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("storage-error");
+  });
+
+  // ─── HIST-04: on-register backfill (40-07) ────────────────────────────────────
+  function singleLegPair(): PositionLeg[] {
+    return [
+      leg({ occSymbol: "SPX   260804P07400000", shortQty: 1, averagePrice: 95.3278 }),
+      leg({ occSymbol: "SPX   260831P07400000", longQty: 1, averagePrice: 138.7022 }),
+    ];
+  }
+
+  it("a newly-registered calendar triggers a backfill rebuild over [openedAt, now], recording rowsHealed as backfilledSlots", async () => {
+    const calendarStore: Calendar[] = [];
+    let nextId = 1;
+    const registerCalendarUseCase = makeRegisterCalendarUseCase({
+      persistCalendar: async (input) => {
+        const row: Calendar = {
+          id: `cal-${nextId++}`,
+          underlying: input.underlying,
+          strike: input.strike,
+          optionType: input.optionType,
+          frontExpiry: input.frontExpiry,
+          backExpiry: input.backExpiry,
+          qty: input.qty,
+          openNetDebit: input.openNetDebit,
+          status: "open",
+          openedAt: input.openedAt,
+          closedAt: null,
+          notes: input.notes ?? null,
+        };
+        calendarStore.push(row);
+        return ok(row);
+      },
+      now: () => NOW,
+    });
+    const listCalendars: ForListingCalendars = async () => ok(calendarStore);
+    const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async () => ok([]);
+    const rebuildCalls: Array<{ calendar: Calendar; window: { from: Date; to: Date } }> = [];
+    const rebuildCalendarHistory: ForRunningRebuildCalendarHistory = async (calendar, window) => {
+      rebuildCalls.push({ calendar, window });
+      return ok({ slotsConsidered: 4, rowsHealed: 3, honestGapSlots: 1 });
+    };
+
+    const use = makeRegisterOpenCalendarsUseCase({
+      fetchOpenPositions: async () => ok(singleLegPair()),
+      listCalendars,
+      readFillsByOccSymbols,
+      registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory,
+      now: () => NOW,
+    });
+
+    const result = await use();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.registered).toHaveLength(1);
+    expect(rebuildCalls).toHaveLength(1);
+    expect(rebuildCalls[0]?.calendar.id).toBe(result.value.registered[0]?.calendarId);
+    // openedAt falls back to now() (no fills seeded) — so the backfill window is [now, now].
+    expect(rebuildCalls[0]?.window).toEqual({ from: NOW, to: NOW });
+    expect(result.value.registered[0]?.backfilledSlots).toBe(3);
+  });
+
+  it("a rebuild StorageError does not fail the registration — the summary records backfilledSlots: null", async () => {
+    const calendarStore: Calendar[] = [];
+    let nextId = 1;
+    const registerCalendarUseCase = makeRegisterCalendarUseCase({
+      persistCalendar: async (input) => {
+        const row: Calendar = {
+          id: `cal-${nextId++}`,
+          underlying: input.underlying,
+          strike: input.strike,
+          optionType: input.optionType,
+          frontExpiry: input.frontExpiry,
+          backExpiry: input.backExpiry,
+          qty: input.qty,
+          openNetDebit: input.openNetDebit,
+          status: "open",
+          openedAt: input.openedAt,
+          closedAt: null,
+          notes: input.notes ?? null,
+        };
+        calendarStore.push(row);
+        return ok(row);
+      },
+      now: () => NOW,
+    });
+    const listCalendars: ForListingCalendars = async () => ok(calendarStore);
+    const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async () => ok([]);
+    const rebuildCalendarHistory: ForRunningRebuildCalendarHistory = async () =>
+      err({ kind: "storage-error", message: "rebuild failed" });
+
+    const use = makeRegisterOpenCalendarsUseCase({
+      fetchOpenPositions: async () => ok(singleLegPair()),
+      listCalendars,
+      readFillsByOccSymbols,
+      registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory,
+      now: () => NOW,
+    });
+
+    const result = await use();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.registered).toHaveLength(1);
+    expect(result.value.registered[0]?.backfilledSlots).toBeNull();
+  });
+
+  it("a skipped-existing calendar is never backfilled", async () => {
+    const existing: Calendar = {
+      id: "cal-existing",
+      underlying: "SPX",
+      strike: 7400000,
+      optionType: "P",
+      frontExpiry: "2026-08-04",
+      backExpiry: "2026-08-31",
+      qty: 1,
+      openNetDebit: 43.3744,
+      status: "open",
+      openedAt: new Date("2026-07-01T14:00:00Z"),
+      closedAt: null,
+      notes: null,
+    };
+    const listCalendars: ForListingCalendars = async () => ok([existing]);
+    const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async () => ok([]);
+    const registerCalendarUseCase = makeRegisterCalendarUseCase({ persistCalendar: vi.fn(), now: () => NOW });
+    const rebuildCalendarHistory = vi.fn();
+
+    const use = makeRegisterOpenCalendarsUseCase({
+      fetchOpenPositions: async () => ok(singleLegPair()),
+      listCalendars,
+      readFillsByOccSymbols,
+      registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory,
+      now: () => NOW,
+    });
+
+    const result = await use();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.registered).toHaveLength(0);
+    expect(result.value.skippedExisting).toHaveLength(1);
+    expect(rebuildCalendarHistory).not.toHaveBeenCalled();
   });
 });

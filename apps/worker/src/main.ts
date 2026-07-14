@@ -508,11 +508,24 @@ const registerCalendarUseCase = makeRegisterCalendarUseCase({
   now: () => new Date(),
 });
 
+// HIST-02/03/04 (40-05/06/07): the single rebuild engine, composed from legObsRepo's as-of-slot
+// read + calendarSnapshotsRepo's fill-only heal-write (both plan-04 ports, already instantiated
+// above). Built here (before registerOpenCalendarsUseCase, which needs it for the HIST-04
+// on-register backfill) and reused as-is by selfHealJournalUseCase and
+// repairJournalHistoryUseCase below — one engine, three consumers.
+const rebuildCalendarHistoryUseCase = makeRebuildCalendarHistoryUseCase({
+  resolveLegObservationForSlot: legObsRepo.resolveLegObservationForSlot,
+  healSnapshot: calendarSnapshotsRepo.healSnapshot,
+  now: () => new Date(),
+});
+
 const registerOpenCalendarsUseCase = makeRegisterOpenCalendarsUseCase({
   fetchOpenPositions: fetchOpenPositionLegs,
   listCalendars: calendarsRepo.listCalendars,
   readFillsByOccSymbols: fillsRepo.readFillsByOccSymbols,
   registerCalendar: registerCalendarUseCase,
+  // HIST-04: backfill a newly-registered calendar's entry-day-onward history, non-fatally.
+  rebuildCalendarHistory: rebuildCalendarHistoryUseCase,
   now: () => new Date(),
 });
 
@@ -521,16 +534,8 @@ const registerOpenCalendarsHandler = makeRegisterOpenCalendarsHandler({
   now: () => new Date(),
 });
 
-// HIST-03 (40-06): self-heal-journal — sparse hourly repair of OPEN calendars' past slots
-// via the plan-05 rebuild engine, composed from calendarsRepo (open calendars, reused from
-// snapshotCalendarsUseCase above) + legObsRepo's as-of-slot read + calendarSnapshotsRepo's
-// fill-only heal-write (both plan-04 ports, already instantiated above).
-const rebuildCalendarHistoryUseCase = makeRebuildCalendarHistoryUseCase({
-  resolveLegObservationForSlot: legObsRepo.resolveLegObservationForSlot,
-  healSnapshot: calendarSnapshotsRepo.healSnapshot,
-  now: () => new Date(),
-});
-
+// HIST-03 (40-06): self-heal-journal — sparse hourly repair of OPEN calendars' past slots,
+// via the same rebuildCalendarHistoryUseCase built above.
 const selfHealJournalUseCase = makeSelfHealJournalUseCase({
   getOpenCalendars: calendarsRepo.getOpenCalendars,
   rebuildCalendarHistory: rebuildCalendarHistoryUseCase,

@@ -43,6 +43,7 @@ import { pairPositionsIntoCalendarCandidates } from "../domain/position-pairing.
 import type { PositionLeg } from "../domain/position-pairing.ts";
 import type { ForListingCalendars, ForReadingFillsByOccSymbols, StorageError } from "./ports.ts";
 import type { ForRunningRegisterCalendar, ValidationError } from "./registerCalendar.ts";
+import type { ForRunningRebuildCalendarHistory } from "./rebuildCalendarHistory.ts";
 
 export type { PositionLeg } from "../domain/position-pairing.ts";
 
@@ -65,6 +66,13 @@ export type RegisteredCalendarSummary = {
   readonly openNetDebit: number;
   readonly openedAt: Date;
   readonly openedAtSource: "fill" | "fallback-now";
+  /**
+   * Rows backfilled via the plan-05 rebuild engine over [openedAt, now] (HIST-04) — the entry-
+   * day-onward history a late registration would otherwise lose. Null when the backfill itself
+   * failed; the registration still succeeds (non-fatal) and the history is re-runnable via the
+   * self-heal job or the operator repair CLI.
+   */
+  readonly backfilledSlots: number | null;
 };
 
 export type SkippedCalendarSummary = {
@@ -85,6 +93,7 @@ export type RegisterOpenCalendarsDeps = {
   readonly listCalendars: ForListingCalendars;
   readonly readFillsByOccSymbols: ForReadingFillsByOccSymbols;
   readonly registerCalendar: ForRunningRegisterCalendar;
+  readonly rebuildCalendarHistory: ForRunningRebuildCalendarHistory;
   readonly now: () => Date;
 };
 
@@ -194,6 +203,16 @@ export function makeRegisterOpenCalendarsUseCase(
       });
       if (!registerResult.ok) return registerResult;
 
+      // HIST-04: backfill the entry-day-onward history so late registration never loses it.
+      // Non-fatal — the calendar is already persisted; a rebuild failure is recorded on the
+      // summary (backfilledSlots: null) rather than failing the registration, and is
+      // re-runnable via the self-heal job or the operator repair CLI.
+      const backfillResult = await deps.rebuildCalendarHistory(registerResult.value, {
+        from: openedAt,
+        to: deps.now(),
+      });
+      const backfilledSlots = backfillResult.ok ? backfillResult.value.rowsHealed : null;
+
       registered.push({
         calendarId: registerResult.value.id,
         underlying: row.underlying,
@@ -204,6 +223,7 @@ export function makeRegisterOpenCalendarsUseCase(
         openNetDebit,
         openedAt,
         openedAtSource,
+        backfilledSlots,
       });
       // Prevents re-registering the same candidate twice within one run (defensive — the
       // grouping key already guarantees at most one candidate per (underlying,strike,type)).
