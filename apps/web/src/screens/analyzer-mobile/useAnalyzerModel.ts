@@ -99,6 +99,36 @@ export const EXPERIMENTAL_SHORT: Record<string, string> = {
   thetaVega: "θ/V",
 };
 
+/** Verdict Hero factor groups (Phase 41, AUI-02/D-02) — LOCKED mapping, single source shared
+ * by the desktop hero and MobileScorecard (never re-declared per tree). `Record<string, ...>`
+ * (not the closed criterion union) because callers index it by `scoreItems[].key`, which is
+ * `string` once registry rule ids (RuleSetEntry.id) are mixed in with FALLBACK_SCORE_ITEMS'
+ * criterion keys. */
+export const GROUP_OF: Record<string, "EDGE" | "RISK" | "FIT"> = {
+  fwdEdge: "EDGE",
+  slope: "EDGE",
+  vrp: "EDGE",
+  eventAdjustment: "RISK",
+  beVsEm: "RISK",
+  debitFit: "RISK",
+  gexFit: "FIT",
+  deltaNeutral: "FIT",
+  thetaVega: "FIT",
+};
+
+/** verdictWord — the evidence-honest headline word (Phase 41, AUI-02/D-02): reuses
+ * `scoreStatus()`'s own ✓/~/✗ tier split on the overall `candidate.score`, never a new
+ * threshold or fabricated confidence number. */
+export function verdictWord(score: number): {
+  readonly word: "FAVORABLE" | "CAUTION" | "SKIP";
+  readonly icon: string;
+  readonly cls: string;
+} {
+  const { icon, cls } = scoreStatus(score);
+  const word = icon === "✓" ? "FAVORABLE" : icon === "~" ? "CAUTION" : "SKIP";
+  return { word, icon, cls };
+}
+
 // ─── Model ──────────────────────────────────────────────────────────────────────
 
 export interface AnalyzerModel {

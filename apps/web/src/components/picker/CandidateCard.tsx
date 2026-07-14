@@ -85,7 +85,7 @@ function formatBreakdownCaption(entry: BreakdownEntry): string {
  * date — a date-only value made the dot always amber and the HH:MM label a constant
  * timezone-offset artifact of UTC midnight, never the real snapshot instant.
  */
-function formatAsOf(observedAt: string): { readonly label: string; readonly fresh: boolean } {
+export function formatAsOf(observedAt: string): { readonly label: string; readonly fresh: boolean } {
   const ts = new Date(observedAt).getTime();
   if (Number.isNaN(ts)) {
     return { label: "as of —", fresh: false };

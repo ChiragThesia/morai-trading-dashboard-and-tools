@@ -48,7 +48,7 @@ vi.mock("../../hooks/useAnalyzeCalendar.ts", () => ({
   useAnalyzeCalendar: () => ({ mutateAsync: mockAnalyzeCalendarMutateAsync }),
 }));
 
-import { useAnalyzerModel } from "./useAnalyzerModel.ts";
+import { useAnalyzerModel, GROUP_OF, verdictWord } from "./useAnalyzerModel.ts";
 import { useLiveStream } from "../../hooks/useLiveStream.ts";
 
 const mockUseLiveStream = vi.mocked(useLiveStream);
@@ -131,5 +131,33 @@ describe("useAnalyzerModel — live-aware spot seam (AUI-07, D-07 port of LIVE-0
     expect(result.current.liveBadgeProps.hasReceivedFirstTick).toBe(false);
     expect(result.current.liveBadgeProps.isReconnecting).toBe(false);
     expect(typeof result.current.liveBadgeProps.onReconnect).toBe("function");
+  });
+});
+
+describe("GROUP_OF — Verdict Hero factor grouping (Phase 41, AUI-02/D-02, LOCKED mapping)", () => {
+  it("maps every one of the 9 breakdownEntry criteria to exactly one of EDGE/RISK/FIT", () => {
+    expect(GROUP_OF["fwdEdge"]).toBe("EDGE");
+    expect(GROUP_OF["slope"]).toBe("EDGE");
+    expect(GROUP_OF["vrp"]).toBe("EDGE");
+    expect(GROUP_OF["eventAdjustment"]).toBe("RISK");
+    expect(GROUP_OF["beVsEm"]).toBe("RISK");
+    expect(GROUP_OF["debitFit"]).toBe("RISK");
+    expect(GROUP_OF["gexFit"]).toBe("FIT");
+    expect(GROUP_OF["deltaNeutral"]).toBe("FIT");
+    expect(GROUP_OF["thetaVega"]).toBe("FIT");
+  });
+});
+
+describe("verdictWord — evidence-honest verdict derivation (Phase 41, AUI-02/D-02)", () => {
+  it("score 81 (>= 66.7) -> FAVORABLE, text-up, reusing scoreStatus's ✓ icon", () => {
+    expect(verdictWord(81)).toEqual({ word: "FAVORABLE", icon: "✓", cls: "text-up" });
+  });
+
+  it("score 50 (>= 33.3, < 66.7) -> CAUTION, text-amber, reusing scoreStatus's ~ icon", () => {
+    expect(verdictWord(50)).toEqual({ word: "CAUTION", icon: "~", cls: "text-amber" });
+  });
+
+  it("score 10 (< 33.3) -> SKIP, text-down, reusing scoreStatus's ✗ icon", () => {
+    expect(verdictWord(10)).toEqual({ word: "SKIP", icon: "✗", cls: "text-down" });
   });
 });
