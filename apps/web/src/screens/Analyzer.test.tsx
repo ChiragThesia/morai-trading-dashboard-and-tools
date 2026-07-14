@@ -279,7 +279,7 @@ describe("Analyzer — ranked candidate table (Phase 41, AUI-01/AUI-03)", () => 
   });
 });
 
-describe("Analyzer — per-candidate scoring checklist", () => {
+describe("Analyzer — verdict hero (Phase 41, AUI-02/D-02)", () => {
   beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
@@ -287,13 +287,27 @@ describe("Analyzer — per-candidate scoring checklist", () => {
     Reflect.deleteProperty(window, "matchMedia");
   });
 
-  it("renders a checklist row per rubric factor plus the theta constraint for the selected calendar", () => {
+  it("renders the headline (verdict word + score + Θ) and a checklist row per rubric factor for the selected calendar", () => {
     const { container } = render(<Analyzer />);
-    expect(container.querySelector('[data-testid="scoring-checklist"]')).not.toBeNull();
+    expect(screen.getByTestId("verdict-word").textContent).toContain("CAUTION");
+    expect(screen.getByTestId("verdict-score").textContent).toBe(`score ${Math.round(TOP.score)}/100`);
+    expect(screen.getByTestId("verdict-theta").textContent).toBe(
+      `Θ ${TOP.theta >= 0 ? "+" : ""}${TOP.theta.toFixed(1)}/d`,
+    );
     for (const key of ["fwdEdge", "slope", "eventAdjustment", "gexFit", "beVsEm"]) {
       expect(container.querySelector(`[data-testid="checklist-${key}"]`)).not.toBeNull();
     }
-    expect(container.querySelector('[data-testid="checklist-theta"]')).not.toBeNull();
+    // θ GATE is retired as a separate chip — its info is the headline Θ above, never duplicated.
+    expect(container.querySelector('[data-testid="checklist-theta"]')).toBeNull();
+  });
+
+  it("groups the checklist rows under EDGE/RISK/FIT per the LOCKED mapping (shared GROUP_OF)", () => {
+    render(<Analyzer />);
+    within(screen.getByTestId("verdict-group-EDGE")).getByTestId("checklist-fwdEdge");
+    within(screen.getByTestId("verdict-group-EDGE")).getByTestId("checklist-slope");
+    within(screen.getByTestId("verdict-group-RISK")).getByTestId("checklist-eventAdjustment");
+    within(screen.getByTestId("verdict-group-RISK")).getByTestId("checklist-beVsEm");
+    within(screen.getByTestId("verdict-group-FIT")).getByTestId("checklist-gexFit");
   });
 
   it("changes per calendar — the guard candidate (fwdIv null) shows forward-vol edge as n/a", () => {
@@ -307,6 +321,13 @@ describe("Analyzer — per-candidate scoring checklist", () => {
     const legend = screen.getByTestId("rail-legend");
     expect(legend.textContent).toContain("daily $ decay");
     expect(legend.textContent).toContain("event on front");
+  });
+
+  it("renders the as-of + source provenance in the quiet footer (AUI-07)", () => {
+    render(<Analyzer />);
+    const footer = screen.getByTestId("verdict-hero-footer");
+    expect(footer.textContent).toContain("as of");
+    expect(footer.textContent).toContain(pickerSnapshotFixture.source);
   });
 });
 
@@ -706,7 +727,7 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE);
 
     expect(screen.getAllByText("Pasted calendar — not engine-scored.").length).toBe(3);
-    expect(screen.queryByTestId("scoring-checklist")).toBeNull();
+    expect(screen.queryByTestId("verdict-word")).toBeNull();
     expect(screen.queryByTestId("entryexit-value-debit")).toBeNull();
     expect(screen.queryByTestId("whypanel-forward-edge-sentence")).toBeNull();
   });
@@ -739,7 +760,7 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     within(screen.getByTestId("candidate-row-pasted-1")).getByText("PASTED");
     // The "not engine-scored" placeholder is gone; real panels render.
     expect(screen.queryByText("Pasted calendar — not engine-scored.")).toBeNull();
-    expect(screen.getByTestId("scoring-checklist")).toBeTruthy();
+    expect(screen.getByTestId("verdict-word")).toBeTruthy();
     expect(screen.getByTestId("whypanel-forward-edge-sentence")).toBeTruthy();
   });
 
@@ -946,61 +967,58 @@ describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.rul
     };
   }
 
-  it("renders engine weights from the snapshot ruleSet (w35 on fwdEdge, w30 on slope)", () => {
+  it("renders engine labels from the snapshot ruleSet in the correct group (fwdEdge/slope under EDGE)", () => {
     mockUsePickerReturn({ data: snapshotWithRegistry() });
     render(<Analyzer />);
 
-    expect(screen.getByTestId("checklist-fwdEdge-weight").textContent).toBe("w35");
-    expect(screen.getByTestId("checklist-slope-weight").textContent).toBe("w30");
+    within(screen.getByTestId("verdict-group-EDGE")).getByTestId("checklist-fwdEdge");
+    within(screen.getByTestId("verdict-group-EDGE")).getByTestId("checklist-slope");
   });
 
-  it("renders the gate-drop counts line (no silent caps)", () => {
+  it("renders the gate-drop counts in the quiet footer (no silent caps)", () => {
     mockUsePickerReturn({ data: snapshotWithRegistry() });
     render(<Analyzer />);
 
-    const drops = screen.getByTestId("checklist-gate-drops");
-    expect(drops.textContent).toContain("3 illiquid quotes");
-    expect(drops.textContent).toContain("2 negative-θ pairs");
+    const footer = screen.getByTestId("verdict-hero-footer");
+    expect(footer.textContent).toContain("3 illiquid quotes");
+    expect(footer.textContent).toContain("2 negative-θ pairs");
   });
 
-  it("renders the experimental context rows dim with their computed values", () => {
+  it("renders the experimental context values dim in the quiet footer", () => {
     mockUsePickerReturn({ data: snapshotWithRegistry() });
     render(<Analyzer />);
 
-    const experimental = screen.getByTestId("checklist-experimental");
-    expect(experimental.textContent).toContain("CALIBRATING");
-    expect(experimental.textContent).toContain("0.031");
-    expect(experimental.textContent).toContain("67");
+    const footer = screen.getByTestId("verdict-hero-footer");
+    expect(footer.textContent).toContain("CALIBRATING");
+    expect(footer.textContent).toContain("0.031");
+    expect(footer.textContent).toContain("67");
   });
 
-  it("the Re-pull chains button lives in the Suggested-calendars rail heading, not the scorecard strip", () => {
+  it("the Re-pull chains button lives in the Suggested-calendars rail heading, not the scorecard hero", () => {
     mockUsePickerReturn({ data: snapshotWithRegistry() });
     render(<Analyzer />);
 
     const button = screen.getByTestId("repull-chains-button");
-    const strip = screen.getByTestId("scoring-pills");
-    expect(strip.contains(button)).toBe(false);
+    const wrapper = screen.getByTestId("analyzer-scorecard-wrapper");
+    expect(wrapper.contains(button)).toBe(false);
     // The button sits inside the rail panel, adjacent to its heading.
     const rail = screen.getByText("Suggested calendars").closest("section, div.rounded-lg, div");
     expect(rail).not.toBeNull();
   });
 
-  it("scorecard chips render MetricChip-scale values (icon + contribution %) for the selected candidate", () => {
+  it("factor rows render icon + contribution % for the selected candidate", () => {
     mockUsePickerReturn({ data: snapshotWithRegistry() });
     render(<Analyzer />);
 
     const fwd = screen.getByTestId("checklist-fwdEdge");
-    // Big-value chip: label carries the weight, the value line carries icon + percent.
-    expect(fwd.textContent).toContain("w35");
     expect(fwd.textContent).toMatch(/[✓~✗].*%/u);
   });
 
-  it("pre-registry snapshots (empty ruleSet) fall back to the legacy labels with no weights", () => {
+  it("pre-registry snapshots (empty ruleSet) fall back to the legacy labels", () => {
     mockUsePickerReturn({ data: pickerSnapshotFixture });
     render(<Analyzer />);
 
     expect(screen.getByTestId("checklist-fwdEdge")).toBeTruthy();
-    expect(screen.queryByTestId("checklist-fwdEdge-weight")).toBeNull();
   });
 
   it("shows an AH-marks warning chip when the snapshot's marketSession is after-hours", () => {
@@ -1095,7 +1113,7 @@ describe("Analyzer branch — D-01/D-16 (36)", () => {
 
     expect(screen.getByTestId("analyzer-mobile-root")).toBeTruthy();
     expect(screen.queryByTestId("analyzer-inner-grid")).toBeNull();
-    expect(screen.queryByTestId("scoring-pills")).toBeNull();
+    expect(screen.queryByTestId("verdict-headline")).toBeNull();
     expect(screen.queryByText("Suggested calendars")).toBeNull();
   });
 
@@ -1105,9 +1123,9 @@ describe("Analyzer branch — D-01/D-16 (36)", () => {
 
     expect(screen.getByTestId("analyzer-inner-grid")).toBeTruthy();
     expect(screen.queryByTestId("analyzer-mobile-root")).toBeNull();
-    // Desktop structural content: rail heading, scorecard chip strip, copy button, right column.
+    // Desktop structural content: rail heading, verdict hero, copy button, right column.
     expect(screen.getByText("Suggested calendars")).toBeTruthy();
-    expect(screen.getByTestId("scoring-pills")).toBeTruthy();
+    expect(screen.getByTestId("verdict-headline")).toBeTruthy();
     expect(screen.getByTestId("copy-tos-order")).toBeTruthy();
     expect(screen.getByText("Why this calendar")).toBeTruthy();
     expect(screen.getByText("Term structure + your legs")).toBeTruthy();

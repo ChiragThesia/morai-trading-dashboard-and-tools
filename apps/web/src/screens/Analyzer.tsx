@@ -30,7 +30,8 @@ import { exactAbs } from "../lib/position-format.ts";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
-import { Panel, PanelHeading, Button, MetricChip } from "../components/system/index.tsx";
+import { formatAsOf } from "../components/picker/CandidateCard.tsx";
+import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
@@ -45,6 +46,8 @@ import {
   PASTED_NOT_SCORED_NOTE,
   TODAY_CURVE_COLOR,
   EXPIRATION_CURVE_COLOR,
+  GROUP_OF,
+  verdictWord,
 } from "./analyzer-mobile/useAnalyzerModel.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -376,14 +379,16 @@ export function CandidateRail({
   );
 }
 
-// ─── Scoring checklist (per-candidate: how THIS calendar scores on the picking rubric) ─────
+// ─── Verdict hero (per-candidate: how THIS calendar scores on the picking rubric) ──────────
 //
-// Driven by the selected candidate's `breakdown` + the snapshot's `ruleSet` (the engine's
-// own rule registry — rules.ts). Labels/weights come from the registry, and pass/partial
-// status is weight-relative (contribution is the 0-100 share of a criterion's weight:
+// Replaces the retired 11-chip flat scorecard (AUI-02, D-02): one headline (verdict word +
+// score + Θ) over three labeled EDGE/RISK/FIT factor-group columns — a re-layout of the
+// selected candidate's `breakdown` + the snapshot's `ruleSet` (the engine's own rule
+// registry — rules.ts). No new scoring, no new confidence (T-41-03/T-41-04): pass/partial
+// status stays weight-relative (contribution is the 0-100 share of a criterion's weight:
 // ✓ ≥ ⅔, ~ ≥ ⅓) — no client-side placeholder thresholds.
 
-interface ScoringMethodologyPanelProps {
+interface VerdictHeroProps {
   readonly candidate: PickerCandidate | null;
   /** The engine's rule registry from the snapshot (empty on pre-registry snapshots). */
   readonly ruleSet: ReadonlyArray<RuleSetEntry>;
@@ -391,118 +396,124 @@ interface ScoringMethodologyPanelProps {
   readonly gateDrops: { readonly liquidity: number; readonly netTheta: number };
   /** Marks provenance — "after-hours" renders the indicative-marks warning chip. */
   readonly marketSession: "rth" | "after-hours";
+  /** Snapshot-level as-of provenance (AUI-07) — footer-only, `formatAsOf` verbatim. */
+  readonly observedAt: string;
+  readonly source: "schwab" | "cboe";
 }
 
-// FALLBACK_SCORE_ITEMS, scoreStatus, CHIP_LABELS, EXPERIMENTAL_SHORT now live in
-// analyzer-mobile/useAnalyzerModel.ts (D-02, single source) — imported above.
+// FALLBACK_SCORE_ITEMS, scoreStatus, CHIP_LABELS, EXPERIMENTAL_SHORT, GROUP_OF, verdictWord
+// now live in analyzer-mobile/useAnalyzerModel.ts (D-02, single source) — imported above.
 
-function ScoringMethodologyPanel({
+const GROUP_ORDER = ["EDGE", "RISK", "FIT"] as const;
+
+function VerdictHero({
   candidate,
   ruleSet,
   gateDrops,
   marketSession,
-}: ScoringMethodologyPanelProps): React.ReactElement {
-  // Score rows from the engine's registry when available; legacy fallback otherwise.
-  const scoreRules = ruleSet.filter((r) => r.kind === "score" && r.status === "active");
-  const scoreItems =
-    scoreRules.length > 0
-      ? scoreRules.map((r) => ({ key: r.id, label: CHIP_LABELS[r.id] ?? r.label, weight: r.weight }))
-      : FALLBACK_SCORE_ITEMS.map((item) => ({
-          key: item.key,
-          label: CHIP_LABELS[item.key] ?? item.label,
-          weight: null,
-        }));
+  observedAt,
+  source,
+}: VerdictHeroProps): React.ReactElement | null {
+  // No selection -> render nothing (matches MobileScorecard's candidate === null convention).
+  if (candidate === null) return null;
 
-  if (candidate === null) {
-    return (
-      <div data-testid="scoring-pills">
-        <span className="font-mono text-[10px] text-dim">Select a calendar to see its scorecard.</span>
-      </div>
-    );
-  }
+  // Not-scored (pasted) -> the honest note only, no verdict word, no groups (catch #23).
   if (candidate.breakdown.length === 0) {
     return (
-      <div data-testid="scoring-pills">
+      <div data-testid="verdict-hero">
         <span className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</span>
       </div>
     );
   }
 
+  // Score rows from the engine's registry when available; legacy fallback otherwise — the
+  // exact scoreItems derivation the retired chip strip used, partitioned by GROUP_OF below.
+  const scoreRules = ruleSet.filter((r) => r.kind === "score" && r.status === "active");
+  const scoreItems =
+    scoreRules.length > 0
+      ? scoreRules.map((r) => ({ key: r.id, label: CHIP_LABELS[r.id] ?? r.label }))
+      : FALLBACK_SCORE_ITEMS.map((item) => ({ key: item.key, label: CHIP_LABELS[item.key] ?? item.label }));
+
+  const verdict = verdictWord(candidate.score);
+  const asOf = formatAsOf(observedAt);
+  const calibrating =
+    candidate.context.length > 0
+      ? `CALIBRATING ${candidate.context
+          .map(
+            (entry) =>
+              `${EXPERIMENTAL_SHORT[entry.id] ?? entry.id} ${
+                entry.value === null ? "—" : entry.value.toFixed(entry.id === "slopePercentile" ? 0 : 3)
+              }`,
+          )
+          .join(" · ")}`
+      : null;
+  const drops =
+    gateDrops.liquidity > 0 || gateDrops.netTheta > 0
+      ? `${gateDrops.liquidity} illiquid quote${gateDrops.liquidity === 1 ? "" : "s"} · ${gateDrops.netTheta} negative-θ pair${gateDrops.netTheta === 1 ? "" : "s"} dropped this run`
+      : null;
+  const footer = [calibrating, drops, `${asOf.label} · ${source}`].filter((p): p is string => p !== null).join("   ");
+
   return (
-    <div className="flex flex-wrap items-center gap-2" data-testid="scoring-pills">
-      {marketSession === "after-hours" && (
-        <MetricChip
-          data-testid="session-badge"
-          alert
-          label="SESSION"
-          value={<span className="text-amber">AH — indicative</span>}
-        />
-      )}
-      <div className="flex flex-wrap items-center gap-2" data-testid="scoring-checklist">
-        {scoreItems.map((item) => {
-          const entry = candidate.breakdown.find((b) => b.criterion === item.key);
-          const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
-          const contribution = entry?.contribution ?? 0;
-          const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(contribution);
-          return (
-            <MetricChip
-              key={item.key}
-              data-testid={`checklist-${item.key}`}
-              label={
-                <>
-                  {item.label}
-                  {item.weight !== null && (
-                    <span className="ml-1 text-dim" data-testid={`checklist-${item.key}-weight`}>
-                      w{item.weight}
-                    </span>
-                  )}
-                </>
-              }
-              value={
-                <span className={st.cls}>
-                  {st.icon} {guard ? "n/a" : `${Math.round(contribution)}%`}
-                </span>
-              }
-            />
-          );
-        })}
-        <MetricChip
-          data-testid="checklist-theta"
-          label="θ GATE"
-          value={
-            <span className={candidate.theta >= 0 ? "text-up" : "text-down"}>
-              {candidate.theta >= 0 ? "✓" : "✗"} {`${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}
-            </span>
-          }
-        />
-        {candidate.context.length > 0 && (
-          <MetricChip
-            data-testid="checklist-experimental"
-            className="opacity-60"
-            label="CALIBRATING"
-            value={
-              <span className="font-mono text-[10px] font-normal text-dim">
-                {candidate.context
-                  .map(
-                    (entry) =>
-                      `${EXPERIMENTAL_SHORT[entry.id] ?? entry.id} ${
-                        entry.value === null
-                          ? "—"
-                          : entry.value.toFixed(entry.id === "slopePercentile" ? 0 : 3)
-                      }`,
-                  )
-                  .join(" · ")}
-              </span>
-            }
-          />
-        )}
+    <div data-testid="verdict-hero">
+      <div className="flex flex-wrap items-baseline gap-2" data-testid="verdict-headline">
+        <span className={cn("font-display text-[16px] font-semibold", verdict.cls)} data-testid="verdict-word">
+          {verdict.icon} {verdict.word}
+        </span>
+        <span className="font-mono text-[13px] font-semibold tabular-nums text-txt" data-testid="verdict-score">
+          {`score ${Math.round(candidate.score)}/100`}
+        </span>
+        <span
+          className={cn(
+            "font-mono text-[13px] font-semibold tabular-nums",
+            candidate.theta >= 0 ? "text-up" : "text-down",
+          )}
+          data-testid="verdict-theta"
+        >
+          {`Θ ${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}
+        </span>
       </div>
-      {(gateDrops.liquidity > 0 || gateDrops.netTheta > 0) && (
-        <span className="font-mono text-[9px] text-dim" data-testid="checklist-gate-drops">
-          {gateDrops.liquidity} illiquid quote{gateDrops.liquidity === 1 ? "" : "s"} ·{" "}
-          {gateDrops.netTheta} negative-θ pair{gateDrops.netTheta === 1 ? "" : "s"} dropped this run
+      {marketSession === "after-hours" && (
+        <span
+          data-testid="session-badge"
+          className="mt-1 inline-block rounded-sm bg-amber/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-amber"
+        >
+          {"SESSION · AH — indicative"}
         </span>
       )}
+      <div className="mt-2 grid grid-cols-3 gap-4" data-testid="verdict-groups">
+        {GROUP_ORDER.map((group) => (
+          <div key={group} data-testid={`verdict-group-${group}`}>
+            <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+              {group}
+            </span>
+            <div className="mt-1 flex flex-col gap-y-1">
+              {scoreItems
+                .filter((item) => GROUP_OF[item.key] === group)
+                .map((item) => {
+                  const entry = candidate.breakdown.find((b) => b.criterion === item.key);
+                  if (entry === undefined) return null;
+                  const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
+                  const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(entry.contribution);
+                  return (
+                    <div
+                      key={item.key}
+                      data-testid={`checklist-${item.key}`}
+                      className="flex items-center justify-between font-mono text-[11px]"
+                    >
+                      <span className="text-dim">{item.label}</span>
+                      <span className={st.cls}>
+                        {st.icon} {guard ? "n/a" : `${Math.round(entry.contribution)}%`}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 font-mono text-[10px] text-dim" data-testid="verdict-hero-footer">
+        {footer}
+      </p>
     </div>
   );
 }
@@ -707,13 +718,15 @@ function AnalyzerDesktop(): React.ReactElement {
 
   return (
     <div className="flex flex-col gap-4 bg-bg p-3">
-      {/* ── Top strip: the engine's scorecard chips for the selected calendar ── */}
+      {/* ── Top strip: the verdict hero for the selected calendar ── */}
       <div data-testid="analyzer-scorecard-wrapper">
-        <ScoringMethodologyPanel
+        <VerdictHero
           candidate={selected}
           ruleSet={snapshot?.ruleSet ?? []}
           gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 }}
           marketSession={snapshot?.marketSession ?? "rth"}
+          observedAt={snapshot?.observedAt ?? ""}
+          source={snapshot?.source ?? "schwab"}
         />
       </div>
       {/* 3-col desktop grid (this tree only mounts ≥1024px, D-17). */}
