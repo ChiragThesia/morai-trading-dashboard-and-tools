@@ -14,6 +14,9 @@
 import type { Job } from "pg-boss";
 import { z } from "zod";
 import type { ForRunningSelfHealJournal } from "@morai/core";
+import { SELF_HEAL_LOOKBACK_DAYS } from "@morai/core";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const selfHealJournalPayload = z.object({ lookbackDays: z.number().optional() });
 
@@ -46,5 +49,16 @@ export function makeSelfHealJournalHandler(
     if (!result.ok) {
       throw new Error(result.error.message);
     }
+
+    // Observability: one line per run. Without it prod cannot distinguish "ran, healed 0"
+    // from "ran, honest-gap N" (the pre-anchor-window blind spot) from "ran, errored N".
+    // The window here mirrors the use-case's own [now - lookback, now] (self-contained; the
+    // aggregate RebuildCoverage does not carry the window).
+    const to = deps.now();
+    const from = new Date(to.getTime() - (lookbackDays ?? SELF_HEAL_LOOKBACK_DAYS) * DAY_MS);
+    const { slotsConsidered, rowsHealed, honestGapSlots, errorCount } = result.value;
+    console.warn(
+      `self-heal-journal: slots=${slotsConsidered} healed=${rowsHealed} honestGaps=${honestGapSlots} errors=${errorCount} window=[${from.toISOString()}..${to.toISOString()}]`,
+    );
   };
 }

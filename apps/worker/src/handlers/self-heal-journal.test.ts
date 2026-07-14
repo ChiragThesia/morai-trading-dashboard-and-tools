@@ -79,6 +79,28 @@ describe("makeSelfHealJournalHandler", () => {
     await expect(handler([makeJob({})])).rejects.toThrow("heal failed");
   });
 
+  it("logs one coverage line per successful run (observability — prod is otherwise blind)", async () => {
+    const now = new Date("2026-07-14T16:00:30.000Z");
+    const selfHealJournalUseCase = vi
+      .fn()
+      .mockResolvedValue(ok({ slotsConsidered: 92, rowsHealed: 3, honestGapSlots: 69, errorCount: 0 }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const handler = makeSelfHealJournalHandler({ selfHealJournalUseCase, now: () => now });
+
+    await handler([makeJob({})]);
+
+    // Distinguishes "ran, healed 0" / "ran, honest-gap N" / "ran, errored N" — the states prod
+    // could not tell apart when the handler was silent.
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "self-heal-journal: slots=92 healed=3 honestGaps=69 errors=0 window=",
+      ),
+    );
+    // window ends at `now`
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("2026-07-14T16:00:30.000Z"));
+    warn.mockRestore();
+  });
+
   it("runs even outside RTH (no RTH gate — repairs past slots, not time-of-day sensitive)", async () => {
     const weekend = new Date("2026-08-16T14:00:00Z");
     const selfHealJournalUseCase = vi

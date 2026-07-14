@@ -46,12 +46,22 @@ export function makeRepairJournalHistoryHandler(
     // exactOptionalPropertyTypes: never pass an explicit `trimOutsideWindow: undefined` — omit
     // the key entirely so the use-case's own default (heal-only, D-08) applies.
     const { calendarId, trimOutsideWindow } = payloadResult.data;
+    const scope = calendarId ?? "all";
     const result = await deps.repairJournalHistoryUseCase({
-      scope: calendarId ?? "all",
+      scope,
       ...(trimOutsideWindow !== undefined ? { trimOutsideWindow } : {}),
     });
     if (!result.ok) {
       throw new Error(result.error.message);
     }
+
+    // Observability: one line per run. healed = Σ(after.nonGapRows − before.nonGapRows) across
+    // the repaired calendars; errors = Σ errorCount (lost heal-write races, WR-01).
+    const reports = result.value;
+    const healed = reports.reduce((sum, r) => sum + (r.after.nonGapRows - r.before.nonGapRows), 0);
+    const errors = reports.reduce((sum, r) => sum + r.errorCount, 0);
+    console.warn(
+      `repair-journal-history: scope=${scope} calendars=${reports.length} healed=${healed} errors=${errors}`,
+    );
   };
 }

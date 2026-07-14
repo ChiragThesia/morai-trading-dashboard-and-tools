@@ -86,6 +86,29 @@ describe("makeRepairJournalHistoryHandler", () => {
     await expect(handler([makeJob({})])).rejects.toThrow("repair failed");
   });
 
+  it("logs one coverage line per successful run (observability)", async () => {
+    const reports = ok([
+      {
+        calendarId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        before: { rows: 10, nonGapRows: 4, days: 2 },
+        after: { rows: 10, nonGapRows: 9, days: 2 },
+        deleted: null,
+        errorCount: 1,
+      },
+    ]);
+    const repairJournalHistoryUseCase = vi.fn().mockResolvedValue(reports);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const handler = makeRepairJournalHistoryHandler({ repairJournalHistoryUseCase, now: () => new Date() });
+
+    await handler([makeJob({})]);
+
+    // healed = Σ(after.nonGapRows − before.nonGapRows) = 9 − 4 = 5
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("repair-journal-history: scope=all calendars=1 healed=5 errors=1"),
+    );
+    warn.mockRestore();
+  });
+
   it("runs even outside RTH (no RTH gate — on-demand only)", async () => {
     const weekend = new Date("2026-08-16T14:00:00Z");
     const repairJournalHistoryUseCase = vi.fn().mockResolvedValue(emptyReport);
