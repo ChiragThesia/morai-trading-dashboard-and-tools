@@ -17,7 +17,9 @@
  *   compute-exit-advice (no cron — chain-triggered by compute-picker, 26-04 EXIT-01),
  *   fetch-economic-events (weekly Friday 17:00 ET — 19-08 D-14),
  *   recompute-snapshot-pnl (no cron — on-demand only, JRNL-01 data-correction path),
- *   wipe-derived-fills (no cron — on-demand only, account-wide fills-side-correction follow-up)
+ *   wipe-derived-fills (no cron — on-demand only, account-wide fills-side-correction follow-up),
+ *   self-heal-journal (sparse hourly cron, no RTH gate — HIST-03 D-05: repairs OPEN calendars'
+ *   past slots via leg_observations; fill-only, so it never races the OPS-01 live gate)
  *
  * CRITICAL (RESEARCH Pitfall 2):
  *   snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
@@ -86,6 +88,7 @@ export type AllHandlers = {
   readonly recomputeSnapshotPnl: PgBossHandler;
   readonly wipeDerivedFills: PgBossHandler;
   readonly registerOpenCalendars: PgBossHandler;
+  readonly selfHealJournal: PgBossHandler;
 };
 
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
@@ -126,6 +129,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("recompute-snapshot-pnl"); // JRNL-01 pnl-unit-mismatch fix: on-demand only; no cron
   await boss.createQueue("wipe-derived-fills"); // journal-pnl-opennetdebit-units round 3: on-demand only, account-wide; no cron
   await boss.createQueue("register-open-calendars"); // JRNL-02: on-demand only, account-wide; no cron
+  await boss.createQueue("self-heal-journal"); // HIST-03: sparse hourly cron — see below
   // refresh-tokens: RETIRED (GW-03) — sidecar auto-refreshes both Schwab apps; no TS refresher
 
   // ── Phase 2: schedules (idempotent — safe on every boot) ─────────────────────
@@ -199,6 +203,16 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
     { tz: "America/New_York" },
   );
 
+  // HIST-03 (D-05): sparse hourly repair pass — bounded 7-day lookback, OPEN-only, fill-only
+  // (never races the OPS-01 live gate). No RTH gate — repairs past slots, not time-of-day
+  // sensitive. Distinct queue name, so no CR-01 duplicate-key concern.
+  await boss.schedule(
+    "self-heal-journal",
+    "0 * * * *", // hourly, 24/7
+    null,
+    { tz: "America/New_York" },
+  );
+
   // snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
   // compute-analytics: NO schedule — chain-triggered only by snapshot-calendars (06-04)
   // compute-gex-snapshot: NO schedule — chain-triggered only by compute-analytics (08-06 D-01)
@@ -230,4 +244,5 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("recompute-snapshot-pnl", POLLING_INTERVAL, handlers.recomputeSnapshotPnl);
   await boss.work("wipe-derived-fills", POLLING_INTERVAL, handlers.wipeDerivedFills);
   await boss.work("register-open-calendars", POLLING_INTERVAL, handlers.registerOpenCalendars);
+  await boss.work("self-heal-journal", POLLING_INTERVAL, handlers.selfHealJournal);
 }

@@ -73,6 +73,8 @@ import {
   makeRegisterCalendarUseCase,
   makeRegisterOpenCalendarsUseCase,
   makeComputeExitAdviceUseCase,
+  makeRebuildCalendarHistoryUseCase,
+  makeSelfHealJournalUseCase,
 } from "@morai/core";
 import type { PositionLeg } from "@morai/core";
 import type { GexContextForPicker, GexSnapshotRow } from "@morai/core";
@@ -96,6 +98,7 @@ import { makeRebuildJournalHandler } from "./handlers/rebuild-journal.ts";
 import { makeRecomputeSnapshotPnlHandler } from "./handlers/recompute-snapshot-pnl.ts";
 import { makeWipeDerivedFillsHandler } from "./handlers/wipe-derived-fills.ts";
 import { makeRegisterOpenCalendarsHandler } from "./handlers/register-open-calendars.ts";
+import { makeSelfHealJournalHandler } from "./handlers/self-heal-journal.ts";
 import { makeComputePickerHandler } from "./handlers/compute-picker.ts";
 import { makeComputeExitAdviceHandler } from "./handlers/compute-exit-advice.ts";
 import { makeFetchEconomicEventsHandler } from "./handlers/fetch-economic-events.ts";
@@ -516,6 +519,27 @@ const registerOpenCalendarsHandler = makeRegisterOpenCalendarsHandler({
   now: () => new Date(),
 });
 
+// HIST-03 (40-06): self-heal-journal — sparse hourly repair of OPEN calendars' past slots
+// via the plan-05 rebuild engine, composed from calendarsRepo (open calendars, reused from
+// snapshotCalendarsUseCase above) + legObsRepo's as-of-slot read + calendarSnapshotsRepo's
+// fill-only heal-write (both plan-04 ports, already instantiated above).
+const rebuildCalendarHistoryUseCase = makeRebuildCalendarHistoryUseCase({
+  resolveLegObservationForSlot: legObsRepo.resolveLegObservationForSlot,
+  healSnapshot: calendarSnapshotsRepo.healSnapshot,
+  now: () => new Date(),
+});
+
+const selfHealJournalUseCase = makeSelfHealJournalUseCase({
+  getOpenCalendars: calendarsRepo.getOpenCalendars,
+  rebuildCalendarHistory: rebuildCalendarHistoryUseCase,
+  now: () => new Date(),
+});
+
+const selfHealJournalHandler = makeSelfHealJournalHandler({
+  selfHealJournalUseCase,
+  now: () => new Date(),
+});
+
 // COT-01 (13-05): weekly CFTC Commitment of Traders report (Friday 17:00 ET, D-07).
 // CFTC Socrata endpoint — anonymous access, no auth required (landmine 7).
 // Idempotent: ON CONFLICT (contract_code, as_of) DO NOTHING in the repo (D-09).
@@ -715,8 +739,9 @@ await registerAllJobs(boss, {
   recomputeSnapshotPnl: recomputeSnapshotPnlHandler,
   wipeDerivedFills: wipeDerivedFillsHandler,
   registerOpenCalendars: registerOpenCalendarsHandler,
+  selfHealJournal: selfHealJournalHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 16 queues created, 7 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 17 queues created, 8 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events, self-heal-journal); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );
