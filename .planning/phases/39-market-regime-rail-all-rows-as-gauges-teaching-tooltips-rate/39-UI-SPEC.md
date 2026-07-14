@@ -51,16 +51,16 @@ Exceptions (existing, carried forward — not introduced by this phase):
 
 ## Typography
 
-Reusing the rail's existing two-tier value hierarchy (regime rows louder, rates/COT quieter) —
-no new sizes.
+Four sizes total (10/11/12/13px) — the rail's prior mixed 9-13px use is consolidated into one
+scale so no row introduces a 5th size.
 
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
 | Row label | 10px | 600 (semibold) | 1 (single line) | `font-display`, `tracking-[0.08em]`, uppercase, `text-dim` — every row label, all three blocks |
+| Quiet metadata | 10px | 400 regular | 1 (single line) | `font-mono text-dim` — ⓘ badge glyph (`RegimeBoard.tsx:194`, moves `text-[9px]`→`text-[10px]`), freshness footer (already 10px, unchanged), COT legend footnote (`CotCard.tsx:132`, moves `text-[9px]`→`text-[10px]`) |
+| Value (secondary tier) | 11px | 400 regular | 1 (single line) | `font-mono tabular-nums` — rates values (unchanged 11px) AND COT net/WoW values, which move `text-[10px]`→`text-[11px]` (see Gauge Component Contract, COT bullet) so the whole secondary tier reads at one size |
 | Value (primary tier) | 13px | 400 regular / 600 when abnormal | 1 (single line) | `font-mono tabular-nums` — the 4 existing regime indicator values only (unchanged) |
-| Value (secondary tier) | 11px | 400 regular | 1 (single line) | `font-mono tabular-nums` — rates + COT net values (unchanged size, now paired with a track underneath) |
 | Tooltip body | 12px (`text-xs`) | 400 | 1.45 | `font-mono text-muted-foreground` — WHAT/WHY/BANDS/SOURCE lines |
-| Footnote | 9-10px | 400 | 1 | `font-mono text-dim` — freshness footer, COT legend line (unchanged) |
 
 Panel headings (`PanelHeading`) are untouched by this phase — not restated here.
 
@@ -151,8 +151,8 @@ string authored here.
 - WHAT: ICE BofA US High Yield Option-Adjusted Spread — the extra yield high-yield corporate
   bonds pay over Treasuries, in percentage points.
 - WHY: Widening credit spreads mean bond investors are demanding more compensation for
-  default risk — a cross-asset stress signal that has historically led equity weakness by
-  a week or two.
+  default risk — a cross-asset stress signal that has historically coincided with or preceded
+  broader market stress, the same evidence this indicator's bands were calibrated from.
 - BANDS: Calm below 3.0%. Warning 3.0-5.0%. Crisis at 5.0% or above.
 - SOURCE: (unchanged)
 
@@ -316,6 +316,11 @@ legible")
   on a COT row. Keep the WoW `▲`/`▼` arrow + `fmtSigned`/`fmtMag` exactly as today, to the
   right of the track (mirrors the existing `regime-value`/gauge-marker layout: label+ⓘ left,
   value right, track full-width below).
+  Size unification (Typography): `CotCard.tsx:90` today sets `text-[10px]` on the whole row
+  container, cascading to the label, net, and WoW spans alike. Moving net/WoW to the shared
+  11px secondary-value tier means removing that row-level size class and setting size per span
+  instead — label span gets an explicit `text-[10px]` (Row label tier, unchanged), net/WoW
+  spans get `text-[11px]` (Value secondary tier) — so the label doesn't drift to 11px too.
 
 ### Gauge scale (visual axis)
 
