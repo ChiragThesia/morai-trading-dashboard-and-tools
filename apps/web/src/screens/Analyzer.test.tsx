@@ -55,6 +55,24 @@ vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
   return { ...actual, PayoffChart: vi.fn(actual.PayoffChart) };
 });
 
+// Phase 41 AUI-07: useAnalyzerModel now calls useLiveStream — without this mock every test
+// that renders an Analyzer tree would open a real EventSource (green-suite protection).
+const { mockUseLiveStream } = vi.hoisted(() => ({
+  mockUseLiveStream: vi.fn(() => ({
+    greeks: new Map(),
+    status: "quiet" as const,
+    lastTickAt: null,
+    isRth: null,
+    hasReceivedFirstTick: false,
+    isReconnecting: false,
+    liveSpot: null,
+    liveIndices: null,
+    reconnectNow: vi.fn(),
+    subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+vi.mock("../hooks/useLiveStream.ts", () => ({ useLiveStream: mockUseLiveStream }));
+
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
 vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
 

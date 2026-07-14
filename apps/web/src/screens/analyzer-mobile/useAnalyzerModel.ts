@@ -33,6 +33,8 @@ import type { PayoffDateControl } from "../../hooks/usePayoffDateControl.ts";
 import { usePicker } from "../../hooks/usePicker.ts";
 import { useRepullChains } from "../../hooks/useRepullChains.ts";
 import { useAnalyzeCalendar } from "../../hooks/useAnalyzeCalendar.ts";
+import { useLiveStream } from "../../hooks/useLiveStream.ts";
+import type { LiveStreamStatus } from "../../hooks/useLiveStream.ts";
 import { parseTosOrder } from "../../lib/tos-parser.ts";
 import { parsedCalendarToPickerCandidate } from "../../lib/parsed-calendar-to-candidate.ts";
 import type { PayoffChartToggles } from "../../components/charts/PayoffChart.tsx";
@@ -129,6 +131,14 @@ export interface AnalyzerModel {
   readonly payoffDomain: SpotDomain;
   readonly scenarioResult: ScenarioResult | null;
   readonly spot: number;
+  readonly liveBadgeProps: {
+    readonly status: LiveStreamStatus;
+    readonly lastTickAt: Date | null;
+    readonly isRth: boolean | null;
+    readonly hasReceivedFirstTick: boolean;
+    readonly isReconnecting: boolean;
+    readonly onReconnect: () => void;
+  };
   readonly bookCount: number;
   readonly bookDebit: number;
   readonly bookTheta: number;
@@ -153,7 +163,20 @@ export function useAnalyzerModel(): AnalyzerModel {
     return [...snapshot.candidates].sort((a, b) => b.score - a.score);
   }, [snapshot]);
 
-  const spot = snapshot?.spot ?? 0;
+  // Live-aware spot seam (AUI-07, D-07 — direct port of Phase 38's LIVE-04): live only while
+  // the stream itself is live AND a spot tick has arrived; else the unchanged 30-min snapshot
+  // fallback — never a silent stale-as-live claim (catch #26). Only the source of `spot`
+  // changes; the existing params/payoffDomain/scenarioResult memo chain below is untouched.
+  const {
+    status: liveStatus,
+    liveSpot,
+    lastTickAt: liveLastTickAt,
+    isRth: liveIsRth,
+    hasReceivedFirstTick: liveHasReceivedFirstTick,
+    isReconnecting: liveIsReconnecting,
+    reconnectNow: liveReconnectNow,
+  } = useLiveStream();
+  const spot = liveStatus === "live" && liveSpot !== null ? liveSpot : (snapshot?.spot ?? 0);
 
   const [selectedId, setSelectedId] = useState<string>("");
   // Combined-book multi-select: extra calendars ⊕-Combine'd with the selected one and summed
@@ -389,6 +412,14 @@ export function useAnalyzerModel(): AnalyzerModel {
     payoffDomain,
     scenarioResult,
     spot,
+    liveBadgeProps: {
+      status: liveStatus,
+      lastTickAt: liveLastTickAt,
+      isRth: liveIsRth,
+      hasReceivedFirstTick: liveHasReceivedFirstTick,
+      isReconnecting: liveIsReconnecting,
+      onReconnect: liveReconnectNow,
+    },
     bookCount,
     bookDebit,
     bookTheta,
