@@ -73,7 +73,7 @@ Requirement → test map (from RESEARCH §Validation Architecture):
 | HIST-02 | Heal-write port: insert-when-absent / update-when-gap / no-op-when-live (D-03) | contract (postgres + memory) | `bun run test -- packages/adapters/src/postgres/repos/calendar-snapshots.contract.test.ts` | extend existing |
 | HIST-03 | Self-heal touches only OPEN calendars, bounded lookback, never overwrites live rows | unit | `bun run test -- packages/core/src/journal/application/selfHealJournal.test.ts` | ❌ Wave 0 |
 | HIST-03 | Handler: array-guard, gate decision, chain wiring | unit | `bun run test -- apps/worker/src/handlers/self-heal-journal.test.ts` | ❌ Wave 0 |
-| HIST-04 | CLI/job orchestrator: one-calendar mode, all-calendars mode, idempotent re-run, before/after counts | unit (faked deps) | `bun run test -- apps/worker/src/repair-journal-history.test.ts` | ❌ Wave 0 |
+| HIST-04 | Repair orchestrator: one-calendar mode, all-calendars mode, idempotent re-run, before/after counts | unit (faked deps) | `bun run test -- packages/core/src/journal/application/repairJournalHistory.test.ts apps/worker/src/handlers/repair-journal-history.test.ts` | ❌ Wave 0 |
 | HIST-04 | On-register backfill: newly-registered calendar gets `[openedAt, now]` rows | unit | `bun run test -- packages/core/src/journal/application/registerOpenCalendars.test.ts` | extend existing |
 | HIST-05 | Slot rounding: idempotent, rounds down to valid RTH 30-min slot, `event-move` bypasses | unit + fast-check | `bun run test -- packages/core/src/journal/domain/rth-slot.test.ts` | ❌ Wave 0 |
 | HIST-05 | Regression: two same-slot runs 10-15 min apart produce ONE row | unit | `bun run test -- packages/core/src/journal/application/snapshotCalendars.test.ts` | extend existing |

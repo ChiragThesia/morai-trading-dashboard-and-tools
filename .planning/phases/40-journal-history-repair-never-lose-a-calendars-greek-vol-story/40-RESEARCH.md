@@ -764,7 +764,18 @@ historical backfill for the first time; the doc's wording should be updated to d
 **If this table is empty:** N/A — see rows above. All three should be spot-checked against live
 data during planning/execution, not treated as settled.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Resolution notes (plan-checker pass, 2026-07-14): Q1 resolved in 40-06-PLAN — separate
+> `self-heal-journal` job on a sparse hourly cron, no RTH gate, bounded 7-day lookback
+> (rationale recorded in the plan). Q2 resolved in 40-05-PLAN — ONE shared
+> `rebuildCalendarHistory` use-case parametrized by date range, reused by the self-heal job
+> (40-06), the repair job/CLI (40-07), and the on-register backfill (40-07). Q3 is
+> unresolvable without live DB access and is handled by design: 40-08 Task 2 runs the
+> diagnostic SQL as an explicit pre-repair checkpoint, and the try-both-roots fix (40-02) is
+> correct under BOTH outcomes (data present → healed; absent → captured from the next chain
+> cycle, honest gap until then). Live confirmation is deliberately deferred to the 40-08
+> gate — the fix direction is invariant to the diagnostic result (Assumption A1).
 
 1. **Should the self-heal job (HIST-03) be its own pg-boss queue, or logic added inside the
    existing `snapshot-calendars` handler?**
