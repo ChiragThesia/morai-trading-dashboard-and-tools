@@ -35,6 +35,10 @@ export type {
   ForGettingOpenCalendarLegs,
   LegSnapshot,
   ForResolvingLegSnapshot,
+  // Phase 40 (HIST-02): as-of-slot read + fill-only heal-write + D-08 windowed-delete ports.
+  ForResolvingLegObservationForSlot,
+  ForHealingSnapshot,
+  ForDeletingSnapshotsOutsideWindow,
   SnapshotRow,
   ForPersistingSnapshot,
   ForReadingLatestSnapshotTime,
@@ -57,6 +61,9 @@ export {
 // Snapshot use-case (Phase 3, plan 05)
 export { makeSnapshotCalendarsUseCase, computeSnapshotPnl } from "./application/snapshotCalendars.ts";
 export type { ForRunningSnapshotCalendars, SnapshotCalendarsDeps } from "./application/snapshotCalendars.ts";
+// Phase 40 (HIST-02, D-07): the OPS-01 live freshness tolerance, reused as the as-of-slot
+// read's usability window so a slot with no usable observation stays an honest gap.
+export { SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "./application/snapshotCalendars.ts";
 // PICK-04 (27-02): computeLegPairMetrics — pure leg-pair metrics extracted from
 // buildSnapshotRow, so the backtest harness can price a hypothetical candidate without a
 // Calendar row (RESEARCH Pattern 5). Additive; buildSnapshotRow's live output is unchanged.

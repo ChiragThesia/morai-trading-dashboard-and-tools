@@ -1,5 +1,6 @@
 import { ok, err, parseOccSymbol, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
+import { resolveRootCandidates, SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "@morai/core";
 import type {
   ForPersistingObservations,
   ForUpsertingContracts,
@@ -7,6 +8,7 @@ import type {
   ForWritingBsmResults,
   ForReadingLatestLegObs,
   ForReadingSmileSource,
+  ForResolvingLegObservationForSlot,
   ObservationRow,
   ContractRow,
   PendingObs,
@@ -15,7 +17,7 @@ import type {
   SmileReadResult,
   StorageError,
 } from "@morai/core";
-import { and, isNull, isNotNull, ne, eq, lte, inArray, desc, sql } from "drizzle-orm";
+import { and, isNull, isNotNull, ne, eq, lte, gte, inArray, desc, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import { computeMoneyness } from "../../smile-moneyness.ts";
 import type { Db } from "../db.ts";
@@ -45,6 +47,7 @@ export type PostgresLegObservationsRepo = {
   readonly writeBsmResults: ForWritingBsmResults;
   readonly getLatestLegObs: ForReadingLatestLegObs;
   readonly readSmile: ForReadingSmileSource;
+  readonly resolveLegObservationForSlot: ForResolvingLegObservationForSlot;
 };
 
 export function makePostgresLegObservationsRepo(
@@ -381,6 +384,89 @@ export function makePostgresLegObservationsRepo(
     }
   };
 
+  // ─── ForResolvingLegObservationForSlot (HIST-02) ─────────────────────────────
+  // Two-step, mirroring resolveLegSnapshot's root-candidate join (HIST-01) + readSmile's
+  // "latest at-or-before an anchor" bound, additionally lower-bounded by the usability window
+  // (D-07 reuse: SNAPSHOT_LEG_STALENESS_TOLERANCE_MS) so a slot with no usable observation
+  // stays an honest gap (D-04) rather than resolving a stale value.
+  const resolveLegObservationForSlot: ForResolvingLegObservationForSlot = async (
+    query,
+  ): Promise<Result<LegSnapshot | null, StorageError>> => {
+    try {
+      // Step 1: find the OCC symbol via attribute match, trying every candidate root
+      // (stored root first, then its sibling — HIST-01).
+      const contractRows = await db
+        .select({ occSymbol: contracts.occSymbol })
+        .from(contracts)
+        .where(
+          and(
+            inArray(contracts.root, resolveRootCandidates(query.underlying)),
+            eq(contracts.strike, query.strike), // ×1000 int
+            eq(contracts.expiration, query.expiry),
+            eq(contracts.contractType, query.optionType),
+          ),
+        )
+        .limit(1);
+
+      const contractRow = contractRows[0];
+      if (contractRow === undefined) return ok(null);
+
+      const occSymbolRaw = contractRow.occSymbol;
+      const parsedOcc = parseOccSymbol(occSymbolRaw);
+      if (!parsedOcc.ok) return ok(null); // malformed symbol in DB → null
+
+      // Step 2: nearest observation at-or-before slotAnchor, within the usability window.
+      const windowStart = new Date(
+        query.slotAnchor.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS,
+      );
+      const obsRows = await db
+        .select({
+          time: legObservations.time,
+          mark: legObservations.mark,
+          underlyingPrice: legObservations.underlyingPrice,
+          iv: legObservations.iv,
+          bsmIv: legObservations.bsmIv,
+          bsmDelta: legObservations.bsmDelta,
+          bsmGamma: legObservations.bsmGamma,
+          bsmTheta: legObservations.bsmTheta,
+          bsmVega: legObservations.bsmVega,
+          source: legObservations.source,
+        })
+        .from(legObservations)
+        .where(
+          and(
+            eq(legObservations.contract, occSymbolRaw),
+            lte(legObservations.time, query.slotAnchor),
+            gte(legObservations.time, windowStart),
+          ),
+        )
+        .orderBy(desc(legObservations.time))
+        .limit(1);
+
+      const obsRow = obsRows[0];
+      if (obsRow === undefined) return ok(null);
+
+      const leg: LegSnapshot = {
+        occSymbol: formatOccSymbol(parsedOcc.value),
+        time: obsRow.time,
+        mark: parseFloat(obsRow.mark),
+        underlyingPrice: parseFloat(obsRow.underlyingPrice),
+        ivRaw: obsRow.iv !== null ? parseFloat(obsRow.iv) : null,
+        bsmIv: obsRow.bsmIv,
+        bsmDelta: obsRow.bsmDelta,
+        bsmGamma: obsRow.bsmGamma,
+        bsmTheta: obsRow.bsmTheta,
+        bsmVega: obsRow.bsmVega,
+        source: obsRow.source,
+      };
+
+      return ok(leg);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return err<StorageError>({ kind: "storage-error", message });
+    }
+  };
+
   return {
     persistObservations,
     upsertContracts,
@@ -388,5 +474,6 @@ export function makePostgresLegObservationsRepo(
     writeBsmResults,
     getLatestLegObs,
     readSmile,
+    resolveLegObservationForSlot,
   };
 }

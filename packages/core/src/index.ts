@@ -36,6 +36,9 @@ export { resolveRootCandidates } from "./journal/index.ts";
 // Phase 40 (HIST-05): 30-min RTH slot-boundary rounding — reused by snapshotCalendars.ts
 // (plan 03) and the rebuild use-case (plan 05).
 export { roundDownToRthSlot } from "./journal/index.ts";
+// Phase 40 (HIST-02, D-07): OPS-01 live freshness tolerance, reused as the as-of-slot read's
+// usability window (plan 04).
+export { SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "./journal/index.ts";
 // SNAP-01 (20-04/20-06): cooldown predicate — composed in apps/server's onSpotObserved wiring.
 export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";
@@ -87,6 +90,10 @@ export type {
   ForGettingOpenCalendarLegs,
   LegSnapshot,
   ForResolvingLegSnapshot,
+  // Phase 40 (HIST-02): as-of-slot read + fill-only heal-write + D-08 windowed-delete ports.
+  ForResolvingLegObservationForSlot,
+  ForHealingSnapshot,
+  ForDeletingSnapshotsOutsideWindow,
   SnapshotRow,
   ForPersistingSnapshot,
   ForReadingLatestSnapshotTime,

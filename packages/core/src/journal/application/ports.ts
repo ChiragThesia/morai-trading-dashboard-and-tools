@@ -201,6 +201,22 @@ export type ForResolvingLegSnapshot = (query: {
   readonly expiry: string; // YYYY-MM-DD
 }) => Promise<Result<LegSnapshot | null, StorageError>>;
 
+/**
+ * ForResolvingLegObservationForSlot — as-of-slot read (HIST-02). Resolves a leg's nearest
+ * observation at-or-before `slotAnchor`, within the live freshness window (D-07 reuse:
+ * SNAPSHOT_LEG_STALENESS_TOLERANCE_MS). Root-candidate-aware like ForResolvingLegSnapshot
+ * (D-04/HIST-01): an EOM/mixed-root back leg resolves under its sibling root. An observation
+ * older than the usability window, or none at-or-before the anchor, is an honest gap — returns
+ * null, never throws.
+ */
+export type ForResolvingLegObservationForSlot = (query: {
+  readonly underlying: string;
+  readonly strike: number; // ×1000 int
+  readonly optionType: "C" | "P";
+  readonly expiry: string; // YYYY-MM-DD
+  readonly slotAnchor: Date;
+}) => Promise<Result<LegSnapshot | null, StorageError>>;
+
 // Domain type: the full 18-column journal row for calendar_snapshots.
 // All Drizzle-numeric columns are typed string ('NaN' is a valid value per D-06).
 // dteFront/dteBack are integer calendar days (not the year-fraction computeT returns).
@@ -239,6 +255,30 @@ export type SnapshotRow = {
 export type ForPersistingSnapshot = (
   row: SnapshotRow,
 ) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForHealingSnapshot — fill-only conditional write (HIST-02, D-03). Same shape as
+ * ForPersistingSnapshot — the fill-only decision lives in the adapter: INSERT when no row
+ * exists for (calendar_id, time); UPDATE to the healed row when the existing row IS a gap
+ * (isGapRow, imported from @morai/core's attribution.ts — never a second gap predicate);
+ * NO-OP when the existing row is NOT a gap (a live row always wins).
+ */
+export type ForHealingSnapshot = (
+  row: SnapshotRow,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForDeletingSnapshotsOutsideWindow — D-08 operator-repair trim. Deletes calendar_snapshots
+ * rows for a calendar outside [openedAt, closedAt] (closedAt null for an open calendar trims
+ * only the pre-openedAt side); returns the exact deleted count. Every in-window row is left
+ * intact. Operator-repair-only (plan 07) — no HTTP/MCP surface (architecture rule 9 waived
+ * per D-01).
+ */
+export type ForDeletingSnapshotsOutsideWindow = (
+  calendarId: string,
+  openedAt: Date,
+  closedAt: Date | null,
+) => Promise<Result<{ readonly deletedCount: number }, StorageError>>;
 
 /**
  * ForReadingLatestSnapshotTime — read the latest calendar_snapshots time (SNAP-01, Pattern 2).

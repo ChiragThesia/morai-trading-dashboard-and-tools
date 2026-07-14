@@ -5,9 +5,11 @@ import type {
   ForReadingPendingObs,
   ForWritingBsmResults,
   ForReadingLatestLegObs,
+  ForResolvingLegObservationForSlot,
   ObservationRow,
   ContractRow,
 } from "@morai/core";
+import { SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "@morai/core";
 import type { OccSymbol } from "@morai/shared";
 import { formatOccSymbol } from "@morai/shared";
 
@@ -665,3 +667,131 @@ export function runLegObservationsContractTests(
 // Export helper for test files that need to build ObservationRow fixtures
 export { makeFixtureRows };
 export type { OccSymbol };
+
+// ─── HIST-02: as-of-slot read contract (ForResolvingLegObservationForSlot) ───────────────────
+//
+// A separate, smaller suite from runLegObservationsContractTests above: the memory twin
+// implements resolveLegObservationForSlot but NOT upsertContracts/readPendingObs/writeBsmResults
+// (those are Postgres-only BSM-pipeline ports), so it cannot run the full suite above. This
+// suite only requires resolveLegObservationForSlot + a seed helper, mirroring
+// calendar-snapshots.contract.ts's SeedContext shape (the memory-runner pattern to mirror).
+
+export type LegObservationForSlotRepo = {
+  readonly resolveLegObservationForSlot: ForResolvingLegObservationForSlot;
+};
+
+export type SlotSeedContext = {
+  /**
+   * Seed a contract row so the Postgres adapter's contracts join can find it. No-op on the
+   * memory twin — it has no separate contracts table; the occSymbol's own embedded root is
+   * enough (mirrors calendar-snapshots' SeedContext.seedContract memory no-op).
+   */
+  seedContract: (
+    occ: OccSymbol,
+    strike: number, // ×1000 int
+    expiration: string, // YYYY-MM-DD
+    optionType: "C" | "P",
+    root: "SPX" | "SPXW",
+  ) => Promise<void>;
+  /** Seed a leg_observation row for a contract, at a given time. */
+  seedObservation: (
+    occ: OccSymbol,
+    time: Date,
+    mark: number,
+    underlyingPrice: number,
+  ) => Promise<void>;
+};
+
+export function runLegObservationForSlotContractTests(
+  makeRepo: (seed: SlotSeedContext) => LegObservationForSlotRepo,
+  getSeedContext: () => SlotSeedContext,
+): void {
+  describe("leg-observations as-of-slot read contract (HIST-02)", () => {
+    let repo: LegObservationForSlotRepo;
+    let seed: SlotSeedContext;
+
+    beforeEach(() => {
+      seed = getSeedContext();
+      repo = makeRepo(seed);
+    });
+
+    it("hit: resolves the nearest observation at-or-before the slot anchor, within the usability window", async () => {
+      const occ = formatOccSymbol({ root: "SPX", expiry: new Date(2026, 6, 18), type: "C", strike: 5000 });
+      await seed.seedContract(occ, 5000000, "2026-07-18", "C", "SPX");
+      const anchor = new Date("2026-07-01T19:00:00Z");
+      const obsTime = new Date(anchor.getTime() - 10 * 60 * 1000); // 10 min before anchor
+      await seed.seedObservation(occ, obsTime, 20.0, 5010.0);
+
+      const result = await repo.resolveLegObservationForSlot({
+        underlying: "SPX",
+        strike: 5000000,
+        optionType: "C",
+        expiry: "2026-07-18",
+        slotAnchor: anchor,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).not.toBeNull();
+      expect(result.value?.mark).toBeCloseTo(20.0, 2);
+      expect(result.value?.time.getTime()).toBe(obsTime.getTime());
+    });
+
+    it("miss-before-anchor: no observation at-or-before the anchor returns null (honest gap)", async () => {
+      const occ = formatOccSymbol({ root: "SPX", expiry: new Date(2026, 6, 18), type: "C", strike: 5100 });
+      await seed.seedContract(occ, 5100000, "2026-07-18", "C", "SPX");
+      const anchor = new Date("2026-07-01T19:00:00Z");
+      const futureObs = new Date(anchor.getTime() + 30 * 60 * 1000); // AFTER the anchor
+      await seed.seedObservation(occ, futureObs, 22.0, 5010.0);
+
+      const result = await repo.resolveLegObservationForSlot({
+        underlying: "SPX",
+        strike: 5100000,
+        optionType: "C",
+        expiry: "2026-07-18",
+        slotAnchor: anchor,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toBeNull();
+    });
+
+    it("stale-outside-window: an observation older than the usability window returns null (honest gap, D-04/D-07)", async () => {
+      const occ = formatOccSymbol({ root: "SPX", expiry: new Date(2026, 6, 18), type: "C", strike: 5200 });
+      await seed.seedContract(occ, 5200000, "2026-07-18", "C", "SPX");
+      const anchor = new Date("2026-07-01T19:00:00Z");
+      const staleObs = new Date(anchor.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS - 60 * 1000);
+      await seed.seedObservation(occ, staleObs, 18.0, 5000.0);
+
+      const result = await repo.resolveLegObservationForSlot({
+        underlying: "SPX",
+        strike: 5200000,
+        optionType: "C",
+        expiry: "2026-07-18",
+        slotAnchor: anchor,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toBeNull();
+    });
+
+    it("root-candidate: resolves a mixed-root back leg under the sibling root (HIST-01 reuse)", async () => {
+      const occ = formatOccSymbol({ root: "SPXW", expiry: new Date(2026, 7, 7), type: "P", strike: 7425 });
+      await seed.seedContract(occ, 7425000, "2026-08-07", "P", "SPXW");
+      const anchor = new Date("2026-07-01T19:00:00Z");
+      const obsTime = new Date(anchor.getTime() - 5 * 60 * 1000);
+      await seed.seedObservation(occ, obsTime, 169.4, 7381.12);
+
+      const result = await repo.resolveLegObservationForSlot({
+        underlying: "SPX", // calendar's stored root — NOT the real contract's root
+        strike: 7425000,
+        optionType: "P",
+        expiry: "2026-08-07",
+        slotAnchor: anchor,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).not.toBeNull();
+      expect(result.value?.mark).toBeCloseTo(169.4, 2);
+    });
+  });
+}

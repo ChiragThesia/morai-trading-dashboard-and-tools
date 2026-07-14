@@ -13,13 +13,15 @@
  * (Mirrors Postgres ORDER BY time DESC LIMIT 1.)
  */
 
-import { ok } from "@morai/shared";
+import { ok, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { computeMoneyness } from "../smile-moneyness.ts";
+import { resolveRootCandidates, SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "@morai/core";
 import type {
   ForPersistingObservations,
   ForReadingLatestLegObs,
   ForReadingSmileSource,
+  ForResolvingLegObservationForSlot,
   ObservationRow,
   LegSnapshot,
   SmileQuote,
@@ -47,6 +49,8 @@ export type MemoryLegObservationsRepo = {
   readonly persistObservations: ForPersistingObservations;
   readonly getLatestLegObs: ForReadingLatestLegObs;
   readonly readSmile: ForReadingSmileSource;
+  /** Phase 40 (HIST-02): as-of-slot read — nearest observation at-or-before an anchor. */
+  readonly resolveLegObservationForSlot: ForResolvingLegObservationForSlot;
   /** Test helper: seed a BSM-solved leg for the smile-source read. */
   readonly seedSmileLeg: (leg: SeededSmileLeg) => void;
 };
@@ -106,6 +110,55 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
     smileStore.set(key, leg);
   };
 
+  // resolveLegObservationForSlot (HIST-02): nearest observation at-or-before slotAnchor, within
+  // the usability window (D-07 reuse). Root-candidate-aware (D-04/HIST-01): tries the stored
+  // root then its sibling, building each candidate's occSymbol directly (no separate contracts
+  // table modeled here — the occSymbol's own embedded root prefix IS the contract's real root).
+  const resolveLegObservationForSlot: ForResolvingLegObservationForSlot = async (
+    query,
+  ): Promise<Result<LegSnapshot | null, StorageError>> => {
+    const [y, m, d] = query.expiry.split("-").map(Number);
+    const expiry = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+    const anchorMs = query.slotAnchor.getTime();
+    const windowStartMs = anchorMs - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS;
+
+    for (const root of resolveRootCandidates(query.underlying)) {
+      const occSymbol = formatOccSymbol({
+        root,
+        expiry,
+        type: query.optionType,
+        strike: query.strike / 1000,
+      });
+
+      let latest: ObservationRow | null = null;
+      for (const row of store.values()) {
+        if (row.contract !== occSymbol) continue;
+        const t = row.time.getTime();
+        if (t > anchorMs || t < windowStartMs) continue; // outside [anchor - window, anchor]
+        if (latest === null || row.time > latest.time) latest = row;
+      }
+
+      if (latest !== null) {
+        return ok({
+          occSymbol: latest.contract,
+          time: latest.time,
+          mark: latest.mark,
+          underlyingPrice: latest.underlyingPrice,
+          ivRaw: latest.iv,
+          // Memory adapter: bsm fields are always null (mirrors getLatestLegObs above).
+          bsmIv: null,
+          bsmDelta: null,
+          bsmGamma: null,
+          bsmTheta: null,
+          bsmVega: null,
+          source: latest.source,
+        });
+      }
+    }
+
+    return ok(null);
+  };
+
   // ForReadingSmileSource (06-06 / CR-01): the argument is the cycle ANCHOR (upper bound), not an
   // exact-equality match. Resolve the latest BSM-solved leg cohort AT OR BEFORE the anchor, then
   // return only that cohort. Excludes NaN-stamped iv (bsmIv === "NaN") and unsolved rows
@@ -144,5 +197,11 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
     return ok({ cycleTime: new Date(resolvedTime), quotes: smile });
   };
 
-  return { persistObservations, getLatestLegObs, readSmile, seedSmileLeg };
+  return {
+    persistObservations,
+    getLatestLegObs,
+    readSmile,
+    resolveLegObservationForSlot,
+    seedSmileLeg,
+  };
 }

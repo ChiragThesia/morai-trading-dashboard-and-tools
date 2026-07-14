@@ -1,6 +1,9 @@
 import { describe, it, beforeAll, afterAll } from "vitest";
 import { inject } from "vitest";
-import { runLegObservationsContractTests } from "../../__contract__/leg-observations.contract.ts";
+import {
+  runLegObservationsContractTests,
+  runLegObservationForSlotContractTests,
+} from "../../__contract__/leg-observations.contract.ts";
 import { makePostgresLegObservationsRepo } from "./leg-observations.ts";
 import { makeDb } from "../db.ts";
 import { sql } from "drizzle-orm";
@@ -104,4 +107,54 @@ describe.skipIf(shouldSkip)("postgres leg-observations adapter", () => {
       },
     };
   });
+
+  // HIST-02: as-of-slot read (ForResolvingLegObservationForSlot) — seeds via the same repo's
+  // own upsertContracts/persistObservations ports, no raw SQL needed.
+  runLegObservationForSlotContractTests(
+    (_seed) => {
+      if (!db) throw new Error("db not initialized");
+      const repo = makePostgresLegObservationsRepo(db);
+      return { resolveLegObservationForSlot: repo.resolveLegObservationForSlot };
+    },
+    () => ({
+      seedContract: async (occ, strike, expiration, optionType, root): Promise<void> => {
+        if (!db) throw new Error("db not initialized");
+        const repo = makePostgresLegObservationsRepo(db);
+        await repo.upsertContracts([
+          {
+            occSymbol: occ,
+            underlying: "SPX",
+            root,
+            contractType: optionType,
+            exerciseStyle: "european",
+            strike,
+            expiration,
+            multiplier: 100,
+          },
+        ]);
+      },
+      seedObservation: async (occ, time, mark, underlyingPrice): Promise<void> => {
+        if (!db) throw new Error("db not initialized");
+        const repo = makePostgresLegObservationsRepo(db);
+        await repo.persistObservations([
+          {
+            time,
+            contract: occ,
+            bid: mark,
+            ask: mark,
+            mark,
+            underlyingPrice,
+            iv: null,
+            delta: null,
+            gamma: null,
+            theta: null,
+            vega: null,
+            openInterest: 0,
+            volume: 0,
+            source: "cboe",
+          },
+        ]);
+      },
+    }),
+  );
 });
