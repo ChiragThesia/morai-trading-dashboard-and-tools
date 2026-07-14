@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { assertDefined } from "@morai/shared";
 
 const { mockUseCot } = vi.hoisted(() => ({ mockUseCot: vi.fn() }));
@@ -143,5 +144,33 @@ describe("CotCard", () => {
     expect(gauge.getAttribute("aria-valuetext")).toContain("−373K");
     expect(gauge.getAttribute("aria-valuetext")).toContain("up 142K");
     expect(gauge.getAttribute("aria-label")).toBe("Leveraged net position");
+  });
+
+  it("renders a cot-why-{key} tooltip trigger with a verbatim 4-part WHAT/WHY/BANDS/SOURCE payload", async () => {
+    const user = userEvent.setup();
+    setData([WEEK_LATEST, WEEK_PREV]);
+    render(<CotCard />);
+
+    await user.hover(screen.getByTestId("cot-why-netLeveraged"));
+
+    expect(
+      await screen.findByText(
+        "Net position of Leveraged Funds — hedge funds and CTAs, the report's \"big guys.\"",
+      ),
+    ).toBeDefined();
+    expect(await screen.findByText(/position only, no verdict/i)).toBeDefined();
+    expect(
+      await screen.findByText(
+        "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+      ),
+    ).toBeDefined();
+  });
+
+  it("renders the legend footnote at 10px", () => {
+    setData([WEEK_LATEST, WEEK_PREV]);
+    render(<CotCard />);
+    const footnote = screen.getByText(/Net = long − short contracts/);
+    expect(footnote.className).toContain("text-[10px]");
+    expect(footnote.className).not.toContain("text-[9px]");
   });
 });

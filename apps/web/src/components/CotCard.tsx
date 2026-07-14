@@ -1,5 +1,12 @@
 import { useCot } from "../hooks/useCot.ts";
 import { BulletGauge, Panel, PanelHeading } from "./system/index.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip.tsx";
 import { cn } from "@/lib/utils";
 
 /**
@@ -7,8 +14,9 @@ import { cn } from "@/lib/utils";
  *
  * Renders the newest weekly report as a net-per-class row list (long − short), each as a
  * NEUTRAL direction-tinted bullet gauge (39-03, GAUGE-03) — marker bg-up/bg-down by sign,
- * never a verdict color — with a week-over-week delta arrow. Leveraged Funds is the
- * headline "big guys" signal (D-05). Data via useCot() — no props.
+ * never a verdict color — with a week-over-week delta arrow and a 4-part teaching ⓘ
+ * tooltip (GAUGE-04). Leveraged Funds is the headline "big guys" signal (D-05). Data via
+ * useCot() — no props.
  *
  * Design-system only (tokens + Tailwind); layout-only inline styles for the bar removed
  * (BulletGauge owns its own track math).
@@ -51,6 +59,50 @@ const COT_GAUGE_SCALE: Record<NetKey, { min: number; max: number }> = {
   netOther: { min: -25_000, max: 25_000 },
   // max observed |net| = 122,578 → ×1.5 = 183,867, rounded up
   netNonreportable: { min: -200_000, max: 200_000 },
+};
+
+/** WHAT/WHY/BANDS/SOURCE copy, verbatim from 39-UI-SPEC.md's "COT block" payload — do not
+ *  paraphrase or invent claims. SOURCE is identical across all five (one CFTC TFF report). */
+const TOOLTIP_COPY: Record<
+  NetKey,
+  { what: string; why: string; bands: string; source: string }
+> = {
+  netDealer: {
+    what: "CFTC Dealer/Intermediary net position in E-mini S&P 500 futures — long minus short contracts held by banks and broker-dealers.",
+    why: "Dealers mostly intermediate client flow rather than take directional bets. Their net position reads who's coming to them for exposure, not a standalone conviction signal.",
+    bands:
+      "Track shows net contracts against a fixed range sized to this class's typical extent — position only, no verdict.",
+    source:
+      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+  },
+  netAssetManager: {
+    what: "Net position of Asset Manager/Institutional traders — pensions, insurers, and other long-horizon institutional money.",
+    why: "The largest reportable class by open interest. A slow-moving, usually long-biased read on institutional equity exposure rather than a tactical signal.",
+    bands: "Position only, no verdict.",
+    source:
+      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+  },
+  netLeveraged: {
+    what: "Net position of Leveraged Funds — hedge funds and CTAs, the report's \"big guys.\"",
+    why: "The most tactical, fastest-moving class in the report. Swings here often lead price action more than the slower institutional or dealer classes.",
+    bands: "Position only, no verdict.",
+    source:
+      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+  },
+  netOther: {
+    what: "Net position of Other Reportable traders — large traders that don't fit the Dealer, Asset Manager, or Leveraged Funds classes.",
+    why: "A catch-all class, useful mainly as a check that the other three classes explain most of the positioning.",
+    bands: "Position only, no verdict.",
+    source:
+      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+  },
+  netNonreportable: {
+    what: "Net position of Non-Reportable traders — small speculators below the CFTC's individual reporting threshold, aggregated.",
+    why: "Often read as a retail-sentiment proxy. Small in size relative to the institutional classes above.",
+    bands: "Position only, no verdict.",
+    source:
+      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+  },
 };
 
 /** Compact magnitude: 1.98M / 756K / 421. Unsigned. */
@@ -110,6 +162,7 @@ export function CotCard(): React.ReactElement {
           const isLong = net >= 0;
           const wow = prev !== undefined ? net - prev[c.key] : null;
           const scale = COT_GAUGE_SCALE[c.key];
+          const copy = TOOLTIP_COPY[c.key];
 
           return (
             <div
@@ -127,6 +180,36 @@ export function CotCard(): React.ReactElement {
                   >
                     {c.label}
                   </span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger
+                        data-testid={`cot-why-${c.key}`}
+                        aria-label={`${c.label} explanation`}
+                        style={{
+                          display: "inline-flex",
+                          cursor: "default",
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                        }}
+                      >
+                        <Badge
+                          variant="outline"
+                          className="border-line2 px-1 py-0 font-mono text-[10px] text-dim"
+                        >
+                          ⓘ
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="flex max-w-xs flex-col gap-1 font-mono text-xs leading-[1.45]">
+                          <span className="text-txt">{copy.what}</span>
+                          <span className="text-txt">{copy.why}</span>
+                          <span className="text-muted-foreground">{copy.bands}</span>
+                          <span className="text-dim">{copy.source}</span>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -165,7 +248,7 @@ export function CotCard(): React.ReactElement {
         })}
       </div>
 
-      <span className="font-mono text-[9px] text-dim">
+      <span className="font-mono text-[10px] text-dim">
         Net = long − short contracts · WoW vs prior week · Leveraged = the “big guys” (D-05).
       </span>
     </Panel>
