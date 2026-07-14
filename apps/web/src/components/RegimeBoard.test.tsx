@@ -708,9 +708,7 @@ describe("RegimeBoard — teaching tooltips (39-02, GAUGE-04)", () => {
     await user.hover(screen.getByTestId("regime-why-hy-oas"));
 
     expect(
-      await screen.findByText(
-        "ICE BofA US High Yield Option-Adjusted Spread — the extra yield high-yield corporate bonds pay over Treasuries, in percentage points.",
-      ),
+      await screen.findByText("HY OAS — junk-bond yield premium over Treasuries"),
     ).toBeDefined();
     const hyOas = INDICATORS.find((ind) => ind.id === "hy-oas");
     assertDefined(hyOas, "hy-oas fixture present");
@@ -718,36 +716,29 @@ describe("RegimeBoard — teaching tooltips (39-02, GAUGE-04)", () => {
     expect(await screen.findByText(hyOas.rationale)).toBeDefined();
   });
 
-  it("hovering rate-why-T10Y2Y shows its WHAT + the banded BANDS wording", async () => {
+  it("hovering rate-why-T10Y2Y shows its WHAT + the banded META wording", async () => {
     const user = userEvent.setup();
     render(<RegimeBoard />);
 
     await user.hover(screen.getByTestId("rate-why-T10Y2Y"));
 
     expect(
-      await screen.findByText(
-        "The 10-year Treasury yield minus the 2-year Treasury yield — the classic yield-curve slope.",
-      ),
+      await screen.findByText("10Y minus 2Y Treasury yield — the curve slope"),
     ).toBeDefined();
     expect(
-      await screen.findByText(
-        "Calm above 0.0 (normal upward slope). Warning at or below 0.0 (inverted — the historically-cited recession precursor). Crisis at -0.50 or below (deep, sustained inversion) — [ASSUMED], a structural tier, not independently backtested.",
-      ),
+      await screen.findByText("Calm >0 · warn ≤0 · crisis ≤−0.50 · FRED T10Y2Y, daily"),
     ).toBeDefined();
   });
 
-  it("hovering rate-why-DFF shows its WHAT + the neutral 'position only' BANDS wording", async () => {
+  it("hovering rate-why-DFF shows its WHAT + the neutral 'position only' META wording", async () => {
     const user = userEvent.setup();
     render(<RegimeBoard />);
 
     await user.hover(screen.getByTestId("rate-why-DFF"));
 
     expect(
-      await screen.findByText("The Federal Reserve's overnight bank lending rate — the rate the Fed sets directly."),
+      await screen.findByText("Fed's overnight bank lending rate — sets everything else"),
     ).toBeDefined();
-    expect(
-      await screen.findByText("Track shows today's rate against a fixed 0%-8% range — position only, no verdict."),
-    ).toBeDefined();
-    expect(await screen.findByText("FRED series DFF, daily.")).toBeDefined();
+    expect(await screen.findByText("0–8% range · FRED DFF, daily")).toBeDefined();
   });
 });

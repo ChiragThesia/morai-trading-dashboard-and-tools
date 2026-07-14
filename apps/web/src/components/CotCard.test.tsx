@@ -146,7 +146,7 @@ describe("CotCard", () => {
     expect(gauge.getAttribute("aria-label")).toBe("Leveraged net position");
   });
 
-  it("renders a cot-why-{key} tooltip trigger with a verbatim 4-part WHAT/WHY/BANDS/SOURCE payload", async () => {
+  it("renders a cot-why-{key} tooltip trigger with a verbatim 3-line WHAT/WHY/META payload", async () => {
     const user = userEvent.setup();
     setData([WEEK_LATEST, WEEK_PREV]);
     render(<CotCard />);
@@ -154,16 +154,12 @@ describe("CotCard", () => {
     await user.hover(screen.getByTestId("cot-why-netLeveraged"));
 
     expect(
-      await screen.findByText(
-        "Net position of Leveraged Funds — hedge funds and CTAs, the report's \"big guys.\"",
-      ),
+      await screen.findByText("Leveraged Funds net position — hedge funds & CTAs"),
     ).toBeDefined();
-    expect(await screen.findByText(/position only, no verdict/i)).toBeDefined();
     expect(
-      await screen.findByText(
-        "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
-      ),
+      await screen.findByText("Most tactical class; often leads price action"),
     ).toBeDefined();
+    expect(await screen.findByText("±800K axis · CFTC TFF, weekly")).toBeDefined();
   });
 
   it("renders the legend footnote at 10px", () => {

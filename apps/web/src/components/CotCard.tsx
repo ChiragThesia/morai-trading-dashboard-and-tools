@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
  *
  * Renders the newest weekly report as a net-per-class row list (long − short), each as a
  * NEUTRAL direction-tinted bullet gauge (39-03, GAUGE-03) — marker bg-up/bg-down by sign,
- * never a verdict color — with a week-over-week delta arrow and a 4-part teaching ⓘ
- * tooltip (GAUGE-04). Leveraged Funds is the headline "big guys" signal (D-05). Data via
- * useCot() — no props.
+ * never a verdict color — with a week-over-week delta arrow and a 3-line teaching ⓘ
+ * tooltip (GAUGE-04, rev 3 — condensed WHAT/WHY/META). Leveraged Funds is the headline
+ * "big guys" signal (D-05). Data via useCot() — no props.
  *
  * Design-system only (tokens + Tailwind); layout-only inline styles for the bar removed
  * (BulletGauge owns its own track math).
@@ -61,47 +61,34 @@ const COT_GAUGE_SCALE: Record<NetKey, { min: number; max: number }> = {
   netNonreportable: { min: -200_000, max: 200_000 },
 };
 
-/** WHAT/WHY/BANDS/SOURCE copy, verbatim from 39-UI-SPEC.md's "COT block" payload — do not
- *  paraphrase or invent claims. SOURCE is identical across all five (one CFTC TFF report). */
-const TOOLTIP_COPY: Record<
-  NetKey,
-  { what: string; why: string; bands: string; source: string }
-> = {
+/** WHAT/WHY/META copy, condensed from 39-UI-SPEC.md's "COT block" payload (rev 3 — 3-line scan
+ *  per user feedback) — compression only, no new claims. META folds the axis range (matching
+ *  each class's COT_GAUGE_SCALE below) and the shared CFTC TFF source into one quiet line. */
+const TOOLTIP_COPY: Record<NetKey, { what: string; why: string; meta: string }> = {
   netDealer: {
-    what: "CFTC Dealer/Intermediary net position in E-mini S&P 500 futures — long minus short contracts held by banks and broker-dealers.",
-    why: "Dealers mostly intermediate client flow rather than take directional bets. Their net position reads who's coming to them for exposure, not a standalone conviction signal.",
-    bands:
-      "Track shows net contracts against a fixed range sized to this class's typical extent — position only, no verdict.",
-    source:
-      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+    what: "Dealer net position — banks & broker-dealers",
+    why: "Mostly intermediates client flow, not a conviction bet",
+    meta: "±1.15M axis · CFTC TFF, weekly",
   },
   netAssetManager: {
-    what: "Net position of Asset Manager/Institutional traders — pensions, insurers, and other long-horizon institutional money.",
-    why: "The largest reportable class by open interest. A slow-moving, usually long-biased read on institutional equity exposure rather than a tactical signal.",
-    bands: "Position only, no verdict.",
-    source:
-      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+    what: "Asset Manager net position — pensions & institutions",
+    why: "Slow-moving, usually long-biased institutional read",
+    meta: "±1.5M axis · CFTC TFF, weekly",
   },
   netLeveraged: {
-    what: "Net position of Leveraged Funds — hedge funds and CTAs, the report's \"big guys.\"",
-    why: "The most tactical, fastest-moving class in the report. Swings here often lead price action more than the slower institutional or dealer classes.",
-    bands: "Position only, no verdict.",
-    source:
-      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+    what: "Leveraged Funds net position — hedge funds & CTAs",
+    why: "Most tactical class; often leads price action",
+    meta: "±800K axis · CFTC TFF, weekly",
   },
   netOther: {
-    what: "Net position of Other Reportable traders — large traders that don't fit the Dealer, Asset Manager, or Leveraged Funds classes.",
-    why: "A catch-all class, useful mainly as a check that the other three classes explain most of the positioning.",
-    bands: "Position only, no verdict.",
-    source:
-      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+    what: "Other Reportable net position — the catch-all class",
+    why: "Checks the other three classes explain most flow",
+    meta: "±25K axis · CFTC TFF, weekly",
   },
   netNonreportable: {
-    what: "Net position of Non-Reportable traders — small speculators below the CFTC's individual reporting threshold, aggregated.",
-    why: "Often read as a retail-sentiment proxy. Small in size relative to the institutional classes above.",
-    bands: "Position only, no verdict.",
-    source:
-      "CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday release, Tuesday as-of).",
+    what: "Non-Reportable net position — small speculators, aggregated",
+    why: "Read as a retail-sentiment proxy; small in size",
+    meta: "±200K axis · CFTC TFF, weekly",
   },
 };
 
@@ -201,11 +188,10 @@ export function CotCard(): React.ReactElement {
                         </Badge>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <div className="flex max-w-xs flex-col gap-1 font-mono text-xs leading-[1.45]">
-                          <span className="text-txt">{copy.what}</span>
-                          <span className="text-txt">{copy.why}</span>
-                          <span className="text-muted-foreground">{copy.bands}</span>
-                          <span className="text-dim">{copy.source}</span>
+                        <div className="flex max-w-[15rem] flex-col gap-1 font-mono">
+                          <span className="text-[11px] text-txt">{copy.what}</span>
+                          <span className="text-[11px] text-dim">{copy.why}</span>
+                          <span className="text-[10px] text-dim/70">{copy.meta}</span>
                         </div>
                       </TooltipContent>
                     </Tooltip>
