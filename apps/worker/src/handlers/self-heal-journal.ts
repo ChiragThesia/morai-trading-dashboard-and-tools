@@ -27,15 +27,17 @@ export type SelfHealJournalHandlerDeps = {
 
 export function makeSelfHealJournalHandler(
   deps: SelfHealJournalHandlerDeps,
-): (jobs: ReadonlyArray<Job | undefined>) => Promise<void> {
-  return async ([job]: ReadonlyArray<Job | undefined>): Promise<void> => {
+): (jobs: ReadonlyArray<Job<unknown> | undefined>) => Promise<void> {
+  return async ([job]: ReadonlyArray<Job<unknown> | undefined>): Promise<void> => {
     // pg-boss v12: array element can be undefined
     if (job === undefined) return;
 
     // No RTH gate — sparse cron, repairs past slots anytime
 
     // Zod-parse the payload at the handler boundary (JOB-01 requirement)
-    const payloadResult = selfHealJournalPayload.safeParse(job.data);
+    // null-payload regression (2026-07-14, same class as sync-fills 07-09/10): pg-boss
+    // cron/trigger fires can deliver data:null; treat as the {} default payload, never throw.
+    const payloadResult = selfHealJournalPayload.safeParse(job.data ?? {});
     if (!payloadResult.success) {
       throw new Error(`self-heal-journal: invalid payload: ${payloadResult.error.message}`);
     }

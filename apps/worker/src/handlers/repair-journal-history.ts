@@ -28,15 +28,17 @@ export type RepairJournalHistoryHandlerDeps = {
 
 export function makeRepairJournalHistoryHandler(
   deps: RepairJournalHistoryHandlerDeps,
-): (jobs: ReadonlyArray<Job | undefined>) => Promise<void> {
-  return async ([job]: ReadonlyArray<Job | undefined>): Promise<void> => {
+): (jobs: ReadonlyArray<Job<unknown> | undefined>) => Promise<void> {
+  return async ([job]: ReadonlyArray<Job<unknown> | undefined>): Promise<void> => {
     // pg-boss v12: array element can be undefined
     if (job === undefined) return;
 
     // No RTH gate — on-demand job, runs anytime
 
     // Zod-parse the payload at the handler boundary (JOB-01 requirement)
-    const payloadResult = repairJournalHistoryPayload.safeParse(job.data);
+    // null-payload regression (2026-07-14, same class as sync-fills 07-09/10): pg-boss
+    // cron/trigger fires can deliver data:null; treat as the {} default payload, never throw.
+    const payloadResult = repairJournalHistoryPayload.safeParse(job.data ?? {});
     if (!payloadResult.success) {
       throw new Error(
         `repair-journal-history: invalid payload: ${payloadResult.error.message}`,

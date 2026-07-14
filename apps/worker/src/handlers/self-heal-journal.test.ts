@@ -113,3 +113,26 @@ describe("makeSelfHealJournalHandler", () => {
     expect(selfHealJournalUseCase).toHaveBeenCalledOnce();
   });
 });
+
+describe("makeSelfHealJournalHandler — null job.data (prod regression 2026-07-14)", () => {
+  // pg-boss scheduled fires deliver data:null (schedule.ts passes null); Zod's object schema
+  // rejects null with "expected object, received null" — the handler threw on EVERY hourly
+  // cron fire, so self-heal never ran in prod (same class as sync-fills 2026-07-09/10).
+  it("runs the use-case with defaults when job.data is null instead of throwing", async () => {
+    const selfHealJournalUseCase = vi
+      .fn()
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
+    const handler = makeSelfHealJournalHandler({ selfHealJournalUseCase, now: () => new Date() });
+
+    const job: Job<unknown> = {
+      id: "test-null-payload",
+      name: "self-heal-journal",
+      data: null,
+      expireInSeconds: 900,
+      heartbeatSeconds: null,
+      signal: new AbortController().signal,
+    };
+    await handler([job]);
+    expect(selfHealJournalUseCase).toHaveBeenCalledWith({});
+  });
+});

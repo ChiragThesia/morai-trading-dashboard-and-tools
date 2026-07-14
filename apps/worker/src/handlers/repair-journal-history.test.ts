@@ -119,3 +119,23 @@ describe("makeRepairJournalHistoryHandler", () => {
     expect(repairJournalHistoryUseCase).toHaveBeenCalledOnce();
   });
 });
+
+describe("makeRepairJournalHistoryHandler — null job.data (prod regression class 2026-07-14)", () => {
+  // Same null-payload class as sync-fills/self-heal-journal: a trigger path delivering
+  // data:null must behave as the {} all-calendars heal-only payload, never throw.
+  it("runs the use-case with all/heal-only defaults when job.data is null", async () => {
+    const repairJournalHistoryUseCase = vi.fn().mockResolvedValue(ok([]));
+    const handler = makeRepairJournalHistoryHandler({ repairJournalHistoryUseCase });
+
+    const job: Job<unknown> = {
+      id: "test-null-payload",
+      name: "repair-journal-history",
+      data: null,
+      expireInSeconds: 900,
+      heartbeatSeconds: null,
+      signal: new AbortController().signal,
+    };
+    await handler([job]);
+    expect(repairJournalHistoryUseCase).toHaveBeenCalledOnce();
+  });
+});
