@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 40
-current_phase_name: journal-history-repair-never-lose-a-calendars-greek-vol-story
-status: planning
-stopped_at: Phase 39 complete 2026-07-14; Phase 40 research running; 37/38 human gates deferred (time-locked)
-last_updated: "2026-07-14T06:11:32.830Z"
+current_phase: 41
+current_phase_name: analyzer-desktop-redesign-ranked-table-verdict-hero-live-sidecar
+status: verifying
+stopped_at: Phase 41 verified (human_needed — user visual approval); round-3 TOS layout deployed
+last_updated: "2026-07-14T18:55:05.127Z"
 last_activity: 2026-07-14
-last_activity_desc: Phase 39 complete, transitioned to Phase 40
+last_activity_desc: Phase 40 complete, transitioned to Phase 41
 progress:
-  total_phases: 19
-  completed_phases: 16
-  total_plans: 99
-  completed_plans: 99
-  percent: 84
+  total_phases: 20
+  completed_phases: 20
+  total_plans: 112
+  completed_plans: 112
+  percent: 100
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 40 — Journal history repair (the core-value data layer)
+**Current focus:** Phase 41 — analyzer-desktop-redesign-ranked-table-verdict-hero-live-sidecar
 
 ## Current Position
 
-Phase: 40 — Journal history repair — never lose a calendar's greek/vol story: root-cause the back-leg NaN poisoning every open-calendar snapshot, rebuild calendar_snapshots from the leg_observations archive (full chain stored since Jun 12), self-heal gaps instead of "never backfill", on-register backfill from openedAt, one-time repair of all existing calendars, and series hygiene (one scheduled row per 30-min slot)
-Plan: Not started (context committed; researcher running)
-Status: Phase 39 closed (verifier 8/8). Phases 37+38 executed+deployed, verification DEFERRED on time-locked human gates — 37 live re-auth UAT ~2026-07-20 (token expiry), 38 live RTH UAT next market open.
-Last activity: 2026-07-14 — Phase 39 complete, transitioned to Phase 40
+Phase: 41 — Analyzer cleanup — ranked candidate table + verdict hero + live sidecar data: kill the 17-card wall and chip-row scorecard; selection-driven detail panels, sticky layout, sane number precision, paste/term-structure polish, mobile parity via analyzer-mobile, and live sidecar-fed marks (explicit user override of Phase 38's snapshot-spot scoring lock)
+Plan: Not started
+Status: Executing Phase 40
+Last activity: 2026-07-14 — Phase 40 complete, transitioned to Phase 41
 
 ## Deferred Verification
 
@@ -181,6 +181,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | 34 | 5 | - | - |
 | 36 | 5 | - | - |
 | 39 | 4 | - | - |
+| 40 | 8 | - | - |
 
 **Recent Trend:**
 

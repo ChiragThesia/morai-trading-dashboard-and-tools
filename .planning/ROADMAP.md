@@ -542,7 +542,7 @@ Plans:
 **Goal:** Every calendar — open, closed, or registered late — carries its full 30-min greek/vol/price/P&L story in the journal: the back-leg NaN that turns whole lifecycles into gap rows is root-caused and fixed, missing/gap slots heal automatically from `leg_observations` (the same pure metric functions as the live writer, fill-only, honest gaps only where no market data exists), a repair CLI rebuilds all 17 existing calendars' histories, and the lifecycle chart shows the trade's actual life instead of a handful of frozen NaN rows.
 **Requirements**: HIST-01, HIST-02, HIST-03, HIST-04, HIST-05
 **Depends on:** Phase 25 (OPS-01 freshness gate), Phase 22 (lifecycle graph)
-**Plans:** 8 plans
+**Plans:** 8/8 plans complete
 
 Plans:
 

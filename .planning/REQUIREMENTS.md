@@ -248,7 +248,7 @@ chain (marks + BSM greeks) since Jun 12. Live-write-only + "never backfill" turn
 outage, late registration, or stale-leg skip into a permanent hole. Fix the data layer;
 the lifecycle chart already renders everything.
 
-- [ ] **HIST-01**: Root-cause and fix the far-dated back-leg NaN — open calendars' back leg
+- [x] **HIST-01**: Root-cause and fix the far-dated back-leg NaN — open calendars' back leg
       (e.g. `SPX 261130P07600000`) carries NaN `bsm_iv`/greeks in `leg_observations` while the
       front leg is healthy, which poisons every journal row (`isGap`) and (post-OPS-01) silences
       snapshots entirely. Diagnose where it breaks (contract missing from fetch window / mark
@@ -256,25 +256,25 @@ the lifecycle chart already renders everything.
       mark in `leg_observations` gets IV + greeks. Honest-gap law stays: a leg with NO market
       data renders as a gap, never a fabricated value.
 
-- [ ] **HIST-02**: A pure rebuild use-case derives `calendar_snapshots` rows for a calendar
+- [x] **HIST-02**: A pure rebuild use-case derives `calendar_snapshots` rows for a calendar
       from historical `leg_observations` — for each 30-min RTH slot between `openedAt` and
       `min(closedAt, now)`, resolve both legs' observations for that slot and build the row
       with the SAME pure functions the live writer uses (`computeLegPairMetrics`,
       `computeSnapshotPnl`) — no formula drift. Fill-only semantics: upserts never overwrite an
       existing non-gap row; gap rows MAY be replaced by healed non-gap rows.
 
-- [ ] **HIST-03**: Self-heal replaces "historical rows are never backfilled": a recurring
+- [x] **HIST-03**: Self-heal replaces "historical rows are never backfilled": a recurring
       worker job (chained after the existing snapshot/analytics cycle or scheduled) detects
       missing or gap slots for OPEN calendars over a bounded lookback and repairs them from
       `leg_observations` once usable data exists. The OPS-01 live freshness gate stays (never
       write stale marks as fresh) — but a skipped cycle now heals instead of scarring.
 
-- [ ] **HIST-04**: Operator repair path — a CLI (pattern: existing backfill/rebuild CLIs) that
+- [x] **HIST-04**: Operator repair path — a CLI (pattern: existing backfill/rebuild CLIs) that
       rebuilds the full journal history for one calendar or all calendars (one-time repair of
       the 17 existing calendars), and registration of a calendar (manual or auto) triggers a
       backfill from its `openedAt` so late registration never loses the entry-day story.
 
-- [ ] **HIST-05**: Series hygiene — at most one scheduled row per 30-min slot per calendar
+- [x] **HIST-05**: Series hygiene — at most one scheduled row per 30-min slot per calendar
       (today: hourly NaN row + a near-duplicate recompute row ~10-15 min later inflate the
       series to ~19 rows/day with frozen marks); event-move rows stay distinct via the existing
       `trigger` field; rebuild/self-heal never writes rows outside `openedAt`..`closedAt`.
@@ -291,21 +291,27 @@ sidecar-fed data.
       loads that candidate into the center/right detail panels (risk profile chart, term
       structure, WHY THIS CALENDAR, entry/exit plan). Selection state is visually explicit.
       Combine/Copy affordances survive (row actions or detail-pane buttons).
+
 - [ ] **AUI-02**: The chip-row scorecard becomes a verdict hero + grouped factors: one
       dominant verdict (score + Θ gate headline) with factors clustered under labeled groups
       (Edge / Risk / Fit), reusing the existing pass/fail/partial marks. The calibrating
       banner and dropped-quotes debug line move into a quiet ⓘ/footer, never a floating row.
+
 - [ ] **AUI-03**: Layout rebalance — center chart + right panels stay usable (sticky or
       equivalent) while the candidate table scrolls; no dead columns; page height driven by
       content, not by one skinny column.
+
 - [ ] **AUI-04**: Global display precision on the Analyzer: dollars whole, greeks ≤2dp,
       theta/vega ≤1dp — no raw floats like `+61.9536112` anywhere on the tab.
+
 - [ ] **AUI-05**: Paste-flow polish — larger paste target with clear Analyze affordance;
       term-structure chart gets more height, clearer short/long leg markers, and event chips
       visually tied to the curve kinks.
+
 - [ ] **AUI-06**: Mobile parity — every new idiom (table, verdict hero, detail pane) has a
       designed mobile treatment through the existing `analyzer-mobile` tree (Phase 36
       conventions); desktop redesign never degrades the mobile flow.
+
 - [ ] **AUI-07**: Live sidecar-driven data — the Analyzer's marks/spot/risk-profile inputs
       consume the live sidecar-fed stream (Phase 38 seam) rather than only the 30-min stored
       cohort, with honest stale-fallback when the stream is quiet/stalled. EXPLICIT USER
