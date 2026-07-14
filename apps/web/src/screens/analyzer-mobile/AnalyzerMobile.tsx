@@ -85,6 +85,7 @@ export function AnalyzerMobile(): React.ReactElement {
     payoffDomain,
     scenarioResult,
     spot,
+    liveBadgeProps,
     bookCount,
     bookDebit,
     bookTheta,
@@ -320,6 +321,7 @@ export function AnalyzerMobile(): React.ReactElement {
           dateControl={dateControl}
           bounds={bounds}
           positionSetSignature={positionSetSignature}
+          liveBadgeProps={liveBadgeProps}
         />
       )}
 

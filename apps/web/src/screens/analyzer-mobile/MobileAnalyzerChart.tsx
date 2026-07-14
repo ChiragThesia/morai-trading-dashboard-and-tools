@@ -17,8 +17,10 @@ import type { PickerCandidate, PickerSnapshotResponse } from "@morai/contracts";
 import { PayoffChart } from "../../components/charts/PayoffChart.tsx";
 import type { PayoffChartToggles } from "../../components/charts/PayoffChart.tsx";
 import { MobileChartControls } from "../../components/charts/MobileChartControls.tsx";
+import { LiveStatusBadge } from "../../components/LiveStatusBadge.tsx";
 import type { ScenarioResult, SpotDomain } from "../../lib/scenario-engine.ts";
 import type { PayoffDateControl } from "../../hooks/usePayoffDateControl.ts";
+import type { AnalyzerModel } from "./useAnalyzerModel.ts";
 import { TODAY_CURVE_COLOR, EXPIRATION_CURVE_COLOR } from "./useAnalyzerModel.ts";
 
 function noop(): void {}
@@ -36,6 +38,7 @@ export interface MobileAnalyzerChartProps {
   readonly dateControl: PayoffDateControl;
   readonly bounds: { readonly minIso: string; readonly maxIso: string };
   readonly positionSetSignature: string;
+  readonly liveBadgeProps: AnalyzerModel["liveBadgeProps"];
 }
 
 export function MobileAnalyzerChart({
@@ -49,6 +52,7 @@ export function MobileAnalyzerChart({
   dateControl,
   bounds,
   positionSetSignature,
+  liveBadgeProps,
 }: MobileAnalyzerChartProps): React.ReactElement {
   // Worst-of caption dot: fresh only when both context statuses are "ok" AND session is RTH.
   const session = snapshot.marketSession;
@@ -58,6 +62,9 @@ export function MobileAnalyzerChart({
   return (
     <section className="px-0">
       {/* ONE slim control row — the shared chrome (D-05); owns its own px-4. */}
+      <div className="flex items-center gap-2 px-4">
+        <LiveStatusBadge {...liveBadgeProps} />
+      </div>
       <MobileChartControls dateControl={dateControl} bounds={bounds} toggles={toggles} onToggle={onToggle} />
 
       {/* Chart — full-bleed (section owns px-0). */}

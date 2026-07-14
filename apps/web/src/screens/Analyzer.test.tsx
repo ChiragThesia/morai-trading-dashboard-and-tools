@@ -49,6 +49,7 @@ import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { PickerSnapshotResponse, PickerCandidate, AnalyzeAdHocCalendarResponse } from "@morai/contracts";
+import type { UseLiveStreamResult } from "../hooks/useLiveStream.ts";
 
 vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../components/charts/PayoffChart.tsx")>();
@@ -58,9 +59,9 @@ vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
 // Phase 41 AUI-07: useAnalyzerModel now calls useLiveStream — without this mock every test
 // that renders an Analyzer tree would open a real EventSource (green-suite protection).
 const { mockUseLiveStream } = vi.hoisted(() => ({
-  mockUseLiveStream: vi.fn(() => ({
+  mockUseLiveStream: vi.fn((): UseLiveStreamResult => ({
     greeks: new Map(),
-    status: "quiet" as const,
+    status: "quiet",
     lastTickAt: null,
     isRth: null,
     hasReceivedFirstTick: false,
@@ -71,7 +72,12 @@ const { mockUseLiveStream } = vi.hoisted(() => ({
     subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
   })),
 }));
-vi.mock("../hooks/useLiveStream.ts", () => ({ useLiveStream: mockUseLiveStream }));
+vi.mock("../hooks/useLiveStream.ts", () => ({
+  useLiveStream: mockUseLiveStream,
+  // LiveStatusBadge.tsx imports this const directly (module-load time) — must be mocked
+  // alongside the hook or the Analyzer tree crashes as soon as it mounts the badge.
+  STALL_THRESHOLD_MS: 20_000,
+}));
 
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
 vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
@@ -1034,5 +1040,56 @@ describe("Analyzer branch — D-01/D-16 (36)", () => {
     const props = latestPayoffChartProps();
     expect(props.showBePills).toBeUndefined();
     expect(props.aspectRatio).toBeUndefined();
+  });
+});
+
+// Phase 41 Task 2 (AUI-07): LiveStatusBadge mounted in the desktop Risk-profile header,
+// reflecting the mocked stream status.
+function setLiveStream(status: "live" | "quiet" | "stalled"): void {
+  mockUseLiveStream.mockReturnValue({
+    greeks: new Map(),
+    status,
+    lastTickAt: null,
+    isRth: null,
+    hasReceivedFirstTick: false,
+    isReconnecting: false,
+    liveSpot: null,
+    liveIndices: null,
+    reconnectNow: vi.fn(),
+    subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+  });
+}
+
+describe("Analyzer — desktop LiveStatusBadge (Phase 41, AUI-07)", () => {
+  beforeEach(stubDesktopMatchMedia);
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    Reflect.deleteProperty(window, "matchMedia");
+  });
+
+  it("renders LIVE in the Risk profile header when the stream is live", () => {
+    setLiveStream("live");
+    render(<Analyzer />);
+
+    expect(screen.getByText("Risk profile")).toBeTruthy();
+    expect(screen.getByText("LIVE")).toBeTruthy();
+  });
+
+  it("renders STALLED in the Risk profile header when the stream is stalled", () => {
+    setLiveStream("stalled");
+    render(<Analyzer />);
+
+    expect(screen.getByText("STALLED")).toBeTruthy();
+  });
+
+  it("renders the badge even with no candidate selected (not gated on `selected`)", () => {
+    setLiveStream("live");
+    mockUsePickerReturn({ data: null });
+
+    render(<Analyzer />);
+
+    expect(screen.getByText("LIVE")).toBeTruthy();
+    expect(screen.queryByTestId("copy-tos-order")).toBeNull();
   });
 });

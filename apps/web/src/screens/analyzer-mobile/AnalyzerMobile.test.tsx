@@ -14,6 +14,7 @@ import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { PickerSnapshotResponse } from "@morai/contracts";
+import type { UseLiveStreamResult } from "../../hooks/useLiveStream.ts";
 
 // Spy-wrap PayoffChart so the Task-3 chart-prop assertions can inspect the exact props the
 // mobile chart block hands it — the real component still renders.
@@ -25,9 +26,9 @@ vi.mock("../../components/charts/PayoffChart.tsx", async (importOriginal) => {
 // Phase 41 AUI-07: useAnalyzerModel now calls useLiveStream — without this mock every test
 // that renders an Analyzer tree would open a real EventSource (green-suite protection).
 const { mockUseLiveStream } = vi.hoisted(() => ({
-  mockUseLiveStream: vi.fn(() => ({
+  mockUseLiveStream: vi.fn((): UseLiveStreamResult => ({
     greeks: new Map(),
-    status: "quiet" as const,
+    status: "quiet",
     lastTickAt: null,
     isRth: null,
     hasReceivedFirstTick: false,
@@ -38,7 +39,12 @@ const { mockUseLiveStream } = vi.hoisted(() => ({
     subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
   })),
 }));
-vi.mock("../../hooks/useLiveStream.ts", () => ({ useLiveStream: mockUseLiveStream }));
+vi.mock("../../hooks/useLiveStream.ts", () => ({
+  useLiveStream: mockUseLiveStream,
+  // LiveStatusBadge.tsx imports this const directly (module-load time) — must be mocked
+  // alongside the hook or the Analyzer tree crashes as soon as it mounts the badge.
+  STALL_THRESHOLD_MS: 20_000,
+}));
 
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
 vi.mock("../../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
@@ -386,5 +392,42 @@ describe("AnalyzerMobile — J4 DOM order + null-candidate guard", () => {
     expect(screen.queryByTestId("date-pill")).toBeNull();
     expect(screen.queryByTestId("analyzer-mobile-caption")).toBeNull();
     expect(container.querySelector("details")).toBeNull();
+  });
+});
+
+// Phase 41 Task 2 (AUI-06/AUI-07): LiveStatusBadge mounted in the mobile chart chrome row.
+describe("AnalyzerMobile — LiveStatusBadge in the chart chrome row (Phase 41)", () => {
+  afterEach(() => {
+    mockUseLiveStream.mockReturnValue({
+      greeks: new Map(),
+      status: "quiet" as const,
+      lastTickAt: null,
+      isRth: null,
+      hasReceivedFirstTick: false,
+      isReconnecting: false,
+      liveSpot: null,
+      liveIndices: null,
+      reconnectNow: vi.fn(),
+      subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  it("renders LIVE in the mobile chart block when the stream is live", () => {
+    mockUseLiveStream.mockReturnValue({
+      greeks: new Map(),
+      status: "live" as const,
+      lastTickAt: null,
+      isRth: null,
+      hasReceivedFirstTick: false,
+      isReconnecting: false,
+      liveSpot: null,
+      liveIndices: null,
+      reconnectNow: vi.fn(),
+      subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+    });
+
+    render(<Analyzer />);
+
+    expect(screen.getByText("LIVE")).toBeTruthy();
   });
 });

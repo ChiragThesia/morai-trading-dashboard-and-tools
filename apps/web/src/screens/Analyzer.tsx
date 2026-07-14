@@ -32,6 +32,7 @@ import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
 import { Panel, PanelHeading, Button, MetricChip } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
+import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
 import { useIsDesktop } from "../hooks/useIsDesktop.ts";
 import { AnalyzerMobile } from "./analyzer-mobile/AnalyzerMobile.tsx";
 import {
@@ -424,6 +425,7 @@ function AnalyzerDesktop(): React.ReactElement {
     payoffDomain,
     scenarioResult,
     spot,
+    liveBadgeProps,
     bookCount,
     bookDebit,
     bookTheta,
@@ -555,7 +557,10 @@ function AnalyzerDesktop(): React.ReactElement {
       <div data-testid="analyzer-center-column" className="flex min-w-0 flex-col gap-3">
         <Panel>
           <div className="mb-1 flex items-center justify-between gap-2">
-            <PanelHeading title="Risk profile" />
+            <div className="flex items-center gap-2">
+              <PanelHeading title="Risk profile" />
+              <LiveStatusBadge {...liveBadgeProps} />
+            </div>
             {selected !== null && (
               <Button
                 variant="toggle"
