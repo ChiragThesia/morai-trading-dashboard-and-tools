@@ -1,8 +1,8 @@
 ---
 phase: 40
 slug: journal-history-repair-never-lose-a-calendars-greek-vol-story
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-14
 ---
@@ -42,7 +42,24 @@ created: 2026-07-14
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| (planner fills from task breakdown; the requirement→test map below is the source) | | | | | | | | | |
+| 40-01-T1 | 40-01 | 1 | HIST-03/04 (docs-first) | T-40-SC | Docs-before-code job catalog; unrelated macro backfill note untouched | docs grep | `grep -q "self-heal-journal" docs/architecture/jobs.md && grep -q "repair-journal-history" docs/architecture/jobs.md` | ❌ edit existing | ⬜ pending |
+| 40-01-T2 | 40-01 | 1 | HIST-01 | T-40-01 | Root candidates from a closed union (no arbitrary root reaches a query) | unit + fast-check | `bun run test -- packages/core/src/journal/domain/occ-root.test.ts` | ❌ Wave 0 | ⬜ pending |
+| 40-01-T3 | 40-01 | 1 | HIST-05 | T-40-07 | Idempotent slot rounding (same-slot collapse) | unit + fast-check | `bun run test -- packages/core/src/journal/domain/rth-slot.test.ts` | ❌ Wave 0 | ⬜ pending |
+| 40-02-T1 | 40-02 | 2 | HIST-01 | T-40-05, T-40-09 | Both candidate roots built; honest NaN only on genuine miss | unit + contract | `bun run test -- packages/core/src/journal/application/getLiveGreeks.test.ts packages/adapters/src/postgres/repos/calendars.contract.test.ts` | ❌ getLiveGreeks / extend calendars.contract | ⬜ pending |
+| 40-02-T2 | 40-02 | 2 | HIST-01 | T-40-05, T-40-08 | Candidate-root contract match; source-inclusive journal read | contract (pg + memory) | `bun run test -- packages/adapters/src/postgres/repos/calendar-snapshots.contract.test.ts packages/adapters/src/memory/calendar-snapshots.contract.test.ts` | extend existing | ⬜ pending |
+| 40-03-T1 | 40-03 | 2 | HIST-05 | T-40-10, T-40-11 | Same-slot dedup via existing PK; freshness gate on real clock | unit | `bun run test -- packages/core/src/journal/application/snapshotCalendars.test.ts` | extend existing | ⬜ pending |
+| 40-04-T1 | 40-04 | 3 | HIST-02 | T-40-05, T-40-03 | As-of-slot read; stale-outside-window → honest gap | contract (pg + memory) | `bun run test -- packages/adapters/src/postgres/repos/leg-observations.contract.test.ts packages/adapters/src/memory/leg-observations.contract.test.ts` | extend + new memory runner | ⬜ pending |
+| 40-04-T2 | 40-04 | 3 | HIST-02 | T-40-02, T-40-12 | Fill-only heal via isGapRow; windowed delete keeps in-window rows | contract (pg + memory) | `bun run test -- packages/adapters/src/postgres/repos/calendar-snapshots.contract.test.ts packages/adapters/src/memory/calendar-snapshots.contract.test.ts` | extend existing | ⬜ pending |
+| 40-05-T1 | 40-05 | 4 | HIST-02 | T-40-01 | Slot enumeration clamped to life window (D-08) | unit + fast-check | `bun run test -- packages/core/src/journal/application/rebuildCalendarHistory.test.ts` | ❌ Wave 0 | ⬜ pending |
+| 40-05-T2 | 40-05 | 4 | HIST-02 | T-40-13, T-40-03, T-40-02 | Byte-identical to live writer; honest-gap skip; fill-only heal | unit + fast-check | `bun run test -- packages/core/src/journal/application/rebuildCalendarHistory.test.ts` | ❌ Wave 0 | ⬜ pending |
+| 40-06-T1 | 40-06 | 5 | HIST-03 | T-40-02, T-40-14 | OPEN-only, bounded lookback, fill-only | unit | `bun run test -- packages/core/src/journal/application/selfHealJournal.test.ts` | ❌ Wave 0 | ⬜ pending |
+| 40-06-T2 | 40-06 | 5 | HIST-03 | T-40-06 | Handler Zod-parses payload; array-guard; throws on !ok | unit | `bun run test -- apps/worker/src/handlers/self-heal-journal.test.ts` | ❌ Wave 0 | ⬜ pending |
+| 40-07-T1 | 40-07 | 6 | HIST-04 | T-40-04, T-40-15 | Heal-only by default; trim opt-in with count; before/after coverage | unit | `bun run test -- packages/core/src/journal/application/repairJournalHistory.test.ts` | ❌ Wave 0 | ⬜ pending |
+| 40-07-T2 | 40-07 | 6 | HIST-04 | T-40-06, T-40-15 | z.enum job name; trim not reachable via trigger_job; explicit --all | unit | `bun run test -- apps/worker/src/handlers/repair-journal-history.test.ts packages/contracts/src/jobs.test.ts` | ❌ Wave 0 / extend jobs | ⬜ pending |
+| 40-07-T3 | 40-07 | 6 | HIST-04 | T-40-16 | On-register backfill non-fatal to registration | unit | `bun run test -- packages/core/src/journal/application/registerOpenCalendars.test.ts` | extend existing | ⬜ pending |
+| 40-08-T1 | 40-08 | 7 | HIST-01..05 + D-09 | T-40-18 | Full suite + typecheck + lint + backtest/exit regression green | integration | `bun run test && bun run typecheck && bun run lint && bun run test -- packages/core/src/backtest packages/core/src/exits` | existing suites | ⬜ pending |
+| 40-08-T2 | 40-08 | 7 | HIST-01/04 | T-40-17 | Diagnostic SQL before write; heal-only trigger_job; before/after counts | manual (operator) | Diagnostic SQL queries 1-2 + `trigger_job repair-journal-history` (see plan 08 how-to-verify) | manual | ⬜ pending |
+| 40-08-T3 | 40-08 | 7 | HIST-02/03 | — | Healed non-gap lifecycle series; honest gaps preserved; one row per slot | manual (visual UAT) | morai.wtf Journal lifecycle check (see plan 08 how-to-verify) | manual | ⬜ pending |
 
 Requirement → test map (from RESEARCH §Validation Architecture):
 
