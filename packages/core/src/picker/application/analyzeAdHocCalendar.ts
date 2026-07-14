@@ -24,7 +24,12 @@
 import { ok, err, assertDefined } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { bsmGreeks } from "@morai/quant";
-import { legSpansEvents, resolveEventExit, daysBetween } from "../domain/candidate-selection.ts";
+import {
+  legSpansEvents,
+  resolveEventExit,
+  daysBetween,
+  yearFractionToSettlement,
+} from "../domain/candidate-selection.ts";
 import { scoreCalendarCandidates } from "../domain/scoring.ts";
 import { realizedVol } from "../domain/realized-vol.ts";
 import { resolvePickerRuleConfig } from "../domain/rule-config.ts";
@@ -131,8 +136,11 @@ export function makeAnalyzeAdHocCalendarUseCase(
       return ok({ scored: false, reason: "dte-expiry-mismatch" });
     }
 
-    const gF = bsmGreeks(spot, K, tf / 365, ivF, r, q, "P");
-    const gB = bsmGreeks(spot, K, tb / 365, ivB, r, q, "P");
+    // Settlement-aware year fractions anchored on the snapshot's observedAt instant (TOS
+    // parity, 2026-07-14) — same convention as selectCandidates. Ad-hoc input has no OCC
+    // root, so both legs take the PM-settled default (the user's calendars are SPXW).
+    const gF = bsmGreeks(spot, K, yearFractionToSettlement(snapshotRow.observedAt, fe), ivF, r, q, "P");
+    const gB = bsmGreeks(spot, K, yearFractionToSettlement(snapshotRow.observedAt, be), ivB, r, q, "P");
     const theta = (gB.theta - gF.theta) * 100;
     const vega = (gB.vega - gF.vega) * 100;
     const delta = (gB.delta - gF.delta) * 100;

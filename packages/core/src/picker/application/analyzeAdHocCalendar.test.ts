@@ -22,6 +22,7 @@ import { bsmGreeks } from "@morai/quant";
 import { makeAnalyzeAdHocCalendarUseCase } from "./analyzeAdHocCalendar.ts";
 import type { AnalyzeAdHocCalendarDeps } from "./analyzeAdHocCalendar.ts";
 import { scoreCalendarCandidates } from "../domain/scoring.ts";
+import { yearFractionToSettlement } from "../domain/candidate-selection.ts";
 import { resolvePickerRuleConfig } from "../domain/rule-config.ts";
 import type { RawCandidate } from "../domain/types.ts";
 import type {
@@ -186,8 +187,11 @@ describe("makeAnalyzeAdHocCalendarUseCase", () => {
 
           // The equivalent RawCandidate, built by hand (candidate-selection.ts:370-411 shape)
           // and scored via the SAME scoreCalendarCandidates function -- the byte-parity oracle.
-          const gF = bsmGreeks(SNAPSHOT_SPOT, strike, frontDte / 365, ivF, R, Q, "P");
-          const gB = bsmGreeks(SNAPSHOT_SPOT, strike, backDte / 365, ivB, R, Q, "P");
+          // T mirrors the engine's settlement-aware year fraction anchored on the snapshot's
+          // observedAt instant (TOS parity, 2026-07-14).
+          const observedAt = new Date("2026-07-01T14:30:00.000Z");
+          const gF = bsmGreeks(SNAPSHOT_SPOT, strike, yearFractionToSettlement(observedAt, frontExpiry), ivF, R, Q, "P");
+          const gB = bsmGreeks(SNAPSHOT_SPOT, strike, yearFractionToSettlement(observedAt, backExpiry), ivB, R, Q, "P");
           const expectedRaw: RawCandidate = {
             id: "expected",
             name: "expected",

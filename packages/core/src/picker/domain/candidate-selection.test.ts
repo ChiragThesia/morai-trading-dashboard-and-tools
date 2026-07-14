@@ -22,6 +22,7 @@ import {
   haircutFill,
   autoTuneTargetDelta,
   resolveEventExit,
+  yearFractionToSettlement,
   DELTA_BAND_MIN,
   DELTA_BAND_MAX,
   FRONT_DTE_MIN,
@@ -36,6 +37,14 @@ import type { ChainQuoteForPicker, EconomicEvent } from "../application/ports.ts
 const SPOT = 7500;
 const R = 0.04;
 const Q = 0.013;
+
+// Cohort asOf instant — every chainQuote fixture carries this time, so selectCandidates'
+// latestTime resolves to it. Greek mirrors below use the SAME settlement-aware year
+// fraction the engine uses (TOS parity, 2026-07-14) — whole-day dte/365 is retired.
+const ASOF = new Date("2026-07-01T14:30:00.000Z");
+function tOf(leg: { readonly expiration: string }): number {
+  return yearFractionToSettlement(ASOF, leg.expiration);
+}
 
 // ─────────────────────────────────────────────────────────────
 // Synthetic chain builder — strike is the ×1000 int convention (Pitfall 1); the domain
@@ -117,6 +126,37 @@ describe("legSpansEvents", () => {
   });
 });
 
+describe("yearFractionToSettlement", () => {
+  const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+
+  it("PM-settled default (SPXW / non-3rd-Friday): T runs to 16:00 ET on the expiry date", () => {
+    // 2026-07-31 is EDT (UTC-4): 16:00 ET = 20:00 UTC.
+    const settle = Date.UTC(2026, 6, 31, 20, 0, 0);
+    const expected = (settle - ASOF.getTime()) / MS_PER_YEAR;
+    expect(yearFractionToSettlement(ASOF, "2026-07-31")).toBeCloseTo(expected, 12);
+  });
+
+  it("AM-settled SPX 3rd Friday: T runs to 09:30 ET; the SPXW twin on the same date stays PM", () => {
+    // 2026-08-21 is the 3rd Friday of August 2026, EDT: 09:30 ET = 13:30 UTC.
+    const settleAm = Date.UTC(2026, 7, 21, 13, 30, 0);
+    const settlePm = Date.UTC(2026, 7, 21, 20, 0, 0);
+    expect(yearFractionToSettlement(ASOF, "2026-08-21", "SPX")).toBeCloseTo(
+      (settleAm - ASOF.getTime()) / MS_PER_YEAR,
+      12,
+    );
+    expect(yearFractionToSettlement(ASOF, "2026-08-21", "SPXW")).toBeCloseTo(
+      (settlePm - ASOF.getTime()) / MS_PER_YEAR,
+      12,
+    );
+  });
+
+  it("stays within a calendar day of the whole-day dte/365 convention it replaces", () => {
+    const tFrac = yearFractionToSettlement(ASOF, "2026-07-31");
+    const tWhole = 30 / 365;
+    expect(Math.abs(tFrac - tWhole)).toBeLessThan(1.5 / 365);
+  });
+});
+
 describe("selectCandidates", () => {
   it("every emitted candidate carries net gamma = (back γ − front γ) × 100 (Analyzer table column)", () => {
     const iv = 0.15;
@@ -129,8 +169,8 @@ describe("selectCandidates", () => {
     const { candidates } = selectCandidates(chain, [], { r: R, q: Q });
     expect(candidates.length).toBeGreaterThan(0);
     for (const c of candidates) {
-      const gF = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P");
-      const gB = bsmGreeks(c.spot, c.backLeg.strike, c.backLeg.dte / 365, c.backLeg.iv, R, Q, "P");
+      const gF = bsmGreeks(c.spot, c.frontLeg.strike, tOf(c.frontLeg), c.frontLeg.iv, R, Q, "P");
+      const gB = bsmGreeks(c.spot, c.backLeg.strike, tOf(c.backLeg), c.backLeg.iv, R, Q, "P");
       expect(Number.isFinite(c.gamma)).toBe(true);
       expect(c.gamma).toBeCloseTo((gB.gamma - gF.gamma) * 100, 9);
     }
@@ -156,7 +196,7 @@ describe("selectCandidates", () => {
     expect(ks.has(7400)).toBe(true);
     // Every emitted strike's front delta is inside the band.
     for (const c of candidates) {
-      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, tOf(c.frontLeg), c.frontLeg.iv, R, Q, "P").delta;
       expect(d).toBeLessThanOrEqual(DELTA_BAND_MAX + 1e-9);
       expect(d).toBeGreaterThanOrEqual(DELTA_BAND_MIN - 1e-9);
     }
@@ -485,7 +525,7 @@ describe("selectCandidates — effectiveDeltaMin (28-04, PLAY-05 wiring)", () =>
     });
     expect(tilted.candidates.length).toBeLessThan(full.candidates.length);
     for (const c of tilted.candidates) {
-      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, tOf(c.frontLeg), c.frontLeg.iv, R, Q, "P").delta;
       expect(d).toBeGreaterThanOrEqual(DELTA_BAND_MAX - 1e-9);
     }
   });
@@ -497,7 +537,7 @@ describe("selectCandidates — effectiveDeltaMin (28-04, PLAY-05 wiring)", () =>
 
     const clampedHigh = selectCandidates(denseChain(), [], { r: R, q: Q, effectiveDeltaMin: 10 });
     for (const c of clampedHigh.candidates) {
-      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, tOf(c.frontLeg), c.frontLeg.iv, R, Q, "P").delta;
       expect(d).toBeLessThanOrEqual(DELTA_BAND_MAX + 1e-9);
     }
   });
@@ -558,7 +598,7 @@ describe("selectCandidates — deltaMax / frontDteMin / frontDteMax (29-03 runti
     const narrowed = selectCandidates(denseChain(), [], { r: R, q: Q, deltaMax: -0.35 });
     expect(narrowed.candidates.length).toBeLessThan(full.candidates.length);
     for (const c of narrowed.candidates) {
-      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, tOf(c.frontLeg), c.frontLeg.iv, R, Q, "P").delta;
       expect(d).toBeLessThanOrEqual(-0.35 + 1e-9);
     }
   });
@@ -572,7 +612,7 @@ describe("selectCandidates — deltaMax / frontDteMin / frontDteMax (29-03 runti
     const narrowed = selectCandidates(denseChain(), [], { r: R, q: Q, deltaMin: -0.35 });
     expect(narrowed.candidates.length).toBeLessThan(full.candidates.length);
     for (const c of narrowed.candidates) {
-      const d = bsmGreeks(c.spot, c.frontLeg.strike, c.frontLeg.dte / 365, c.frontLeg.iv, R, Q, "P").delta;
+      const d = bsmGreeks(c.spot, c.frontLeg.strike, tOf(c.frontLeg), c.frontLeg.iv, R, Q, "P").delta;
       expect(d).toBeGreaterThanOrEqual(-0.35 - 1e-9);
     }
   });

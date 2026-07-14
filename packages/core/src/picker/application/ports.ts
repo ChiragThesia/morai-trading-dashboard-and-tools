@@ -50,6 +50,12 @@ export type ChainQuoteForPicker = {
   readonly contractType: "C" | "P";
   readonly underlyingPrice: number;
   readonly bsmIv: string | null;
+  /**
+   * OCC root, when the source row carries one — drives AM-vs-PM settlement in the
+   * candidate greeks' year fraction (yearFractionToSettlement). Absent → PM-settled
+   * ("SPXW" default); only SPX 3rd-Friday contracts settle AM.
+   */
+  readonly root?: "SPX" | "SPXW";
   /** Quote bid/ask + open interest — inputs to the `liquidity` gate (rules.ts). */
   readonly bid: number;
   readonly ask: number;

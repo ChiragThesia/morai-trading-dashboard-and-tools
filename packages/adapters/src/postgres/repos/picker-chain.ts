@@ -60,6 +60,7 @@ export function makePostgresPickerChainRepo(db: Db): PostgresPickerChainRepo {
           contractType: contracts.contractType,
           strike: contracts.strike,
           expiration: contracts.expiration,
+          root: contracts.root,
         })
         .from(legObservations)
         .innerJoin(contracts, eq(legObservations.contract, contracts.occSymbol))
@@ -79,6 +80,9 @@ export function makePostgresPickerChainRepo(db: Db): PostgresPickerChainRepo {
         strike: row.strike, // ×1000 int convention
         expiration: row.expiration,
         contractType: row.contractType,
+        // Settlement classification (yearFractionToSettlement): SPX/SPXW union, anything
+        // unexpected degrades to the PM-settled "SPXW" default.
+        root: row.root === "SPX" ? "SPX" : "SPXW",
         underlyingPrice: parseFloat(row.underlyingPrice),
         bsmIv: row.bsmIv, // numeric string or null
         bid: parseFloat(row.bid),

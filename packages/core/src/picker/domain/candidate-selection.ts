@@ -32,7 +32,7 @@
  * components, and event-span membership is a plain ISO string-interval compare.
  */
 
-import { assertDefined } from "@morai/shared";
+import { assertDefined, settlementTimestamp } from "@morai/shared";
 import { bsmGreeks, bsmPrice } from "@morai/quant";
 import { isLiquidQuote } from "./rules.ts";
 import { VIX_LADDER } from "./entry-gate.ts";
@@ -150,6 +150,38 @@ function isoDayNumber(iso: string): number {
 /** Days between two ISO calendar dates (`to` minus `from`), via calendar-day arithmetic. */
 export function daysBetween(fromIso: string, toIso: string): number {
   return isoDayNumber(toIso) - isoDayNumber(fromIso);
+}
+
+/** Milliseconds per BSM year — 365.25 days, matching the journal computeT convention (D-04). */
+const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+
+/**
+ * yearFractionToSettlement — settlement-aware BSM year fraction for a leg (TOS parity,
+ * 2026-07-14). The chain's bsmIv values are inverted with the settlement-aware fractional T
+ * (journal computeT, D-04); recomputing candidate greeks at whole-day dte/365 mixed the two
+ * conventions and the displayed theta/vega read visibly low against TOS. This mirrors the
+ * inversion: exact settlement instant (settlementTimestamp — 09:30 ET for AM-settled
+ * 3rd-Friday SPX, 16:00 ET otherwise) minus the cohort asOf instant, over a 365.25-day year.
+ *
+ * `root` defaults to "SPXW" (PM-settled): only SPX 3rd-Friday rows settle AM, and the
+ * adapter supplies `root` whenever the source row carries an OCC symbol.
+ *
+ * The expiry Date is LOCAL-constructed — settlementTimestamp reads its argument with local
+ * getters, and a UTC-constructed date lands a day early west of UTC.
+ */
+export function yearFractionToSettlement(
+  asOf: Date,
+  expiryIso: string,
+  root: "SPX" | "SPXW" = "SPXW",
+): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiryIso);
+  assertDefined(match, `yearFractionToSettlement: malformed ISO date "${expiryIso}"`);
+  const [, y, m, d] = match;
+  assertDefined(y, "yearFractionToSettlement: year component");
+  assertDefined(m, "yearFractionToSettlement: month component");
+  assertDefined(d, "yearFractionToSettlement: day component");
+  const settle = settlementTimestamp(root, new Date(Number(y), Number(m) - 1, Number(d)));
+  return (settle.getTime() - asOf.getTime()) / MS_PER_YEAR;
 }
 
 /**
@@ -316,6 +348,7 @@ export function selectCandidates(
     readonly iv: number;
     readonly bid: number;
     readonly ask: number;
+    readonly root: "SPX" | "SPXW" | undefined;
   };
   const putQuotes: PointsQuote[] = [];
   for (const quote of chain) {
@@ -328,7 +361,14 @@ export function selectCandidates(
       drops.liquidity += 1;
       continue;
     }
-    putQuotes.push({ strike, expiration: quote.expiration, iv, bid: quote.bid, ask: quote.ask });
+    putQuotes.push({
+      strike,
+      expiration: quote.expiration,
+      iv,
+      bid: quote.bid,
+      ask: quote.ask,
+      root: quote.root,
+    });
   }
   if (putQuotes.length === 0) {
     return { candidates: [], gateDrops: drops };
@@ -362,7 +402,11 @@ export function selectCandidates(
 
     // Band membership (NOT nearest-target): every strike whose front delta is in the band.
     for (const frontQuote of frontQuotesRaw) {
-      const delta = bsmGreeks(spot, frontQuote.strike, tf / 365, frontQuote.iv, r, q, "P").delta;
+      // Settlement-aware year fraction (TOS parity, 2026-07-14) — the same convention the
+      // chain's bsmIv inversion used (journal computeT); tf/tb stay whole-day for the DTE
+      // windows, gap gates, and display.
+      const tfY = yearFractionToSettlement(latestTime, fe, frontQuote.root);
+      const delta = bsmGreeks(spot, frontQuote.strike, tfY, frontQuote.iv, r, q, "P").delta;
       if (delta < deltaMin || delta > deltaMax) continue;
       const K = frontQuote.strike;
       const ivF = frontQuote.iv;
@@ -385,8 +429,8 @@ export function selectCandidates(
         // < −1.5) zeroes true stress inversions. gateDrops.termInverted stays at 0 for
         // contract compat until the next schema pass.
 
-        const gF = bsmGreeks(spot, K, tf / 365, ivF, r, q, "P");
-        const gB = bsmGreeks(spot, K, tb / 365, ivB, r, q, "P");
+        const gF = bsmGreeks(spot, K, tfY, ivF, r, q, "P");
+        const gB = bsmGreeks(spot, K, yearFractionToSettlement(latestTime, be, backAtK.root), ivB, r, q, "P");
         const theta = (gB.theta - gF.theta) * 100;
         if (theta <= 0) {
           drops.netTheta += 1;

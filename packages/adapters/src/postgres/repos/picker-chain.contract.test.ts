@@ -89,6 +89,9 @@ describe.skipIf(shouldSkip)("postgres picker-chain adapter", () => {
     expect(leg.bsmIv).toBe("0.16");
     expect(leg.underlyingPrice).toBe(7390);
     expect(leg.source).toBe("schwab"); // schwab_chain → "schwab"
+    // Settlement classification input (yearFractionToSettlement) — projected from
+    // contracts.root, narrowed to the SPX/SPXW union.
+    expect(leg.root).toBe("SPX");
     expect(leg.time.getTime()).toBe(latestTime.getTime());
     // Liquidity-gate inputs ride along (rules.ts).
     expect(leg.bid).toBe(2.0);
