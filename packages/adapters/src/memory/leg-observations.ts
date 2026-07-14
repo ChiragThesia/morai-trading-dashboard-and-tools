@@ -16,7 +16,7 @@
 import { ok, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import { computeMoneyness } from "../smile-moneyness.ts";
-import { resolveRootCandidates, SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "@morai/core";
+import { resolveRootCandidates } from "@morai/core";
 import type {
   ForPersistingObservations,
   ForReadingLatestLegObs,
@@ -44,6 +44,9 @@ export type SeededSmileLeg = {
   /** spot = underlying_price (points). Omitted → moneyness null (mirrors Postgres' guard). */
   readonly underlyingPrice?: string;
 };
+
+/** RTH slot width (mirrors postgres/repos/leg-observations.ts's SLOT_INTERVAL_MS). */
+const SLOT_INTERVAL_MS = 30 * 60 * 1000;
 
 export type MemoryLegObservationsRepo = {
   readonly persistObservations: ForPersistingObservations;
@@ -110,17 +113,21 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
     smileStore.set(key, leg);
   };
 
-  // resolveLegObservationForSlot (HIST-02): nearest observation at-or-before slotAnchor, within
-  // the usability window (D-07 reuse). Root-candidate-aware (D-04/HIST-01): tries the stored
-  // root then its sibling, building each candidate's occSymbol directly (no separate contracts
-  // table modeled here — the occSymbol's own embedded root prefix IS the contract's real root).
+  // resolveLegObservationForSlot (HIST-02): nearest observation to slotAnchor within the
+  // half-open interval [slotAnchor, slotAnchor + 30min) — the observation that BELONGS to the
+  // slot, not the nearest at-or-before it (live-fix 2026-07-14: the live writer builds a
+  // slot's row from the freshest observation, fetched slightly AFTER the anchor, so
+  // at-or-before semantics could never see it). Root-candidate-aware (D-04/HIST-01): tries the
+  // stored root then its sibling, building each candidate's occSymbol directly (no separate
+  // contracts table modeled here — the occSymbol's own embedded root prefix IS the contract's
+  // real root).
   const resolveLegObservationForSlot: ForResolvingLegObservationForSlot = async (
     query,
   ): Promise<Result<LegSnapshot | null, StorageError>> => {
     const [y, m, d] = query.expiry.split("-").map(Number);
     const expiry = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
     const anchorMs = query.slotAnchor.getTime();
-    const windowStartMs = anchorMs - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS;
+    const intervalEndMs = anchorMs + SLOT_INTERVAL_MS;
 
     for (const root of resolveRootCandidates(query.underlying)) {
       const occSymbol = formatOccSymbol({
@@ -130,28 +137,28 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
         strike: query.strike / 1000,
       });
 
-      let latest: ObservationRow | null = null;
+      let nearest: ObservationRow | null = null;
       for (const row of store.values()) {
         if (row.contract !== occSymbol) continue;
         const t = row.time.getTime();
-        if (t > anchorMs || t < windowStartMs) continue; // outside [anchor - window, anchor]
-        if (latest === null || row.time > latest.time) latest = row;
+        if (t < anchorMs || t >= intervalEndMs) continue; // outside [anchor, anchor + interval)
+        if (nearest === null || row.time < nearest.time) nearest = row; // nearest-to-anchor = earliest
       }
 
-      if (latest !== null) {
+      if (nearest !== null) {
         return ok({
-          occSymbol: latest.contract,
-          time: latest.time,
-          mark: latest.mark,
-          underlyingPrice: latest.underlyingPrice,
-          ivRaw: latest.iv,
+          occSymbol: nearest.contract,
+          time: nearest.time,
+          mark: nearest.mark,
+          underlyingPrice: nearest.underlyingPrice,
+          ivRaw: nearest.iv,
           // Memory adapter: bsm fields are always null (mirrors getLatestLegObs above).
           bsmIv: null,
           bsmDelta: null,
           bsmGamma: null,
           bsmTheta: null,
           bsmVega: null,
-          source: latest.source,
+          source: nearest.source,
         });
       }
     }

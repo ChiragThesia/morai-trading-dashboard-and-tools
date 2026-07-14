@@ -202,12 +202,15 @@ export type ForResolvingLegSnapshot = (query: {
 }) => Promise<Result<LegSnapshot | null, StorageError>>;
 
 /**
- * ForResolvingLegObservationForSlot — as-of-slot read (HIST-02). Resolves a leg's nearest
- * observation at-or-before `slotAnchor`, within the live freshness window (D-07 reuse:
- * SNAPSHOT_LEG_STALENESS_TOLERANCE_MS). Root-candidate-aware like ForResolvingLegSnapshot
- * (D-04/HIST-01): an EOM/mixed-root back leg resolves under its sibling root. An observation
- * older than the usability window, or none at-or-before the anchor, is an honest gap — returns
- * null, never throws.
+ * ForResolvingLegObservationForSlot — slot-interval read (HIST-02). Resolves the leg
+ * observation that BELONGS to the slot: nearest to `slotAnchor` within the half-open interval
+ * [slotAnchor, slotAnchor + 30min). This matches the live snapshot writer, which floors a
+ * slot's persisted row time down to the slot boundary but builds the row from the freshest
+ * observation available at write time — an observation fetched slightly AFTER the anchor, not
+ * before it (2026-07-14 live fix: at-or-before-anchor semantics could never see that row).
+ * Root-candidate-aware like ForResolvingLegSnapshot (D-04/HIST-01): an EOM/mixed-root back leg
+ * resolves under its sibling root. No observation inside the interval — it belongs to a
+ * neighboring slot — is an honest gap: returns null, never throws.
  */
 export type ForResolvingLegObservationForSlot = (query: {
   readonly underlying: string;

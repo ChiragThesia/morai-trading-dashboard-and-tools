@@ -1,6 +1,6 @@
 import { ok, err, parseOccSymbol, formatOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { resolveRootCandidates, SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "@morai/core";
+import { resolveRootCandidates } from "@morai/core";
 import type {
   ForPersistingObservations,
   ForUpsertingContracts,
@@ -17,7 +17,7 @@ import type {
   SmileReadResult,
   StorageError,
 } from "@morai/core";
-import { and, isNull, isNotNull, ne, eq, lte, gte, inArray, desc, sql } from "drizzle-orm";
+import { and, isNull, isNotNull, ne, eq, lte, lt, gte, inArray, desc, asc, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import { computeMoneyness } from "../../smile-moneyness.ts";
 import type { Db } from "../db.ts";
@@ -40,6 +40,9 @@ import type { Db } from "../db.ts";
 
 /** Maximum rows per INSERT statement to stay below Postgres's 65,534 bind-parameter limit. */
 const INSERT_CHUNK_ROWS = 2000;
+
+/** RTH slot width (mirrors rebuildCalendarHistory.ts's SLOT_MS / rth-slot.ts's SLOT_MINUTES). */
+const SLOT_INTERVAL_MS = 30 * 60 * 1000;
 export type PostgresLegObservationsRepo = {
   readonly persistObservations: ForPersistingObservations;
   readonly upsertContracts: ForUpsertingContracts;
@@ -385,10 +388,12 @@ export function makePostgresLegObservationsRepo(
   };
 
   // ─── ForResolvingLegObservationForSlot (HIST-02) ─────────────────────────────
-  // Two-step, mirroring resolveLegSnapshot's root-candidate join (HIST-01) + readSmile's
-  // "latest at-or-before an anchor" bound, additionally lower-bounded by the usability window
-  // (D-07 reuse: SNAPSHOT_LEG_STALENESS_TOLERANCE_MS) so a slot with no usable observation
-  // stays an honest gap (D-04) rather than resolving a stale value.
+  // Two-step, mirroring resolveLegSnapshot's root-candidate join (HIST-01). Step 2 resolves the
+  // observation nearest `slotAnchor` inside the half-open interval [slotAnchor, slotAnchor +
+  // 30min) — the observation that BELONGS to the slot, not the nearest at-or-before it (live-fix
+  // 2026-07-14: the live writer builds a slot's row from the freshest observation, fetched
+  // slightly AFTER the anchor, so at-or-before semantics could never see it). No observation
+  // inside the interval is an honest gap (D-04).
   const resolveLegObservationForSlot: ForResolvingLegObservationForSlot = async (
     query,
   ): Promise<Result<LegSnapshot | null, StorageError>> => {
@@ -415,10 +420,8 @@ export function makePostgresLegObservationsRepo(
       const parsedOcc = parseOccSymbol(occSymbolRaw);
       if (!parsedOcc.ok) return ok(null); // malformed symbol in DB → null
 
-      // Step 2: nearest observation at-or-before slotAnchor, within the usability window.
-      const windowStart = new Date(
-        query.slotAnchor.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS,
-      );
+      // Step 2: nearest observation to slotAnchor within [slotAnchor, slotAnchor + 30min).
+      const intervalEnd = new Date(query.slotAnchor.getTime() + SLOT_INTERVAL_MS);
       const obsRows = await db
         .select({
           time: legObservations.time,
@@ -436,11 +439,11 @@ export function makePostgresLegObservationsRepo(
         .where(
           and(
             eq(legObservations.contract, occSymbolRaw),
-            lte(legObservations.time, query.slotAnchor),
-            gte(legObservations.time, windowStart),
+            gte(legObservations.time, query.slotAnchor),
+            lt(legObservations.time, intervalEnd),
           ),
         )
-        .orderBy(desc(legObservations.time))
+        .orderBy(asc(legObservations.time))
         .limit(1);
 
       const obsRow = obsRows[0];
