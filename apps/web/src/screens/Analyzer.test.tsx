@@ -1068,7 +1068,7 @@ describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
     const innerGrid = screen.getByTestId("analyzer-inner-grid");
     const classes = innerGrid.className.split(/\s+/u);
     expect(classes).toContain("grid");
-    expect(classes).toContain("grid-cols-[300px_minmax(0,1fr)_330px]");
+    expect(classes).toContain("grid-cols-[minmax(380px,440px)_minmax(0,1fr)]");
     expect(classes).toContain("gap-4");
     // The reflow arm is gone: no display:contents, no lg:-prefixed grid variants, no inline style.
     expect(innerGrid.className).not.toContain("contents");
@@ -1091,7 +1091,7 @@ describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
     }
   });
 
-  it("keeps DOM order scorecard -> rail -> center -> right unchanged", () => {
+  it("keeps DOM order scorecard -> rail -> detail column; WHY/ENTRY sit between chart and term structure", () => {
     render(<Analyzer />);
 
     const outer = screen.getByTestId("analyzer-scorecard-wrapper").parentElement;
@@ -1105,9 +1105,26 @@ describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
     const innerChildren = Array.from(innerGrid.children);
     const railIdx = innerChildren.indexOf(screen.getByTestId("analyzer-rail-wrapper"));
     const centerIdx = innerChildren.indexOf(screen.getByTestId("analyzer-center-column"));
-    const rightIdx = innerChildren.indexOf(screen.getByTestId("analyzer-right-wrapper"));
     expect(railIdx).toBeLessThan(centerIdx);
-    expect(centerIdx).toBeLessThan(rightIdx);
+
+    // 2-col layout: WHY/ENTRY moved INSIDE the detail column, between the payoff panel
+    // (first child) and the term-structure panel (last child).
+    const center = screen.getByTestId("analyzer-center-column");
+    const right = screen.getByTestId("analyzer-right-wrapper");
+    expect(center.contains(right)).toBe(true);
+    const centerChildren = Array.from(center.children);
+    const rightIdx = centerChildren.indexOf(right);
+    expect(rightIdx).toBeGreaterThan(0);
+    expect(rightIdx).toBeLessThan(centerChildren.length - 1);
+  });
+
+  it("WHY + ENTRY/EXIT render as a side-by-side 2-up grid under the chart", () => {
+    render(<Analyzer />);
+
+    const right = screen.getByTestId("analyzer-right-wrapper");
+    const stack = right.firstElementChild;
+    assertDefined(stack, "RightColumn wrapper present");
+    expect(stack.className).toContain("grid-cols-2");
   });
 
   it("drops the full-bleed chart wrapper — no negative-margin bleed remains in the payoff center", () => {

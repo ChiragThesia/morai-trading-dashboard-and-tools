@@ -1,11 +1,17 @@
 ---
 phase: 41
 slug: analyzer-desktop-redesign-ranked-table-verdict-hero-live-sidecar
-status: approved-rev2
+status: approved-rev3
 shadcn_initialized: true
 preset: base-nova (neutral base color, existing — apps/web/components.json)
 created: 2026-07-14
 ---
+
+> **Rev 3 (2026-07-14, user UAT feedback — USER-LOCKED via live AskUserQuestion):** desktop grid
+> is now 2-col, not 3-col. The 300px rail squished the table. New layout:
+> `grid-cols-[minmax(380px,440px)_minmax(0,1fr)]` — roomy ranked table left; detail column right
+> stacking payoff chart → WHY/ENTRY-EXIT as a side-by-side 2-up (`grid-cols-2`) → full-width
+> term-structure chart last. References to the 3-col grid below are rev-2 history.
 
 # Phase 41 — UI Design Contract
 

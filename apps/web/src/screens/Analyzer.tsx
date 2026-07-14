@@ -540,14 +540,14 @@ export interface RightColumnProps {
 }
 
 /**
- * RightColumn — the "Why this calendar" / "Entry / exit plan" stack for the currently-selected
- * candidate. The term-structure chart moved to the center column (stacked under the payoff graph);
- * reads the live snapshot's GEX context (Phase 19: never the frozen fixture).
+ * RightColumn — the "Why this calendar" / "Entry / exit plan" 2-up for the currently-selected
+ * candidate, rendered side-by-side under the payoff chart (2-col layout, 2026-07-14 UAT
+ * feedback); reads the live snapshot's GEX context (Phase 19: never the frozen fixture).
  */
 function RightColumn({ candidate, gex, sizing }: RightColumnProps): React.ReactElement {
   const notScored = candidate !== null && candidate.breakdown.length === 0;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="grid grid-cols-2 gap-3">
       <Panel>
         <PanelHeading title="Why this calendar" />
         {notScored ? (
@@ -740,17 +740,18 @@ function AnalyzerDesktop(): React.ReactElement {
           source={snapshot?.source ?? "schwab"}
         />
       </div>
-      {/* 3-col desktop grid (this tree only mounts ≥1024px, D-17). */}
+      {/* 2-col desktop grid (this tree only mounts ≥1024px, D-17): roomy ranked table left,
+          detail column right (chart → WHY/ENTRY 2-up → full-width term structure). */}
       <div
         data-testid="analyzer-inner-grid"
-        className="grid grid-cols-[300px_minmax(0,1fr)_330px] gap-4"
+        className="grid grid-cols-[minmax(380px,440px)_minmax(0,1fr)] gap-4"
       >
       {/* ── Left column: ranked rail ── */}
       <div data-testid="analyzer-rail-wrapper" className="flex flex-col gap-3">
         {railBody}
       </div>
 
-      {/* ── Center column: payoff graph + term structure (both charts, stacked) ── */}
+      {/* ── Detail column: payoff graph → WHY/ENTRY 2-up → full-width term structure ── */}
       <div data-testid="analyzer-center-column" className="flex min-w-0 flex-col gap-3">
         <Panel>
           <div className="mb-1 flex items-center justify-between gap-2">
@@ -835,6 +836,11 @@ function AnalyzerDesktop(): React.ReactElement {
           )}
         </Panel>
 
+        {/* ── WHY / ENTRY-EXIT 2-up, directly under the chart ── */}
+        <div data-testid="analyzer-right-wrapper">
+          <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
+        </div>
+
         <Panel>
           <PanelHeading title="Term structure + your legs" />
           {selected !== null && snapshot !== null && (
@@ -846,11 +852,6 @@ function AnalyzerDesktop(): React.ReactElement {
             />
           )}
         </Panel>
-      </div>
-
-      {/* ── Right column: why-panel / entry-exit-plan ─── */}
-      <div data-testid="analyzer-right-wrapper">
-        <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
       </div>
       </div>
     </div>
