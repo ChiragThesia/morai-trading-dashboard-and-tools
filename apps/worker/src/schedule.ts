@@ -20,6 +20,8 @@
  *   wipe-derived-fills (no cron — on-demand only, account-wide fills-side-correction follow-up),
  *   self-heal-journal (sparse hourly cron, no RTH gate — HIST-03 D-05: repairs OPEN calendars'
  *   past slots via leg_observations; fill-only, so it never races the OPS-01 live gate)
+ *   repair-journal-history (no cron — on-demand only, HIST-04: operator repair via trigger_job
+ *   or the CLI, one/all-calendar rebuild + before/after coverage, opt-in trim CLI-only)
  *
  * CRITICAL (RESEARCH Pitfall 2):
  *   snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
@@ -89,6 +91,7 @@ export type AllHandlers = {
   readonly wipeDerivedFills: PgBossHandler;
   readonly registerOpenCalendars: PgBossHandler;
   readonly selfHealJournal: PgBossHandler;
+  readonly repairJournalHistory: PgBossHandler;
 };
 
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
@@ -130,6 +133,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("wipe-derived-fills"); // journal-pnl-opennetdebit-units round 3: on-demand only, account-wide; no cron
   await boss.createQueue("register-open-calendars"); // JRNL-02: on-demand only, account-wide; no cron
   await boss.createQueue("self-heal-journal"); // HIST-03: sparse hourly cron — see below
+  await boss.createQueue("repair-journal-history"); // HIST-04: on-demand only, no cron; operator repair
   // refresh-tokens: RETIRED (GW-03) — sidecar auto-refreshes both Schwab apps; no TS refresher
 
   // ── Phase 2: schedules (idempotent — safe on every boot) ─────────────────────
@@ -223,6 +227,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   // wipe-derived-fills: NO schedule — on-demand via trigger_job (journal-pnl-opennetdebit-units
   //   round 3; destructive account-wide op — must never run on a cron)
   // register-open-calendars: NO schedule — on-demand via trigger_job (JRNL-02)
+  // repair-journal-history: NO schedule — on-demand via trigger_job or the CLI (HIST-04)
   // refresh-tokens: RETIRED (GW-03) — sidecar handles Schwab token refresh; no TS scheduled job
 
   // ── Phase 3: register handlers (work) ─────────────────────────────────────────
@@ -245,4 +250,5 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("wipe-derived-fills", POLLING_INTERVAL, handlers.wipeDerivedFills);
   await boss.work("register-open-calendars", POLLING_INTERVAL, handlers.registerOpenCalendars);
   await boss.work("self-heal-journal", POLLING_INTERVAL, handlers.selfHealJournal);
+  await boss.work("repair-journal-history", POLLING_INTERVAL, handlers.repairJournalHistory);
 }

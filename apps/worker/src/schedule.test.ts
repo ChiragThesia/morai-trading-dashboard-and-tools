@@ -82,6 +82,7 @@ function makeFakeHandlers(): AllHandlers {
     wipeDerivedFills: handler,
     registerOpenCalendars: handler,
     selfHealJournal: handler,
+    repairJournalHistory: handler,
   };
 }
 
@@ -90,9 +91,9 @@ function makeFakeHandlers(): AllHandlers {
 // (on-demand only, mirrors rebuild-journal); journal-pnl-opennetdebit-units round 3:
 // wipe-derived-fills added (on-demand only, account-wide); JRNL-02: register-open-calendars
 // added (on-demand only, account-wide); 26-04 EXIT-01: compute-exit-advice added
-// (chain-triggered only); 40-06 HIST-03: self-heal-journal added (sparse hourly cron) —
-// 17 queues, 8 crons.
-const ALL_17_QUEUES = [
+// (chain-triggered only); 40-06 HIST-03: self-heal-journal added (sparse hourly cron);
+// 40-07 HIST-04: repair-journal-history added (on-demand only) — 18 queues, 8 crons.
+const ALL_18_QUEUES = [
   "fetch-schwab-chain",
   "fetch-rates",
   "compute-bsm-greeks",
@@ -110,6 +111,7 @@ const ALL_17_QUEUES = [
   "wipe-derived-fills",
   "register-open-calendars",
   "self-heal-journal",
+  "repair-journal-history",
 ];
 
 const SCHEDULED_8 = [
@@ -124,11 +126,11 @@ const SCHEDULED_8 = [
 ];
 
 describe("registerAllJobs", () => {
-  it("calls createQueue for all 17 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02; self-heal-journal added 40-06 HIST-03)", async () => {
+  it("calls createQueue for all 18 job names (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02; self-heal-journal added 40-06 HIST-03; repair-journal-history added 40-07 HIST-04)", async () => {
     const { boss, createQueueCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(createQueueCalls.sort()).toEqual(ALL_17_QUEUES.sort());
+    expect(createQueueCalls.sort()).toEqual(ALL_18_QUEUES.sort());
   });
 
   it("calls schedule 9 times — 8 jobs, fetch-rates scheduled twice; all 9 rows survive the (name, key) upsert (14-05, D-06, CR-01)", async () => {
@@ -211,11 +213,19 @@ describe("registerAllJobs", () => {
     expect(names).not.toContain("refresh-tokens");
   });
 
-  it("calls work() for all 17 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02; self-heal-journal added 40-06 HIST-03)", async () => {
+  it("calls work() for all 18 queues (refresh-tokens retired GW-03; fetch-cot added COT-01; compute-picker + fetch-economic-events added 19-08; recompute-snapshot-pnl added JRNL-01; wipe-derived-fills added journal-pnl-opennetdebit-units round 3; register-open-calendars added JRNL-02; self-heal-journal added 40-06 HIST-03; repair-journal-history added 40-07 HIST-04)", async () => {
     const { boss, workCalls } = makeFakeBoss();
     await registerAllJobs(boss, makeFakeHandlers());
 
-    expect(workCalls.sort()).toEqual(ALL_17_QUEUES.sort());
+    expect(workCalls.sort()).toEqual(ALL_18_QUEUES.sort());
+  });
+
+  it("does NOT schedule repair-journal-history (on-demand only — HIST-04, via trigger_job or the CLI)", async () => {
+    const { boss, scheduleCalls } = makeFakeBoss();
+    await registerAllJobs(boss, makeFakeHandlers());
+
+    const names = scheduleCalls.map((c) => c.name);
+    expect(names).not.toContain("repair-journal-history");
   });
 
   it("self-heal-journal cron is '0 * * * *' tz America/New_York (HIST-03, sparse hourly, no RTH gate — D-05)", async () => {

@@ -18,6 +18,12 @@ export const TRIGGERABLE_JOBS = [
   "register-open-calendars",
   /** Re-pull chains on demand (24/7): kicks off the full fetch→bsm→analytics→gex→picker chain. */
   "fetch-schwab-chain",
+  /**
+   * HIST-04: operator repair — one/all-calendar rebuild via the plan-05 rebuild engine.
+   * Heal-only via this trigger (calendarId optional, absent → all); the destructive trim flag
+   * is CLI-only, never reachable here (T-40-15 — triggerJobPayload below carries no trim field).
+   */
+  "repair-journal-history",
 ] as const;
 
 export type TriggerableJob = (typeof TRIGGERABLE_JOBS)[number];

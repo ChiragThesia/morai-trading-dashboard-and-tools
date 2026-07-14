@@ -75,6 +75,7 @@ import {
   makeComputeExitAdviceUseCase,
   makeRebuildCalendarHistoryUseCase,
   makeSelfHealJournalUseCase,
+  makeRepairJournalHistoryUseCase,
 } from "@morai/core";
 import type { PositionLeg } from "@morai/core";
 import type { GexContextForPicker, GexSnapshotRow } from "@morai/core";
@@ -99,6 +100,7 @@ import { makeRecomputeSnapshotPnlHandler } from "./handlers/recompute-snapshot-p
 import { makeWipeDerivedFillsHandler } from "./handlers/wipe-derived-fills.ts";
 import { makeRegisterOpenCalendarsHandler } from "./handlers/register-open-calendars.ts";
 import { makeSelfHealJournalHandler } from "./handlers/self-heal-journal.ts";
+import { makeRepairJournalHistoryHandler } from "./handlers/repair-journal-history.ts";
 import { makeComputePickerHandler } from "./handlers/compute-picker.ts";
 import { makeComputeExitAdviceHandler } from "./handlers/compute-exit-advice.ts";
 import { makeFetchEconomicEventsHandler } from "./handlers/fetch-economic-events.ts";
@@ -540,6 +542,24 @@ const selfHealJournalHandler = makeSelfHealJournalHandler({
   now: () => new Date(),
 });
 
+// HIST-04 (40-07): repair-journal-history — operator repair orchestrator, reusing the SAME
+// rebuildCalendarHistoryUseCase instance already built above for self-heal-journal (both are
+// thin wrappers over the one plan-05 engine). Heal-only via trigger_job (T-40-15 — the trim
+// flag is never exposed through triggerJobPayload); the CLI (repair-journal-history.ts) is the
+// only --trim entry point, wiring these same repos independently.
+const repairJournalHistoryUseCase = makeRepairJournalHistoryUseCase({
+  listCalendars: calendarsRepo.listCalendars,
+  readJournal: calendarSnapshotsRepo.readJournal,
+  rebuildCalendarHistory: rebuildCalendarHistoryUseCase,
+  deleteSnapshotsOutsideWindow: calendarSnapshotsRepo.deleteSnapshotsOutsideWindow,
+  now: () => new Date(),
+});
+
+const repairJournalHistoryHandler = makeRepairJournalHistoryHandler({
+  repairJournalHistoryUseCase,
+  now: () => new Date(),
+});
+
 // COT-01 (13-05): weekly CFTC Commitment of Traders report (Friday 17:00 ET, D-07).
 // CFTC Socrata endpoint — anonymous access, no auth required (landmine 7).
 // Idempotent: ON CONFLICT (contract_code, as_of) DO NOTHING in the repo (D-09).
@@ -740,8 +760,9 @@ await registerAllJobs(boss, {
   wipeDerivedFills: wipeDerivedFillsHandler,
   registerOpenCalendars: registerOpenCalendarsHandler,
   selfHealJournal: selfHealJournalHandler,
+  repairJournalHistory: repairJournalHistoryHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 17 queues created, 8 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events, self-heal-journal); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 18 queues created, 8 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events, self-heal-journal); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars + repair-journal-history on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );

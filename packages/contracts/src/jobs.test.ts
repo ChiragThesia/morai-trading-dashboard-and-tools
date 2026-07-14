@@ -61,4 +61,29 @@ describe("triggerJobBodyFor — WR-04 rebuild-journal requires calendarId", () =
     const result = triggerJobBodyFor("wipe-derived-fills").safeParse({});
     expect(result.success).toBe(true);
   });
+
+  // HIST-04: repair-journal-history — operator repair, heal-only via trigger_job (T-40-15:
+  // the destructive trim flag is CLI-only and structurally unreachable through this schema,
+  // since triggerJobPayload carries no trim field at all — any extra body key is stripped).
+  it("repair-journal-history is registered as a triggerable job", () => {
+    expect(TRIGGERABLE_JOBS).toContain("repair-journal-history");
+  });
+
+  it("repair-journal-history WITHOUT calendarId passes (optional — absent means 'all')", () => {
+    const result = triggerJobBodyFor("repair-journal-history").safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("repair-journal-history WITH calendarId passes", () => {
+    const result = triggerJobBodyFor("repair-journal-history").safeParse({ calendarId });
+    expect(result.success).toBe(true);
+  });
+
+  it("repair-journal-history strips an unknown trimOutsideWindow key (never reachable via trigger_job)", () => {
+    const result = triggerJobBodyFor("repair-journal-history").safeParse({ trimOutsideWindow: true });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty("trimOutsideWindow");
+    }
+  });
 });
