@@ -300,3 +300,14 @@ export type {
   SelfHealJournalDeps,
   SelfHealJournalInput,
 } from "./application/selfHealJournal.ts";
+// Phase 40 (HIST-04, plan 07): operator repair orchestrator — one/all-calendar rebuild with
+// before/after coverage, opt-in trim (D-08). The repair-journal-history job + CLI both call
+// this single tested use-case.
+export { makeRepairJournalHistoryUseCase } from "./application/repairJournalHistory.ts";
+export type {
+  ForRunningRepairJournalHistory,
+  RepairJournalHistoryDeps,
+  RepairJournalHistoryInput,
+  RepairCoverage,
+  CalendarRepairReport,
+} from "./application/repairJournalHistory.ts";

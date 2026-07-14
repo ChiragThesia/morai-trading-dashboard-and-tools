@@ -55,6 +55,16 @@ export type {
   SelfHealJournalDeps,
   SelfHealJournalInput,
 } from "./journal/index.ts";
+// Phase 40 (HIST-04, plan 07): operator repair orchestrator — the repair-journal-history job
+// (heal-only via trigger_job) and CLI (heal-only or opt-in --trim) both consume this.
+export { makeRepairJournalHistoryUseCase } from "./journal/index.ts";
+export type {
+  ForRunningRepairJournalHistory,
+  RepairJournalHistoryDeps,
+  RepairJournalHistoryInput,
+  RepairCoverage,
+  CalendarRepairReport,
+} from "./journal/index.ts";
 // SNAP-01 (20-04/20-06): cooldown predicate — composed in apps/server's onSpotObserved wiring.
 export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";
