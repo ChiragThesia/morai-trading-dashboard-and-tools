@@ -120,7 +120,7 @@ function mockUsePickerReturn(overrides: Partial<MockPickerResult>): void {
   });
 }
 
-import { Analyzer, CandidateRail, DEFAULT_CANDIDATE_SORT } from "./Analyzer.tsx";
+import { Analyzer, CandidateRail, DEFAULT_CANDIDATE_SORT, compactCalendarName } from "./Analyzer.tsx";
 import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
@@ -284,6 +284,17 @@ describe("Analyzer — ranked candidate table (Phase 41, AUI-01/AUI-03)", () => 
   it("Suggested calendars panel heading renders (locked copy)", () => {
     render(<Analyzer />);
     expect(screen.getByText("Suggested calendars")).toBeTruthy();
+  });
+
+  it("table rows render calendar names with short dates so rows stay one line (no ISO wrap)", () => {
+    // Live engine names carry ISO dates (fixture names are already short-form).
+    expect(compactCalendarName("7525P 2026-08-06 / 2026-08-10")).toBe("7525P Aug 6 / Aug 10");
+    // Non-date text passes through untouched.
+    expect(compactCalendarName("7525P pasted calendar")).toBe("7525P pasted calendar");
+
+    render(<Analyzer />);
+    const row = screen.getByTestId(`candidate-row-${TOP.id}`);
+    expect(row.textContent).toContain(compactCalendarName(TOP.name));
   });
 });
 

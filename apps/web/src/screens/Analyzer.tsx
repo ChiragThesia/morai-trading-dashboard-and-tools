@@ -74,6 +74,18 @@ export const DEFAULT_CANDIDATE_SORT: CandidateSortState = { key: "score", dir: "
 
 const SORT_LABEL: Record<CandidateSortKey, string> = { score: "Score", debit: "Debit", theta: "Θ/d" };
 
+const MONTH_ABBREV = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Shortens ISO dates inside a candidate name ("7525P 2026-08-06 / 2026-08-10" →
+ *  "7525P Aug 6 / Aug 10") so table rows stay one line. Pure string transform — no Date
+ *  construction (local-vs-UTC shift risk); non-date text passes through untouched. */
+export function compactCalendarName(name: string): string {
+  return name.replace(/\b\d{4}-(\d{2})-(\d{2})\b/g, (match, month: string, day: string) => {
+    const abbrev = MONTH_ABBREV[Number(month) - 1];
+    return abbrev === undefined ? match : `${abbrev} ${Number(day)}`;
+  });
+}
+
 function sortValue(candidate: PickerCandidate, key: CandidateSortKey): number {
   if (key === "score") return candidate.score;
   if (key === "debit") return candidate.debit;
@@ -172,7 +184,7 @@ function CandidateRow({
           )}
         </span>
       </td>
-      <td className="px-2 py-1.5 text-left">{candidate.name}</td>
+      <td className="px-2 py-1.5 text-left whitespace-nowrap">{compactCalendarName(candidate.name)}</td>
       <td className="px-2 py-1.5 text-right">
         {notScored ? <span className="text-dim">—</span> : `$${Math.round(candidate.debit)}`}
       </td>
