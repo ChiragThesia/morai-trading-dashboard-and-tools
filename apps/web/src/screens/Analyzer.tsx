@@ -23,9 +23,9 @@
  * No any/as/!.
  */
 import type { PickerCandidate, PickerGexContext, RuleSetEntry, PickerSizing } from "@morai/contracts";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { exactAbs } from "../lib/position-format.ts";
-import { CandidateCard } from "../components/picker/CandidateCard.tsx";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
@@ -54,6 +54,176 @@ import {
 
 function noop(): void {}
 
+// ─── Ranked candidate table (D-01, D-03) ───────────────────────────────────────
+//
+// Replaces the 17-CandidateCard scroll rail with one compact sortable <table> (UI-SPEC
+// "Table Contract"). Sort state is local to AnalyzerDesktop (NOT the shared model hook —
+// mobile keeps CandidateCard, no table there, research OQ2).
+
+export type CandidateSortKey = "score" | "debit" | "theta";
+
+export interface CandidateSortState {
+  readonly key: CandidateSortKey;
+  readonly dir: "asc" | "desc";
+}
+
+export const DEFAULT_CANDIDATE_SORT: CandidateSortState = { key: "score", dir: "desc" };
+
+const SORT_LABEL: Record<CandidateSortKey, string> = { score: "Score", debit: "Debit", theta: "Θ/d" };
+
+function sortValue(candidate: PickerCandidate, key: CandidateSortKey): number {
+  if (key === "score") return candidate.score;
+  if (key === "debit") return candidate.debit;
+  return candidate.theta;
+}
+
+/** Sorts a COPY of `candidates` by the active column/direction — never mutates the input;
+ *  pasted rows are never passed through this (they stay pinned above, unsorted). */
+function sortCandidates(
+  candidates: ReadonlyArray<PickerCandidate>,
+  sort: CandidateSortState,
+): ReadonlyArray<PickerCandidate> {
+  return [...candidates].sort((a, b) => {
+    const diff = sortValue(b, sort.key) - sortValue(a, sort.key);
+    return sort.dir === "desc" ? diff : -diff;
+  });
+}
+
+/** Cycles a sortable header's state: clicking a new column starts it at desc; clicking the
+ *  already-active column flips desc<->asc (UI-SPEC Sort affordance — 2 states + "not active"). */
+function cycleSort(current: CandidateSortState, clicked: CandidateSortKey): CandidateSortState {
+  if (current.key !== clicked) return { key: clicked, dir: "desc" };
+  return { key: clicked, dir: current.dir === "desc" ? "asc" : "desc" };
+}
+
+function SortableHeader({
+  sortKey,
+  sort,
+  onSortChange,
+}: {
+  readonly sortKey: CandidateSortKey;
+  readonly sort: CandidateSortState;
+  readonly onSortChange: (key: CandidateSortKey) => void;
+}): React.ReactElement {
+  const active = sort.key === sortKey;
+  const ariaSort = active ? (sort.dir === "asc" ? "ascending" : "descending") : "none";
+  return (
+    <th
+      className="cursor-pointer border-b border-line px-2 py-1.5 text-right font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase hover:text-txt"
+      aria-sort={ariaSort}
+      data-testid={`rail-sort-${sortKey}`}
+      onClick={() => { onSortChange(sortKey); }}
+    >
+      {SORT_LABEL[sortKey]}
+      {active && <span className="ml-0.5">{sort.dir === "asc" ? "▲" : "▼"}</span>}
+    </th>
+  );
+}
+
+interface CandidateRowProps {
+  readonly candidate: PickerCandidate;
+  readonly pasted: boolean;
+  readonly selected: boolean;
+  readonly combinedIds: ReadonlySet<string>;
+  readonly onSelect: (candidate: PickerCandidate) => void;
+  readonly onToggleCombine: (candidate: PickerCandidate) => void;
+  readonly onRemove?: (candidate: PickerCandidate) => void;
+}
+
+/** One <tr> in the ranked table. Row click selects (UI-SPEC Selection linkage); the action
+ *  cell stopPropagations so ⊕/× never also select the row (Overview.tsx's own td-onClick
+ *  precedent). */
+function CandidateRow({
+  candidate,
+  pasted,
+  selected,
+  combinedIds,
+  onSelect,
+  onToggleCombine,
+  onRemove,
+}: CandidateRowProps): React.ReactElement {
+  const notScored = candidate.breakdown.length === 0;
+  const event = candidate.frontEvents[0] ?? candidate.backEvents[0] ?? null;
+  const eventCount = candidate.frontEvents.length + candidate.backEvents.length;
+
+  return (
+    <tr
+      data-testid={`candidate-row-${candidate.id}`}
+      onClick={() => { onSelect(candidate); }}
+      className={cn(
+        "cursor-pointer border-b border-line/60 text-txt hover:bg-line/40",
+        selected && "border-l-2 border-l-violet bg-violet/[0.06]",
+      )}
+    >
+      <td className="px-2 py-1.5 text-right">
+        <span className="inline-flex items-center gap-1">
+          {pasted && (
+            <span className="rounded-sm bg-violet/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-violet">
+              PASTED
+            </span>
+          )}
+          {!notScored && (
+            <span className={cn("font-bold", scoreStatus(candidate.score).cls)}>
+              {Math.round(candidate.score)}
+            </span>
+          )}
+        </span>
+      </td>
+      <td className="px-2 py-1.5 text-left">{candidate.name}</td>
+      <td className="px-2 py-1.5 text-right">
+        {notScored ? <span className="text-dim">—</span> : `$${Math.round(candidate.debit)}`}
+      </td>
+      <td
+        className={cn(
+          "px-2 py-1.5 text-right",
+          !notScored && (candidate.theta >= 0 ? "text-up" : "text-down"),
+        )}
+      >
+        {notScored ? (
+          <span className="text-dim">—</span>
+        ) : (
+          `${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-left">
+        {event === null ? (
+          <span className="text-dim">—</span>
+        ) : (
+          <span className="rounded-sm bg-raise px-1 py-0.5 text-amber">
+            {`⚡ ${event}${eventCount > 1 ? ` +${eventCount - 1}` : ""}`}
+          </span>
+        )}
+      </td>
+      <td className="px-1 py-1.5" onClick={(e) => { e.stopPropagation(); }}>
+        <span className="flex items-center justify-center gap-1">
+          <Button
+            variant="toggle"
+            tone="amber"
+            size="xs"
+            active={combinedIds.has(candidate.id)}
+            data-testid={`combine-${candidate.id}`}
+            aria-label={`Combine ${candidate.name}`}
+            onClick={() => { onToggleCombine(candidate); }}
+          >
+            {"⊕"}
+          </Button>
+          {pasted && onRemove !== undefined && (
+            <Button
+              variant="destructive"
+              data-testid={`remove-pasted-${candidate.id}`}
+              title="Remove this pasted calendar"
+              className="px-1 text-[10px] leading-none"
+              onClick={() => { onRemove(candidate); }}
+            >
+              {"×"}
+            </Button>
+          )}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
 // ─── Suggested calendars rail ──────────────────────────────────────────────────
 
 export interface CandidateRailProps {
@@ -66,29 +236,24 @@ export interface CandidateRailProps {
   readonly pasteError: string | null;
   /** Date-only reference date for the empty-state message (DTE/event x-axis anchor). */
   readonly asOf: string;
-  /** Full-ISO real instant (WR-03) — threaded to each CandidateCard's staleness dot. */
-  readonly observedAt: string;
-  readonly source: "schwab" | "cboe";
-  readonly gexContextStatus: "ok" | "stale" | "missing";
-  readonly eventsContextStatus: "ok" | "stale" | "missing";
   readonly selectedId: string;
   readonly combinedIds: ReadonlySet<string>;
-  readonly copiedId: string | null;
+  readonly sort: CandidateSortState;
+  readonly onSortChange: (key: CandidateSortKey) => void;
   readonly onSelect: (candidate: PickerCandidate) => void;
   readonly onToggleCombine: (candidate: PickerCandidate) => void;
-  readonly onCopy: (candidate: PickerCandidate) => void;
   readonly onPasteTextChange: (text: string) => void;
   readonly onPasteAnalyze: () => void;
-  /** Removes one pasted card (its own × button) — leaves other pasted cards untouched. */
+  /** Removes one pasted row (its own × button) — leaves other pasted rows untouched. */
   readonly onRemovePasted: (candidate: PickerCandidate) => void;
-  /** Removes every pasted card at once. */
+  /** Removes every pasted row at once. */
   readonly onClearAllPasted: () => void;
   /** Optional heading-row control (the Re-pull chains button — refreshes THIS rail). */
   readonly headerAction?: React.ReactNode;
 }
 
 /**
- * CandidateRail — the "Suggested calendars" panel: ranked CandidateCard rail + the
+ * CandidateRail — the "Suggested calendars" panel: ranked candidate table + the
  * zero-candidates-passed-filter empty state (D-18). Exported (like Overview.tsx's
  * `formatExpiryCell`) so the empty-state branch is directly unit-testable.
  *
@@ -102,16 +267,12 @@ export function CandidateRail({
   pasteText,
   pasteError,
   asOf,
-  observedAt,
-  source,
-  gexContextStatus,
-  eventsContextStatus,
   selectedId,
   combinedIds,
-  copiedId,
+  sort,
+  onSortChange,
   onSelect,
   onToggleCombine,
-  onCopy,
   onPasteTextChange,
   onPasteAnalyze,
   onRemovePasted,
@@ -119,7 +280,7 @@ export function CandidateRail({
   headerAction,
 }: CandidateRailProps): React.ReactElement {
   return (
-    <Panel>
+    <Panel className="max-h-[70vh] overflow-y-auto">
       <div className="mb-2 flex items-center justify-between gap-2">
         <PanelHeading title="Suggested calendars" />
         <div className="flex items-center gap-1.5">
@@ -166,42 +327,49 @@ export function CandidateRail({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {pastedCandidates.map((candidate) => (
-            <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              pasted
-              selected={candidate.id === selectedId}
-              combined={combinedIds.has(candidate.id)}
-              copied={candidate.id === copiedId}
-              observedAt={observedAt}
-              source={source}
-              gexContextStatus={gexContextStatus}
-              eventsContextStatus={eventsContextStatus}
-              onSelect={onSelect}
-              onToggleCombine={onToggleCombine}
-              onCopy={onCopy}
-              onRemove={onRemovePasted}
-            />
-          ))}
-          {candidates.map((candidate) => (
-            <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              selected={candidate.id === selectedId}
-              combined={combinedIds.has(candidate.id)}
-              copied={candidate.id === copiedId}
-              observedAt={observedAt}
-              source={source}
-              gexContextStatus={gexContextStatus}
-              eventsContextStatus={eventsContextStatus}
-              onSelect={onSelect}
-              onToggleCombine={onToggleCombine}
-              onCopy={onCopy}
-            />
-          ))}
-        </div>
+        <table className="w-full border-collapse font-mono text-[11px] tabular-nums">
+          <thead className="sticky top-0 z-10 bg-panel">
+            <tr>
+              <SortableHeader sortKey="score" sort={sort} onSortChange={onSortChange} />
+              <th className="border-b border-line px-2 py-1.5 text-left font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+                Calendar
+              </th>
+              <SortableHeader sortKey="debit" sort={sort} onSortChange={onSortChange} />
+              <SortableHeader sortKey="theta" sort={sort} onSortChange={onSortChange} />
+              <th className="border-b border-line px-2 py-1.5 text-left font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+                Event
+              </th>
+              <th className="border-b border-line px-1 py-1.5">
+                <span className="sr-only">Combine</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {pastedCandidates.map((candidate) => (
+              <CandidateRow
+                key={candidate.id}
+                candidate={candidate}
+                pasted
+                selected={candidate.id === selectedId}
+                combinedIds={combinedIds}
+                onSelect={onSelect}
+                onToggleCombine={onToggleCombine}
+                onRemove={onRemovePasted}
+              />
+            ))}
+            {candidates.map((candidate) => (
+              <CandidateRow
+                key={candidate.id}
+                candidate={candidate}
+                pasted={false}
+                selected={candidate.id === selectedId}
+                combinedIds={combinedIds}
+                onSelect={onSelect}
+                onToggleCombine={onToggleCombine}
+              />
+            ))}
+          </tbody>
+        </table>
       )}
     </Panel>
   );
@@ -434,6 +602,14 @@ function AnalyzerDesktop(): React.ReactElement {
     repull,
   } = useAnalyzerModel();
 
+  // Table sort state (D-03) — local to this desktop view, not the shared model hook (mobile
+  // has no table). Sorts a COPY of the scored candidates; pasted rows stay pinned above, unsorted.
+  const [sort, setSort] = useState<CandidateSortState>(DEFAULT_CANDIDATE_SORT);
+  const handleSortChange = (key: CandidateSortKey): void => {
+    setSort((prev) => cycleSort(prev, key));
+  };
+  const sortedRows = useMemo(() => sortCandidates(sortedCandidates, sort), [sortedCandidates, sort]);
+
   // Re-pull chains control — lives with the rail it refreshes (heading action slot).
   const repullControl = (
     <div className="flex items-center gap-1.5">
@@ -508,21 +684,17 @@ function AnalyzerDesktop(): React.ReactElement {
   } else {
     railBody = (
       <CandidateRail
-        candidates={sortedCandidates}
+        candidates={sortedRows}
         pastedCandidates={pastedCandidates}
         pasteText={pasteText}
         pasteError={pasteError}
         asOf={snapshot.asOf}
-        observedAt={snapshot.observedAt}
-        source={snapshot.source}
-        gexContextStatus={snapshot.gexContextStatus}
-        eventsContextStatus={snapshot.eventsContextStatus}
         selectedId={selectedId}
         combinedIds={combinedIds}
-        copiedId={copiedId}
+        sort={sort}
+        onSortChange={handleSortChange}
         onSelect={handleSelect}
         onToggleCombine={handleToggleCombine}
-        onCopy={handleCopyCandidate}
         onPasteTextChange={setPasteText}
         onPasteAnalyze={handlePasteAnalyze}
         onRemovePasted={handleRemovePasted}
@@ -562,16 +734,28 @@ function AnalyzerDesktop(): React.ReactElement {
               <LiveStatusBadge {...liveBadgeProps} />
             </div>
             {selected !== null && (
-              <Button
-                variant="toggle"
-                tone="up"
-                active={copiedId === selected.id}
-                data-testid="copy-tos-order"
-                onClick={() => { handleCopyCandidate(selected); }}
-                title="Copy this calendar as a Thinkorswim order"
-              >
-                {copiedId === selected.id ? "Copied ✓" : "⧉ Copy TOS order"}
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="toggle"
+                  tone="amber"
+                  active={combinedIds.has(selected.id)}
+                  data-testid="detail-combine"
+                  onClick={() => { handleToggleCombine(selected); }}
+                  title="Add this calendar to the combined-book payoff"
+                >
+                  {combinedIds.has(selected.id) ? "✓ Combined" : "⊕ Combine"}
+                </Button>
+                <Button
+                  variant="toggle"
+                  tone="up"
+                  active={copiedId === selected.id}
+                  data-testid="copy-tos-order"
+                  onClick={() => { handleCopyCandidate(selected); }}
+                  title="Copy this calendar as a Thinkorswim order"
+                >
+                  {copiedId === selected.id ? "Copied ✓" : "⧉ Copy TOS order"}
+                </Button>
+              </div>
             )}
           </div>
           {selected !== null && (

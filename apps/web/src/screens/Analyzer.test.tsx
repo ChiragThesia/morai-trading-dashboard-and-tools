@@ -120,7 +120,7 @@ function mockUsePickerReturn(overrides: Partial<MockPickerResult>): void {
   });
 }
 
-import { Analyzer, CandidateRail } from "./Analyzer.tsx";
+import { Analyzer, CandidateRail, DEFAULT_CANDIDATE_SORT } from "./Analyzer.tsx";
 import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
@@ -190,7 +190,7 @@ beforeEach(() => {
   mockUsePickerReturn({});
 });
 
-describe("Analyzer — ranked candidate rail (Task 2)", () => {
+describe("Analyzer — ranked candidate table (Phase 41, AUI-01/AUI-03)", () => {
   beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
     cleanup();
@@ -198,14 +198,14 @@ describe("Analyzer — ranked candidate rail (Task 2)", () => {
     Reflect.deleteProperty(window, "matchMedia");
   });
 
-  it("renders one CandidateCard per fixture candidate, ordered score-descending", () => {
+  it("renders one row per fixture candidate, ordered score-descending by default", () => {
     render(<Analyzer />);
 
-    const cards = screen.getAllByTestId(/^candidate-card-/);
-    expect(cards.length).toBe(pickerSnapshotFixture.candidates.length);
+    const rows = screen.getAllByTestId(/^candidate-row-/);
+    expect(rows.length).toBe(pickerSnapshotFixture.candidates.length);
 
-    const renderedIds = cards.map((el) => el.getAttribute("data-testid"));
-    const expectedIds = SORTED_CANDIDATES.map((c) => `candidate-card-${c.id}`);
+    const renderedIds = rows.map((el) => el.getAttribute("data-testid"));
+    const expectedIds = SORTED_CANDIDATES.map((c) => `candidate-row-${c.id}`);
     expect(renderedIds).toEqual(expectedIds);
   });
 
@@ -214,13 +214,63 @@ describe("Analyzer — ranked candidate rail (Task 2)", () => {
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
   });
 
-  it("clicking a different card updates the selected candidate", () => {
+  it("clicking a different row updates the selected candidate", () => {
     render(<Analyzer />);
 
-    fireEvent.click(screen.getByTestId(`candidate-card-${SECOND.id}`));
+    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
 
     // The Risk profile subtitle now names the newly-selected candidate.
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(SECOND.name);
+  });
+
+  it("clicking the Debit header sorts rows by debit descending and sets aria-sort on that column only", () => {
+    render(<Analyzer />);
+
+    fireEvent.click(screen.getByTestId("rail-sort-debit"));
+
+    const expectedIds = [...SORTED_CANDIDATES]
+      .sort((a, b) => b.debit - a.debit)
+      .map((c) => `candidate-row-${c.id}`);
+    const rows = screen.getAllByTestId(/^candidate-row-/);
+    expect(rows.map((el) => el.getAttribute("data-testid"))).toEqual(expectedIds);
+    expect(screen.getByTestId("rail-sort-debit").getAttribute("aria-sort")).toBe("descending");
+    expect(screen.getByTestId("rail-sort-score").getAttribute("aria-sort")).toBe("none");
+  });
+
+  it("clicking the same header again flips the direction (desc -> asc)", () => {
+    render(<Analyzer />);
+
+    fireEvent.click(screen.getByTestId("rail-sort-debit"));
+    fireEvent.click(screen.getByTestId("rail-sort-debit"));
+
+    const expectedIds = [...SORTED_CANDIDATES]
+      .sort((a, b) => a.debit - b.debit)
+      .map((c) => `candidate-row-${c.id}`);
+    const rows = screen.getAllByTestId(/^candidate-row-/);
+    expect(rows.map((el) => el.getAttribute("data-testid"))).toEqual(expectedIds);
+    expect(screen.getByTestId("rail-sort-debit").getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("the ⊕ cell toggles Combine without changing the current row selection (stopPropagation)", () => {
+    render(<Analyzer />);
+
+    fireEvent.click(screen.getByTestId(`combine-${SECOND.id}`));
+
+    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
+    expect(screen.getByTestId("combined-book-summary").textContent).toContain("+ 1 more");
+  });
+
+  it("the detail-pane Combine button toggles the selected candidate into the combined book", () => {
+    render(<Analyzer />);
+    const button = screen.getByTestId("detail-combine");
+    expect(button.textContent).toBe("⊕ Combine");
+
+    fireEvent.click(button);
+    expect(button.textContent).toBe("✓ Combined");
+
+    // Selecting a different row now surfaces the combined book (TOP stays combined-in as "extra").
+    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
+    expect(screen.getByTestId("combined-book-summary").textContent).toContain("+ 1 more");
   });
 
   it("Suggested calendars panel heading renders (locked copy)", () => {
@@ -260,7 +310,7 @@ describe("Analyzer — per-candidate scoring checklist", () => {
   });
 });
 
-describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D-18)", () => {
+describe("CandidateRail — direct-render states (Phase 41, D-18)", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -274,16 +324,12 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
         pasteText=""
         pasteError={null}
         asOf="2026-07-02"
-        observedAt="2026-07-02T14:32:00.000Z"
-        source="schwab"
-        gexContextStatus="ok"
-        eventsContextStatus="ok"
         selectedId=""
         combinedIds={new Set()}
-        copiedId={null}
+        sort={DEFAULT_CANDIDATE_SORT}
+        onSortChange={() => {}}
         onSelect={() => {}}
         onToggleCombine={() => {}}
-        onCopy={() => {}}
         onPasteTextChange={() => {}}
         onPasteAnalyze={() => {}}
         onRemovePasted={() => {}}
@@ -298,7 +344,7 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
     ).toBeTruthy();
   });
 
-  it("renders no CandidateCard elements when the candidate list is empty", () => {
+  it("renders no candidate-row elements when the candidate list is empty", () => {
     const { container } = render(
       <CandidateRail
         candidates={[]}
@@ -306,23 +352,57 @@ describe("CandidateRail — zero-candidates-passed-filter empty state (Task 2, D
         pasteText=""
         pasteError={null}
         asOf="2026-07-02"
-        observedAt="2026-07-02T14:32:00.000Z"
-        source="schwab"
-        gexContextStatus="ok"
-        eventsContextStatus="ok"
         selectedId=""
         combinedIds={new Set()}
-        copiedId={null}
+        sort={DEFAULT_CANDIDATE_SORT}
+        onSortChange={() => {}}
         onSelect={() => {}}
         onToggleCombine={() => {}}
-        onCopy={() => {}}
         onPasteTextChange={() => {}}
         onPasteAnalyze={() => {}}
         onRemovePasted={() => {}}
         onClearAllPasted={() => {}}
       />,
     );
-    expect(container.querySelectorAll('[data-testid^="candidate-card-"]').length).toBe(0);
+    expect(container.querySelectorAll('[data-testid^="candidate-row-"]').length).toBe(0);
+  });
+
+  it("a pasted, unscored candidate shows the PASTED pill and — for the Debit/Θ cells", () => {
+    const raw = pickerSnapshotFixture.candidates[0];
+    if (raw === undefined) throw new Error("expected at least one fixture candidate");
+    const pastedUnscored: PickerCandidate = {
+      ...raw,
+      id: "pasted-1",
+      name: "7450P · pasted",
+      breakdown: [],
+      frontEvents: ["CPI"],
+      backEvents: [],
+    };
+
+    render(
+      <CandidateRail
+        candidates={[]}
+        pastedCandidates={[pastedUnscored]}
+        pasteText=""
+        pasteError={null}
+        asOf="2026-07-02"
+        selectedId=""
+        combinedIds={new Set()}
+        sort={DEFAULT_CANDIDATE_SORT}
+        onSortChange={() => {}}
+        onSelect={() => {}}
+        onToggleCombine={() => {}}
+        onPasteTextChange={() => {}}
+        onPasteAnalyze={() => {}}
+        onRemovePasted={() => {}}
+        onClearAllPasted={() => {}}
+      />,
+    );
+
+    const row = screen.getByTestId("candidate-row-pasted-1");
+    within(row).getByText("PASTED");
+    expect(within(row).getAllByText("—").length).toBe(2);
+    expect(within(row).getByTestId("remove-pasted-pasted-1")).toBeTruthy();
   });
 });
 
