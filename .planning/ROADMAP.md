@@ -522,3 +522,14 @@ Plans:
 - [x] 38-05-PLAN.md — spot display consumers: header chip + GEX markers + mobile hero, honest badge (wave 3)
 - [x] 38-06-PLAN.md — regime gauges display-live/gate-EOD (RegimeBoard + MarketRail + Overview prop) (wave 4)
 - [ ] 38-07-PLAN.md — integration gate + Railway/Vercel deploy + live RTH UAT (wave 5)
+
+### Phase 39: Market Regime rail — all rows as gauges + teaching tooltips: rates block (Fed funds, SOFR, 1M, 3M, 10Y−2Y, 10Y−3M) and COT positioning rows get bullet gauge tracks matching the existing regime-indicator gauges — evidence-aware: yield-curve spreads (10Y−2Y, 10Y−3M) get real warn/crisis inversion bands (documented evidence), Fed funds/SOFR/bills/COT get neutral position-only tracks (marker on a visual range, NO verdict colors — regime-board evidence law); every ⓘ tooltip rewritten to teach: WHAT the indicator measures (plain English, 1-2 sentences), WHY it matters for calendar trades (1-2 sentences), what the warn/crisis bands mean, existing source/provenance line kept at bottom. Explainer copy sourced from knowledge-base/ + docs/architecture regime evidence docs.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 38
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 39 to break down)
