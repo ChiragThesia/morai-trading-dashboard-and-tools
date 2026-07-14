@@ -560,8 +560,12 @@ Plans:
 **Goal:** The Analyzer reads as one selection-driven screen: a ranked compact table of suggested calendars (score / strikes / dates / debit / Θ/d / event flag) where clicking a row loads the full detail — risk profile, term structure, WHY THIS CALENDAR, entry/exit plan — into stable center/right panels; a verdict hero (score + Θ headline, Edge/Risk/Fit factor groups) replaces the chip wall; every number renders at trading precision; the paste flow and term-structure chart read clean; the same idioms have designed mobile treatments through the analyzer-mobile tree; and the tab's marks/spot flow live from the sidecar with honest stale states.
 **Requirements**: AUI-01, AUI-02, AUI-03, AUI-04, AUI-05, AUI-06, AUI-07
 **Depends on:** Phase 38 (live sidecar stream seam), Phase 36 (analyzer-mobile tree), Phases 29-32 (picker UI)
-**Plans:** TBD
+**Plans:** 5 plans
 
 Plans:
 
-- [ ] TBD (ui-phase → plan-phase)
+- [ ] 41-01-PLAN.md — AUI-07 live-spot seam (useAnalyzerModel useLiveStream) + LiveStatusBadge mounts (desktop + mobile) (wave 1)
+- [ ] 41-02-PLAN.md — AUI-01 ranked sortable table + AUI-03 sticky bounded layout + detail-pane Combine + test migration (wave 2)
+- [ ] 41-03-PLAN.md — AUI-02 verdict hero (desktop) + AUI-06 mobile Edge/Risk/Fit grouping (GROUP_OF shared) (wave 3)
+- [ ] 41-04-PLAN.md — AUI-04 number rounding (both trees) + AUI-05 term-structure/paste polish (wave 4)
+- [ ] 41-05-PLAN.md — integration gate: full suite + dual typecheck + lint + AUI-law greps + morai.wtf UAT (wave 5)
