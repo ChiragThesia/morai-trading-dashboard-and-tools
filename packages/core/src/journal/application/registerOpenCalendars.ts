@@ -26,15 +26,20 @@
  *      found — never fabricated, and callers can tell the two cases apart via openedAtSource.
  *   6. Registers via the existing registerCalendar use-case (ForRunningRegisterCalendar).
  *
- * KNOWN LIMITATION (not introduced by this use-case — a pre-existing schema constraint):
- * the calendars table's `underlying` column is a single root string shared by BOTH legs
- * (see packages/adapters/src/postgres/repos/fills.ts calendarLegSymbols and
- * calendars.ts getOpenCalendarLegs, both of which derive front+back occSymbol from ONE
- * stored root). A calendar whose front and back legs have DIFFERENT OCC roots (e.g. front
- * SPX-standard, back SPXW-weekly) cannot be fully represented — this use-case stores the
- * front leg's root (the best available single value), so the back leg's occSymbol will be
- * mis-derived by the existing fill-matching/snapshot-resolution paths until a future schema
- * change stores per-leg root. See the handback notes for the concrete affected calendars.
+ * KNOWN LIMITATION (not introduced by this use-case — a pre-existing schema constraint,
+ * WR-02 40-REVIEW.md: narrowed to the paths still affected after HIST-01):
+ * the calendars table's `underlying` column is a single root string shared by BOTH legs.
+ * HIST-01's resolveRootCandidates fix already closed this for calendars.ts
+ * getOpenCalendarLegs and the calendar-snapshots resolveLegSnapshot/
+ * resolveLegObservationForSlot paths — those now try BOTH candidate roots per leg. The
+ * residual gap is packages/adapters/src/postgres/repos/fills.ts's calendarLegSymbols
+ * (and its memory twin), which still derives front+back occSymbol from ONE stored root and
+ * was not touched by this phase — a calendar whose front and back legs have DIFFERENT OCC
+ * roots (e.g. front SPX-standard, back SPXW-weekly) can still have its back leg's occSymbol
+ * mis-derived by the fill-matching paths (readCalendarLegs, readUnprocessedFillsForCalendar,
+ * resetFillsProcessedForCalendar) until a future schema change stores per-leg root. This
+ * use-case itself only stores the front leg's root (the best available single value); see
+ * the handback notes for the concrete affected calendars.
  */
 
 import { ok } from "@morai/shared";
