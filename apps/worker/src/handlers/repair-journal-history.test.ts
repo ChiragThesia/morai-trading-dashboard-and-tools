@@ -125,7 +125,7 @@ describe("makeRepairJournalHistoryHandler — null job.data (prod regression cla
   // data:null must behave as the {} all-calendars heal-only payload, never throw.
   it("runs the use-case with all/heal-only defaults when job.data is null", async () => {
     const repairJournalHistoryUseCase = vi.fn().mockResolvedValue(ok([]));
-    const handler = makeRepairJournalHistoryHandler({ repairJournalHistoryUseCase });
+    const handler = makeRepairJournalHistoryHandler({ repairJournalHistoryUseCase, now: () => new Date() });
 
     const job: Job<unknown> = {
       id: "test-null-payload",
