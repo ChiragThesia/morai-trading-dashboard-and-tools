@@ -202,6 +202,43 @@ inputs. Requirements derived from `39-CONTEXT.md` locked decisions + the APPROVE
       resolution take ZERO new inputs from these bands — they are a client-visual-only display
       band (rates come from `useMacro`, not `useRegimeBoard`).
 
+### Journal history repair — never lose a calendar's greek/vol story (Phase 40, added 2026-07-14)
+
+The journal's per-calendar 30-min series (greeks, front/back IV, term slope, marks, spot,
+P&L) is the product's core value ("why did my calendar act the way it did") — and live data
+shows it is starved: both open calendars are 100% gap rows (back-leg NaN), zero rows since
+Jul 8, and no calendar has any row before Jul 6 despite `leg_observations` holding the full
+chain (marks + BSM greeks) since Jun 12. Live-write-only + "never backfill" turns every
+outage, late registration, or stale-leg skip into a permanent hole. Fix the data layer;
+the lifecycle chart already renders everything.
+
+- [ ] **HIST-01**: Root-cause and fix the far-dated back-leg NaN — open calendars' back leg
+      (e.g. `SPX 261130P07600000`) carries NaN `bsm_iv`/greeks in `leg_observations` while the
+      front leg is healthy, which poisons every journal row (`isGap`) and (post-OPS-01) silences
+      snapshots entirely. Diagnose where it breaks (contract missing from fetch window / mark
+      missing / IV inversion failure / BSM batch starvation) and fix so any leg with a usable
+      mark in `leg_observations` gets IV + greeks. Honest-gap law stays: a leg with NO market
+      data renders as a gap, never a fabricated value.
+- [ ] **HIST-02**: A pure rebuild use-case derives `calendar_snapshots` rows for a calendar
+      from historical `leg_observations` — for each 30-min RTH slot between `openedAt` and
+      `min(closedAt, now)`, resolve both legs' observations for that slot and build the row
+      with the SAME pure functions the live writer uses (`computeLegPairMetrics`,
+      `computeSnapshotPnl`) — no formula drift. Fill-only semantics: upserts never overwrite an
+      existing non-gap row; gap rows MAY be replaced by healed non-gap rows.
+- [ ] **HIST-03**: Self-heal replaces "historical rows are never backfilled": a recurring
+      worker job (chained after the existing snapshot/analytics cycle or scheduled) detects
+      missing or gap slots for OPEN calendars over a bounded lookback and repairs them from
+      `leg_observations` once usable data exists. The OPS-01 live freshness gate stays (never
+      write stale marks as fresh) — but a skipped cycle now heals instead of scarring.
+- [ ] **HIST-04**: Operator repair path — a CLI (pattern: existing backfill/rebuild CLIs) that
+      rebuilds the full journal history for one calendar or all calendars (one-time repair of
+      the 17 existing calendars), and registration of a calendar (manual or auto) triggers a
+      backfill from its `openedAt` so late registration never loses the entry-day story.
+- [ ] **HIST-05**: Series hygiene — at most one scheduled row per 30-min slot per calendar
+      (today: hourly NaN row + a near-duplicate recompute row ~10-15 min later inflate the
+      series to ~19 rows/day with frozen marks); event-move rows stay distinct via the existing
+      `trigger` field; rebuild/self-heal never writes rows outside `openedAt`..`closedAt`.
+
 ## Future Requirements
 
 Deferred. Tracked but not in the v1.3 roadmap.
@@ -273,6 +310,11 @@ Explicit exclusions with reasoning.
 | GAUGE-03 | Phase 39 | Planned |
 | GAUGE-04 | Phase 39 | Planned |
 | GAUGE-05 | Phase 39 | Planned |
+| HIST-01 | Phase 40 | Planned |
+| HIST-02 | Phase 40 | Planned |
+| HIST-03 | Phase 40 | Planned |
+| HIST-04 | Phase 40 | Planned |
+| HIST-05 | Phase 40 | Planned |
 
 **Coverage:** 28/28 v1.3 requirements mapped, 0 orphans. Phase order:
 23 (VIX3M, first-and-alone) → 24 (regime board) → 25 (ops rider) → 26 (exit advisor) →
