@@ -6,10 +6,12 @@
  *   2. Shows the "as of" report date from the newest entry.
  *   3. Renders week-over-week delta arrows against the previous entry.
  *   4. Empty state when useCot has no data.
+ *   5. Each class renders as a neutral, sign-tinted bullet gauge (39-03, GAUGE-03).
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import { assertDefined } from "@morai/shared";
 
 const { mockUseCot } = vi.hoisted(() => ({ mockUseCot: vi.fn() }));
 vi.mock("../hooks/useCot.ts", () => ({ useCot: mockUseCot }));
@@ -77,5 +79,69 @@ describe("CotCard", () => {
     const wow = screen.getByTestId("cot-wow-netLeveraged").textContent ?? "";
     expect(wow).toContain("▲");
     expect(wow).toContain("142K");
+  });
+
+  it("renders each COT row as a neutral bullet gauge, marker tinted by sign, never amber, no band segments", () => {
+    setData([WEEK_LATEST, WEEK_PREV]);
+    render(<CotCard />);
+
+    // netDealer short (−756K) → bg-down; netAssetManager long (+993K) → bg-up
+    expect(screen.getByTestId("cot-gauge-marker-netDealer").className).toContain("bg-down");
+    expect(screen.getByTestId("cot-gauge-marker-netDealer").className).not.toContain("bg-amber");
+    expect(screen.getByTestId("cot-gauge-marker-netAssetManager").className).toContain("bg-up");
+    expect(screen.getByTestId("cot-gauge-marker-netAssetManager").className).not.toContain("bg-amber");
+    // netLeveraged short, netOther/netNonreportable long — never amber on any of them
+    expect(screen.getByTestId("cot-gauge-marker-netLeveraged").className).toContain("bg-down");
+    expect(screen.getByTestId("cot-gauge-marker-netOther").className).toContain("bg-up");
+    expect(screen.getByTestId("cot-gauge-marker-netNonreportable").className).toContain("bg-up");
+    for (const c of [
+      "netDealer",
+      "netAssetManager",
+      "netLeveraged",
+      "netOther",
+      "netNonreportable",
+    ]) {
+      expect(screen.getByTestId(`cot-gauge-marker-${c}`).className).not.toContain("bg-amber");
+      const gauge = screen.getByTestId(`cot-gauge-${c}`);
+      expect(gauge.getAttribute("role")).toBe("meter");
+      // neutral variant: no band-segment children, marker only
+      expect(gauge.querySelectorAll(":scope > div").length).toBe(1);
+    }
+  });
+
+  it("keeps cot-net/cot-wow strings unchanged after the gauge rewire", () => {
+    setData([WEEK_LATEST, WEEK_PREV]);
+    render(<CotCard />);
+    expect(screen.getByTestId("cot-net-netDealer").textContent).toBe("−756K");
+    expect(screen.getByTestId("cot-net-netAssetManager").textContent).toBe("+993K");
+    expect(screen.getByTestId("cot-wow-netLeveraged").textContent).toBe("▲ 142K");
+  });
+
+  it("moves net/WoW spans to 11px while the label span stays 10px (no row-level cascade)", () => {
+    setData([WEEK_LATEST, WEEK_PREV]);
+    render(<CotCard />);
+
+    expect(screen.getByTestId("cot-net-netDealer").className).toContain("text-[11px]");
+    expect(screen.getByTestId("cot-wow-netDealer").className).toContain("text-[11px]");
+
+    const row = screen.getByTestId("cot-row-netDealer");
+    const label = row.querySelector("span");
+    assertDefined(label, "COT row label span present");
+    expect(label.className).toContain("text-[10px]");
+    expect(label.className).not.toContain("text-[11px]");
+  });
+
+  it("gives every COT gauge a full meter aria contract (a11y parity with regime/rate gauges)", () => {
+    setData([WEEK_LATEST, WEEK_PREV]);
+    render(<CotCard />);
+
+    const gauge = screen.getByTestId("cot-gauge-netLeveraged");
+    expect(gauge.getAttribute("aria-valuemin")).toBe("-800000");
+    expect(gauge.getAttribute("aria-valuemax")).toBe("800000");
+    expect(gauge.getAttribute("aria-valuenow")).toBe("-373468");
+    // net −373K short, but WoW moved up (less short) +142K — direction is WoW's, not the sign's.
+    expect(gauge.getAttribute("aria-valuetext")).toContain("−373K");
+    expect(gauge.getAttribute("aria-valuetext")).toContain("up 142K");
+    expect(gauge.getAttribute("aria-label")).toBe("Leveraged net position");
   });
 });
