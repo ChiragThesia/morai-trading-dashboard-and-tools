@@ -9,7 +9,6 @@ import type {
   ObservationRow,
   ContractRow,
 } from "@morai/core";
-import { SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "@morai/core";
 import type { OccSymbol } from "@morai/shared";
 import { formatOccSymbol } from "@morai/shared";
 
@@ -668,13 +667,20 @@ export function runLegObservationsContractTests(
 export { makeFixtureRows };
 export type { OccSymbol };
 
-// ─── HIST-02: as-of-slot read contract (ForResolvingLegObservationForSlot) ───────────────────
+// ─── HIST-02: slot-interval read contract (ForResolvingLegObservationForSlot) ────────────────
 //
 // A separate, smaller suite from runLegObservationsContractTests above: the memory twin
 // implements resolveLegObservationForSlot but NOT upsertContracts/readPendingObs/writeBsmResults
 // (those are Postgres-only BSM-pipeline ports), so it cannot run the full suite above. This
 // suite only requires resolveLegObservationForSlot + a seed helper, mirroring
 // calendar-snapshots.contract.ts's SeedContext shape (the memory-runner pattern to mirror).
+//
+// Slot-interval semantics (live-bug fix, 2026-07-14): the live snapshot writer builds a slot's
+// row from the FRESHEST observation and rounds the row time DOWN to the slot floor — a slot-
+// 14:00 row is actually built from an observation fetched at ~14:00:50, AFTER the anchor. The
+// read must resolve the observation that BELONGS to the slot: nearest-to-anchor within
+// [slotAnchor, slotAnchor + 30min). An observation outside that half-open interval belongs to
+// a neighboring slot and is not usable for this one (honest gap).
 
 export type LegObservationForSlotRepo = {
   readonly resolveLegObservationForSlot: ForResolvingLegObservationForSlot;
@@ -715,11 +721,13 @@ export function runLegObservationForSlotContractTests(
       repo = makeRepo(seed);
     });
 
-    it("hit: resolves the nearest observation at-or-before the slot anchor, within the usability window", async () => {
+    it("hit: resolves an observation inside [slotAnchor, slotAnchor + 30min) — the live-writer repro (fetched 50s after the anchor)", async () => {
       const occ = formatOccSymbol({ root: "SPX", expiry: new Date(2026, 6, 18), type: "C", strike: 5000 });
       await seed.seedContract(occ, 5000000, "2026-07-18", "C", "SPX");
       const anchor = new Date("2026-07-01T19:00:00Z");
-      const obsTime = new Date(anchor.getTime() - 10 * 60 * 1000); // 10 min before anchor
+      // The live snapshot writer floors the row's persisted time to the slot anchor but builds
+      // it from the FRESHEST observation, fetched slightly AFTER the anchor — this is that row.
+      const obsTime = new Date(anchor.getTime() + 50 * 1000);
       await seed.seedObservation(occ, obsTime, 20.0, 5010.0);
 
       const result = await repo.resolveLegObservationForSlot({
@@ -736,12 +744,35 @@ export function runLegObservationForSlotContractTests(
       expect(result.value?.time.getTime()).toBe(obsTime.getTime());
     });
 
-    it("miss-before-anchor: no observation at-or-before the anchor returns null (honest gap)", async () => {
+    it("prefers the observation nearest the anchor when several fall inside the interval", async () => {
+      const occ = formatOccSymbol({ root: "SPX", expiry: new Date(2026, 6, 18), type: "C", strike: 5050 });
+      await seed.seedContract(occ, 5050000, "2026-07-18", "C", "SPX");
+      const anchor = new Date("2026-07-01T19:00:00Z");
+      const nearObs = new Date(anchor.getTime() + 50 * 1000);
+      const farObs = new Date(anchor.getTime() + 5 * 60 * 1000);
+      // Seed the far one first — the result must not depend on insertion order.
+      await seed.seedObservation(occ, farObs, 30.0, 5010.0);
+      await seed.seedObservation(occ, nearObs, 21.0, 5011.0);
+
+      const result = await repo.resolveLegObservationForSlot({
+        underlying: "SPX",
+        strike: 5050000,
+        optionType: "C",
+        expiry: "2026-07-18",
+        slotAnchor: anchor,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value?.mark).toBeCloseTo(21.0, 2);
+      expect(result.value?.time.getTime()).toBe(nearObs.getTime());
+    });
+
+    it("miss-before-anchor: an observation before the slot anchor belongs to the PRIOR slot and returns null (honest gap)", async () => {
       const occ = formatOccSymbol({ root: "SPX", expiry: new Date(2026, 6, 18), type: "C", strike: 5100 });
       await seed.seedContract(occ, 5100000, "2026-07-18", "C", "SPX");
       const anchor = new Date("2026-07-01T19:00:00Z");
-      const futureObs = new Date(anchor.getTime() + 30 * 60 * 1000); // AFTER the anchor
-      await seed.seedObservation(occ, futureObs, 22.0, 5010.0);
+      const priorSlotObs = new Date(anchor.getTime() - 10 * 60 * 1000); // 10 min before anchor
+      await seed.seedObservation(occ, priorSlotObs, 22.0, 5010.0);
 
       const result = await repo.resolveLegObservationForSlot({
         underlying: "SPX",
@@ -755,12 +786,12 @@ export function runLegObservationForSlotContractTests(
       expect(result.value).toBeNull();
     });
 
-    it("stale-outside-window: an observation older than the usability window returns null (honest gap, D-04/D-07)", async () => {
+    it("miss-after-window: an observation at/after slotAnchor + 30min belongs to the NEXT slot and returns null (honest gap, half-open upper bound)", async () => {
       const occ = formatOccSymbol({ root: "SPX", expiry: new Date(2026, 6, 18), type: "C", strike: 5200 });
       await seed.seedContract(occ, 5200000, "2026-07-18", "C", "SPX");
       const anchor = new Date("2026-07-01T19:00:00Z");
-      const staleObs = new Date(anchor.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS - 60 * 1000);
-      await seed.seedObservation(occ, staleObs, 18.0, 5000.0);
+      const nextSlotObs = new Date(anchor.getTime() + 30 * 60 * 1000); // exactly one slot width later
+      await seed.seedObservation(occ, nextSlotObs, 18.0, 5000.0);
 
       const result = await repo.resolveLegObservationForSlot({
         underlying: "SPX",
@@ -778,7 +809,7 @@ export function runLegObservationForSlotContractTests(
       const occ = formatOccSymbol({ root: "SPXW", expiry: new Date(2026, 7, 7), type: "P", strike: 7425 });
       await seed.seedContract(occ, 7425000, "2026-08-07", "P", "SPXW");
       const anchor = new Date("2026-07-01T19:00:00Z");
-      const obsTime = new Date(anchor.getTime() - 5 * 60 * 1000);
+      const obsTime = new Date(anchor.getTime() + 5 * 60 * 1000);
       await seed.seedObservation(occ, obsTime, 169.4, 7381.12);
 
       const result = await repo.resolveLegObservationForSlot({
