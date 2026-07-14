@@ -200,8 +200,8 @@ new threshold, no fabricated confidence number, per D-02's evidence-honesty law.
 {icon} {WORD}     score {Math.round(score)}/100     Θ {theta≥0?'+':''}{theta.toFixed(1)}/d
 ```
 
-`{WORD}` at Verdict-word tier (16px bold, tier color). `score …/100` and `Θ …/d` at Headline-value
-tier (13px bold mono); Θ keeps its existing sign color (`text-up`/`text-down`) independent of the
+`{WORD}` at Verdict-word tier (16px 600 semibold, tier color — rev 2). `score …/100` and `Θ …/d` at Headline-value
+tier (13px 600 semibold mono — rev 2); Θ keeps its existing sign color (`text-up`/`text-down`) independent of the
 verdict-word tier color — a positive score-tier candidate can still show a red Θ if theta is
 negative (never let one signal silently overwrite another). AH-session badge (existing
 `SESSION` / "AH — indicative" amber pill) renders immediately after the headline row when

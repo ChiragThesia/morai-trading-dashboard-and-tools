@@ -569,7 +569,9 @@ file and line — this is a codebase-internal research pass with no external pac
 lookups (UI-SPEC already locked "zero new dependency," which was independently confirmed rather
 than merely trusted).
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Both questions RESOLVED at planning (plan-checker pass 2026-07-14): OQ1 — keep the hand-rolled header div, no PanelHeading swap (41-01/41-02 implement this). OQ2 — sort state stays local to Analyzer.tsx, never the shared hook (41-02 Task 1 implements this).
 
 1. **Does `Analyzer.tsx`'s "Risk profile" panel header get refactored to use `PanelHeading` (gaining
    the `badge=` slot for free), or does the badge get inlined into the existing hand-rolled header
