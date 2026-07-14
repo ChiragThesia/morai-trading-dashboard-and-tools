@@ -55,6 +55,7 @@ export function makeSelfHealJournalUseCase(deps: SelfHealJournalDeps): ForRunnin
     let slotsConsidered = 0;
     let rowsHealed = 0;
     let honestGapSlots = 0;
+    let errorCount = 0;
 
     for (const calendar of openResult.value) {
       const rebuildResult = await deps.rebuildCalendarHistory(calendar, window);
@@ -62,8 +63,11 @@ export function makeSelfHealJournalUseCase(deps: SelfHealJournalDeps): ForRunnin
       slotsConsidered += rebuildResult.value.slotsConsidered;
       rowsHealed += rebuildResult.value.rowsHealed;
       honestGapSlots += rebuildResult.value.honestGapSlots;
+      // WR-01 (40-REVIEW.md): per-slot heal errors no longer abort rebuildCalendarHistory —
+      // surface the count so the hourly cron's operator/logs can see a degraded run.
+      errorCount += rebuildResult.value.errorCount;
     }
 
-    return ok({ slotsConsidered, rowsHealed, honestGapSlots });
+    return ok({ slotsConsidered, rowsHealed, honestGapSlots, errorCount });
   };
 }

@@ -26,7 +26,7 @@ describe("makeSelfHealJournalHandler", () => {
   it("when job is undefined: handler no-ops (pg-boss v12 guard)", async () => {
     const selfHealJournalUseCase = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const handler = makeSelfHealJournalHandler({ selfHealJournalUseCase, now: () => new Date() });
 
@@ -37,7 +37,7 @@ describe("makeSelfHealJournalHandler", () => {
   it("invalid payload (non-numeric lookbackDays) → handler throws naming the job", async () => {
     const selfHealJournalUseCase = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const handler = makeSelfHealJournalHandler({ selfHealJournalUseCase, now: () => new Date() });
 
@@ -50,7 +50,7 @@ describe("makeSelfHealJournalHandler", () => {
   it("empty payload → use-case called with an empty object (default lookback)", async () => {
     const selfHealJournalUseCase = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const handler = makeSelfHealJournalHandler({ selfHealJournalUseCase, now: () => new Date() });
 
@@ -61,7 +61,7 @@ describe("makeSelfHealJournalHandler", () => {
   it("payload with a numeric lookbackDays override → passed through to the use-case", async () => {
     const selfHealJournalUseCase = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const handler = makeSelfHealJournalHandler({ selfHealJournalUseCase, now: () => new Date() });
 
@@ -83,7 +83,7 @@ describe("makeSelfHealJournalHandler", () => {
     const weekend = new Date("2026-08-16T14:00:00Z");
     const selfHealJournalUseCase = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const handler = makeSelfHealJournalHandler({ selfHealJournalUseCase, now: () => weekend });
 

@@ -58,10 +58,11 @@ export function parseRepairArgs(argv: ReadonlyArray<string>): ParsedRepairArgs {
 
 function printReportRow(report: CalendarRepairReport): void {
   const deletedStr = report.deleted === null ? "n/a" : String(report.deleted);
+  const errorsStr = report.errorCount > 0 ? `  errors ${report.errorCount}` : "";
   console.warn(
     `${report.calendarId}  rows ${report.before.rows}→${report.after.rows}  ` +
       `nonGap ${report.before.nonGapRows}→${report.after.nonGapRows}  ` +
-      `days ${report.before.days}→${report.after.days}  deleted ${deletedStr}`,
+      `days ${report.before.days}→${report.after.days}  deleted ${deletedStr}${errorsStr}`,
   );
 }
 

@@ -35,7 +35,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function makeDeps(overrides: Partial<SelfHealJournalDeps> = {}): SelfHealJournalDeps {
   return {
     getOpenCalendars: async () => ok([]),
-    rebuildCalendarHistory: async () => ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }),
+    rebuildCalendarHistory: async () => ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }),
     now: () => NOW,
     ...overrides,
   };
@@ -47,7 +47,7 @@ describe("makeSelfHealJournalUseCase", () => {
     const calledIds: string[] = [];
     const rebuildCalendarHistory: SelfHealJournalDeps["rebuildCalendarHistory"] = async (calendar) => {
       calledIds.push(calendar.id);
-      return ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 });
+      return ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 });
     };
 
     const useCase = makeSelfHealJournalUseCase(
@@ -63,7 +63,7 @@ describe("makeSelfHealJournalUseCase", () => {
     const open = [makeCalendar()];
     const rebuildCalendarHistory = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const useCase = makeSelfHealJournalUseCase(
       makeDeps({ getOpenCalendars: async () => ok(open), rebuildCalendarHistory }),
@@ -82,7 +82,7 @@ describe("makeSelfHealJournalUseCase", () => {
     const open = [makeCalendar()];
     const rebuildCalendarHistory = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const useCase = makeSelfHealJournalUseCase(
       makeDeps({ getOpenCalendars: async () => ok(open), rebuildCalendarHistory }),
@@ -96,12 +96,12 @@ describe("makeSelfHealJournalUseCase", () => {
     });
   });
 
-  it("aggregation: sums RebuildCoverage across multiple calendars", async () => {
+  it("aggregation: sums RebuildCoverage (including errorCount, WR-01) across multiple calendars", async () => {
     const open = [makeCalendar({ id: "cal-a" }), makeCalendar({ id: "cal-b" })];
     const rebuildCalendarHistory = vi
       .fn()
-      .mockResolvedValueOnce(ok({ slotsConsidered: 3, rowsHealed: 2, honestGapSlots: 1 }))
-      .mockResolvedValueOnce(ok({ slotsConsidered: 5, rowsHealed: 4, honestGapSlots: 1 }));
+      .mockResolvedValueOnce(ok({ slotsConsidered: 3, rowsHealed: 2, honestGapSlots: 1, errorCount: 1 }))
+      .mockResolvedValueOnce(ok({ slotsConsidered: 5, rowsHealed: 4, honestGapSlots: 1, errorCount: 0 }));
 
     const useCase = makeSelfHealJournalUseCase(
       makeDeps({ getOpenCalendars: async () => ok(open), rebuildCalendarHistory }),
@@ -111,7 +111,7 @@ describe("makeSelfHealJournalUseCase", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toEqual({ slotsConsidered: 8, rowsHealed: 6, honestGapSlots: 2 });
+      expect(result.value).toEqual({ slotsConsidered: 8, rowsHealed: 6, honestGapSlots: 2, errorCount: 1 });
     }
   });
 

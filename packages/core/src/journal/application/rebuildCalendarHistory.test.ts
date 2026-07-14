@@ -246,7 +246,7 @@ describe("makeRebuildCalendarHistoryUseCase", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toEqual({ slotsConsidered: 1, rowsHealed: 0, honestGapSlots: 1 });
+      expect(result.value).toEqual({ slotsConsidered: 1, rowsHealed: 0, honestGapSlots: 1, errorCount: 0 });
     }
     expect(capture.rows).toHaveLength(0);
   });
@@ -276,7 +276,7 @@ describe("makeRebuildCalendarHistoryUseCase", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toEqual({ slotsConsidered: 2, rowsHealed: 1, honestGapSlots: 1 });
+      expect(result.value).toEqual({ slotsConsidered: 2, rowsHealed: 1, honestGapSlots: 1, errorCount: 0 });
     }
     expect(capture.rows).toHaveLength(1);
   });
@@ -299,17 +299,32 @@ describe("makeRebuildCalendarHistoryUseCase", () => {
     expect(capture.rows).toHaveLength(0);
   });
 
-  it("propagates a StorageError from healSnapshot (fill-only — never persistSnapshot)", async () => {
-    const calendar = makeCalendar({ openedAt: SLOT_ANCHOR, closedAt: SLOT_ANCHOR });
-    const storageError = { kind: "storage-error" as const, message: "heal failed" };
+  it("WR-01 (40-REVIEW.md): a healSnapshot error is recorded and the loop continues — never aborts the whole run", async () => {
+    // Two slot-aligned instants 30 min apart -> exactly 2 enumerated slots (see Task 1 tests).
+    const openedAt = new Date("2026-06-15T13:30:00Z"); // 09:30 ET
+    const closedAt = new Date("2026-06-15T14:00:00Z"); // 10:00 ET
+    const calendar = makeCalendar({ openedAt, closedAt });
+    const storageError = { kind: "storage-error" as const, message: "heal failed (e.g. a lost concurrent-write race)" };
+    const capture = makeHealCapture();
 
-    const useCase = makeRebuildCalendarHistoryUseCase(
-      makeDeps({ healSnapshot: async () => err(storageError) }),
-    );
+    // First slot's heal fails; second slot's heal must still be attempted and succeed —
+    // a single colliding slot must never abandon the rest of the calendar's rebuild.
+    const healSnapshot: ForHealingSnapshot = async (row: SnapshotRow) => {
+      if (row.time.getTime() === openedAt.getTime()) return err(storageError);
+      return capture.healSnapshot(row);
+    };
 
-    const result = await useCase(calendar, SINGLE_SLOT_WINDOW);
+    const useCase = makeRebuildCalendarHistoryUseCase(makeDeps({ healSnapshot }));
 
-    expect(result).toEqual(err(storageError));
+    const result = await useCase(calendar, { from: openedAt, to: closedAt });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ slotsConsidered: 2, rowsHealed: 1, honestGapSlots: 0, errorCount: 1 });
+    }
+    // The second slot's row still healed despite the first slot's error.
+    expect(capture.rows).toHaveLength(1);
+    expect(capture.rows[0]?.time.getTime()).toBe(closedAt.getTime());
   });
 
   it("fast-check: pnlOpen always matches computeSnapshotPnl(netMark, openNetDebit, qty) for any resolved leg pair", () => {

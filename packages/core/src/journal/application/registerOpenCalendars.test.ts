@@ -20,7 +20,7 @@ import type { ForRunningRebuildCalendarHistory } from "./rebuildCalendarHistory.
 // Backfill test stub — never called unless a test overrides it (existing tests above don't
 // exercise the backfill path, only the new HIST-04 on-register-backfill tests below do).
 const noopRebuildCalendarHistory: ForRunningRebuildCalendarHistory = async () =>
-  ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 });
+  ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 });
 
 // ─── The 5 real open positions (register-open-calendars oracle) ────────────────
 function leg(overrides: Partial<PositionLeg> & { occSymbol: string }): PositionLeg {
@@ -542,7 +542,7 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
     const rebuildCalls: Array<{ calendar: Calendar; window: { from: Date; to: Date } }> = [];
     const rebuildCalendarHistory: ForRunningRebuildCalendarHistory = async (calendar, window) => {
       rebuildCalls.push({ calendar, window });
-      return ok({ slotsConsidered: 4, rowsHealed: 3, honestGapSlots: 1 });
+      return ok({ slotsConsidered: 4, rowsHealed: 3, honestGapSlots: 1, errorCount: 0 });
     };
 
     const use = makeRegisterOpenCalendarsUseCase({
@@ -562,6 +562,55 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
     expect(rebuildCalls[0]?.calendar.id).toBe(result.value.registered[0]?.calendarId);
     // openedAt falls back to now() (no fills seeded) — so the backfill window is [now, now].
     expect(rebuildCalls[0]?.window).toEqual({ from: NOW, to: NOW });
+    expect(result.value.registered[0]?.backfilledSlots).toBe(3);
+  });
+
+  it("WR-01 (40-REVIEW.md): a per-slot heal error inside the backfill rebuild does not null out backfilledSlots — it still reports the healed count", async () => {
+    const calendarStore: Calendar[] = [];
+    let nextId = 1;
+    const registerCalendarUseCase = makeRegisterCalendarUseCase({
+      persistCalendar: async (input) => {
+        const row: Calendar = {
+          id: `cal-${nextId++}`,
+          underlying: input.underlying,
+          strike: input.strike,
+          optionType: input.optionType,
+          frontExpiry: input.frontExpiry,
+          backExpiry: input.backExpiry,
+          qty: input.qty,
+          openNetDebit: input.openNetDebit,
+          status: "open",
+          openedAt: input.openedAt,
+          closedAt: null,
+          notes: input.notes ?? null,
+        };
+        calendarStore.push(row);
+        return ok(row);
+      },
+      now: () => NOW,
+    });
+    const listCalendars: ForListingCalendars = async () => ok(calendarStore);
+    const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async () => ok([]);
+    // The rebuild engine itself already absorbs per-slot heal errors (WR-01 fix lives in
+    // rebuildCalendarHistory.ts) — this stub reproduces that observable contract: ok() with a
+    // real rowsHealed count AND a nonzero errorCount, never a StorageError for one bad slot.
+    const rebuildCalendarHistory: ForRunningRebuildCalendarHistory = async () =>
+      ok({ slotsConsidered: 5, rowsHealed: 3, honestGapSlots: 1, errorCount: 1 });
+
+    const use = makeRegisterOpenCalendarsUseCase({
+      fetchOpenPositions: async () => ok(singleLegPair()),
+      listCalendars,
+      readFillsByOccSymbols,
+      registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory,
+      now: () => NOW,
+    });
+
+    const result = await use();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // A colliding slot never nulls out the whole backfill count — the registration is not
+    // treated as a total failure just because one slot raced.
     expect(result.value.registered[0]?.backfilledSlots).toBe(3);
   });
 

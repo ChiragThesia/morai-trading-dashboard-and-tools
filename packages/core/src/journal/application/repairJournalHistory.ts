@@ -45,6 +45,12 @@ export type CalendarRepairReport = {
   readonly after: RepairCoverage;
   /** Deleted-row count from the trim step; null when trimOutsideWindow was not requested. */
   readonly deleted: number | null;
+  /**
+   * WR-01 (40-REVIEW.md): slots where the rebuild engine's healSnapshot call errored (e.g. a
+   * lost concurrent-write race) — surfaced for operator visibility. Never aborts the repair;
+   * see rebuildCalendarHistory.ts's RebuildCoverage.errorCount.
+   */
+  readonly errorCount: number;
 };
 
 export type RepairJournalHistoryDeps = {
@@ -117,7 +123,7 @@ export function makeRepairJournalHistoryUseCase(
       if (!afterResult.ok) return err(afterResult.error);
       const after = computeCoverage(afterResult.value ?? []);
 
-      reports.push({ calendarId: calendar.id, before, after, deleted });
+      reports.push({ calendarId: calendar.id, before, after, deleted, errorCount: rebuildResult.value.errorCount });
     }
 
     return ok(reports);

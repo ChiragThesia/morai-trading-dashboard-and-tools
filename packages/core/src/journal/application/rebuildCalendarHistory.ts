@@ -40,6 +40,12 @@ export type RebuildCoverage = {
   readonly slotsConsidered: number;
   readonly rowsHealed: number;
   readonly honestGapSlots: number;
+  /**
+   * WR-01 (40-REVIEW.md): slots where healSnapshot itself returned a StorageError (e.g. a lost
+   * concurrent-write race) — recorded and skipped, never abort the whole run. Distinct from
+   * honestGapSlots (D-04's "no usable leg data" case, which is not an error).
+   */
+  readonly errorCount: number;
 };
 
 export type RebuildCalendarHistoryDeps = {
@@ -94,6 +100,11 @@ export function enumerateRebuildSlots(
  * stamps trigger='scheduled', and heals it via healSnapshot (fill-only, D-03 — never
  * persistSnapshot). A slot where either leg is unresolved is an honest gap (D-04): no heal
  * call, counted separately.
+ *
+ * WR-01 (40-REVIEW.md): a healSnapshot failure on one slot (e.g. a lost concurrent-write race
+ * — see CR-01) is recorded in errorCount and the loop continues to the remaining slots, rather
+ * than aborting the whole calendar's rebuild. A resolveLegObservationForSlot failure still
+ * aborts immediately — that's a data-fetch problem, not a benign per-slot write race.
  */
 export function makeRebuildCalendarHistoryUseCase(
   deps: RebuildCalendarHistoryDeps,
@@ -104,6 +115,7 @@ export function makeRebuildCalendarHistoryUseCase(
 
     let rowsHealed = 0;
     let honestGapSlots = 0;
+    let errorCount = 0;
 
     for (const slotAnchor of slots) {
       const frontResult = await deps.resolveLegObservationForSlot({
@@ -150,10 +162,13 @@ export function makeRebuildCalendarHistoryUseCase(
         pnlOpen,
         trigger: "scheduled",
       });
-      if (!healResult.ok) return err(healResult.error);
+      if (!healResult.ok) {
+        errorCount += 1; // WR-01: record and continue — never abort the whole run
+        continue;
+      }
       rowsHealed += 1;
     }
 
-    return ok({ slotsConsidered: slots.length, rowsHealed, honestGapSlots });
+    return ok({ slotsConsidered: slots.length, rowsHealed, honestGapSlots, errorCount });
   };
 }

@@ -66,7 +66,7 @@ function makeDeps(overrides: Partial<RepairJournalHistoryDeps> = {}): RepairJour
   return {
     listCalendars: async () => ok([]),
     readJournal: async () => ok([]),
-    rebuildCalendarHistory: async () => ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }),
+    rebuildCalendarHistory: async () => ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }),
     deleteSnapshotsOutsideWindow: async () => ok({ deletedCount: 0 }),
     now: () => NOW,
     ...overrides,
@@ -79,7 +79,7 @@ describe("makeRepairJournalHistoryUseCase", () => {
     const other = makeCalendar({ id: "cal-other" });
     const rebuildCalendarHistory = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const useCase = makeRepairJournalHistoryUseCase(
       makeDeps({ listCalendars: async () => ok([target, other]), rebuildCalendarHistory }),
@@ -102,7 +102,7 @@ describe("makeRepairJournalHistoryUseCase", () => {
     const listCalendars = vi.fn().mockResolvedValue(ok([a, b]));
     const rebuildCalendarHistory = vi
       .fn()
-      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0 }));
+      .mockResolvedValue(ok({ slotsConsidered: 0, rowsHealed: 0, honestGapSlots: 0, errorCount: 0 }));
 
     const useCase = makeRepairJournalHistoryUseCase(makeDeps({ listCalendars, rebuildCalendarHistory }));
 
@@ -167,6 +167,23 @@ describe("makeRepairJournalHistoryUseCase", () => {
     const report = result.value[0];
     expect(report?.before).toEqual({ rows: 3, nonGapRows: 2, days: 2 });
     expect(report?.after).toEqual({ rows: 4, nonGapRows: 3, days: 3 });
+  });
+
+  it("WR-01 (40-REVIEW.md): errorCount from the rebuild engine is surfaced on the calendar's report, never aborts the run", async () => {
+    const target = makeCalendar();
+    const rebuildCalendarHistory = vi
+      .fn()
+      .mockResolvedValue(ok({ slotsConsidered: 4, rowsHealed: 2, honestGapSlots: 1, errorCount: 1 }));
+
+    const useCase = makeRepairJournalHistoryUseCase(
+      makeDeps({ listCalendars: async () => ok([target]), rebuildCalendarHistory }),
+    );
+
+    const result = await useCase({ scope: target.id });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value[0]?.errorCount).toBe(1);
   });
 
   it("idempotent re-run: identical stub deps produce equal before/after coverage on a second run", async () => {

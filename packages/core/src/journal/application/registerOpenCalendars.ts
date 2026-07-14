@@ -204,9 +204,12 @@ export function makeRegisterOpenCalendarsUseCase(
       if (!registerResult.ok) return registerResult;
 
       // HIST-04: backfill the entry-day-onward history so late registration never loses it.
-      // Non-fatal — the calendar is already persisted; a rebuild failure is recorded on the
-      // summary (backfilledSlots: null) rather than failing the registration, and is
-      // re-runnable via the self-heal job or the operator repair CLI.
+      // Non-fatal — the calendar is already persisted; a rebuild StorageError (e.g. a failed
+      // leg-observation read) is recorded on the summary (backfilledSlots: null) rather than
+      // failing the registration, and is re-runnable via the self-heal job or the operator
+      // repair CLI. WR-01 (40-REVIEW.md): a per-slot healSnapshot error (e.g. a lost
+      // concurrent-write race) does NOT null this out — rebuildCalendarHistory already absorbs
+      // those internally, so backfilledSlots still reports the real healed count.
       const backfillResult = await deps.rebuildCalendarHistory(registerResult.value, {
         from: openedAt,
         to: deps.now(),
