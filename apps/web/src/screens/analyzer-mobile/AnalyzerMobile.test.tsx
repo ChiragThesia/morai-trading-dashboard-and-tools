@@ -137,7 +137,7 @@ describe("AnalyzerMobile — J6 rail states (bare prompts, no hollow shells)", (
     expect(loading.textContent).toContain("Loading candidates…");
     // Bare prompt — no boxed Panel gradient anywhere up its ancestor chain.
     expect(loading.closest(".bg-gradient-to-b")).toBeNull();
-    expect(container.querySelector('[data-testid="mobile-score"]')).toBeNull();
+    expect(container.querySelector('[data-testid="mobile-verdict-headline"]')).toBeNull();
     expect(container.querySelector("details")).toBeNull();
   });
 
@@ -173,7 +173,7 @@ describe("AnalyzerMobile — J6 rail states (bare prompts, no hollow shells)", (
     );
   });
 
-  it("J6e no hollow shells: mobile-score / caption / disclosures absent in every non-selected state", () => {
+  it("J6e no hollow shells: verdict headline / caption / disclosures absent in every non-selected state", () => {
     const states: ReadonlyArray<Partial<MockPickerResult>> = [
       { data: undefined, isPending: true },
       { data: undefined, isError: true },
@@ -183,7 +183,7 @@ describe("AnalyzerMobile — J6 rail states (bare prompts, no hollow shells)", (
     for (const overrides of states) {
       mockUsePickerReturn(overrides);
       const { container } = render(<Analyzer />);
-      expect(container.querySelector('[data-testid="mobile-score"]')).toBeNull();
+      expect(container.querySelector('[data-testid="mobile-verdict-headline"]')).toBeNull();
       expect(container.querySelector('[data-testid="analyzer-mobile-caption"]')).toBeNull();
       expect(screen.queryByText("Term structure + your legs")).toBeNull();
       expect(screen.queryByText("Why this calendar")).toBeNull();
@@ -369,11 +369,11 @@ describe("AnalyzerMobile — J10 disclosures (D-10, catches #23/#24)", () => {
 });
 
 describe("AnalyzerMobile — J4 DOM order + null-candidate guard", () => {
-  it("J4: paste input precedes card list precedes mobile-score precedes date-pill precedes first <details>", () => {
+  it("J4: paste input precedes card list precedes verdict headline precedes date-pill precedes first <details>", () => {
     render(<Analyzer />);
     const input = screen.getByTestId("picker-paste-input");
     const firstCard = screen.getAllByTestId(/^candidate-card-/)[0];
-    const score = screen.getByTestId("mobile-score");
+    const score = screen.getByTestId("mobile-verdict-headline");
     const pill = screen.getByTestId("date-pill");
     const firstDetails = document.querySelector("details");
     assertDefined(firstCard, "a candidate card renders");

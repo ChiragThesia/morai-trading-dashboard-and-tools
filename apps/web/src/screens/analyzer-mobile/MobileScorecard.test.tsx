@@ -5,12 +5,13 @@
  * from the frozen pickerSnapshotFixture (@morai/contracts) and the scorecard props the mobile
  * tree feeds it. No hooks, no network, no matchMedia — pure props → DOM.
  *
- * J7a null → renders nothing · J7b not-scored → note only · J7c scored hero · J7d combined
- * book summary · J7e checklist rows (scoreStatus icons, θ GATE, guard n/a, weights, CALIBRATING,
- * gate-drops) · J7f AH session row.
+ * J7a null → renders nothing · J7b not-scored → note only · J7c scored verdict-word headline
+ * (word + score + Θ) · J7d combined book summary · J7e checklist rows grouped EDGE/RISK/FIT
+ * (scoreStatus icons, guard n/a, CALIBRATING, gate-drops — θ GATE retired into the headline
+ * Θ) · J7f AH session row.
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, within } from "@testing-library/react";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { PickerCandidate, RuleSetEntry } from "@morai/contracts";
 import { exactAbs } from "../../lib/position-format.ts";
@@ -51,7 +52,7 @@ afterEach(cleanup);
 describe("MobileScorecard — J7 verdict hero", () => {
   it("J7a: candidate === null renders nothing (no scorecard shell)", () => {
     const { container } = render(<MobileScorecard candidate={null} {...BASE} />);
-    expect(container.querySelector('[data-testid="mobile-score"]')).toBeNull();
+    expect(container.querySelector('[data-testid="mobile-verdict-headline"]')).toBeNull();
     expect(screen.queryByText("Scorecard")).toBeNull();
     expect(container.querySelector('[data-testid^="checklist-"]')).toBeNull();
   });
@@ -61,18 +62,20 @@ describe("MobileScorecard — J7 verdict hero", () => {
     const { container } = render(<MobileScorecard candidate={notScored} {...BASE} />);
     expect(screen.getByText("Scorecard")).toBeTruthy();
     expect(screen.getByText("Pasted calendar — not engine-scored.")).toBeTruthy();
-    expect(container.querySelector('[data-testid="mobile-score"]')).toBeNull();
+    expect(container.querySelector('[data-testid="mobile-verdict-headline"]')).toBeNull();
     expect(container.querySelector('[data-testid^="checklist-"]')).toBeNull();
   });
 
-  it("J7c: a scored candidate renders the 32px rounded score + verbatim context line, no combined book at bookCount 1", () => {
+  it("J7c: a scored candidate renders the verdict-word headline (word + score + Θ) + verbatim context line, no combined book at bookCount 1", () => {
     render(<MobileScorecard candidate={TOP} {...BASE} />);
 
-    const score = screen.getByTestId("mobile-score");
-    expect(score.textContent).toBe(String(Math.round(TOP.score)));
-    expect(score.className).toContain("text-[32px]");
-    expect(score.className).toContain("font-mono");
-    expect(score.className).toContain("font-bold");
+    expect(screen.getByTestId("mobile-verdict-word").textContent).toContain("CAUTION");
+    expect(screen.getByTestId("mobile-verdict-score").textContent).toBe(
+      `score ${Math.round(TOP.score)}/100`,
+    );
+    expect(screen.getByTestId("mobile-verdict-theta").textContent).toBe(
+      `Θ ${TOP.theta >= 0 ? "+" : ""}${TOP.theta.toFixed(1)}/d`,
+    );
 
     const name = screen.getByTestId("risk-profile-selected-name");
     expect(name.textContent).toBe(TOP.name);
@@ -100,7 +103,7 @@ describe("MobileScorecard — J7 verdict hero", () => {
     expect(summary.className).toContain("text-amber");
   });
 
-  it("J7e: one checklist row per active score rule, θ GATE sign-colored, gate-drops fine print", () => {
+  it("J7e: one checklist row per active score rule grouped under EDGE/RISK/FIT, θ folded into the headline, gate-drops fine print", () => {
     render(<MobileScorecard candidate={TOP} {...BASE} />);
 
     for (const key of ["fwdEdge", "slope", "eventAdjustment", "gexFit", "beVsEm"]) {
@@ -110,13 +113,22 @@ describe("MobileScorecard — J7 verdict hero", () => {
     expect(screen.getByTestId("checklist-gexFit").textContent).toContain("✓");
     expect(screen.getByTestId("checklist-gexFit").textContent).toContain("100%");
 
-    const theta = screen.getByTestId("checklist-theta");
-    expect(theta.textContent).toContain("✓");
-    expect(theta.textContent).toContain(`+${TOP.theta.toFixed(1)}/d`);
+    // θ GATE is retired as a separate row — its info is the headline Θ (mobile-verdict-theta).
+    expect(screen.queryByTestId("checklist-theta")).toBeNull();
 
     expect(screen.getByTestId("checklist-gate-drops").textContent).toBe(
       "2 illiquid quotes · 1 negative-θ pair dropped this run",
     );
+  });
+
+  it("J7e: groups the checklist rows under EDGE/RISK/FIT per the LOCKED mapping (shared GROUP_OF)", () => {
+    render(<MobileScorecard candidate={TOP} {...BASE} />);
+
+    within(screen.getByTestId("mobile-verdict-group-EDGE")).getByTestId("checklist-fwdEdge");
+    within(screen.getByTestId("mobile-verdict-group-EDGE")).getByTestId("checklist-slope");
+    within(screen.getByTestId("mobile-verdict-group-RISK")).getByTestId("checklist-eventAdjustment");
+    within(screen.getByTestId("mobile-verdict-group-RISK")).getByTestId("checklist-beVsEm");
+    within(screen.getByTestId("mobile-verdict-group-FIT")).getByTestId("checklist-gexFit");
   });
 
   it("J7e: the guard candidate (fwdIv null) shows the fwdEdge row as — n/a in text-dim", () => {
@@ -127,15 +139,12 @@ describe("MobileScorecard — J7 verdict hero", () => {
     expect(fwd.querySelector(".text-dim")).not.toBeNull();
   });
 
-  it("J7e: engine ruleSet weights render as w{n} spans; CALIBRATING row appears when context is non-empty", () => {
+  it("J7e: CALIBRATING row appears when context is non-empty", () => {
     const withContext: PickerCandidate = {
       ...TOP,
       context: [{ id: "vrp", label: "VRP (front IV − RV20)", value: 0.031, note: "calibrating" }],
     };
     render(<MobileScorecard candidate={withContext} {...BASE} ruleSet={REGISTRY_RULESET} />);
-
-    expect(screen.getByTestId("checklist-fwdEdge-weight").textContent).toBe("w35");
-    expect(screen.getByTestId("checklist-slope-weight").textContent).toBe("w30");
 
     const calibrating = screen.getByTestId("checklist-experimental");
     expect(calibrating.textContent).toContain("CALIBRATING");
