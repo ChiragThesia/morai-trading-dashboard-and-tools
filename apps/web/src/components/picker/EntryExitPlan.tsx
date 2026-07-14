@@ -106,8 +106,7 @@ export function EntryExitPlan({ candidate, sizing = null }: EntryExitPlanProps):
         value={formatSizing(sizing)}
       />
       <p className="m-0 mt-1.5 font-mono text-[9px] leading-[1.5] text-dim">
-        Max-loss=debit holds only if closed as a spread by front expiration (European SPX, no
-        early assignment). Targets are tunable defaults, not validated thresholds.
+        Max loss = debit only if closed by front expiry · targets are defaults, not validated.
       </p>
     </div>
   );

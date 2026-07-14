@@ -107,6 +107,7 @@ function buildCandidate(params: {
     theta: 0,
     vega: 0,
     delta: 0,
+    gamma: null,
     fwdIv: 0.15,
     fwdIvGuard: "ok",
     slope: 0,

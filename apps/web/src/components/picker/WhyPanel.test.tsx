@@ -119,18 +119,18 @@ describe("WhyPanel — forward-edge sentence (3-way branch)", () => {
     expect(sentence).toContain("10.0%"); // fwd IV
   });
 
-  it("uses forward-tailwind wording when fwdEdge <= 0 (fwdIv not null)", () => {
+  it("uses forward-tailwind wording when fwdEdge <= 0 (fwdIv not null) — condensed copy", () => {
     render(<WhyPanel candidate={NORMAL} gex={GEX} />);
     const sentence = screen.getByTestId("whypanel-forward-edge-sentence").textContent ?? "";
-    expect(sentence).toContain("no front-richness edge today");
-    expect(sentence).toContain("Vasquez");
+    expect(sentence).toContain("no richness edge");
+    expect(sentence).toContain("slope + carry case");
   });
 
-  it("uses the dedicated locked guard sentence when fwdIv is null (verbatim, T-18-10)", () => {
+  it("uses the dedicated locked guard sentence when fwdIv is null (verbatim, T-18-10; condensed rev 2026-07-14)", () => {
     render(<WhyPanel candidate={GUARD} gex={GEX} />);
     const sentence = screen.getByTestId("whypanel-forward-edge-sentence").textContent ?? "";
     expect(sentence).toBe(
-      "Forward IV is undefined here — the term structure between these two legs is inverted (back-leg variance implies a negative forward radicand). This candidate is ranked on slope, GEX fit, and event adjustment only; the forward-edge criterion contributes 0.",
+      "Fwd IV undefined (inverted term structure) — ranked on slope/GEX/event only.",
     );
   });
 });
@@ -149,7 +149,8 @@ describe("WhyPanel — event-premium sentence (2-way branch)", () => {
   it("states the structural/non-event wording when frontEvents is empty", () => {
     render(<WhyPanel candidate={CLEAN} gex={GEX} />);
     const sentence = screen.getByTestId("whypanel-event-sentence").textContent ?? "";
-    expect(sentence).toContain("structural, not event premium");
+    expect(sentence).toContain("structural edge");
+    expect(sentence).toContain("No event inside the front leg");
   });
 });
 

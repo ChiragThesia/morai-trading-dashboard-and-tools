@@ -441,7 +441,9 @@ describe("CandidateRail — direct-render states (Phase 41, D-18)", () => {
 
     const row = screen.getByTestId("candidate-row-pasted-1");
     within(row).getByText("PASTED");
-    expect(within(row).getAllByText("—").length).toBe(2);
+    // One honest em-dash per numeric column: Debit, Δ, Γ, Θ, Vega, IV f/b (greeks columns
+    // added 2026-07-14 — an unscored paste never fabricates any of them).
+    expect(within(row).getAllByText("—").length).toBe(6);
     expect(within(row).getByTestId("remove-pasted-pasted-1")).toBeTruthy();
   });
 });
@@ -546,7 +548,7 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
   it("wires WhyPanel/TermStructureChart/EntryExitPlan to the default (top-ranked) candidate", () => {
     render(<Analyzer />);
     expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toContain(
-      `Front IV ${(TOP.frontLeg.iv * 100).toFixed(1)}%`,
+      `Front ${(TOP.frontLeg.iv * 100).toFixed(1)}%`,
     );
     expect(screen.getByTestId("term-structure-leg-dot-front")).toBeTruthy();
     expect(screen.getByTestId("entryexit-value-debit")).toBeTruthy();
@@ -556,7 +558,7 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
     render(<Analyzer />);
     fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
     expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toContain(
-      `Front IV ${(SECOND.frontLeg.iv * 100).toFixed(1)}%`,
+      `Front ${(SECOND.frontLeg.iv * 100).toFixed(1)}%`,
     );
   });
 
@@ -565,7 +567,7 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
     fireEvent.click(screen.getByTestId(`candidate-row-${GUARD.id}`));
 
     expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toBe(
-      "Forward IV is undefined here — the term structure between these two legs is inverted (back-leg variance implies a negative forward radicand). This candidate is ranked on slope, GEX fit, and event adjustment only; the forward-edge criterion contributes 0.",
+      "Fwd IV undefined (inverted term structure) — ranked on slope/GEX/event only.",
     );
     expect(screen.queryByTestId("term-structure-fwd-bracket")).toBeNull();
     expect(screen.getByTestId("term-structure-guard-tag")).toBeTruthy();
@@ -1068,7 +1070,7 @@ describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
     const innerGrid = screen.getByTestId("analyzer-inner-grid");
     const classes = innerGrid.className.split(/\s+/u);
     expect(classes).toContain("grid");
-    expect(classes).toContain("grid-cols-[minmax(380px,440px)_minmax(0,1fr)]");
+    expect(classes).toContain("grid-cols-[minmax(280px,330px)_minmax(0,1fr)]");
     expect(classes).toContain("gap-4");
     // The reflow arm is gone: no display:contents, no lg:-prefixed grid variants, no inline style.
     expect(innerGrid.className).not.toContain("contents");
@@ -1091,40 +1093,42 @@ describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
     }
   });
 
-  it("keeps DOM order scorecard -> rail -> detail column; WHY/ENTRY sit between chart and term structure", () => {
+  it("TOS layout: hero -> [WHY/ENTRY left | chart right] -> full-width table -> term structure", () => {
     render(<Analyzer />);
 
     const outer = screen.getByTestId("analyzer-scorecard-wrapper").parentElement;
     assertDefined(outer, "outer flex column present");
     const innerGrid = screen.getByTestId("analyzer-inner-grid");
     const outerChildren = Array.from(outer.children);
-    expect(outerChildren.indexOf(screen.getByTestId("analyzer-scorecard-wrapper"))).toBeLessThan(
-      outerChildren.indexOf(innerGrid),
-    );
+    const heroIdx = outerChildren.indexOf(screen.getByTestId("analyzer-scorecard-wrapper"));
+    const gridIdx = outerChildren.indexOf(innerGrid);
+    const tableIdx = outerChildren.indexOf(screen.getByTestId("analyzer-rail-wrapper"));
+    expect(heroIdx).toBeLessThan(gridIdx);
+    // The ranked table is a FULL-WIDTH sibling below the chart grid, not a grid column.
+    expect(gridIdx).toBeLessThan(tableIdx);
 
+    // Inside the grid: WHY/ENTRY rail left, chart column right.
     const innerChildren = Array.from(innerGrid.children);
-    const railIdx = innerChildren.indexOf(screen.getByTestId("analyzer-rail-wrapper"));
-    const centerIdx = innerChildren.indexOf(screen.getByTestId("analyzer-center-column"));
-    expect(railIdx).toBeLessThan(centerIdx);
-
-    // 2-col layout: WHY/ENTRY moved INSIDE the detail column, between the payoff panel
-    // (first child) and the term-structure panel (last child).
-    const center = screen.getByTestId("analyzer-center-column");
-    const right = screen.getByTestId("analyzer-right-wrapper");
-    expect(center.contains(right)).toBe(true);
-    const centerChildren = Array.from(center.children);
-    const rightIdx = centerChildren.indexOf(right);
-    expect(rightIdx).toBeGreaterThan(0);
-    expect(rightIdx).toBeLessThan(centerChildren.length - 1);
+    const whyIdx = innerChildren.indexOf(screen.getByTestId("analyzer-right-wrapper"));
+    const chartIdx = innerChildren.indexOf(screen.getByTestId("analyzer-center-column"));
+    expect(whyIdx).toBeGreaterThanOrEqual(0);
+    expect(whyIdx).toBeLessThan(chartIdx);
   });
 
-  it("WHY + ENTRY/EXIT render as a side-by-side 2-up grid under the chart", () => {
+  it("greeks columns: each scored row renders Δ / Γ / Θ / vega / IV f-b at trading precision", () => {
     render(<Analyzer />);
 
-    const right = screen.getByTestId("analyzer-right-wrapper");
-    const stack = right.firstElementChild;
-    assertDefined(stack, "RightColumn wrapper present");
-    expect(stack.className).toContain("grid-cols-2");
+    const row = screen.getByTestId(`candidate-row-${TOP.id}`);
+    const text = row.textContent ?? "";
+    expect(text).toContain(`${TOP.delta >= 0 ? "+" : ""}${TOP.delta.toFixed(2)}`);
+    // Fixture candidates predate the gamma field (contract defaults it to null) — the cell
+    // renders an honest em-dash, never a fabricated number.
+    expect(TOP.gamma === null ? "—" : `${TOP.gamma >= 0 ? "+" : ""}${TOP.gamma.toFixed(3)}`)
+      .toSatisfy((expected: string) => text.includes(expected));
+    expect(text).toContain(`${TOP.vega >= 0 ? "+" : ""}${TOP.vega.toFixed(1)}`);
+    expect(text).toContain(
+      `${(TOP.frontLeg.iv * 100).toFixed(1)}/${(TOP.backLeg.iv * 100).toFixed(1)}`,
+    );
   });
 
   it("drops the full-bleed chart wrapper — no negative-margin bleed remains in the payoff center", () => {

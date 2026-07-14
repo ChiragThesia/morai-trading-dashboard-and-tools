@@ -154,6 +154,7 @@ const SCORED_CANDIDATE: PickerCandidate = {
   theta: 12.3,
   vega: 45.1,
   delta: -30.2,
+  gamma: null,
   fwdIv: 0.155,
   fwdIvGuard: "ok",
   slope: 0.08,

@@ -32,25 +32,23 @@ function signedVolPtsPerYear(v: number): string {
   return `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(1)}v/yr`;
 }
 
+/* Condensed one-liners (user feedback 2026-07-14: panel was too verbose) — same 3-way/2-way
+ * branch logic as the original prose, every number still candidate-derived, nothing fabricated. */
 function forwardEdgeSentence(candidate: PickerCandidate): string {
   if (candidate.fwdIv === null) {
-    return (
-      "Forward IV is undefined here — the term structure between these two legs is inverted " +
-      "(back-leg variance implies a negative forward radicand). This candidate is ranked on " +
-      "slope, GEX fit, and event adjustment only; the forward-edge criterion contributes 0."
-    );
+    return "Fwd IV undefined (inverted term structure) — ranked on slope/GEX/event only.";
   }
   if (candidate.fwdEdge > 0) {
-    return `Front IV ${pct1(candidate.frontLeg.iv)} is RICH vs the ${pct1(candidate.fwdIv)} forward path — genuine term-structure edge for the short leg.`;
+    return `Front ${pct1(candidate.frontLeg.iv)} RICH vs fwd ${pct1(candidate.fwdIv)} ✓ — short-leg edge.`;
   }
-  return `Front IV ${pct1(candidate.frontLeg.iv)} is below the ${pct1(candidate.fwdIv)} forward vol — no front-richness edge today; the case rests on the upward slope (long-vol tailwind, Vasquez) and theta carry.`;
+  return `Front ${pct1(candidate.frontLeg.iv)} below fwd ${pct1(candidate.fwdIv)} — slope + carry case, no richness edge.`;
 }
 
 function eventPremiumSentence(candidate: PickerCandidate): string {
   if (candidate.frontEvents.length > 0) {
-    return `Front leg spans ${candidate.frontEvents.join(" + ")} — part of its IV is event premium and a realized-vol spike near ${candidate.frontLeg.strike} is the max-loss scenario. Scored with a penalty.`;
+    return `Front leg spans ${candidate.frontEvents.join(" + ")} — event premium, scored with a penalty.`;
   }
-  return "Front leg expires before FOMC — edge is structural, not event premium.";
+  return "No event inside the front leg — structural edge.";
 }
 
 function gexFitSentence(candidate: PickerCandidate, gex: PickerGexContext): string {
@@ -86,7 +84,7 @@ function gexFitSentence(candidate: PickerCandidate, gex: PickerGexContext): stri
     strikeNote = "no abs-γ strike reference available";
   }
 
-  return `GEX: net γ ${netSign}$${Math.abs(gex.netGammaAtSpot).toFixed(1)}B (${regime}) ✓ · strike ${strikeNote}.`;
+  return `Net γ ${netSign}$${Math.abs(gex.netGammaAtSpot).toFixed(1)}B (${regime}) · strike ${strikeNote}`;
 }
 
 function WhyStat({
@@ -155,13 +153,13 @@ export function WhyPanel({ candidate, gex }: WhyPanelProps): React.ReactElement 
         />
       </div>
 
-      <p data-testid="whypanel-forward-edge-sentence" className="m-0 font-mono text-xs leading-[1.45] text-txt">
+      <p data-testid="whypanel-forward-edge-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-txt">
         {forwardEdgeSentence(candidate)}
       </p>
-      <p data-testid="whypanel-event-sentence" className="m-0 font-mono text-xs leading-[1.45] text-txt">
+      <p data-testid="whypanel-event-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-txt">
         {eventPremiumSentence(candidate)}
       </p>
-      <p data-testid="whypanel-gex-sentence" className="m-0 font-mono text-xs leading-[1.45] text-txt">
+      <p data-testid="whypanel-gex-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-dim">
         {gexFitSentence(candidate, gex)}
       </p>
     </div>

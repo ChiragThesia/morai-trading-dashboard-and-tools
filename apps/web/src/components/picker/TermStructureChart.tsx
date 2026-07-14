@@ -25,6 +25,12 @@ import {
 } from "recharts";
 import { ChartContainer } from "../ui/chart.tsx";
 import type { ChartConfig } from "../ui/chart.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip.tsx";
 import type { PickerCandidate, PickerEvent, TermStructurePoint } from "@morai/contracts";
 
 const W = 760;
@@ -50,6 +56,24 @@ const IV_TICKS: ReadonlyArray<number> = [0.09, 0.12, 0.15];
 const X_TICKS: ReadonlyArray<number> = [0, 20, 40, 60, 80];
 
 const chartConfig = { iv: { label: "ATM IV", color: TERM_LINE } } satisfies ChartConfig;
+
+/** Teaching copy per event kind (Phase-39 WHAT/WHY tooltip idiom). Qualitative only — the
+ *  system stores no consensus/prior numbers for these releases (economic_events carries
+ *  date+name), so the tooltip never fabricates an "expected" figure. */
+const EVENT_COPY: Readonly<Record<string, { what: string; why: string }>> = {
+  FOMC: {
+    what: "Fed rate decision + press conference (2:00 PM ET).",
+    why: "Highest-impact scheduled vol event — IV into it is event premium; a realized gap through the strike is the calendar's max-loss scenario.",
+  },
+  CPI: {
+    what: "Monthly inflation print (8:30 AM ET).",
+    why: "Reprices the Fed path — high-impact SPX vol event; the IV kink into this date is event premium, stripped before scoring.",
+  },
+  NFP: {
+    what: "Nonfarm payrolls (8:30 AM ET, first Friday).",
+    why: "Growth + rates read — moderate SPX vol event; front legs spanning it carry a scored penalty.",
+  },
+};
 
 /** Parse an ISO 8601 date (YYYY-MM-DD) into a UTC-midnight epoch-ms value. */
 function isoDateToUtcMs(iso: string): number {
@@ -235,6 +259,8 @@ export function TermStructureChart({
             <GuardTag frontDte={frontDte} frontIv={frontIv} backDte={backDte} backIv={backIv} />
           )}
 
+          {/* Leg markers: bare red (short front) / green (long back) dots — text labels
+              dropped per user feedback 2026-07-14; the caption below carries the key. */}
           <ReferenceDot
             data-testid="term-structure-leg-dot-front"
             x={frontDte}
@@ -242,7 +268,6 @@ export function TermStructureChart({
             r={7}
             fill={CORAL}
             stroke="none"
-            label={{ value: "short f", position: "top", offset: 8, fill: CORAL, fontSize: 13, fontFamily: MONO }}
           />
           <ReferenceDot
             data-testid="term-structure-leg-dot-back"
@@ -251,34 +276,57 @@ export function TermStructureChart({
             r={7}
             fill={TEAL}
             stroke="none"
-            label={{ value: "long b", position: "top", offset: 8, fill: TEAL, fontSize: 13, fontFamily: MONO }}
           />
         </LineChart>
       </ChartContainer>
-      <div className="flex flex-wrap items-center gap-1.5" data-testid="term-structure-legend">
-        {legendEvents.map((e) => {
-          const color = e.leg === "front" ? CORAL : e.leg === "back" ? TEAL : AXIS_LABEL;
-          const tag = e.leg === "front" ? " ◂f" : e.leg === "back" ? " ◂b" : "";
-          return (
-            <span
-              key={e.key}
-              className="rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px]"
-              style={{
-                color,
-                borderColor: `${color}66`,
-                background: `${color}12`,
-                opacity: e.leg === "later" ? 0.6 : 1,
-              }}
-            >
-              {`${e.label} ${e.name}${tag}`}
-            </span>
-          );
-        })}
-      </div>
+      <TooltipProvider>
+        <div className="flex flex-wrap items-center gap-1.5" data-testid="term-structure-legend">
+          {legendEvents.map((e) => {
+            const color = e.leg === "front" ? CORAL : e.leg === "back" ? TEAL : AXIS_LABEL;
+            const tag = e.leg === "front" ? " ◂f" : e.leg === "back" ? " ◂b" : "";
+            const copy = EVENT_COPY[e.name];
+            const legNote =
+              e.leg === "front"
+                ? "Inside the SHORT front leg — max-loss exposure."
+                : e.leg === "back"
+                  ? "Inside the LONG back leg only — vega event for the leg you own."
+                  : "After both legs — context only.";
+            return (
+              <Tooltip key={e.key}>
+                <TooltipTrigger
+                  data-testid={`term-structure-chip-${e.key}`}
+                  aria-label={`${e.name} event details`}
+                  style={{ background: "transparent", border: "none", padding: 0, cursor: "default" }}
+                >
+                  <span
+                    className="rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px]"
+                    style={{
+                      color,
+                      borderColor: `${color}66`,
+                      background: `${color}12`,
+                      opacity: e.leg === "later" ? 0.6 : 1,
+                    }}
+                  >
+                    {`${e.label} ${e.name}${tag} · ${e.dte}d`}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="flex max-w-[16rem] flex-col gap-1 font-mono">
+                    <span className="text-[11px] text-txt">{copy?.what ?? `${e.name} — scheduled economic release.`}</span>
+                    <span className="text-[11px] text-dim">{copy?.why ?? "Scheduled event — IV into it is event premium."}</span>
+                    <span className="text-[10px] text-dim/70">{`${e.label} · ${e.dte}d out · ${legNote}`}</span>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      </TooltipProvider>
       <p className="m-0 font-mono text-[10px] leading-[1.5] text-dim">
-        ATM implied vol by expiry. <span style={{ color: CORAL }}>◂f</span> = event before front expiry ·{" "}
-        <span style={{ color: TEAL }}>◂b</span> = before back expiry · the IV kink into those dates is
-        event premium, stripped before scoring.
+        ATM implied vol by expiry. <span style={{ color: CORAL }}>●</span> short front leg ·{" "}
+        <span style={{ color: TEAL }}>●</span> long back leg · <span style={{ color: CORAL }}>◂f</span>/
+        <span style={{ color: TEAL }}>◂b</span> = event before front/back expiry — hover a chip for
+        what the event is and how it hits this calendar.
       </p>
     </div>
   );

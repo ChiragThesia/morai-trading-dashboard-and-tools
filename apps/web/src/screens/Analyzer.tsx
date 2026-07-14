@@ -188,6 +188,20 @@ function CandidateRow({
       <td className="px-2 py-1.5 text-right">
         {notScored ? <span className="text-dim">—</span> : `$${Math.round(candidate.debit)}`}
       </td>
+      <td className="px-2 py-1.5 text-right">
+        {notScored ? (
+          <span className="text-dim">—</span>
+        ) : (
+          `${candidate.delta >= 0 ? "+" : ""}${candidate.delta.toFixed(2)}`
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right">
+        {notScored || candidate.gamma === null ? (
+          <span className="text-dim">—</span>
+        ) : (
+          `${candidate.gamma >= 0 ? "+" : ""}${candidate.gamma.toFixed(3)}`
+        )}
+      </td>
       <td
         className={cn(
           "px-2 py-1.5 text-right",
@@ -198,6 +212,20 @@ function CandidateRow({
           <span className="text-dim">—</span>
         ) : (
           `${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right">
+        {notScored ? (
+          <span className="text-dim">—</span>
+        ) : (
+          `${candidate.vega >= 0 ? "+" : ""}${candidate.vega.toFixed(1)}`
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right">
+        {notScored ? (
+          <span className="text-dim">—</span>
+        ) : (
+          `${(candidate.frontLeg.iv * 100).toFixed(1)}/${(candidate.backLeg.iv * 100).toFixed(1)}`
         )}
       </td>
       <td className="px-2 py-1.5 text-left">
@@ -295,7 +323,7 @@ export function CandidateRail({
   headerAction,
 }: CandidateRailProps): React.ReactElement {
   return (
-    <Panel className="max-h-[70vh] overflow-y-auto">
+    <Panel>
       <div className="mb-2 flex items-center justify-between gap-2">
         <PanelHeading title="Suggested calendars" />
         <div className="flex items-center gap-1.5">
@@ -342,6 +370,9 @@ export function CandidateRail({
           </p>
         </div>
       ) : (
+        // ~5 rows visible, scroll for the rest (TOS idiom) — sticky header scrolls within
+        // this wrapper, never the page.
+        <div className="max-h-[228px] overflow-y-auto">
         <table className="w-full border-collapse font-mono text-[11px] tabular-nums">
           <thead className="sticky top-0 z-10 bg-panel">
             <tr>
@@ -350,7 +381,19 @@ export function CandidateRail({
                 Calendar
               </th>
               <SortableHeader sortKey="debit" sort={sort} onSortChange={onSortChange} />
+              <th className="border-b border-line px-2 py-1.5 text-right font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+                Δ
+              </th>
+              <th className="border-b border-line px-2 py-1.5 text-right font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+                Γ
+              </th>
               <SortableHeader sortKey="theta" sort={sort} onSortChange={onSortChange} />
+              <th className="border-b border-line px-2 py-1.5 text-right font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+                Vega
+              </th>
+              <th className="border-b border-line px-2 py-1.5 text-right font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+                IV f/b
+              </th>
               <th className="border-b border-line px-2 py-1.5 text-left font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
                 Event
               </th>
@@ -385,6 +428,7 @@ export function CandidateRail({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </Panel>
   );
@@ -540,14 +584,15 @@ export interface RightColumnProps {
 }
 
 /**
- * RightColumn — the "Why this calendar" / "Entry / exit plan" 2-up for the currently-selected
- * candidate, rendered side-by-side under the payoff chart (2-col layout, 2026-07-14 UAT
- * feedback); reads the live snapshot's GEX context (Phase 19: never the frozen fixture).
+ * RightColumn — the condensed "Why this calendar" / "Entry / exit plan" stack for the
+ * currently-selected candidate, rendered as the LEFT rail beside the payoff chart (TOS-style
+ * layout, user-locked 2026-07-14); reads the live snapshot's GEX context (Phase 19: never the
+ * frozen fixture).
  */
 function RightColumn({ candidate, gex, sizing }: RightColumnProps): React.ReactElement {
   const notScored = candidate !== null && candidate.breakdown.length === 0;
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="flex flex-col gap-3">
       <Panel>
         <PanelHeading title="Why this calendar" />
         {notScored ? (
@@ -740,18 +785,18 @@ function AnalyzerDesktop(): React.ReactElement {
           source={snapshot?.source ?? "schwab"}
         />
       </div>
-      {/* 2-col desktop grid (this tree only mounts ≥1024px, D-17): roomy ranked table left,
-          detail column right (chart → WHY/ENTRY 2-up → full-width term structure). */}
+      {/* TOS-style layout (user-locked 2026-07-14): condensed WHY/ENTRY rail left of the
+          chart, full-width greeks table below it, term structure last. ≥1024px only (D-17). */}
       <div
         data-testid="analyzer-inner-grid"
-        className="grid grid-cols-[minmax(380px,440px)_minmax(0,1fr)] gap-4"
+        className="grid grid-cols-[minmax(280px,330px)_minmax(0,1fr)] gap-4"
       >
-      {/* ── Left column: ranked rail ── */}
-      <div data-testid="analyzer-rail-wrapper" className="flex flex-col gap-3">
-        {railBody}
+      {/* ── Left rail: condensed WHY / ENTRY-EXIT ── */}
+      <div data-testid="analyzer-right-wrapper">
+        <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
       </div>
 
-      {/* ── Detail column: payoff graph → WHY/ENTRY 2-up → full-width term structure ── */}
+      {/* ── Chart column ── */}
       <div data-testid="analyzer-center-column" className="flex min-w-0 flex-col gap-3">
         <Panel>
           <div className="mb-1 flex items-center justify-between gap-2">
@@ -836,24 +881,26 @@ function AnalyzerDesktop(): React.ReactElement {
           )}
         </Panel>
 
-        {/* ── WHY / ENTRY-EXIT 2-up, directly under the chart ── */}
-        <div data-testid="analyzer-right-wrapper">
-          <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
-        </div>
+      </div>
+      </div>
 
-        <Panel>
-          <PanelHeading title="Term structure + your legs" />
-          {selected !== null && snapshot !== null && (
-            <TermStructureChart
-              termStructure={snapshot.termStructure}
-              events={snapshot.events}
-              asOf={snapshot.asOf}
-              candidate={selected}
-            />
-          )}
-        </Panel>
+      {/* ── Full-width ranked greeks table (TOS idiom: table under the graph) ── */}
+      <div data-testid="analyzer-rail-wrapper" className="flex flex-col gap-3">
+        {railBody}
       </div>
-      </div>
+
+      {/* ── Full-width term structure ── */}
+      <Panel>
+        <PanelHeading title="Term structure + your legs" />
+        {selected !== null && snapshot !== null && (
+          <TermStructureChart
+            termStructure={snapshot.termStructure}
+            events={snapshot.events}
+            asOf={snapshot.asOf}
+            candidate={selected}
+          />
+        )}
+      </Panel>
     </div>
   );
 }

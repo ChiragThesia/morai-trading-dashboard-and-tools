@@ -85,11 +85,11 @@ describe("EntryExitPlan — 5 locked rows + arithmetic (ANLZ-03/D-01b)", () => {
     expect(document.body.textContent).not.toContain("NaN");
   });
 
-  it("renders the verbatim footnote", () => {
+  it("renders the verbatim footnote (condensed rev 2026-07-14)", () => {
     render(<EntryExitPlan candidate={NORMAL} />);
     expect(
       screen.getByText(
-        "Max-loss=debit holds only if closed as a spread by front expiration (European SPX, no early assignment). Targets are tunable defaults, not validated thresholds.",
+        "Max loss = debit only if closed by front expiry · targets are defaults, not validated.",
       ),
     ).toBeTruthy();
   });

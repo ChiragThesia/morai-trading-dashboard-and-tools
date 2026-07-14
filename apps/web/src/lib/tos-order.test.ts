@@ -34,6 +34,7 @@ function candidate(overrides: {
     theta: 40,
     vega: 300,
     delta: 1,
+    gamma: null,
     fwdIv: 0.15,
     fwdIvGuard: "ok",
     slope: 0.1,
