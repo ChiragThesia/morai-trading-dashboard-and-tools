@@ -1,7 +1,7 @@
 ---
 phase: 41
 slug: analyzer-desktop-redesign-ranked-table-verdict-hero-live-sidecar
-status: draft
+status: approved-rev2
 shadcn_initialized: true
 preset: base-nova (neutral base color, existing — apps/web/components.json)
 created: 2026-07-14
@@ -48,7 +48,7 @@ Reusing the app's existing scale — no new values introduced.
 Exceptions (existing, carried forward):
 - Table cell padding `px-2 py-1.5` (6px vertical) — denser than `md` because a 17-row table at
   `md` padding re-introduces the scroll-wall problem this phase kills. Matches `BulletGauge`
-  row rhythm precedent (39-UI-SPEC `py-1.5`).
+  row rhythm precedent (39-UI-SPEC `py-1.5`). `md`=12px is an ACCEPTED additional spacing token (existing unchanged `Panel` padding) — noted per ui-checker Dim-5 (rev 2).
 - Verdict-hero factor row `gap-y-1` (4px) between the three rows inside each Edge/Risk/Fit
   column — matches the existing checklist row rhythm in `MobileScorecard.tsx`.
 
@@ -62,8 +62,8 @@ scatter (`CandidateCard.tsx`'s `text-[9px]` sub-line, `text-sm` header) into one
 
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
-| Verdict word | 16px | 700 (bold) | 1 | `font-display` — "FAVORABLE" / "CAUTION" / "SKIP", color per tier (see Color) |
-| Headline value | 13px | 700 (bold) | 1 | `font-mono tabular-nums` — score ("81/100") and Θ ("+18.1/d") next to the verdict word |
+| Verdict word | 16px | 600 (semibold) | 1 | `font-display` — "FAVORABLE" / "CAUTION" / "SKIP", color per tier (see Color) — rev 2: 700→600, ui-checker Dim-4 two-weight cap |
+| Headline value | 13px | 600 (semibold) | 1 | `font-mono tabular-nums` — score ("81/100") and Θ ("+18.1/d") next to the verdict word — rev 2: 700→600 |
 | Group label | 10px | 600 (semibold) | 1 | `font-display`, `tracking-[0.08em]` uppercase, `text-dim` — "EDGE" / "RISK" / "FIT", table column headers — matches `SectionLabel`/39's Row-label tier exactly, one shared tier |
 | Row value (primary) | 11px | 400 regular | 1 | `font-mono tabular-nums` — table cell values, factor-row values, hero footer's `as of` line |
 | Quiet metadata | 10px | 400 regular | 1 | `font-mono text-dim` — CALIBRATING/dropped-quotes footer line, event chip captions (unchanged) |
@@ -123,7 +123,7 @@ Replaces the 17-card scroll rail (`CandidateRail`'s `<CandidateCard>` list) with
 | Debit | `candidate.debit` | whole dollar, `$${Math.round(debit)}` (see Number Rounding Contract — NOT `exactAbs`/`usd()`) | Yes |
 | Θ/d | `candidate.theta` | `${theta>=0?'+':''}${theta.toFixed(1)}/d`, `text-up`/`text-down` by sign (existing convention, unchanged) | Yes |
 | Event | `candidate.frontEvents[0] ?? candidate.backEvents[0] ?? null` | amber pill, event name + `⚡`; `text-dim` `"—"` when both arrays are empty; `+N` suffix when more than one event exists across both legs | No |
-| ⊕ | `combinedIds.has(candidate.id)` | icon-only `Button variant="toggle" tone="amber" size="xs"` (existing per-card Combine affordance, moved to its own narrow column since Combine must stay triggerable on rows the user has NOT selected — Copy stays detail-pane-only, see below) | No |
+| ⊕ | `combinedIds.has(candidate.id)` | icon-only `Button variant="toggle" tone="amber" size="xs"` with `aria-label={\`Combine ${candidate.name}\`}` (rev 2, ui-checker Dim-2; the ⊕ column `<th>` carries a visually-hidden "Combine" label) (existing per-card Combine affordance, moved to its own narrow column since Combine must stay triggerable on rows the user has NOT selected — Copy stays detail-pane-only, see below) | No |
 
 Pasted rows (`pastedCandidates`) render pinned above scored rows in paste order, unchanged
 ordering. Score cell shows the existing "PASTED" pill instead of a number; that row's rightmost
