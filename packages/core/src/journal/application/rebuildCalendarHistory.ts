@@ -25,6 +25,7 @@ import type {
   ForHealingSnapshot,
 } from "./ports.ts";
 import { roundDownToRthSlot } from "../domain/rth-slot.ts";
+import { computeLegPairMetrics, computeSnapshotPnl } from "./snapshotCalendars.ts";
 
 const SLOT_MS = 30 * 60 * 1000;
 
@@ -82,4 +83,77 @@ export function enumerateRebuildSlots(
     cursor = new Date(cursor.getTime() + SLOT_MS);
   }
   return anchors;
+}
+
+/**
+ * makeRebuildCalendarHistoryUseCase — factory returning the rebuild driver port.
+ *
+ * For each enumerated slot: resolves front + back via resolveLegObservationForSlot. When
+ * BOTH resolve, builds the row with computeLegPairMetrics + computeSnapshotPnl (D-02 verbatim
+ * reuse — byte-identical to the live writer's buildSnapshotRow for the same legs/instant),
+ * stamps trigger='scheduled', and heals it via healSnapshot (fill-only, D-03 — never
+ * persistSnapshot). A slot where either leg is unresolved is an honest gap (D-04): no heal
+ * call, counted separately.
+ */
+export function makeRebuildCalendarHistoryUseCase(
+  deps: RebuildCalendarHistoryDeps,
+): ForRunningRebuildCalendarHistory {
+  return async (calendar, window) => {
+    const now = deps.now();
+    const slots = enumerateRebuildSlots(calendar, window, now);
+
+    let rowsHealed = 0;
+    let honestGapSlots = 0;
+
+    for (const slotAnchor of slots) {
+      const frontResult = await deps.resolveLegObservationForSlot({
+        underlying: calendar.underlying,
+        strike: calendar.strike,
+        optionType: calendar.optionType,
+        expiry: calendar.frontExpiry,
+        slotAnchor,
+      });
+      if (!frontResult.ok) return err(frontResult.error);
+
+      const backResult = await deps.resolveLegObservationForSlot({
+        underlying: calendar.underlying,
+        strike: calendar.strike,
+        optionType: calendar.optionType,
+        expiry: calendar.backExpiry,
+        slotAnchor,
+      });
+      if (!backResult.ok) return err(backResult.error);
+
+      const front = frontResult.value;
+      const back = backResult.value;
+
+      if (front === null || back === null) {
+        honestGapSlots += 1;
+        continue;
+      }
+
+      const metrics = computeLegPairMetrics(
+        slotAnchor,
+        front,
+        back,
+        calendar.qty,
+        calendar.frontExpiry,
+        calendar.backExpiry,
+      );
+      const pnlOpen = String(
+        computeSnapshotPnl(parseFloat(metrics.netMark), calendar.openNetDebit, calendar.qty),
+      );
+
+      const healResult = await deps.healSnapshot({
+        ...metrics,
+        calendarId: calendar.id,
+        pnlOpen,
+        trigger: "scheduled",
+      });
+      if (!healResult.ok) return err(healResult.error);
+      rowsHealed += 1;
+    }
+
+    return ok({ slotsConsidered: slots.length, rowsHealed, honestGapSlots });
+  };
 }

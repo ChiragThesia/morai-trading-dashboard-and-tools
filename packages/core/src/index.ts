@@ -39,6 +39,15 @@ export { roundDownToRthSlot } from "./journal/index.ts";
 // Phase 40 (HIST-02, D-07): OPS-01 live freshness tolerance, reused as the as-of-slot read's
 // usability window (plan 04).
 export { SNAPSHOT_LEG_STALENESS_TOLERANCE_MS } from "./journal/index.ts";
+// Phase 40 (HIST-02, plan 05): rebuild use-case — self-heal job (plan 06) and operator repair
+// (plan 07) both consume this from @morai/core.
+export { makeRebuildCalendarHistoryUseCase } from "./journal/index.ts";
+export type {
+  ForRunningRebuildCalendarHistory,
+  RebuildCalendarHistoryDeps,
+  RebuildWindow,
+  RebuildCoverage,
+} from "./journal/index.ts";
 // SNAP-01 (20-04/20-06): cooldown predicate — composed in apps/server's onSpotObserved wiring.
 export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";

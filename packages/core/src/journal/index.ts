@@ -283,3 +283,12 @@ export { resolveRootCandidates } from "./domain/occ-root.ts";
 // Phase 40 (HIST-05): 30-min RTH slot-boundary rounding — pure domain fn reused by
 // snapshotCalendars.ts (plan 03) and the rebuild use-case (plan 05).
 export { roundDownToRthSlot } from "./domain/rth-slot.ts";
+// Phase 40 (HIST-02, plan 05): the drift-free, honest-gap, fill-only rebuild engine — the
+// single derivation path the self-heal job (plan 06) and operator repair (plan 07) both call.
+export { makeRebuildCalendarHistoryUseCase } from "./application/rebuildCalendarHistory.ts";
+export type {
+  ForRunningRebuildCalendarHistory,
+  RebuildCalendarHistoryDeps,
+  RebuildWindow,
+  RebuildCoverage,
+} from "./application/rebuildCalendarHistory.ts";
