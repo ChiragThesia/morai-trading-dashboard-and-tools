@@ -542,8 +542,15 @@ Plans:
 **Goal:** Every calendar — open, closed, or registered late — carries its full 30-min greek/vol/price/P&L story in the journal: the back-leg NaN that turns whole lifecycles into gap rows is root-caused and fixed, missing/gap slots heal automatically from `leg_observations` (the same pure metric functions as the live writer, fill-only, honest gaps only where no market data exists), a repair CLI rebuilds all 17 existing calendars' histories, and the lifecycle chart shows the trade's actual life instead of a handful of frozen NaN rows.
 **Requirements**: HIST-01, HIST-02, HIST-03, HIST-04, HIST-05
 **Depends on:** Phase 25 (OPS-01 freshness gate), Phase 22 (lifecycle graph)
-**Plans:** TBD
+**Plans:** 8 plans
 
 Plans:
 
-- [ ] TBD (plan-phase)
+- [ ] 40-01-PLAN.md — docs-first jobs.md + resolveRootCandidates (HIST-01) + roundDownToRthSlot (HIST-05) pure-fn foundations (wave 1)
+- [ ] 40-02-PLAN.md — HIST-01 root-mismatch fix at all 4 call sites + source-inclusive mapSnapshotRow (wave 2)
+- [ ] 40-03-PLAN.md — HIST-05 slot-rounding applied to scheduled snapshot rows (one row per 30-min slot) (wave 2)
+- [ ] 40-04-PLAN.md — HIST-02 new ports: as-of-slot read + fill-only heal-write + windowed-delete, with twins + contract tests (wave 3)
+- [ ] 40-05-PLAN.md — HIST-02 rebuildCalendarHistory use-case (D-02 no drift, D-04 honest gaps, D-08 life-window) (wave 4)
+- [ ] 40-06-PLAN.md — HIST-03 self-heal-journal job (bounded-lookback, OPEN-only) + handler + schedule (wave 5)
+- [ ] 40-07-PLAN.md — HIST-04 repair use-case + pg-boss job + CLI + TRIGGERABLE_JOBS + on-register backfill (wave 6)
+- [ ] 40-08-PLAN.md — integration gate: suite/typecheck/lint + D-09 regression + diagnostic SQL + prod repair + lifecycle UAT (wave 7)
