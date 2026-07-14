@@ -292,3 +292,11 @@ export type {
   RebuildWindow,
   RebuildCoverage,
 } from "./application/rebuildCalendarHistory.ts";
+// Phase 40 (HIST-03, plan 06): self-heal — bounded-lookback, OPEN-only wrapper over the
+// rebuild engine, run by a recurring worker job (D-05's complement to OPS-01).
+export { makeSelfHealJournalUseCase, SELF_HEAL_LOOKBACK_DAYS } from "./application/selfHealJournal.ts";
+export type {
+  ForRunningSelfHealJournal,
+  SelfHealJournalDeps,
+  SelfHealJournalInput,
+} from "./application/selfHealJournal.ts";

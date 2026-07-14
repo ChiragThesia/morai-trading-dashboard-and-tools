@@ -48,6 +48,13 @@ export type {
   RebuildWindow,
   RebuildCoverage,
 } from "./journal/index.ts";
+// Phase 40 (HIST-03, plan 06): self-heal use-case — worker composition root wires this.
+export { makeSelfHealJournalUseCase, SELF_HEAL_LOOKBACK_DAYS } from "./journal/index.ts";
+export type {
+  ForRunningSelfHealJournal,
+  SelfHealJournalDeps,
+  SelfHealJournalInput,
+} from "./journal/index.ts";
 // SNAP-01 (20-04/20-06): cooldown predicate — composed in apps/server's onSpotObserved wiring.
 export { isWithinCooldown, SNAPSHOT_COOLDOWN_MS } from "./journal/index.ts";
 export type { BsmGreeks, IvError } from "./journal/index.ts";
