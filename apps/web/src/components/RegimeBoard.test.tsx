@@ -605,3 +605,86 @@ describe("RegimeBoard — live display value + client band recompute (Phase 38-0
     expect(screen.getByTestId("regime-value-vvix").textContent).toBe("120.30");
   });
 });
+
+describe("RegimeBoard — rate block gauges (39-02, GAUGE-02/GAUGE-05)", () => {
+  beforeEach(() => {
+    setRegimeBoard(INDICATORS);
+    setPickerGate();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders the 4 money-rate rows as NEUTRAL bg-dim gauges, no band-segment children, for any value", () => {
+    setMacro(MACRO_DATA);
+    render(<RegimeBoard />);
+
+    for (const id of ["DFF", "SOFR", "DGS1MO", "DGS3MO"] as const) {
+      const gauge = screen.getByTestId(`rate-gauge-${id}`);
+      const marker = screen.getByTestId(`rate-gauge-marker-${id}`);
+      expect(marker.className).toContain("bg-dim");
+      expect(marker.className).not.toContain("bg-amber");
+      expect(marker.className).not.toContain("bg-down");
+      expect(marker.className).not.toContain("bg-txt");
+      expect(gauge.querySelectorAll(":scope > div").length).toBe(1);
+      expect(gauge.getAttribute("role")).toBe("meter");
+      expect(gauge.getAttribute("aria-valuemin")).toBe("0");
+      expect(gauge.getAttribute("aria-valuemax")).toBe("8");
+    }
+  });
+
+  it("a neutral row's aria-valuetext states the value + 'position', never a band word", () => {
+    setMacro(MACRO_DATA);
+    render(<RegimeBoard />);
+
+    const gauge = screen.getByTestId("rate-gauge-DFF");
+    expect(gauge.getAttribute("aria-valuetext")).toBe("4.33% — position");
+    expect(gauge.getAttribute("aria-valuetext")).not.toMatch(/calm|warning|crisis/);
+  });
+
+  it("renders 10Y-2Y at -0.60 as BANDED crisis (band segments present, marker bg-down)", () => {
+    setMacro({ ...MACRO_DATA, T10Y2Y: [{ time: "2026-06-30", value: -0.6 }] });
+    render(<RegimeBoard />);
+
+    const gauge = screen.getByTestId("rate-gauge-T10Y2Y");
+    expect(gauge.querySelectorAll(":scope > div").length).toBe(3);
+    expect(screen.getByTestId("rate-gauge-marker-T10Y2Y").className).toContain("bg-down");
+    expect(gauge.getAttribute("aria-valuetext")).toBe("-0.60% — crisis");
+  });
+
+  it("renders 10Y-2Y at -0.20 as BANDED warning", () => {
+    setMacro({ ...MACRO_DATA, T10Y2Y: [{ time: "2026-06-30", value: -0.2 }] });
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("rate-gauge-marker-T10Y2Y").className).toContain("bg-amber");
+    expect(screen.getByTestId("rate-gauge-T10Y2Y").getAttribute("aria-valuetext")).toBe("-0.20% — warning");
+  });
+
+  it("renders 10Y-3M at +0.50 as BANDED calm", () => {
+    setMacro({ ...MACRO_DATA, T10Y3M: [{ time: "2026-06-30", value: 0.5 }] });
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("rate-gauge-marker-T10Y3M").className).toContain("bg-txt");
+    expect(screen.getByTestId("rate-gauge-T10Y3M").getAttribute("aria-valuetext")).toBe("0.50% — calm");
+  });
+
+  it("keeps the printed rate-chip value strings unchanged from today (fmtRate)", () => {
+    setMacro(MACRO_DATA);
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("rate-chip-DFF").textContent).toContain("4.33");
+    expect(screen.getByTestId("rate-chip-T10Y2Y").textContent).toContain("0.52");
+    expect(screen.getByTestId("rate-chip-T10Y3M").textContent).toContain("-0.18");
+  });
+
+  it("omits the gauge (never a marker at a fabricated 0) when a rate has no macro point", () => {
+    const { DFF: _dff, ...rest } = MACRO_DATA;
+    setMacro(rest);
+    render(<RegimeBoard />);
+
+    expect(screen.getByTestId("rate-chip-DFF").textContent).toContain("—");
+    expect(screen.queryByTestId("rate-gauge-DFF")).toBeNull();
+  });
+});

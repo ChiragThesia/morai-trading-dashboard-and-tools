@@ -104,6 +104,35 @@ const GAUGE_SCALE: Record<string, { min: number; max: number }> = {
   "hy-oas": { min: 1.5, max: 8.0 },
 };
 
+/** Rate-block visual axis — NOT semantic thresholds, same discipline as GAUGE_SCALE
+ *  (39-UI-SPEC.md "Gauge scale"). The 4 money-rate axes span 0-8%; the 2 yield-curve
+ *  spreads get their own tighter axes sized to the modern historical extent. */
+const RATE_GAUGE_SCALE: Record<string, { min: number; max: number }> = {
+  DFF: { min: 0, max: 8 },
+  SOFR: { min: 0, max: 8 },
+  DGS1MO: { min: 0, max: 8 },
+  DGS3MO: { min: 0, max: 8 },
+  T10Y2Y: { min: -1.5, max: 2.5 },
+  T10Y3M: { min: -2.0, max: 3.0 },
+};
+
+/** Display-only client band for the 2 yield-curve spreads — gate BLIND, never fed into
+ *  usePicker/useRegimeBoard/gate resolution (T-39-04). Matches the t10y2y/t10y3m evidence
+ *  rows docs/architecture/regime-board.md documents (39-01): calm > 0.0, warning ≤ 0.0,
+ *  crisis ≤ -0.50 [ASSUMED]. */
+const RATE_BANDS: Record<string, { warn: number; crisis: number }> = {
+  T10Y2Y: { warn: 0.0, crisis: -0.5 },
+  T10Y3M: { warn: 0.0, crisis: -0.5 },
+};
+
+/** Client-side display-band classifier for the 2 banded rate rows — a plain value/threshold
+ *  compare against RATE_BANDS, never touching a gate. */
+function rateBand(value: number, bands: { warn: number; crisis: number }): RegimeBand {
+  if (value <= bands.crisis) return "crisis";
+  if (value <= bands.warn) return "warning";
+  return "calm";
+}
+
 /** Dense-mode label shortening (keeps rows single-line) — also used for the freshness
  *  footer's date-exception tags. The full name stays legible at non-dense width. */
 const SHORT_LABELS: Record<string, string> = {
@@ -281,31 +310,97 @@ function GateChip({ gate }: { gate: PickerGate }): React.ReactElement {
 // ─── Rates row (former MacroCard, absorbed into this panel) ──────────────────
 
 /** Raw FRED rates/curve backdrop — VIX/VVIX are dropped here (already covered by the
- *  banded VVIX indicator above and the entry-gate chip's VIX reading). */
-const RATES: ReadonlyArray<{ id: MacroSeriesId; label: string }> = [
-  { id: "DFF", label: "Fed Funds" },
-  { id: "SOFR", label: "SOFR" },
-  { id: "DGS1MO", label: "1M" },
-  { id: "DGS3MO", label: "3M" },
-  { id: "T10Y2Y", label: "10Y−2Y" },
-  { id: "T10Y3M", label: "10Y−3M" },
+ *  banded VVIX indicator above and the entry-gate chip's VIX reading). `variant` picks the
+ *  gauge shape: the 4 money rates are position-only NEUTRAL tracks (no verdict, ever); the
+ *  2 yield-curve spreads are BANDED from RATE_BANDS (display-only, gate stays blind). */
+const RATES: ReadonlyArray<{ id: MacroSeriesId; label: string; variant: "neutral" | "banded" }> = [
+  { id: "DFF", label: "Fed Funds", variant: "neutral" },
+  { id: "SOFR", label: "SOFR", variant: "neutral" },
+  { id: "DGS1MO", label: "1M", variant: "neutral" },
+  { id: "DGS3MO", label: "3M", variant: "neutral" },
+  { id: "T10Y2Y", label: "10Y−2Y", variant: "banded" },
+  { id: "T10Y3M", label: "10Y−3M", variant: "banded" },
 ];
 
-function fmtRate(data: MacroResponse, id: MacroSeriesId): string {
+/** Latest observation value for one macro series — the single source both the printed
+ *  value line and the gauge read from (no double parse, no `!`). Null when the series has
+ *  no data point yet (never fabricated). */
+function latestValue(data: MacroResponse, id: MacroSeriesId): number | null {
   const points = data[id];
   const latest = points?.[points.length - 1];
-  return latest === undefined ? "—" : `${latest.value.toFixed(2)}%`;
+  return latest === undefined ? null : latest.value;
 }
 
-/** RateRow — a backdrop value as a compact label/value row (not a pill). Dimmer + smaller
- *  than the regime values above so the rates read as context, not signal. */
-function RateRow({ id, label, value }: { id: MacroSeriesId; label: string; value: string }): React.ReactElement {
+function fmtRate(data: MacroResponse, id: MacroSeriesId): string {
+  const value = latestValue(data, id);
+  return value === null ? "—" : `${value.toFixed(2)}%`;
+}
+
+/** RateGaugeRow — a backdrop value as a compact label/value row (not a pill), plus a bullet
+ *  gauge track below. Dimmer + smaller than the regime values above so the rates read as
+ *  context, not signal. A row with no macro point renders the value dash and omits the
+ *  gauge entirely — never a marker at a fabricated 0 (catch #26 honesty). */
+function RateGaugeRow({
+  id,
+  label,
+  variant,
+  data,
+}: {
+  id: MacroSeriesId;
+  label: string;
+  variant: "neutral" | "banded";
+  data: MacroResponse;
+}): React.ReactElement {
+  const value = latestValue(data, id);
+  const valueText = fmtRate(data, id);
+  const scale = RATE_GAUGE_SCALE[id] ?? null;
+  const bands = RATE_BANDS[id] ?? null;
+
+  let gauge: React.ReactElement | null = null;
+  if (value !== null && scale !== null) {
+    if (variant === "neutral") {
+      gauge = (
+        <BulletGauge
+          variant="neutral"
+          min={scale.min}
+          max={scale.max}
+          value={value}
+          markerColorClass="bg-dim"
+          ariaLabel={`${label} gauge`}
+          ariaValueText={`${value.toFixed(2)}% — position`}
+          testId={`rate-gauge-${id}`}
+          markerTestId={`rate-gauge-marker-${id}`}
+        />
+      );
+    } else if (bands !== null) {
+      const band = rateBand(value, bands);
+      gauge = (
+        <BulletGauge
+          variant="banded"
+          min={scale.min}
+          max={scale.max}
+          value={value}
+          bandWarn={bands.warn}
+          bandCrisis={bands.crisis}
+          markerColorClass={MARKER_CLASSES[band]}
+          ariaLabel={`${label} gauge`}
+          ariaValueText={`${value.toFixed(2)}% — ${band}`}
+          testId={`rate-gauge-${id}`}
+          markerTestId={`rate-gauge-marker-${id}`}
+        />
+      );
+    }
+  }
+
   return (
-    <div className="flex items-center justify-between gap-2" data-testid={`rate-chip-${id}`}>
-      <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
-        {label}
-      </span>
-      <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{value}</span>
+    <div className="flex flex-col gap-1 py-1.5" data-testid={`rate-chip-${id}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+          {label}
+        </span>
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{valueText}</span>
+      </div>
+      {gauge}
     </div>
   );
 }
@@ -343,7 +438,7 @@ function RegimeBoardImpl({
         data-testid="regime-rates-row"
       >
         {RATES.map((r) => (
-          <RateRow key={r.id} id={r.id} label={r.label} value={fmtRate(macro, r.id)} />
+          <RateGaugeRow key={r.id} id={r.id} label={r.label} variant={r.variant} data={macro} />
         ))}
       </div>
     ) : null;
