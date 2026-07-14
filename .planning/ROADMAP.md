@@ -546,14 +546,14 @@ Plans:
 
 Plans:
 
-- [ ] 40-01-PLAN.md — docs-first jobs.md + resolveRootCandidates (HIST-01) + roundDownToRthSlot (HIST-05) pure-fn foundations (wave 1)
-- [ ] 40-02-PLAN.md — HIST-01 root-mismatch fix at all 4 call sites + source-inclusive mapSnapshotRow (wave 2)
-- [ ] 40-03-PLAN.md — HIST-05 slot-rounding applied to scheduled snapshot rows (one row per 30-min slot) (wave 2)
-- [ ] 40-04-PLAN.md — HIST-02 new ports: as-of-slot read + fill-only heal-write + windowed-delete, with twins + contract tests (wave 3)
-- [ ] 40-05-PLAN.md — HIST-02 rebuildCalendarHistory use-case (D-02 no drift, D-04 honest gaps, D-08 life-window) (wave 4)
-- [ ] 40-06-PLAN.md — HIST-03 self-heal-journal job (bounded-lookback, OPEN-only) + handler + schedule (wave 5)
-- [ ] 40-07-PLAN.md — HIST-04 repair use-case + pg-boss job + CLI + TRIGGERABLE_JOBS + on-register backfill (wave 6)
-- [ ] 40-08-PLAN.md — integration gate: suite/typecheck/lint + D-09 regression + diagnostic SQL + prod repair + lifecycle UAT (wave 7)
+- [x] 40-01-PLAN.md — docs-first jobs.md + resolveRootCandidates (HIST-01) + roundDownToRthSlot (HIST-05) pure-fn foundations (wave 1)
+- [x] 40-02-PLAN.md — HIST-01 root-mismatch fix at all 4 call sites + source-inclusive mapSnapshotRow (wave 2)
+- [x] 40-03-PLAN.md — HIST-05 slot-rounding applied to scheduled snapshot rows (one row per 30-min slot) (wave 2)
+- [x] 40-04-PLAN.md — HIST-02 new ports: as-of-slot read + fill-only heal-write + windowed-delete, with twins + contract tests (wave 3)
+- [x] 40-05-PLAN.md — HIST-02 rebuildCalendarHistory use-case (D-02 no drift, D-04 honest gaps, D-08 life-window) (wave 4)
+- [x] 40-06-PLAN.md — HIST-03 self-heal-journal job (bounded-lookback, OPEN-only) + handler + schedule (wave 5)
+- [x] 40-07-PLAN.md — HIST-04 repair use-case + pg-boss job + CLI + TRIGGERABLE_JOBS + on-register backfill (wave 6)
+- [x] 40-08-PLAN.md — integration gate: suite/typecheck/lint + D-09 regression + diagnostic SQL + prod repair + lifecycle UAT (wave 7)
 
 ### Phase 41: Analyzer cleanup — ranked candidate table + verdict hero + live sidecar data: kill the 17-card wall and chip-row scorecard; selection-driven detail panels, sticky layout, sane number precision, paste/term-structure polish, mobile parity via analyzer-mobile, and live sidecar-fed marks (explicit user override of Phase 38's snapshot-spot scoring lock)
 

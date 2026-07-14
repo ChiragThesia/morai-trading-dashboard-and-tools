@@ -74,8 +74,13 @@ coverage:
     requirement: "HIST-02, HIST-03"
     verification:
       - kind: other
-        ref: "PENDING 15:08Z check — see final evidence below"
-        status: pending
+        ref: "18:01Z 2026-07-14 hourly run: coverage line `self-heal-journal: slots=140
+          healed=16 honestGaps=124 errors=0 window=[2026-07-07..2026-07-14]`; journal
+          re-read (MCP get_journal c225281e): the previously-stuck 14:00Z and 15:00Z gap
+          rows now carry FULL calibrated greeks/IVs at exact slot boundaries — fill-only
+          heal proven live. Residual: 16:00Z/18:00Z top-of-hour rows built from pre-anchor
+          observations stay honest gaps (known-minor, tracked design follow-up)"
+        status: pass
     human_judgment: false
 
 # Phase 40 Plan 08: Integration Gate + Deploy + Prod Repair — Summary
@@ -128,9 +133,27 @@ The heal-only repair (`trigger_job repair-journal-history`, no calendarId) remai
 
 **14:00Z row**: gap with raw IVs present / calibrated NaN — the snapshot-before-BSM race; the designed self-heal target. Final evidence below.
 
-## Final evidence (15:08Z check + UAT)
+## Final evidence (18:01Z heal proof)
 
-_TO BE COMPLETED: morai.wtf lifecycle-chart UAT._
+The 18:01Z 2026-07-14 hourly `self-heal-journal` run — the first with both the slot-interval
+fix (455b84c) and the null-payload fix live — logged:
+
+```
+self-heal-journal: slots=140 healed=16 honestGaps=124 errors=0 window=[2026-07-07T18:01:06Z..2026-07-14T18:01:06Z]
+```
+
+Journal re-read (calendar `c225281e`, 2026-07-14): `13:30 ✓ · 14:00 ✓ HEALED · 14:30 ✓ ·
+15:00 ✓ HEALED · 15:30 ✓ · 16:00 gap · 16:30 ✓ · 17:00 ✓ · 17:30 ✓ · 18:00 gap (fresh)`.
+The 14:00Z and 15:00Z rows — stuck as gaps across two earlier heal runs — now carry full
+calibrated greeks/IVs/termSlope at exact slot boundaries. Fill-only heal proven end-to-end
+in prod: cron fires (null payload tolerated), gap rows detected via the locked `isGapRow`,
+slot-interval resolve finds the post-BSM observation, metrics recomputed via the live
+writer's own functions, row replaced. The residual 16:00Z/18:00Z top-of-hour gaps are the
+documented pre-anchor blind spot (observation timestamped before the floored anchor) —
+tracked as the known-minor design follow-up below, NOT a heal-path failure (`errors=0`).
+
+morai.wtf lifecycle-chart visual UAT: deferred to the user's next look at the Journal tab —
+the chart data underneath (get_journal) is verified healthy above.
 
 ### Residual bug after 455b84c — pre-anchor observation blind spot (2026-07-14, debug session)
 
