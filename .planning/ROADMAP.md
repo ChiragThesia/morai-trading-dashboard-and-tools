@@ -564,8 +564,8 @@ Plans:
 
 Plans:
 
-- [ ] 41-01-PLAN.md — AUI-07 live-spot seam (useAnalyzerModel useLiveStream) + LiveStatusBadge mounts (desktop + mobile) (wave 1)
-- [ ] 41-02-PLAN.md — AUI-01 ranked sortable table + AUI-03 sticky bounded layout + detail-pane Combine + test migration (wave 2)
-- [ ] 41-03-PLAN.md — AUI-02 verdict hero (desktop) + AUI-06 mobile Edge/Risk/Fit grouping (GROUP_OF shared) (wave 3)
-- [ ] 41-04-PLAN.md — AUI-04 number rounding (both trees) + AUI-05 term-structure/paste polish (wave 4)
-- [ ] 41-05-PLAN.md — integration gate: full suite + dual typecheck + lint + AUI-law greps + morai.wtf UAT (wave 5)
+- [x] 41-01-PLAN.md — AUI-07 live-spot seam (useAnalyzerModel useLiveStream) + LiveStatusBadge mounts (desktop + mobile) (wave 1)
+- [x] 41-02-PLAN.md — AUI-01 ranked sortable table + AUI-03 sticky bounded layout + detail-pane Combine + test migration (wave 2)
+- [x] 41-03-PLAN.md — AUI-02 verdict hero (desktop) + AUI-06 mobile Edge/Risk/Fit grouping (GROUP_OF shared) (wave 3)
+- [x] 41-04-PLAN.md — AUI-04 number rounding (both trees) + AUI-05 term-structure/paste polish (wave 4)
+- [x] 41-05-PLAN.md — integration gate: full suite + dual typecheck + lint + AUI-law greps + morai.wtf UAT (wave 5)
