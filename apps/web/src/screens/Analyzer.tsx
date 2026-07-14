@@ -26,7 +26,6 @@
 import type { PickerCandidate, PickerGexContext, RuleSetEntry, PickerSizing } from "@morai/contracts";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { exactAbs } from "../lib/position-format.ts";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
@@ -778,11 +777,11 @@ function AnalyzerDesktop(): React.ReactElement {
                 {selected.name}
               </span>
               {selected.breakdown.length === 0
-                ? ` · debit $${exactAbs(selected.debit)}`
-                : ` · debit $${exactAbs(selected.debit)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${exactAbs(selected.vega)}`}
+                ? ` · debit $${Math.round(selected.debit)}`
+                : ` · debit $${Math.round(selected.debit)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(2)}`}
               {bookCount > 1 && (
                 <span className="ml-2 text-amber" data-testid="combined-book-summary">
-                  {`+ ${bookCount - 1} more → combined debit $${exactAbs(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${exactAbs(bookVega)}`}
+                  {`+ ${bookCount - 1} more → combined debit $${Math.round(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(2)}`}
                 </span>
               )}
             </p>

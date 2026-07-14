@@ -125,7 +125,6 @@ import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
-import { exactAbs } from "../lib/position-format.ts";
 import { repriceScenario } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
 import { computePayoffDomain } from "../lib/payoff-domain.ts";
@@ -221,6 +220,15 @@ describe("Analyzer — ranked candidate table (Phase 41, AUI-01/AUI-03)", () => 
 
     // The Risk profile subtitle now names the newly-selected candidate.
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(SECOND.name);
+  });
+
+  it("rounds debit to whole dollars and vega to 2dp in the subline (AUI-04) — no long-decimal render", () => {
+    render(<Analyzer />);
+    const subline = screen.getByTestId("risk-profile-selected-name").parentElement?.textContent ?? "";
+    expect(subline).toContain(`debit $${Math.round(TOP.debit)}`);
+    expect(subline).toContain(`vega +${TOP.vega.toFixed(2)}`);
+    expect(subline).not.toContain(String(TOP.debit));
+    expect(subline).not.toContain(String(TOP.vega));
   });
 
   it("clicking the Debit header sorts rows by debit descending and sets aria-sort on that column only", () => {
@@ -505,7 +513,7 @@ describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
 
     const summary = screen.getByTestId("combined-book-summary");
     expect(summary.textContent).toContain("+ 1 more");
-    expect(summary.textContent).toContain(`$${exactAbs(TOP.debit + SECOND.debit)}`);
+    expect(summary.textContent).toContain(`$${Math.round(TOP.debit + SECOND.debit)}`);
   });
 });
 
@@ -695,7 +703,7 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
 
     const summary = screen.getByTestId("combined-book-summary");
     expect(summary.textContent).toContain("+ 1 more");
-    expect(summary.textContent).toContain(`$${exactAbs(debit1 + debit2)}`);
+    expect(summary.textContent).toContain(`$${Math.round(debit1 + debit2)}`);
   });
 
   it("Clear all removes every pasted card and re-selects the top-ranked scored candidate", async () => {

@@ -14,7 +14,6 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, within } from "@testing-library/react";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { PickerCandidate, RuleSetEntry } from "@morai/contracts";
-import { exactAbs } from "../../lib/position-format.ts";
 import { MobileScorecard } from "./MobileScorecard.tsx";
 
 const SORTED = [...pickerSnapshotFixture.candidates].sort((a, b) => b.score - a.score);
@@ -34,9 +33,10 @@ const BASE = {
   bookVega: TOP.vega,
 };
 
-/** The verbatim desktop selected-name context tail for a scored candidate. */
+/** The verbatim desktop selected-name context tail for a scored candidate — rounded to
+ *  trading precision (AUI-04): whole dollars, 2dp vega. */
 function contextTail(c: PickerCandidate): string {
-  return ` · debit $${exactAbs(c.debit)} · θ ${c.theta >= 0 ? "+" : ""}${c.theta.toFixed(1)}/d · vega +${exactAbs(c.vega)}`;
+  return ` · debit $${Math.round(c.debit)} · θ ${c.theta >= 0 ? "+" : ""}${c.theta.toFixed(1)}/d · vega +${c.vega.toFixed(2)}`;
 }
 
 const REGISTRY_RULESET: ReadonlyArray<RuleSetEntry> = [
@@ -81,6 +81,8 @@ describe("MobileScorecard — J7 verdict hero", () => {
     expect(name.textContent).toBe(TOP.name);
     expect(name.className).toContain("text-violet");
     expect(name.parentElement?.textContent).toContain(contextTail(TOP));
+    // AUI-04: rounded, never the raw exact-broker-value decimal (position-format's own law).
+    expect(name.parentElement?.textContent).not.toContain(String(TOP.vega));
 
     expect(screen.queryByTestId("combined-book-summary")).toBeNull();
   });
@@ -98,7 +100,7 @@ describe("MobileScorecard — J7 verdict hero", () => {
     );
     const summary = screen.getByTestId("combined-book-summary");
     expect(summary.textContent).toBe(
-      "+ 1 more → combined debit $9637 (max loss) · θ +84.5/d · vega +610",
+      "+ 1 more → combined debit $9637 (max loss) · θ +84.5/d · vega +610.00",
     );
     expect(summary.className).toContain("text-amber");
   });

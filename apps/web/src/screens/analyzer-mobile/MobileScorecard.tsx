@@ -17,7 +17,6 @@
  */
 import { cn } from "@/lib/utils";
 import type { PickerCandidate, RuleSetEntry } from "@morai/contracts";
-import { exactAbs } from "../../lib/position-format.ts";
 import { SectionLabel } from "../../components/system/index.tsx";
 import {
   scoreStatus,
@@ -109,10 +108,10 @@ export function MobileScorecard({
         <span className="text-violet" data-testid="risk-profile-selected-name">
           {candidate.name}
         </span>
-        {` · debit $${exactAbs(candidate.debit)} · θ ${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d · vega +${exactAbs(candidate.vega)}`}
+        {` · debit $${Math.round(candidate.debit)} · θ ${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d · vega +${candidate.vega.toFixed(2)}`}
         {bookCount > 1 && (
           <span className="ml-2 text-amber" data-testid="combined-book-summary">
-            {`+ ${bookCount - 1} more → combined debit $${exactAbs(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${exactAbs(bookVega)}`}
+            {`+ ${bookCount - 1} more → combined debit $${Math.round(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(2)}`}
           </span>
         )}
       </p>
