@@ -625,6 +625,86 @@ describe("makeSnapshotCalendarsUseCase", () => {
     });
   });
 
+  describe("HIST-05 slot-rounding — scheduled row time collapses to the 30-min slot boundary", () => {
+    it("two scheduled invocations whose now falls in the same 30-min RTH slot produce byte-identical SnapshotRow.time", async () => {
+      // Monday 2026-06-15, EDT (UTC-4) — mirrors rth-slot.test.ts's own example.
+      const legTime = new Date("2026-06-15T14:00:00Z");
+      const leg = makeLegSnapshot({ time: legTime });
+      const capture1 = makePersistCapture();
+      const capture2 = makePersistCapture();
+
+      const useCase1 = makeSnapshotCalendarsUseCase(
+        makeDeps({
+          now: () => new Date("2026-06-15T14:03:00Z"), // 10:03 ET
+          resolveLegs: async () => ok(leg),
+          persistSnapshot: capture1.persistSnapshot,
+        }),
+      );
+      const useCase2 = makeSnapshotCalendarsUseCase(
+        makeDeps({
+          now: () => new Date("2026-06-15T14:14:00Z"), // 10:14 ET, same slot
+          resolveLegs: async () => ok(leg),
+          persistSnapshot: capture2.persistSnapshot,
+        }),
+      );
+
+      await useCase1();
+      await useCase2();
+
+      const row1 = capture1.rows[0];
+      const row2 = capture2.rows[0];
+      if (row1 === undefined || row2 === undefined) throw new Error("no row captured");
+      expect(row1.time.getTime()).toBe(row2.time.getTime());
+      expect(row1.time.getTime()).toBe(new Date("2026-06-15T14:00:00Z").getTime()); // 10:00 ET slot start
+    });
+
+    it("event-move trigger keeps the real unrounded now as SnapshotRow.time (D-07)", async () => {
+      const now = new Date("2026-06-15T14:14:00Z"); // 10:14 ET, mid-slot
+      const leg = makeLegSnapshot({ time: new Date("2026-06-15T14:00:00Z") });
+      const capture = makePersistCapture();
+
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({
+          now: () => now,
+          resolveLegs: async () => ok(leg),
+          persistSnapshot: capture.persistSnapshot,
+        }),
+      );
+
+      await useCase({ trigger: "event-move" });
+
+      const row = capture.rows[0];
+      if (row === undefined) throw new Error("no row captured");
+      expect(row.time.getTime()).toBe(now.getTime());
+    });
+
+    it("OPS-01 freshness gate still evaluates against the real now, not the rounded slot — a leg stale relative to real-now is still skipped", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const now = new Date("2026-06-15T14:14:00Z"); // 10:14 ET
+      // Stale relative to REAL now (14:14), but would look FRESH if freshness wrongly used the
+      // rounded slot start (14:00) instead — this is the regression the split clock guards.
+      const staleTime = new Date(now.getTime() - SNAPSHOT_LEG_STALENESS_TOLERANCE_MS - 1);
+      const frontLeg = makeLegSnapshot({ time: staleTime });
+      const backLeg = makeLegSnapshot({ time: new Date("2026-06-15T14:00:00Z") });
+
+      let callCount = 0;
+      const resolveLegs: ForResolvingLegSnapshot = async () => {
+        callCount += 1;
+        return ok(callCount === 1 ? frontLeg : backLeg);
+      };
+      const capture = makePersistCapture();
+
+      const useCase = makeSnapshotCalendarsUseCase(
+        makeDeps({ now: () => now, resolveLegs, persistSnapshot: capture.persistSnapshot }),
+      );
+      await useCase();
+
+      expect(capture.calledTimes()).toBe(0);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
+
   describe("fast-check property: pnlOpen formula invariant", () => {
     it("pnlOpen = (netMark - openNetDebit) * qty * 100 for arbitrary inputs", async () => {
       await fc.assert(

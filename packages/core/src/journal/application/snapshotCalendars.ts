@@ -36,6 +36,7 @@ import type {
   ForPersistingSnapshot,
 } from "./ports.ts";
 import { calendarDte } from "../domain/dte.ts";
+import { roundDownToRthSlot } from "../domain/rth-slot.ts";
 
 // NaN sentinel — always use this string, never JS NaN (D-06, T-03-13)
 export const NAN_STAMP = "NaN";
@@ -248,6 +249,11 @@ export function makeSnapshotCalendarsUseCase(
   ): Promise<Result<void, StorageError>> => {
     const trigger = args?.trigger ?? "scheduled";
     const now = deps.now();
+    // HIST-05: scheduled rows floor to their 30-min slot boundary so two near-simultaneous
+    // scheduled writes collide on the composite PK and onConflictDoNothing absorbs the
+    // duplicate. event-move rows keep the real instant (D-07). Freshness below stays on the
+    // REAL `now` — only the persisted row time is rounded.
+    const rowTime = trigger === "scheduled" ? roundDownToRthSlot(now) : now;
 
     const calendarsResult = await deps.getOpenCalendars();
     if (!calendarsResult.ok) return err(calendarsResult.error);
@@ -283,7 +289,7 @@ export function makeSnapshotCalendarsUseCase(
         continue;
       }
 
-      const row = buildSnapshotRow(now, calendar, front, back, trigger);
+      const row = buildSnapshotRow(rowTime, calendar, front, back, trigger);
 
       const persistResult = await deps.persistSnapshot(row);
       if (!persistResult.ok) return err(persistResult.error);
