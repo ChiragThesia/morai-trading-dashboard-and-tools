@@ -119,3 +119,6 @@ All code-level acceptance criteria for GAUGE-01..05 are proven by the gate above
 
 ## Self-Check: PASSED
 Gate outputs (test/typecheck/tsc/lint) and grep results reproduced above were captured directly from command output during this run; no created files beyond this SUMMARY to verify.
+
+## Post-UAT Revision (2026-07-13)
+User feedback after this phase's deploy: tooltips were "too large and not easy to read." Condensed all 15 tooltips (4 regime + 6 rate + 5 COT) from the WHAT/WHY/BANDS/SOURCE 4-line layout to a WHAT/WHY/META 3-line scan (compression only, no new financial claims) — see `39-UI-SPEC.md` "Tooltip Copy (LOCKED, rev 3)".

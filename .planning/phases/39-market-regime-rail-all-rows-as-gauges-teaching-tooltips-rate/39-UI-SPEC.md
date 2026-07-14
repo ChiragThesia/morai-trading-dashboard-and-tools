@@ -103,159 +103,110 @@ The real copy payload for this phase is the tooltip content — see below.
 
 ---
 
-## Tooltip Copy (LOCKED)
+## Tooltip Copy (LOCKED, rev 3 — condensed 2026-07-13)
 
-Every gauge row's ⓘ tooltip renders four parts, in this order, Hemingway style:
+**Rev 3 supersedes rev 2's four-part WHAT/WHY/BANDS/SOURCE layout.** User feedback after the
+39-04 UAT: "The tooltips are too large and not easy to read. It should be quick and easy to
+read not complicated." Every gauge row's ⓘ tooltip now renders three lines, Hemingway style:
 
-1. **WHAT** — 1-2 plain sentences, what the number is.
-2. **WHY** — 1-2 sentences, why it matters for SPX calendar trading.
-3. **BANDS** — what warn/crisis mean (banded rows) or what the range shows (neutral rows).
-4. **SOURCE** — provenance, rendered smallest/quietest (`text-muted-foreground`, unchanged
-   visual treatment from the existing tooltip).
+1. **WHAT** — one punchy clause, ≤10 words, what the number is.
+2. **WHY** — one clause, ≤12 words, why it matters for SPX calendar trading.
+3. **META** — smallest/quietest line (`text-dim/70`), combining bands-or-range with source.
 
 Copy below is FINAL — executors render it verbatim, they do not paraphrase or invent
-financial claims. The 4 existing regime rows keep their server-provided `source`/`rationale`
-fields as the SOURCE line (WHAT/WHY/BANDS below are new, client-side, static copy layered in
-front of them). Rates and COT rows have no server-provided source field — SOURCE is a static
-string authored here.
+financial claims. This is a COMPRESSION of the rev-2 copy only — every fact already existed
+in the prior locked copy (see git history for the pre-rev-3 wording). The 4 existing regime
+rows keep their server-provided `source`/`rationale` fields, appended below META, unchanged.
+Rates and COT rows have no server-provided source field — META bakes provenance in directly.
 
-### Existing regime indicators (4 rows — WHAT/WHY/BANDS are new; SOURCE = existing `indicator.source` + `indicator.rationale`, unchanged)
+### Existing regime indicators (4 rows — WHAT/WHY/META are condensed; SOURCE = existing `indicator.source` + `indicator.rationale`, unchanged, rendered below META)
 
 **`vix-term-structure` — VIX/VIX3M**
-- WHAT: VIX divided by VIX3M — the ratio of near-term to three-month S&P 500 implied volatility.
-- WHY: Ratios below 1 (contango) are the market's normal state. A ratio approaching or
-  crossing 1 (backwardation) means near-term fear has spiked above longer-dated fear — a
-  stress signal that hits short-dated vega hardest, calendars included.
-- BANDS: Calm below 0.90. Warning 0.90-0.95 (contango compressing). Crisis at 0.95 or above
-  (near backwardation).
+- WHAT: VIX ÷ VIX3M — near-term vs 3-month vol ratio
+- WHY: Backwardation = near-term fear spike; hurts calendars most
+- META: Calm <0.90 · warn 0.90–0.95 · crisis ≥0.95
 - SOURCE: (unchanged — render `indicator.source` then `indicator.rationale` as today)
 
 **`vvix` — VVIX**
-- WHAT: VVIX, the CBOE's volatility-of-volatility index — the implied volatility of VIX options.
-- WHY: VVIX spikes when option markets expect VIX itself to move sharply — a leading tell for
-  vol-of-vol risk that the VIX level alone misses, relevant to any vega-sensitive position.
-- BANDS: Calm below 100. Warning 100-115 (elevated). Crisis at 115 or above (extreme-fear zone).
+- WHAT: VVIX — implied volatility of VIX options
+- WHY: High VVIX = vol-of-vol risk the VIX level misses
+- META: Calm <100 · warn 100–115 · crisis ≥115
 - SOURCE: (unchanged)
 
 **`vix9d-vix` — VIX9D/VIX**
-- WHAT: VIX9D divided by VIX — the ratio of 9-day to 30-day S&P 500 implied volatility.
-- WHY: Same idea as VIX/VIX3M, but focused on the very front of the curve. A rising ratio
-  flags fear concentrating in the next two weeks — the window that matters most for
-  short-dated calendar legs.
-- BANDS: Calm below 1.0. Warning 1.0-1.1. Crisis at 1.1 or above. These cuts are a structural
-  analogy to VIX/VIX3M, not independently backtested — display-only (matches the existing
-  `[ASSUMED]` disclosure in `docs/architecture/regime-board.md`).
+- WHAT: VIX9D ÷ VIX — 9-day vs 30-day vol ratio
+- WHY: Rising ratio = near-term fear building fast
+- META: Calm <1.0 · warn 1.0–1.1 · crisis ≥1.1 (unbacktested analogy)
 - SOURCE: (unchanged)
 
 **`hy-oas` — HY OAS**
-- WHAT: ICE BofA US High Yield Option-Adjusted Spread — the extra yield high-yield corporate
-  bonds pay over Treasuries, in percentage points.
-- WHY: Widening credit spreads mean bond investors are demanding more compensation for
-  default risk — a cross-asset stress signal that has historically coincided with or preceded
-  broader market stress, the same evidence this indicator's bands were calibrated from.
-- BANDS: Calm below 3.0%. Warning 3.0-5.0%. Crisis at 5.0% or above.
+- WHAT: HY OAS — junk-bond yield premium over Treasuries
+- WHY: Widening spreads = credit stress, often leads risk-off
+- META: Calm <3.0% · warn 3.0–5.0% · crisis ≥5.0%
 - SOURCE: (unchanged)
 
-### Rates block (6 rows — NEUTRAL, no bands, new tooltip entirely — none exists today)
+### Rates block (6 rows — NEUTRAL, no bands, META bakes in source)
 
 **Fed Funds (`DFF`)**
-- WHAT: The Federal Reserve's overnight bank lending rate — the rate the Fed sets directly.
-- WHY: Every other rate on this rail prices off this one. Its level and direction set the
-  macro backdrop for options carry and the cost of holding hedges overnight.
-- BANDS: Track shows today's rate against a fixed 0%-8% range — position only, no verdict.
-- SOURCE: FRED series DFF, daily.
+- WHAT: Fed's overnight bank lending rate — sets everything else
+- WHY: Sets the backdrop for options carry & hedge cost
+- META: 0–8% range · FRED DFF, daily
 
 **SOFR (`SOFR`)**
-- WHAT: Secured Overnight Financing Rate — the repo-market rate that replaced LIBOR as the
-  standard short-term benchmark.
-- WHY: Tracks Fed funds closely. A persistent gap between the two is itself a funding-stress
-  signal for money markets.
-- BANDS: Track shows today's rate against a fixed 0%-8% range — position only, no verdict.
-- SOURCE: FRED series SOFR, daily.
+- WHAT: SOFR — repo rate that replaced LIBOR
+- WHY: Gap vs Fed funds = money-market funding stress
+- META: 0–8% range · FRED SOFR, daily
 
 **1M (`DGS1MO`)**
-- WHAT: 1-month Treasury bill yield — the shortest-dated U.S. government borrowing rate.
-- WHY: Moves fastest with Fed-meeting expectations. A quick divergence from Fed funds/SOFR
-  often prices in an imminent rate decision.
-- BANDS: Track shows today's yield against a fixed 0%-8% range — position only, no verdict.
-- SOURCE: FRED series DGS1MO, daily.
+- WHAT: 1-month T-bill yield — shortest US gov't rate
+- WHY: Fast moves price in an imminent rate decision
+- META: 0–8% range · FRED DGS1MO, daily
 
 **3M (`DGS3MO`)**
-- WHAT: 3-month Treasury bill yield.
-- WHY: The other leg of the 10Y-3M spread below — its own level also reflects near-term Fed
-  policy expectations.
-- BANDS: Track shows today's yield against a fixed 0%-8% range — position only, no verdict.
-- SOURCE: FRED series DGS3MO, daily.
+- WHAT: 3-month T-bill yield — short leg of 10Y-3M
+- WHY: Reflects near-term Fed policy expectations
+- META: 0–8% range · FRED DGS3MO, daily
 
-**10Y-2Y (`T10Y2Y`) — BANDED, evidence-table addition PROPOSED, see below**
-- WHAT: The 10-year Treasury yield minus the 2-year Treasury yield — the classic
-  yield-curve slope.
-- WHY: A positive spread is the market's normal state (long rates above short rates). A
-  negative spread — inversion — has historically preceded U.S. recessions by 6-12 months,
-  and a recession is the deepest, most correlated risk any short-vol equity position faces.
-- BANDS: Calm above 0.0 (normal upward slope). Warning at or below 0.0 (inverted — the
-  historically-cited recession precursor). Crisis at -0.50 or below (deep, sustained
-  inversion) — `[ASSUMED]`, a structural tier, not independently backtested.
-- SOURCE: FRED series T10Y2Y, daily. Threshold rationale:
-  `knowledge-base/grouped-data/macro_rates.md` ("Inverted curves... have historically
-  preceded recessions by 6-12 months"); the -0.50 crisis tier is a structural analogy, same
-  disclosure pattern as `vix9d-vix`/`hy-oas` in `docs/architecture/regime-board.md`.
+**10Y-2Y (`T10Y2Y`) — BANDED**
+- WHAT: 10Y minus 2Y Treasury yield — the curve slope
+- WHY: Inverted = historical recession precursor, 6–12mo lead
+- META: Calm >0 · warn ≤0 · crisis ≤−0.50 · FRED T10Y2Y, daily
 
-**10Y-3M (`T10Y3M`) — BANDED, evidence-table addition PROPOSED, see below**
-- WHAT: The 10-year Treasury yield minus the 3-month Treasury bill yield — a second,
-  shorter-horizon yield-curve slope, the spread the NY Fed's own recession-probability work
-  watches most closely.
-- WHY: Same inversion logic as 10Y-2Y, but the 3-month leg reacts faster to Fed policy — the
-  two spreads inverting together is a stronger signal than either alone.
-- BANDS: Calm above 0.0. Warning at or below 0.0 (inverted). Crisis at -0.50 or below (deep
-  inversion) — `[ASSUMED]`, same disclosure as 10Y-2Y.
-- SOURCE: FRED series T10Y3M, daily. Same threshold rationale as 10Y-2Y.
+**10Y-3M (`T10Y3M`) — BANDED**
+- WHAT: 10Y minus 3M Treasury yield — a faster curve spread
+- WHY: Inverting with 10Y-2Y = stronger recession signal
+- META: Calm >0 · warn ≤0 · crisis ≤−0.50 · FRED T10Y3M, daily
 
-### COT block (5 rows — NEUTRAL, no bands, new tooltip entirely — none exists today)
+### COT block (5 rows — NEUTRAL, no bands, META bakes in axis + source)
 
 TFF class definitions below are sourced from the codebase's own authoritative comment
-(`packages/contracts/src/cot.ts:6-16`), not invented.
+(`packages/contracts/src/cot.ts:6-16`), not invented. Axis values in META match each class's
+`COT_GAUGE_SCALE` entry in `CotCard.tsx`.
 
 **Dealer (`netDealer`)**
-- WHAT: CFTC Dealer/Intermediary net position in E-mini S&P 500 futures — long minus short
-  contracts held by banks and broker-dealers.
-- WHY: Dealers mostly intermediate client flow rather than take directional bets. Their net
-  position reads who's coming to them for exposure, not a standalone conviction signal.
-- BANDS: Track shows net contracts against a fixed range sized to this class's typical
-  extent — position only, no verdict.
-- SOURCE: CFTC Traders in Financial Futures (TFF) report, E-mini S&P 500, weekly (Friday
-  release, Tuesday as-of).
+- WHAT: Dealer net position — banks & broker-dealers
+- WHY: Mostly intermediates client flow, not a conviction bet
+- META: ±1.15M axis · CFTC TFF, weekly
 
 **Asset Mgr (`netAssetManager`)**
-- WHAT: Net position of Asset Manager/Institutional traders — pensions, insurers, and other
-  long-horizon institutional money.
-- WHY: The largest reportable class by open interest. A slow-moving, usually long-biased
-  read on institutional equity exposure rather than a tactical signal.
-- BANDS: Position only, no verdict.
-- SOURCE: (same as Dealer)
+- WHAT: Asset Manager net position — pensions & institutions
+- WHY: Slow-moving, usually long-biased institutional read
+- META: ±1.5M axis · CFTC TFF, weekly
 
 **Leveraged (`netLeveraged`) — headline row (D-05)**
-- WHAT: Net position of Leveraged Funds — hedge funds and CTAs, the report's "big guys."
-- WHY: The most tactical, fastest-moving class in the report. Swings here often lead price
-  action more than the slower institutional or dealer classes.
-- BANDS: Position only, no verdict.
-- SOURCE: (same as Dealer)
+- WHAT: Leveraged Funds net position — hedge funds & CTAs
+- WHY: Most tactical class; often leads price action
+- META: ±800K axis · CFTC TFF, weekly
 
 **Other rept (`netOther`)**
-- WHAT: Net position of Other Reportable traders — large traders that don't fit the Dealer,
-  Asset Manager, or Leveraged Funds classes.
-- WHY: A catch-all class, useful mainly as a check that the other three classes explain most
-  of the positioning.
-- BANDS: Position only, no verdict.
-- SOURCE: (same as Dealer)
+- WHAT: Other Reportable net position — the catch-all class
+- WHY: Checks the other three classes explain most flow
+- META: ±25K axis · CFTC TFF, weekly
 
 **Non-rept (`netNonreportable`)**
-- WHAT: Net position of Non-Reportable traders — small speculators below the CFTC's
-  individual reporting threshold, aggregated.
-- WHY: Often read as a retail-sentiment proxy. Small in size relative to the institutional
-  classes above.
-- BANDS: Position only, no verdict.
-- SOURCE: (same as Dealer)
+- WHAT: Non-Reportable net position — small speculators, aggregated
+- WHY: Read as a retail-sentiment proxy; small in size
+- META: ±200K axis · CFTC TFF, weekly
 
 ### Yield-curve evidence-table addition (PROPOSED — docs-before-code)
 
@@ -364,24 +315,28 @@ band word (no "calm"/"warning"/"crisis" vocabulary on a row with no verdict). Fo
 `aria-valuetext` states the signed value and WoW direction (e.g. `"+50.7K contracts —
 up 3.2K week-over-week"`).
 
-### Tooltip layout (4-part structure)
+### Tooltip layout (3-line structure, rev 3)
 
-Same `TooltipProvider`/`Tooltip`/`TooltipContent` wiring as today (`RegimeBoard.tsx:177-204`),
-same `ⓘ` `Badge` trigger. `TooltipContent` inner stack becomes 4 lines instead of 2:
+Same `TooltipProvider`/`Tooltip`/`TooltipContent` wiring as today (`RegimeBoard.tsx`), same
+`ⓘ` `Badge` trigger. `TooltipContent` inner stack is 3 lines (condensed from rev 2's 4-line
+WHAT/WHY/BANDS/SOURCE per user feedback — "too large ... should be quick and easy to read"):
 
 ```
-<div className="flex max-w-xs flex-col gap-1 font-mono text-xs leading-[1.45]">
-  <span className="text-txt">{WHAT}</span>
-  <span className="text-txt">{WHY}</span>
-  <span className="text-muted-foreground">{BANDS}</span>
-  <span className="text-dim">{SOURCE}</span>  {/* quietest line, unchanged tone from today's source/rationale */}
+<div className="flex max-w-[15rem] flex-col gap-1 font-mono">
+  <span className="text-[11px] text-txt">{WHAT}</span>
+  <span className="text-[11px] text-dim">{WHY}</span>
+  <div className="flex flex-col gap-0.5 text-[10px] text-dim/70">
+    <span>{META}</span>
+    {SOURCE}  {/* regime rows only: indicator.source + indicator.rationale, unchanged */}
+  </div>
 </div>
 ```
 
-WHAT/WHY render at the slightly brighter `text-txt` (they're the teaching content, the point
-of this phase); BANDS at the existing `text-muted-foreground`; SOURCE at `text-dim` — one step
-quieter than today's flat `text-muted-foreground` for both lines, so the new teaching content
-doesn't get visually buried under provenance the way a 2-line tooltip could.
+WHAT renders at `text-txt`, WHY one step quieter at `text-dim` (both 11px) — the teaching
+content, the point of this phase. META (bands, or bands+provenance baked in for rate/COT
+rows) is quietest at `text-dim/70` (10px). Regime rows append the server's own
+source/rationale below META unchanged — the only rows with more than 3 visual lines, since
+that provenance is dynamic per-instance data, not part of the condensed authored copy.
 
 ---
 
