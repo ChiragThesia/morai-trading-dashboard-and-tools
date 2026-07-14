@@ -130,7 +130,49 @@ The heal-only repair (`trigger_job repair-journal-history`, no calendarId) remai
 
 ## Final evidence (15:08Z check + UAT)
 
-_TO BE COMPLETED: 14:30Z slot state, 15:00Z self-heal replacement of the 14:00Z gap row, morai.wtf lifecycle-chart UAT._
+_TO BE COMPLETED: morai.wtf lifecycle-chart UAT._
+
+### Residual bug after 455b84c — pre-anchor observation blind spot (2026-07-14, debug session)
+
+`455b84c` was necessary but not sufficient. Live evidence on `c225281e` after the fix
+deployed (worker SUCCESS 15:41:04Z) and the 16:00Z self-heal cron: `13:30 ✓ / 14:00 GAP /
+14:30 ✓ / 15:00 GAP / 15:30 ✓ / 16:00 GAP` — the top-of-hour gap rows still never healed.
+
+A prod-shaped testcontainers integration test now wires the REAL adapters
+(`resolveLegObservationForSlot` + `healSnapshot` + `getOpenCalendars`) through the REAL
+use-cases (rebuild + self-heal), seeded to mirror `c225281e` exactly (mixed-root SPX/SPXW
+pair, a 14:00:00Z gap row, and post-BSM leg observations), run at `now = 16:00:30Z`:
+`packages/adapters/src/postgres/repos/self-heal-journal.prod-repro.contract.test.ts`.
+
+- **Faithful repro (obs in-slot at 14:00:50Z) HEALS** — `rowsHealed ≥ 1`, `errorCount 0`, the
+  14:00 row's calibrated fields become finite. So the enumerate → resolve → `isGapRow` →
+  metrics → heal path is sound for an in-slot observation. `455b84c` works for that case.
+- **Characterization (obs at 13:59:30Z, one slot early) LEAVES THE 14:00 GAP ROW UNHEALED** —
+  `frontIv` stays `NaN`, `errorCount 0` (an honest-gap, not an error → silent), and the one
+  heal lands on the previous (13:30) slot. This reproduces the exact prod symptom.
+
+**Root cause (exact):** `resolveLegObservationForSlot`
+(`packages/adapters/src/postgres/repos/leg-observations.ts:423-447`) resolves a slot's
+observation from the half-open interval `[slotAnchor, slotAnchor + 30min)`. The live
+`snapshot-calendars` writer floors its trigger instant to the slot boundary but pairs it with
+the globally-latest `leg_observation`. The `compute-bsm-greeks` cron is hourly `"0 * * * *"`
+(`apps/worker/src/schedule.ts`) and chain-triggers `snapshot-calendars` at the top of each ET
+hour; at that instant the latest observation can still be the PREVIOUS `*/30` fetch —
+timestamped BEFORE the floored anchor. `455b84c` traded the original at-or-before semantics
+(which missed post-anchor obs) for `[anchor, anchor+30min)` (which misses pre-anchor obs).
+Top-of-hour rows built from a pre-anchor observation are exactly the systematic `:00`-slot
+gaps that persist. A widened resolve window is NOT shipped here: reaching back one slot would
+fabricate rows for genuinely-empty slots (D-04 honest-gap violation), so the correct fix needs
+a design that only reaches back for slots that already carry a writer-written gap row —
+confirmed first via the observability below.
+
+**Observability shipped (mandatory — prod was blind).** `self-heal-journal` and
+`repair-journal-history` handlers now log one coverage line per run:
+`self-heal-journal: slots=N healed=N honestGaps=N errors=N window=[from..to]`. Prod could not
+previously distinguish "ran, healed 0" from "ran, honest-gap N" from "never ran" from "errored
+N". The next cron run will show `honestGaps>0` on the gap slots, confirming the pre-anchor
+blind spot as the live cause. Handler tests assert the line; `apps/worker` suite 139 green,
+adapter prod-repro suite 3 green, typecheck + lint clean.
 
 ### Gap found during live verification — slot-resolution semantics bug (2026-07-14)
 
