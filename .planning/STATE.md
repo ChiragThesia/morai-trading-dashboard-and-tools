@@ -328,6 +328,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 
 ### Roadmap Evolution
 
+- Phase 42 added (2026-07-15): Design-system consolidation — DataTable primitive + single Button + tokens + design-system doc; daisyUI researched and rejected (user-approved shadcn consolidation path).
 - Phase 8 added (2026-06-23): Web Dashboard — React/Vite/Tailwind/shadcn frontend (apps/web) on Hono RPC + new GEX analytics endpoint. 5 screens prototyped as HTML mockups in `mockups/` (overview, analyzer, positions, journal, market).
 - Phases 10-15 added (2026-06-25): Milestone v1.1 — Real-Time Schwab Streaming. schwab-py sidecar as sole Schwab boundary; live stream; COT + expanded FRED.
 - Phases 16-20 added (2026-07-03): Milestone v1.2 — Trade Picker & Dashboard Redesign. Deploy

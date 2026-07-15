@@ -569,3 +569,14 @@ Plans:
 - [x] 41-03-PLAN.md — AUI-02 verdict hero (desktop) + AUI-06 mobile Edge/Risk/Fit grouping (GROUP_OF shared) (wave 3)
 - [x] 41-04-PLAN.md — AUI-04 number rounding (both trees) + AUI-05 term-structure/paste polish (wave 4)
 - [x] 41-05-PLAN.md — integration gate: full suite + dual typecheck + lint + AUI-law greps + morai.wtf UAT (wave 5)
+
+### Phase 42: Design-system consolidation — one reusable component system for every screen. Kill the disparate table/button/panel sources: (1) DataTable primitive (shadcn table + column-def pattern: sticky header, sort + aria-sort, row hover/selection, mono-numeric cells, dense terminal styling) and migrate ALL tables onto it — Overview PositionsTable, Analyzer CandidateTable, Journal tables, desktop + mobile trees; (2) single Button system — fold the components/ui/button call sites into components/system/Button (variants+tone+active), delete the duplicate; (3) formalize design tokens (panel gradient, line colors, text scale, spacing) so every screen pulls from one source; (4) docs/architecture/design-system.md (docs-before-architecture law). Zero new dependencies — consolidate on the existing shadcn + system/ layer; daisyUI evaluated 2026-07-15 and REJECTED (CSS-only no table behavior, third styling idiom, fights the dense terminal aesthetic). Success: every table renders via DataTable with identical chrome; one Button; visual parity verified at 1512x860 and 2056x1329 with no page scroll; all suites green.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 41
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 42 to break down)
