@@ -23,13 +23,11 @@
  *
  * No any/as/!.
  */
-import type { PickerCandidate, PickerGexContext, RuleSetEntry, PickerSizing } from "@morai/contracts";
+import type { PickerCandidate, PickerGexContext, RuleSetEntry } from "@morai/contracts";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
-import { EventChipsRow } from "../components/picker/TermStructureChart.tsx";
-import { TermStructureInset } from "../components/picker/TermStructureInset.tsx";
-import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
+import { EventLegRibbon } from "../components/picker/EventLegRibbon.tsx";
 import { formatAsOf } from "../components/picker/CandidateCard.tsx";
 import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
@@ -142,7 +140,7 @@ export function CandidateRail({
   pasteAnalyzing,
 }: CandidateRailProps): React.ReactElement {
   return (
-    <Panel>
+    <Panel className="flex h-full min-h-0 flex-col">
       <div className="mb-2 flex items-center justify-between gap-2">
         <PanelHeading title="Suggested calendars" />
         <div className="flex items-center gap-1.5">
@@ -199,8 +197,8 @@ export function CandidateRail({
           )}
         </div>
       ) : (
-        // ~5 rows visible, scroll for the rest (TOS idiom) — sticky header scrolls within
-        // this wrapper, never the page.
+        // The table absorbs whatever viewport height is left (no-scroll layout) — sticky
+        // header scrolls within this wrapper, never the page.
         <CandidateTable
           candidates={candidates}
           pastedCandidates={pastedCandidates}
@@ -211,7 +209,7 @@ export function CandidateRail({
           onSelect={onSelect}
           onToggleCombine={onToggleCombine}
           onRemovePasted={onRemovePasted}
-          wrapperClassName="max-h-[140px] overflow-y-auto"
+          wrapperClassName="min-h-0 flex-1 overflow-y-auto"
         />
       )}
     </Panel>
@@ -360,20 +358,17 @@ function VerdictHero({
   );
 }
 
-// ─── WHY / ENTRY-EXIT panels (ANLZ-03, D-01b) ──────────────────────────────────
+// ─── WHY panel column (ANLZ-03, D-01b) ─────────────────────────────────────────
 //
-// No-scroll layout (2026-07-15): the two panels are separate grid COLUMNS beside the chart
-// (previously a stacked rail whose height could out-grow the chart and stretch the row).
+// 2026-07-15 (user): the ENTRY/EXIT panel is dropped from desktop — WHY is the single slim
+// column beside the chart. (EntryExitPlan still ships in the mobile tree.)
 
-interface SidePanelProps {
+interface WhyColumnProps {
   readonly candidate: PickerCandidate | null;
   readonly gex: PickerGexContext | null;
-  /** VIX-tiered sizing recommendation from the snapshot (28-06, PLAY-03) — threaded straight
-   *  to EntryExitPlan, never recomputed here. */
-  readonly sizing: PickerSizing | null;
 }
 
-function WhyColumn({ candidate, gex }: Omit<SidePanelProps, "sizing">): React.ReactElement {
+function WhyColumn({ candidate, gex }: WhyColumnProps): React.ReactElement {
   const notScored = candidate !== null && candidate.breakdown.length === 0;
   return (
     <Panel>
@@ -382,20 +377,6 @@ function WhyColumn({ candidate, gex }: Omit<SidePanelProps, "sizing">): React.Re
         <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
       ) : (
         candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />
-      )}
-    </Panel>
-  );
-}
-
-function ExitColumn({ candidate, sizing }: Omit<SidePanelProps, "gex">): React.ReactElement {
-  const notScored = candidate !== null && candidate.breakdown.length === 0;
-  return (
-    <Panel>
-      <PanelHeading title="Entry / exit plan" />
-      {notScored ? (
-        <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
-      ) : (
-        candidate !== null && <EntryExitPlan candidate={candidate} sizing={sizing} />
       )}
     </Panel>
   );
@@ -571,7 +552,7 @@ function AnalyzerDesktop(): React.ReactElement {
   }
 
   return (
-    <div className="flex flex-col gap-4 bg-bg p-3">
+    <div className="flex h-[calc(100dvh-48px)] flex-col gap-4 overflow-hidden bg-bg p-3">
       {/* ── Top strip: the verdict hero for the selected calendar ── */}
       <div data-testid="analyzer-scorecard-wrapper">
         <VerdictHero
@@ -583,20 +564,17 @@ function AnalyzerDesktop(): React.ReactElement {
           source={snapshot?.source ?? "schwab"}
         />
       </div>
-      {/* No-scroll layout (2026-07-15, evolves the 2026-07-14 TOS layout): WHY and ENTRY as
-          two slim columns left of the chart — the rail can never out-grow the chart row —
-          then the full-width greeks table. Term structure renders as a chart inset, not a
-          page section. ≥1024px only (D-17). */}
+      {/* No-scroll layout (2026-07-15): the page owns its viewport height; WHY is the single
+          slim column beside the chart (ENTRY/EXIT dropped, user 2026-07-15); the day ribbon
+          replaces the term-structure inset; the table flexes into whatever height is left.
+          ≥1024px only (D-17). */}
       <div
         data-testid="analyzer-inner-grid"
-        className="grid grid-cols-[minmax(230px,270px)_minmax(230px,270px)_minmax(0,1fr)] gap-4"
+        className="grid grid-cols-[minmax(260px,300px)_minmax(0,1fr)] gap-4"
       >
-      {/* ── WHY / ENTRY-EXIT columns ── */}
+      {/* ── WHY column ── */}
       <div data-testid="analyzer-right-wrapper">
         <WhyColumn candidate={selected} gex={snapshot?.gex ?? null} />
-      </div>
-      <div data-testid="analyzer-exit-wrapper">
-        <ExitColumn candidate={selected} sizing={snapshot?.sizing ?? null} />
       </div>
 
       {/* ── Chart column ── */}
@@ -647,15 +625,6 @@ function AnalyzerDesktop(): React.ReactElement {
                   </span>
                 )}
               </p>
-              {/* Event chips (from the retired term-structure panel) — hover for WHAT/WHY. */}
-              {snapshot !== null && (
-                <EventChipsRow
-                  events={snapshot.events}
-                  asOf={snapshot.asOf}
-                  frontDte={selected.frontLeg.dte}
-                  backDte={selected.backLeg.dte}
-                />
-              )}
             </div>
           )}
           {selected !== null && selectedPosition !== null && scenarioResult !== null && (
@@ -670,43 +639,39 @@ function AnalyzerDesktop(): React.ReactElement {
                 toggles={toggles}
                 onToggle={handleToggle}
               />
-              <div className="relative">
-                <PayoffChart
-                  todayCurve={scenarioResult.payoffCurve}
-                  fanCurves={[]}
-                  expirationCurve={scenarioResult.expirationCurve}
-                  rollCurve={null}
-                  gex={{
-                    callWall: snapshot?.gex.callWall ?? null,
-                    putWall: snapshot?.gex.putWall ?? null,
-                    flip: snapshot?.gex.flip ?? null,
-                  }}
-                  domain={payoffDomain}
-                  spot={spot}
-                  toggles={toggles}
-                  fitY={false}
-                  onFitYConsumed={noop}
-                  positionSetSignature={positionSetSignature}
-                  baseExpirationCurve={scenarioResult.expirationCurve}
-                  todayCurveColor={TODAY_CURVE_COLOR}
-                  expirationCurveColor={EXPIRATION_CURVE_COLOR}
-                  expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
-                  aspectRatio={2.9}
+              {/* Day ribbon (2026-07-15, replaces the term-structure inset + chips row):
+                  WHERE the macro events fall relative to your legs — hover a tick for
+                  WHAT/WHY. The IV-curve verdicts live in the WHY panel numbers. */}
+              {snapshot !== null && (
+                <EventLegRibbon
+                  events={snapshot.events}
+                  asOf={snapshot.asOf}
+                  frontDte={selected.frontLeg.dte}
+                  backDte={selected.backLeg.dte}
                 />
-                {/* Term-structure inset (no-scroll layout): overlaid on the payoff canvas's
-                    quiet top-left corner, below the BE chip strip and clear of the y-axis
-                    labels; pointer-events-none keeps the payoff crosshair live underneath. */}
-                {snapshot !== null && (
-                  <div className="pointer-events-none absolute left-16 top-8 z-10">
-                    <TermStructureInset
-                      termStructure={snapshot.termStructure}
-                      events={snapshot.events}
-                      asOf={snapshot.asOf}
-                      candidate={selected}
-                    />
-                  </div>
-                )}
-              </div>
+              )}
+              <PayoffChart
+                todayCurve={scenarioResult.payoffCurve}
+                fanCurves={[]}
+                expirationCurve={scenarioResult.expirationCurve}
+                rollCurve={null}
+                gex={{
+                  callWall: snapshot?.gex.callWall ?? null,
+                  putWall: snapshot?.gex.putWall ?? null,
+                  flip: snapshot?.gex.flip ?? null,
+                }}
+                domain={payoffDomain}
+                spot={spot}
+                toggles={toggles}
+                fitY={false}
+                onFitYConsumed={noop}
+                positionSetSignature={positionSetSignature}
+                baseExpirationCurve={scenarioResult.expirationCurve}
+                todayCurveColor={TODAY_CURVE_COLOR}
+                expirationCurveColor={EXPIRATION_CURVE_COLOR}
+                expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
+                aspectRatio={2.9}
+              />
             </>
           )}
         </Panel>
@@ -714,8 +679,8 @@ function AnalyzerDesktop(): React.ReactElement {
       </div>
       </div>
 
-      {/* ── Full-width ranked greeks table (TOS idiom: table under the graph) ── */}
-      <div data-testid="analyzer-rail-wrapper" className="flex flex-col gap-3">
+      {/* ── Ranked greeks table: flexes into the leftover viewport height (TOS idiom) ── */}
+      <div data-testid="analyzer-rail-wrapper" className="flex min-h-0 flex-1 flex-col gap-3">
         {railBody}
       </div>
     </div>

@@ -60,7 +60,7 @@ const chartConfig = { iv: { label: "ATM IV", color: TERM_LINE } } satisfies Char
 /** Teaching copy per event kind (Phase-39 WHAT/WHY tooltip idiom). Qualitative only — the
  *  system stores no consensus/prior numbers for these releases (economic_events carries
  *  date+name), so the tooltip never fabricates an "expected" figure. */
-const EVENT_COPY: Readonly<Record<string, { what: string; why: string }>> = {
+export const EVENT_COPY: Readonly<Record<string, { what: string; why: string }>> = {
   FOMC: {
     what: "Fed rate decision + press conference (2:00 PM ET).",
     why: "Highest-impact scheduled vol event — IV into it is event premium; a realized gap through the strike is the calendar's max-loss scenario.",
