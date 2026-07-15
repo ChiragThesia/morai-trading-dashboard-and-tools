@@ -26,7 +26,7 @@ import { EntryExitPlan } from "../../components/picker/EntryExitPlan.tsx";
 import { Button, SectionLabel } from "../../components/system/index.tsx";
 import { MobileScorecard } from "./MobileScorecard.tsx";
 import { MobileAnalyzerChart } from "./MobileAnalyzerChart.tsx";
-import { useAnalyzerModel, PASTED_NOT_SCORED_NOTE } from "./useAnalyzerModel.ts";
+import { useAnalyzerModel, PASTED_NOT_SCORED_NOTE, describeEmptyBoard } from "./useAnalyzerModel.ts";
 
 /**
  * Disclosure — a closed-by-default native `<details>` whose body mounts ONLY when the real `open`
@@ -169,9 +169,11 @@ export function AnalyzerMobile(): React.ReactElement {
     candidatesBody = (
       <div className="flex flex-col gap-1.5" data-testid="picker-empty-filtered">
         <p className="m-0 font-display text-sm font-bold text-txt">No candidates in this snapshot</p>
-        <p className="m-0 font-mono text-[11px] text-dim">
-          {`No put calendars meet net-θ>0 over the ${snapshot.asOf} snapshot.`}
-        </p>
+        {describeEmptyBoard(snapshot).map((line) => (
+          <p key={line} className="m-0 font-mono text-[11px] text-dim">
+            {line}
+          </p>
+        ))}
       </div>
     );
   } else {

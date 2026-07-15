@@ -929,6 +929,59 @@ describe("Analyzer — live-data states (Task 2, 19-09-PLAN.md, D-18/D-19)", () 
     expect(screen.queryByTestId("picker-empty-cold-start")).toBeNull();
   });
 
+  it("zero candidates: the hollow shells never render — no hero, no WHY/ENTRY rail, no chart, no term panel (2026-07-15)", () => {
+    mockUsePickerReturn({ data: { ...pickerSnapshotFixture, candidates: [] }, isPending: false, isError: false });
+
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("picker-empty-filtered")).toBeTruthy();
+    expect(screen.queryByTestId("analyzer-scorecard-wrapper")).toBeNull();
+    expect(screen.queryByTestId("analyzer-inner-grid")).toBeNull();
+    expect(screen.queryByText("Why this calendar")).toBeNull();
+    expect(screen.queryByText("Entry / exit plan")).toBeNull();
+    expect(screen.queryByText("Risk profile")).toBeNull();
+    expect(screen.queryByText("Term structure + your legs")).toBeNull();
+    // The paste box + Re-pull stay usable — the rail IS the screen in this state.
+    expect(screen.getByTestId("picker-paste-input")).toBeTruthy();
+    expect(screen.getByTestId("repull-chains-button")).toBeTruthy();
+  });
+
+  it("zero candidates with gate drops + after-hours: the empty state names the real reason", () => {
+    mockUsePickerReturn({
+      data: {
+        ...pickerSnapshotFixture,
+        candidates: [],
+        marketSession: "after-hours",
+        gateDrops: { liquidity: 3539, netTheta: 2, termInverted: 0, eventBlackout: 0 },
+      },
+      isPending: false,
+      isError: false,
+    });
+
+    render(<Analyzer />);
+
+    const emptyFiltered = screen.getByTestId("picker-empty-filtered");
+    expect(emptyFiltered.textContent).toContain("3539 illiquid quotes · 2 negative-θ pairs dropped");
+    expect(emptyFiltered.textContent).toContain("After-hours spreads are wide");
+  });
+
+  it("zero candidates behind a blocked gate: the empty state says the gate suppressed the board", () => {
+    mockUsePickerReturn({
+      data: {
+        ...pickerSnapshotFixture,
+        candidates: [],
+        gate: { ...pickerSnapshotFixture.gate, state: "blocked" },
+      },
+      isPending: false,
+      isError: false,
+    });
+
+    render(<Analyzer />);
+
+    const emptyFiltered = screen.getByTestId("picker-empty-filtered");
+    expect(emptyFiltered.textContent).toContain("Entry gate blocked");
+  });
+
   it("populated: renders the ranked rail from live data (no layout change from the fixture path)", () => {
     render(<Analyzer />);
 

@@ -129,6 +129,37 @@ export function verdictWord(score: number): {
   return { word, icon, cls };
 }
 
+/**
+ * describeEmptyBoard — honest reason lines for a settled snapshot with zero candidates
+ * (2026-07-15: the generic net-θ line implied the wrong cause when the gate or after-hours
+ * liquidity emptied the board). Priority: entry-gate suppression → gate-drop counts (+ the
+ * after-hours hint) → the plain net-θ fallback. Shared by both trees (D-02 single source).
+ */
+export function describeEmptyBoard(snapshot: PickerSnapshotResponse): ReadonlyArray<string> {
+  const { gate, gateDrops, marketSession, asOf } = snapshot;
+  if (gate.state === "blocked" || gate.brakes.maxOpen || gate.brakes.cooldown) {
+    const why =
+      gate.state === "blocked"
+        ? "blocked"
+        : gate.brakes.maxOpen
+          ? "braked (max open positions)"
+          : "braked (cooldown)";
+    return [`Entry gate ${why} — candidate output is suppressed for the ${asOf} snapshot.`];
+  }
+  const lines: string[] = [];
+  if (gateDrops.liquidity + gateDrops.netTheta > 0) {
+    lines.push(
+      `${gateDrops.liquidity} illiquid quote${gateDrops.liquidity === 1 ? "" : "s"} · ${gateDrops.netTheta} negative-θ pair${gateDrops.netTheta === 1 ? "" : "s"} dropped from the ${asOf} snapshot.`,
+    );
+  } else {
+    lines.push(`No put calendars meet net-θ>0 over the ${asOf} snapshot.`);
+  }
+  if (marketSession === "after-hours") {
+    lines.push("After-hours spreads are wide — the board usually refills during regular trading hours.");
+  }
+  return lines;
+}
+
 // ─── Model ──────────────────────────────────────────────────────────────────────
 
 export interface AnalyzerModel {

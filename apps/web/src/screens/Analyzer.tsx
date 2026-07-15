@@ -54,6 +54,7 @@ import {
   EXPIRATION_CURVE_COLOR,
   GROUP_OF,
   verdictWord,
+  describeEmptyBoard,
 } from "./analyzer-mobile/useAnalyzerModel.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -103,6 +104,9 @@ export interface CandidateRailProps {
   readonly onClearAllPasted: () => void;
   /** Optional heading-row control (the Re-pull chains button — refreshes THIS rail). */
   readonly headerAction?: React.ReactNode;
+  /** Honest zero-candidate reason lines (describeEmptyBoard) — falls back to the plain
+   *  net-θ line when omitted (direct-render tests pass `asOf` only). */
+  readonly emptyReasonLines?: ReadonlyArray<string>;
 }
 
 /**
@@ -131,6 +135,7 @@ export function CandidateRail({
   onRemovePasted,
   onClearAllPasted,
   headerAction,
+  emptyReasonLines,
 }: CandidateRailProps): React.ReactElement {
   return (
     <Panel>
@@ -175,9 +180,13 @@ export function CandidateRail({
       {candidates.length === 0 && pastedCandidates.length === 0 ? (
         <div className="flex flex-col gap-1.5" data-testid="picker-empty-filtered">
           <p className="m-0 font-display text-sm font-bold text-txt">No candidates in this snapshot</p>
-          <p className="m-0 font-mono text-[11px] text-dim">
-            {`No put calendars meet net-θ>0 over the ${asOf} snapshot.`}
-          </p>
+          {(emptyReasonLines ?? [`No put calendars meet net-θ>0 over the ${asOf} snapshot.`]).map(
+            (line) => (
+              <p key={line} className="m-0 font-mono text-[11px] text-dim">
+                {line}
+              </p>
+            ),
+          )}
         </div>
       ) : (
         // ~5 rows visible, scroll for the rest (TOS idiom) — sticky header scrolls within
@@ -533,8 +542,16 @@ function AnalyzerDesktop(): React.ReactElement {
         onRemovePasted={handleRemovePasted}
         onClearAllPasted={handleClearAllPasted}
         headerAction={repullControl}
+        emptyReasonLines={describeEmptyBoard(snapshot)}
       />
     );
+  }
+
+  // Zero-candidate empty state (2026-07-15): with nothing scored and nothing pasted there is
+  // no selection, and the hero / WHY-ENTRY rail / chart / term panels would all render as
+  // hollow shells — the rail (paste box + honest reason + Re-pull) IS the screen instead.
+  if (!isLoading && !isError && snapshot !== null && selected === null) {
+    return <div className="flex flex-col gap-4 bg-bg p-3">{railBody}</div>;
   }
 
   return (
