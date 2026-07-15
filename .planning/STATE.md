@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Picker Intelligence
-current_phase: 41
-current_phase_name: analyzer-desktop-redesign-ranked-table-verdict-hero-live-sidecar
-status: verifying
-stopped_at: Phase 41 verified (human_needed — user visual approval); round-3 TOS layout deployed
-last_updated: "2026-07-14T18:55:05.127Z"
-last_activity: 2026-07-14
-last_activity_desc: Phase 40 complete, transitioned to Phase 41
+current_phase: 42
+current_phase_name: "Design-system consolidation — one reusable component system for every screen: DataTable primitive, single Button system, formalized design tokens, docs/architecture/design-system.md"
+status: executing
+stopped_at: Phase 42 Plan 01 complete (DataTable<T> primitive, TDD, barrel-exported)
+last_updated: "2026-07-15T20:43:41.014Z"
+last_activity: 2026-07-15
+last_activity_desc: Phase 42 Plan 01 complete, DataTable<T> primitive built TDD red→green and barrel-exported
 progress:
-  total_phases: 20
+  total_phases: 21
   completed_phases: 20
-  total_plans: 112
-  completed_plans: 112
-  percent: 100
+  total_plans: 117
+  completed_plans: 113
+  percent: 95
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** For any calendar, answer "how did price and greeks move over the life of this trade?" — collected automatically, queryable by API and Claude Code.
-**Current focus:** Phase 41 — analyzer-desktop-redesign-ranked-table-verdict-hero-live-sidecar
+**Current focus:** Phase 42 — design-system-consolidation-one-reusable-component-system-fo
 
 ## Current Position
 
-Phase: 41 — Analyzer cleanup — ranked candidate table + verdict hero + live sidecar data: kill the 17-card wall and chip-row scorecard; selection-driven detail panels, sticky layout, sane number precision, paste/term-structure polish, mobile parity via analyzer-mobile, and live sidecar-fed marks (explicit user override of Phase 38's snapshot-spot scoring lock)
-Plan: Not started
-Status: Executing Phase 40
-Last activity: 2026-07-14 — Phase 40 complete, transitioned to Phase 41
+Phase: 42 — Design-system consolidation — one reusable component system for every screen: DataTable primitive, single Button system, formalized design tokens, docs/architecture/design-system.md
+Plan: 01 of 5 complete (DataTable<T> primitive)
+Status: Executing Phase 42
+Last activity: 2026-07-15 — Phase 42 Plan 01 complete, DataTable<T> primitive built TDD red→green and barrel-exported
 
 ## Deferred Verification
 
@@ -323,6 +323,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 35.1 P03 | 8min | 2 tasks | 5 files |
 | Phase 35.1 P04 | 16min | 3 tasks | 7 files |
 | Phase 36 P05 | 12min | 2 tasks | 4 files |
+| Phase 42 P01 | 10min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -507,6 +508,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 35.1-04: MobileMarketSection = stat grids not shrunken charts (D-08); mobile-market testid; gex-unavailable plain line; D-12 bleed wrapper dropped entirely
 - [Phase ?]: Phase-36 D-17: removed the Phase-35 responsive reflow arms (order-*/display:contents/-mx-3 bleed/lg:-gated variants) from both desktop trees; guarded RED-first, full suite + typecheck + lint green
 - [Phase ?]: 36-05 C1-C10 chrome-devtools items + C7 1440px before/after screenshots deferred PENDING-ORCHESTRATOR (executor has no browser tools); baseline commit 2e9eb33, after eb3a44f; C11 phone check PENDING-USER
+- [Phase 42]: DataTable owns only thead + one tr per row (+ renderRowDetail/footer slots) — never a hardcoded selected boolean; callers pass rowClassName(row) so CandidateTable's border-tint and Overview's flat highlight stay distinct
 
 ### Pending Todos
 
@@ -563,7 +565,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-11T21:34:17.403Z
+Last session: 2026-07-15T20:40:47.519Z
 Stopped at: Completed 35.1-01-PLAN.md
 Resume file: 
 None
