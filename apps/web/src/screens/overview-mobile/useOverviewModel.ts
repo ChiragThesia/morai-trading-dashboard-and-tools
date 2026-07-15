@@ -340,6 +340,11 @@ export interface OverviewModel {
     readonly dff: number | null;
     readonly curveSlope: number | null;
   };
+  /** Live-when-fresh VIX/VVIX for the hero + market chips (2026-07-15): the streamed
+   *  20s-poll value while liveStatus==="live", else the EOD macro fallback — the same
+   *  honest live-or-EOD seam displaySpot uses (never a silent stale-as-live claim). */
+  readonly displayVix: number | null;
+  readonly displayVvix: number | null;
   readonly regime: GexRegime | null;
   readonly zeroDte: number | null;
   readonly cotLev: number | null;
@@ -618,6 +623,13 @@ export function useOverviewModel(): OverviewModel {
     curveSlope: latestMacroValue(macro, "T10Y2Y"),
   };
 
+  // Live-when-fresh VIX/VVIX (2026-07-15) — the displaySpot seam applied to the
+  // 20s-poll indices stream: live value only while the stream is verifiably live,
+  // EOD macro otherwise.
+  const indicesLive = liveStatus === "live" && liveIndices !== null;
+  const displayVix = indicesLive && liveIndices.vix !== null ? liveIndices.vix : macroValues.vix;
+  const displayVvix = indicesLive && liveIndices.vvix !== null ? liveIndices.vvix : macroValues.vvix;
+
   return {
     positions,
     rows,
@@ -628,6 +640,8 @@ export function useOverviewModel(): OverviewModel {
     gex,
     macro,
     macroValues,
+    displayVix,
+    displayVvix,
     regime,
     zeroDte,
     cotLev,

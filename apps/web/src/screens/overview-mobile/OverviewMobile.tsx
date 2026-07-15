@@ -110,7 +110,7 @@ export function OverviewMobile(): React.ReactElement {
         bookPnl={m.bookPnl}
         hasPositions={m.positions.length > 0}
         spot={m.displaySpot}
-        vix={m.macroValues.vix}
+        vix={m.displayVix}
         regime={m.regime}
         liveStatus={m.liveStatus}
       />
@@ -192,7 +192,7 @@ export function OverviewMobile(): React.ReactElement {
         railGreeks={m.railGreeks}
         zeroDte={m.zeroDte}
         regime={m.regime}
-        vvix={m.macroValues.vvix}
+        vvix={m.displayVvix}
         dff={m.macroValues.dff}
         curveSlope={m.macroValues.curveSlope}
         cotLev={m.cotLev}

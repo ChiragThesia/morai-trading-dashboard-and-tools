@@ -437,6 +437,26 @@ describe("Overview screen", () => {
 
   // ── Existing tests (unchanged assertions) ─────────────────────────────────────
 
+  it("VIX/VVIX pill chips prefer the live indices stream over EOD macro when the stream is live (2026-07-15)", () => {
+    setPositions([]);
+    mockUseLiveStream.mockReturnValue({
+      greeks: new Map(),
+      status: "live",
+      lastTickAt: new Date("2026-07-15T14:00:05.000Z"),
+      isRth: true,
+      hasReceivedFirstTick: true,
+      isReconnecting: false,
+      reconnectNow: vi.fn(),
+      subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
+      liveSpot: 7551.25,
+      liveIndices: { vix: 18.42, vvix: 101.3, vix9d: 17.9, vix3m: 19.6, ts: "2026-07-15T14:00:00.000Z" },
+    });
+    render(<Overview />);
+
+    expect(screen.getByText("18.42")).toBeDefined();
+    expect(screen.getByText("101.3")).toBeDefined();
+  });
+
   it("renders the three-column shell headers (left rail, center hero+positions, GEX rail)", () => {
     setPositions([]);
     render(<Overview />);

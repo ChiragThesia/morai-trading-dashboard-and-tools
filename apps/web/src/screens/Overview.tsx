@@ -448,6 +448,7 @@ function PillHeader({
   bookPnl,
   displaySpot,
   liveStatus,
+  liveIndices,
 }: {
   gex: GexSnapshotEntry | undefined;
   cotLev: number | null;
@@ -457,12 +458,18 @@ function PillHeader({
   displaySpot: number | null;
   /** Gates the chip's live tint + dot marker — never a silent stale-as-live claim (catch #26). */
   liveStatus: LiveStreamStatus;
+  /** Latest VIX-family stream frame (20s sidecar poll) — live-when-fresh source for the
+   *  VIX/VVIX chips (2026-07-15), EOD macro fallback otherwise. */
+  liveIndices: StreamIndicesEvent | null;
 }): React.ReactElement {
   const regime = gex !== undefined ? classifyRegime(gex.netGammaAtSpot) : null;
   // 0DTE net gamma — today's expiry from the byExpiry rollup ($Bn/1% units)
   const zeroDte = gex !== undefined ? zeroDteGex(gex.byExpiry, gex.computedAt) : null;
-  const vix = latestMacroValue(macro, "VIXCLS");
-  const vvix = latestMacroValue(macro, "VVIX");
+  const indicesLive = liveStatus === "live" && liveIndices !== null;
+  const vix =
+    indicesLive && liveIndices.vix !== null ? liveIndices.vix : latestMacroValue(macro, "VIXCLS");
+  const vvix =
+    indicesLive && liveIndices.vvix !== null ? liveIndices.vvix : latestMacroValue(macro, "VVIX");
   const dff = latestMacroValue(macro, "DFF");
   const curveSlope = latestMacroValue(macro, "T10Y2Y");
 
@@ -657,6 +664,7 @@ function OverviewDesktop(): React.ReactElement {
         bookPnl={bookPnl}
         displaySpot={displaySpot}
         liveStatus={liveStatus}
+        liveIndices={liveIndices}
       />
 
       {/* ── Three-column Launchpad shell: MarketRail (left) / hero + positions (center) /

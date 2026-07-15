@@ -732,7 +732,7 @@ describe("PayoffChart — native Tooltip crosshair content (D-10, D-12: typed co
     expect(screen.getByText("7550")).toBeTruthy();
   });
 
-  it("PayoffTooltipContent formats P&L from the payload value exactly, no compact k/M rounding (teal for positive, coral for negative)", () => {
+  it("PayoffTooltipContent formats P&L at the 2-decimal cap, no compact k/M rounding (teal for positive, coral for negative)", () => {
     const { unmount } = render(
       <PayoffTooltipContent
         active
@@ -744,7 +744,7 @@ describe("PayoffChart — native Tooltip crosshair content (D-10, D-12: typed co
         gex={null}
       />,
     );
-    expect(screen.getByText("+$1234.5678")).toBeTruthy();
+    expect(screen.getByText("+$1234.57")).toBeTruthy();
     unmount();
 
     render(

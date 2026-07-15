@@ -4,25 +4,20 @@
  * (35-04). Extracted out of Overview.tsx so PositionCard doesn't import from Overview.tsx —
  * that would create an Overview → PositionCard → Overview runtime cycle.
  *
- * Money helpers show the exact value Schwab returns — no rounding, no fixed-decimal
- * padding (user directive: "all the decimal points ... no rounding, exact numbers").
+ * Decimal policy (2026-07-15 user directive, superseding the 35-04 "exact numbers" ask):
+ * $ values cap at 2 decimals, unitless greeks at 3 — full floats read as noise on the
+ * positions table and net-greek tiles. Trailing zeros are still trimmed.
  */
 import type { BrokerPositionResponse } from "@morai/contracts";
 
-/**
- * Exact decimal representation of a number — every real digit it carries, no
- * rounding, no padding. Rounds at 8dp first (kills float noise like
- * 37.490000000000002) then trims trailing zeros/dot. Native `-` sign passes
- * through untouched (toFixed's own), so callers embedding this in a sentence
- * that supplies its own +/$ literal (Analyzer/MobileScorecard debit/vega) can
- * call it directly on the raw value.
- */
-export function exactAbs(absV: number): string {
-  return absV.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+/** Capped-decimal representation: round at `dp`, trim trailing zeros/dot. */
+export function exactAbs(absV: number, dp: number = 2): string {
+  return absV.toFixed(dp).replace(/0+$/, "").replace(/\.$/, "");
 }
 
+/** Unitless greek scale — 3 decimals so gamma (−0.013) keeps its signal. */
 export function signed(v: number): string {
-  return `${v >= 0 ? "+" : "−"}${exactAbs(Math.abs(v))}`;
+  return `${v >= 0 ? "+" : "−"}${exactAbs(Math.abs(v), 3)}`;
 }
 
 export function signedUsd(v: number): string {

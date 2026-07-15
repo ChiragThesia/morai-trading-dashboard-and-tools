@@ -16,7 +16,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { GexSnapshotEntry } from "@morai/contracts";
+import type { GexSnapshotEntry, StreamIndicesEvent } from "@morai/contracts";
 
 vi.mock("../../hooks/useLiveStream.ts", () => ({
   useLiveStream: vi.fn(() => ({
@@ -123,7 +123,11 @@ function makeGexResult(data: GexSnapshotEntry | undefined): UseQueryResult<GexSn
 // a test can only pass on the real live path (catch #20).
 const LIVE_SPOT = 7402.875;
 
-function setLiveStream(status: "live" | "quiet" | "stalled", liveSpot: number | null): void {
+function setLiveStream(
+  status: "live" | "quiet" | "stalled",
+  liveSpot: number | null,
+  liveIndices: StreamIndicesEvent | null = null,
+): void {
   mockUseLiveStream.mockReturnValue({
     greeks: new Map(),
     status,
@@ -132,11 +136,20 @@ function setLiveStream(status: "live" | "quiet" | "stalled", liveSpot: number | 
     hasReceivedFirstTick: false,
     isReconnecting: false,
     liveSpot,
-    liveIndices: null,
+    liveIndices,
     reconnectNow: vi.fn(),
     subscribeAdHoc: vi.fn().mockResolvedValue(undefined),
   });
 }
+
+// Deliberately distinct from any EOD macro fixture value — only the live path can pass.
+const LIVE_INDICES: StreamIndicesEvent = {
+  vix: 18.42,
+  vvix: 101.3,
+  vix9d: 17.9,
+  vix3m: 19.6,
+  ts: "2026-07-15T14:00:00.000Z",
+};
 
 describe("useOverviewModel — live-aware spot seam (LIVE-04)", () => {
   beforeEach(() => {
@@ -175,6 +188,24 @@ describe("useOverviewModel — live-aware spot seam (LIVE-04)", () => {
 
     expect(result.current.spot).toBe(5800);
     expect(result.current.displaySpot).toBeNull();
+  });
+
+  it("live indices: status 'live' -> displayVix/displayVvix come from the stream (2026-07-15)", () => {
+    setLiveStream("live", LIVE_SPOT, LIVE_INDICES);
+
+    const { result } = renderHook(() => useOverviewModel());
+
+    expect(result.current.displayVix).toBe(18.42);
+    expect(result.current.displayVvix).toBe(101.3);
+  });
+
+  it("quiet stream: displayVix/displayVvix fall back to the EOD macro values (null fixture -> null)", () => {
+    setLiveStream("quiet", null, LIVE_INDICES);
+
+    const { result } = renderHook(() => useOverviewModel());
+
+    expect(result.current.displayVix).toBeNull();
+    expect(result.current.displayVvix).toBeNull();
   });
 
   it("a non-null liveSpot while status is 'quiet' does NOT drive spot/displaySpot (live gate, not just non-null, catch #26)", () => {
