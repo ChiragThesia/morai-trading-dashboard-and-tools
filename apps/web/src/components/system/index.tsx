@@ -3,7 +3,8 @@
  *
  * Atomic structure:
  *   - Atoms      → src/components/ui/* (shadcn: Button, Badge, Card, Input, Tabs, …)
- *   - Molecules  → THIS FILE (Panel, PanelHeading, SectionLabel, Stat, MetricChip)
+ *   - Molecules  → THIS FILE (Panel, PanelHeading, SectionLabel, Stat, MetricChip) plus
+ *                  DataTable (barrel re-exported from ./DataTable.tsx)
  *   - Organisms  → screen-level cards composed in src/screens/*
  *
  * Every visual constant comes from the LOCKED token palette in src/index.css (@theme):
@@ -21,6 +22,8 @@ import { cn } from "@/lib/utils";
 
 export { Button, buttonClass } from "./Button.tsx";
 export type { ButtonProps, ButtonVariant, ButtonTone, ButtonSize } from "./Button.tsx";
+export { DataTable } from "./DataTable.tsx";
+export type { DataTableColumn, DataTableProps } from "./DataTable.tsx";
 export { ChipRail } from "./ChipRail.tsx";
 export { BulletGauge } from "./BulletGauge.tsx";
 export type { BulletGaugeProps, BulletGaugeVariant } from "./BulletGauge.tsx";
