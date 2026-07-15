@@ -5,15 +5,15 @@ milestone_name: Picker Intelligence
 current_phase: 42
 current_phase_name: "Design-system consolidation — one reusable component system for every screen: DataTable primitive, single Button system, formalized design tokens, docs/architecture/design-system.md"
 status: executing
-stopped_at: Phase 42 Plan 01 complete (DataTable<T> primitive, TDD, barrel-exported)
-last_updated: "2026-07-15T20:43:41.014Z"
+stopped_at: Phase 42 Plan 04 complete (Button consolidation — dialog.tsx/Login.tsx/RebuildButton.tsx migrated to system/Button, ui/button.tsx deleted)
+last_updated: "2026-07-15T20:54:30.086Z"
 last_activity: 2026-07-15
-last_activity_desc: Phase 42 Plan 01 complete, DataTable<T> primitive built TDD red→green and barrel-exported
+last_activity_desc: Phase 42 Plan 04 complete — three ui/button call sites migrated to system/Button, Panel-gradient dup swept on Login/RebuildButton, ui/button.tsx deleted
 progress:
   total_phases: 21
   completed_phases: 20
   total_plans: 117
-  completed_plans: 113
+  completed_plans: 114
   percent: 95
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 42 — Design-system consolidation — one reusable component system for every screen: DataTable primitive, single Button system, formalized design tokens, docs/architecture/design-system.md
-Plan: 01 of 5 complete (DataTable<T> primitive)
+Plan: 04 of 5 complete (Button consolidation — dialog/Login/RebuildButton migrated, ui/button.tsx deleted)
 Status: Executing Phase 42
-Last activity: 2026-07-15 — Phase 42 Plan 01 complete, DataTable<T> primitive built TDD red→green and barrel-exported
+Last activity: 2026-07-15 — Phase 42 Plan 04 complete — three ui/button call sites migrated to system/Button, Panel-gradient dup swept on Login/RebuildButton, ui/button.tsx deleted
 
 ## Deferred Verification
 
@@ -324,6 +324,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 35.1 P04 | 16min | 3 tasks | 7 files |
 | Phase 36 P05 | 12min | 2 tasks | 4 files |
 | Phase 42 P01 | 10min | 2 tasks | 3 files |
+| Phase 42 P04 | 25min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -509,6 +510,7 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: Phase-36 D-17: removed the Phase-35 responsive reflow arms (order-*/display:contents/-mx-3 bleed/lg:-gated variants) from both desktop trees; guarded RED-first, full suite + typecheck + lint green
 - [Phase ?]: 36-05 C1-C10 chrome-devtools items + C7 1440px before/after screenshots deferred PENDING-ORCHESTRATOR (executor has no browser tools); baseline commit 2e9eb33, after eb3a44f; C11 phone check PENDING-USER
 - [Phase 42]: DataTable owns only thead + one tr per row (+ renderRowDetail/footer slots) — never a hardcoded selected boolean; callers pass rowClassName(row) so CandidateTable's border-tint and Overview's flat highlight stay distinct
+- [Phase 42]: 42-04: no React.forwardRef added to system/Button — React 19 ref-as-prop model + base-ui useRenderElement source trace + existing DialogTrigger render={<Button/>} precedent (RuleSettingsModal.tsx, zero ref warnings across 35 tests) proves the render-merge works without it; live browser focus-return click-through deferred human_needed (no browser tool available this session)
 
 ### Pending Todos
 
@@ -565,7 +567,7 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-15T20:40:47.519Z
+Last session: 2026-07-15T20:53:19.635Z
 Stopped at: Completed 35.1-01-PLAN.md
 Resume file: 
 None
