@@ -124,6 +124,22 @@ describe("scoreCalendarCandidates", () => {
     expect(scored.score).toBeLessThanOrEqual(100);
   });
 
+  it("event penalty is graded (0.25/event, ×2 in peak theta) — never saturates on a single event (2026-07-15)", () => {
+    const eventFraction = (events: ReadonlyArray<string>, inPeakTheta: boolean): number => {
+      const [scored] = scoreCalendarCandidates(
+        [{ ...normalCandidate(), frontEvents: events, eventInPeakTheta: inPeakTheta }],
+        GEX_CONTEXT,
+        { r: R, q: Q },
+      );
+      const entry = scored?.breakdown.find((b) => b.criterion === "eventAdjustment");
+      return entry?.contribution ?? Number.NaN;
+    };
+    expect(eventFraction(["FOMC"], false)).toBeCloseTo(75, 10); // 1 − 0.25
+    expect(eventFraction(["FOMC"], true)).toBeCloseTo(50, 10); // doubled in peak theta
+    expect(eventFraction(["FOMC", "CPI", "NFP"], false)).toBeCloseTo(25, 10); // 1 − 0.75
+    expect(eventFraction(["FOMC", "CPI", "NFP"], true)).toBe(0); // doubled → floor 0
+  });
+
   it("the breakdown criterion set is always a subset of the closed enum (REFUTED criteria structurally excluded)", () => {
     const [scored] = scoreCalendarCandidates([normalCandidate()], null, { r: R, q: Q });
     expect(scored).toBeDefined();

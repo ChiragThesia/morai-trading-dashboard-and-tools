@@ -34,6 +34,9 @@ import {
   DEBIT_IDEAL_MIN,
   DEBIT_IDEAL_MAX,
   DEBIT_CHEAP_CREDIT,
+  EVENT_PENALTY,
+  BE_VS_EM_TARGET_RATIO,
+  THETA_VEGA_FULL,
 } from "./rules.ts";
 import type { GexContextForPicker } from "../application/ports.ts";
 
@@ -189,9 +192,10 @@ describe("thetaVegaValue (experimental — θ/vega carry ratio)", () => {
     expect(row?.status).toBe("active");
   });
 
-  it("thetaVegaFraction: linear to full credit at 0.25; 0 on zero vega", () => {
-    expect(thetaVegaFraction(2.5, 10)).toBe(1); // ratio 0.25
-    expect(thetaVegaFraction(2, 10)).toBeCloseTo(0.8, 10); // practitioner floor 0.20 → 80%
+  it("thetaVegaFraction: linear to full credit at 0.20 (tastytrade floor, aligned 2026-07-15); 0 on zero vega", () => {
+    expect(thetaVegaFraction(2, 10)).toBe(1); // ratio 0.20 — full credit AT the practitioner floor
+    expect(thetaVegaFraction(1, 10)).toBeCloseTo(0.5, 10); // ratio 0.10 → 50%
+    expect(thetaVegaFraction(2.5, 10)).toBe(1); // above the floor stays clamped at 1
     expect(thetaVegaFraction(1, 0)).toBe(0);
   });
 
@@ -215,6 +219,22 @@ describe("deltaNeutralFraction (Δ-neutrality score — user-locked 2026-07-08)"
     expect(WEIGHT_FWD_EDGE).toBe(25);
     expect(WEIGHT_SLOPE).toBe(10);
     expect(WEIGHT_DELTA_NEUTRAL).toBe(15);
+  });
+});
+
+describe("2026-07-15 recalibration (verified vs practitioner sources)", () => {
+  it("event penalty is graded at 0.25/event — 0.5 saturated to a dead criterion (any 20-35 DTE window spans ≥2 macro events)", () => {
+    expect(EVENT_PENALTY["FOMC"]).toBe(0.25);
+    expect(EVENT_PENALTY["CPI"]).toBe(0.25);
+    expect(EVENT_PENALTY["NFP"]).toBe(0.25);
+  });
+
+  it("beVsEm target ratio reverted to 1.5× — live ATM calendars cluster ~1.1×, 2.0 was unreachable", () => {
+    expect(BE_VS_EM_TARGET_RATIO).toBe(1.5);
+  });
+
+  it("thetaVega full credit sits AT the tastytrade 0.20 floor (vega ≤ 5× theta)", () => {
+    expect(THETA_VEGA_FULL).toBe(0.2);
   });
 });
 

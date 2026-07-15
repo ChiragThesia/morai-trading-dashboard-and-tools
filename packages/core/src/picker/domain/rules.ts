@@ -33,9 +33,10 @@ export const WEIGHT_BE_VS_EM = 15;
 export const WEIGHT_DELTA_NEUTRAL = 15;
 /** |net Δ| ($/pt per spread) at which the deltaNeutral fraction reaches 0 (tightened /10→/5, 2026-07-09). */
 export const DELTA_NEUTRAL_MAX = 5;
-/** θ/vega promoted to scored (2026-07-09 user lock): full credit at ≥ this ratio. */
+/** θ/vega promoted to scored (2026-07-09 user lock): full credit at ≥ this ratio.
+ * Aligned 0.25→0.20 (2026-07-15): tastytrade's own floor ("vega no more than 5× theta"). */
 export const WEIGHT_THETA_VEGA = 10;
-export const THETA_VEGA_FULL = 0.25;
+export const THETA_VEGA_FULL = 0.2;
 /** VRP promoted to scored: full credit when front IV exceeds RV20 by ≥ this (3 vol pts). */
 export const WEIGHT_VRP = 5;
 export const VRP_FULL = 0.03;
@@ -54,7 +55,7 @@ export const SLOPE_RICH_FULL = -0.25;
 export const SLOPE_CRISIS_FLOOR = -1.5;
 export const FWD_EDGE_OFFSET = 0.02;
 export const FWD_EDGE_RANGE = 0.04;
-export const BE_VS_EM_TARGET_RATIO = 2.0; // raised 1.5→2.0 (2026-07-09): wider profit zone keeps earning credit
+export const BE_VS_EM_TARGET_RATIO = 1.5; // reverted 2.0→1.5 (2026-07-15): live ATM calendars cluster ~1.1×, 2.0 unreachable
 
 // ─── gexFit tunables (near-term placement, spot-bracketed walls) ────────────────
 /** Credit when spot sits ABOVE the flip (dampen regime — calendars want suppressed realized vol). */
@@ -73,10 +74,13 @@ export const LIQUIDITY_MAX_SPREAD_FRAC = 0.10;
 export const LIQUIDITY_MIN_OI = 100;
 
 // ─── Event penalty weights (front leg only — D-11) ──────────────────────────────
+// Softened 0.5→0.25 (2026-07-15): any 20-35 DTE front window spans ≥2 of FOMC/CPI/NFP,
+// so 0.5/event saturated the criterion to a permanent 0 for the real universe. Graded
+// keeps it discriminating: 1 event −25%, 3 events −75%, peak-theta doubling still floors.
 export const EVENT_PENALTY: Readonly<Record<string, number>> = {
-  FOMC: 0.5,
-  CPI: 0.5,
-  NFP: 0.5,
+  FOMC: 0.25,
+  CPI: 0.25,
+  NFP: 0.25,
 };
 
 function clamp01(x: number): number {
@@ -319,8 +323,8 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     weight: WEIGHT_EVENT,
     status: "active",
     rationale:
-      "Binary macro catalysts (FOMC/CPI/NFP) inside the short leg spike gamma risk; an event colliding with the peak-theta window (final 5 days) doubles its penalty — the forced pre-event exit forfeits the richest decay days.",
-    source: "Practitioner consensus; D-11; peak-theta collision 2026-07-09",
+      "Binary macro catalysts (FOMC/CPI/NFP) inside the short leg spike gamma risk — graded −25% each (a month-long front window near-always spans 2+); an event colliding with the peak-theta window (final 5 days) doubles its penalty — the forced pre-event exit forfeits the richest decay days.",
+    source: "Practitioner consensus; D-11; peak-theta collision 2026-07-09; graded 2026-07-15",
   },
   {
     id: "beVsEm",
@@ -329,7 +333,7 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     weight: WEIGHT_BE_VS_EM,
     status: "active",
     rationale:
-      "Real bisection breakevens vs ±1σ expected move — profit-zone coverage; credit up to 2.0× (user: moves amplify, wider is better).",
+      "Real bisection breakevens vs ±1σ expected move — profit-zone coverage; full credit at 1.5× (reverted from 2.0×, 2026-07-15: live ATM calendars cluster ~1.1×).",
     source: "D-09 (replaces the mockup's fixed-strike proxy)",
   },
   {
@@ -389,7 +393,7 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
     weight: WEIGHT_THETA_VEGA,
     status: "active",
     rationale:
-      "Carry per unit of vol risk; full credit at ratio ≥ 0.25 (practitioner floor 0.20 = 80% credit). Bounds vol-crush damage per theta dollar.",
+      "Carry per unit of vol risk; full credit at ratio ≥ 0.20 — the tastytrade floor itself (vega no more than 5× theta; aligned 2026-07-15). Bounds vol-crush damage per theta dollar.",
     source: "tastytrade benchmark via OptionsTradingIQ; promoted 2026-07-09 (user lock, PICK-04 re-arbitrates)",
   },
 ];
