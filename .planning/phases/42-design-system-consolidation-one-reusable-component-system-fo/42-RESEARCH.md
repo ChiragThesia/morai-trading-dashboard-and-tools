@@ -514,7 +514,7 @@ internal:
 becoming locked (A1 already has an explicit UI-SPEC-mandated smoke-test gate; A2 is a
 recommendation the plan should state explicitly, not re-open).
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `system/Button` need `React.forwardRef` for the base-ui dialog `render` prop-merge
    to preserve focus-trap/return-focus behavior?**

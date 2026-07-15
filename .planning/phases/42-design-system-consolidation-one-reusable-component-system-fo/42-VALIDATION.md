@@ -1,8 +1,8 @@
 ---
 phase: 42
 slug: design-system-consolidation-one-reusable-component-system-fo
-status: draft
-nyquist_compliant: false
+status: ready
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-15
 ---
@@ -38,7 +38,11 @@ created: 2026-07-15
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| (filled by planner — DataTable sort/aria-sort/selection logic must have red-first unit tests; migrations verified by existing Analyzer/Overview suites staying green; Button swap verified by Login/RebuildButton/dialog suites + manual dialog smoke test) | | | | | | | | | |
+| 01-T1/T2 | 42-01 | 1 | DataTable primitive | — | n/a (client UI) | TDD unit | `bun run vitest run apps/web/src/components/system/DataTable.test.tsx` | planner | ready |
+| 02-T1 | 42-02 | 2 | CandidateTable wrapper | — | n/a | regression | `bun run vitest run apps/web/src/screens/Analyzer.test.tsx apps/web/src/screens/analyzer-mobile apps/web/src/components/picker` | existing | ready |
+| 03-T1 | 42-03 | 2 | PositionsTable migration | — | n/a | regression | `bun run vitest run apps/web/src/screens/Overview.test.tsx` | existing | ready |
+| 04-T1..T3 | 42-04 | 1 | Button consolidation + tokens | — | n/a | regression + smoke | `bun run vitest run apps/web` + manual dialog focus smoke | existing | ready |
+| 05-T1/T2 | 42-05 | 3 | docs + phase gate | — | n/a | suite + visual | `bun run test` + tsc baseline + dual-viewport parity | existing | ready |
 
 ---
 
