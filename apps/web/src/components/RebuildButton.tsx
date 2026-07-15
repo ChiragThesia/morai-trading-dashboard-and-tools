@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/system/index.tsx";
 import { useRebuildJournal } from "../hooks/useRebuildJournal.ts";
 
 /**
@@ -47,16 +47,10 @@ export function RebuildButton({ calendarId }: RebuildButtonProps): React.ReactEl
   return (
     <>
       <Button
-        variant="outline"
+        variant="destructive"
         size="sm"
         onClick={() => {
           setOpen(true);
-        }}
-        style={{
-          borderColor: "#3e1f23",
-          color: "#ef5350",
-          fontSize: 10,
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
         }}
         aria-label={`Rebuild journal for ${calendarId}`}
       >
@@ -66,57 +60,24 @@ export function RebuildButton({ calendarId }: RebuildButtonProps): React.ReactEl
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           showCloseButton={false}
-          style={{
-            background: "linear-gradient(180deg, #0f1521, #0c111a)",
-            border: "1px solid #1b2433",
-            maxWidth: 400,
-          }}
+          className="max-w-[400px] bg-gradient-to-b from-panel to-panel2 ring-1 ring-line"
         >
           <DialogHeader>
-            <DialogTitle
-              style={{
-                fontFamily: "'Space Grotesk', system-ui, sans-serif",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "#d6dbe4",
-              }}
-            >
+            <DialogTitle className="font-display text-sm font-bold text-txt">
               Rebuild journal for &ldquo;{calendarId}&rdquo;?
             </DialogTitle>
-            <DialogDescription
-              style={{
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                fontSize: 11,
-                color: "#7b8696",
-              }}
-            >
+            <DialogDescription className="font-mono text-[11px] text-muted-foreground">
               This overwrites all snapshot history.
             </DialogDescription>
           </DialogHeader>
 
           <DialogFooter style={{ gap: 8 }}>
-            <DialogClose
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}
-                />
-              }
-            >
-              Cancel
-            </DialogClose>
+            <DialogClose render={<Button variant="secondary" size="sm" />}>Cancel</DialogClose>
             <Button
               variant="destructive"
               size="sm"
               disabled={rebuild.isPending}
               onClick={handleRebuild}
-              style={{
-                background: "#ef5350",
-                color: "#0a0e14",
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                fontSize: 11,
-              }}
             >
               {rebuild.isPending ? "Rebuilding…" : "Rebuild"}
             </Button>
