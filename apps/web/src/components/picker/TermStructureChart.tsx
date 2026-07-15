@@ -36,19 +36,19 @@ import type { PickerCandidate, PickerEvent, TermStructurePoint } from "@morai/co
 const W = 760;
 const H = 320;
 
-const DTE_MIN = 0;
-const DTE_MAX = 82;
-const IV_MIN = 0.08;
-const IV_MAX = 0.155;
+export const DTE_MIN = 0;
+export const DTE_MAX = 82;
+export const IV_MIN = 0.08;
+export const IV_MAX = 0.155;
 
-const CORAL = "#ef5350";
-const TEAL = "#26a69a";
-const BLUE = "#5b9cf6";
-const AMBER = "#f0b429";
-const GRID_LINE = "#222839";
-const TERM_LINE = "#9aa3b8";
-const AXIS_LABEL = "#67708a";
-const MONO = "JetBrains Mono, monospace";
+export const CORAL = "#ef5350";
+export const TEAL = "#26a69a";
+export const BLUE = "#5b9cf6";
+export const AMBER = "#f0b429";
+export const GRID_LINE = "#222839";
+export const TERM_LINE = "#9aa3b8";
+export const AXIS_LABEL = "#67708a";
+export const MONO = "JetBrains Mono, monospace";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
@@ -76,7 +76,7 @@ const EVENT_COPY: Readonly<Record<string, { what: string; why: string }>> = {
 };
 
 /** Parse an ISO 8601 date (YYYY-MM-DD) into a UTC-midnight epoch-ms value. */
-function isoDateToUtcMs(iso: string): number {
+export function isoDateToUtcMs(iso: string): number {
   const [y, m, d] = iso.split("-").map(Number);
   return Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1);
 }
@@ -86,7 +86,7 @@ function isoDateToUtcMs(iso: string): number {
  * Events carry absolute ISO dates (D-01) while the term-structure points and leg dots are
  * DTE-relative, so `referenceMs` (the snapshot's asOf) is what puts events on the same x-axis.
  */
-function eventDte(iso: string, referenceMs: number): number {
+export function eventDte(iso: string, referenceMs: number): number {
   return Math.round((isoDateToUtcMs(iso) - referenceMs) / 86_400_000);
 }
 
@@ -103,7 +103,7 @@ interface GuardTagProps {
  * genuinely non-standard mark on this chart (D-08) — it reads the chart's own axis scales via
  * Recharts 3.x hooks instead of hand-rolling pixel math.
  */
-function GuardTag({ frontDte, frontIv, backDte, backIv }: GuardTagProps): React.ReactElement | null {
+export function GuardTag({ frontDte, frontIv, backDte, backIv }: GuardTagProps): React.ReactElement | null {
   const xScale = useXAxisScale();
   const yScale = useYAxisScale();
   const plotArea = usePlotArea();
@@ -136,6 +136,84 @@ function GuardTag({ frontDte, frontIv, backDte, backIv }: GuardTagProps): React.
   );
 }
 
+export interface EventChipsRowProps {
+  readonly events: ReadonlyArray<PickerEvent>;
+  /** ISO 8601 snapshot reference date the DTE fields are relative to (WR-03). */
+  readonly asOf: string;
+  readonly frontDte: number;
+  readonly backDte: number;
+}
+
+/**
+ * EventChipsRow — the dated event-chip legend with WHAT/WHY hover tooltips, extracted from
+ * TermStructureChart (2026-07-15) so the desktop Analyzer can render it under the payoff
+ * chart while the mobile tree keeps it inside the full term-structure panel. DOM unchanged.
+ */
+export function EventChipsRow({ events, asOf, frontDte, backDte }: EventChipsRowProps): React.ReactElement {
+  const referenceMs = isoDateToUtcMs(asOf);
+  const legendEvents = events
+    .map((ev) => {
+      const [, moStr, dayStr] = ev.date.split("-");
+      const dte = eventDte(ev.date, referenceMs);
+      const leg: "front" | "back" | "later" = dte <= frontDte ? "front" : dte <= backDte ? "back" : "later";
+      return {
+        key: `${ev.date}-${ev.name}`,
+        name: ev.name,
+        label: `${MON[(Number(moStr) || 1) - 1]} ${Number(dayStr) || 1}`,
+        dte,
+        leg,
+      };
+    })
+    .filter((e) => e.dte >= DTE_MIN && e.dte <= DTE_MAX)
+    .sort((a, b) => a.dte - b.dte);
+
+  return (
+    <TooltipProvider>
+      <div className="flex flex-wrap items-center gap-1.5" data-testid="term-structure-legend">
+        {legendEvents.map((e) => {
+          const color = e.leg === "front" ? CORAL : e.leg === "back" ? TEAL : AXIS_LABEL;
+          const tag = e.leg === "front" ? " ◂f" : e.leg === "back" ? " ◂b" : "";
+          const copy = EVENT_COPY[e.name];
+          const legNote =
+            e.leg === "front"
+              ? "Inside the SHORT front leg — max-loss exposure."
+              : e.leg === "back"
+                ? "Inside the LONG back leg only — vega event for the leg you own."
+                : "After both legs — context only.";
+          return (
+            <Tooltip key={e.key}>
+              <TooltipTrigger
+                data-testid={`term-structure-chip-${e.key}`}
+                aria-label={`${e.name} event details`}
+                style={{ background: "transparent", border: "none", padding: 0, cursor: "default" }}
+              >
+                <span
+                  className="rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px]"
+                  style={{
+                    color,
+                    borderColor: `${color}66`,
+                    background: `${color}12`,
+                    opacity: e.leg === "later" ? 0.6 : 1,
+                  }}
+                >
+                  {`${e.label} ${e.name}${tag} · ${e.dte}d`}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex max-w-[16rem] flex-col gap-1 font-mono">
+                  <span className="text-[11px] text-txt">{copy?.what ?? `${e.name} — scheduled economic release.`}</span>
+                  <span className="text-[11px] text-dim">{copy?.why ?? "Scheduled event — IV into it is event premium."}</span>
+                  <span className="text-[10px] text-dim/70">{`${e.label} · ${e.dte}d out · ${legNote}`}</span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    </TooltipProvider>
+  );
+}
+
 export interface TermStructureChartProps {
   readonly termStructure: ReadonlyArray<TermStructurePoint>;
   readonly events: ReadonlyArray<PickerEvent>;
@@ -156,25 +234,6 @@ export function TermStructureChart({
   const backDte = candidate.backLeg.dte;
   const frontIv = candidate.frontLeg.iv;
   const backIv = candidate.backLeg.iv;
-
-  // Dated event legend below the chart — each scheduled event with its calendar date, tagged by
-  // which leg spans it (classified by DTE: front ≤ front expiry, back ≤ back expiry, else later).
-  // Fixture data today; a live economic calendar arrives with the Phase-19 picker engine.
-  const legendEvents = events
-    .map((ev) => {
-      const [, moStr, dayStr] = ev.date.split("-");
-      const dte = eventDte(ev.date, referenceMs);
-      const leg: "front" | "back" | "later" = dte <= frontDte ? "front" : dte <= backDte ? "back" : "later";
-      return {
-        key: `${ev.date}-${ev.name}`,
-        name: ev.name,
-        label: `${MON[(Number(moStr) || 1) - 1]} ${Number(dayStr) || 1}`,
-        dte,
-        leg,
-      };
-    })
-    .filter((e) => e.dte >= DTE_MIN && e.dte <= DTE_MAX)
-    .sort((a, b) => a.dte - b.dte);
 
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-1.5">
@@ -279,49 +338,7 @@ export function TermStructureChart({
           />
         </LineChart>
       </ChartContainer>
-      <TooltipProvider>
-        <div className="flex flex-wrap items-center gap-1.5" data-testid="term-structure-legend">
-          {legendEvents.map((e) => {
-            const color = e.leg === "front" ? CORAL : e.leg === "back" ? TEAL : AXIS_LABEL;
-            const tag = e.leg === "front" ? " ◂f" : e.leg === "back" ? " ◂b" : "";
-            const copy = EVENT_COPY[e.name];
-            const legNote =
-              e.leg === "front"
-                ? "Inside the SHORT front leg — max-loss exposure."
-                : e.leg === "back"
-                  ? "Inside the LONG back leg only — vega event for the leg you own."
-                  : "After both legs — context only.";
-            return (
-              <Tooltip key={e.key}>
-                <TooltipTrigger
-                  data-testid={`term-structure-chip-${e.key}`}
-                  aria-label={`${e.name} event details`}
-                  style={{ background: "transparent", border: "none", padding: 0, cursor: "default" }}
-                >
-                  <span
-                    className="rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px]"
-                    style={{
-                      color,
-                      borderColor: `${color}66`,
-                      background: `${color}12`,
-                      opacity: e.leg === "later" ? 0.6 : 1,
-                    }}
-                  >
-                    {`${e.label} ${e.name}${tag} · ${e.dte}d`}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="flex max-w-[16rem] flex-col gap-1 font-mono">
-                    <span className="text-[11px] text-txt">{copy?.what ?? `${e.name} — scheduled economic release.`}</span>
-                    <span className="text-[11px] text-dim">{copy?.why ?? "Scheduled event — IV into it is event premium."}</span>
-                    <span className="text-[10px] text-dim/70">{`${e.label} · ${e.dte}d out · ${legNote}`}</span>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            );
-          })}
-        </div>
-      </TooltipProvider>
+      <EventChipsRow events={events} asOf={asOf} frontDte={frontDte} backDte={backDte} />
       <p className="m-0 font-mono text-[10px] leading-[1.5] text-dim">
         ATM implied vol by expiry. <span style={{ color: CORAL }}>●</span> short front leg ·{" "}
         <span style={{ color: TEAL }}>●</span> long back leg · <span style={{ color: CORAL }}>◂f</span>/

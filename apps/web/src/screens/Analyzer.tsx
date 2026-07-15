@@ -27,7 +27,8 @@ import type { PickerCandidate, PickerGexContext, RuleSetEntry, PickerSizing } fr
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
-import { TermStructureChart } from "../components/picker/TermStructureChart.tsx";
+import { EventChipsRow } from "../components/picker/TermStructureChart.tsx";
+import { TermStructureInset } from "../components/picker/TermStructureInset.tsx";
 import { EntryExitPlan } from "../components/picker/EntryExitPlan.tsx";
 import { formatAsOf } from "../components/picker/CandidateCard.tsx";
 import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
@@ -210,7 +211,7 @@ export function CandidateRail({
           onSelect={onSelect}
           onToggleCombine={onToggleCombine}
           onRemovePasted={onRemovePasted}
-          wrapperClassName="max-h-[228px] overflow-y-auto"
+          wrapperClassName="max-h-[160px] overflow-y-auto"
         />
       )}
     </Panel>
@@ -291,40 +292,43 @@ function VerdictHero({
       : null;
   const footer = [calibrating, drops, `${asOf.label} · ${source}`].filter((p): p is string => p !== null).join("   ");
 
+  // Single-line hero (no-scroll layout, 2026-07-15): headline + the three factor groups
+  // inline on one flex-wrap row, footer provenance as a slim second line. Same testids and
+  // copy as the retired 3-column grid — this is a density re-layout, not a scoring change.
   return (
-    <div data-testid="verdict-hero">
-      <div className="flex flex-wrap items-baseline gap-2" data-testid="verdict-headline">
-        <span className={cn("font-display text-[16px] font-semibold", verdict.cls)} data-testid="verdict-word">
-          {verdict.icon} {verdict.word}
-        </span>
-        <span className="font-mono text-[13px] font-semibold tabular-nums text-txt" data-testid="verdict-score">
-          {`score ${Math.round(candidate.score)}/100`}
-        </span>
-        <span
-          className={cn(
-            "font-mono text-[13px] font-semibold tabular-nums",
-            candidate.theta >= 0 ? "text-up" : "text-down",
-          )}
-          data-testid="verdict-theta"
-        >
-          {`Θ ${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}
-        </span>
-      </div>
-      {marketSession === "after-hours" && (
-        <span
-          data-testid="session-badge"
-          className="mt-1 inline-block rounded-sm bg-amber/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-amber"
-        >
-          {"SESSION · AH — indicative"}
-        </span>
-      )}
-      <div className="mt-2 grid grid-cols-3 gap-4" data-testid="verdict-groups">
-        {GROUP_ORDER.map((group) => (
-          <div key={group} data-testid={`verdict-group-${group}`}>
-            <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
-              {group}
-            </span>
-            <div className="mt-1 flex flex-col gap-y-1">
+    <div data-testid="verdict-hero" className="flex flex-col gap-0.5">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <div className="flex items-baseline gap-2" data-testid="verdict-headline">
+          <span className={cn("font-display text-[16px] font-semibold", verdict.cls)} data-testid="verdict-word">
+            {verdict.icon} {verdict.word}
+          </span>
+          <span className="font-mono text-[13px] font-semibold tabular-nums text-txt" data-testid="verdict-score">
+            {`score ${Math.round(candidate.score)}/100`}
+          </span>
+          <span
+            className={cn(
+              "font-mono text-[13px] font-semibold tabular-nums",
+              candidate.theta >= 0 ? "text-up" : "text-down",
+            )}
+            data-testid="verdict-theta"
+          >
+            {`Θ ${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}
+          </span>
+        </div>
+        {marketSession === "after-hours" && (
+          <span
+            data-testid="session-badge"
+            className="inline-block rounded-sm bg-amber/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-amber"
+          >
+            {"SESSION · AH — indicative"}
+          </span>
+        )}
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1" data-testid="verdict-groups">
+          {GROUP_ORDER.map((group) => (
+            <div key={group} data-testid={`verdict-group-${group}`} className="flex items-baseline gap-x-2.5">
+              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.08em] text-dim">
+                {group}
+              </span>
               {scoreItems
                 .filter((item) => GROUP_OF[item.key] === group)
                 .map((item) => {
@@ -333,32 +337,35 @@ function VerdictHero({
                   const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
                   const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(entry.contribution);
                   return (
-                    <div
+                    <span
                       key={item.key}
                       data-testid={`checklist-${item.key}`}
-                      className="flex items-center justify-between font-mono text-[11px]"
+                      className="flex items-baseline gap-1 font-mono text-[10px]"
                     >
                       <span className="text-dim">{item.label}</span>
                       <span className={st.cls}>
                         {st.icon} {guard ? "n/a" : `${Math.round(entry.contribution)}%`}
                       </span>
-                    </div>
+                    </span>
                   );
                 })}
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-      <p className="mt-2 font-mono text-[10px] text-dim" data-testid="verdict-hero-footer">
+      <p className="m-0 font-mono text-[9px] text-dim" data-testid="verdict-hero-footer">
         {footer}
       </p>
     </div>
   );
 }
 
-// ─── Right column: why-panel / term-structure / entry-exit-plan (ANLZ-03, D-01b) ──
+// ─── WHY / ENTRY-EXIT panels (ANLZ-03, D-01b) ──────────────────────────────────
+//
+// No-scroll layout (2026-07-15): the two panels are separate grid COLUMNS beside the chart
+// (previously a stacked rail whose height could out-grow the chart and stretch the row).
 
-export interface RightColumnProps {
+interface SidePanelProps {
   readonly candidate: PickerCandidate | null;
   readonly gex: PickerGexContext | null;
   /** VIX-tiered sizing recommendation from the snapshot (28-06, PLAY-03) — threaded straight
@@ -366,33 +373,31 @@ export interface RightColumnProps {
   readonly sizing: PickerSizing | null;
 }
 
-/**
- * RightColumn — the condensed "Why this calendar" / "Entry / exit plan" stack for the
- * currently-selected candidate, rendered as the LEFT rail beside the payoff chart (TOS-style
- * layout, user-locked 2026-07-14); reads the live snapshot's GEX context (Phase 19: never the
- * frozen fixture).
- */
-function RightColumn({ candidate, gex, sizing }: RightColumnProps): React.ReactElement {
+function WhyColumn({ candidate, gex }: Omit<SidePanelProps, "sizing">): React.ReactElement {
   const notScored = candidate !== null && candidate.breakdown.length === 0;
   return (
-    <div className="flex flex-col gap-3">
-      <Panel>
-        <PanelHeading title="Why this calendar" />
-        {notScored ? (
-          <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
-        ) : (
-          candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />
-        )}
-      </Panel>
-      <Panel>
-        <PanelHeading title="Entry / exit plan" />
-        {notScored ? (
-          <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
-        ) : (
-          candidate !== null && <EntryExitPlan candidate={candidate} sizing={sizing} />
-        )}
-      </Panel>
-    </div>
+    <Panel>
+      <PanelHeading title="Why this calendar" />
+      {notScored ? (
+        <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+      ) : (
+        candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />
+      )}
+    </Panel>
+  );
+}
+
+function ExitColumn({ candidate, sizing }: Omit<SidePanelProps, "gex">): React.ReactElement {
+  const notScored = candidate !== null && candidate.breakdown.length === 0;
+  return (
+    <Panel>
+      <PanelHeading title="Entry / exit plan" />
+      {notScored ? (
+        <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+      ) : (
+        candidate !== null && <EntryExitPlan candidate={candidate} sizing={sizing} />
+      )}
+    </Panel>
   );
 }
 
@@ -578,15 +583,20 @@ function AnalyzerDesktop(): React.ReactElement {
           source={snapshot?.source ?? "schwab"}
         />
       </div>
-      {/* TOS-style layout (user-locked 2026-07-14): condensed WHY/ENTRY rail left of the
-          chart, full-width greeks table below it, term structure last. ≥1024px only (D-17). */}
+      {/* No-scroll layout (2026-07-15, evolves the 2026-07-14 TOS layout): WHY and ENTRY as
+          two slim columns left of the chart — the rail can never out-grow the chart row —
+          then the full-width greeks table. Term structure renders as a chart inset, not a
+          page section. ≥1024px only (D-17). */}
       <div
         data-testid="analyzer-inner-grid"
-        className="grid grid-cols-[minmax(280px,330px)_minmax(0,1fr)] gap-4"
+        className="grid grid-cols-[minmax(230px,270px)_minmax(230px,270px)_minmax(0,1fr)] gap-4"
       >
-      {/* ── Left rail: condensed WHY / ENTRY-EXIT ── */}
+      {/* ── WHY / ENTRY-EXIT columns ── */}
       <div data-testid="analyzer-right-wrapper">
-        <RightColumn candidate={selected} gex={snapshot?.gex ?? null} sizing={snapshot?.sizing ?? null} />
+        <WhyColumn candidate={selected} gex={snapshot?.gex ?? null} />
+      </div>
+      <div data-testid="analyzer-exit-wrapper">
+        <ExitColumn candidate={selected} sizing={snapshot?.sizing ?? null} />
       </div>
 
       {/* ── Chart column ── */}
@@ -623,19 +633,30 @@ function AnalyzerDesktop(): React.ReactElement {
             )}
           </div>
           {selected !== null && (
-            <p className="mb-1.5 font-mono text-[10px] text-dim">
-              <span className="text-violet" data-testid="risk-profile-selected-name">
-                {selected.name}
-              </span>
-              {selected.breakdown.length === 0
-                ? ` · debit $${Math.round(selected.debit)}`
-                : ` · debit $${Math.round(selected.debit)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(2)}`}
-              {bookCount > 1 && (
-                <span className="ml-2 text-amber" data-testid="combined-book-summary">
-                  {`+ ${bookCount - 1} more → combined debit $${Math.round(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(2)}`}
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <p className="m-0 font-mono text-[10px] text-dim">
+                <span className="text-violet" data-testid="risk-profile-selected-name">
+                  {selected.name}
                 </span>
+                {selected.breakdown.length === 0
+                  ? ` · debit $${Math.round(selected.debit)}`
+                  : ` · debit $${Math.round(selected.debit)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(2)}`}
+                {bookCount > 1 && (
+                  <span className="ml-2 text-amber" data-testid="combined-book-summary">
+                    {`+ ${bookCount - 1} more → combined debit $${Math.round(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(2)}`}
+                  </span>
+                )}
+              </p>
+              {/* Event chips (from the retired term-structure panel) — hover for WHAT/WHY. */}
+              {snapshot !== null && (
+                <EventChipsRow
+                  events={snapshot.events}
+                  asOf={snapshot.asOf}
+                  frontDte={selected.frontLeg.dte}
+                  backDte={selected.backLeg.dte}
+                />
               )}
-            </p>
+            </div>
           )}
           {selected !== null && selectedPosition !== null && scenarioResult !== null && (
             <>
@@ -649,27 +670,43 @@ function AnalyzerDesktop(): React.ReactElement {
                 toggles={toggles}
                 onToggle={handleToggle}
               />
-              <PayoffChart
-                todayCurve={scenarioResult.payoffCurve}
-                fanCurves={[]}
-                expirationCurve={scenarioResult.expirationCurve}
-                rollCurve={null}
-                gex={{
-                  callWall: snapshot?.gex.callWall ?? null,
-                  putWall: snapshot?.gex.putWall ?? null,
-                  flip: snapshot?.gex.flip ?? null,
-                }}
-                domain={payoffDomain}
-                spot={spot}
-                toggles={toggles}
-                fitY={false}
-                onFitYConsumed={noop}
-                positionSetSignature={positionSetSignature}
-                baseExpirationCurve={scenarioResult.expirationCurve}
-                todayCurveColor={TODAY_CURVE_COLOR}
-                expirationCurveColor={EXPIRATION_CURVE_COLOR}
-                expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
-              />
+              <div className="relative">
+                <PayoffChart
+                  todayCurve={scenarioResult.payoffCurve}
+                  fanCurves={[]}
+                  expirationCurve={scenarioResult.expirationCurve}
+                  rollCurve={null}
+                  gex={{
+                    callWall: snapshot?.gex.callWall ?? null,
+                    putWall: snapshot?.gex.putWall ?? null,
+                    flip: snapshot?.gex.flip ?? null,
+                  }}
+                  domain={payoffDomain}
+                  spot={spot}
+                  toggles={toggles}
+                  fitY={false}
+                  onFitYConsumed={noop}
+                  positionSetSignature={positionSetSignature}
+                  baseExpirationCurve={scenarioResult.expirationCurve}
+                  todayCurveColor={TODAY_CURVE_COLOR}
+                  expirationCurveColor={EXPIRATION_CURVE_COLOR}
+                  expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
+                  aspectRatio={2.5}
+                />
+                {/* Term-structure inset (no-scroll layout): overlaid on the payoff canvas's
+                    quiet top-left corner; pointer-events-none keeps the payoff crosshair
+                    live underneath. */}
+                {snapshot !== null && (
+                  <div className="pointer-events-none absolute left-12 top-1 z-10">
+                    <TermStructureInset
+                      termStructure={snapshot.termStructure}
+                      events={snapshot.events}
+                      asOf={snapshot.asOf}
+                      candidate={selected}
+                    />
+                  </div>
+                )}
+              </div>
             </>
           )}
         </Panel>
@@ -681,19 +718,6 @@ function AnalyzerDesktop(): React.ReactElement {
       <div data-testid="analyzer-rail-wrapper" className="flex flex-col gap-3">
         {railBody}
       </div>
-
-      {/* ── Full-width term structure ── */}
-      <Panel>
-        <PanelHeading title="Term structure + your legs" />
-        {selected !== null && snapshot !== null && (
-          <TermStructureChart
-            termStructure={snapshot.termStructure}
-            events={snapshot.events}
-            asOf={snapshot.asOf}
-            candidate={selected}
-          />
-        )}
-      </Panel>
     </div>
   );
 }

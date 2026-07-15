@@ -543,11 +543,14 @@ describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
     Reflect.deleteProperty(window, "matchMedia");
   });
 
-  it("renders the three locked right-column headings", () => {
+  it("renders the WHY/ENTRY headings; term structure is the chart inset, not a standalone panel", () => {
     render(<Analyzer />);
     expect(screen.getByText("Why this calendar")).toBeTruthy();
-    expect(screen.getByText("Term structure + your legs")).toBeTruthy();
     expect(screen.getByText("Entry / exit plan")).toBeTruthy();
+    // No-scroll layout (2026-07-15): the full-width TS panel is gone — the term structure
+    // renders as an inset overlaid on the payoff chart instead.
+    expect(screen.queryByText("Term structure + your legs")).toBeNull();
+    expect(screen.getByTestId("term-structure-inset")).toBeTruthy();
   });
 
   it("wires WhyPanel/TermStructureChart/EntryExitPlan to the default (top-ranked) candidate", () => {
@@ -1137,7 +1140,9 @@ describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
     const innerGrid = screen.getByTestId("analyzer-inner-grid");
     const classes = innerGrid.className.split(/\s+/u);
     expect(classes).toContain("grid");
-    expect(classes).toContain("grid-cols-[minmax(280px,330px)_minmax(0,1fr)]");
+    // No-scroll layout (2026-07-15): WHY and ENTRY sit side-by-side as two slim columns so
+    // the rail can never out-grow the chart and stretch the row.
+    expect(classes).toContain("grid-cols-[minmax(230px,270px)_minmax(230px,270px)_minmax(0,1fr)]");
     expect(classes).toContain("gap-4");
     // The reflow arm is gone: no display:contents, no lg:-prefixed grid variants, no inline style.
     expect(innerGrid.className).not.toContain("contents");
@@ -1160,7 +1165,7 @@ describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
     }
   });
 
-  it("TOS layout: hero -> [WHY/ENTRY left | chart right] -> full-width table -> term structure", () => {
+  it("no-scroll layout: hero -> [WHY | ENTRY | chart] -> full-width table (no term panel)", () => {
     render(<Analyzer />);
 
     const outer = screen.getByTestId("analyzer-scorecard-wrapper").parentElement;
@@ -1173,13 +1178,38 @@ describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
     expect(heroIdx).toBeLessThan(gridIdx);
     // The ranked table is a FULL-WIDTH sibling below the chart grid, not a grid column.
     expect(gridIdx).toBeLessThan(tableIdx);
+    // The table is the LAST section — the term-structure panel no longer exists below it.
+    expect(tableIdx).toBe(outerChildren.length - 1);
 
-    // Inside the grid: WHY/ENTRY rail left, chart column right.
+    // Inside the grid: WHY column, ENTRY column, chart column — in that order.
     const innerChildren = Array.from(innerGrid.children);
     const whyIdx = innerChildren.indexOf(screen.getByTestId("analyzer-right-wrapper"));
+    const exitIdx = innerChildren.indexOf(screen.getByTestId("analyzer-exit-wrapper"));
     const chartIdx = innerChildren.indexOf(screen.getByTestId("analyzer-center-column"));
     expect(whyIdx).toBeGreaterThanOrEqual(0);
-    expect(whyIdx).toBeLessThan(chartIdx);
+    expect(whyIdx).toBeLessThan(exitIdx);
+    expect(exitIdx).toBeLessThan(chartIdx);
+  });
+
+  it("term-structure inset + event chips live INSIDE the chart column (no page section for them)", () => {
+    render(<Analyzer />);
+
+    const center = screen.getByTestId("analyzer-center-column");
+    expect(within(center).getByTestId("term-structure-inset")).toBeTruthy();
+    expect(within(center).getByTestId("term-structure-legend")).toBeTruthy();
+    // Inset carries the same marks as the retired panel: term line, leg dots, fwd bracket.
+    expect(within(center).getByTestId("term-structure-leg-dot-front")).toBeTruthy();
+    expect(within(center).getByTestId("term-structure-leg-dot-back")).toBeTruthy();
+  });
+
+  it("verdict hero is a single flex line (chips inline), not the 3-column grid", () => {
+    render(<Analyzer />);
+
+    const groups = screen.getByTestId("verdict-groups");
+    const classes = groups.className.split(/\s+/u);
+    expect(classes).toContain("flex");
+    expect(classes).not.toContain("grid");
+    expect(classes).not.toContain("grid-cols-3");
   });
 
   it("greeks columns: each scored row renders Δ / Γ / Θ / vega / IV f-b at trading precision", () => {
@@ -1235,17 +1265,19 @@ describe("Analyzer branch — D-01/D-16 (36)", () => {
     expect(screen.getByTestId("verdict-headline")).toBeTruthy();
     expect(screen.getByTestId("copy-tos-order")).toBeTruthy();
     expect(screen.getByText("Why this calendar")).toBeTruthy();
-    expect(screen.getByText("Term structure + your legs")).toBeTruthy();
+    expect(screen.getByTestId("term-structure-inset")).toBeTruthy();
     expect(screen.getByText("Entry / exit plan")).toBeTruthy();
   });
 
-  it("J9 (desktop half): the desktop PayoffChart call site passes neither mobile chart prop", () => {
+  it("J9 (desktop half): desktop PayoffChart gets the no-scroll ratio, never the mobile pills prop", () => {
     stubDesktopMatchMedia();
     render(<Analyzer />);
 
     const props = latestPayoffChartProps();
     expect(props.showBePills).toBeUndefined();
-    expect(props.aspectRatio).toBeUndefined();
+    // No-scroll layout (2026-07-15): desktop passes a wider ratio so the whole screen fits
+    // one viewport — no longer byte-identical to the pre-36 call site.
+    expect(props.aspectRatio).toBe(2.5);
   });
 });
 
