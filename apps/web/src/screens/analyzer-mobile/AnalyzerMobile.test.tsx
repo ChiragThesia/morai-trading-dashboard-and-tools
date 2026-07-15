@@ -193,44 +193,43 @@ describe("AnalyzerMobile — J6 rail states (bare prompts, no hollow shells)", (
   });
 });
 
-describe("AnalyzerMobile — J5 candidates fold", () => {
-  it("J5a: 9 scored → top 3 + an aria-expanded 'All candidates (6)' toggle that reveals the rest", () => {
+describe("AnalyzerMobile — ranked table (2026-07-14: table replaces the card stack, h-scroll OK)", () => {
+  it("all 9 scored candidates render as table rows inside a horizontal-scroll wrapper — no fold toggle", () => {
     render(<Analyzer />);
 
-    expect(screen.getAllByTestId(/^candidate-card-/).length).toBe(3);
-    const toggle = screen.getByTestId("all-candidates-toggle");
-    expect(toggle.textContent).toContain("▸");
-    expect(toggle.textContent).toContain("All candidates (6)");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(toggle.textContent).toContain("▾");
-    expect(screen.getAllByTestId(/^candidate-card-/).length).toBe(9);
-
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getAllByTestId(/^candidate-card-/).length).toBe(3);
-  });
-
-  it("J5b: ≤3 scored → no fold toggle", () => {
-    mockUsePickerReturn({ data: { ...pickerSnapshotFixture, candidates: pickerSnapshotFixture.candidates.slice(0, 3) } });
-    render(<Analyzer />);
-
-    expect(screen.getAllByTestId(/^candidate-card-/).length).toBe(3);
+    expect(screen.getAllByTestId(/^candidate-row-/).length).toBe(9);
     expect(screen.queryByTestId("all-candidates-toggle")).toBeNull();
+    const scroll = screen.getByTestId("mobile-candidate-table-scroll");
+    expect(scroll.className).toContain("overflow-x-auto");
   });
 
-  it("J5c: a pasted card pins on top, auto-selects, and reveals Clear all", async () => {
+  it("sort headers render and clicking Θ/d re-sorts the rows", () => {
+    render(<Analyzer />);
+
+    const thetaHeader = screen.getByTestId("rail-sort-theta");
+    fireEvent.click(thetaHeader);
+    expect(thetaHeader.getAttribute("aria-sort")).toBe("descending");
+
+    const rows = screen.getAllByTestId(/^candidate-row-/);
+    const thetas = rows.map((row) => {
+      const id = row.getAttribute("data-testid") ?? "";
+      const candidate = pickerSnapshotFixture.candidates.find((c) => `candidate-row-${c.id}` === id);
+      return candidate?.theta ?? Number.NaN;
+    });
+    const sortedDesc = [...thetas].sort((a, b) => b - a);
+    expect(thetas).toEqual(sortedDesc);
+  });
+
+  it("a pasted row pins on top, auto-selects, and reveals Clear all", async () => {
     render(<Analyzer />);
 
     await paste(PASTE_EXAMPLE);
 
-    const cards = screen.getAllByTestId(/^candidate-card-/);
-    expect(cards[0]?.getAttribute("data-testid")).toBe("candidate-card-pasted-1");
-    // Auto-selected pasted card drives the scorecard (not-scored note) and shows the violet ring.
+    const rows = screen.getAllByTestId(/^candidate-row-/);
+    expect(rows[0]?.getAttribute("data-testid")).toBe("candidate-row-pasted-1");
+    // Auto-selected pasted row drives the scorecard (not-scored note) and the violet row accent.
     expect(screen.getByText("Pasted calendar — not engine-scored.")).toBeTruthy();
-    expect(screen.getByTestId("candidate-card-pasted-1").className).toContain("border-violet");
+    expect(screen.getByTestId("candidate-row-pasted-1").className).toContain("border-l-violet");
     expect(screen.getByTestId("picker-paste-clear-all")).toBeTruthy();
   });
 });
@@ -244,11 +243,11 @@ describe("AnalyzerMobile — paste block (D-18) + rail legend", () => {
     expect(input.getAttribute("placeholder")).toBe("Paste a TOS calendar order…");
   });
 
-  it("a parse failure surfaces the verbatim paste-error copy and adds no card", async () => {
+  it("a parse failure surfaces the verbatim paste-error copy and adds no row", async () => {
     render(<Analyzer />);
     await paste("not an order");
     expect(screen.getByTestId("picker-paste-error").textContent).toBe(PASTE_ERROR_COPY);
-    expect(screen.queryByTestId("candidate-card-pasted-1")).toBeNull();
+    expect(screen.queryByTestId("candidate-row-pasted-1")).toBeNull();
   });
 
   it("WR-01 (catch #26): pasting during snapshot cold-start renders NO chart block — spot would be the 0 fallback", async () => {
@@ -263,7 +262,7 @@ describe("AnalyzerMobile — paste block (D-18) + rail legend", () => {
     expect(screen.queryByTestId("analyzer-mobile-caption")).toBeNull();
   });
 
-  it("the rail legend renders below the cards when candidates are present", () => {
+  it("the rail legend renders below the table when candidates are present", () => {
     render(<Analyzer />);
     const legend = screen.getByTestId("rail-legend");
     expect(legend.textContent).toContain("daily $ decay");
@@ -369,19 +368,19 @@ describe("AnalyzerMobile — J10 disclosures (D-10, catches #23/#24)", () => {
 });
 
 describe("AnalyzerMobile — J4 DOM order + null-candidate guard", () => {
-  it("J4: paste input precedes card list precedes verdict headline precedes date-pill precedes first <details>", () => {
+  it("J4: paste input precedes ranked table precedes verdict headline precedes date-pill precedes first <details>", () => {
     render(<Analyzer />);
     const input = screen.getByTestId("picker-paste-input");
-    const firstCard = screen.getAllByTestId(/^candidate-card-/)[0];
+    const firstRow = screen.getAllByTestId(/^candidate-row-/)[0];
     const score = screen.getByTestId("mobile-verdict-headline");
     const pill = screen.getByTestId("date-pill");
     const firstDetails = document.querySelector("details");
-    assertDefined(firstCard, "a candidate card renders");
+    assertDefined(firstRow, "a candidate row renders");
     assertDefined(firstDetails, "a details renders");
 
     const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(input.compareDocumentPosition(firstCard) & FOLLOWING).toBeTruthy();
-    expect(firstCard.compareDocumentPosition(score) & FOLLOWING).toBeTruthy();
+    expect(input.compareDocumentPosition(firstRow) & FOLLOWING).toBeTruthy();
+    expect(firstRow.compareDocumentPosition(score) & FOLLOWING).toBeTruthy();
     expect(score.compareDocumentPosition(pill) & FOLLOWING).toBeTruthy();
     expect(pill.compareDocumentPosition(firstDetails) & FOLLOWING).toBeTruthy();
   });

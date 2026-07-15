@@ -13,7 +13,13 @@
  * No any/as/!.
  */
 import { useState } from "react";
-import { CandidateCard } from "../../components/picker/CandidateCard.tsx";
+import {
+  CandidateTable,
+  cycleSort,
+  sortCandidates,
+  DEFAULT_CANDIDATE_SORT,
+} from "../../components/picker/CandidateTable.tsx";
+import type { CandidateSortKey, CandidateSortState } from "../../components/picker/CandidateTable.tsx";
 import { WhyPanel } from "../../components/picker/WhyPanel.tsx";
 import { TermStructureChart } from "../../components/picker/TermStructureChart.tsx";
 import { EntryExitPlan } from "../../components/picker/EntryExitPlan.tsx";
@@ -94,9 +100,12 @@ export function AnalyzerMobile(): React.ReactElement {
     repull,
   } = useAnalyzerModel();
 
-  // The rest of the scored rail beyond the top 3 folds behind a real aria-expanded toggle
-  // (D-07 / catch #24 — React state, never a CSS reveal).
-  const [showAllCandidates, setShowAllCandidates] = useState(false);
+  // Table sort state — local to this view (mirrors AnalyzerDesktop; 2026-07-14 user lock:
+  // the ranked table replaces the phase-36 card stack on mobile, horizontal scroll OK).
+  const [sort, setSort] = useState<CandidateSortState>(DEFAULT_CANDIDATE_SORT);
+  const handleSortChange = (key: CandidateSortKey): void => {
+    setSort((prev) => cycleSort(prev, key));
+  };
 
   // Re-pull chains control — same testids/strings/behavior as the desktop rail heading action.
   const repullControl = (
@@ -166,82 +175,48 @@ export function AnalyzerMobile(): React.ReactElement {
       </div>
     );
   } else {
-    const topScored = sortedCandidates.slice(0, 3);
-    const restScored = sortedCandidates.slice(3);
+    // The ranked table (2026-07-14 user lock, replacing the phase-36 card stack): every scored
+    // row renders — the table scrolls horizontally inside its own wrapper (never the page) and
+    // vertically past ~7 rows, matching the desktop rail's TOS idiom.
     candidatesBody = (
       <div className="flex flex-col gap-2">
-        {pastedCandidates.map((candidate) => (
-          <CandidateCard
-            key={candidate.id}
-            candidate={candidate}
-            pasted
-            selected={candidate.id === selectedId}
-            combined={combinedIds.has(candidate.id)}
-            copied={candidate.id === copiedId}
-            observedAt={snapshot.observedAt}
-            source={snapshot.source}
-            gexContextStatus={snapshot.gexContextStatus}
-            eventsContextStatus={snapshot.eventsContextStatus}
-            onSelect={handleSelect}
-            onToggleCombine={handleToggleCombine}
-            onCopy={handleCopyCandidate}
-            onRemove={handleRemovePasted}
-          />
-        ))}
-        {topScored.map((candidate) => (
-          <CandidateCard
-            key={candidate.id}
-            candidate={candidate}
-            selected={candidate.id === selectedId}
-            combined={combinedIds.has(candidate.id)}
-            copied={candidate.id === copiedId}
-            observedAt={snapshot.observedAt}
-            source={snapshot.source}
-            gexContextStatus={snapshot.gexContextStatus}
-            eventsContextStatus={snapshot.eventsContextStatus}
-            onSelect={handleSelect}
-            onToggleCombine={handleToggleCombine}
-            onCopy={handleCopyCandidate}
-          />
-        ))}
-        {restScored.length > 0 && (
-          <button
-            type="button"
-            aria-expanded={showAllCandidates}
-            data-testid="all-candidates-toggle"
-            onClick={() => {
-              setShowAllCandidates((v) => !v);
-            }}
-            className="flex w-full items-center gap-1.5 rounded-md px-[9px] py-[6px] font-mono text-[10px] tracking-wide text-dim hover:text-txt"
-          >
-            {showAllCandidates ? "▾" : "▸"} All candidates ({restScored.length})
-          </button>
-        )}
-        {showAllCandidates &&
-          restScored.map((candidate) => (
-            <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              selected={candidate.id === selectedId}
-              combined={combinedIds.has(candidate.id)}
-              copied={candidate.id === copiedId}
-              observedAt={snapshot.observedAt}
-              source={snapshot.source}
-              gexContextStatus={snapshot.gexContextStatus}
-              eventsContextStatus={snapshot.eventsContextStatus}
-              onSelect={handleSelect}
-              onToggleCombine={handleToggleCombine}
-              onCopy={handleCopyCandidate}
-            />
-          ))}
+        <CandidateTable
+          candidates={sortCandidates(sortedCandidates, sort)}
+          pastedCandidates={pastedCandidates}
+          selectedId={selectedId}
+          combinedIds={combinedIds}
+          sort={sort}
+          onSortChange={handleSortChange}
+          onSelect={handleSelect}
+          onToggleCombine={handleToggleCombine}
+          onRemovePasted={handleRemovePasted}
+          wrapperClassName="-mx-4 max-h-[318px] overflow-x-auto overflow-y-auto px-4"
+          tableClassName="min-w-[640px]"
+          wrapperTestId="mobile-candidate-table-scroll"
+        />
         {sortedCandidates.length > 0 && (
           <p className="font-mono text-[9px] leading-[1.5] text-dim" data-testid="rail-legend">
             {"θ = daily $ decay · vega = $ per vol-pt · "}
             <span className="text-amber">◂f</span>
             {"/"}
             <span className="text-amber">◂b</span>
-            {" = event on front / back leg · bars = scored factors (higher = better)"}
+            {" = event on front / back leg"}
           </p>
+        )}
+        {selected !== null && (
+          <Button
+            variant="toggle"
+            tone="up"
+            size="touch"
+            active={copiedId === selected.id}
+            data-testid="copy-tos-order"
+            onClick={() => {
+              handleCopyCandidate(selected);
+            }}
+            title="Copy this calendar as a Thinkorswim order"
+          >
+            {copiedId === selected.id ? "Copied ✓" : "⧉ Copy TOS order"}
+          </Button>
         )}
       </div>
     );
