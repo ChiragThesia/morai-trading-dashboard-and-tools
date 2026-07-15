@@ -572,11 +572,15 @@ Plans:
 
 ### Phase 42: Design-system consolidation — one reusable component system for every screen. Kill the disparate table/button/panel sources: (1) DataTable primitive (shadcn table + column-def pattern: sticky header, sort + aria-sort, row hover/selection, mono-numeric cells, dense terminal styling) and migrate ALL tables onto it — Overview PositionsTable, Analyzer CandidateTable, Journal tables, desktop + mobile trees; (2) single Button system — fold the components/ui/button call sites into components/system/Button (variants+tone+active), delete the duplicate; (3) formalize design tokens (panel gradient, line colors, text scale, spacing) so every screen pulls from one source; (4) docs/architecture/design-system.md (docs-before-architecture law). Zero new dependencies — consolidate on the existing shadcn + system/ layer; daisyUI evaluated 2026-07-15 and REJECTED (CSS-only no table behavior, third styling idiom, fights the dense terminal aesthetic). Success: every table renders via DataTable with identical chrome; one Button; visual parity verified at 1512x860 and 2056x1329 with no page scroll; all suites green.
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** One reusable component system for every screen — one DataTable primitive that Overview PositionsTable + Analyzer CandidateTable (desktop + mobile) render through with identical chrome, one Button (system/Button, ui/button deleted), tokens documented as the single source, design-system.md updated. Visual parity at 1512x860 + 2056x1329 with no page scroll; all suites green.
+**Requirements**: none (roadmap-evolution phase)
 **Depends on:** Phase 41
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 42 to break down)
+- [ ] 42-01-PLAN.md — DataTable&lt;T&gt; primitive (TDD, presentational, sort/aria-sort/renderRowDetail/footer) + barrel export (wave 1)
+- [ ] 42-02-PLAN.md — CandidateTable → thin DataTable wrapper, public API byte-stable, Analyzer desktop+mobile untouched (wave 2)
+- [ ] 42-03-PLAN.md — Overview PositionsTable → DataTable columns; detail + Net-total rows via caller slots (wave 2)
+- [ ] 42-04-PLAN.md — single Button: migrate dialog/Login/RebuildButton to system/Button, token sweep, delete ui/button.tsx (wave 1)
+- [ ] 42-05-PLAN.md — design-system.md + TOPIC-MAP + rule link; phase gate (full suite, tsc baseline, dual-viewport visual parity) (wave 3)
