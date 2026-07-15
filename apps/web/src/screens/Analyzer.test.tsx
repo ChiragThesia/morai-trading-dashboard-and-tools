@@ -1276,8 +1276,9 @@ describe("Analyzer branch — D-01/D-16 (36)", () => {
     const props = latestPayoffChartProps();
     expect(props.showBePills).toBeUndefined();
     // No-scroll layout (2026-07-15): desktop passes a wider ratio so the whole screen fits
-    // one viewport — no longer byte-identical to the pre-36 call site.
-    expect(props.aspectRatio).toBe(2.5);
+    // one viewport — no longer byte-identical to the pre-36 call site. 2.9 measured live:
+    // 48 nav + 38 hero + ~450 chart row + ~260 table + gaps/padding ≈ an 860px viewport.
+    expect(props.aspectRatio).toBe(2.9);
   });
 });
 

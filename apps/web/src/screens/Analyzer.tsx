@@ -211,7 +211,7 @@ export function CandidateRail({
           onSelect={onSelect}
           onToggleCombine={onToggleCombine}
           onRemovePasted={onRemovePasted}
-          wrapperClassName="max-h-[160px] overflow-y-auto"
+          wrapperClassName="max-h-[140px] overflow-y-auto"
         />
       )}
     </Panel>
@@ -691,13 +691,13 @@ function AnalyzerDesktop(): React.ReactElement {
                   todayCurveColor={TODAY_CURVE_COLOR}
                   expirationCurveColor={EXPIRATION_CURVE_COLOR}
                   expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
-                  aspectRatio={2.5}
+                  aspectRatio={2.9}
                 />
                 {/* Term-structure inset (no-scroll layout): overlaid on the payoff canvas's
-                    quiet top-left corner; pointer-events-none keeps the payoff crosshair
-                    live underneath. */}
+                    quiet top-left corner, below the BE chip strip and clear of the y-axis
+                    labels; pointer-events-none keeps the payoff crosshair live underneath. */}
                 {snapshot !== null && (
-                  <div className="pointer-events-none absolute left-12 top-1 z-10">
+                  <div className="pointer-events-none absolute left-16 top-8 z-10">
                     <TermStructureInset
                       termStructure={snapshot.termStructure}
                       events={snapshot.events}
