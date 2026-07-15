@@ -175,6 +175,8 @@ export interface AnalyzerModel {
   readonly setPasteText: (text: string) => void;
   readonly pasteError: string | null;
   readonly handlePasteAnalyze: () => void;
+  /** True while the ad-hoc analyze request is in flight — drives the Analyzing… button state. */
+  readonly pasteAnalyzing: boolean;
   readonly handleRemovePasted: (candidate: PickerCandidate) => void;
   readonly handleClearAllPasted: () => void;
   readonly selected: PickerCandidate | null;
@@ -456,6 +458,7 @@ export function useAnalyzerModel(): AnalyzerModel {
     setPasteText,
     pasteError,
     handlePasteAnalyze,
+    pasteAnalyzing: analyzeCalendar.isPending === true,
     handleRemovePasted,
     handleClearAllPasted,
     selected,

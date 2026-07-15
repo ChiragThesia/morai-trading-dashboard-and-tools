@@ -107,6 +107,8 @@ export interface CandidateRailProps {
   /** Honest zero-candidate reason lines (describeEmptyBoard) — falls back to the plain
    *  net-θ line when omitted (direct-render tests pass `asOf` only). */
   readonly emptyReasonLines?: ReadonlyArray<string>;
+  /** True while the ad-hoc analyze request is in flight — Analyzing… button state. */
+  readonly pasteAnalyzing?: boolean;
 }
 
 /**
@@ -136,6 +138,7 @@ export function CandidateRail({
   onClearAllPasted,
   headerAction,
   emptyReasonLines,
+  pasteAnalyzing,
 }: CandidateRailProps): React.ReactElement {
   return (
     <Panel>
@@ -159,8 +162,14 @@ export function CandidateRail({
           placeholder="Paste a TOS calendar order…"
           className="min-w-0 flex-1 rounded-[3px] border border-line2 bg-transparent px-3 py-2 font-mono text-[12px] text-txt"
         />
-        <Button variant="primary" size="sm" data-testid="picker-paste-analyze" onClick={onPasteAnalyze}>
-          Analyze
+        <Button
+          variant="primary"
+          size="sm"
+          data-testid="picker-paste-analyze"
+          disabled={pasteAnalyzing === true}
+          onClick={onPasteAnalyze}
+        >
+          {pasteAnalyzing === true ? "Analyzing…" : "Analyze"}
         </Button>
       </div>
       {pasteError !== null && (
@@ -418,6 +427,7 @@ function AnalyzerDesktop(): React.ReactElement {
     setPasteText,
     pasteError,
     handlePasteAnalyze,
+    pasteAnalyzing,
     handleRemovePasted,
     handleClearAllPasted,
     selected,
@@ -543,6 +553,7 @@ function AnalyzerDesktop(): React.ReactElement {
         onClearAllPasted={handleClearAllPasted}
         headerAction={repullControl}
         emptyReasonLines={describeEmptyBoard(snapshot)}
+        pasteAnalyzing={pasteAnalyzing}
       />
     );
   }

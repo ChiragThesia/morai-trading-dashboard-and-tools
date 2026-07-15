@@ -75,6 +75,7 @@ export function AnalyzerMobile(): React.ReactElement {
     setPasteText,
     pasteError,
     handlePasteAnalyze,
+    pasteAnalyzing,
     handleRemovePasted,
     handleClearAllPasted,
     selected,
@@ -243,9 +244,10 @@ export function AnalyzerMobile(): React.ReactElement {
             variant="primary"
             size="touch"
             data-testid="picker-paste-analyze"
+            disabled={pasteAnalyzing}
             onClick={handlePasteAnalyze}
           >
-            Analyze
+            {pasteAnalyzing ? "Analyzing…" : "Analyze"}
           </Button>
         </div>
         {pasteError !== null && (

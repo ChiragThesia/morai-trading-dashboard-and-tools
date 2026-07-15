@@ -100,8 +100,12 @@ const { mockAnalyzeCalendarMutateAsync } = vi.hoisted(() => ({
       Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
   ),
 }));
+const { mockAnalyzePending } = vi.hoisted(() => ({ mockAnalyzePending: { value: false } }));
 vi.mock("../hooks/useAnalyzeCalendar.ts", () => ({
-  useAnalyzeCalendar: () => ({ mutateAsync: mockAnalyzeCalendarMutateAsync }),
+  useAnalyzeCalendar: () => ({
+    mutateAsync: mockAnalyzeCalendarMutateAsync,
+    isPending: mockAnalyzePending.value,
+  }),
 }));
 
 /** Loose shape covering only the fields Analyzer.tsx actually reads off the query result. */
@@ -187,6 +191,7 @@ if (GUARD === undefined) {
 // equal to the frozen Phase-18 fixture. Individual tests override per-test.
 beforeEach(() => {
   mockUsePickerReturn({});
+  mockAnalyzePending.value = false;
 });
 
 describe("Analyzer — ranked candidate table (Phase 41, AUI-01/AUI-03)", () => {
@@ -963,6 +968,15 @@ describe("Analyzer — live-data states (Task 2, 19-09-PLAN.md, D-18/D-19)", () 
     const emptyFiltered = screen.getByTestId("picker-empty-filtered");
     expect(emptyFiltered.textContent).toContain("3539 illiquid quotes · 2 negative-θ pairs dropped");
     expect(emptyFiltered.textContent).toContain("After-hours spreads are wide");
+  });
+
+  it("while the analyze request is pending, the button reads Analyzing… and is disabled (2026-07-15)", () => {
+    mockAnalyzePending.value = true;
+    render(<Analyzer />);
+
+    const analyzeButton = screen.getByTestId("picker-paste-analyze");
+    expect(analyzeButton.textContent).toBe("Analyzing…");
+    expect(analyzeButton.hasAttribute("disabled")).toBe(true);
   });
 
   it("zero candidates behind a blocked gate: the empty state says the gate suppressed the board", () => {

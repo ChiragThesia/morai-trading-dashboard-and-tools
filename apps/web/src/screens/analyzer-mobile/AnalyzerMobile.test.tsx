@@ -59,8 +59,12 @@ const { mockAnalyzeCalendarMutateAsync } = vi.hoisted(() => ({
     Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
   ),
 }));
+const { mockAnalyzePending } = vi.hoisted(() => ({ mockAnalyzePending: { value: false } }));
 vi.mock("../../hooks/useAnalyzeCalendar.ts", () => ({
-  useAnalyzeCalendar: () => ({ mutateAsync: mockAnalyzeCalendarMutateAsync }),
+  useAnalyzeCalendar: () => ({
+    mutateAsync: mockAnalyzeCalendarMutateAsync,
+    isPending: mockAnalyzePending.value,
+  }),
 }));
 
 type MockPickerResult = Pick<
@@ -118,6 +122,7 @@ async function paste(text: string): Promise<void> {
 
 beforeEach(() => {
   mockUsePickerReturn({});
+  mockAnalyzePending.value = false;
 });
 
 afterEach(() => {
@@ -241,6 +246,15 @@ describe("AnalyzerMobile — paste block (D-18) + rail legend", () => {
     expect(input.className).toContain("text-base");
     expect(input.className).toContain("min-h-11");
     expect(input.getAttribute("placeholder")).toBe("Paste a TOS calendar order…");
+  });
+
+  it("while the analyze request is pending, the button reads Analyzing… and is disabled (2026-07-15)", () => {
+    mockAnalyzePending.value = true;
+    render(<Analyzer />);
+
+    const analyzeButton = screen.getByTestId("picker-paste-analyze");
+    expect(analyzeButton.textContent).toBe("Analyzing…");
+    expect(analyzeButton.hasAttribute("disabled")).toBe(true);
   });
 
   it("a parse failure surfaces the verbatim paste-error copy and adds no row", async () => {
