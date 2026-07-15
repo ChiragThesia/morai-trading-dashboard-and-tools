@@ -1,15 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../lib/supabase.ts";
 import { Input } from "../components/ui/input.tsx";
-import { Button } from "../components/ui/button.tsx";
+import { Button, Panel } from "../components/system/index.tsx";
 
 /**
  * Login — Supabase Auth login screen per the locked UI-SPEC interaction contract.
  *
  * Visual spec (09-UI-SPEC.md "Login screen"):
  * - Full viewport centered flex column, body gradient background
- * - Card: max-width 360px, bg linear-gradient(180deg, #0f1521, #0c111a), border #1b2433 1px,
- *   border-radius 12px, padding 24px
+ * - Card: max-width 360px, Panel gradient token surface, border-radius 12px, padding 24px
  * - Brand: MOR**AI** logotype (violet "AI")
  * - Heading: "Sign in" (subhead token)
  * - Sub-heading: "Trading dashboard — access restricted to authorized users" (label token, dim)
@@ -91,55 +90,19 @@ export function Login() {
         padding: "24px",
       }}
     >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "360px",
-          background: "linear-gradient(180deg, #0f1521, #0c111a)",
-          border: "1px solid #1b2433",
-          borderRadius: "12px",
-          padding: "24px",
-        }}
-      >
+      <Panel className="w-full max-w-[360px] rounded-xl p-6">
         {/* Brand logotype: MOR + AI (violet) — subhead token */}
-        <div
-          style={{
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontSize: "16px",
-            fontWeight: 700,
-            lineHeight: 1.1,
-            color: "#d6dbe4",
-            marginBottom: "20px",
-          }}
-        >
-          MOR<strong style={{ color: "#a78bfa" }}>AI</strong>
+        <div className="mb-5 font-display text-base leading-[1.1] font-bold text-txt">
+          MOR<strong className="text-violet">AI</strong>
         </div>
 
         {/* Heading: "Sign in" — subhead token */}
-        <h1
-          style={{
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            fontSize: "16px",
-            fontWeight: 700,
-            lineHeight: 1.1,
-            color: "#d6dbe4",
-            margin: "0 0 6px",
-          }}
-        >
+        <h1 className="mb-1.5 font-display text-base leading-[1.1] font-bold text-txt">
           Sign in
         </h1>
 
         {/* Sub-heading: label token, dim color */}
-        <p
-          style={{
-            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-            fontSize: "10px",
-            fontWeight: 400,
-            lineHeight: 1.4,
-            color: "#566273",
-            margin: "0 0 20px",
-          }}
-        >
+        <p className="mb-5 font-mono text-[10px] leading-[1.4] text-dim">
           Trading dashboard — access restricted to authorized users
         </p>
 
@@ -148,14 +111,7 @@ export function Login() {
           <div style={{ marginBottom: "12px" }}>
             <label
               htmlFor="login-email"
-              style={{
-                display: "block",
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                fontSize: "10px",
-                fontWeight: 400,
-                color: "#7b8696",
-                marginBottom: "4px",
-              }}
+              className="mb-1 block font-mono text-[10px] font-normal text-muted-foreground"
             >
               Email
             </label>
@@ -178,14 +134,7 @@ export function Login() {
           <div style={{ marginBottom: "16px" }}>
             <label
               htmlFor="login-password"
-              style={{
-                display: "block",
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                fontSize: "10px",
-                fontWeight: 400,
-                color: "#7b8696",
-                marginBottom: "4px",
-              }}
+              className="mb-1 block font-mono text-[10px] font-normal text-muted-foreground"
             >
               Password
             </label>
@@ -205,37 +154,18 @@ export function Login() {
 
           {/* Inline error — coral, label token, locked copy */}
           {error !== null && (
-            <p
-              role="alert"
-              style={{
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                fontSize: "10px",
-                lineHeight: 1.4,
-                color: "#ef5350",
-                margin: "0 0 12px",
-              }}
-            >
+            <p role="alert" className="mb-3 font-mono text-[10px] leading-[1.4] text-down">
               {error}
             </p>
           )}
 
           {/* Submit button — full-width violet */}
-          <Button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              backgroundColor: "#a78bfa",
-              color: "#0a0e14",
-              fontFamily: "'Space Grotesk', system-ui, sans-serif",
-              fontWeight: 600,
-            }}
-          >
+          <Button type="submit" variant="primary" size="sm" disabled={loading} className="w-full">
             {loading ? "Signing in…" : "Sign in"}
           </Button>
         </form>
         {/* No signup/forgot links — single-user closed system (UI-SPEC) */}
-      </div>
+      </Panel>
     </div>
   );
 }
