@@ -233,7 +233,17 @@ function computeYDomain(
  * sync with the chart's domain prop (D-01, Phase 30).
  */
 function buildXTicks(min: number, max: number, targetCount = 5): ReadonlyArray<number> {
-  const rawStep = (max - min) / targetCount;
+  const span = max - min;
+  // TOS grid (2026-07-16 user): a tick every 100 points whenever the span allows —
+  // gridlines draw at every tick; the LABELS thin themselves by pixel spacing in
+  // PayoffChartGrid so narrow charts stay readable.
+  if (span > 0 && span <= 3000) {
+    const first = Math.ceil(min / 100) * 100;
+    const ticks: number[] = [];
+    for (let v = first; v <= max; v += 100) ticks.push(v);
+    return ticks;
+  }
+  const rawStep = span / targetCount;
   const roundSteps = [25, 50, 100, 200, 250, 500, 1000];
   const step = roundSteps.find((s) => s >= rawStep) ?? roundSteps[roundSteps.length - 1];
   const snappedStep = step ?? rawStep;
@@ -340,6 +350,10 @@ interface PayoffChartGridProps {
   /** T+0 P&L at the live spot, rendered as a sign-colored readout pinned to the
    *  spot line's top ("how much are we making right now" at a glance). */
   spotReadout: { readonly spot: number; readonly pl: number } | null;
+  /** @exp curve extremes (2026-07-16 "show the MAX PROFIT"): dashed line + right-pinned
+   *  label at max profit (teal) and max loss (coral). Null (empty curve) renders nothing. */
+  maxProfit: number | null;
+  maxLoss: number | null;
 }
 
 /** Grid tick labels within this many px of a BE number are dropped (BE wins the lane). */
@@ -364,9 +378,21 @@ function PayoffChartGrid({
   beTodayColor,
   beExpColor,
   spotReadout,
+  maxProfit,
+  maxLoss,
 }: PayoffChartGridProps): React.ReactElement | null {
   const scales = usePlotScales();
   if (scales === null) return null;
+  // Label thinning (TOS 100-pt grid): gridlines draw at EVERY tick; labels keep only
+  // every Nth tick so they never collide on narrow charts. Stride snaps to round
+  // multiples (1/2/5/10 → labels every 100/200/500/1000).
+  const pxPerTick = xTicks.length > 1 ? scales.innerWidth / (xTicks.length - 1) : scales.innerWidth;
+  const labelStride = [1, 2, 5, 10].find((s) => pxPerTick * s >= 44) ?? 10;
+  // Max profit/loss marks (2026-07-16): dashed line + right-pinned label at the @exp
+  // curve's extremes. Only meaningful extremes render (profit above 0, loss below 0).
+  const maxMarks: Array<{ v: number; color: string; tid: string; dy: number }> = [];
+  if (maxProfit !== null && maxProfit > 0) maxMarks.push({ v: maxProfit, color: TEAL, tid: "max-profit-label", dy: -4 });
+  if (maxLoss !== null && maxLoss < 0) maxMarks.push({ v: maxLoss, color: CORAL, tid: "max-loss-label", dy: 12 });
   const readout = ((): { x: number; anchor: "start" | "end"; text: string; color: string } | null => {
     if (spotReadout === null) return null;
     const px = scales.xScale(spotReadout.spot);
@@ -387,8 +413,10 @@ function PayoffChartGrid({
     return px >= 0 && px <= scales.innerWidth;
   });
   const bePx = beLabels.map(({ v }) => scales.xScale(v));
-  const keptXTicks = xTicks.filter((s) =>
-    bePx.every((px) => Math.abs(px - scales.xScale(s)) > BE_LABEL_CLEARANCE_PX),
+  const keptXTicks = xTicks.filter(
+    (s) =>
+      s % (100 * labelStride) === 0 &&
+      bePx.every((px) => Math.abs(px - scales.xScale(s)) > BE_LABEL_CLEARANCE_PX),
   );
   return (
     <g transform={`translate(${scales.plotX},${scales.plotY})`}>
@@ -403,6 +431,21 @@ function PayoffChartGrid({
           </g>
         );
       })}
+      {/* Vertical gridlines at EVERY x tick (TOS 100-pt grid, 2026-07-16) — fainter than
+          the horizontal $ lines so the price grid reads as texture, not chrome. */}
+      {xTicks.map((s) => (
+        <line
+          key={`xg-${s}`}
+          data-testid="x-gridline"
+          x1={scales.xScale(s)}
+          y1={0}
+          x2={scales.xScale(s)}
+          y2={scales.innerHeight}
+          stroke={GRID_LINE}
+          strokeWidth={1}
+          opacity={0.45}
+        />
+      ))}
       {keptXTicks.map((s) => (
         <text
           key={s}
@@ -416,6 +459,35 @@ function PayoffChartGrid({
           {s}
         </text>
       ))}
+      {maxMarks.map((m) => {
+        const y = scales.yScale(m.v);
+        return (
+          <g key={m.tid}>
+            <line
+              x1={0}
+              y1={y}
+              x2={scales.innerWidth}
+              y2={y}
+              stroke={m.color}
+              strokeWidth={1}
+              strokeDasharray="2 5"
+              opacity={0.5}
+            />
+            <text
+              data-testid={m.tid}
+              x={scales.innerWidth - 4}
+              y={y + m.dy}
+              fill={m.color}
+              fontSize={10}
+              fontWeight={600}
+              textAnchor="end"
+              fontFamily={MONO}
+            >
+              {`max ${fmtPl(m.v)}`}
+            </text>
+          </g>
+        );
+      })}
       {beLabels.map(({ v, color, tid }) => (
         <text
           key={`${tid}-${v}`}
@@ -624,6 +696,19 @@ export function PayoffChart({
   // replaces a hardcoded literal array that could drift from the chart's own scale.
   const xTicks = useMemo(() => buildXTicks(domain.min, domain.max), [domain]);
 
+  // Max profit/loss (2026-07-16 "show the MAX PROFIT"): the @exp curve's extremes —
+  // the structural bounds of the trade, drawn as dashed marks by PayoffChartGrid.
+  const expExtremes = useMemo((): { hi: number | null; lo: number | null } => {
+    if (baseExpirationCurve.length === 0) return { hi: null, lo: null };
+    let hi = -Infinity;
+    let lo = Infinity;
+    for (const p of baseExpirationCurve) {
+      if (p.pl > hi) hi = p.pl;
+      if (p.pl < lo) lo = p.pl;
+    }
+    return { hi, lo };
+  }, [baseExpirationCurve]);
+
   // PayoffChartMarks (33-02) keeps its plain-closure xScale contract, but the closures
   // now come from usePlotScales() INSIDE the chart tree (PayoffMarksLayer adapter) —
   // recharts' own axis scales + plot area, alive to ResponsiveContainer resizes
@@ -779,6 +864,8 @@ export function PayoffChart({
               beTodayColor={todayCurveColor}
               beExpColor={expirationCurveColor}
               spotReadout={todayCurve.length > 0 ? { spot, pl: plAtSpot } : null}
+              maxProfit={expExtremes.hi}
+              maxLoss={expExtremes.lo}
             />
 
             <ReferenceLine y={0} stroke={ZERO_LINE} strokeWidth={1.1} />

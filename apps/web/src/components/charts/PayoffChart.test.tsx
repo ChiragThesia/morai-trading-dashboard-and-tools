@@ -72,7 +72,9 @@ const HUGE_EXP_CURVE: PayoffPoint[] = [
  * PAD). text-anchor="end" is unique to these labels among the chart's rendered text.
  */
 function getGridLabels(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('text[text-anchor="end"]')).map(
+  // Exclude the right-pinned max-profit/max-loss marks (2026-07-16) — also anchor="end"
+  // but not y-grid tick labels.
+  return Array.from(container.querySelectorAll('text[text-anchor="end"]:not([data-testid])')).map(
     (el) => el.textContent ?? "",
   );
 }
@@ -393,9 +395,19 @@ describe("computeYDomain — combined-curve y-axis (OVW-04)", () => {
   });
 });
 
-describe("buildXTicks — derived round-number x-axis ticks (OVW-04)", () => {
-  it("reproduces the round-step tick set for the X_MIN/X_MAX domain (6900-7900 -> step 200)", () => {
-    expect(buildXTicks(6900, 7900)).toEqual([7000, 7200, 7400, 7600, 7800]);
+describe("buildXTicks — derived round-number x-axis ticks (OVW-04; every-100 TOS grid 2026-07-16)", () => {
+  it("ticks every 100 points across a typical spot±1000 domain", () => {
+    expect(buildXTicks(6900, 7900)).toEqual([
+      6900, 7000, 7100, 7200, 7300, 7400, 7500, 7600, 7700, 7800, 7900,
+    ]);
+  });
+
+  it("falls back to coarser round steps when the span is too wide for 100s (> 3000)", () => {
+    const ticks = buildXTicks(0, 10000);
+    expect(ticks.length).toBeLessThanOrEqual(25);
+    const first = ticks[0];
+    const second = ticks[1];
+    expect(first !== undefined && second !== undefined && second - first >= 500).toBe(true);
   });
 
   it("keeps every tick within [min, max] and strictly increasing for an arbitrary positive range", () => {
@@ -868,8 +880,9 @@ describe("PayoffChart — y-axis round ticks anchored at zero (2026-07-10 reques
 
   it("y-axis tick labels are round-step multiples, never arbitrary evenly-spaced values", () => {
     const { container } = render(<PayoffChart {...baseProps()} />);
+    // Exclude the right-pinned max marks (data-testid'd) — same scoping as getGridLabels.
     const yLabels = [...container.querySelectorAll("text")]
-      .filter((t) => t.getAttribute("text-anchor") === "end")
+      .filter((t) => t.getAttribute("text-anchor") === "end" && t.getAttribute("data-testid") === null)
       .map((t) => t.textContent ?? "");
     expect(yLabels.length).toBeGreaterThanOrEqual(3);
     // every label parses back to a multiple of 50 (all round steps are ≥50)
@@ -932,5 +945,26 @@ describe("PayoffChart — D-06 additive mobile props (35.1)", () => {
   it("J9 override: aspectRatio={1.3} renders the numeric value on the ChartContainer", () => {
     const { container } = render(<PayoffChart {...baseProps()} aspectRatio={1.3} />);
     expect(chartRoot(container).style.aspectRatio).toBe("1.3");
+  });
+});
+
+// ─── Max profit / max loss axis labels (2026-07-16: "show the MAX PROFIT", TOS-style) ────
+describe("PayoffChart — max profit/loss labels", () => {
+  afterEach(cleanup);
+
+  it("renders MAX labels at the expiration curve's extremes (teal profit, coral loss)", () => {
+    render(<PayoffChart {...baseProps()} />);
+    // EXP_CURVE extremes: +400 max profit, −400 max loss
+    const maxP = screen.getByTestId("max-profit-label");
+    const maxL = screen.getByTestId("max-loss-label");
+    expect(maxP.textContent).toBe("max +$400");
+    expect(maxL.textContent).toBe("max −$400");
+  });
+
+  it("renders vertical gridlines for every x tick (TOS 100-pt grid)", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    const lines = container.querySelectorAll('[data-testid="x-gridline"]');
+    // 6900-7900 → 11 ticks every 100
+    expect(lines.length).toBe(11);
   });
 });
