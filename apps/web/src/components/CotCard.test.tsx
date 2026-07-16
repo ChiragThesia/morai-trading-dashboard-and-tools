@@ -110,12 +110,21 @@ describe("CotCard", () => {
     }
   });
 
-  it("keeps cot-net/cot-wow strings unchanged after the gauge rewire", () => {
+  it("cot-net unchanged; cot-wow carries the WoW % of last week's |net| (2026-07-16 trend ask)", () => {
     setData([WEEK_LATEST, WEEK_PREV]);
     render(<CotCard />);
     expect(screen.getByTestId("cot-net-netDealer").textContent).toBe("−756K");
     expect(screen.getByTestId("cot-net-netAssetManager").textContent).toBe("+993K");
-    expect(screen.getByTestId("cot-wow-netLeveraged").textContent).toBe("▲ 142K");
+    // ▲ 142K on a 515K prior |net| = 27.6% — the % says how big the move is vs the position.
+    expect(screen.getByTestId("cot-wow-netLeveraged").textContent).toBe("▲ 142K · 27.6%");
+  });
+
+  it("cot-wow omits the % when last week's net is 0 (never Infinity)", () => {
+    setData([WEEK_LATEST, { ...WEEK_PREV, netOther: 0 }]);
+    render(<CotCard />);
+    const text = screen.getByTestId("cot-wow-netOther").textContent ?? "";
+    expect(text).not.toContain("%");
+    expect(text).toMatch(/^[▲▼] /u);
   });
 
   it("moves net/WoW spans to 11px while the label span stays 10px (no row-level cascade)", () => {

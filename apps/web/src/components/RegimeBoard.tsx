@@ -11,6 +11,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip.tsx";
 import { cn } from "@/lib/utils";
+import { seriesDelta, ratioDelta, formatDelta } from "../lib/series-delta.ts";
+import type { Delta, DeltaKind } from "../lib/series-delta.ts";
 import { bandVixTermStructure, bandVvix, bandVix9dRatio } from "@morai/core";
 import type {
   RegimeBand,
@@ -131,6 +133,53 @@ function rateBand(value: number, bands: { warn: number; crisis: number }): Regim
   if (value <= bands.crisis) return "crisis";
   if (value <= bands.warn) return "warning";
   return "calm";
+}
+
+// ─── Trend deltas (2026-07-16, user ask: "% change since last so we can see the trend") ──
+//
+// Each regime indicator's change vs its PRIOR EOD observation, derived client-side from
+// the macro history useMacro already fetches — no backend change. Unit-appropriate per
+// metric (a % of a ratio misleads): ratios raw Δ, VVIX %, HY OAS + rates in bp. Missing
+// history → null → no chip (never fabricated).
+
+/** indicator id → delta + display kind from the macro series history. */
+function regimeDelta(id: string, macro: MacroResponse | undefined): { d: Delta; kind: DeltaKind } | null {
+  if (macro === undefined) return null;
+  switch (id) {
+    case "vix-term-structure": {
+      const d = ratioDelta(macro["VIXCLS"], macro["VXVCLS"]);
+      return d === null ? null : { d, kind: "ratio" };
+    }
+    case "vix9d-vix": {
+      const d = ratioDelta(macro["VIX9D"], macro["VIXCLS"]);
+      return d === null ? null : { d, kind: "ratio" };
+    }
+    case "vvix": {
+      const d = seriesDelta(macro["VVIX"]);
+      return d === null ? null : { d, kind: "level-pct" };
+    }
+    case "hy-oas": {
+      const d = seriesDelta(macro["BAMLH0A0HYM2"]);
+      return d === null ? null : { d, kind: "bp" };
+    }
+    default:
+      return null;
+  }
+}
+
+/** The quiet trend chip next to a value — direction + magnitude, deliberately neutral
+ *  color (the band already carries the verdict; the chip is information, not alarm). */
+function DeltaChip({ id, delta }: { id: string; delta: { d: Delta; kind: DeltaKind } | null }): React.ReactElement | null {
+  if (delta === null) return null;
+  return (
+    <span
+      className="font-mono text-[9px] tabular-nums text-dim"
+      data-testid={`regime-delta-${id}`}
+      title={`vs ${delta.d.vsDate} (prev observation): ${delta.d.prev.toFixed(2)} → ${delta.d.latest.toFixed(2)}`}
+    >
+      {formatDelta(delta.kind, delta.d)}
+    </span>
+  );
 }
 
 /** Dense-mode label shortening (keeps rows single-line) — also used for the freshness
@@ -265,6 +314,7 @@ function Row({
   dense,
   liveValue = null,
   liveBand = null,
+  delta = null,
 }: {
   indicator: RegimeIndicator;
   dense: boolean;
@@ -275,6 +325,9 @@ function Row({
   /** Client-recomputed band for `liveValue` (T-31-05 scoped display-only exception) —
    *  null falls back to the stored EOD `indicator.band`. */
   liveBand?: RegimeBand | null;
+  /** Trend vs prior EOD observation (2026-07-16) — null renders no chip. Always the
+   *  EOD-vs-EOD delta, even while the value itself displays live. */
+  delta?: { d: Delta; kind: DeltaKind } | null;
 }): React.ReactElement {
   const value = liveValue ?? indicator.value;
   const displayBand = liveBand ?? indicator.band;
@@ -306,15 +359,18 @@ function Row({
             }
           />
         </div>
-        <span
-          className={cn(
-            "font-mono text-[13px] tabular-nums",
-            band.text,
-            abnormal && "font-semibold",
-          )}
-          data-testid={`regime-value-${indicator.id}`}
-        >
-          {value.toFixed(2)}
+        <span className="flex items-baseline gap-1.5">
+          <DeltaChip id={indicator.id} delta={delta} />
+          <span
+            className={cn(
+              "font-mono text-[13px] tabular-nums",
+              band.text,
+              abnormal && "font-semibold",
+            )}
+            data-testid={`regime-value-${indicator.id}`}
+          >
+            {value.toFixed(2)}
+          </span>
         </span>
       </div>
       <BulletGauge
@@ -453,6 +509,9 @@ function RateGaugeRow({
   const scale = RATE_GAUGE_SCALE[id] ?? null;
   const bands = RATE_BANDS[id] ?? null;
   const copy = TOOLTIP_COPY[id] ?? { what: "", why: "", meta: "" };
+  // Trend vs prior observation (2026-07-16) — rates and curve spreads move in bp.
+  const rawDelta = seriesDelta(data[id]);
+  const delta = rawDelta === null ? null : { d: rawDelta, kind: "bp" as const };
 
   let gauge: React.ReactElement | null = null;
   if (value !== null && scale !== null) {
@@ -505,7 +564,10 @@ function RateGaugeRow({
             meta={copy.meta}
           />
         </div>
-        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{valueText}</span>
+        <span className="flex items-baseline gap-1.5">
+          <DeltaChip id={id} delta={delta} />
+          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{valueText}</span>
+        </span>
       </div>
       {gauge}
     </div>
@@ -635,6 +697,7 @@ function RegimeBoardImpl({
               dense={dense}
               liveValue={liveValue}
               liveBand={liveBand}
+              delta={regimeDelta(indicator.id, macro)}
             />
           );
         })}

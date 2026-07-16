@@ -742,3 +742,71 @@ describe("RegimeBoard — teaching tooltips (39-02, GAUGE-04)", () => {
     expect(await screen.findByText("0–8% range · FRED DFF, daily")).toBeDefined();
   });
 });
+
+// ─── Trend delta chips (2026-07-16: "% change since last so we can see the trend") ──────
+describe("RegimeBoard — trend delta chips", () => {
+  beforeEach(() => {
+    setPickerGate();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const MACRO_WITH_HISTORY = {
+    VIXCLS: [
+      { time: "2026-07-14", value: 17.16 },
+      { time: "2026-07-15", value: 16.5 },
+    ],
+    VXVCLS: [
+      { time: "2026-07-14", value: 19.5 },
+      { time: "2026-07-15", value: 19.4 },
+    ],
+    VVIX: [
+      { time: "2026-07-14", value: 93.5 },
+      { time: "2026-07-15", value: 94.3 },
+    ],
+    VIX9D: [
+      { time: "2026-07-14", value: 14.0 },
+      { time: "2026-07-15", value: 14.2 },
+    ],
+    BAMLH0A0HYM2: [
+      { time: "2026-07-14", value: 2.69 },
+      { time: "2026-07-15", value: 2.72 },
+    ],
+    DFF: [
+      { time: "2026-07-14", value: 4.33 },
+      { time: "2026-07-15", value: 4.31 },
+    ],
+  };
+
+  it("renders unit-appropriate deltas vs the prior EOD observation on regime + rate rows", () => {
+    setRegimeBoard(INDICATORS);
+    setMacro(MACRO_WITH_HISTORY);
+    render(<RegimeBoard />);
+
+    // ratio rows: raw Δ 2dp — VIX/VIX3M 17.16/19.5=0.880 → 16.5/19.4=0.851 = ▼0.03
+    expect(screen.getByTestId("regime-delta-vix-term-structure").textContent).toBe("▼0.03");
+    // VIX9D/VIX 14/17.16=0.816 → 14.2/16.5=0.861 = ▲0.04
+    expect(screen.getByTestId("regime-delta-vix9d-vix").textContent).toBe("▲0.04");
+    // VVIX level: % of prev — 93.5 → 94.3 = +0.9%
+    expect(screen.getByTestId("regime-delta-vvix").textContent).toBe("▲0.9%");
+    // HY OAS: bp — 2.69 → 2.72 = ▲3bp
+    expect(screen.getByTestId("regime-delta-hy-oas").textContent).toBe("▲3bp");
+    // rate row: DFF 4.33 → 4.31 = ▼2bp
+    expect(screen.getByTestId("regime-delta-DFF").textContent).toBe("▼2bp");
+    // tooltip carries the vs-date provenance
+    expect(screen.getByTestId("regime-delta-vvix").getAttribute("title")).toContain("vs 2026-07-14");
+  });
+
+  it("renders NO delta chip when a series has fewer than 2 observations (never fabricated)", () => {
+    setRegimeBoard(INDICATORS);
+    setMacro(MACRO_DATA); // the single-point fixture
+    render(<RegimeBoard />);
+
+    expect(screen.queryByTestId("regime-delta-DFF")).toBeNull();
+    expect(screen.queryByTestId("regime-delta-vvix")).toBeNull();
+    expect(screen.queryByTestId("regime-delta-vix-term-structure")).toBeNull();
+  });
+});

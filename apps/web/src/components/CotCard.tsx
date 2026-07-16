@@ -1,4 +1,5 @@
 import { useCot } from "../hooks/useCot.ts";
+import { pctOfPrev } from "../lib/series-delta.ts";
 import { BulletGauge, Panel, PanelHeading } from "./system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -148,6 +149,10 @@ export function CotCard(): React.ReactElement {
           const net = latest[c.key];
           const isLong = net >= 0;
           const wow = prev !== undefined ? net - prev[c.key] : null;
+          // Trend context (2026-07-16): WoW change as a % of last week's |net| — how big
+          // the move is relative to the position, not just its raw size. Null-safe on a
+          // zero prior net (never Infinity).
+          const wowPct = wow !== null && prev !== undefined ? pctOfPrev(wow, prev[c.key]) : null;
           const scale = COT_GAUGE_SCALE[c.key];
           const copy = TOOLTIP_COPY[c.key];
 
@@ -210,10 +215,12 @@ export function CotCard(): React.ReactElement {
                   </span>
 
                   <span
-                    className="w-16 shrink-0 text-right font-mono text-[11px] tabular-nums text-dim"
+                    className="w-24 shrink-0 text-right font-mono text-[11px] tabular-nums text-dim"
                     data-testid={`cot-wow-${c.key}`}
                   >
-                    {wow === null ? "" : `${wow >= 0 ? "▲" : "▼"} ${fmtMag(Math.abs(wow))}`}
+                    {wow === null
+                      ? ""
+                      : `${wow >= 0 ? "▲" : "▼"} ${fmtMag(Math.abs(wow))}${wowPct === null ? "" : ` · ${wowPct}`}`}
                   </span>
                 </div>
               </div>
