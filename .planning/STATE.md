@@ -5,16 +5,16 @@ milestone_name: Picker Intelligence
 current_phase: 42
 current_phase_name: "Design-system consolidation — one reusable component system for every screen: DataTable primitive, single Button system, formalized design tokens, docs/architecture/design-system.md"
 status: executing
-stopped_at: Completed 42-03-PLAN.md
-last_updated: "2026-07-16T13:28:40.481Z"
+stopped_at: Completed 42-05-PLAN.md
+last_updated: "2026-07-16T13:36:55.884Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 42 Plan 03 complete — Overview's PositionsTable rewritten onto DataTable<Row>, live-cell flash/IV n-a/VERDICT/checkbox/highlight behaviors preserved, Overview.test.tsx green unchanged (89/89)
 progress:
   total_phases: 21
-  completed_phases: 20
+  completed_phases: 21
   total_plans: 117
-  completed_plans: 116
-  percent: 95
+  completed_plans: 117
+  percent: 100
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 42 — Design-system consolidation — one reusable component system for every screen: DataTable primitive, single Button system, formalized design tokens, docs/architecture/design-system.md
-Plan: 4 of 5 complete (01 DataTable primitive, 02 CandidateTable wrapper, 03 Overview PositionsTable migration, 04 Button consolidation — 05 token sweep + design-system doc remains)
-Status: Executing Phase 42
+Plan: 5 of 5 complete (01 DataTable primitive, 02 CandidateTable wrapper, 03 Overview PositionsTable migration, 04 Button consolidation — 05 token sweep + design-system doc remains)
+Status: Ready to execute
 Last activity: 2026-07-16 — Phase 42 Plan 03 complete — Overview's PositionsTable rewritten onto DataTable<Row>, live-cell flash/IV n-a/VERDICT/checkbox/highlight behaviors preserved, Overview.test.tsx green unchanged (89/89)
 
 ## Deferred Verification
@@ -326,6 +326,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 42 P01 | 10min | 2 tasks | 3 files |
 | Phase 42 P04 | 25min | 3 tasks | 4 files |
 | Phase 42 P03 | 15min | 1 tasks | 1 files |
+| Phase 42 P05 | 20min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -515,6 +516,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 42-03: wrapperClassName="" (bare passthrough) — PositionsTable had no scroll wrapper before this migration; empty className reproduces exact prior layout
 - [Phase ?]: 42-03: tableClassName omitted — original bare 'table' Tailwind utility class was a no-op display:table, unrelated to .live-cell/.live-cell-flash CSS, dropped rather than carried forward
 - [Phase ?]: 42-03: Net-total row padding converged to px-2 py-1.5 (was py-1) alongside header/body convergence for visual consistency, not test-asserted
+- [Phase 42-05]: DataTable documented as its own design-system.md section (not folded into Rules for screens) matching the doc's existing one-section-per-concern pattern
+- [Phase 42-05]: Fixed 2 pre-existing 'as Element' lint violations in DataTable.test.tsx (Plan 01 artifact, never whole-tree-linted until this phase gate) via the existing assertDefined(@morai/shared) narrowing pattern, required to satisfy this plan's own lint-clean acceptance criterion
+- [Phase 42-05]: Dual-viewport visual parity check and Plan 04 dialog focus-return smoke test deferred to orchestrator (browser/chrome-devtools access) per this plan's execution notes
 
 ### Pending Todos
 
@@ -571,6 +575,6 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-16T13:28:40.468Z
-Stopped at: Completed 42-03-PLAN.md
+Last session: 2026-07-16T13:36:48.154Z
+Stopped at: Completed 42-05-PLAN.md
 Resume file: 
