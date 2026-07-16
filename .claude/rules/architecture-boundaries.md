@@ -50,6 +50,7 @@ Replacing a technology (broker, queue, DB, host):
 ## Where to Look
 
 - [docs/architecture/hexagonal-ddd.md](../../docs/architecture/hexagonal-ddd.md) - Layers, port naming with examples, bounded contexts, per-context directory shape
+- [docs/architecture/design-system.md](../../docs/architecture/design-system.md) - The web UI design-system layers, tokens, and DataTable/Button primitives
 - [docs/architecture/monorepo-layout.md](../../docs/architecture/monorepo-layout.md) - Workspace dependency graph, composition roots
 - [docs/architecture/stack-decisions.md](../../docs/architecture/stack-decisions.md) - Decision table, swap costs, revisit triggers
 - ESLint boundary configuration in `eslint.config.js` - mechanical enforcement (source of truth once scaffolded)

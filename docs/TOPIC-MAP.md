@@ -13,6 +13,7 @@ Read in order. Source of truth for how Morai works.
 | [stack-decisions.md](architecture/stack-decisions.md) | Every tooling decision: why, swap cost, revisit trigger (ADR-lite) |
 | [hexagonal-ddd.md](architecture/hexagonal-ddd.md) | Layers, ports/adapters, naming conventions, bounded contexts, enforcement |
 | [monorepo-layout.md](architecture/monorepo-layout.md) | Bun workspaces, dependency graph, composition roots |
+| [design-system.md](architecture/design-system.md) | Web UI design system: token/atom/molecule/organism layers, the DataTable table primitive, the single Button component, rules for screens |
 | [data-model.md](architecture/data-model.md) | Journal schema, snapshots, Postgres-vs-Timescale math |
 | [jobs.md](architecture/jobs.md) | Job catalog, schedules, pg-boss patterns, JobQueue port |
 | [picker-rules.md](architecture/picker-rules.md) | Calendar-picker rule table: gates, weighted scores, experimental rules, refuted list, how to add a rule |

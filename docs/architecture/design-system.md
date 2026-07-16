@@ -7,8 +7,8 @@ The web UI uses one design system. Screens compose it. They do not hand-roll sty
 | Layer | Where | What |
 |---|---|---|
 | Tokens | `apps/web/src/index.css` (`@theme`) | LOCKED palette, fonts, radii. Source of truth. |
-| Atoms | `apps/web/src/components/ui/*` | shadcn primitives (Button, Badge, Card, Input, Tabs, Tooltip…). |
-| Molecules | `apps/web/src/components/system/` | Morai composites: Panel, PanelHeading, SectionLabel, Stat, MetricChip. |
+| Atoms | `apps/web/src/components/ui/*` | shadcn primitives (Badge, Card, Input, Tabs, Tooltip…). |
+| Molecules | `apps/web/src/components/system/` | Morai composites: Panel, PanelHeading, SectionLabel, Stat, MetricChip, DataTable, Button. |
 | Organisms | `apps/web/src/screens/*` | Screen cards built from the layers above. |
 
 ## Tokens
@@ -23,6 +23,15 @@ Defined once in `index.css`. Use the Tailwind utility, never the hex.
 
 The shadcn bridge maps `text-muted-foreground` to the label gray and `bg-muted` to the
 panel surface. They are different on purpose. Do not collapse them.
+
+## DataTable
+
+`components/system/DataTable.tsx` is the one column-def table primitive every screen
+table renders through (Overview's positions, the Analyzer's candidates). Columns are
+`{ key, header, align?, mono?, sortable?, width?, render(row) }`; DataTable owns the
+sticky header and one `<tr>` per row and nothing else — sort state, selection, and row
+highlighting stay caller-owned via props. `renderRowDetail`/`footer` slots let a screen
+add an expandable detail row or a totals row without DataTable knowing its shape.
 
 ## Rules for screens
 
