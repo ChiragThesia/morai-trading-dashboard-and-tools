@@ -167,13 +167,15 @@ function regimeDelta(id: string, macro: MacroResponse | undefined): { d: Delta; 
   }
 }
 
-/** The quiet trend chip next to a value — direction + magnitude, deliberately neutral
- *  color (the band already carries the verdict; the chip is information, not alarm). */
+/** The trend chip next to a value — direction-colored (user 2026-07-16: gray too hard to
+ *  see): ▲ up green / ▼ down red / flat dim. Direction color, not a verdict — the band
+ *  still owns good/bad (a green ▲ on VIX is an UP move, not good news). */
 function DeltaChip({ id, delta }: { id: string; delta: { d: Delta; kind: DeltaKind } | null }): React.ReactElement | null {
   if (delta === null) return null;
+  const dir = delta.d.delta > 0 ? "text-up" : delta.d.delta < 0 ? "text-down" : "text-dim";
   return (
     <span
-      className="font-mono text-[9px] tabular-nums text-dim"
+      className={cn("font-mono text-[9px] tabular-nums", dir)}
       data-testid={`regime-delta-${id}`}
       title={`vs ${delta.d.vsDate} (prev observation): ${delta.d.prev.toFixed(2)} → ${delta.d.latest.toFixed(2)}`}
     >

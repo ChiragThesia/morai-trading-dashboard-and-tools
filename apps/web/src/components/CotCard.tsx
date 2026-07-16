@@ -215,7 +215,10 @@ export function CotCard(): React.ReactElement {
                   </span>
 
                   <span
-                    className="w-24 shrink-0 text-right font-mono text-[11px] tabular-nums text-dim"
+                    className={cn(
+                      "w-24 shrink-0 text-right font-mono text-[11px] tabular-nums",
+                      wow === null ? "text-dim" : wow >= 0 ? "text-up" : "text-down",
+                    )}
                     data-testid={`cot-wow-${c.key}`}
                   >
                     {wow === null
