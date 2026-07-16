@@ -20,6 +20,9 @@ export interface DataTableColumn<T> {
   readonly mono?: boolean;
   readonly sortable?: boolean;
   readonly width?: string;
+  /** Optional data-testid on this column's <th> — lets a caller preserve a pre-existing
+   *  header testid (e.g. CandidateTable's `rail-sort-{key}`) across a DataTable migration. */
+  readonly headerTestId?: string;
   readonly render: (row: T) => React.ReactNode;
 }
 
@@ -79,6 +82,7 @@ export function DataTable<T,>({
                     key={col.key}
                     className={headerClassName}
                     aria-sort={ariaSort}
+                    data-testid={col.headerTestId}
                     onClick={() => { onSortChange?.(col.key); }}
                   >
                     {col.header}
@@ -87,7 +91,7 @@ export function DataTable<T,>({
                 );
               }
               return (
-                <th key={col.key} className={headerClassName}>
+                <th key={col.key} className={headerClassName} data-testid={col.headerTestId}>
                   {col.header}
                 </th>
               );
