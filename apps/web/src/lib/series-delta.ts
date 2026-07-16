@@ -77,3 +77,10 @@ export function pctOfPrev(change: number, prev: number): string | null {
   if (prev === 0) return null;
   return `${((Math.abs(change) / Math.abs(prev)) * 100).toFixed(1)}%`;
 }
+
+/** Compact magnitude: 1.98M / 756K / 421. Unsigned. (Shared with CotCard's rows.) */
+export function fmtMag(abs: number): string {
+  if (abs >= 1_000_000) return `${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${Math.round(abs / 1_000)}K`;
+  return String(abs);
+}

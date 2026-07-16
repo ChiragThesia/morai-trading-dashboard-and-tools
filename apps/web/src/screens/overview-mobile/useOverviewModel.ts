@@ -348,6 +348,8 @@ export interface OverviewModel {
   readonly regime: GexRegime | null;
   readonly zeroDte: number | null;
   readonly cotLev: number | null;
+  /** Prior week's COT leveraged net — the mobile macro tile's WoW chip base (2026-07-16). */
+  readonly cotLevPrev: number | null;
   readonly bookPnl: number;
   readonly liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>;
   readonly liveStatus: LiveStreamStatus;
@@ -569,6 +571,7 @@ export function useOverviewModel(): OverviewModel {
 
   const bookPnl = useMemo(() => bookUnrealizedPnl(positions), [positions]);
   const cotLev = cot?.[0]?.netLeveraged ?? null;
+  const cotLevPrev = cot?.[1]?.netLeveraged ?? null;
 
   // ── Row highlight (D-05) — transient hover id + persisted click-toggle id,
   // mirroring AdHocPicker's clearHovered pattern. ──────────────────────────────
@@ -645,6 +648,7 @@ export function useOverviewModel(): OverviewModel {
     regime,
     zeroDte,
     cotLev,
+    cotLevPrev,
     bookPnl,
     liveGreeks,
     liveStatus,

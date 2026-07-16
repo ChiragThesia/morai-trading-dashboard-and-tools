@@ -197,6 +197,8 @@ export function OverviewMobile(): React.ReactElement {
         curveSlope={m.macroValues.curveSlope}
         cotLev={m.cotLev}
         spot={m.spot}
+        macro={m.macro}
+        cotLevPrev={m.cotLevPrev}
       />
     </div>
   );

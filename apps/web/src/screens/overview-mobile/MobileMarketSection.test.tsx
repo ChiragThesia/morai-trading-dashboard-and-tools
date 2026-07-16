@@ -199,3 +199,47 @@ describe("MobileMarketSection (D-08 / J13)", () => {
     expect(within(rail).getByText("Regime · COT · health")).toBeDefined();
   });
 });
+
+// ─── Macro-tile trend deltas (2026-07-16: mobile parity with the regime rail chips) ──────
+describe("MobileMarketSection — macro delta chips", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const MACRO_HISTORY = {
+    VVIX: [
+      { time: "2026-07-14", value: 93.5 },
+      { time: "2026-07-15", value: 94.3 },
+    ],
+    DFF: [
+      { time: "2026-07-14", value: 4.33 },
+      { time: "2026-07-15", value: 4.31 },
+    ],
+    T10Y2Y: [
+      { time: "2026-07-14", value: 0.4 },
+      { time: "2026-07-15", value: 0.42 },
+    ],
+  };
+
+  it("renders direction-colored deltas on the VVIX / Fed funds / 10y−2y / COT lev tiles", () => {
+    renderSection({ macro: MACRO_HISTORY, cotLevPrev: -374_000, cotLev: -361_875 });
+
+    expect(screen.getByTestId("mobile-delta-vvix").textContent).toBe("▲0.9%");
+    expect(screen.getByTestId("mobile-delta-dff").textContent).toBe("▼2bp");
+    expect(screen.getByTestId("mobile-delta-curve").textContent).toBe("▲2bp");
+    // −374K → −361.875K = ▲ 12K, 3.2% of |prev|
+    expect(screen.getByTestId("mobile-delta-cotlev").textContent).toBe("▲ 12K · 3.2%");
+    expect(screen.getByTestId("mobile-delta-vvix").className).toContain("text-up");
+    expect(screen.getByTestId("mobile-delta-dff").className).toContain("text-down");
+  });
+
+  it("renders NO delta chips when history is missing (never fabricated)", () => {
+    renderSection({ macro: undefined, cotLevPrev: null });
+
+    expect(screen.queryByTestId("mobile-delta-vvix")).toBeNull();
+    expect(screen.queryByTestId("mobile-delta-dff")).toBeNull();
+    expect(screen.queryByTestId("mobile-delta-curve")).toBeNull();
+    expect(screen.queryByTestId("mobile-delta-cotlev")).toBeNull();
+  });
+});

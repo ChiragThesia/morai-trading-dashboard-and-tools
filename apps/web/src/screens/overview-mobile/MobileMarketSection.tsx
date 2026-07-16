@@ -11,10 +11,12 @@ import { keyLevelsFor, fmtGammaCompact } from "./useOverviewModel.ts";
 import type { NetGreeks } from "./useOverviewModel.ts";
 import type { GexRegime } from "../../lib/gex-regime.ts";
 import { signed, signedUsd, signClass } from "../../lib/position-format.ts";
+import { seriesDelta, formatDelta, pctOfPrev, fmtMag } from "../../lib/series-delta.ts";
+import type { DeltaKind } from "../../lib/series-delta.ts";
 import { MarketRail } from "../MarketRail.tsx";
 import { Stat, SectionLabel } from "../../components/system/index.tsx";
 import { cn } from "@/lib/utils";
-import type { GexSnapshotEntry } from "@morai/contracts";
+import type { GexSnapshotEntry, MacroResponse } from "@morai/contracts";
 
 export interface MobileMarketSectionProps {
   readonly gex: GexSnapshotEntry | undefined;
@@ -28,6 +30,27 @@ export interface MobileMarketSectionProps {
   /** Live-aware engine spot (LIVE-04) — the other keyLevelsFor call site's override,
    *  so the mobile "Spot" row matches the desktop rail + hero (one SPX number). */
   readonly spot: number | null;
+  /** Macro history for the tile trend chips (2026-07-16) — undefined renders no chips. */
+  readonly macro?: MacroResponse | undefined;
+  /** Prior week's COT leveraged net for the WoW chip — null renders no chip. */
+  readonly cotLevPrev?: number | null;
+}
+
+/** Trend chip for one macro tile — same idiom as the regime rail's DeltaChip (direction
+ *  color, unit-appropriate magnitude); null delta renders nothing (never fabricated). */
+function tileDelta(
+  testId: string,
+  kind: DeltaKind,
+  points: MacroResponse[keyof MacroResponse] | undefined,
+): React.ReactElement | null {
+  const d = seriesDelta(points);
+  if (d === null) return null;
+  const dir = d.delta > 0 ? "text-up" : d.delta < 0 ? "text-down" : "text-dim";
+  return (
+    <span className={cn("ml-1.5 font-mono text-[9px] tabular-nums", dir)} data-testid={testId}>
+      {formatDelta(kind, d)}
+    </span>
+  );
 }
 
 export function MobileMarketSection({
@@ -40,7 +63,22 @@ export function MobileMarketSection({
   curveSlope,
   cotLev,
   spot,
+  macro,
+  cotLevPrev,
 }: MobileMarketSectionProps): React.ReactElement {
+  // COT lev WoW chip — same arrow · magnitude · % idiom as CotCard's rows.
+  const cotWow =
+    cotLev !== null && cotLevPrev !== null && cotLevPrev !== undefined ? cotLev - cotLevPrev : null;
+  const cotWowPct = cotWow !== null && cotLevPrev != null ? pctOfPrev(cotWow, cotLevPrev) : null;
+  const cotChip =
+    cotWow === null ? null : (
+      <span
+        className={cn("ml-1.5 font-mono text-[9px] tabular-nums", cotWow >= 0 ? "text-up" : "text-down")}
+        data-testid="mobile-delta-cotlev"
+      >
+        {`${cotWow >= 0 ? "▲" : "▼"} ${fmtMag(Math.abs(cotWow))}${cotWowPct === null ? "" : ` · ${cotWowPct}`}`}
+      </span>
+    );
   return (
     <section data-testid="mobile-market" className="flex flex-col gap-3 px-4">
       <SectionLabel>Market</SectionLabel>
@@ -97,19 +135,46 @@ export function MobileMarketSection({
         </>
       )}
 
-      {/* Macro — the same formatting the header chips used. */}
+      {/* Macro — the same formatting the header chips used, plus trend chips vs the
+          prior observation (2026-07-16 parity with the regime rail's deltas). */}
       <SectionLabel tone="dim">Macro</SectionLabel>
       <div className="grid grid-cols-2 gap-2">
-        <Stat label="VVIX" value={vvix !== null ? vvix.toFixed(1) : "—"} />
-        <Stat label="Fed funds" value={dff !== null ? `${dff.toFixed(2)}%` : "—"} />
+        <Stat
+          label="VVIX"
+          value={
+            <>
+              {vvix !== null ? vvix.toFixed(1) : "—"}
+              {tileDelta("mobile-delta-vvix", "level-pct", macro?.["VVIX"])}
+            </>
+          }
+        />
+        <Stat
+          label="Fed funds"
+          value={
+            <>
+              {dff !== null ? `${dff.toFixed(2)}%` : "—"}
+              {tileDelta("mobile-delta-dff", "bp", macro?.["DFF"])}
+            </>
+          }
+        />
         <Stat
           label="10y−2y"
-          value={curveSlope !== null ? `${curveSlope >= 0 ? "+" : ""}${curveSlope.toFixed(2)}` : "—"}
+          value={
+            <>
+              {curveSlope !== null ? `${curveSlope >= 0 ? "+" : ""}${curveSlope.toFixed(2)}` : "—"}
+              {tileDelta("mobile-delta-curve", "bp", macro?.["T10Y2Y"])}
+            </>
+          }
           valueClassName={curveSlope !== null ? signClass(curveSlope) : "text-muted-foreground"}
         />
         <Stat
           label="COT lev"
-          value={cotLev !== null ? signed(cotLev) : "—"}
+          value={
+            <>
+              {cotLev !== null ? signed(cotLev) : "—"}
+              {cotChip}
+            </>
+          }
           valueClassName={cotLev !== null ? signClass(cotLev) : "text-muted-foreground"}
         />
       </div>

@@ -1,5 +1,5 @@
 import { useCot } from "../hooks/useCot.ts";
-import { pctOfPrev } from "../lib/series-delta.ts";
+import { pctOfPrev, fmtMag } from "../lib/series-delta.ts";
 import { BulletGauge, Panel, PanelHeading } from "./system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -92,13 +92,6 @@ const TOOLTIP_COPY: Record<NetKey, { what: string; why: string; meta: string }> 
     meta: "±200K axis · CFTC TFF, weekly",
   },
 };
-
-/** Compact magnitude: 1.98M / 756K / 421. Unsigned. */
-function fmtMag(abs: number): string {
-  if (abs >= 1_000_000) return `${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${Math.round(abs / 1_000)}K`;
-  return String(abs);
-}
 
 /** Signed compact: −756K / +993K (minus glyph, matching Market). */
 function fmtSigned(v: number): string {
