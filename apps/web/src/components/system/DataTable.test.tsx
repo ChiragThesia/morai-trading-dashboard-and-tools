@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { assertDefined } from "@morai/shared";
 import { DataTable, type DataTableColumn } from "./DataTable.tsx";
 
 afterEach(() => cleanup());
@@ -128,7 +129,9 @@ describe("DataTable — generic presentational table primitive", () => {
         onSortChange={onSortChange}
       />,
     );
-    fireEvent.click(screen.getAllByRole("columnheader")[1] as Element);
+    const valueHeader = screen.getAllByRole("columnheader")[1];
+    assertDefined(valueHeader, "value column header present");
+    fireEvent.click(valueHeader);
     expect(onSortChange).toHaveBeenCalledWith("value");
   });
 
@@ -143,7 +146,8 @@ describe("DataTable — generic presentational table primitive", () => {
         onSortChange={onSortChange}
       />,
     );
-    const labelHeader = screen.getAllByRole("columnheader")[0] as Element;
+    const labelHeader = screen.getAllByRole("columnheader")[0];
+    assertDefined(labelHeader, "label column header present");
     expect(labelHeader.getAttribute("aria-sort")).toBeNull();
     fireEvent.click(labelHeader);
     expect(onSortChange).not.toHaveBeenCalled();
