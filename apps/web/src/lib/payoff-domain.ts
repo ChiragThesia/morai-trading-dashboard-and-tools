@@ -19,8 +19,11 @@
 import { repriceScenario, findZeroCrossings, extractStrike, includedForT0 } from "./scenario-engine.ts";
 import type { AnalyzerPosition, ScenarioParams, SpotDomain } from "./scenario-engine.ts";
 
-/** Empty-position fallback half-width (T-30-01: never produce a NaN/degenerate domain). */
-const FALLBACK_HALF_WIDTH = 500;
+/** TOS-parity minimum half-width (2026-07-16 user DITTO): TOS draws the risk profile
+ *  over roughly ±$1000 from the current price (e.g. spot 7500 → ~6400-8600); the domain
+ *  never goes NARROWER than this — anchors (strikes/breakevens) can only widen it. Also
+ *  the empty-position fallback half-width (T-30-01: never a NaN/degenerate domain). */
+const TOS_MIN_HALF_WIDTH = 1000;
 /** Wide-pass half-width floor (dollars) — large enough to bracket real breakevens. */
 const WIDE_PASS_MIN_HALF_WIDTH = 1500;
 /** Wide-pass half-width as a fraction of the highest anchor (strikes/spot). */
@@ -38,7 +41,7 @@ export function computePayoffDomain(
   params: ScenarioParams,
 ): SpotDomain {
   if (positions.length === 0) {
-    return { min: spot - FALLBACK_HALF_WIDTH, max: spot + FALLBACK_HALF_WIDTH };
+    return { min: spot - TOS_MIN_HALF_WIDTH, max: spot + TOS_MIN_HALF_WIDTH };
   }
 
   // Only positions that actually contribute pl (same `includedForT0` predicate bookPL/
@@ -49,7 +52,7 @@ export function computePayoffDomain(
     // Every position excluded/non-convergent (WR-01) — same fallback as the empty-book
     // case, never a zero-width {min: spot, max: spot} domain (that produces NaN in
     // PayoffChart's d3 xScale).
-    return { min: spot - FALLBACK_HALF_WIDTH, max: spot + FALLBACK_HALF_WIDTH };
+    return { min: spot - TOS_MIN_HALF_WIDTH, max: spot + TOS_MIN_HALF_WIDTH };
   }
   const strikes = contributing.map(extractStrike);
   const baseAnchors = [...strikes, spot];
@@ -70,5 +73,9 @@ export function computePayoffDomain(
   const hi = Math.max(...anchors);
   const pad = (hi - lo) * DOMAIN_PAD_FRACTION;
 
-  return { min: lo - pad, max: hi + pad };
+  // TOS-parity floor: at least spot ± 1000, anchors only ever widen beyond it.
+  return {
+    min: Math.min(lo - pad, spot - TOS_MIN_HALF_WIDTH),
+    max: Math.max(hi + pad, spot + TOS_MIN_HALF_WIDTH),
+  };
 }

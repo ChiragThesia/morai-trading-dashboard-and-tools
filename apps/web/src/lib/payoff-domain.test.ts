@@ -46,9 +46,23 @@ function paramsAt(spot: number): ScenarioParams {
 }
 
 describe("computePayoffDomain — empty positions fallback", () => {
-  it("returns {spot - 500, spot + 500} when there are no positions (T-30-01)", () => {
+  it("returns {spot - 1000, spot + 1000} when there are no positions (TOS width, 2026-07-16)", () => {
     const domain = computePayoffDomain([], 7381, paramsAt(7381));
-    expect(domain).toEqual({ min: 6881, max: 7881 });
+    expect(domain).toEqual({ min: 6381, max: 8381 });
+  });
+});
+
+describe("computePayoffDomain — TOS x-axis width (2026-07-16 DITTO)", () => {
+  it("always spans at least spot ± 1000 even when the tent is narrow", () => {
+    const domain = computePayoffDomain([makePosition("tos-1", 7500)], 7381, paramsAt(7381));
+    expect(domain.min).toBeLessThanOrEqual(7381 - 1000);
+    expect(domain.max).toBeGreaterThanOrEqual(7381 + 1000);
+  });
+
+  it("still widens BEYOND ±1000 when an anchor (strike/breakeven) needs it", () => {
+    // strike 9000 far outside spot+1000 — the tent must stay visible
+    const domain = computePayoffDomain([makePosition("tos-2", 9000)], 7381, paramsAt(7381));
+    expect(domain.max).toBeGreaterThanOrEqual(9000);
   });
 });
 
@@ -69,14 +83,14 @@ describe("computePayoffDomain — the user's 7500P repro", () => {
 });
 
 describe("computePayoffDomain — all positions excluded (WR-01 regression)", () => {
-  it("falls back to {spot - 500, spot + 500} when every position is excluded, not {min: spot, max: spot}", () => {
+  it("falls back to {spot - 1000, spot + 1000} when every position is excluded, not {min: spot, max: spot}", () => {
     const positions = [
       { ...makePosition("p1", 7000), included: false },
       { ...makePosition("p2", 7600), included: false },
     ];
     const domain = computePayoffDomain(positions, 7300, paramsAt(7300));
 
-    expect(domain).toEqual({ min: 6800, max: 7800 });
+    expect(domain).toEqual({ min: 6300, max: 8300 });
     expect(Number.isFinite(domain.min)).toBe(true);
     expect(Number.isFinite(domain.max)).toBe(true);
     expect(domain.max).toBeGreaterThan(domain.min);
@@ -86,7 +100,7 @@ describe("computePayoffDomain — all positions excluded (WR-01 regression)", ()
     const positions = [{ ...makePosition("p1", 7000), frontIvStatus: "non-convergent" as const, backIvStatus: "non-convergent" as const }];
     const domain = computePayoffDomain(positions, 7300, paramsAt(7300));
 
-    expect(domain).toEqual({ min: 6800, max: 7800 });
+    expect(domain).toEqual({ min: 6300, max: 8300 });
   });
 });
 
