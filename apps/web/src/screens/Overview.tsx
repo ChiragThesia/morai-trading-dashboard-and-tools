@@ -1,7 +1,10 @@
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
+import { assertDefined } from "@morai/shared";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { resolveLivePositionRow } from "../lib/live-position-greeks.ts";
+import type { LiveRowResult } from "../lib/live-position-greeks.ts";
 import { usd, signed, signedUsd, signClass } from "../lib/position-format.ts";
+import type { Row } from "../lib/position-format.ts";
 import { classifyRegime, zeroDteGex } from "../lib/gex-regime.ts";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
@@ -27,7 +30,8 @@ import {
   VerdictDetailBody,
 } from "./HeldPositionsPanel.tsx";
 import { ExitRulesPanel } from "./ExitRulesPanel.tsx";
-import { Panel, PanelHeading, Stat, MetricChip, Button } from "../components/system/index.tsx";
+import { Panel, PanelHeading, Stat, MetricChip, Button, DataTable } from "../components/system/index.tsx";
+import type { DataTableColumn } from "../components/system/index.tsx";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -77,11 +81,17 @@ const COLS = ["Position", "Expiry / DTE", "Net val", "P&L / entry", "Δ", "Γ", 
 /**
  * PositionsTable — TOS-style docked positions table with live BSM greek overlay.
  *
+ * Phase 42 Plan 03: thin wrapper over the shared `DataTable<Row>` primitive (Plan 01) —
+ * header + base-row chrome converges to CandidateTable's `px-2 py-1.5` density. The
+ * expandable verdict-detail row and the Net-total row stay caller-composed via
+ * `renderRowDetail`/`footer` (the phase's locked ownership decision, 42-03-PLAN.md).
+ *
  * Phase 12-07 extensions (STRM-01 / D-04 / Surface 2, kept unmodified — Pitfall 6):
  *   - resolveLivePositionRow overlays live SSE ticks per row + Net total.
  *   - .live-cell applied to live-sourced cells (Net val, Unreal, Δ, Γ, Θ/d, Vega).
  *   - .live-cell.stale applied when status is 'stale'/'reconnecting' (color dim, not opacity).
- *   - React key trick (key includes liveTs) re-triggers .live-cell-flash animation per tick.
+ *   - React key trick (key includes liveTs) re-triggers .live-cell-flash animation per tick —
+ *     now on the render()ed cell's inner element (DataTable, not this file, owns the <td>).
  *   - Per-symbol fallback: no tick for a symbol → static polled value, no live-cell class.
  *   - Excluded-row opacity-40 is user-driven row exclusion — NOT the stale-streaming UX.
  */
@@ -146,6 +156,13 @@ function PositionsTable({
     return resolveLivePositionRow(includedLegs, spot, liveGreeks);
   }, [rows, excluded, spot, liveGreeks]);
 
+  // One resolveLivePositionRow call per row (not per live column) — the six live columns
+  // (Net val, Unreal, Δ, Γ, Θ/d, Vega) share this map instead of recomputing per cell.
+  const resolvedByKey = useMemo(
+    () => new Map(rows.map((r) => [r.key, resolveLivePositionRow(r.legs, spot, liveGreeks)] as const)),
+    [rows, spot, liveGreeks],
+  );
+
   if (rows.length === 0) {
     return (
       <p className="font-mono text-[11px] text-dim">
@@ -156,218 +173,256 @@ function PositionsTable({
 
   const includedCount = rows.filter((r) => !excluded.has(r.key)).length;
 
-  return (
-    <table className="w-full border-collapse font-mono text-[11px] tabular-nums table">
-      <thead>
-        <tr>
-          <th className="border-b border-line px-2 py-1" aria-label="Include in total" />
-          {COLS.map((c, i) => (
-            <th
-              key={c}
-              className={cn(
-                "border-b border-line px-2 py-1 font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase",
-                i === 0 ? "text-left" : "text-right",
-              )}
-            >
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => {
-          const included = !excluded.has(r.key);
-          const resolved = resolveLivePositionRow(r.legs, spot, liveGreeks);
-          const { netVal: val, unreal, greeks: g, liveTs } = resolved;
-          const rowLive = liveCellCn(liveTs);
-          const flashCn = liveTs !== null ? `live-cell-flash ${rowLive}` : "";
-          const ivNa = ivNaByRowKey.get(r.key) === true;
-          const verdict = verdictByRowKey.get(r.label) ?? null;
-          const expanded = expandedRowKey === r.key && verdict !== null;
-          return (
-            <Fragment key={r.key}>
-            <tr
-              data-testid={`position-row-${r.key}`}
-              onMouseEnter={() => { onHoverRow(r.key); }}
-              onMouseLeave={() => { onHoverRow(null); }}
-              onClick={() => { onSelectRow(r.key); }}
-              className={cn(
-                "cursor-pointer border-b border-line/50 transition-opacity hover:bg-raise/30",
-                !included && "opacity-40",
-                highlightedRowKey === r.key && "bg-raise/20",
-              )}
-            >
-              <td
-                className="px-2 py-1 text-center"
-                onClick={(e) => { e.stopPropagation(); }}
-              >
-                <input
-                  type="checkbox"
-                  checked={included}
-                  onChange={() => { onToggleExcluded(r.key); }}
-                  aria-label={`Include ${r.label} in risk profile & total`}
-                  className="accent-blue cursor-pointer"
-                />
-              </td>
-              {/* Position — static, no live-cell */}
-              <td className="px-2 py-1 text-left text-txt">
-                {r.label}
-                {ivNa && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger
-                        style={{
-                          display: "inline-flex",
-                          marginLeft: 6,
-                          verticalAlign: "middle",
-                          cursor: "default",
-                          background: "transparent",
-                          border: "none",
-                          padding: 0,
-                        }}
-                      >
-                        <Badge
-                          variant="outline"
-                          className="border-amber/50 px-1 py-0 font-mono text-[9px] text-amber"
-                        >
-                          IV n/a
-                        </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <span className="font-mono text-xs text-muted-foreground">
-                          IV n/a — did not converge. @exp shown; excluded from T+0.
-                        </span>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </td>
-              {/* Expiry / DTE — static, no live-cell */}
-              <td className="px-2 py-1 text-right">
-                <div className="flex flex-col items-end">
-                  <span className="text-[11px] text-muted-foreground">{r.expiry.line1}</span>
-                  <span className="text-[9px] text-dim">{r.expiry.line2}</span>
-                </div>
-              </td>
-              {/* Net val — live-sourced when tick present */}
-              <td
-                key={`${r.key}-netval-${liveTs ?? ""}`}
-                className={cn("px-2 py-1 text-right text-txt", flashCn)}
-              >
-                {usd(val)}
-              </td>
-              {/* Unreal — live-sourced when tick present */}
-              <td
-                key={`${r.key}-unreal-${liveTs ?? ""}`}
-                className={cn("px-2 py-1 text-right", unreal === null ? "text-dim" : signClass(unreal), flashCn)}
-              >
-                {unreal === null ? "—" : signedUsd(unreal)}
-              </td>
-              {/* Δ — live-sourced when tick present */}
-              <td
-                key={`${r.key}-delta-${liveTs ?? ""}`}
-                className={cn("px-2 py-1 text-right", signClass(g.delta), flashCn)}
-              >
-                {signed(g.delta)}
-              </td>
-              {/* Γ — live-sourced when tick present */}
-              <td
-                key={`${r.key}-gamma-${liveTs ?? ""}`}
-                className={cn("px-2 py-1 text-right text-muted-foreground", flashCn)}
-              >
-                {signed(g.gamma)}
-              </td>
-              {/* Θ/d — live-sourced when tick present */}
-              <td
-                key={`${r.key}-theta-${liveTs ?? ""}`}
-                className={cn("px-2 py-1 text-right", signClass(g.theta), flashCn)}
-              >
-                {signedUsd(g.theta)}
-              </td>
-              {/* Vega — live-sourced when tick present */}
-              <td
-                key={`${r.key}-vega-${liveTs ?? ""}`}
-                className={cn("px-2 py-1 text-right", signClass(g.vega), flashCn)}
-              >
-                {signedUsd(g.vega)}
-              </td>
-              {/* Verdict — joined exit verdict for this calendar (static, no live-cell) */}
-              <td className="px-2 py-1 text-right">
-                {verdict !== null ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <VerdictChangedMarker row={verdict} />
-                    <VerdictChip row={verdict} marketSession={verdictMarketSession} />
-                  </span>
-                ) : (
-                  <span className="text-dim">—</span>
-                )}
-              </td>
-            </tr>
-            {expanded && verdict !== null && (
-              <tr data-testid={`position-verdict-detail-${r.key}`}>
-                <td className="px-2 pb-2" />
-                <td className="px-2 pb-2" colSpan={COLS.length}>
-                  <VerdictDetailBody row={verdict} observedAt={verdictObservedAt ?? ""} />
-                </td>
-              </tr>
+  const resolvedFor = (r: Row): LiveRowResult => {
+    const resolved = resolvedByKey.get(r.key);
+    assertDefined(resolved, `resolved live row for ${r.key}`);
+    return resolved;
+  };
+
+  const columns: ReadonlyArray<DataTableColumn<Row>> = [
+    {
+      key: "include",
+      header: <span className="sr-only">Include in total</span>,
+      align: "left",
+      render: (r) => (
+        <span className="flex justify-center" onClick={(e) => { e.stopPropagation(); }}>
+          <input
+            type="checkbox"
+            checked={!excluded.has(r.key)}
+            onChange={() => { onToggleExcluded(r.key); }}
+            aria-label={`Include ${r.label} in risk profile & total`}
+            className="accent-blue cursor-pointer"
+          />
+        </span>
+      ),
+    },
+    {
+      key: "position",
+      header: COLS[0],
+      align: "left",
+      render: (r) => {
+        const ivNa = ivNaByRowKey.get(r.key) === true;
+        return (
+          <>
+            {r.label}
+            {ivNa && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger
+                    style={{
+                      display: "inline-flex",
+                      marginLeft: 6,
+                      verticalAlign: "middle",
+                      cursor: "default",
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                    }}
+                  >
+                    <Badge
+                      variant="outline"
+                      className="border-amber/50 px-1 py-0 font-mono text-[9px] text-amber"
+                    >
+                      IV n/a
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      IV n/a — did not converge. @exp shown; excluded from T+0.
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
-            </Fragment>
-          );
-        })}
-        {/* Net total row — uses resolveLivePositionRow over all included legs */}
+          </>
+        );
+      },
+    },
+    {
+      key: "expiry",
+      header: COLS[1],
+      render: (r) => (
+        <div className="flex flex-col items-end">
+          <span className="text-[11px] text-muted-foreground">{r.expiry.line1}</span>
+          <span className="text-[9px] text-dim">{r.expiry.line2}</span>
+        </div>
+      ),
+    },
+    {
+      key: "netval",
+      header: COLS[2],
+      render: (r) => {
+        const { netVal: val, liveTs } = resolvedFor(r);
+        const flashCn = liveTs !== null ? `live-cell-flash ${liveCellCn(liveTs)}` : "";
+        return (
+          <span key={`${r.key}-netval-${liveTs ?? ""}`} className={cn("text-txt", flashCn)}>
+            {usd(val)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "unreal",
+      header: COLS[3],
+      render: (r) => {
+        const { unreal, liveTs } = resolvedFor(r);
+        const flashCn = liveTs !== null ? `live-cell-flash ${liveCellCn(liveTs)}` : "";
+        return (
+          <span
+            key={`${r.key}-unreal-${liveTs ?? ""}`}
+            className={cn(unreal === null ? "text-dim" : signClass(unreal), flashCn)}
+          >
+            {unreal === null ? "—" : signedUsd(unreal)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "delta",
+      header: COLS[4],
+      render: (r) => {
+        const { greeks: g, liveTs } = resolvedFor(r);
+        const flashCn = liveTs !== null ? `live-cell-flash ${liveCellCn(liveTs)}` : "";
+        return (
+          <span key={`${r.key}-delta-${liveTs ?? ""}`} className={cn(signClass(g.delta), flashCn)}>
+            {signed(g.delta)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "gamma",
+      header: COLS[5],
+      render: (r) => {
+        const { greeks: g, liveTs } = resolvedFor(r);
+        const flashCn = liveTs !== null ? `live-cell-flash ${liveCellCn(liveTs)}` : "";
+        return (
+          <span key={`${r.key}-gamma-${liveTs ?? ""}`} className={cn("text-muted-foreground", flashCn)}>
+            {signed(g.gamma)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "theta",
+      header: COLS[6],
+      render: (r) => {
+        const { greeks: g, liveTs } = resolvedFor(r);
+        const flashCn = liveTs !== null ? `live-cell-flash ${liveCellCn(liveTs)}` : "";
+        return (
+          <span key={`${r.key}-theta-${liveTs ?? ""}`} className={cn(signClass(g.theta), flashCn)}>
+            {signedUsd(g.theta)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "vega",
+      header: COLS[7],
+      render: (r) => {
+        const { greeks: g, liveTs } = resolvedFor(r);
+        const flashCn = liveTs !== null ? `live-cell-flash ${liveCellCn(liveTs)}` : "";
+        return (
+          <span key={`${r.key}-vega-${liveTs ?? ""}`} className={cn(signClass(g.vega), flashCn)}>
+            {signedUsd(g.vega)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "verdict",
+      header: COLS[8],
+      render: (r) => {
+        const verdict = verdictByRowKey.get(r.label) ?? null;
+        return verdict !== null ? (
+          <span className="inline-flex items-center gap-1.5">
+            <VerdictChangedMarker row={verdict} />
+            <VerdictChip row={verdict} marketSession={verdictMarketSession} />
+          </span>
+        ) : (
+          <span className="text-dim">—</span>
+        );
+      },
+    },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowTestId={(r) => `position-row-${r.key}`}
+      rowClassName={(r) => cn(excluded.has(r.key) && "opacity-40", highlightedRowKey === r.key && "bg-raise/20")}
+      onRowClick={(r) => { onSelectRow(r.key); }}
+      onRowMouseEnter={(r) => { onHoverRow(r.key); }}
+      onRowMouseLeave={() => { onHoverRow(null); }}
+      renderRowDetail={(r) => {
+        const verdict = verdictByRowKey.get(r.label) ?? null;
+        const expanded = expandedRowKey === r.key && verdict !== null;
+        return expanded ? (
+          <tr data-testid={`position-verdict-detail-${r.key}`}>
+            <td className="px-2 pb-2" />
+            <td className="px-2 pb-2" colSpan={COLS.length}>
+              <VerdictDetailBody row={verdict} observedAt={verdictObservedAt ?? ""} />
+            </td>
+          </tr>
+        ) : null;
+      }}
+      footer={
+        // Net total row — uses resolveLivePositionRow over all included legs.
         <tr className="border-t border-line font-semibold">
-          <td className="px-2 py-1" />
-          <td className="px-2 py-1 text-left text-txt">
+          <td className="px-2 py-1.5" />
+          <td className="px-2 py-1.5 text-left text-txt">
             Net <span className="font-mono text-[10px] font-normal text-dim">· {includedCount}/{rows.length}</span>
           </td>
-          <td className="px-2 py-1" />
+          <td className="px-2 py-1.5" />
           {/* Net val total */}
           <td
             key={`total-netval-${total.liveTs ?? ""}`}
-            className={cn("px-2 py-1 text-right text-txt", total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
+            className={cn("px-2 py-1.5 text-right text-txt", total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
           >
             {usd(total.netVal)}
           </td>
           {/* Unreal total */}
           <td
             key={`total-unreal-${total.liveTs ?? ""}`}
-            className={cn("px-2 py-1 text-right", total.unreal === null ? "text-dim" : signClass(total.unreal), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
+            className={cn("px-2 py-1.5 text-right", total.unreal === null ? "text-dim" : signClass(total.unreal), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
           >
             {total.unreal === null ? "—" : signedUsd(total.unreal)}
           </td>
           {/* Δ total */}
           <td
             key={`total-delta-${total.liveTs ?? ""}`}
-            className={cn("px-2 py-1 text-right", signClass(total.greeks.delta), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
+            className={cn("px-2 py-1.5 text-right", signClass(total.greeks.delta), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
           >
             {signed(total.greeks.delta)}
           </td>
           {/* Γ total */}
           <td
             key={`total-gamma-${total.liveTs ?? ""}`}
-            className={cn("px-2 py-1 text-right text-muted-foreground", total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
+            className={cn("px-2 py-1.5 text-right text-muted-foreground", total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
           >
             {signed(total.greeks.gamma)}
           </td>
           {/* Θ/d total */}
           <td
             key={`total-theta-${total.liveTs ?? ""}`}
-            className={cn("px-2 py-1 text-right", signClass(total.greeks.theta), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
+            className={cn("px-2 py-1.5 text-right", signClass(total.greeks.theta), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
           >
             {signedUsd(total.greeks.theta)}
           </td>
           {/* Vega total */}
           <td
             key={`total-vega-${total.liveTs ?? ""}`}
-            className={cn("px-2 py-1 text-right", signClass(total.greeks.vega), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
+            className={cn("px-2 py-1.5 text-right", signClass(total.greeks.vega), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
           >
             {signedUsd(total.greeks.vega)}
           </td>
           {/* Verdict column — no aggregate */}
-          <td className="px-2 py-1" />
+          <td className="px-2 py-1.5" />
         </tr>
-      </tbody>
-    </table>
+      }
+      wrapperClassName=""
+    />
   );
 }
 
