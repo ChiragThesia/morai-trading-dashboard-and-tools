@@ -116,3 +116,8 @@ None - no external service configuration required.
 ---
 *Phase: 42-design-system-consolidation-one-reusable-component-system-fo*
 *Completed: 2026-07-16*
+
+## Self-Check: PASSED
+- FOUND: apps/web/src/screens/Overview.tsx
+- FOUND: 0a23746 (feat commit)
+- FOUND: 5c78081 (docs/summary commit)

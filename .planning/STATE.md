@@ -5,15 +5,15 @@ milestone_name: Picker Intelligence
 current_phase: 42
 current_phase_name: "Design-system consolidation — one reusable component system for every screen: DataTable primitive, single Button system, formalized design tokens, docs/architecture/design-system.md"
 status: executing
-stopped_at: Phase 42 Plan 04 complete (Button consolidation — dialog.tsx/Login.tsx/RebuildButton.tsx migrated to system/Button, ui/button.tsx deleted)
-last_updated: "2026-07-15T20:54:30.086Z"
-last_activity: 2026-07-15
-last_activity_desc: Phase 42 Plan 04 complete — three ui/button call sites migrated to system/Button, Panel-gradient dup swept on Login/RebuildButton, ui/button.tsx deleted
+stopped_at: Completed 42-03-PLAN.md
+last_updated: "2026-07-16T13:28:40.481Z"
+last_activity: 2026-07-16
+last_activity_desc: Phase 42 Plan 03 complete — Overview's PositionsTable rewritten onto DataTable<Row>, live-cell flash/IV n-a/VERDICT/checkbox/highlight behaviors preserved, Overview.test.tsx green unchanged (89/89)
 progress:
   total_phases: 21
   completed_phases: 20
   total_plans: 117
-  completed_plans: 114
+  completed_plans: 116
   percent: 95
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 ## Current Position
 
 Phase: 42 — Design-system consolidation — one reusable component system for every screen: DataTable primitive, single Button system, formalized design tokens, docs/architecture/design-system.md
-Plan: 04 of 5 complete (Button consolidation — dialog/Login/RebuildButton migrated, ui/button.tsx deleted)
+Plan: 4 of 5 complete (01 DataTable primitive, 02 CandidateTable wrapper, 03 Overview PositionsTable migration, 04 Button consolidation — 05 token sweep + design-system doc remains)
 Status: Executing Phase 42
-Last activity: 2026-07-15 — Phase 42 Plan 04 complete — three ui/button call sites migrated to system/Button, Panel-gradient dup swept on Login/RebuildButton, ui/button.tsx deleted
+Last activity: 2026-07-16 — Phase 42 Plan 03 complete — Overview's PositionsTable rewritten onto DataTable<Row>, live-cell flash/IV n-a/VERDICT/checkbox/highlight behaviors preserved, Overview.test.tsx green unchanged (89/89)
 
 ## Deferred Verification
 
@@ -325,6 +325,7 @@ Regression gates (must survive every phase, carried from v1.0/v1.1):
 | Phase 36 P05 | 12min | 2 tasks | 4 files |
 | Phase 42 P01 | 10min | 2 tasks | 3 files |
 | Phase 42 P04 | 25min | 3 tasks | 4 files |
+| Phase 42 P03 | 15min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -511,6 +512,9 @@ pitfalls, phase ordering) is in `.planning/research/SUMMARY.md` and
 - [Phase ?]: 36-05 C1-C10 chrome-devtools items + C7 1440px before/after screenshots deferred PENDING-ORCHESTRATOR (executor has no browser tools); baseline commit 2e9eb33, after eb3a44f; C11 phone check PENDING-USER
 - [Phase 42]: DataTable owns only thead + one tr per row (+ renderRowDetail/footer slots) — never a hardcoded selected boolean; callers pass rowClassName(row) so CandidateTable's border-tint and Overview's flat highlight stay distinct
 - [Phase 42]: 42-04: no React.forwardRef added to system/Button — React 19 ref-as-prop model + base-ui useRenderElement source trace + existing DialogTrigger render={<Button/>} precedent (RuleSettingsModal.tsx, zero ref warnings across 35 tests) proves the render-merge works without it; live browser focus-return click-through deferred human_needed (no browser tool available this session)
+- [Phase ?]: 42-03: wrapperClassName="" (bare passthrough) — PositionsTable had no scroll wrapper before this migration; empty className reproduces exact prior layout
+- [Phase ?]: 42-03: tableClassName omitted — original bare 'table' Tailwind utility class was a no-op display:table, unrelated to .live-cell/.live-cell-flash CSS, dropped rather than carried forward
+- [Phase ?]: 42-03: Net-total row padding converged to px-2 py-1.5 (was py-1) alongside header/body convergence for visual consistency, not test-asserted
 
 ### Pending Todos
 
@@ -567,7 +571,6 @@ Items acknowledged and deferred at v1.2 milestone close on 2026-07-06 (override_
 
 ## Session Continuity
 
-Last session: 2026-07-15T20:53:19.635Z
-Stopped at: Completed 35.1-01-PLAN.md
+Last session: 2026-07-16T13:28:40.468Z
+Stopped at: Completed 42-03-PLAN.md
 Resume file: 
-None
