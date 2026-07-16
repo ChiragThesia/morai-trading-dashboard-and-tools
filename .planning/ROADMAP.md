@@ -575,12 +575,12 @@ Plans:
 **Goal:** One reusable component system for every screen — one DataTable primitive that Overview PositionsTable + Analyzer CandidateTable (desktop + mobile) render through with identical chrome, one Button (system/Button, ui/button deleted), tokens documented as the single source, design-system.md updated. Visual parity at 1512x860 + 2056x1329 with no page scroll; all suites green.
 **Requirements**: none (roadmap-evolution phase)
 **Depends on:** Phase 41
-**Plans:** 2/5 plans executed
+**Plans:** 3/5 plans executed
 
 Plans:
 
 - [x] 42-01-PLAN.md — DataTable&lt;T&gt; primitive (TDD, presentational, sort/aria-sort/renderRowDetail/footer) + barrel export (wave 1)
-- [ ] 42-02-PLAN.md — CandidateTable → thin DataTable wrapper, public API byte-stable, Analyzer desktop+mobile untouched (wave 2)
+- [x] 42-02-PLAN.md — CandidateTable → thin DataTable wrapper, public API byte-stable, Analyzer desktop+mobile untouched (wave 2)
 - [ ] 42-03-PLAN.md — Overview PositionsTable → DataTable columns; detail + Net-total rows via caller slots (wave 2)
 - [x] 42-04-PLAN.md — single Button: migrate dialog/Login/RebuildButton to system/Button, token sweep, delete ui/button.tsx (wave 1)
 - [ ] 42-05-PLAN.md — design-system.md + TOPIC-MAP + rule link; phase gate (full suite, tsc baseline, dual-viewport visual parity) (wave 3)
