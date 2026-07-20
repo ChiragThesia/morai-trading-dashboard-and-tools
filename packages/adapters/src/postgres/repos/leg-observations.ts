@@ -20,6 +20,7 @@ import type {
 import { and, isNull, isNotNull, ne, eq, lte, lt, gte, inArray, desc, asc, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import { computeMoneyness } from "../../smile-moneyness.ts";
+import { withStatementTimeout } from "../db.ts";
 import type { Db } from "../db.ts";
 
 /**
@@ -43,6 +44,13 @@ const INSERT_CHUNK_ROWS = 2000;
 
 /** RTH slot width (mirrors rebuildCalendarHistory.ts's SLOT_MS / rth-slot.ts's SLOT_MINUTES). */
 const SLOT_INTERVAL_MS = 30 * 60 * 1000;
+
+/**
+ * statement_timeout for the pending-BSM drain scan — cold-cache runs have exceeded the
+ * pooler's 2min session default (exact-120s job deaths, 2026-07-20). Stays under the 900s
+ * pg-boss expire cap.
+ */
+const DRAIN_READ_TIMEOUT_MS = 600_000;
 export type PostgresLegObservationsRepo = {
   readonly persistObservations: ForPersistingObservations;
   readonly upsertContracts: ForUpsertingContracts;
@@ -129,22 +137,27 @@ export function makePostgresLegObservationsRepo(
     Result<ReadonlyArray<PendingObs>, StorageError>
   > => {
     try {
-      // Step 1: scan the partial index for pending rows — NEWEST-first, bounded.
+      // Step 1: scan for pending rows — NEWEST-first, bounded (PK backward scan).
       // gex-schwab-bsm-null-puts fix: ORDER BY time DESC + LIMIT so the freshest chain cycle
       // is always the cohort processed. The previous unbounded, oldest-first read starved the
       // newest (live) cohort — its legs stayed bsm_* NULL and GEX dropped them (no put wall /
-      // flip). The btree partial index (time, contract) supports the backward scan + limit.
-      const obsRows = await db
-        .select({
-          time: legObservations.time,
-          contract: legObservations.contract,
-          mark: legObservations.mark,
-          underlyingPrice: legObservations.underlyingPrice,
-        })
-        .from(legObservations)
-        .where(and(isNull(legObservations.bsmIv), isNotNull(legObservations.mark)))
-        .orderBy(desc(legObservations.time))
-        .limit(limit);
+      // flip).
+      // withStatementTimeout: on cold-cache/throttled IO this scan can exceed the pooler's
+      // 2min session statement_timeout default and get killed mid-run (57014) — Supavisor
+      // strips per-connection overrides, so SET LOCAL in a transaction is the only fix.
+      const obsRows = await withStatementTimeout(db, DRAIN_READ_TIMEOUT_MS, async (tx) =>
+        tx
+          .select({
+            time: legObservations.time,
+            contract: legObservations.contract,
+            mark: legObservations.mark,
+            underlyingPrice: legObservations.underlyingPrice,
+          })
+          .from(legObservations)
+          .where(and(isNull(legObservations.bsmIv), isNotNull(legObservations.mark)))
+          .orderBy(desc(legObservations.time))
+          .limit(limit),
+      );
 
       if (obsRows.length === 0) return ok([]);
 
