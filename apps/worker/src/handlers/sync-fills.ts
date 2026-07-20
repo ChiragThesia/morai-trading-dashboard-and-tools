@@ -15,6 +15,7 @@ import type { Job } from "pg-boss";
 import { z } from "zod";
 import { isWithinRth, isNyseHoliday } from "@morai/core";
 import type { ForRunningSyncFills } from "@morai/core";
+import type { BossForChainHandler } from "./fetch-cboe-chain.ts";
 
 // Payload schema — sync-fills full-sweep uses no required fields
 // Extensible for calendar-scoped variant (rebuild-journal 05-08 will add calendarId)
@@ -24,6 +25,8 @@ export type SyncFillsPayload = z.infer<typeof syncFillsPayload>;
 export type SyncFillsHandlerDeps = {
   readonly syncFillsUseCase: ForRunningSyncFills;
   readonly now: () => Date;
+  /** pg-boss — used only to enqueue register-open-calendars on success. */
+  readonly boss: BossForChainHandler;
 };
 
 /**
@@ -62,5 +65,17 @@ export function makeSyncFillsHandler(
     if (!result.ok) {
       throw new Error(result.error.message);
     }
+
+    // Broker book is the source of truth (2026-07-20): rolls create new legs the
+    // calendar registry (exit advisor, journal) only learns about through
+    // register-open-calendars — previously on-demand only, so after a roll the
+    // registry sat stale until an operator ran it. Enqueue on every successful
+    // sync so the registry follows the book. Fire-and-forget (D-03 pattern):
+    // send failure must not fail the sync job; singletonKey dedups.
+    void deps.boss.send("register-open-calendars", {}, {
+      singletonKey: "triggered-by-sync-fills",
+    }).catch((e: unknown) => {
+      console.warn("sync-fills: failed to enqueue register-open-calendars", e);
+    });
   };
 }

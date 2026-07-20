@@ -337,6 +337,9 @@ const syncFillsUseCase = makeSyncFillsUseCase({
 const syncFillsHandler = makeSyncFillsHandler({
   syncFillsUseCase,
   now: () => new Date(),
+  // Broker book = source of truth: successful syncs enqueue register-open-calendars
+  // so rolls self-register (exit advisor / journal follow the book automatically).
+  boss,
 });
 
 // A2/CR-04 (A5): calendar-scoped sync — rebuild-journal re-pairs ONLY the target calendar
