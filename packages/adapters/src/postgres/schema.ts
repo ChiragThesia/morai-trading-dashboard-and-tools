@@ -1,6 +1,5 @@
 import {
   customType,
-  index,
   integer,
   jsonb,
   numeric,
@@ -144,10 +143,9 @@ export const legObservations = pgTable(
   (table) => [
     // Time-leading composite PK — (time, contract)
     primaryKey({ columns: [table.time, table.contract] }),
-    // Partial index: cheap "pending BSM compute" scan
-    index("leg_obs_pending_bsm_idx")
-      .on(table.time, table.contract)
-      .where(sql`bsm_iv IS NULL AND mark IS NOT NULL`),
+    // leg_obs_pending_bsm_idx dropped in 0025: planner never chose it (idx_scan=0 in prod,
+    // the pending-BSM drain uses the PK backward scan) and its transient predicate rows
+    // bloated it to 222MB of pure write amplification.
   ],
 ).enableRLS();
 
@@ -574,7 +572,3 @@ export const reauthNonces = pgTable("reauth_nonces", {
   appId: text("app_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
-
-// ─── Re-export sql helper used by partial index ───────────────────────────────
-import { sql } from "drizzle-orm";
-export { sql };

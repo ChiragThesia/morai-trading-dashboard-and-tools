@@ -17,11 +17,23 @@ export type Db = ReturnType<typeof makeDb>;
  */
 export function makeDb(
   connectionString: string,
-  opts?: { readonly max?: number; readonly idleTimeout?: number },
+  opts?: {
+    readonly max?: number;
+    readonly idleTimeout?: number;
+    /**
+     * Per-connection statement_timeout in ms. Batch workers set this above the
+     * pooler's 2min session default — the BSM drain SELECT can exceed 2min on
+     * cold-cache/throttled IO and must not be killed mid-run (57014).
+     */
+    readonly statementTimeoutMs?: number;
+  },
 ) {
   const client = postgres(connectionString, {
     max: opts?.max ?? 10,
     idle_timeout: opts?.idleTimeout ?? 20,
+    ...(opts?.statementTimeoutMs !== undefined
+      ? { connection: { statement_timeout: opts.statementTimeoutMs } }
+      : {}),
   });
   return drizzle({ client, schema });
 }

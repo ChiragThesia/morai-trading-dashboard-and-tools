@@ -1,0 +1,1 @@
+DROP INDEX "leg_obs_pending_bsm_idx";

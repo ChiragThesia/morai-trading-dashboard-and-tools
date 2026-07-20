@@ -123,7 +123,9 @@ await boss.start();
 
 // Build Drizzle DB instance (direct connection for repos).
 // max:3 — job handlers run sequentially; a small pool is ample and bounds total usage.
-const db = makeDb(config.DATABASE_URL, { max: 3 });
+// statementTimeoutMs 600s: batch jobs (BSM drain) can exceed the pooler's 2min session
+// default on cold-cache IO; stays under the 900s pg-boss expire cap.
+const db = makeDb(config.DATABASE_URL, { max: 3, statementTimeoutMs: 600_000 });
 
 // Build repos
 const calendarsRepo = makePostgresCalendarsRepo(db);

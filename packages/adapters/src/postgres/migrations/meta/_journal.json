@@ -176,6 +176,13 @@
       "when": 1783958998800,
       "tag": "0024_reauth_nonces",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784558573017,
+      "tag": "0025_drop_leg_obs_pending_bsm_idx",
+      "breakpoints": true
     }
   ]
 }
