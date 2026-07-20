@@ -358,6 +358,8 @@ interface PayoffChartGridProps {
 
 /** Grid tick labels within this many px of a BE number are dropped (BE wins the lane). */
 const BE_LABEL_CLEARANCE_PX = 30;
+/** Minimum horizontal gap between BE axis numbers (collision sweep, 2026-07-20). */
+const MIN_BE_LABEL_GAP_PX = 26;
 
 /**
  * Grid lines + axis tick labels, hand-rendered (not native Recharts XAxis/YAxis tick
@@ -413,6 +415,27 @@ function PayoffChartGrid({
     return px >= 0 && px <= scales.innerWidth;
   });
   const bePx = beLabels.map(({ v }) => scales.xScale(v));
+  // Collision sweep (2026-07-20): a today-BE and an @exp-BE at nearly the same price
+  // rendered on top of each other. Sort by true position, push each label right to a
+  // minimum gap, then walk back from the right edge so the cluster never overflows.
+  // Tick MARKS (zeroY bars) and gridline suppression keep the TRUE positions.
+  const placedBeLabels = [...beLabels]
+    .map((l) => ({ ...l, px: scales.xScale(l.v) }))
+    .sort((a, b) => a.px - b.px);
+  for (let i = 1; i < placedBeLabels.length; i++) {
+    const prev = placedBeLabels[i - 1];
+    const cur = placedBeLabels[i];
+    if (prev !== undefined && cur !== undefined && cur.px < prev.px + MIN_BE_LABEL_GAP_PX) {
+      cur.px = prev.px + MIN_BE_LABEL_GAP_PX;
+    }
+  }
+  for (let i = placedBeLabels.length - 1; i >= 0; i--) {
+    const cur = placedBeLabels[i];
+    const next = placedBeLabels[i + 1];
+    if (cur === undefined) continue;
+    const rightBound = next === undefined ? scales.innerWidth : next.px - MIN_BE_LABEL_GAP_PX;
+    if (cur.px > rightBound) cur.px = rightBound;
+  }
   const keptXTicks = xTicks.filter(
     (s) =>
       s % (100 * labelStride) === 0 &&
@@ -488,11 +511,11 @@ function PayoffChartGrid({
           </g>
         );
       })}
-      {beLabels.map(({ v, color, tid }) => (
+      {placedBeLabels.map(({ v, color, tid, px }) => (
         <text
           key={`${tid}-${v}`}
           data-testid={tid}
-          x={scales.xScale(v)}
+          x={px}
           y={scales.innerHeight + 16}
           fill={color}
           fontSize={10}

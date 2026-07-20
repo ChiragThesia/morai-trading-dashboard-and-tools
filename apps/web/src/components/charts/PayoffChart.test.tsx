@@ -862,6 +862,23 @@ describe("PayoffChart — BE values as x-axis numbers (2026-07-10 request)", () 
     expect(container.querySelectorAll('[data-testid="be-axis-label-exp"]').length).toBe(0);
     expect(container.querySelectorAll('[data-testid="be-axis-label-t0"]').length).toBe(1);
   });
+
+  // 2026-07-20 user report: when a today-BE and an @exp-BE land at nearly the same
+  // price, their axis numbers rendered on top of each other (unreadable mash). Labels
+  // now sweep apart to a minimum horizontal gap; this fixture's t0 and exp BEs are BOTH
+  // exactly 7400, the worst case.
+  it("near-identical BE numbers are pushed apart instead of overlapping", () => {
+    const { container } = render(<PayoffChart {...baseProps()} />);
+    const labels = [
+      ...container.querySelectorAll('[data-testid="be-axis-label-t0"], [data-testid="be-axis-label-exp"]'),
+    ];
+    expect(labels.length).toBe(2);
+    const xs = labels.map((l) => Number(l.getAttribute("x"))).sort((a, b) => a - b);
+    const first = xs[0];
+    const second = xs[1];
+    if (first === undefined || second === undefined) throw new Error("missing BE label x");
+    expect(second - first).toBeGreaterThanOrEqual(24);
+  });
 });
 
 describe("PayoffChart — y-axis round ticks anchored at zero (2026-07-10 request)", () => {

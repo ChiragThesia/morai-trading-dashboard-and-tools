@@ -168,8 +168,8 @@ function stubDesktopMatchMedia(): void {
  * fixture-only, view-only screen — spot/rate/divYield are the frozen snapshot constants). */
 const PARAMS: ScenarioParams = {
   spot: pickerSnapshotFixture.spot,
-  // TOS date-line convention (2026-07-20): "today" prices at today's CLOSE → daysForward 1.
-  daysForward: 1,
+  // TOS date-line convention (2026-07-20 oracle-corrected): "today" prices at NOW → 0.
+  daysForward: 0,
   ivShift: 0,
   rate: 0.045,
   divYield: 0.013,
