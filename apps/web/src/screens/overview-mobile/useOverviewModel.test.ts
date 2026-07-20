@@ -308,3 +308,49 @@ describe("buildCalendarPosition — per-calendar tick consistency", () => {
     expect(built.position.backIv).toBeCloseTo(0.29, 10);
   });
 });
+
+// ─── buildCalendarPosition — calibration/repricing carry identity (2026-07-20 #2) ─────
+//
+// resolveLegIv inverted marks with the flat DEFAULT_RATE/DEFAULT_DIV while the scenario
+// engine repriced with each leg's parity-implied carry from the GEX snapshot. Inverting
+// at one (r,q) and repricing at another breaks the mark→IV→mark identity: the whole T+0
+// curve floated ~+$265 at spot (site showed +$194 while broker truth was −$20) and BEs
+// widened ~45pts. Calibration must use the SAME carry the engine prices with.
+import { repriceScenario as repriceForCarryTest } from "../../lib/scenario-engine.ts";
+
+describe("buildCalendarPosition — carry identity", () => {
+  const SPOT2 = 7479.1;
+  const GEX_WITH_CARRY: GexSnapshotEntry = {
+    ...GEX_FIXTURE,
+    impliedCarry: [
+      { expiration: "2026-10-16", rate: 0.038372777777777776, divYield: 0.0049856229554864975 },
+    ],
+  };
+
+  it("T+0 book P&L at spot reproduces the broker-mark P&L when parity carry is present", () => {
+    // Broker-mark truth: (backMark − frontMark − entryNet) × 100
+    const frontMark = 185.5; // |−18550| / 100
+    const backMark = 232.75; // 23275 / 100
+    const entryNet = 206.8422 - 159.1678;
+    const truth = (backMark - frontMark - entryNet) * 100;
+
+    const cal: CalendarGroup = {
+      ...CAL,
+      front: calLeg("SPXW  261016P07450000", false, 159.1678, -18550),
+      back: calLeg("SPXW  261130P07450000", true, 206.8422, 23275),
+    };
+    const built = buildCalendarPosition(cal, SPOT2, new Map(), NOW, true, GEX_WITH_CARRY);
+    const r = repriceForCarryTest([built.position], {
+      spot: SPOT2,
+      daysForward: 0,
+      ivShift: 0,
+      rate: 0.045,
+      divYield: 0.013,
+    });
+    const atSpot = r.payoffCurve.reduce((b, p) =>
+      Math.abs(p.spot - SPOT2) < Math.abs(b.spot - SPOT2) ? p : b,
+    );
+    // Within grid-interpolation + settlement-fraction noise — nowhere near the +$265 float.
+    expect(Math.abs(atSpot.pl - truth)).toBeLessThan(60);
+  });
+});

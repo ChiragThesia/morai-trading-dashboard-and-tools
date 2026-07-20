@@ -82,15 +82,20 @@ function resolveLeg(
   spot: number,
   liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>,
   now: Date,
+  carry: { readonly rate: number; readonly divYield: number },
 ): LegIvResolution {
   const netQty = leg.longQty - leg.shortQty;
   const tick = liveGreeks.get(leg.occSymbol);
   const liveTick: LiveTick | null = tick === undefined ? null : { mark: tick.mark, bsmIv: tick.bsmIv };
+  // Carry identity (2026-07-20 #2): invert with the SAME (r, q) the scenario engine
+  // reprices this leg with (its parity-implied carry, or the defaults when absent).
+  // Inverting at the flat defaults while repricing at parity carry floated the whole
+  // T+0 curve ~+$265 at spot and widened BEs ~45pts.
   const result = resolveLegIv(
     leg.occSymbol,
     spot,
-    DEFAULT_RATE,
-    DEFAULT_DIV,
+    carry.rate,
+    carry.divYield,
     liveTick,
     leg.marketValue,
     netQty,
@@ -141,10 +146,10 @@ export function buildCalendarPosition(
   // legs calibrate from the broker REST marks — one payload, one instant.
   const bothTicked = liveGreeks.has(cal.front.occSymbol) && liveGreeks.has(cal.back.occSymbol);
   const calGreeks = bothTicked ? liveGreeks : EMPTY_GREEKS;
-  const front = resolveLeg(cal.front, spot, calGreeks, now);
-  const back = resolveLeg(cal.back, spot, calGreeks, now);
   const frontCarry = resolveCarry(gex, legExpiryKey(cal.front.occSymbol));
   const backCarry = resolveCarry(gex, legExpiryKey(cal.back.occSymbol));
+  const front = resolveLeg(cal.front, spot, calGreeks, now, frontCarry);
+  const back = resolveLeg(cal.back, spot, calGreeks, now, backCarry);
   // Actual fill basis (points per contract): anchors the payoff curves to the REAL
   // entry so they show true open P&L at spot, like TOS — not the model entry re-priced
   // at the live spot (which pins T+0 to $0 at spot and, on a near-flat calendar curve,
