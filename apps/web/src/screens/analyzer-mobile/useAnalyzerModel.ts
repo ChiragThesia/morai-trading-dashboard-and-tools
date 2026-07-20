@@ -319,8 +319,8 @@ export function useAnalyzerModel(): AnalyzerModel {
   );
 
   const params = useMemo<ScenarioParams>(
-    () => ({ spot, daysForward: dateControl.daysForward, ivShift: 0, rate: DEFAULT_RATE, divYield: DEFAULT_DIV }),
-    [spot, dateControl.daysForward],
+    () => ({ spot, daysForward: dateControl.engineDaysForward, ivShift: 0, rate: DEFAULT_RATE, divYield: DEFAULT_DIV }),
+    [spot, dateControl.engineDaysForward],
   );
 
   // POST /api/picker/analyze (D-02) — pasting a PUT calendar scores it through the real

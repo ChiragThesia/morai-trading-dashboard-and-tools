@@ -29,6 +29,7 @@ const BASE = {
   dateControl: {
     dateInputValue: "2026-07-11",
     daysForward: 0,
+    engineDaysForward: 1,
     setDate: (): void => {},
     stepDate: (): void => {},
     resetDate: (): void => {},
@@ -50,6 +51,7 @@ const PROJECTED = {
   ...BASE.dateControl,
   dateInputValue: "2026-07-14",
   daysForward: 3,
+  engineDaysForward: 4,
 };
 
 function openOverflowDialog(): void {

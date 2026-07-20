@@ -550,24 +550,24 @@ export function useOverviewModel(): OverviewModel {
   const payoffDomain = useMemo(() => {
     const params: ScenarioParams = {
       spot,
-      daysForward: dateControl.daysForward,
+      daysForward: dateControl.engineDaysForward,
       ivShift: 0,
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
     return computePayoffDomain(calendarPositions, spot, params);
-  }, [calendarPositions, spot, dateControl.daysForward]);
+  }, [calendarPositions, spot, dateControl.engineDaysForward]);
 
   const scenario = useMemo(() => {
     const params: ScenarioParams = {
       spot,
-      daysForward: dateControl.daysForward,
+      daysForward: dateControl.engineDaysForward,
       ivShift: 0,
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
     return repriceScenario(calendarPositions, params, payoffDomain);
-  }, [calendarPositions, spot, dateControl.daysForward, payoffDomain]);
+  }, [calendarPositions, spot, dateControl.engineDaysForward, payoffDomain]);
 
   const positionSetSignature = calendarPositions
     .map((p) => `${p.id}:${p.frontIvStatus ?? "ok"}:${p.backIvStatus ?? "ok"}:${p.included}`)
@@ -600,13 +600,13 @@ export function useOverviewModel(): OverviewModel {
     if (highlightedPosition === null) return null;
     const params: ScenarioParams = {
       spot,
-      daysForward: dateControl.daysForward,
+      daysForward: dateControl.engineDaysForward,
       ivShift: 0,
       rate: DEFAULT_RATE,
       divYield: DEFAULT_DIV,
     };
     return repriceScenario([highlightedPosition], params, payoffDomain);
-  }, [highlightedPosition, spot, dateControl.daysForward, payoffDomain]);
+  }, [highlightedPosition, spot, dateControl.engineDaysForward, payoffDomain]);
 
   const excludedFromT0 = t0ExcludedPositions(calendarPositions);
 

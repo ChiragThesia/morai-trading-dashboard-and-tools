@@ -13,16 +13,36 @@ const TODAY = new Date(2026, 6, 4); // local 2026-07-04 (never new Date("...") �
 const MAX = 21;
 
 describe("usePayoffDateControl", () => {
-  it("starts at today with daysForward 0", () => {
+  it("starts at today with display daysForward 0", () => {
     const { result } = renderHook(() => usePayoffDateControl(TODAY, MAX));
     expect(result.current.dateInputValue).toBe("2026-07-04");
     expect(result.current.daysForward).toBe(0);
+  });
+
+  // TOS parity (2026-07-20): the risk-profile date line prices at the SELECTED DATE'S
+  // CLOSE — the named day fully decayed — so the engine offset is daysForward + 1, capped
+  // at front expiry. Pricing "today" at now left the near-flat calendar T+0 curve one
+  // theta-day high and pushed its breakevens ~40pts wide vs TOS (measured live: ours
+  // [7436,7602] vs TOS [7477,7577]; with +1, [7474,7578]).
+  it("engineDaysForward = daysForward + 1 (close of the picked day), capped at max", () => {
+    const { result } = renderHook(() => usePayoffDateControl(TODAY, MAX));
+    expect(result.current.engineDaysForward).toBe(1);
+
+    act(() => { result.current.stepDate(999); }); // date clamps at max
+    expect(result.current.daysForward).toBe(MAX);
+    expect(result.current.engineDaysForward).toBe(MAX); // +1 capped at front expiry
+  });
+
+  it("engineDaysForward is 0 when maxDaysForward is 0 (no calendars)", () => {
+    const { result } = renderHook(() => usePayoffDateControl(TODAY, 0));
+    expect(result.current.engineDaysForward).toBe(0);
   });
 
   it("steps by whole days, clamped to [0, max]", () => {
     const { result } = renderHook(() => usePayoffDateControl(TODAY, MAX));
     act(() => { result.current.stepDate(1); });
     expect(result.current.daysForward).toBe(1);
+    expect(result.current.engineDaysForward).toBe(2); // close of tomorrow
     expect(result.current.dateInputValue).toBe("2026-07-05");
 
     act(() => { result.current.stepDate(-5); }); // from 1 → clamp at 0
@@ -37,6 +57,7 @@ describe("usePayoffDateControl", () => {
     const { result } = renderHook(() => usePayoffDateControl(TODAY, MAX));
     act(() => { result.current.setDate("2026-07-10"); });
     expect(result.current.daysForward).toBe(6);
+    expect(result.current.engineDaysForward).toBe(7); // close of the picked day
 
     act(() => { result.current.setDate("2026-12-31"); }); // far past front expiry → clamp
     expect(result.current.daysForward).toBe(MAX);

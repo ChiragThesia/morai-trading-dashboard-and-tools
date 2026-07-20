@@ -14,7 +14,14 @@ import { resolveDaysForward, toDateInputValue } from "../lib/date-projection.ts"
 
 export interface PayoffDateControl {
   readonly dateInputValue: string;
+  /** Whole-day calendar offset of the picked date (0 = today) — DISPLAY semantics
+   *  (date pill, dialogs). Never feed this to the scenario engine directly. */
   readonly daysForward: number;
+  /** What the scenario engine prices: the picked date's CLOSE (TOS date-line parity,
+   *  2026-07-20) = daysForward + 1, capped at front expiry. Pricing "today" at now left
+   *  the near-flat calendar T+0 curve one theta-day high and pushed its breakevens
+   *  ~40pts wide vs TOS (live: ours [7436,7602] vs TOS [7477,7577]; +1 → [7474,7578]). */
+  readonly engineDaysForward: number;
   readonly setDate: (value: string) => void;
   readonly stepDate: (delta: number) => void;
   readonly resetDate: () => void;
@@ -25,6 +32,7 @@ export function usePayoffDateControl(today: Date, maxDaysForward: number): Payof
 
   // Derived, never stored: input string → clamped whole-day offset (0 on empty/malformed).
   const daysForward = resolveDaysForward(dateInputValue, today, maxDaysForward);
+  const engineDaysForward = Math.min(daysForward + 1, Math.max(maxDaysForward, 0));
 
   const setDate = useCallback((value: string): void => {
     setDateInputValue(value);
@@ -46,5 +54,5 @@ export function usePayoffDateControl(today: Date, maxDaysForward: number): Payof
     setDateInputValue(toDateInputValue(today));
   }, [today]);
 
-  return { dateInputValue, daysForward, setDate, stepDate, resetDate };
+  return { dateInputValue, daysForward, engineDaysForward, setDate, stepDate, resetDate };
 }
