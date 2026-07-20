@@ -297,15 +297,22 @@ describe("buildCalendarPosition — per-calendar tick consistency", () => {
     expect(withTicks.position.backIvStatus).toBe("ok");
   });
 
-  it("both legs ticked → tick IVs trusted for both", () => {
+  // Tick IVs are solved SERVER-side under the server's own (rate, q, spot, T) — inputs
+  // the client cannot reproduce — so repricing them client-side breaks the mark→IV→mark
+  // identity exactly like the carry bug below. The payoff curve therefore NEVER uses
+  // tick IVs: every leg calibrates from the broker REST marks (self-consistent loop,
+  // ≤30s stale via the positions poll). Ticks still drive row greeks and live badges.
+  it("both legs ticked → curve IVs still calibrate from broker marks, never tick IVs", () => {
     const both = new Map([
       [FRONT.occSymbol, tickFor(FRONT.occSymbol, 0.31)],
       [BACK.occSymbol, tickFor(BACK.occSymbol, 0.29)],
     ]);
-    const built = buildCalendarPosition(CAL, SPOT, both, NOW, true, undefined);
+    const withTicks = buildCalendarPosition(CAL, SPOT, both, NOW, true, undefined);
+    const restOnly = buildCalendarPosition(CAL, SPOT, new Map(), NOW, true, undefined);
 
-    expect(built.position.frontIv).toBeCloseTo(0.31, 10);
-    expect(built.position.backIv).toBeCloseTo(0.29, 10);
+    expect(withTicks.position.frontIv).toBeCloseTo(restOnly.position.frontIv, 10);
+    expect(withTicks.position.backIv).toBeCloseTo(restOnly.position.backIv, 10);
+    expect(withTicks.position.frontIv).not.toBeCloseTo(0.31, 6);
   });
 });
 

@@ -31,7 +31,6 @@ import { toDateInputValue } from "../../lib/date-projection.ts";
 import { classifyRegime, zeroDteGex } from "../../lib/gex-regime.ts";
 import type { GexRegime } from "../../lib/gex-regime.ts";
 import { resolveLegIv } from "../../lib/iv-calibration.ts";
-import type { LiveTick } from "../../lib/iv-calibration.ts";
 import { computeProjectionBounds } from "../../lib/date-projection.ts";
 import { usePayoffDateControl } from "../../hooks/usePayoffDateControl.ts";
 import type { PayoffDateControl } from "../../hooks/usePayoffDateControl.ts";
@@ -58,9 +57,6 @@ export type NetGreeks = { delta: number; gamma: number; theta: number; vega: num
 
 // ─── Per-leg IV calibration (OVW-02, D-01/D-02) ───────────────────────────────
 
-/** Shared empty map for the tick-gated path — stable identity, no per-call alloc. */
-const EMPTY_GREEKS: ReadonlyMap<string, StreamLiveGreekEvent> = new Map();
-
 type LegIvResolution = {
   readonly iv: number;
   readonly status: "ok" | "non-convergent";
@@ -80,23 +76,22 @@ type LegIvResolution = {
 function resolveLeg(
   leg: BrokerPositionResponse,
   spot: number,
-  liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>,
   now: Date,
   carry: { readonly rate: number; readonly divYield: number },
 ): LegIvResolution {
   const netQty = leg.longQty - leg.shortQty;
-  const tick = liveGreeks.get(leg.occSymbol);
-  const liveTick: LiveTick | null = tick === undefined ? null : { mark: tick.mark, bsmIv: tick.bsmIv };
   // Carry identity (2026-07-20 #2): invert with the SAME (r, q) the scenario engine
   // reprices this leg with (its parity-implied carry, or the defaults when absent).
   // Inverting at the flat defaults while repricing at parity carry floated the whole
-  // T+0 curve ~+$265 at spot and widened BEs ~45pts.
+  // T+0 curve ~+$265 at spot and widened BEs ~45pts. Tick IVs are never used here —
+  // they're solved server-side under the server's own (rate, q, spot, T), which the
+  // client can't reproduce, so repricing them breaks the same identity (liveTick null).
   const result = resolveLegIv(
     leg.occSymbol,
     spot,
     carry.rate,
     carry.divYield,
-    liveTick,
+    null,
     leg.marketValue,
     netQty,
     now,
@@ -133,23 +128,21 @@ function legExpiryKey(occSymbol: string): string {
 export function buildCalendarPosition(
   cal: CalendarGroup,
   spot: number,
-  liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>,
+  // Kept so the curve-vs-ticks tests can prove ticks NEVER change the output.
+  _liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent>,
   now: Date,
   included: boolean,
   gex: GexSnapshotEntry | undefined,
 ): CalendarPositionBuild {
-  // Per-calendar tick consistency (2026-07-20 regression): trust tick IVs only when
-  // BOTH legs have ticks. A leg with no tick (expiry outside the chain-fetch window
-  // never gets observations) otherwise leaves its sibling priced off a different
-  // instant/spot — the mixed pair broke the calendar's hedge cancellation and showed
-  // +$1.4k phantom T+0 (BEs pushed ~40pts wide vs TOS). With ticks gated off, both
-  // legs calibrate from the broker REST marks — one payload, one instant.
-  const bothTicked = liveGreeks.has(cal.front.occSymbol) && liveGreeks.has(cal.back.occSymbol);
-  const calGreeks = bothTicked ? liveGreeks : EMPTY_GREEKS;
+  // Curve IVs always calibrate from the broker REST marks — one payload, one instant,
+  // same (r, q) as repricing, so the mark→IV→mark identity holds by construction.
+  // (2026-07-20: per-leg tick marks mixed with broker marks showed +$1.4k phantom T+0,
+  // and even both-legs-ticked broke the identity — server ticks are solved under the
+  // server's own rate/q/spot/T. Ticks still drive row greeks and live badges.)
   const frontCarry = resolveCarry(gex, legExpiryKey(cal.front.occSymbol));
   const backCarry = resolveCarry(gex, legExpiryKey(cal.back.occSymbol));
-  const front = resolveLeg(cal.front, spot, calGreeks, now, frontCarry);
-  const back = resolveLeg(cal.back, spot, calGreeks, now, backCarry);
+  const front = resolveLeg(cal.front, spot, now, frontCarry);
+  const back = resolveLeg(cal.back, spot, now, backCarry);
   // Actual fill basis (points per contract): anchors the payoff curves to the REAL
   // entry so they show true open P&L at spot, like TOS — not the model entry re-priced
   // at the live spot (which pins T+0 to $0 at spot and, on a near-flat calendar curve,
