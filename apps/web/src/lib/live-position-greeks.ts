@@ -69,10 +69,18 @@ export function resolveLivePositionRow(
   const greeks = { delta: 0, gamma: 0, theta: 0, vega: 0 };
   let liveTs: string | null = null;
 
+  // Money fields are all-or-nothing per row (2026-07-20 regression): a leg with no
+  // tick (e.g. an expiry outside the chain-fetch window never gets observations) must
+  // not be summed against a sibling's tick mark — two sources/instants inside one
+  // hedged spread don't cancel, and a stale tick showed as +$1.4k phantom P&L. When
+  // any leg lacks a tick, ALL legs price from the broker payload (one instant).
+  const allTicked = legs.every((leg) => liveGreeks.has(leg.occSymbol));
+
   for (const leg of legs) {
     const netQty = leg.longQty - leg.shortQty;
     const nq = netQty * 100;
-    const tick = liveGreeks.get(leg.occSymbol);
+    const tick = allTicked ? liveGreeks.get(leg.occSymbol) : undefined;
+    const greekTick = liveGreeks.get(leg.occSymbol);
 
     // ── Net val ──────────────────────────────────────────────────────────────
     if (tick !== undefined) {
@@ -102,14 +110,14 @@ export function resolveLivePositionRow(
       }
     }
 
-    // ── Greeks ───────────────────────────────────────────────────────────────
-    if (tick !== undefined) {
+    // ── Greeks (display-only, not money — per-leg blend is fine) ─────────────
+    if (greekTick !== undefined) {
       // Live: tick.bsm* is RAW per-share (same layer as the kernel). Position greek =
       // per-share × netQty × 100 = per-share × nq. One netQty only (CR-01).
-      greeks.delta += tick.bsmDelta * nq;
-      greeks.gamma += tick.bsmGamma * nq;
-      greeks.theta += tick.bsmTheta * nq;
-      greeks.vega += tick.bsmVega * nq;
+      greeks.delta += greekTick.bsmDelta * nq;
+      greeks.gamma += greekTick.bsmGamma * nq;
+      greeks.theta += greekTick.bsmTheta * nq;
+      greeks.vega += greekTick.bsmVega * nq;
     } else {
       // Static: computePositionGreeks already scales by netQty, so apply ONLY the ×100
       // contract multiplier — using nq here would double-apply netQty (CR-01).
@@ -129,7 +137,8 @@ export function resolveLivePositionRow(
       greeks.vega += r.value.greeks.vega * 100;
     }
 
-    // ── liveTs: lexicographically greatest ts among ticked legs ──────────────
+    // ── liveTs: lexicographically greatest ts — only when the whole row is live
+    // (a partially-ticked row's money is static; badging it live would lie) ────
     if (tick !== undefined) {
       if (liveTs === null || tick.ts > liveTs) {
         liveTs = tick.ts;

@@ -193,7 +193,25 @@ describe("resolveLivePositionRow", () => {
   });
 
   // 4. Mixed legs: one with tick, one without
-  it("mixed legs (one with tick, one without) → contributions sum; liveTs = present tick's ts", () => {
+  // Mixed-source money regression (2026-07-20): a calendar leg with no tick (e.g. an
+  // expiry outside the chain-fetch window never gets observations) must NOT be summed
+  // against its sibling's tick mark — two sources/instants inside one hedged spread do
+  // not cancel, and a stale tick showed as +$1.4k phantom P&L vs the broker's truth.
+  // Money fields (netVal/unreal) and the liveTs badge are all-or-nothing per row.
+  it("mixed legs (one with tick, one without) → netVal/unreal use the static broker path for ALL legs; liveTs null", () => {
+    const longLeg = makeLongLeg();
+    const shortLeg = makeShortLeg();
+    const tick = makeTick(OCC_LONG);
+    const liveGreeks = new Map([[OCC_LONG, tick]]);
+
+    const result = resolveLivePositionRow([longLeg, shortLeg], SPOT, liveGreeks);
+
+    expect(result.netVal).toBe(netValue([longLeg, shortLeg]));
+    expect(result.unreal).toBe(netUnreal([longLeg, shortLeg]));
+    expect(result.liveTs).toBeNull();
+  });
+
+  it("mixed legs → greeks still blend per leg (display-only; not money)", () => {
     const longLeg = makeLongLeg();
     const shortLeg = makeShortLeg();
     const tick = makeTick(OCC_LONG);
@@ -218,7 +236,6 @@ describe("resolveLivePositionRow", () => {
     const staticContrib = shortR.ok ? shortR.value.greeks.delta * 100 : 0;
 
     expect(result.greeks.delta).toBeCloseTo(liveContrib + staticContrib, 8);
-    expect(result.liveTs).toBe(tick.ts);
   });
 
   // 5. averagePrice === null + no tick → unreal is null
@@ -261,26 +278,28 @@ describe("resolveLivePositionRow", () => {
     expect(result.liveTs).toBe(tick2.ts);
   });
 
-  // 8. Property: never throws; liveTs is null IFF no leg had a tick
-  it("(property) never throws for arbitrary finite inputs; liveTs is null iff no leg had a tick", () => {
+  // 8. Property: never throws; liveTs is null IFF not every leg had a tick
+  it("(property) never throws for arbitrary finite inputs; liveTs is null iff not every leg had a tick", () => {
     fc.assert(
       fc.property(
         fc.float({ min: 5000, max: 7000, noNaN: true }),
-        fc.boolean(), // whether to include a tick
-        (spot: number, hasTick: boolean) => {
-          const leg = makeLongLeg();
-          const liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent> = hasTick
-            ? new Map([[OCC_LONG, makeTick(OCC_LONG)]])
-            : new Map();
+        fc.boolean(), // whether the long leg gets a tick
+        fc.boolean(), // whether the short leg gets a tick
+        (spot: number, longTick: boolean, shortTick: boolean) => {
+          const legs = [makeLongLeg(), makeShortLeg()];
+          const entries: Array<[string, StreamLiveGreekEvent]> = [];
+          if (longTick) entries.push([OCC_LONG, makeTick(OCC_LONG)]);
+          if (shortTick) entries.push([OCC_SHORT, makeTick(OCC_SHORT)]);
+          const liveGreeks: ReadonlyMap<string, StreamLiveGreekEvent> = new Map(entries);
 
           let result: ReturnType<typeof resolveLivePositionRow>;
           expect(() => {
-            result = resolveLivePositionRow([leg], spot, liveGreeks);
+            result = resolveLivePositionRow(legs, spot, liveGreeks);
           }).not.toThrow();
 
-          // liveTs is null IFF no tick was present
+          // liveTs is set IFF every leg had a tick (all-or-nothing row badge)
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          expect(result!.liveTs === null).toBe(!hasTick);
+          expect(result!.liveTs === null).toBe(!(longTick && shortTick));
         },
       ),
     );

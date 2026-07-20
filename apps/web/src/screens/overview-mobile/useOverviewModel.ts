@@ -58,6 +58,9 @@ export type NetGreeks = { delta: number; gamma: number; theta: number; vega: num
 
 // ─── Per-leg IV calibration (OVW-02, D-01/D-02) ───────────────────────────────
 
+/** Shared empty map for the tick-gated path — stable identity, no per-call alloc. */
+const EMPTY_GREEKS: ReadonlyMap<string, StreamLiveGreekEvent> = new Map();
+
 type LegIvResolution = {
   readonly iv: number;
   readonly status: "ok" | "non-convergent";
@@ -130,8 +133,16 @@ export function buildCalendarPosition(
   included: boolean,
   gex: GexSnapshotEntry | undefined,
 ): CalendarPositionBuild {
-  const front = resolveLeg(cal.front, spot, liveGreeks, now);
-  const back = resolveLeg(cal.back, spot, liveGreeks, now);
+  // Per-calendar tick consistency (2026-07-20 regression): trust tick IVs only when
+  // BOTH legs have ticks. A leg with no tick (expiry outside the chain-fetch window
+  // never gets observations) otherwise leaves its sibling priced off a different
+  // instant/spot — the mixed pair broke the calendar's hedge cancellation and showed
+  // +$1.4k phantom T+0 (BEs pushed ~40pts wide vs TOS). With ticks gated off, both
+  // legs calibrate from the broker REST marks — one payload, one instant.
+  const bothTicked = liveGreeks.has(cal.front.occSymbol) && liveGreeks.has(cal.back.occSymbol);
+  const calGreeks = bothTicked ? liveGreeks : EMPTY_GREEKS;
+  const front = resolveLeg(cal.front, spot, calGreeks, now);
+  const back = resolveLeg(cal.back, spot, calGreeks, now);
   const frontCarry = resolveCarry(gex, legExpiryKey(cal.front.occSymbol));
   const backCarry = resolveCarry(gex, legExpiryKey(cal.back.occSymbol));
   // Actual fill basis (points per contract): anchors the payoff curves to the REAL

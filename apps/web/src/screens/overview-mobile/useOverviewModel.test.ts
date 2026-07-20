@@ -226,3 +226,85 @@ describe("useOverviewModel — live-aware spot seam (LIVE-04)", () => {
     expect(result.current.liveIndices).toBeNull();
   });
 });
+
+// ─── buildCalendarPosition — per-calendar tick consistency (2026-07-20 regression) ────
+//
+// A leg with no tick (expiry outside the chain-fetch window never gets observations)
+// must not leave its sibling priced off a tick from a different instant/spot: the
+// mixed pair broke the calendar's hedge cancellation and showed +$1.4k phantom T+0
+// (BEs pushed ~40pts wide vs TOS). Tick IVs are trusted only when BOTH legs have
+// ticks; otherwise BOTH legs calibrate from the broker REST marks (one instant).
+import { buildCalendarPosition } from "./useOverviewModel.ts";
+import type { CalendarGroup } from "../../lib/pair-calendars.ts";
+import type { BrokerPositionResponse, StreamLiveGreekEvent } from "@morai/contracts";
+
+const NOW = new Date("2026-07-20T15:00:00Z");
+
+function calLeg(occSymbol: string, long: boolean, averagePrice: number, marketValue: number): BrokerPositionResponse {
+  return {
+    occSymbol,
+    putCall: "P",
+    longQty: long ? 1 : 0,
+    shortQty: long ? 0 : 1,
+    averagePrice,
+    marketValue,
+    underlyingSymbol: "$SPX",
+  };
+}
+
+const FRONT = calLeg("SPXW  261016P07450000", false, 159.1678, -18605);
+const BACK = calLeg("SPXW  261130P07450000", true, 206.8422, 23330);
+
+const CAL: CalendarGroup = {
+  key: "$SPX|7450|P",
+  underlyingSymbol: "$SPX",
+  strike: 7450,
+  optionType: "P",
+  front: FRONT,
+  back: BACK,
+  netUnreal: null,
+  dteFront: 88,
+  dteBack: 133,
+};
+
+function tickFor(occSymbol: string, bsmIv: number): StreamLiveGreekEvent {
+  return {
+    occSymbol,
+    mark: 184.17,
+    bid: 184,
+    ask: 184.4,
+    bsmIv,
+    bsmDelta: -0.4,
+    bsmGamma: 0.002,
+    bsmTheta: -0.9,
+    bsmVega: 9.1,
+    ts: "2026-07-20T14:59:00Z",
+  };
+}
+
+describe("buildCalendarPosition — per-calendar tick consistency", () => {
+  const SPOT = 7474.6;
+
+  it("one leg ticked, sibling not → BOTH legs ignore ticks and calibrate from broker marks", () => {
+    const frontOnly = new Map([[FRONT.occSymbol, tickFor(FRONT.occSymbol, 0.31)]]);
+    const withTicks = buildCalendarPosition(CAL, SPOT, frontOnly, NOW, true, undefined);
+    const restOnly = buildCalendarPosition(CAL, SPOT, new Map(), NOW, true, undefined);
+
+    expect(withTicks.position.frontIv).not.toBeCloseTo(0.31, 6);
+    expect(withTicks.position.frontIv).toBeCloseTo(restOnly.position.frontIv, 10);
+    expect(withTicks.position.backIv).toBeCloseTo(restOnly.position.backIv, 10);
+    expect(withTicks.position.frontIvStatus).toBe("ok");
+    expect(withTicks.position.backIvStatus).toBe("ok");
+  });
+
+  it("both legs ticked → tick IVs trusted for both", () => {
+    const both = new Map([
+      [FRONT.occSymbol, tickFor(FRONT.occSymbol, 0.31)],
+      [BACK.occSymbol, tickFor(BACK.occSymbol, 0.29)],
+    ]);
+    const built = buildCalendarPosition(CAL, SPOT, both, NOW, true, undefined);
+
+    expect(built.position.frontIv).toBeCloseTo(0.31, 10);
+    expect(built.position.backIv).toBeCloseTo(0.29, 10);
+  });
+});
