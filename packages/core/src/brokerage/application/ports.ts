@@ -105,6 +105,14 @@ export type BrokerTransaction = {
     readonly positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
     readonly side: "buy" | "sell";
   }>;
+  // Trade Ledger additive fields (optional so pre-existing fixtures stay valid).
+  // execTime is Schwab's verbatim `time` string — parse to Date at the persistence
+  // boundary, never here (core stays date-library-free).
+  readonly execTime?: string;
+  readonly activityType?: string;
+  readonly settlementDate?: string; // YYYY-MM-DD
+  readonly fees?: number; // Σ cost over fee transferItems, Schwab's sign kept
+  readonly raw?: unknown; // verbatim Schwab payload element (opaque)
 };
 
 // ─── Driven ports (ForVerbingNoun convention) ─────────────────────────────────

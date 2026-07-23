@@ -344,6 +344,30 @@ describe("makeSchwabTransactionsAdapter", () => {
       expect(leg.positionEffect).toBe("CLOSING");
     });
 
+    // ─── Trade Ledger: raw + execTime/activityType/settlementDate/fees carried through ──
+
+    it("carries execTime/activityType/settlementDate/fees and the verbatim raw element (Trade Ledger)", async () => {
+      const adapter = makeTransactions();
+      const result = await adapter.fetchTransactions(
+        ACCOUNT_HASH,
+        "2026-06-01",
+        "2026-06-30",
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const tx = result.value[0];
+      expect(tx).toBeDefined();
+      if (!tx) return;
+      expect(tx.execTime).toBe("2026-06-10T14:30:00+0000");
+      expect(tx.activityType).toBe("EXECUTION");
+      expect(tx.settlementDate).toBe("2026-06-11");
+      // Two fee transferItems in the fixture: -0.66 + -0.04 — fee items never become legs.
+      expect(tx.fees).toBeCloseTo(-0.7, 10);
+      expect(tx.legs.length).toBe(1);
+      // raw is the verbatim response element, not a re-serialization of the parsed shape.
+      expect(tx.raw).toEqual(schwabTransactionsFixture[0]);
+    });
+
     // ─── journal-pnl-opennetdebit-units #2: side from signed amount, not positionEffect ──
 
     it("maps side from transferItem.amount's SIGN, not positionEffect (fixture rows: amount +1/-1 both happen to agree with the old inference)", async () => {

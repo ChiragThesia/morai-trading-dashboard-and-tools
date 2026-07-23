@@ -20,6 +20,24 @@
         "cost": -1250.00,
         "price": 12.50,
         "positionEffect": "OPENING"
+      },
+      {
+        "instrument": {
+          "assetType": "CURRENCY",
+          "symbol": "CURRENCY_USD"
+        },
+        "amount": 0.66,
+        "cost": -0.66,
+        "feeType": "OPT_REG_FEE"
+      },
+      {
+        "instrument": {
+          "assetType": "CURRENCY",
+          "symbol": "CURRENCY_USD"
+        },
+        "amount": 0.04,
+        "cost": -0.04,
+        "feeType": "SEC_FEE"
       }
     ]
   },

@@ -94,14 +94,24 @@ function mapSide(
 
 function mapTransaction(
   tx: z.infer<typeof TransactionSchema>,
+  rawElement: unknown,
 ): BrokerTransaction | null {
   const activityId = tx.activityId;
   if (activityId === undefined) return null;
 
   const transferItems = tx.transferItems ?? [];
   const legs: BrokerTransaction["legs"][number][] = [];
+  // Trade Ledger: fee transferItems (feeType set, CURRENCY instrument that fails the OCC
+  // parse below) never become legs — they sum into `fees` with Schwab's own sign kept.
+  let feesSum = 0;
+  let sawFee = false;
 
   for (const item of transferItems) {
+    if (item.feeType !== undefined) {
+      feesSum += item.cost ?? 0;
+      sawFee = true;
+      continue;
+    }
     const symbol = item.instrument?.symbol;
     if (symbol === undefined || symbol.length === 0) continue;
 
@@ -130,6 +140,15 @@ function mapTransaction(
     netAmount: tx.netAmount ?? 0,
     orderId: tx.orderId ?? null,
     legs,
+    // Trade Ledger additive fields — conditional spreads (exactOptionalPropertyTypes).
+    // execTime stays Schwab's verbatim string; parsed to Date at the persistence boundary.
+    ...(tx.time !== undefined ? { execTime: tx.time } : {}),
+    ...(tx.activityType !== undefined ? { activityType: tx.activityType } : {}),
+    ...(tx.settlementDate !== undefined
+      ? { settlementDate: tx.settlementDate.slice(0, 10) }
+      : {}),
+    ...(sawFee ? { fees: feesSum } : {}),
+    raw: rawElement,
   };
 }
 
@@ -201,9 +220,19 @@ export function makeSchwabTransactionsAdapter(deps: {
       });
     }
 
+    // Trade Ledger: capture each verbatim response element alongside its typed parse —
+    // same array, so indexes align; never rely on .passthrough() reconstruction.
+    const rawElements = z.array(z.unknown()).safeParse(rawBody);
+    if (rawElements.success !== true) {
+      return err({
+        kind: "fetch-error",
+        message: `Schwab transactions raw-capture error: ${rawElements.error.message}`,
+      });
+    }
+
     const brokerTransactions: BrokerTransaction[] = [];
-    for (const tx of parsed.data) {
-      const mapped = mapTransaction(tx);
+    for (const [i, tx] of parsed.data.entries()) {
+      const mapped = mapTransaction(tx, rawElements.data[i]);
       if (mapped !== null) {
         brokerTransactions.push(mapped);
       }
