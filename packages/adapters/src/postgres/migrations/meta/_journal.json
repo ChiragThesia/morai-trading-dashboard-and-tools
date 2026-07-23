@@ -183,6 +183,13 @@
       "when": 1784558573017,
       "tag": "0025_drop_leg_obs_pending_bsm_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784842437499,
+      "tag": "0026_broker_transactions",
+      "breakpoints": true
     }
   ]
 }

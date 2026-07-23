@@ -1,0 +1,1709 @@
+{
+  "id": "f1e8825f-a479-4e6d-88be-0e3d1cae6f49",
+  "prevId": "82835f44-2837-4f5e-99d9-b74a84904fb8",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.backtest_runs": {
+      "name": "backtest_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "params": {
+          "name": "params",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "report": {
+          "name": "report",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.broker_tokens": {
+      "name": "broker_tokens",
+      "schema": "",
+      "columns": {
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issued_at": {
+          "name": "issued_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refresh_issued_at": {
+          "name": "refresh_issued_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_refresh_error": {
+          "name": "last_refresh_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_json": {
+          "name": "token_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.broker_transactions": {
+      "name": "broker_transactions",
+      "schema": "",
+      "columns": {
+        "activity_id": {
+          "name": "activity_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activity_type": {
+          "name": "activity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exec_time": {
+          "name": "exec_time",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trade_date": {
+          "name": "trade_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "settlement_date": {
+          "name": "settlement_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fees": {
+          "name": "fees",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "legs": {
+          "name": "legs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw": {
+          "name": "raw",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.calendar_event_annotations": {
+      "name": "calendar_event_annotations",
+      "schema": "",
+      "columns": {
+        "fill_ids_hash": {
+          "name": "fill_ids_hash",
+          "type": "varchar(64)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "rule_tags": {
+          "name": "rule_tags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "other_note": {
+          "name": "other_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.calendar_events": {
+      "name": "calendar_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "calendar_event_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evented_at": {
+          "name": "evented_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fill_ids_hash": {
+          "name": "fill_ids_hash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "leg_occ_symbol": {
+          "name": "leg_occ_symbol",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rolled_from_occ_symbol": {
+          "name": "rolled_from_occ_symbol",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "qty": {
+          "name": "qty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "avg_price": {
+          "name": "avg_price",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "realized_pnl": {
+          "name": "realized_pnl",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "roll_open_debit": {
+          "name": "roll_open_debit",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "roll_close_credit": {
+          "name": "roll_close_credit",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leg_breakdown": {
+          "name": "leg_breakdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entry_thesis": {
+          "name": "entry_thesis",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "calendar_events_fill_ids_hash_unique": {
+          "name": "calendar_events_fill_ids_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "fill_ids_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.calendar_snapshots": {
+      "name": "calendar_snapshots",
+      "schema": "",
+      "columns": {
+        "time": {
+          "name": "time",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "spot": {
+          "name": "spot",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "net_mark": {
+          "name": "net_mark",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "front_mark": {
+          "name": "front_mark",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "back_mark": {
+          "name": "back_mark",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "front_iv": {
+          "name": "front_iv",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "back_iv": {
+          "name": "back_iv",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "front_iv_raw": {
+          "name": "front_iv_raw",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "back_iv_raw": {
+          "name": "back_iv_raw",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "net_delta": {
+          "name": "net_delta",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "net_gamma": {
+          "name": "net_gamma",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "net_theta": {
+          "name": "net_theta",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "net_vega": {
+          "name": "net_vega",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "term_slope": {
+          "name": "term_slope",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dte_front": {
+          "name": "dte_front",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dte_back": {
+          "name": "dte_back",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pnl_open": {
+          "name": "pnl_open",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "snapshot_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trigger": {
+          "name": "trigger",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "calendar_snapshots_time_calendar_id_pk": {
+          "name": "calendar_snapshots_time_calendar_id_pk",
+          "columns": [
+            "time",
+            "calendar_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.calendars": {
+      "name": "calendars",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "underlying": {
+          "name": "underlying",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strike": {
+          "name": "strike",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "option_type": {
+          "name": "option_type",
+          "type": "contract_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "front_expiry": {
+          "name": "front_expiry",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "back_expiry": {
+          "name": "back_expiry",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty": {
+          "name": "qty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "calendar_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "open_net_debit": {
+          "name": "open_net_debit",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "close_net_credit": {
+          "name": "close_net_credit",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entry_thesis": {
+          "name": "entry_thesis",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.contracts": {
+      "name": "contracts",
+      "schema": "",
+      "columns": {
+        "occ_symbol": {
+          "name": "occ_symbol",
+          "type": "varchar(32)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "schwab_symbol": {
+          "name": "schwab_symbol",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "underlying": {
+          "name": "underlying",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "root": {
+          "name": "root",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contract_type": {
+          "name": "contract_type",
+          "type": "contract_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "exercise_style": {
+          "name": "exercise_style",
+          "type": "exercise_style",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strike": {
+          "name": "strike",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expiration": {
+          "name": "expiration",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "multiplier": {
+          "name": "multiplier",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 100
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.cot_observations": {
+      "name": "cot_observations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "contract_code": {
+          "name": "contract_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "as_of": {
+          "name": "as_of",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "open_interest": {
+          "name": "open_interest",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dealer_long": {
+          "name": "dealer_long",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dealer_short": {
+          "name": "dealer_short",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "asset_mgr_long": {
+          "name": "asset_mgr_long",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "asset_mgr_short": {
+          "name": "asset_mgr_short",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lev_money_long": {
+          "name": "lev_money_long",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lev_money_short": {
+          "name": "lev_money_short",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "other_rept_long": {
+          "name": "other_rept_long",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "other_rept_short": {
+          "name": "other_rept_short",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nonrept_long": {
+          "name": "nonrept_long",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nonrept_short": {
+          "name": "nonrept_short",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "cot_observations_contract_code_as_of_unique": {
+          "name": "cot_observations_contract_code_as_of_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "contract_code",
+            "as_of"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.economic_events": {
+      "name": "economic_events",
+      "schema": "",
+      "columns": {
+        "event_date": {
+          "name": "event_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_name": {
+          "name": "event_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "economic_events_event_date_event_name_pk": {
+          "name": "economic_events_event_date_event_name_pk",
+          "columns": [
+            "event_date",
+            "event_name"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.exit_verdicts": {
+      "name": "exit_verdicts",
+      "schema": "",
+      "columns": {
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verdict": {
+          "name": "verdict",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "exit_verdicts_observed_at_calendar_id_pk": {
+          "name": "exit_verdicts_observed_at_calendar_id_pk",
+          "columns": [
+            "observed_at",
+            "calendar_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.fills": {
+      "name": "fills",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occ_symbol": {
+          "name": "occ_symbol",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "varchar(4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty": {
+          "name": "qty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "filled_at": {
+          "name": "filled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "commission": {
+          "name": "commission",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fees": {
+          "name": "fees",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raw": {
+          "name": "raw",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position_effect": {
+          "name": "position_effect",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.gex_snapshots": {
+      "name": "gex_snapshots",
+      "schema": "",
+      "columns": {
+        "cycle_time": {
+          "name": "cycle_time",
+          "type": "timestamp with time zone",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "spot": {
+          "name": "spot",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flip": {
+          "name": "flip",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "call_wall": {
+          "name": "call_wall",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "put_wall": {
+          "name": "put_wall",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "net_gamma_at_spot": {
+          "name": "net_gamma_at_spot",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "profile": {
+          "name": "profile",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strikes": {
+          "name": "strikes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "by_expiry": {
+          "name": "by_expiry",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "near_term": {
+          "name": "near_term",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "implied_carry": {
+          "name": "implied_carry",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "computed_at": {
+          "name": "computed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.leg_observations": {
+      "name": "leg_observations",
+      "schema": "",
+      "columns": {
+        "time": {
+          "name": "time",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contract": {
+          "name": "contract",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bid": {
+          "name": "bid",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ask": {
+          "name": "ask",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mark": {
+          "name": "mark",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last": {
+          "name": "last",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "underlying_price": {
+          "name": "underlying_price",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "iv": {
+          "name": "iv",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delta": {
+          "name": "delta",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gamma": {
+          "name": "gamma",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "theta": {
+          "name": "theta",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vega": {
+          "name": "vega",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bsm_iv": {
+          "name": "bsm_iv",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bsm_delta": {
+          "name": "bsm_delta",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bsm_gamma": {
+          "name": "bsm_gamma",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bsm_theta": {
+          "name": "bsm_theta",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bsm_vega": {
+          "name": "bsm_vega",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "open_interest": {
+          "name": "open_interest",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "volume": {
+          "name": "volume",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "observation_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "leg_observations_time_contract_pk": {
+          "name": "leg_observations_time_contract_pk",
+          "columns": [
+            "time",
+            "contract"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.macro_observations": {
+      "name": "macro_observations",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "series_id": {
+          "name": "series_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "macro_observations_date_series_id_pk": {
+          "name": "macro_observations_date_series_id_pk",
+          "columns": [
+            "date",
+            "series_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.orders": {
+      "name": "orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "broker_id": {
+          "name": "broker_id",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occ_symbol": {
+          "name": "occ_symbol",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "varchar(4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty": {
+          "name": "qty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_type": {
+          "name": "order_type",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "limit_price": {
+          "name": "limit_price",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "placed_at": {
+          "name": "placed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw": {
+          "name": "raw",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.orphan_fills": {
+      "name": "orphan_fills",
+      "schema": "",
+      "columns": {
+        "fill_id": {
+          "name": "fill_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "occ_symbol": {
+          "name": "occ_symbol",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "varchar(4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty": {
+          "name": "qty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "filled_at": {
+          "name": "filled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.picker_snapshot": {
+      "name": "picker_snapshot",
+      "schema": "",
+      "columns": {
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.rate_observations": {
+      "name": "rate_observations",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "rate": {
+          "name": "rate",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.reauth_nonces": {
+      "name": "reauth_nonces",
+      "schema": "",
+      "columns": {
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.risk_reversal_observations": {
+      "name": "risk_reversal_observations",
+      "schema": "",
+      "columns": {
+        "snapshot_time": {
+          "name": "snapshot_time",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "underlying": {
+          "name": "underlying",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expiration": {
+          "name": "expiration",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "risk_reversal": {
+          "name": "risk_reversal",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rr_rank": {
+          "name": "rr_rank",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "risk_reversal_observations_snapshot_time_underlying_expiration_pk": {
+          "name": "risk_reversal_observations_snapshot_time_underlying_expiration_pk",
+          "columns": [
+            "snapshot_time",
+            "underlying",
+            "expiration"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.rule_overrides": {
+      "name": "rule_overrides",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "overrides": {
+          "name": "overrides",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.skew_observations": {
+      "name": "skew_observations",
+      "schema": "",
+      "columns": {
+        "snapshot_time": {
+          "name": "snapshot_time",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "underlying": {
+          "name": "underlying",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expiration": {
+          "name": "expiration",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strike": {
+          "name": "strike",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "iv": {
+          "name": "iv",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delta": {
+          "name": "delta",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "moneyness": {
+          "name": "moneyness",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "skew_observations_snapshot_time_underlying_expiration_strike_pk": {
+          "name": "skew_observations_snapshot_time_underlying_expiration_strike_pk",
+          "columns": [
+            "snapshot_time",
+            "underlying",
+            "expiration",
+            "strike"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.term_structure_observations": {
+      "name": "term_structure_observations",
+      "schema": "",
+      "columns": {
+        "snapshot_time": {
+          "name": "snapshot_time",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "front_iv": {
+          "name": "front_iv",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "back_iv": {
+          "name": "back_iv",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "term_structure_observations_snapshot_time_calendar_id_pk": {
+          "name": "term_structure_observations_snapshot_time_calendar_id_pk",
+          "columns": [
+            "snapshot_time",
+            "calendar_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    }
+  },
+  "enums": {
+    "public.calendar_event_type": {
+      "name": "calendar_event_type",
+      "schema": "public",
+      "values": [
+        "OPEN",
+        "CLOSE",
+        "ROLL"
+      ]
+    },
+    "public.calendar_status": {
+      "name": "calendar_status",
+      "schema": "public",
+      "values": [
+        "open",
+        "closed"
+      ]
+    },
+    "public.contract_type": {
+      "name": "contract_type",
+      "schema": "public",
+      "values": [
+        "C",
+        "P"
+      ]
+    },
+    "public.exercise_style": {
+      "name": "exercise_style",
+      "schema": "public",
+      "values": [
+        "american",
+        "european"
+      ]
+    },
+    "public.observation_source": {
+      "name": "observation_source",
+      "schema": "public",
+      "values": [
+        "schwab_chain",
+        "cboe",
+        "computed_only"
+      ]
+    },
+    "public.snapshot_source": {
+      "name": "snapshot_source",
+      "schema": "public",
+      "values": [
+        "schwab_chain",
+        "cboe",
+        "computed_only"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

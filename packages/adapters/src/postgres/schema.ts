@@ -1,4 +1,5 @@
 import {
+  bigint,
   customType,
   integer,
   jsonb,
@@ -570,5 +571,28 @@ export const ruleOverrides = pgTable("rule_overrides", {
 export const reauthNonces = pgTable("reauth_nonces", {
   state: text("state").primaryKey(),
   appId: text("app_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
+// ─── 24. broker_transactions — verbatim Schwab trade history (Trade Ledger) ──
+// The fills table is a lossy derivation (exec time, fees, net amount, settlement date
+// dropped at the adapter boundary). This table keeps the whole broker payload: parsed
+// key columns for the ledger UI + the raw element for audit/reprocessing. Written by
+// sync-transactions BEFORE fills flattening, upsert onConflictDoNothing(activity_id) —
+// first-seen raw wins (ponytail: onConflictDoUpdate if Schwab amendments ever matter).
+
+export const brokerTransactions = pgTable("broker_transactions", {
+  // Schwab's unique per-fill activity id — exceeds int4, so bigint (mode "number":
+  // values are ~1.2e11, far under Number.MAX_SAFE_INTEGER)
+  activityId: bigint("activity_id", { mode: "number" }).primaryKey(),
+  orderId: bigint("order_id", { mode: "number" }),
+  activityType: text("activity_type"),
+  execTime: timestamp("exec_time", { withTimezone: true }),
+  tradeDate: date("trade_date").notNull(),
+  settlementDate: date("settlement_date"),
+  netAmount: numeric("net_amount").notNull(),
+  fees: numeric("fees"),
+  legs: jsonb("legs").notNull(),
+  raw: jsonb("raw").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
