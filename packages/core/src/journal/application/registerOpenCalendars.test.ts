@@ -394,6 +394,65 @@ describe("makeRegisterOpenCalendarsUseCase", () => {
     expect(c7400?.openedAtSource).toBe("fill");
   });
 
+  it("sources openedAt from the FRONT leg only — an older calendar's OPENING fill on the shared back-leg symbol must not leak in (roll-down keeps the back month)", async () => {
+    const calendarStore: Calendar[] = [];
+    let nextId = 1;
+    const registerCalendarUseCase = makeRegisterCalendarUseCase({
+      persistCalendar: async (input) => {
+        const row: Calendar = {
+          id: `cal-${nextId++}`,
+          underlying: input.underlying,
+          strike: input.strike,
+          optionType: input.optionType,
+          frontExpiry: input.frontExpiry,
+          backExpiry: input.backExpiry,
+          qty: input.qty,
+          openNetDebit: input.openNetDebit,
+          status: "open",
+          openedAt: input.openedAt,
+          closedAt: null,
+          notes: input.notes ?? null,
+        };
+        calendarStore.push(row);
+        return ok(row);
+      },
+      now: () => NOW,
+    });
+    const listCalendars: ForListingCalendars = async () => ok(calendarStore);
+
+    // The real 2026-07-23 bug: an older, now-closed calendar OPENED the same back-leg
+    // symbol (31 Aug 7400P) on Jul 2. The new calendar (rolled into on Jul 23) shares that
+    // back leg; its own front leg opened Jul 23. openedAt must come from the front leg.
+    const oldBackOpen = new Date("2026-07-02T14:30:00Z");
+    const frontOpen = new Date("2026-07-23T19:50:00Z");
+    const readFillsByOccSymbols: ForReadingFillsByOccSymbols = async (occSymbols) => {
+      const fills: RawFill[] = [];
+      if (occSymbols.includes("SPX   260804P07400000")) {
+        fills.push(makeFill("SPX   260804P07400000", frontOpen.toISOString(), "front-open"));
+      }
+      if (occSymbols.includes("SPX   260831P07400000")) {
+        fills.push(makeFill("SPX   260831P07400000", oldBackOpen.toISOString(), "old-back-open"));
+      }
+      return ok(fills);
+    };
+
+    const use = makeRegisterOpenCalendarsUseCase({
+      fetchOpenPositions: fetchOpenPositions(),
+      listCalendars,
+      readFillsByOccSymbols,
+      registerCalendar: registerCalendarUseCase,
+      rebuildCalendarHistory: noopRebuildCalendarHistory,
+      now: () => NOW,
+    });
+
+    const result = await use();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const c7400 = result.value.registered.find((r) => r.strike === 7400000);
+    expect(c7400?.openedAt).toEqual(frontOpen);
+    expect(c7400?.openedAtSource).toBe("fill");
+  });
+
   it("sources openedAt from the earliest matching fill when present", async () => {
     const calendarStore: Calendar[] = [];
     let nextId = 1;

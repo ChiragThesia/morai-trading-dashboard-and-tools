@@ -16,9 +16,12 @@
  *   4. openNetDebit (points) = back.averagePrice − front.averagePrice — Σ avgPrice ×
  *      (longQty − shortQty) over both legs (back is long +avgPrice, front is short
  *      −avgPrice for a standard long calendar).
- *   5. openedAt = the earliest OPENING fill's filledAt among the two legs
+ *   5. openedAt = the earliest OPENING fill's filledAt on the FRONT leg only
  *      (ForReadingFillsByOccSymbols, which reads regardless of processed/orphan status —
- *      these fills may already be orphan-parked from before the calendar existed). Only
+ *      these fills may already be orphan-parked from before the calendar existed). Front
+ *      only because the front expiry is unique per calendar generation while the back leg
+ *      survives rolls — a rolled calendar shares its back-leg symbol with the older closed
+ *      calendar, whose fills must not leak an earlier timestamp in. Only
  *      positionEffect === "OPENING" fills count: a CLOSING fill on the same OCC symbol
  *      belongs to a different, possibly older calendar that happened to share a leg (a
  *      documented real pattern — see fill-pairing.ts's shared-leg disambiguation) and must
@@ -175,10 +178,11 @@ export function makeRegisterOpenCalendarsUseCase(
       const openNetDebit = candidate.back.averagePrice - candidate.front.averagePrice;
       const qty = Math.abs(candidate.front.longQty - candidate.front.shortQty);
 
-      const fillsResult = await deps.readFillsByOccSymbols([
-        candidate.front.occSymbol,
-        candidate.back.occSymbol,
-      ]);
+      // FRONT leg only: the front expiry is unique per calendar generation, while the back
+      // leg survives rolls — a rolled-down calendar shares its back-leg symbol with the
+      // older closed calendar, whose OPENING fills would otherwise win as "earliest"
+      // (real case 2026-07-23: 11Aug/31Aug 7400P inherited the 7/02 open of 4Aug/31Aug).
+      const fillsResult = await deps.readFillsByOccSymbols([candidate.front.occSymbol]);
       if (!fillsResult.ok) return fillsResult;
 
       // Only OPENING fills count toward openedAt — a CLOSING fill on the same OCC symbol
