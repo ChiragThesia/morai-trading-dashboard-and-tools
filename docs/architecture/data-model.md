@@ -92,6 +92,29 @@ CLOSE fills into OPEN events, or vice versa, whenever status hadn't kept pace wi
 Existing rows read NULL and fall back to `"UNKNOWN"` (orphan-parked, never a fabricated
 classification).
 
+### `broker_transactions` — verbatim Schwab trade history (Trade Ledger)
+
+Raw Schwab `/transactions` payloads, stored as-is. The `fills` table is a lossy derivation
+(execution time, fees, net amount, settlement date are dropped at the adapter boundary);
+this table keeps the whole payload so the ledger UI and any future reprocessing read the
+broker's own record.
+
+```
+activity_id bigint PK          -- Schwab's unique per-fill id (idempotency key)
+order_id bigint, activity_type text
+exec_time timestamptz          -- full execution instant (UTC; render ET)
+trade_date date NOT NULL, settlement_date date
+net_amount numeric NOT NULL, fees numeric
+legs jsonb NOT NULL            -- parsed instrument legs
+raw jsonb NOT NULL             -- verbatim Schwab payload element
+created_at timestamptz
+```
+
+Written by `sync-transactions` (every 10 min RTH) BEFORE fills flattening, upsert
+`onConflictDoNothing(activity_id)`. Backfilled once from 2026-04-16 via
+`backfill-transactions`. First-seen raw wins; Schwab amendments are not re-fetched.
+Read by `GET /api/trade-history` / MCP `get_trade_history`.
+
 ### `rate_observations` — FRED DGS3MO daily
 ```
 date PK, rate numeric          -- fallback 4.5% if FRED unreachable (rho impact tiny)

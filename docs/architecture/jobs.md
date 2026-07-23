@@ -166,6 +166,12 @@ broker transaction feed (the Phase-4 transactions adapter) and writes `fills` ro
 events. This source job lands in plan 05-12; the `ForWritingFills` port (below) is its writer
 contract. It runs before `sync-fills` in the RTH cadence so each pairing run sees fresh fills.
 
+**Raw persistence (Trade Ledger).** Before flattening to `fills`, the use-case stores each
+transaction verbatim into `broker_transactions` (see data-model.md) — upsert on
+`activity_id`, so the 7-day trailing window re-covers old rows as no-ops. A store failure
+fails the run (retryable) and skips fills writing, so raw never lags derived. The backfill
+CLI shares the use-case and therefore backfills raw rows too.
+
 ### Historical backfill (Phase 7, BRK-04)
 
 The scheduled `sync-transactions` job only ever covers a rolling 7-day window. To pull older
