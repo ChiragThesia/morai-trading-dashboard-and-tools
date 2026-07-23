@@ -5,7 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 
 import { Overview } from "./screens/Overview.tsx";
 import { Analyzer } from "./screens/Analyzer.tsx";
-import { JournalContainer } from "./screens/JournalContainer.tsx";
+import { Journal } from "./screens/Journal.tsx";
 
 /**
  * App — the auth gate component.
@@ -52,7 +52,7 @@ export function App(): React.ReactElement | null {
           ),
           Journal: (
             <ErrorBoundary>
-              <JournalContainer />
+              <Journal />
             </ErrorBoundary>
           ),
         }}

@@ -1,449 +1,302 @@
 /**
- * Journal screen — trade lifecycle + per-calendar rebuild (JOURNAL-01 + REBUILD-01 + JRNL-01)
+ * Journal — the Trade Ledger: two plain tables, nothing else.
  *
- * UI-SPEC "Journal screen" 3-column layout:
- *   Left  (250px) — trade list: open trades first (the "what's going on now" view),
- *                   closed trades folded into a collapsed "History (N)" section.
- *                   history/entry-exit/OPEN badges; selected row = violet border.
- *   Center (1fr)  — lifecycle: LifecycleMasthead (verdict headline + read + net P&L) +
- *                   the D-08 stacked-panel LifecycleChart (for history trades) OR dashed
- *                   pre-history stub + "no day-by-day (pre Jun-12)" (for entry/exit-only)
- *                   OR "Building the lifecycle." (too-new) OR an error state + Retry.
- *                   RebuildButton and the always-visible honest-caveats footer are present.
- *   Right (290px) — reactive rail: P&L bridge (crosshair-synced) → the edge → greeks · now
- *                   → the beats → relocated Notes (RULE-01, unchanged).
+ * Replaces the lifecycle-chart Journal (user decision 2026-07-23: "simple table").
+ * The lifecycle/attribution backend (calendar_snapshots, /lifecycle route, MCP tools)
+ * is untouched — only the web chrome died.
  *
- * Data: useLifecycle(calendarId) per selected trade (60s poll, parse via lifecycleResponse).
- * Empty state: locked "No journal history yet…" copy (JOURNAL-01).
- * Pre-Jun-12 trades: graceful stub — NEVER error, NEVER blank (JOURNAL-01 invariant).
- * Rebuild: RebuildButton triggers POST /api/jobs/rebuild-journal/trigger (REBUILD-01).
+ *   1. Round-trips — one row per calendar (open first via newest-openedAt server order):
+ *      trade, status, opened/closed, entry debit, realized P&L (from calendar_events,
+ *      the fill ledger — the number TOS never shows per strategy), and for open
+ *      calendars the latest stored greeks/IV (30-min RTH snapshots). Footer = total P&L.
+ *   2. Executions — TOS Account-Statement-style raw fills from broker_transactions:
+ *      exec time (ET), side, qty, effect, symbol, exp, strike, type, price, net amount,
+ *      order id.
  *
- * 36 D-04: ALL state/derivation + the shared helpers/stubs/RuleTagChips live in
- * useJournalModel.tsx — this file keeps the desktop view components (TradeRow /
- * LifecycleSection) and the screen JSX. No seed data. No `any`/`as`/`!`.
+ * One tree for all viewports: both tables sit in horizontal-scroll wrappers with a
+ * min-width table (the AnalyzerMobile recipe) — no useIsDesktop split needed.
  */
 
-import { classifyTradeHistory } from "../lib/journal-history.ts";
-import { LifecycleChart } from "../components/LifecycleChart.tsx";
-import { LifecycleMasthead } from "../components/LifecycleMasthead.tsx";
-import { PnlBridgeCard } from "../components/PnlBridgeCard.tsx";
-import { EdgeCard } from "../components/EdgeCard.tsx";
-import { GreeksNowCard } from "../components/GreeksNowCard.tsx";
-import { BeatsCard } from "../components/BeatsCard.tsx";
+import { Panel, PanelHeading, DataTable, Button } from "../components/system/index.tsx";
+import type { DataTableColumn } from "../components/system/index.tsx";
 import { RebuildButton } from "../components/RebuildButton.tsx";
-import { Panel, PanelHeading, SectionLabel, Button } from "../components/system/index.tsx";
-import type { LifecycleResponse } from "@morai/contracts";
-import { useIsDesktop } from "../hooks/useIsDesktop.ts";
-import { JournalMobile } from "./journal-mobile/JournalMobile.tsx";
-import {
-  useJournalModel,
-  fmtDate,
-  fmtPnl,
-  HeadingPill,
-  RuleTagChips,
-  PreHistoryStub,
-  BuildingLifecycleStub,
-  ENTER_OPTIONS,
-  EXIT_OPTIONS,
-  ROLL_OPTIONS,
-} from "./journal-mobile/useJournalModel.tsx";
-import type { TradeSummary } from "./journal-mobile/useJournalModel.tsx";
+import { useTradeHistory } from "../hooks/useTradeHistory.ts";
+import { signedUsd, signClass } from "../lib/position-format.ts";
+import type {
+  TradeHistoryRoundTripResponse,
+  TradeHistoryExecutionResponse,
+} from "@morai/contracts";
 
-// 36 D-04: TradeSummary is single-sourced in useJournalModel — re-exported so
-// JournalContainer's import keeps resolving (the TradeSummary contract is untouched, D-03).
-export type { TradeSummary };
+// ─── Formatting helpers ───────────────────────────────────────────────────────
 
-interface JournalProps {
-  /** All trades to show in the left-column list */
-  trades: ReadonlyArray<TradeSummary>;
+const DASH = "—";
+
+/** "2026-07-23T19:50:00.000Z" → "Jul 23" (UTC date part — trade dates, not instants). */
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+/** "2026-08-11" → "Aug 11" */
+function shortYmd(ymd: string): string {
+  return shortDate(`${ymd}T00:00:00Z`);
+}
 
-/** Center column lifecycle section for a selected trade */
-function LifecycleSection({
-  trade,
-  snapshots,
-  isPending,
-  isError,
-  onRetry,
-  onCrosshairChange,
-}: {
-  trade: TradeSummary;
-  snapshots: LifecycleResponse["snapshots"];
-  isPending: boolean;
-  isError: boolean;
-  onRetry: () => void;
-  onCrosshairChange: (index: number | null) => void;
-}): React.ReactElement {
-  const kind = classifyTradeHistory({
-    openedAt: trade.openedAt,
-    closedAt: trade.closedAt,
-    hasSnapshots: snapshots.length > 0,
-  });
+// Exec instants render in ET explicitly (TOS shows ET) — never sliced ISO strings.
+const ET_TIME = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+});
 
-  const eyebrow = `${trade.name} · ${fmtDate(trade.openedAt)}${
-    trade.closedAt !== null ? ` → ${fmtDate(trade.closedAt)}` : " (open)"
-  }`;
+function etTime(iso: string | null): string {
+  if (iso === null) return DASH;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return DASH;
+  return ET_TIME.format(d);
+}
 
-  return (
-    <div className="flex flex-col gap-3">
-      {!isPending && !isError && kind === "history" && (
-        <LifecycleMasthead snapshots={snapshots} eyebrow={eyebrow} />
-      )}
+/** 0.145 → "14.5%" */
+function pct(v: number | null): string {
+  return v === null ? DASH : `${(v * 100).toFixed(1)}%`;
+}
 
-      {/* Lifecycle chart card */}
-      <Panel className="flex min-h-[300px] flex-1 flex-col">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="font-mono text-[10px] text-dim">
-            {kind === "history" ? "30-min snapshots" : "entry/exit only"}
-          </div>
-          <RebuildButton calendarId={trade.calendarId} />
-        </div>
+function money(v: number | null): string {
+  return v === null ? DASH : signedUsd(v);
+}
 
-        {isPending && (
-          <div
-            className="min-h-[200px] flex-1 rounded-md bg-line opacity-40"
-            aria-busy="true"
-            aria-label="Loading lifecycle"
-          />
-        )}
+function moneyClass(v: number | null): string {
+  return v === null ? "text-dim" : signClass(v);
+}
 
-        {!isPending && isError && (
-          <div className="flex min-h-[200px] flex-1 flex-col items-center justify-center gap-2 p-4 text-center font-mono text-[11px] text-dim">
-            <span>Couldn&apos;t load this calendar&apos;s lifecycle.</span>
-            <Button
-              variant="secondary"
-              size="xs"
-              onClick={() => {
-                onRetry();
-              }}
-            >
-              Retry
-            </Button>
-          </div>
-        )}
+function tradeName(r: TradeHistoryRoundTripResponse): string {
+  return `${r.underlying} ${r.strike / 1000}${r.optionType}`;
+}
 
-        {!isPending && !isError && kind === "entry-exit-only" && <PreHistoryStub />}
+const NUM = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
-        {!isPending && !isError && kind === "history" && snapshots.length > 1 && (
-          <LifecycleChart
-            snapshots={snapshots}
-            strike={trade.strike}
-            onCrosshairChange={onCrosshairChange}
-          />
-        )}
+// ─── Round-trips table ────────────────────────────────────────────────────────
 
-        {!isPending && !isError && kind === "history" && snapshots.length <= 1 && (
-          <BuildingLifecycleStub />
-        )}
-      </Panel>
-
-      {/* Honest-caveats footer (always visible, not dismissible — D-05) */}
-      <div className="flex flex-col gap-1 px-1 font-mono text-[9.5px] leading-[1.3] text-dim">
-        <span>
-          Attribution is a 2nd-order approximation — the faint residual band is the
-          unexplained part, never hidden.
+const ROUNDTRIP_COLS: ReadonlyArray<DataTableColumn<TradeHistoryRoundTripResponse>> = [
+  {
+    key: "trade",
+    header: "Trade",
+    align: "left",
+    render: (r) => (
+      <span className="text-txt">
+        {tradeName(r)}{" "}
+        <span className="text-dim">
+          {shortYmd(r.frontExpiry)}/{shortYmd(r.backExpiry)}
         </span>
-        <span>
-          Line breaks are real feed gaps (spot=0 / NaN), drawn as gaps, never interpolated.
-        </span>
-      </div>
-    </div>
-  );
-}
+      </span>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    align: "left",
+    render: (r) => (
+      <span className={r.status === "open" ? "text-cyan" : "text-dim"}>{r.status}</span>
+    ),
+  },
+  { key: "opened", header: "Opened", render: (r) => shortDate(r.openedAt) },
+  {
+    key: "closed",
+    header: "Closed",
+    render: (r) => (r.closedAt !== null ? shortDate(r.closedAt) : DASH),
+  },
+  { key: "debit", header: "Debit", render: (r) => r.openNetDebit.toFixed(2) },
+  {
+    key: "pnl",
+    header: "P&L",
+    render: (r) => (
+      <span className={`font-semibold ${moneyClass(r.realizedPnl)}`}>
+        {money(r.realizedPnl)}
+      </span>
+    ),
+  },
+  {
+    key: "delta",
+    header: "Δ",
+    render: (r) =>
+      r.greeks !== null && r.greeks.netDelta !== null
+        ? r.greeks.netDelta.toFixed(1)
+        : DASH,
+  },
+  {
+    key: "theta",
+    header: "Θ/d",
+    render: (r) => money(r.greeks?.netTheta ?? null),
+  },
+  {
+    key: "vega",
+    header: "Vega",
+    render: (r) => money(r.greeks?.netVega ?? null),
+  },
+  {
+    key: "iv",
+    header: "IV f/b",
+    render: (r) =>
+      r.greeks !== null ? `${pct(r.greeks.frontIv)}/${pct(r.greeks.backIv)}` : DASH,
+  },
+  {
+    key: "slope",
+    header: "Slope",
+    render: (r) =>
+      r.greeks !== null && r.greeks.termSlope !== null
+        ? (r.greeks.termSlope * 100).toFixed(2)
+        : DASH,
+  },
+  {
+    key: "rebuild",
+    header: "",
+    render: (r) => <RebuildButton calendarId={r.calendarId} />,
+  },
+];
 
-// ─── Trade list row ────────────────────────────────────────────────────────────
+// ─── Executions table ─────────────────────────────────────────────────────────
 
-/** One selectable trade row in the left-column list (open or closed). */
-function TradeRow({
-  trade,
-  isSelected,
-  tagLabels,
-  onSelect,
-}: {
-  trade: TradeSummary;
-  isSelected: boolean;
-  /** Recorded rule-tag labels — only passed (non-empty) for the selected trade (D-22). */
-  tagLabels: ReadonlyArray<string>;
-  onSelect: (id: string) => void;
-}): React.ReactElement {
-  const isOpen = trade.closedAt === null;
-  const kind = classifyTradeHistory({
-    openedAt: trade.openedAt,
-    closedAt: trade.closedAt,
-    hasSnapshots: trade.hasSnapshots,
-  });
-  const pnlNum = parseFloat(trade.realizedPnl);
-  const pnlClass = isOpen ? "text-blue" : pnlNum >= 0 ? "text-up" : "text-down";
+// Row key = activityId + position index: two legs of one activity stay distinct.
+type ExecRow = TradeHistoryExecutionResponse & { readonly rowKey: string };
 
-  return (
-    <div
-      onClick={() => {
-        onSelect(trade.id);
-      }}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onSelect(trade.id);
-      }}
-      className={`mb-[5px] grid cursor-pointer grid-cols-[1fr_auto] gap-1.5 rounded-lg border px-[9px] py-[7px] ${
-        isSelected ? "border-violet bg-violetd" : "border-line bg-panel2"
-      }`}
-    >
-      <div>
-        <div className="flex items-center gap-1 font-display text-xs text-txt">
-          {trade.name}
-          {isOpen && (
-            <span className="rounded-[3px] border border-cyan/30 px-[5px] text-[8px] text-cyan">
-              OPEN
-            </span>
-          )}
-        </div>
-        <div className="text-[9px] text-dim">
-          {fmtDate(trade.openedAt)}
-          {trade.closedAt !== null ? ` → ${fmtDate(trade.closedAt)}` : ""}
-        </div>
-      </div>
+const EXECUTION_COLS: ReadonlyArray<DataTableColumn<ExecRow>> = [
+  { key: "time", header: "Exec Time (ET)", align: "left", render: (e) => etTime(e.execTime) },
+  {
+    key: "side",
+    header: "Side",
+    align: "left",
+    render: (e) => (
+      <span className={e.side === "buy" ? "text-up" : "text-down"}>
+        {e.side === "buy" ? "BUY" : "SELL"}
+      </span>
+    ),
+  },
+  { key: "qty", header: "Qty", render: (e) => e.qty },
+  { key: "effect", header: "Effect", align: "left", render: (e) => e.positionEffect },
+  { key: "symbol", header: "Symbol", align: "left", render: (e) => e.occSymbol.split(" ")[0] },
+  { key: "exp", header: "Exp", render: (e) => shortYmd(e.expiry) },
+  { key: "strike", header: "Strike", render: (e) => e.strike },
+  { key: "type", header: "Type", render: (e) => e.type },
+  { key: "price", header: "Price", render: (e) => e.price.toFixed(2) },
+  {
+    key: "net",
+    header: "Net Amt",
+    render: (e) => (
+      <span className={signClass(e.netAmount)}>{NUM.format(e.netAmount)}</span>
+    ),
+  },
+  { key: "order", header: "Order #", render: (e) => e.orderId ?? DASH },
+];
 
-      <div className="text-right">
-        <div className={`font-display text-xs font-bold tabular-nums ${pnlClass}`}>
-          {isOpen ? "open" : fmtPnl(trade.realizedPnl)}
-        </div>
-        {/* History badge */}
-        <div
-          className={`mt-[3px] inline-block rounded-[3px] border px-[5px] text-[8px] ${
-            kind === "history" ? "border-cyan/30 text-cyan" : "border-line2 text-dim"
-          }`}
-        >
-          {kind === "history" ? "history" : "entry/exit"}
-        </div>
-        {/* Rule-tag read-view pill (D-22) — only known for the selected trade
-            (useRuleTags fetches one calendar's tags at a time); neutral, not violet. */}
-        {isSelected && tagLabels.length > 0 && (
-          <div
-            data-testid="rule-tags-pill"
-            title={tagLabels.join(", ")}
-            className="mt-[3px] block max-w-[110px] truncate rounded-[3px] border border-line2 px-[5px] text-[8px] text-dim"
-          >
-            {tagLabels.join(", ")}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
-// ─── Main screen ─────────────────────────────────────────────────────────────
+// Shared mobile-friendly scroll recipe (AnalyzerMobile precedent): the wrapper h-scrolls,
+// the table keeps a min-width so columns never crush on a phone.
+const SCROLL_WRAPPER = "-mx-2 overflow-x-auto px-2";
 
-/** The thin root switch (36 D-03, UI-SPEC §5): exactly ONE tree mounts per viewport
- *  state, so useJournalModel's useLifecycle/useRuleTags calls stay the single consumer. */
-export function Journal({ trades }: JournalProps): React.ReactElement {
-  const isDesktop = useIsDesktop();
-  return isDesktop ? <JournalDesktop trades={trades} /> : <JournalMobile trades={trades} />;
-}
+export function Journal(): React.ReactElement {
+  const { data, isPending, isError, refetch } = useTradeHistory();
 
-function JournalDesktop({ trades }: JournalProps): React.ReactElement {
-  // 36 D-04: the shared model hook owns ALL state/derivation. Locals are destructured to
-  // the pre-extraction names so the JSX below stays byte-identical to the pre-refactor
-  // render — same elements, classes, testids, order (the OverviewDesktop precedent).
-  const {
-    openTrades,
-    closedTrades,
-    selectedTrade,
-    setSelectedId,
-    historyOpen,
-    toggleHistory,
-    hoveredIndex,
-    setHoveredIndex,
-    snapshots,
-    isPending,
-    isError,
-    refetch,
-    rulesPending,
-    ruleErrors,
-    saveRuleTags,
-    retryRuleTags,
-    openEvent,
-    closeEvent,
-    rollEvents,
-    selectedTradeTagLabels,
-    beats,
-  } = useJournalModel(trades);
-
-  // ── Empty state ─────────────────────────────────────────────────────────────
-  if (trades.length === 0) {
+  if (isPending) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 font-mono text-xs text-dim">
-        <span>No journal history yet.</span>
-        <span className="text-[10px]">Trades before Jun 12 have entry/exit only.</span>
+      <div className="p-3">
+        <div
+          data-testid="ledger-loading"
+          className="min-h-[240px] rounded-md bg-line opacity-40"
+          aria-busy="true"
+          aria-label="Loading trade ledger"
+        />
       </div>
     );
   }
 
+  if (isError || data === undefined) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 font-mono text-xs text-dim">
+        <span>Couldn&apos;t load the trade ledger.</span>
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={() => {
+            void refetch();
+          }}
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (data.roundTrips.length === 0 && data.executions.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center font-mono text-xs text-dim">
+        No trade history yet.
+      </div>
+    );
+  }
+
+  const total = data.totals.realizedPnl;
+
   return (
-    <div
-      data-testid="journal-positions"
-      className="grid h-full grid-cols-[250px_minmax(0,1fr)_290px] gap-3 overflow-hidden p-3"
-    >
-      {/* ── Left column — trade list ─────────────────────────────────────── */}
-      <div data-testid="journal-trades-column" className="flex flex-col gap-3 min-h-0 overflow-y-auto">
-        <Panel>
-          {/* Heading */}
-          <PanelHeading
-            title="Trades"
-            action={<HeadingPill>SPXW put calendars</HeadingPill>}
-          />
+    <div data-testid="journal-ledger" className="flex h-full flex-col gap-3 overflow-y-auto p-3">
+      {/* ── Round-trips ──────────────────────────────────────────────────── */}
+      <Panel>
+        <PanelHeading
+          title="Trades"
+          action={
+            data.vix !== null ? (
+              <span className="font-mono text-[10px] text-dim">
+                VIX {data.vix.value.toFixed(1)} · {data.vix.date}
+              </span>
+            ) : undefined
+          }
+        />
+        <DataTable
+          columns={ROUNDTRIP_COLS}
+          rows={[...data.roundTrips]}
+          rowTestId={(r) => `roundtrip-row-${r.calendarId}`}
+          wrapperClassName={SCROLL_WRAPPER}
+          wrapperTestId="roundtrip-table-scroll"
+          tableClassName="min-w-[820px]"
+          footer={
+            <tr data-testid="roundtrip-total" className="border-t border-line font-semibold">
+              <td className="px-2 py-1.5 text-left text-txt">Total realized</td>
+              <td className="px-2 py-1.5" colSpan={4} />
+              <td className={`px-2 py-1.5 text-right ${moneyClass(total)}`}>
+                {money(total)}
+              </td>
+              <td className="px-2 py-1.5" colSpan={6} />
+            </tr>
+          }
+        />
+      </Panel>
 
-          {/* Trade rows — open first, then the collapsed History (closed) section. */}
-          <div>
-            {openTrades.map((trade) => (
-              <TradeRow
-                key={trade.id}
-                trade={trade}
-                isSelected={trade.id === selectedTrade?.id}
-                tagLabels={trade.id === selectedTrade?.id ? selectedTradeTagLabels : []}
-                onSelect={setSelectedId}
-              />
-            ))}
-
-            {closedTrades.length > 0 && (
-              <div className={openTrades.length > 0 ? "mt-1" : ""}>
-                <button
-                  type="button"
-                  data-testid="history-toggle"
-                  aria-expanded={historyOpen}
-                  onClick={() => {
-                    toggleHistory();
-                  }}
-                  className="mb-[5px] flex w-full items-center gap-1.5 rounded-md px-[9px] py-[6px] font-mono text-[10px] tracking-wide text-dim transition-colors hover:text-txt"
-                >
-                  <span className="text-[8px]">{historyOpen ? "▾" : "▸"}</span>
-                  <span>History ({closedTrades.length})</span>
-                </button>
-
-                {historyOpen &&
-                  closedTrades.map((trade) => (
-                    <TradeRow
-                      key={trade.id}
-                      trade={trade}
-                      isSelected={trade.id === selectedTrade?.id}
-                      tagLabels={trade.id === selectedTrade?.id ? selectedTradeTagLabels : []}
-                      onSelect={setSelectedId}
-                    />
-                  ))}
-              </div>
-            )}
-          </div>
-        </Panel>
-      </div>
-
-      {/* ── Center column — lifecycle ─────────────────────────────────────── */}
-      <div data-testid="journal-lifecycle-column" className="flex flex-col gap-3 min-h-0 overflow-y-auto">
-        {selectedTrade !== null && (
-          <LifecycleSection
-            trade={selectedTrade}
-            snapshots={snapshots}
-            isPending={isPending}
-            isError={isError}
-            onRetry={() => {
-              void refetch();
-            }}
-            onCrosshairChange={setHoveredIndex}
-          />
-        )}
-      </div>
-
-      {/* ── Right column — reactive rail + notes ──────────────────────────── */}
-      <div data-testid="journal-rail-column" className="flex flex-col gap-3 min-h-0 overflow-y-auto">
-        <PnlBridgeCard snapshots={snapshots} hoveredIndex={hoveredIndex} />
-        <EdgeCard snapshots={snapshots} />
-        <GreeksNowCard snapshots={snapshots} />
-        <BeatsCard beats={beats} />
-
-        {/* Notes card (RULE-01) — relocated to the bottom of the rail, unchanged */}
-        <Panel>
-          <PanelHeading
-            title="Notes"
-            action={<HeadingPill>thesis · review</HeadingPill>}
-          />
-
-          {/* RULE-01: enter/exit/roll rule-tag control (D-07/D-10) — ABOVE the free-text
-              textarea, which stays untouched. Editable anytime; no read-only lock. */}
-          {!rulesPending && (
-            <div className="mb-2 flex flex-col gap-2">
-              {openEvent !== undefined && (
-                <div className="flex flex-col gap-1">
-                  <SectionLabel tone="dim">ENTER</SectionLabel>
-                  <RuleTagChips
-                    fillIdsHash={openEvent.fillIdsHash}
-                    options={ENTER_OPTIONS}
-                    activeTags={openEvent.tags}
-                    otherNote={openEvent.otherNote}
-                    error={ruleErrors[openEvent.fillIdsHash]}
-                    onSave={(tags, otherNote) => {
-                      void saveRuleTags(openEvent.fillIdsHash, tags, otherNote);
-                    }}
-                    onRetry={() => {
-                      retryRuleTags(openEvent.fillIdsHash);
-                    }}
-                  />
-                </div>
-              )}
-
-              <div className="flex flex-col gap-1">
-                <SectionLabel tone="dim">EXIT</SectionLabel>
-                {closeEvent === undefined ? (
-                  <span className="font-mono text-[10px] text-dim">Available at close.</span>
-                ) : (
-                  <RuleTagChips
-                    fillIdsHash={closeEvent.fillIdsHash}
-                    options={EXIT_OPTIONS}
-                    activeTags={closeEvent.tags}
-                    otherNote={closeEvent.otherNote}
-                    error={ruleErrors[closeEvent.fillIdsHash]}
-                    onSave={(tags, otherNote) => {
-                      void saveRuleTags(closeEvent.fillIdsHash, tags, otherNote);
-                    }}
-                    onRetry={() => {
-                      retryRuleTags(closeEvent.fillIdsHash);
-                    }}
-                  />
-                )}
-              </div>
-
-              {rollEvents.map((rollEvent) => (
-                <div key={rollEvent.fillIdsHash} className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5">
-                    <SectionLabel tone="dim">ROLL</SectionLabel>
-                    <span className="font-mono text-[9px] text-dim">
-                      {fmtDate(rollEvent.eventedAt)}
-                    </span>
-                  </div>
-                  <RuleTagChips
-                    fillIdsHash={rollEvent.fillIdsHash}
-                    options={ROLL_OPTIONS}
-                    activeTags={rollEvent.tags}
-                    otherNote={rollEvent.otherNote}
-                    error={ruleErrors[rollEvent.fillIdsHash]}
-                    onSave={(tags, otherNote) => {
-                      void saveRuleTags(rollEvent.fillIdsHash, tags, otherNote);
-                    }}
-                    onRetry={() => {
-                      retryRuleTags(rollEvent.fillIdsHash);
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          <textarea
-            placeholder="Entry thesis, management, post-mortem…"
-            className="box-border min-h-[60px] w-full resize-y rounded-md border border-line2 bg-panel2 p-2 font-mono text-[11px] text-txt"
-          />
-        </Panel>
-      </div>
+      {/* ── Executions (TOS Account-Statement style) ─────────────────────── */}
+      <Panel>
+        <PanelHeading
+          title="Trade History"
+          action={
+            <span className="font-mono text-[10px] text-dim">
+              {data.executions.length} fills · raw broker record
+            </span>
+          }
+        />
+        <DataTable
+          columns={EXECUTION_COLS}
+          rows={data.executions.map((e, i) => ({ ...e, rowKey: `${e.activityId}-${i}` }))}
+          rowTestId={(e) => `execution-row-${e.rowKey}`}
+          wrapperClassName={SCROLL_WRAPPER}
+          wrapperTestId="execution-table-scroll"
+          tableClassName="min-w-[860px]"
+        />
+      </Panel>
     </div>
   );
 }

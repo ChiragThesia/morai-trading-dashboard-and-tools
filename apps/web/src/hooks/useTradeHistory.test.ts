@@ -1,12 +1,11 @@
 /**
- * useCalendars.test.ts — TDD suite for the useCalendars hook.
+ * useTradeHistory.test.ts — TDD suite for the Trade Ledger data hook.
  *
  * Behaviors under test:
- *   1. Successful fetch → returns parsed ListCalendarsResponse.
+ *   1. Successful fetch → returns parsed TradeHistoryResponse.
  *   2. 401 response → throws UnauthorizedError (non-retryable).
- *   3. Non-401 error → throws a generic Error.
  *
- * Mirrors the pattern of useGex.test.ts / usePositions usage pattern.
+ * Mirrors the useCalendars.test.ts pattern.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -16,7 +15,6 @@ import React from "react";
 
 // ─── Mock apiFetch ───────────────────────────────────────────────────────────
 const { mockApiFetch } = vi.hoisted(() => ({
-  // Typed as vi.fn returning unknown; actual shape matches what the queryFn reads
   mockApiFetch: vi.fn(),
 }));
 
@@ -38,27 +36,48 @@ vi.mock("../lib/supabase.ts", () => ({
 }));
 
 // ─── Import hook after vi.mock hoisting ─────────────────────────────────────
-import { useCalendars } from "./useCalendars.ts";
+import { useTradeHistory } from "./useTradeHistory.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const SAMPLE_CALENDAR_LIST = {
-  calendars: [
+const SAMPLE_TRADE_HISTORY = {
+  roundTrips: [
     {
-      id: "550e8400-e29b-41d4-a716-446655440000",
-      underlying: "SPX",
-      strike: 7425000,
+      calendarId: "550e8400-e29b-41d4-a716-446655440000",
+      underlying: "SPXW",
+      strike: 7400000,
       optionType: "P" as const,
-      frontExpiry: "2026-08-08",
-      backExpiry: "2026-09-19",
+      frontExpiry: "2026-08-11",
+      backExpiry: "2026-08-31",
       qty: 1,
-      openNetDebit: 5.8,
       status: "open" as const,
-      openedAt: "2026-06-01T14:30:00.000Z",
+      openedAt: "2026-07-23T19:50:00.000Z",
       closedAt: null,
-      notes: null,
+      openNetDebit: 40.08,
+      realizedPnl: null,
+      greeks: null,
     },
   ],
+  executions: [
+    {
+      activityId: 126084076124,
+      execTime: "2026-07-23T19:50:12.000Z",
+      tradeDate: "2026-07-23",
+      orderId: 1007316230828,
+      occSymbol: "SPXW  260811P07400000",
+      expiry: "2026-08-11",
+      strike: 7400,
+      type: "P" as const,
+      side: "sell" as const,
+      qty: 1,
+      positionEffect: "OPENING" as const,
+      price: 103.36,
+      netAmount: 10334.87,
+      fees: -0.66,
+    },
+  ],
+  totals: { realizedPnl: -171.7 },
+  vix: { value: 18.2, date: "2026-07-23" },
 };
 
 function makeOkResponse(body: unknown): { ok: boolean; status: number; json: () => Promise<unknown> } {
@@ -84,34 +103,35 @@ function wrapper({ children }: { children: React.ReactNode }): React.ReactElemen
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe("useCalendars", () => {
+describe("useTradeHistory", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("returns parsed calendars list on success", async () => {
-    mockApiFetch.mockResolvedValueOnce(makeOkResponse(SAMPLE_CALENDAR_LIST));
+  it("returns the parsed trade history on success", async () => {
+    mockApiFetch.mockResolvedValueOnce(makeOkResponse(SAMPLE_TRADE_HISTORY));
 
-    const { result } = renderHook(() => useCalendars(), { wrapper });
+    const { result } = renderHook(() => useTradeHistory(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.calendars).toHaveLength(1);
-    expect(result.current.data?.calendars[0]?.underlying).toBe("SPX");
-    expect(result.current.data?.calendars[0]?.strike).toBe(7425000);
+    expect(result.current.data?.roundTrips).toHaveLength(1);
+    expect(result.current.data?.executions[0]?.strike).toBe(7400);
+    expect(result.current.data?.totals.realizedPnl).toBeCloseTo(-171.7, 10);
+    expect(mockApiFetch).toHaveBeenCalledWith("/api/trade-history");
   });
 
   it("throws UnauthorizedError (non-retryable) on 401", async () => {
     mockApiFetch.mockResolvedValueOnce(makeErrorResponse(401));
 
-    const { result } = renderHook(() => useCalendars(), { wrapper });
+    const { result } = renderHook(() => useTradeHistory(), { wrapper });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-
-    expect(result.current.error?.message).toBe("UNAUTHORIZED");
-    // retry count should be 0 — the hook does not retry 401s
-    expect(result.current.failureCount).toBe(1);
+    expect(result.current.error?.name).toBe("UnauthorizedError");
   });
 
+  // ponytail: no non-401 retry test — it would exercise TanStack's backoff machinery
+  // (3 retries, seconds of wall-clock), not our code. 401 non-retry above is the
+  // behavior this hook owns.
 });

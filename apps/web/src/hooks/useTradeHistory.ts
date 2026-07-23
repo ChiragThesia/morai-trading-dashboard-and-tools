@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { listCalendarsResponse } from "@morai/contracts";
+import { tradeHistoryResponse } from "@morai/contracts";
 import { apiFetch } from "../lib/rpc.ts";
 
 // Non-retryable 401 error — mirrors the useGex / usePositions pattern (Pitfall 7).
@@ -12,28 +12,27 @@ class UnauthorizedError extends Error {
 }
 
 /**
- * useCalendars — fetches GET /api/calendars every 60s.
+ * useTradeHistory — fetches GET /api/trade-history every 60s (Trade Ledger).
  *
  * - Uses `apiFetch` from rpc.ts (Bearer token header — T-09-01).
- * - Parses the response body through `listCalendarsResponse.parse()` — no `as` cast.
- * - 401 → throws UnauthorizedError (non-retryable, matching useGex / usePositions pattern).
- * - Provides the calendar list for the JournalContainer.
+ * - Parses the response body through `tradeHistoryResponse.parse()` — no `as` cast.
+ * - 401 → throws UnauthorizedError (non-retryable, matching useCalendars' pattern).
  */
-export function useCalendars() {
+export function useTradeHistory() {
   return useQuery({
-    queryKey: ["calendars"],
+    queryKey: ["trade-history"],
     queryFn: async () => {
-      const res = await apiFetch("/api/calendars");
+      const res = await apiFetch("/api/trade-history");
 
       if (res.status === 401) {
         throw new UnauthorizedError();
       }
 
       if (!res.ok) {
-        throw new Error(`GET /api/calendars failed: ${res.status}`);
+        throw new Error(`GET /api/trade-history failed: ${res.status}`);
       }
 
-      return listCalendarsResponse.parse(await res.json());
+      return tradeHistoryResponse.parse(await res.json());
     },
     refetchInterval: 60_000,
     staleTime: 45_000,
