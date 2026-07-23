@@ -37,6 +37,7 @@ import type {
 } from "@morai/core";
 import {
   makeMemoryFillsRepo,
+  makeMemoryBrokerTransactionsRepo,
   makeMemoryCalendarEventsRepo,
   makeMemoryOrphanFillsRepo,
 } from "@morai/adapters";
@@ -115,6 +116,7 @@ describe("journal end-to-end (SC4 + SC5) against the real in-memory repo path", 
     const syncTransactions = makeSyncTransactionsUseCase({
       fetchTransactions,
       writeFills: fillsRepo.writeFills,
+      storeBrokerTransactions: makeMemoryBrokerTransactionsRepo().storeBrokerTransactions,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
       window: () => ({ from: "2026-06-01", to: "2026-06-30" }),
@@ -245,6 +247,7 @@ describe("journal end-to-end (SC4 + SC5) against the real in-memory repo path", 
     const syncTransactions = makeSyncTransactionsUseCase({
       fetchTransactions,
       writeFills: fillsRepo.writeFills,
+      storeBrokerTransactions: makeMemoryBrokerTransactionsRepo().storeBrokerTransactions,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
       window: () => ({ from: "2026-06-01", to: "2026-06-30" }),

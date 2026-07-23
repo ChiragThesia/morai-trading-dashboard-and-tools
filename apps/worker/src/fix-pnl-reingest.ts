@@ -70,6 +70,7 @@ if (import.meta.main) {
     makePostgresOrphanFillsRepo,
     makePostgresCalendarSnapshotsRepo,
     makePostgresBrokerTokensRepo,
+    makePostgresBrokerTransactionsRepo,
     makeAccountHashResolver,
     makeSchwabTransactionsAdapter,
   } = await import("@morai/adapters");
@@ -198,6 +199,7 @@ if (import.meta.main) {
   const backfillResult = await runBackfill({
     fetchTransactions: fetchTransactionsResolved,
     writeFills: fillsRepo.writeFills,
+    storeBrokerTransactions: makePostgresBrokerTransactionsRepo(db).storeBrokerTransactions,
     hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
     // Not authoritative on this path — fetchTransactionsResolved re-resolves the real hash
     // per call. Threaded only because RunBackfillDeps requires the field (see

@@ -35,6 +35,7 @@ import {
 } from "@morai/core";
 import type {
   ForFetchingTransactions,
+  ForStoringBrokerTransactions,
   ForWritingFills,
   StorageError,
 } from "@morai/core";
@@ -68,6 +69,9 @@ export type BackfillSummary = {
 export type RunBackfillDeps = {
   readonly fetchTransactions: ForFetchingTransactions;
   readonly writeFills: ForWritingFills;
+  // Trade Ledger: raw broker_transactions store — the backfill persists verbatim history
+  // through the same use-case as the scheduled job.
+  readonly storeBrokerTransactions: ForStoringBrokerTransactions;
   readonly hashFillIds: (ids: ReadonlyArray<string>) => string;
   readonly accountHash: string;
   readonly now: () => Date;
@@ -109,6 +113,7 @@ export async function runBackfill(
     const runChunk = makeSyncTransactionsUseCase({
       fetchTransactions: deps.fetchTransactions,
       writeFills: deps.writeFills,
+      storeBrokerTransactions: deps.storeBrokerTransactions,
       hashFillIds: deps.hashFillIds,
       accountHash: deps.accountHash,
       // Operator-supplied chunk: a static window thunk is correct here (one-shot CLI).
@@ -137,6 +142,7 @@ if (import.meta.main) {
   const {
     makeDb,
     makePostgresFillsRepo,
+    makePostgresBrokerTransactionsRepo,
     makeAccountHashResolver,
     makeSchwabTransactionsAdapter,
   } = await import("@morai/adapters");
@@ -174,6 +180,7 @@ if (import.meta.main) {
   const config = bootWorkerConfig();
   const db = makeDb(config.DATABASE_URL);
   const fillsRepo = makePostgresFillsRepo(db);
+  const brokerTransactionsRepo = makePostgresBrokerTransactionsRepo(db);
 
   const USER_AGENT = "morai-worker/0.0.1";
 
@@ -222,6 +229,7 @@ if (import.meta.main) {
   const result = await runBackfill({
     fetchTransactions: fetchTransactionsResolved,
     writeFills: fillsRepo.writeFills,
+    storeBrokerTransactions: brokerTransactionsRepo.storeBrokerTransactions,
     hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
     // IN-02: accountHash is NOT authoritative on the CLI path. fetchTransactionsResolved
     // ignores this value and re-resolves the real hash per call (Pitfall 5). It is threaded

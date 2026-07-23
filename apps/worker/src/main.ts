@@ -26,6 +26,7 @@ import {
   makePostgresCalendarEventsRepo,
   makePostgresOrphanFillsRepo,
   makePostgresFillsRepo,
+  makePostgresBrokerTransactionsRepo,
   makeCboeChainAdapter,
   makeSidecarChainAdapter,
   makeSchwabTransactionsAdapter,
@@ -141,6 +142,8 @@ const brokerTokensRepo = makePostgresBrokerTokensRepo(db, config.TOKEN_ENCRYPTIO
 const calendarEventsRepo = makePostgresCalendarEventsRepo(db);
 const orphanFillsRepo = makePostgresOrphanFillsRepo(db);
 const fillsRepo = makePostgresFillsRepo(db);
+// Trade Ledger: verbatim broker_transactions store (written by sync-transactions).
+const brokerTransactionsRepo = makePostgresBrokerTransactionsRepo(db);
 
 const USER_AGENT = "morai-worker/0.0.1";
 
@@ -410,6 +413,7 @@ const trailingTxWindow = (): { from: string; to: string } => {
 const syncTransactionsUseCase = makeSyncTransactionsUseCase({
   fetchTransactions: fetchTransactionsResolved,
   writeFills: fillsRepo.writeFills,
+  storeBrokerTransactions: brokerTransactionsRepo.storeBrokerTransactions,
   // C1: injected sha256 hasher → deterministic UUID fill ids.
   hashFillIds: (ids) => hashFillIds(ids, sha256Hex),
   accountHash: "resolved-at-call-time", // ignored by fetchTransactionsResolved (resolver wins)

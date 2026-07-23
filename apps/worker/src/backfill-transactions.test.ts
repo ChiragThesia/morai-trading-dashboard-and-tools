@@ -28,7 +28,7 @@ import type {
   FetchError,
   AuthExpiredError,
 } from "@morai/core";
-import { makeMemoryFillsRepo } from "@morai/adapters";
+import { makeMemoryFillsRepo, makeMemoryBrokerTransactionsRepo } from "@morai/adapters";
 import {
   runBackfill,
   SCHWAB_TX_LOOKBACK_MAX_DAYS,
@@ -91,6 +91,9 @@ const baseDeps = {
   accountHash: "ACCT-HASH",
   now: () => new Date("2026-06-20T00:00:00Z"),
   maxDays: 30,
+  // Trade Ledger: raw store twin — backfill persists verbatim history through the same
+  // use-case as the scheduled job (per-test twins not needed; nothing asserts on it here).
+  storeBrokerTransactions: makeMemoryBrokerTransactionsRepo().storeBrokerTransactions,
 };
 
 describe("runBackfill — historical trade-history backfill (BRK-04)", () => {

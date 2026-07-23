@@ -55,6 +55,7 @@ import {
 import type { BrokerTransaction, ForFetchingTransactions, Calendar } from "@morai/core";
 import {
   makeMemoryFillsRepo,
+  makeMemoryBrokerTransactionsRepo,
   makeMemoryCalendarEventsRepo,
   makeMemoryOrphanFillsRepo,
   makeMemoryCalendarsRepo,
@@ -359,6 +360,7 @@ describe("journal oracle — real-transaction openNetDebit/closeNetCredit regres
     const syncTransactions = makeSyncTransactionsUseCase({
       fetchTransactions,
       writeFills: fillsRepo.writeFills,
+      storeBrokerTransactions: makeMemoryBrokerTransactionsRepo().storeBrokerTransactions,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
       window: () => ({ from: "2026-04-01", to: "2026-07-31" }),
@@ -484,6 +486,7 @@ describe("journal oracle — closed-status auto-transition (round 5, bug 2)", ()
     const syncTransactions = makeSyncTransactionsUseCase({
       fetchTransactions,
       writeFills: fillsRepo.writeFills,
+      storeBrokerTransactions: makeMemoryBrokerTransactionsRepo().storeBrokerTransactions,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
       window: () => ({ from: "2026-04-01", to: "2026-07-31" }),
@@ -596,6 +599,7 @@ describe("journal oracle — scoped rebuild-journal convergence for the shared-l
     const syncTransactions = makeSyncTransactionsUseCase({
       fetchTransactions,
       writeFills: fillsRepo.writeFills,
+      storeBrokerTransactions: makeMemoryBrokerTransactionsRepo().storeBrokerTransactions,
       hashFillIds: hashIds,
       accountHash: "acct-hash",
       window: () => ({ from: "2026-05-01", to: "2026-06-30" }),

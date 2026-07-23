@@ -41,10 +41,12 @@ import type {
   ForFetchingTransactions,
 } from "../../brokerage/application/ports.ts";
 import type {
+  ForStoringBrokerTransactions,
   ForWritingFills,
   HashFillIds,
   RawFill,
   StorageError,
+  StoredBrokerTransaction,
 } from "./ports.ts";
 
 // ─── Deps ──────────────────────────────────────────────────────────────────────
@@ -52,6 +54,9 @@ import type {
 export type SyncTransactionsDeps = {
   readonly fetchTransactions: ForFetchingTransactions;
   readonly writeFills: ForWritingFills;
+  // Trade Ledger: verbatim broker_transactions store — written BEFORE fills so the raw
+  // audit record never lags the derived rows. A store failure fails the run (retryable).
+  readonly storeBrokerTransactions: ForStoringBrokerTransactions;
   // Injected sha256-hex hasher (C1) — used to derive deterministic UUID fill ids.
   readonly hashFillIds: HashFillIds;
   readonly accountHash: string;
@@ -115,6 +120,13 @@ export function makeSyncTransactionsUseCase(
       });
     }
 
+    // Trade Ledger: persist the verbatim batch FIRST — raw must never lag derived fills.
+    // Store failure → err (pg-boss retries); fills are not written this run.
+    const storeResult = await deps.storeBrokerTransactions(
+      txResult.value.map(toStoredBrokerTransaction),
+    );
+    if (!storeResult.ok) return err(storeResult.error);
+
     const fills: RawFill[] = [];
     for (const tx of txResult.value) {
       flattenTransaction(tx, deps.hashFillIds, fills);
@@ -125,6 +137,26 @@ export function makeSyncTransactionsUseCase(
     const writeResult = await deps.writeFills(fills);
     if (!writeResult.ok) return err(writeResult.error);
     return ok(undefined);
+  };
+}
+
+// Map a BrokerTransaction to its persisted shape. execTime is Schwab's verbatim string —
+// parsed to Date here at the persistence boundary; an unparseable value maps to null,
+// never an Invalid Date row.
+function toStoredBrokerTransaction(tx: BrokerTransaction): StoredBrokerTransaction {
+  const execTimeMs = tx.execTime !== undefined ? Date.parse(tx.execTime) : NaN;
+  return {
+    activityId: tx.activityId,
+    orderId: tx.orderId,
+    activityType: tx.activityType ?? null,
+    execTime: Number.isNaN(execTimeMs) ? null : new Date(execTimeMs),
+    tradeDate: tx.tradeDate,
+    settlementDate: tx.settlementDate ?? null,
+    netAmount: tx.netAmount,
+    fees: tx.fees ?? null,
+    legs: tx.legs,
+    // ponytail: {} only for legacy fixtures without raw — the live adapter always supplies it
+    raw: tx.raw ?? {},
   };
 }
 

@@ -20,7 +20,13 @@ import type {
   FetchError,
   AuthExpiredError,
 } from "../../brokerage/application/ports.ts";
-import type { ForWritingFills, RawFill, StorageError } from "./ports.ts";
+import type {
+  ForStoringBrokerTransactions,
+  ForWritingFills,
+  RawFill,
+  StorageError,
+  StoredBrokerTransaction,
+} from "./ports.ts";
 import { hexToUuid, makeSyncTransactionsUseCase } from "./syncTransactions.ts";
 
 const UUID_RE =
@@ -114,11 +120,29 @@ function testHashFillIds(ids: ReadonlyArray<string>): string {
   return base.repeat(8); // 64 hex chars
 }
 
+// Trade Ledger: capturing store double (Map-keyed on activityId, first-seen wins).
+function makeCapturingStore(): {
+  storeBrokerTransactions: ForStoringBrokerTransactions;
+  captured: StoredBrokerTransaction[];
+} {
+  const captured: StoredBrokerTransaction[] = [];
+  const storeBrokerTransactions: ForStoringBrokerTransactions = async (
+    batch: ReadonlyArray<StoredBrokerTransaction>,
+  ): Promise<Result<void, StorageError>> => {
+    captured.push(...batch);
+    return ok(undefined);
+  };
+  return { storeBrokerTransactions, captured };
+}
+
+const noopStore: ForStoringBrokerTransactions = async () => ok(undefined);
+
 const baseDeps = {
   accountHash: "ACCT-HASH",
   window: () => ({ from: "2026-06-01", to: "2026-06-30" }),
   now: () => new Date("2026-06-20T00:00:00Z"),
   hashFillIds: testHashFillIds,
+  storeBrokerTransactions: noopStore,
 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────────
@@ -263,6 +287,113 @@ describe("makeSyncTransactionsUseCase — A4 fills source", () => {
     const result = await run();
     expect(result.ok).toBe(false);
     expect(captured).toHaveLength(0);
+  });
+});
+
+describe("makeSyncTransactionsUseCase — Trade Ledger raw persistence", () => {
+  const RAW_TX: BrokerTransaction = {
+    activityId: 3001,
+    tradeDate: "2026-07-23",
+    netAmount: -4010.26,
+    orderId: 9101,
+    legs: [
+      { occSymbol: FRONT, qty: 1, price: 103.36, positionEffect: "OPENING", side: "sell" },
+    ],
+    execTime: "2026-07-23T19:50:12+0000",
+    activityType: "EXECUTION",
+    settlementDate: "2026-07-24",
+    fees: -0.7,
+    raw: { activityId: 3001, verbatim: true },
+  };
+
+  it("stores the full mapped batch (raw included) before writing fills", async () => {
+    const { writeFills, captured: fills } = makeCapturingWriteFills();
+    const { storeBrokerTransactions, captured: stored } = makeCapturingStore();
+    const run = makeSyncTransactionsUseCase({
+      ...baseDeps,
+      fetchTransactions: makeFetch([RAW_TX]),
+      writeFills,
+      storeBrokerTransactions,
+    });
+
+    const result = await run();
+    expect(result.ok).toBe(true);
+
+    expect(stored).toHaveLength(1);
+    const row = stored[0];
+    expect(row).toBeDefined();
+    if (!row) return;
+    expect(row.activityId).toBe(3001);
+    expect(row.orderId).toBe(9101);
+    expect(row.activityType).toBe("EXECUTION");
+    expect(row.execTime?.toISOString()).toBe("2026-07-23T19:50:12.000Z");
+    expect(row.tradeDate).toBe("2026-07-23");
+    expect(row.settlementDate).toBe("2026-07-24");
+    expect(row.netAmount).toBeCloseTo(-4010.26, 10);
+    expect(row.fees).toBeCloseTo(-0.7, 10);
+    expect(row.legs).toEqual(RAW_TX.legs);
+    expect(row.raw).toEqual({ activityId: 3001, verbatim: true });
+    // Fills still written as before.
+    expect(fills).toHaveLength(1);
+  });
+
+  it("optional fields absent → nulls; invalid execTime → null, never Invalid Date", async () => {
+    const { storeBrokerTransactions, captured: stored } = makeCapturingStore();
+    const bare: BrokerTransaction = {
+      activityId: 3002,
+      tradeDate: "2026-07-23",
+      netAmount: 1,
+      orderId: null,
+      legs: [],
+      execTime: "not-a-date",
+    };
+    const { writeFills } = makeCapturingWriteFills();
+    const run = makeSyncTransactionsUseCase({
+      ...baseDeps,
+      fetchTransactions: makeFetch([bare]),
+      writeFills,
+      storeBrokerTransactions,
+    });
+
+    const result = await run();
+    expect(result.ok).toBe(true);
+    const row = stored[0];
+    expect(row?.orderId).toBeNull();
+    expect(row?.activityType).toBeNull();
+    expect(row?.execTime).toBeNull();
+    expect(row?.settlementDate).toBeNull();
+    expect(row?.fees).toBeNull();
+  });
+
+  it("store failure → err (retryable) and fills are NOT written — raw never lags derived", async () => {
+    const { writeFills, captured: fills } = makeCapturingWriteFills();
+    const failingStore: ForStoringBrokerTransactions = async () =>
+      err<StorageError>({ kind: "storage-error", message: "insert failed" });
+    const run = makeSyncTransactionsUseCase({
+      ...baseDeps,
+      fetchTransactions: makeFetch([RAW_TX]),
+      writeFills,
+      storeBrokerTransactions: failingStore,
+    });
+
+    const result = await run();
+    expect(result.ok).toBe(false);
+    expect(fills).toHaveLength(0);
+  });
+
+  it("AUTH_EXPIRED still degrades to ok with no store call", async () => {
+    const { storeBrokerTransactions, captured: stored } = makeCapturingStore();
+    const { writeFills } = makeCapturingWriteFills();
+    const run = makeSyncTransactionsUseCase({
+      ...baseDeps,
+      fetchTransactions: makeAuthExpiredFetch(),
+      writeFills,
+      storeBrokerTransactions,
+    });
+
+    const result = await run();
+    expect(result.ok).toBe(true);
+    expect(stored).toHaveLength(0);
   });
 });
 
