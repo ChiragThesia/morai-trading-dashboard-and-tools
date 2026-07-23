@@ -44,6 +44,12 @@ export type { MemoryCalendarEventsRepo } from "./memory/calendar-events.ts";
 export { makeMemoryOrphanFillsRepo } from "./memory/orphan-fills.ts";
 export type { MemoryOrphanFillsRepo } from "./memory/orphan-fills.ts";
 
+// Trade Ledger: broker_transactions verbatim store (postgres + memory twin)
+export { makePostgresBrokerTransactionsRepo } from "./postgres/repos/broker-transactions.ts";
+export type { PostgresBrokerTransactionsRepo } from "./postgres/repos/broker-transactions.ts";
+export { makeMemoryBrokerTransactionsRepo } from "./memory/broker-transactions.ts";
+export type { MemoryBrokerTransactionsRepo } from "./memory/broker-transactions.ts";
+
 // RULE-01 (20-08, barrel gap closed 20-10): calendar-event-annotations Postgres repo +
 // in-memory twin (D-09/D-10/D24). Structurally matches @morai/core's ForReadingAnnotations/
 // ForWritingAnnotations exactly (20-09) — no wiring changes needed beyond the barrel export.

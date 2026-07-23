@@ -89,6 +89,14 @@ export type {
   RecentClosedCalendar,
   ForReadingRecentClosedCalendars,
 } from "./journal/index.ts";
+// Trade Ledger: broker_transactions store + per-calendar realized P&L aggregate
+export type {
+  StoredBrokerTransaction,
+  StoredBrokerTransactionLeg,
+  ForStoringBrokerTransactions,
+  ForReadingBrokerTransactions,
+  ForReadingRealizedPnlByCalendar,
+} from "./journal/index.ts";
 export { makeGetCalendarEventsWithRulesUseCase } from "./journal/index.ts";
 export type {
   CalendarEventWithRules,

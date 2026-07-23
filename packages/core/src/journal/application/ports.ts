@@ -915,3 +915,61 @@ export type RecentClosedCalendar = {
 export type ForReadingRecentClosedCalendars = (
   sinceDate: string, // YYYY-MM-DD
 ) => Promise<Result<ReadonlyArray<RecentClosedCalendar>, StorageError>>;
+
+// ─── Trade Ledger: broker_transactions ports ─────────────────────────────────
+
+/**
+ * StoredBrokerTransaction — one verbatim Schwab transaction as persisted in
+ * broker_transactions (Trade Ledger). `raw` is the whole broker payload element,
+ * opaque to core; `legs` is the parsed instrument-leg subset the ledger UI renders.
+ * The fills table stays the derived, lossy pairing source — this is the audit record.
+ */
+export type StoredBrokerTransactionLeg = {
+  readonly occSymbol: string;
+  readonly qty: number;
+  readonly price: number;
+  readonly positionEffect: "OPENING" | "CLOSING" | "UNKNOWN";
+  readonly side: "buy" | "sell";
+};
+
+export type StoredBrokerTransaction = {
+  readonly activityId: number;
+  readonly orderId: number | null;
+  readonly activityType: string | null;
+  readonly execTime: Date | null; // full execution instant; null when Schwab omitted it
+  readonly tradeDate: string; // YYYY-MM-DD
+  readonly settlementDate: string | null; // YYYY-MM-DD
+  readonly netAmount: number;
+  readonly fees: number | null; // Σ fee transferItems, Schwab's sign kept
+  readonly legs: ReadonlyArray<StoredBrokerTransactionLeg>;
+  readonly raw: unknown;
+};
+
+/**
+ * ForStoringBrokerTransactions — batch upsert into broker_transactions,
+ * onConflictDoNothing on the activity_id PK (first-seen raw wins; the 7-day trailing
+ * sync window re-covers old rows as no-ops). Empty batch is a valid no-op.
+ */
+export type ForStoringBrokerTransactions = (
+  batch: ReadonlyArray<StoredBrokerTransaction>,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingBrokerTransactions — all stored transactions, newest first
+ * (exec_time DESC, nulls last). Personal-account volume (~hundreds of rows) makes an
+ * unbounded read fine; add a limit only when it measurably matters.
+ */
+export type ForReadingBrokerTransactions = () => Promise<
+  Result<ReadonlyArray<StoredBrokerTransaction>, StorageError>
+>;
+
+/**
+ * ForReadingRealizedPnlByCalendar — per-calendar SUM of calendar_events.realized_pnl over
+ * CLOSE **and** ROLL events (ROLL rows carry the closed leg's realized P&L — the
+ * PLAY-02 CLOSE-only aggregate deliberately excludes them, the ledger must not).
+ * A calendar whose every summed event has null realizedPnl maps to null, never 0.
+ * Calendars with no CLOSE/ROLL events are absent from the record.
+ */
+export type ForReadingRealizedPnlByCalendar = () => Promise<
+  Result<Readonly<Record<string, number | null>>, StorageError>
+>;

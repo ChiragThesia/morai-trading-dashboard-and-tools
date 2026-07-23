@@ -20,6 +20,7 @@ import type {
   ForReadingCalendarEvents,
   ForReadingCalendarEventByHash,
   ForDeletingCalendarEvents,
+  ForReadingRealizedPnlByCalendar,
   StorageError,
 } from "@morai/core";
 import type { CalendarEvent } from "@morai/core";
@@ -31,6 +32,7 @@ export type CalendarEventsRepo = {
   readonly readCalendarEvents: ForReadingCalendarEvents;
   readonly readCalendarEventByHash: ForReadingCalendarEventByHash;
   readonly deleteCalendarEvents: ForDeletingCalendarEvents;
+  readonly readRealizedPnlByCalendar: ForReadingRealizedPnlByCalendar;
   /** Count rows in calendar_events for the given calendarId */
   readonly countEvents: (calendarId: string) => Promise<number>;
 };
@@ -222,6 +224,56 @@ export function runCalendarEventsContractTests(
 
         expect(await repo.countEvents(CAL_A)).toBe(0);
         expect(await repo.countEvents(CAL_B)).toBe(1);
+      });
+    });
+
+    describe("readRealizedPnlByCalendar — Trade Ledger aggregate", () => {
+      it("sums realizedPnl across CLOSE AND ROLL events per calendar", async () => {
+        await seed.seedCalendar(CAL_A);
+        await seed.seedCalendar(CAL_B);
+
+        await repo.storeCalendarEvent(
+          makeCalendarEvent(CAL_A, HASH_1, { eventType: "CLOSE", realizedPnl: -100.5 }),
+        );
+        await repo.storeCalendarEvent(
+          makeCalendarEvent(CAL_A, HASH_2, {
+            eventType: "ROLL",
+            realizedPnl: -71.2,
+            rollOpenDebit: 40.08,
+            rollCloseCredit: 41.58,
+          }),
+        );
+        // OPEN events never contribute (realizedPnl null on OPEN anyway).
+        await repo.storeCalendarEvent(
+          makeCalendarEvent(CAL_B, HASH_3, { eventType: "OPEN", realizedPnl: null }),
+        );
+
+        const result = await repo.readRealizedPnlByCalendar();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value[CAL_A]).toBeCloseTo(-171.7, 10);
+        // CAL_B has no CLOSE/ROLL events → absent from the record entirely.
+        expect(CAL_B in result.value).toBe(false);
+      });
+
+      it("a calendar whose every CLOSE/ROLL event has null realizedPnl maps to null, never 0", async () => {
+        await seed.seedCalendar(CAL_A);
+        await repo.storeCalendarEvent(
+          makeCalendarEvent(CAL_A, HASH_1, { eventType: "CLOSE", realizedPnl: null }),
+        );
+
+        const result = await repo.readRealizedPnlByCalendar();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(CAL_A in result.value).toBe(true);
+        expect(result.value[CAL_A]).toBeNull();
+      });
+
+      it("returns an empty record when no CLOSE/ROLL events exist", async () => {
+        const result = await repo.readRealizedPnlByCalendar();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(Object.keys(result.value)).toHaveLength(0);
       });
     });
   });

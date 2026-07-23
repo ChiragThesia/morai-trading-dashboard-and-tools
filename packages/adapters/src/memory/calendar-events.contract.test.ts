@@ -19,6 +19,7 @@ describe("in-memory calendar-events adapter", () => {
         readCalendarEvents: repo.readCalendarEvents,
         readCalendarEventByHash: repo.readCalendarEventByHash,
         deleteCalendarEvents: repo.deleteCalendarEvents,
+        readRealizedPnlByCalendar: repo.readRealizedPnlByCalendar,
         countEvents: repo.countEvents,
       };
     },
