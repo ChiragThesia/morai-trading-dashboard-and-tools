@@ -24,6 +24,7 @@ import type {
   ForRunningGetRuleSettings,
   ForRunningSetRuleOverrides,
   ForRunningPreviewRuleOverrides,
+  ForRunningGetTradeHistory,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -51,6 +52,7 @@ import {
   registerGetRuleSettingsTool,
   registerSetRuleOverridesTool,
   registerPreviewRuleOverridesTool,
+  registerGetTradeHistoryTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -127,6 +129,7 @@ export function makeMcpRouter(
   setRuleOverrides?: ForRunningSetRuleOverrides,
   analyzeAdHocCalendar?: ForAnalyzingAdHocCalendar,
   previewRuleOverrides?: ForRunningPreviewRuleOverrides,
+  getTradeHistory?: ForRunningGetTradeHistory,
 ): Hono {
   const router = new Hono();
 
@@ -217,6 +220,11 @@ export function makeMcpRouter(
     // use-case is available (Phase 32, 32-04)
     if (previewRuleOverrides !== undefined) {
       registerPreviewRuleOverridesTool(server, previewRuleOverrides);
+    }
+    // Trade Ledger / MCP-02: get_trade_history tool — optional, wired when the
+    // getTradeHistory use-case is available
+    if (getTradeHistory !== undefined) {
+      registerGetTradeHistoryTool(server, getTradeHistory);
     }
     return { server, transport };
   }

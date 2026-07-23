@@ -28,6 +28,7 @@ import {
   setRuleOverridesResponse,
   previewRuleOverridesRequest,
   previewRuleOverridesResponse,
+  tradeHistoryResponse,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -52,6 +53,7 @@ import type {
   ForRunningGetRuleSettings,
   ForRunningSetRuleOverrides,
   ForRunningPreviewRuleOverrides,
+  ForRunningGetTradeHistory,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -198,6 +200,53 @@ export function registerGetJournalTool(
           ...row,
           time: row.time instanceof Date ? row.time.toISOString() : row.time,
         })),
+      });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetTradeHistoryTool — registers the get_trade_history MCP tool (Trade Ledger).
+ *
+ * MCP-02: shares tradeHistoryResponse schema with GET /api/trade-history.
+ * No input args. Dates serialize via toISOString() (same rule as the HTTP route —
+ * Schwab's raw "+0000" offset format fails the contract's z.string().datetime()).
+ */
+export function registerGetTradeHistoryTool(
+  server: McpServer,
+  getTradeHistory: ForRunningGetTradeHistory,
+): void {
+  server.registerTool(
+    "get_trade_history",
+    {
+      title: "Get Trade History",
+      description:
+        "Returns the trade ledger: per-calendar round-trips with realized P&L and latest greeks, plus TOS-style raw executions. Same payload as GET /api/trade-history.",
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getTradeHistory();
+      if (!result.ok) {
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      const { roundTrips, executions, totals, vix } = result.value;
+      const payload = tradeHistoryResponse.parse({
+        roundTrips: roundTrips.map((r) => ({
+          ...r,
+          openedAt: r.openedAt.toISOString(),
+          closedAt: r.closedAt !== null ? r.closedAt.toISOString() : null,
+          greeks:
+            r.greeks !== null ? { ...r.greeks, asOf: r.greeks.asOf.toISOString() } : null,
+        })),
+        executions: executions.map((e) => ({
+          ...e,
+          execTime: e.execTime !== null ? e.execTime.toISOString() : null,
+        })),
+        totals,
+        vix,
       });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],

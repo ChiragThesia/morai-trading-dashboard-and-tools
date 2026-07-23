@@ -19,6 +19,20 @@ export type {
 } from "./calendar.ts";
 
 // Journal read contracts (MCP-02: reused by get_journal MCP tool in plan 07)
+// Trade Ledger contracts (MCP-02: reused by get_trade_history MCP tool)
+export {
+  tradeHistoryGreeks,
+  tradeHistoryRoundTrip,
+  tradeHistoryExecution,
+  tradeHistoryResponse,
+} from "./trade-history.ts";
+export type {
+  TradeHistoryGreeksResponse,
+  TradeHistoryRoundTripResponse,
+  TradeHistoryExecutionResponse,
+  TradeHistoryResponse,
+} from "./trade-history.ts";
+
 export { snapshotResponse, journalResponse } from "./journal.ts";
 export type { SnapshotResponse, JournalResponse } from "./journal.ts";
 // JRNL-01 (22-01/22-03): lifecycle contract — additive .extend() over snapshotResponse,

@@ -444,6 +444,71 @@ describe("MCP router", () => {
     ).not.toThrow();
   });
 
+  // ─── get_trade_history tool (Trade Ledger, MCP-02) ─────────────────────────
+
+  it("get_trade_history tool registers and its handler returns tradeHistoryResponse-valid payload", async () => {
+    const { registerGetTradeHistoryTool } = await import("./tools.ts");
+    const { tradeHistoryResponse } = await import("@morai/contracts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    const fakeGetTradeHistory = async () =>
+      ok({
+        roundTrips: [
+          {
+            calendarId: "550e8400-e29b-41d4-a716-446655440000",
+            underlying: "SPXW",
+            strike: 7400000,
+            optionType: "P" as const,
+            frontExpiry: "2026-08-11",
+            backExpiry: "2026-08-31",
+            qty: 1,
+            status: "open" as const,
+            openedAt: new Date("2026-07-23T19:50:00Z"),
+            closedAt: null,
+            openNetDebit: 40.08,
+            realizedPnl: null,
+            greeks: null,
+          },
+        ],
+        executions: [],
+        totals: { realizedPnl: null },
+        vix: null,
+      });
+    registerGetTradeHistoryTool(server, fakeGetTradeHistory);
+
+    const toolsMap: unknown = Reflect.get(server, "_registeredTools");
+    if (typeof toolsMap !== "object" || toolsMap === null) {
+      throw new Error("_registeredTools not found on McpServer instance");
+    }
+    const toolEntry: unknown = Reflect.get(toolsMap, "get_trade_history");
+    if (typeof toolEntry !== "object" || toolEntry === null) {
+      throw new Error("get_trade_history tool not registered");
+    }
+    const handler: unknown = Reflect.get(toolEntry, "handler");
+    if (typeof handler !== "function") {
+      throw new Error("get_trade_history handler is not a function");
+    }
+
+    const result: unknown = await Reflect.apply(handler, undefined, [{}]);
+    if (typeof result !== "object" || result === null) {
+      throw new Error("handler did not return an object");
+    }
+    const content: unknown = Reflect.get(result, "content");
+    if (!Array.isArray(content)) throw new Error("content is not an array");
+    const first: unknown = content[0];
+    if (typeof first !== "object" || first === null) {
+      throw new Error("content[0] is not an object");
+    }
+    const text: unknown = Reflect.get(first, "text");
+    if (typeof text !== "string") throw new Error("content[0].text is not a string");
+    const payload = tradeHistoryResponse.parse(JSON.parse(text));
+    expect(payload.roundTrips[0]?.openedAt).toBe("2026-07-23T19:50:00.000Z");
+    expect(payload.totals.realizedPnl).toBeNull();
+  });
+
   // ─── get_journal / get_live_greeks — safeParse: invalid args → typed error content (CR-02) ──
 
   it("get_journal tool returns typed error content for non-UUID calendarId — does not throw (CR-02)", async () => {

@@ -97,6 +97,15 @@ export type {
   ForReadingBrokerTransactions,
   ForReadingRealizedPnlByCalendar,
 } from "./journal/index.ts";
+export { makeGetTradeHistoryUseCase } from "./journal/index.ts";
+export type {
+  GetTradeHistoryDeps,
+  ForRunningGetTradeHistory,
+  TradeHistory,
+  TradeHistoryRoundTrip,
+  TradeHistoryExecution,
+  TradeHistoryGreeks,
+} from "./journal/index.ts";
 export { makeGetCalendarEventsWithRulesUseCase } from "./journal/index.ts";
 export type {
   CalendarEventWithRules,

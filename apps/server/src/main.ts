@@ -31,6 +31,7 @@ import {
   makePostgresEconomicEventsRepo,
   makePostgresPickerHistoryRepo,
   makePostgresRateObservationsRepo,
+  makePostgresBrokerTransactionsRepo,
 } from "@morai/adapters";
 import {
   makeGetStatusUseCase,
@@ -38,6 +39,7 @@ import {
   makeListCalendarsUseCase,
   makeCloseCalendarUseCase,
   makeGetJournalUseCase,
+  makeGetTradeHistoryUseCase,
   makeGetLiveGreeksUseCase,
   makeGetPositionsUseCase,
   makeGetTransactionsUseCase,
@@ -87,6 +89,7 @@ import { statusRoutes } from "./adapters/http/status.routes.ts";
 import { withRefreshExpiryWarning } from "./adapters/refresh-expiry-warner.ts";
 import { calendarRoutes } from "./adapters/http/calendar.routes.ts";
 import { journalRoutes } from "./adapters/http/journal.routes.ts";
+import { tradeHistoryRoutes } from "./adapters/http/trade-history.routes.ts";
 import { journalRulesRoutes } from "./adapters/http/journal-rules.routes.ts";
 import { settingsRoutes } from "./adapters/http/settings.routes.ts";
 import { reauthRoutes } from "./adapters/http/reauth.routes.ts";
@@ -436,6 +439,18 @@ const previewRuleOverrides = makePreviewRuleOverridesUseCase({ previewPicker, pr
 // MCP tools over the ONE journal-rules contract schema set (D-13).
 const calendarEventsRepo = makePostgresCalendarEventsRepo(db);
 const calendarEventAnnotationsRepo = makePostgresCalendarEventAnnotationsRepo(db);
+// Trade Ledger: GET /api/trade-history + get_trade_history MCP tool — composes existing
+// reads (calendars, CLOSE+ROLL P&L aggregate, latest snapshot per open calendar, macro VIX)
+// with the verbatim broker_transactions store.
+const brokerTransactionsRepo = makePostgresBrokerTransactionsRepo(db);
+const getTradeHistory = makeGetTradeHistoryUseCase({
+  listCalendars: calendarsRepo.listCalendars,
+  readRealizedPnlByCalendar: calendarEventsRepo.readRealizedPnlByCalendar,
+  readLatestSnapshotPerOpenCalendar:
+    calendarSnapshotsRepo.readLatestSnapshotPerOpenCalendar,
+  readMacroObservations: macroObservationsRepo.readMacroObservations,
+  readBrokerTransactions: brokerTransactionsRepo.readBrokerTransactions,
+});
 const getEventsWithRules = makeGetCalendarEventsWithRulesUseCase({
   readCalendarEvents: calendarEventsRepo.readCalendarEvents,
   readAnnotations: calendarEventAnnotationsRepo,
@@ -536,6 +551,8 @@ app.route("/api", statusRoutes(statusPort));
 const apiRouter = new Hono()
   .route("/", calendarRoutes(registerCalendar, listCalendars, closeCalendar))
   .route("/", journalRoutes(getJournal))
+  // Trade Ledger: GET /api/trade-history — round-trips + raw executions (MCP-02)
+  .route("/", tradeHistoryRoutes(getTradeHistory))
   // RULE-01 (20-10): GET/PUT /api/journal/*/rules — event read + rule-tag write (D-13)
   .route("/", journalRulesRoutes(calendarsRepo.getCalendarById, getEventsWithRules, setRuleTags))
   // JRNL-01 (22-03): GET /api/journal/:calendarId/lifecycle — enriched series (forward vol +
@@ -637,6 +654,7 @@ const mcpRouter = makeMcpRouter(
   setRuleOverrides,
   analyzeAdHocCalendar,
   previewRuleOverrides,
+  getTradeHistory,
 );
 app.route("", mcpRouter);
 

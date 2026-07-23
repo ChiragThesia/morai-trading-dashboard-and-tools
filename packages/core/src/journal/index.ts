@@ -238,6 +238,15 @@ export type {
   ForReadingBrokerTransactions,
   ForReadingRealizedPnlByCalendar,
 } from "./application/ports.ts";
+export { makeGetTradeHistoryUseCase } from "./application/getTradeHistory.ts";
+export type {
+  GetTradeHistoryDeps,
+  ForRunningGetTradeHistory,
+  TradeHistory,
+  TradeHistoryRoundTrip,
+  TradeHistoryExecution,
+  TradeHistoryGreeks,
+} from "./application/getTradeHistory.ts";
 export { makeGetCalendarEventsWithRulesUseCase } from "./application/getCalendarEventsWithRules.ts";
 export type {
   CalendarEventWithRules,
