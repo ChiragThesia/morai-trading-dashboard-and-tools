@@ -510,6 +510,87 @@ describe("MCP router", () => {
     expect(payload.totals.realizedPnl).toBeNull();
   });
 
+  // ─── get_trade_detail tool (Trade Ledger expansion, MCP-02) ────────────────
+
+  it("get_trade_detail tool parses via contract; not-found and invalid-uuid return typed error text", async () => {
+    const { registerGetTradeDetailTool } = await import("./tools.ts");
+    const { tradeDetailResponse } = await import("@morai/contracts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+
+    const KNOWN = "550e8400-e29b-41d4-a716-446655440000";
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    const fakeGetTradeDetail = async (calendarId: string) =>
+      calendarId === KNOWN
+        ? ok({
+            calendarId: KNOWN,
+            days: [
+              {
+                date: "2026-07-23",
+                asOf: new Date("2026-07-23T19:30:00Z"),
+                spot: 7400.5,
+                pnlOpen: 2.0,
+                netDelta: 1.2,
+                netGamma: null,
+                netTheta: 38.5,
+                netVega: 112.3,
+                frontIv: 0.145,
+                backIv: 0.139,
+                termSlope: -0.006,
+                front: { mark: 103.4, iv: 0.145, delta: -40, gamma: null, theta: 550, vega: -610 },
+                back: { mark: 143.5, iv: 0.139, delta: 42, gamma: 0.2, theta: -310, vega: 720 },
+              },
+            ],
+          })
+        : ok(null);
+    registerGetTradeDetailTool(server, fakeGetTradeDetail);
+
+    const toolsMap: unknown = Reflect.get(server, "_registeredTools");
+    if (typeof toolsMap !== "object" || toolsMap === null) {
+      throw new Error("_registeredTools not found on McpServer instance");
+    }
+    const toolEntry: unknown = Reflect.get(toolsMap, "get_trade_detail");
+    if (typeof toolEntry !== "object" || toolEntry === null) {
+      throw new Error("get_trade_detail tool not registered");
+    }
+    const handler: unknown = Reflect.get(toolEntry, "handler");
+    if (typeof handler !== "function") {
+      throw new Error("get_trade_detail handler is not a function");
+    }
+
+    function textOf(result: unknown): string {
+      if (typeof result !== "object" || result === null) throw new Error("not an object");
+      const content: unknown = Reflect.get(result, "content");
+      if (!Array.isArray(content)) throw new Error("content is not an array");
+      const first: unknown = content[0];
+      if (typeof first !== "object" || first === null) throw new Error("no content[0]");
+      const text: unknown = Reflect.get(first, "text");
+      if (typeof text !== "string") throw new Error("text is not a string");
+      return text;
+    }
+
+    // Known id → contract-valid payload with ISO asOf
+    const okText = textOf(await Reflect.apply(handler, undefined, [{ calendarId: KNOWN }]));
+    const payload = tradeDetailResponse.parse(JSON.parse(okText));
+    expect(payload.days[0]?.asOf).toBe("2026-07-23T19:30:00.000Z");
+    expect(payload.days[0]?.front.delta).toBeCloseTo(-40, 10);
+
+    // Unknown id → not-found text
+    const missText = textOf(
+      await Reflect.apply(handler, undefined, [
+        { calendarId: "550e8400-e29b-41d4-a716-446655440099" },
+      ]),
+    );
+    expect(missText).toContain("not found");
+
+    // Invalid uuid → typed error text, never throws
+    const badText = textOf(
+      await Reflect.apply(handler, undefined, [{ calendarId: "not-a-uuid" }]),
+    );
+    expect(badText).toContain("invalid");
+  });
+
   // ─── get_journal / get_live_greeks — safeParse: invalid args → typed error content (CR-02) ──
 
   it("get_journal tool returns typed error content for non-UUID calendarId — does not throw (CR-02)", async () => {

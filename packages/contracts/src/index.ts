@@ -25,12 +25,18 @@ export {
   tradeHistoryRoundTrip,
   tradeHistoryExecution,
   tradeHistoryResponse,
+  tradeDetailLegDay,
+  tradeDetailDay,
+  tradeDetailResponse,
 } from "./trade-history.ts";
 export type {
   TradeHistoryGreeksResponse,
   TradeHistoryRoundTripResponse,
   TradeHistoryExecutionResponse,
   TradeHistoryResponse,
+  TradeDetailLegDayResponse,
+  TradeDetailDayResponse,
+  TradeDetailResponse,
 } from "./trade-history.ts";
 
 export { snapshotResponse, journalResponse } from "./journal.ts";

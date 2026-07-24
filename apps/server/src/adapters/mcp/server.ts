@@ -25,6 +25,7 @@ import type {
   ForRunningSetRuleOverrides,
   ForRunningPreviewRuleOverrides,
   ForRunningGetTradeHistory,
+  ForRunningGetTradeDetail,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -53,6 +54,7 @@ import {
   registerSetRuleOverridesTool,
   registerPreviewRuleOverridesTool,
   registerGetTradeHistoryTool,
+  registerGetTradeDetailTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -130,6 +132,7 @@ export function makeMcpRouter(
   analyzeAdHocCalendar?: ForAnalyzingAdHocCalendar,
   previewRuleOverrides?: ForRunningPreviewRuleOverrides,
   getTradeHistory?: ForRunningGetTradeHistory,
+  getTradeDetail?: ForRunningGetTradeDetail,
 ): Hono {
   const router = new Hono();
 
@@ -225,6 +228,9 @@ export function makeMcpRouter(
     // getTradeHistory use-case is available
     if (getTradeHistory !== undefined) {
       registerGetTradeHistoryTool(server, getTradeHistory);
+    }
+    if (getTradeDetail !== undefined) {
+      registerGetTradeDetailTool(server, getTradeDetail);
     }
     return { server, transport };
   }

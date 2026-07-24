@@ -1,13 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
-import type { ForRunningGetTradeHistory, StorageError, TradeHistory } from "@morai/core";
-import { tradeHistoryResponse } from "@morai/contracts";
+import type {
+  ForRunningGetTradeDetail,
+  ForRunningGetTradeHistory,
+  StorageError,
+  TradeDetail,
+  TradeHistory,
+} from "@morai/core";
+import { tradeDetailResponse, tradeHistoryResponse } from "@morai/contracts";
 import { tradeHistoryRoutes } from "./trade-history.routes.ts";
 
-function buildTestApp(getTradeHistory: ForRunningGetTradeHistory) {
+const noopGetTradeDetail: ForRunningGetTradeDetail = async () => ok(null);
+
+function buildTestApp(
+  getTradeHistory: ForRunningGetTradeHistory,
+  getTradeDetail: ForRunningGetTradeDetail = noopGetTradeDetail,
+) {
   const app = new Hono();
-  app.route("/api", tradeHistoryRoutes(getTradeHistory));
+  app.route("/api", tradeHistoryRoutes(getTradeHistory, getTradeDetail));
   return app;
 }
 
@@ -119,6 +130,58 @@ describe("GET /api/trade-history", () => {
       err<StorageError>({ kind: "storage-error", message: "pg exploded" }),
     );
     const res = await app.request("/api/trade-history");
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "internal" });
+  });
+});
+
+describe("GET /api/trade-history/:calendarId/detail", () => {
+  const DETAIL: TradeDetail = {
+    calendarId: OPEN_CAL,
+    days: [
+      {
+        date: "2026-07-23",
+        asOf: new Date("2026-07-23T19:30:00Z"),
+        spot: 7400.5,
+        pnlOpen: 2.0,
+        netDelta: 1.2,
+        netGamma: -0.05,
+        netTheta: 38.5,
+        netVega: 112.3,
+        frontIv: 0.145,
+        backIv: 0.139,
+        termSlope: -0.006,
+        front: { mark: 103.4, iv: 0.145, delta: -40, gamma: null, theta: 550, vega: -610 },
+        back: { mark: 143.5, iv: 0.139, delta: 42, gamma: 0.2, theta: -310, vega: 720 },
+      },
+    ],
+  };
+
+  it("200: serializes days through the contract (asOf → ISO string)", async () => {
+    const app = buildTestApp(async () => ok(FIXTURE), async () => ok(DETAIL));
+    const res = await app.request(`/api/trade-history/${OPEN_CAL}/detail`);
+    expect(res.status).toBe(200);
+    const body = tradeDetailResponse.parse(await res.json());
+    expect(body.calendarId).toBe(OPEN_CAL);
+    expect(body.days[0]?.asOf).toBe("2026-07-23T19:30:00.000Z");
+    expect(body.days[0]?.front.delta).toBeCloseTo(-40, 10);
+    expect(body.days[0]?.back.gamma).toBeCloseTo(0.2, 10);
+    expect(body.days[0]?.front.gamma).toBeNull();
+  });
+
+  it("404: unknown calendarId → not found", async () => {
+    const app = buildTestApp(async () => ok(FIXTURE), async () => ok(null));
+    const res = await app.request(`/api/trade-history/${OPEN_CAL}/detail`);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "not found" });
+  });
+
+  it("500: flat error body on failure", async () => {
+    const app = buildTestApp(
+      async () => ok(FIXTURE),
+      async () => err<StorageError>({ kind: "storage-error", message: "pg exploded" }),
+    );
+    const res = await app.request(`/api/trade-history/${OPEN_CAL}/detail`);
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: "internal" });
   });

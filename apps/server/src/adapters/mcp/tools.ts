@@ -29,6 +29,7 @@ import {
   previewRuleOverridesRequest,
   previewRuleOverridesResponse,
   tradeHistoryResponse,
+  tradeDetailResponse,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -54,6 +55,7 @@ import type {
   ForRunningSetRuleOverrides,
   ForRunningPreviewRuleOverrides,
   ForRunningGetTradeHistory,
+  ForRunningGetTradeDetail,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -247,6 +249,54 @@ export function registerGetTradeHistoryTool(
         })),
         totals,
         vix,
+      });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetTradeDetailTool — registers the get_trade_detail MCP tool (Trade Ledger
+ * expansion). MCP-02: shares tradeDetailResponse with GET /api/trade-history/:id/detail.
+ * safeParse at boundary (Pitfall 6); unknown calendarId → not-found text, never throws.
+ */
+export function registerGetTradeDetailTool(
+  server: McpServer,
+  getTradeDetail: ForRunningGetTradeDetail,
+): void {
+  server.registerTool(
+    "get_trade_detail",
+    {
+      title: "Get Trade Detail",
+      description:
+        "Per-trade daily history while held: SPX spot, calendar net greeks, per-leg greeks (signed position dollars), IVs, term slope, open P&L. Same payload as GET /api/trade-history/:calendarId/detail.",
+      inputSchema: { calendarId: z.string().uuid() },
+    },
+    async (args) => {
+      const parsed = z.object({ calendarId: z.string().uuid() }).safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "invalid calendarId" }) },
+          ],
+        };
+      }
+      const result = await getTradeDetail(parsed.data.calendarId);
+      if (!result.ok) {
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+      if (result.value === null) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "not found" }) },
+          ],
+        };
+      }
+      const payload = tradeDetailResponse.parse({
+        calendarId: result.value.calendarId,
+        days: result.value.days.map((d) => ({ ...d, asOf: d.asOf.toISOString() })),
       });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],

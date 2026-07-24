@@ -96,6 +96,14 @@ export type {
   ForStoringBrokerTransactions,
   ForReadingBrokerTransactions,
 } from "./journal/index.ts";
+export { makeGetTradeDetailUseCase } from "./journal/index.ts";
+export type {
+  GetTradeDetailDeps,
+  ForRunningGetTradeDetail,
+  TradeDetail,
+  TradeDetailDay,
+  TradeDetailLegDay,
+} from "./journal/index.ts";
 export { makeGetTradeHistoryUseCase } from "./journal/index.ts";
 export type {
   GetTradeHistoryDeps,

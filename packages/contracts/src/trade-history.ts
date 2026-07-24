@@ -61,3 +61,40 @@ export const tradeHistoryResponse = z.object({
   vix: z.object({ value: z.number(), date: z.string() }).nullable(),
 });
 export type TradeHistoryResponse = z.infer<typeof tradeHistoryResponse>;
+
+// ─── Per-trade daily detail (Trade Ledger expansion) ─────────────────────────
+// Per-leg greeks are signed position dollars (front short, back long); marks/IVs raw.
+// asOf serialized via Date.toISOString() server-side (same datetime rule as above).
+
+export const tradeDetailLegDay = z.object({
+  mark: z.number().nullable(),
+  iv: z.number().nullable(),
+  delta: z.number().nullable(),
+  gamma: z.number().nullable(),
+  theta: z.number().nullable(),
+  vega: z.number().nullable(),
+});
+export type TradeDetailLegDayResponse = z.infer<typeof tradeDetailLegDay>;
+
+export const tradeDetailDay = z.object({
+  date: z.string(), // ET calendar day YYYY-MM-DD
+  asOf: z.string().datetime(),
+  spot: z.number().nullable(),
+  pnlOpen: z.number().nullable(),
+  netDelta: z.number().nullable(),
+  netGamma: z.number().nullable(),
+  netTheta: z.number().nullable(),
+  netVega: z.number().nullable(),
+  frontIv: z.number().nullable(),
+  backIv: z.number().nullable(),
+  termSlope: z.number().nullable(),
+  front: tradeDetailLegDay,
+  back: tradeDetailLegDay,
+});
+export type TradeDetailDayResponse = z.infer<typeof tradeDetailDay>;
+
+export const tradeDetailResponse = z.object({
+  calendarId: z.string().uuid(),
+  days: z.array(tradeDetailDay),
+});
+export type TradeDetailResponse = z.infer<typeof tradeDetailResponse>;

@@ -40,6 +40,7 @@ import {
   makeCloseCalendarUseCase,
   makeGetJournalUseCase,
   makeGetTradeHistoryUseCase,
+  makeGetTradeDetailUseCase,
   makeGetLiveGreeksUseCase,
   makeGetPositionsUseCase,
   makeGetTransactionsUseCase,
@@ -450,6 +451,12 @@ const getTradeHistory = makeGetTradeHistoryUseCase({
   readMacroObservations: macroObservationsRepo.readMacroObservations,
   readBrokerTransactions: brokerTransactionsRepo.readBrokerTransactions,
 });
+// Trade Ledger expansion: per-trade daily history (legs resolved at each day's slot).
+const getTradeDetail = makeGetTradeDetailUseCase({
+  getCalendarById: calendarsRepo.getCalendarById,
+  readJournal: calendarSnapshotsRepo.readJournal,
+  resolveLegObservationForSlot: legObsRepo.resolveLegObservationForSlot,
+});
 const getEventsWithRules = makeGetCalendarEventsWithRulesUseCase({
   readCalendarEvents: calendarEventsRepo.readCalendarEvents,
   readAnnotations: calendarEventAnnotationsRepo,
@@ -550,8 +557,8 @@ app.route("/api", statusRoutes(statusPort));
 const apiRouter = new Hono()
   .route("/", calendarRoutes(registerCalendar, listCalendars, closeCalendar))
   .route("/", journalRoutes(getJournal))
-  // Trade Ledger: GET /api/trade-history — round-trips + raw executions (MCP-02)
-  .route("/", tradeHistoryRoutes(getTradeHistory))
+  // Trade Ledger: GET /api/trade-history (+ /:calendarId/detail) — MCP-02
+  .route("/", tradeHistoryRoutes(getTradeHistory, getTradeDetail))
   // RULE-01 (20-10): GET/PUT /api/journal/*/rules — event read + rule-tag write (D-13)
   .route("/", journalRulesRoutes(calendarsRepo.getCalendarById, getEventsWithRules, setRuleTags))
   // JRNL-01 (22-03): GET /api/journal/:calendarId/lifecycle — enriched series (forward vol +
@@ -654,6 +661,7 @@ const mcpRouter = makeMcpRouter(
   analyzeAdHocCalendar,
   previewRuleOverrides,
   getTradeHistory,
+  getTradeDetail,
 );
 app.route("", mcpRouter);
 

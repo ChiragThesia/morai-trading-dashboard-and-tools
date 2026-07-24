@@ -237,6 +237,14 @@ export type {
   ForStoringBrokerTransactions,
   ForReadingBrokerTransactions,
 } from "./application/ports.ts";
+export { makeGetTradeDetailUseCase } from "./application/getTradeDetail.ts";
+export type {
+  GetTradeDetailDeps,
+  ForRunningGetTradeDetail,
+  TradeDetail,
+  TradeDetailDay,
+  TradeDetailLegDay,
+} from "./application/getTradeDetail.ts";
 export { makeGetTradeHistoryUseCase } from "./application/getTradeHistory.ts";
 export type {
   GetTradeHistoryDeps,
