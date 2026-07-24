@@ -53,13 +53,34 @@ export function ToggleTones() {
   );
 }
 
-/** Three sizes. `touch` is the mobile target — it collapses to xs metrics at lg:. */
+/**
+ * Three sizes. `touch` is the mobile target: 44px tall by default, collapsing to the dense
+ * xs box under `pointer-fine:`. Note this preview renders in a desktop browser, which
+ * reports a fine pointer — so `touch` shows its COLLAPSED form here. On a phone (or any
+ * coarse-pointer device) the same button is >=44px tall.
+ */
 export function Sizes() {
   return (
-    <div style={row}>
-      <Button variant="secondary" size="xs">xs · rail chip</Button>
-      <Button variant="secondary" size="sm">sm · panel action</Button>
-      <Button variant="secondary" size="touch">touch · mobile</Button>
+    <div style={stack}>
+      <Group label="the three sizes">
+        <Button variant="secondary" size="xs">xs · rail chip</Button>
+        <Button variant="secondary" size="sm">sm · panel action</Button>
+        <Button variant="secondary" size="touch">touch · mobile</Button>
+      </Group>
+      <Group label="touch, as a coarse pointer sees it — min-h-11 (44px)">
+        <span style={{ ...caption, textTransform: "none", color: "#7b8696" }}>
+          the same control on a phone:
+        </span>
+        <span
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            minHeight: 44, padding: "6px 12px", fontSize: 11,
+            border: "1px dashed #27313f", borderRadius: 3, color: "#566273",
+          }}
+        >
+          touch · mobile
+        </span>
+      </Group>
     </div>
   );
 }

@@ -74,6 +74,15 @@ re-stages it.
 - **`GuardTag` reads recharts' `useXAxisScale`/`useYAxisScale`/`usePlotArea`** and
   returns `null` outside a chart — its preview is the full `TermStructureChart`
   composition, which is its only true render.
+- **The capture browser reports `pointer: fine`.** Anything keyed to `pointer-coarse:` /
+  `pointer-fine:` renders in its DESKTOP form in every preview — `Button size="touch"`
+  looks dense here even though it is 44px on a phone. Its preview therefore renders the
+  coarse-pointer box explicitly alongside, so the card still teaches the rule. Same trap
+  applies to any future modality-keyed style.
+- **Container queries need a wide-container cell to be legible.** `ChipRail` is a
+  container query at 32rem, and every preview container is narrower than that by default,
+  so a single cell only ever shows the scroll state. Its preview pairs a 420px cell with a
+  720px one — read together, they are the contract.
 - **`LiveStatusBadge.lastTickAt` is a `Date`**, not an ISO string.
 - **`Shell`** mounts screens whose hooks call `useQuery` — it needs a
   `QueryClientProvider` or it renders empty.
