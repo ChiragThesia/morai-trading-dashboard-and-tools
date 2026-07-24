@@ -136,14 +136,22 @@ describe("Button — shared control-affordance primitive (Phase 21)", () => {
     expect(el.className).toContain("text-[9px]");
   });
 
-  it("size=touch is >=44px tall below lg: and reverts to the exact xs box at lg:", () => {
+  it("size=touch defaults to a >=44px target and shrinks only for a precise pointer", () => {
+    // Mobile-first: the safe (large) target is the base, and a fine pointer opts down to
+    // the dense box. Keyed to input modality, not viewport width — a touchscreen laptop
+    // needs the 44px target at any width, and a narrow mouse window does not.
     render(<Button size="touch">Today</Button>);
     const el = screen.getByText("Today");
     expect(el.className).toContain("min-h-11");
-    expect(el.className).toContain("lg:min-h-0");
-    expect(el.className).toContain("lg:px-[7px]");
-    expect(el.className).toContain("lg:py-0.5");
-    expect(el.className).toContain("lg:text-[9px]");
+    expect(el.className).toContain("pointer-fine:min-h-0");
+    expect(el.className).toContain("pointer-fine:px-[7px]");
+    expect(el.className).toContain("pointer-fine:py-0.5");
+    expect(el.className).toContain("pointer-fine:text-[9px]");
+  });
+
+  it("size=touch no longer couples its target size to a viewport breakpoint", () => {
+    render(<Button size="touch">Today</Button>);
+    expect(screen.getByText("Today").className).not.toMatch(/\blg:/);
   });
 
   it("passes through native button props: type, onClick, data-testid, className", () => {

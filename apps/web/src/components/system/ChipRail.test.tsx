@@ -33,7 +33,7 @@ describe("ChipRail — shared scroll-snap chip rail", () => {
     expect(screen.getByText("chip B")).toBeDefined();
   });
 
-  it("carries the mobile scroll-snap classes and the lg: flex-wrap revert triplet", () => {
+  it("carries the scroll-snap classes and the @lg: flex-wrap revert triplet", () => {
     render(
       <ChipRail ariaLabel="test rail">
         <span>chip A</span>
@@ -43,20 +43,34 @@ describe("ChipRail — shared scroll-snap chip rail", () => {
     expect(el.className).toContain("snap-x");
     expect(el.className).toContain("overflow-x-auto");
     expect(el.className).toContain("pr-6");
-    expect(el.className).toContain("lg:flex-wrap");
-    expect(el.className).toContain("lg:overflow-visible");
-    expect(el.className).toContain("lg:snap-none");
-    expect(el.className).toContain("lg:pr-0");
+    expect(el.className).toContain("@lg:flex-wrap");
+    expect(el.className).toContain("@lg:overflow-visible");
+    expect(el.className).toContain("@lg:snap-none");
+    expect(el.className).toContain("@lg:pr-0");
   });
 
-  it("merges a caller-passed className after the base classes", () => {
+  it("adapts to its own container, not the viewport", () => {
     render(
-      <ChipRail ariaLabel="test rail" className="lg:hidden">
+      <ChipRail ariaLabel="test rail">
         <span>chip A</span>
       </ChipRail>,
     );
     const el = screen.getByRole("group", { name: "test rail" });
-    expect(el.className).toContain("lg:hidden");
+    // No viewport breakpoint anywhere: a rail in a narrow desktop sidebar must scroll,
+    // and a rail in a wide mobile-landscape panel must wrap.
+    expect(el.className).not.toMatch(/(?:^|\s)lg:/);
+    // The queried container is the wrapper this component owns.
+    expect(el.parentElement?.className).toContain("@container");
+  });
+
+  it("merges a caller-passed className after the base classes", () => {
+    render(
+      <ChipRail ariaLabel="test rail" className="hidden">
+        <span>chip A</span>
+      </ChipRail>,
+    );
+    const el = screen.getByRole("group", { name: "test rail" });
+    expect(el.className).toContain("hidden");
     expect(el.className).toContain("snap-x");
   });
 });
