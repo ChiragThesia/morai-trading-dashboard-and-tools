@@ -11,6 +11,7 @@ import {
   skewResponse,
   gexSnapshotResponse,
   cotResponse,
+  newsResponse,
   brokerageAuthExpiredPayload,
   macroResponse,
   macroQuery,
@@ -41,6 +42,7 @@ import type {
   ForRunningGetGex,
   ForRunningGetCot,
   ForRunningGetMacro,
+  ForRunningGetNews,
   ForRunningGetRegimeBoard,
   ForGettingPositions,
   ForGettingTransactions,
@@ -828,6 +830,47 @@ export function registerGetCotTool(
       // Empty array on no data — never an error (COT-02 / MCP-02 stability).
       // Direct parse: CotEntry fields already match cotSeriesEntry types.
       const payload = cotResponse.parse(result.value);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetNewsTool — registers the get_news MCP tool (D28 / MCP-02).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: call use-case → parse result through newsResponse schema → return content.
+ *
+ * MCP-02: the SAME newsResponse schema used by GET /api/analytics/news is used here.
+ * A one-sided field rename fails `bun run typecheck`.
+ *
+ * Returns a contract-valid EMPTY array (never an error) when no data exists —
+ * Alpaca keys unset or the fetch-news cron has not run yet.
+ */
+export function registerGetNewsTool(
+  server: McpServer,
+  getNews: ForRunningGetNews,
+): void {
+  server.registerTool(
+    "get_news",
+    {
+      title: "Get News",
+      description:
+        "Returns the latest 50 market news headlines (Alpaca News API — Benzinga wire): headline, summary, source, url, tagged symbols, and publish time, newest first. Same payload as GET /api/analytics/news. Empty array when no data has been fetched yet.",
+      // No input parameters — returns the latest stored batch (no filters).
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getNews();
+      if (!result.ok) {
+        // Flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      // Empty array on no data — never an error (MCP-02 stability).
+      const payload = newsResponse.parse(result.value);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };

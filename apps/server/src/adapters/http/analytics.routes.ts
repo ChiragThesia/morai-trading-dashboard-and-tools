@@ -6,6 +6,7 @@ import {
   macroResponse,
   macroQuery,
   regimeResponse,
+  newsResponse,
 } from "@morai/contracts";
 import type {
   ForRunningGetTermStructure,
@@ -13,6 +14,7 @@ import type {
   ForRunningGetCot,
   ForRunningGetMacro,
   ForRunningGetRegimeBoard,
+  ForRunningGetNews,
 } from "@morai/core";
 
 /**
@@ -48,6 +50,7 @@ export function analyticsRoutes(
   getCot: ForRunningGetCot,
   getMacro: ForRunningGetMacro,
   getRegimeBoard: ForRunningGetRegimeBoard,
+  getNews: ForRunningGetNews,
 ) {
   const router = new Hono();
 
@@ -109,6 +112,21 @@ export function analyticsRoutes(
         })),
       ),
     );
+  });
+
+  // D28 / MCP-02: GET /analytics/news — latest 50 market headlines (Alpaca/Benzinga wire).
+  // NewsEntry fields are already plain strings (use-case serialises publishedAt to ISO),
+  // so newsResponse.parse(result.value) is direct. Empty store → 200 + [] (not an error).
+  // No user-controlled query input; output contract-parsed before send.
+  router.get("/analytics/news", async (c) => {
+    const result = await getNews();
+    if (!result.ok) {
+      // Flat error — never expose DB internals.
+      return c.json({ error: "internal" }, 500);
+    }
+
+    // Empty array on no data — never an error (keys unset or cron not yet run).
+    return c.json(newsResponse.parse(result.value));
   });
 
   // COT-02 / MCP-02: GET /analytics/cot — CFTC TFF weekly net-per-class series.

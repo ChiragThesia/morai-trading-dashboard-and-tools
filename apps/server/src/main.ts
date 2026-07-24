@@ -22,6 +22,7 @@ import {
   makePostgresRiskReversalObservationsRepo,
   makePostgresGexSnapshotRepo,
   makePostgresCotObservationsRepo,
+  makePostgresNewsItemsRepo,
   makePostgresMacroObservationsRepo,
   makePostgresPickerSnapshotRepo,
   makePostgresCalendarEventsRepo,
@@ -50,6 +51,7 @@ import {
   makeGetSkewUseCase,
   makeGetGexUseCase,
   makeGetCotUseCase,
+  makeGetNewsUseCase,
   makeGetMacroUseCase,
   makeGetRegimeBoardUseCase,
   makeGetPickerUseCase,
@@ -207,6 +209,13 @@ const getCot = makeGetCotUseCase({
 const macroObservationsRepo = makePostgresMacroObservationsRepo(db);
 const getMacro = makeGetMacroUseCase({
   readMacroObservations: macroObservationsRepo.readMacroObservations,
+});
+
+// D28 / MCP-02: get-news read use-case — shared by GET /api/analytics/news + get_news
+// MCP tool over the ONE newsResponse contract. Latest 50 Alpaca/Benzinga headlines.
+const newsItemsRepo = makePostgresNewsItemsRepo(db);
+const getNews = makeGetNewsUseCase({
+  readNewsItems: newsItemsRepo.listNewsItems,
 });
 
 // 29-12 (RUNTIME-*): runtime rule-settings overrides repo — the regime board reads this FRESH
@@ -570,7 +579,8 @@ const apiRouter = new Hono()
   // COT-02 (13-06): GET /api/analytics/cot — CFTC TFF weekly series (MCP-02)
   // MAC-02 (14-06): GET /api/analytics/macro — FRED + VVIX series (MCP-02)
   // BOARD-01/02/03 (24-04): GET /api/analytics/regime — regime/breadth board (MCP-02)
-  .route("/", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro, getRegimeBoard))
+  // D28: GET /api/analytics/news — latest 50 Alpaca/Benzinga headlines (MCP-02)
+  .route("/", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro, getRegimeBoard, getNews))
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex))
   // PICK-02 (19-07): GET /api/picker/candidates — stored-row read (D-04, never recomputed)
@@ -662,6 +672,7 @@ const mcpRouter = makeMcpRouter(
   previewRuleOverrides,
   getTradeHistory,
   getTradeDetail,
+  getNews,
 );
 app.route("", mcpRouter);
 

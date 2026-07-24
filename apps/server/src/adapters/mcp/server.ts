@@ -11,6 +11,7 @@ import type {
   ForRunningGetGex,
   ForRunningGetCot,
   ForRunningGetMacro,
+  ForRunningGetNews,
   ForRunningGetRegimeBoard,
   ForRunningGetPicker,
   ForAnalyzingAdHocCalendar,
@@ -39,6 +40,7 @@ import {
   registerGetGexTool,
   registerGetCotTool,
   registerGetMacroTool,
+  registerGetNewsTool,
   registerGetRegimeTool,
   registerGetPickerCandidatesTool,
   registerAnalyzeAdHocCalendarTool,
@@ -133,6 +135,7 @@ export function makeMcpRouter(
   previewRuleOverrides?: ForRunningPreviewRuleOverrides,
   getTradeHistory?: ForRunningGetTradeHistory,
   getTradeDetail?: ForRunningGetTradeDetail,
+  getNews?: ForRunningGetNews,
 ): Hono {
   const router = new Hono();
 
@@ -163,6 +166,10 @@ export function makeMcpRouter(
     // MAC-02 / MCP-02: get_macro tool — optional, wired when getMacro use-case is available (Phase 14)
     if (getMacro !== undefined) {
       registerGetMacroTool(server, getMacro);
+    }
+    // D28 / MCP-02: get_news tool — optional, wired when getNews use-case is available
+    if (getNews !== undefined) {
+      registerGetNewsTool(server, getNews);
     }
     // PICK-02 / MCP-02: get_picker_candidates tool — optional, wired when getPicker use-case
     // is available (Phase 19)

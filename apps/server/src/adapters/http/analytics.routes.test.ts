@@ -16,8 +16,9 @@ import type {
   ForRunningGetCot,
   ForRunningGetMacro,
   ForRunningGetRegimeBoard,
+  ForRunningGetNews,
 } from "@morai/core";
-import { termStructureResponse, skewResponse, cotResponse, macroResponse, regimeResponse } from "@morai/contracts";
+import { termStructureResponse, skewResponse, cotResponse, macroResponse, regimeResponse, newsResponse } from "@morai/contracts";
 import { analyticsRoutes } from "./analytics.routes.ts";
 
 const CAL_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -27,6 +28,7 @@ const skewEmpty: ForRunningGetSkew = async () => ok([]);
 const cotEmpty: ForRunningGetCot = async () => ok([]);
 const macroEmpty: ForRunningGetMacro = async () => ok({});
 const regimeEmpty: ForRunningGetRegimeBoard = async () => ok([]);
+const newsEmpty: ForRunningGetNews = async () => ok([]);
 
 function buildApp(
   getTermStructure: ForRunningGetTermStructure,
@@ -34,33 +36,40 @@ function buildApp(
   getCot: ForRunningGetCot = cotEmpty,
   getMacro: ForRunningGetMacro = macroEmpty,
   getRegimeBoard: ForRunningGetRegimeBoard = regimeEmpty,
+  getNews: ForRunningGetNews = newsEmpty,
 ) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro, getRegimeBoard));
+  app.route("/api", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro, getRegimeBoard, getNews));
   return app;
 }
 
 function buildSkewApp(getSkew: ForRunningGetSkew) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, getSkew, cotEmpty, macroEmpty, regimeEmpty));
+  app.route("/api", analyticsRoutes(empty, getSkew, cotEmpty, macroEmpty, regimeEmpty, newsEmpty));
   return app;
 }
 
 function buildCotApp(getCot: ForRunningGetCot) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, skewEmpty, getCot, macroEmpty, regimeEmpty));
+  app.route("/api", analyticsRoutes(empty, skewEmpty, getCot, macroEmpty, regimeEmpty, newsEmpty));
   return app;
 }
 
 function buildMacroApp(getMacro: ForRunningGetMacro) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, getMacro, regimeEmpty));
+  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, getMacro, regimeEmpty, newsEmpty));
   return app;
 }
 
 function buildRegimeApp(getRegimeBoard: ForRunningGetRegimeBoard) {
   const app = new Hono();
-  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, macroEmpty, getRegimeBoard));
+  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, macroEmpty, getRegimeBoard, newsEmpty));
+  return app;
+}
+
+function buildNewsApp(getNews: ForRunningGetNews) {
+  const app = new Hono();
+  app.route("/api", analyticsRoutes(empty, skewEmpty, cotEmpty, macroEmpty, regimeEmpty, getNews));
   return app;
 }
 
@@ -370,6 +379,54 @@ describe("GET /api/analytics/regime", () => {
   it("maps a storage error to a flat {error:'internal'} 500 (T-24-08)", async () => {
     const app = buildRegimeApp(regimeErrored);
     const res = await app.request("/api/analytics/regime");
+    expect(res.status).toBe(500);
+    const body: unknown = await res.json();
+    expect(body).toEqual({ error: "internal" });
+  });
+});
+
+// ─── News (D28) fakes ──────────────────────────────────────────────────────────
+const newsWithData: ForRunningGetNews = async () =>
+  ok([
+    {
+      id: "24843171",
+      headline: "S&P 500 Slips As Fed Officials Signal Higher-For-Longer Rates",
+      summary: "Markets retreated after hawkish commentary.",
+      source: "benzinga",
+      url: "https://www.benzinga.com/markets/24843171",
+      symbols: ["SPY", "QQQ"],
+      publishedAt: "2026-07-24T13:05:00.000Z",
+    },
+  ]);
+
+const newsErrored: ForRunningGetNews = async () =>
+  err({ kind: "storage-error", message: "boom" });
+
+describe("GET /api/analytics/news", () => {
+  it("returns a contract-valid array with ≥1 entry when data exists (D28)", async () => {
+    const app = buildNewsApp(newsWithData);
+    const res = await app.request("/api/analytics/news");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    // Parsing must succeed — proves MCP-02 contract conformance.
+    const parsed = newsResponse.parse(body);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.id).toBe("24843171");
+    expect(parsed[0]?.publishedAt).toBe("2026-07-24T13:05:00.000Z");
+    expect(parsed[0]?.symbols).toEqual(["SPY", "QQQ"]);
+  });
+
+  it("returns a contract-valid EMPTY array (not an error) when there is no data", async () => {
+    const app = buildNewsApp(newsEmpty);
+    const res = await app.request("/api/analytics/news");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(newsResponse.parse(body)).toEqual([]);
+  });
+
+  it("maps a storage error to a flat {error:'internal'} 500", async () => {
+    const app = buildNewsApp(newsErrored);
+    const res = await app.request("/api/analytics/news");
     expect(res.status).toBe(500);
     const body: unknown = await res.json();
     expect(body).toEqual({ error: "internal" });

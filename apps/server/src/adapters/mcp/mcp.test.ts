@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForGettingStatus } from "@morai/core";
-import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks, ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot, ForRunningGetMacro } from "@morai/core";
+import type { ForListingCalendars, ForReadingJournal, ForRunningGetLiveGreeks, ForRunningGetTermStructure, ForRunningGetSkew, ForRunningGetCot, ForRunningGetMacro, ForRunningGetNews } from "@morai/core";
 import type { Calendar, SnapshotRow, StorageError } from "@morai/core";
 import {
   statusResponse,
@@ -12,6 +12,7 @@ import {
   liveGreeksResponse,
   cotResponse,
   macroResponse,
+  newsResponse,
 } from "@morai/contracts";
 import { bearerAuth } from "./bearer.ts";
 import { makeMcpRouter } from "./server.ts";
@@ -968,6 +969,49 @@ describe("MCP router", () => {
     if (!result.ok) return;
     // Empty array is a valid cotResponse (not an error).
     expect(cotResponse.parse(result.value)).toEqual([]);
+  });
+
+  // ─── get_news tool (D28 — real use-case over the shared newsResponse contract, MCP-02) ──
+
+  const fakeNewsEntry = {
+    id: "24843171",
+    headline: "S&P 500 Slips As Fed Officials Signal Higher-For-Longer Rates",
+    summary: "Markets retreated after hawkish commentary.",
+    source: "benzinga",
+    url: "https://www.benzinga.com/markets/24843171",
+    symbols: ["SPY", "QQQ"],
+    publishedAt: "2026-07-24T13:05:00.000Z",
+  };
+
+  const fakeGetNews: ForRunningGetNews = async () => ok([fakeNewsEntry]);
+  const fakeGetNewsEmpty: ForRunningGetNews = async () => ok([]);
+
+  it("get_news tool registers with the real use-case and returns the shared contract series (MCP-02)", async () => {
+    const { registerGetNewsTool } = await import("./tools.ts");
+    const { McpServer } = await import(
+      "@modelcontextprotocol/sdk/server/mcp.js"
+    );
+
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    // D28: registration requires the use-case; should not throw.
+    expect(() => registerGetNewsTool(server, fakeGetNews)).not.toThrow();
+
+    // MCP-02: the tool's payload validates against the SAME newsResponse as the HTTP route.
+    const result = await fakeGetNews();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const payload = newsResponse.parse(result.value);
+    expect(payload).toHaveLength(1);
+    expect(payload[0]?.id).toBe("24843171");
+    expect(payload[0]?.source).toBe("benzinga");
+  });
+
+  it("get_news tool returns a contract-valid EMPTY array (not an error) on no data (MCP-02)", async () => {
+    const result = await fakeGetNewsEmpty();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Empty array is a valid newsResponse (keys unset or cron not yet run).
+    expect(newsResponse.parse(result.value)).toEqual([]);
   });
 
   // ─── get_macro tool (14-06 — real use-case over the shared macroResponse contract, MCP-02) ──
