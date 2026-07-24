@@ -1,34 +1,33 @@
 /**
- * Journal — the Trade Ledger: two plain tables, nothing else.
+ * Journal — the Trade Ledger: two plain tables + in-place per-trade expansion.
  *
- * Replaces the lifecycle-chart Journal (user decision 2026-07-23: "simple table").
- * The lifecycle/attribution backend (calendar_snapshots, /lifecycle route, MCP tools)
- * is untouched — only the web chrome died.
+ *   1. Trades — one row per calendar: TRADE, STATUS, OPENED, CLOSED, DAYS held,
+ *      ENTRY (open debit), EXIT (close credit), P&L. Clicking a row expands it in
+ *      place (data only): the trade's own fills + a DAILY history table (SPX, net
+ *      greeks, per-leg greeks, IVs, slope, open P&L) with named greek headers and a
+ *      one-line legend — user feedback 2026-07-24: bare Δ/Θ symbols were unreadable.
+ *   2. Trade History — TOS Account-Statement-style raw fills from broker_transactions.
  *
- *   1. Round-trips — one row per calendar (open first via newest-openedAt server order):
- *      trade, status, opened/closed, entry debit, realized P&L (from calendar_events,
- *      the fill ledger — the number TOS never shows per strategy), and for open
- *      calendars the latest stored greeks/IV (30-min RTH snapshots). Footer = total P&L.
- *   2. Executions — TOS Account-Statement-style raw fills from broker_transactions:
- *      exec time (ET), side, qty, effect, symbol, exp, strike, type, price, net amount,
- *      order id.
- *
- * One tree for all viewports: both tables sit in horizontal-scroll wrappers with a
- * min-width table (the AnalyzerMobile recipe) — no useIsDesktop split needed.
+ * One tree for all viewports: tables sit in horizontal-scroll wrappers with min-width
+ * (the AnalyzerMobile recipe) — no useIsDesktop split.
  */
 
+import { useState } from "react";
 import { Panel, PanelHeading, DataTable, Button } from "../components/system/index.tsx";
 import type { DataTableColumn } from "../components/system/index.tsx";
 import { useTradeHistory } from "../hooks/useTradeHistory.ts";
+import { useTradeDetail } from "../hooks/useTradeDetail.ts";
 import { signedUsd, signClass } from "../lib/position-format.ts";
 import type {
   TradeHistoryRoundTripResponse,
   TradeHistoryExecutionResponse,
+  TradeDetailDayResponse,
 } from "@morai/contracts";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
 const DASH = "—";
+const DAY_MS = 86_400_000;
 
 /** "2026-07-23T19:50:00.000Z" → "Jul 23" (UTC date part — trade dates, not instants). */
 function shortDate(iso: string): string {
@@ -72,8 +71,17 @@ function moneyClass(v: number | null): string {
   return v === null ? "text-dim" : signClass(v);
 }
 
+function num(v: number | null, dp = 2): string {
+  return v === null ? DASH : v.toFixed(dp);
+}
+
 function tradeName(r: TradeHistoryRoundTripResponse): string {
   return `${r.underlying} ${r.strike / 1000}${r.optionType}`;
+}
+
+function daysHeld(r: TradeHistoryRoundTripResponse): number {
+  const end = r.closedAt !== null ? new Date(r.closedAt).getTime() : Date.now();
+  return Math.max(1, Math.round((end - new Date(r.openedAt).getTime()) / DAY_MS));
 }
 
 const NUM = new Intl.NumberFormat("en-US", {
@@ -81,7 +89,7 @@ const NUM = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-// ─── Round-trips table ────────────────────────────────────────────────────────
+// ─── Round-trips table (simple 8 columns) ─────────────────────────────────────
 
 const ROUNDTRIP_COLS: ReadonlyArray<DataTableColumn<TradeHistoryRoundTripResponse>> = [
   {
@@ -111,7 +119,13 @@ const ROUNDTRIP_COLS: ReadonlyArray<DataTableColumn<TradeHistoryRoundTripRespons
     header: "Closed",
     render: (r) => (r.closedAt !== null ? shortDate(r.closedAt) : DASH),
   },
-  { key: "debit", header: "Debit", render: (r) => r.openNetDebit.toFixed(2) },
+  { key: "days", header: "Days", render: (r) => daysHeld(r) },
+  { key: "entry", header: "Entry", render: (r) => r.openNetDebit.toFixed(2) },
+  {
+    key: "exit",
+    header: "Exit",
+    render: (r) => (r.closeNetCredit !== null ? r.closeNetCredit.toFixed(2) : DASH),
+  },
   {
     key: "pnl",
     header: "P&L",
@@ -121,44 +135,158 @@ const ROUNDTRIP_COLS: ReadonlyArray<DataTableColumn<TradeHistoryRoundTripRespons
       </span>
     ),
   },
+];
+
+// ─── Expansion: daily history table ───────────────────────────────────────────
+
+const DAY_COLS: ReadonlyArray<DataTableColumn<TradeDetailDayResponse>> = [
+  { key: "date", header: "Date", align: "left", render: (d) => shortYmd(d.date) },
+  { key: "spot", header: "SPX", render: (d) => num(d.spot, 1) },
   {
-    key: "delta",
-    header: "Δ",
-    render: (r) =>
-      r.greeks !== null && r.greeks.netDelta !== null
-        ? r.greeks.netDelta.toFixed(1)
-        : DASH,
+    key: "pnl",
+    header: "P&L ($)",
+    render: (d) => (
+      <span className={moneyClass(d.pnlOpen !== null ? d.pnlOpen * 100 : null)}>
+        {money(d.pnlOpen !== null ? d.pnlOpen * 100 : null)}
+      </span>
+    ),
   },
-  {
-    key: "theta",
-    header: "Θ/d",
-    render: (r) => money(r.greeks?.netTheta ?? null),
-  },
-  {
-    key: "vega",
-    header: "Vega",
-    render: (r) => money(r.greeks?.netVega ?? null),
-  },
-  {
-    key: "iv",
-    header: "IV f/b",
-    render: (r) =>
-      r.greeks !== null ? `${pct(r.greeks.frontIv)}/${pct(r.greeks.backIv)}` : DASH,
-  },
+  { key: "nd", header: "Net Delta (Δ)", render: (d) => num(d.netDelta, 1) },
+  { key: "nt", header: "Net Theta (Θ)/day", render: (d) => money(d.netTheta) },
+  { key: "nv", header: "Net Vega", render: (d) => money(d.netVega) },
+  { key: "ng", header: "Net Gamma (Γ)", render: (d) => num(d.netGamma, 3) },
+  { key: "fiv", header: "Front IV", render: (d) => pct(d.frontIv) },
+  { key: "biv", header: "Back IV", render: (d) => pct(d.backIv) },
   {
     key: "slope",
-    header: "Slope",
-    render: (r) =>
-      r.greeks !== null && r.greeks.termSlope !== null
-        ? (r.greeks.termSlope * 100).toFixed(2)
-        : DASH,
+    header: "IV Slope (back−front)",
+    render: (d) => (d.termSlope !== null ? (d.termSlope * 100).toFixed(2) : DASH),
+  },
+  { key: "fm", header: "Front Mark", render: (d) => num(d.front.mark) },
+  { key: "fd", header: "Front Delta (Δ)", render: (d) => num(d.front.delta, 1) },
+  { key: "ft", header: "Front Theta (Θ)", render: (d) => money(d.front.theta) },
+  { key: "fv", header: "Front Vega", render: (d) => money(d.front.vega) },
+  { key: "bm", header: "Back Mark", render: (d) => num(d.back.mark) },
+  { key: "bd", header: "Back Delta (Δ)", render: (d) => num(d.back.delta, 1) },
+  { key: "bt", header: "Back Theta (Θ)", render: (d) => money(d.back.theta) },
+  { key: "bv", header: "Back Vega", render: (d) => money(d.back.vega) },
+];
+
+// ─── Expansion: legs (fills) mini-table ──────────────────────────────────────
+
+type ExecRow = TradeHistoryExecutionResponse & { readonly rowKey: string };
+
+/**
+ * The trade's own fills: strike + type match, expiry is one of the calendar's two legs,
+ * trade date inside the hold window (±1 day).
+ * ponytail: two time-overlapping calendars sharing strike+type+one expiry would both
+ * show a shared fill — honest (the fill did touch that contract).
+ */
+function fillsForTrade(
+  executions: ReadonlyArray<TradeHistoryExecutionResponse>,
+  r: TradeHistoryRoundTripResponse,
+): ReadonlyArray<TradeHistoryExecutionResponse> {
+  const from = new Date(new Date(r.openedAt).getTime() - DAY_MS).toISOString().slice(0, 10);
+  const to = new Date(
+    (r.closedAt !== null ? new Date(r.closedAt).getTime() : Date.now()) + DAY_MS,
+  )
+    .toISOString()
+    .slice(0, 10);
+  return executions.filter(
+    (e) =>
+      e.strike === r.strike / 1000 &&
+      e.type === r.optionType &&
+      (e.expiry === r.frontExpiry || e.expiry === r.backExpiry) &&
+      e.tradeDate >= from &&
+      e.tradeDate <= to,
+  );
+}
+
+const LEG_COLS: ReadonlyArray<DataTableColumn<ExecRow>> = [
+  { key: "time", header: "Exec Time (ET)", align: "left", render: (e) => etTime(e.execTime) },
+  {
+    key: "side",
+    header: "Side",
+    align: "left",
+    render: (e) => (
+      <span className={e.side === "buy" ? "text-up" : "text-down"}>
+        {e.side === "buy" ? "BUY" : "SELL"}
+      </span>
+    ),
+  },
+  { key: "action", header: "Action", align: "left", render: (e) => e.positionEffect },
+  { key: "exp", header: "Exp", render: (e) => shortYmd(e.expiry) },
+  { key: "price", header: "Price", render: (e) => e.price.toFixed(2) },
+  {
+    key: "net",
+    header: "Net Amt",
+    render: (e) => (
+      <span className={signClass(e.netAmount)}>{NUM.format(e.netAmount)}</span>
+    ),
   },
 ];
 
-// ─── Executions table ─────────────────────────────────────────────────────────
+// ─── Expansion panel ──────────────────────────────────────────────────────────
 
-// Row key = activityId + position index: two legs of one activity stay distinct.
-type ExecRow = TradeHistoryExecutionResponse & { readonly rowKey: string };
+function TradeDetailPanel({
+  trade,
+  executions,
+  detail,
+}: {
+  trade: TradeHistoryRoundTripResponse;
+  executions: ReadonlyArray<TradeHistoryExecutionResponse>;
+  detail: ReturnType<typeof useTradeDetail>;
+}): React.ReactElement {
+  const fills = fillsForTrade(executions, trade);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-line/60 bg-panel2/60 p-3">
+      <div>
+        <div className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.09em] text-dim">
+          Fills — {tradeName(trade)}
+        </div>
+        <DataTable
+          columns={LEG_COLS}
+          rows={fills.map((e, i) => ({ ...e, rowKey: `${e.activityId}-${i}` }))}
+          rowTestId={(e) => `trade-fill-row-${e.rowKey}`}
+          wrapperClassName="overflow-x-auto"
+          tableClassName="min-w-[560px]"
+        />
+      </div>
+
+      <div>
+        <div className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.09em] text-dim">
+          Daily history while held
+        </div>
+        {detail.isPending && (
+          <div className="p-2 font-mono text-[10px] text-dim">Loading history…</div>
+        )}
+        {detail.isError && (
+          <div className="p-2 font-mono text-[10px] text-dim">
+            Couldn&apos;t load this trade&apos;s history.
+          </div>
+        )}
+        {!detail.isPending && !detail.isError && detail.data !== undefined && (
+          <DataTable
+            columns={DAY_COLS}
+            rows={[...detail.data.days]}
+            rowTestId={(d) => `trade-day-row-${d.date}`}
+            wrapperClassName="overflow-x-auto"
+            tableClassName="min-w-[1500px]"
+          />
+        )}
+        <div className="mt-1 px-1 font-mono text-[9.5px] leading-[1.3] text-dim">
+          Δ delta = $ per 1-pt SPX move · Γ gamma = how fast delta changes per pt · Θ theta
+          = $ earned/lost per day from time decay · Vega = $ per 1-pt vol move · IV slope =
+          back-month IV − front-month IV. Per-leg values are position-signed (front short,
+          back long); daily row = last snapshot of that trading day.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Executions table (TOS Account-Statement style) ──────────────────────────
 
 const EXECUTION_COLS: ReadonlyArray<DataTableColumn<ExecRow>> = [
   { key: "time", header: "Exec Time (ET)", align: "left", render: (e) => etTime(e.execTime) },
@@ -191,12 +319,13 @@ const EXECUTION_COLS: ReadonlyArray<DataTableColumn<ExecRow>> = [
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-// Shared mobile-friendly scroll recipe (AnalyzerMobile precedent): the wrapper h-scrolls,
-// the table keeps a min-width so columns never crush on a phone.
+// Shared mobile-friendly scroll recipe (AnalyzerMobile precedent).
 const SCROLL_WRAPPER = "-mx-2 overflow-x-auto px-2";
 
 export function Journal(): React.ReactElement {
   const { data, isPending, isError, refetch } = useTradeHistory();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const detail = useTradeDetail(expandedId);
 
   if (isPending) {
     return (
@@ -237,29 +366,46 @@ export function Journal(): React.ReactElement {
   }
 
   const total = data.totals.realizedPnl;
+  const executions = data.executions;
 
   return (
     <div data-testid="journal-ledger" className="flex h-full flex-col gap-3 overflow-y-auto p-3">
       {/* ── Round-trips ──────────────────────────────────────────────────── */}
-      {/* No VIX chip here — the top market strip already shows LIVE VIX; the macro
-          series is EOD and read as "stale data" (user feedback 2026-07-24). */}
       <Panel>
-        <PanelHeading title="Trades" />
+        <PanelHeading
+          title="Trades"
+          action={
+            <span className="font-mono text-[10px] text-dim">
+              click a trade to expand its history
+            </span>
+          }
+        />
         <DataTable
           columns={ROUNDTRIP_COLS}
           rows={[...data.roundTrips]}
           rowTestId={(r) => `roundtrip-row-${r.calendarId}`}
+          onRowClick={(r) => {
+            setExpandedId((cur) => (cur === r.calendarId ? null : r.calendarId));
+          }}
+          renderRowDetail={(r) =>
+            r.calendarId === expandedId ? (
+              <tr data-testid={`roundtrip-detail-${r.calendarId}`}>
+                <td className="px-2 pb-2" colSpan={ROUNDTRIP_COLS.length}>
+                  <TradeDetailPanel trade={r} executions={executions} detail={detail} />
+                </td>
+              </tr>
+            ) : null
+          }
           wrapperClassName={SCROLL_WRAPPER}
           wrapperTestId="roundtrip-table-scroll"
-          tableClassName="min-w-[820px]"
+          tableClassName="min-w-[720px]"
           footer={
             <tr data-testid="roundtrip-total" className="border-t border-line font-semibold">
               <td className="px-2 py-1.5 text-left text-txt">Total realized</td>
-              <td className="px-2 py-1.5" colSpan={4} />
+              <td className="px-2 py-1.5" colSpan={6} />
               <td className={`px-2 py-1.5 text-right ${moneyClass(total)}`}>
                 {money(total)}
               </td>
-              <td className="px-2 py-1.5" colSpan={5} />
             </tr>
           }
         />

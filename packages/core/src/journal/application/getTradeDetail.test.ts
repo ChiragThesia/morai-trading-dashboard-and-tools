@@ -82,6 +82,7 @@ function legObs(
     bsmGamma: "0.002",
     bsmTheta: "-5.5",
     bsmVega: "6.1",
+    source: "schwab_chain",
     ...greeks,
   };
 }

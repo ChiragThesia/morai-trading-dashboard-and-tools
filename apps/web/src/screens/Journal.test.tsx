@@ -1,32 +1,40 @@
 /**
- * Journal.test.tsx — Trade Ledger screen (simple tables, no lifecycle chrome).
+ * Journal.test.tsx — Trade Ledger screen (simple tables + expandable per-trade history).
  *
  * Behaviors under test:
- *   1. Round-trips table: one row per calendar, open rows show greeks, closed rows
- *      show "—" greeks and their realized P&L; footer shows the total.
- *   2. Executions table: one row per stored leg, TOS-style columns, exec time in ET.
- *   3. Both tables live in horizontal-scroll wrappers (mobile-friendly recipe).
- *   4. Loading and error states render without tables; empty ledger shows empty state.
+ *   1. Main table: exactly TRADE/STATUS/OPENED/CLOSED/DAYS/ENTRY/EXIT/P&L — greek symbol
+ *      columns are gone; Days/Entry/Exit values render; footer total intact.
+ *   2. Clicking a row expands it in place: legs mini-table (only that calendar's fills) +
+ *      daily history table with NAMED greek headers + legend; re-click collapses.
+ *   3. Executions table unchanged (TOS-style, ET exec time).
+ *   4. Loading/error/empty states.
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import React from "react";
-import type { TradeHistoryResponse } from "@morai/contracts";
+import type { TradeHistoryResponse, TradeDetailResponse } from "@morai/contracts";
 
-// ─── Mock the data hook (screen-level tests own rendering, not fetching) ──────
-const { mockUseTradeHistory } = vi.hoisted(() => ({
+// ─── Mock the data hooks (screen tests own rendering, not fetching) ───────────
+const { mockUseTradeHistory, mockUseTradeDetail } = vi.hoisted(() => ({
   mockUseTradeHistory: vi.fn(),
+  mockUseTradeDetail: vi.fn(),
 }));
 vi.mock("../hooks/useTradeHistory.ts", () => ({
   useTradeHistory: mockUseTradeHistory,
 }));
+vi.mock("../hooks/useTradeDetail.ts", () => ({
+  useTradeDetail: mockUseTradeDetail,
+}));
 import { Journal } from "./Journal.tsx";
+
+const OPEN_ID = "550e8400-e29b-41d4-a716-446655440001";
+const CLOSED_ID = "550e8400-e29b-41d4-a716-446655440002";
 
 const FIXTURE: TradeHistoryResponse = {
   roundTrips: [
     {
-      calendarId: "550e8400-e29b-41d4-a716-446655440001",
+      calendarId: OPEN_ID,
       underlying: "SPXW",
       strike: 7400000,
       optionType: "P",
@@ -39,18 +47,10 @@ const FIXTURE: TradeHistoryResponse = {
       openNetDebit: 40.08,
       closeNetCredit: null,
       realizedPnl: null,
-      greeks: {
-        netDelta: 1.2,
-        netTheta: 38.5,
-        netVega: 112.3,
-        frontIv: 0.145,
-        backIv: 0.139,
-        termSlope: -0.006,
-        asOf: "2026-07-23T19:30:00.000Z",
-      },
+      greeks: null,
     },
     {
-      calendarId: "550e8400-e29b-41d4-a716-446655440002",
+      calendarId: CLOSED_ID,
       underlying: "SPXW",
       strike: 7500000,
       optionType: "P",
@@ -60,9 +60,9 @@ const FIXTURE: TradeHistoryResponse = {
       status: "closed",
       openedAt: "2026-07-16T14:00:00.000Z",
       closedAt: "2026-07-23T19:50:00.000Z",
-      openNetDebit: 43.27,
+      openNetDebit: 43.25,
       closeNetCredit: 41.58,
-      realizedPnl: -171.7,
+      realizedPnl: -167,
       greeks: null,
     },
   ],
@@ -100,8 +100,29 @@ const FIXTURE: TradeHistoryResponse = {
       fees: null,
     },
   ],
-  totals: { realizedPnl: -171.7 },
-  vix: { value: 18.2, date: "2026-07-23" },
+  totals: { realizedPnl: -167 },
+  vix: null,
+};
+
+const DETAIL: TradeDetailResponse = {
+  calendarId: OPEN_ID,
+  days: [
+    {
+      date: "2026-07-23",
+      asOf: "2026-07-23T19:30:00.000Z",
+      spot: 7400.5,
+      pnlOpen: 2.0,
+      netDelta: 1.2,
+      netGamma: -0.05,
+      netTheta: 38.5,
+      netVega: 112.3,
+      frontIv: 0.145,
+      backIv: 0.139,
+      termSlope: -0.006,
+      front: { mark: 103.4, iv: 0.145, delta: -40, gamma: null, theta: 550, vega: -610 },
+      back: { mark: 143.5, iv: 0.139, delta: 42, gamma: 0.2, theta: -310, vega: 720 },
+    },
+  ],
 };
 
 function mockSuccess(data: TradeHistoryResponse = FIXTURE): void {
@@ -113,50 +134,104 @@ function mockSuccess(data: TradeHistoryResponse = FIXTURE): void {
   });
 }
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-07-25T15:00:00Z"));
+  mockUseTradeDetail.mockReturnValue({
+    data: DETAIL,
+    isPending: false,
+    isError: false,
+  });
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   vi.clearAllMocks();
 });
 
 describe("Journal — Trade Ledger screen", () => {
-  it("renders one round-trip row per calendar with status, debit and realized P&L", () => {
+  it("main table shows exactly the 8 simple columns — greek symbol columns gone", () => {
     mockSuccess();
     render(<Journal />);
 
-    const openRow = screen.getByTestId(
-      "roundtrip-row-550e8400-e29b-41d4-a716-446655440001",
-    );
-    const closedRow = screen.getByTestId(
-      "roundtrip-row-550e8400-e29b-41d4-a716-446655440002",
-    );
-    expect(openRow.textContent).toContain("SPXW 7400P");
-    expect(openRow.textContent).toContain("open");
-    expect(openRow.textContent).toContain("40.08");
+    // DOM casing (CSS uppercases visually); "Trade" appears only as a header here.
+    for (const h of ["Trade", "Status", "Opened", "Closed", "Days", "Entry", "Exit", "P&L"]) {
+      expect(screen.getAllByText(h).length).toBeGreaterThan(0);
+    }
+    // The old cryptic columns are gone from the main table
+    expect(screen.queryByText("Θ/d")).toBeNull();
+    expect(screen.queryByText("IV f/b")).toBeNull();
+    expect(screen.queryByText("Slope")).toBeNull();
+  });
+
+  it("rows show Days/Entry/Exit/P&L; open rows dash the Exit", () => {
+    mockSuccess();
+    render(<Journal />);
+
+    const closedRow = screen.getByTestId(`roundtrip-row-${CLOSED_ID}`);
     expect(closedRow.textContent).toContain("SPXW 7500P");
-    // signedUsd convention: U+2212 minus, 2dp trimmed (lib/position-format.ts).
-    expect(closedRow.textContent).toContain("−$171.7");
+    expect(closedRow.textContent).toContain("7"); // 7/16 → 7/23 = 7 days
+    expect(closedRow.textContent).toContain("43.25");
+    expect(closedRow.textContent).toContain("41.58");
+    expect(closedRow.textContent).toContain("−$167");
+
+    const openRow = screen.getByTestId(`roundtrip-row-${OPEN_ID}`);
+    expect(openRow.textContent).toContain("40.08");
+    expect(openRow.textContent).toContain("2"); // 7/23 → now (7/25) = 2 days
+    expect(openRow.textContent).toContain("—"); // no exit yet
   });
 
-  it("open rows show greeks; closed rows show em-dash greeks", () => {
+  it("clicking a row expands it in place: legs + named-header daily history + legend; re-click collapses", () => {
     mockSuccess();
     render(<Journal />);
 
-    const openRow = screen.getByTestId(
-      "roundtrip-row-550e8400-e29b-41d4-a716-446655440001",
-    );
-    expect(openRow.textContent).toContain("14.5%"); // frontIv
-    const closedRow = screen.getByTestId(
-      "roundtrip-row-550e8400-e29b-41d4-a716-446655440002",
-    );
-    expect(closedRow.textContent).toContain("—");
+    fireEvent.click(screen.getByTestId(`roundtrip-row-${OPEN_ID}`));
+
+    const detail = screen.getByTestId(`roundtrip-detail-${OPEN_ID}`);
+    // Legs mini-table: only THIS calendar's fill (the 7500 closing fill is another trade)
+    expect(detail.textContent).toContain("SELL");
+    expect(detail.textContent).toContain("103.36");
+    expect(detail.textContent).not.toContain("143.35");
+
+    // Daily history: named greek headers + values
+    for (const h of [
+      "Net Delta (Δ)",
+      "Net Theta (Θ)/day",
+      "Net Gamma (Γ)",
+      "Net Vega",
+      "Front IV",
+      "Back IV",
+      "IV Slope (back−front)",
+      "Front Delta (Δ)",
+      "Back Delta (Δ)",
+    ]) {
+      expect(detail.textContent).toContain(h);
+    }
+    expect(detail.textContent).toContain("7400.5"); // SPX spot
+    // Legend explains the symbols in words
+    expect(detail.textContent).toContain("delta = $ per 1-pt SPX move");
+
+    // Re-click collapses
+    fireEvent.click(screen.getByTestId(`roundtrip-row-${OPEN_ID}`));
+    expect(screen.queryByTestId(`roundtrip-detail-${OPEN_ID}`)).toBeNull();
   });
 
-  it("footer shows the total realized P&L; no VIX chip (live VIX lives in the top strip)", () => {
+  it("expansion shows a loading hint while the detail is pending", () => {
     mockSuccess();
+    mockUseTradeDetail.mockReturnValue({ data: undefined, isPending: true, isError: false });
     render(<Journal />);
 
-    expect(screen.getByTestId("roundtrip-total").textContent).toContain("−$171.7");
-    expect(screen.queryByText(/VIX/)).toBeNull();
+    fireEvent.click(screen.getByTestId(`roundtrip-row-${OPEN_ID}`));
+    expect(
+      screen.getByTestId(`roundtrip-detail-${OPEN_ID}`).textContent,
+    ).toContain("Loading");
+  });
+
+  it("footer shows the total realized P&L", () => {
+    mockSuccess();
+    render(<Journal />);
+    expect(screen.getByTestId("roundtrip-total").textContent).toContain("−$167");
   });
 
   it("renders executions TOS-style: ET exec time, side, effect, strike, net amount", () => {
@@ -164,7 +239,6 @@ describe("Journal — Trade Ledger screen", () => {
     render(<Journal />);
 
     const row = screen.getByTestId("execution-row-126084076124-0");
-    // 19:50Z = 3:50 PM ET (EDT) — rendered in America/New_York explicitly.
     expect(row.textContent).toContain("3:50");
     expect(row.textContent).toContain("SELL");
     expect(row.textContent).toContain("OPENING");
