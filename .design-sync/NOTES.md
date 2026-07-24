@@ -2,6 +2,29 @@
 
 Repo-specific gotchas for future syncs. Read this before re-running.
 
+## Re-syncing
+
+```sh
+bun run design-sync
+```
+
+Runs `cfg.buildCmd` then the converter driver (build → diff → validate → capture)
+and prints one verdict JSON, also written to `ds-bundle/.resync-verdict.json`.
+Read `verification.pendingGrade` and `upload.any` from it.
+
+Two steps the script cannot do, because they need the DesignSync tool rather than a
+shell — Claude does these around it:
+
+1. **Before**: fetch the project's `_ds_sync.json` into
+   `.design-sync/.cache/remote-sync.json`. The script picks it up automatically when
+   present; without it every component is re-verified from scratch (correct, just slow).
+2. **After**: upload, when `upload.any` is true. `upload.any === false` means the
+   project already matches the build — nothing to do.
+
+`.ds-sync/` (the staged converter + its node_modules) is gitignored and does **not**
+survive a clone. The script fails with instructions if it is missing; `/design-sync`
+re-stages it.
+
 ## Why the config looks unusual
 
 - **`apps/web` is an app, not a library.** There is no `dist/` library entry, so the
