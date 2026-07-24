@@ -31,6 +31,7 @@ import {
 import { Button } from "@/components/system/Button.tsx";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { STALL_THRESHOLD_MS } from "../hooks/useLiveStream.ts";
+import { token } from "@/design/tokens.generated.ts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ export function LiveStatusBadge({
             style={{
               fontSize: 12,
               fontFamily: "JetBrains Mono, monospace",
-              color: "#7b8696", // --color-muted
+              color: token.text.secondary, // --color-muted
             }}
           >
             {tooltipText}

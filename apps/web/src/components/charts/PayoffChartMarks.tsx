@@ -1,3 +1,4 @@
+import { token } from "@/design/tokens.generated.ts";
 /**
  * PayoffChartMarks — the three genuinely-custom PayoffChart SVG marks that no
  * native Recharts primitive covers (RESEARCH D-08 / Pattern 4): the EM-band
@@ -19,10 +20,10 @@
  * No any/as/!.
  */
 
-const CORAL = "#ef5350";
-const BLUE = "#5b9cf6";
-const TEAL = "#26a69a";
-const AMBER = "#f0b429";
+const CORAL = token.value.negative;
+const BLUE = token.accent.info;
+const TEAL = token.value.positive;
+const AMBER = token.accent.warning;
 
 /**
  * KISS collision fix (31-01, DEFECT-1): fixed vertical lane per wall series

@@ -1,5 +1,6 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { token } from "@/design/tokens.generated.ts";
 
 interface Props {
   children: ReactNode;
@@ -39,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
             alignItems: "center",
             justifyContent: "center",
             minHeight: "60vh",
-            color: "#566273",
+            color: token.text.tertiary,
             fontFamily: "'JetBrains Mono', ui-monospace, monospace",
             fontSize: 12,
           }}

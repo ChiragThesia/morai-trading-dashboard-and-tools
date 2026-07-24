@@ -1,3 +1,4 @@
+import { token } from "@/design/tokens.generated.ts";
 /**
  * ComingSoon — reusable badged coming-soon placeholder stub.
  *
@@ -43,7 +44,7 @@ export function ComingSoon({
   return (
     <div
       style={{
-        border: "1px dashed #27313f",
+        border: `1px dashed ${token.border.strong}`,
         borderRadius: "8px",
         padding: "16px",
         display: "flex",
@@ -61,7 +62,7 @@ export function ComingSoon({
           fontSize: "10px",
           fontFamily: "'Space Grotesk', system-ui, sans-serif",
           fontWeight: 600,
-          color: "#566273",
+          color: token.text.tertiary,
           letterSpacing: "0.9px",
         }}
       >
@@ -76,7 +77,7 @@ export function ComingSoon({
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "0.9px",
-          color: "#d6dbe4",
+          color: token.text.primary,
           textAlign: "center",
         }}
       >
@@ -88,7 +89,7 @@ export function ComingSoon({
         style={{
           fontSize: "10px",
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          color: "#566273",
+          color: token.text.tertiary,
           textAlign: "center",
           lineHeight: 1.45,
         }}

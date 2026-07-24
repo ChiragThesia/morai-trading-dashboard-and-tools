@@ -49,8 +49,9 @@
     "vite": "^8.1.0"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/build-tokens.mjs && vite",
+    "build": "node scripts/build-tokens.mjs && vite build",
+    "tokens": "node scripts/build-tokens.mjs",
     "typecheck": "tsc --noEmit"
   }
 }

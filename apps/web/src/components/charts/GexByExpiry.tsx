@@ -1,6 +1,7 @@
 import ReactECharts from "echarts-for-react";
 import { useMemo } from "react";
 import type { GexSnapshotEntry } from "@morai/contracts";
+import { token } from "@/design/tokens.generated.ts";
 
 /**
  * GexByExpiry — GEX by-expiration vertical bar chart.
@@ -31,8 +32,8 @@ interface GexByExpiryProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CORAL = "#ef5350";
-const ZERO_LINE = "#27313f";
+const CORAL = token.value.negative;
+const ZERO_LINE = token.border.strong;
 
 // Units regression: domain dollarGamma outputs $Bn/1% ALREADY — no second /1e9.
 function fmtBn(v: number): string {
@@ -61,7 +62,7 @@ export function GexByExpiry({
         show: true,
         position: e.gex >= 0 ? "top" : "bottom",
         formatter: (params: { value: number }) => fmtBn(params.value),
-        color: "#d6dbe4",
+        color: token.text.primary,
         fontSize: 9,
         fontFamily: "JetBrains Mono, monospace",
       },
@@ -74,7 +75,7 @@ export function GexByExpiry({
         type: "category",
         data: dates,
         axisLabel: {
-          color: "#566273",
+          color: token.text.tertiary,
           fontSize: 9,
           rotate: 30,
           fontFamily: "JetBrains Mono, monospace",
@@ -87,7 +88,7 @@ export function GexByExpiry({
         axisLine: { lineStyle: { color: ZERO_LINE } },
         splitLine: { lineStyle: { color: ZERO_LINE, type: "dashed" } },
         axisLabel: {
-          color: "#566273",
+          color: token.text.tertiary,
           fontSize: 9,
           formatter: (v: number) => fmtBn(v),
         },

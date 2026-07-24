@@ -34,7 +34,9 @@
   --color-chart-ink-series-purple: #7c6fd6;
   --color-chart-ink-series-steel: #5f93b8;
   --color-alert-danger-surface: #180f10;
+  --color-alert-danger-border: #5a2b2e;
   --color-alert-warn-surface: #231a08;
+  --color-alert-warn-border: #5a4a1f;
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
@@ -82,7 +84,11 @@
   --color-chart-series-purple: var(--color-chart-ink-series-purple);
   --color-chart-series-steel: var(--color-chart-ink-series-steel);
   --color-banner-danger-surface: var(--color-alert-danger-surface);
+  --color-banner-danger-border: var(--color-alert-danger-border);
+  --color-banner-danger-text: var(--color-coral-500);
   --color-banner-warn-surface: var(--color-alert-warn-surface);
+  --color-banner-warn-border: var(--color-alert-warn-border);
+  --color-banner-warn-text: var(--color-amber-300);
 
   /* shadcn/ui vocabulary — one definition, mirrored into :root below. */
   --color-background: var(--color-surface-base);

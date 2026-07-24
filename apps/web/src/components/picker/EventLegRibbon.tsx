@@ -31,6 +31,7 @@ import {
   isoDateToUtcMs,
   eventDte,
 } from "./TermStructureChart.tsx";
+import { token } from "@/design/tokens.generated.ts";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
@@ -142,7 +143,7 @@ export function EventLegRibbon({
         />
         <div
           className="absolute h-px"
-          style={{ left: `${backPct}%`, width: `${100 - backPct}%`, top: BASE + 1, background: "#222839" }}
+          style={{ left: `${backPct}%`, width: `${100 - backPct}%`, top: BASE + 1, background: token.chart.grid }}
         />
 
         {/* Endpoints */}

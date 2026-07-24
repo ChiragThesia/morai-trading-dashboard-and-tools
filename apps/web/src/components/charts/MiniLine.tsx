@@ -2,6 +2,7 @@ import { LinePath } from "@visx/shape";
 import { curveMonotoneX } from "@visx/curve";
 import { scaleLinear, scalePoint } from "@visx/scale";
 import { Group } from "@visx/group";
+import { token } from "@/design/tokens.generated.ts";
 
 /**
  * MiniLine — small visx line chart for term structure and skew mini charts.
@@ -31,7 +32,7 @@ interface MiniLineProps {
 
 export function MiniLine({
   data,
-  color = "#22d3ee",
+  color = token.accent.highlight,
   width = 80,
   height = 40,
   label = "Mini line chart",

@@ -153,6 +153,37 @@ export default tseslint.config(
     },
   },
 
+  // Design tokens are the only place a colour literal may appear. Chart components take
+  // colours as props rather than classes, which is where the "no hardcoded hex" rule kept
+  // breaking down — import from src/design/tokens.generated.ts instead. Edit the palette in
+  // tokens.dtcg.json and run `bun run tokens`.
+  {
+    // Tests are exempt on purpose: asserting a literal hex is what makes them an oracle
+    // for the palette. If a token edit changes a rendered colour, those assertions are
+    // exactly what should fail.
+    files: ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
+    ignores: [
+      "apps/web/src/design/tokens.generated.ts",
+      "apps/web/src/**/*.test.ts",
+      "apps/web/src/**/*.test.tsx",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Literal[value=/#[0-9a-fA-F]{6}\\b/]",
+          message:
+            "Hardcoded colour. Import from @/design/tokens.generated.ts, or add the value to tokens.dtcg.json and run `bun run tokens`.",
+        },
+        {
+          selector: "TemplateElement[value.raw=/#[0-9a-fA-F]{6}\\b/]",
+          message:
+            "Hardcoded colour in a template literal. Interpolate a token from @/design/tokens.generated.ts instead.",
+        },
+      ],
+    },
+  },
+
   // shadcn-generated ui primitives (apps/web/src/components/ui/**) — scaffolded by the
   // shadcn CLI and committed unmodified (Phase 33 D-02: "no wrapping abstraction",
   // extend only via composition/config). They don't follow this repo's strict-TS
