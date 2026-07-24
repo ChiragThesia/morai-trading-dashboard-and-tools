@@ -153,3 +153,13 @@
   --ring: var(--color-accent-primary);
   --radius: 0.5rem;
 }
+
+/* Ship the whole semantic tier regardless of what this app currently references. */
+@source inline("bg-{surface-base,surface-sunken,surface-raised,surface-overlay,surface-glow,line-subtle,line-strong,fg-primary,fg-secondary,fg-tertiary,value-positive,value-positive-surface,value-negative,value-negative-surface,accent-primary,accent-primary-surface,accent-warning,accent-info,accent-highlight}");
+@source inline("text-{surface-base,surface-sunken,surface-raised,surface-overlay,surface-glow,line-subtle,line-strong,fg-primary,fg-secondary,fg-tertiary,value-positive,value-positive-surface,value-negative,value-negative-surface,accent-primary,accent-primary-surface,accent-warning,accent-info,accent-highlight}");
+@source inline("border-{surface-base,surface-sunken,surface-raised,surface-overlay,surface-glow,line-subtle,line-strong,fg-primary,fg-secondary,fg-tertiary,value-positive,value-positive-surface,value-negative,value-negative-surface,accent-primary,accent-primary-surface,accent-warning,accent-info,accent-highlight}");
+@source inline("ring-{surface-base,surface-sunken,surface-raised,surface-overlay,surface-glow,line-subtle,line-strong,fg-primary,fg-secondary,fg-tertiary,value-positive,value-positive-surface,value-negative,value-negative-surface,accent-primary,accent-primary-surface,accent-warning,accent-info,accent-highlight}");
+@source inline("fill-{surface-base,surface-sunken,surface-raised,surface-overlay,surface-glow,line-subtle,line-strong,fg-primary,fg-secondary,fg-tertiary,value-positive,value-positive-surface,value-negative,value-negative-surface,accent-primary,accent-primary-surface,accent-warning,accent-info,accent-highlight}");
+@source inline("stroke-{surface-base,surface-sunken,surface-raised,surface-overlay,surface-glow,line-subtle,line-strong,fg-primary,fg-secondary,fg-tertiary,value-positive,value-positive-surface,value-negative,value-negative-surface,accent-primary,accent-primary-surface,accent-warning,accent-info,accent-highlight}");
+@source inline("from-{surface-base,surface-sunken,surface-raised,surface-overlay,surface-glow,line-subtle,line-strong,fg-primary,fg-secondary,fg-tertiary,value-positive,value-positive-surface,value-negative,value-negative-surface,accent-primary,accent-primary-surface,accent-warning,accent-info,accent-highlight}");
+@source inline("to-{surface-base,surface-sunken,surface-raised,surface-overlay,surface-glow,line-subtle,line-strong,fg-primary,fg-secondary,fg-tertiary,value-positive,value-positive-surface,value-negative,value-negative-surface,accent-primary,accent-primary-surface,accent-warning,accent-info,accent-highlight}");

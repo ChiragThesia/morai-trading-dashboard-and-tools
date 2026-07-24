@@ -141,6 +141,16 @@ const SHADCN = {
 const shadcnTheme = Object.entries(SHADCN).map(([k, v]) => `  --color-${k}: var(--color-${v});`);
 const shadcnRoot = Object.entries(SHADCN).map(([k, v]) => `  --${k}: var(--color-${v});`);
 
+// Tailwind only emits utilities it finds in the source scan. The semantic tier has to ship
+// whether or not this app happens to use every name yet — the design system is also consumed
+// by the claude.ai/design agent, which composes new markup against the documented vocabulary.
+// Without this, a documented class silently resolves to nothing.
+const SAFELIST_PREFIXES = ['bg', 'text', 'border', 'ring', 'fill', 'stroke', 'from', 'to'];
+const semUtilities = semantics.map(([p]) => semName(p));
+const safelist = SAFELIST_PREFIXES.map(
+  (pre) => `@source inline("${pre}-{${semUtilities.join(',')}}");`,
+).join('\n');
+
 writeFileSync(
   join(DIR, 'tokens.generated.css'),
   `${banner}
@@ -169,6 +179,9 @@ ${legacyLines.join('\n')}
 ${shadcnRoot.join('\n')}
   --radius: 0.5rem;
 }
+
+/* Ship the whole semantic tier regardless of what this app currently references. */
+${safelist}
 `,
 );
 
