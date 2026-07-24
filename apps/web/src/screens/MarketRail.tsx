@@ -19,6 +19,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop.ts";
 import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 import { RegimeBoard } from "../components/RegimeBoard.tsx";
 import { CotCard } from "../components/CotCard.tsx";
+import { NewsCard } from "../components/NewsCard.tsx";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
 import type { StreamIndicesEvent } from "@morai/contracts";
@@ -74,6 +75,7 @@ export function MarketRail({
       <div className="mt-3 flex flex-col gap-3 lg:mt-0">
         <RegimeBoard dense liveIndices={liveIndices} liveStatus={liveStatus} />
         <CotCard />
+        <NewsCard />
         <Panel>
           <PanelHeading title="System health" />
           <SystemHealth />

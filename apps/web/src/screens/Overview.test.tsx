@@ -87,6 +87,7 @@ vi.mock("../hooks/usePositions.ts", () => ({ usePositions: vi.fn() }));
 vi.mock("../hooks/useGex.ts", () => ({ useGex: vi.fn(() => ({ data: GEX_FIXTURE })) }));
 vi.mock("../hooks/useStatus.ts", () => ({ useStatus: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useCot.ts", () => ({ useCot: vi.fn(() => ({ data: undefined })) }));
+vi.mock("../hooks/useNews.ts", () => ({ useNews: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useMacro.ts", () => ({ useMacro: vi.fn(() => ({ data: undefined, isPending: false })) }));
 // Phase 24: RegimeBoard's own hook — mocked so mounting the board doesn't require a
 // QueryClientProvider in this file's plain render() calls (matches useMacro's pattern).

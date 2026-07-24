@@ -23,6 +23,7 @@ vi.mock("../hooks/useMacro.ts", () => ({ useMacro: mockUseMacro }));
 
 const { mockUseCot } = vi.hoisted(() => ({ mockUseCot: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useCot.ts", () => ({ useCot: mockUseCot }));
+vi.mock("../hooks/useNews.ts", () => ({ useNews: vi.fn(() => ({ data: undefined })) }));
 
 const { mockUseStatus } = vi.hoisted(() => ({ mockUseStatus: vi.fn(() => ({ data: undefined })) }));
 vi.mock("../hooks/useStatus.ts", () => ({ useStatus: mockUseStatus }));
