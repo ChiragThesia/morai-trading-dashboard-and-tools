@@ -147,9 +147,12 @@ export function makeGetTradeHistoryUseCase(
         const snapshot =
           c.status === "open" ? snapshotByCalendar.get(c.id) : undefined;
         // Realized $ from the oracle-validated calendars-table amounts (points → ×100).
-        const closeNetCredit = c.closeNetCredit ?? null;
+        // OPEN calendars report null exit even when the stored column is 0 —
+        // recomputeCalendarAmounts writes 0 (not NULL) for a calendar with no CLOSE events.
+        const closeNetCredit =
+          c.status === "closed" ? (c.closeNetCredit ?? null) : null;
         const realizedPnl =
-          c.status === "closed" && closeNetCredit !== null
+          closeNetCredit !== null
             ? (closeNetCredit - c.openNetDebit) * c.qty * 100
             : null;
         return {

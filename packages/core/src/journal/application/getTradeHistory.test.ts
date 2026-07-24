@@ -152,6 +152,16 @@ describe("makeGetTradeHistoryUseCase — Trade Ledger read model", () => {
     expect(vix).toEqual({ value: 18.2, date: "2026-07-23" });
   });
 
+  it("an OPEN calendar with a stored closeNetCredit of 0 still reports null exit (recompute writes 0 for open cals)", async () => {
+    const result = await makeUseCase({
+      calendars: [cal({ id: "open-zero", closeNetCredit: 0 })],
+    })();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.roundTrips[0]?.closeNetCredit).toBeNull();
+    expect(result.value.roundTrips[0]?.realizedPnl).toBeNull();
+  });
+
   it("closed calendar without a stored closeNetCredit → realizedPnl null, never fabricated", async () => {
     const result = await makeUseCase({
       calendars: [cal({ id: "c", status: "closed", closedAt: new Date("2026-07-20T14:00:00Z") })],
