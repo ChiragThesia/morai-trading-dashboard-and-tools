@@ -46,6 +46,7 @@ import {
 import type { StreamLiveGreekEvent, StreamIndicesEvent } from "@morai/contracts";
 import { apiFetch } from "../lib/rpc.ts";
 import { deriveStreamStatus } from "../lib/deriveStreamStatus.ts";
+import { API_BASE } from "../lib/api-base.ts";
 
 // ─── Error types ──────────────────────────────────────────────────────────────
 
@@ -212,10 +213,9 @@ export function useLiveStream(): UseLiveStreamResult {
         // ~20s cold-start grace window (D-11), same as a resumed tick would.
         lastTickOrConnectAtRef.current = Date.now();
 
-        // Construct the EventSource URL. VITE_API_BASE_URL is "" in dev (relative path)
-        // and "https://..." in production (cross-origin to Railway API).
-        const base = import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "");
-        const es = new EventSource(`${base}/api/stream?ticket=${ticketBody.ticket}`);
+        // Construct the EventSource URL. API_BASE is "" in dev (relative path) and
+        // "https://..." in production (cross-origin to Railway API).
+        const es = new EventSource(`${API_BASE}/api/stream?ticket=${ticketBody.ticket}`);
         esRef.current = es;
 
         es.onopen = (): void => {

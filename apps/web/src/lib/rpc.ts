@@ -4,6 +4,7 @@ import { hc } from "hono/client";
 // The `import type` creates zero runtime overhead; hc<AppType>() resolves types at compile time.
 // RPC-01 / SC-3: AppType exported from apps/server/src/main.ts after the default export.
 import type { AppType } from "../../../server/src/main.ts";
+import { API_BASE } from "./api-base.ts";
 
 // Module-level auth token — updated by setAuthToken whenever the Supabase session changes.
 // Captured by the `headers` function at request time (not at client construction time).
@@ -38,11 +39,10 @@ function authHeaders(): Record<string, string> {
  * route inference; `apiFetch` is provided for route calls that need the auth header.
  *
  * VITE_API_BASE_URL: `https://` only (T-09-01 — never send Bearer over plain HTTP).
- * The `as string` cast here is the ONLY permitted `as` in this file: vite-env.d.ts declares
- * VITE_API_BASE_URL as `string` but exactOptionalPropertyTypes requires the cast for hc<>().
+ * API_BASE resolves that to a trailing-slash-free string, or "" when the variable is
+ * absent — which is the supported same-origin setup, so no cast is needed here any more.
  */
-// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-export const rpc = hc<AppType>(import.meta.env.VITE_API_BASE_URL as string, {
+export const rpc = hc<AppType>(API_BASE, {
   headers: authHeaders,
 });
 
@@ -57,8 +57,7 @@ export const rpc = hc<AppType>(import.meta.env.VITE_API_BASE_URL as string, {
  * VITE_API_BASE_URL which must be `https://` in production.
  */
 export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const base = import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "");
-  return fetch(`${base}${path}`, {
+  return fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       ...authHeaders(),
