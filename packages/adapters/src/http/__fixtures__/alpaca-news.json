@@ -1,0 +1,31 @@
+{
+  "news": [
+    {
+      "id": 24843200,
+      "headline": "Crude Rallies On Surprise Inventory Draw",
+      "author": "Benzinga Newsdesk",
+      "created_at": "2026-07-24T13:10:00Z",
+      "updated_at": "2026-07-24T13:11:30Z",
+      "summary": "",
+      "content": "",
+      "url": "",
+      "images": [],
+      "symbols": [],
+      "source": "benzinga"
+    },
+    {
+      "id": 24843171,
+      "headline": "S&P 500 Slips As Fed Officials Signal Higher-For-Longer Rates",
+      "author": "Benzinga Newsdesk",
+      "created_at": "2026-07-24T13:05:00Z",
+      "updated_at": "2026-07-24T13:06:00Z",
+      "summary": "Markets retreated after hawkish commentary from two Fed governors.",
+      "content": "",
+      "url": "https://www.benzinga.com/markets/24843171",
+      "images": [],
+      "symbols": ["SPY", "QQQ"],
+      "source": "benzinga"
+    }
+  ],
+  "next_page_token": null
+}

@@ -107,6 +107,7 @@ export { makeCboeVvixAdapter } from "./http/cboe-vvix.ts";
 export { makeCboeVix9dAdapter } from "./http/cboe-vix9d.ts";
 // Phase 13 (13-02): CFTC Socrata TFF adapter — ForFetchingCotReport over gpe5-46if.json (COT-01)
 export { makeCftcCotAdapter } from "./http/cftc.ts";
+export { makeAlpacaNewsAdapter } from "./http/alpaca-news.ts";
 // Phase 13 (13-03): COT observations repo — ForPersistingCotObservation + ForReadingCotObservations
 export { makePostgresCotObservationsRepo } from "./postgres/repos/cot-observations.ts";
 export type { PostgresCotObservationsRepo } from "./postgres/repos/cot-observations.ts";
