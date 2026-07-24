@@ -1,0 +1,155 @@
+{
+  "$schema": "https://tr.designtokens.org/format/",
+  "$description": "Morai design tokens — W3C DTCG format (spec v2025.10). Single source of truth for both CSS utilities and TypeScript chart props. Generated outputs: tokens.generated.css, tokens.generated.ts. Do not edit those by hand; edit here and run `bun run tokens`.",
+
+  "primitive": {
+    "$description": "Tier 1 — raw values. NEVER reference these from a component; use a semantic token. The 19 values carried over from the LOCKED 09-UI-SPEC palette keep their exact hex.",
+    "ink": {
+      "$type": "color",
+      "$description": "Neutral surface ramp, darkest to lightest. Dark-theme elevation: higher tier == lighter surface (Carbon layering model).",
+      "900": { "$value": "#0a0e14", "$description": "Page background. LOCKED." },
+      "800": { "$value": "#0c111a", "$description": "Recessed panel. LOCKED." },
+      "700": { "$value": "#0f1521", "$description": "Standard card surface. LOCKED." },
+      "600": { "$value": "#161d2b", "$description": "Raised control surface. LOCKED." },
+      "500": { "$value": "#1b2433", "$description": "Hairline border. LOCKED." },
+      "400": { "$value": "#27313f", "$description": "Stronger border / chart zero line. LOCKED." },
+      "300": { "$value": "#3a4453", "$description": "LOCKED. Currently unreferenced." },
+      "glow": { "$value": "#141b29", "$description": "Ambient glow at the top-right of the page background gradient." }
+    },
+    "slate": {
+      "$type": "color",
+      "$description": "Neutral text ramp.",
+      "100": { "$value": "#d6dbe4", "$description": "Primary text. LOCKED." },
+      "300": { "$value": "#7b8696", "$description": "Secondary / label text. LOCKED." },
+      "500": { "$value": "#566273", "$description": "Tertiary / axis text. LOCKED." }
+    },
+    "teal": {
+      "$type": "color",
+      "$description": "Gains. The green/red convention is non-negotiable in financial UI — never re-map these to a brand colour.",
+      "500": { "$value": "#26a69a", "$description": "Positive value. LOCKED." },
+      "900": { "$value": "#0e3b36", "$description": "Positive surface tint. LOCKED. Currently unreferenced." }
+    },
+    "coral": {
+      "$type": "color",
+      "$description": "Losses.",
+      "500": { "$value": "#ef5350", "$description": "Negative value. LOCKED." },
+      "900": { "$value": "#3e1f23", "$description": "Negative surface tint. LOCKED." }
+    },
+    "violet": {
+      "$type": "color",
+      "400": { "$value": "#a78bfa", "$description": "Brand accent / primary action. LOCKED." },
+      "900": { "$value": "#241d40", "$description": "Accent surface tint (value-flash, accent bg). LOCKED." }
+    },
+    "amber": {
+      "$type": "color",
+      "500": { "$value": "#f0b429", "$description": "Warning / event emphasis. LOCKED." },
+      "300": { "$value": "#ffb74d", "$description": "Lighter amber used by one chart mark. Off-palette; consolidation candidate." }
+    },
+    "blue": {
+      "$type": "color",
+      "400": { "$value": "#5b9cf6", "$description": "Spot / informational marker. LOCKED." }
+    },
+    "cyan": {
+      "$type": "color",
+      "400": { "$value": "#22d3ee", "$description": "Highlight. LOCKED." }
+    },
+
+    "chartInk": {
+      "$type": "color",
+      "$description": "Off-palette values found hardcoded in chart components. Preserved at their exact current hex so this refactor changes no pixels. Each group below has drifted into near-duplicates — see the collisions noted in $description and decide whether to consolidate.",
+      "gridA": { "$value": "#222839", "$description": "Grid line, variant A (GexBars, GexByExpiry). COLLISION with gridB." },
+      "gridB": { "$value": "#19212e", "$description": "Grid line, variant B (PayoffChart). COLLISION with gridA." },
+      "zeroAlt": { "$value": "#46556a", "$description": "Zero line, variant B. COLLISION with primitive.ink.400." },
+      "axisA": { "$value": "#9aa3b8", "$description": "Term-structure line grey. COLLISION with axisB/axisC." },
+      "axisB": { "$value": "#67708a", "$description": "Axis label grey. COLLISION with axisA/axisC." },
+      "axisC": { "$value": "#8a98ad", "$description": "Crosshair grey. COLLISION with axisA/axisB." },
+      "seriesIndigo": { "$value": "#6f86c9", "$description": "Improvised chart series colour." },
+      "seriesPurple": { "$value": "#7c6fd6", "$description": "Improvised chart series colour." },
+      "seriesSteel": { "$value": "#5f93b8", "$description": "Improvised chart series colour." }
+    },
+    "alert": {
+      "$type": "color",
+      "$description": "Banner surfaces, previously inline-styled in AuthExpiredBanner.",
+      "dangerSurface": { "$value": "#180f10", "$description": "Auth-expired banner background." },
+      "warnSurface": { "$value": "#231a08", "$description": "Near-expiry banner background." }
+    },
+
+    "font": {
+      "$type": "fontFamily",
+      "display": { "$value": "'Space Grotesk', system-ui, sans-serif", "$description": "Headings, labels, KPI values." },
+      "mono": { "$value": "'JetBrains Mono', ui-monospace, monospace", "$description": "Body default. Every number in the product is mono + tabular." }
+    }
+  },
+
+  "semantic": {
+    "$description": "Tier 2 — intent. This is what components consume. Renaming a value here re-themes the product; renaming a primitive does not.",
+    "surface": {
+      "$type": "color",
+      "$description": "Dark-theme elevation ladder: the higher the elevation, the lighter the surface.",
+      "base": { "$value": "{primitive.ink.900}", "$description": "The page itself." },
+      "sunken": { "$value": "{primitive.ink.800}", "$description": "Recessed area inside a card." },
+      "raised": { "$value": "{primitive.ink.700}", "$description": "Standard card / panel." },
+      "overlay": { "$value": "{primitive.ink.600}", "$description": "Control resting on a card; also popover/menu." },
+      "glow": { "$value": "{primitive.ink.glow}", "$description": "Page-background gradient highlight." }
+    },
+    "border": {
+      "$type": "color",
+      "subtle": { "$value": "{primitive.ink.500}", "$description": "Default hairline." },
+      "strong": { "$value": "{primitive.ink.400}", "$description": "Input outline, chart zero line." }
+    },
+    "text": {
+      "$type": "color",
+      "primary": { "$value": "{primitive.slate.100}", "$description": "Values and body copy." },
+      "secondary": { "$value": "{primitive.slate.300}", "$description": "Labels and column headers." },
+      "tertiary": { "$value": "{primitive.slate.500}", "$description": "De-emphasised / stale / axis." }
+    },
+    "value": {
+      "$type": "color",
+      "$description": "Signed P&L and greeks. Never use accent colours for these.",
+      "positive": { "$value": "{primitive.teal.500}" },
+      "positiveSurface": { "$value": "{primitive.teal.900}" },
+      "negative": { "$value": "{primitive.coral.500}" },
+      "negativeSurface": { "$value": "{primitive.coral.900}" }
+    },
+    "accent": {
+      "$type": "color",
+      "primary": { "$value": "{primitive.violet.400}", "$description": "Primary action, focus ring, selection." },
+      "primarySurface": { "$value": "{primitive.violet.900}", "$description": "Selected-row tint, value-change flash." },
+      "warning": { "$value": "{primitive.amber.500}", "$description": "Events, guards, roll overlay." },
+      "info": { "$value": "{primitive.blue.400}", "$description": "Spot marker." },
+      "highlight": { "$value": "{primitive.cyan.400}" }
+    }
+  },
+
+  "component": {
+    "$description": "Tier 3 — component overrides. Only exists where a component needs a value as a JS prop rather than a class (charts), or where a component legitimately diverges from the semantic layer.",
+    "chart": {
+      "$type": "color",
+      "$description": "Recharts and visx take colours as props, not classNames — this tier is what makes the 'no hardcoded hex' rule actually achievable in chart code.",
+      "grid": { "$value": "{primitive.chartInk.gridA}", "$description": "Cartesian grid stroke." },
+      "gridDeep": { "$value": "{primitive.chartInk.gridB}", "$description": "Grid stroke on the darker payoff surface." },
+      "zeroLine": { "$value": "{primitive.ink.400}", "$description": "The P&L = 0 rule." },
+      "zeroLineAlt": { "$value": "{primitive.chartInk.zeroAlt}" },
+      "axisLabel": { "$value": "{primitive.slate.500}" },
+      "axisLabelAlt": { "$value": "{primitive.chartInk.axisB}" },
+      "crosshair": { "$value": "{primitive.chartInk.axisC}" },
+      "termLine": { "$value": "{primitive.chartInk.axisA}" },
+      "gammaPositive": { "$value": "{primitive.teal.500}", "$description": "Dealer gamma above zero (dampening)." },
+      "gammaNegative": { "$value": "{primitive.coral.500}", "$description": "Dealer gamma below zero (amplifying)." },
+      "spot": { "$value": "{primitive.blue.400}" },
+      "flip": { "$value": "{primitive.amber.500}" },
+      "today": { "$value": "{primitive.violet.400}", "$description": "T+0 payoff curve." },
+      "expiry": { "$value": "{primitive.slate.300}", "$description": "Expiration tent." },
+      "roll": { "$value": "{primitive.amber.500}", "$description": "Roll overlay curve." },
+      "compare": { "$value": "{primitive.amber.300}", "$description": "Compare-candidate overlay." },
+      "seriesIndigo": { "$value": "{primitive.chartInk.seriesIndigo}" },
+      "seriesPurple": { "$value": "{primitive.chartInk.seriesPurple}" },
+      "seriesSteel": { "$value": "{primitive.chartInk.seriesSteel}" }
+    },
+    "banner": {
+      "$type": "color",
+      "dangerSurface": { "$value": "{primitive.alert.dangerSurface}" },
+      "warnSurface": { "$value": "{primitive.alert.warnSurface}" }
+    }
+  }
+}
