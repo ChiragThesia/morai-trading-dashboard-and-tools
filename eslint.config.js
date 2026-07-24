@@ -8,6 +8,11 @@ export default tseslint.config(
       "node_modules/**",
       "**/dist/**",
       "**/*.tsbuildinfo",
+      // Emitted declarations (`tsc --build` writes these) and the design-system
+      // bundle. Both are gitignored build output, so a typecheck run must not
+      // leave the next lint run failing on generated code.
+      "apps/web/types/**",
+      "ds-bundle/**",
       // Fixture files are only linted explicitly via --no-ignore in acceptance tests
       "**/__fixtures__/**",
       // Files outside TypeScript project scope
