@@ -16,6 +16,7 @@
 import { ok } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ForReadingNewsItems, StorageError } from "./ports.ts";
+import { isMarketRelevant } from "../domain/news-relevance.ts";
 
 // ─── Domain shape (mirrored from newsItem contract) ───────────────────────────
 
@@ -35,8 +36,15 @@ export type NewsEntry = {
 
 // ─── Port types ───────────────────────────────────────────────────────────────
 
-/** Fixed read window — the card shows ~15, the API serves the top 50. */
-const NEWS_READ_LIMIT = 50;
+/** Fixed serve window — the card shows ~15, the API serves the top 50. */
+const NEWS_SERVE_LIMIT = 50;
+
+/**
+ * Raw rows pulled before filtering. The relevance filter keeps roughly 10-15% of
+ * the Alpaca firehose, so a wide raw window is what makes 50 relevant entries
+ * reachable on a busy ratings day.
+ */
+const NEWS_RAW_READ_LIMIT = 300;
 
 /** ForRunningGetNews — driver port returned by makeGetNewsUseCase (D28). */
 export type ForRunningGetNews = () => Promise<
@@ -49,28 +57,33 @@ export type ForRunningGetNews = () => Promise<
  * makeGetNewsUseCase — inject deps, return ForRunningGetNews.
  *
  * The returned driver:
- *   1. Reads the latest 50 NewsItemRow[] from the repo (published_at DESC).
- *   2. Maps each row → NewsEntry (Date → ISO string; updatedAt dropped — storage-only).
- *   3. Returns ok([]) when no rows exist; propagates StorageError on failure.
+ *   1. Reads the latest 300 raw NewsItemRow[] from the repo (published_at DESC).
+ *   2. Drops anything that cannot move SPX implied vol (isMarketRelevant).
+ *   3. Maps the survivors → NewsEntry (Date → ISO; updatedAt dropped — storage-only)
+ *      and caps at 50.
+ *   4. Returns ok([]) when nothing survives; propagates StorageError on failure.
  */
 export function makeGetNewsUseCase(deps: {
   readonly readNewsItems: ForReadingNewsItems;
 }): ForRunningGetNews {
   return async (): Promise<Result<ReadonlyArray<NewsEntry>, StorageError>> => {
-    const result = await deps.readNewsItems(NEWS_READ_LIMIT);
+    const result = await deps.readNewsItems(NEWS_RAW_READ_LIMIT);
     if (!result.ok) {
       return result;
     }
 
-    const entries: ReadonlyArray<NewsEntry> = result.value.map((row) => ({
-      id: row.id,
-      headline: row.headline,
-      summary: row.summary,
-      source: row.source,
-      url: row.url,
-      symbols: row.symbols,
-      publishedAt: row.publishedAt.toISOString(),
-    }));
+    const entries: ReadonlyArray<NewsEntry> = result.value
+      .filter((row) => isMarketRelevant(row))
+      .slice(0, NEWS_SERVE_LIMIT)
+      .map((row) => ({
+        id: row.id,
+        headline: row.headline,
+        summary: row.summary,
+        source: row.source,
+        url: row.url,
+        symbols: row.symbols,
+        publishedAt: row.publishedAt.toISOString(),
+      }));
 
     return ok(entries);
   };

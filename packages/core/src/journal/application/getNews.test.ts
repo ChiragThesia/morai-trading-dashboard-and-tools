@@ -72,11 +72,54 @@ describe("makeGetNewsUseCase", () => {
     expect(result.error).toEqual(storageErr);
   });
 
-  it("reads with the default limit of 50", async () => {
+  it("reads a wide raw window so the relevance filter has material to work with", async () => {
     const readNewsItems: ForReadingNewsItems = vi.fn().mockResolvedValue(ok([]));
 
     await makeGetNewsUseCase({ readNewsItems })();
 
-    expect(readNewsItems).toHaveBeenCalledExactlyOnceWith(50);
+    expect(readNewsItems).toHaveBeenCalledExactlyOnceWith(300);
+  });
+
+  // ─── Relevance filter (D28) ─────────────────────────────────────────────────
+  // The raw store keeps the whole Alpaca firehose; the read path serves only what
+  // can move SPX implied vol. See domain/news-relevance.ts.
+
+  it("drops analyst-rating noise and keeps macro prints", async () => {
+    const rating: NewsItemRow = {
+      ...ROW,
+      id: "rating",
+      headline: "Truist Securities Maintains Hold on Quest Diagnostics, Raises Price Target to $250",
+      symbols: ["DGX"],
+    };
+    const macro: NewsItemRow = {
+      ...ROW,
+      id: "macro",
+      headline: "Fed Holds Rates Steady, Powell Signals Higher-For-Longer",
+      symbols: [],
+    };
+    const readNewsItems: ForReadingNewsItems = vi
+      .fn()
+      .mockResolvedValue(ok([rating, macro]));
+
+    const result = await makeGetNewsUseCase({ readNewsItems })();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((e) => e.id)).toEqual(["macro"]);
+  });
+
+  it("caps the filtered result at 50 entries", async () => {
+    const many: ReadonlyArray<NewsItemRow> = Array.from({ length: 120 }, (_, i) => ({
+      ...ROW,
+      id: String(i),
+      headline: `S&P 500 Moves On Headline ${i}`,
+    }));
+    const readNewsItems: ForReadingNewsItems = vi.fn().mockResolvedValue(ok(many));
+
+    const result = await makeGetNewsUseCase({ readNewsItems })();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toHaveLength(50);
   });
 });
