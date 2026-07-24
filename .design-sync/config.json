@@ -1,0 +1,227 @@
+{
+  "projectId": "c8cde2b5-e096-4a32-b2f6-2751da4c9426",
+  "shape": "package",
+  "pkg": "@morai/web",
+  "globalName": "Morai",
+  "buildCmd": "cd apps/web && bun run build && { bunx tsc -p tsconfig.json --noEmit false --declaration --emitDeclarationOnly --composite false --declarationMap false --outDir types || true; } && bash ../../.design-sync/make-css.sh",
+  "srcDir": "src/components",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": "dist/ds-styles.css",
+  "extraEntries": [
+    "@tanstack/react-query",
+    "recharts"
+  ],
+  "componentSrcMap": {
+    "AuthExpiredBanner": "src/components/AuthExpiredBanner.tsx",
+    "Badge": "src/components/ui/badge.tsx",
+    "BulletGauge": "src/components/system/BulletGauge.tsx",
+    "Button": "src/components/system/Button.tsx",
+    "CandidateCard": "src/components/picker/CandidateCard.tsx",
+    "CandidateTable": "src/components/picker/CandidateTable.tsx",
+    "Card": "src/components/ui/card.tsx",
+    "CardAction": "src/components/ui/card.tsx",
+    "CardContent": "src/components/ui/card.tsx",
+    "CardDescription": "src/components/ui/card.tsx",
+    "CardFooter": "src/components/ui/card.tsx",
+    "CardHeader": "src/components/ui/card.tsx",
+    "CardTitle": "src/components/ui/card.tsx",
+    "ChartContainer": "src/components/ui/chart.tsx",
+    "ChartLegend": null,
+    "ChartLegendContent": "src/components/ui/chart.tsx",
+    "ChartStyle": null,
+    "ChartTooltip": null,
+    "ChartTooltipContent": "src/components/ui/chart.tsx",
+    "ChipRail": "src/components/system/ChipRail.tsx",
+    "ComingSoon": null,
+    "CotCard": "src/components/CotCard.tsx",
+    "DataTable": "src/components/system/DataTable.tsx",
+    "Dialog": "src/components/ui/dialog.tsx",
+    "DialogClose": "src/components/ui/dialog.tsx",
+    "DialogContent": "src/components/ui/dialog.tsx",
+    "DialogDescription": "src/components/ui/dialog.tsx",
+    "DialogFooter": "src/components/ui/dialog.tsx",
+    "DialogHeader": "src/components/ui/dialog.tsx",
+    "DialogOverlay": null,
+    "DialogPortal": null,
+    "DialogTitle": "src/components/ui/dialog.tsx",
+    "DialogTrigger": "src/components/ui/dialog.tsx",
+    "EntryExitPlan": "src/components/picker/EntryExitPlan.tsx",
+    "EquityCurve": "src/components/charts/EquityCurve.tsx",
+    "ErrorBoundary": null,
+    "EventChipsRow": "src/components/picker/TermStructureChart.tsx",
+    "EventLegRibbon": "src/components/picker/EventLegRibbon.tsx",
+    "GammaProfile": "src/components/charts/GammaProfile.tsx",
+    "GexBars": "src/components/charts/GexBars.tsx",
+    "GexByExpiry": "src/components/charts/GexByExpiry.tsx",
+    "GuardTag": "src/components/picker/TermStructureChart.tsx",
+    "Input": "src/components/ui/input.tsx",
+    "LiveStatusBadge": "src/components/LiveStatusBadge.tsx",
+    "MetricChip": "src/components/system/index.tsx",
+    "MiniLine": "src/components/charts/MiniLine.tsx",
+    "MobileChartControls": "src/components/charts/MobileChartControls.tsx",
+    "NewsCard": "src/components/NewsCard.tsx",
+    "Panel": "src/components/system/index.tsx",
+    "PanelHeading": "src/components/system/index.tsx",
+    "PayoffChart": "src/components/charts/PayoffChart.tsx",
+    "PayoffChartMarks": "src/components/charts/PayoffChartMarks.tsx",
+    "PayoffControls": "src/components/charts/PayoffControls.tsx",
+    "PayoffTooltipContent": "src/components/charts/PayoffChart.tsx",
+    "PositionCard": "src/components/PositionCard.tsx",
+    "ReauthWizard": "src/components/ReauthWizard.tsx",
+    "RegimeBoard": "src/components/RegimeBoard.tsx",
+    "SectionLabel": "src/components/system/index.tsx",
+    "Separator": "src/components/ui/separator.tsx",
+    "Shell": "src/components/Shell.tsx",
+    "ShellWithRouter": null,
+    "Skeleton": "src/components/ui/skeleton.tsx",
+    "Slider": "src/components/ui/slider.tsx",
+    "Stat": "src/components/system/index.tsx",
+    "Tabs": "src/components/ui/tabs.tsx",
+    "TabsContent": "src/components/ui/tabs.tsx",
+    "TabsList": "src/components/ui/tabs.tsx",
+    "TabsTrigger": "src/components/ui/tabs.tsx",
+    "TermStructureChart": "src/components/picker/TermStructureChart.tsx",
+    "Textarea": "src/components/ui/textarea.tsx",
+    "Toggle": "src/components/ui/toggle.tsx",
+    "ToggleGroup": "src/components/ui/toggle-group.tsx",
+    "ToggleGroupItem": "src/components/ui/toggle-group.tsx",
+    "Tooltip": "src/components/ui/tooltip.tsx",
+    "TooltipContent": "src/components/ui/tooltip.tsx",
+    "TooltipProvider": "src/components/ui/tooltip.tsx",
+    "TooltipTrigger": "src/components/ui/tooltip.tsx",
+    "WhyPanel": "src/components/picker/WhyPanel.tsx"
+  },
+  "libOverrides": {
+    "source-kit.mjs": "`ui/` is a real group here (shadcn atom layer), not a generic container"
+  },
+  "overrides": {
+    "GammaProfile": {
+      "cardMode": "column"
+    },
+    "GexBars": {
+      "cardMode": "column"
+    },
+    "GexByExpiry": {
+      "cardMode": "column"
+    },
+    "MiniLine": {
+      "cardMode": "column"
+    },
+    "PayoffChart": {
+      "cardMode": "column"
+    },
+    "PayoffChartMarks": {
+      "cardMode": "column"
+    },
+    "CandidateTable": {
+      "cardMode": "column"
+    },
+    "TermStructureChart": {
+      "cardMode": "column"
+    },
+    "GuardTag": {
+      "cardMode": "column"
+    },
+    "ChartContainer": {
+      "cardMode": "column"
+    },
+    "ChartLegendContent": {
+      "cardMode": "column"
+    },
+    "ChartTooltipContent": {
+      "cardMode": "column"
+    },
+    "EquityCurve": {
+      "cardMode": "column"
+    },
+    "Dialog": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "DialogClose": {
+      "cardMode": "single",
+      "primaryStory": "Confirm",
+      "viewport": "900x700"
+    },
+    "DialogContent": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "DialogDescription": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "DialogFooter": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "DialogHeader": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "DialogTitle": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "DialogTrigger": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "TooltipContent": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "TooltipProvider": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "TooltipTrigger": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "900x700"
+    },
+    "AuthExpiredBanner": {
+      "cardMode": "single",
+      "primaryStory": "OneExpired",
+      "viewport": "900x700"
+    },
+    "Shell": {
+      "cardMode": "column"
+    }
+  },
+  "dtsPropsFor": {
+    "Panel": "  /** Standard gradient card surface. Accepts every intrinsic <div> prop. */\n  readonly className?: string;\n  readonly children?: React.ReactNode;\n  readonly style?: React.CSSProperties;\n  readonly id?: string;\n  readonly onClick?: React.MouseEventHandler<HTMLDivElement>;",
+    "SectionLabel": "  /** 10px uppercase tracked heading. Accepts every intrinsic <h3> prop. */\n  /** \"dim\" is the fainter section-divider tone; default \"muted\" is the card title. */\n  readonly tone?: \"muted\" | \"dim\";\n  readonly className?: string;\n  readonly children?: React.ReactNode;",
+    "Stat": "  /** Label-over-value KPI cell (MARK / DEBIT / UNREAL / DTE, net-greeks rows). */\n  readonly label: React.ReactNode;\n  readonly value: React.ReactNode;\n  /** Sign colour for the value line, e.g. \"text-up\" | \"text-down\" | \"text-dim\". */\n  readonly valueClassName?: string;\n  readonly className?: string;",
+    "MetricChip": "  /** Bordered pill for the global header strip (SPX, net gamma, flip, book P&L). */\n  readonly label: React.ReactNode;\n  readonly value: React.ReactNode;\n  readonly valueClassName?: string;\n  /** Swaps to the blood-dark danger surface (negative-gamma / loss emphasis). */\n  readonly alert?: boolean;\n  readonly className?: string;",
+    "PanelHeading": "  /** Title row inside a Panel: a SectionLabel, an optional inline badge, an optional right action. */\n  readonly title: React.ReactNode;\n  readonly badge?: React.ReactNode;\n  readonly action?: React.ReactNode;\n  readonly className?: string;",
+    "ChipRail": "  /** Below lg: a scroll-snap horizontal rail with a right-edge peek; at lg: reverts to flex-wrap. */\n  /** Each call site adds \"snap-start shrink-0\" to its own children. */\n  readonly children: React.ReactNode;\n  readonly ariaLabel: string;\n  readonly className?: string;",
+    "ChartContainer": "  /** Recharts responsive wrapper. Also supplies the chart context that ChartTooltipContent\n   *  and ChartLegendContent read — both throw outside a ChartContainer.\n   *  Give it a definite aspect-ratio, never a percentage height (a % height collapses to 0). */\n  readonly config: Record<string, { label?: React.ReactNode; icon?: React.ComponentType; color?: string; theme?: Record<\"light\" | \"dark\", string> }>;\n  readonly children: React.ReactElement;\n  readonly id?: string;\n  readonly className?: string;\n  readonly style?: React.CSSProperties;\n  readonly initialDimension?: { width: number; height: number };",
+    "ChartTooltipContent": "  /** Tooltip body for a recharts chart. Must be rendered inside a ChartContainer. */\n  readonly active?: boolean;\n  readonly payload?: readonly unknown[];\n  readonly label?: unknown;\n  readonly indicator?: \"line\" | \"dot\" | \"dashed\";\n  readonly hideLabel?: boolean;\n  readonly hideIndicator?: boolean;\n  readonly nameKey?: string;\n  readonly labelKey?: string;\n  readonly labelClassName?: string;\n  readonly className?: string;\n  readonly color?: string;",
+    "ChartLegendContent": "  /** Legend body for a recharts chart. Must be rendered inside a ChartContainer. */\n  readonly payload?: readonly unknown[];\n  readonly hideIcon?: boolean;\n  readonly nameKey?: string;\n  readonly verticalAlign?: \"top\" | \"bottom\";\n  readonly className?: string;",
+    "LiveStatusBadge": "  /** Current 3-state stream status. */\n  readonly status: \"live\" | \"quiet\" | \"stalled\";\n  /** Timestamp of the most recently received tick (null until the first tick). */\n  readonly lastTickAt: Date | null;\n  /** Server-pushed RTH truth from the last well-formed ping (null until the first ping). */\n  readonly isRth: boolean | null;\n  readonly hasReceivedFirstTick: boolean;\n  /** True while a manual reconnect is in flight. */\n  readonly isReconnecting: boolean;\n  /** Force-reconnect action (STALLED only). */\n  readonly onReconnect: () => void;",
+    "AuthExpiredBanner": "  /** Takes no props — reads Schwab token freshness from useStatus() itself, and renders\n   *  nothing while both apps are healthy. Needs a QueryClientProvider above it. */",
+    "CotCard": "  /** Takes no props — reads the weekly CFTC series from useCot() itself.\n   *  Needs a QueryClientProvider above it. */",
+    "NewsCard": "  /** Takes no props — reads the latest headlines from useNews() itself.\n   *  Needs a QueryClientProvider above it. */",
+    "RegimeBoard": "  /** Takes no props — reads useRegimeBoard(), useMacro() and usePicker() itself.\n   *  Needs a QueryClientProvider above it. */",
+    "CandidateTable": "  /** ReadonlyArray<PickerCandidate> from @morai/contracts — the ranked engine candidates. */\n  readonly candidates: readonly unknown[];\n  /** User-pasted calendars (same PickerCandidate shape), pinned above candidates in paste order. */\n  readonly pastedCandidates: readonly unknown[];\n  readonly selectedId: string;\n  readonly combinedIds: ReadonlySet<string>;\n  readonly sort: { readonly key: \"score\" | \"debit\" | \"theta\"; readonly dir: \"asc\" | \"desc\" };\n  readonly onSortChange: (key: \"score\" | \"debit\" | \"theta\") => void;\n  /** Receives the PickerCandidate for the clicked row. */\n  readonly onSelect: (candidate: never) => void;\n  readonly onToggleCombine: (candidate: never) => void;\n  readonly onRemovePasted: (candidate: never) => void;\n  /** Scroll-container classes — desktop caps height, mobile scrolls horizontally. */\n  readonly wrapperClassName: string;\n  readonly tableClassName?: string;\n  readonly wrapperTestId?: string;",
+    "EntryExitPlan": "  /** PickerCandidate from @morai/contracts. */\n  readonly candidate: unknown;\n  /** VIX-tiered sizing from the snapshot — omitted renders \"No recommendation\", never a fabricated size. */\n  readonly sizing?: { tier?: \"crisis\" | \"low\" | \"normal\" | \"elevated\"; contracts?: number; vix?: number };",
+    "WhyPanel": "  /** PickerCandidate from @morai/contracts. */\n  readonly candidate: unknown;\n  readonly gex: {\n    netGammaAtSpot: number;\n    nearTerm: { callWall?: number; putWall?: number; flip?: number };\n    flip?: number;\n    callWall?: number;\n    putWall?: number;\n    absGammaStrike?: number;\n  };",
+    "TermStructureChart": "  readonly termStructure: readonly { dte: number; iv: number }[];\n  readonly events: readonly { date: string; name: string }[];\n  /** ISO 8601 snapshot reference date the DTE fields are relative to. */\n  readonly asOf: string;\n  /** PickerCandidate from @morai/contracts — its two legs are pinned on the curve. */\n  readonly candidate: unknown;"
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
