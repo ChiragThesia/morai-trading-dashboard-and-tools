@@ -51,6 +51,7 @@ export type TradeHistoryRoundTrip = {
   readonly openedAt: Date;
   readonly closedAt: Date | null;
   readonly openNetDebit: number;
+  readonly closeNetCredit: number | null; // stored exit credit (points); null while open
   readonly realizedPnl: number | null;
   readonly greeks: TradeHistoryGreeks | null; // open calendars with a snapshot only
 };
@@ -163,6 +164,7 @@ export function makeGetTradeHistoryUseCase(
           openedAt: c.openedAt,
           closedAt: c.closedAt,
           openNetDebit: c.openNetDebit,
+          closeNetCredit,
           realizedPnl,
           greeks: snapshot !== undefined ? toGreeks(snapshot) : null,
         };

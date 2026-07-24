@@ -30,6 +30,7 @@ export const tradeHistoryRoundTrip = z.object({
   openedAt: z.string().datetime(),
   closedAt: z.string().datetime().nullable(),
   openNetDebit: z.number(),
+  closeNetCredit: z.number().nullable(),
   realizedPnl: z.number().nullable(),
   greeks: tradeHistoryGreeks.nullable(),
 });

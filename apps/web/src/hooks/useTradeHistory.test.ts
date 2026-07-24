@@ -54,6 +54,7 @@ const SAMPLE_TRADE_HISTORY = {
       openedAt: "2026-07-23T19:50:00.000Z",
       closedAt: null,
       openNetDebit: 40.08,
+      closeNetCredit: null,
       realizedPnl: null,
       greeks: null,
     },

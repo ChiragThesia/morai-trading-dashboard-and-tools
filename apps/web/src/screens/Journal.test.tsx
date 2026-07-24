@@ -37,6 +37,7 @@ const FIXTURE: TradeHistoryResponse = {
       openedAt: "2026-07-23T19:50:00.000Z",
       closedAt: null,
       openNetDebit: 40.08,
+      closeNetCredit: null,
       realizedPnl: null,
       greeks: {
         netDelta: 1.2,
@@ -60,6 +61,7 @@ const FIXTURE: TradeHistoryResponse = {
       openedAt: "2026-07-16T14:00:00.000Z",
       closedAt: "2026-07-23T19:50:00.000Z",
       openNetDebit: 43.27,
+      closeNetCredit: 41.58,
       realizedPnl: -171.7,
       greeks: null,
     },

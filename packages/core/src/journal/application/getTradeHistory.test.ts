@@ -141,8 +141,12 @@ describe("makeGetTradeHistoryUseCase — Trade Ledger read model", () => {
     // history whose OPEN fills predate registration; see orphan-exclusion LAW).
     const closed = roundTrips[1];
     expect(closed?.realizedPnl).toBeCloseTo((41.58 - 43.27) * 100, 8);
+    expect(closed?.closeNetCredit).toBeCloseTo(41.58, 10);
     expect(closed?.greeks).toBeNull();
     expect(closed?.closedAt?.toISOString()).toBe("2026-07-23T19:50:00.000Z");
+
+    // Open trade has no exit yet — closeNetCredit null, never 0.
+    expect(roundTrips[0]?.closeNetCredit).toBeNull();
 
     expect(totals.realizedPnl).toBeCloseTo(-169, 8);
     expect(vix).toEqual({ value: 18.2, date: "2026-07-23" });
