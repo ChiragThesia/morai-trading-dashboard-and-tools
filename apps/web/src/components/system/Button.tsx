@@ -33,7 +33,11 @@ const BASE =
 const SIZE_CLASS: Record<ButtonSize, string> = {
   xs: "px-[7px] py-0.5 text-[9px]",
   sm: "px-2.5 py-1 text-[10px]",
-  touch: "min-h-11 px-3 py-1.5 text-[11px] lg:min-h-0 lg:px-[7px] lg:py-0.5 lg:text-[9px]",
+  // Mobile-first: the 44px target is the base and a *fine pointer* opts down to the dense
+  // box. Keyed to input modality rather than viewport width — a touchscreen laptop needs
+  // the large target at any width, and a narrow mouse window does not.
+  touch:
+    "min-h-11 px-3 py-1.5 text-[11px] pointer-fine:min-h-0 pointer-fine:px-[7px] pointer-fine:py-0.5 pointer-fine:text-[9px]",
 };
 
 const VARIANT_CLASS: Record<Exclude<ButtonVariant, "toggle">, string> = {
