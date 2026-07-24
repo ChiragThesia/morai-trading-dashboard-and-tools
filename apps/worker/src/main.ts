@@ -39,6 +39,8 @@ import {
   makePostgresGexSnapshotRepo,
   makeCftcCotAdapter,
   makePostgresCotObservationsRepo,
+  makeAlpacaNewsAdapter,
+  makePostgresNewsItemsRepo,
   makeFredSeriesAdapter,
   makeCboeVvixAdapter,
   makeCboeVix9dAdapter,
@@ -68,6 +70,7 @@ import {
   makeWipeDerivedFillsUseCase,
   selectChainSources,
   makeFetchCot,
+  makeFetchNews,
   makeFetchMacroSeries,
   makeComputePickerSnapshotUseCase,
   makeGetPositionsUseCase,
@@ -88,6 +91,7 @@ import type {
   LatestSnapshotForOpenCalendar,
 } from "@morai/core";
 import { makeFetchCotHandler } from "./handlers/fetch-cot.ts";
+import { makeFetchNewsHandler } from "./handlers/fetch-news.ts";
 import { makeFetchSchwabChainHandler } from "./handlers/fetch-schwab-chain.ts";
 import { makeFetchRatesHandler } from "./handlers/fetch-rates.ts";
 import { makeComputeBsmGreeksHandler } from "./handlers/compute-bsm-greeks.ts";
@@ -585,6 +589,29 @@ const fetchCot = makeFetchCot({
 });
 const fetchCotHandler = makeFetchCotHandler({ fetchCot });
 
+// D28: Alpaca News headlines (every 5 min, 24/7). Keys are OPTIONAL — when unset the
+// handler below is a no-op that logs and completes, so the cron never enters a retry
+// storm and deploys never depend on the keys existing.
+const alpacaKeysPresent =
+  config.ALPACA_API_KEY_ID !== undefined &&
+  config.ALPACA_API_KEY_ID !== "" &&
+  config.ALPACA_API_SECRET_KEY !== undefined &&
+  config.ALPACA_API_SECRET_KEY !== "";
+const newsItemsRepo = makePostgresNewsItemsRepo(db);
+const fetchNews = makeFetchNews({
+  fetchNewsHeadlines: makeAlpacaNewsAdapter({
+    fetch: globalThis.fetch,
+    keyId: config.ALPACA_API_KEY_ID,
+    secretKey: config.ALPACA_API_SECRET_KEY,
+  }),
+  persistNewsItems: newsItemsRepo.upsertNewsItems,
+});
+const fetchNewsHandler = alpacaKeysPresent
+  ? makeFetchNewsHandler({ fetchNews })
+  : async (): Promise<void> => {
+      console.warn("fetch-news: ALPACA keys unset — skipping");
+    };
+
 // PICK-01/PICK-03 (19-08): picker engine + economic-events wiring.
 // compute-picker is chain-triggered by compute-gex-snapshot (D-04) — it needs the GEX context
 // (criterion 7) computed just before it runs. fetch-economic-events refreshes economic_events
@@ -766,6 +793,7 @@ await registerAllJobs(boss, {
   syncFills: syncFillsHandler,
   rebuildJournal: rebuildJournalHandler,
   fetchCot: fetchCotHandler,
+  fetchNews: fetchNewsHandler,
   computePicker: computePickerHandler,
   computeExitAdvice: computeExitAdviceHandler,
   fetchEconomicEvents: fetchEconomicEventsHandler,
@@ -777,5 +805,5 @@ await registerAllJobs(boss, {
 });
 
 console.warn(
-  "morai worker: pg-boss started; 18 queues created, 8 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-economic-events, self-heal-journal); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars + repair-journal-history on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 19 queues created, 9 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-news, fetch-economic-events, self-heal-journal); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars + repair-journal-history on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );

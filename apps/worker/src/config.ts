@@ -18,6 +18,9 @@ const workerConfigSchema = z.object({
   // Phase 2 tunables (D-13) — all have defaults, no Railway env required
   // FRED API key — absent → skip fetch, use 4.5% fallback (D-02)
   FRED_API_KEY: z.string().optional(),
+  // D28: Alpaca News key pair — absent → fetch-news no-ops with a log line (never blocks deploys)
+  ALPACA_API_KEY_ID: z.string().optional(),
+  ALPACA_API_SECRET_KEY: z.string().optional(),
   // BSM filter / compute tunables
   BSM_MAX_DTE: z.coerce.number().int().positive().default(90),
   BSM_STRIKE_BAND_PCT: z.coerce.number().positive().default(0.10),

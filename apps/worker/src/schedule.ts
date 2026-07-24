@@ -84,6 +84,7 @@ export type AllHandlers = {
   readonly syncFills: PgBossHandler;
   readonly rebuildJournal: PgBossHandler;
   readonly fetchCot: PgBossHandler;
+  readonly fetchNews: PgBossHandler;
   readonly computePicker: PgBossHandler;
   readonly computeExitAdvice: PgBossHandler;
   readonly fetchEconomicEvents: PgBossHandler;
@@ -126,6 +127,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("sync-fills");
   await boss.createQueue("rebuild-journal"); // on-demand only; no cron
   await boss.createQueue("fetch-cot"); // COT-01: weekly CFTC COT report (Friday 17:00 ET, D-07)
+  await boss.createQueue("fetch-news"); // D28: Alpaca News headlines (every 5 min, 24/7)
   await boss.createQueue("compute-picker"); // 19-08: chain-triggered by compute-gex-snapshot; no cron (D-04)
   await boss.createQueue("compute-exit-advice"); // 26-04: chain-triggered by compute-picker; no cron (EXIT-01)
   await boss.createQueue("fetch-economic-events"); // 19-08: weekly FRED+FOMC events refresh (D-14)
@@ -197,6 +199,15 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
     { tz: "America/New_York" },
   );
 
+  // D28: Alpaca News headlines — every 5 min, 24/7 (wire publishes around the clock; one
+  // request per run, trivially inside Alpaca's 200/min limit). No RTH/holiday gate.
+  await boss.schedule(
+    "fetch-news",
+    "*/5 * * * *", // every 5 min, 24/7
+    null,
+    { tz: "America/New_York" },
+  );
+
   // 19-08 (D-14): weekly economic-events refresh (FRED CPI/NFP release dates + FOMC seed) —
   // identical cron/tz to fetch-cot (own queue name, own handler; CR-01 distinct-key discipline
   // n/a here since this is the ONLY schedule() call for this queue name).
@@ -243,6 +254,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("sync-fills", POLLING_INTERVAL, handlers.syncFills);
   await boss.work("rebuild-journal", POLLING_INTERVAL, handlers.rebuildJournal);
   await boss.work("fetch-cot", POLLING_INTERVAL, handlers.fetchCot);
+  await boss.work("fetch-news", POLLING_INTERVAL, handlers.fetchNews);
   await boss.work("compute-picker", POLLING_INTERVAL, handlers.computePicker);
   await boss.work("compute-exit-advice", POLLING_INTERVAL, handlers.computeExitAdvice);
   await boss.work("fetch-economic-events", POLLING_INTERVAL, handlers.fetchEconomicEvents);
