@@ -168,9 +168,17 @@ updated_at    timestamptz NOT NULL
 ```
 
 **RLS enabled.** Idempotent upsert on `id` with DO UPDATE — Benzinga corrects headlines
-upstream, so a re-fetched id refreshes the row instead of skipping it. Read path is
-latest-N by `published_at DESC`. No retention job: a few hundred rows/day, revisit if the
-table ever matters.
+upstream, so a re-fetched id refreshes the row instead of skipping it. No retention job: a
+few hundred rows/day, revisit if the table ever matters.
+
+**Raw store, filtered read.** The table keeps the whole Alpaca firehose; `getNews` reads the
+latest 300 by `published_at DESC`, drops everything that cannot move SPX implied vol
+(`packages/core/src/journal/domain/news-relevance.ts`), and serves the top 50. The book is
+SPX calendar spreads, delta-neutral, so the bar is index-vol relevance: macro prints,
+index-level moves, and the mega-caps heavy enough to drag SPX. Analyst notes, options-activity
+listicles, and recurring TV segments are dropped. Measured on the first live batch: 187 raw
+rows → 14 kept (7%); analyst notes alone were 66% of the firehose. Filtering on the read
+(same split as `broker_transactions`) means retuning the rule never needs a re-ingest.
 
 ### Analytics tables (analytics context, Phase 6)
 
