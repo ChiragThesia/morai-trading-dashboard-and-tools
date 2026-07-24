@@ -131,6 +131,9 @@ export type {
 export { cotSeriesEntry, cotResponse } from "./cot.ts";
 export type { CotSeriesEntry, CotResponse } from "./cot.ts";
 
+export { newsItem, newsResponse } from "./news.ts";
+export type { NewsItem, NewsResponse } from "./news.ts";
+
 // Macro contracts (Phase 14 — MCP-02: ONE schema source for GET /api/analytics/macro + get_macro MCP tool)
 export { macroSeriesPoint, macroResponse, macroQuery, MACRO_SERIES_IDS, macroSeriesId } from "./macro.ts";
 export type { MacroSeriesPoint, MacroResponse, MacroQuery, MacroSeriesId } from "./macro.ts";
