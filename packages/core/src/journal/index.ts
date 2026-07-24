@@ -146,6 +146,17 @@ export { makeFetchCot } from "./application/fetchCot.ts";
 export type { ForRunningFetchCot } from "./application/fetchCot.ts";
 export { makeGetCotUseCase } from "./application/getCot.ts";
 export type { ForRunningGetCot, CotEntry } from "./application/getCot.ts";
+// D28: market news ports + use-cases
+export type {
+  NewsItemRow,
+  ForFetchingNewsHeadlines,
+  ForPersistingNewsItems,
+  ForReadingNewsItems,
+} from "./application/ports.ts";
+export { makeFetchNews } from "./application/fetchNews.ts";
+export type { ForRunningFetchNews } from "./application/fetchNews.ts";
+export { makeGetNewsUseCase } from "./application/getNews.ts";
+export type { ForRunningGetNews, NewsEntry } from "./application/getNews.ts";
 // Phase 14: FRED macro expansion ports + domain type (MAC-01, MAC-02)
 export type {
   MacroObservationRow,

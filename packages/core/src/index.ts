@@ -398,6 +398,18 @@ export type { ForRunningFetchCot } from "./journal/index.ts";
 export { makeGetCotUseCase } from "./journal/index.ts";
 export type { ForRunningGetCot, CotEntry } from "./journal/index.ts";
 
+// ─── D28: market news ports + use-cases ───────────────────────────────────────
+export type {
+  NewsItemRow,
+  ForFetchingNewsHeadlines,
+  ForPersistingNewsItems,
+  ForReadingNewsItems,
+} from "./journal/index.ts";
+export { makeFetchNews } from "./journal/index.ts";
+export type { ForRunningFetchNews } from "./journal/index.ts";
+export { makeGetNewsUseCase } from "./journal/index.ts";
+export type { ForRunningGetNews, NewsEntry } from "./journal/index.ts";
+
 // ─── Phase 14: FRED macro expansion ports + domain type (MAC-01, MAC-02) ──────
 // New macro_observations table (D-01); rate/BSM ports above stay untouched (D-02).
 export type {

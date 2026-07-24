@@ -824,6 +824,54 @@ export type ForReadingMacroObservations = () => Promise<
   Result<ReadonlyArray<MacroObservationRow>, StorageError>
 >;
 
+// ─── D28: market news ports (news_items) ─────────────────────────────────────
+// Mirrors the COT fetch/persist/read trio. Headlines come from the Alpaca News API
+// (Benzinga wire); timestamps are the VENDOR's publish/update times — no injected clock.
+
+/**
+ * NewsItemRow — one news_items row (D28).
+ * `id` is Alpaca's numeric news id stringified at the adapter (stable upsert key).
+ */
+export type NewsItemRow = {
+  readonly id: string;
+  readonly headline: string;
+  readonly summary: string; // may be empty — not every wire item carries a summary
+  readonly source: string; // e.g. 'benzinga'
+  readonly url: string | null;
+  readonly symbols: ReadonlyArray<string>;
+  readonly publishedAt: Date; // vendor created_at
+  readonly updatedAt: Date; // vendor updated_at — headlines get corrected upstream
+};
+
+/**
+ * ForFetchingNewsHeadlines — fetch the latest headline batch, newest first (D28).
+ * Implemented by the Alpaca News HTTP adapter and in-memory twin.
+ * No fallback: missing keys, network, non-2xx, and parse failures all return
+ * err(FetchError) — never a fabricated batch.
+ */
+export type ForFetchingNewsHeadlines = () => Promise<
+  Result<ReadonlyArray<NewsItemRow>, FetchError>
+>;
+
+/**
+ * ForPersistingNewsItems — bulk upsert news_items rows (D28).
+ * Idempotent: ON CONFLICT (id) DO UPDATE — Benzinga corrects headlines upstream, so a
+ * re-fetched id refreshes the row instead of skipping it.
+ * Implemented by the Postgres repo and in-memory twin.
+ */
+export type ForPersistingNewsItems = (
+  rows: ReadonlyArray<NewsItemRow>,
+) => Promise<Result<void, StorageError>>;
+
+/**
+ * ForReadingNewsItems — list the latest `limit` news_items by published_at DESC (D28).
+ * Returns empty array when no rows exist.
+ * Implemented by the Postgres repo and in-memory twin.
+ */
+export type ForReadingNewsItems = (
+  limit: number,
+) => Promise<Result<ReadonlyArray<NewsItemRow>, StorageError>>;
+
 // ─── Phase 20: RULE-01 annotation ports (calendar_event_annotations) ──────────
 // Canonical core ports for the calendar_event_annotations storage layer shipped in plan
 // 20-08. The Postgres repo and in-memory twin (packages/adapters) already implement
