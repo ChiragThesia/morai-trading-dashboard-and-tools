@@ -461,6 +461,60 @@ describe("resolveFillMatches", () => {
     expect(resolved).toEqual({ kind: "no-match", fill });
   });
 
+  it("a ROLL order anchoring TWO calendars still resolves the shared leg — candidate ∩ anchors is the tiebreak (2026-07-24 regression)", () => {
+    // The real 2026-07-23 roll: one broker order closes the 7500 calendar (CAL_C, two
+    // unambiguous legs) AND opens the new 7400 calendar (CAL_B via its unique front leg +
+    // a 31Aug back leg shared with the older closed 7400 calendar CAL_A). The order's
+    // anchor set is {CAL_C, CAL_B} — two calendars, legitimately. The shared leg's
+    // candidates are [CAL_A, CAL_B]; only CAL_B is anchored by this order, so it wins.
+    const CAL_C = "cal-C";
+    const closeFront = makeRawFill({ id: "c1", occSymbol: "SPXW  260807P07500000", orderId: "roll-1" });
+    const closeBack = makeRawFill({ id: "c2", occSymbol: "SPXW  260831P07500000", orderId: "roll-1" });
+    const openFront = makeRawFill({ id: "o1", occSymbol: "SPXW  260811P07400000", orderId: "roll-1" });
+    const openSharedBack = makeRawFill({ id: "o2", occSymbol: "SPXW  260831P07400000", orderId: "roll-1" });
+
+    const resolved = resolveFillMatches([
+      { fill: closeFront, candidates: [{ calendarId: CAL_C, legOccSymbol: "SPXW  260807P07500000" }] },
+      { fill: closeBack, candidates: [{ calendarId: CAL_C, legOccSymbol: "SPXW  260831P07500000" }] },
+      { fill: openFront, candidates: [{ calendarId: CAL_B, legOccSymbol: "SPXW  260811P07400000" }] },
+      {
+        fill: openSharedBack,
+        candidates: [
+          { calendarId: CAL_A, legOccSymbol: "SPXW  260831P07400000" },
+          { calendarId: CAL_B, legOccSymbol: "SPXW  260831P07400000" },
+        ],
+      },
+    ]);
+
+    expect(resolved[3]).toEqual({
+      kind: "matched",
+      fill: openSharedBack,
+      leg: { calendarId: CAL_B, legOccSymbol: "SPXW  260831P07400000" },
+    });
+  });
+
+  it("ambiguous stays ambiguous when MULTIPLE candidates sit in the order's anchor set", () => {
+    // Pathological: both candidate calendars are anchored by the same order — no unique
+    // intersection → never guess, keep parking.
+    const anchorA = makeRawFill({ id: "a", occSymbol: BACK_A, orderId: "order-x" });
+    const anchorB = makeRawFill({ id: "b", occSymbol: BACK_B, orderId: "order-x" });
+    const shared = makeRawFill({ id: "s", occSymbol: SHARED, orderId: "order-x" });
+
+    const resolved = resolveFillMatches([
+      { fill: anchorA, candidates: [{ calendarId: CAL_A, legOccSymbol: BACK_A }] },
+      { fill: anchorB, candidates: [{ calendarId: CAL_B, legOccSymbol: BACK_B }] },
+      {
+        fill: shared,
+        candidates: [
+          { calendarId: CAL_A, legOccSymbol: SHARED },
+          { calendarId: CAL_B, legOccSymbol: SHARED },
+        ],
+      },
+    ]);
+
+    expect(resolved[2]?.kind).toBe("ambiguous");
+  });
+
   it("ambiguous fill resolved via an anchor leg in the SAME order (round 5 fix)", () => {
     // order-1: CAL_A's back leg (unambiguous, the anchor) + the shared front leg (ambiguous).
     const backFill = makeRawFill({ id: "back-1", occSymbol: BACK_A, orderId: "order-1" });

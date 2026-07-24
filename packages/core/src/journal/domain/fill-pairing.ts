@@ -257,12 +257,19 @@ export function resolveFillMatches(
       if (only === undefined) return { kind: "no-match", fill };
       return { kind: "matched", fill, leg: only };
     }
-    // Ambiguous: try to resolve via this fill's order anchor.
+    // Ambiguous: try to resolve via this fill's order anchors. A ROLL order legitimately
+    // anchors TWO calendars (it closes one and opens another in a single order —
+    // 2026-07-24 regression: the old size===1 gate gave up and orphan-parked the new
+    // calendar's shared back leg forever). The tiebreak is the candidate ∩ anchors
+    // intersection: match only when exactly ONE candidate is anchored by this order —
+    // multiple anchored candidates stay ambiguous (never guess, D-05/WR-01).
     const anchors = anchorsByOrder.get(fill.orderId);
-    if (anchors !== undefined && anchors.size === 1) {
-      const [anchorCalendarId] = anchors;
-      const resolvedLeg = candidates.find((c) => c.calendarId === anchorCalendarId);
-      if (resolvedLeg !== undefined) return { kind: "matched", fill, leg: resolvedLeg };
+    if (anchors !== undefined) {
+      const anchored = candidates.filter((c) => anchors.has(c.calendarId));
+      const only = anchored[0];
+      if (anchored.length === 1 && only !== undefined) {
+        return { kind: "matched", fill, leg: only };
+      }
     }
     return { kind: "ambiguous", fill, candidates };
   });
