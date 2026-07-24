@@ -443,6 +443,31 @@ export const cotObservations = pgTable(
   ],
 ).enableRLS();
 
+// ─── 15b. news_items — Alpaca News headlines (D28) ───────────────────────────
+// One row per Alpaca news id (stringified numeric id = PK = upsert key).
+// ON CONFLICT (id) DO UPDATE — Benzinga corrects headlines upstream, so a
+// re-fetched id refreshes the row. published_at/updated_at are the VENDOR's
+// timestamps; created_at is our ingest clock. Read path: published_at DESC.
+
+export const newsItems = pgTable("news_items", {
+  /** Alpaca's numeric news id, stored as text (stable upsert key). */
+  id: text("id").primaryKey(),
+  headline: text("headline").notNull(),
+  /** May be empty — not every wire item carries a summary. */
+  summary: text("summary").notNull(),
+  /** Wire source, e.g. 'benzinga'. */
+  source: text("source").notNull(),
+  /** Link out to the article; NULL when the wire item has none. */
+  url: text("url"),
+  /** Tagged tickers, string[] — empty for untagged macro items. */
+  symbols: jsonb("symbols").$type<ReadonlyArray<string>>().notNull(),
+  /** Vendor publish time (Alpaca created_at). */
+  publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+  /** Vendor correction time (Alpaca updated_at). */
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
 // ─── 16. macro_observations — FRED/CBOE macro series (Phase 14) ──────────────
 // One row per (date, series_id). Composite time-leading PK is the MAC-01
 // idempotency key (D-05) — a second same-day fetch upserts, never duplicates.

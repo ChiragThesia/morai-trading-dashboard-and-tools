@@ -114,6 +114,11 @@ export type { PostgresCotObservationsRepo } from "./postgres/repos/cot-observati
 // Phase 13 (13-03): in-memory twin for cot-observations (architecture-boundaries §8)
 export { makeMemoryCotObservationsRepo } from "./memory/cot-observations.ts";
 export type { MemoryCotObservationsRepo } from "./memory/cot-observations.ts";
+// D28: news-items repo — ForPersistingNewsItems + ForReadingNewsItems (+ in-memory twin, §8)
+export { makePostgresNewsItemsRepo } from "./postgres/repos/news-items.ts";
+export type { PostgresNewsItemsRepo } from "./postgres/repos/news-items.ts";
+export { makeMemoryNewsItemsRepo } from "./memory/news-items.ts";
+export type { MemoryNewsItemsRepo } from "./memory/news-items.ts";
 // Phase 14 (14-03): macro-observations repo — ForPersistingMacroObservation + ForReadingMacroObservations (MAC-01)
 export { makePostgresMacroObservationsRepo } from "./postgres/repos/macro-observations.ts";
 export type { PostgresMacroObservationsRepo } from "./postgres/repos/macro-observations.ts";
