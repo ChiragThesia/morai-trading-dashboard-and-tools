@@ -58,7 +58,11 @@ export const token = {
   },
   "banner": {
     "dangerSurface": "#180f10",
-    "warnSurface": "#231a08"
+    "dangerBorder": "#5a2b2e",
+    "dangerText": "#ef5350",
+    "warnSurface": "#231a08",
+    "warnBorder": "#5a4a1f",
+    "warnText": "#ffb74d"
   }
 } as const;
 

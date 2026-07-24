@@ -3,6 +3,7 @@ import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ReferenceDot } from "rech
 import { ChartContainer } from "../ui/chart.tsx";
 import type { ChartConfig } from "../ui/chart.tsx";
 import type { GexSnapshotEntry } from "@morai/contracts";
+import { token } from "@/design/tokens.generated.ts";
 
 /**
  * GammaProfile — Net dealer gamma profile chart.
@@ -38,11 +39,11 @@ interface GammaProfileProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TEAL = "#26a69a";
-const CORAL = "#ef5350";
-const AMBER = "#f0b429";
-const BLUE = "#5b9cf6";
-const ZERO_LINE = "#27313f";
+const TEAL = token.value.positive;
+const CORAL = token.value.negative;
+const AMBER = token.accent.warning;
+const BLUE = token.accent.info;
+const ZERO_LINE = token.border.strong;
 
 const FULL_WIDTH = 720;
 const FULL_HEIGHT = 230;
@@ -118,7 +119,7 @@ export function GammaProfile({
           hide={compact}
           ticks={[minSpot, maxSpot]}
           tickFormatter={(v: number): string => v.toFixed(0)}
-          tick={{ fill: "#566273", fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+          tick={{ fill: token.text.tertiary, fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
           tickLine={false}
           axisLine={false}
         />

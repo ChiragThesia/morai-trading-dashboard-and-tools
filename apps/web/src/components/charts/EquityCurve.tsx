@@ -3,6 +3,7 @@ import { curveMonotoneX } from "@visx/curve";
 import { scaleLinear, scalePoint } from "@visx/scale";
 import { LinearGradient } from "@visx/gradient";
 import { Group } from "@visx/group";
+import { token } from "@/design/tokens.generated.ts";
 
 /**
  * EquityCurve — P&L equity curve chart for the Overview P&L card.
@@ -49,7 +50,7 @@ export function EquityCurve({
   const finalValue = cumulative[cumulative.length - 1] ?? 0;
   const isNegative = finalValue < 0;
 
-  const lineColor = isNegative ? "#ef5350" : "#26a69a";
+  const lineColor = isNegative ? token.value.negative : token.value.positive;
   const gradientId = `equity-grad-${isNegative ? "neg" : "pos"}`;
 
   const minVal = Math.min(...cumulative);

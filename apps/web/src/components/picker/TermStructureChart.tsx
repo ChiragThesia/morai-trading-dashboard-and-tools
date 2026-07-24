@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip.tsx";
 import type { PickerCandidate, PickerEvent, TermStructurePoint } from "@morai/contracts";
+import { token } from "@/design/tokens.generated.ts";
 
 const W = 760;
 const H = 320;
@@ -41,13 +42,13 @@ export const DTE_MAX = 82;
 export const IV_MIN = 0.08;
 export const IV_MAX = 0.155;
 
-export const CORAL = "#ef5350";
-export const TEAL = "#26a69a";
-export const BLUE = "#5b9cf6";
-export const AMBER = "#f0b429";
-export const GRID_LINE = "#222839";
-export const TERM_LINE = "#9aa3b8";
-export const AXIS_LABEL = "#67708a";
+export const CORAL = token.value.negative;
+export const TEAL = token.value.positive;
+export const BLUE = token.accent.info;
+export const AMBER = token.accent.warning;
+export const GRID_LINE = token.chart.grid;
+export const TERM_LINE = token.chart.termLine;
+export const AXIS_LABEL = token.chart.axisLabelAlt;
 export const MONO = "JetBrains Mono, monospace";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;

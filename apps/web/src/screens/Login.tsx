@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "../lib/supabase.ts";
 import { Input } from "../components/ui/input.tsx";
 import { Button, Panel } from "../components/system/index.tsx";
+import { token } from "@/design/tokens.generated.ts";
 
 /**
  * Login — Supabase Auth login screen per the locked UI-SPEC interaction contract.
@@ -86,7 +87,7 @@ export function Login() {
         alignItems: "center",
         justifyContent: "center",
         background:
-          "radial-gradient(1100px 560px at 80% -10%, #141b29 0%, rgba(10,14,20,0) 58%), #0a0e14",
+          `radial-gradient(1100px 560px at 80% -10%, ${token.surface.glow} 0%, rgba(10,14,20,0) 58%), ${token.surface.base}`,
         padding: "24px",
       }}
     >

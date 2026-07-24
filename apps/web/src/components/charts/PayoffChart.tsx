@@ -55,6 +55,7 @@ import { findZeroCrossings } from "../../lib/scenario-engine.ts";
 import type { PayoffPoint } from "../../lib/scenario-engine.ts";
 import { PayoffChartMarks, EDGE_ARROW_LANE_Y } from "./PayoffChartMarks.tsx";
 import type { PayoffChartMarksGex, PayoffChartMarksProps } from "./PayoffChartMarks.tsx";
+import { token } from "@/design/tokens.generated.ts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,19 +167,19 @@ const PAD = { left: 56, right: 14, top: 14, bottom: 24 };
 const INNER_W = SVG_W - PAD.left - PAD.right;
 const INNER_H = SVG_H - PAD.top - PAD.bottom;
 
-const VIOLET = "#a78bfa";
-const TEAL = "#26a69a";
-const CORAL = "#ef5350";
-const AMBER = "#f0b429";
-const BLUE = "#5b9cf6";
-const GRAY_MUTED = "#7b8696";
-const ZERO_LINE = "#46556a";
-const GRID_LINE = "#19212e";
-const CROSSHAIR_COLOR = "#8a98ad";
-const AXIS_LABEL = "#566273";
+const VIOLET = token.accent.primary;
+const TEAL = token.value.positive;
+const CORAL = token.value.negative;
+const AMBER = token.accent.warning;
+const BLUE = token.accent.info;
+const GRAY_MUTED = token.text.secondary;
+const ZERO_LINE = token.chart.zeroLineAlt;
+const GRID_LINE = token.chart.gridDeep;
+const CROSSHAIR_COLOR = token.chart.crosshair;
+const AXIS_LABEL = token.text.tertiary;
 const MONO = "JetBrains Mono, monospace";
 
-const FAN_COLORS = ["#7c6fd6", "#6f86c9", "#5f93b8"] as const;
+const FAN_COLORS = [token.chart.seriesPurple, token.chart.seriesIndigo, token.chart.seriesSteel] as const;
 
 const chartConfig = {} satisfies ChartConfig;
 
@@ -574,7 +575,7 @@ export function PayoffTooltipContent({
       data-testid="payoff-tooltip"
       style={{
         background: "rgba(8,11,16,0.97)",
-        border: "1px solid #27313f",
+        border: `1px solid ${token.border.strong}`,
         borderRadius: 8,
         padding: "7px 9px",
         fontSize: 10.5,
@@ -594,22 +595,22 @@ export function PayoffTooltipContent({
       >
         {fmtPlExact(pl)}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: token.text.secondary }}>
         <span>SPX</span>
-        <span style={{ color: "#d6dbe4", fontWeight: 500 }}>{Math.round(hoveredSpot)}</span>
+        <span style={{ color: token.text.primary, fontWeight: 500 }}>{Math.round(hoveredSpot)}</span>
       </div>
       {gex !== null && gex.putWall !== null && (
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: token.text.secondary }}>
           <span>vs put wall</span>
-          <span style={{ color: "#d6dbe4", fontWeight: 500 }}>
+          <span style={{ color: token.text.primary, fontWeight: 500 }}>
             {((hoveredSpot - gex.putWall) >= 0 ? "+" : "") + (hoveredSpot - gex.putWall).toFixed(0)}
           </span>
         </div>
       )}
       {gex !== null && gex.callWall !== null && (
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: "#7b8696" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, color: token.text.secondary }}>
           <span>vs call wall</span>
-          <span style={{ color: "#d6dbe4", fontWeight: 500 }}>
+          <span style={{ color: token.text.primary, fontWeight: 500 }}>
             {((hoveredSpot - gex.callWall) >= 0 ? "+" : "") + (hoveredSpot - gex.callWall).toFixed(0)}
           </span>
         </div>
@@ -960,7 +961,7 @@ export function PayoffChart({
                   dataKey="pl"
                   type="monotone"
                   dot={false}
-                  stroke={FAN_COLORS[i] ?? "#6f86c9"}
+                  stroke={FAN_COLORS[i] ?? token.chart.seriesIndigo}
                   strokeWidth={1.3}
                   strokeOpacity={0.85}
                   isAnimationActive={false}
@@ -1113,7 +1114,7 @@ export function PayoffChart({
               ifOverflow="hidden"
               r={4.5}
               fill={BLUE}
-              stroke="#0a0e14"
+              stroke={token.surface.base}
               strokeWidth={2}
             />
 

@@ -38,6 +38,7 @@ import type { LiveStreamStatus } from "../../hooks/useLiveStream.ts";
 import { parseTosOrder } from "../../lib/tos-parser.ts";
 import { parsedCalendarToPickerCandidate } from "../../lib/parsed-calendar-to-candidate.ts";
 import type { PayoffChartToggles } from "../../components/charts/PayoffChart.tsx";
+import { token } from "@/design/tokens.generated.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -46,8 +47,8 @@ const DEFAULT_DIV = 0.013;
 
 /** ANLZ-02 picker curve colors (UI-SPEC Color table — distinct from both Overview's TOS
  * override and the old Analyzer's own defaults). */
-export const TODAY_CURVE_COLOR = "#5b9cf6";
-export const EXPIRATION_CURVE_COLOR = "#a78bfa";
+export const TODAY_CURVE_COLOR = token.accent.info;
+export const EXPIRATION_CURVE_COLOR = token.accent.primary;
 
 /** Id prefix for a user-pasted calendar (multi-paste redesign: several can coexist, each with a
  * unique `pasted-${n}` id assigned in paste order, kept for provenance even when the server

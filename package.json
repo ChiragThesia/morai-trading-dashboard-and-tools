@@ -9,6 +9,7 @@
     "typecheck": "tsc --build --force",
     "lint": "eslint .",
     "migrate": "bun run apps/worker/src/migrate.ts",
+    "tokens": "bun run --filter @morai/web tokens",
     "design-sync": "bash .design-sync/resync.sh"
   },
   "devDependencies": {

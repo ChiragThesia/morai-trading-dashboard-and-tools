@@ -1,6 +1,7 @@
 import { useStatus } from "../hooks/useStatus.ts";
 import type { ReauthApp } from "../hooks/useReauth.ts";
 import { ReauthWizard } from "./ReauthWizard.tsx";
+import { token } from "@/design/tokens.generated.ts";
 
 /**
  * AuthExpiredBanner — UI-02: fixed bottom banner when Schwab auth has expired.
@@ -79,8 +80,8 @@ export function AuthExpiredBanner() {
           left: 0,
           right: 0,
           zIndex: 100,
-          backgroundColor: "#180f10",
-          borderTop: "1px solid #5a2b2e",
+          backgroundColor: token.banner.dangerSurface,
+          borderTop: `1px solid ${token.banner.dangerBorder}`,
           paddingTop: "8px",
           paddingLeft: "16px",
           paddingRight: "16px",
@@ -88,7 +89,7 @@ export function AuthExpiredBanner() {
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
           fontSize: "12px",
           lineHeight: 1.45,
-          color: "#ef5350",
+          color: token.value.negative,
         }}
       >
         Schwab auth expired. Live data may be stale.
@@ -107,8 +108,8 @@ export function AuthExpiredBanner() {
           left: 0,
           right: 0,
           zIndex: 100,
-          backgroundColor: "#231a08",
-          borderTop: "1px solid #5a4a1f",
+          backgroundColor: token.banner.warnSurface,
+          borderTop: `1px solid ${token.banner.warnBorder}`,
           paddingTop: "8px",
           paddingLeft: "16px",
           paddingRight: "16px",
@@ -116,7 +117,7 @@ export function AuthExpiredBanner() {
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
           fontSize: "12px",
           lineHeight: 1.45,
-          color: "#ffb74d",
+          color: token.banner.warnText,
         }}
       >
         {isMarketExpired

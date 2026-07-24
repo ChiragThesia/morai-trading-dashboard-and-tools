@@ -71,7 +71,9 @@
       "$type": "color",
       "$description": "Banner surfaces, previously inline-styled in AuthExpiredBanner.",
       "dangerSurface": { "$value": "#180f10", "$description": "Auth-expired banner background." },
-      "warnSurface": { "$value": "#231a08", "$description": "Near-expiry banner background." }
+      "dangerBorder": { "$value": "#5a2b2e", "$description": "Auth-expired banner top border." },
+      "warnSurface": { "$value": "#231a08", "$description": "Near-expiry banner background." },
+      "warnBorder": { "$value": "#5a4a1f", "$description": "Near-expiry banner top border." }
     },
 
     "font": {
@@ -148,8 +150,13 @@
     },
     "banner": {
       "$type": "color",
+      "$description": "AuthExpiredBanner renders with inline styles (it is position:fixed chrome outside the Tailwind-styled tree), so it needs values.",
       "dangerSurface": { "$value": "{primitive.alert.dangerSurface}" },
-      "warnSurface": { "$value": "{primitive.alert.warnSurface}" }
+      "dangerBorder": { "$value": "{primitive.alert.dangerBorder}" },
+      "dangerText": { "$value": "{primitive.coral.500}" },
+      "warnSurface": { "$value": "{primitive.alert.warnSurface}" },
+      "warnBorder": { "$value": "{primitive.alert.warnBorder}" },
+      "warnText": { "$value": "{primitive.amber.300}" }
     }
   }
 }

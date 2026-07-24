@@ -4,6 +4,7 @@ import { ChartContainer } from "../ui/chart.tsx";
 import type { ChartConfig } from "../ui/chart.tsx";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.tsx";
 import type { GexSnapshotEntry } from "@morai/contracts";
+import { token } from "@/design/tokens.generated.ts";
 
 /**
  * GexBars — GEX by-strike horizontal bar chart with GEX/OI/Volume toggle.
@@ -49,12 +50,12 @@ interface GexBarsProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TEAL = "#26a69a";
-const CORAL = "#ef5350";
-const BLUE = "#5b9cf6";
-const AMBER = "#f0b429";
-const ZERO_LINE = "#27313f";
-const TICK_STYLE = { fill: "#566273", fontSize: 9 };
+const TEAL = token.value.positive;
+const CORAL = token.value.negative;
+const BLUE = token.accent.info;
+const AMBER = token.accent.warning;
+const ZERO_LINE = token.border.strong;
+const TICK_STYLE = { fill: token.text.tertiary, fontSize: 9 };
 
 // jsdom/test fallback width when `width` is the responsive "100%" default — inert in the
 // browser, where the real ResponsiveContainer measures and overrides it (33-03/33-04 finding).
