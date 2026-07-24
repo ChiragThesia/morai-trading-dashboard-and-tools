@@ -33,6 +33,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D24 | RULE-01 annotation storage | `calendar_event_annotations` keyed by `fill_ids_hash`, deliberately NO foreign key to `calendar_events` | Low (plain table, no FK to manage) | `rebuildJournal` stops being delete-then-reinsert |
 | D25 | Runtime rule overrides (Phase 29) | `rule_overrides` — single-row JSONB deltas-over-defaults table, keyed by fixed literal id `"default"` (mirrors `broker_tokens.app_id`, no DB CHECK constraint). **Overrides Phase 28 T-28-11** — constants stay the DEFAULTS; the row is an explicit layer merged over them at consumption time. | Low (drop the row, code defaults remain authoritative) | A curated knob needs per-calendar or per-user scope |
 | D27 | Live SPX spot + VIX-family fan-out; DISPLAY-LIVE/GATE-EOD law (Phase 38) | SPX spot rides the EXISTING greeks pipe (zero new Schwab calls); VIX family (`$VIX`/`$VVIX`/`$VIX9D`/`$VIX3M`) via a new sidecar `get_quotes` poll (~20s). Server fans out two new on-change-throttled SSE lanes (`spot`, `indices`) beside the existing ticks lane. **Law**: only DISPLAYED values ever live-tint — every gate (entry-gate verdict, stored `indicator.band`, hy-oas/FRED) keeps consuming stored EOD data, untouched. | Low (additive SSE lanes; sidecar poll loop) | A 5th regime indicator needs a live source OR the poll interval needs to shrink below ~20s |
+| D28 | Market news headlines vendor | **Alpaca News API** (Benzinga content) — REST poll on a `fetch-news` cron → `news_items` table → `GET /api/analytics/news` + `get_news` MCP tool. Schwab Trader API exposes no news endpoint (the TOS feed is display-only vendor licensing) | Low (one HTTP adapter behind `ForFetchingNewsHeadlines`; keys optional) | Alpaca drops free news access OR headline latency proves too slow vs TOS → Benzinga direct (paid) |
 
 ## D1 — Bun
 
@@ -552,3 +553,27 @@ to shrink (e.g., a future feature wants sub-5s VIX-family freshness).
 (38-CONTEXT.md, 38-RESEARCH.md, 38-A1-PROBE.md); `apps/sidecar/streamer.py` (`start_indices_poll`);
 `apps/server/src/adapters/http/stream-fan-out.ts`; `apps/web/src/hooks/useLiveStream.ts`;
 `apps/web/src/screens/overview-mobile/useOverviewModel.ts`; `apps/web/src/components/RegimeBoard.tsx`.
+
+## D28 — Alpaca News API for market headlines
+
+**Why**: The TOS news gadget is licensed vendor content (Dow Jones Newswires, MT Newswires,
+Benzinga) that Schwab displays but does not expose through the Trader API — there is no news
+endpoint or streamer service, so the sidecar cannot pull it. Alpaca relays the same Benzinga
+wire through its News API, free with a paper account. That gives the Overview page the closest
+match to what TOS shows without a paid vendor contract.
+
+**Shape**: `fetch-news` cron (every 5 min, 24/7) → `makeAlpacaNewsAdapter` (REST
+`GET data.alpaca.markets/v1beta1/news`, key-pair headers) → idempotent upsert into
+`news_items` → `GET /api/analytics/news` + `get_news` MCP tool → `NewsCard` in the Overview
+market rail. Headlines and summaries only — article bodies are not fetched or stored.
+
+**Key handling**: `ALPACA_API_KEY_ID` / `ALPACA_API_SECRET_KEY` are OPTIONAL worker env vars.
+When unset the composition root wires a no-op handler that logs and completes — no retry
+storms, and deploys never depend on the keys existing. The server never sees the keys; it only
+reads the table.
+
+**Swap cost**: Low. One HTTP adapter behind the `ForFetchingNewsHeadlines` port; a Benzinga
+direct or dxFeed adapter drops in with a composition-root wiring change only.
+
+**Revisit trigger**: Alpaca drops free news access, or headline latency vs TOS proves too slow
+for real use → Benzinga direct (paid).

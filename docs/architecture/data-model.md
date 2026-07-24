@@ -151,6 +151,27 @@ DGS3MO is double-written — once here (raw, source `fred`) and once in `rate_ob
 second run for the same date is a no-op for unchanged values (D-05 self-healing incremental
 fetch). ENABLE ROW LEVEL SECURITY per the standard observation-table convention.
 
+### `news_items` — market headlines from the Alpaca News API (D28)
+
+Written by the `fetch-news` cron ([jobs.md](jobs.md)); backs `GET /api/analytics/news` and the
+`get_news` MCP tool.
+
+```
+id            text PK            -- Alpaca's numeric news id, stored as text
+headline      text NOT NULL
+summary       text               -- may be empty; article bodies are never fetched
+source        text NOT NULL      -- e.g. 'benzinga'
+url           text               -- link out to the article
+symbols       jsonb NOT NULL     -- tagged tickers, string[]
+published_at  timestamptz NOT NULL
+updated_at    timestamptz NOT NULL
+```
+
+**RLS enabled.** Idempotent upsert on `id` with DO UPDATE — Benzinga corrects headlines
+upstream, so a re-fetched id refreshes the row instead of skipping it. Read path is
+latest-N by `published_at DESC`. No retention job: a few hundred rows/day, revisit if the
+table ever matters.
+
 ### Analytics tables (analytics context, Phase 6)
 
 Three append-only observation tables, written by the `compute-analytics` job after each

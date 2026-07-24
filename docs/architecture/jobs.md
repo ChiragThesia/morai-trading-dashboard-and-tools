@@ -29,6 +29,7 @@ handlers are thin inbound adapters calling application use-cases.
 | `sync-fills` | `*/10 9-16 * * 1-5` (every 10 min RTH) | Schwab transactions → `fills`/`orders`; pair into calendar OPEN/CLOSE/ROLL events |
 | `refresh-tokens` | RETIRED (GW-03) | Token refresh moved to the schwab-py sidecar (Phase 11 cutover); removed from the trigger surface in Phase 15 — see section below |
 | `fetch-rates` | `0 9 * * 1-5` + `30 18 * * 1-5` | FRED DGS3MO daily (BSM rate) + expanded macro fetch (Phase 14) |
+| `fetch-news` | `*/5 * * * *` (24/7) | Alpaca News API (Benzinga wire, D28) → idempotent upsert into `news_items`; headlines + summaries only. No-op with a log line when the optional Alpaca keys are unset |
 | `compute-analytics` | chain-triggered only (NO cron) | Reads `leg_observations` + `calendar_snapshots`; writes `skew_observations`, `risk_reversal_observations`, `term_structure_observations` |
 | `compute-exit-advice` | chain-triggered only (NO cron) | Thin terminal handler: reads open calendars + the latest snapshot + economic events + the previous cycle's verdict per open calendar, evaluates the exit rule ladder ([exit-rules.md](exit-rules.md)), and appends one `exit_verdicts` row per calendar. Terminal — nothing enqueues after it |
 | `rebuild-journal` | on-demand only (no schedule) | Reconstructs OPEN/CLOSE/ROLL events for one calendar from fills; idempotent delete-then-reinsert |
