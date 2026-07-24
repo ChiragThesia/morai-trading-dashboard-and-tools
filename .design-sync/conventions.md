@@ -19,31 +19,60 @@ There is **no provider to wrap your app in** for styling — the tokens come fro
 
 ### The styling idiom
 
-Tailwind v4 utilities over a locked token palette. **Never hardcode a hex value and
+Tailwind v4 utilities over a three-tier token system. **Never hardcode a hex value and
 never set colour or font in an inline style** — inline styles are for layout only
-(grid spans, fixed chart widths). Use these families:
+(grid spans, fixed chart widths). Use the **semantic** tier:
 
 | Purpose | Utilities |
 |---|---|
-| Surfaces | `bg-bg` `bg-panel` `bg-panel2` `bg-raise` `bg-card` `bg-muted` |
-| Borders / rules | `ring-line` `ring-line2` `border-line2` |
-| Text | `text-txt` (primary) `text-muted-foreground` (labels) `text-dim` (faint) `text-foreground` |
-| Signed values | `text-up` (teal, gains) `text-down` (coral, losses) |
-| Accents | `text-violet` `text-amber` `text-blue` `text-cyan`, and `bg-violet` `bg-amber` `bg-blue` `bg-up` `bg-down` `bg-downd` |
+| Surfaces | `surface-base` (page) `surface-sunken` (recessed) `surface-raised` (card) `surface-overlay` (control/popover) |
+| Borders / rules | `line-subtle` (hairline) `line-strong` (input outline) |
+| Text | `fg-primary` (values) `fg-secondary` (labels) `fg-tertiary` (faint/stale) |
+| Signed values | `value-positive` (teal, gains) `value-negative` (coral, losses), plus `value-positive-surface` / `value-negative-surface` tints |
+| Accents | `accent-primary` (violet — actions, focus, selection) `accent-primary-surface` `accent-warning` (amber — events/guards) `accent-info` (blue — spot) `accent-highlight` (cyan) |
 | Type | `font-display` (Space Grotesk — headings/labels) `font-mono` (JetBrains Mono — **all numbers**) `tabular-nums` |
+
+Each name works with every colour prefix: `bg-surface-raised`, `text-fg-secondary`,
+`border-line-subtle`, `ring-accent-primary`, `fill-value-positive`, and so on. The whole
+tier is safelisted, so a name from this table always resolves — you are not limited to
+what the app happens to use today.
 
 Every number in this product is monospace and tabular. The body default is already
 `font-mono` at 12px.
 
-The same values exist as CSS variables when you need them raw: `--color-bg`,
-`--color-panel`, `--color-panel2`, `--color-raise`, `--color-line`, `--color-line2`,
-`--color-txt`, `--color-muted`, `--color-dim`, `--color-up`, `--color-down`,
-`--color-downd`, `--color-violet`, `--color-violetd`, `--color-amber`, `--color-blue`,
-`--color-cyan`, `--font-display`, `--font-mono`, `--radius`.
+The same values exist as CSS variables (`--color-surface-raised`, `--color-fg-primary`,
+`--color-value-positive`, …), and the shadcn vocabulary is wired on top
+(`bg-background`, `text-foreground`, `bg-card`, `border-border`, `bg-primary`, …).
 
-> The shipped stylesheet is the **app's compiled Tailwind build**, so arbitrary
-> utilities outside these families may not exist in it. Stay inside the table above,
-> or use the CSS variables directly.
+> **Deprecated:** the older flat names — `bg-panel`, `text-txt`, `text-up`, `text-dim`,
+> `bg-raise`, `ring-line` — still resolve as aliases but are being removed. Use the
+> semantic names above in anything new.
+
+**Colour as a value, not a class.** For chart props, canvas, or inline SVG, import the
+resolved token rather than writing a hex:
+
+```tsx
+import { token } from "@/design/tokens.generated.ts";
+<Area stroke={token.chart.gammaPositive} fill={token.chart.grid} />
+```
+
+An eslint rule fails the build on any colour literal under `apps/web/src`.
+
+### Responsive: container-first, and size targets by pointer
+
+This is a dense professional trading tool, not a retail app. **Do not trade density for
+whitespace on small screens** — the answer to a narrow viewport is progressive disclosure
+(summary row that expands, bottom sheet for detail), never fewer numbers.
+
+Two rules follow from that:
+
+- **Query the container, not the viewport.** A component adapts to the room *it* has.
+  Wrap in `@container` and use `@sm:`/`@md:`/`@lg:` — `ChipRail` is the reference
+  implementation. Reserve viewport `md:`/`lg:` for page-level shell decisions only
+  (which nav pattern, top-level grid).
+- **Size touch targets by input modality.** Use `<Button size="touch">`, which is 44px by
+  default and shrinks under `pointer-fine:`. Don't key target size to width — a
+  touchscreen laptop needs the large target at any width.
 
 ### Compose, don't rebuild
 
