@@ -44,7 +44,6 @@ describe.skipIf(shouldSkip)("postgres calendar-events adapter", () => {
         readCalendarEvents: repo.readCalendarEvents,
         readCalendarEventByHash: repo.readCalendarEventByHash,
         deleteCalendarEvents: repo.deleteCalendarEvents,
-        readRealizedPnlByCalendar: repo.readRealizedPnlByCalendar,
         countEvents: async (calendarId: string): Promise<number> => {
           const rows = await db.execute(
             sql`SELECT COUNT(*)::int AS cnt FROM calendar_events WHERE calendar_id = ${calendarId}::uuid`,

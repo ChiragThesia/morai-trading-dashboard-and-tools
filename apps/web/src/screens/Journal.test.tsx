@@ -21,13 +21,6 @@ const { mockUseTradeHistory } = vi.hoisted(() => ({
 vi.mock("../hooks/useTradeHistory.ts", () => ({
   useTradeHistory: mockUseTradeHistory,
 }));
-// RebuildButton drags in the rebuild mutation + dialog — not under test here.
-vi.mock("../components/RebuildButton.tsx", () => ({
-  RebuildButton: ({ calendarId }: { calendarId: string }) => (
-    <span data-testid={`rebuild-${calendarId}`} />
-  ),
-}));
-
 import { Journal } from "./Journal.tsx";
 
 const FIXTURE: TradeHistoryResponse = {
@@ -156,12 +149,12 @@ describe("Journal — Trade Ledger screen", () => {
     expect(closedRow.textContent).toContain("—");
   });
 
-  it("footer shows the total realized P&L and the VIX chip renders", () => {
+  it("footer shows the total realized P&L; no VIX chip (live VIX lives in the top strip)", () => {
     mockSuccess();
     render(<Journal />);
 
     expect(screen.getByTestId("roundtrip-total").textContent).toContain("−$171.7");
-    expect(screen.getByText(/VIX 18\.2/)).toBeTruthy();
+    expect(screen.queryByText(/VIX/)).toBeNull();
   });
 
   it("renders executions TOS-style: ET exec time, side, effect, strike, net amount", () => {

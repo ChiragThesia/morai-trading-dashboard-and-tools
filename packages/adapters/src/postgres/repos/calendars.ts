@@ -53,6 +53,7 @@ type CalendarRow = {
   openedAt: Date;
   closedAt: Date | null;
   openNetDebit: string | null;
+  closeNetCredit: string | null;
   notes: string | null;
 };
 
@@ -66,6 +67,8 @@ function mapRow(row: CalendarRow): Calendar {
     backExpiry: row.backExpiry,
     qty: row.qty,
     openNetDebit: row.openNetDebit !== null ? parseFloat(row.openNetDebit) : 0,
+    // Trade Ledger: stored close credit (points) — null while open / never recorded.
+    closeNetCredit: row.closeNetCredit !== null ? parseFloat(row.closeNetCredit) : null,
     status: row.status,
     openedAt: row.openedAt,
     closedAt: row.closedAt,
@@ -91,6 +94,7 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
           openedAt: calendars.openedAt,
           closedAt: calendars.closedAt,
           openNetDebit: calendars.openNetDebit,
+          closeNetCredit: calendars.closeNetCredit,
           notes: calendars.notes,
         })
         .from(calendars)
@@ -143,6 +147,7 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
           openedAt: calendars.openedAt,
           closedAt: calendars.closedAt,
           openNetDebit: calendars.openNetDebit,
+          closeNetCredit: calendars.closeNetCredit,
           notes: calendars.notes,
         });
       if (row === undefined) {
@@ -175,6 +180,7 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
           openedAt: calendars.openedAt,
           closedAt: calendars.closedAt,
           openNetDebit: calendars.openNetDebit,
+          closeNetCredit: calendars.closeNetCredit,
           notes: calendars.notes,
         })
         .from(calendars)
@@ -214,6 +220,7 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
           openedAt: calendars.openedAt,
           closedAt: calendars.closedAt,
           openNetDebit: calendars.openNetDebit,
+          closeNetCredit: calendars.closeNetCredit,
           notes: calendars.notes,
         })
         .from(calendars)
@@ -249,6 +256,7 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
           openedAt: calendars.openedAt,
           closedAt: calendars.closedAt,
           openNetDebit: calendars.openNetDebit,
+          closeNetCredit: calendars.closeNetCredit,
           notes: calendars.notes,
         });
 
@@ -309,6 +317,7 @@ export function makePostgresCalendarsRepo(db: Db): PostgresCalendarsRepo {
           openedAt: calendars.openedAt,
           closedAt: calendars.closedAt,
           openNetDebit: calendars.openNetDebit,
+          closeNetCredit: calendars.closeNetCredit,
           notes: calendars.notes,
         })
         .from(calendars)

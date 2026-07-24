@@ -1,16 +1,18 @@
 /**
  * getTradeHistory.ts — Trade Ledger read model (round-trips + executions).
  *
- * Composes five existing reads into the ledger the Journal screen renders:
+ * Composes four existing reads into the ledger the Journal screen renders:
  *   - listCalendars → one round-trip row per calendar, newest openedAt first
- *   - readRealizedPnlByCalendar → per-calendar CLOSE+ROLL P&L aggregate
  *   - readLatestSnapshotPerOpenCalendar → greeks/IV block for OPEN calendars
  *     ('NaN' numeric strings map to null — JSON cannot carry NaN)
- *   - readMacroObservations → latest VIXCLS row as the vol-context chip
+ *   - readMacroObservations → latest VIXCLS row as the vol-context value
  *   - readBrokerTransactions → TOS-style executions, one row per stored leg
  *
- * Pure composition — no recomputation: realized P&L comes from calendar_events,
- * greeks from calendar_snapshots, verbatim history from broker_transactions.
+ * Realized P&L = (closeNetCredit − openNetDebit) × qty × 100 from the calendars table —
+ * the oracle-validated amounts (journal-pnl fix 2026-07-05), stored in POINTS. The
+ * calendar_events realized_pnl aggregate is deliberately NOT used: it is null for any
+ * calendar whose OPEN fills predate its registration (orphan-exclusion trap) and is
+ * points-scaled per leg. Missing closeNetCredit → null, never a fabricated number.
  */
 
 import { ok, parseOccSymbol } from "@morai/shared";
@@ -21,7 +23,6 @@ import type {
   ForReadingBrokerTransactions,
   ForReadingLatestSnapshotPerOpenCalendar,
   ForReadingMacroObservations,
-  ForReadingRealizedPnlByCalendar,
   SnapshotRow,
   StorageError,
 } from "./ports.ts";
@@ -82,7 +83,6 @@ export type TradeHistory = {
 
 export type GetTradeHistoryDeps = {
   readonly listCalendars: ForListingCalendars;
-  readonly readRealizedPnlByCalendar: ForReadingRealizedPnlByCalendar;
   readonly readLatestSnapshotPerOpenCalendar: ForReadingLatestSnapshotPerOpenCalendar;
   readonly readMacroObservations: ForReadingMacroObservations;
   readonly readBrokerTransactions: ForReadingBrokerTransactions;
@@ -129,8 +129,6 @@ export function makeGetTradeHistoryUseCase(
   return async (): Promise<Result<TradeHistory, StorageError>> => {
     const calendarsResult = await deps.listCalendars();
     if (!calendarsResult.ok) return calendarsResult;
-    const pnlResult = await deps.readRealizedPnlByCalendar();
-    if (!pnlResult.ok) return pnlResult;
     const snapshotsResult = await deps.readLatestSnapshotPerOpenCalendar();
     if (!snapshotsResult.ok) return snapshotsResult;
     const macroResult = await deps.readMacroObservations();
@@ -147,6 +145,12 @@ export function makeGetTradeHistoryUseCase(
       .map((c: Calendar): TradeHistoryRoundTrip => {
         const snapshot =
           c.status === "open" ? snapshotByCalendar.get(c.id) : undefined;
+        // Realized $ from the oracle-validated calendars-table amounts (points → ×100).
+        const closeNetCredit = c.closeNetCredit ?? null;
+        const realizedPnl =
+          c.status === "closed" && closeNetCredit !== null
+            ? (closeNetCredit - c.openNetDebit) * c.qty * 100
+            : null;
         return {
           calendarId: c.id,
           underlying: c.underlying,
@@ -159,7 +163,7 @@ export function makeGetTradeHistoryUseCase(
           openedAt: c.openedAt,
           closedAt: c.closedAt,
           openNetDebit: c.openNetDebit,
-          realizedPnl: pnlResult.value[c.id] ?? null,
+          realizedPnl,
           greeks: snapshot !== undefined ? toGreeks(snapshot) : null,
         };
       });

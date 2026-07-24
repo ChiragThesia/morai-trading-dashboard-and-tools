@@ -26,7 +26,6 @@ import type {
   ForReadingCalendarEventByHash,
   ForDeletingCalendarEvents,
   ForReadingRecentClosedCalendars,
-  ForReadingRealizedPnlByCalendar,
   RecentClosedCalendar,
   CalendarEvent,
   StorageError,
@@ -38,7 +37,6 @@ export type MemoryCalendarEventsRepo = {
   readonly readCalendarEventByHash: ForReadingCalendarEventByHash;
   readonly deleteCalendarEvents: ForDeletingCalendarEvents;
   readonly readRecentClosedCalendars: ForReadingRecentClosedCalendars;
-  readonly readRealizedPnlByCalendar: ForReadingRealizedPnlByCalendar;
   /** countEvents — test helper: count events for a calendarId */
   readonly countEvents: (calendarId: string) => Promise<number>;
   /**
@@ -130,31 +128,6 @@ export function makeMemoryCalendarEventsRepo(): MemoryCalendarEventsRepo {
     return ok(rows);
   };
 
-  // ─── readRealizedPnlByCalendar (ForReadingRealizedPnlByCalendar, Trade Ledger) ──
-  // Twin of the Postgres GROUP BY: sum realizedPnl over CLOSE AND ROLL events per
-  // calendar (ROLL rows carry the closed leg's P&L — the ledger must include them).
-  // All-null group → null, never 0 (Postgres SUM's NULL-ignoring semantics).
-  const readRealizedPnlByCalendar: ForReadingRealizedPnlByCalendar = async (): Promise<
-    Result<Readonly<Record<string, number | null>>, StorageError>
-  > => {
-    const byCalendar = new Map<string, CalendarEvent[]>();
-    for (const event of store.values()) {
-      if (event.eventType !== "CLOSE" && event.eventType !== "ROLL") continue;
-      const bucket = byCalendar.get(event.calendarId) ?? [];
-      bucket.push(event);
-      byCalendar.set(event.calendarId, bucket);
-    }
-
-    const record: Record<string, number | null> = {};
-    for (const [calendarId, events] of byCalendar.entries()) {
-      const nonNull = events
-        .map((e) => e.realizedPnl)
-        .filter((pnl): pnl is number => pnl !== null);
-      record[calendarId] = nonNull.length > 0 ? nonNull.reduce((a, b) => a + b, 0) : null;
-    }
-    return ok(record);
-  };
-
   const seedCalendar = (id: string, openNetDebit?: number): void => {
     if (openNetDebit !== undefined) openNetDebits.set(id, openNetDebit);
   };
@@ -165,7 +138,6 @@ export function makeMemoryCalendarEventsRepo(): MemoryCalendarEventsRepo {
     readCalendarEventByHash,
     deleteCalendarEvents,
     readRecentClosedCalendars,
-    readRealizedPnlByCalendar,
     countEvents,
     seedCalendar,
   };

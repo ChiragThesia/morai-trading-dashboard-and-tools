@@ -29,6 +29,9 @@ export type Calendar = {
   readonly backExpiry: string; // YYYY-MM-DD — the far-term leg
   readonly qty: number;
   readonly openNetDebit: number; // parsed to number at repo boundary; stored as numeric string in DB
+  // Trade Ledger: the stored close credit (points), oracle-validated alongside openNetDebit
+  // (journal-pnl fix 2026-07-05). Optional-additive: pre-existing constructions omit it.
+  readonly closeNetCredit?: number | null;
   readonly status: "open" | "closed";
   readonly openedAt: Date;
   readonly closedAt: Date | null;
@@ -961,15 +964,4 @@ export type ForStoringBrokerTransactions = (
  */
 export type ForReadingBrokerTransactions = () => Promise<
   Result<ReadonlyArray<StoredBrokerTransaction>, StorageError>
->;
-
-/**
- * ForReadingRealizedPnlByCalendar — per-calendar SUM of calendar_events.realized_pnl over
- * CLOSE **and** ROLL events (ROLL rows carry the closed leg's realized P&L — the
- * PLAY-02 CLOSE-only aggregate deliberately excludes them, the ledger must not).
- * A calendar whose every summed event has null realizedPnl maps to null, never 0.
- * Calendars with no CLOSE/ROLL events are absent from the record.
- */
-export type ForReadingRealizedPnlByCalendar = () => Promise<
-  Result<Readonly<Record<string, number | null>>, StorageError>
 >;

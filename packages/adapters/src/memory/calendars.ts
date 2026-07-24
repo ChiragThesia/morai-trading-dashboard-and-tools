@@ -101,17 +101,14 @@ export function makeMemoryCalendarsRepo(): MemoryCalendarsRepo {
     if (existing.status === "closed") {
       return err<CalendarAlreadyClosed>({ kind: "already-closed" });
     }
-    // closeNetCredit is stored in the DB by the Postgres adapter but is not part of
-    // the Calendar domain type (it lives in the calendars table only).
-    // The in-memory twin captures status + closedAt only.
+    // Trade Ledger: closeNetCredit joined the Calendar domain type (optional-additive) —
+    // store it, mirroring the Postgres column write.
     const updated: Calendar = {
       ...existing,
       status: "closed",
       closedAt: new Date(),
+      closeNetCredit,
     };
-    // closeNetCredit is intentionally not stored in-memory (not in Calendar type)
-    const _closeNetCredit = closeNetCredit; // acknowledge param without void-floating
-    void _closeNetCredit;
     store.set(id, updated);
     return ok(updated);
   };

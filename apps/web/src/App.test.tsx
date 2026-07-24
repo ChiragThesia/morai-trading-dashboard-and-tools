@@ -50,7 +50,6 @@ vi.mock("./hooks/usePositions.ts", () => ({ usePositions: vi.fn(() => ({ data: u
 vi.mock("./hooks/useGex.ts", () => ({ useGex: vi.fn(() => ({ data: undefined, isLoading: true, isError: false, error: null })) }));
 vi.mock("./hooks/useMarketStatus.ts", () => ({ useMarketStatus: vi.fn(() => ({ data: undefined, isLoading: true })) }));
 vi.mock("./hooks/useTradeHistory.ts", () => ({ useTradeHistory: vi.fn(() => ({ data: undefined, isPending: true, isError: false, refetch: vi.fn() })) }));
-vi.mock("./hooks/useRebuildJournal.ts", () => ({ useRebuildJournal: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false, isSuccess: false })) }));
 
 // Mock useAuthSession — controls the session state directly without supabase internals
 vi.mock("./hooks/useAuthSession.ts", () => ({

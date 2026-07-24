@@ -17,12 +17,11 @@ import type {
   ForReadingCalendarEventByHash,
   ForDeletingCalendarEvents,
   ForReadingRecentClosedCalendars,
-  ForReadingRealizedPnlByCalendar,
   RecentClosedCalendar,
   CalendarEvent,
   StorageError,
 } from "@morai/core";
-import { eq, asc, and, gte, max, sum, inArray } from "drizzle-orm";
+import { eq, asc, and, gte, max, sum } from "drizzle-orm";
 import { calendarEvents, calendars } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -32,7 +31,6 @@ export type PostgresCalendarEventsRepo = {
   readonly readCalendarEventByHash: ForReadingCalendarEventByHash;
   readonly deleteCalendarEvents: ForDeletingCalendarEvents;
   readonly readRecentClosedCalendars: ForReadingRecentClosedCalendars;
-  readonly readRealizedPnlByCalendar: ForReadingRealizedPnlByCalendar;
 };
 
 export function makePostgresCalendarEventsRepo(db: Db): PostgresCalendarEventsRepo {
@@ -216,41 +214,11 @@ export function makePostgresCalendarEventsRepo(db: Db): PostgresCalendarEventsRe
     }
   };
 
-  // ─── readRealizedPnlByCalendar (ForReadingRealizedPnlByCalendar, Trade Ledger) ──
-  // ONE GROUP BY over CLOSE **and** ROLL events (ROLL rows carry the closed leg's
-  // realized P&L — the PLAY-02 CLOSE-only aggregate deliberately excludes them, the
-  // ledger must not). SUM ignores nulls and yields NULL for an all-null group — mapped
-  // to null, never 0. Calendars with no CLOSE/ROLL events are absent (GROUP BY).
-  const readRealizedPnlByCalendar: ForReadingRealizedPnlByCalendar = async (): Promise<
-    Result<Readonly<Record<string, number | null>>, StorageError>
-  > => {
-    try {
-      const rows = await db
-        .select({
-          calendarId: calendarEvents.calendarId,
-          realizedPnl: sum(calendarEvents.realizedPnl),
-        })
-        .from(calendarEvents)
-        .where(inArray(calendarEvents.eventType, ["CLOSE", "ROLL"]))
-        .groupBy(calendarEvents.calendarId);
-
-      const record: Record<string, number | null> = {};
-      for (const row of rows) {
-        record[row.calendarId] = row.realizedPnl !== null ? parseFloat(row.realizedPnl) : null;
-      }
-      return ok(record);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      return err<StorageError>({ kind: "storage-error", message });
-    }
-  };
-
   return {
     storeCalendarEvent,
     readCalendarEvents,
     readCalendarEventByHash,
     deleteCalendarEvents,
     readRecentClosedCalendars,
-    readRealizedPnlByCalendar,
   };
 }

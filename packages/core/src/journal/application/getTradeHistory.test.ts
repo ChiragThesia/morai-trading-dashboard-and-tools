@@ -80,6 +80,7 @@ const CLOSED_CAL = cal({
   openedAt: new Date("2026-07-16T14:00:00Z"),
   closedAt: new Date("2026-07-23T19:50:00Z"),
   openNetDebit: 43.27,
+  closeNetCredit: 41.58,
 });
 
 const TX: StoredBrokerTransaction = {
@@ -105,14 +106,12 @@ const MACRO: ReadonlyArray<MacroObservationRow> = [
 
 function makeUseCase(overrides: {
   calendars?: ReadonlyArray<Calendar>;
-  pnl?: Record<string, number | null>;
   snapshots?: ReadonlyArray<{ calendarId: string; snapshot: SnapshotRow }>;
   macro?: ReadonlyArray<MacroObservationRow>;
   txs?: ReadonlyArray<StoredBrokerTransaction>;
 } = {}) {
   return makeGetTradeHistoryUseCase({
     listCalendars: async () => ok(overrides.calendars ?? [OPEN_CAL, CLOSED_CAL]),
-    readRealizedPnlByCalendar: async () => ok(overrides.pnl ?? { "closed-cal": -171.7 }),
     readLatestSnapshotPerOpenCalendar: async () =>
       ok(overrides.snapshots ?? [{ calendarId: "open-cal", snapshot: snap("open-cal") }]),
     readMacroObservations: async () => ok(overrides.macro ?? MACRO),
@@ -137,13 +136,44 @@ describe("makeGetTradeHistoryUseCase — Trade Ledger read model", () => {
     expect(open?.greeks?.termSlope).toBeCloseTo(-0.006, 10);
     expect(open?.greeks?.asOf.toISOString()).toBe("2026-07-23T19:30:00.000Z");
 
+    // Realized $ = (closeNetCredit − openNetDebit) × qty × 100 — the oracle-validated
+    // calendars-table amounts (points), never the events aggregate (null-riddled for
+    // history whose OPEN fills predate registration; see orphan-exclusion LAW).
     const closed = roundTrips[1];
-    expect(closed?.realizedPnl).toBeCloseTo(-171.7, 10);
+    expect(closed?.realizedPnl).toBeCloseTo((41.58 - 43.27) * 100, 8);
     expect(closed?.greeks).toBeNull();
     expect(closed?.closedAt?.toISOString()).toBe("2026-07-23T19:50:00.000Z");
 
-    expect(totals.realizedPnl).toBeCloseTo(-171.7, 10);
+    expect(totals.realizedPnl).toBeCloseTo(-169, 8);
     expect(vix).toEqual({ value: 18.2, date: "2026-07-23" });
+  });
+
+  it("closed calendar without a stored closeNetCredit → realizedPnl null, never fabricated", async () => {
+    const result = await makeUseCase({
+      calendars: [cal({ id: "c", status: "closed", closedAt: new Date("2026-07-20T14:00:00Z") })],
+    })();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.roundTrips[0]?.realizedPnl).toBeNull();
+    expect(result.value.totals.realizedPnl).toBeNull();
+  });
+
+  it("qty scales realized P&L", async () => {
+    const result = await makeUseCase({
+      calendars: [
+        cal({
+          id: "c2",
+          status: "closed",
+          closedAt: new Date("2026-07-20T14:00:00Z"),
+          qty: 2,
+          openNetDebit: 40,
+          closeNetCredit: 41,
+        }),
+      ],
+    })();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.roundTrips[0]?.realizedPnl).toBeCloseTo(200, 8);
   });
 
   it("'NaN' greek strings map to null — JSON cannot carry NaN", async () => {
@@ -184,11 +214,10 @@ describe("makeGetTradeHistoryUseCase — Trade Ledger read model", () => {
     expect(row?.fees).toBeCloseTo(-0.66, 10);
   });
 
-  it("totals.realizedPnl null when no round-trip has realized P&L; vix null when series absent", async () => {
-    const result = await makeUseCase({ pnl: {}, macro: [] })();
+  it("vix null when the series is absent", async () => {
+    const result = await makeUseCase({ macro: [] })();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.totals.realizedPnl).toBeNull();
     expect(result.value.vix).toBeNull();
   });
 });

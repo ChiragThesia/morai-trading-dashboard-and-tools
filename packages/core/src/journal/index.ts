@@ -230,13 +230,12 @@ export type {
   RecentClosedCalendar,
   ForReadingRecentClosedCalendars,
 } from "./application/ports.ts";
-// Trade Ledger: broker_transactions store + per-calendar realized P&L aggregate
+// Trade Ledger: broker_transactions store
 export type {
   StoredBrokerTransaction,
   StoredBrokerTransactionLeg,
   ForStoringBrokerTransactions,
   ForReadingBrokerTransactions,
-  ForReadingRealizedPnlByCalendar,
 } from "./application/ports.ts";
 export { makeGetTradeHistoryUseCase } from "./application/getTradeHistory.ts";
 export type {

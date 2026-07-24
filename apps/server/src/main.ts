@@ -445,7 +445,6 @@ const calendarEventAnnotationsRepo = makePostgresCalendarEventAnnotationsRepo(db
 const brokerTransactionsRepo = makePostgresBrokerTransactionsRepo(db);
 const getTradeHistory = makeGetTradeHistoryUseCase({
   listCalendars: calendarsRepo.listCalendars,
-  readRealizedPnlByCalendar: calendarEventsRepo.readRealizedPnlByCalendar,
   readLatestSnapshotPerOpenCalendar:
     calendarSnapshotsRepo.readLatestSnapshotPerOpenCalendar,
   readMacroObservations: macroObservationsRepo.readMacroObservations,

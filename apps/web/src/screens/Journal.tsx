@@ -19,7 +19,6 @@
 
 import { Panel, PanelHeading, DataTable, Button } from "../components/system/index.tsx";
 import type { DataTableColumn } from "../components/system/index.tsx";
-import { RebuildButton } from "../components/RebuildButton.tsx";
 import { useTradeHistory } from "../hooks/useTradeHistory.ts";
 import { signedUsd, signClass } from "../lib/position-format.ts";
 import type {
@@ -154,11 +153,6 @@ const ROUNDTRIP_COLS: ReadonlyArray<DataTableColumn<TradeHistoryRoundTripRespons
         ? (r.greeks.termSlope * 100).toFixed(2)
         : DASH,
   },
-  {
-    key: "rebuild",
-    header: "",
-    render: (r) => <RebuildButton calendarId={r.calendarId} />,
-  },
 ];
 
 // ─── Executions table ─────────────────────────────────────────────────────────
@@ -247,17 +241,10 @@ export function Journal(): React.ReactElement {
   return (
     <div data-testid="journal-ledger" className="flex h-full flex-col gap-3 overflow-y-auto p-3">
       {/* ── Round-trips ──────────────────────────────────────────────────── */}
+      {/* No VIX chip here — the top market strip already shows LIVE VIX; the macro
+          series is EOD and read as "stale data" (user feedback 2026-07-24). */}
       <Panel>
-        <PanelHeading
-          title="Trades"
-          action={
-            data.vix !== null ? (
-              <span className="font-mono text-[10px] text-dim">
-                VIX {data.vix.value.toFixed(1)} · {data.vix.date}
-              </span>
-            ) : undefined
-          }
-        />
+        <PanelHeading title="Trades" />
         <DataTable
           columns={ROUNDTRIP_COLS}
           rows={[...data.roundTrips]}
@@ -272,7 +259,7 @@ export function Journal(): React.ReactElement {
               <td className={`px-2 py-1.5 text-right ${moneyClass(total)}`}>
                 {money(total)}
               </td>
-              <td className="px-2 py-1.5" colSpan={6} />
+              <td className="px-2 py-1.5" colSpan={5} />
             </tr>
           }
         />
