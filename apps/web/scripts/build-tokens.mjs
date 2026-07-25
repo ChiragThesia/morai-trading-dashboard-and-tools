@@ -50,28 +50,12 @@ const kebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 /** Primitive-relative path (e.g. ['ink','900']) -> `ink-900`. */
 const cssName = (segs) => segs.map(kebab).join('-');
 
-// ── Legacy aliases ────────────────────────────────────────────────────────────
-// The pre-token utility names, kept so the migration can land in stages. Each
-// maps to its tier-2 replacement. Delete a row once its call sites are migrated;
-// `bun run tokens:lint` fails the build when a deleted name is still referenced.
-const LEGACY = {
-  bg: 'surface-base',
-  panel: 'surface-raised',
-  panel2: 'surface-sunken',
-  raise: 'surface-overlay',
-  line: 'line-subtle',
-  line2: 'line-strong',
-  txt: 'fg-primary',
-  dim: 'fg-tertiary',
-  up: 'value-positive',
-  down: 'value-negative',
-  downd: 'value-negative-surface',
-  violet: 'accent-primary',
-  violetd: 'accent-primary-surface',
-  amber: 'accent-warning',
-  blue: 'accent-info',
-  cyan: 'accent-highlight',
-};
+// ── Retired: the legacy alias tier ────────────────────────────────────────────
+// The pre-token utility names (bg, panel, txt, dim, up, down, violet, …) were a
+// staged-migration shim. All call sites are migrated and the aliases are gone.
+// `bun run tokens:lint` fails the build if one reappears — Tailwind emits nothing
+// for an unknown class, so the regression would otherwise be invisible until
+// someone saw black-on-black in prod. Retired names live in scripts/tokens-lint.mjs.
 
 // semantic.<group>.<name> -> the CSS utility stem. `text` becomes `fg` so the
 // utility reads `text-fg-primary`, not `text-text-primary`; `border` becomes
@@ -110,10 +94,6 @@ function findPrimitivePath(value) {
   if (!key.startsWith('primitive.')) throw new Error(`alias must bottom out in primitive.*, got: ${key}`);
   return key.split('.').slice(1); // drop the `primitive` root — cssName expects a relative path
 }
-
-const legacyLines = Object.entries(LEGACY).map(
-  ([old, next]) => `  --color-${old}: var(--color-${next});`,
-);
 
 // The shadcn/ui contract, expressed once. Previously duplicated across an
 // `@theme inline` block and a `:root` block that had to be kept in sync by hand.
@@ -169,9 +149,6 @@ ${compLines.join('\n')}
 
   /* shadcn/ui vocabulary — one definition, mirrored into :root below. */
 ${shadcnTheme.join('\n')}
-
-  /* Deprecated pre-token names. Migrate call sites, then delete from LEGACY. */
-${legacyLines.join('\n')}
 }
 
 /* shadcn components read the bare custom properties, not the --color-* ones. */
@@ -227,4 +204,4 @@ export type Token = typeof token;
 );
 
 const counts = `${primitives.length} primitive, ${semantics.length} semantic, ${components.length} component`;
-console.log(`✓ tokens.generated.css + tokens.generated.ts (${counts}, ${Object.keys(LEGACY).length} legacy aliases)`);
+console.log(`✓ tokens.generated.css + tokens.generated.ts (${counts})`);

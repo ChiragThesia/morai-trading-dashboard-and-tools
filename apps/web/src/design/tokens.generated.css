@@ -110,24 +110,6 @@
   --color-border: var(--color-line-subtle);
   --color-input: var(--color-line-strong);
   --color-ring: var(--color-accent-primary);
-
-  /* Deprecated pre-token names. Migrate call sites, then delete from LEGACY. */
-  --color-bg: var(--color-surface-base);
-  --color-panel: var(--color-surface-raised);
-  --color-panel2: var(--color-surface-sunken);
-  --color-raise: var(--color-surface-overlay);
-  --color-line: var(--color-line-subtle);
-  --color-line2: var(--color-line-strong);
-  --color-txt: var(--color-fg-primary);
-  --color-dim: var(--color-fg-tertiary);
-  --color-up: var(--color-value-positive);
-  --color-down: var(--color-value-negative);
-  --color-downd: var(--color-value-negative-surface);
-  --color-violet: var(--color-accent-primary);
-  --color-violetd: var(--color-accent-primary-surface);
-  --color-amber: var(--color-accent-warning);
-  --color-blue: var(--color-accent-info);
-  --color-cyan: var(--color-accent-highlight);
 }
 
 /* shadcn components read the bare custom properties, not the --color-* ones. */

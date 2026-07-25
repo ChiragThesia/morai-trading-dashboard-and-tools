@@ -50,8 +50,9 @@
   },
   "scripts": {
     "dev": "node scripts/build-tokens.mjs && vite",
-    "build": "node scripts/build-tokens.mjs && vite build",
+    "build": "node scripts/build-tokens.mjs && node scripts/tokens-lint.mjs && vite build",
     "tokens": "node scripts/build-tokens.mjs",
+    "tokens:lint": "node scripts/tokens-lint.mjs",
     "typecheck": "tsc --noEmit"
   }
 }
