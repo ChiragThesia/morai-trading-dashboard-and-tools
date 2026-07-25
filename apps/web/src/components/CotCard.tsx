@@ -1,6 +1,6 @@
 import { useCot } from "../hooks/useCot.ts";
 import { pctOfPrev, fmtMag } from "../lib/series-delta.ts";
-import { BulletGauge, Panel, PanelHeading } from "./system/index.tsx";
+import { BulletGauge, Panel, PanelHeading, Tag } from "./system/index.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
   Tooltip,
@@ -131,9 +131,7 @@ export function CotCard(): React.ReactElement {
       <PanelHeading
         title="CFTC COT — dealer & spec positioning"
         badge={
-          <span className="rounded-sm border border-line2 px-1 py-px font-mono text-[10px] text-dim">
-            E-mini S&P · as of {latest.asOf}
-          </span>
+          <Tag>E-mini S&P · as of {latest.asOf}</Tag>
         }
       />
 

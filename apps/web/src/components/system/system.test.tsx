@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { Panel, SectionLabel, Stat, MetricChip, PanelHeading, Button } from "./index.tsx";
+import { Panel, SectionLabel, Stat, MetricChip, PanelHeading, Button, Tag } from "./index.tsx";
 
 describe("design system molecules", () => {
   afterEach(() => cleanup());
@@ -163,5 +163,41 @@ describe("Button — shared control-affordance primitive (Phase 21)", () => {
     const el = screen.getByTestId("my-btn");
     expect(el.getAttribute("type")).toBe("submit");
     expect(el.className).toContain("custom-class");
+  });
+});
+
+// ─── Tag ──────────────────────────────────────────────────────────────────────
+// The small bordered mono chip used for metadata: "as of <date>" badges on a
+// PanelHeading, symbol tags on a news row. Extracted because the same class
+// string was repeated across Market, CotCard, and NewsCard (design-system rule 4).
+
+describe("Tag", () => {
+  afterEach(() => cleanup());
+
+  it("renders its children", () => {
+    render(<Tag data-testid="t">SPY</Tag>);
+    expect(screen.getByTestId("t").textContent).toBe("SPY");
+  });
+
+  it("carries the locked token classes (mono, faint text, hairline border)", () => {
+    render(<Tag data-testid="t">x</Tag>);
+    const cls = screen.getByTestId("t").className;
+    expect(cls).toContain("font-mono");
+    expect(cls).toContain("text-dim");
+    expect(cls).toContain("border-line2");
+  });
+
+  it("has no hardcoded hex or inline colour", () => {
+    render(<Tag data-testid="t">x</Tag>);
+    const el = screen.getByTestId("t");
+    expect(el.className).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(el.getAttribute("style")).toBeNull();
+  });
+
+  it("merges a caller className without dropping the base classes", () => {
+    render(<Tag data-testid="t" className="ml-2">x</Tag>);
+    const cls = screen.getByTestId("t").className;
+    expect(cls).toContain("ml-2");
+    expect(cls).toContain("font-mono");
   });
 });

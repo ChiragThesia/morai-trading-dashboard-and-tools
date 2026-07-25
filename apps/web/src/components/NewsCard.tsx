@@ -1,6 +1,6 @@
 import { useNews } from "../hooks/useNews.ts";
 import { relAge } from "../screens/Market.tsx";
-import { Panel, PanelHeading } from "./system/index.tsx";
+import { Panel, PanelHeading, Tag } from "./system/index.tsx";
 
 /**
  * NewsCard — market headlines from the Alpaca News API (Benzinga wire, D28).
@@ -37,9 +37,7 @@ export function NewsCard(): React.ReactElement {
       <PanelHeading
         title="Market news"
         badge={
-          <span className="rounded-sm border border-line2 px-1 py-px font-mono text-[10px] text-dim">
-            {relAge(Date.now() - new Date(newest.publishedAt).getTime())}
-          </span>
+          <Tag>{relAge(Date.now() - new Date(newest.publishedAt).getTime())}</Tag>
         }
       />
 
@@ -72,12 +70,7 @@ export function NewsCard(): React.ReactElement {
             {item.symbols.length > 0 && (
               <div className="flex flex-wrap gap-1 pl-16">
                 {item.symbols.slice(0, 4).map((sym) => (
-                  <span
-                    key={sym}
-                    className="rounded-sm border border-line2 px-1 py-px font-mono text-[10px] text-dim"
-                  >
-                    {sym}
-                  </span>
+                  <Tag key={sym}>{sym}</Tag>
                 ))}
               </div>
             )}

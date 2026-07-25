@@ -4,7 +4,7 @@ import { classifyRegime, zeroDteGex, fmtGammaBn } from "../lib/gex-regime.ts";
 import { GexBars } from "../components/charts/GexBars.tsx";
 import type { StrikeRange } from "../components/charts/GexBars.tsx";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs.tsx";
-import { MetricChip, Panel, PanelHeading } from "../components/system/index.tsx";
+import { MetricChip, Panel, PanelHeading, Tag } from "../components/system/index.tsx";
 import { cn } from "@/lib/utils";
 import type { GexSnapshotEntry } from "@morai/contracts";
 
@@ -84,11 +84,7 @@ function Card({
         className="mb-0"
         title={heading}
         badge={
-          badge !== undefined ? (
-            <span className="rounded-sm border border-line2 px-1 py-px font-mono text-[10px] text-dim">
-              {badge}
-            </span>
-          ) : undefined
+          badge !== undefined ? <Tag>{badge}</Tag> : undefined
         }
       />
       {children}

@@ -142,6 +142,35 @@ export function MetricChip({
   );
 }
 
+/**
+ * Tag — the small bordered mono chip used for metadata, not for measurement:
+ * a PanelHeading's "as of <date>" badge, a symbol tag on a news row.
+ *
+ * Distinct from MetricChip, which is the large header pill carrying a label and a
+ * value. A Tag is one short string and never a number you would read off.
+ */
+export function Tag({
+  children,
+  className,
+  "data-testid": dataTestId,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  "data-testid"?: string;
+}): React.ReactElement {
+  return (
+    <span
+      data-testid={dataTestId}
+      className={cn(
+        "rounded-sm border border-line2 px-1 py-px font-mono text-[10px] text-dim",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 // ─── Molecules ────────────────────────────────────────────────────────────────
 
 /**
