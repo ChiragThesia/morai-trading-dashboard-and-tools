@@ -12,7 +12,7 @@
 
 import { randomUUID, createHash } from "node:crypto";
 import { PgBoss } from "pg-boss";
-import { ok } from "@morai/shared";
+import { ok, retryWithBackoff } from "@morai/shared";
 import { bootWorkerConfig } from "./config.ts";
 import {
   runMigrations,
@@ -113,9 +113,41 @@ import { registerAllJobs } from "./schedule.ts";
 
 const config = bootWorkerConfig();
 
+// ── Failure handling (2026-07-23 outage) ─────────────────────────────────────
+// Supabase was unreachable for 81 minutes and this process died on the first
+// unguarded await below, then restart-looped into the same dead connection.
+// Three failure classes, three responses — see docs/architecture/deployment.md.
+//
+// Class 3: anything genuinely unexpected. After an uncaught exception the process
+// state is undefined, so continuing risks writing corrupt journal data. Log the
+// cause (previously there was NO error logging here at all) and exit non-zero so
+// Railway restarts us clean.
+process.on("uncaughtException", (error) => {
+  console.error("worker: uncaught exception — exiting for a clean restart", error);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("worker: unhandled rejection — exiting for a clean restart", reason);
+  process.exit(1);
+});
+
+// Class 1: boot I/O that cannot succeed *yet*. ~4 minutes of in-process patience;
+// past that we exit and let Railway restart, which retries again — so an outage of
+// any length is ridden out without hot-looping.
+const BOOT_RETRY = {
+  attempts: 10,
+  baseDelayMs: 1_000,
+  maxDelayMs: 30_000,
+} as const;
+
 // DATA-02: idempotent boot migration over the direct connection.
 // runMigrations creates a dedicated max:1 client (Pitfall 3) and closes it.
-await runMigrations(config.DATABASE_URL);
+await retryWithBackoff(async () => runMigrations(config.DATABASE_URL), {
+  ...BOOT_RETRY,
+  onRetry: (attempt, error) => {
+    console.error(`worker: boot migration attempt ${attempt}/${BOOT_RETRY.attempts} failed`, error);
+  },
+});
 
 // pg-boss: use DATABASE_POOL_URL if provided (preferred for job workers);
 // fall back to DATABASE_URL (direct connection). pg-boss creates its own pool.
@@ -124,7 +156,21 @@ const bossConnectionString = config.DATABASE_POOL_URL ?? config.DATABASE_URL;
 // max:4 — bounded pool for the 10 low-frequency cron queues (30s polling). Keeps the
 // worker's pg-boss + Drizzle pools under the Supavisor session-pooler ceiling (see db.ts).
 const boss = new PgBoss({ connectionString: bossConnectionString, max: 4 });
-await boss.start();
+
+// Class 2: pg-boss runtime errors. pg-boss recovers on its own, so this listener
+// never exits — but it MUST exist. In Node an 'error' event with no listener is
+// rethrown as an uncaught exception, which is precisely what killed this worker
+// on 07-23.
+boss.on("error", (error) => {
+  console.error("worker: pg-boss error (non-fatal, pg-boss will recover)", error);
+});
+
+await retryWithBackoff(async () => boss.start(), {
+  ...BOOT_RETRY,
+  onRetry: (attempt, error) => {
+    console.error(`worker: boss.start attempt ${attempt}/${BOOT_RETRY.attempts} failed`, error);
+  },
+});
 
 // Build Drizzle DB instance (direct connection for repos).
 // max:3 — job handlers run sequentially; a small pool is ample and bounds total usage.

@@ -79,6 +79,37 @@ when UI work begins (D19), so it is a distinct origin (CORS configured on the AP
 Auto-run on boot (server and worker both call the idempotent migrator — file-tracked,
 lex-ordered, per-file transactions). Safe under Railway's rolling restarts.
 
+## Failure handling
+
+On 2026-07-23 Supabase was unreachable for 81 minutes. Both services died on their first
+unguarded `await`, logged nothing but a driver stack trace, and restart-looped into the
+same dead connection. Three failure classes now get three different responses. The
+distinction is the point — one blanket `try/catch` would be worse than none.
+
+| Class | Example | Response |
+|---|---|---|
+| Boot I/O that cannot succeed *yet* | boot migration, `boss.start()` | Retry with exponential backoff |
+| pg-boss runtime `error` event | pooler drops a connection mid-run | Log only, never exit |
+| Genuinely unexpected | `uncaughtException`, `unhandledRejection` | Log the cause, then `exit(1)` |
+
+**Why retry, then still exit.** Each boot gets 10 attempts, 1s base, 30s cap — about four
+minutes of in-process patience. Past that the process exits non-zero and Railway restarts
+it, which retries again. So an outage of any length is ridden out without hot-looping, and
+a *genuinely* misconfigured connection string still fails loudly instead of hanging.
+
+**Why the `error` listener is not optional.** In Node an `error` event with no listener is
+rethrown as an uncaught exception. pg-boss recovers from pooler blips on its own; the only
+bug was that nobody was listening. Both composition roots now attach one.
+
+**Why we exit rather than limp on.** After an uncaught exception the process state is
+undefined. For the worker that risks writing corrupt journal data; for the server it means
+answering requests against a broken pool. Exiting deliberately — after logging the cause —
+is both safer and, with Railway restarting, self-healing.
+
+Implementation: `retryWithBackoff` in `packages/shared/src/retry.ts` (the only tested part;
+the rest is composition-root wiring), applied in `apps/worker/src/main.ts` and
+`apps/server/src/main.ts`.
+
 ## Observability (minimum viable)
 
 - Structured JSON logs (console — Railway captures). `warn`/`error` gated console rule.

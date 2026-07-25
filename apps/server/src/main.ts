@@ -80,7 +80,7 @@ import type {
   GexContextForPicker,
   GexSnapshotRow,
 } from "@morai/core";
-import { ok } from "@morai/shared";
+import { ok, retryWithBackoff } from "@morai/shared";
 import { PgBoss } from "pg-boss";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -111,6 +111,33 @@ import { recomputeLiveGreek } from "@morai/core";
 import { makeSidecarPositionReconciler, makeSidecarReauthAdapter } from "@morai/adapters";
 
 const config = bootConfig();
+
+// ── Failure handling (2026-07-23 outage) ─────────────────────────────────────
+// Supabase was unreachable for 81 minutes and this process died with no error
+// logging at all. Three failure classes, three responses — see
+// docs/architecture/deployment.md.
+//
+// Class 3: anything genuinely unexpected. Log the cause, then exit non-zero so
+// Railway restarts clean rather than leaving a half-alive server answering
+// requests against a broken pool.
+process.on("uncaughtException", (error) => {
+  console.error("server: uncaught exception — exiting for a clean restart", error);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("server: unhandled rejection — exiting for a clean restart", reason);
+  process.exit(1);
+});
+
+// Class 1: boot I/O that cannot succeed *yet*. ~4 minutes of in-process patience,
+// then exit and let Railway restart — an outage of any length is ridden out
+// without hot-looping. The server runs no migrations; jobBoss.start is its only
+// retried boot step.
+const BOOT_RETRY = {
+  attempts: 10,
+  baseDelayMs: 1_000,
+  maxDelayMs: 30_000,
+} as const;
 
 // Build the Postgres pool + Drizzle instance.
 // max:4 — bounded so server + worker pools fit under the Supavisor session-pooler
@@ -520,7 +547,21 @@ const getOrders = makeGetOrdersUseCase({
 // max:2 — the server only enqueues (trigger_job); it never processes jobs, so a tiny
 // pool suffices and keeps the total under the Supavisor session-pooler ceiling.
 const jobBoss = new PgBoss({ connectionString: config.DATABASE_URL, max: 2 });
-await jobBoss.start();
+
+// Class 2: pg-boss runtime errors. Log only — pg-boss recovers on its own, and the
+// server merely enqueues. This listener MUST exist regardless: in Node an 'error'
+// event with no listener is rethrown as an uncaught exception, which is what took
+// this process down on 07-23.
+jobBoss.on("error", (error) => {
+  console.error("server: pg-boss error (non-fatal, enqueue-only client)", error);
+});
+
+await retryWithBackoff(async () => jobBoss.start(), {
+  ...BOOT_RETRY,
+  onRetry: (attempt, error) => {
+    console.error(`server: jobBoss.start attempt ${attempt}/${BOOT_RETRY.attempts} failed`, error);
+  },
+});
 const pgBossJobQueue = makePgBossJobQueue(jobBoss);
 const enqueueJob = makeEnqueueJobUseCase({
   jobQueue: pgBossJobQueue.enqueue,
