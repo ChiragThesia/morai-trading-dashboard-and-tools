@@ -6,6 +6,9 @@ export { ok, err, isOk, isErr } from "./result.ts";
 
 export { assertDefined } from "./assert.ts";
 
+export { retryWithBackoff } from "./retry.ts";
+export type { RetryOptions } from "./retry.ts";
+
 export type { OccSymbol, OccSymbolParsed, OccError } from "./occ-symbol.ts";
 export { parseOccSymbol, formatOccSymbol } from "./occ-symbol.ts";
 
