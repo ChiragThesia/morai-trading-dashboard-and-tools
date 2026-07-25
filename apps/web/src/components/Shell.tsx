@@ -53,12 +53,12 @@ export function Shell({
   return (
     <>
       {/* Sticky frosted-glass header */}
-      <header className="sticky top-0 right-0 left-0 z-50 box-border flex h-12 items-center justify-between border-b border-line bg-gradient-to-b from-raise/55 to-transparent px-4 backdrop-blur-md">
+      <header className="sticky top-0 right-0 left-0 z-50 box-border flex h-12 items-center justify-between border-b border-line-subtle bg-gradient-to-b from-surface-overlay/55 to-transparent px-4 backdrop-blur-md">
         {/* Left: Brand logotype + Nav tabs */}
         <div className="flex items-center gap-6">
           {/* MOR-AI logotype (violet "AI") */}
-          <div className="shrink-0 font-display text-base font-bold tracking-[-0.01em] text-txt select-none">
-            MOR<strong className="text-violet">AI</strong>
+          <div className="shrink-0 font-display text-base font-bold tracking-[-0.01em] text-fg-primary select-none">
+            MOR<strong className="text-accent-primary">AI</strong>
           </div>
 
           {/* Nav tabs — locked order: Overview · Analyzer · Journal */}
@@ -78,10 +78,10 @@ export function Shell({
                     handleNavigate(tab);
                   }}
                   className={cn(
-                    "min-h-11 min-w-11 lg:min-h-8 cursor-pointer rounded-md border-b-2 px-3 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] uppercase transition-colors outline-none focus-visible:ring-2 focus-visible:ring-violet",
+                    "min-h-11 min-w-11 lg:min-h-8 cursor-pointer rounded-md border-b-2 px-3 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] uppercase transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent-primary",
                     isActive
-                      ? "border-violet bg-violet/10 text-violet"
-                      : "border-transparent text-dim hover:text-txt",
+                      ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                      : "border-transparent text-fg-tertiary hover:text-fg-primary",
                   )}
                 >
                   {tab}

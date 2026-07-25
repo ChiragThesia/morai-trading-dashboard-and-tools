@@ -74,11 +74,11 @@ export function BulletGauge({
       bands = (
         <>
           <div
-            className="absolute inset-y-0 bg-amber/30"
+            className="absolute inset-y-0 bg-accent-warning/30"
             style={{ left: `${warnPct}%`, width: `${crisisPct - warnPct}%` }}
           />
           <div
-            className="absolute inset-y-0 bg-down/30"
+            className="absolute inset-y-0 bg-value-negative/30"
             style={{ left: `${crisisPct}%`, width: `${100 - crisisPct}%` }}
           />
         </>
@@ -93,7 +93,7 @@ export function BulletGauge({
   return (
     <div
       role="meter"
-      className="relative h-1.5 w-full overflow-hidden rounded-full bg-line2"
+      className="relative h-1.5 w-full overflow-hidden rounded-full bg-line-strong"
       aria-valuenow={clampedValue}
       aria-valuemin={min}
       aria-valuemax={max}

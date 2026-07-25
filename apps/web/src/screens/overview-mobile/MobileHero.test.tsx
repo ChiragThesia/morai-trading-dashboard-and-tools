@@ -20,42 +20,42 @@ const BASE = {
 };
 
 describe("MobileHero — hero-first BOOK P&L (D-03, J3/J4)", () => {
-  it("J3a: positive book P&L renders signedUsd(bookPnl) with text-up", () => {
+  it("J3a: positive book P&L renders signedUsd(bookPnl) with text-value-positive", () => {
     render(<MobileHero {...BASE} />);
     const value = screen.getByTestId("mobile-hero-value");
     expect(value.textContent).toBe(signedUsd(1204));
-    expect(value.className).toContain("text-up");
+    expect(value.className).toContain("text-value-positive");
   });
 
-  it("J3b: negative book P&L renders with text-down", () => {
+  it("J3b: negative book P&L renders with text-value-negative", () => {
     render(<MobileHero {...BASE} bookPnl={-350} />);
     const value = screen.getByTestId("mobile-hero-value");
     expect(value.textContent).toBe(signedUsd(-350));
-    expect(value.className).toContain("text-down");
+    expect(value.className).toContain("text-value-negative");
   });
 
-  it("J3c: no positions renders — in text-txt with neither sign class", () => {
+  it("J3c: no positions renders — in text-fg-primary with neither sign class", () => {
     render(<MobileHero {...BASE} hasPositions={false} />);
     const value = screen.getByTestId("mobile-hero-value");
     expect(value.textContent).toBe("—");
-    expect(value.className).toContain("text-txt");
-    expect(value.className).not.toContain("text-up");
-    expect(value.className).not.toContain("text-down");
+    expect(value.className).toContain("text-fg-primary");
+    expect(value.className).not.toContain("text-value-positive");
+    expect(value.className).not.toContain("text-value-negative");
   });
 
-  it("J4a: context line shows SPX 6842.1, VIX 14.32 and a γ DAMPEN segment in text-up", () => {
+  it("J4a: context line shows SPX 6842.1, VIX 14.32 and a γ DAMPEN segment in text-value-positive", () => {
     render(<MobileHero {...BASE} />);
     const hero = screen.getByTestId("mobile-hero");
     expect(hero.textContent).toContain("SPX 6842.1");
     expect(hero.textContent).toContain("VIX 14.32");
     const regimeSegment = screen.getByText("γ DAMPEN");
-    expect(regimeSegment.className).toContain("text-up");
+    expect(regimeSegment.className).toContain("text-value-positive");
   });
 
-  it("J4a: AMPLIFY regime segment renders in text-down", () => {
+  it("J4a: AMPLIFY regime segment renders in text-value-negative", () => {
     render(<MobileHero {...BASE} regime="AMPLIFY" />);
     const regimeSegment = screen.getByText("γ AMPLIFY");
-    expect(regimeSegment.className).toContain("text-down");
+    expect(regimeSegment.className).toContain("text-value-negative");
   });
 
   it("J4b: null spot and null vix render — for their segments", () => {
@@ -65,17 +65,17 @@ describe("MobileHero — hero-first BOOK P&L (D-03, J3/J4)", () => {
     expect(hero.textContent).toContain("VIX —");
   });
 
-  it("LIVE-04: the SPX segment tints text-blue while liveStatus is live (catch #26 honest badge)", () => {
+  it("LIVE-04: the SPX segment tints text-accent-info while liveStatus is live (catch #26 honest badge)", () => {
     render(<MobileHero {...BASE} liveStatus="live" />);
     const spotValue = screen.getByText("6842.1");
-    expect(spotValue.className).toContain("text-blue");
+    expect(spotValue.className).toContain("text-accent-info");
   });
 
-  it("LIVE-04: the SPX segment stays EOD-styled (text-dim, no live tint) while liveStatus is quiet", () => {
+  it("LIVE-04: the SPX segment stays EOD-styled (text-fg-tertiary, no live tint) while liveStatus is quiet", () => {
     render(<MobileHero {...BASE} liveStatus="quiet" />);
     const spotValue = screen.getByText("6842.1");
-    expect(spotValue.className).toContain("text-dim");
-    expect(spotValue.className).not.toContain("text-blue");
+    expect(spotValue.className).toContain("text-fg-tertiary");
+    expect(spotValue.className).not.toContain("text-accent-info");
   });
 
   it("J4b: null regime omits the regime segment entirely, including its · separator", () => {

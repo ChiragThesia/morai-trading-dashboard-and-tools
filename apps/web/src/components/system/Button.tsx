@@ -3,7 +3,7 @@
  *
  * Every interactive control in apps/web renders through this so on/off/hover/focus/disabled
  * are never ambiguous. Filled-vs-outline states on the existing accent palette replace the old
- * flat-gray `border-line2 bg-transparent` buttons with faint 10%-opacity "active" tints.
+ * flat-gray `border-line-strong bg-transparent` buttons with faint 10%-opacity "active" tints.
  *
  * `variant="toggle"` is the on/off affordance (series toggles, Combine, Copy): `active=true`
  * renders a FILLED accent (bg-{tone}, dark text) — the clear "ON" — `active=false` renders an
@@ -28,7 +28,7 @@ export interface ButtonProps extends React.ComponentProps<"button"> {
 }
 
 const BASE =
-  "inline-flex items-center justify-center gap-1 cursor-pointer rounded-[3px] font-mono transition-colors select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-1 focus-visible:ring-offset-bg disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none";
+  "inline-flex items-center justify-center gap-1 cursor-pointer rounded-[3px] font-mono transition-colors select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-1 focus-visible:ring-offset-bg disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none";
 
 const SIZE_CLASS: Record<ButtonSize, string> = {
   xs: "px-[7px] py-0.5 text-[9px]",
@@ -41,26 +41,26 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
 };
 
 const VARIANT_CLASS: Record<Exclude<ButtonVariant, "toggle">, string> = {
-  primary: "bg-violet text-bg border border-violet hover:bg-violet/85",
-  secondary: "bg-raise text-txt border border-line2 hover:border-violet/60 hover:bg-violet/10",
-  ghost: "bg-transparent text-dim border border-transparent hover:text-txt hover:bg-line/60",
-  destructive: "bg-transparent text-dim border border-transparent hover:text-down hover:bg-down/15",
+  primary: "bg-accent-primary text-surface-base border border-accent-primary hover:bg-accent-primary/85",
+  secondary: "bg-surface-overlay text-fg-primary border border-line-strong hover:border-accent-primary/60 hover:bg-accent-primary/10",
+  ghost: "bg-transparent text-fg-tertiary border border-transparent hover:text-fg-primary hover:bg-line-subtle/60",
+  destructive: "bg-transparent text-fg-tertiary border border-transparent hover:text-value-negative hover:bg-value-negative/15",
 };
 
 /** toggle + active=true: filled accent, dark text — the clear "ON". */
 const TOGGLE_ACTIVE_CLASS: Record<ButtonTone, string> = {
-  violet: "bg-violet text-bg border border-violet",
-  amber: "bg-amber text-bg border border-amber",
-  up: "bg-up text-bg border border-up",
-  down: "bg-down text-bg border border-down",
+  violet: "bg-accent-primary text-surface-base border border-accent-primary",
+  amber: "bg-accent-warning text-surface-base border border-accent-warning",
+  up: "bg-value-positive text-surface-base border border-value-positive",
+  down: "bg-value-negative text-surface-base border border-value-negative",
 };
 
 /** toggle + active=false: outline "OFF", hoverable toward the tone. */
 const TOGGLE_INACTIVE_CLASS: Record<ButtonTone, string> = {
-  violet: "bg-transparent text-dim border border-line2 hover:border-violet/60 hover:text-txt",
-  amber: "bg-transparent text-dim border border-line2 hover:border-amber/60 hover:text-txt",
-  up: "bg-transparent text-dim border border-line2 hover:border-up/60 hover:text-txt",
-  down: "bg-transparent text-dim border border-line2 hover:border-down/60 hover:text-txt",
+  violet: "bg-transparent text-fg-tertiary border border-line-strong hover:border-accent-primary/60 hover:text-fg-primary",
+  amber: "bg-transparent text-fg-tertiary border border-line-strong hover:border-accent-warning/60 hover:text-fg-primary",
+  up: "bg-transparent text-fg-tertiary border border-line-strong hover:border-value-positive/60 hover:text-fg-primary",
+  down: "bg-transparent text-fg-tertiary border border-line-strong hover:border-value-negative/60 hover:text-fg-primary",
 };
 
 export interface ButtonClassOptions {

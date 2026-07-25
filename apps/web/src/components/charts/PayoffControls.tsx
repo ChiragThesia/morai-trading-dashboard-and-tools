@@ -53,7 +53,7 @@ export function PayoffControls({
   return (
     <ChipRail
       ariaLabel="Chart date and series controls"
-      className="mb-2 items-center font-mono text-[9px] text-dim"
+      className="mb-2 items-center font-mono text-[9px] text-fg-tertiary"
     >
       <span className="shrink-0 snap-start">Date:</span>
       <Button
@@ -72,7 +72,7 @@ export function PayoffControls({
         value={dateInputValue}
         onChange={(e) => { onDateChange(e.target.value); }}
         style={{ colorScheme: "dark" }}
-        className="shrink-0 snap-start rounded-[3px] border border-line2 bg-raise px-[7px] py-0.5 font-mono text-[11px] text-txt focus-visible:border-violet focus-visible:ring-2 focus-visible:ring-violet/40 focus-visible:outline-none"
+        className="shrink-0 snap-start rounded-[3px] border border-line-strong bg-surface-overlay px-[7px] py-0.5 font-mono text-[11px] text-fg-primary focus-visible:border-accent-primary focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:outline-none"
       />
       <Button
         size="touch"
@@ -86,7 +86,7 @@ export function PayoffControls({
         Today
       </Button>
 
-      <span className="mx-0.5 h-3 w-px shrink-0 snap-start bg-line2" aria-hidden="true" />
+      <span className="mx-0.5 h-3 w-px shrink-0 snap-start bg-line-strong" aria-hidden="true" />
 
       {TOGGLE_META.map(({ key, label }) => {
         const on = toggles[key];

@@ -39,14 +39,14 @@ function baseProps(overrides: Partial<Props> = {}): Props {
 describe("LiveStatusBadge", () => {
   // ── 1. Three states render the exact labels + tokens ─────────────────────
 
-  it("renders LIVE with the text-up token and a pulsing dot", () => {
+  it("renders LIVE with the text-value-positive token and a pulsing dot", () => {
     const { container } = render(<LiveStatusBadge {...baseProps({ status: "live" })} />);
     expect(screen.getByText("LIVE")).toBeDefined();
-    expect(container.querySelector(".text-up")).not.toBeNull();
+    expect(container.querySelector(".text-value-positive")).not.toBeNull();
     expect(container.querySelector(".live-dot")).not.toBeNull();
   });
 
-  it("renders QUIET with the text-dim token and no dot, when no ping has ever arrived (isRth null)", () => {
+  it("renders QUIET with the text-fg-tertiary token and no dot, when no ping has ever arrived (isRth null)", () => {
     const { container } = render(
       <LiveStatusBadge
         {...baseProps({
@@ -58,11 +58,11 @@ describe("LiveStatusBadge", () => {
       />,
     );
     expect(screen.getByText("QUIET")).toBeDefined();
-    expect(container.querySelector(".text-dim")).not.toBeNull();
+    expect(container.querySelector(".text-fg-tertiary")).not.toBeNull();
     expect(container.querySelector(".live-dot")).toBeNull();
   });
 
-  it("renders QUIET with the text-dim token when the market is confirmed closed (isRth false)", () => {
+  it("renders QUIET with the text-fg-tertiary token when the market is confirmed closed (isRth false)", () => {
     render(
       <LiveStatusBadge
         {...baseProps({ status: "quiet", isRth: false, hasReceivedFirstTick: false })}
@@ -76,11 +76,11 @@ describe("LiveStatusBadge", () => {
       <LiveStatusBadge {...baseProps({ status: "stalled", isRth: true, hasReceivedFirstTick: true })} />,
     );
     expect(screen.getByText("STALLED")).toBeDefined();
-    expect(container.querySelector(".text-down")).not.toBeNull();
-    expect(container.querySelector(".bg-downd")).not.toBeNull();
-    expect(container.querySelector(".ring-down\\/40")).not.toBeNull();
-    expect(container.querySelector(".text-amber")).toBeNull();
-    expect(container.querySelector(".bg-amber")).toBeNull();
+    expect(container.querySelector(".text-value-negative")).not.toBeNull();
+    expect(container.querySelector(".bg-value-negative-surface")).not.toBeNull();
+    expect(container.querySelector(".ring-value-negative\\/40")).not.toBeNull();
+    expect(container.querySelector(".text-accent-warning")).toBeNull();
+    expect(container.querySelector(".bg-accent-warning")).toBeNull();
     expect(container.querySelector(".live-dot")).toBeNull();
   });
 
@@ -101,7 +101,7 @@ describe("LiveStatusBadge", () => {
     expect(screen.queryByText("QUIET")).toBeNull();
     // Same visual token as QUIET — CONNECTING is a copy-only distinction, not a 4th
     // status/visual state (D-01).
-    expect(container.querySelector(".text-dim")).not.toBeNull();
+    expect(container.querySelector(".text-fg-tertiary")).not.toBeNull();
   });
 
   it("does NOT show CONNECTING copy when isRth is null (true cold start, before any ping)", () => {

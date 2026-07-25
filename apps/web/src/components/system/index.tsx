@@ -8,9 +8,9 @@
  *   - Organisms  → screen-level cards composed in src/screens/*
  *
  * Every visual constant comes from the LOCKED token palette in src/index.css (@theme):
- *   surfaces  bg-panel / from-panel to-panel2 / bg-raise   borders ring-line / ring-line2
- *   text      text-txt / text-muted-foreground (#7b8696) / text-dim (#566273)
- *   accents   text-up text-down text-violet text-amber text-blue
+ *   surfaces  bg-surface-raised / from-surface-raised to-surface-sunken / bg-surface-overlay   borders ring-line-subtle / ring-line-strong
+ *   text      text-fg-primary / text-muted-foreground (#7b8696) / text-fg-tertiary (#566273)
+ *   accents   text-value-positive text-value-negative text-accent-primary text-accent-warning text-accent-info
  *   type      font-display (Space Grotesk) / font-mono (JetBrains Mono)
  *
  * Rule for screens: NO hardcoded hex, NO inline color/font styles. Compose these
@@ -41,7 +41,7 @@ export function Panel({
   return (
     <div
       className={cn(
-        "rounded-lg bg-gradient-to-b from-panel to-panel2 p-3 ring-1 ring-line",
+        "rounded-lg bg-gradient-to-b from-surface-raised to-surface-sunken p-3 ring-1 ring-line-subtle",
         className,
       )}
       {...props}
@@ -64,7 +64,7 @@ export function SectionLabel({
     <h3
       className={cn(
         "m-0 font-display text-[10px] font-semibold tracking-[0.09em] uppercase",
-        tone === "dim" ? "text-dim" : "text-muted-foreground",
+        tone === "dim" ? "text-fg-tertiary" : "text-muted-foreground",
         className,
       )}
       {...props}
@@ -89,10 +89,10 @@ export function Stat({
 }): React.ReactElement {
   return (
     <div className={cn("flex flex-col gap-0.5", className)}>
-      <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+      <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
         {label}
       </span>
-      <span className={cn("font-mono tabular-nums text-txt", valueClassName)}>
+      <span className={cn("font-mono tabular-nums text-fg-primary", valueClassName)}>
         {value}
       </span>
     </div>
@@ -123,7 +123,7 @@ export function MetricChip({
       data-testid={dataTestId}
       className={cn(
         "flex items-center gap-1.5 rounded-md px-3 py-1.5 ring-1",
-        alert ? "bg-downd ring-down/40" : "bg-raise/40 ring-line",
+        alert ? "bg-value-negative-surface ring-value-negative/40" : "bg-surface-overlay/40 ring-line-subtle",
         className,
       )}
     >
@@ -162,7 +162,7 @@ export function Tag({
     <span
       data-testid={dataTestId}
       className={cn(
-        "rounded-sm border border-line2 px-1 py-px font-mono text-[10px] text-dim",
+        "rounded-sm border border-line-strong px-1 py-px font-mono text-[10px] text-fg-tertiary",
         className,
       )}
     >

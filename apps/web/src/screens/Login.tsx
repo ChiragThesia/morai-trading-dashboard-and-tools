@@ -93,17 +93,17 @@ export function Login() {
     >
       <Panel className="w-full max-w-[360px] rounded-xl p-6">
         {/* Brand logotype: MOR + AI (violet) — subhead token */}
-        <div className="mb-5 font-display text-base leading-[1.1] font-bold text-txt">
-          MOR<strong className="text-violet">AI</strong>
+        <div className="mb-5 font-display text-base leading-[1.1] font-bold text-fg-primary">
+          MOR<strong className="text-accent-primary">AI</strong>
         </div>
 
         {/* Heading: "Sign in" — subhead token */}
-        <h1 className="mb-1.5 font-display text-base leading-[1.1] font-bold text-txt">
+        <h1 className="mb-1.5 font-display text-base leading-[1.1] font-bold text-fg-primary">
           Sign in
         </h1>
 
         {/* Sub-heading: label token, dim color */}
-        <p className="mb-5 font-mono text-[10px] leading-[1.4] text-dim">
+        <p className="mb-5 font-mono text-[10px] leading-[1.4] text-fg-tertiary">
           Trading dashboard — access restricted to authorized users
         </p>
 
@@ -155,7 +155,7 @@ export function Login() {
 
           {/* Inline error — coral, label token, locked copy */}
           {error !== null && (
-            <p role="alert" className="mb-3 font-mono text-[10px] leading-[1.4] text-down">
+            <p role="alert" className="mb-3 font-mono text-[10px] leading-[1.4] text-value-negative">
               {error}
             </p>
           )}

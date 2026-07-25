@@ -320,11 +320,11 @@ describe("AnalyzerMobile — J9 chart props + J8 controls + caption (D-09)", () 
     expect(screen.getByTestId("date-picker-input")).toBeTruthy();
   });
 
-  it("caption: worst-of dot + '{source} · {asOf}', bg-up when both contexts ok and rth", () => {
+  it("caption: worst-of dot + '{source} · {asOf}', bg-value-positive when both contexts ok and rth", () => {
     render(<Analyzer />);
     const caption = screen.getByTestId("analyzer-mobile-caption");
     expect(caption.textContent).toContain(`${pickerSnapshotFixture.source} · ${pickerSnapshotFixture.asOf}`);
-    expect(caption.querySelector(".bg-up")).not.toBeNull();
+    expect(caption.querySelector(".bg-value-positive")).not.toBeNull();
     expect(caption.textContent).not.toContain("AH — indicative");
   });
 
@@ -333,7 +333,7 @@ describe("AnalyzerMobile — J9 chart props + J8 controls + caption (D-09)", () 
     render(<Analyzer />);
     const caption = screen.getByTestId("analyzer-mobile-caption");
     expect(caption.textContent).toContain("AH — indicative");
-    expect(caption.querySelector(".bg-amber")).not.toBeNull();
+    expect(caption.querySelector(".bg-accent-warning")).not.toBeNull();
   });
 });
 

@@ -165,7 +165,7 @@ function PositionsTable({
 
   if (rows.length === 0) {
     return (
-      <p className="font-mono text-[11px] text-dim">
+      <p className="font-mono text-[11px] text-fg-tertiary">
         No open positions. Register a calendar via the API or paste a TOS order in the Analyzer.
       </p>
     );
@@ -221,7 +221,7 @@ function PositionsTable({
                   >
                     <Badge
                       variant="outline"
-                      className="border-amber/50 px-1 py-0 font-mono text-[9px] text-amber"
+                      className="border-accent-warning/50 px-1 py-0 font-mono text-[9px] text-accent-warning"
                     >
                       IV n/a
                     </Badge>
@@ -244,7 +244,7 @@ function PositionsTable({
       render: (r) => (
         <div className="flex flex-col items-end">
           <span className="text-[11px] text-muted-foreground">{r.expiry.line1}</span>
-          <span className="text-[9px] text-dim">{r.expiry.line2}</span>
+          <span className="text-[9px] text-fg-tertiary">{r.expiry.line2}</span>
         </div>
       ),
     },
@@ -255,7 +255,7 @@ function PositionsTable({
         const { netVal: val, liveTs } = resolvedFor(r);
         const flashCn = liveTs !== null ? `live-cell-flash ${liveCellCn(liveTs)}` : "";
         return (
-          <span key={`${r.key}-netval-${liveTs ?? ""}`} className={cn("text-txt", flashCn)}>
+          <span key={`${r.key}-netval-${liveTs ?? ""}`} className={cn("text-fg-primary", flashCn)}>
             {usd(val)}
           </span>
         );
@@ -270,7 +270,7 @@ function PositionsTable({
         return (
           <span
             key={`${r.key}-unreal-${liveTs ?? ""}`}
-            className={cn(unreal === null ? "text-dim" : signClass(unreal), flashCn)}
+            className={cn(unreal === null ? "text-fg-tertiary" : signClass(unreal), flashCn)}
           >
             {unreal === null ? "—" : signedUsd(unreal)}
           </span>
@@ -340,7 +340,7 @@ function PositionsTable({
             <VerdictChip row={verdict} marketSession={verdictMarketSession} />
           </span>
         ) : (
-          <span className="text-dim">—</span>
+          <span className="text-fg-tertiary">—</span>
         );
       },
     },
@@ -351,7 +351,7 @@ function PositionsTable({
       columns={columns}
       rows={rows}
       rowTestId={(r) => `position-row-${r.key}`}
-      rowClassName={(r) => cn(excluded.has(r.key) && "opacity-40", highlightedRowKey === r.key && "bg-raise/20")}
+      rowClassName={(r) => cn(excluded.has(r.key) && "opacity-40", highlightedRowKey === r.key && "bg-surface-overlay/20")}
       onRowClick={(r) => { onSelectRow(r.key); }}
       onRowMouseEnter={(r) => { onHoverRow(r.key); }}
       onRowMouseLeave={() => { onHoverRow(null); }}
@@ -369,23 +369,23 @@ function PositionsTable({
       }}
       footer={
         // Net total row — uses resolveLivePositionRow over all included legs.
-        <tr className="border-t border-line font-semibold">
+        <tr className="border-t border-line-subtle font-semibold">
           <td className="px-2 py-1.5" />
-          <td className="px-2 py-1.5 text-left text-txt">
-            Net <span className="font-mono text-[10px] font-normal text-dim">· {includedCount}/{rows.length}</span>
+          <td className="px-2 py-1.5 text-left text-fg-primary">
+            Net <span className="font-mono text-[10px] font-normal text-fg-tertiary">· {includedCount}/{rows.length}</span>
           </td>
           <td className="px-2 py-1.5" />
           {/* Net val total */}
           <td
             key={`total-netval-${total.liveTs ?? ""}`}
-            className={cn("px-2 py-1.5 text-right text-txt", total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
+            className={cn("px-2 py-1.5 text-right text-fg-primary", total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
           >
             {usd(total.netVal)}
           </td>
           {/* Unreal total */}
           <td
             key={`total-unreal-${total.liveTs ?? ""}`}
-            className={cn("px-2 py-1.5 text-right", total.unreal === null ? "text-dim" : signClass(total.unreal), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
+            className={cn("px-2 py-1.5 text-right", total.unreal === null ? "text-fg-tertiary" : signClass(total.unreal), total.liveTs !== null && `live-cell-flash ${liveCellCn(total.liveTs)}`)}
           >
             {total.unreal === null ? "—" : signedUsd(total.unreal)}
           </td>
@@ -441,7 +441,7 @@ function GexRail({
 }): React.ReactElement {
   if (gex === undefined) {
     return (
-      <Panel className="p-8 text-center font-mono text-xs text-dim" data-testid="gex-rail-empty">
+      <Panel className="p-8 text-center font-mono text-xs text-fg-tertiary" data-testid="gex-rail-empty">
         GEX data unavailable — run fetch-chain to populate.
       </Panel>
     );
@@ -471,12 +471,12 @@ function GexRail({
           {keyLevelsFor(gex, spot).map((lvl) => (
             <div
               key={lvl.label}
-              className="flex items-center justify-between gap-2 rounded-lg bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+              className="flex items-center justify-between gap-2 rounded-lg bg-surface-overlay/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line-subtle"
             >
               <span className={cn(lvl.colorClass, "font-display font-semibold tracking-[0.09em] uppercase")}>
                 {lvl.label}
               </span>
-              <span className="text-txt">{lvl.value !== null ? lvl.value.toFixed(0) : "—"}</span>
+              <span className="text-fg-primary">{lvl.value !== null ? lvl.value.toFixed(0) : "—"}</span>
             </div>
           ))}
         </div>
@@ -531,7 +531,7 @@ function PillHeader({
   return (
     <div
       data-testid="pill-header"
-      className="sticky top-0 z-10 -mx-4 border-b border-line bg-bg/90 px-4 py-2 backdrop-blur"
+      className="sticky top-0 z-10 -mx-4 border-b border-line-subtle bg-surface-base/90 px-4 py-2 backdrop-blur"
     >
       {/* Full row — all 10 chips, single flex-wrap row (35.1 D-12: the component only
           mounts at ≥1024px now; the Phase 35 mobile priority row + secondary ChipRail
@@ -544,26 +544,26 @@ function PillHeader({
             </span>
           }
           value={displaySpot !== null ? displaySpot.toFixed(1) : "—"}
-          valueClassName={liveStatus === "live" ? "text-blue" : "text-dim"}
+          valueClassName={liveStatus === "live" ? "text-accent-info" : "text-fg-tertiary"}
         />
         <MetricChip
           label="net γ /1%"
           value={gex !== undefined ? fmtGammaCompact(gex.netGammaAtSpot) : "—"}
           alert={regime === "AMPLIFY"}
-          valueClassName={regime === null ? "text-muted-foreground" : regime === "AMPLIFY" ? "text-down" : "text-up"}
+          valueClassName={regime === null ? "text-muted-foreground" : regime === "AMPLIFY" ? "text-value-negative" : "text-value-positive"}
         />
         {/* 0DTE γ — today's expiry only (byExpiry rollup); "—" once it rolls off */}
         <MetricChip
           label="0DTE γ"
           value={zeroDte !== null ? fmtGammaCompact(zeroDte) : "—"}
           valueClassName={
-            zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-down" : "text-up"
+            zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-value-negative" : "text-value-positive"
           }
         />
         <MetricChip
           label="γ flip"
           value={gex !== undefined && gex.flip !== null ? gex.flip.toFixed(0) : "—"}
-          valueClassName="text-amber"
+          valueClassName="text-accent-warning"
         />
         <MetricChip label="VIX" value={vix !== null ? vix.toFixed(2) : "—"} />
         <MetricChip label="VVIX" value={vvix !== null ? vvix.toFixed(1) : "—"} />
@@ -660,7 +660,7 @@ function OverviewDesktop(): React.ReactElement {
   if (exitsIsPending && exitsDataIsUndefined) {
     exitsBody = (
       <div
-        className="font-mono text-[10px] text-dim"
+        className="font-mono text-[10px] text-fg-tertiary"
         data-testid="held-positions-loading"
       >
         Loading exit verdicts…
@@ -669,7 +669,7 @@ function OverviewDesktop(): React.ReactElement {
   } else if (exitsIsError) {
     exitsBody = (
       <div className="flex items-center gap-2" data-testid="held-positions-error">
-        <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load exit verdicts.</p>
+        <p className="m-0 font-mono text-[12px] text-value-negative">Couldn&apos;t load exit verdicts.</p>
         <Button
           onClick={() => {
             void exitsRefetch();
@@ -682,8 +682,8 @@ function OverviewDesktop(): React.ReactElement {
   } else if (exitsSnapshot === null) {
     exitsBody = (
       <div className="flex flex-col gap-1.5" data-testid="held-positions-cold-start">
-        <p className="m-0 font-display text-sm font-bold text-txt">Exit advisor warming up</p>
-        <p className="m-0 font-mono text-[11px] text-dim">
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">Exit advisor warming up</p>
+        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
           First verdict pending — check back after the next chain snapshot.
         </p>
       </div>
@@ -691,8 +691,8 @@ function OverviewDesktop(): React.ReactElement {
   } else if (exitsSnapshot.positions.length === 0) {
     exitsBody = (
       <div className="flex flex-col gap-1.5" data-testid="held-positions-empty">
-        <p className="m-0 font-display text-sm font-bold text-txt">No open positions</p>
-        <p className="m-0 font-mono text-[11px] text-dim">
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">No open positions</p>
+        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
           Nothing to advise on — the exit advisor activates once you have an open calendar.
         </p>
       </div>
@@ -743,31 +743,31 @@ function OverviewDesktop(): React.ReactElement {
                 <div className="flex flex-wrap items-center gap-2">
                   {gex !== undefined && (
                     <div
-                      className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+                      className="flex items-center gap-1.5 rounded-md bg-surface-overlay/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line-subtle"
                       data-testid="gex-freshness"
                     >
-                      <span className={cn("size-1.5 rounded-full", gexFresh ? "bg-up" : "bg-amber")} />
-                      <span className="text-dim">GEX as of</span>
-                      <span className="text-txt">{gexAsOf}</span>
+                      <span className={cn("size-1.5 rounded-full", gexFresh ? "bg-value-positive" : "bg-accent-warning")} />
+                      <span className="text-fg-tertiary">GEX as of</span>
+                      <span className="text-fg-primary">{gexAsOf}</span>
                       {gexAgeMs !== null && (
-                        <span className={gexFresh ? "text-up" : "text-amber"}>· {relAge(gexAgeMs)}</span>
+                        <span className={gexFresh ? "text-value-positive" : "text-accent-warning"}>· {relAge(gexAgeMs)}</span>
                       )}
                     </div>
                   )}
                   <div
-                    className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+                    className="flex items-center gap-1.5 rounded-md bg-surface-overlay/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line-subtle"
                     data-testid="live-mark-freshness"
                   >
-                    <span className={cn("size-1.5 rounded-full", markFresh ? "bg-up" : "bg-amber")} />
-                    <span className="text-dim">mark as of</span>
-                    <span className="text-txt">{markAsOf}</span>
+                    <span className={cn("size-1.5 rounded-full", markFresh ? "bg-value-positive" : "bg-accent-warning")} />
+                    <span className="text-fg-tertiary">mark as of</span>
+                    <span className="text-fg-primary">{markAsOf}</span>
                     {markAgeMs !== null && (
-                      <span className={markFresh ? "text-up" : "text-amber"}>· {relAge(markAgeMs)}</span>
+                      <span className={markFresh ? "text-value-positive" : "text-accent-warning"}>· {relAge(markAgeMs)}</span>
                     )}
                   </div>
                 </div>
               }
-              action={<span className="hidden font-mono text-[10px] text-dim lg:inline">view-only · Analyzer →</span>}
+              action={<span className="hidden font-mono text-[10px] text-fg-tertiary lg:inline">view-only · Analyzer →</span>}
             />
             {/* OVW-05 + follow-on: shared control strip — forward date projection (projects
                 scenario.payoffCurve via daysForward; @exp unaffected, D-01) + series toggles.
@@ -788,7 +788,7 @@ function OverviewDesktop(): React.ReactElement {
                 removed in-chart wall/flip text labels — KISS collision fix). */}
             <div className="mb-1 flex flex-wrap gap-3 font-mono text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-0.5 w-3.5 rounded-full bg-violet" />
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-accent-primary" />
                 T+0
               </span>
               <span className="flex items-center gap-1.5">
@@ -796,15 +796,15 @@ function OverviewDesktop(): React.ReactElement {
                 @ exp
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-0.5 w-3.5 rounded-full bg-amber" />
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-accent-warning" />
                 γ flip
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-0.5 w-3.5 rounded-full bg-up" />
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-value-positive" />
                 call wall
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-0.5 w-3.5 rounded-full bg-down" />
+                <span className="inline-block h-0.5 w-3.5 rounded-full bg-value-negative" />
                 put wall
               </span>
             </div>
@@ -852,7 +852,7 @@ function OverviewDesktop(): React.ReactElement {
                   <Dialog>
                     <DialogTrigger
                       data-testid="exit-rules-trigger"
-                      className="rounded-md bg-raise/40 px-2.5 py-1 font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase ring-1 ring-line hover:text-txt"
+                      className="rounded-md bg-surface-overlay/40 px-2.5 py-1 font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase ring-1 ring-line-subtle hover:text-fg-primary"
                     >
                       Exit rules ▸
                     </DialogTrigger>

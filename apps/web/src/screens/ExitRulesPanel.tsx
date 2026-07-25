@@ -20,11 +20,11 @@ export function ExitRulesPanel({ ruleSet }: ExitRulesPanelProps): React.ReactEle
         {ruleSet.map((entry) => (
           <div
             key={entry.id}
-            className="flex flex-col gap-0.5 border-b border-line/40 pb-1.5 last:border-b-0"
+            className="flex flex-col gap-0.5 border-b border-line-subtle/40 pb-1.5 last:border-b-0"
             data-testid={`exit-rule-${entry.id}`}
           >
             <SectionLabel>{`${entry.id} · ${entry.kind}`}</SectionLabel>
-            <p className="m-0 font-mono text-[10px] text-dim">{entry.rationale}</p>
+            <p className="m-0 font-mono text-[10px] text-fg-tertiary">{entry.rationale}</p>
           </div>
         ))}
       </div>

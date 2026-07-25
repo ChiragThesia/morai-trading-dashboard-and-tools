@@ -14,15 +14,15 @@ describe("design system molecules", () => {
     render(<Panel data-testid="p">hello</Panel>);
     const el = screen.getByTestId("p");
     expect(el.textContent).toBe("hello");
-    expect(el.className).toContain("from-panel");
-    expect(el.className).toContain("ring-line");
+    expect(el.className).toContain("from-surface-raised");
+    expect(el.className).toContain("ring-line-subtle");
   });
 
   it("SectionLabel uses the muted token by default and dim when tone=dim", () => {
     const { rerender } = render(<SectionLabel>open</SectionLabel>);
     expect(screen.getByText("open").className).toContain("text-muted-foreground");
     rerender(<SectionLabel tone="dim">open</SectionLabel>);
-    expect(screen.getByText("open").className).toContain("text-dim");
+    expect(screen.getByText("open").className).toContain("text-fg-tertiary");
   });
 
   it("Stat shows label + value", () => {
@@ -32,9 +32,9 @@ describe("design system molecules", () => {
   });
 
   it("MetricChip swaps to the danger surface when alert", () => {
-    render(<MetricChip label="net γ" value="-$56B" alert valueClassName="text-down" />);
+    render(<MetricChip label="net γ" value="-$56B" alert valueClassName="text-value-negative" />);
     const value = screen.getByText("-$56B");
-    expect(value.className).toContain("text-down");
+    expect(value.className).toContain("text-value-negative");
   });
 
   it("PanelHeading renders title, badge and action", () => {
@@ -52,35 +52,35 @@ describe("Button — shared control-affordance primitive (Phase 21)", () => {
 
   it("carries the focus-visible ring class on every variant", () => {
     render(<Button>focus me</Button>);
-    expect(screen.getByText("focus me").className).toContain("focus-visible:ring-violet");
+    expect(screen.getByText("focus me").className).toContain("focus-visible:ring-accent-primary");
   });
 
-  it("primary renders a filled violet CTA (bg-violet, dark text)", () => {
+  it("primary renders a filled violet CTA (bg-accent-primary, dark text)", () => {
     render(<Button variant="primary">Analyze</Button>);
     const el = screen.getByText("Analyze");
-    expect(el.className).toContain("bg-violet");
-    expect(el.className).toContain("text-bg");
+    expect(el.className).toContain("bg-accent-primary");
+    expect(el.className).toContain("text-surface-base");
   });
 
   it("secondary renders the raised-surface outline (default variant)", () => {
     render(<Button>Retry</Button>);
     const el = screen.getByText("Retry");
-    expect(el.className).toContain("bg-raise");
-    expect(el.className).toContain("border-line2");
+    expect(el.className).toContain("bg-surface-overlay");
+    expect(el.className).toContain("border-line-strong");
   });
 
   it("ghost renders transparent with a hover-only surface", () => {
     render(<Button variant="ghost">Clear all</Button>);
     const el = screen.getByText("Clear all");
     expect(el.className).toContain("bg-transparent");
-    expect(el.className).toContain("hover:bg-line/60");
+    expect(el.className).toContain("hover:bg-line-subtle/60");
   });
 
   it("destructive renders transparent with a hover-down tint", () => {
     render(<Button variant="destructive">{"×"}</Button>);
     const el = screen.getByText("×");
-    expect(el.className).toContain("hover:text-down");
-    expect(el.className).toContain("hover:bg-down/15");
+    expect(el.className).toContain("hover:text-value-negative");
+    expect(el.className).toContain("hover:bg-value-negative/15");
   });
 
   it("toggle active=true is a FILLED accent (not a faint tint) — differs from active=false", () => {
@@ -90,9 +90,9 @@ describe("Button — shared control-affordance primitive (Phase 21)", () => {
       </Button>,
     );
     const onClass = screen.getByText("Combine").className;
-    expect(onClass).toContain("bg-violet");
-    expect(onClass).toContain("text-bg");
-    expect(onClass).not.toContain("bg-violet/10");
+    expect(onClass).toContain("bg-accent-primary");
+    expect(onClass).toContain("text-surface-base");
+    expect(onClass).not.toContain("bg-accent-primary/10");
 
     rerender(
       <Button variant="toggle" active={false}>
@@ -101,8 +101,8 @@ describe("Button — shared control-affordance primitive (Phase 21)", () => {
     );
     const offClass = screen.getByText("Combine").className;
     expect(offClass).toContain("bg-transparent");
-    expect(offClass).toContain("border-line2");
-    expect(offClass).not.toContain("bg-violet");
+    expect(offClass).toContain("border-line-strong");
+    expect(offClass).not.toContain("bg-accent-primary");
   });
 
   it("toggle honors tone for the active fill (amber/up)", () => {
@@ -111,7 +111,7 @@ describe("Button — shared control-affordance primitive (Phase 21)", () => {
         Combine
       </Button>,
     );
-    expect(screen.getByText("Combine").className).toContain("bg-amber");
+    expect(screen.getByText("Combine").className).toContain("bg-accent-warning");
   });
 
   it("disabled dims the control and blocks pointer events", () => {
@@ -183,8 +183,8 @@ describe("Tag", () => {
     render(<Tag data-testid="t">x</Tag>);
     const cls = screen.getByTestId("t").className;
     expect(cls).toContain("font-mono");
-    expect(cls).toContain("text-dim");
-    expect(cls).toContain("border-line2");
+    expect(cls).toContain("text-fg-tertiary");
+    expect(cls).toContain("border-line-strong");
   });
 
   it("has no hardcoded hex or inline colour", () => {

@@ -45,7 +45,7 @@ function Disclosure({
   // body mounts the instant the user opens it — jsdom fires the native `toggle` event async).
   const [open, setOpen] = useState(false);
   return (
-    <details className="group border-t border-line/40" open={open}>
+    <details className="group border-t border-line-subtle/40" open={open}>
       <summary
         onClick={(e) => {
           e.preventDefault();
@@ -112,12 +112,12 @@ export function AnalyzerMobile(): React.ReactElement {
   const repullControl = (
     <div className="flex items-center gap-1.5">
       {repull.isSuccess && (
-        <span className="font-mono text-[9px] text-dim" data-testid="repull-status">
+        <span className="font-mono text-[9px] text-fg-tertiary" data-testid="repull-status">
           queued · ~4 min
         </span>
       )}
       {repull.isError && (
-        <span className="font-mono text-[9px] text-down" data-testid="repull-status">
+        <span className="font-mono text-[9px] text-value-negative" data-testid="repull-status">
           failed
         </span>
       )}
@@ -140,14 +140,14 @@ export function AnalyzerMobile(): React.ReactElement {
   let candidatesBody: React.ReactElement;
   if (isLoading) {
     candidatesBody = (
-      <p className="font-mono text-[10px] text-dim" data-testid="picker-loading">
+      <p className="font-mono text-[10px] text-fg-tertiary" data-testid="picker-loading">
         Loading candidates…
       </p>
     );
   } else if (isError) {
     candidatesBody = (
       <div className="flex flex-col items-start gap-2" data-testid="picker-error">
-        <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load candidates.</p>
+        <p className="m-0 font-mono text-[12px] text-value-negative">Couldn&apos;t load candidates.</p>
         <Button
           onClick={() => {
             void refetch();
@@ -160,8 +160,8 @@ export function AnalyzerMobile(): React.ReactElement {
   } else if (snapshot === null) {
     candidatesBody = (
       <div className="flex flex-col gap-1.5" data-testid="picker-empty-cold-start">
-        <p className="m-0 font-display text-sm font-bold text-txt">Picker warming up</p>
-        <p className="m-0 font-mono text-[11px] text-dim">
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">Picker warming up</p>
+        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
           First scoring run pending — check back after the next chain snapshot.
         </p>
       </div>
@@ -169,9 +169,9 @@ export function AnalyzerMobile(): React.ReactElement {
   } else if (sortedCandidates.length === 0 && pastedCandidates.length === 0) {
     candidatesBody = (
       <div className="flex flex-col gap-1.5" data-testid="picker-empty-filtered">
-        <p className="m-0 font-display text-sm font-bold text-txt">No candidates in this snapshot</p>
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">No candidates in this snapshot</p>
         {describeEmptyBoard(snapshot).map((line) => (
-          <p key={line} className="m-0 font-mono text-[11px] text-dim">
+          <p key={line} className="m-0 font-mono text-[11px] text-fg-tertiary">
             {line}
           </p>
         ))}
@@ -198,11 +198,11 @@ export function AnalyzerMobile(): React.ReactElement {
           wrapperTestId="mobile-candidate-table-scroll"
         />
         {sortedCandidates.length > 0 && (
-          <p className="font-mono text-[9px] leading-[1.5] text-dim" data-testid="rail-legend">
+          <p className="font-mono text-[9px] leading-[1.5] text-fg-tertiary" data-testid="rail-legend">
             {"θ = daily $ decay · vega = $ per vol-pt · "}
-            <span className="text-amber">◂f</span>
+            <span className="text-accent-warning">◂f</span>
             {"/"}
-            <span className="text-amber">◂b</span>
+            <span className="text-accent-warning">◂b</span>
             {" = event on front / back leg"}
           </p>
         )}
@@ -238,7 +238,7 @@ export function AnalyzerMobile(): React.ReactElement {
               setPasteText(e.target.value);
             }}
             placeholder="Paste a TOS calendar order…"
-            className="min-h-11 min-w-0 flex-1 rounded-[3px] border border-line2 bg-transparent px-2 font-mono text-base text-txt"
+            className="min-h-11 min-w-0 flex-1 rounded-[3px] border border-line-strong bg-transparent px-2 font-mono text-base text-fg-primary"
           />
           <Button
             variant="primary"
@@ -251,7 +251,7 @@ export function AnalyzerMobile(): React.ReactElement {
           </Button>
         </div>
         {pasteError !== null && (
-          <p data-testid="picker-paste-error" className="mt-1.5 font-mono text-[9px] text-down">
+          <p data-testid="picker-paste-error" className="mt-1.5 font-mono text-[9px] text-value-negative">
             {pasteError}
           </p>
         )}
@@ -310,7 +310,7 @@ export function AnalyzerMobile(): React.ReactElement {
         <section className="px-4">
           <Disclosure summary="Term structure + your legs">
             {selected.breakdown.length === 0 ? (
-              <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+              <p className="font-mono text-[10px] text-fg-tertiary">{PASTED_NOT_SCORED_NOTE}</p>
             ) : (
               snapshot !== null && (
                 <TermStructureChart
@@ -324,14 +324,14 @@ export function AnalyzerMobile(): React.ReactElement {
           </Disclosure>
           <Disclosure summary="Why this calendar">
             {selected.breakdown.length === 0 ? (
-              <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+              <p className="font-mono text-[10px] text-fg-tertiary">{PASTED_NOT_SCORED_NOTE}</p>
             ) : (
               snapshot !== null && <WhyPanel candidate={selected} gex={snapshot.gex} />
             )}
           </Disclosure>
           <Disclosure summary="Entry / exit plan">
             {selected.breakdown.length === 0 ? (
-              <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+              <p className="font-mono text-[10px] text-fg-tertiary">{PASTED_NOT_SCORED_NOTE}</p>
             ) : (
               <EntryExitPlan candidate={selected} sizing={snapshot?.sizing ?? null} />
             )}

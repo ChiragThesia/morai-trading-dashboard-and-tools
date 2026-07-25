@@ -72,7 +72,7 @@ describe("ReauthWizard", () => {
     });
 
     const traderChip = screen.getByTestId("reauth-step-chip-trader");
-    expect(traderChip.className).toContain("bg-violet");
+    expect(traderChip.className).toContain("bg-accent-primary");
   });
 
   it("shows a scoped per-app failure + Retry that re-enters only that app's idle step", async () => {
@@ -134,8 +134,8 @@ describe("ReauthWizard", () => {
       expect(screen.getByText("Reconnected. Live data resumes on the next status check.")).toBeDefined();
     });
     expect(screen.getByRole("button", { name: "Close" })).toBeDefined();
-    expect(screen.getByTestId("reauth-step-chip-trader").className).toContain("bg-violet");
-    expect(screen.getByTestId("reauth-step-chip-market").className).toContain("bg-violet");
+    expect(screen.getByTestId("reauth-step-chip-trader").className).toContain("bg-accent-primary");
+    expect(screen.getByTestId("reauth-step-chip-market").className).toContain("bg-accent-primary");
   });
 
   it("never renders the code, state, or redirect URL anywhere", async () => {

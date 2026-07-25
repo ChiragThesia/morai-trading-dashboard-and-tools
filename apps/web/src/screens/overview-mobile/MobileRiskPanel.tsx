@@ -103,10 +103,10 @@ export function MobileRiskPanel({
       {/* Single worst-of freshness caption (D-05). */}
       <div
         data-testid="mobile-freshness"
-        className="flex items-center gap-1.5 px-4 mt-1.5 font-mono text-[9px] text-dim"
+        className="flex items-center gap-1.5 px-4 mt-1.5 font-mono text-[9px] text-fg-tertiary"
       >
         <span
-          className={cn("size-1.5 shrink-0 rounded-full", bothFresh ? "bg-up" : "bg-amber")}
+          className={cn("size-1.5 shrink-0 rounded-full", bothFresh ? "bg-value-positive" : "bg-accent-warning")}
         />
         <span className="truncate">
           GEX {freshness.gexAsOf}

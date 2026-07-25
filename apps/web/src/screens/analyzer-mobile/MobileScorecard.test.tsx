@@ -79,7 +79,7 @@ describe("MobileScorecard — J7 verdict hero", () => {
 
     const name = screen.getByTestId("risk-profile-selected-name");
     expect(name.textContent).toBe(TOP.name);
-    expect(name.className).toContain("text-violet");
+    expect(name.className).toContain("text-accent-primary");
     expect(name.parentElement?.textContent).toContain(contextTail(TOP));
     // AUI-04: rounded, never the raw exact-broker-value decimal (position-format's own law).
     expect(name.parentElement?.textContent).not.toContain(String(TOP.vega));
@@ -102,7 +102,7 @@ describe("MobileScorecard — J7 verdict hero", () => {
     expect(summary.textContent).toBe(
       "+ 1 more → combined debit $9637 (max loss) · θ +84.5/d · vega +610.00",
     );
-    expect(summary.className).toContain("text-amber");
+    expect(summary.className).toContain("text-accent-warning");
   });
 
   it("J7e: one checklist row per active score rule grouped under EDGE/RISK/FIT, θ folded into the headline, gate-drops fine print", () => {
@@ -133,12 +133,12 @@ describe("MobileScorecard — J7 verdict hero", () => {
     within(screen.getByTestId("mobile-verdict-group-FIT")).getByTestId("checklist-gexFit");
   });
 
-  it("J7e: the guard candidate (fwdIv null) shows the fwdEdge row as — n/a in text-dim", () => {
+  it("J7e: the guard candidate (fwdIv null) shows the fwdEdge row as — n/a in text-fg-tertiary", () => {
     render(<MobileScorecard candidate={GUARD} {...BASE} />);
     const fwd = screen.getByTestId("checklist-fwdEdge");
     expect(fwd.textContent).toContain("—");
     expect(fwd.textContent).toContain("n/a");
-    expect(fwd.querySelector(".text-dim")).not.toBeNull();
+    expect(fwd.querySelector(".text-fg-tertiary")).not.toBeNull();
   });
 
   it("J7e: CALIBRATING row appears when context is non-empty", () => {
@@ -160,7 +160,7 @@ describe("MobileScorecard — J7 verdict hero", () => {
     const session = screen.getByTestId("checklist-session");
     expect(session.textContent).toContain("SESSION");
     expect(session.textContent).toContain("AH — indicative");
-    expect(session.querySelector(".text-amber")).not.toBeNull();
+    expect(session.querySelector(".text-accent-warning")).not.toBeNull();
     // Renders first — before the first score row.
     const fwd = screen.getByTestId("checklist-fwdEdge");
     expect(session.compareDocumentPosition(fwd) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

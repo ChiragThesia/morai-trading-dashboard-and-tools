@@ -176,7 +176,7 @@ describe("PayoffChart — D-02 T+0 exclusion note", () => {
     render(<PayoffChart {...baseProps()} excludedFromT0Count={1} />);
     const note = screen.getByTestId("t0-exclusion-note");
     expect(note.textContent).toBe("T+0 excludes 1 position: IV n/a");
-    expect(note.className).toContain("text-amber");
+    expect(note.className).toContain("text-accent-warning");
   });
 
   it("renders the plural exclusion note at count 3", () => {

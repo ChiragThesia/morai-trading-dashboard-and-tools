@@ -6,9 +6,9 @@
  * position (UI-SPEC Surface 3).
  *
  * States (D-01 3-state model, 20-UI-SPEC.md Color contract):
- *   LIVE    — text-up + 6px pulsing dot (.live-dot) — ticks arriving during RTH.
- *   QUIET   — text-dim, transparent, no dot — market closed (benign).
- *   STALLED — text-down on bg-downd + ring-down/40, no dot — a genuine alarm (D-20):
+ *   LIVE    — text-value-positive + 6px pulsing dot (.live-dot) — ticks arriving during RTH.
+ *   QUIET   — text-fg-tertiary, transparent, no dot — market closed (benign).
+ *   STALLED — text-value-negative on bg-value-negative-surface + ring-value-negative/40, no dot — a genuine alarm (D-20):
  *             RTH but ticks frozen past STALL_THRESHOLD_MS, or transport dead.
  *   CONNECTING — a copy-only condition (SAME classes as QUIET, D-11): status==='quiet'
  *             AND the last heartbeat's isRth===true AND no tick has arrived yet. This
@@ -62,19 +62,19 @@ type StatusConfig = {
 const STATUS_CONFIG = {
   live: {
     label: "LIVE",
-    className: "text-up bg-transparent",
+    className: "text-value-positive bg-transparent",
     showDot: true,
   },
   quiet: {
     label: "QUIET",
-    className: "text-dim bg-transparent",
+    className: "text-fg-tertiary bg-transparent",
     showDot: false,
   },
   stalled: {
     // D-20 resolution: the down/red alarm token, not the retired amber "stale" look —
     // STALLED must read as a genuine fault, never merely stale.
     label: "STALLED",
-    className: "text-down bg-downd ring-1 ring-down/40",
+    className: "text-value-negative bg-value-negative-surface ring-1 ring-value-negative/40",
     showDot: false,
   },
 } as const satisfies Record<LiveStreamStatus, StatusConfig>;

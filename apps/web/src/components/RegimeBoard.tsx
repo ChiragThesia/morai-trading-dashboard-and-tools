@@ -32,10 +32,10 @@ import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
  *
  * Top → bottom, three visual tiers (loud → quiet):
  *   - Entry gate (28-06): the SIGNAL — a framed compact tile, state word colored by state,
- *     VIX·ratio·as-of on a dim second line. `state: "blind"` keeps the filled `bg-downd`
+ *     VIX·ratio·as-of on a dim second line. `state: "blind"` keeps the filled `bg-value-negative-surface`
  *     alarm treatment (loudest thing in the rail). Read straight from `usePicker().gate`.
  *   - Regime indicators: compact label-left / value-right ROWS. Band is signaled by VALUE
- *     COLOR only-when-abnormal — calm = quiet `text-txt`, warning = amber, crisis = down —
+ *     COLOR only-when-abnormal — calm = quiet `text-fg-primary`, warning = amber, crisis = down —
  *     so the eye lands on the one deviating value. ⓘ provenance tooltip kept, visually quiet.
  *   - Rates (former MacroCard): a 2-col label/value grid, dimmer + smaller than regime
  *     values (backdrop tier). Pills removed — they were the rejected look.
@@ -48,20 +48,20 @@ import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
 /** Value color is the band signal, ONLY when abnormal (NN/g: color marks what warrants
  *  attention). Calm stays quiet (default text); warning/amber, crisis/down. */
 const BAND_CLASSES: Record<RegimeBand, { text: string }> = {
-  calm: { text: "text-txt" },
-  warning: { text: "text-amber" },
-  crisis: { text: "text-down" },
+  calm: { text: "text-fg-primary" },
+  warning: { text: "text-accent-warning" },
+  crisis: { text: "text-value-negative" },
 };
 
 /** Gauge marker color reads the server-computed band — never recomputed from value/thresholds
  *  client-side (T-31-05), EXCEPT the scoped Phase-38 live-display override below (CONTEXT
  *  Area 2 Q1): while live, the 3 broker-quotable rows recompute this from the live value.
  *  Not BAND_CLASSES.dot (removed): calm needs a visible-but-unaccented color to read as a
- *  positioned marker, not the old dim `bg-line2` dot's near-invisible calm. */
+ *  positioned marker, not the old dim `bg-line-strong` dot's near-invisible calm. */
 const MARKER_CLASSES: Record<RegimeBand, string> = {
-  calm: "bg-txt",
-  warning: "bg-amber",
-  crisis: "bg-down",
+  calm: "bg-fg-primary",
+  warning: "bg-accent-warning",
+  crisis: "bg-value-negative",
 };
 
 /** id → live-band function (T-31-05 scoped display-only exception, CONTEXT Area 2 Q1).
@@ -172,7 +172,7 @@ function regimeDelta(id: string, macro: MacroResponse | undefined): { d: Delta; 
  *  still owns good/bad (a green ▲ on VIX is an UP move, not good news). */
 function DeltaChip({ id, delta }: { id: string; delta: { d: Delta; kind: DeltaKind } | null }): React.ReactElement | null {
   if (delta === null) return null;
-  const dir = delta.d.delta > 0 ? "text-up" : delta.d.delta < 0 ? "text-down" : "text-dim";
+  const dir = delta.d.delta > 0 ? "text-value-positive" : delta.d.delta < 0 ? "text-value-negative" : "text-fg-tertiary";
   return (
     <span
       className={cn("font-mono text-[9px] tabular-nums", dir)}
@@ -255,8 +255,8 @@ const TOOLTIP_COPY: Record<string, { what: string; why: string; meta: string }> 
 
 /** ⓘ tooltip trigger + condensed WHAT/WHY/META content (39-UI-SPEC.md "Tooltip layout", rev 3),
  *  shared by regime rows and rate rows — one badge/tooltip idiom, one render path so the locked
- *  copy is single-sourced. WHAT at `text-txt`, WHY at `text-dim` (both 11px); META (bands, with
- *  provenance baked in for rate rows) at the quietest `text-dim/70` (10px). Regime rows append
+ *  copy is single-sourced. WHAT at `text-fg-primary`, WHY at `text-fg-tertiary` (both 11px); META (bands, with
+ *  provenance baked in for rate rows) at the quietest `text-fg-tertiary/70` (10px). Regime rows append
  *  the server's own source/rationale below META via `source`, unchanged content/behavior. */
 function InfoTooltip({
   testId,
@@ -287,15 +287,15 @@ function InfoTooltip({
             padding: 0,
           }}
         >
-          <Badge variant="outline" className="border-line2 px-1 py-0 font-mono text-[10px] text-dim">
+          <Badge variant="outline" className="border-line-strong px-1 py-0 font-mono text-[10px] text-fg-tertiary">
             ⓘ
           </Badge>
         </TooltipTrigger>
         <TooltipContent>
           <div className="flex max-w-[15rem] flex-col gap-1 font-mono">
-            <span className="text-[11px] text-txt">{what}</span>
-            <span className="text-[11px] text-dim">{why}</span>
-            <div className="flex flex-col gap-0.5 text-[10px] text-dim/70">
+            <span className="text-[11px] text-fg-primary">{what}</span>
+            <span className="text-[11px] text-fg-tertiary">{why}</span>
+            <div className="flex flex-col gap-0.5 text-[10px] text-fg-tertiary/70">
               <span>{meta}</span>
               {source}
             </div>
@@ -344,7 +344,7 @@ function Row({
     <div className="flex flex-col gap-1 py-1.5" data-testid={`regime-chip-${indicator.id}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
-          <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+          <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-fg-tertiary uppercase">
             {shortLabel(indicator, dense)}
           </span>
           <InfoTooltip
@@ -400,10 +400,10 @@ const GATE_STATE_LABEL: Record<PickerGate["state"], string> = {
 };
 
 const GATE_STATE_TEXT_CLASS: Record<PickerGate["state"], string> = {
-  open: "text-up",
-  penalty: "text-amber",
-  blocked: "text-down",
-  blind: "text-down",
+  open: "text-value-positive",
+  penalty: "text-accent-warning",
+  blocked: "text-value-negative",
+  blind: "text-value-negative",
 };
 
 /** Names a tripped brake alongside the gate state (28-03's two anti-criteria brakes) — never
@@ -419,7 +419,7 @@ function brakeLabel(brakes: PickerGate["brakes"]): string | null {
 /** GateChip — the picker's entry-gate tile (28-06, PLAY-01/T-28-17), the rail's top SIGNAL.
  *  Every value is read straight from `PickerSnapshotResponse.gate` — no client-side band
  *  recomputation. Compact two-line tile: label + state on line one, VIX·ratio·as-of dim on
- *  line two. `state: "blind"` keeps the filled `bg-downd`/`ring-down` alarm treatment
+ *  line two. `state: "blind"` keeps the filled `bg-value-negative-surface`/`ring-value-negative` alarm treatment
  *  (louder than "blocked", which only colors the state label). */
 function GateChip({ gate }: { gate: PickerGate }): React.ReactElement {
   const isBlind = gate.state === "blind";
@@ -429,12 +429,12 @@ function GateChip({ gate }: { gate: PickerGate }): React.ReactElement {
     <div
       className={cn(
         "flex flex-col gap-1 rounded-lg px-2.5 py-2 ring-1",
-        isBlind ? "bg-downd ring-down/40" : "bg-raise/40 ring-line",
+        isBlind ? "bg-value-negative-surface ring-value-negative/40" : "bg-surface-overlay/40 ring-line-subtle",
       )}
       data-testid="gate-chip"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+        <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-fg-tertiary uppercase">
           Entry gate
         </span>
         <span
@@ -447,14 +447,14 @@ function GateChip({ gate }: { gate: PickerGate }): React.ReactElement {
           {GATE_STATE_LABEL[gate.state]}
         </span>
       </div>
-      <div className="flex items-center justify-between gap-2 font-mono text-[10px] text-dim">
+      <div className="flex items-center justify-between gap-2 font-mono text-[10px] text-fg-tertiary">
         <span data-testid="gate-metrics">
           {`VIX ${gate.vix === null ? "—" : gate.vix.toFixed(2)} · ratio ${gate.ratio === null ? "—" : gate.ratio.toFixed(2)}`}
         </span>
         <span data-testid="gate-asof">{`as of ${gate.asOf ?? "—"}`}</span>
       </div>
       {brake !== null && (
-        <span className="font-mono text-[10px] text-amber" data-testid="gate-brake">
+        <span className="font-mono text-[10px] text-accent-warning" data-testid="gate-brake">
           {`brake: ${brake}`}
         </span>
       )}
@@ -524,7 +524,7 @@ function RateGaugeRow({
           min={scale.min}
           max={scale.max}
           value={value}
-          markerColorClass="bg-dim"
+          markerColorClass="bg-fg-tertiary"
           ariaLabel={`${label} gauge`}
           ariaValueText={`${value.toFixed(2)}% — position`}
           testId={`rate-gauge-${id}`}
@@ -555,7 +555,7 @@ function RateGaugeRow({
     <div className="flex flex-col gap-1 py-1.5" data-testid={`rate-chip-${id}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
-          <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+          <span className="truncate font-display text-[10px] font-semibold tracking-[0.08em] text-fg-tertiary uppercase">
             {label}
           </span>
           <InfoTooltip
@@ -605,7 +605,7 @@ function RegimeBoardImpl({
   const ratesRow =
     macro !== undefined && Object.keys(macro).length > 0 ? (
       <div
-        className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-line pt-2"
+        className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-line-subtle pt-2"
         data-testid="regime-rates-row"
       >
         {RATES.map((r) => (
@@ -619,7 +619,7 @@ function RegimeBoardImpl({
       <Panel className="flex flex-col gap-2" style={{ minHeight: 96 }}>
         <PanelHeading title="Market regime" />
         <div
-          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
+          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-fg-tertiary"
           data-testid="regime-loading"
         >
           Loading regime board…
@@ -635,7 +635,7 @@ function RegimeBoardImpl({
       <Panel className="flex flex-col gap-2" style={{ minHeight: 96 }}>
         <PanelHeading title="Market regime" />
         <div
-          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
+          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-fg-tertiary"
           data-testid="regime-error"
         >
           Regime board unavailable — check the FRED/CBOE fetch job.
@@ -651,7 +651,7 @@ function RegimeBoardImpl({
       <Panel className="flex flex-col gap-2" style={{ minHeight: 96 }}>
         <PanelHeading title="Market regime" />
         <div
-          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
+          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-fg-tertiary"
           data-testid="regime-empty"
         >
           Regime data unavailable — run fetch-rates to populate.
@@ -684,7 +684,7 @@ function RegimeBoardImpl({
     <Panel className="flex flex-col gap-2" data-testid="regime-board">
       <PanelHeading title="Market regime" />
       {gateChip}
-      <div className="flex flex-col divide-y divide-line/60">
+      <div className="flex flex-col divide-y divide-line-subtle/60">
         {data.map((indicator) => {
           const liveValue = liveById.get(indicator.id) ?? null;
           const bandFn = LIVE_BAND_FNS[indicator.id];
@@ -706,7 +706,7 @@ function RegimeBoardImpl({
       </div>
       {ratesRow}
       <span
-        className="flex items-center gap-1 font-mono text-[10px] text-dim"
+        className="flex items-center gap-1 font-mono text-[10px] text-fg-tertiary"
         data-testid="regime-freshness"
       >
         {showLiveFooter ? (

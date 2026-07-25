@@ -402,7 +402,7 @@ describe("CandidateCard — scored pasted variant (Phase 30-06, D-02, Pitfall 8)
       />,
     );
 
-    const meta = container.querySelector(".text-\\[9px\\].text-dim");
+    const meta = container.querySelector(".text-\\[9px\\].text-fg-tertiary");
     expect(meta).not.toBeNull();
     expect(meta?.className).toContain("flex-wrap");
   });
@@ -612,7 +612,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
     cleanup();
   });
 
-  it("renders 'as of {HH:MM} · {source}' with a fresh (bg-up) dot for a just-computed snapshot", () => {
+  it("renders 'as of {HH:MM} · {source}' with a fresh (bg-value-positive) dot for a just-computed snapshot", () => {
     const nowIso = new Date().toISOString();
     const candidate = makeCandidate({
       id: "fresh-1",
@@ -643,10 +643,10 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
       hour12: false,
     });
     expect(screen.getByText(`as of ${expectedHhmm} · cboe`)).toBeTruthy();
-    expect(container.querySelector(".bg-up")).not.toBeNull();
+    expect(container.querySelector(".bg-value-positive")).not.toBeNull();
   });
 
-  it("renders an amber (bg-amber) dot when the snapshot is older than the freshness window", () => {
+  it("renders an amber (bg-accent-warning) dot when the snapshot is older than the freshness window", () => {
     const staleIso = new Date(Date.now() - 90 * 60 * 1000).toISOString();
     const candidate = makeCandidate({
       id: "stale-1",
@@ -677,7 +677,7 @@ describe("CandidateCard — staleness+source tag (19-09-PLAN.md Task 3, D-15/D-1
       hour12: false,
     });
     const tag = screen.getByText(`as of ${expectedHhmm} · schwab`);
-    expect(tag.parentElement?.querySelector(".bg-amber")).not.toBeNull();
+    expect(tag.parentElement?.querySelector(".bg-accent-warning")).not.toBeNull();
   });
 
   it("renders 'as of —' (em-dash), never 'Invalid Date', when observedAt fails to parse", () => {

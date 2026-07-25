@@ -33,29 +33,29 @@ export function MobileHero({
 }: MobileHeroProps): React.ReactElement {
   return (
     <section data-testid="mobile-hero" className="px-4 pt-4">
-      <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+      <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
         Book P&L
       </span>
       <div
         data-testid="mobile-hero-value"
         className={cn(
           "mt-1 font-mono text-[32px] font-bold tabular-nums leading-none",
-          hasPositions ? signClass(bookPnl) : "text-txt",
+          hasPositions ? signClass(bookPnl) : "text-fg-primary",
         )}
       >
         {hasPositions ? signedUsd(bookPnl) : "—"}
       </div>
       <div className="mt-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
         <span>SPX </span>
-        <span className={liveStatus === "live" ? "text-blue" : "text-dim"}>
+        <span className={liveStatus === "live" ? "text-accent-info" : "text-fg-tertiary"}>
           {spot !== null ? spot.toFixed(1) : "—"}
         </span>
-        <span className="text-dim"> · </span>
+        <span className="text-fg-tertiary"> · </span>
         <span>VIX {vix !== null ? vix.toFixed(2) : "—"}</span>
         {regime !== null && (
           <>
-            <span className="text-dim"> · </span>
-            <span className={regime === "AMPLIFY" ? "text-down" : "text-up"}>γ {regime}</span>
+            <span className="text-fg-tertiary"> · </span>
+            <span className={regime === "AMPLIFY" ? "text-value-negative" : "text-value-positive"}>γ {regime}</span>
           </>
         )}
       </div>

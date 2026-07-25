@@ -23,7 +23,7 @@ describe("BulletGauge", () => {
         value={2.0}
         bandWarn={0.9}
         bandCrisis={0.95}
-        markerColorClass="bg-amber"
+        markerColorClass="bg-accent-warning"
         ariaLabel="VIX/VIX3M gauge"
         ariaValueText="2.00 — warning"
         testId="gauge-test"
@@ -50,7 +50,7 @@ describe("BulletGauge", () => {
         value={0.92}
         bandWarn={0.9}
         bandCrisis={0.95}
-        markerColorClass="bg-amber"
+        markerColorClass="bg-accent-warning"
         ariaLabel="gauge"
         ariaValueText="0.92 — warning"
         testId="gauge-banded"
@@ -68,10 +68,10 @@ describe("BulletGauge", () => {
     // bandWarn 0.9 on [0.6,1.2] -> 50%; bandCrisis 0.95 -> 58.33% (same fixture as RegimeBoard.test.tsx)
     expect(parseFloat(warnSeg.style.left)).toBeCloseTo(50, 5);
     expect(parseFloat(crisisSeg.style.left)).toBeCloseTo(58.333, 1);
-    expect(warnSeg.className).toContain("bg-amber/30");
-    expect(crisisSeg.className).toContain("bg-down/30");
+    expect(warnSeg.className).toContain("bg-accent-warning/30");
+    expect(crisisSeg.className).toContain("bg-value-negative/30");
     expect(marker.getAttribute("data-testid")).toBe("gauge-banded-marker");
-    expect(marker.className).toContain("bg-amber");
+    expect(marker.className).toContain("bg-accent-warning");
   });
 
   it("neutral variant renders exactly one child — the marker — no band segments", () => {
@@ -81,7 +81,7 @@ describe("BulletGauge", () => {
         min={0}
         max={8}
         value={4.33}
-        markerColorClass="bg-dim"
+        markerColorClass="bg-fg-tertiary"
         ariaLabel="Fed Funds gauge"
         ariaValueText="4.33% — position"
         testId="gauge-neutral"
@@ -111,7 +111,7 @@ describe("BulletGauge", () => {
               value={value}
               bandWarn={min}
               bandCrisis={max}
-              markerColorClass="bg-txt"
+              markerColorClass="bg-fg-primary"
               ariaLabel="gauge"
               ariaValueText={`${value} — calm`}
               testId="gauge-fc"

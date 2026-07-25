@@ -121,7 +121,7 @@ type ExitsPreviewBranch = NonNullable<PreviewRuleOverridesResponse["exits"]>;
 function renderPickerPreview(branch: PickerPreviewBranch | null): React.ReactElement | null {
   if (branch === null) return null;
   if (branch.universeNote !== null) {
-    return <div className="font-mono text-[9px] text-txt">{branch.universeNote}</div>;
+    return <div className="font-mono text-[9px] text-fg-primary">{branch.universeNote}</div>;
   }
   const movers = branch.candidates
     .filter((c) => c.score !== c.oldScore)
@@ -130,22 +130,22 @@ function renderPickerPreview(branch: PickerPreviewBranch | null): React.ReactEle
   const gateChanged = branch.gate !== null && branch.gate.before.state !== branch.gate.after.state;
   const sizingChanged = branch.sizing !== null && branch.sizing.before.tier !== branch.sizing.after.tier;
   if (movers.length === 0 && !gateChanged && !sizingChanged) {
-    return <div className="font-mono text-[9px] text-dim">No change.</div>;
+    return <div className="font-mono text-[9px] text-fg-tertiary">No change.</div>;
   }
   return (
     <>
       {movers.map((c) => (
-        <div key={c.id} className="font-mono text-[9px] text-txt">
+        <div key={c.id} className="font-mono text-[9px] text-fg-primary">
           {c.name}: {c.oldScore} → {c.score}
         </div>
       ))}
       {gateChanged && branch.gate !== null && (
-        <div className="font-mono text-[9px] text-txt">
+        <div className="font-mono text-[9px] text-fg-primary">
           Gate: {branch.gate.before.state} → {branch.gate.after.state}
         </div>
       )}
       {sizingChanged && branch.sizing !== null && (
-        <div className="font-mono text-[9px] text-txt">
+        <div className="font-mono text-[9px] text-fg-primary">
           Sizing: {branch.sizing.before.tier ?? "-"} → {branch.sizing.after.tier ?? "-"}
         </div>
       )}
@@ -157,18 +157,18 @@ function renderPickerPreview(branch: PickerPreviewBranch | null): React.ReactEle
 function renderExitsPreview(entries: ExitsPreviewBranch | null): React.ReactElement | null {
   if (entries === null) return null;
   if (entries.length === 0) {
-    return <div className="font-mono text-[9px] text-dim">No open calendars to preview.</div>;
+    return <div className="font-mono text-[9px] text-fg-tertiary">No open calendars to preview.</div>;
   }
   const changed = entries.filter(
     (e) => e.current.verdict !== e.staged.verdict || e.current.rung !== e.staged.rung,
   );
   if (changed.length === 0) {
-    return <div className="font-mono text-[9px] text-dim">No change.</div>;
+    return <div className="font-mono text-[9px] text-fg-tertiary">No change.</div>;
   }
   return (
     <>
       {changed.map((e) => (
-        <div key={e.calendarId} className="font-mono text-[9px] text-txt">
+        <div key={e.calendarId} className="font-mono text-[9px] text-fg-primary">
           {e.calendarId}: {e.current.verdict}
           {e.current.rung !== null ? ` (${e.current.rung})` : ""} → {e.staged.verdict}
           {e.staged.rung !== null ? ` (${e.staged.rung})` : ""}
@@ -301,12 +301,12 @@ function GroupPanel({
             <div key={keyFor(row)} className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 flex-col gap-0.5">
                 <div className="flex items-center gap-1">
-                  <span className="font-mono text-[10px] text-dim">{label}</span>
+                  <span className="font-mono text-[10px] text-fg-tertiary">{label}</span>
                   {explainer !== undefined && (
                     <Tooltip>
                       <TooltipTrigger
                         aria-label={`${label} details`}
-                        className="text-dim/70 hover:text-txt"
+                        className="text-fg-tertiary/70 hover:text-fg-primary"
                       >
                         <Info className="h-3 w-3" />
                       </TooltipTrigger>
@@ -318,8 +318,8 @@ function GroupPanel({
                 </div>
                 {explainer !== undefined && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] text-dim">{explainer.summary}</span>
-                    <span className="shrink-0 rounded-[3px] bg-raise px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-dim">
+                    <span className="text-[9px] text-fg-tertiary">{explainer.summary}</span>
+                    <span className="shrink-0 rounded-[3px] bg-surface-overlay px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-fg-tertiary">
                       {explainer.affects}
                     </span>
                   </div>
@@ -333,10 +333,10 @@ function GroupPanel({
                   onChange={(e) => {
                     handleChange(row, e.target.value);
                   }}
-                  className="w-20 rounded-[3px] border border-line2 bg-raise px-1.5 py-0.5 font-mono text-[10px] text-txt"
+                  className="w-20 rounded-[3px] border border-line-strong bg-surface-overlay px-1.5 py-0.5 font-mono text-[10px] text-fg-primary"
                 />
                 {overridden && defaultValue !== undefined && (
-                  <span className="font-mono text-[9px] text-dim">default {defaultValue}</span>
+                  <span className="font-mono text-[9px] text-fg-tertiary">default {defaultValue}</span>
                 )}
               </div>
             </div>
@@ -344,7 +344,7 @@ function GroupPanel({
         })}
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
-        {error !== undefined && <span className="font-mono text-[9px] text-down">{error}</span>}
+        {error !== undefined && <span className="font-mono text-[9px] text-value-negative">{error}</span>}
         <div className="ml-auto flex items-center gap-2">
           <Button
             variant="ghost"
@@ -370,9 +370,9 @@ function GroupPanel({
       </div>
       {group === "regime" ? (
         regimePreview !== undefined && (
-          <div data-testid={`preview-${group}`} className="mt-2 flex flex-col gap-1 rounded-[3px] bg-raise p-2">
+          <div data-testid={`preview-${group}`} className="mt-2 flex flex-col gap-1 rounded-[3px] bg-surface-overlay p-2">
             {regimePreview.map((p) => (
-              <div key={p.id} className="font-mono text-[9px] text-txt">
+              <div key={p.id} className="font-mono text-[9px] text-fg-primary">
                 {regimeIndicators?.find((i) => i.id === p.id)?.label ?? p.id}: {p.before} → {p.after}
               </div>
             ))}
@@ -381,18 +381,18 @@ function GroupPanel({
       ) : (
         <>
           {previewMutation.isPending && (
-            <div data-testid={`preview-${group}`} className="mt-2 font-mono text-[9px] text-dim">
+            <div data-testid={`preview-${group}`} className="mt-2 font-mono text-[9px] text-fg-tertiary">
               Previewing…
             </div>
           )}
           {(previewMutation.isError || previewParseError !== undefined) && (
-            <div data-testid={`preview-${group}`} className="mt-2 font-mono text-[9px] text-down">
+            <div data-testid={`preview-${group}`} className="mt-2 font-mono text-[9px] text-value-negative">
               {previewParseError ?? `Couldn't preview ${group} settings.`}
             </div>
           )}
           {previewMutation.data !== undefined && (
-            <div data-testid={`preview-${group}`} className="mt-2 flex flex-col gap-1 rounded-[3px] bg-raise p-2">
-              <div className="font-mono text-[8px] uppercase tracking-wide text-dim">
+            <div data-testid={`preview-${group}`} className="mt-2 flex flex-col gap-1 rounded-[3px] bg-surface-overlay p-2">
+              <div className="font-mono text-[8px] uppercase tracking-wide text-fg-tertiary">
                 {previewMutation.data.asOf !== null
                   ? `Snapshot as of ${previewMutation.data.asOf}`
                   : "No stored snapshot yet"}

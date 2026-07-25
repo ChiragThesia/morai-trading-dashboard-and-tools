@@ -104,11 +104,11 @@ describe("PositionCard", () => {
     expect(focal.className).toContain(signClass(unreal));
   });
 
-  it("J10a: renders — with text-dim when unreal is null (no cost basis)", () => {
+  it("J10a: renders — with text-fg-tertiary when unreal is null (no cost basis)", () => {
     render(<PositionCard {...baseProps()} row={ROW_NO_BASIS} />);
 
     const focal = screen.getByText("—");
-    expect(focal.className).toContain("text-dim");
+    expect(focal.className).toContain("text-fg-tertiary");
     expect(focal.className).toContain("font-mono");
     expect(focal.className).toContain("text-base");
   });
@@ -132,19 +132,19 @@ describe("PositionCard", () => {
     );
     expect(meta.className).toContain("font-mono");
     expect(meta.className).toContain("text-[10px]");
-    expect(meta.className).toContain("text-dim");
+    expect(meta.className).toContain("text-fg-tertiary");
     expect(meta.className).toContain("truncate");
   });
 
   // ── J10c: card surface ─────────────────────────────────────────────────────────
 
-  it("J10c: card surface carries bg-raise/30 + ring-1 ring-line (card-not-table-row cue)", () => {
+  it("J10c: card surface carries bg-surface-overlay/30 + ring-1 ring-line-subtle (card-not-table-row cue)", () => {
     render(<PositionCard {...baseProps()} />);
 
     const card = screen.getByTestId("position-card-$SPX|7425|P");
-    expect(card.className).toContain("bg-raise/30");
+    expect(card.className).toContain("bg-surface-overlay/30");
     expect(card.className).toContain("ring-1");
-    expect(card.className).toContain("ring-line");
+    expect(card.className).toContain("ring-line-subtle");
   });
 
   it("J10c: dims the card (opacity-40) when not included", () => {

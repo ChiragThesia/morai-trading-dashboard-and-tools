@@ -51,7 +51,7 @@ export function OverviewMobile(): React.ReactElement {
   if (exitsIsPending && exitsDataIsUndefined) {
     exitsBody = (
       <div
-        className="font-mono text-[10px] text-dim"
+        className="font-mono text-[10px] text-fg-tertiary"
         data-testid="held-positions-loading"
       >
         Loading exit verdicts…
@@ -60,7 +60,7 @@ export function OverviewMobile(): React.ReactElement {
   } else if (exitsIsError) {
     exitsBody = (
       <div className="flex items-center gap-2" data-testid="held-positions-error">
-        <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load exit verdicts.</p>
+        <p className="m-0 font-mono text-[12px] text-value-negative">Couldn&apos;t load exit verdicts.</p>
         <Button
           onClick={() => {
             void exitsRefetch();
@@ -73,8 +73,8 @@ export function OverviewMobile(): React.ReactElement {
   } else if (exitsSnapshot === null) {
     exitsBody = (
       <div className="flex flex-col gap-1.5" data-testid="held-positions-cold-start">
-        <p className="m-0 font-display text-sm font-bold text-txt">Exit advisor warming up</p>
-        <p className="m-0 font-mono text-[11px] text-dim">
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">Exit advisor warming up</p>
+        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
           First verdict pending — check back after the next chain snapshot.
         </p>
       </div>
@@ -82,8 +82,8 @@ export function OverviewMobile(): React.ReactElement {
   } else if (exitsSnapshot.positions.length === 0) {
     exitsBody = (
       <div className="flex flex-col gap-1.5" data-testid="held-positions-empty">
-        <p className="m-0 font-display text-sm font-bold text-txt">No open positions</p>
-        <p className="m-0 font-mono text-[11px] text-dim">
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">No open positions</p>
+        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
           Nothing to advise on — the exit advisor activates once you have an open calendar.
         </p>
       </div>
@@ -136,7 +136,7 @@ export function OverviewMobile(): React.ReactElement {
             <Dialog>
               <DialogTrigger
                 data-testid="exit-rules-trigger"
-                className="rounded-md bg-raise/40 px-2.5 py-1 font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase ring-1 ring-line hover:text-txt"
+                className="rounded-md bg-surface-overlay/40 px-2.5 py-1 font-display text-[10px] font-semibold tracking-[0.09em] text-muted-foreground uppercase ring-1 ring-line-subtle hover:text-fg-primary"
               >
                 Exit rules ▸
               </DialogTrigger>
@@ -147,7 +147,7 @@ export function OverviewMobile(): React.ReactElement {
           )}
         </div>
         {m.rows.length === 0 ? (
-          <p className="font-mono text-[11px] text-dim">
+          <p className="font-mono text-[11px] text-fg-tertiary">
             No open positions. Register a calendar via the API or paste a TOS order in the Analyzer.
           </p>
         ) : (
@@ -176,7 +176,7 @@ export function OverviewMobile(): React.ReactElement {
               className="mt-2 font-mono text-[11px] text-muted-foreground tabular-nums"
             >
               Net {usd(total.netVal)} ·{" "}
-              <span className={total.unreal === null ? "text-dim" : signClass(total.unreal)}>
+              <span className={total.unreal === null ? "text-fg-tertiary" : signClass(total.unreal)}>
                 {total.unreal === null ? "—" : signedUsd(total.unreal)}
               </span>
               {" · "}

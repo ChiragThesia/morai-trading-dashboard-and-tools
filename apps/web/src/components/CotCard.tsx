@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
  * CotCard — CFTC Commitments-of-Traders positioning for E-mini S&P 500 (Phase 13 FE).
  *
  * Renders the newest weekly report as a net-per-class row list (long − short), each as a
- * NEUTRAL direction-tinted bullet gauge (39-03, GAUGE-03) — marker bg-up/bg-down by sign,
+ * NEUTRAL direction-tinted bullet gauge (39-03, GAUGE-03) — marker bg-value-positive/bg-value-negative by sign,
  * never a verdict color — with a week-over-week delta arrow and a 3-line teaching ⓘ
  * tooltip (GAUGE-04, rev 3 — condensed WHAT/WHY/META). Leveraged Funds is the headline
  * "big guys" signal (D-05). Data via useCot() — no props.
@@ -117,7 +117,7 @@ export function CotCard(): React.ReactElement {
       <Panel className="flex flex-col gap-2" style={{ minHeight: 120 }}>
         <PanelHeading title="CFTC COT — dealer & spec positioning" />
         <div
-          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
+          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-fg-tertiary"
           data-testid="cot-empty"
         >
           COT data unavailable — run fetch-cot to populate.
@@ -158,7 +158,7 @@ export function CotCard(): React.ReactElement {
                   <span
                     className={cn(
                       "truncate text-[10px] font-display font-semibold tracking-[0.09em] uppercase",
-                      c.headline === true ? "text-txt" : "text-dim",
+                      c.headline === true ? "text-fg-primary" : "text-fg-tertiary",
                     )}
                   >
                     {c.label}
@@ -178,16 +178,16 @@ export function CotCard(): React.ReactElement {
                       >
                         <Badge
                           variant="outline"
-                          className="border-line2 px-1 py-0 font-mono text-[10px] text-dim"
+                          className="border-line-strong px-1 py-0 font-mono text-[10px] text-fg-tertiary"
                         >
                           ⓘ
                         </Badge>
                       </TooltipTrigger>
                       <TooltipContent>
                         <div className="flex max-w-[15rem] flex-col gap-1 font-mono">
-                          <span className="text-[11px] text-txt">{copy.what}</span>
-                          <span className="text-[11px] text-dim">{copy.why}</span>
-                          <span className="text-[10px] text-dim/70">{copy.meta}</span>
+                          <span className="text-[11px] text-fg-primary">{copy.what}</span>
+                          <span className="text-[11px] text-fg-tertiary">{copy.why}</span>
+                          <span className="text-[10px] text-fg-tertiary/70">{copy.meta}</span>
                         </div>
                       </TooltipContent>
                     </Tooltip>
@@ -198,7 +198,7 @@ export function CotCard(): React.ReactElement {
                   <span
                     className={cn(
                       "w-14 shrink-0 text-right font-mono text-[11px] tabular-nums",
-                      isLong ? "text-up" : "text-down",
+                      isLong ? "text-value-positive" : "text-value-negative",
                     )}
                     data-testid={`cot-net-${c.key}`}
                   >
@@ -208,7 +208,7 @@ export function CotCard(): React.ReactElement {
                   <span
                     className={cn(
                       "w-24 shrink-0 text-right font-mono text-[11px] tabular-nums",
-                      wow === null ? "text-dim" : wow >= 0 ? "text-up" : "text-down",
+                      wow === null ? "text-fg-tertiary" : wow >= 0 ? "text-value-positive" : "text-value-negative",
                     )}
                     data-testid={`cot-wow-${c.key}`}
                   >
@@ -224,7 +224,7 @@ export function CotCard(): React.ReactElement {
                 min={scale.min}
                 max={scale.max}
                 value={net}
-                markerColorClass={isLong ? "bg-up" : "bg-down"}
+                markerColorClass={isLong ? "bg-value-positive" : "bg-value-negative"}
                 ariaLabel={`${c.label} net position`}
                 ariaValueText={cotAriaValueText(net, wow)}
                 testId={`cot-gauge-${c.key}`}
@@ -235,7 +235,7 @@ export function CotCard(): React.ReactElement {
         })}
       </div>
 
-      <span className="font-mono text-[10px] text-dim">
+      <span className="font-mono text-[10px] text-fg-tertiary">
         Net = long − short contracts · WoW vs prior week · Leveraged = the “big guys” (D-05).
       </span>
     </Panel>

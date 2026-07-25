@@ -149,15 +149,15 @@ describe("GROUP_OF — Verdict Hero factor grouping (Phase 41, AUI-02/D-02, LOCK
 });
 
 describe("verdictWord — evidence-honest verdict derivation (Phase 41, AUI-02/D-02)", () => {
-  it("score 81 (>= 66.7) -> FAVORABLE, text-up, reusing scoreStatus's ✓ icon", () => {
-    expect(verdictWord(81)).toEqual({ word: "FAVORABLE", icon: "✓", cls: "text-up" });
+  it("score 81 (>= 66.7) -> FAVORABLE, text-value-positive, reusing scoreStatus's ✓ icon", () => {
+    expect(verdictWord(81)).toEqual({ word: "FAVORABLE", icon: "✓", cls: "text-value-positive" });
   });
 
-  it("score 50 (>= 33.3, < 66.7) -> CAUTION, text-amber, reusing scoreStatus's ~ icon", () => {
-    expect(verdictWord(50)).toEqual({ word: "CAUTION", icon: "~", cls: "text-amber" });
+  it("score 50 (>= 33.3, < 66.7) -> CAUTION, text-accent-warning, reusing scoreStatus's ~ icon", () => {
+    expect(verdictWord(50)).toEqual({ word: "CAUTION", icon: "~", cls: "text-accent-warning" });
   });
 
-  it("score 10 (< 33.3) -> SKIP, text-down, reusing scoreStatus's ✗ icon", () => {
-    expect(verdictWord(10)).toEqual({ word: "SKIP", icon: "✗", cls: "text-down" });
+  it("score 10 (< 33.3) -> SKIP, text-value-negative, reusing scoreStatus's ✗ icon", () => {
+    expect(verdictWord(10)).toEqual({ word: "SKIP", icon: "✗", cls: "text-value-negative" });
   });
 });

@@ -78,13 +78,13 @@ describe("MobileRiskPanel — slim row + projection dialog + ⋯ dialog (D-05/D-
     render(<MobileRiskPanel {...BASE} />);
     const pill = screen.getByTestId("date-pill");
     expect(pill.textContent).toBe("Jul 11 · today");
-    expect(pill.className).not.toContain("ring-1 ring-violet");
+    expect(pill.className).not.toContain("ring-1 ring-accent-primary");
 
     cleanup();
     render(<MobileRiskPanel {...BASE} dateControl={PROJECTED} />);
     const projectedPill = screen.getByTestId("date-pill");
     expect(projectedPill.textContent).toBe("Jul 14 · +3d");
-    expect(projectedPill.className).toContain("ring-1 ring-violet");
+    expect(projectedPill.className).toContain("ring-1 ring-accent-primary");
   });
 
   it("row slimming: no native date input and no @ exp button OUTSIDE the dialogs", () => {
@@ -215,23 +215,23 @@ describe("MobileRiskPanel — slim row + projection dialog + ⋯ dialog (D-05/D-
     expect(onToggle).toHaveBeenCalledWith("showProfitZone");
   });
 
-  it("D-06/D-13: the chart section mounts and the freshness caption dot is bg-up when BOTH channels are fresh", () => {
+  it("D-06/D-13: the chart section mounts and the freshness caption dot is bg-value-positive when BOTH channels are fresh", () => {
     render(<MobileRiskPanel {...BASE} />);
 
     expect(screen.getByTestId("mobile-payoff")).toBeDefined();
 
     const caption = screen.getByTestId("mobile-freshness");
-    expect(caption.querySelector(".bg-up")).not.toBeNull();
-    expect(caption.querySelector(".bg-amber")).toBeNull();
+    expect(caption.querySelector(".bg-value-positive")).not.toBeNull();
+    expect(caption.querySelector(".bg-accent-warning")).toBeNull();
     expect(caption.textContent).toContain("GEX Jul 11, 02:00 PM");
     expect(caption.textContent).toContain("mark Jul 11, 02:03 PM");
   });
 
-  it("D-05: the freshness dot degrades to bg-amber when either channel is stale", () => {
+  it("D-05: the freshness dot degrades to bg-accent-warning when either channel is stale", () => {
     render(<MobileRiskPanel {...BASE} freshness={{ ...BASE.freshness, markFresh: false }} />);
 
     const caption = screen.getByTestId("mobile-freshness");
-    expect(caption.querySelector(".bg-up")).toBeNull();
-    expect(caption.querySelector(".bg-amber")).not.toBeNull();
+    expect(caption.querySelector(".bg-value-positive")).toBeNull();
+    expect(caption.querySelector(".bg-accent-warning")).not.toBeNull();
   });
 });

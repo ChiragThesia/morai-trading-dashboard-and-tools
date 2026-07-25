@@ -159,7 +159,7 @@ export function CandidateRail({
           value={pasteText}
           onChange={(e) => { onPasteTextChange(e.target.value); }}
           placeholder="Paste a TOS calendar order…"
-          className="min-w-0 flex-1 rounded-[3px] border border-line2 bg-transparent px-3 py-2 font-mono text-[12px] text-txt"
+          className="min-w-0 flex-1 rounded-[3px] border border-line-strong bg-transparent px-3 py-2 font-mono text-[12px] text-fg-primary"
         />
         <Button
           variant="primary"
@@ -172,25 +172,25 @@ export function CandidateRail({
         </Button>
       </div>
       {pasteError !== null && (
-        <p data-testid="picker-paste-error" className="mb-2 font-mono text-[9px] text-down">
+        <p data-testid="picker-paste-error" className="mb-2 font-mono text-[9px] text-value-negative">
           {pasteError}
         </p>
       )}
       {candidates.length > 0 && (
-        <p className="mb-2 font-mono text-[9px] leading-[1.5] text-dim" data-testid="rail-legend">
+        <p className="mb-2 font-mono text-[9px] leading-[1.5] text-fg-tertiary" data-testid="rail-legend">
           {"θ = daily $ decay · vega = $ per vol-pt · "}
-          <span className="text-amber">◂f</span>
+          <span className="text-accent-warning">◂f</span>
           {"/"}
-          <span className="text-amber">◂b</span>
+          <span className="text-accent-warning">◂b</span>
           {" = event on front / back leg · bars = scored factors (higher = better)"}
         </p>
       )}
       {candidates.length === 0 && pastedCandidates.length === 0 ? (
         <div className="flex flex-col gap-1.5" data-testid="picker-empty-filtered">
-          <p className="m-0 font-display text-sm font-bold text-txt">No candidates in this snapshot</p>
+          <p className="m-0 font-display text-sm font-bold text-fg-primary">No candidates in this snapshot</p>
           {(emptyReasonLines ?? [`No put calendars meet net-θ>0 over the ${asOf} snapshot.`]).map(
             (line) => (
-              <p key={line} className="m-0 font-mono text-[11px] text-dim">
+              <p key={line} className="m-0 font-mono text-[11px] text-fg-tertiary">
                 {line}
               </p>
             ),
@@ -258,7 +258,7 @@ function VerdictHero({
   if (candidate.breakdown.length === 0) {
     return (
       <div data-testid="verdict-hero">
-        <span className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</span>
+        <span className="font-mono text-[10px] text-fg-tertiary">{PASTED_NOT_SCORED_NOTE}</span>
       </div>
     );
   }
@@ -300,13 +300,13 @@ function VerdictHero({
           <span className={cn("font-display text-[16px] font-semibold", verdict.cls)} data-testid="verdict-word">
             {verdict.icon} {verdict.word}
           </span>
-          <span className="font-mono text-[13px] font-semibold tabular-nums text-txt" data-testid="verdict-score">
+          <span className="font-mono text-[13px] font-semibold tabular-nums text-fg-primary" data-testid="verdict-score">
             {`score ${Math.round(candidate.score)}/100`}
           </span>
           <span
             className={cn(
               "font-mono text-[13px] font-semibold tabular-nums",
-              candidate.theta >= 0 ? "text-up" : "text-down",
+              candidate.theta >= 0 ? "text-value-positive" : "text-value-negative",
             )}
             data-testid="verdict-theta"
           >
@@ -316,7 +316,7 @@ function VerdictHero({
         {marketSession === "after-hours" && (
           <span
             data-testid="session-badge"
-            className="inline-block rounded-sm bg-amber/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-amber"
+            className="inline-block rounded-sm bg-accent-warning/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-accent-warning"
           >
             {"SESSION · AH — indicative"}
           </span>
@@ -324,7 +324,7 @@ function VerdictHero({
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1" data-testid="verdict-groups">
           {GROUP_ORDER.map((group) => (
             <div key={group} data-testid={`verdict-group-${group}`} className="flex items-baseline gap-x-2.5">
-              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.08em] text-dim">
+              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.08em] text-fg-tertiary">
                 {group}
               </span>
               {scoreItems
@@ -333,14 +333,14 @@ function VerdictHero({
                   const entry = candidate.breakdown.find((b) => b.criterion === item.key);
                   if (entry === undefined) return null;
                   const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
-                  const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(entry.contribution);
+                  const st = guard ? { icon: "—", cls: "text-fg-tertiary" } : scoreStatus(entry.contribution);
                   return (
                     <span
                       key={item.key}
                       data-testid={`checklist-${item.key}`}
                       className="flex items-baseline gap-1 font-mono text-[10px]"
                     >
-                      <span className="text-dim">{item.label}</span>
+                      <span className="text-fg-tertiary">{item.label}</span>
                       <span className={st.cls}>
                         {st.icon} {guard ? "n/a" : `${Math.round(entry.contribution)}%`}
                       </span>
@@ -351,7 +351,7 @@ function VerdictHero({
           ))}
         </div>
       </div>
-      <p className="m-0 font-mono text-[9px] text-dim" data-testid="verdict-hero-footer">
+      <p className="m-0 font-mono text-[9px] text-fg-tertiary" data-testid="verdict-hero-footer">
         {footer}
       </p>
     </div>
@@ -374,7 +374,7 @@ function WhyColumn({ candidate, gex }: WhyColumnProps): React.ReactElement {
     <Panel>
       <PanelHeading title="Why this calendar" />
       {notScored ? (
-        <p className="font-mono text-[10px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+        <p className="font-mono text-[10px] text-fg-tertiary">{PASTED_NOT_SCORED_NOTE}</p>
       ) : (
         candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />
       )}
@@ -452,12 +452,12 @@ function AnalyzerDesktop(): React.ReactElement {
   const repullControl = (
     <div className="flex items-center gap-1.5">
       {repull.isSuccess && (
-        <span className="font-mono text-[9px] text-dim" data-testid="repull-status">
+        <span className="font-mono text-[9px] text-fg-tertiary" data-testid="repull-status">
           queued · ~4 min
         </span>
       )}
       {repull.isError && (
-        <span className="font-mono text-[9px] text-down" data-testid="repull-status">
+        <span className="font-mono text-[9px] text-value-negative" data-testid="repull-status">
           failed
         </span>
       )}
@@ -481,7 +481,7 @@ function AnalyzerDesktop(): React.ReactElement {
       <Panel>
         <PanelHeading title="Suggested calendars" />
         <div
-          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
+          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-fg-tertiary"
           data-testid="picker-loading"
         >
           Loading candidates…
@@ -493,7 +493,7 @@ function AnalyzerDesktop(): React.ReactElement {
       <Panel>
         <PanelHeading title="Suggested calendars" />
         <div className="flex flex-col items-center gap-2 p-4 text-center" data-testid="picker-error">
-          <p className="m-0 font-mono text-[12px] text-down">Couldn&apos;t load candidates.</p>
+          <p className="m-0 font-mono text-[12px] text-value-negative">Couldn&apos;t load candidates.</p>
           <Button
             onClick={() => {
               void refetch();
@@ -512,8 +512,8 @@ function AnalyzerDesktop(): React.ReactElement {
           {repullControl}
         </div>
         <div className="flex flex-col gap-1.5 p-4" data-testid="picker-empty-cold-start">
-          <p className="m-0 font-display text-sm font-bold text-txt">Picker warming up</p>
-          <p className="m-0 font-mono text-[11px] text-dim">
+          <p className="m-0 font-display text-sm font-bold text-fg-primary">Picker warming up</p>
+          <p className="m-0 font-mono text-[11px] text-fg-tertiary">
             First scoring run pending — check back after the next chain snapshot.
           </p>
         </div>
@@ -548,11 +548,11 @@ function AnalyzerDesktop(): React.ReactElement {
   // no selection, and the hero / WHY-ENTRY rail / chart / term panels would all render as
   // hollow shells — the rail (paste box + honest reason + Re-pull) IS the screen instead.
   if (!isLoading && !isError && snapshot !== null && selected === null) {
-    return <div className="flex flex-col gap-4 bg-bg p-3">{railBody}</div>;
+    return <div className="flex flex-col gap-4 bg-surface-base p-3">{railBody}</div>;
   }
 
   return (
-    <div className="flex h-[calc(100dvh-48px)] flex-col gap-4 overflow-hidden bg-bg p-3">
+    <div className="flex h-[calc(100dvh-48px)] flex-col gap-4 overflow-hidden bg-surface-base p-3">
       {/* ── Top strip: the verdict hero for the selected calendar ── */}
       <div data-testid="analyzer-scorecard-wrapper">
         <VerdictHero
@@ -612,15 +612,15 @@ function AnalyzerDesktop(): React.ReactElement {
           </div>
           {selected !== null && (
             <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <p className="m-0 font-mono text-[10px] text-dim">
-                <span className="text-violet" data-testid="risk-profile-selected-name">
+              <p className="m-0 font-mono text-[10px] text-fg-tertiary">
+                <span className="text-accent-primary" data-testid="risk-profile-selected-name">
                   {selected.name}
                 </span>
                 {selected.breakdown.length === 0
                   ? ` · debit $${Math.round(selected.debit)}`
                   : ` · debit $${Math.round(selected.debit)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(2)}`}
                 {bookCount > 1 && (
-                  <span className="ml-2 text-amber" data-testid="combined-book-summary">
+                  <span className="ml-2 text-accent-warning" data-testid="combined-book-summary">
                     {`+ ${bookCount - 1} more → combined debit $${Math.round(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(2)}`}
                   </span>
                 )}

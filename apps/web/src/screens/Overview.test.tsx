@@ -604,7 +604,7 @@ describe("Overview screen", () => {
       const { container } = render(<Overview />);
       const badge = screen.getByTestId("gex-freshness");
       expect(badge.textContent).toContain("GEX as of");
-      expect(container.querySelector('[data-testid="gex-freshness"] .bg-amber')).not.toBeNull();
+      expect(container.querySelector('[data-testid="gex-freshness"] .bg-accent-warning')).not.toBeNull();
     });
 
     it("renders the live-mark badge amber when the last tick is older than 5 minutes", () => {
@@ -624,7 +624,7 @@ describe("Overview screen", () => {
       const { container } = render(<Overview />);
       const badge = screen.getByTestId("live-mark-freshness");
       expect(badge.textContent).toContain("mark as of");
-      expect(container.querySelector('[data-testid="live-mark-freshness"] .bg-amber')).not.toBeNull();
+      expect(container.querySelector('[data-testid="live-mark-freshness"] .bg-accent-warning')).not.toBeNull();
     });
 
     it("selecting a docked-table row highlights that position's curve in PayoffChart (dims the net book)", () => {
@@ -876,13 +876,13 @@ describe("Overview screen", () => {
       expect(expCurve?.getAttribute("stroke")).toBe("#7b8696");
     });
 
-    it("legend swatches use bg-violet (T+0) and bg-muted-foreground (@ exp), not TOS neon", () => {
+    it("legend swatches use bg-accent-primary (T+0) and bg-muted-foreground (@ exp), not TOS neon", () => {
       setPositions([CAL_FRONT, CAL_BACK]);
       const { container } = render(<Overview />);
-      expect(container.querySelector(".bg-violet")).not.toBeNull();
+      expect(container.querySelector(".bg-accent-primary")).not.toBeNull();
       expect(container.querySelector(".bg-muted-foreground")).not.toBeNull();
       expect(container.querySelector(".bg-tos-magenta")).toBeNull();
-      expect(container.querySelector(".bg-cyan")).toBeNull();
+      expect(container.querySelector(".bg-accent-highlight")).toBeNull();
     });
   });
 
@@ -1124,7 +1124,7 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
 
     const chip = screen.getByTestId("held-position-verdict-cal-stop");
     expect(chip.textContent).toContain("STOP −25%");
-    expect(chip.className).toContain("bg-downd");
+    expect(chip.className).toContain("bg-value-negative-surface");
     expect(screen.getByTestId("held-position-rule-cal-stop").textContent).toBe("stop · pnlPct −26.1%");
   });
 
@@ -1135,8 +1135,8 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
 
     const chip = screen.getByTestId("held-position-verdict-cal-exit");
     expect(chip.textContent).toContain("EXIT — pre-event");
-    expect(chip.className).toContain("bg-amber/15");
-    expect(chip.className).not.toContain("bg-downd");
+    expect(chip.className).toContain("bg-accent-warning/15");
+    expect(chip.className).not.toContain("bg-value-negative-surface");
   });
 
   it("HOLD/TAKE/ROLL render on the plain (non-alert, unfilled) chip background", () => {
@@ -1147,8 +1147,8 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
     for (const id of ["cal-hold", "cal-take", "cal-roll"]) {
       const chip = screen.getByTestId(`held-position-verdict-${id}`);
       expect(chip.className).toContain("bg-transparent");
-      expect(chip.className).not.toContain("bg-downd");
-      expect(chip.className).not.toContain("bg-amber/15");
+      expect(chip.className).not.toContain("bg-value-negative-surface");
+      expect(chip.className).not.toContain("bg-accent-warning/15");
     }
   });
 
@@ -1163,7 +1163,7 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
     // mark) reads "STALE — indicative", not "AH — indicative" (that string is reserved for an
     // after-hours-marketSession snapshot, exercised separately below).
     expect(indicativeMark.textContent).toBe("STALE — indicative");
-    expect(indicativeMark.className).toContain("text-amber");
+    expect(indicativeMark.className).toContain("text-accent-warning");
   });
 
   it("indicative marker reads 'AH — indicative' when the snapshot's marketSession is after-hours", () => {
@@ -1182,7 +1182,7 @@ describe("Overview — held positions + exit rules panels (moved from Analyzer, 
 
     const marker = screen.getByTestId("held-position-changed-cal-take");
     expect(marker.textContent).toBe("CHANGED");
-    expect(marker.className).toContain("text-up");
+    expect(marker.className).toContain("text-value-positive");
     expect(screen.queryByTestId("held-position-changed-cal-hold")).toBeNull();
   });
 

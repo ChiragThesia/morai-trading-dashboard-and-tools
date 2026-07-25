@@ -64,28 +64,28 @@ describe("WhyPanel — stat grid (ANLZ-03)", () => {
     render(<WhyPanel candidate={NORMAL} gex={GEX} />);
     const el = screen.getByTestId("whypanel-stat-slope-value");
     expect(el.textContent).toBe("+25.4v/yr");
-    expect(el.className).toContain("text-violet");
+    expect(el.className).toContain("text-accent-primary");
   });
 
   it("renders Slope in down/red when negative (guard candidate)", () => {
     render(<WhyPanel candidate={GUARD} gex={GEX} />);
     const el = screen.getByTestId("whypanel-stat-slope-value");
     expect(el.textContent).toBe("−76.0v/yr");
-    expect(el.className).toContain("text-down");
+    expect(el.className).toContain("text-value-negative");
   });
 
   it("Net θ always renders positive (never NaN, never negative) for a normal candidate", () => {
     render(<WhyPanel candidate={NORMAL} gex={GEX} />);
     const el = screen.getByTestId("whypanel-stat-nettheta-value");
     expect(el.textContent).toBe("+45.9/d");
-    expect(el.className).toContain("text-up");
+    expect(el.className).toContain("text-value-positive");
   });
 
   it("Net θ still renders positive for the guard candidate (theta stays a normal finite value)", () => {
     render(<WhyPanel candidate={GUARD} gex={GEX} />);
     const el = screen.getByTestId("whypanel-stat-nettheta-value");
     expect(el.textContent).toBe("+138.1/d");
-    expect(el.className).toContain("text-up");
+    expect(el.className).toContain("text-value-positive");
     expect(el.textContent).not.toContain("−");
     expect(el.textContent).not.toContain("NaN");
   });

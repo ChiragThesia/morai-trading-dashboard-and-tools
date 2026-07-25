@@ -83,7 +83,7 @@ export function MobileChartControls({
       <Button
         size="touch"
         variant="ghost"
-        className="px-2 text-txt"
+        className="px-2 text-fg-primary"
         onClick={() => { dateControl.stepDate(-1); }}
         aria-label="Previous day"
       >
@@ -96,8 +96,8 @@ export function MobileChartControls({
           aria-label="Projection date"
           className={cn(
             buttonClass({ size: "touch", variant: "ghost" }),
-            "px-2 font-mono text-[11px] text-txt",
-            projected && "text-violet ring-1 ring-violet",
+            "px-2 font-mono text-[11px] text-fg-primary",
+            projected && "text-accent-primary ring-1 ring-accent-primary",
           )}
         >
           {pillLabel}
@@ -135,7 +135,7 @@ export function MobileChartControls({
                 Expiry
               </Button>
             </div>
-            <div data-testid="date-readout" className="font-mono text-[11px] text-txt">
+            <div data-testid="date-readout" className="font-mono text-[11px] text-fg-primary">
               {pillLabel}
             </div>
             <input
@@ -159,7 +159,7 @@ export function MobileChartControls({
               value={dateControl.dateInputValue}
               onChange={(e) => { dateControl.setDate(e.target.value); }}
               style={{ colorScheme: "dark" }}
-              className="min-h-11 w-full rounded-[3px] border border-line2 bg-raise px-[7px] py-0.5 font-mono text-[11px] text-txt focus-visible:border-violet focus-visible:ring-2 focus-visible:ring-violet/40 focus-visible:outline-none"
+              className="min-h-11 w-full rounded-[3px] border border-line-strong bg-surface-overlay px-[7px] py-0.5 font-mono text-[11px] text-fg-primary focus-visible:border-accent-primary focus-visible:ring-2 focus-visible:ring-accent-primary/40 focus-visible:outline-none"
             />
           </div>
         </DialogContent>
@@ -167,7 +167,7 @@ export function MobileChartControls({
       <Button
         size="touch"
         variant="ghost"
-        className="px-2 text-txt"
+        className="px-2 text-fg-primary"
         onClick={() => { dateControl.stepDate(1); }}
         aria-label="Next day"
       >

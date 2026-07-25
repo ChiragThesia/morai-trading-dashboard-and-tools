@@ -75,9 +75,9 @@ export const FALLBACK_SCORE_ITEMS: ReadonlyArray<{ readonly key: BreakdownEntry[
 
 // Weight-relative status: contribution is already the 0-100 share of the criterion's weight.
 export function scoreStatus(contribution: number): { readonly icon: string; readonly cls: string } {
-  if (contribution >= (200 / 3)) return { icon: "✓", cls: "text-up" };
-  if (contribution >= (100 / 3)) return { icon: "~", cls: "text-amber" };
-  return { icon: "✗", cls: "text-down" };
+  if (contribution >= (200 / 3)) return { icon: "✓", cls: "text-value-positive" };
+  if (contribution >= (100 / 3)) return { icon: "~", cls: "text-accent-warning" };
+  return { icon: "✗", cls: "text-value-negative" };
 }
 
 /** Short chip labels — the ruleSet's verbose labels stay in WhyPanel/docs; chips scan fast. */

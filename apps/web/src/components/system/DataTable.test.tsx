@@ -264,6 +264,6 @@ describe("DataTable — generic presentational table primitive", () => {
     expect(thead?.className).toContain("sticky");
     expect(thead?.className).toContain("top-0");
     expect(thead?.className).toContain("z-10");
-    expect(thead?.className).toContain("bg-panel");
+    expect(thead?.className).toContain("bg-surface-raised");
   });
 });

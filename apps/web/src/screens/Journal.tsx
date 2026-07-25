@@ -68,7 +68,7 @@ function money(v: number | null): string {
 }
 
 function moneyClass(v: number | null): string {
-  return v === null ? "text-dim" : signClass(v);
+  return v === null ? "text-fg-tertiary" : signClass(v);
 }
 
 function num(v: number | null, dp = 2): string {
@@ -97,9 +97,9 @@ const ROUNDTRIP_COLS: ReadonlyArray<DataTableColumn<TradeHistoryRoundTripRespons
     header: "Trade",
     align: "left",
     render: (r) => (
-      <span className="text-txt">
+      <span className="text-fg-primary">
         {tradeName(r)}{" "}
-        <span className="text-dim">
+        <span className="text-fg-tertiary">
           {shortYmd(r.frontExpiry)}/{shortYmd(r.backExpiry)}
         </span>
       </span>
@@ -110,7 +110,7 @@ const ROUNDTRIP_COLS: ReadonlyArray<DataTableColumn<TradeHistoryRoundTripRespons
     header: "Status",
     align: "left",
     render: (r) => (
-      <span className={r.status === "open" ? "text-cyan" : "text-dim"}>{r.status}</span>
+      <span className={r.status === "open" ? "text-accent-highlight" : "text-fg-tertiary"}>{r.status}</span>
     ),
   },
   { key: "opened", header: "Opened", render: (r) => shortDate(r.openedAt) },
@@ -209,7 +209,7 @@ const LEG_COLS: ReadonlyArray<DataTableColumn<ExecRow>> = [
     header: "Side",
     align: "left",
     render: (e) => (
-      <span className={e.side === "buy" ? "text-up" : "text-down"}>
+      <span className={e.side === "buy" ? "text-value-positive" : "text-value-negative"}>
         {e.side === "buy" ? "BUY" : "SELL"}
       </span>
     ),
@@ -240,9 +240,9 @@ function TradeDetailPanel({
   const fills = fillsForTrade(executions, trade);
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-line/60 bg-panel2/60 p-3">
+    <div className="flex flex-col gap-3 rounded-md border border-line-subtle/60 bg-surface-sunken/60 p-3">
       <div>
-        <div className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.09em] text-dim">
+        <div className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.09em] text-fg-tertiary">
           Fills — {tradeName(trade)}
         </div>
         <DataTable
@@ -255,14 +255,14 @@ function TradeDetailPanel({
       </div>
 
       <div>
-        <div className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.09em] text-dim">
+        <div className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.09em] text-fg-tertiary">
           Daily history while held
         </div>
         {detail.isPending && (
-          <div className="p-2 font-mono text-[10px] text-dim">Loading history…</div>
+          <div className="p-2 font-mono text-[10px] text-fg-tertiary">Loading history…</div>
         )}
         {detail.isError && (
-          <div className="p-2 font-mono text-[10px] text-dim">
+          <div className="p-2 font-mono text-[10px] text-fg-tertiary">
             Couldn&apos;t load this trade&apos;s history.
           </div>
         )}
@@ -275,7 +275,7 @@ function TradeDetailPanel({
             tableClassName="min-w-[1500px]"
           />
         )}
-        <div className="mt-1 px-1 font-mono text-[9.5px] leading-[1.3] text-dim">
+        <div className="mt-1 px-1 font-mono text-[9.5px] leading-[1.3] text-fg-tertiary">
           Δ delta = $ per 1-pt SPX move · Γ gamma = how fast delta changes per pt · Θ theta
           = $ earned/lost per day from time decay · Vega = $ per 1-pt vol move · IV slope =
           back-month IV − front-month IV. Per-leg values are position-signed (front short,
@@ -295,7 +295,7 @@ const EXECUTION_COLS: ReadonlyArray<DataTableColumn<ExecRow>> = [
     header: "Side",
     align: "left",
     render: (e) => (
-      <span className={e.side === "buy" ? "text-up" : "text-down"}>
+      <span className={e.side === "buy" ? "text-value-positive" : "text-value-negative"}>
         {e.side === "buy" ? "BUY" : "SELL"}
       </span>
     ),
@@ -332,7 +332,7 @@ export function Journal(): React.ReactElement {
       <div className="p-3">
         <div
           data-testid="ledger-loading"
-          className="min-h-[240px] rounded-md bg-line opacity-40"
+          className="min-h-[240px] rounded-md bg-line-subtle opacity-40"
           aria-busy="true"
           aria-label="Loading trade ledger"
         />
@@ -342,7 +342,7 @@ export function Journal(): React.ReactElement {
 
   if (isError || data === undefined) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 font-mono text-xs text-dim">
+      <div className="flex h-full flex-col items-center justify-center gap-2 font-mono text-xs text-fg-tertiary">
         <span>Couldn&apos;t load the trade ledger.</span>
         <Button
           variant="secondary"
@@ -359,7 +359,7 @@ export function Journal(): React.ReactElement {
 
   if (data.roundTrips.length === 0 && data.executions.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center font-mono text-xs text-dim">
+      <div className="flex h-full items-center justify-center font-mono text-xs text-fg-tertiary">
         No trade history yet.
       </div>
     );
@@ -375,7 +375,7 @@ export function Journal(): React.ReactElement {
         <PanelHeading
           title="Trades"
           action={
-            <span className="font-mono text-[10px] text-dim">
+            <span className="font-mono text-[10px] text-fg-tertiary">
               click a trade to expand its history
             </span>
           }
@@ -400,8 +400,8 @@ export function Journal(): React.ReactElement {
           wrapperTestId="roundtrip-table-scroll"
           tableClassName="min-w-[720px]"
           footer={
-            <tr data-testid="roundtrip-total" className="border-t border-line font-semibold">
-              <td className="px-2 py-1.5 text-left text-txt">Total realized</td>
+            <tr data-testid="roundtrip-total" className="border-t border-line-subtle font-semibold">
+              <td className="px-2 py-1.5 text-left text-fg-primary">Total realized</td>
               <td className="px-2 py-1.5" colSpan={6} />
               <td className={`px-2 py-1.5 text-right ${moneyClass(total)}`}>
                 {money(total)}
@@ -416,7 +416,7 @@ export function Journal(): React.ReactElement {
         <PanelHeading
           title="Trade History"
           action={
-            <span className="font-mono text-[10px] text-dim">
+            <span className="font-mono text-[10px] text-fg-tertiary">
               {data.executions.length} fills · raw broker record
             </span>
           }

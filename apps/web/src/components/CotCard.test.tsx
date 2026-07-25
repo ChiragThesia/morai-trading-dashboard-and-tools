@@ -86,15 +86,15 @@ describe("CotCard", () => {
     setData([WEEK_LATEST, WEEK_PREV]);
     render(<CotCard />);
 
-    // netDealer short (−756K) → bg-down; netAssetManager long (+993K) → bg-up
-    expect(screen.getByTestId("cot-gauge-marker-netDealer").className).toContain("bg-down");
-    expect(screen.getByTestId("cot-gauge-marker-netDealer").className).not.toContain("bg-amber");
-    expect(screen.getByTestId("cot-gauge-marker-netAssetManager").className).toContain("bg-up");
-    expect(screen.getByTestId("cot-gauge-marker-netAssetManager").className).not.toContain("bg-amber");
+    // netDealer short (−756K) → bg-value-negative; netAssetManager long (+993K) → bg-value-positive
+    expect(screen.getByTestId("cot-gauge-marker-netDealer").className).toContain("bg-value-negative");
+    expect(screen.getByTestId("cot-gauge-marker-netDealer").className).not.toContain("bg-accent-warning");
+    expect(screen.getByTestId("cot-gauge-marker-netAssetManager").className).toContain("bg-value-positive");
+    expect(screen.getByTestId("cot-gauge-marker-netAssetManager").className).not.toContain("bg-accent-warning");
     // netLeveraged short, netOther/netNonreportable long — never amber on any of them
-    expect(screen.getByTestId("cot-gauge-marker-netLeveraged").className).toContain("bg-down");
-    expect(screen.getByTestId("cot-gauge-marker-netOther").className).toContain("bg-up");
-    expect(screen.getByTestId("cot-gauge-marker-netNonreportable").className).toContain("bg-up");
+    expect(screen.getByTestId("cot-gauge-marker-netLeveraged").className).toContain("bg-value-negative");
+    expect(screen.getByTestId("cot-gauge-marker-netOther").className).toContain("bg-value-positive");
+    expect(screen.getByTestId("cot-gauge-marker-netNonreportable").className).toContain("bg-value-positive");
     for (const c of [
       "netDealer",
       "netAssetManager",
@@ -102,7 +102,7 @@ describe("CotCard", () => {
       "netOther",
       "netNonreportable",
     ]) {
-      expect(screen.getByTestId(`cot-gauge-marker-${c}`).className).not.toContain("bg-amber");
+      expect(screen.getByTestId(`cot-gauge-marker-${c}`).className).not.toContain("bg-accent-warning");
       const gauge = screen.getByTestId(`cot-gauge-${c}`);
       expect(gauge.getAttribute("role")).toBe("meter");
       // neutral variant: no band-segment children, marker only

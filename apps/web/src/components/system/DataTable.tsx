@@ -44,7 +44,7 @@ export interface DataTableProps<T> {
 }
 
 const HEADER_BASE =
-  "border-b border-line px-2 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase";
+  "border-b border-line-subtle px-2 py-1.5 font-display text-[10px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase";
 
 export function DataTable<T,>({
   columns,
@@ -65,7 +65,7 @@ export function DataTable<T,>({
   return (
     <div className={wrapperClassName} data-testid={wrapperTestId}>
       <table className={cn("w-full border-collapse font-mono text-[11px] tabular-nums", tableClassName)}>
-        <thead className="sticky top-0 z-10 bg-panel">
+        <thead className="sticky top-0 z-10 bg-surface-raised">
           <tr>
             {columns.map((col) => {
               const active = col.sortable === true && sort?.key === col.key;
@@ -73,7 +73,7 @@ export function DataTable<T,>({
               const headerClassName = cn(
                 HEADER_BASE,
                 col.align === "left" ? "text-left" : "text-right",
-                col.sortable === true && "cursor-pointer hover:text-txt",
+                col.sortable === true && "cursor-pointer hover:text-fg-primary",
                 col.width,
               );
               if (col.sortable === true) {
@@ -110,7 +110,7 @@ export function DataTable<T,>({
                   onMouseEnter={() => { onRowMouseEnter?.(row); }}
                   onMouseLeave={() => { onRowMouseLeave?.(row); }}
                   className={cn(
-                    "cursor-pointer border-b border-line/60 text-txt hover:bg-line/40",
+                    "cursor-pointer border-b border-line-subtle/60 text-fg-primary hover:bg-line-subtle/40",
                     rowClassName?.(row),
                   )}
                 >

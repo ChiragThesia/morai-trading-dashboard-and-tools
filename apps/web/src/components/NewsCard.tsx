@@ -23,7 +23,7 @@ export function NewsCard(): React.ReactElement {
       <Panel className="flex flex-col gap-2" style={{ minHeight: 120 }}>
         <PanelHeading title="Market news" />
         <div
-          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-dim"
+          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-fg-tertiary"
           data-testid="news-empty"
         >
           News unavailable — set the Alpaca keys and run fetch-news to populate.
@@ -45,15 +45,15 @@ export function NewsCard(): React.ReactElement {
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex flex-col gap-0.5 border-b border-line2/50 pb-1.5 last:border-b-0 last:pb-0"
+            className="flex flex-col gap-0.5 border-b border-line-strong/50 pb-1.5 last:border-b-0 last:pb-0"
             data-testid={`news-row-${item.id}`}
           >
             <div className="flex items-baseline gap-2">
-              <span className="w-14 shrink-0 font-mono text-[10px] text-dim">
+              <span className="w-14 shrink-0 font-mono text-[10px] text-fg-tertiary">
                 {relAge(Date.now() - new Date(item.publishedAt).getTime())}
               </span>
               {item.url === null ? (
-                <span className="min-w-0 text-[11px] leading-snug text-txt">
+                <span className="min-w-0 text-[11px] leading-snug text-fg-primary">
                   {item.headline}
                 </span>
               ) : (
@@ -61,7 +61,7 @@ export function NewsCard(): React.ReactElement {
                   href={item.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="min-w-0 text-[11px] leading-snug text-txt hover:underline"
+                  className="min-w-0 text-[11px] leading-snug text-fg-primary hover:underline"
                 >
                   {item.headline}
                 </a>
@@ -78,7 +78,7 @@ export function NewsCard(): React.ReactElement {
         ))}
       </div>
 
-      <span className="font-mono text-[10px] text-dim">
+      <span className="font-mono text-[10px] text-fg-tertiary">
         Alpaca News (Benzinga wire) · newest {items.length} of the stored batch.
       </span>
     </Panel>

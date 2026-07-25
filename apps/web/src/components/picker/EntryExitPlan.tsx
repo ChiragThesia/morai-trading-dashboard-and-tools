@@ -81,13 +81,13 @@ export function EntryExitPlan({ candidate, sizing = null }: EntryExitPlanProps):
         label="Profit target (+25%)"
         testId="entryexit-value-target"
         value={fixedSignUsd(target, "+")}
-        valueClassName="text-up"
+        valueClassName="text-value-positive"
       />
       <PlanRow
         label="Stop (−17.5%)"
         testId="entryexit-value-stop"
         value={fixedSignUsd(stop, "−")}
-        valueClassName="text-down"
+        valueClassName="text-value-negative"
       />
       <PlanRow label="Manage short (21 DTE)" testId="entryexit-value-manage" value={fmtDate(manageDate)} />
       <PlanRow
@@ -98,14 +98,14 @@ export function EntryExitPlan({ candidate, sizing = null }: EntryExitPlanProps):
             ? `${fmtDate(closeByDate)} (pre-event · captures ~${Math.round(candidate.exitPlan.thetaCapturePct * 100)}% of θ runway)`
             : `${fmtDate(closeByDate)} (front expiry)`
         }
-        valueClassName="text-amber"
+        valueClassName="text-accent-warning"
       />
       <PlanRow
         label="Recommended sizing"
         testId="entryexit-value-sizing"
         value={formatSizing(sizing)}
       />
-      <p className="m-0 mt-1.5 font-mono text-[9px] leading-[1.5] text-dim">
+      <p className="m-0 mt-1.5 font-mono text-[9px] leading-[1.5] text-fg-tertiary">
         Max loss = debit only if closed by front expiry · targets are defaults, not validated.
       </p>
     </div>
@@ -124,9 +124,9 @@ function PlanRow({
   valueClassName?: string;
 }): React.ReactElement {
   return (
-    <div className="flex justify-between border-b border-line/40 py-1 text-xs last:border-b-0">
-      <span className="text-dim">{label}</span>
-      <span data-testid={testId} className={`font-mono ${valueClassName ?? "text-txt"}`}>
+    <div className="flex justify-between border-b border-line-subtle/40 py-1 text-xs last:border-b-0">
+      <span className="text-fg-tertiary">{label}</span>
+      <span data-testid={testId} className={`font-mono ${valueClassName ?? "text-fg-primary"}`}>
         {value}
       </span>
     </div>

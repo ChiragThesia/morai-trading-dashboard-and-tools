@@ -98,9 +98,9 @@ export function MobileAnalyzerChart({
       {/* Single worst-of caption. */}
       <div
         data-testid="analyzer-mobile-caption"
-        className="mt-1.5 flex items-center gap-1.5 px-4 font-mono text-[9px] text-dim"
+        className="mt-1.5 flex items-center gap-1.5 px-4 font-mono text-[9px] text-fg-tertiary"
       >
-        <span className={cn("size-1.5 shrink-0 rounded-full", freshDot ? "bg-up" : "bg-amber")} />
+        <span className={cn("size-1.5 shrink-0 rounded-full", freshDot ? "bg-value-positive" : "bg-accent-warning")} />
         <span className="truncate">
           {snapshot.source} · {snapshot.asOf}
           {session === "after-hours" && " · AH — indicative"}

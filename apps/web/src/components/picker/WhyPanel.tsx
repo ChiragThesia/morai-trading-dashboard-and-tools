@@ -101,17 +101,17 @@ function WhyStat({
   subCaption: string;
 }): React.ReactElement {
   return (
-    <div className="rounded-md bg-raise px-2 py-1.5">
-      <div className="font-display text-[9px] font-semibold tracking-[0.08em] text-dim uppercase">
+    <div className="rounded-md bg-surface-overlay px-2 py-1.5">
+      <div className="font-display text-[9px] font-semibold tracking-[0.08em] text-fg-tertiary uppercase">
         {label}
       </div>
       <div
         data-testid={`${testIdBase}-value`}
-        className={cn("font-display text-sm font-bold tabular-nums", valueClassName ?? "text-txt")}
+        className={cn("font-display text-sm font-bold tabular-nums", valueClassName ?? "text-fg-primary")}
       >
         {value}
       </div>
-      <div data-testid={`${testIdBase}-subcaption`} className="font-mono text-[9px] text-dim">
+      <div data-testid={`${testIdBase}-subcaption`} className="font-mono text-[9px] text-fg-tertiary">
         {subCaption}
       </div>
     </div>
@@ -135,14 +135,14 @@ export function WhyPanel({ candidate, gex }: WhyPanelProps): React.ReactElement 
           testIdBase="whypanel-stat-slope"
           label="Slope"
           value={signedVolPtsPerYear(candidate.slope)}
-          valueClassName={slopePositive ? "text-violet" : "text-down"}
+          valueClassName={slopePositive ? "text-accent-primary" : "text-value-negative"}
           subCaption="between legs"
         />
         <WhyStat
           testIdBase="whypanel-stat-nettheta"
           label="Net θ"
           value={`+${candidate.theta.toFixed(1)}/d`}
-          valueClassName="text-up"
+          valueClassName="text-value-positive"
           subCaption="constraint: >0 ✓"
         />
         <WhyStat
@@ -153,13 +153,13 @@ export function WhyPanel({ candidate, gex }: WhyPanelProps): React.ReactElement 
         />
       </div>
 
-      <p data-testid="whypanel-forward-edge-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-txt">
+      <p data-testid="whypanel-forward-edge-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-fg-primary">
         {forwardEdgeSentence(candidate)}
       </p>
-      <p data-testid="whypanel-event-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-txt">
+      <p data-testid="whypanel-event-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-fg-primary">
         {eventPremiumSentence(candidate)}
       </p>
-      <p data-testid="whypanel-gex-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-dim">
+      <p data-testid="whypanel-gex-sentence" className="m-0 font-mono text-[11px] leading-[1.5] text-fg-tertiary">
         {gexFitSentence(candidate, gex)}
       </p>
     </div>

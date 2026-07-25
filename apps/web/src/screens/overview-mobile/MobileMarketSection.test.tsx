@@ -105,19 +105,19 @@ describe("MobileMarketSection (D-08 / J13)", () => {
     const section = screen.getByTestId("mobile-market");
     expect(within(section).getByText("Gamma")).toBeDefined();
     const netGamma = within(section).getByText(fmtGammaCompact(GEX_FIXTURE.netGammaAtSpot));
-    // regime DAMPEN → text-up (text-down only when AMPLIFY).
-    expect(netGamma.className).toContain("text-up");
+    // regime DAMPEN → text-value-positive (text-value-negative only when AMPLIFY).
+    expect(netGamma.className).toContain("text-value-positive");
     expect(within(section).getByText("net γ /1%")).toBeDefined();
     expect(within(section).getByText("0DTE γ")).toBeDefined();
     const zeroDteValue = within(section).getByText(fmtGammaCompact(-3.2));
-    expect(zeroDteValue.className).toContain("text-down");
+    expect(zeroDteValue.className).toContain("text-value-negative");
   });
 
-  it("J13a: net γ /1% carries text-down when regime is AMPLIFY", () => {
+  it("J13a: net γ /1% carries text-value-negative when regime is AMPLIFY", () => {
     renderSection({ regime: "AMPLIFY" });
 
     const netGamma = screen.getByText(fmtGammaCompact(GEX_FIXTURE.netGammaAtSpot));
-    expect(netGamma.className).toContain("text-down");
+    expect(netGamma.className).toContain("text-value-negative");
   });
 
   it("J13a: Net book greeks 2x2 renders the railGreeks fixture with the GexRail labels/formatting", () => {
@@ -231,8 +231,8 @@ describe("MobileMarketSection — macro delta chips", () => {
     expect(screen.getByTestId("mobile-delta-curve").textContent).toBe("▲2bp");
     // −374K → −361.875K = ▲ 12K, 3.2% of |prev|
     expect(screen.getByTestId("mobile-delta-cotlev").textContent).toBe("▲ 12K · 3.2%");
-    expect(screen.getByTestId("mobile-delta-vvix").className).toContain("text-up");
-    expect(screen.getByTestId("mobile-delta-dff").className).toContain("text-down");
+    expect(screen.getByTestId("mobile-delta-vvix").className).toContain("text-value-positive");
+    expect(screen.getByTestId("mobile-delta-dff").className).toContain("text-value-negative");
   });
 
   it("renders NO delta chips when history is missing (never fabricated)", () => {

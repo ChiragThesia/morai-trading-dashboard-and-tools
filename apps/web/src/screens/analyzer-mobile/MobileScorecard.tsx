@@ -62,7 +62,7 @@ export function MobileScorecard({
     return (
       <section className="px-4">
         <SectionLabel>Scorecard</SectionLabel>
-        <p className="mt-1 font-mono text-[11px] text-dim">{PASTED_NOT_SCORED_NOTE}</p>
+        <p className="mt-1 font-mono text-[11px] text-fg-tertiary">{PASTED_NOT_SCORED_NOTE}</p>
       </section>
     );
   }
@@ -89,13 +89,13 @@ export function MobileScorecard({
         >
           {verdict.icon} {verdict.word}
         </span>
-        <span className="font-mono text-[13px] font-semibold tabular-nums text-txt" data-testid="mobile-verdict-score">
+        <span className="font-mono text-[13px] font-semibold tabular-nums text-fg-primary" data-testid="mobile-verdict-score">
           {`score ${Math.round(candidate.score)}/100`}
         </span>
         <span
           className={cn(
             "font-mono text-[13px] font-semibold tabular-nums",
-            candidate.theta >= 0 ? "text-up" : "text-down",
+            candidate.theta >= 0 ? "text-value-positive" : "text-value-negative",
           )}
           data-testid="mobile-verdict-theta"
         >
@@ -104,13 +104,13 @@ export function MobileScorecard({
       </div>
 
       {/* Context line — strings verbatim from the desktop selected-name line. */}
-      <p className="mt-1 font-mono text-[11px] text-dim">
-        <span className="text-violet" data-testid="risk-profile-selected-name">
+      <p className="mt-1 font-mono text-[11px] text-fg-tertiary">
+        <span className="text-accent-primary" data-testid="risk-profile-selected-name">
           {candidate.name}
         </span>
         {` · debit $${Math.round(candidate.debit)} · θ ${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d · vega +${candidate.vega.toFixed(2)}`}
         {bookCount > 1 && (
-          <span className="ml-2 text-amber" data-testid="combined-book-summary">
+          <span className="ml-2 text-accent-warning" data-testid="combined-book-summary">
             {`+ ${bookCount - 1} more → combined debit $${Math.round(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(2)}`}
           </span>
         )}
@@ -124,7 +124,7 @@ export function MobileScorecard({
             className="flex items-center justify-between font-mono text-[11px]"
           >
             <span className="text-muted-foreground">SESSION</span>
-            <span className="text-amber">AH — indicative</span>
+            <span className="text-accent-warning">AH — indicative</span>
           </div>
         )}
 
@@ -133,7 +133,7 @@ export function MobileScorecard({
           if (groupItems.length === 0) return null;
           return (
             <div key={group} data-testid={`mobile-verdict-group-${group}`}>
-              <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-dim uppercase">
+              <span className="font-display text-[10px] font-semibold tracking-[0.08em] text-fg-tertiary uppercase">
                 {group}
               </span>
               <div className="mt-1 flex flex-col gap-1">
@@ -141,7 +141,7 @@ export function MobileScorecard({
                   const entry = candidate.breakdown.find((b) => b.criterion === item.key);
                   if (entry === undefined) return null;
                   const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
-                  const st = guard ? { icon: "—", cls: "text-dim" } : scoreStatus(entry.contribution);
+                  const st = guard ? { icon: "—", cls: "text-fg-tertiary" } : scoreStatus(entry.contribution);
                   return (
                     <div
                       key={item.key}
@@ -169,7 +169,7 @@ export function MobileScorecard({
             className="flex items-center justify-between font-mono text-[11px] opacity-60"
           >
             <span className="text-muted-foreground">CALIBRATING</span>
-            <span className="text-dim">
+            <span className="text-fg-tertiary">
               {candidate.context
                 .map(
                   (entry) =>
@@ -185,7 +185,7 @@ export function MobileScorecard({
         )}
 
         {(gateDrops.liquidity > 0 || gateDrops.netTheta > 0) && (
-          <p className="font-mono text-[9px] text-dim" data-testid="checklist-gate-drops">
+          <p className="font-mono text-[9px] text-fg-tertiary" data-testid="checklist-gate-drops">
             {gateDrops.liquidity} illiquid quote{gateDrops.liquidity === 1 ? "" : "s"} ·{" "}
             {gateDrops.netTheta} negative-θ pair{gateDrops.netTheta === 1 ? "" : "s"} dropped this run
           </p>

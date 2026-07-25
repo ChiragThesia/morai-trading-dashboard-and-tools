@@ -27,7 +27,7 @@ import type { StreamIndicesEvent } from "@morai/contracts";
 function SystemHealth(): React.ReactElement {
   const { data: status } = useStatus();
   if (status === undefined || status.lastJobRuns === "none yet") {
-    return <p className="font-mono text-[11px] text-dim">System status loading…</p>;
+    return <p className="font-mono text-[11px] text-fg-tertiary">System status loading…</p>;
   }
   return (
     <div className="flex flex-col gap-1.5">
@@ -37,9 +37,9 @@ function SystemHealth(): React.ReactElement {
           (rec.lastSuccessAt !== null && rec.lastSuccessAt > rec.lastErrorAt);
         return (
           <div key={job} className="flex items-center gap-2 font-mono text-[11px]">
-            <span className={cn("size-2 shrink-0 rounded-full", healthy ? "bg-up" : "bg-down")} />
+            <span className={cn("size-2 shrink-0 rounded-full", healthy ? "bg-value-positive" : "bg-value-negative")} />
             <span className="text-muted-foreground">{job}</span>
-            <span className="ml-auto text-dim">{healthy ? "ok" : "error"}</span>
+            <span className="ml-auto text-fg-tertiary">{healthy ? "ok" : "error"}</span>
           </div>
         );
       })}

@@ -121,7 +121,7 @@ export function CandidateTable({
         return (
           <span className="inline-flex items-center gap-1">
             {pastedIds.has(candidate.id) && (
-              <span className="rounded-sm bg-violet/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-violet">
+              <span className="rounded-sm bg-accent-primary/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-accent-primary">
                 PASTED
               </span>
             )}
@@ -147,7 +147,7 @@ export function CandidateTable({
       headerTestId: "rail-sort-debit",
       render: (candidate) =>
         candidate.breakdown.length === 0 ? (
-          <span className="text-dim">—</span>
+          <span className="text-fg-tertiary">—</span>
         ) : (
           `$${Math.round(candidate.debit)}`
         ),
@@ -157,7 +157,7 @@ export function CandidateTable({
       header: "Δ",
       render: (candidate) =>
         candidate.breakdown.length === 0 ? (
-          <span className="text-dim">—</span>
+          <span className="text-fg-tertiary">—</span>
         ) : (
           `${candidate.delta >= 0 ? "+" : ""}${candidate.delta.toFixed(2)}`
         ),
@@ -167,7 +167,7 @@ export function CandidateTable({
       header: "Γ",
       render: (candidate) =>
         candidate.breakdown.length === 0 || candidate.gamma === null ? (
-          <span className="text-dim">—</span>
+          <span className="text-fg-tertiary">—</span>
         ) : (
           `${candidate.gamma >= 0 ? "+" : ""}${candidate.gamma.toFixed(3)}`
         ),
@@ -180,9 +180,9 @@ export function CandidateTable({
       render: (candidate) => {
         const notScored = candidate.breakdown.length === 0;
         return (
-          <span className={cn(!notScored && (candidate.theta >= 0 ? "text-up" : "text-down"))}>
+          <span className={cn(!notScored && (candidate.theta >= 0 ? "text-value-positive" : "text-value-negative"))}>
             {notScored ? (
-              <span className="text-dim">—</span>
+              <span className="text-fg-tertiary">—</span>
             ) : (
               `${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`
             )}
@@ -195,7 +195,7 @@ export function CandidateTable({
       header: "Vega",
       render: (candidate) =>
         candidate.breakdown.length === 0 ? (
-          <span className="text-dim">—</span>
+          <span className="text-fg-tertiary">—</span>
         ) : (
           `${candidate.vega >= 0 ? "+" : ""}${candidate.vega.toFixed(1)}`
         ),
@@ -205,7 +205,7 @@ export function CandidateTable({
       header: "IV f/b",
       render: (candidate) =>
         candidate.breakdown.length === 0 ? (
-          <span className="text-dim">—</span>
+          <span className="text-fg-tertiary">—</span>
         ) : (
           `${(candidate.frontLeg.iv * 100).toFixed(1)}/${(candidate.backLeg.iv * 100).toFixed(1)}`
         ),
@@ -218,9 +218,9 @@ export function CandidateTable({
         const event = candidate.frontEvents[0] ?? candidate.backEvents[0] ?? null;
         const eventCount = candidate.frontEvents.length + candidate.backEvents.length;
         return event === null ? (
-          <span className="text-dim">—</span>
+          <span className="text-fg-tertiary">—</span>
         ) : (
-          <span className="rounded-sm bg-raise px-1 py-0.5 text-amber">
+          <span className="rounded-sm bg-surface-overlay px-1 py-0.5 text-accent-warning">
             {`⚡ ${event}${eventCount > 1 ? ` +${eventCount - 1}` : ""}`}
           </span>
         );
@@ -276,7 +276,7 @@ export function CandidateTable({
       columns={columns}
       rows={rows}
       rowTestId={(c) => `candidate-row-${c.id}`}
-      rowClassName={(c) => (c.id === selectedId ? "border-l-2 border-l-violet bg-violet/[0.06]" : "")}
+      rowClassName={(c) => (c.id === selectedId ? "border-l-2 border-l-violet bg-accent-primary/[0.06]" : "")}
       onRowClick={onSelect}
       sort={sort}
       onSortChange={handleSort}

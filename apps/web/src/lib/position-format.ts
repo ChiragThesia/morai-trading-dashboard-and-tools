@@ -30,7 +30,7 @@ export function usd(v: number): string {
 }
 
 export function signClass(v: number): string {
-  return v >= 0 ? "text-up" : "text-down";
+  return v >= 0 ? "text-value-positive" : "text-value-negative";
 }
 
 /** Structured expiry/DTE cell (OVW-03). */

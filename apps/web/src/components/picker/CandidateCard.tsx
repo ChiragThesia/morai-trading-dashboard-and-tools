@@ -24,7 +24,7 @@
  * same amber token the front/back event tags already use, since this is the same "event"
  * semantic at the whole-candidate level rather than a new color/token.
  *
- * Hand-rolled bar fills (bg-violet/bg-blue/bg-up/bg-amber Tailwind tokens, no hardcoded hex)
+ * Hand-rolled bar fills (bg-accent-primary/bg-accent-info/bg-value-positive/bg-accent-warning Tailwind tokens, no hardcoded hex)
  * mirror PayoffChart.tsx's existing hand-rolled precedent (UI-SPEC Registry Safety).
  */
 import { cn } from "@/lib/utils";
@@ -43,10 +43,10 @@ const BAR_LABEL: Record<BarCriterion, string> = {
 };
 
 const BAR_FILL_CLASS: Record<BarCriterion, string> = {
-  slope: "bg-violet",
-  fwdEdge: "bg-blue",
-  gexFit: "bg-up",
-  eventAdjustment: "bg-amber",
+  slope: "bg-accent-primary",
+  fwdEdge: "bg-accent-info",
+  gexFit: "bg-value-positive",
+  eventAdjustment: "bg-accent-warning",
 };
 
 /** Per-criterion caption formatter — exhaustive over the full breakdownEntry enum (never a default). */
@@ -152,20 +152,20 @@ export function CandidateCard({
       onClick={() => onSelect(candidate)}
       className={cn(
         "cursor-pointer rounded-lg border px-2.5 py-2",
-        selected ? "border-violet bg-violet/[0.06]" : "border-line bg-transparent hover:border-line2",
+        selected ? "border-accent-primary bg-accent-primary/[0.06]" : "border-line-subtle bg-transparent hover:border-line-strong",
       )}
       data-testid={`candidate-card-${candidate.id}`}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-display text-sm font-bold text-txt">{candidate.name}</span>
+        <span className="font-display text-sm font-bold text-fg-primary">{candidate.name}</span>
         <span className="flex items-center gap-1">
           {pasted && (
-            <span className="rounded-sm bg-violet/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-violet">
+            <span className="rounded-sm bg-accent-primary/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-accent-primary">
               PASTED
             </span>
           )}
           {candidate.breakdown.length > 0 && (
-            <span className="font-display text-sm font-bold text-violet">{candidate.score}</span>
+            <span className="font-display text-sm font-bold text-accent-primary">{candidate.score}</span>
           )}
           {pasted && onRemove !== undefined && (
             <Button
@@ -186,7 +186,7 @@ export function CandidateCard({
 
       {!pasted && candidate.bucket === "event-calendar" && (
         <span
-          className="mt-0.5 inline-block rounded-sm bg-amber/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-amber"
+          className="mt-0.5 inline-block rounded-sm bg-accent-warning/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-accent-warning"
           data-testid={`bucket-label-${candidate.id}`}
         >
           Event-calendar bucket
@@ -196,34 +196,34 @@ export function CandidateCard({
       {/* flex-wrap: the chip spans are adjacent inline boxes with no whitespace between
           them — no soft-wrap points — so a chip-heavy candidate rendered one unbreakable
           line (533px page at 390px, Phase-36 C2). Flex items wrap at every boundary. */}
-      <div className="mt-0.5 flex flex-wrap items-center gap-y-0.5 font-mono text-[9px] text-dim">
+      <div className="mt-0.5 flex flex-wrap items-center gap-y-0.5 font-mono text-[9px] text-fg-tertiary">
         {candidate.breakdown.length === 0 ? (
           `DTE ${candidate.frontLeg.dte}/${candidate.backLeg.dte} · debit $${candidate.debit.toFixed(0)} · IV ${(candidate.frontLeg.iv * 100).toFixed(1)}%`
         ) : (
           <>
             {`DTE ${candidate.frontLeg.dte}/${candidate.backLeg.dte} · debit $${candidate.debit.toFixed(0)} · θ +${candidate.theta.toFixed(1)}/d · vega +${candidate.vega.toFixed(0)}`}
             {candidate.frontEvents.map((ev) => (
-              <span key={`f-${ev}`} className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">
+              <span key={`f-${ev}`} className="ml-1 rounded-sm bg-surface-overlay px-1 py-0.5 text-accent-warning">
                 {`${ev}◂f`}
               </span>
             ))}
             {candidate.backEvents.map((ev) => (
-              <span key={`b-${ev}`} className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber opacity-60">
+              <span key={`b-${ev}`} className="ml-1 rounded-sm bg-surface-overlay px-1 py-0.5 text-accent-warning opacity-60">
                 {`${ev}◂b`}
               </span>
             ))}
             {!hasEvents && (
-              <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-dim">clean</span>
+              <span className="ml-1 rounded-sm bg-surface-overlay px-1 py-0.5 text-fg-tertiary">clean</span>
             )}
-            <span className="ml-1 flex items-center gap-1 rounded-sm bg-raise px-1 py-0.5">
-              <span className={cn("size-1.5 rounded-full", staleness.fresh ? "bg-up" : "bg-amber")} />
+            <span className="ml-1 flex items-center gap-1 rounded-sm bg-surface-overlay px-1 py-0.5">
+              <span className={cn("size-1.5 rounded-full", staleness.fresh ? "bg-value-positive" : "bg-accent-warning")} />
               {`${staleness.label} · ${source}`}
             </span>
             {guardGexFit && (
-              <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">GEX unavailable</span>
+              <span className="ml-1 rounded-sm bg-surface-overlay px-1 py-0.5 text-accent-warning">GEX unavailable</span>
             )}
             {guardEventAdjustment && (
-              <span className="ml-1 rounded-sm bg-raise px-1 py-0.5 text-amber">events unavailable</span>
+              <span className="ml-1 rounded-sm bg-surface-overlay px-1 py-0.5 text-accent-warning">events unavailable</span>
             )}
           </>
         )}
@@ -241,15 +241,15 @@ export function CandidateCard({
           const caption = isGuardBar ? "n/a" : formatBreakdownCaption(entry);
           return (
             <div key={criterion} className="flex items-center gap-1.5">
-              <span className="w-16 shrink-0 font-mono text-[9px] text-dim">{BAR_LABEL[criterion]}</span>
-              <span className="h-[5px] flex-1 rounded-full bg-raise">
+              <span className="w-16 shrink-0 font-mono text-[9px] text-fg-tertiary">{BAR_LABEL[criterion]}</span>
+              <span className="h-[5px] flex-1 rounded-full bg-surface-overlay">
                 <span
                   className={cn("block h-full rounded-full", BAR_FILL_CLASS[criterion])}
                   style={{ width: `${width}%` }}
                   data-testid={`breakdown-bar-fill-${criterion}`}
                 />
               </span>
-              <span className="w-9 shrink-0 text-right font-mono text-[9px] text-dim">{caption}</span>
+              <span className="w-9 shrink-0 text-right font-mono text-[9px] text-fg-tertiary">{caption}</span>
             </div>
           );
         })}

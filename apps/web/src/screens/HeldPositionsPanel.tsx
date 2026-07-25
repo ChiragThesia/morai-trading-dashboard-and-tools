@@ -20,18 +20,18 @@ import { Panel, PanelHeading } from "../components/system/index.tsx";
 import { GEX_FRESH_MS } from "./Market.tsx";
 
 /** The verdict's OWN color — shared by the value text (when not forced INDICATIVE) and the
- * CHANGED marker (Color contract: "a changed STOP shows CHANGED in text-down..."). */
+ * CHANGED marker (Color contract: "a changed STOP shows CHANGED in text-value-negative..."). */
 export function verdictColorClass(verdict: ExitVerdictEnum): string {
   switch (verdict) {
     case "HOLD":
-      return "text-txt";
+      return "text-fg-primary";
     case "TAKE":
-      return "text-up";
+      return "text-value-positive";
     case "ROLL":
     case "EXIT_PRE_EVENT":
-      return "text-amber";
+      return "text-accent-warning";
     case "STOP":
-      return "text-down";
+      return "text-value-negative";
   }
 }
 
@@ -93,10 +93,10 @@ export function VerdictChip({
   const escalated = row.escalate && !row.indicative;
   const fillRing =
     escalated && row.verdict === "STOP"
-      ? "bg-downd ring-down/40"
+      ? "bg-value-negative-surface ring-value-negative/40"
       : escalated && row.verdict === "EXIT_PRE_EVENT"
-        ? "bg-amber/15 ring-amber/40"
-        : "bg-transparent ring-line";
+        ? "bg-accent-warning/15 ring-accent-warning/40"
+        : "bg-transparent ring-line-subtle";
   return (
     <span
       data-testid={`held-position-verdict-${row.calendarId}`}
@@ -108,7 +108,7 @@ export function VerdictChip({
       )}
     >
       {row.indicative ? (
-        <span className="text-amber/70" data-testid={`held-position-indicative-${row.calendarId}`}>
+        <span className="text-accent-warning/70" data-testid={`held-position-indicative-${row.calendarId}`}>
           {marketSession === "after-hours" ? "AH — indicative" : "STALE — indicative"}
         </span>
       ) : (
@@ -148,20 +148,20 @@ export function VerdictDetailBody({
   const staleness = formatAsOf(observedAt);
   return (
     <div className="flex flex-col gap-1">
-      <div className="font-mono text-[9px] text-dim" data-testid={`held-position-rule-${row.calendarId}`}>
+      <div className="font-mono text-[9px] text-fg-tertiary" data-testid={`held-position-rule-${row.calendarId}`}>
         {`${row.ruleId} · ${formatMetric(row.metric)}`}
       </div>
       <div className="flex items-center gap-1">
-        <span className={cn("size-1.5 rounded-full", staleness.fresh ? "bg-up" : "bg-amber")} />
-        <span className="font-mono text-[9px] text-dim">{staleness.label}</span>
+        <span className={cn("size-1.5 rounded-full", staleness.fresh ? "bg-value-positive" : "bg-accent-warning")} />
+        <span className="font-mono text-[9px] text-fg-tertiary">{staleness.label}</span>
       </div>
       {row.verdict === "ROLL" && row.roll !== null && (
         <div
-          className="flex justify-between gap-2 border-t border-line/40 pt-1 font-mono text-[10px]"
+          className="flex justify-between gap-2 border-t border-line-subtle/40 pt-1 font-mono text-[10px]"
           data-testid={`held-position-roll-${row.calendarId}`}
         >
-          <span className="text-dim">Suggested roll</span>
-          <span className="text-txt">
+          <span className="text-fg-tertiary">Suggested roll</span>
+          <span className="text-fg-primary">
             {`→ ${row.roll.suggestedFrontExpiry} · new front est. credit $${Math.round(row.roll.estNewFrontCredit)}`}
           </span>
         </div>
@@ -199,12 +199,12 @@ export function HeldPositionsPanel({
         {positions.map((row) => (
           <div
             key={row.calendarId}
-            className="rounded-lg border border-line bg-transparent px-2.5 py-2 hover:border-line2"
+            className="rounded-lg border border-line-subtle bg-transparent px-2.5 py-2 hover:border-line-strong"
             data-testid={`held-position-${row.calendarId}`}
           >
             <div className="flex items-baseline justify-between gap-2">
               <span className="flex items-center gap-1.5">
-                <span className="font-display text-sm font-bold text-txt">{row.name}</span>
+                <span className="font-display text-sm font-bold text-fg-primary">{row.name}</span>
                 <VerdictChangedMarker row={row} />
               </span>
               <VerdictChip row={row} marketSession={marketSession} />

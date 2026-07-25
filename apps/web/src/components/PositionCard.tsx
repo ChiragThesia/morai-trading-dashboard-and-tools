@@ -56,7 +56,7 @@ export function PositionCard({
     <div
       data-testid={`position-card-${row.key}`}
       className={cn(
-        "rounded-lg bg-raise/30 p-3 ring-1 ring-line transition-opacity",
+        "rounded-lg bg-surface-overlay/30 p-3 ring-1 ring-line-subtle transition-opacity",
         !included && "opacity-40",
       )}
     >
@@ -79,9 +79,9 @@ export function PositionCard({
           {/* Row 1 (D-07): label + IV n/a + verdict left, focal unreal right. */}
           <div className="flex items-center justify-between gap-2">
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="font-display text-sm font-bold text-txt">{row.label}</span>
+              <span className="font-display text-sm font-bold text-fg-primary">{row.label}</span>
               {ivNa && (
-                <Badge variant="outline" className="border-amber/50 px-1 py-0 font-mono text-[9px] text-amber">
+                <Badge variant="outline" className="border-accent-warning/50 px-1 py-0 font-mono text-[9px] text-accent-warning">
                   IV n/a
                 </Badge>
               )}
@@ -90,18 +90,18 @@ export function PositionCard({
             <span
               className={cn(
                 "font-mono text-base font-bold tabular-nums",
-                unreal === null ? "text-dim" : signClass(unreal),
+                unreal === null ? "text-fg-tertiary" : signClass(unreal),
               )}
             >
               {unreal === null ? "—" : signedUsd(unreal)}
             </span>
           </div>
           {/* Row 2 (D-07): one muted meta line — expiry · DTE · net val. */}
-          <div className="mt-1 font-mono text-[10px] text-dim truncate">
+          <div className="mt-1 font-mono text-[10px] text-fg-tertiary truncate">
             {row.expiry.line1} · {row.expiry.line2} · {usd(netVal)}
           </div>
           {expanded && (
-            <div className="mt-2 border-t border-line/40 pt-2">
+            <div className="mt-2 border-t border-line-subtle/40 pt-2">
               <div className="grid grid-cols-4 gap-2">
                 <Stat label="Δ" value={signed(g.delta)} valueClassName={signClass(g.delta)} />
                 <Stat label="Γ" value={signed(g.gamma)} />

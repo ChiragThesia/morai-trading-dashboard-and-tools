@@ -33,8 +33,8 @@ describe("position-format", () => {
   });
 
   it("signClass: returns the up/down color token", () => {
-    expect(signClass(1)).toBe("text-up");
-    expect(signClass(0)).toBe("text-up");
-    expect(signClass(-1)).toBe("text-down");
+    expect(signClass(1)).toBe("text-value-positive");
+    expect(signClass(0)).toBe("text-value-positive");
+    expect(signClass(-1)).toBe("text-value-negative");
   });
 });

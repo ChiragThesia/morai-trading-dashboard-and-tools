@@ -157,13 +157,13 @@ describe("RegimeBoard", () => {
     }
 
     // calm → quiet default text, NOT the loud up/green token; abnormal bands carry the color.
-    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-txt");
-    expect(screen.getByTestId("regime-value-vvix").className).not.toContain("text-up");
-    expect(screen.getByTestId("regime-gauge-marker-vvix").className).not.toContain("bg-up");
-    expect(screen.getByTestId("regime-value-vix-term-structure").className).toContain("text-amber");
-    expect(screen.getByTestId("regime-gauge-marker-vix-term-structure").className).toContain("bg-amber");
-    expect(screen.getByTestId("regime-value-vix9d-vix").className).toContain("text-down");
-    expect(screen.getByTestId("regime-gauge-marker-vix9d-vix").className).toContain("bg-down");
+    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-fg-primary");
+    expect(screen.getByTestId("regime-value-vvix").className).not.toContain("text-value-positive");
+    expect(screen.getByTestId("regime-gauge-marker-vvix").className).not.toContain("bg-value-positive");
+    expect(screen.getByTestId("regime-value-vix-term-structure").className).toContain("text-accent-warning");
+    expect(screen.getByTestId("regime-gauge-marker-vix-term-structure").className).toContain("bg-accent-warning");
+    expect(screen.getByTestId("regime-value-vix9d-vix").className).toContain("text-value-negative");
+    expect(screen.getByTestId("regime-gauge-marker-vix9d-vix").className).toContain("bg-value-negative");
   });
 
   it("renders a role=meter gauge per indicator, band-colored marker, aria carrying value/band (DEFECT-2)", () => {
@@ -182,9 +182,9 @@ describe("RegimeBoard", () => {
     expect(screen.queryByTestId("regime-band-vvix")).toBeNull();
 
     // Marker color reads the server band, not a client recomputation.
-    expect(screen.getByTestId("regime-gauge-marker-vvix").className).toContain("bg-txt");
-    expect(screen.getByTestId("regime-gauge-marker-vix-term-structure").className).toContain("bg-amber");
-    expect(screen.getByTestId("regime-gauge-marker-vix9d-vix").className).toContain("bg-down");
+    expect(screen.getByTestId("regime-gauge-marker-vvix").className).toContain("bg-fg-primary");
+    expect(screen.getByTestId("regime-gauge-marker-vix-term-structure").className).toContain("bg-accent-warning");
+    expect(screen.getByTestId("regime-gauge-marker-vix9d-vix").className).toContain("bg-value-negative");
   });
 
   it("positions band segments from response bandWarn/bandCrisis (not client threshold constants)", () => {
@@ -444,7 +444,7 @@ describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
     expect(screen.getByTestId("gate-state").textContent).toBe("OPEN");
     expect(screen.getByTestId("gate-metrics").textContent).toBe("VIX 18.00 · ratio 0.90");
     expect(screen.getByTestId("gate-asof").textContent).toBe("as of 2026-07-09");
-    expect(screen.getByTestId("gate-state").className).toContain("text-up");
+    expect(screen.getByTestId("gate-state").className).toContain("text-value-positive");
   });
 
   it("renders the penalty gate state distinctly (amber)", () => {
@@ -453,7 +453,7 @@ describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
     render(<RegimeBoard />);
 
     expect(screen.getByTestId("gate-state").textContent).toBe("PENALTY");
-    expect(screen.getByTestId("gate-state").className).toContain("text-amber");
+    expect(screen.getByTestId("gate-state").className).toContain("text-accent-warning");
   });
 
   it("renders the blocked gate state (down token), without the blind alarm treatment", () => {
@@ -462,8 +462,8 @@ describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
     render(<RegimeBoard />);
 
     expect(screen.getByTestId("gate-state").textContent).toBe("BLOCKED");
-    expect(screen.getByTestId("gate-state").className).toContain("text-down");
-    expect(screen.getByTestId("gate-chip").className).not.toContain("bg-downd");
+    expect(screen.getByTestId("gate-state").className).toContain("text-value-negative");
+    expect(screen.getByTestId("gate-chip").className).not.toContain("bg-value-negative-surface");
   });
 
   it("renders GATE BLIND visibly louder than blocked — the filled alarm treatment", () => {
@@ -472,7 +472,7 @@ describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
     render(<RegimeBoard />);
 
     expect(screen.getByTestId("gate-state").textContent).toBe("GATE BLIND");
-    expect(screen.getByTestId("gate-chip").className).toContain("bg-downd");
+    expect(screen.getByTestId("gate-chip").className).toContain("bg-value-negative-surface");
     expect(screen.getByTestId("gate-metrics").textContent).toBe("VIX — · ratio —");
     expect(screen.getByTestId("gate-asof").textContent).toBe("as of —");
   });
@@ -521,7 +521,7 @@ describe("RegimeBoard — entry-gate tile (28-06, PLAY-01)", () => {
     ).toBeDefined();
     expect(screen.getByTestId("gate-chip")).toBeDefined();
     expect(screen.getByTestId("gate-state").textContent).toBe("GATE BLIND");
-    expect(screen.getByTestId("gate-chip").className).toContain("bg-downd");
+    expect(screen.getByTestId("gate-chip").className).toContain("bg-value-negative-surface");
   });
 });
 
@@ -552,16 +552,16 @@ describe("RegimeBoard — live display value + client band recompute (Phase 38-0
 
     // vvix: EOD 89.00/calm -> live 120.30 (>= VVIX_CRISIS 115) -> crisis
     expect(screen.getByTestId("regime-value-vvix").textContent).toBe("120.30");
-    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-down");
-    expect(screen.getByTestId("regime-gauge-marker-vvix").className).toContain("bg-down");
+    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-value-negative");
+    expect(screen.getByTestId("regime-gauge-marker-vvix").className).toContain("bg-value-negative");
 
     // vix-term-structure: EOD 0.92/warning -> live 21.7/20.9=1.04 (>= crisis 0.95) -> crisis
     expect(screen.getByTestId("regime-value-vix-term-structure").textContent).toBe("1.04");
-    expect(screen.getByTestId("regime-value-vix-term-structure").className).toContain("text-down");
+    expect(screen.getByTestId("regime-value-vix-term-structure").className).toContain("text-value-negative");
 
     // vix9d-vix: EOD 1.15/crisis -> live 23.5/21.7=1.08 (>= warn 1.0, < crisis 1.1) -> warning
     expect(screen.getByTestId("regime-value-vix9d-vix").textContent).toBe("1.08");
-    expect(screen.getByTestId("regime-value-vix9d-vix").className).toContain("text-amber");
+    expect(screen.getByTestId("regime-value-vix9d-vix").className).toContain("text-accent-warning");
 
     // Footer flips to a live marker — never a silent live/EOD mix (catch #26)
     expect(screen.getByTestId("regime-freshness").textContent).toBe("LIVE");
@@ -572,7 +572,7 @@ describe("RegimeBoard — live display value + client band recompute (Phase 38-0
     render(<RegimeBoard liveIndices={LIVE_INDICES} liveStatus="quiet" />);
 
     expect(screen.getByTestId("regime-value-vvix").textContent).toBe("89.00");
-    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-txt");
+    expect(screen.getByTestId("regime-value-vvix").className).toContain("text-fg-primary");
     expect(screen.getByTestId("regime-freshness").textContent).toContain("EOD · as of 2026-07-08");
   });
 
@@ -592,7 +592,7 @@ describe("RegimeBoard — live display value + client band recompute (Phase 38-0
 
     expect(screen.getByTestId("gate-metrics").textContent).toBe("VIX 18.00 · ratio 0.90");
     expect(screen.getByTestId("regime-value-hy-oas").textContent).toBe("3.40");
-    expect(screen.getByTestId("regime-value-hy-oas").className).toContain("text-amber");
+    expect(screen.getByTestId("regime-value-hy-oas").className).toContain("text-accent-warning");
   });
 
   it("degrades only the affected row to EOD when one required live input is null (per-symbol Schwab failure)", () => {
@@ -617,17 +617,17 @@ describe("RegimeBoard — rate block gauges (39-02, GAUGE-02/GAUGE-05)", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the 4 money-rate rows as NEUTRAL bg-dim gauges, no band-segment children, for any value", () => {
+  it("renders the 4 money-rate rows as NEUTRAL bg-fg-tertiary gauges, no band-segment children, for any value", () => {
     setMacro(MACRO_DATA);
     render(<RegimeBoard />);
 
     for (const id of ["DFF", "SOFR", "DGS1MO", "DGS3MO"] as const) {
       const gauge = screen.getByTestId(`rate-gauge-${id}`);
       const marker = screen.getByTestId(`rate-gauge-marker-${id}`);
-      expect(marker.className).toContain("bg-dim");
-      expect(marker.className).not.toContain("bg-amber");
-      expect(marker.className).not.toContain("bg-down");
-      expect(marker.className).not.toContain("bg-txt");
+      expect(marker.className).toContain("bg-fg-tertiary");
+      expect(marker.className).not.toContain("bg-accent-warning");
+      expect(marker.className).not.toContain("bg-value-negative");
+      expect(marker.className).not.toContain("bg-fg-primary");
       expect(gauge.querySelectorAll(":scope > div").length).toBe(1);
       expect(gauge.getAttribute("role")).toBe("meter");
       expect(gauge.getAttribute("aria-valuemin")).toBe("0");
@@ -644,13 +644,13 @@ describe("RegimeBoard — rate block gauges (39-02, GAUGE-02/GAUGE-05)", () => {
     expect(gauge.getAttribute("aria-valuetext")).not.toMatch(/calm|warning|crisis/);
   });
 
-  it("renders 10Y-2Y at -0.60 as BANDED crisis (band segments present, marker bg-down)", () => {
+  it("renders 10Y-2Y at -0.60 as BANDED crisis (band segments present, marker bg-value-negative)", () => {
     setMacro({ ...MACRO_DATA, T10Y2Y: [{ time: "2026-06-30", value: -0.6 }] });
     render(<RegimeBoard />);
 
     const gauge = screen.getByTestId("rate-gauge-T10Y2Y");
     expect(gauge.querySelectorAll(":scope > div").length).toBe(3);
-    expect(screen.getByTestId("rate-gauge-marker-T10Y2Y").className).toContain("bg-down");
+    expect(screen.getByTestId("rate-gauge-marker-T10Y2Y").className).toContain("bg-value-negative");
     expect(gauge.getAttribute("aria-valuetext")).toBe("-0.60% — crisis");
   });
 
@@ -658,7 +658,7 @@ describe("RegimeBoard — rate block gauges (39-02, GAUGE-02/GAUGE-05)", () => {
     setMacro({ ...MACRO_DATA, T10Y2Y: [{ time: "2026-06-30", value: -0.2 }] });
     render(<RegimeBoard />);
 
-    expect(screen.getByTestId("rate-gauge-marker-T10Y2Y").className).toContain("bg-amber");
+    expect(screen.getByTestId("rate-gauge-marker-T10Y2Y").className).toContain("bg-accent-warning");
     expect(screen.getByTestId("rate-gauge-T10Y2Y").getAttribute("aria-valuetext")).toBe("-0.20% — warning");
   });
 
@@ -666,7 +666,7 @@ describe("RegimeBoard — rate block gauges (39-02, GAUGE-02/GAUGE-05)", () => {
     setMacro({ ...MACRO_DATA, T10Y3M: [{ time: "2026-06-30", value: 0.5 }] });
     render(<RegimeBoard />);
 
-    expect(screen.getByTestId("rate-gauge-marker-T10Y3M").className).toContain("bg-txt");
+    expect(screen.getByTestId("rate-gauge-marker-T10Y3M").className).toContain("bg-fg-primary");
     expect(screen.getByTestId("rate-gauge-T10Y3M").getAttribute("aria-valuetext")).toBe("0.50% — calm");
   });
 

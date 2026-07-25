@@ -202,9 +202,9 @@ export function EventChipsRow({ events, asOf, frontDte, backDte }: EventChipsRow
               </TooltipTrigger>
               <TooltipContent>
                 <div className="flex max-w-[16rem] flex-col gap-1 font-mono">
-                  <span className="text-[11px] text-txt">{copy?.what ?? `${e.name} — scheduled economic release.`}</span>
-                  <span className="text-[11px] text-dim">{copy?.why ?? "Scheduled event — IV into it is event premium."}</span>
-                  <span className="text-[10px] text-dim/70">{`${e.label} · ${e.dte}d out · ${legNote}`}</span>
+                  <span className="text-[11px] text-fg-primary">{copy?.what ?? `${e.name} — scheduled economic release.`}</span>
+                  <span className="text-[11px] text-fg-tertiary">{copy?.why ?? "Scheduled event — IV into it is event premium."}</span>
+                  <span className="text-[10px] text-fg-tertiary/70">{`${e.label} · ${e.dte}d out · ${legNote}`}</span>
                 </div>
               </TooltipContent>
             </Tooltip>
@@ -340,7 +340,7 @@ export function TermStructureChart({
         </LineChart>
       </ChartContainer>
       <EventChipsRow events={events} asOf={asOf} frontDte={frontDte} backDte={backDte} />
-      <p className="m-0 font-mono text-[10px] leading-[1.5] text-dim">
+      <p className="m-0 font-mono text-[10px] leading-[1.5] text-fg-tertiary">
         ATM implied vol by expiry. <span style={{ color: CORAL }}>●</span> short front leg ·{" "}
         <span style={{ color: TEAL }}>●</span> long back leg · <span style={{ color: CORAL }}>◂f</span>/
         <span style={{ color: TEAL }}>◂b</span> = event before front/back expiry — hover a chip for

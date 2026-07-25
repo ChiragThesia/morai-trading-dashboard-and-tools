@@ -116,17 +116,17 @@ function KeyLevelsTable({
   nearTerm,
 }: KeyLevelsTableProps): React.ReactElement {
   const levels: ReadonlyArray<KeyLevel> = [
-    { label: "Call Wall", value: callWall, colorClass: "text-up" },
-    { label: "γ flip", value: flip, colorClass: "text-amber" },
-    { label: "Spot", value: spot, colorClass: "text-blue" },
-    { label: "Put Wall", value: putWall, colorClass: "text-down" },
+    { label: "Call Wall", value: callWall, colorClass: "text-value-positive" },
+    { label: "γ flip", value: flip, colorClass: "text-accent-warning" },
+    { label: "Spot", value: spot, colorClass: "text-accent-info" },
+    { label: "Put Wall", value: putWall, colorClass: "text-value-negative" },
     // Near-term (≤45d DTE) set — the intraday-relevant walls when far-dated OI
     // dominates the all-expiry levels. Absent on pre-0019 snapshots.
     ...(nearTerm !== null
       ? [
-          { label: "Call Wall 45d", value: nearTerm.callWall, colorClass: "text-up" },
-          { label: "γ flip 45d", value: nearTerm.flip, colorClass: "text-amber" },
-          { label: "Put Wall 45d", value: nearTerm.putWall, colorClass: "text-down" },
+          { label: "Call Wall 45d", value: nearTerm.callWall, colorClass: "text-value-positive" },
+          { label: "γ flip 45d", value: nearTerm.flip, colorClass: "text-accent-warning" },
+          { label: "Put Wall 45d", value: nearTerm.putWall, colorClass: "text-value-negative" },
         ]
       : []),
   ];
@@ -142,13 +142,13 @@ function KeyLevelsTable({
         return (
           <div
             key={lvl.label}
-            className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] tabular-nums ring-1 ring-line"
+            className="flex items-center gap-1.5 rounded-md bg-surface-overlay/40 px-2.5 py-1 font-mono text-[10px] tabular-nums ring-1 ring-line-subtle"
           >
             <span className={cn(lvl.colorClass, "font-display text-[10px] font-semibold tracking-[0.09em] uppercase")}>
               {lvl.label}
             </span>
-            <span className="text-txt">{valStr}</span>
-            <span className="text-dim">{distStr}</span>
+            <span className="text-fg-primary">{valStr}</span>
+            <span className="text-fg-tertiary">{distStr}</span>
           </div>
         );
       })}
@@ -177,7 +177,7 @@ export function Market(): React.ReactElement {
   if (gex === undefined) {
     return (
       <div
-        className="p-8 text-center font-mono text-xs text-dim"
+        className="p-8 text-center font-mono text-xs text-fg-tertiary"
         data-testid="market-empty"
       >
         {/* Locked copy from UI-SPEC "Empty / loading / error states" */}
@@ -197,7 +197,7 @@ export function Market(): React.ReactElement {
   const zeroDte = zeroDteGex(gex.byExpiry, gex.computedAt);
 
   // Sign-color class: coral (AMPLIFY / net short gamma) vs teal (DAMPEN / net long).
-  const signClass = isAmplify ? "text-down" : "text-up";
+  const signClass = isAmplify ? "text-value-negative" : "text-value-positive";
 
   // Regime chip
   const regimeLabel = isAmplify ? "▼ AMPLIFY" : "▲ DAMPEN";
@@ -222,7 +222,7 @@ export function Market(): React.ReactElement {
         <MetricChip
           label="SPX spot"
           value={gex.spot.toFixed(2)}
-          valueClassName="text-blue"
+          valueClassName="text-accent-info"
         />
         {/* net γ /1% (coral when negative with blood-dark bg) */}
         <MetricChip
@@ -239,12 +239,12 @@ export function Market(): React.ReactElement {
             zeroDte === null
               ? "text-muted-foreground"
               : zeroDte < 0
-                ? "text-down"
-                : "text-up"
+                ? "text-value-negative"
+                : "text-value-positive"
           }
         />
         {/* γ flip (amber) */}
-        <MetricChip label="γ flip" value={flipLabel} valueClassName="text-amber" />
+        <MetricChip label="γ flip" value={flipLabel} valueClassName="text-accent-warning" />
         {/* Regime label: AMPLIFY or DAMPEN */}
         <MetricChip
           label="regime"
@@ -254,19 +254,19 @@ export function Market(): React.ReactElement {
         />
         {/* GEX freshness — "as of <time> · <age>"; amber dot when stale (off-hours / feed gap) */}
         <div
-          className="flex items-center gap-1.5 rounded-md bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+          className="flex items-center gap-1.5 rounded-md bg-surface-overlay/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line-subtle"
           data-testid="gex-freshness"
         >
-          <span className={cn("size-1.5 rounded-full", gexFresh ? "bg-up" : "bg-amber")} />
-          <span className="text-dim">GEX as of</span>
-          <span className="text-txt">{gexAsOf}</span>
-          <span className={gexFresh ? "text-up" : "text-amber"}>· {relAge(gexAgeMs)}</span>
+          <span className={cn("size-1.5 rounded-full", gexFresh ? "bg-value-positive" : "bg-accent-warning")} />
+          <span className="text-fg-tertiary">GEX as of</span>
+          <span className="text-fg-primary">{gexAsOf}</span>
+          <span className={gexFresh ? "text-value-positive" : "text-accent-warning"}>· {relAge(gexAgeMs)}</span>
         </div>
       </div>
 
       {/* ── Strike-window picker (shared by the three by-strike charts) ── */}
       <div className="flex items-center gap-2">
-        <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-dim uppercase">
+        <span className="font-display text-[10px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
           Strike window
         </span>
         <Tabs value={String(range)} onValueChange={handleRange}>

@@ -180,9 +180,9 @@ export function EventLegRibbon({
               </TooltipTrigger>
               <TooltipContent>
                 <div className="flex max-w-[16rem] flex-col gap-1 font-mono">
-                  <span className="text-[11px] text-txt">{copy?.what ?? `${e.name} — scheduled economic release.`}</span>
-                  <span className="text-[11px] text-dim">{copy?.why ?? "Scheduled event — IV into it is event premium."}</span>
-                  <span className="text-[10px] text-dim/70">{`${e.label} · ${e.dte}d out · ${WINDOW_NOTE[e.window]}`}</span>
+                  <span className="text-[11px] text-fg-primary">{copy?.what ?? `${e.name} — scheduled economic release.`}</span>
+                  <span className="text-[11px] text-fg-tertiary">{copy?.why ?? "Scheduled event — IV into it is event premium."}</span>
+                  <span className="text-[10px] text-fg-tertiary/70">{`${e.label} · ${e.dte}d out · ${WINDOW_NOTE[e.window]}`}</span>
                 </div>
               </TooltipContent>
             </Tooltip>

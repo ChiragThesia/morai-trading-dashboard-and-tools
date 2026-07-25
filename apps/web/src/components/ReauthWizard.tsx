@@ -174,7 +174,7 @@ export function ReauthWizard({ expiredApps }: ReauthWizardProps): React.ReactEle
         </div>
         {state.done ? (
           <div className="flex flex-col gap-3">
-            <div className="font-mono text-[12px] leading-[1.45] text-txt">
+            <div className="font-mono text-[12px] leading-[1.45] text-fg-primary">
               Reconnected. Live data resumes on the next status check.
             </div>
             <Button variant="secondary" size="touch" onClick={() => setOpen(false)}>
@@ -189,7 +189,7 @@ export function ReauthWizard({ expiredApps }: ReauthWizardProps): React.ReactEle
               <div className="flex flex-col gap-3">
                 {status === "idle" && (
                   <>
-                    <div className="font-mono text-[12px] leading-[1.45] text-txt">
+                    <div className="font-mono text-[12px] leading-[1.45] text-fg-primary">
                       Click Authorize with Schwab to reconnect the {step} app.
                     </div>
                     <Button
@@ -203,16 +203,16 @@ export function ReauthWizard({ expiredApps }: ReauthWizardProps): React.ReactEle
                   </>
                 )}
                 {status === "confirming" && (
-                  <div className="font-mono text-[12px] leading-[1.45] text-dim">Confirming…</div>
+                  <div className="font-mono text-[12px] leading-[1.45] text-fg-tertiary">Confirming…</div>
                 )}
                 {status === "success" && (
-                  <div className="flex items-center gap-1 font-mono text-[12px] leading-[1.45] text-up">
+                  <div className="flex items-center gap-1 font-mono text-[12px] leading-[1.45] text-value-positive">
                     <Check className="h-3 w-3" /> {APP_LABEL[step]} connected.
                   </div>
                 )}
                 {status === "failure" && (
                   <>
-                    <div className="font-mono text-[12px] leading-[1.45] text-down">
+                    <div className="font-mono text-[12px] leading-[1.45] text-value-negative">
                       {APP_LABEL[step]} reconnect failed — Schwab didn&apos;t confirm a fresh token.
                     </div>
                     <Button variant="secondary" size="touch" onClick={() => handleRetry(step)}>

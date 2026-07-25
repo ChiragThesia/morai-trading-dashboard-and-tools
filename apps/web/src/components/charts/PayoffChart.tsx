@@ -808,7 +808,7 @@ export function PayoffChart({
         {exclusionNoteText !== null && (
           <div
             data-testid="t0-exclusion-note"
-            className="pointer-events-none absolute right-2 top-1 text-[10px] text-amber"
+            className="pointer-events-none absolute right-2 top-1 text-[10px] text-accent-warning"
           >
             {exclusionNoteText}
           </div>

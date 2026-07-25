@@ -45,7 +45,7 @@ function tileDelta(
 ): React.ReactElement | null {
   const d = seriesDelta(points);
   if (d === null) return null;
-  const dir = d.delta > 0 ? "text-up" : d.delta < 0 ? "text-down" : "text-dim";
+  const dir = d.delta > 0 ? "text-value-positive" : d.delta < 0 ? "text-value-negative" : "text-fg-tertiary";
   return (
     <span className={cn("ml-1.5 font-mono text-[9px] tabular-nums", dir)} data-testid={testId}>
       {formatDelta(kind, d)}
@@ -73,7 +73,7 @@ export function MobileMarketSection({
   const cotChip =
     cotWow === null ? null : (
       <span
-        className={cn("ml-1.5 font-mono text-[9px] tabular-nums", cotWow >= 0 ? "text-up" : "text-down")}
+        className={cn("ml-1.5 font-mono text-[9px] tabular-nums", cotWow >= 0 ? "text-value-positive" : "text-value-negative")}
         data-testid="mobile-delta-cotlev"
       >
         {`${cotWow >= 0 ? "▲" : "▼"} ${fmtMag(Math.abs(cotWow))}${cotWowPct === null ? "" : ` · ${cotWowPct}`}`}
@@ -84,7 +84,7 @@ export function MobileMarketSection({
       <SectionLabel>Market</SectionLabel>
 
       {gex === undefined ? (
-        <p className="font-mono text-xs text-dim">
+        <p className="font-mono text-xs text-fg-tertiary">
           GEX data unavailable — run fetch-chain to populate.
         </p>
       ) : (
@@ -95,12 +95,12 @@ export function MobileMarketSection({
             {keyLevelsFor(gex, spot ?? undefined).map((lvl) => (
               <div
                 key={lvl.label}
-                className="flex items-center justify-between gap-2 rounded-lg bg-raise/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line"
+                className="flex items-center justify-between gap-2 rounded-lg bg-surface-overlay/40 px-2.5 py-1 font-mono text-[10px] ring-1 ring-line-subtle"
               >
                 <span className={cn(lvl.colorClass, "font-display font-semibold tracking-[0.09em] uppercase")}>
                   {lvl.label}
                 </span>
-                <span className="text-txt">{lvl.value !== null ? lvl.value.toFixed(0) : "—"}</span>
+                <span className="text-fg-primary">{lvl.value !== null ? lvl.value.toFixed(0) : "—"}</span>
               </div>
             ))}
           </div>
@@ -111,13 +111,13 @@ export function MobileMarketSection({
             <Stat
               label="net γ /1%"
               value={fmtGammaCompact(gex.netGammaAtSpot)}
-              valueClassName={regime === "AMPLIFY" ? "text-down" : "text-up"}
+              valueClassName={regime === "AMPLIFY" ? "text-value-negative" : "text-value-positive"}
             />
             <Stat
               label="0DTE γ"
               value={zeroDte !== null ? fmtGammaCompact(zeroDte) : "—"}
               valueClassName={
-                zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-down" : "text-up"
+                zeroDte === null ? "text-muted-foreground" : zeroDte < 0 ? "text-value-negative" : "text-value-positive"
               }
             />
           </div>
