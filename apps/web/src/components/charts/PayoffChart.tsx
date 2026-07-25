@@ -586,7 +586,7 @@ export function PayoffTooltipContent({
     >
       <div
         style={{
-          fontFamily: "Space Grotesk, sans-serif",
+          fontFamily: token.font.display,
           fontWeight: 700,
           fontSize: 13,
           marginBottom: 3,

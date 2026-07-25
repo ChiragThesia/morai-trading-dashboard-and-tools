@@ -199,6 +199,10 @@ function nest(entries) {
 }
 
 const ts = {
+  // Fonts come from tier 1: there is no semantic font tier, and SVG/canvas text needs the
+  // family as a value the same way charts need a colour as a value. Without this, every
+  // Recharts `tick={{ fontFamily }}` hardcodes the stack and drifts from the source.
+  font: nest(primitives.filter(([p]) => p[0] === 'font')).font,
   surface: nest(semantics.filter(([p]) => p[0] === 'surface')).surface,
   border: nest(semantics.filter(([p]) => p[0] === 'border')).border,
   text: nest(semantics.filter(([p]) => p[0] === 'text')).text,
@@ -212,9 +216,9 @@ writeFileSync(
   join(DIR, 'tokens.generated.ts'),
   `${banner}
 /**
- * Resolved token values for code that needs a colour as a value rather than a
- * class — Recharts/visx props, canvas, inline SVG. Never hardcode a hex in a
- * component; import from here.
+ * Resolved token values for code that needs a colour or font as a value rather
+ * than a class — Recharts/visx props, canvas, inline SVG. Never hardcode a hex
+ * or a font stack in a component; import from here.
  */
 export const token = ${JSON.stringify(ts, null, 2)} as const;
 

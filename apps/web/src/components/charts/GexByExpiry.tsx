@@ -64,7 +64,7 @@ export function GexByExpiry({
         formatter: (params: { value: number }) => fmtBn(params.value),
         color: token.text.primary,
         fontSize: 9,
-        fontFamily: "JetBrains Mono, monospace",
+        fontFamily: token.font.mono,
       },
     }));
 
@@ -78,7 +78,7 @@ export function GexByExpiry({
           color: token.text.tertiary,
           fontSize: 9,
           rotate: 30,
-          fontFamily: "JetBrains Mono, monospace",
+          fontFamily: token.font.mono,
         },
         axisLine: { lineStyle: { color: ZERO_LINE } },
         axisTick: { lineStyle: { color: ZERO_LINE } },

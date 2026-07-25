@@ -119,7 +119,7 @@ export function GammaProfile({
           hide={compact}
           ticks={[minSpot, maxSpot]}
           tickFormatter={(v: number): string => v.toFixed(0)}
-          tick={{ fill: token.text.tertiary, fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}
+          tick={{ fill: token.text.tertiary, fontSize: 9, fontFamily: token.font.mono }}
           tickLine={false}
           axisLine={false}
         />

@@ -41,7 +41,7 @@ export class ErrorBoundary extends Component<Props, State> {
             justifyContent: "center",
             minHeight: "60vh",
             color: token.text.tertiary,
-            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+            fontFamily: token.font.mono,
             fontSize: 12,
           }}
         >

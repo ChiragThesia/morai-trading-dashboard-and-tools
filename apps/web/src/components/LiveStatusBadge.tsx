@@ -170,7 +170,7 @@ export function LiveStatusBadge({
               className={cfg.className}
               style={{
                 fontSize: 10,
-                fontFamily: "JetBrains Mono, monospace",
+                fontFamily: token.font.mono,
                 letterSpacing: "0.9px",
                 textTransform: "uppercase",
                 borderColor: "transparent",
@@ -196,7 +196,7 @@ export function LiveStatusBadge({
           <span
             style={{
               fontSize: 12,
-              fontFamily: "JetBrains Mono, monospace",
+              fontFamily: token.font.mono,
               color: token.text.secondary, // --color-muted
             }}
           >
