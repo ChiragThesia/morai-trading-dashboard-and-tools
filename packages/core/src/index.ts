@@ -478,6 +478,7 @@ export { makePreviewPickerRuleOverridesUseCase } from "./picker/index.ts";
 export {
   selectCandidates,
   haircutFill,
+  computeFwdIv,
   scoreCalendarCandidates,
   RULE_SET_METADATA,
   realizedVol,
@@ -496,6 +497,7 @@ export type {
   BreakdownCriterion,
   ContextEntry,
   ExitPlan,
+  FwdIvResult,
 } from "./picker/index.ts";
 
 // ─── Phase 22: Journal calendar-lifecycle graph (JRNL-01) ─────────────────────
