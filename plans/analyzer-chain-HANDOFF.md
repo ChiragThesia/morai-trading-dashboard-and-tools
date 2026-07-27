@@ -109,59 +109,80 @@ Both are enforced **by signature**, not a doc comment. `api-design.md` also neve
 
 ---
 
-## OPEN — open interest is 0 for every contract, and it breaks GEX
+## FIXED 2026-07-27 — the open-interest zeros, and the diagnosis that was wrong
 
-**This is the real bug behind the "GEX null walls" item, and it is bigger than GEX.**
+**The earlier version of this section blamed `?? 0` in the two vendor adapters. That was wrong,
+and the way it was wrong is the lesson: it was inferred from reading code, never checked against
+the vendor.** What checking found:
 
-Live: every leg in the ladder shows **OI 0** — checked 50 legs in SPXW 2026-08-21 and 50 in SPX
-2026-08-21. `get_gex` agrees: all 103 `strikes[]` entries have `gex/coi/poi/vol` = 0, all 37
-`byExpiry[]` are 0, `netGammaAtSpot` 0, both walls null. GEX is OI × gamma, so **the null walls
-are a symptom, not the disease**. `flip: 6812` is not a real flip either — it is just the
-profile grid's lowest point, the degenerate answer for an all-zero profile.
+- **CBOE sends open interest on everything.** The raw public payload carries `open_interest` on
+  all 29,186 contracts, 21,320 of them non-zero, max 268,662. It is present in *every* snapshot,
+  at a steady 78.7% non-zero.
+- **The DB has real values too.** `SPX 260821P06675000` → 3,461, matching CBOE exactly. The
+  3461 / 264 figures the first handoff recorded were real, and still are.
+- **So `?? 0` was never the cause.** It is still a latent defect worth cleaning up one day —
+  `optional()` + `?? 0` makes "not reported" indistinguishable from a real zero — but nothing
+  currently reaches it.
 
-Root cause, located but NOT fixed:
+**The actual cause was merge order.** Schwab's chain returns `openInterest: 0` for *every*
+contract outside RTH — measured 0.0% non-zero from 04:00Z through 10:00Z, flipping to 86.3% at
+10:30Z. CBOE always has real values. Both land in the same 10-minute cohort window, and Schwab
+writes about a minute *after* CBOE, so `DISTINCT ON (contract) ORDER BY time DESC` handed the
+whole chain Schwab's zeros overnight. **2,971 contracts a day.** And GEX is open interest ×
+gamma, so it computed zero gamma at every strike and reported null walls — the entire "GEX is
+broken" story. It self-heals when RTH data lands, which is why GEX read perfectly healthy a few
+hours later (flip 7446 against spot 7412, walls 7500 / 7000, real gamma throughout).
 
-- `packages/adapters/src/http/cboe.ts:19,129` — `open_interest: z.number().optional()` then
-  `openInterest: opt.open_interest ?? 0`
-- `packages/adapters/src/schwab/market/chain-adapter.ts:23,104` — same shape, same `?? 0`
+That also explains why the first UAT saw "OI 0 everywhere": it sampled the 04:00Z cohort, where
+Schwab was the only writer. Re-checked at 11:30Z the same ladder reads `Open Int = 950`, 3,461,
+23,640 — correct all along, in a different snapshot.
 
-Both vendors' adapters map **a missing field to 0**, so "the vendor did not tell us" is
-indistinguishable from "this strike genuinely has no open interest". That is the
-never-fabricate-a-number law being broken at the ingest seam: the honest mapping is `null`.
+**Fixed in all THREE consumers**, because fixing one hides the others:
 
-Which vendor is currently omitting it, and whether this is a vendor schema change or an
-off-hours artifact (OI is an end-of-day OCC figure), is **not yet determined**. The previous
-handoff recorded OI 3461 / 264 at strike 6675000 on 2026-08-21, so if that was real, OI
-regressed to 0 at some point and the question is when.
+| Read | Who it feeds |
+|---|---|
+| `postgres/repos/picker-chain.ts` | the chain the Analyzer and the picker read |
+| `postgres/gex-snapshot.repo.ts` | GEX — the primary victim |
+| `postgres/repos/backtest-chain.ts` | every replayed cohort, so the calibration corpus was scored against open interest that did not exist |
 
-Fixing it properly means making `openInterest` nullable through the contract and a migration —
-too big to do unasked. **Start here next session.**
+Each now takes `max(open_interest) over (partition by contract)` rather than the newest row's
+value. This is correct, not a heuristic: open interest is a once-daily OCC figure and never
+negative, so within one cohort window the larger of the two sources IS the reported value, and a
+genuinely untraded strike still reads 0 because both sources then report 0. Postgres evaluates
+window functions *before* `DISTINCT`, so the surviving row already carries its partition's max —
+one query, no subselect. Prices, gamma and IV still come from the newest row.
 
-### Correction to the previous handoff
+### Also fixed: the parity-implied dividend yield
 
-It claimed "every greek on the chain table is priced against the flat 4.5% / 1.3% defaults
-instead of per-expiry implied carry". **That is false.** `gex.impliedCarry` is fully populated —
-39 expirations with real values (2026-08-21 → rate 0.0382, q 0.00919; 2026-09-18 → 0.03871,
-0.00900) — and `resolve-carry.ts:22` is a plain lookup that finds them. The chain greeks DO use
-implied carry.
+Parity divides the residual by T, so the noise gain is 1/T. Live readings: **0DTE q = 0.2984
+(29.8%)**, 1DTE 0.0823, 2DTE 0.0450, 3DTE 0.0291, settling to the ~0.009–0.012 SPX actually
+yields only from 4DTE out — plus **negative** values on sparse expiries (2026-08-23 → −0.1201,
+2026-09-02 → −0.0857), which is not a quantity an index can have.
 
-### Separate hazard: parity-implied q blows up as T→0
+`impliedDivYield` now refuses a horizon under 7 days and any answer outside `[0, 0.10]`. **Null,
+not a clamp** — `computeImpliedCarry` already emits no entry for an unsolved expiry, so every
+consumer falls back to its flat default, whereas a clamped number would still pose as a
+measurement. This matters because Browse lists every expiry: a 1DTE front leg is one click away
+and its greeks were being priced at an 8% dividend yield.
 
-From the same live payload: 2026-07-27 → q **0.1846** (18.5%), 07-28 → 0.0746, 07-29 → 0.0443,
-07-30 → 0.0299, settling to ~0.008–0.012 from 07-31 out. Put-call parity divides by T, so a
-0–2 DTE cohort gets a nonsense dividend yield.
+### Correction that still stands
 
-This matters more now than it did: Browse lists **every** expiry, so a 1DTE front leg is one
-click away and its greeks would be priced at a 7.5% q. (0DTE is already safe — `legGreeks`
-returns null at `dte <= 0`.) Exposure is roughly DTE 1–3.
-
-**Not fixed, deliberately** — any clamp changes displayed greeks, which is your call. The options
-are: floor T, clamp q to a sane band, or fall back to the flat default below N days.
+The first handoff claimed "every greek on the chain table is priced against the flat 4.5% / 1.3%
+defaults instead of per-expiry implied carry". **False.** `gex.impliedCarry` is fully populated
+(39 expirations) and `resolve-carry.ts:22` is a plain lookup that finds them. Chain greeks do use
+implied carry — which is exactly why the bad `q` values above mattered.
 
 ---
 
 ## Also open
 
+- **`apps/web/src/screens/Analyzer 2.tsx` — delete it.** An untracked accidental duplicate dated
+  Jul 25, holding the pre-reshape "ranked-cards PICKER" version of the screen. Nothing imports
+  it, so it is not bundled and CI is unaffected, but it imports the now-deleted `ChainTable`, so
+  its types collapse to `any` — and it is the **sole source of all 10 `bun run lint` errors and
+  11 of the 20 errors `apps/web`'s own tsc reports**. Excluding it, that tsc is at its exact
+  9-error baseline. Left in place because deleting an untracked file is unrecoverable; it is your
+  call: `rm "apps/web/src/screens/Analyzer 2.tsx"`.
 - **Vercel preview deploys cannot run the app at all.** The preview build throws
   `Uncaught Error: supabaseUrl is required` — the Supabase env vars are scoped to Production
   only. So no PR in this repo can be UAT'd on its preview URL; tonight's UAT had to happen on
@@ -224,7 +245,16 @@ are: floor T, clamp q to a sane band, or fall back to the flat default below N d
 11. **A "sort looks stuck" report may be correct behaviour.** V-Skew descending matched
     strike-ascending on a live ladder because put skew is monotone there. Check the data's shape
     before believing the UI is broken.
-12. **Reviewer output is leads, not verdicts — and variance claims especially.** A reviewer
+12. **Check the vendor before blaming the mapping.** The `?? 0` diagnosis in this file's first
+    version was inferred from reading two adapters and was wrong — CBOE was sending open interest
+    the whole time. One `curl` of a public endpoint would have caught it, and would have saved a
+    nullable-contract migration that fixes nothing. **A root cause read off the code is a
+    hypothesis; a root cause read off the wire is a finding.**
+13. **A symptom sampled once is not a symptom.** "OI is 0 for every contract" was true of the
+    04:00Z cohort and false of the 11:30Z one. Anything that varies with the ingest cycle has to
+    be measured across cycles before it gets called broken — `group by time, source` was the query
+    that actually explained it.
+14. **Reviewer output is leads, not verdicts — and variance claims especially.** A reviewer
     subagent cleared five categories correctly, then reported the `onPickFront={chain.pickFront}`
     handoff as "parameter variance backwards, technically unsound". It is the opposite: passing
     `(ChainLegId) => void` where `(ChainLegRow) => void` is wanted is the CONTRAVARIANT, sound
