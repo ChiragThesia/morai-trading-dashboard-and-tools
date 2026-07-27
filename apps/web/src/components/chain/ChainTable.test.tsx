@@ -23,6 +23,7 @@ const ROWS: ReadonlyArray<ChainTableRow> = [
   {
     strike: 7400000,
     contractType: "P",
+    root: "SPXW",
     deltaFront: -0.412,
     ivFront: 0.1452,
     ivBack: 0.1391,
@@ -64,6 +65,7 @@ const ROWS: ReadonlyArray<ChainTableRow> = [
     // Every derived field null — the "no data" row. Must never show 0 or NaN.
     strike: 7450000,
     contractType: "P",
+    root: "SPXW",
     deltaFront: null,
     ivFront: null,
     ivBack: null,
@@ -104,6 +106,7 @@ const ROWS: ReadonlyArray<ChainTableRow> = [
   {
     strike: 7500000,
     contractType: "P",
+    root: "SPXW",
     deltaFront: -0.508,
     ivFront: 0.1521,
     ivBack: 0.1444,
@@ -176,6 +179,7 @@ const TINY_LEG: ChainTableLeg = {
 const TINY_ROW: ChainTableRow = {
   strike: 7600000,
   contractType: "P",
+  root: "SPXW",
   deltaFront: -0.412,
   ivFront: 0.1452,
   ivBack: 0.1391,
@@ -234,7 +238,7 @@ describe("ChainTable — chain data surface", () => {
 
     expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
 
-    const row = screen.getByTestId("chain-row-P-7400000");
+    const row = screen.getByTestId("chain-row-SPXW-P-7400000");
     expect(row.textContent).toContain("7400");
     expect(row.textContent).toContain("−0.412"); // front delta
     expect(row.textContent).toContain("14.52%"); // front IV
@@ -253,7 +257,7 @@ describe("ChainTable — chain data surface", () => {
   it("never renders a signed zero: a value that rounds to zero drops its sign", () => {
     render(<ChainTable rows={[TINY_ROW]} />);
 
-    const row = screen.getByTestId("chain-row-P-7600000");
+    const row = screen.getByTestId("chain-row-SPXW-P-7600000");
     // "−0.00" reads as "slightly negative" but prints as zero — the same
     // zero-vs-no-data ambiguity the em-dash rule exists to prevent.
     expect(row.textContent).not.toContain("−0.00");
@@ -264,7 +268,7 @@ describe("ChainTable — chain data surface", () => {
   it("renders every null derived field as an em dash — never 0, never NaN", () => {
     render(<ChainTable rows={ROWS} />);
 
-    const nullRow = screen.getByTestId("chain-row-P-7450000");
+    const nullRow = screen.getByTestId("chain-row-SPXW-P-7450000");
     const cells = Array.from(nullRow.querySelectorAll("td")).map((td) =>
       (td.textContent ?? "").trim(),
     );
@@ -279,10 +283,10 @@ describe("ChainTable — chain data surface", () => {
   it("expands a row into both legs plus the calendar net greeks; re-click collapses", () => {
     render(<ChainTable rows={ROWS} />);
 
-    expect(screen.queryByTestId("chain-detail-P-7400000")).toBeNull();
-    fireEvent.click(screen.getByTestId("chain-row-P-7400000"));
+    expect(screen.queryByTestId("chain-detail-SPXW-P-7400000")).toBeNull();
+    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7400000"));
 
-    const detail = screen.getByTestId("chain-detail-P-7400000");
+    const detail = screen.getByTestId("chain-detail-SPXW-P-7400000");
     const text = detail.textContent ?? "";
 
     // Both legs, side by side, each with the full per-leg record.
@@ -307,26 +311,26 @@ describe("ChainTable — chain data surface", () => {
     expect(text).toContain("Net Vega");
     expect(text).toContain("−0.0009"); // net gamma
 
-    fireEvent.click(screen.getByTestId("chain-row-P-7400000"));
-    expect(screen.queryByTestId("chain-detail-P-7400000")).toBeNull();
+    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7400000"));
+    expect(screen.queryByTestId("chain-detail-SPXW-P-7400000")).toBeNull();
   });
 
   it("keeps only one row expanded at a time", () => {
     render(<ChainTable rows={ROWS} />);
 
-    fireEvent.click(screen.getByTestId("chain-row-P-7400000"));
-    expect(screen.getByTestId("chain-detail-P-7400000")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7400000"));
+    expect(screen.getByTestId("chain-detail-SPXW-P-7400000")).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId("chain-row-P-7500000"));
-    expect(screen.getByTestId("chain-detail-P-7500000")).toBeTruthy();
-    expect(screen.queryByTestId("chain-detail-P-7400000")).toBeNull();
+    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7500000"));
+    expect(screen.getByTestId("chain-detail-SPXW-P-7500000")).toBeTruthy();
+    expect(screen.queryByTestId("chain-detail-SPXW-P-7400000")).toBeNull();
   });
 
   it("expanded legs show em dashes when the leg has no quote", () => {
     render(<ChainTable rows={ROWS} />);
 
-    fireEvent.click(screen.getByTestId("chain-row-P-7450000"));
-    const detail = screen.getByTestId("chain-detail-P-7450000");
+    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7450000"));
+    const detail = screen.getByTestId("chain-detail-SPXW-P-7450000");
     expect(detail.textContent).toContain("—");
     expect(detail.textContent).not.toContain("NaN");
   });
@@ -334,12 +338,14 @@ describe("ChainTable — chain data surface", () => {
   it("sorts by a data column, toggles direction, and keeps nulls last", () => {
     render(<ChainTable rows={ROWS} />);
 
+    // A metric opens DESCENDING — biggest first is what you want on a trading table.
     fireEvent.click(headerCell("Edge"));
-    expect(strikeOrder()).toEqual(["7400", "7500", "7450"]); // asc, null last
+    expect(strikeOrder()).toEqual(["7500", "7400", "7450"]); // desc, null last
 
     fireEvent.click(headerCell("Edge"));
-    expect(strikeOrder()).toEqual(["7500", "7400", "7450"]); // desc, null still last
+    expect(strikeOrder()).toEqual(["7400", "7500", "7450"]); // asc, null still last
 
+    // Strike is the axis: back to it and it reads low-to-high again.
     fireEvent.click(headerCell("Strike"));
     expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
   });
@@ -349,7 +355,7 @@ describe("ChainTable — chain data surface", () => {
 
     expect(headerCell("Strike").getAttribute("aria-sort")).toBe("ascending");
     fireEvent.click(headerCell("Edge"));
-    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("ascending");
+    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("descending");
     expect(headerCell("Strike").getAttribute("aria-sort")).toBe("none");
   });
 
@@ -366,13 +372,14 @@ describe("ChainTable — chain data surface", () => {
       ...TINY_ROW,
       strike: 7400000,
       contractType: "C",
+    root: "SPXW",
       ivFront: 0.1103,
       debit: 31.5,
     };
     render(<ChainTable rows={[put, call]} />);
 
-    const putRow = screen.getByTestId("chain-row-P-7400000");
-    const callRow = screen.getByTestId("chain-row-C-7400000");
+    const putRow = screen.getByTestId("chain-row-SPXW-P-7400000");
+    const callRow = screen.getByTestId("chain-row-SPXW-C-7400000");
     expect(putRow).not.toBe(callRow);
     expect(putRow.textContent).toContain("14.52%"); // the put's own front IV
     expect(callRow.textContent).toContain("11.03%"); // the call's own front IV
@@ -380,8 +387,8 @@ describe("ChainTable — chain data surface", () => {
 
     // Expanding one wing must not expand the other.
     fireEvent.click(putRow);
-    expect(screen.getByTestId("chain-detail-P-7400000")).toBeTruthy();
-    expect(screen.queryByTestId("chain-detail-C-7400000")).toBeNull();
+    expect(screen.getByTestId("chain-detail-SPXW-P-7400000")).toBeTruthy();
+    expect(screen.queryByTestId("chain-detail-SPXW-C-7400000")).toBeNull();
   });
 
   it("uses the one-tree mobile recipe: horizontal-scroll wrapper + min-width table", () => {
@@ -393,5 +400,73 @@ describe("ChainTable — chain data surface", () => {
 
     const table = wrapper.querySelector("table");
     expect(table?.className).toMatch(/min-w-\[\d+px\]/);
+  });
+});
+
+// REGRESSION (prod, 2026-07-26). Same class as the wing collision above, one level deeper:
+// SPX (AM-settled monthlies) and SPXW (PM-settled weeklies) quote the SAME strike on the SAME
+// date. Keying on strike + wing alone collided them — 242 duplicate keys live, so one React
+// key and one expansion slot served two different books, and after sorting the detail panel
+// opened nowhere near the row that was clicked.
+//
+// The two roots MUST carry different IVs here, or this passes even when they are crossed.
+describe("ChainTable — SPX vs SPXW at one strike", () => {
+  it("keeps the two roots as separate, independently expandable rows", () => {
+    const spxw: ChainTableRow = { ...TINY_ROW, strike: 7400000, root: "SPXW", ivFront: 0.1452 };
+    const spx: ChainTableRow = { ...TINY_ROW, strike: 7400000, root: "SPX", ivFront: 0.2103 };
+    render(<ChainTable rows={[spxw, spx]} />);
+
+    const a = screen.getByTestId("chain-row-SPXW-P-7400000");
+    const b = screen.getByTestId("chain-row-SPX-P-7400000");
+    expect(a).not.toBe(b);
+    expect(a.textContent).toContain("14.52%");
+    expect(b.textContent).toContain("21.03%");
+
+    // Expanding one must not expand the other — the collision's most visible symptom.
+    fireEvent.click(a);
+    expect(screen.getByTestId("chain-detail-SPXW-P-7400000")).toBeTruthy();
+    expect(screen.queryByTestId("chain-detail-SPX-P-7400000")).toBeNull();
+  });
+});
+
+// A metric's FIRST click must land descending — biggest first. Ascending-first shows the
+// worst edge, the thinnest theta and the smallest debit on top, which reads as "the sort did
+// not work" even though it did. Strike is the exception: it is an axis, not a metric, so it
+// reads low-to-high like a chain always does.
+describe("ChainTable — first-click sort direction", () => {
+  it("sorts a metric descending on first click, and toggles on the second", () => {
+    render(<ChainTable rows={ROWS} />);
+
+    fireEvent.click(headerCell("Edge"));
+    // ROWS carry edge 0.004, null, 0.012 → 1.20 on top, null last.
+    expect(strikeOrder()).toEqual(["7500", "7400", "7450"]);
+    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("descending");
+
+    fireEvent.click(headerCell("Edge"));
+    expect(strikeOrder()).toEqual(["7400", "7500", "7450"]);
+    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("opens on strike ascending — the axis reads low-to-high, like any chain", () => {
+    render(<ChainTable rows={ROWS} />);
+    // Strike is already the active sort at mount, so this is the mount state, not a click.
+    expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
+    expect(headerCell("Strike").getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("returns to strike ascending after sorting by a metric", () => {
+    render(<ChainTable rows={ROWS} />);
+    fireEvent.click(headerCell("Debit"));
+    fireEvent.click(headerCell("Strike"));
+    expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
+    expect(headerCell("Strike").getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("keeps nulls last whichever direction a metric is sorted", () => {
+    render(<ChainTable rows={ROWS} />);
+    fireEvent.click(headerCell("Theta (Θ)"));
+    expect(strikeOrder()[2]).toBe("7450"); // the all-null row
+    fireEvent.click(headerCell("Theta (Θ)"));
+    expect(strikeOrder()[2]).toBe("7450");
   });
 });

@@ -50,6 +50,9 @@ export interface ChainTableRow {
    * expressible here at all; the caller owns pairing each leg to its own wing.
    */
   readonly contractType: "C" | "P";
+  /** OCC root — SPX is AM-settled, SPXW PM-settled. Both quote the same strike, so this is
+   *  part of row identity, not decoration. See rowKey. */
+  readonly root: "SPX" | "SPXW";
   readonly deltaFront: number | null;
   readonly ivFront: number | null;
   readonly ivBack: number | null;
@@ -351,7 +354,25 @@ type Sort = { readonly key: string; readonly dir: "asc" | "desc" };
  * slot, so opening the put would open the call.
  */
 function rowKey(r: ChainTableRow): string {
-  return `${r.contractType}-${r.strike}`;
+  // Root is in the key for the same reason the wing is: SPX (AM-settled monthlies) and SPXW
+  // (PM-settled weeklies) quote the SAME strike on the SAME date. Without it, 242 rows
+  // collided in production — two books on one React key and one expansion slot, so opening
+  // one opened the other, and after sorting the detail panel appeared nowhere near the row
+  // that was clicked.
+  return `${r.root}-${r.contractType}-${r.strike}`;
+}
+
+/**
+ * Which direction a column opens on its FIRST click.
+ *
+ * Strike is an axis, not a measurement — a chain reads low-to-high, so it opens ascending.
+ * Every other column is a metric, and on a metric you want the biggest number on top: opening
+ * ascending puts the worst edge, the thinnest theta and the smallest debit at the top, which
+ * reads as "the sort is broken" even though it sorted exactly as asked. Clicking again
+ * toggles, so nothing is unreachable.
+ */
+function firstDir(key: string): "asc" | "desc" {
+  return key === "strike" ? "asc" : "desc";
 }
 
 /** Nulls sort last in BOTH directions — "no data" is never the best or worst row. */
@@ -400,7 +421,7 @@ export function ChainTable({
           setSort((cur) =>
             cur.key === key
               ? { key, dir: cur.dir === "asc" ? "desc" : "asc" }
-              : { key, dir: "asc" },
+              : { key, dir: firstDir(key) },
           );
         }}
         wrapperClassName={SCROLL_WRAPPER}

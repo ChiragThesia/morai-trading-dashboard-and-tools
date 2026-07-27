@@ -10,6 +10,7 @@ import { chainRoutes } from "./chain.routes.ts";
 
 /** Solved-IV call leg. `strike` is the ×1000 int convention (7400000 = 7400). */
 const CALL_ROW = {
+  root: "SPXW",
   strike: 7400000,
   expiration: "2026-08-21",
   contractType: "C" as const,
@@ -26,6 +27,7 @@ const CALL_ROW = {
 
 /** Half-strike put leg with UNSOLVED IV — bsmIv is nullable but never optional, never 0. */
 const PUT_ROW = {
+  root: "SPXW",
   strike: 7412500, // 7412.5 strike — proves the ×1000 int convention survives the seam
   expiration: "2026-09-18",
   contractType: "P" as const,
@@ -117,7 +119,7 @@ describe("GET /chain", () => {
     expect(() => chainResponse.parse(body)).not.toThrow();
   });
 
-  it("does NOT leak internal repo fields (root/time/rowId) — the route Zod-parses on the way out", async () => {
+  it("does NOT leak internal repo fields (time/rowId) — the route Zod-parses on the way out", async () => {
     const app = buildTestApp(getChainLeaky);
     const res = await app.request("/chain");
     expect(res.status).toBe(200);
@@ -126,7 +128,9 @@ describe("GET /chain", () => {
     // and fail here. chainResponse.parse() would itself strip them, so it cannot be the probe.
     const rawRows = z.array(z.record(z.string(), z.unknown())).parse(body);
     const rawKeys = Object.keys(rawRows[0] ?? {}).sort();
-    expect(rawKeys).not.toContain("root");
+    // root is now a PUBLISHED field, not an internal one: SPX and SPXW quote the same
+    // strike, so it is the only thing separating the two books on the wire.
+    expect(rawKeys).toContain("root");
     expect(rawKeys).not.toContain("time");
     expect(rawKeys).not.toContain("rowId");
     expect(rawKeys).toStrictEqual(
@@ -139,6 +143,7 @@ describe("GET /chain", () => {
         "expiration",
         "observedAt",
         "openInterest",
+        "root",
         "source",
         "strike",
         "underlyingPrice",

@@ -92,6 +92,7 @@ function buildRow(
   return {
     strike: front.strike,
     contractType: front.contractType,
+    root: front.root,
     deltaFront: frontGreeks?.delta ?? null,
     ivFront: front.bsmIv,
     ivBack: back.bsmIv,
@@ -181,6 +182,14 @@ export function useChainModel(): ChainModel {
     // filtered BEFORE the strike map is built, never after.
     const frontLegs = frontAll.filter((r) => r.contractType === contractType);
     const backLegs = backAll.filter((r) => r.contractType === contractType);
+    // ROOT IS PART OF THE JOIN KEY, not just the wing. SPX (AM-settled monthlies) and SPXW
+    // (PM-settled weeklies) quote the SAME strike on the SAME date with different books. A
+    // strike-only map keeps whichever root it saw last — in production that was often the
+    // twin whose IV had never solved, which is why most columns rendered em dashes, and it
+    // once paired an SPXW back leg against an SPX front (back IV 68.89% vs front 24.69%,
+    // H-Skew −44.21). Like the wing, every input is present and finite, so nothing dashes:
+    // the row just reads wrong.
+    const keyOf = (r: ChainRow): string => `${r.root}-${r.strike}`;
     // V-Skew reference: chain-math's atmIv takes the expiry and wing as arguments, so the
     // skew curve cannot be crossed here. Never resolve the ATM strike by hand.
     // A null spot means the cohort carried no usable underlying price — there is no honest
@@ -195,10 +204,10 @@ export function useChainModel(): ChainModel {
     // the GEX snapshot is absent or carries no entry — never throws, never blocks the table.
     const frontCarry = resolveCarry(gex, frontExpiry);
     const backCarry = resolveCarry(gex, backExpiry);
-    const backByStrike = new Map(backLegs.map((r) => [r.strike, r]));
+    const backByKey = new Map(backLegs.map((r) => [keyOf(r), r]));
     const out: ChainTableRow[] = [];
     for (const front of frontLegs) {
-      const back = backByStrike.get(front.strike);
+      const back = backByKey.get(keyOf(front));
       if (back === undefined) continue;
       out.push(buildRow(front, back, frontAtm, frontCarry, backCarry));
     }
