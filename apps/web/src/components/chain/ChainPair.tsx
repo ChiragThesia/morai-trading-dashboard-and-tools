@@ -202,6 +202,13 @@ export function ChainPair({
         disagree, trust Edge. · An inverted structure prices no forward vol, so both dash. · Net Δ
         Γ Θ vega are the CALENDAR&apos;s, back minus front — you are short the front gamma. · Debit
         = the back leg bought and the front sold at the ORATS 0.66-of-width fill haircut, not mids.
+        <span className="mt-1 block text-fg-secondary">
+          The two axes: <strong className="font-semibold">V-Skew picks the STRIKE</strong> (where
+          on the curve you are paid most to sell),{" "}
+          <strong className="font-semibold">EDGE picks the EXPIRY PAIR</strong> (when the front is
+          rich against the window behind it). Vertical skew chooses where, term structure chooses
+          when.
+        </span>
       </div>
     </div>
   );

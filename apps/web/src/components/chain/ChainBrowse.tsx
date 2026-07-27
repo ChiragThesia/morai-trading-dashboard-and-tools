@@ -264,9 +264,10 @@ function StrikeLadder({
       <div className="px-1 font-mono text-[9.5px] leading-[1.3] text-fg-tertiary">
         Every strike this expiry quotes, unfiltered · IV = this leg&apos;s own implied vol ·
         V-Skew = this strike&apos;s IV minus the ATM strike&apos;s IV, same expiry and same wing,
-        in vol points — positive means you are paid extra vol to sell here · Δ Γ Θ vega are this
-        ONE leg&apos;s greeks, not a spread&apos;s · Pick a Front and a Back leg to see the
-        calendar math.
+        in vol points — positive means you are paid extra vol to sell here, so{" "}
+        <span className="text-fg-secondary">V-Skew is how you pick the STRIKE</span> · Δ Γ Θ vega
+        are this ONE leg&apos;s greeks, not a spread&apos;s · Pick a Front and a Back leg to see
+        the calendar math, where EDGE picks the expiry pair.
       </div>
     </div>
   );
