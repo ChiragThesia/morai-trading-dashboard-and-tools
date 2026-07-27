@@ -28,7 +28,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { EventLegRibbon } from "../components/picker/EventLegRibbon.tsx";
-import { formatAsOf } from "../components/picker/CandidateCard.tsx";
+import { formatAsOf } from "../lib/format-as-of.ts";
 import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
