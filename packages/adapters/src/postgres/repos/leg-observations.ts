@@ -105,8 +105,28 @@ export function makePostgresLegObservationsRepo(
   ): Promise<Result<void, StorageError>> => {
     if (rows.length === 0) return ok(undefined);
     try {
-      // Map ContractRow → contracts insert shape
-      const values = rows.map((row) => ({
+      // Map ContractRow → contracts insert shape, DEDUPED BY occ_symbol.
+      //
+      // The dedupe is not tidiness — without it this throws. Postgres raises "ON CONFLICT DO
+      // UPDATE command cannot affect row a second time" when the same conflict target appears
+      // twice in ONE statement. `onConflictDoNothing` tolerates that; `onConflictDoUpdate`
+      // does not, which took `fetch-schwab-chain` down for 74 minutes on 2026-07-27.
+      //
+      // The live batch was 2,000 rows carrying 1,900 distinct symbols: exactly 100 duplicates,
+      // every one an SPX third-Friday contract, because the sidecar's single "$SPX" call
+      // surfaces those in both the SPX and SPXW chain responses. `DO NOTHING` had been
+      // swallowing that duplication for as long as it existed — the duplicate was never the new
+      // bug, the new conflict clause only revealed it.
+      //
+      // Deduping HERE rather than in the caller: inserting one contract twice in a single
+      // statement is meaningless whatever the caller meant, and one guard at the repo boundary
+      // covers every caller instead of just the chain path.
+      //
+      // Last occurrence wins, so a batch that disagrees with itself resolves to its newest read
+      // of the contract rather than to whichever row happened to arrive first.
+      const byOccSymbol = new Map<string, ContractRow>();
+      for (const row of rows) byOccSymbol.set(row.occSymbol, row);
+      const values = [...byOccSymbol.values()].map((row) => ({
         occSymbol: row.occSymbol,
         underlying: row.underlying,
         root: row.root,

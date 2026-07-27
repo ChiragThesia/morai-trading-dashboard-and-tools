@@ -192,6 +192,103 @@ export function runLegObservationsContractTests(
       // a root taken from the requested chain label (and a date one day early) forever.
       // Read back through readPendingObs, the same path that feeds computeT's AM-vs-PM
       // settlement choice, so the proof is that BSM sees the corrected labels.
+      /**
+       * REGRESSION (production outage, 2026-07-27 19:06Z-20:20Z). Moving upsertContracts from
+       * `onConflictDoNothing()` to `onConflictDoUpdate()` broke `fetch-schwab-chain` outright.
+       *
+       * Postgres raises "ON CONFLICT DO UPDATE command cannot affect row a second time" when the
+       * SAME conflict target appears twice in ONE statement. `DO NOTHING` tolerates that;
+       * `DO UPDATE` does not. The live batch was 2,000 rows with 1,900 distinct occ_symbols --
+       * exactly 100 duplicates, every one an SPX third-Friday contract, because the sidecar's
+       * single "$SPX" call surfaces those in both the SPX and SPXW chain responses.
+       *
+       * `DO NOTHING` had been silently swallowing that duplication for as long as it existed, so
+       * the duplicate was never the NEW bug -- the new conflict clause only revealed it. The fix
+       * belongs here rather than in the caller: inserting one contract twice in a single
+       * statement is meaningless whatever the caller intended, and a guard at the repo boundary
+       * covers every caller instead of just the chain path.
+       */
+      it("tolerates a batch containing the same occ_symbol twice (DO UPDATE would abort)", async () => {
+        const occ = formatOccSymbol({
+          root: "SPX",
+          expiry: new Date(2097, 7, 16),
+          type: "P",
+          strike: 7300,
+        });
+        const row: ContractRow = {
+          occSymbol: occ,
+          underlying: "SPX",
+          root: "SPX",
+          contractType: "P",
+          exerciseStyle: "european",
+          strike: 7300000,
+          expiration: "2097-08-16",
+          multiplier: 100,
+        };
+
+        // The exact shape the live chain produced: the same contract twice in one batch.
+        const result = await repo.upsertContracts([row, row]);
+        expect(result.ok, `duplicate occ_symbol in one batch must not error: ${
+          result.ok ? "" : result.error.message
+        }`).toBe(true);
+
+        // And it must still be stored exactly once, with its labels intact.
+        const obsTime = new Date(Date.UTC(2097, 7, 16, 15, 0, 0));
+        await repo.persistObservations([
+          {
+            time: obsTime, contract: occ, bid: 1.0, ask: 1.1, mark: 1.05,
+            underlyingPrice: 7300.0, iv: 0.2, delta: -0.5, gamma: 0.001, theta: -0.02,
+            vega: 0.3, openInterest: 10, volume: 5, source: "cboe" as const,
+          },
+        ]);
+        const pending = await repo.readPendingObs(PENDING_LIMIT_ALL);
+        expect(pending.ok).toBe(true);
+        if (!pending.ok) return;
+        const hits = pending.value.filter((x) => x.contract === occ);
+        expect(hits).toHaveLength(1);
+      });
+
+      it("keeps the LAST occurrence when a batch carries the same occ_symbol with different labels", async () => {
+        // Deduping must be deterministic, not arbitrary: a batch that disagrees with itself
+        // resolves to the last row, so the newest read of a contract wins.
+        const occ = formatOccSymbol({
+          root: "SPXW",
+          expiry: new Date(2097, 8, 17),
+          type: "C",
+          strike: 7400,
+        });
+        const base: ContractRow = {
+          occSymbol: occ,
+          underlying: "SPX",
+          root: "SPX",
+          contractType: "C",
+          exerciseStyle: "european",
+          strike: 7400000,
+          expiration: "2097-09-16",
+          multiplier: 100,
+        };
+        const corrected: ContractRow = { ...base, root: "SPXW", expiration: "2097-09-17" };
+
+        const result = await repo.upsertContracts([base, corrected]);
+        expect(result.ok).toBe(true);
+
+        const obsTime = new Date(Date.UTC(2097, 8, 17, 15, 0, 0));
+        await repo.persistObservations([
+          {
+            time: obsTime, contract: occ, bid: 1.0, ask: 1.1, mark: 1.05,
+            underlyingPrice: 7400.0, iv: 0.2, delta: 0.5, gamma: 0.001, theta: -0.02,
+            vega: 0.3, openInterest: 10, volume: 5, source: "cboe" as const,
+          },
+        ]);
+        const pending = await repo.readPendingObs(PENDING_LIMIT_ALL);
+        expect(pending.ok).toBe(true);
+        if (!pending.ok) return;
+        const match = pending.value.find((x) => x.contract === occ);
+        expect(match).toBeDefined();
+        if (match === undefined) return;
+        expect(match.root).toBe("SPXW");
+      });
+
       it("a second upsert with a corrected root + expiration overwrites the stored row", async () => {
         const occ = formatOccSymbol({
           root: "SPXW",
