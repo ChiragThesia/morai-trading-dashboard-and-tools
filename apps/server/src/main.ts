@@ -729,6 +729,7 @@ const mcpRouter = makeMcpRouter(
   getTradeHistory,
   getTradeDetail,
   getNews,
+  getChain,
 );
 app.route("", mcpRouter);
 
