@@ -141,8 +141,12 @@ export function atmStrike(
  * the wing they came from is gone, and it would return a plausible, clean, wrong number.
  *
  * Null when the cohort is empty, spot is unusable, or the ATM strike's own IV never solved. That
- * last one is deliberate: a neighbouring strike's IV is NOT a substitute reference. Silently
- * shifting the reference strike would change what the whole vertical-skew column means.
+ * last one is deliberate and load-bearing: a neighbouring strike's IV is NOT a substitute
+ * reference. Vertical skew is rendered as a SORTABLE COLUMN, so a row silently measured against
+ * 7450 because 7400 never solved is not merely a slightly-off number — it is on a different
+ * scale from every row it gets ranked against, and the ranking is the artifact that tells the
+ * reader they ARE comparable. A visible gap costs one row; a re-based row corrupts its
+ * neighbours' order, invisibly, because the neighbours still look fine.
  */
 export function atmIv(
   rows: ReadonlyArray<{
