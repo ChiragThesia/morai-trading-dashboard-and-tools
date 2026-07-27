@@ -165,6 +165,18 @@ consumer falls back to its flat default, whereas a clamped number would still po
 measurement. This matters because Browse lists every expiry: a 1DTE front leg is one click away
 and its greeks were being priced at an 8% dividend yield.
 
+**Verified live**, cycle `2026-07-27T12:30:00Z` (the first cycle to run on the new worker):
+32 carry entries, **0 negative**, **0 above 0.10**, q range `0.00280 … 0.01614` — a plausible SPX
+band end to end, where the pre-fix cycle carried 0.2984 and two negatives. GEX unaffected: flip
+7453 against spot 7412, walls 7500 / 7000.
+
+Two traps when checking this yourself, both of which produced a false "the guard is not working":
+the **12:00Z cycle still ran the old code** (Railway reported SUCCESS while the old instance served
+that cron tick — always confirm against a cycle timestamp AFTER the swap), and **calendar-day DTE
+is not the guard's T**. The guard measures to the settlement instant, so an expiry that looks like
+6 calendar days is 7.31 years-fraction days and correctly passes. Compute T with
+`settlementTimestamp`, never `(expiry − now)/86400000`.
+
 ### Correction that still stands
 
 The first handoff claimed "every greek on the chain table is priced against the flat 4.5% / 1.3%
@@ -173,6 +185,39 @@ defaults instead of per-expiry implied carry". **False.** `gex.impliedCarry` is 
 implied carry — which is exactly why the bad `q` values above mattered.
 
 ---
+
+## OPEN, AND IT UNDERCUTS THE ROOT WORK — 1,190 contracts have the wrong root AND date
+
+Found while verifying the `q` guard. `contracts` disagrees with the OCC symbol it is keyed by:
+
+```
+              total   26,109
+OCC=SPXW, root=SPXW   22,197   clean
+OCC=SPX,  root=SPX     2,722   clean
+OCC=SPXW, root=SPX     1,190   WRONG — and every one of these ALSO has
+                                expiration exactly ONE DAY EARLY
+expiration off by −1    1,290   (the 1,190 above, plus 100 more)
+day delta values        only 0 and −1, never anything else
+```
+
+`root_only` is **0** — every root mismatch also carries the date mismatch, so this is one ingest
+defect, not two. The shape (root read as the first three characters, `SPX`, plus a one-day-early
+date) points at a writer that mis-splits the OCC symbol and stores a timezone-shifted expiry.
+Sample: `"SPXW  260828C08300000"` → `root=SPX`, `expiration=2026-08-27`.
+
+**Why this matters more than it looks.** Everything shipped this round scopes by root:
+
+- Those 1,190 SPXW contracts appear in Browse as **SPX** cohorts, on the **wrong date**.
+- `chain-math.atmIv` and `riskReversalForExpiry` now take `root` — so they scope those legs into
+  the SPX book. That is exactly the cross-root contamination this round eliminated, reintroduced
+  from the data side. The signature guards the code path; it cannot guard a mislabelled row.
+- `buildTosPairOrder` tags `[AM]` off the root, so one of these would be tagged AM when it is a
+  PM-settled SPXW contract — the same wrong-contract-in-TOS bug that was just fixed in the builder.
+
+**Not started.** It needs the bad ingest path found and a backfill of 1,190 rows, which is its own
+piece of work. Note `parseOccSymbol` is the trustworthy reader here — it is what
+`computeImpliedCarry` uses, and it is why the `q` guard measured T correctly (7.31d) even for a row
+whose `expiration` column said otherwise. **This is the next task.**
 
 ## Also open
 
