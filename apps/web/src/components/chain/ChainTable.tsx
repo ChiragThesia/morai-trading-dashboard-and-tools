@@ -60,12 +60,19 @@ export interface ChainTableRow {
   /**
    * Vertical skew across strikes, decimal vol.
    *
-   * CALLER CONSTRAINT (u06): the ATM IV this is measured against must come from the
-   * same expiry AND the same `contractType` as the row. Calls and puts trace different
-   * skew curves, so a put IV minus a call ATM subtracts two unrelated numbers. Unlike
-   * every other field here, this one cannot null itself when it is wrong — by the time
-   * chain-math sees two floats the wing is gone, so it returns a plausible, clean,
-   * wrong number. The wing lives on this row; filter on it before picking the ATM IV.
+   * Fill this with `vSkewVsAtm(bsmIv, atmIv(rows, spot, expiration, contractType))` —
+   * do NOT hand-roll the ATM lookup. The reference IV must come from the same expiry
+   * AND the same wing, because calls and puts trace different skew curves, and
+   * `atmIv` takes both as arguments so a wrong-curve call is not expressible.
+   *
+   * Worth knowing why that helper exists rather than a doc comment: a cross-wing ATM
+   * is the one bad input in chain-math that cannot null itself. Every other degraded
+   * value nulls its own column and shows up here as a visible gap; this one returns a
+   * clean, plausible, wrong number that nothing downstream can distinguish.
+   *
+   * When the ATM strike's own IV never solved, `atmIv` returns null rather than
+   * falling back to the nearest strike that did — so this column dashes instead of
+   * silently re-basing one row against a different reference than its neighbours.
    */
   readonly vSkew: number | null;
   readonly theta: number | null;
