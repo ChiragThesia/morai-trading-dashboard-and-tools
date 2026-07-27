@@ -660,6 +660,8 @@ any of this code lands.
 
 ## 11. Contracts and API surface
 
+**Built** — commit `ce1ffc7`.
+
 | Surface | Shape |
 |---|---|
 | Zod contract | `packages/contracts/src/calendar-rank.ts` — `rankedCalendar` + `rankedCalendarResponse`. New schema, not a widened `pickerCandidate`: the closed `BreakdownCriterion` union at `picker.ts:34` deliberately blocks new criteria, and that friction is correct |
@@ -674,6 +676,20 @@ percentile**, every §5.2 metric, both legs' greeks and quotes, the debit, and t
 
 The breakdown is not decoration. A score you cannot decompose is a score you cannot
 argue with, and the doctrine's own instruction is to find out *why*.
+
+### 11.1 The seam carries a compile-time link
+
+`apps/server/src/adapters/calendar-rank-dto.ts` annotates its return as
+`RankedCalendarResponse`. That annotation is the ONLY compile-time link between the core
+ranking type and the hand-mirrored Zod schema, and it is deliberate: four core-type/contract
+pairs already in this repo mirror each other with no such link, so "add a field" is a four-file
+edit whose only guard is a runtime parse (current-state landmine 20). Verified to have teeth by
+injecting a contract field the engine does not produce — `bun run typecheck` fails at
+`calendar-rank-dto.ts:38` with TS2741 rather than the first request returning a 500.
+
+The cross-seam test lives in `apps/server`, not `packages/contracts`, because contracts may not
+import core. It builds the real use-case, pushes a real body through the real route, and parses
+it with the real schema — a fixture that agreed with itself would pass while the two drifted.
 
 ---
 
@@ -718,8 +734,8 @@ Order of work. Each step is green before the next begins.
 
 | # | Step | Behaviour change? |
 |---|---|---|
-| 1 | Fix the ingest writer (§9) + backfill + re-solve | Yes — corrects biased IVs |
-| 2 | Correct the `CLAUDE.md` layer table for `packages/quant` (§10.1) | No — docs |
+| 1 | Fix the ingest writer (§9) + backfill + re-solve | Yes — corrects biased IVs. **Writer done** (`64c5594`); backfill still owed |
+| 2 | Correct the `CLAUDE.md` layer table for `packages/quant` (§10.1) | No — docs. **Done** (`37c083a`) |
 | 3 | Delete dead weight: `Analyzer 2.tsx` (688 lines, untracked, 11 of the 20 `apps/web` tsc errors), `event-rules.test.ts` (tests a module that does not exist), `rules.ts` retired event bucket, the two never-incremented `gateDrops` fields | No |
 | 4 | Promote the browser's chain math into `core/calendar/domain` | No — same formulas, new home |
 | 5 | Unify `T` on one root-aware function (§8.3) | **Yes** — lands alone, with a TOS comparison |
