@@ -361,9 +361,42 @@ settlement instant (§8.3). IVs are decimals; vol points are `×100` at display 
 | `atmStrike` | `argmin |K − S|`, ties to the lower strike | Existing: `chain-math.ts:113` |
 | `atmIv` | IV at `atmStrike` within this `(expiration, contractType, root)` | Existing: `chain-math.ts:160`. **Never substitutes a neighbouring strike** |
 | `delta(K)` | `bsmGreeks(S, K, T, σ_K, r, q, "P").delta` | The chain read carries no delta; it is solved per row |
-| `atm50Strike` | strike whose \|delta\| is closest to 0.50 | The doctrine's ATM (§2.9), distinct from `atmStrike` |
-| `atm50Iv` | IV at `atm50Strike` | **This is the IV that feeds the term-structure score** |
-| `extrinsic(K)` | `mark(K) − max(K − S, 0)` | Denominator for normalised theta |
+| `atm50Iv` | IV **interpolated** to exactly \|delta\| = 0.50, linear in delta between the tightest bracketing pair | **This is the IV that feeds the term-structure score.** Interpolated and not picked — see §5.1.1. Null when 50Δ is not bracketed, or the bracket exceeds 0.30 in delta space. Never extrapolated |
+| `atm50BracketWidth` | delta-space width interpolated across; 0 on an exact hit | So a reader can see how much of `atm50Iv` is measurement and how much is interpolation |
+| `extrinsic(K)` | `mark(K) − max(K − S, 0)`, floored at 0 | Denominator for normalised theta. A mid below intrinsic is a quote artifact, not negative time value |
+
+#### 5.1.1 The 50Δ reference is interpolated, not picked
+
+Two live failures forced this, in sequence.
+
+**Picking the nearest strike degenerates on a sparse cohort** — the same neighbour-substitution
+error `atmIv` already refuses, one function along. Live SPX cohorts offered these as their
+"nearest to 50 delta":
+
+| DTE | Legs | Strike | IV | \|Δ\| |
+|---|---|---|---|---|
+| 28 | 1 | 6700 | 26.22% | **0.077** |
+| 27 | 2 | 6800 | 24.75% | **0.094** |
+| 15 | 4 | 7620 | 11.93% | **0.876** |
+
+A back cohort referencing that 11.93% inflated every candidate in its pair to a **44.37%**
+forward factor, against a real maximum of 14.4%.
+
+**Bounding that with a tolerance is not enough**, because a tolerance still lets the front and
+back references sit at *different* deltas, and skew turns that into a systematic bias:
+
+| Pair | front \|Δ\| gap | back \|Δ\| gap | FF, nearest strike | FF, interpolated |
+|---|---|---|---|---|
+| SPX 17/53d | 0.070 | 0.001 | 21.35% | **10.91%** |
+| SPXW 35/65d | 0.003 | 0.000 | 0.09% | 0.54% |
+
+Half of that 21% was the mismatch — a 0.43Δ front IV compared against a 0.50Δ back IV. Where both
+references genuinely sit at 50 delta the two methods agree to within half a point, so
+interpolation costs nothing on a dense ladder and removes an artifact on a sparse one.
+
+Same technique and same never-extrapolate policy as `interpolateRiskReversal`, which is this
+repo's established precedent for interpolating a smile and refusing when it cannot be done
+honestly.
 
 ### 5.2 Per candidate — one `(root, strike, frontExp, backExp)`
 
@@ -404,14 +437,36 @@ absolute threshold — forced by §3.2, and it is the same relative-value frame 
 doctrine itself uses. Deterministic: the same snapshot always produces the same ranks,
 and no history is required.
 
-| Term | Raw metric | Weight | Why this and not something else |
-|---|---|---|---|
-| `fwdEdge` | `ffAtm` | **45** | The author's own named ranking metric, measured on the ATM IVs so it reads term structure and not skew (§3.3). The forward-vol view *is* the trade |
-| `frontVrp` | `atm50Iv_f − RV20` | **25** | The house thesis, and the only term that looks outside the chain — therefore the only one not collinear with `fwdEdge` |
-| `thetaCarry` | `θ_f/extrinsic_f − θ_b/extrinsic_b` | **20** | Decay per unit of extrinsic sold, the author's own normalisation. Rewards carry without ranking the most dangerous front expiry |
-| `deltaBalance` | `1 − \|netΔ\| / maxNetΔ` | **10** | The trader's hard constraint, used as the strike discriminator within a pair |
+| Term | Raw metric | Weight | Picks | Why this and not something else |
+|---|---|---|---|---|
+| `fwdEdge` | `ffAtm` | **45** | the pair | The author's own named ranking metric, measured on the 50Δ IVs so it reads term structure and not skew (§3.3). The forward-vol view *is* the trade |
+| `frontVrp` | `atm50Iv_f − RV20` | **25** | the pair | The house thesis, and the only term that looks outside the chain — therefore the only one not collinear with `fwdEdge` |
+| `deltaBalance` | `−\|netΔ\|` | **30** | the strike | The trader's hard constraint. Measured on the live ladder, `\|netΔ\|` is minimised **near the money** (−0.042 at 736 OTM, +0.008 at 16 OTM, +0.098 at 244 ITM), so it selects the strike the doctrine also prescribes |
 
-`score = Σ (weight × percentileWithinSnapshot(term))`, in `[0, 100]`.
+`score = Σ (weight × percentileWithinSnapshot(term))`, in `[0, 100]`. Two terms are
+strike-invariant and pick the expiry pair; one picks the strike inside it. That split is the
+engine's shape.
+
+### 6.0 A fourth term was removed after live measurement
+
+`thetaCarry` — `θ_f/extrinsic_f − θ_b/extrinsic_b` — shipped as a fourth term at weight 20 and
+put the top-ranked live candidate **721 points out of the money**, scoring it at the 93rd
+percentile of that term. The reason is that theta as a share of remaining extrinsic is
+**U-shaped in strike, with its minimum at the money**:
+
+| Strike | Distance from spot | θ / extrinsic |
+|---|---|---|
+| 6660 | 736 OTM | 0.03022 |
+| 7380 | 16 OTM | **0.00744** ← minimum |
+| 7640 | 244 ITM | 0.02852 |
+
+So ranking it "higher is better" is an instruction to pick the most extreme strike available. The
+doctrine uses that ratio to compare **tenors** at the money (3%/day at 30 DTE, 10% at 10 DTE); it
+was never a strike discriminator. `netθ/|netΓ|` was tested as a replacement and is worse — it
+runs monotonically from 55,070 deep OTM to negative deep ITM.
+
+The weight went to `deltaBalance`, which the same measurement shows is minimised near the money.
+`thetaCarry` remains on every candidate as a reported metric and is never scored.
 
 ### 6.1 What is computed, shown, and deliberately not scored
 
@@ -420,7 +475,7 @@ and no history is required.
 | `cushion` | No | A monotone re-expression of `ffAtm` from the same two IVs. Scoring both double-counts one signal. Displayed, because it *is* the loss condition |
 | `slope`, `hSkew`, `ffStrike` | No | Same two IVs again |
 | Net vega | **Never** | Root-time flat. The one explicit prohibition in the corpus (§2.3) |
-| Raw net theta | No | Bought with short gamma in proportion (§2.4). `thetaCarry` is the honest form |
+| Net theta, raw **or** normalised by extrinsic | No | Raw theta is bought with short gamma in proportion (§2.4). Normalising by extrinsic does not fix it — measured U-shaped in strike with its minimum at the money, so ranking it picks the most extreme strike (§6.0) |
 | Spread cost / liquidity | No | Measured inert: p90 = 1.0% of mid (§3.4). A near-constant term is noise |
 | Open interest | No | Measured harmful as a gate, meaningless as a signal (§3.4) |
 | IV rank, VRP rank, FF band | No | 17–30 days of history (§3.5). A rank over 20 samples is a random number |
@@ -578,7 +633,7 @@ zero new tables, zero new fakes.**
 |---|---|---|
 | `packages/core/src/calendar/domain/cohort.ts` | ~130 | Group by `(root, expiration)`; resolve spot, `atmStrike`, `atmIv`, per-row delta, `atm50Strike`, `atm50Iv`, `extrinsic`. Promoted from `apps/web/src/lib/chain-math.ts` + `chain-risk-reversal.ts`, not rewritten |
 | `packages/core/src/calendar/domain/candidate.ts` | ~140 | Enumerate under the gates; compute every §5.2 quantity |
-| `packages/core/src/calendar/domain/score.ts` | ~80 | Cross-sectional percentile of four terms, weighted sum, tie-break |
+| `packages/core/src/calendar/domain/score.ts` | ~80 | Cross-sectional percentile of three terms, weighted sum, tie-break |
 | `packages/core/src/calendar/application/rankCalendars.ts` | ~90 | One read → cohorts → candidates → score → top N. `Result<T,E>`, no throw |
 
 Reused verbatim:
@@ -631,7 +686,7 @@ TDD red→green, per the repo rule. No production line without a failing test fi
 | **Oracles** | `σ_fwd` against all three of the author's worked examples (19.5%, 53.8%, 32.2%). `FF` against the KRE $36 case (47–52% window containing his stated 49%). Root-time law: `vega(T) × Δσ(T)` constant across a √T ladder |
 | **Property (fast-check)** | Null-in → null-out on every metric. Never `NaN`, never a fabricated 0. `atmStrike` optimality. Score ∈ `[0,100]`. Ranking is a total order. **Permuting the input rows does not change the output ranking** — the determinism guarantee |
 | **Regression** | Front 14 DTE never enumerates. Gap 14 never enumerates. Inverted structure is dropped with a reason, not scored 0. A cohort holding both roots at one strike never mixes them. A `'NaN'`-string IV never becomes a number |
-| **Cross-sectional** | Feed the real 2,454-candidate snapshot: assert the top-ranked candidate is near-ATM, i.e. that §3.3's skew leak is actually closed |
+| **Cross-sectional, against the live chain** | Feed the real snapshot and assert the top-ranked candidate is near-ATM — i.e. that §3.3's skew leak is actually closed. This check is what caught both §5.1.1 failures and the §6.0 term inversion; it is not optional |
 | **Postgres** | testcontainers against real Postgres for the read. SQL is never mocked |
 | **Port hygiene** | Structurally prove the use-case cannot reach a gate/snapshot/macro read — copy the idea from `analyzeAdHocCalendar.test.ts:346` |
 
@@ -684,7 +739,7 @@ Not blockers. Recorded so they are decided on purpose rather than by accident.
 | # | Question | Recommendation |
 |---|---|---|
 | 1 | Is `FF = IV_front/σ_fwd − 1` the right Forward Factor? | Ship it, marked as inference, behind a swappable expression. It fits his one numbered case; nothing else does |
-| 2 | Weights 45/25/20/10 | Start there, from the doctrine's own emphasis. Re-derive only against a backtest, never by feel |
+| 2 | Weights 45/25/30 | Start there, from the doctrine's emphasis plus the one measured correction in §6.0. Re-derive only against a backtest, never by feel |
 | 3 | `RV20` window and estimator | Close-to-close over 21 daily closes, which already ships. Note the known bias: the "daily close" is a ~23:30Z sample in UTC buckets, not the 16:00 ET print |
 | 4 | Cross-root calendars (SPX front / SPXW back) | Blocked in v1 (gate 7). Tradeable, but the AM/PM settlement difference changes the front leg's expiry-day risk and nothing in the corpus covers it |
 | 5 | Strike granularity | Enumerate every shared strike. 2,454 candidates costs nothing |

@@ -42,6 +42,20 @@ const MAX_SPREAD_FRACTION = 0.15;
 /** The doctrine's ATM: the strike trading closest to 50 delta, per expiry. */
 const TARGET_ABS_DELTA = 0.5;
 
+/** Absent root means PM-settled; only SPX third-Friday contracts settle AM. */
+const DEFAULT_ROOT: Root = "SPXW";
+
+/**
+ * Widest delta-space bracket the 50-delta interpolation will trust.
+ *
+ * Two points far apart in delta describe a smile too sparse to trust a straight line between
+ * them: linear-in-delta interpolation across such a gap can land far from the true 50-delta vol
+ * and still return a real-looking number. Same policy and same threshold as the 25Δ risk
+ * reversal (`analytics/domain/risk-reversal.ts`), which is the established precedent in this
+ * repo for interpolating a smile and refusing when it cannot be done honestly.
+ */
+const MAX_BRACKET_WIDTH = 0.3;
+
 export type BuildCohortsOptions = {
   /** Injected observation instant. */
   readonly now: Date;
@@ -85,7 +99,7 @@ export function buildCohorts(
   // is a vendor union, so arrival order is not a property of the data.
   const sorted = quotes
     .filter((q) => q.contractType === opts.contractType)
-    .map((q) => ({ q, root: q.root ?? ("SPXW" as Root), iv: parseIv(q.bsmIv) }))
+    .map((q) => ({ q, root: q.root ?? DEFAULT_ROOT, iv: parseIv(q.bsmIv) }))
     .filter((r): r is { q: CalendarChainQuote; root: Root; iv: number } => r.iv !== null)
     .sort(
       (a, b) =>
@@ -136,7 +150,7 @@ export function buildCohorts(
     legs.sort((a, b) => a.strike - b.strike);
 
     const atmStrike = nearestStrike(legs, spot);
-    const atm50Strike = nearestFiftyDelta(legs);
+    const atm50 = interpolateFiftyDeltaIv(legs);
 
     cohorts.push({
       root: group.root,
@@ -150,8 +164,8 @@ export function buildCohorts(
       // never solved is not slightly off — it is on a different scale from every row it gets
       // ranked against, and the ranking is what tells the reader they are comparable.
       atmIv: ivAt(legs, atmStrike),
-      atm50Strike,
-      atm50Iv: ivAt(legs, atm50Strike),
+      atm50Iv: atm50?.iv ?? null,
+      atm50BracketWidth: atm50?.bracketWidth ?? null,
       legs,
     });
   }
@@ -234,23 +248,53 @@ function nearestStrike(legs: ReadonlyArray<CohortLeg>, spot: number): number | n
 }
 
 /**
- * Strike whose |delta| is closest to 0.50 — the doctrine's ATM, and NOT the same question as
- * "nearest spot" once skew and carry are in play. This is the reference the term-structure
- * score reads, because forward vol taken off a traded strike's own IVs measures skew instead:
- * on the live chain the top candidates by per-strike forward factor all sat 250–300 points
- * from spot, at roughly double the near-the-money reading.
+ * The doctrine's ATM reference: IV INTERPOLATED to exactly |delta| = 0.50.
+ *
+ * Interpolated, never picked, and the difference is not cosmetic. Picking the nearest strike
+ * lets the front and back cohorts' references sit at DIFFERENT deltas, and skew turns that into
+ * a systematic bias in the forward factor computed from them. Measured on the live chain:
+ *
+ *   SPX 17/53d   front |Δ| 0.43 against back |Δ| 0.50   FF 21.35%  →  10.91% interpolated
+ *   SPXW 35/65d  front |Δ| 0.497 against back |Δ| 0.4997  FF 0.09%  →   0.54% interpolated
+ *
+ * Half of that 21% was the mismatch. Where both references genuinely sit at 50 delta the two
+ * methods agree to within half a point — so interpolation costs nothing where the ladder is
+ * dense and removes an artifact where it is not.
+ *
+ * Linear in delta between the tightest bracketing pair, and NEVER extrapolated: a cohort whose
+ * legs are all on one side of 50 delta has no ATM reference, which drops its pairs with a named
+ * reason. Same technique and same refusal policy as `interpolateRiskReversal`.
+ *
+ * Returns the interpolated IV and the delta-space width it was interpolated across, so a reader
+ * can see how much of the number is measurement and how much is interpolation.
  */
-function nearestFiftyDelta(legs: ReadonlyArray<CohortLeg>): number | null {
-  let best: number | null = null;
-  let bestGap = Number.POSITIVE_INFINITY;
+function interpolateFiftyDeltaIv(
+  legs: ReadonlyArray<CohortLeg>,
+): { readonly iv: number; readonly bracketWidth: number } | null {
+  let lower: CohortLeg | null = null;
+  let upper: CohortLeg | null = null;
+
   for (const leg of legs) {
-    const gap = Math.abs(Math.abs(leg.delta) - TARGET_ABS_DELTA);
-    if (gap < bestGap) {
-      best = leg.strike;
-      bestGap = gap;
+    const absDelta = Math.abs(leg.delta);
+    // A magnitude at or beyond 1 is not a real option delta; it signals a mis-signed or
+    // numerically unstable solve and must not anchor a bracket.
+    if (!Number.isFinite(absDelta) || absDelta >= 1) continue;
+    if (absDelta <= TARGET_ABS_DELTA && (lower === null || absDelta > Math.abs(lower.delta))) {
+      lower = leg;
+    }
+    if (absDelta >= TARGET_ABS_DELTA && (upper === null || absDelta < Math.abs(upper.delta))) {
+      upper = leg;
     }
   }
-  return best;
+  if (lower === null || upper === null) return null;
+
+  const span = Math.abs(upper.delta) - Math.abs(lower.delta);
+  if (span === 0) return { iv: lower.iv, bracketWidth: 0 };
+  if (span > MAX_BRACKET_WIDTH) return null;
+
+  const fraction = (TARGET_ABS_DELTA - Math.abs(lower.delta)) / span;
+  const iv = lower.iv + fraction * (upper.iv - lower.iv);
+  return Number.isFinite(iv) && iv > 0 ? { iv, bracketWidth: span } : null;
 }
 
 function ivAt(legs: ReadonlyArray<CohortLeg>, strike: number | null): number | null {

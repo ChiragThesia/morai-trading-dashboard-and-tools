@@ -102,17 +102,26 @@ export type Cohort = {
   /** IV at `atmStrike`. Null when that strike's own IV never solved — never a neighbour's. */
   readonly atmIv: number | null;
   /**
-   * Strike whose |delta| is closest to 0.50 — the doctrine's ATM, which is NOT the same as
-   * the strike nearest spot once skew and carry are in play.
-   */
-  readonly atm50Strike: number | null;
-  /**
-   * IV at `atm50Strike`. This is the IV that feeds the term-structure score, because reading
-   * forward vol off a traded strike's own IVs measures skew instead: on the live chain, the
-   * top candidates by per-strike forward factor all sat 250–300 points from spot at roughly
-   * double the near-the-money reading.
+   * IV INTERPOLATED to exactly |delta| = 0.50 — the doctrine's ATM, and the IV that feeds the
+   * term-structure score.
+   *
+   * Two reasons it is this and not the traded strike's own IV. First, reading forward vol off a
+   * traded strike measures skew rather than term structure: on the live chain the top candidates
+   * by per-strike forward factor all sat 250–300 points from spot at roughly double the
+   * near-the-money reading. Second, interpolating rather than picking the nearest strike stops
+   * the front and back references sitting at different deltas, which skew turns into a
+   * systematic bias — measured at 10.4 forward-factor points on one live SPX pair.
+   *
+   * Null when 50 delta is not bracketed by this cohort's legs, or the bracket is too wide to
+   * trust. Never extrapolated.
    */
   readonly atm50Iv: number | null;
+  /**
+   * Delta-space width the reference was interpolated across; 0 on an exact hit. Reported so a
+   * reader can see how much of `atm50Iv` is measurement and how much is interpolation. Null
+   * exactly when `atm50Iv` is null.
+   */
+  readonly atm50BracketWidth: number | null;
   readonly legs: ReadonlyArray<CohortLeg>;
 };
 

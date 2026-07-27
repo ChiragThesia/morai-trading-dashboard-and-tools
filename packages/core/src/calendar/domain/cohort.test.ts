@@ -83,8 +83,14 @@ describe("buildCohorts — root is part of the key", () => {
     expect(cohorts).toHaveLength(2);
     const spx = cohorts.find((c) => c.root === "SPX");
     const spxw = cohorts.find((c) => c.root === "SPXW");
-    expect(spx?.atm50Iv).toBeCloseTo(0.2469, 6);
-    expect(spxw?.atm50Iv).toBeCloseTo(0.6889, 6);
+    // Asserted on the legs rather than on the ATM reference: a single-strike cohort cannot
+    // bracket 50 delta, so it correctly has no reference. What matters here is that the two
+    // books did not merge — these are the actual live values from the collision that motivated
+    // making root part of the key.
+    expect(spx?.legs).toHaveLength(1);
+    expect(spxw?.legs).toHaveLength(1);
+    expect(spx?.legs[0]?.iv).toBeCloseTo(0.2469, 9);
+    expect(spxw?.legs[0]?.iv).toBeCloseTo(0.6889, 9);
   });
 
   it("defaults an absent root to SPXW, the PM-settled case", () => {
@@ -193,15 +199,113 @@ describe("buildCohorts — the ATM references are two different questions", () =
     expect(c?.atmIv).toBeCloseTo(0.155, 6);
   });
 
-  it("picks atm50Strike by |delta| nearest 0.50, which need not be atmStrike", () => {
+  /**
+   * REGRESSION #1 (live chain, 2026-07-27). Picking the NEAREST strike to 50 delta degenerates
+   * into "whatever leg exists" on a sparse cohort — the same neighbour-substitution error this
+   * file already refuses for `atmIv`, one function along. Live SPX cohorts offered a 1-leg
+   * 7.7-delta strike at 26.22% IV and a 4-leg 87.6-delta strike at 11.93% as their
+   * nearest-to-50, and a back cohort referencing the 11.93% inflated every candidate in its pair
+   * to a 44.37% forward factor against a real maximum of 14.4%.
+   *
+   * REGRESSION #2, found after bounding #1 with a tolerance: a tolerance is not enough, because
+   * it lets the FRONT and BACK references sit at DIFFERENT deltas, and skew makes that a
+   * systematic bias. Measured on the live chain:
+   *
+   *   SPX 17/53d   front |Δ| gap 0.0702, back 0.0013   FF nearest 21.35%  →  interpolated 10.91%
+   *   SPXW 35/65d  front |Δ| gap 0.0028, back 0.0003   FF nearest  0.09%  →  interpolated  0.54%
+   *
+   * Half of that 21% reading was the mismatch: a 0.43-delta front IV compared against a
+   * 0.50-delta back IV. Where both references genuinely sit at 50 delta the two methods agree to
+   * within half a point.
+   *
+   * So the reference IV is INTERPOLATED to exactly |Δ| = 0.50 between the tightest bracketing
+   * pair, never picked. Same technique and same never-extrapolate policy as the 25Δ risk
+   * reversal, which refuses a bracket wider than 0.30 in delta space for exactly this reason.
+   */
+  it("interpolates the reference IV to exactly 50 delta between the bracketing strikes", () => {
+    const c = buildCohorts(
+      [
+        quote({ strike: 7_300_000, bsmIv: "0.180" }),
+        quote({ strike: 7_400_000, bsmIv: "0.162" }),
+        quote({ strike: 7_500_000, bsmIv: "0.150" }),
+      ],
+      opts,
+    )[0];
+    expect(c).toBeDefined();
+    if (c === undefined) return;
+
+    // Hand-compute the same linear-in-delta interpolation from the cohort's own legs.
+    const pts = c.legs.map((l) => ({ d: Math.abs(l.delta), iv: l.iv }));
+    const lower = pts.filter((p) => p.d <= 0.5).sort((a, b) => b.d - a.d)[0];
+    const upper = pts.filter((p) => p.d >= 0.5).sort((a, b) => a.d - b.d)[0];
+    expect(lower).toBeDefined();
+    expect(upper).toBeDefined();
+    if (lower === undefined || upper === undefined) return;
+    const span = upper.d - lower.d;
+    const expected = span === 0 ? lower.iv : lower.iv + ((0.5 - lower.d) / span) * (upper.iv - lower.iv);
+
+    expect(c.atm50Iv).not.toBeNull();
+    expect(c.atm50Iv ?? 0).toBeCloseTo(expected, 12);
+    expect(c.atm50BracketWidth ?? -1).toBeCloseTo(span, 12);
+
+    // And the interpolated value sits strictly between the two bracketing IVs.
+    const loIv = Math.min(lower.iv, upper.iv);
+    const hiIv = Math.max(lower.iv, upper.iv);
+    expect(c.atm50Iv ?? 0).toBeGreaterThanOrEqual(loIv);
+    expect(c.atm50Iv ?? 0).toBeLessThanOrEqual(hiIv);
+  });
+
+  it("nulls the reference when 50 delta is not BRACKETED — never extrapolates", () => {
+    // Two deep-OTM strikes: every leg is under 50 delta, so there is no upper bracket. A nearest
+    // pick would have returned the 9-delta strike's IV and called it the ATM reference.
+    const allOtm = buildCohorts(
+      [quote({ strike: 6_700_000, bsmIv: "0.26" }), quote({ strike: 6_800_000, bsmIv: "0.25" })],
+      opts,
+    )[0];
+    expect(allOtm?.atm50Iv).toBeNull();
+    expect(allOtm?.atm50BracketWidth).toBeNull();
+
+    // And the mirror case: every leg deep ITM, no lower bracket.
+    const allItm = buildCohorts([quote({ strike: 8_200_000, bsmIv: "0.20" })], opts)[0];
+    expect(Math.abs(allItm?.legs[0]?.delta ?? 0)).toBeGreaterThan(0.9);
+    expect(allItm?.atm50Iv).toBeNull();
+  });
+
+  it("nulls the reference when the bracket is too wide to trust a straight line across", () => {
+    // A pair that spans 50 delta but from far away on both sides: linear-in-delta interpolation
+    // across that gap can land far from the true 50-delta vol and still return a real number.
+    const wide = buildCohorts(
+      [quote({ strike: 6_600_000, bsmIv: "0.30" }), quote({ strike: 8_200_000, bsmIv: "0.14" })],
+      opts,
+    )[0];
+    const deltas = (wide?.legs ?? []).map((l) => Math.abs(l.delta)).sort((a, b) => a - b);
+    expect(deltas.some((d) => d < 0.5)).toBe(true);
+    expect(deltas.some((d) => d > 0.5)).toBe(true);
+    expect((deltas[deltas.length - 1] ?? 0) - (deltas[0] ?? 0)).toBeGreaterThan(0.3);
+    expect(wide?.atm50Iv).toBeNull();
+  });
+
+  it("returns the leg's own IV on an exact 50-delta hit, with a zero-width bracket", () => {
+    // Constructed so one leg lands on |Δ| = 0.5 to within floating point: scan a fine ladder and
+    // assert whichever cohort achieves the exact hit reports width 0.
+    const fine = Array.from({ length: 81 }, (_, i) =>
+      quote({ strike: (7_200 + i * 5) * 1000, bsmIv: "0.16" }),
+    );
+    const c = buildCohorts(fine, opts)[0];
+    expect(c?.atm50Iv).not.toBeNull();
+    // Every leg has the same IV here, so the interpolation must reproduce it exactly regardless
+    // of where the bracket falls — a clean invariant that holds with or without an exact hit.
+    expect(c?.atm50Iv ?? 0).toBeCloseTo(0.16, 12);
+    expect(c?.atm50BracketWidth ?? -1).toBeLessThan(0.05);
+  });
+
+  it("reads the reference at 50 delta, which is NOT the strike nearest spot", () => {
     const c = buildCohorts(ladder, opts)[0];
-    expect(c?.atm50Strike).not.toBeNull();
-    const leg = c?.legs.find((l) => l.strike === c.atm50Strike);
-    expect(leg).toBeDefined();
-    if (leg === undefined) return;
-    // Whatever strike wins, it must be the closest to 50 delta in the cohort.
-    const best = Math.min(...(c?.legs ?? []).map((l) => Math.abs(Math.abs(l.delta) - 0.5)));
-    expect(Math.abs(Math.abs(leg.delta) - 0.5)).toBeCloseTo(best, 12);
+    expect(c?.atmStrike).toBe(7400);
+    expect(c?.atm50Iv).not.toBeNull();
+    // The two references answer different questions, so they give different IVs. For a put the
+    // 50-delta point sits above spot, where the smile is lower.
+    expect(c?.atm50Iv).not.toBe(c?.atmIv);
   });
 });
 

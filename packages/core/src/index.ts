@@ -691,3 +691,41 @@ export type { RegimeBand, RegimeThresholds } from "./analytics/index.ts";
 export type { ReauthApp, ReauthError, ForStartingReauth, ForExchangingReauth } from "./reauth/index.ts";
 export { makeStartReauth, makeExchangeReauth } from "./reauth/index.ts";
 export type { StartReauthDeps, ExchangeReauthDeps } from "./reauth/index.ts";
+
+// ─── Calendar engine (docs/calendar-engine/spec.mdx) ──────────────────────────
+// Deterministic calendar-spread ranking: one chain read, every candidate enumerated, four
+// cross-sectionally-ranked score terms. Front leg >= 15 DTE and gap >= 15 days are hard
+// floors. Replaces the picker context.
+export {
+  yearsToSettlement,
+  calendarDaysTo,
+  buildCohorts,
+  snapshotSpot,
+  enumerateCandidates,
+  scoreCandidates,
+  SCORE_WEIGHTS,
+  FRONT_DTE_FLOOR,
+  GAP_DAYS_FLOOR,
+  BACK_DTE_CEILING,
+  makeRankCalendarsUseCase,
+} from "./calendar/index.ts";
+export type {
+  CalendarChainQuote,
+  CalendarRanking,
+  Candidate,
+  Cohort,
+  CohortLeg,
+  DropCounts,
+  DropReason,
+  ExpiryCarry,
+  ForRankingCalendars,
+  ForReadingCalendarChain,
+  ForReadingDailyCloses,
+  ForReadingExpiryCarry,
+  RankCalendarsDeps,
+  RankCalendarsRequest,
+  ScoreContext,
+  ScoreTerm,
+  ScoreTermKey,
+  ScoredCalendar,
+} from "./calendar/index.ts";
