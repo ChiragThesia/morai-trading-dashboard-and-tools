@@ -34,6 +34,9 @@ import {
   chainResponse,
   rankCalendarsQuery,
 } from "@morai/contracts";
+// The compile-time link between the core row type and the mirrored chain schema — see
+// registerGetChainTool. Type-only, so it adds nothing to the bundle.
+import type { ChainResponse } from "@morai/contracts";
 import type {
   ForGettingStatus,
   ForListingCalendars,
@@ -851,11 +854,16 @@ export function registerGetCotTool(
  * Pattern: call use-case → parse result through chainResponse schema → return content.
  *
  * Rule 9: the chain read-surface ships its HTTP route AND this tool in the same change.
- * MCP-02: the SAME chainResponse schema used by GET /api/chain is used here, so a
- * one-sided field rename fails `bun run typecheck`.
+ * MCP-02: the SAME chainResponse schema used by GET /api/chain is used here — but sharing a
+ * schema is NOT what makes a one-sided field change fail `bun run typecheck`. `.parse()` takes
+ * `unknown`, so a drifted core type compiles here and surfaces as a runtime throw on the first
+ * call. The `body: ChainResponse` annotation below is the compile-time link, mirroring
+ * chain.routes.ts. Verified by probe: making `bsmIv` non-nullable on the contract side alone
+ * fails typecheck at both seams.
  *
  * ChainEntry fields are already plain strings and numbers (the use-case serialises
- * observedAt to ISO), so chainResponse.parse(result.value) is direct.
+ * observedAt to ISO), so no field mapping is needed — only the ReadonlyArray copy the
+ * inferred type wants.
  *
  * Returns a contract-valid EMPTY array (never an error) when the cohort is empty —
  * the read never recomputes and never 404s from MCP.
@@ -881,7 +889,8 @@ export function registerGetChainTool(
       }
 
       // Empty array on no data — never an error (MCP-02 stability).
-      const payload = chainResponse.parse(result.value);
+      const body: ChainResponse = [...result.value];
+      const payload = chainResponse.parse(body);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { chainResponse } from "@morai/contracts";
+import type { ChainResponse } from "@morai/contracts";
 import type { ForRunningGetChain } from "@morai/core";
 
 /**
@@ -22,7 +23,16 @@ import type { ForRunningGetChain } from "@morai/core";
  *   strips any internal repo field the read port happens to carry.
  *
  * MCP-02: chainResponse is the single schema source shared by this route and any chain MCP
- *   tool. A one-sided field change fails `bun run typecheck`.
+ *   tool. A one-sided field change fails `bun run typecheck` — but ONLY because of the
+ *   `body: ChainResponse` annotation below. `chainResponse.parse(result.value)` on its own
+ *   type-checks no matter how far the core `ChainEntry` type and this schema have drifted,
+ *   because `.parse()` accepts `unknown`; the mismatch would then surface as a 500 on the
+ *   first real request instead of at build time. The annotation is the ONLY compile-time link
+ *   between the two, which are mirrored by hand in separate packages because `packages/contracts`
+ *   may not import `packages/core`. Verified by probe: renaming a field on one side alone fails
+ *   typecheck at the annotation. Three sibling seams (picker candidate, picker snapshot, ad-hoc
+ *   analyze) still lack this and are knowingly left alone — they belong to the picker context,
+ *   which is scheduled for deletion.
  *
  * Mount: in main.ts inside the CHAINED apiRouter builder (`.route("/", chainRoutes(getChain))`),
  *   so the effective path is GET /api/chain. The chained form is required for hc<AppType>() RPC
@@ -40,7 +50,12 @@ export function chainRoutes(getChain: ForRunningGetChain) {
     }
 
     // Empty cohort on no data — never an error (array-read convention).
-    return c.json(chainResponse.parse(result.value));
+    // The annotation is load-bearing, not decoration: it reconciles the core row type against
+    // the contract's inferred type at build time. The spread copies ReadonlyArray → the mutable
+    // array the inferred type wants; no field mapping happens, because the use-case already
+    // hands over wire-shaped rows.
+    const body: ChainResponse = [...result.value];
+    return c.json(chainResponse.parse(body));
   });
 
   return router;
