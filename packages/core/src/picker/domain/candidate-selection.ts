@@ -255,9 +255,9 @@ export type SelectCandidatesParams = {
    */
   readonly effectiveDeltaMin?: number;
   /**
-   * Optional back-leg gap window override (28-05, PLAY-04 — `selectEventCandidates`).
-   * Both default to `BACK_DTE_MIN_GAP`/`BACK_DTE_MAX_GAP` when omitted, reproducing today's
-   * live (primary) universe byte-identically for every existing caller.
+   * Optional back-leg gap window override (29-03 runtime rule settings —
+   * `config.backDteGap`). Both default to `BACK_DTE_MIN_GAP`/`BACK_DTE_MAX_GAP` when omitted,
+   * reproducing today's live universe byte-identically for every existing caller.
    */
   readonly backDteMinGap?: number;
   readonly backDteMaxGap?: number;
@@ -479,36 +479,4 @@ export function selectCandidates(
   }
 
   return { candidates, gateDrops: drops };
-}
-
-// ─────────────────────────────────────────────────────────────
-// selectEventCandidates (28-05, PLAY-04) — event-calendar bucket
-// ─────────────────────────────────────────────────────────────
-
-/** Event-calendar bucket back-leg gap window (user-locked research, 28-CONTEXT.md). */
-export const EVENT_BACK_DTE_MIN_GAP = 3;
-export const EVENT_BACK_DTE_MAX_GAP = 10;
-
-/**
- * selectEventCandidates — a second universe for short-gap (3-10d) calendars that
- * intentionally own a scheduled event between their legs (PLAY-04). A thin wrapper over
- * `selectCandidates`, NOT a second engine: same band-scan/gate machinery, the back-leg gap
- * window narrowed to `[EVENT_BACK_DTE_MIN_GAP, EVENT_BACK_DTE_MAX_GAP]`, post-filtered to
- * candidates whose back leg spans an event the front leg does not (`backEvents.length > 0` —
- * `selectCandidates` already computes this per candidate via `legSpansEvents`).
- */
-export function selectEventCandidates(
-  chain: ReadonlyArray<ChainQuoteForPicker>,
-  events: ReadonlyArray<EconomicEvent>,
-  params: SelectCandidatesParams,
-): SelectCandidatesResult {
-  const result = selectCandidates(chain, events, {
-    ...params,
-    backDteMinGap: EVENT_BACK_DTE_MIN_GAP,
-    backDteMaxGap: EVENT_BACK_DTE_MAX_GAP,
-  });
-  return {
-    candidates: result.candidates.filter((c) => c.backEvents.length > 0),
-    gateDrops: result.gateDrops,
-  };
 }

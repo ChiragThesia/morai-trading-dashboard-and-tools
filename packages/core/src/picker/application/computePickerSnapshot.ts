@@ -662,11 +662,11 @@ export function makeComputePickerSnapshotUseCase(
     // zeroEventAdjustment's post-scoring-override shape. A no-op at multiplier 1 (open state). ──
     scored = scored.map((candidate) => applyGatePenalty(candidate, gate.penaltyMultiplier));
 
-    // Event-calendar bucket (28-05, PLAY-04) RETIRED 2026-07-14 (user kill): the short-gap
-    // (3-10d) second universe recommended fuck-around-sized trades over the real 15-90d gap
-    // strategy, and its EVENT_SCORE_WEIGHTS scores outranked the primary universe on the
-    // merged Analyzer table. selectEventCandidates/scoreEventCandidates stay in the domain
-    // (tested, un-emitted); the `bucket` contract field stays for persisted-snapshot compat.
+    // Event-calendar bucket (28-05, PLAY-04) RETIRED 2026-07-14 (user kill) and its domain
+    // code deleted: the short-gap (3-10d) second universe recommended fuck-around-sized
+    // trades over the real 15-90d gap strategy, and its bucket-scaled scores outranked the
+    // primary universe on the merged Analyzer table. Every candidate below is "standard".
+    // The `bucket` contract field stays for persisted-snapshot compat.
 
     // ── Step 5: Rank (stable id tie-break) + cap at PICKER_TOP_N (D-03). ──
     const ranked = rankAndCapCandidates(scored, PICKER_TOP_N);

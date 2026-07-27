@@ -15,9 +15,8 @@
  * siblings. Pure — no I/O, no clock.
  */
 
-import { percentileRank, assertDefined } from "@morai/shared";
+import { percentileRank } from "@morai/shared";
 import type { GexContextForPicker } from "../application/ports.ts";
-import type { BreakdownCriterion } from "./types.ts";
 
 // ─────────────────────────────────────────────────────────────
 // Score weights (active rules must sum to 100 — enforced by rules.test.ts).
@@ -400,166 +399,13 @@ export const RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
 ];
 
 // ─────────────────────────────────────────────────────────────
-// Event-calendar bucket (28-05, PLAY-04) — a SEPARATE registry, own sum-100 invariant.
-// `backEventBonus` is promoted from experimental (weight 0, above) to an active scored
-// criterion; the other 9 primary score criteria are scaled down proportionally so THIS
-// table sums to 100 — RULE_SET_METADATA above and its weight-sum-100 test are never touched
-// (T-28-13).
+// Event-calendar bucket (28-05, PLAY-04) — RETIRED 2026-07-14 (user kill), registry and
+// scaled weight set deleted. This ONE constant outlives it: stored snapshots still hold
+// `bucket: "event-calendar"` candidates whose score included the bonus, and
+// previewPickerRuleOverrides' `rescoreCandidate` re-adds that exact term when re-weighting
+// them. It is a read-path compatibility constant now, not a live scoring weight.
 // ─────────────────────────────────────────────────────────────
 
-/** Bucket-scoped weight for the promoted `backEventBonus` row (28-RESEARCH.md A5: 8-10, UAT-pending). */
+/** Bonus weight carried by already-stored event-bucket candidates (28-RESEARCH.md A5: 8-10). */
 export const WEIGHT_BACK_EVENT_BONUS = 10;
 
-/** Proportional scale applied to the primary registry's 9 score weights so they + WEIGHT_BACK_EVENT_BONUS sum to 100. */
-const EVENT_BUCKET_SCALE = (100 - WEIGHT_BACK_EVENT_BONUS) / 100;
-
-/**
- * Derive the event-bucket weight set from ANY standard 9-weight set: each weight scaled by
- * EVENT_BUCKET_SCALE so the 9 + WEIGHT_BACK_EVENT_BONUS sum to 100. Single source of the
- * derivation — consumed by EVENT_SCORE_WEIGHTS below (compile-time defaults) and by the
- * Phase-32 preview when re-scoring event-bucket candidates under STAGED weights.
- */
-export function deriveEventScoreWeights(
-  weights: Record<BreakdownCriterion, number>,
-): Record<BreakdownCriterion, number> {
-  return {
-    slope: weights.slope * EVENT_BUCKET_SCALE,
-    fwdEdge: weights.fwdEdge * EVENT_BUCKET_SCALE,
-    gexFit: weights.gexFit * EVENT_BUCKET_SCALE,
-    eventAdjustment: weights.eventAdjustment * EVENT_BUCKET_SCALE,
-    beVsEm: weights.beVsEm * EVENT_BUCKET_SCALE,
-    deltaNeutral: weights.deltaNeutral * EVENT_BUCKET_SCALE,
-    thetaVega: weights.thetaVega * EVENT_BUCKET_SCALE,
-    vrp: weights.vrp * EVENT_BUCKET_SCALE,
-    debitFit: weights.debitFit * EVENT_BUCKET_SCALE,
-  };
-}
-
-/**
- * Bucket-scoped score weights for the 9 primary criteria — consumed by scoring.ts's
- * `scoreEventCandidates` via `scoreCalendarCandidates`'s existing per-criterion weights
- * ablation seam (T-27-03). Reuses the primary scoring formulas verbatim; never a second
- * scoring engine.
- */
-export const EVENT_SCORE_WEIGHTS: Partial<Record<BreakdownCriterion, number>> = deriveEventScoreWeights({
-  slope: WEIGHT_SLOPE,
-  fwdEdge: WEIGHT_FWD_EDGE,
-  gexFit: WEIGHT_GEX_FIT,
-  eventAdjustment: WEIGHT_EVENT,
-  beVsEm: WEIGHT_BE_VS_EM,
-  deltaNeutral: WEIGHT_DELTA_NEUTRAL,
-  thetaVega: WEIGHT_THETA_VEGA,
-  vrp: WEIGHT_VRP,
-  debitFit: WEIGHT_DEBIT_FIT,
-});
-
-const netThetaGate = RULE_SET_METADATA.find((r) => r.id === "net-theta-positive");
-assertDefined(netThetaGate, "rules.ts: net-theta-positive row missing from RULE_SET_METADATA");
-const liquidityGate = RULE_SET_METADATA.find((r) => r.id === "liquidity");
-assertDefined(liquidityGate, "rules.ts: liquidity row missing from RULE_SET_METADATA");
-
-export const EVENT_RULE_SET_METADATA: ReadonlyArray<RuleMetadata> = [
-  netThetaGate, // net-theta-positive gate — unchanged
-  liquidityGate, // liquidity gate — unchanged
-  {
-    id: "fwdEdge",
-    label: "Forward-IV edge",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.fwdEdge ?? 0,
-    status: "active",
-    rationale: "Same structural calendar edge as the primary registry, bucket-scaled to make room for backEventBonus.",
-    source: "Perfiliev forward-IV; SpotGamma Fwd IV",
-  },
-  {
-    id: "slope",
-    label: "Term-structure slope",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.slope ?? 0,
-    status: "active",
-    rationale: "Same VRP-proxy slope signal as the primary registry, bucket-scaled.",
-    source: "Johnson (2017), JFQA — slope predicts VRP",
-  },
-  {
-    id: "gexFit",
-    label: "GEX placement (near-term walls + flip regime)",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.gexFit ?? 0,
-    status: "active",
-    rationale: "Same GEX placement signal as the primary registry, bucket-scaled.",
-    source: "In-house GEX (spot-bracketed side-specific walls, ≤45d set)",
-  },
-  {
-    id: "eventAdjustment",
-    label: "Front-leg event risk",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.eventAdjustment ?? 0,
-    status: "active",
-    rationale:
-      "Front-leg event penalty is structurally near-0 in this bucket (the front never spans the OWNED event by construction) but the row stays live for any incidental front-leg event, bucket-scaled.",
-    source: "Practitioner consensus; D-11; peak-theta collision 2026-07-09",
-  },
-  {
-    id: "beVsEm",
-    label: "Breakeven width vs expected move",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.beVsEm ?? 0,
-    status: "active",
-    rationale: "Same profit-zone-coverage signal as the primary registry, bucket-scaled.",
-    source: "D-09 (replaces the mockup's fixed-strike proxy)",
-  },
-  {
-    id: "debitFit",
-    label: "Debit fit ($3.2k–5k ideal)",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.debitFit ?? 0,
-    status: "active",
-    rationale: "Same spend-preference band as the primary registry, bucket-scaled.",
-    source: "User-locked spend preference (2026-07-09)",
-  },
-  {
-    id: "deltaNeutral",
-    label: "Delta neutrality",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.deltaNeutral ?? 0,
-    status: "active",
-    rationale: "Same delta-neutrality preference as the primary registry, bucket-scaled.",
-    source: "User-locked preference (2026-07-08); consistent with ATM-neutral practitioner default (tastytrade)",
-  },
-  {
-    id: "vrp",
-    label: "Volatility risk premium (front IV − RV20)",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.vrp ?? 0,
-    status: "active",
-    rationale: "Same VRP signal as the primary registry, bucket-scaled.",
-    source: "VRP literature (Johnson 2017 et al.); promoted 2026-07-09 (user lock, PICK-04 re-arbitrates)",
-  },
-  {
-    id: "slopePercentile",
-    label: "Slope percentile vs trailing history",
-    kind: "experimental",
-    weight: 0,
-    status: "experimental",
-    rationale: "Not promoted for this bucket — display-only until PICK-04, same as the primary registry.",
-    source: "Johnson (2017); in-house picker_snapshot corpus",
-  },
-  {
-    id: "backEventBonus",
-    label: "Event in back-leg window (bucket-promoted)",
-    kind: "score",
-    weight: WEIGHT_BACK_EVENT_BONUS,
-    status: "active",
-    rationale:
-      "Promoted from experimental for the event-calendar bucket only (PLAY-04): the long back leg owns event vol the short front leg never faces — the defining edge signal for this short-gap, event-owning universe. The primary registry's backEventBonus row above stays experimental (weight 0) — untouched.",
-    source: "Practitioner event-vol placement (PICK-05 precursor); bucket-promoted 2026-07-09",
-  },
-  {
-    id: "thetaVega",
-    label: "θ/vega carry ratio",
-    kind: "score",
-    weight: EVENT_SCORE_WEIGHTS.thetaVega ?? 0,
-    status: "active",
-    rationale: "Same carry-per-vol-risk signal as the primary registry, bucket-scaled.",
-    source: "tastytrade benchmark via OptionsTradingIQ; promoted 2026-07-09 (user lock, PICK-04 re-arbitrates)",
-  },
-];
