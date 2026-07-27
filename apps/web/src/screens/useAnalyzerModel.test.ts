@@ -15,7 +15,7 @@ import { renderHook, cleanup } from "@testing-library/react";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { PickerSnapshotResponse, AnalyzeAdHocCalendarResponse } from "@morai/contracts";
 
-vi.mock("../../hooks/useLiveStream.ts", () => ({
+vi.mock("../hooks/useLiveStream.ts", () => ({
   useLiveStream: vi.fn(() => ({
     greeks: new Map(),
     status: "quiet" as const,
@@ -31,12 +31,12 @@ vi.mock("../../hooks/useLiveStream.ts", () => ({
 }));
 
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
-vi.mock("../../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
+vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
 
 const { mockRepull } = vi.hoisted(() => ({
   mockRepull: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isSuccess: false, isError: false })),
 }));
-vi.mock("../../hooks/useRepullChains.ts", () => ({ useRepullChains: mockRepull }));
+vi.mock("../hooks/useRepullChains.ts", () => ({ useRepullChains: mockRepull }));
 
 const { mockAnalyzeCalendarMutateAsync } = vi.hoisted(() => ({
   mockAnalyzeCalendarMutateAsync: vi.fn(
@@ -44,12 +44,12 @@ const { mockAnalyzeCalendarMutateAsync } = vi.hoisted(() => ({
       Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
   ),
 }));
-vi.mock("../../hooks/useAnalyzeCalendar.ts", () => ({
+vi.mock("../hooks/useAnalyzeCalendar.ts", () => ({
   useAnalyzeCalendar: () => ({ mutateAsync: mockAnalyzeCalendarMutateAsync }),
 }));
 
-import { useAnalyzerModel, GROUP_OF, verdictWord } from "./useAnalyzerModel.ts";
-import { useLiveStream } from "../../hooks/useLiveStream.ts";
+import { useAnalyzerModel } from "./useAnalyzerModel.ts";
+import { useLiveStream } from "../hooks/useLiveStream.ts";
 
 const mockUseLiveStream = vi.mocked(useLiveStream);
 
@@ -134,30 +134,28 @@ describe("useAnalyzerModel — live-aware spot seam (AUI-07, D-07 port of LIVE-0
   });
 });
 
-describe("GROUP_OF — Verdict Hero factor grouping (Phase 41, AUI-02/D-02, LOCKED mapping)", () => {
-  it("maps every one of the 9 breakdownEntry criteria to exactly one of EDGE/RISK/FIT", () => {
-    expect(GROUP_OF["fwdEdge"]).toBe("EDGE");
-    expect(GROUP_OF["slope"]).toBe("EDGE");
-    expect(GROUP_OF["vrp"]).toBe("EDGE");
-    expect(GROUP_OF["eventAdjustment"]).toBe("RISK");
-    expect(GROUP_OF["beVsEm"]).toBe("RISK");
-    expect(GROUP_OF["debitFit"]).toBe("RISK");
-    expect(GROUP_OF["gexFit"]).toBe("FIT");
-    expect(GROUP_OF["deltaNeutral"]).toBe("FIT");
-    expect(GROUP_OF["thetaVega"]).toBe("FIT");
-  });
-});
-
-describe("verdictWord — evidence-honest verdict derivation (Phase 41, AUI-02/D-02)", () => {
-  it("score 81 (>= 66.7) -> FAVORABLE, text-value-positive, reusing scoreStatus's ✓ icon", () => {
-    expect(verdictWord(81)).toEqual({ word: "FAVORABLE", icon: "✓", cls: "text-value-positive" });
+describe("useAnalyzerModel — the screen no longer proposes calendars", () => {
+  beforeEach(() => {
+    setLiveStream("quiet", null);
+    mockUsePickerReturn(pickerSnapshotFixture);
   });
 
-  it("score 50 (>= 33.3, < 66.7) -> CAUTION, text-accent-warning, reusing scoreStatus's ~ icon", () => {
-    expect(verdictWord(50)).toEqual({ word: "CAUTION", icon: "~", cls: "text-accent-warning" });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
   });
 
-  it("score 10 (< 33.3) -> SKIP, text-value-negative, reusing scoreStatus's ✗ icon", () => {
-    expect(verdictWord(10)).toEqual({ word: "SKIP", icon: "✗", cls: "text-value-negative" });
+  it("never surfaces the engine's own candidates — only what the user pasted", () => {
+    const { result } = renderHook(() => useAnalyzerModel());
+
+    // The fixture snapshot is full of scored candidates; none of them reach the screen.
+    expect(pickerSnapshotFixture.candidates.length).toBeGreaterThan(0);
+    expect(result.current.pastedCandidates).toEqual([]);
+    expect(result.current.selected).toBeNull();
+  });
+
+  it("still exposes the snapshot for the payoff panel's GEX walls and event ribbon", () => {
+    const { result } = renderHook(() => useAnalyzerModel());
+    expect(result.current.snapshot).toBe(pickerSnapshotFixture);
   });
 });

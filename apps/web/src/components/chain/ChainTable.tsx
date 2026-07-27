@@ -53,7 +53,14 @@ export interface ChainTableRow {
   readonly deltaFront: number | null;
   readonly ivFront: number | null;
   readonly ivBack: number | null;
-  /** Horizontal (calendar) skew: back IV − front IV, decimal vol. */
+  /**
+   * Horizontal (calendar) skew: front IV − back IV, decimal vol. Fill from `hSkew` in
+   * chain-math, which owns this convention.
+   *
+   * POSITIVE means the FRONT expiry is the rich one — the calendar seller's setup, since
+   * you sell the front and buy the back. That matches `edge`'s sign (front IV − forward
+   * IV), so both term-structure columns read the same direction. Do not flip it.
+   */
   readonly hSkew: number | null;
   readonly fwdIv: number | null;
   readonly edge: number | null;
@@ -401,7 +408,7 @@ export function ChainTable({
         tableClassName="min-w-[1140px]"
       />
       <div className="px-1 font-mono text-[9.5px] leading-[1.3] text-fg-tertiary">
-        H-Skew = back IV − front IV, in vol points · V-Skew = IV change across strikes,
+        H-Skew = front IV − back IV, in vol points · V-Skew = IV change across strikes,
         in vol points · Fwd IV = the vol implied between the two expiries · Edge = forward
         IV − front IV, in vol points · Θ theta = $ per day · Vega = $ per 1-pt vol move ·
         Γ gamma = how fast delta changes per point, negative = short gamma at the front

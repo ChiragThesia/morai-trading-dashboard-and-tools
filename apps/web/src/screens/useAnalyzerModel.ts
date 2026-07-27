@@ -1,43 +1,42 @@
 /**
- * useAnalyzerModel — the shared Analyzer state/derivation hook (Phase 36, D-02).
+ * useAnalyzerModel — the Analyzer's payoff-panel state/derivation hook.
  *
- * All non-trivial state and derivation that used to live inline in `Analyzer()` moves here
- * (the `useOverviewModel` precedent) so BOTH the desktop and mobile Analyzer trees consume
- * one model — the logic is never duplicated per tree; only the view JSX is (sanctioned).
+ * Scope after the chain-table rework: this hook owns the RISK PROFILE half of the
+ * Analyzer — pasting a TOS order, pricing it, combining several into one book,
+ * copying an order back out, and the live-aware spot seam. The chain data table
+ * has its own model (`hooks/useChainModel.ts`).
  *
- * The D-02 constants/helpers (`PASTED_NOT_SCORED_NOTE`, `PASTE_ERROR_COPY`, `CHIP_LABELS`,
- * `EXPERIMENTAL_SHORT`, `FALLBACK_SCORE_ITEMS`, `scoreStatus`, and the two picker curve
- * colors) are exported alongside so `Analyzer.tsx` (and the mobile tree) import them from
- * this single home. `DEFAULT_RATE`/`DEFAULT_DIV`/`PASTED_ID_PREFIX` stay module-private —
- * only the hook uses them.
- *
- * Behavior-preserving extraction: the existing Analyzer.test.tsx suite passes UNMODIFIED.
+ * Everything the picker's scoring UI needed is GONE: no verdict word, no factor
+ * groups, no chip labels, no score-descending candidate sort. The Analyzer no
+ * longer proposes anything, so nothing here ranks anything. `usePicker()` stays
+ * only for the payoff panel's context — GEX walls, macro events, and the
+ * snapshot's as-of date/spot fallback.
  *
  * No any/as/!.
  */
 import { useCallback, useMemo, useState } from "react";
-import type { PickerCandidate, PickerSnapshotResponse, BreakdownEntry } from "@morai/contracts";
-import { candidateToAnalyzerPosition } from "../../lib/candidate-to-position.ts";
-import { buildTosCalendarOrder } from "../../lib/tos-order.ts";
-import { repriceScenario } from "../../lib/scenario-engine.ts";
+import type { PickerCandidate, PickerSnapshotResponse } from "@morai/contracts";
+import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
+import { buildTosCalendarOrder } from "../lib/tos-order.ts";
+import { repriceScenario } from "../lib/scenario-engine.ts";
 import type {
   ScenarioParams,
   ScenarioResult,
   AnalyzerPosition,
   SpotDomain,
-} from "../../lib/scenario-engine.ts";
-import { computePayoffDomain } from "../../lib/payoff-domain.ts";
-import { computeProjectionBounds } from "../../lib/date-projection.ts";
-import { usePayoffDateControl } from "../../hooks/usePayoffDateControl.ts";
-import type { PayoffDateControl } from "../../hooks/usePayoffDateControl.ts";
-import { usePicker } from "../../hooks/usePicker.ts";
-import { useRepullChains } from "../../hooks/useRepullChains.ts";
-import { useAnalyzeCalendar } from "../../hooks/useAnalyzeCalendar.ts";
-import { useLiveStream } from "../../hooks/useLiveStream.ts";
-import type { LiveStreamStatus } from "../../hooks/useLiveStream.ts";
-import { parseTosOrder } from "../../lib/tos-parser.ts";
-import { parsedCalendarToPickerCandidate } from "../../lib/parsed-calendar-to-candidate.ts";
-import type { PayoffChartToggles } from "../../components/charts/PayoffChart.tsx";
+} from "../lib/scenario-engine.ts";
+import { computePayoffDomain } from "../lib/payoff-domain.ts";
+import { computeProjectionBounds } from "../lib/date-projection.ts";
+import { usePayoffDateControl } from "../hooks/usePayoffDateControl.ts";
+import type { PayoffDateControl } from "../hooks/usePayoffDateControl.ts";
+import { usePicker } from "../hooks/usePicker.ts";
+import { useRepullChains } from "../hooks/useRepullChains.ts";
+import { useAnalyzeCalendar } from "../hooks/useAnalyzeCalendar.ts";
+import { useLiveStream } from "../hooks/useLiveStream.ts";
+import type { LiveStreamStatus } from "../hooks/useLiveStream.ts";
+import { parseTosOrder } from "../lib/tos-parser.ts";
+import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candidate.ts";
+import type { PayoffChartToggles } from "../components/charts/PayoffChart.tsx";
 import { token } from "@/design/tokens.generated.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -55,111 +54,8 @@ export const EXPIRATION_CURVE_COLOR = token.accent.primary;
  * scores the calendar — see handlePasteAnalyze). */
 const PASTED_ID_PREFIX = "pasted-";
 
-/** Honest copy shown wherever engine-scored content would otherwise render for a pasted
- * candidate that came back `scored:false` (or a pasted CALL, D-03 — never sent to the
- * endpoint) — `candidate.breakdown.length === 0` is the gate (Pitfall 8), not the pasted id,
- * so a successfully SCORED pasted candidate renders the same panels an engine candidate does. */
-export const PASTED_NOT_SCORED_NOTE = "Pasted calendar — not engine-scored.";
-
 export const PASTE_ERROR_COPY =
   "Couldn't read that. Paste a TOS calendar order, e.g. BUY +1 CALENDAR SPX 100 18 SEP 26 [AM]/14 AUG 26 7425 PUT @48.75 LMT GTC";
-
-/** Fallback labels when the snapshot predates the rule registry (ruleSet empty). */
-export const FALLBACK_SCORE_ITEMS: ReadonlyArray<{ readonly key: BreakdownEntry["criterion"]; readonly label: string }> = [
-  { key: "fwdEdge", label: "Forward-vol edge" },
-  { key: "slope", label: "Term-structure slope" },
-  { key: "eventAdjustment", label: "Event exposure" },
-  { key: "gexFit", label: "GEX fit" },
-  { key: "beVsEm", label: "Breakeven vs EM" },
-];
-
-// Weight-relative status: contribution is already the 0-100 share of the criterion's weight.
-export function scoreStatus(contribution: number): { readonly icon: string; readonly cls: string } {
-  if (contribution >= (200 / 3)) return { icon: "✓", cls: "text-value-positive" };
-  if (contribution >= (100 / 3)) return { icon: "~", cls: "text-accent-warning" };
-  return { icon: "✗", cls: "text-value-negative" };
-}
-
-/** Short chip labels — the ruleSet's verbose labels stay in WhyPanel/docs; chips scan fast. */
-export const CHIP_LABELS: Record<string, string> = {
-  fwdEdge: "FWD-IV EDGE",
-  slope: "SLOPE",
-  gexFit: "GEX FIT",
-  eventAdjustment: "EVENT RISK",
-  beVsEm: "BE : EM",
-  deltaNeutral: "Δ NEUTRAL",
-  thetaVega: "θ/VEGA",
-  vrp: "VRP",
-  debitFit: "DEBIT",
-};
-
-export const EXPERIMENTAL_SHORT: Record<string, string> = {
-  vrp: "VRP",
-  slopePercentile: "SLP%",
-  backEventBonus: "EVT",
-  thetaVega: "θ/V",
-};
-
-/** Verdict Hero factor groups (Phase 41, AUI-02/D-02) — LOCKED mapping, single source shared
- * by the desktop hero and MobileScorecard (never re-declared per tree). `Record<string, ...>`
- * (not the closed criterion union) because callers index it by `scoreItems[].key`, which is
- * `string` once registry rule ids (RuleSetEntry.id) are mixed in with FALLBACK_SCORE_ITEMS'
- * criterion keys. */
-export const GROUP_OF: Record<string, "EDGE" | "RISK" | "FIT"> = {
-  fwdEdge: "EDGE",
-  slope: "EDGE",
-  vrp: "EDGE",
-  eventAdjustment: "RISK",
-  beVsEm: "RISK",
-  debitFit: "RISK",
-  gexFit: "FIT",
-  deltaNeutral: "FIT",
-  thetaVega: "FIT",
-};
-
-/** verdictWord — the evidence-honest headline word (Phase 41, AUI-02/D-02): reuses
- * `scoreStatus()`'s own ✓/~/✗ tier split on the overall `candidate.score`, never a new
- * threshold or fabricated confidence number. */
-export function verdictWord(score: number): {
-  readonly word: "FAVORABLE" | "CAUTION" | "SKIP";
-  readonly icon: string;
-  readonly cls: string;
-} {
-  const { icon, cls } = scoreStatus(score);
-  const word = icon === "✓" ? "FAVORABLE" : icon === "~" ? "CAUTION" : "SKIP";
-  return { word, icon, cls };
-}
-
-/**
- * describeEmptyBoard — honest reason lines for a settled snapshot with zero candidates
- * (2026-07-15: the generic net-θ line implied the wrong cause when the gate or after-hours
- * liquidity emptied the board). Priority: entry-gate suppression → gate-drop counts (+ the
- * after-hours hint) → the plain net-θ fallback. Shared by both trees (D-02 single source).
- */
-export function describeEmptyBoard(snapshot: PickerSnapshotResponse): ReadonlyArray<string> {
-  const { gate, gateDrops, marketSession, asOf } = snapshot;
-  if (gate.state === "blocked" || gate.brakes.maxOpen || gate.brakes.cooldown) {
-    const why =
-      gate.state === "blocked"
-        ? "blocked"
-        : gate.brakes.maxOpen
-          ? "braked (max open positions)"
-          : "braked (cooldown)";
-    return [`Entry gate ${why} — candidate output is suppressed for the ${asOf} snapshot.`];
-  }
-  const lines: string[] = [];
-  if (gateDrops.liquidity + gateDrops.netTheta > 0) {
-    lines.push(
-      `${gateDrops.liquidity} illiquid quote${gateDrops.liquidity === 1 ? "" : "s"} · ${gateDrops.netTheta} negative-θ pair${gateDrops.netTheta === 1 ? "" : "s"} dropped from the ${asOf} snapshot.`,
-    );
-  } else {
-    lines.push(`No put calendars meet net-θ>0 over the ${asOf} snapshot.`);
-  }
-  if (marketSession === "after-hours") {
-    lines.push("After-hours spreads are wide — the board usually refills during regular trading hours.");
-  }
-  return lines;
-}
 
 // ─── Model ──────────────────────────────────────────────────────────────────────
 
@@ -169,8 +65,6 @@ export interface AnalyzerModel {
   readonly isLoading: boolean;
   readonly isError: boolean;
   readonly refetch: () => void;
-  readonly sortedCandidates: ReadonlyArray<PickerCandidate>;
-  readonly railCandidates: ReadonlyArray<PickerCandidate>;
   readonly pastedCandidates: ReadonlyArray<PickerCandidate>;
   readonly pasteText: string;
   readonly setPasteText: (text: string) => void;
@@ -212,20 +106,16 @@ export interface AnalyzerModel {
 }
 
 /**
- * useAnalyzerModel — the single source of Analyzer state/derivation (D-02). Both the desktop
- * and mobile trees call it; the returned slices carry the exact behavior the inline Analyzer
- * body had, so the extraction is byte-for-byte behavior-preserving.
+ * useAnalyzerModel — the Analyzer payoff panel's state/derivation.
+ *
+ * The engine's own candidates are deliberately NOT read off the snapshot: the screen
+ * stopped proposing calendars. Only what the user pastes is priced.
  */
 export function useAnalyzerModel(): AnalyzerModel {
   const { data, isPending, isError, refetch } = usePicker();
   // Unify `undefined` (never-settled) and `null` (404 cold start) into one `null` sentinel —
   // downstream logic only needs to distinguish "no snapshot" from "a real snapshot".
   const snapshot = data ?? null;
-
-  const sortedCandidates = useMemo<ReadonlyArray<PickerCandidate>>(() => {
-    if (snapshot === null) return [];
-    return [...snapshot.candidates].sort((a, b) => b.score - a.score);
-  }, [snapshot]);
 
   // Live-aware spot seam (AUI-07, D-07 — direct port of Phase 38's LIVE-04): live only while
   // the stream itself is live AND a spot tick has arrived; else the unchanged 30-min snapshot
@@ -257,15 +147,10 @@ export function useAnalyzerModel(): AnalyzerModel {
   const [pasteText, setPasteText] = useState<string>("");
   const [pasteError, setPasteError] = useState<string | null>(null);
 
-  const railCandidates = useMemo<ReadonlyArray<PickerCandidate>>(
-    () => [...pastedCandidates, ...sortedCandidates],
-    [pastedCandidates, sortedCandidates],
-  );
-
   const selected = useMemo<PickerCandidate | null>(() => {
-    const found = railCandidates.find((c) => c.id === selectedId);
-    return found ?? railCandidates[0] ?? null;
-  }, [selectedId, railCandidates]);
+    const found = pastedCandidates.find((c) => c.id === selectedId);
+    return found ?? pastedCandidates[0] ?? null;
+  }, [selectedId, pastedCandidates]);
 
   const handleSelect = useCallback((candidate: PickerCandidate) => {
     setSelectedId(candidate.id);
@@ -413,14 +298,12 @@ export function useAnalyzerModel(): AnalyzerModel {
     setPasteError(null);
   }, [pastedCandidates]);
 
-  // The combined book = the selected candidate (always) + any ⊕-Combine'd calendars — pooled
-  // over railCandidates so a ⊕-Combine'd pasted card is included even when a scored candidate
-  // is the one selected.
+  // The combined book = the selected calendar (always) + any ⊕-Combine'd ones.
   const bookCandidates = useMemo<ReadonlyArray<PickerCandidate>>(() => {
     if (selected === null) return [];
-    const extra = railCandidates.filter((c) => combinedIds.has(c.id) && c.id !== selected.id);
+    const extra = pastedCandidates.filter((c) => combinedIds.has(c.id) && c.id !== selected.id);
     return [selected, ...extra];
-  }, [selected, railCandidates, combinedIds]);
+  }, [selected, pastedCandidates, combinedIds]);
 
   const combinedPositions = useMemo(
     () => bookCandidates.map(candidateToAnalyzerPosition),
@@ -452,8 +335,6 @@ export function useAnalyzerModel(): AnalyzerModel {
     isLoading: isPending && data === undefined,
     isError,
     refetch,
-    sortedCandidates,
-    railCandidates,
     pastedCandidates,
     pasteText,
     setPasteText,

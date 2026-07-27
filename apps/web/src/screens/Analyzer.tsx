@@ -1,413 +1,100 @@
 /**
- * Analyzer — ranked-cards calendar PICKER (Phase 18, D-04 — full replacement of the
- * position-analyzer cockpit). Phase 19 (PICK-02) swaps the frozen fixture for live data.
+ * Analyzer — the option-chain DATA TABLE.
  *
- * UI-SPEC "Ranked candidate cards" / "Payoff center": 3-col grid (300px/1fr/330px, stacking
- * below 1280px in DOM order):
- *   Left (300px)  — "Suggested calendars": ranked candidate table (ANLZ-01, D-01/D-05,
- *                   Phase 41 AUI-01/AUI-03),
- *                   now sourced from usePicker() with loading/error/cold-start/zero-filtered
- *                   states (19-UI-SPEC "Rail live-data states", D-18/D-19).
- *   Center (1fr)  — "Risk profile" (payoff center, wired in Task 3) + "Scoring methodology"
- *                   collapsible panel (locked reference copy, not fixture-driven).
- *   Right (330px) — "Why this calendar" / "Term structure + your legs" / "Entry / exit plan"
- *                   panel shells — content lands in 18-05 (out of this plan's scope).
+ * The screen used to propose scored calendars. It does not any more (user,
+ * 2026-07-26): "DO NOT ANALYZE or measure, just give me the data and then we can
+ * determine how to auto surface best ones after." So the verdict hero, the WHY
+ * column, the ranked candidate rail and every scoring helper are gone.
  *
- * PICK-02 "no layout change": the 3-column grid, card anatomy, breakdown bars, why-panel,
- * term-structure, and entry/exit plan are UNCHANGED from Phase 18 — this is an import-only
- * data-source swap (`usePicker().data` replaces the Phase-18 frozen fixture import) plus the
- * additive rail states the synchronous fixture never needed.
+ * What is here instead:
+ *   1. An expiry-pair header — front/back selects, put/call switch, spot, the
+ *      observation instant, and each expiry's 25Δ risk reversal.
+ *   2. The chain table — one row per strike, horizontal skew, vertical skew,
+ *      edge, debit and net greeks; click a row and both legs open in place.
+ *   3. The risk profile — paste a TOS order and see its payoff. Survives from the
+ *      old screen unchanged; it is the only part that was never about ranking.
  *
- * Keeps the exact `export function Analyzer(): React.ReactElement` name/signature so
- * `App.tsx`'s route wiring needs zero changes.
+ * ONE TREE FOR ALL VIEWPORTS (Journal.tsx precedent). No `useIsDesktop` split, no
+ * analyzer-mobile/. Responsiveness is the scroll wrapper plus a table min-width.
+ * No column is dropped on a phone — this is a dense professional tool, so mobile
+ * gets progressive disclosure, never fewer numbers.
  *
  * No any/as/!.
  */
-import type { PickerCandidate, PickerGexContext, RuleSetEntry } from "@morai/contracts";
 import { useMemo, useState } from "react";
-import { cn } from "@/lib/utils";
-import { WhyPanel } from "../components/picker/WhyPanel.tsx";
 import { EventLegRibbon } from "../components/picker/EventLegRibbon.tsx";
-import { formatAsOf } from "../lib/format-as-of.ts";
 import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
-import { useIsDesktop } from "../hooks/useIsDesktop.ts";
-import { AnalyzerMobile } from "./analyzer-mobile/AnalyzerMobile.tsx";
-import {
-  CandidateTable,
-  cycleSort,
-  sortCandidates,
-  DEFAULT_CANDIDATE_SORT,
-} from "../components/picker/CandidateTable.tsx";
-import type { CandidateSortKey, CandidateSortState } from "../components/picker/CandidateTable.tsx";
-import {
-  useAnalyzerModel,
-  scoreStatus,
-  CHIP_LABELS,
-  FALLBACK_SCORE_ITEMS,
-  EXPERIMENTAL_SHORT,
-  PASTED_NOT_SCORED_NOTE,
-  TODAY_CURVE_COLOR,
-  EXPIRATION_CURVE_COLOR,
-  GROUP_OF,
-  verdictWord,
-  describeEmptyBoard,
-} from "./analyzer-mobile/useAnalyzerModel.ts";
+import { ChainTable } from "../components/chain/ChainTable.tsx";
+import { useChainModel } from "../hooks/useChainModel.ts";
+import { useAnalyzerModel, TODAY_CURVE_COLOR, EXPIRATION_CURVE_COLOR } from "./useAnalyzerModel.ts";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-//
-// The picker curve colors, the not-scored note, the chip labels/weights helper, and the
-// paste-error copy now live in analyzer-mobile/useAnalyzerModel.ts (D-02, single source —
-// both trees import them). This file re-imports the ones its desktop view still renders.
+const DASH = "—";
 
 function noop(): void {}
 
-// ─── Ranked candidate table (D-01, D-03) ───────────────────────────────────────
-//
-// The sortable <table> (UI-SPEC "Table Contract") lives in components/picker/CandidateTable.tsx
-// (shared with the mobile tree since 2026-07-14 — user-locked: mobile shows the table too,
-// horizontal scroll OK). Sort state stays local to each view. Public names its tests use are
-// re-exported below so import sites stay stable.
+// ─── Formatting ───────────────────────────────────────────────────────────────
 
-export {
-  DEFAULT_CANDIDATE_SORT,
-  compactCalendarName,
-} from "../components/picker/CandidateTable.tsx";
-export type { CandidateSortKey, CandidateSortState } from "../components/picker/CandidateTable.tsx";
+const ET_STAMP = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
 
-// ─── Suggested calendars rail ──────────────────────────────────────────────────
-
-export interface CandidateRailProps {
-  readonly candidates: ReadonlyArray<PickerCandidate>;
-  /** User-pasted calendars (multi-paste redesign), pinned above `candidates` in paste order. */
-  readonly pastedCandidates: ReadonlyArray<PickerCandidate>;
-  /** Controlled paste-input text (Analyzer owns the state). */
-  readonly pasteText: string;
-  /** Parse-failure copy, or null when the last Analyze succeeded / hasn't run yet. */
-  readonly pasteError: string | null;
-  /** Date-only reference date for the empty-state message (DTE/event x-axis anchor). */
-  readonly asOf: string;
-  readonly selectedId: string;
-  readonly combinedIds: ReadonlySet<string>;
-  readonly sort: CandidateSortState;
-  readonly onSortChange: (key: CandidateSortKey) => void;
-  readonly onSelect: (candidate: PickerCandidate) => void;
-  readonly onToggleCombine: (candidate: PickerCandidate) => void;
-  readonly onPasteTextChange: (text: string) => void;
-  readonly onPasteAnalyze: () => void;
-  /** Removes one pasted row (its own × button) — leaves other pasted rows untouched. */
-  readonly onRemovePasted: (candidate: PickerCandidate) => void;
-  /** Removes every pasted row at once. */
-  readonly onClearAllPasted: () => void;
-  /** Optional heading-row control (the Re-pull chains button — refreshes THIS rail). */
-  readonly headerAction?: React.ReactNode;
-  /** Honest zero-candidate reason lines (describeEmptyBoard) — falls back to the plain
-   *  net-θ line when omitted (direct-render tests pass `asOf` only). */
-  readonly emptyReasonLines?: ReadonlyArray<string>;
-  /** True while the ad-hoc analyze request is in flight — Analyzing… button state. */
-  readonly pasteAnalyzing?: boolean;
+/** ISO-Z instant → "Jul 26, 2:00 PM ET". Quotes are read in ET; never a sliced ISO. */
+function formatObserved(iso: string | null): string {
+  if (iso === null) return DASH;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return DASH;
+  return `${ET_STAMP.format(d)} ET`;
 }
 
-/**
- * CandidateRail — the "Suggested calendars" panel: ranked candidate table + the
- * zero-candidates-passed-filter empty state (D-18). Exported (like Overview.tsx's
- * `formatExpiryCell`) so the empty-state branch is directly unit-testable.
- *
- * Only handles the "settled response" states (populated / zero-candidates) — the
- * loading/error/cold-start states (D-18/D-19) live one level up in Analyzer(), since they
- * replace this panel's body entirely before a `PickerSnapshotResponse` even exists.
- */
-export function CandidateRail({
-  candidates,
-  pastedCandidates,
-  pasteText,
-  pasteError,
-  asOf,
-  selectedId,
-  combinedIds,
-  sort,
-  onSortChange,
-  onSelect,
-  onToggleCombine,
-  onPasteTextChange,
-  onPasteAnalyze,
-  onRemovePasted,
-  onClearAllPasted,
-  headerAction,
-  emptyReasonLines,
-  pasteAnalyzing,
-}: CandidateRailProps): React.ReactElement {
+/** 0.0184 → "+1.84" vol points. */
+function volPts(v: number | null): string {
+  return v === null ? DASH : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}`;
+}
+
+// ─── Header stat ──────────────────────────────────────────────────────────────
+
+function HeaderStat({
+  label,
+  value,
+  testId,
+  className,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly testId: string;
+  readonly className?: string;
+}): React.ReactElement {
   return (
-    <Panel className="flex h-full min-h-0 flex-col">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <PanelHeading title="Suggested calendars" />
-        <div className="flex items-center gap-1.5">
-          {pastedCandidates.length > 0 && (
-            <Button variant="ghost" data-testid="picker-paste-clear-all" onClick={onClearAllPasted}>
-              Clear all
-            </Button>
-          )}
-          {headerAction}
-        </div>
-      </div>
-      <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        <input
-          type="text"
-          data-testid="picker-paste-input"
-          value={pasteText}
-          onChange={(e) => { onPasteTextChange(e.target.value); }}
-          placeholder="Paste a TOS calendar order…"
-          className="min-w-0 flex-1 rounded-[3px] border border-line-strong bg-transparent px-3 py-2 font-mono text-[12px] text-fg-primary"
-        />
-        <Button
-          variant="primary"
-          size="sm"
-          data-testid="picker-paste-analyze"
-          disabled={pasteAnalyzing === true}
-          onClick={onPasteAnalyze}
-        >
-          {pasteAnalyzing === true ? "Analyzing…" : "Analyze"}
-        </Button>
-      </div>
-      {pasteError !== null && (
-        <p data-testid="picker-paste-error" className="mb-2 font-mono text-[9px] text-value-negative">
-          {pasteError}
-        </p>
-      )}
-      {candidates.length > 0 && (
-        <p className="mb-2 font-mono text-[9px] leading-[1.5] text-fg-tertiary" data-testid="rail-legend">
-          {"θ = daily $ decay · vega = $ per vol-pt · "}
-          <span className="text-accent-warning">◂f</span>
-          {"/"}
-          <span className="text-accent-warning">◂b</span>
-          {" = event on front / back leg · bars = scored factors (higher = better)"}
-        </p>
-      )}
-      {candidates.length === 0 && pastedCandidates.length === 0 ? (
-        <div className="flex flex-col gap-1.5" data-testid="picker-empty-filtered">
-          <p className="m-0 font-display text-sm font-bold text-fg-primary">No candidates in this snapshot</p>
-          {(emptyReasonLines ?? [`No put calendars meet net-θ>0 over the ${asOf} snapshot.`]).map(
-            (line) => (
-              <p key={line} className="m-0 font-mono text-[11px] text-fg-tertiary">
-                {line}
-              </p>
-            ),
-          )}
-        </div>
-      ) : (
-        // The table absorbs whatever viewport height is left (no-scroll layout) — sticky
-        // header scrolls within this wrapper, never the page.
-        <CandidateTable
-          candidates={candidates}
-          pastedCandidates={pastedCandidates}
-          selectedId={selectedId}
-          combinedIds={combinedIds}
-          sort={sort}
-          onSortChange={onSortChange}
-          onSelect={onSelect}
-          onToggleCombine={onToggleCombine}
-          onRemovePasted={onRemovePasted}
-          wrapperClassName="min-h-0 flex-1 overflow-y-auto"
-        />
-      )}
-    </Panel>
-  );
-}
-
-// ─── Verdict hero (per-candidate: how THIS calendar scores on the picking rubric) ──────────
-//
-// Replaces the retired 11-chip flat scorecard (AUI-02, D-02): one headline (verdict word +
-// score + Θ) over three labeled EDGE/RISK/FIT factor-group columns — a re-layout of the
-// selected candidate's `breakdown` + the snapshot's `ruleSet` (the engine's own rule
-// registry — rules.ts). No new scoring, no new confidence (T-41-03/T-41-04): pass/partial
-// status stays weight-relative (contribution is the 0-100 share of a criterion's weight:
-// ✓ ≥ ⅔, ~ ≥ ⅓) — no client-side placeholder thresholds.
-
-interface VerdictHeroProps {
-  readonly candidate: PickerCandidate | null;
-  /** The engine's rule registry from the snapshot (empty on pre-registry snapshots). */
-  readonly ruleSet: ReadonlyArray<RuleSetEntry>;
-  /** Per-gate drop counts for the snapshot's compute run. */
-  readonly gateDrops: { readonly liquidity: number; readonly netTheta: number };
-  /** Marks provenance — "after-hours" renders the indicative-marks warning chip. */
-  readonly marketSession: "rth" | "after-hours";
-  /** Snapshot-level as-of provenance (AUI-07) — footer-only, `formatAsOf` verbatim. */
-  readonly observedAt: string;
-  readonly source: "schwab" | "cboe";
-}
-
-// FALLBACK_SCORE_ITEMS, scoreStatus, CHIP_LABELS, EXPERIMENTAL_SHORT, GROUP_OF, verdictWord
-// now live in analyzer-mobile/useAnalyzerModel.ts (D-02, single source) — imported above.
-
-const GROUP_ORDER = ["EDGE", "RISK", "FIT"] as const;
-
-function VerdictHero({
-  candidate,
-  ruleSet,
-  gateDrops,
-  marketSession,
-  observedAt,
-  source,
-}: VerdictHeroProps): React.ReactElement | null {
-  // No selection -> render nothing (matches MobileScorecard's candidate === null convention).
-  if (candidate === null) return null;
-
-  // Not-scored (pasted) -> the honest note only, no verdict word, no groups (catch #23).
-  if (candidate.breakdown.length === 0) {
-    return (
-      <div data-testid="verdict-hero">
-        <span className="font-mono text-[10px] text-fg-tertiary">{PASTED_NOT_SCORED_NOTE}</span>
-      </div>
-    );
-  }
-
-  // Score rows from the engine's registry when available; legacy fallback otherwise — the
-  // exact scoreItems derivation the retired chip strip used, partitioned by GROUP_OF below.
-  const scoreRules = ruleSet.filter((r) => r.kind === "score" && r.status === "active");
-  const scoreItems =
-    scoreRules.length > 0
-      ? scoreRules.map((r) => ({ key: r.id, label: CHIP_LABELS[r.id] ?? r.label }))
-      : FALLBACK_SCORE_ITEMS.map((item) => ({ key: item.key, label: CHIP_LABELS[item.key] ?? item.label }));
-
-  const verdict = verdictWord(candidate.score);
-  const asOf = formatAsOf(observedAt);
-  const calibrating =
-    candidate.context.length > 0
-      ? `CALIBRATING ${candidate.context
-          .map(
-            (entry) =>
-              `${EXPERIMENTAL_SHORT[entry.id] ?? entry.id} ${
-                entry.value === null ? "—" : entry.value.toFixed(entry.id === "slopePercentile" ? 0 : 3)
-              }`,
-          )
-          .join(" · ")}`
-      : null;
-  const drops =
-    gateDrops.liquidity > 0 || gateDrops.netTheta > 0
-      ? `${gateDrops.liquidity} illiquid quote${gateDrops.liquidity === 1 ? "" : "s"} · ${gateDrops.netTheta} negative-θ pair${gateDrops.netTheta === 1 ? "" : "s"} dropped this run`
-      : null;
-  const footer = [calibrating, drops, `${asOf.label} · ${source}`].filter((p): p is string => p !== null).join("   ");
-
-  // Single-line hero (no-scroll layout, 2026-07-15): headline + the three factor groups
-  // inline on one flex-wrap row, footer provenance as a slim second line. Same testids and
-  // copy as the retired 3-column grid — this is a density re-layout, not a scoring change.
-  return (
-    <div data-testid="verdict-hero" className="flex flex-col gap-0.5">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <div className="flex items-baseline gap-2" data-testid="verdict-headline">
-          <span className={cn("font-display text-[16px] font-semibold", verdict.cls)} data-testid="verdict-word">
-            {verdict.icon} {verdict.word}
-          </span>
-          <span className="font-mono text-[13px] font-semibold tabular-nums text-fg-primary" data-testid="verdict-score">
-            {`score ${Math.round(candidate.score)}/100`}
-          </span>
-          <span
-            className={cn(
-              "font-mono text-[13px] font-semibold tabular-nums",
-              candidate.theta >= 0 ? "text-value-positive" : "text-value-negative",
-            )}
-            data-testid="verdict-theta"
-          >
-            {`Θ ${candidate.theta >= 0 ? "+" : ""}${candidate.theta.toFixed(1)}/d`}
-          </span>
-        </div>
-        {marketSession === "after-hours" && (
-          <span
-            data-testid="session-badge"
-            className="inline-block rounded-sm bg-accent-warning/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-accent-warning"
-          >
-            {"SESSION · AH — indicative"}
-          </span>
-        )}
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1" data-testid="verdict-groups">
-          {GROUP_ORDER.map((group) => (
-            <div key={group} data-testid={`verdict-group-${group}`} className="flex items-baseline gap-x-2.5">
-              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.08em] text-fg-tertiary">
-                {group}
-              </span>
-              {scoreItems
-                .filter((item) => GROUP_OF[item.key] === group)
-                .map((item) => {
-                  const entry = candidate.breakdown.find((b) => b.criterion === item.key);
-                  if (entry === undefined) return null;
-                  const guard = item.key === "fwdEdge" && candidate.fwdIv === null;
-                  const st = guard ? { icon: "—", cls: "text-fg-tertiary" } : scoreStatus(entry.contribution);
-                  return (
-                    <span
-                      key={item.key}
-                      data-testid={`checklist-${item.key}`}
-                      className="flex items-baseline gap-1 font-mono text-[10px]"
-                    >
-                      <span className="text-fg-tertiary">{item.label}</span>
-                      <span className={st.cls}>
-                        {st.icon} {guard ? "n/a" : `${Math.round(entry.contribution)}%`}
-                      </span>
-                    </span>
-                  );
-                })}
-            </div>
-          ))}
-        </div>
-      </div>
-      <p className="m-0 font-mono text-[9px] text-fg-tertiary" data-testid="verdict-hero-footer">
-        {footer}
-      </p>
+    <div className="flex flex-col gap-0.5">
+      <span className="font-display text-[9px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
+        {label}
+      </span>
+      <span
+        data-testid={testId}
+        className={`font-mono text-[12px] tabular-nums ${className ?? "text-fg-primary"}`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
 
-// ─── WHY panel column (ANLZ-03, D-01b) ─────────────────────────────────────────
-//
-// 2026-07-15 (user): the ENTRY/EXIT panel is dropped from desktop — WHY is the single slim
-// column beside the chart. (EntryExitPlan still ships in the mobile tree.)
+const SELECT_CLASS =
+  "min-w-0 rounded-[3px] border border-line-strong bg-transparent px-2 py-1.5 font-mono text-[11px] text-fg-primary";
 
-interface WhyColumnProps {
-  readonly candidate: PickerCandidate | null;
-  readonly gex: PickerGexContext | null;
-}
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
-function WhyColumn({ candidate, gex }: WhyColumnProps): React.ReactElement {
-  const notScored = candidate !== null && candidate.breakdown.length === 0;
-  return (
-    <Panel>
-      <PanelHeading title="Why this calendar" />
-      {notScored ? (
-        <p className="font-mono text-[10px] text-fg-tertiary">{PASTED_NOT_SCORED_NOTE}</p>
-      ) : (
-        candidate !== null && gex !== null && <WhyPanel candidate={candidate} gex={gex} />
-      )}
-    </Panel>
-  );
-}
-
-// ─── Main Analyzer (picker) screen ─────────────────────────────────────────────
-
-/**
- * Analyzer — the thin switch (D-01, verbatim Overview pattern): exactly one tree mounts at a
- * time. Desktop (≥1024px) renders AnalyzerDesktop (today's JSX, byte-identical DOM); below
- * 1024px the dedicated mobile tree. Same public export name/signature — App.tsx wiring
- * unchanged. `CandidateRail` stays exported for direct unit testing.
- */
 export function Analyzer(): React.ReactElement {
-  const isDesktop = useIsDesktop();
-  return isDesktop ? <AnalyzerDesktop /> : <AnalyzerMobile />;
-}
-
-/**
- * AnalyzerDesktop — today's Analyzer picker screen (D-01: renamed in-file, JSX untouched).
- * Consumes the shared useAnalyzerModel like the mobile tree does.
- */
-function AnalyzerDesktop(): React.ReactElement {
-  // All state/derivation lives in useAnalyzerModel (D-02, single source shared with the
-  // mobile tree). This desktop view consumes the model slices.
+  const chain = useChainModel();
   const {
     snapshot,
-    isLoading,
-    isError,
-    refetch,
-    sortedCandidates,
     pastedCandidates,
     pasteText,
     setPasteText,
@@ -417,7 +104,6 @@ function AnalyzerDesktop(): React.ReactElement {
     handleRemovePasted,
     handleClearAllPasted,
     selected,
-    selectedId,
     handleSelect,
     combinedIds,
     handleToggleCombine,
@@ -440,15 +126,11 @@ function AnalyzerDesktop(): React.ReactElement {
     repull,
   } = useAnalyzerModel();
 
-  // Table sort state (D-03) — local to this desktop view, not the shared model hook (mobile
-  // has no table). Sorts a COPY of the scored candidates; pasted rows stay pinned above, unsorted.
-  const [sort, setSort] = useState<CandidateSortState>(DEFAULT_CANDIDATE_SORT);
-  const handleSortChange = (key: CandidateSortKey): void => {
-    setSort((prev) => cycleSort(prev, key));
-  };
-  const sortedRows = useMemo(() => sortCandidates(sortedCandidates, sort), [sortedCandidates, sort]);
+  // Sort and row expansion are ChainTable's own state — it is self-contained, unlike the
+  // candidate rail it replaced, which needed the screen to own sort so the score column
+  // could drive it. There is no score column now, so there is nothing to lift.
 
-  // Re-pull chains control — lives with the rail it refreshes (heading action slot).
+  // Re-pull chains — refreshes the data this whole screen reads.
   const repullControl = (
     <div className="flex items-center gap-1.5">
       {repull.isSuccess && (
@@ -463,162 +145,303 @@ function AnalyzerDesktop(): React.ReactElement {
       )}
       <Button
         variant="ghost"
-        onClick={() => { repull.mutate(); }}
+        onClick={() => {
+          repull.mutate();
+        }}
         disabled={repull.isPending}
         data-testid="repull-chains-button"
-        title="Fetch fresh chains and re-score the rail (runs the full pipeline, ~4 min)"
+        title="Fetch fresh chains (runs the full pipeline, ~4 min)"
       >
         {repull.isPending ? "Queuing…" : "↻ Re-pull"}
       </Button>
     </div>
   );
 
-  // ── Rail body: five mutually-exclusive states (D-18/D-19), precedence
-  // loading → error → cold-start → zero-filtered (inside CandidateRail) → populated. ──
-  let railBody: React.ReactElement;
-  if (isLoading) {
-    railBody = (
-      <Panel>
-        <PanelHeading title="Suggested calendars" />
-        <div
-          className="flex flex-1 items-center justify-center p-4 text-center font-mono text-[10px] text-fg-tertiary"
-          data-testid="picker-loading"
+  // ── Chain body: five mutually-exclusive states, precedence
+  // loading → error → cold-start → empty (inside ChainTable) → populated. ──
+  let chainBody: React.ReactElement;
+  if (chain.isLoading) {
+    chainBody = (
+      <div
+        className="flex items-center justify-center p-6 text-center font-mono text-[10px] text-fg-tertiary"
+        data-testid="chain-loading"
+      >
+        Loading chain…
+      </div>
+    );
+  } else if (chain.isError) {
+    chainBody = (
+      <div className="flex flex-col items-center gap-2 p-6 text-center" data-testid="chain-error">
+        <p className="m-0 font-mono text-[12px] text-value-negative">Couldn&apos;t load the chain.</p>
+        <Button
+          onClick={() => {
+            chain.refetch();
+          }}
         >
-          Loading candidates…
-        </div>
-      </Panel>
+          Retry
+        </Button>
+      </div>
     );
-  } else if (isError) {
-    railBody = (
-      <Panel>
-        <PanelHeading title="Suggested calendars" />
-        <div className="flex flex-col items-center gap-2 p-4 text-center" data-testid="picker-error">
-          <p className="m-0 font-mono text-[12px] text-value-negative">Couldn&apos;t load candidates.</p>
-          <Button
-            onClick={() => {
-              void refetch();
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      </Panel>
+  } else if (chain.expirations.length === 0) {
+    chainBody = (
+      <div className="flex flex-col gap-1.5 p-6" data-testid="chain-cold-start">
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">Chain warming up</p>
+        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
+          No snapshot yet — check back after the next chain pull.
+        </p>
+      </div>
     );
-  } else if (snapshot === null) {
-    railBody = (
-      <Panel>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <PanelHeading title="Suggested calendars" />
-          {repullControl}
-        </div>
-        <div className="flex flex-col gap-1.5 p-4" data-testid="picker-empty-cold-start">
-          <p className="m-0 font-display text-sm font-bold text-fg-primary">Picker warming up</p>
-          <p className="m-0 font-mono text-[11px] text-fg-tertiary">
-            First scoring run pending — check back after the next chain snapshot.
-          </p>
-        </div>
-      </Panel>
+  } else if (chain.rows.length === 0) {
+    // The chain HAS expiries, but no strike is quoted in both of the selected ones — so the
+    // join is legitimately empty. Distinct from cold start (no snapshot at all): here the
+    // fix is to pick a different pair, not to wait. Saying so beats an empty table, which
+    // reads as a bug.
+    chainBody = (
+      <div className="flex flex-col gap-1.5 p-6" data-testid="chain-empty">
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">No overlapping strikes</p>
+        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
+          No strike is quoted in both of the selected expiries. Try a different pair.
+        </p>
+      </div>
     );
   } else {
-    railBody = (
-      <CandidateRail
-        candidates={sortedRows}
-        pastedCandidates={pastedCandidates}
-        pasteText={pasteText}
-        pasteError={pasteError}
-        asOf={snapshot.asOf}
-        selectedId={selectedId}
-        combinedIds={combinedIds}
-        sort={sort}
-        onSortChange={handleSortChange}
-        onSelect={handleSelect}
-        onToggleCombine={handleToggleCombine}
-        onPasteTextChange={setPasteText}
-        onPasteAnalyze={handlePasteAnalyze}
-        onRemovePasted={handleRemovePasted}
-        onClearAllPasted={handleClearAllPasted}
-        headerAction={repullControl}
-        emptyReasonLines={describeEmptyBoard(snapshot)}
-        pasteAnalyzing={pasteAnalyzing}
-      />
-    );
+    chainBody = <ChainTable rows={chain.rows} />;
   }
 
-  // Zero-candidate empty state (2026-07-15): with nothing scored and nothing pasted there is
-  // no selection, and the hero / WHY-ENTRY rail / chart / term panels would all render as
-  // hollow shells — the rail (paste box + honest reason + Re-pull) IS the screen instead.
-  if (!isLoading && !isError && snapshot !== null && selected === null) {
-    return <div className="flex flex-col gap-4 bg-surface-base p-3">{railBody}</div>;
-  }
+  const hasPasted = pastedCandidates.length > 0;
 
   return (
-    <div className="flex h-[calc(100dvh-48px)] flex-col gap-4 overflow-hidden bg-surface-base p-3">
-      {/* ── Top strip: the verdict hero for the selected calendar ── */}
-      <div data-testid="analyzer-scorecard-wrapper">
-        <VerdictHero
-          candidate={selected}
-          ruleSet={snapshot?.ruleSet ?? []}
-          gateDrops={snapshot?.gateDrops ?? { liquidity: 0, netTheta: 0, termInverted: 0, eventBlackout: 0 }}
-          marketSession={snapshot?.marketSession ?? "rth"}
-          observedAt={snapshot?.observedAt ?? ""}
-          source={snapshot?.source ?? "schwab"}
-        />
-      </div>
-      {/* No-scroll layout (2026-07-15): the page owns its viewport height; WHY is the single
-          slim column beside the chart (ENTRY/EXIT dropped, user 2026-07-15); the day ribbon
-          replaces the term-structure inset; the table flexes into whatever height is left.
-          ≥1024px only (D-17). */}
-      <div
-        data-testid="analyzer-inner-grid"
-        className="grid grid-cols-[minmax(260px,300px)_minmax(0,1fr)] gap-4"
-      >
-      {/* ── WHY column ── */}
-      <div data-testid="analyzer-right-wrapper">
-        <WhyColumn candidate={selected} gex={snapshot?.gex ?? null} />
-      </div>
+    <div data-testid="analyzer-root" className="flex h-full flex-col gap-3 overflow-y-auto bg-surface-base p-3">
+      {/* ── Chain ───────────────────────────────────────────────────────── */}
+      <Panel>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <PanelHeading title="Option chain" />
+            <LiveStatusBadge {...liveBadgeProps} />
+          </div>
+          {repullControl}
+        </div>
 
-      {/* ── Chart column ── */}
-      <div data-testid="analyzer-center-column" className="flex min-w-0 flex-col gap-3">
-        <Panel>
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <PanelHeading title="Risk profile" />
-              <LiveStatusBadge {...liveBadgeProps} />
+        {/* Expiry pair + side. Native selects — the OS picker is the best mobile
+            control there is, and it costs nothing. */}
+        <div className="mb-2 flex flex-wrap items-end gap-x-3 gap-y-2">
+          <label className="flex flex-col gap-0.5">
+            <span className="font-display text-[9px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
+              Front expiry
+            </span>
+            <select
+              data-testid="chain-front-select"
+              className={SELECT_CLASS}
+              value={chain.frontExpiry ?? ""}
+              onChange={(e) => {
+                chain.setFrontExpiry(e.target.value);
+              }}
+            >
+              {chain.expirations.map((e) => (
+                <option key={e.expiration} value={e.expiration}>
+                  {`${e.expiration} · ${e.dte}d`}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-0.5">
+            <span className="font-display text-[9px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
+              Back expiry
+            </span>
+            <select
+              data-testid="chain-back-select"
+              className={SELECT_CLASS}
+              value={chain.backExpiry ?? ""}
+              onChange={(e) => {
+                chain.setBackExpiry(e.target.value);
+              }}
+            >
+              {chain.expirations.map((e) => (
+                <option key={e.expiration} value={e.expiration}>
+                  {`${e.expiration} · ${e.dte}d`}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="toggle"
+              active={chain.contractType === "P"}
+              data-testid="chain-type-put"
+              onClick={() => {
+                chain.setContractType("P");
+              }}
+            >
+              Puts
+            </Button>
+            <Button
+              variant="toggle"
+              active={chain.contractType === "C"}
+              data-testid="chain-type-call"
+              onClick={() => {
+                chain.setContractType("C");
+              }}
+            >
+              Calls
+            </Button>
+          </div>
+        </div>
+
+        {/* Provenance + the two expiry-level skew numbers. */}
+        <div className="mb-2 flex flex-wrap gap-x-6 gap-y-2 border-t border-line-subtle pt-2">
+          <HeaderStat
+            label="Spot"
+            testId="chain-spot"
+            value={chain.spot === null ? DASH : chain.spot.toFixed(2)}
+            className={chain.spot === null ? "text-fg-tertiary" : "text-fg-primary"}
+          />
+          <HeaderStat
+            label="Observed"
+            testId="chain-observed"
+            value={formatObserved(chain.observedAt)}
+            className={chain.observedAt === null ? "text-fg-tertiary" : "text-fg-secondary"}
+          />
+          <HeaderStat
+            label="25Δ RR front"
+            testId="chain-rr-front"
+            value={volPts(chain.frontRr)}
+            className={chain.frontRr === null ? "text-fg-tertiary" : "text-fg-primary"}
+          />
+          <HeaderStat
+            label="25Δ RR back"
+            testId="chain-rr-back"
+            value={volPts(chain.backRr)}
+            className={chain.backRr === null ? "text-fg-tertiary" : "text-fg-primary"}
+          />
+        </div>
+
+        {chainBody}
+      </Panel>
+
+      {/* ── Risk profile ────────────────────────────────────────────────── */}
+      <Panel>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <PanelHeading title="Risk profile" />
+          {selected !== null && (
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="toggle"
+                tone="amber"
+                active={combinedIds.has(selected.id)}
+                data-testid="detail-combine"
+                onClick={() => {
+                  handleToggleCombine(selected);
+                }}
+                title="Add this calendar to the combined-book payoff"
+              >
+                {combinedIds.has(selected.id) ? "✓ Combined" : "⊕ Combine"}
+              </Button>
+              <Button
+                variant="toggle"
+                tone="up"
+                active={copiedId === selected.id}
+                data-testid="copy-tos-order"
+                onClick={() => {
+                  handleCopyCandidate(selected);
+                }}
+                title="Copy this calendar as a Thinkorswim order"
+              >
+                {copiedId === selected.id ? "Copied ✓" : "⧉ Copy TOS order"}
+              </Button>
             </div>
-            {selected !== null && (
-              <div className="flex items-center gap-1.5">
+          )}
+        </div>
+
+        {/* Paste box — the screen's only verb now. */}
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <input
+            type="text"
+            data-testid="picker-paste-input"
+            value={pasteText}
+            onChange={(e) => {
+              setPasteText(e.target.value);
+            }}
+            placeholder="Paste a TOS calendar order…"
+            className="min-w-0 flex-1 rounded-[3px] border border-line-strong bg-transparent px-3 py-2 font-mono text-[12px] text-fg-primary"
+          />
+          <Button
+            variant="primary"
+            size="sm"
+            data-testid="picker-paste-analyze"
+            disabled={pasteAnalyzing}
+            onClick={handlePasteAnalyze}
+          >
+            {pasteAnalyzing ? "Analyzing…" : "Analyze"}
+          </Button>
+          {hasPasted && (
+            <Button variant="ghost" data-testid="picker-paste-clear-all" onClick={handleClearAllPasted}>
+              Clear all
+            </Button>
+          )}
+        </div>
+        {pasteError !== null && (
+          <p data-testid="picker-paste-error" className="mb-2 font-mono text-[9px] text-value-negative">
+            {pasteError}
+          </p>
+        )}
+
+        {/* Pasted calendars — select one to chart it, ⊕ to add it to the book. */}
+        {hasPasted && (
+          <div data-testid="pasted-list" className="mb-2 flex flex-wrap items-center gap-1.5">
+            {pastedCandidates.map((c) => (
+              <span key={c.id} className="flex items-center gap-0.5">
+                <Button
+                  variant="toggle"
+                  active={selected?.id === c.id}
+                  data-testid={`pasted-row-${c.id}`}
+                  onClick={() => {
+                    handleSelect(c);
+                  }}
+                >
+                  {c.name}
+                </Button>
                 <Button
                   variant="toggle"
                   tone="amber"
-                  active={combinedIds.has(selected.id)}
-                  data-testid="detail-combine"
-                  onClick={() => { handleToggleCombine(selected); }}
-                  title="Add this calendar to the combined-book payoff"
+                  active={combinedIds.has(c.id)}
+                  data-testid={`pasted-combine-${c.id}`}
+                  title="Add to the combined-book payoff"
+                  onClick={() => {
+                    handleToggleCombine(c);
+                  }}
                 >
-                  {combinedIds.has(selected.id) ? "✓ Combined" : "⊕ Combine"}
+                  ⊕
                 </Button>
                 <Button
-                  variant="toggle"
-                  tone="up"
-                  active={copiedId === selected.id}
-                  data-testid="copy-tos-order"
-                  onClick={() => { handleCopyCandidate(selected); }}
-                  title="Copy this calendar as a Thinkorswim order"
+                  variant="ghost"
+                  data-testid={`pasted-remove-${c.id}`}
+                  title="Remove this pasted calendar"
+                  onClick={() => {
+                    handleRemovePasted(c);
+                  }}
                 >
-                  {copiedId === selected.id ? "Copied ✓" : "⧉ Copy TOS order"}
+                  ×
                 </Button>
-              </div>
-            )}
+              </span>
+            ))}
           </div>
-          {selected !== null && (
+        )}
+
+        {selected === null ? (
+          <p data-testid="payoff-empty" className="m-0 p-3 font-mono text-[11px] text-fg-tertiary">
+            Paste a TOS calendar order to see its payoff. The table above is the chain, unfiltered
+            and unranked.
+          </p>
+        ) : (
+          <>
             <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <p className="m-0 font-mono text-[10px] text-fg-tertiary">
                 <span className="text-accent-primary" data-testid="risk-profile-selected-name">
                   {selected.name}
                 </span>
-                {selected.breakdown.length === 0
-                  ? ` · debit $${Math.round(selected.debit)}`
-                  : ` · debit $${Math.round(selected.debit)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(2)}`}
+                {` · debit $${Math.round(selected.debit)} · θ ${selected.theta >= 0 ? "+" : ""}${selected.theta.toFixed(1)}/d · vega +${selected.vega.toFixed(2)}`}
                 {bookCount > 1 && (
                   <span className="ml-2 text-accent-warning" data-testid="combined-book-summary">
                     {`+ ${bookCount - 1} more → combined debit $${Math.round(bookDebit)} (max loss) · θ ${bookTheta >= 0 ? "+" : ""}${bookTheta.toFixed(1)}/d · vega +${bookVega.toFixed(2)}`}
@@ -626,63 +449,53 @@ function AnalyzerDesktop(): React.ReactElement {
                 )}
               </p>
             </div>
-          )}
-          {selected !== null && selectedPosition !== null && scenarioResult !== null && (
-            <>
-              <PayoffControls
-                dateInputValue={dateControl.dateInputValue}
-                minIso={bounds.minIso}
-                maxIso={bounds.maxIso}
-                onDateChange={dateControl.setDate}
-                onStepDate={dateControl.stepDate}
-                onResetDate={dateControl.resetDate}
-                toggles={toggles}
-                onToggle={handleToggle}
-              />
-              {/* Day ribbon (2026-07-15, replaces the term-structure inset + chips row):
-                  WHERE the macro events fall relative to your legs — hover a tick for
-                  WHAT/WHY. The IV-curve verdicts live in the WHY panel numbers. */}
-              {snapshot !== null && (
-                <EventLegRibbon
-                  events={snapshot.events}
-                  asOf={snapshot.asOf}
-                  frontDte={selected.frontLeg.dte}
-                  backDte={selected.backLeg.dte}
+            {selectedPosition !== null && scenarioResult !== null && (
+              <>
+                <PayoffControls
+                  dateInputValue={dateControl.dateInputValue}
+                  minIso={bounds.minIso}
+                  maxIso={bounds.maxIso}
+                  onDateChange={dateControl.setDate}
+                  onStepDate={dateControl.stepDate}
+                  onResetDate={dateControl.resetDate}
+                  toggles={toggles}
+                  onToggle={handleToggle}
                 />
-              )}
-              <PayoffChart
-                todayCurve={scenarioResult.payoffCurve}
-                fanCurves={[]}
-                expirationCurve={scenarioResult.expirationCurve}
-                rollCurve={null}
-                gex={{
-                  callWall: snapshot?.gex.callWall ?? null,
-                  putWall: snapshot?.gex.putWall ?? null,
-                  flip: snapshot?.gex.flip ?? null,
-                }}
-                domain={payoffDomain}
-                spot={spot}
-                toggles={toggles}
-                fitY={false}
-                onFitYConsumed={noop}
-                positionSetSignature={positionSetSignature}
-                baseExpirationCurve={scenarioResult.expirationCurve}
-                todayCurveColor={TODAY_CURVE_COLOR}
-                expirationCurveColor={EXPIRATION_CURVE_COLOR}
-                expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
-                aspectRatio={2.9}
-              />
-            </>
-          )}
-        </Panel>
-
-      </div>
-      </div>
-
-      {/* ── Ranked greeks table: flexes into the leftover viewport height (TOS idiom) ── */}
-      <div data-testid="analyzer-rail-wrapper" className="flex min-h-0 flex-1 flex-col gap-3">
-        {railBody}
-      </div>
+                {snapshot !== null && (
+                  <EventLegRibbon
+                    events={snapshot.events}
+                    asOf={snapshot.asOf}
+                    frontDte={selected.frontLeg.dte}
+                    backDte={selected.backLeg.dte}
+                  />
+                )}
+                <PayoffChart
+                  todayCurve={scenarioResult.payoffCurve}
+                  fanCurves={[]}
+                  expirationCurve={scenarioResult.expirationCurve}
+                  rollCurve={null}
+                  gex={{
+                    callWall: snapshot?.gex.callWall ?? null,
+                    putWall: snapshot?.gex.putWall ?? null,
+                    flip: snapshot?.gex.flip ?? null,
+                  }}
+                  domain={payoffDomain}
+                  spot={spot}
+                  toggles={toggles}
+                  fitY={false}
+                  onFitYConsumed={noop}
+                  positionSetSignature={positionSetSignature}
+                  baseExpirationCurve={scenarioResult.expirationCurve}
+                  todayCurveColor={TODAY_CURVE_COLOR}
+                  expirationCurveColor={EXPIRATION_CURVE_COLOR}
+                  expectedMoveBand={selected.expectedMove > 0 ? { spot, em: selected.expectedMove } : null}
+                  aspectRatio={2.9}
+                />
+              </>
+            )}
+          </>
+        )}
+      </Panel>
     </div>
   );
 }
