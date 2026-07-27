@@ -15,8 +15,11 @@ Every source file MUST:
 
 1. **Respect the dependency law.** Imports flow `apps → adapters → core → shared` and
    `web → contracts → shared`. Never the reverse. No exceptions.
-2. **Keep the hexagon pure.** `packages/core` imports ONLY `packages/shared`. Never:
-   hono, drizzle-orm, pg-boss, vendor SDKs, `process.env`, node I/O builtins.
+2. **Keep the hexagon pure.** `packages/core` imports ONLY `packages/shared`,
+   `packages/quant` (pure numerics — BSM pricing, greeks, IV inversion) and `zod`
+   (parse-don't-cast at application boundaries). Never: hono, drizzle-orm, pg-boss,
+   vendor SDKs, `process.env`, node I/O builtins. `packages/quant` is held to the same
+   purity bar — if it ever grows I/O it stops being importable from core.
 3. **Keep adapters thin.** Routes, MCP tools, and job handlers contain zero business
    logic. Pattern is always: Zod-parse input → call use-case → map Result → respond.
 4. **Confine Drizzle** to `packages/adapters/postgres/`. No SQL or ORM types in core

@@ -38,7 +38,7 @@ Hexagonal (ports & adapters) + DDD-lite. Full doc set: `docs/architecture/` (sta
 
 | Layer | Where | May import |
 |---|---|---|
-| Domain + Application (hexagon) | `packages/core/` | `packages/shared` only |
+| Domain + Application (hexagon) | `packages/core/` | `packages/shared`, `packages/quant`, `zod` — nothing else |
 | Driven adapters (DB, Schwab, CBOE, queue) | `packages/adapters/` | core ports, shared |
 | Driving adapters (HTTP, MCP, job handlers) | inside `apps/*` | core, adapters, contracts |
 | API contracts (Zod) | `packages/contracts/` | zod, shared |
