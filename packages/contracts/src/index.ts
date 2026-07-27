@@ -81,6 +81,10 @@ export type {
   TermStructureResponse,
 } from "./analytics.ts";
 
+// Chain contracts (MCP-02: ONE schema source for the chain HTTP route + its MCP tool twin)
+export { chainRow, chainResponse } from "./chain.ts";
+export type { ChainRow, ChainResponse } from "./chain.ts";
+
 // Brokerage contracts (MCP-02: shared by HTTP routes and MCP tools for positions/transactions/orders)
 export {
   positionsResponse,
