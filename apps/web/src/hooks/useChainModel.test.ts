@@ -363,6 +363,10 @@ describe("useChainModel — the picked pair", () => {
     // Back expiry first, then the front — the long-calendar convention.
     expect(result.current.pair?.tosOrder).toContain("18 SEP 26");
     expect(result.current.pair?.tosOrder).toContain("6500 PUT");
+    // The model must pass the ROOT through, not just the dates. Sep 18 2026 IS a third Friday,
+    // so a root-blind builder tags it [AM] — wrong for SPXW, which is always PM-settled, and it
+    // selects the wrong contract in TOS. Caught in live UAT.
+    expect(result.current.pair?.tosOrder).not.toContain("[AM]");
     expect(result.current.pair?.tosOrder?.indexOf("18 SEP 26")).toBeLessThan(
       result.current.pair?.tosOrder?.indexOf("21 AUG 26") ?? -1,
     );

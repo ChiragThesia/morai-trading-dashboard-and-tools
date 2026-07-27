@@ -89,6 +89,7 @@ describe("buildTosPairOrder — a TOS order line for two legs picked off the cha
   const PAIR = {
     strike: 7_425_000,
     contractType: "P",
+    root: "SPX",
     frontExpiry: "2026-08-14",
     backExpiry: "2026-09-18",
     debit: 48.75,
@@ -97,6 +98,41 @@ describe("buildTosPairOrder — a TOS order line for two legs picked off the cha
   it("lists the BACK expiry first, then the front — the long-calendar convention", () => {
     expect(buildTosPairOrder(PAIR)).toBe(
       "BUY +1 CALENDAR SPX 100 18 SEP 26 [AM]/14 AUG 26 7425 PUT @48.75 LMT GTC",
+    );
+  });
+
+  // CAUGHT IN LIVE UAT. `formatTosDate` tags [AM] on any third Friday, because the older
+  // candidate builder had no root to consult and "third Friday" was the only available proxy for
+  // "the AM-settled monthly". It is the WRONG proxy once the root is known: SPXW is PM-settled on
+  // every date it lists, including third Fridays. A real SPXW 7400P Aug-21/Sep-18 calendar came
+  // out tagged `[AM]` on BOTH legs, which selects the wrong contract in Thinkorswim.
+  it("never tags an SPXW leg [AM] — SPXW is PM-settled even on a third Friday", () => {
+    const spxw = buildTosPairOrder({
+      ...PAIR,
+      root: "SPXW",
+      frontExpiry: "2026-08-21",
+      backExpiry: "2026-09-18",
+    });
+    expect(spxw).not.toContain("[AM]");
+    expect(spxw).toBe("BUY +1 CALENDAR SPX 100 18 SEP 26/21 AUG 26 7425 PUT @48.75 LMT GTC");
+  });
+
+  it("tags an SPX third-Friday leg [AM] on BOTH legs when both are monthlies", () => {
+    const spx = buildTosPairOrder({
+      ...PAIR,
+      root: "SPX",
+      frontExpiry: "2026-08-21",
+      backExpiry: "2026-09-18",
+    });
+    expect(spx).toBe(
+      "BUY +1 CALENDAR SPX 100 18 SEP 26 [AM]/21 AUG 26 [AM] 7425 PUT @48.75 LMT GTC",
+    );
+  });
+
+  it("does not tag an SPX leg that is not a third Friday", () => {
+    // SPX lists non-monthly dates too; only the third-Friday monthly settles AM.
+    expect(buildTosPairOrder({ ...PAIR, root: "SPX", frontExpiry: "2026-08-14" })).toContain(
+      "/14 AUG 26 7425",
     );
   });
 

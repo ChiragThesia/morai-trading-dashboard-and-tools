@@ -28,10 +28,20 @@ function expiryDate(asOf: Date, dte: number): Date {
   return new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate() + dte);
 }
 
-/** "18 SEP 26" or "18 SEP 26 [AM]" for a monthly expiry. */
+/** "18 SEP 26", no settlement tag. */
+function plainTosDate(d: Date): string {
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(-2)}`;
+}
+
+/**
+ * "18 SEP 26" or "18 SEP 26 [AM]" for a monthly expiry.
+ *
+ * Third-Friday is a PROXY for "the AM-settled monthly", used because `PickerCandidate` carries no
+ * OCC root. It is only correct for SPX: SPXW lists third Fridays too and is PM-settled on every
+ * one of them. Where the root IS known, tag on the root instead — see `buildTosPairOrder`.
+ */
 function formatTosDate(d: Date): string {
-  const base = `${d.getDate()} ${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(-2)}`;
-  return isThirdFriday(d) ? `${base} [AM]` : base;
+  return isThirdFriday(d) ? `${plainTosDate(d)} [AM]` : plainTosDate(d);
 }
 
 /**
@@ -60,6 +70,11 @@ export interface TosPairOrder {
   /** Strike ×1000, straight off the chain row. */
   readonly strike: number;
   readonly contractType: "C" | "P";
+  /**
+   * The OCC root BOTH legs share. Drives the `[AM]` settlement tag, which is the whole reason it
+   * is here — the caller only emits an order for a same-root pair, so one value covers both legs.
+   */
+  readonly root: "SPX" | "SPXW";
   /** ISO `YYYY-MM-DD`, straight off the chain row — never asOf + dte. */
   readonly frontExpiry: string;
   readonly backExpiry: string;
@@ -88,8 +103,14 @@ export interface TosPairOrder {
 export function buildTosPairOrder(pair: TosPairOrder): string {
   const back = parseLocalDateInput(pair.backExpiry);
   const front = parseLocalDateInput(pair.frontExpiry);
+  // Settlement tag comes off the ROOT, not the date. Only SPX third-Friday monthlies settle AM;
+  // SPXW is PM-settled on every date it lists, third Fridays included. Caught in live UAT — a
+  // real SPXW Aug-21/Sep-18 7400P calendar was tagged [AM] on both legs, which selects the wrong
+  // contract in Thinkorswim. The sibling above still uses the date proxy because a
+  // PickerCandidate carries no root; here we have one, so use it.
+  const fmt = pair.root === "SPX" ? formatTosDate : plainTosDate;
   // Mirrors the sibling's fallback: an unparseable date drops the date segment, never throws.
-  const dates = back === null || front === null ? "" : `${formatTosDate(back)}/${formatTosDate(front)} `;
+  const dates = back === null || front === null ? "" : `${fmt(back)}/${fmt(front)} `;
   // ponytail: /1000 inline rather than importing STRIKE_SCALE from chain-math, which would drag
   // @morai/core + @morai/quant into this module for one constant.
   const strike = pair.strike / 1000;

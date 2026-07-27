@@ -363,13 +363,22 @@ export function ChainBrowse({
         cohortKey(c) === expanded ? (
           <tr data-testid={`chain-strikes-${cohortKey(c)}`}>
             <td className="px-2 pb-2" colSpan={COHORT_COLS.length}>
-              <StrikeLadder
-                cohort={c}
-                frontLeg={frontLeg}
-                backLeg={backLeg}
-                onPickFront={onPickFront}
-                onPickBack={onPickBack}
-              />
+              {/* `w-0 min-w-full` is load-bearing, not decoration. A table cell's content
+                  contributes to the table's intrinsic width, so the ~1000px-wide strike ladder
+                  nested in here dragged the whole cohort table out to 1030px the moment a row
+                  expanded — the cohort rows visibly stretched, and on a phone the ladder had no
+                  scroll of its own, forcing everything through one very wide outer scrollbar.
+                  Zero width means "do not contribute an intrinsic width", min-w-full still fills
+                  the row, and the ladder's own overflow-x wrapper then does the scrolling. */}
+              <div className="w-0 min-w-full">
+                <StrikeLadder
+                  cohort={c}
+                  frontLeg={frontLeg}
+                  backLeg={backLeg}
+                  onPickFront={onPickFront}
+                  onPickBack={onPickBack}
+                />
+              </div>
             </td>
           </tr>
         ) : null

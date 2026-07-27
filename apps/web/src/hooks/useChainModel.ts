@@ -314,6 +314,8 @@ export function useChainModel(): ChainModel {
           : buildTosPairOrder({
               strike: front.strike,
               contractType: front.contractType,
+              // Safe to take one leg's root: this branch is unreachable when rootMismatch.
+              root: front.root,
               frontExpiry: front.expiration,
               backExpiry: back.expiration,
               debit,
