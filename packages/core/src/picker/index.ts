@@ -62,6 +62,10 @@ export type {
   SelectCandidatesResult,
   GateDrops,
 } from "./domain/candidate-selection.ts";
+// The forward-variance identity + its inverted-structure guard. Barrel-wired so the Analyzer
+// chain table's EDGE column reuses this exact function instead of re-deriving the formula.
+export { computeFwdIv } from "./domain/fwd-iv.ts";
+export type { FwdIvResult } from "./domain/fwd-iv.ts";
 export { scoreCalendarCandidates } from "./domain/scoring.ts";
 export type { ScoringParams } from "./domain/scoring.ts";
 export { RULE_SET_METADATA } from "./domain/rules.ts";
