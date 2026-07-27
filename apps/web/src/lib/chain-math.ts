@@ -69,8 +69,13 @@ export function hSkew(ivFront: number | null, ivBack: number | null): number | n
 }
 
 /**
- * Vertical skew — this strike's IV against the ATM strike of the SAME expiry. Both IVs must
- * come from one expiry; comparing across expiries measures term structure, not skew.
+ * Vertical skew — this strike's IV against the ATM strike of the SAME expiry AND THE SAME WING.
+ *
+ * Both constraints bind. Across expiries this measures term structure, not skew. Across wings it
+ * measures nothing at all: calls and puts trace different curves, so a put's IV against the
+ * call ATM is a subtraction of two unrelated numbers that still returns a clean-looking float.
+ * The chain read returns both wings interleaved, so filtering to one expiry is NOT enough —
+ * the caller must filter to one `contractType` before picking the ATM IV.
  */
 export function vSkewVsAtm(ivAtStrike: number | null, ivAtm: number | null): number | null {
   return diff(ivAtStrike, ivAtm);
@@ -99,6 +104,9 @@ export function edge(
  * the caller can match it straight back against `row.strike`. Ties go to the lower strike, which
  * keeps the pick deterministic on an evenly-spaced chain. Null on an empty chain or a spot of 0
  * (a gap row), because there is no honest "nearest" to name.
+ *
+ * Safe to feed a both-wings chain: this returns a strike, not a row, so the duplicate strike per
+ * wing changes nothing. Picking the ATM *IV* at that strike is where the wing starts to matter.
  */
 export function atmStrike(
   rows: ReadonlyArray<{ readonly strike: number }>,
