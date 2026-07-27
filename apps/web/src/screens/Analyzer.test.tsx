@@ -1,63 +1,30 @@
 /**
- * Analyzer.test.tsx — TDD suite for the ranked-cards calendar PICKER (Phase 18, D-04).
+ * Analyzer.test.tsx — the option-chain DATA TABLE screen.
  *
- * This is a FULL REWRITE (18-04-PLAN.md) — the previous suite asserted retired
- * paste-positions/roll-simulator behavior that no longer exists on this screen.
+ * Adapted from the picker suite. The scoring-specific blocks (verdict hero, the
+ * rule-registry checklist, the ranked CandidateRail, the WHY column, the
+ * desktop-grid and desktop/mobile-branch suites) are DELETED with the UI they
+ * covered. Everything that was really about rendering and interaction — the
+ * table, the paste flow, the payoff wiring, copy-TOS, the five load states and
+ * the live badge — survives here, re-pointed at the chain.
  *
- * The picker is 100% fixture-driven (D-02b) — no usePositions/useGex/useLiveStream hooks,
- * no network, no broker positions. `pickerSnapshotFixture` (@morai/contracts, 18-01) is the
- * sole data source, so this suite needs none of the old hook mocks.
- *
- * Behaviors under test (Task 2 — skeleton + ranked rail + methodology + empty-state):
- *   - Ranked rail: one CandidateCard per fixture candidate, ordered score-descending.
- *   - Default selection: the top-ranked candidate.
- *   - Click-to-select: clicking a different card updates the selected candidate.
- *   - Scoring methodology: locked 3-item list renders verbatim.
- *   - Empty state: `CandidateRail` (exported for direct testing, same pattern as
- *     Overview.tsx's exported `formatExpiryCell`) renders the locked empty-state copy when
- *     given zero candidates — Analyzer itself is fixture-only and can't be handed an empty
- *     fixture without module-mocking gymnastics, so the empty-state branch is unit-tested on
- *     the extracted rail component directly.
- *
- * Task 3 (payoff center) behaviors under test:
- *   - Selecting a candidate feeds candidateToAnalyzerPosition -> repriceScenario into
- *     PayoffChart with the picker's curve colors (todayCurveColor blue, expirationCurveColor
- *     violet) and rollCurve={null} (single payoff path, D-02).
- *   - ⊕ Combine sums the selected + combined calendars into one net payoff; toggling off reverts.
- *   - expectedMoveBand is passed as { spot: fixtureSpot, em: selected.expectedMove }.
- *
- * 17.1-03/Overview.test.tsx precedent: spy-wrap PayoffChart (importOriginal) so tests can
- * inspect the exact props Analyzer hands it — the real component still renders.
- *
- * Task 2 (18-05-PLAN.md) right-column behaviors under test:
- *   - Selecting a candidate renders WhyPanel/TermStructureChart/EntryExitPlan under the three
- *     locked right-column headings, wired to that candidate's own fixture data.
- *   - Selecting the guard candidate (fwdIv null) shows the guard sentence and the term
- *     structure's omitted-bracket + guard tag (T-18-10) — the right column is fully re-wired
- *     per selection, not stuck on the default candidate.
- *
- * 19-09-PLAN.md (Task 2, PICK-02 fixture→live swap): Analyzer now sources its data from
- * `usePicker()` instead of the synchronous `pickerSnapshotFixture` import. `usePicker` is
- * mocked so the fixture-driven suites above are unaffected (the default mock resolves
- * `pickerSnapshotFixture` as `data`, matching the frozen Phase-18 behavior byte-for-byte) —
- * new suites at the bottom of this file cover the D-18/D-19 loading/error/cold-start/
- * zero-filtered states the synchronous fixture never needed.
+ * apps/web does not use msw: the RPC layer is mocked instead.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, within, act } from "@testing-library/react";
 import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
-import type { UseQueryResult } from "@tanstack/react-query";
-import type { PickerSnapshotResponse, PickerCandidate, AnalyzeAdHocCalendarResponse } from "@morai/contracts";
+import type { AnalyzeAdHocCalendarResponse } from "@morai/contracts";
 import type { UseLiveStreamResult } from "../hooks/useLiveStream.ts";
+import type { ChainRow } from "../lib/chain-contract.ts";
 
 vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../components/charts/PayoffChart.tsx")>();
   return { ...actual, PayoffChart: vi.fn(actual.PayoffChart) };
 });
 
-// Phase 41 AUI-07: useAnalyzerModel now calls useLiveStream — without this mock every test
-// that renders an Analyzer tree would open a real EventSource (green-suite protection).
+// useAnalyzerModel calls useLiveStream — without this mock every render would open a
+// real EventSource (green-suite protection).
 const { mockUseLiveStream } = vi.hoisted(() => ({
   mockUseLiveStream: vi.fn((): UseLiveStreamResult => ({
     greeks: new Map(),
@@ -74,26 +41,23 @@ const { mockUseLiveStream } = vi.hoisted(() => ({
 }));
 vi.mock("../hooks/useLiveStream.ts", () => ({
   useLiveStream: mockUseLiveStream,
-  // LiveStatusBadge.tsx imports this const directly (module-load time) — must be mocked
-  // alongside the hook or the Analyzer tree crashes as soon as it mounts the badge.
+  // LiveStatusBadge.tsx imports this const at module-load time — must be mocked alongside
+  // the hook or the tree crashes as soon as it mounts the badge.
   STALL_THRESHOLD_MS: 20_000,
 }));
+
+// The chain fetch — mocked at the hook, so no QueryClientProvider is needed.
+const { mockUseChain } = vi.hoisted(() => ({ mockUseChain: vi.fn() }));
+vi.mock("../hooks/useChain.ts", () => ({ useChain: mockUseChain }));
 
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
 vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
 
-// useRepullChains needs a QueryClient; this suite renders Analyzer without a provider, so the
-// mutation hook is mocked to an inert stub (its own behavior is covered in useRepullChains.test.ts).
 const { mockRepull } = vi.hoisted(() => ({
   mockRepull: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isSuccess: false, isError: false })),
 }));
 vi.mock("../hooks/useRepullChains.ts", () => ({ useRepullChains: mockRepull }));
 
-// useAnalyzeCalendar (Phase 30-06, D-02) needs a QueryClient too — mocked to a controllable
-// mutateAsync stub (its own request/response/error handling is covered in
-// useAnalyzeCalendar.test.ts). Defaults to scored:false so every pre-existing paste test in
-// this suite keeps exercising the unscored-fallback path unchanged; individual tests override
-// via mockAnalyzeCalendarMutateAsync.mockResolvedValueOnce/.mockRejectedValueOnce.
 const { mockAnalyzeCalendarMutateAsync } = vi.hoisted(() => ({
   mockAnalyzeCalendarMutateAsync: vi.fn(
     (): Promise<AnalyzeAdHocCalendarResponse> =>
@@ -108,26 +72,10 @@ vi.mock("../hooks/useAnalyzeCalendar.ts", () => ({
   }),
 }));
 
-/** Loose shape covering only the fields Analyzer.tsx actually reads off the query result. */
-type MockPickerResult = Pick<
-  UseQueryResult<PickerSnapshotResponse | null>,
-  "data" | "isPending" | "isError" | "refetch"
->;
-
-function mockUsePickerReturn(overrides: Partial<MockPickerResult>): void {
-  mockUsePicker.mockReturnValue({
-    data: pickerSnapshotFixture,
-    isPending: false,
-    isError: false,
-    refetch: vi.fn(),
-    ...overrides,
-  });
-}
-
-import { Analyzer, CandidateRail, DEFAULT_CANDIDATE_SORT, compactCalendarName } from "./Analyzer.tsx";
-import { buildTosCalendarOrder } from "../lib/tos-order.ts";
+import { Analyzer } from "./Analyzer.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import type { PayoffChartProps } from "../components/charts/PayoffChart.tsx";
+import { buildTosCalendarOrder } from "../lib/tos-order.ts";
 import { candidateToAnalyzerPosition } from "../lib/candidate-to-position.ts";
 import { repriceScenario } from "../lib/scenario-engine.ts";
 import type { ScenarioParams } from "../lib/scenario-engine.ts";
@@ -137,465 +85,360 @@ import { parsedCalendarToPickerCandidate } from "../lib/parsed-calendar-to-candi
 
 const mockPayoffChart = vi.mocked(PayoffChart);
 
-/** Props of the most recent PayoffChart render (throws if it never rendered). */
 function latestPayoffChartProps(): PayoffChartProps {
   const call = mockPayoffChart.mock.calls.at(-1);
   assertDefined(call, "PayoffChart rendered at least once");
   return call[0];
 }
 
-/**
- * D-16 desktop matchMedia stub (the Overview.test.tsx pattern) — jsdom has no matchMedia, so
- * useIsDesktop() reports mobile by default and Analyzer mounts the mobile tree. Every
- * pre-existing desktop-tree describe installs this in beforeEach to keep exercising
- * AnalyzerDesktop byte-identically; each deletes it in afterEach via
- * `Reflect.deleteProperty(window, "matchMedia")`.
- */
-function stubDesktopMatchMedia(): void {
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    writable: true,
-    value: (query: string) => ({
-      matches: query === "(min-width: 1024px)",
-      media: query,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-    }),
+// ─── Chain fixture ────────────────────────────────────────────────────────────
+
+const SPOT = 7498.85;
+const OBSERVED = "2026-07-26T18:00:00.000Z";
+const FRONT = { expiration: "2026-08-21", dte: 26 };
+const BACK = { expiration: "2026-09-18", dte: 54 };
+
+function chainRow(over: Partial<ChainRow>): ChainRow {
+  return {
+    strike: 7500_000,
+    expiration: FRONT.expiration,
+    contractType: "P",
+    dte: FRONT.dte,
+    bsmIv: 0.15,
+    bid: 40,
+    ask: 42,
+    openInterest: 500,
+    underlyingPrice: SPOT,
+    source: "schwab",
+    observedAt: OBSERVED,
+    ...over,
+  };
+}
+
+const STRIKES = [7400, 7450, 7500, 7550, 7600];
+
+function chainFixture(): ReadonlyArray<ChainRow> {
+  const out: ChainRow[] = [];
+  for (const e of [
+    { ...FRONT, base: 0.15 },
+    { ...BACK, base: 0.17 },
+  ]) {
+    for (const k of STRIKES) {
+      const iv = e.base + (7500 - k) * 0.00002;
+      out.push(
+        chainRow({ strike: k * 1000, expiration: e.expiration, dte: e.dte, bsmIv: iv, contractType: "P" }),
+      );
+      out.push(
+        chainRow({
+          strike: k * 1000,
+          expiration: e.expiration,
+          dte: e.dte,
+          bsmIv: iv - 0.005,
+          contractType: "C",
+        }),
+      );
+    }
+  }
+  return out;
+}
+
+function mockChainReturn(
+  overrides: Partial<{
+    data: { rows: ReadonlyArray<ChainRow> } | undefined;
+    isPending: boolean;
+    isError: boolean;
+    refetch: () => void;
+  }> = {},
+): void {
+  mockUseChain.mockReturnValue({
+    data: { rows: chainFixture() },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+    ...overrides,
   });
 }
 
-/** Matches Analyzer.tsx's fixed scenario params (D-02: no scenario sliders on this
- * fixture-only, view-only screen — spot/rate/divYield are the frozen snapshot constants). */
+function mockUsePickerReturn(overrides: Record<string, unknown> = {}): void {
+  mockUsePicker.mockReturnValue({
+    data: pickerSnapshotFixture,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+    ...overrides,
+  });
+}
+
+/** The Analyzer's fixed scenario params — spot comes from the picker snapshot when quiet. */
 const PARAMS: ScenarioParams = {
   spot: pickerSnapshotFixture.spot,
-  // TOS date-line convention (2026-07-20 oracle-corrected): "today" prices at NOW → 0.
   daysForward: 0,
   ivShift: 0,
   rate: 0.045,
   divYield: 0.013,
 };
 
-const SORTED_CANDIDATES = [...pickerSnapshotFixture.candidates].sort((a, b) => b.score - a.score);
-const TOP = SORTED_CANDIDATES[0];
-const SECOND = SORTED_CANDIDATES[1];
-
-if (TOP === undefined || SECOND === undefined) {
-  throw new Error("pickerSnapshotFixture must carry at least 2 candidates for this suite");
-}
-
-const GUARD = pickerSnapshotFixture.candidates.find((c) => c.fwdIv === null);
-if (GUARD === undefined) {
-  throw new Error("pickerSnapshotFixture must carry a guard (fwdIv null) candidate for this suite");
-}
-
-// Default usePicker() mock for every test in this file: a settled, populated picker fetch
-// equal to the frozen Phase-18 fixture. Individual tests override per-test.
 beforeEach(() => {
-  mockUsePickerReturn({});
+  mockChainReturn();
+  mockUsePickerReturn();
   mockAnalyzePending.value = false;
 });
 
-describe("Analyzer — ranked candidate table (Phase 41, AUI-01/AUI-03)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+// ─── Chain table ──────────────────────────────────────────────────────────────
+
+describe("Analyzer — chain table", () => {
+  it("renders one row per strike quoted in both expiries, in strike order", () => {
+    render(<Analyzer />);
+    const rows = screen.getAllByTestId(/^chain-row-/);
+    expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual(
+      STRIKES.map((k) => `chain-row-${k}`),
+    );
   });
 
-  it("renders one row per fixture candidate, ordered score-descending by default", () => {
+  it("shows IV, horizontal skew, edge and net greeks on the row", () => {
     render(<Analyzer />);
-
-    const rows = screen.getAllByTestId(/^candidate-row-/);
-    expect(rows.length).toBe(pickerSnapshotFixture.candidates.length);
-
-    const renderedIds = rows.map((el) => el.getAttribute("data-testid"));
-    const expectedIds = SORTED_CANDIDATES.map((c) => `candidate-row-${c.id}`);
-    expect(renderedIds).toEqual(expectedIds);
+    const row = screen.getByTestId("chain-row-7500");
+    expect(within(row).getByTestId("chain-front-iv").textContent).toBe("15.00%");
+    expect(within(row).getByTestId("chain-back-iv").textContent).toBe("17.00%");
+    expect(within(row).getByTestId("chain-hskew").textContent).toBe("+2.00");
+    expect(within(row).getByTestId("chain-edge").textContent).not.toBe("—");
+    expect(within(row).getByTestId("chain-net-delta").textContent).not.toBe("—");
+    expect(within(row).getByTestId("chain-net-gamma").textContent).not.toBe("—");
+    expect(within(row).getByTestId("chain-net-theta").textContent).not.toBe("—");
+    expect(within(row).getByTestId("chain-net-vega").textContent).not.toBe("—");
   });
 
-  it("defaults the selected candidate to the top-ranked one (Risk profile subtitle names it)", () => {
+  it("shows vertical skew against the same expiry's ATM strike", () => {
     render(<Analyzer />);
-    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
+    expect(within(screen.getByTestId("chain-row-7500")).getByTestId("chain-front-vskew").textContent).toBe(
+      "+0.00",
+    );
+    expect(within(screen.getByTestId("chain-row-7400")).getByTestId("chain-front-vskew").textContent).toBe(
+      "+0.20",
+    );
   });
 
-  it("clicking a different row updates the selected candidate", () => {
+  it("clicking a row expands its two legs in place; clicking again collapses", () => {
     render(<Analyzer />);
+    expect(screen.queryByTestId("chain-detail-7500")).toBeNull();
 
-    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
+    fireEvent.click(screen.getByTestId("chain-row-7500"));
+    const detail = screen.getByTestId("chain-detail-7500");
+    expect(within(detail).getByTestId("chain-leg-front")).toBeTruthy();
+    expect(within(detail).getByTestId("chain-leg-back")).toBeTruthy();
+    expect(detail.textContent).toContain(FRONT.expiration);
+    expect(detail.textContent).toContain(BACK.expiration);
 
-    // The Risk profile subtitle now names the newly-selected candidate.
-    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(SECOND.name);
+    fireEvent.click(screen.getByTestId("chain-row-7500"));
+    expect(screen.queryByTestId("chain-detail-7500")).toBeNull();
   });
 
-  it("rounds debit to whole dollars and vega to 2dp in the subline (AUI-04) — no long-decimal render", () => {
+  it("only one row is expanded at a time", () => {
     render(<Analyzer />);
-    const subline = screen.getByTestId("risk-profile-selected-name").parentElement?.textContent ?? "";
-    expect(subline).toContain(`debit $${Math.round(TOP.debit)}`);
-    expect(subline).toContain(`vega +${TOP.vega.toFixed(2)}`);
-    expect(subline).not.toContain(String(TOP.debit));
-    expect(subline).not.toContain(String(TOP.vega));
+    fireEvent.click(screen.getByTestId("chain-row-7500"));
+    fireEvent.click(screen.getByTestId("chain-row-7400"));
+    expect(screen.getByTestId("chain-detail-7400")).toBeTruthy();
+    expect(screen.queryByTestId("chain-detail-7500")).toBeNull();
   });
 
-  it("clicking the Debit header sorts rows by debit descending and sets aria-sort on that column only", () => {
+  it("clicking a sortable header re-orders the rows and marks aria-sort", () => {
     render(<Analyzer />);
+    const header = screen.getByTestId("chain-sort-edge");
+    fireEvent.click(header);
 
-    fireEvent.click(screen.getByTestId("rail-sort-debit"));
-
-    const expectedIds = [...SORTED_CANDIDATES]
-      .sort((a, b) => b.debit - a.debit)
-      .map((c) => `candidate-row-${c.id}`);
-    const rows = screen.getAllByTestId(/^candidate-row-/);
-    expect(rows.map((el) => el.getAttribute("data-testid"))).toEqual(expectedIds);
-    expect(screen.getByTestId("rail-sort-debit").getAttribute("aria-sort")).toBe("descending");
-    expect(screen.getByTestId("rail-sort-score").getAttribute("aria-sort")).toBe("none");
+    expect(header.getAttribute("aria-sort")).toBe("descending");
+    const first = screen.getAllByTestId(/^chain-row-/)[0]?.getAttribute("data-testid");
+    expect(first).not.toBe("chain-row-7400");
   });
 
-  it("clicking the same header again flips the direction (desc -> asc)", () => {
+  it("clicking the same header again flips the direction", () => {
     render(<Analyzer />);
-
-    fireEvent.click(screen.getByTestId("rail-sort-debit"));
-    fireEvent.click(screen.getByTestId("rail-sort-debit"));
-
-    const expectedIds = [...SORTED_CANDIDATES]
-      .sort((a, b) => a.debit - b.debit)
-      .map((c) => `candidate-row-${c.id}`);
-    const rows = screen.getAllByTestId(/^candidate-row-/);
-    expect(rows.map((el) => el.getAttribute("data-testid"))).toEqual(expectedIds);
-    expect(screen.getByTestId("rail-sort-debit").getAttribute("aria-sort")).toBe("ascending");
+    const header = screen.getByTestId("chain-sort-edge");
+    fireEvent.click(header);
+    fireEvent.click(header);
+    expect(header.getAttribute("aria-sort")).toBe("ascending");
   });
 
-  it("the ⊕ cell toggles Combine without changing the current row selection (stopPropagation)", () => {
+  it("shows an em dash — never a 0 — for a strike the BSM job has not priced", () => {
+    const rows = chainFixture().map((r) =>
+      r.strike === 7400_000 && r.expiration === FRONT.expiration && r.contractType === "P"
+        ? { ...r, bsmIv: null }
+        : r,
+    );
+    mockChainReturn({ data: { rows } });
     render(<Analyzer />);
 
-    fireEvent.click(screen.getByTestId(`combine-${SECOND.id}`));
-
-    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
-    expect(screen.getByTestId("combined-book-summary").textContent).toContain("+ 1 more");
+    const row = screen.getByTestId("chain-row-7400");
+    expect(within(row).getByTestId("chain-front-iv").textContent).toBe("—");
+    expect(within(row).getByTestId("chain-hskew").textContent).toBe("—");
+    expect(within(row).getByTestId("chain-net-theta").textContent).toBe("—");
   });
 
-  it("the detail-pane Combine button toggles the selected candidate into the combined book", () => {
+  it("proposes nothing — no verdict, no score, no ranked rail", () => {
     render(<Analyzer />);
-    const button = screen.getByTestId("detail-combine");
-    expect(button.textContent).toBe("⊕ Combine");
-
-    fireEvent.click(button);
-    expect(button.textContent).toBe("✓ Combined");
-
-    // Selecting a different row now surfaces the combined book (TOP stays combined-in as "extra").
-    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
-    expect(screen.getByTestId("combined-book-summary").textContent).toContain("+ 1 more");
-  });
-
-  it("Suggested calendars panel heading renders (locked copy)", () => {
-    render(<Analyzer />);
-    expect(screen.getByText("Suggested calendars")).toBeTruthy();
-  });
-
-  it("table rows render calendar names with short dates so rows stay one line (no ISO wrap)", () => {
-    // Live engine names carry ISO dates (fixture names are already short-form).
-    expect(compactCalendarName("7525P 2026-08-06 / 2026-08-10")).toBe("7525P Aug 6 / Aug 10");
-    // Non-date text passes through untouched.
-    expect(compactCalendarName("7525P pasted calendar")).toBe("7525P pasted calendar");
-
-    render(<Analyzer />);
-    const row = screen.getByTestId(`candidate-row-${TOP.id}`);
-    expect(row.textContent).toContain(compactCalendarName(TOP.name));
+    expect(screen.queryByTestId("verdict-hero")).toBeNull();
+    expect(screen.queryByTestId("verdict-word")).toBeNull();
+    expect(screen.queryByTestId("verdict-score")).toBeNull();
+    expect(screen.queryByText("Suggested calendars")).toBeNull();
+    expect(screen.queryByText("Why this calendar")).toBeNull();
+    expect(screen.queryAllByTestId(/^candidate-row-/)).toEqual([]);
   });
 });
 
-describe("Analyzer — verdict hero (Phase 41, AUI-02/D-02)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
+// ─── Expiry-pair header ───────────────────────────────────────────────────────
+
+describe("Analyzer — expiry pair header", () => {
+  it("defaults the selects to the two nearest expiries", () => {
+    render(<Analyzer />);
+    expect(screen.getByTestId("chain-front-select")).toHaveProperty("value", FRONT.expiration);
+    expect(screen.getByTestId("chain-back-select")).toHaveProperty("value", BACK.expiration);
   });
 
-  it("renders the headline (verdict word + score + Θ) and a checklist row per rubric factor for the selected calendar", () => {
-    const { container } = render(<Analyzer />);
-    expect(screen.getByTestId("verdict-word").textContent).toContain("CAUTION");
-    expect(screen.getByTestId("verdict-score").textContent).toBe(`score ${Math.round(TOP.score)}/100`);
-    expect(screen.getByTestId("verdict-theta").textContent).toBe(
-      `Θ ${TOP.theta >= 0 ? "+" : ""}${TOP.theta.toFixed(1)}/d`,
+  it("choosing a different back expiry re-joins the table against it", () => {
+    const extra = STRIKES.flatMap((k) => [
+      chainRow({ strike: k * 1000, expiration: "2026-10-16", dte: 82, bsmIv: 0.19, contractType: "P" }),
+      chainRow({ strike: k * 1000, expiration: "2026-10-16", dte: 82, bsmIv: 0.185, contractType: "C" }),
+    ]);
+    mockChainReturn({ data: { rows: [...chainFixture(), ...extra] } });
+    render(<Analyzer />);
+
+    fireEvent.change(screen.getByTestId("chain-back-select"), { target: { value: "2026-10-16" } });
+
+    expect(screen.getByTestId("chain-back-select")).toHaveProperty("value", "2026-10-16");
+    // back 19% − front 15% now.
+    expect(within(screen.getByTestId("chain-row-7500")).getByTestId("chain-back-iv").textContent).toBe(
+      "19.00%",
     );
-    for (const key of ["fwdEdge", "slope", "eventAdjustment", "gexFit", "beVsEm"]) {
-      expect(container.querySelector(`[data-testid="checklist-${key}"]`)).not.toBeNull();
+  });
+
+  it("switches the table between puts and calls", () => {
+    render(<Analyzer />);
+    expect(within(screen.getByTestId("chain-row-7500")).getByTestId("chain-front-iv").textContent).toBe(
+      "15.00%",
+    );
+
+    fireEvent.click(screen.getByTestId("chain-type-call"));
+
+    expect(within(screen.getByTestId("chain-row-7500")).getByTestId("chain-front-iv").textContent).toBe(
+      "14.50%",
+    );
+  });
+
+  it("reports spot and the observation instant from the chain itself", () => {
+    render(<Analyzer />);
+    expect(screen.getByTestId("chain-spot").textContent).toBe(SPOT.toFixed(2));
+    expect(screen.getByTestId("chain-observed").textContent).toContain("ET");
+  });
+
+  it("shows an em dash for the 25Δ RR when the chain is too narrow to reach either wing", () => {
+    render(<Analyzer />);
+    expect(screen.getByTestId("chain-rr-front").textContent).toBe("—");
+    expect(screen.getByTestId("chain-rr-back").textContent).toBe("—");
+  });
+
+  it("shows a real 25Δ RR once the ladder reaches both wings", () => {
+    const wide: ChainRow[] = [];
+    for (const e of [FRONT, BACK]) {
+      for (let k = 6600; k <= 8400; k += 25) {
+        const iv = 0.2 - (k - 6600) * 0.00003;
+        wide.push(chainRow({ ...e, strike: k * 1000, bsmIv: iv, contractType: "P" }));
+        wide.push(chainRow({ ...e, strike: k * 1000, bsmIv: iv - 0.02, contractType: "C" }));
+      }
     }
-    // θ GATE is retired as a separate chip — its info is the headline Θ above, never duplicated.
-    expect(container.querySelector('[data-testid="checklist-theta"]')).toBeNull();
-  });
-
-  it("groups the checklist rows under EDGE/RISK/FIT per the LOCKED mapping (shared GROUP_OF)", () => {
+    mockChainReturn({ data: { rows: wide } });
     render(<Analyzer />);
-    within(screen.getByTestId("verdict-group-EDGE")).getByTestId("checklist-fwdEdge");
-    within(screen.getByTestId("verdict-group-EDGE")).getByTestId("checklist-slope");
-    within(screen.getByTestId("verdict-group-RISK")).getByTestId("checklist-eventAdjustment");
-    within(screen.getByTestId("verdict-group-RISK")).getByTestId("checklist-beVsEm");
-    within(screen.getByTestId("verdict-group-FIT")).getByTestId("checklist-gexFit");
-  });
 
-  it("changes per calendar — the guard candidate (fwdIv null) shows forward-vol edge as n/a", () => {
-    render(<Analyzer />);
-    fireEvent.click(screen.getByTestId(`candidate-row-${GUARD.id}`));
-    expect(screen.getByTestId("checklist-fwdEdge").textContent).toContain("n/a");
-  });
-
-  it("renders the rail legend explaining the shorthand (θ / vega / event tags)", () => {
-    render(<Analyzer />);
-    const legend = screen.getByTestId("rail-legend");
-    expect(legend.textContent).toContain("daily $ decay");
-    expect(legend.textContent).toContain("event on front");
-  });
-
-  it("renders the as-of + source provenance in the quiet footer (AUI-07)", () => {
-    render(<Analyzer />);
-    const footer = screen.getByTestId("verdict-hero-footer");
-    expect(footer.textContent).toContain("as of");
-    expect(footer.textContent).toContain(pickerSnapshotFixture.source);
+    expect(screen.getByTestId("chain-rr-front").textContent).not.toBe("—");
+    expect(screen.getByTestId("chain-rr-back").textContent).toMatch(/^[+-]/);
   });
 });
 
-describe("CandidateRail — direct-render states (Phase 41, D-18)", () => {
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
+// ─── Five load states ─────────────────────────────────────────────────────────
+
+describe("Analyzer — chain load states", () => {
+  it("loading: text-only 'Loading chain…' when isPending && data === undefined", () => {
+    mockChainReturn({ data: undefined, isPending: true });
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("chain-loading").textContent).toBe("Loading chain…");
+    expect(screen.queryByTestId("chain-error")).toBeNull();
+    expect(screen.queryByTestId("chain-cold-start")).toBeNull();
+    expect(document.querySelector(".animate-pulse")).toBeNull();
   });
 
-  it("renders the locked empty-state copy (with the live asOf) when given zero candidates", () => {
-    render(
-      <CandidateRail
-        candidates={[]}
-        pastedCandidates={[]}
-        pasteText=""
-        pasteError={null}
-        asOf="2026-07-02"
-        selectedId=""
-        combinedIds={new Set()}
-        sort={DEFAULT_CANDIDATE_SORT}
-        onSortChange={() => {}}
-        onSelect={() => {}}
-        onToggleCombine={() => {}}
-        onPasteTextChange={() => {}}
-        onPasteAnalyze={() => {}}
-        onRemovePasted={() => {}}
-        onClearAllPasted={() => {}}
-      />,
-    );
+  it("error: shows the failure copy and a Retry that calls refetch()", () => {
+    const refetch = vi.fn();
+    mockChainReturn({ data: undefined, isPending: false, isError: true, refetch });
+    render(<Analyzer />);
 
-    expect(screen.getByTestId("picker-empty-filtered")).toBeTruthy();
-    expect(screen.getByText("No candidates in this snapshot")).toBeTruthy();
-    expect(
-      screen.getByText("No put calendars meet net-θ>0 over the 2026-07-02 snapshot."),
-    ).toBeTruthy();
+    expect(screen.getByTestId("chain-error").textContent).toContain("Couldn't load the chain.");
+    fireEvent.click(screen.getByText("Retry"));
+    expect(refetch).toHaveBeenCalledOnce();
   });
 
-  it("renders no candidate-row elements when the candidate list is empty", () => {
-    const { container } = render(
-      <CandidateRail
-        candidates={[]}
-        pastedCandidates={[]}
-        pasteText=""
-        pasteError={null}
-        asOf="2026-07-02"
-        selectedId=""
-        combinedIds={new Set()}
-        sort={DEFAULT_CANDIDATE_SORT}
-        onSortChange={() => {}}
-        onSelect={() => {}}
-        onToggleCombine={() => {}}
-        onPasteTextChange={() => {}}
-        onPasteAnalyze={() => {}}
-        onRemovePasted={() => {}}
-        onClearAllPasted={() => {}}
-      />,
-    );
-    expect(container.querySelectorAll('[data-testid^="candidate-row-"]').length).toBe(0);
+  it("cold start: settled with no expiries shows 'Chain warming up'", () => {
+    mockChainReturn({ data: { rows: [] } });
+    render(<Analyzer />);
+
+    const cold = screen.getByTestId("chain-cold-start");
+    expect(cold.textContent).toContain("Chain warming up");
+    expect(screen.queryByTestId("chain-empty")).toBeNull();
   });
 
-  it("a pasted, unscored candidate shows the PASTED pill and — for the Debit/Θ cells", () => {
-    const raw = pickerSnapshotFixture.candidates[0];
-    if (raw === undefined) throw new Error("expected at least one fixture candidate");
-    const pastedUnscored: PickerCandidate = {
-      ...raw,
-      id: "pasted-1",
-      name: "7450P · pasted",
-      breakdown: [],
-      frontEvents: ["CPI"],
-      backEvents: [],
-    };
-
-    render(
-      <CandidateRail
-        candidates={[]}
-        pastedCandidates={[pastedUnscored]}
-        pasteText=""
-        pasteError={null}
-        asOf="2026-07-02"
-        selectedId=""
-        combinedIds={new Set()}
-        sort={DEFAULT_CANDIDATE_SORT}
-        onSortChange={() => {}}
-        onSelect={() => {}}
-        onToggleCombine={() => {}}
-        onPasteTextChange={() => {}}
-        onPasteAnalyze={() => {}}
-        onRemovePasted={() => {}}
-        onClearAllPasted={() => {}}
-      />,
+  it("empty: a settled chain with no strike in BOTH expiries says so", () => {
+    // Front-month strikes only exist below 7500, back-month only above — no overlap.
+    const rows = chainFixture().filter(
+      (r) =>
+        (r.expiration === FRONT.expiration && r.strike < 7500_000) ||
+        (r.expiration === BACK.expiration && r.strike > 7500_000),
     );
+    mockChainReturn({ data: { rows } });
+    render(<Analyzer />);
 
-    const row = screen.getByTestId("candidate-row-pasted-1");
-    within(row).getByText("PASTED");
-    // One honest em-dash per numeric column: Debit, Δ, Γ, Θ, Vega, IV f/b (greeks columns
-    // added 2026-07-14 — an unscored paste never fabricates any of them).
-    expect(within(row).getAllByText("—").length).toBe(6);
-    expect(within(row).getByTestId("remove-pasted-pasted-1")).toBeTruthy();
+    expect(screen.getByTestId("chain-empty").textContent).toContain(
+      "No strike is quoted in both of the selected expiries.",
+    );
+    expect(screen.queryAllByTestId(/^chain-row-/)).toEqual([]);
+  });
+
+  it("populated: the table renders and no other state does", () => {
+    render(<Analyzer />);
+    expect(screen.getAllByTestId(/^chain-row-/).length).toBe(STRIKES.length);
+    expect(screen.queryByTestId("chain-loading")).toBeNull();
+    expect(screen.queryByTestId("chain-error")).toBeNull();
+    expect(screen.queryByTestId("chain-cold-start")).toBeNull();
+    expect(screen.queryByTestId("chain-empty")).toBeNull();
+  });
+
+  it("state precedence: loading wins over isError being simultaneously true", () => {
+    mockChainReturn({ data: undefined, isPending: true, isError: true });
+    render(<Analyzer />);
+
+    expect(screen.getByTestId("chain-loading")).toBeTruthy();
+    expect(screen.queryByTestId("chain-error")).toBeNull();
+  });
+
+  it("the Re-pull control stays usable in every state", () => {
+    mockChainReturn({ data: undefined, isPending: true });
+    render(<Analyzer />);
+    expect(screen.getByTestId("repull-chains-button")).toBeTruthy();
   });
 });
 
-describe("Analyzer — payoff center (Task 3, ANLZ-02)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
-
-  it("feeds candidateToAnalyzerPosition(selected) into repriceScenario and passes the picker curve colors", () => {
-    render(<Analyzer />);
-
-    const positions = [candidateToAnalyzerPosition(TOP)];
-    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
-    const expected = repriceScenario(positions, PARAMS, domain);
-    const props = latestPayoffChartProps();
-
-    expect(props.todayCurve).toEqual(expected.payoffCurve);
-    expect(props.expirationCurve).toEqual(expected.expirationCurve);
-    expect(props.todayCurveColor).toBe("#5b9cf6");
-    expect(props.expirationCurveColor).toBe("#a78bfa");
-    expect(props.rollCurve).toBeNull();
-  });
-
-  it("re-prices against the newly-selected candidate when a different row is clicked", () => {
-    render(<Analyzer />);
-
-    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
-
-    const positions = [candidateToAnalyzerPosition(SECOND)];
-    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
-    const expected = repriceScenario(positions, PARAMS, domain);
-    const props = latestPayoffChartProps();
-    expect(props.todayCurve).toEqual(expected.payoffCurve);
-  });
-
-  it("passes expectedMoveBand as { spot: fixtureSpot, em: selected.expectedMove }", () => {
-    render(<Analyzer />);
-    const props = latestPayoffChartProps();
-    expect(props.expectedMoveBand).toEqual({ spot: pickerSnapshotFixture.spot, em: TOP.expectedMove });
-  });
-
-  it("⊕ Combine SUMS the selected + combined calendar into one net payoff curve", () => {
-    render(<Analyzer />);
-
-    fireEvent.click(screen.getByTestId(`combine-${SECOND.id}`));
-
-    // Combined book = [selected TOP, combined SECOND], summed by the one engine (Overview's path).
-    const positions = [candidateToAnalyzerPosition(TOP), candidateToAnalyzerPosition(SECOND)];
-    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
-    const expected = repriceScenario(positions, PARAMS, domain);
-    const props = latestPayoffChartProps();
-    expect(props.todayCurve).toEqual(expected.payoffCurve);
-    expect(props.expirationCurve).toEqual(expected.expirationCurve);
-    // No single dashed overlay any more — the combine path sums instead.
-    expect(props.compareCurve ?? null).toBeNull();
-  });
-
-  it("toggling ⊕ Combine off returns to the selected-only curve", () => {
-    render(<Analyzer />);
-
-    const combineButton = screen.getByTestId(`combine-${SECOND.id}`);
-    fireEvent.click(combineButton);
-    fireEvent.click(combineButton);
-
-    const onlyPositions = [candidateToAnalyzerPosition(TOP)];
-    const onlyDomain = computePayoffDomain(onlyPositions, PARAMS.spot, PARAMS);
-    const selectedOnly = repriceScenario(onlyPositions, PARAMS, onlyDomain);
-    expect(latestPayoffChartProps().todayCurve).toEqual(selectedOnly.payoffCurve);
-  });
-
-  it("shows the combined-book summary (debit = sum) once 2+ calendars are combined", () => {
-    render(<Analyzer />);
-    expect(screen.queryByTestId("combined-book-summary")).toBeNull();
-
-    fireEvent.click(screen.getByTestId(`combine-${SECOND.id}`));
-
-    const summary = screen.getByTestId("combined-book-summary");
-    expect(summary.textContent).toContain("+ 1 more");
-    expect(summary.textContent).toContain(`$${Math.round(TOP.debit + SECOND.debit)}`);
-  });
-});
-
-describe("Analyzer — right column (Task 2, ANLZ-03/D-01b)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
-
-  it("renders the WHY panel only — no ENTRY/EXIT panel, no term-structure panel or inset", () => {
-    render(<Analyzer />);
-    expect(screen.getByText("Why this calendar")).toBeTruthy();
-    // 2026-07-15 (user): ENTRY/EXIT panel dropped from desktop; term info is the day ribbon.
-    expect(screen.queryByText("Entry / exit plan")).toBeNull();
-    expect(screen.queryByText("Term structure + your legs")).toBeNull();
-    expect(screen.queryByTestId("term-structure-inset")).toBeNull();
-    expect(screen.getByTestId("event-leg-ribbon")).toBeTruthy();
-  });
-
-  it("wires WhyPanel + the leg ribbon to the default (top-ranked) candidate", () => {
-    render(<Analyzer />);
-    expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toContain(
-      `Front ${(TOP.frontLeg.iv * 100).toFixed(1)}%`,
-    );
-    expect(screen.getByTestId("term-structure-leg-dot-front")).toBeTruthy();
-    expect(screen.getByTestId("term-structure-leg-dot-back")).toBeTruthy();
-  });
-
-  it("re-wires the right column to the newly-selected candidate when a different row is clicked", () => {
-    render(<Analyzer />);
-    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
-    expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toContain(
-      `Front ${(SECOND.frontLeg.iv * 100).toFixed(1)}%`,
-    );
-  });
-
-  it("selecting the guard candidate shows the guard sentence (fwd-IV visuals live in WHY, not the ribbon)", () => {
-    render(<Analyzer />);
-    fireEvent.click(screen.getByTestId(`candidate-row-${GUARD.id}`));
-
-    expect(screen.getByTestId("whypanel-forward-edge-sentence").textContent).toBe(
-      "Fwd IV undefined (inverted term structure) — ranked on slope/GEX/event only.",
-    );
-    // The day ribbon has no fwd-IV mark to guard — it still renders its leg dots.
-    expect(screen.getByTestId("term-structure-leg-dot-front")).toBeTruthy();
-  });
-});
+// ─── Pasted calendars ─────────────────────────────────────────────────────────
 
 describe("Analyzer — pasted calendars (multi-paste)", () => {
-  beforeEach(stubDesktopMatchMedia);
   afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
     mockAnalyzeCalendarMutateAsync.mockImplementation(() =>
       Promise.resolve({ scored: false, candidate: null, reason: "mocked" }),
     );
   });
 
-  // Dates far in the future so this suite never goes stale relative to "today". Distinct
-  // strikes/debits so two pasted cards are distinguishable in combine assertions.
   const PASTE_EXAMPLE =
     "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7450 PUT @45.85 LMT GTC";
   const PASTE_EXAMPLE_2 =
@@ -603,8 +446,6 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
   const PASTE_EXAMPLE_CALL =
     "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7600 CALL @38.20 LMT GTC";
 
-  // PUT pastes now route through useAnalyzeCalendar's async mutateAsync (mocked above) —
-  // `await act(...)` flushes the resolved/rejected promise + the resulting state update.
   async function paste(text: string): Promise<void> {
     fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: text } });
     await act(async () => {
@@ -613,137 +454,155 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     });
   }
 
-  it("mounts the paste-to-analyze input at the top of the Suggested calendars panel (no separate top chart)", () => {
+  it("mounts the paste input in the Risk profile panel", () => {
     render(<Analyzer />);
     expect(screen.getByTestId("picker-paste-input")).toBeTruthy();
     expect(screen.getByTestId("picker-paste-analyze")).toBeTruthy();
-    // No separate ad-hoc panel/chart above the grid — the old adhoc-* ids are gone.
-    expect(screen.queryByTestId("adhoc-input")).toBeNull();
-    expect(screen.queryByTestId("adhoc-analyze")).toBeNull();
   });
 
-  it("Analyze on a valid paste ADDS a PASTED card at the top of the rail, auto-selects it, and clears the input", async () => {
+  it("with nothing pasted the payoff panel says so instead of charting a fabricated calendar", () => {
     render(<Analyzer />);
+    expect(screen.getByTestId("payoff-empty")).toBeTruthy();
+    expect(screen.queryByTestId("risk-profile-selected-name")).toBeNull();
+  });
 
+  it("Analyze on a valid paste adds a calendar, auto-selects it, and clears the input", async () => {
+    render(<Analyzer />);
     await paste(PASTE_EXAMPLE);
 
-    const rows = screen.getAllByTestId(/^candidate-row-/);
-    expect(rows[0]?.getAttribute("data-testid")).toBe("candidate-row-pasted-1");
+    expect(screen.getByTestId("pasted-row-pasted-1")).toBeTruthy();
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
-    within(screen.getByTestId("candidate-row-pasted-1")).getByText("PASTED");
     expect(screen.getByTestId("picker-paste-input")).toHaveProperty("value", "");
     expect(mockAnalyzeCalendarMutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ putCall: "P", strike: 7450 }),
     );
   });
 
-  it("a second Analyze ADDS a second PASTED card (both coexist, pinned in paste order) and auto-selects the new one", async () => {
+  it("a second Analyze adds a second calendar and auto-selects the new one", async () => {
     render(<Analyzer />);
-
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
 
-    const rows = screen.getAllByTestId(/^candidate-row-/);
-    expect(rows[0]?.getAttribute("data-testid")).toBe("candidate-row-pasted-1");
-    expect(rows[1]?.getAttribute("data-testid")).toBe("candidate-row-pasted-2");
+    expect(screen.getByTestId("pasted-row-pasted-1")).toBeTruthy();
+    expect(screen.getByTestId("pasted-row-pasted-2")).toBeTruthy();
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7500P · pasted");
   });
 
-  it("the pasted candidate drives the shared center Risk-profile chart via the same candidate→position→repriceScenario path", async () => {
+  it("the pasted calendar drives the payoff chart through candidate→position→repriceScenario", async () => {
     render(<Analyzer />);
-
     await paste(PASTE_EXAMPLE);
 
     const parsed = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
     if (parsed === null) throw new Error("expected PASTE_EXAMPLE to parse");
-    const pastedCandidate = parsedCalendarToPickerCandidate(parsed, "pasted-1");
-    const pastedPositions = [candidateToAnalyzerPosition(pastedCandidate)];
-    const pastedDomain = computePayoffDomain(pastedPositions, PARAMS.spot, PARAMS);
-    const expected = repriceScenario(pastedPositions, PARAMS, pastedDomain);
+    const positions = [candidateToAnalyzerPosition(parsedCalendarToPickerCandidate(parsed, "pasted-1"))];
+    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
+    const expected = repriceScenario(positions, PARAMS, domain);
 
     const props = latestPayoffChartProps();
     expect(props.todayCurve).toEqual(expected.payoffCurve);
     expect(props.expirationCurve).toEqual(expected.expirationCurve);
+    expect(props.todayCurveColor).toBe("#5b9cf6");
+    expect(props.expirationCurveColor).toBe("#a78bfa");
+    expect(props.rollCurve).toBeNull();
   });
 
-  it("shows the parse-error copy when the pasted text doesn't parse, without disturbing existing pasted cards", async () => {
+  it("selecting a different pasted calendar re-prices against it", async () => {
     render(<Analyzer />);
+    await paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE_2);
 
+    fireEvent.click(screen.getByTestId("pasted-row-pasted-1"));
+
+    const parsed = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
+    if (parsed === null) throw new Error("expected PASTE_EXAMPLE to parse");
+    const positions = [candidateToAnalyzerPosition(parsedCalendarToPickerCandidate(parsed, "pasted-1"))];
+    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
+    const expected = repriceScenario(positions, PARAMS, domain);
+    expect(latestPayoffChartProps().todayCurve).toEqual(expected.payoffCurve);
+  });
+
+  it("shows the parse-error copy on unreadable text without disturbing existing calendars", async () => {
+    render(<Analyzer />);
     await paste(PASTE_EXAMPLE);
     await paste("not an order");
 
     expect(screen.getByTestId("picker-paste-error")).toBeTruthy();
-    // The earlier successful paste is untouched by the failed second attempt.
-    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
-    expect(screen.queryByTestId("candidate-row-pasted-2")).toBeNull();
+    expect(screen.getByTestId("pasted-row-pasted-1")).toBeTruthy();
+    expect(screen.queryByTestId("pasted-row-pasted-2")).toBeNull();
   });
 
-  it("each pasted card's × removes just that card, cleans its combine state, and re-selects the top-ranked scored candidate when it was selected", async () => {
+  it("× removes just that calendar, clears its combine state, and falls back to the first remaining", async () => {
     render(<Analyzer />);
-
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
-    // pasted-2 is auto-selected; combine it too, then remove it.
-    fireEvent.click(screen.getByTestId("combine-pasted-2"));
+    fireEvent.click(screen.getByTestId("pasted-combine-pasted-2"));
 
-    fireEvent.click(screen.getByTestId("remove-pasted-pasted-2"));
+    fireEvent.click(screen.getByTestId("pasted-remove-pasted-2"));
 
-    expect(screen.queryByTestId("candidate-row-pasted-2")).toBeNull();
-    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
-    // Selection fell back to the first rail candidate (pasted-1, still pinned atop scored ones).
+    expect(screen.queryByTestId("pasted-row-pasted-2")).toBeNull();
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
-    // Combine state for the removed card is gone, so combining pasted-1 doesn't drag it back in.
     expect(screen.queryByTestId("combined-book-summary")).toBeNull();
   });
 
-  it("removing a pasted card that is NOT selected leaves the current selection untouched", async () => {
+  it("removing a calendar that is NOT selected leaves the selection untouched", async () => {
     render(<Analyzer />);
-
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
-    // Select pasted-1 explicitly (pasted-2 is auto-selected by the second paste).
-    fireEvent.click(screen.getByTestId("candidate-row-pasted-1"));
+    fireEvent.click(screen.getByTestId("pasted-row-pasted-1"));
 
-    fireEvent.click(screen.getByTestId("remove-pasted-pasted-2"));
+    fireEvent.click(screen.getByTestId("pasted-remove-pasted-2"));
 
     expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7450P · pasted");
   });
 
-  it("⊕ Combine on two pasted calendars sums both debits into the combined-book summary", async () => {
+  it("⊕ Combine sums both debits into one book payoff and summary", async () => {
     render(<Analyzer />);
-
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
-    // pasted-2 is selected; combine pasted-1 into it.
-    fireEvent.click(screen.getByTestId("combine-pasted-1"));
+    fireEvent.click(screen.getByTestId("pasted-combine-pasted-1"));
 
     const parsed1 = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
     const parsed2 = parseTosOrder(PASTE_EXAMPLE_2, new Date(), pickerSnapshotFixture.spot, 0.045);
     if (parsed1 === null || parsed2 === null) throw new Error("expected both examples to parse");
-    const debit1 = parsedCalendarToPickerCandidate(parsed1, "pasted-1").debit;
-    const debit2 = parsedCalendarToPickerCandidate(parsed2, "pasted-2").debit;
+    const c1 = parsedCalendarToPickerCandidate(parsed1, "pasted-1");
+    const c2 = parsedCalendarToPickerCandidate(parsed2, "pasted-2");
 
     const summary = screen.getByTestId("combined-book-summary");
     expect(summary.textContent).toContain("+ 1 more");
-    expect(summary.textContent).toContain(`$${Math.round(debit1 + debit2)}`);
+    expect(summary.textContent).toContain(`$${Math.round(c1.debit + c2.debit)}`);
+
+    // The chart itself is the SUM, through the one engine.
+    const positions = [candidateToAnalyzerPosition(c2), candidateToAnalyzerPosition(c1)];
+    const domain = computePayoffDomain(positions, PARAMS.spot, PARAMS);
+    const expected = repriceScenario(positions, PARAMS, domain);
+    expect(latestPayoffChartProps().todayCurve).toEqual(expected.payoffCurve);
   });
 
-  it("Clear all removes every pasted card and re-selects the top-ranked scored candidate", async () => {
+  it("toggling ⊕ Combine off returns to the selected-only curve", async () => {
     render(<Analyzer />);
-
     await paste(PASTE_EXAMPLE);
     await paste(PASTE_EXAMPLE_2);
-    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
-    expect(screen.getByTestId("candidate-row-pasted-2")).toBeTruthy();
+
+    const combine = screen.getByTestId("pasted-combine-pasted-1");
+    fireEvent.click(combine);
+    fireEvent.click(combine);
+
+    expect(screen.queryByTestId("combined-book-summary")).toBeNull();
+  });
+
+  it("Clear all removes every pasted calendar and returns to the empty payoff prompt", async () => {
+    render(<Analyzer />);
+    await paste(PASTE_EXAMPLE);
+    await paste(PASTE_EXAMPLE_2);
 
     fireEvent.click(screen.getByTestId("picker-paste-clear-all"));
 
-    expect(screen.queryByTestId("candidate-row-pasted-1")).toBeNull();
-    expect(screen.queryByTestId("candidate-row-pasted-2")).toBeNull();
-    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe(TOP.name);
+    expect(screen.queryByTestId("pasted-row-pasted-1")).toBeNull();
+    expect(screen.queryByTestId("pasted-row-pasted-2")).toBeNull();
+    expect(screen.getByTestId("payoff-empty")).toBeTruthy();
   });
 
-  it("the Clear all button only renders once at least one calendar has been pasted", async () => {
+  it("the Clear all button only renders once something has been pasted", async () => {
     render(<Analyzer />);
     expect(screen.queryByTestId("picker-paste-clear-all")).toBeNull();
 
@@ -751,51 +610,16 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     expect(screen.getByTestId("picker-paste-clear-all")).toBeTruthy();
   });
 
-  it("Why / Scoring checklist show a 'not engine-scored' note when a scored:false pasted PUT is selected", async () => {
+  it("a pasted CALL never reaches the analyze endpoint (puts-only) but still charts", async () => {
     render(<Analyzer />);
-
-    await paste(PASTE_EXAMPLE);
-
-    // Hero + WHY (the ENTRY/EXIT panel was dropped 2026-07-15).
-    expect(screen.getAllByText("Pasted calendar — not engine-scored.").length).toBe(2);
-    expect(screen.queryByTestId("verdict-word")).toBeNull();
-    expect(screen.queryByTestId("entryexit-value-debit")).toBeNull();
-    expect(screen.queryByTestId("whypanel-forward-edge-sentence")).toBeNull();
-  });
-
-  it("a pasted CALL never calls the endpoint — unscored fallback with the 'not engine-scored' note (D-03)", async () => {
-    render(<Analyzer />);
-
     await paste(PASTE_EXAMPLE_CALL);
 
     expect(mockAnalyzeCalendarMutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
-    expect(screen.getAllByText("Pasted calendar — not engine-scored.").length).toBe(2);
+    expect(screen.getByTestId("pasted-row-pasted-1")).toBeTruthy();
+    expect(screen.getByTestId("risk-profile-selected-name").textContent).toBe("7600C · pasted");
   });
 
-  it("scored:true renders the real breakdown bars, θ GATE, WHY THIS CALENDAR, and ENTRY/EXIT PLAN — the placeholder disappears (D-02)", async () => {
-    const scoredCandidate: PickerCandidate = {
-      ...TOP,
-      id: "adhoc-30D-7450-2030-12-01-2030-12-31",
-      name: "7450P adhoc",
-    };
-    mockAnalyzeCalendarMutateAsync.mockImplementationOnce(() =>
-      Promise.resolve({ scored: true, candidate: scoredCandidate, reason: null }),
-    );
-
-    render(<Analyzer />);
-    await paste(PASTE_EXAMPLE);
-
-    // Provenance kept (pasted-prefix id + PASTED badge) even though it's scored.
-    expect(screen.getByTestId("candidate-row-pasted-1")).toBeTruthy();
-    within(screen.getByTestId("candidate-row-pasted-1")).getByText("PASTED");
-    // The "not engine-scored" placeholder is gone; real panels render.
-    expect(screen.queryByText("Pasted calendar — not engine-scored.")).toBeNull();
-    expect(screen.getByTestId("verdict-word")).toBeTruthy();
-    expect(screen.getByTestId("whypanel-forward-edge-sentence")).toBeTruthy();
-  });
-
-  it("a network/HTTP error surfaces the paste-error copy, not a crash, and adds no card", async () => {
+  it("a network error surfaces the paste-error copy, not a crash, and adds no calendar", async () => {
     mockAnalyzeCalendarMutateAsync.mockImplementationOnce(() =>
       Promise.reject(new Error("POST /api/picker/analyze failed: 500")),
     );
@@ -804,59 +628,78 @@ describe("Analyzer — pasted calendars (multi-paste)", () => {
     await paste(PASTE_EXAMPLE);
 
     expect(screen.getByTestId("picker-paste-error")).toBeTruthy();
-    expect(screen.queryByTestId("candidate-row-pasted-1")).toBeNull();
+    expect(screen.queryByTestId("pasted-row-pasted-1")).toBeNull();
+  });
+
+  it("while the analyze request is pending the button reads Analyzing… and is disabled", () => {
+    mockAnalyzePending.value = true;
+    render(<Analyzer />);
+
+    const button = screen.getByTestId("picker-paste-analyze");
+    expect(button.textContent).toBe("Analyzing…");
+    expect(button.hasAttribute("disabled")).toBe(true);
   });
 });
 
-describe("Analyzer — copy TOS order (copy-out)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
+// ─── Copy TOS order ───────────────────────────────────────────────────────────
 
-  it("copies the selected candidate's TOS calendar order to the clipboard", () => {
+describe("Analyzer — copy TOS order (copy-out)", () => {
+  const PASTE_EXAMPLE =
+    "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7450 PUT @45.85 LMT GTC";
+
+  async function paste(text: string): Promise<void> {
+    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: text } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+      await Promise.resolve();
+    });
+  }
+
+  it("copies the selected calendar's TOS order to the clipboard", async () => {
     const writeText = vi.fn();
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 
     render(<Analyzer />);
+    await paste(PASTE_EXAMPLE);
     fireEvent.click(screen.getByTestId("copy-tos-order"));
 
-    expect(writeText).toHaveBeenCalledWith(buildTosCalendarOrder(TOP, pickerSnapshotFixture.asOf));
+    const parsed = parseTosOrder(PASTE_EXAMPLE, new Date(), pickerSnapshotFixture.spot, 0.045);
+    if (parsed === null) throw new Error("expected PASTE_EXAMPLE to parse");
+    const candidate = parsedCalendarToPickerCandidate(parsed, "pasted-1");
+    expect(writeText).toHaveBeenCalledWith(
+      buildTosCalendarOrder(candidate, pickerSnapshotFixture.asOf),
+    );
     expect(screen.getByTestId("copy-tos-order").textContent).toContain("Copied");
   });
 
-  it("selecting a different row and Copy TOS order copies that candidate — not the previous selection", () => {
-    // Phase 41: per-row Copy is gone (Copy lives only in the detail-pane header now) — this
-    // proves per-candidate copy wiring still holds once that candidate becomes selected via a
-    // table row click (SECOND is not the default selection, TOP is).
-    const writeText = vi.fn();
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-
+  it("offers no Copy button while nothing is selected", () => {
     render(<Analyzer />);
-    fireEvent.click(screen.getByTestId(`candidate-row-${SECOND.id}`));
-    fireEvent.click(screen.getByTestId("copy-tos-order"));
-
-    expect(writeText).toHaveBeenCalledWith(buildTosCalendarOrder(SECOND, pickerSnapshotFixture.asOf));
+    expect(screen.queryByTestId("copy-tos-order")).toBeNull();
   });
 });
 
-describe("Analyzer — payoff controls (shared date projection + series toggles)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
+// ─── Payoff controls ──────────────────────────────────────────────────────────
 
-  it("renders the shared date-projection picker", () => {
+describe("Analyzer — payoff controls (shared date projection + series toggles)", () => {
+  const PASTE_EXAMPLE =
+    "BUY +1 CALENDAR SPX 100 (Weeklys) 31 DEC 30/1 DEC 30 7450 PUT @45.85 LMT GTC";
+
+  async function renderWithCalendar(): Promise<void> {
     render(<Analyzer />);
+    fireEvent.change(screen.getByTestId("picker-paste-input"), { target: { value: PASTE_EXAMPLE } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("picker-paste-analyze"));
+      await Promise.resolve();
+    });
+  }
+
+  it("renders the shared date-projection picker", async () => {
+    await renderWithCalendar();
     expect(screen.getByTestId("date-picker-input")).not.toBeNull();
   });
 
-  it("stepping the date forward moves the T+0 curve but leaves @exp fixed (D-01)", () => {
-    render(<Analyzer />);
+  it("stepping the date forward moves the T+0 curve but leaves @exp fixed", async () => {
+    await renderWithCalendar();
     const before = latestPayoffChartProps();
 
     fireEvent.click(screen.getByRole("button", { name: "Next day" }));
@@ -866,8 +709,8 @@ describe("Analyzer — payoff controls (shared date projection + series toggles)
     expect(after.expirationCurve).toEqual(before.expirationCurve);
   });
 
-  it("clicking the @ exp toggle flips PayoffChart toggles.showExpiration off (others unaffected)", () => {
-    render(<Analyzer />);
+  it("clicking the @ exp toggle flips showExpiration off, leaving the others alone", async () => {
+    await renderWithCalendar();
     expect(latestPayoffChartProps().toggles.showExpiration).toBe(true);
 
     fireEvent.click(screen.getByTestId("toggle-showExpiration"));
@@ -875,421 +718,15 @@ describe("Analyzer — payoff controls (shared date projection + series toggles)
     expect(latestPayoffChartProps().toggles.showExpiration).toBe(false);
     expect(latestPayoffChartProps().toggles.showWalls).toBe(true);
   });
-});
 
-describe("Analyzer — live-data states (Task 2, 19-09-PLAN.md, D-18/D-19)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
-
-  it("loading: shows text-only 'Loading candidates…' when isPending && data === undefined", () => {
-    mockUsePickerReturn({ data: undefined, isPending: true, isError: false });
-
-    render(<Analyzer />);
-
-    expect(screen.getByTestId("picker-loading").textContent).toBe("Loading candidates…");
-    expect(screen.queryByTestId("picker-error")).toBeNull();
-    expect(screen.queryByTestId("picker-empty-cold-start")).toBeNull();
-    expect(screen.queryByTestId("picker-empty-filtered")).toBeNull();
-    expect(screen.queryByText("Suggested calendars")).toBeTruthy();
-    // No shadcn Skeleton pulse (D-19) — text-only.
-    expect(document.querySelector(".animate-pulse")).toBeNull();
-  });
-
-  it("error: shows 'Couldn't load candidates.' + a Retry button that calls refetch()", () => {
-    const refetch = vi.fn();
-    mockUsePickerReturn({ data: undefined, isPending: false, isError: true, refetch });
-
-    render(<Analyzer />);
-
-    const errorBlock = screen.getByTestId("picker-error");
-    expect(errorBlock.textContent).toContain("Couldn't load candidates.");
-    expect(screen.queryByTestId("picker-loading")).toBeNull();
-
-    fireEvent.click(screen.getByText("Retry"));
-    expect(refetch).toHaveBeenCalledOnce();
-  });
-
-  it("cold-start: settled with no snapshot (404 -> null) shows 'Picker warming up'", () => {
-    mockUsePickerReturn({ data: null, isPending: false, isError: false });
-
-    render(<Analyzer />);
-
-    const coldStart = screen.getByTestId("picker-empty-cold-start");
-    expect(coldStart.textContent).toContain("Picker warming up");
-    expect(coldStart.textContent).toContain(
-      "First scoring run pending — check back after the next chain snapshot.",
-    );
-    expect(screen.queryByTestId("picker-empty-filtered")).toBeNull();
-  });
-
-  it("zero-candidates-passed-filter: settled with a snapshot whose candidates array is empty", () => {
-    mockUsePickerReturn({ data: { ...pickerSnapshotFixture, candidates: [] }, isPending: false, isError: false });
-
-    render(<Analyzer />);
-
-    const emptyFiltered = screen.getByTestId("picker-empty-filtered");
-    expect(emptyFiltered.textContent).toContain("No candidates in this snapshot");
-    expect(emptyFiltered.textContent).toContain(
-      `No put calendars meet net-θ>0 over the ${pickerSnapshotFixture.asOf} snapshot.`,
-    );
-    expect(screen.queryByTestId("picker-empty-cold-start")).toBeNull();
-  });
-
-  it("zero candidates: the hollow shells never render — no hero, no WHY/ENTRY rail, no chart, no term panel (2026-07-15)", () => {
-    mockUsePickerReturn({ data: { ...pickerSnapshotFixture, candidates: [] }, isPending: false, isError: false });
-
-    render(<Analyzer />);
-
-    expect(screen.getByTestId("picker-empty-filtered")).toBeTruthy();
-    expect(screen.queryByTestId("analyzer-scorecard-wrapper")).toBeNull();
-    expect(screen.queryByTestId("analyzer-inner-grid")).toBeNull();
-    expect(screen.queryByText("Why this calendar")).toBeNull();
-    expect(screen.queryByText("Entry / exit plan")).toBeNull();
-    expect(screen.queryByText("Risk profile")).toBeNull();
-    expect(screen.queryByText("Term structure + your legs")).toBeNull();
-    // The paste box + Re-pull stay usable — the rail IS the screen in this state.
-    expect(screen.getByTestId("picker-paste-input")).toBeTruthy();
-    expect(screen.getByTestId("repull-chains-button")).toBeTruthy();
-  });
-
-  it("zero candidates with gate drops + after-hours: the empty state names the real reason", () => {
-    mockUsePickerReturn({
-      data: {
-        ...pickerSnapshotFixture,
-        candidates: [],
-        marketSession: "after-hours",
-        gateDrops: { liquidity: 3539, netTheta: 2, termInverted: 0, eventBlackout: 0 },
-      },
-      isPending: false,
-      isError: false,
-    });
-
-    render(<Analyzer />);
-
-    const emptyFiltered = screen.getByTestId("picker-empty-filtered");
-    expect(emptyFiltered.textContent).toContain("3539 illiquid quotes · 2 negative-θ pairs dropped");
-    expect(emptyFiltered.textContent).toContain("After-hours spreads are wide");
-  });
-
-  it("while the analyze request is pending, the button reads Analyzing… and is disabled (2026-07-15)", () => {
-    mockAnalyzePending.value = true;
-    render(<Analyzer />);
-
-    const analyzeButton = screen.getByTestId("picker-paste-analyze");
-    expect(analyzeButton.textContent).toBe("Analyzing…");
-    expect(analyzeButton.hasAttribute("disabled")).toBe(true);
-  });
-
-  it("zero candidates behind a blocked gate: the empty state says the gate suppressed the board", () => {
-    mockUsePickerReturn({
-      data: {
-        ...pickerSnapshotFixture,
-        candidates: [],
-        gate: { ...pickerSnapshotFixture.gate, state: "blocked" },
-      },
-      isPending: false,
-      isError: false,
-    });
-
-    render(<Analyzer />);
-
-    const emptyFiltered = screen.getByTestId("picker-empty-filtered");
-    expect(emptyFiltered.textContent).toContain("Entry gate blocked");
-  });
-
-  it("populated: renders the ranked rail from live data (no layout change from the fixture path)", () => {
-    render(<Analyzer />);
-
-    const rows = screen.getAllByTestId(/^candidate-row-/);
-    expect(rows.length).toBe(pickerSnapshotFixture.candidates.length);
-    expect(screen.queryByTestId("picker-loading")).toBeNull();
-    expect(screen.queryByTestId("picker-error")).toBeNull();
-    expect(screen.queryByTestId("picker-empty-cold-start")).toBeNull();
-    expect(screen.queryByTestId("picker-empty-filtered")).toBeNull();
-  });
-
-  it("state precedence: loading wins over isError being simultaneously true", () => {
-    // isPending && data===undefined is checked first — a query that is somehow both isPending
-    // and isError (e.g. stale error state mid-refetch) must still show the loading text, not two
-    // states at once.
-    mockUsePickerReturn({ data: undefined, isPending: true, isError: true });
-
-    render(<Analyzer />);
-
-    expect(screen.getByTestId("picker-loading")).toBeTruthy();
-    expect(screen.queryByTestId("picker-error")).toBeNull();
-  });
-});
-
-describe("Analyzer — rule-registry-driven checklist (rules.ts via snapshot.ruleSet)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
-
-  const RULESET = [
-    { id: "net-theta-positive", label: "Net theta > 0", kind: "gate", weight: 0, status: "active", rationale: "carry" },
-    { id: "liquidity", label: "Liquidity", kind: "gate", weight: 0, status: "active", rationale: "tradeable" },
-    { id: "fwdEdge", label: "Forward-IV edge", kind: "score", weight: 35, status: "active", rationale: "fwd" },
-    { id: "slope", label: "Term-structure slope", kind: "score", weight: 30, status: "active", rationale: "vrp" },
-    { id: "gexFit", label: "GEX placement", kind: "score", weight: 15, status: "active", rationale: "walls" },
-    { id: "eventAdjustment", label: "Front-leg event risk", kind: "score", weight: 10, status: "active", rationale: "events" },
-    { id: "beVsEm", label: "Breakeven vs EM", kind: "score", weight: 10, status: "active", rationale: "zone" },
-    { id: "vrp", label: "VRP", kind: "experimental", weight: 0, status: "experimental", rationale: "calibrating" },
-  ] as const;
-
-  function snapshotWithRegistry(): PickerSnapshotResponse {
-    return {
-      ...pickerSnapshotFixture,
-      ruleSet: [...RULESET],
-      gateDrops: { liquidity: 3, netTheta: 2, termInverted: 0, eventBlackout: 0 },
-      candidates: pickerSnapshotFixture.candidates.map((c) => ({
-        ...c,
-        context: [
-          { id: "vrp", label: "VRP (front IV − RV20)", value: 0.031, note: "calibrating (PICK-04)" },
-          { id: "slopePercentile", label: "Slope percentile", value: 67, note: "calibrating (PICK-04)" },
-          { id: "backEventBonus", label: "Event in back window", value: 1, note: "calibrating (PICK-05)" },
-        ],
-      })),
-    };
-  }
-
-  it("renders engine labels from the snapshot ruleSet in the correct group (fwdEdge/slope under EDGE)", () => {
-    mockUsePickerReturn({ data: snapshotWithRegistry() });
-    render(<Analyzer />);
-
-    within(screen.getByTestId("verdict-group-EDGE")).getByTestId("checklist-fwdEdge");
-    within(screen.getByTestId("verdict-group-EDGE")).getByTestId("checklist-slope");
-  });
-
-  it("renders the gate-drop counts in the quiet footer (no silent caps)", () => {
-    mockUsePickerReturn({ data: snapshotWithRegistry() });
-    render(<Analyzer />);
-
-    const footer = screen.getByTestId("verdict-hero-footer");
-    expect(footer.textContent).toContain("3 illiquid quotes");
-    expect(footer.textContent).toContain("2 negative-θ pairs");
-  });
-
-  it("renders the experimental context values dim in the quiet footer", () => {
-    mockUsePickerReturn({ data: snapshotWithRegistry() });
-    render(<Analyzer />);
-
-    const footer = screen.getByTestId("verdict-hero-footer");
-    expect(footer.textContent).toContain("CALIBRATING");
-    expect(footer.textContent).toContain("0.031");
-    expect(footer.textContent).toContain("67");
-  });
-
-  it("the Re-pull chains button lives in the Suggested-calendars rail heading, not the scorecard hero", () => {
-    mockUsePickerReturn({ data: snapshotWithRegistry() });
-    render(<Analyzer />);
-
-    const button = screen.getByTestId("repull-chains-button");
-    const wrapper = screen.getByTestId("analyzer-scorecard-wrapper");
-    expect(wrapper.contains(button)).toBe(false);
-    // The button sits inside the rail panel, adjacent to its heading.
-    const rail = screen.getByText("Suggested calendars").closest("section, div.rounded-lg, div");
-    expect(rail).not.toBeNull();
-  });
-
-  it("factor rows render icon + contribution % for the selected candidate", () => {
-    mockUsePickerReturn({ data: snapshotWithRegistry() });
-    render(<Analyzer />);
-
-    const fwd = screen.getByTestId("checklist-fwdEdge");
-    expect(fwd.textContent).toMatch(/[✓~✗].*%/u);
-  });
-
-  it("pre-registry snapshots (empty ruleSet) fall back to the legacy labels", () => {
-    mockUsePickerReturn({ data: pickerSnapshotFixture });
-    render(<Analyzer />);
-
-    expect(screen.getByTestId("checklist-fwdEdge")).toBeTruthy();
-  });
-
-  it("shows an AH-marks warning chip when the snapshot's marketSession is after-hours", () => {
-    mockUsePickerReturn({ data: { ...snapshotWithRegistry(), marketSession: "after-hours" } });
-    render(<Analyzer />);
-    const chip = screen.getByTestId("session-badge");
-    expect(chip.textContent).toContain("AH");
-
-    cleanup();
-    mockUsePickerReturn({ data: snapshotWithRegistry() }); // fixture defaults to rth
-    render(<Analyzer />);
-    expect(screen.queryByTestId("session-badge")).toBeNull();
-  });
-});
-
-// ── 36 D-17: desktop grid post-cleanup (reflow arms removed — this tree only mounts ≥1024px) ──
-describe("Analyzer — desktop grid post-cleanup (36 D-17)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
-
-  it("puts analyzer-inner-grid on a plain grid — no display:contents, no lg:-gated variants", () => {
-    render(<Analyzer />);
-
-    const innerGrid = screen.getByTestId("analyzer-inner-grid");
-    const classes = innerGrid.className.split(/\s+/u);
-    expect(classes).toContain("grid");
-    // 2026-07-15 (user): ENTRY/EXIT panel dropped — WHY is the single slim column beside
-    // the chart.
-    expect(classes).toContain("grid-cols-[minmax(260px,300px)_minmax(0,1fr)]");
-    expect(classes).toContain("gap-4");
-    // The reflow arm is gone: no display:contents, no lg:-prefixed grid variants, no inline style.
-    expect(innerGrid.className).not.toContain("contents");
-    expect(innerGrid.className).not.toContain("lg:");
-    expect(innerGrid.getAttribute("style")).toBeNull();
-  });
-
-  it("carries no CSS order utilities on the scorecard / rail / center / right wrappers", () => {
-    render(<Analyzer />);
-
-    for (const testId of [
-      "analyzer-scorecard-wrapper",
-      "analyzer-rail-wrapper",
-      "analyzer-center-column",
-      "analyzer-right-wrapper",
-    ]) {
-      const wrapper = screen.getByTestId(testId);
-      expect(wrapper.className).not.toContain("order-");
-      expect(wrapper.className).not.toContain("lg:");
-    }
-  });
-
-  it("no-scroll layout: hero -> [WHY | chart] -> table filling the leftover viewport height", () => {
-    render(<Analyzer />);
-
-    const outer = screen.getByTestId("analyzer-scorecard-wrapper").parentElement;
-    assertDefined(outer, "outer flex column present");
-    // The page owns its height — the table section absorbs the leftover, the page never scrolls.
-    expect(outer.className).toContain("h-[calc(100dvh-48px)]");
-    const innerGrid = screen.getByTestId("analyzer-inner-grid");
-    const outerChildren = Array.from(outer.children);
-    const heroIdx = outerChildren.indexOf(screen.getByTestId("analyzer-scorecard-wrapper"));
-    const gridIdx = outerChildren.indexOf(innerGrid);
-    const tableWrapper = screen.getByTestId("analyzer-rail-wrapper");
-    const tableIdx = outerChildren.indexOf(tableWrapper);
-    expect(heroIdx).toBeLessThan(gridIdx);
-    // The ranked table is a FULL-WIDTH sibling below the chart grid, not a grid column.
-    expect(gridIdx).toBeLessThan(tableIdx);
-    // The table is the LAST section and flexes into the remaining height.
-    expect(tableIdx).toBe(outerChildren.length - 1);
-    expect(tableWrapper.className).toContain("flex-1");
-    expect(tableWrapper.className).toContain("min-h-0");
-
-    // Inside the grid: WHY column then chart column (ENTRY/EXIT dropped 2026-07-15).
-    const innerChildren = Array.from(innerGrid.children);
-    const whyIdx = innerChildren.indexOf(screen.getByTestId("analyzer-right-wrapper"));
-    const chartIdx = innerChildren.indexOf(screen.getByTestId("analyzer-center-column"));
-    expect(whyIdx).toBeGreaterThanOrEqual(0);
-    expect(whyIdx).toBeLessThan(chartIdx);
-    expect(screen.queryByTestId("analyzer-exit-wrapper")).toBeNull();
-  });
-
-  it("the day ribbon lives INSIDE the chart column (no page section, no chips row)", () => {
-    render(<Analyzer />);
-
-    const center = screen.getByTestId("analyzer-center-column");
-    expect(within(center).getByTestId("event-leg-ribbon")).toBeTruthy();
-    expect(within(center).getByTestId("term-structure-leg-dot-front")).toBeTruthy();
-    expect(within(center).getByTestId("term-structure-leg-dot-back")).toBeTruthy();
-    // The chips row merged into the ribbon — no separate legend strip on desktop.
-    expect(screen.queryByTestId("term-structure-legend")).toBeNull();
-  });
-
-  it("verdict hero is a single flex line (chips inline), not the 3-column grid", () => {
-    render(<Analyzer />);
-
-    const groups = screen.getByTestId("verdict-groups");
-    const classes = groups.className.split(/\s+/u);
-    expect(classes).toContain("flex");
-    expect(classes).not.toContain("grid");
-    expect(classes).not.toContain("grid-cols-3");
-  });
-
-  it("greeks columns: each scored row renders Δ / Γ / Θ / vega / IV f-b at trading precision", () => {
-    render(<Analyzer />);
-
-    const row = screen.getByTestId(`candidate-row-${TOP.id}`);
-    const text = row.textContent ?? "";
-    expect(text).toContain(`${TOP.delta >= 0 ? "+" : ""}${TOP.delta.toFixed(2)}`);
-    // Fixture candidates predate the gamma field (contract defaults it to null) — the cell
-    // renders an honest em-dash, never a fabricated number.
-    expect(TOP.gamma === null ? "—" : `${TOP.gamma >= 0 ? "+" : ""}${TOP.gamma.toFixed(3)}`)
-      .toSatisfy((expected: string) => text.includes(expected));
-    expect(text).toContain(`${TOP.vega >= 0 ? "+" : ""}${TOP.vega.toFixed(1)}`);
-    expect(text).toContain(
-      `${(TOP.frontLeg.iv * 100).toFixed(1)}/${(TOP.backLeg.iv * 100).toFixed(1)}`,
-    );
-  });
-
-  it("drops the full-bleed chart wrapper — no negative-margin bleed remains in the payoff center", () => {
-    const { container } = render(<Analyzer />);
-
-    // The 35-05 mobile-bleed wrapper is gone (PayoffChart renders directly in its Panel).
-    expect(screen.queryByTestId("analyzer-payoff-chart-bleed")).toBeNull();
-    expect(container.querySelector('[class*="-mx-3"]')).toBeNull();
-  });
-});
-
-// ── 36: useIsDesktop switch + jsdom-defaults-mobile (D-01/D-16) ──
-describe("Analyzer branch — D-01/D-16 (36)", () => {
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
-
-  it("J1: default jsdom render mounts the MOBILE tree — no desktop grid / chips / rail", () => {
-    render(<Analyzer />);
-
-    expect(screen.getByTestId("analyzer-mobile-root")).toBeTruthy();
-    expect(screen.queryByTestId("analyzer-inner-grid")).toBeNull();
-    expect(screen.queryByTestId("verdict-headline")).toBeNull();
-    expect(screen.queryByText("Suggested calendars")).toBeNull();
-  });
-
-  it("J2: matchMedia-stubbed desktop renders today's tree (byte-identity guard)", () => {
-    stubDesktopMatchMedia();
-    render(<Analyzer />);
-
-    expect(screen.getByTestId("analyzer-inner-grid")).toBeTruthy();
-    expect(screen.queryByTestId("analyzer-mobile-root")).toBeNull();
-    // Desktop structural content: rail heading, verdict hero, copy button, right column.
-    expect(screen.getByText("Suggested calendars")).toBeTruthy();
-    expect(screen.getByTestId("verdict-headline")).toBeTruthy();
-    expect(screen.getByTestId("copy-tos-order")).toBeTruthy();
-    expect(screen.getByText("Why this calendar")).toBeTruthy();
+  it("renders the event/leg ribbon against the pasted calendar's legs", async () => {
+    await renderWithCalendar();
     expect(screen.getByTestId("event-leg-ribbon")).toBeTruthy();
-    expect(screen.queryByText("Entry / exit plan")).toBeNull();
-  });
-
-  it("J9 (desktop half): desktop PayoffChart gets the no-scroll ratio, never the mobile pills prop", () => {
-    stubDesktopMatchMedia();
-    render(<Analyzer />);
-
-    const props = latestPayoffChartProps();
-    expect(props.showBePills).toBeUndefined();
-    // No-scroll layout (2026-07-15): desktop passes a wider ratio so the whole screen fits
-    // one viewport — no longer byte-identical to the pre-36 call site. 2.9 measured live:
-    // 48 nav + 38 hero + ~450 chart row + ~260 table + gaps/padding ≈ an 860px viewport.
-    expect(props.aspectRatio).toBe(2.9);
   });
 });
 
-// Phase 41 Task 2 (AUI-07): LiveStatusBadge mounted in the desktop Risk-profile header,
-// reflecting the mocked stream status.
+// ─── Live badge ───────────────────────────────────────────────────────────────
+
 function setLiveStream(status: "live" | "quiet" | "stalled"): void {
   mockUseLiveStream.mockReturnValue({
     greeks: new Map(),
@@ -1305,36 +742,45 @@ function setLiveStream(status: "live" | "quiet" | "stalled"): void {
   });
 }
 
-describe("Analyzer — desktop LiveStatusBadge (Phase 41, AUI-07)", () => {
-  beforeEach(stubDesktopMatchMedia);
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-    Reflect.deleteProperty(window, "matchMedia");
-  });
-
-  it("renders LIVE in the Risk profile header when the stream is live", () => {
+describe("Analyzer — LiveStatusBadge", () => {
+  it("renders LIVE in the chain header when the stream is live", () => {
     setLiveStream("live");
     render(<Analyzer />);
 
-    expect(screen.getByText("Risk profile")).toBeTruthy();
+    expect(screen.getByText("Option chain")).toBeTruthy();
     expect(screen.getByText("LIVE")).toBeTruthy();
   });
 
-  it("renders STALLED in the Risk profile header when the stream is stalled", () => {
+  it("renders STALLED when the stream is stalled", () => {
     setLiveStream("stalled");
     render(<Analyzer />);
-
     expect(screen.getByText("STALLED")).toBeTruthy();
   });
 
-  it("renders the badge even with no candidate selected (not gated on `selected`)", () => {
+  it("renders the badge even with no chain and nothing pasted", () => {
     setLiveStream("live");
-    mockUsePickerReturn({ data: null });
-
+    mockChainReturn({ data: { rows: [] } });
     render(<Analyzer />);
 
     expect(screen.getByText("LIVE")).toBeTruthy();
     expect(screen.queryByTestId("copy-tos-order")).toBeNull();
+  });
+});
+
+// ─── One tree for all viewports ───────────────────────────────────────────────
+
+describe("Analyzer — one tree for all viewports", () => {
+  it("mounts a single tree with no desktop/mobile branch (jsdom has no matchMedia)", () => {
+    render(<Analyzer />);
+    expect(screen.getByTestId("analyzer-root")).toBeTruthy();
+    expect(screen.queryByTestId("analyzer-mobile-root")).toBeNull();
+    expect(screen.getAllByTestId(/^chain-row-/).length).toBe(STRIKES.length);
+  });
+
+  it("keeps every column at every viewport — the table scrolls sideways instead", () => {
+    render(<Analyzer />);
+    const wrapper = screen.getByTestId("chain-table-scroll");
+    expect(wrapper.className).toContain("overflow-x-auto");
+    expect(wrapper.querySelector("table")?.className).toContain("min-w-[");
   });
 });
