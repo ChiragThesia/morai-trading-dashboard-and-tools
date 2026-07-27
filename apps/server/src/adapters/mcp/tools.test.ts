@@ -27,7 +27,11 @@ import type {
   ForRunningGetGex,
   GexSnapshotRow,
   ForRunningGetChain,
+  CalendarChainQuote,
+  ForRankingCalendars,
+  RankCalendarsDeps,
 } from "@morai/core";
+import { makeRankCalendarsUseCase } from "@morai/core";
 import {
   pickerSnapshotResponse,
   analyzeAdHocCalendarResponse,
@@ -39,6 +43,7 @@ import {
   previewRuleOverridesResponse,
   gexSnapshotResponse,
   chainResponse,
+  rankedCalendarResponse,
 } from "@morai/contracts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -54,6 +59,7 @@ import {
   registerPreviewRuleOverridesTool,
   registerGetGexTool,
   registerGetChainTool,
+  registerRankCalendarsTool,
 } from "./tools.ts";
 import { exitRoutes } from "../http/exits.routes.ts";
 import { settingsRoutes } from "../http/settings.routes.ts";
@@ -989,5 +995,93 @@ describe("get_chain MCP tool", () => {
 
     expect(text).toBe("internal error");
     expect(text).not.toContain("db connection failed");
+  });
+});
+
+// ── rank_calendars MCP tool (MCP-02 pair for GET /api/calendars/ranked) ────────
+// Rule 9: the calendar engine ships its HTTP route AND its MCP tool together, over the ONE
+// rankedCalendarResponse contract and the ONE rankCalendars use-case. This drives the REAL
+// engine, not a stub, so the tool's serialization is checked against real null-honest output.
+
+const RANK_NOW = new Date("2026-07-27T16:00:00.000Z");
+const RANK_SPOT = 7401.89;
+
+function rankLadder(expiration: string, ivAtm: number): CalendarChainQuote[] {
+  return [7350, 7400, 7450].map((k) => {
+    const iv = ivAtm + ((7400 - k) / 50) * 0.004;
+    const value = Math.max(20, 60 + (k - 7400) * 0.4);
+    return {
+      time: RANK_NOW,
+      strike: k * 1000,
+      expiration,
+      contractType: "P" as const,
+      underlyingPrice: RANK_SPOT,
+      bsmIv: String(iv),
+      root: "SPXW" as const,
+      bid: value,
+      ask: value + 1,
+      openInterest: 39,
+      source: "cboe" as const,
+    };
+  });
+}
+
+function realRankCalendars(over: Partial<RankCalendarsDeps> = {}): ForRankingCalendars {
+  return makeRankCalendarsUseCase({
+    readChain: () =>
+      Promise.resolve(
+        ok([
+          ...rankLadder("2026-08-11", 0.17),
+          ...rankLadder("2026-08-26", 0.165),
+          ...rankLadder("2026-09-11", 0.16),
+        ]),
+      ),
+    readExpiryCarry: () => Promise.resolve(ok([])),
+    readDailyCloses: () => Promise.resolve(ok(Array.from({ length: 25 }, (_, i) => 7300 + i * 4))),
+    now: () => RANK_NOW,
+    defaultCarry: { rate: 0.045, divYield: 0.013 },
+    ...over,
+  });
+}
+
+async function callRankCalendars(
+  rankCalendars: ForRankingCalendars,
+  args: Record<string, unknown> = {},
+): Promise<string> {
+  return callTool(
+    (server) => registerRankCalendarsTool(server, rankCalendars),
+    "rank_calendars",
+    args,
+  );
+}
+
+describe("rank_calendars MCP tool", () => {
+  it("registers rank_calendars and returns rankedCalendarResponse-valid content", async () => {
+    const text = await callRankCalendars(realRankCalendars());
+    const parsed = rankedCalendarResponse.parse(JSON.parse(text));
+
+    expect(parsed.asOf).toBe(RANK_NOW.toISOString());
+    expect(parsed.spot).toBeCloseTo(RANK_SPOT, 6);
+    expect(parsed.candidates.length).toBeGreaterThan(0);
+    expect(parsed.candidates[0]?.frontDte).toBeGreaterThanOrEqual(15);
+  });
+
+  it("honours frontDteMax and limit from the tool arguments", async () => {
+    const text = await callRankCalendars(realRankCalendars(), { frontDteMax: 20, limit: 2 });
+    const parsed = rankedCalendarResponse.parse(JSON.parse(text));
+
+    expect(parsed.frontDteMax).toBe(20);
+    expect(parsed.candidates.length).toBeLessThanOrEqual(2);
+    expect(parsed.candidates.every((c) => c.frontDte <= 20)).toBe(true);
+  });
+
+  it("returns structured 'internal error' text when the chain read fails (never throws)", async () => {
+    const text = await callRankCalendars(
+      realRankCalendars({
+        readChain: () => Promise.resolve(err({ kind: "storage-error", message: "db down" })),
+      }),
+    );
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db down");
   });
 });

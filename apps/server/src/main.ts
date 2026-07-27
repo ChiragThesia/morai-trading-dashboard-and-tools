@@ -73,6 +73,7 @@ import {
   resolveRegimeRuleConfig,
   makeStartReauth,
   makeExchangeReauth,
+  makeRankCalendarsUseCase,
 } from "@morai/core";
 import type {
   Calendar,
@@ -81,6 +82,7 @@ import type {
   LatestSnapshotForOpenCalendar,
   GexContextForPicker,
   GexSnapshotRow,
+  ForReadingExpiryCarry,
 } from "@morai/core";
 import { ok, retryWithBackoff } from "@morai/shared";
 import { PgBoss } from "pg-boss";
@@ -104,6 +106,7 @@ import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
 import { gexRoutes } from "./adapters/http/gex.routes.ts";
 import { chainRoutes } from "./adapters/http/chain.routes.ts";
 import { pickerRoutes } from "./adapters/http/picker.routes.ts";
+import { calendarRankRoutes } from "./adapters/http/calendar-rank.routes.ts";
 import { exitRoutes } from "./adapters/http/exits.routes.ts";
 import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
@@ -408,6 +411,35 @@ const analyzeAdHocCalendar = makeAnalyzeAdHocCalendarUseCase({
   dividendYield: config.BSM_DIVIDEND_YIELD,
 });
 
+// Calendar engine (docs/calendar-engine/spec.mdx) — backs GET /api/calendars/ranked + the
+// rank_calendars MCP tool. Computed ON READ: the engine is deterministic over one chain read,
+// so there is no snapshot table and no compute job to go stale.
+//
+// All three driven ports are satisfied by repos already built above — the engine ships with no
+// new adapter and no new fake, which is why its ports were declared structurally rather than
+// imported from the picker context (calendar/application/ports.ts).
+//   readChain        ← the SAME root-correct, OI-repaired picker-chain read the compute-picker
+//                      job and GET /api/chain use. Its 10-minute union and MAX(open_interest)
+//                      OVER (PARTITION BY contract) are measured outage fixes — never bypass it.
+//   readExpiryCarry  ← the implied_carry array on the latest GEX snapshot row. Carry is NEVER
+//                      re-solved here: it comes from the same computation that produced the
+//                      stored bsm_iv, and re-deriving it would drift from the server. A missing
+//                      or unresolved array degrades to [] → the use-case prices those expiries
+//                      on the flat fallback and NAMES them in defaultCarryExpiries.
+//   readDailyCloses  ← picker-history's trailing spot closes, for the realized-vol comparable.
+const readExpiryCarryFromGex: ForReadingExpiryCarry = async () => {
+  const result = await gexSnapshotRepo.readGexSnapshot();
+  if (!result.ok) return result;
+  return ok(result.value?.impliedCarry ?? []);
+};
+const rankCalendars = makeRankCalendarsUseCase({
+  readChain: pickerChainRepo.readChainForPicker,
+  readExpiryCarry: readExpiryCarryFromGex,
+  readDailyCloses: pickerHistoryRepo.readDailySpotCloses,
+  now: () => new Date(),
+  defaultCarry: { rate: config.BSM_RATE_FALLBACK, divYield: config.BSM_DIVIDEND_YIELD },
+});
+
 // EXIT-08 / MCP-02 (26-05): get-exit-advice read use-case — shared by GET /api/exits +
 // get_exit_advice MCP tool over the ONE exitsResponse contract. Reuses calendarsRepo +
 // calendarSnapshotsRepo (already built above), adapted into the exits-owned
@@ -642,6 +674,9 @@ const apiRouter = new Hono()
   // PICK-02 (19-07): GET /api/picker/candidates — stored-row read (D-04, never recomputed)
   // D-02 (30-05): POST /api/picker/analyze — ad-hoc pasted-calendar scoring
   .route("/", pickerRoutes(getPicker, analyzeAdHocCalendar))
+  // Calendar engine (§11): GET /api/calendars/ranked — ranked on read from the latest chain
+  // cohort. Mounted after calendarRoutes, whose only GET is the exact path /calendars.
+  .route("/", calendarRankRoutes(rankCalendars))
   // EXIT-08 (26-05): GET /api/exits — read-time exit-advice snapshot (MCP-02)
   .route("/", exitRoutes(getExitAdvice))
   // RUNTIME-* (29-13): GET/PUT /api/settings/rules — curated rule-override surface (MCP-02)
@@ -730,6 +765,7 @@ const mcpRouter = makeMcpRouter(
   getTradeDetail,
   getNews,
   getChain,
+  rankCalendars,
 );
 app.route("", mcpRouter);
 

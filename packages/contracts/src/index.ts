@@ -247,3 +247,22 @@ export type {
   ReauthExchangeRequest,
   ReauthExchangeResponse,
 } from "./reauth.ts";
+
+// Calendar-engine contracts (docs/calendar-engine/spec.mdx §11 — ONE schema source for
+// GET /api/calendars/ranked and the rank_calendars MCP tool).
+export {
+  calendarScoreTerm,
+  calendarRankLeg,
+  calendarRankDrops,
+  rankedCalendar,
+  rankedCalendarResponse,
+  rankCalendarsQuery,
+} from "./calendar-rank.ts";
+export type {
+  CalendarScoreTerm,
+  CalendarRankLeg,
+  CalendarRankDrops,
+  RankedCalendar,
+  RankedCalendarResponse,
+  RankCalendarsQuery,
+} from "./calendar-rank.ts";

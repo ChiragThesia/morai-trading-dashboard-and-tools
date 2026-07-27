@@ -32,6 +32,7 @@ import {
   tradeHistoryResponse,
   tradeDetailResponse,
   chainResponse,
+  rankCalendarsQuery,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -60,6 +61,7 @@ import type {
   ForRunningGetTradeHistory,
   ForRunningGetTradeDetail,
   ForRunningGetChain,
+  ForRankingCalendars,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -68,6 +70,9 @@ import { toStatusResponse } from "../status-dto.ts";
 // structural (both adapters call the same functions), not just "the same conversion applied
 // twice."
 import { toOverridesPatch, toPreviewInput } from "../rule-overrides-bridge.ts";
+// The calendar engine's ONE query→request and ranking→wire mapping pair, shared with
+// calendar-rank.routes.ts so MCP-02 parity is structural rather than duplicated.
+import { toRankCalendarsRequest, toRankedCalendarBody } from "../calendar-rank-dto.ts";
 
 /**
  * registerStatusTool — registers the get_status MCP tool on the given McpServer.
@@ -1443,6 +1448,59 @@ export function registerPreviewRuleOverridesTool(
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerRankCalendarsTool — registers the rank_calendars MCP tool
+ * (docs/calendar-engine/spec.mdx §11).
+ *
+ * Architecture law (architecture-boundaries.md §3 / §9): adapter contains zero business logic,
+ * and the calendar engine's HTTP route and MCP tool ship together over ONE contract.
+ * Pattern: safeParse args (the SAME rankCalendarsQuery the HTTP route validates) → call the SAME
+ * rankCalendars use-case → map Result → parse through rankedCalendarResponse → return content.
+ *
+ * MCP-02: rankCalendarsQuery / rankedCalendarResponse are shared with GET /api/calendars/ranked,
+ * and both adapters map through the same calendar-rank-dto functions — parity is structural, not
+ * "the same conversion written twice". A one-sided field change fails `bun run typecheck`.
+ *
+ * An empty ranking is a successful payload carrying the drop counts that explain it, never an
+ * error: "nothing qualified today" is an answer. A chain-read failure maps to flat
+ * "internal error" text — no DB internals leaked, never a throw.
+ */
+export function registerRankCalendarsTool(
+  server: McpServer,
+  rankCalendars: ForRankingCalendars,
+): void {
+  server.registerTool(
+    "rank_calendars",
+    {
+      title: "Rank Calendars",
+      description:
+        "Ranks every calendar spread in the latest chain snapshot: front leg 15+ DTE, 15+ day gap, both legs on one root. Each row carries the 0-100 score decomposed into its three cross-sectionally-ranked terms (forward-vol edge, front variance-risk premium, delta balance) with each term's raw value and percentile, plus forward vol, cushion, forward factor, slope, both legs' quotes and greeks, the haircut debit and the per-leg carry provenance. Also returns the drop counts that explain an empty ranking. Optional frontDteMax (default 60), limit (default 25) and contractType (default P) — the 15-day floors are not configurable.",
+      inputSchema: rankCalendarsQuery.shape,
+    },
+    async (args) => {
+      // Reuse the SAME rankCalendarsQuery schema as the HTTP route's query (MCP-02).
+      const parsed = rankCalendarsQuery.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "invalid params" }) }],
+        };
+      }
+
+      const result = await rankCalendars(toRankCalendarsRequest(parsed.data));
+      if (!result.ok) {
+        // Flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(toRankedCalendarBody(result.value)) },
+        ],
       };
     },
   );
