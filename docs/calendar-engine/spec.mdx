@@ -1,0 +1,717 @@
+---
+title: Calendar Engine — Specification
+status: proposed
+supersedes: packages/core/src/picker (the incumbent 9-term picker engine)
+date: 2026-07-27
+sources:
+  - 103 Predicting Alpha articles (full corpus, read 2026-07-27)
+  - 4 code audits of the live repo at HEAD 6622dec
+  - direct measurement of the production chain, cycle 2026-07-27
+---
+
+# Calendar Engine — Specification
+
+One deterministic engine. It reads the option chain, enumerates every calendar
+you would consider trading, computes the math on both legs, and ranks them.
+
+Backend only. No UI changes in this phase.
+
+---
+
+## 0. Decisions locked
+
+Confirmed by the trader on 2026-07-27. These are not defaults to be re-litigated.
+
+| Decision | Value |
+|---|---|
+| Front (short) leg DTE | **floor 15, hard.** Ceiling configurable, default 60 |
+| Gap between legs | **floor 15 days, hard.** Ceiling 90 (the data ceiling, §3.5) |
+| Working windows in use | 15/30, 21/45, 30/60, 21/60 — all must fall inside the enumeration |
+| Wing | **Puts only** |
+| Incumbent picker engine | **Replaced.** New engine ships, then the old one is deleted |
+| Output | **Ranked full calendars** — each row is one strike + one front expiry + one back expiry |
+| Position delta | Delta-neutral at inception |
+
+The floors are hard because they are the trader's rule, not a tuned parameter. The
+engine must not be configurable below them. Everything above the floor is a knob.
+
+---
+
+## 1. The trade, precisely
+
+A long put calendar on SPX: **sell the near expiry, buy the far expiry, same strike.**
+
+Max loss is the debit paid. The structure is delta-neutral, short gamma, long theta,
+and — this is the part that matters — **only apparently long vega**.
+
+The doctrine is unanimous that a calendar is not a theta trade:
+
+> "When trading a calendar spread, you are essentially expressing a view on forward
+> volatility."
+> — [calendar-spread-strategy](https://www.predictingalpha.com/blogs/calendar-spread-strategy)
+
+Everything in §5 follows from taking that sentence literally.
+
+---
+
+## 2. What the doctrine says
+
+Condensed from the full corpus. The complete dossier with per-article attribution is
+[doctrine.md](./doctrine.md); this section is only what the engine encodes.
+
+### 2.1 The one edge claim
+
+Across 103 articles there is exactly one source of edge: the **variance risk premium**,
+the tendency of implied volatility to exceed subsequently realized volatility. SPX
+anchors: `IV − RV ≈ 4 vol points`, `IV30/RV20 ≈ 1.3`, positive on ~85% of days.
+
+### 2.2 A calendar is a forward-volatility trade
+
+The forward volatility between two expiries is variance additivity:
+
+```
+σ_fwd = sqrt( (σ_b²·T_b − σ_f²·T_f) / (T_b − T_f) )
+```
+
+Verified against three of the author's own worked examples — his toy case (week 1 at
+50%, month at 30% → weeks 2–4 at 19%; formula gives 19.5%), the live KRE trade (11 DTE
+at 105%, 39 DTE at 72% → 55%; formula gives 53.8%), and the calendar article (30d 40%,
+90d 35% → 32%; formula gives 32.2%). The residual 1–2% is day-count convention.
+
+This identity already exists in the repo as `computeFwdIv`
+(`packages/core/src/picker/domain/fwd-iv.ts:30`), with a tagged `{fwdIv: null, guard:
+"inverted"}` union instead of a NaN. Reuse it. Do not reimplement it.
+
+### 2.3 The root-time law — and why net vega must never be scored
+
+This is the deepest idea in the corpus and the one prohibition stated outright.
+
+Short-dated IV reacts to a shock more violently than long-dated IV, roughly `∝ 1/√T`.
+Vega grows `∝ √T`. The products cancel:
+
+```
+vega(T) × Δσ(T) ≈ constant
+```
+
+So a calendar is **root-time flat**: a normal, √T-conforming volatility move produces
+neither gain nor loss on the vega leg.
+
+> "if normal volatility movements occur across the term structure, we neither lose nor
+> gain money due to our vega exposure"
+> — [calendar-spread-strategy](https://www.predictingalpha.com/blogs/calendar-spread-strategy)
+
+**Therefore all calendar alpha is the non-root residual** — deviations of the term
+structure from the √T pattern. And therefore:
+
+> **Net vega is not a score term.** It is flat by construction. Ranking on it ranks
+> nothing. Compute it, display it, never weight it.
+
+The author's own printed shock table is arithmetically inconsistent with his own printed
+shock formula, and its 365-day row breaks the invariant that the other four rows
+satisfy. Encode the law. Discard the cells.
+
+### 2.4 Raw net theta must not be scored either
+
+Theta is bought with short gamma in exact proportion. A high-theta ranking is a
+most-dangerous-front-expiry ranking wearing a friendly label. The author measures theta
+as a **percentage of remaining extrinsic value** — 3% per day at 30 DTE, 10% at 10 DTE,
+100% on the last day. Normalise or drop it.
+
+### 2.5 The Forward Factor
+
+His named ranking metric for calendars, and the only place he publishes an entry
+threshold. He refuses to give the formula:
+
+> "the paper uses a ratio of implied and forward volatility. I use a tool that helps me
+> calculate this ratio as a 'Forward Factor'."
+> — [kre-is-it-crashing-yet](https://www.predictingalpha.com/blogs/kre-is-it-crashing-yet-calendar-trade-analysis)
+
+Reverse-engineered against his one fully-numbered case (May 19 $36P at 80% IV, June 16
+$36P at 64% IV, stated FF = 49%):
+
+```
+FF = IV_front / σ_fwd − 1
+```
+
+At front ≈14 / back ≈42 DTE this gives 47.4%; at 16/44 it gives 51.7%. The stated 49%
+sits inside that window. The two alternative readings — `IV_front/IV_back − 1` = 25%
+and `IV_back/σ_fwd − 1` = 18% — do not fit. **This is inference, and it is marked as
+inference in code.** Make the expression swappable.
+
+Published gates: **≥ 20%** ("I generally consider trades with a Forward Factor of 20%
+to be worth taking"), **≥ 16%** (the terminal's "Best Calendars To Buy" scan), and a
+third gate of a different kind — FF above the upper bound of its own trailing 1-year
+band.
+
+### 2.6 The cushion
+
+The loss condition, stated directly:
+
+> "My calendar spread would only lose money if implied volatility for the long option
+> fell to 55%, a drop of nearly 20 points."
+> — [kre-a-case-study-in-forward-volatility](https://www.predictingalpha.com/blogs/kre-a-case-study-in-forward-volatility)
+
+```
+cushion = IV_back − σ_fwd        (vol points; KRE had 72 − 55 = 17)
+```
+
+And the asymmetry that makes the structure work, credited to Prof. Jim Campasano:
+forward volatility is a **biased** forecast of future implied volatility, so the back
+leg's IV rarely collapses all the way down to it.
+
+### 2.7 The sharpest warning: an expensive back leg
+
+Easy to miss and it invalidates the whole trade. The author tested a 90-DTE long
+strangle as a hedge on a 7-DTE short program and rejected it: the hedge consumed
+**~1/3 of profits** and **over 60% of collected premium** while only halving max loss
+($4,000 → $2,400 per lot).
+
+**A calendar *is* that hedged structure.** The back leg must be cheap in vol terms or
+the calendar converts a positive-EV short into a negative one.
+
+### 2.8 What the doctrine forbids ranking on
+
+| Forbidden | Reason |
+|---|---|
+| Net vega | Root-time flat (§2.3) |
+| Raw net theta | Bought with short gamma in proportion (§2.4) |
+| IV rank / IV percentile | "measure IV relative to its historical implied volatility, but it doesn't tell us whether it's too high or too low" |
+| Probability of profit | EV is structure-invariant |
+| Structure itself | "We don't get paid because of the structure that we trade" |
+
+### 2.9 Where ATM is measured
+
+Define ATM as **delta ≈ 50 per expiry**, not as a shared strike. The 50-delta strike
+differs between expiries. Reading two IVs at one shared strike mixes term structure with
+skew. §3.3 shows what that costs us in practice.
+
+### 2.10 The exit
+
+One mechanical calendar exit in the whole corpus: **close when the front expiry is 3–5
+days away.** Compatible with a 15-DTE entry floor. Out of scope for a ranking engine;
+recorded here so it is not lost.
+
+---
+
+## 3. What our own data says
+
+**This section is the reason the engine cannot simply implement §2.** Every number below
+was measured against the production database on cycle `2026-07-27`, puts only, front
+15–60 DTE, gap ≥15, back ≤90, both legs carrying a solved `bsm_iv`.
+
+### 3.1 The candidate space is small enough to enumerate exhaustively
+
+| Measure | Value |
+|---|---|
+| Distinct `(root, front, back)` expiry pairs | **124** |
+| Full candidates (strike × pair) | **2,454** |
+| Candidates with a solved IV on both legs | 2,454 (100%) |
+| Both legs two-sided (`bid > 0`) | 2,454 (100%) |
+| Front in 15–30 / 21–45 / 30–60 / 21–60 | 1,883 / 1,482 / 640 / 1,608 |
+
+There is no sampling problem and no need for heuristic pruning. One pass over ~2,500
+candidates, deterministic, sub-second. Full enumeration is the design.
+
+### 3.2 The doctrine's absolute gates cannot fire on SPX
+
+This is the single most important finding in this document.
+
+| Doctrine threshold | Its value | Ours, measured |
+|---|---|---|
+| Forward Factor entry gate | **≥ 16–20%** | **0 of 2,465 candidates.** Max 14.4%, p90 7.1%, **median 0.36%** |
+| Cushion `IV_back − σ_fwd` | **17–20 vol points** (KRE) | **median +0.02 points.** p10 −0.49, p90 +0.47 |
+| Backwardation at the strike | the condition being screened for | 1,292 / 2,465 (52%) — but see §3.3 |
+
+The reason is scale. His calendars ran on single names and sector ETFs at **60–105% IV**.
+SPX runs at **16%**. Dispersion scales with the level, so every absolute vol-point
+threshold in the corpus is roughly an order of magnitude too large for this underlying.
+
+> **Consequence: no absolute doctrine threshold may be used as a gate.** An engine that
+> gates on FF ≥ 16% returns an empty list every day, forever, and looks like it is
+> working.
+
+His own third gate — FF above the upper bound of its trailing 1-year band — is the right
+idea and we cannot compute it either (§3.5). The resolution is §6: rank
+**cross-sectionally within the snapshot**.
+
+### 3.3 Unadjusted Forward Factor is a skew detector, not a term-structure detector
+
+Ranking the 2,465 candidates by FF computed from each candidate's own two strike IVs:
+
+| Rank | Root | Strike | Front/Back | IV front | IV back | σ_fwd | FF | Distance from spot |
+|---|---|---|---|---|---|---|---|---|
+| 1 | SPXW | 7100 | 31/46d | 20.01% | 19.22% | 17.49% | **14.4%** | **302 pts** |
+| 2 | SPX | 7300 | 16/53d | 18.17% | 16.67% | 15.98% | 13.7% | 102 pts |
+| 3 | SPXW | 7125 | 31/46d | 19.64% | 18.91% | 17.32% | 13.4% | **277 pts** |
+| 4 | SPXW | 7150 | 31/46d | 19.31% | 18.61% | 17.09% | 13.0% | **252 pts** |
+
+Best near-ATM candidate (|K − S| ≤ 25): **FF 7.7%** — roughly half.
+
+SPX put skew is steeper in the front expiry than the back, so a deep-OTM strike shows
+local backwardation that has nothing to do with the term structure. **An engine that
+scores per-strike FF systematically recommends far-OTM puts** — which also violates the
+delta-neutral requirement and, per the doctrine, eats negative spot-vol correlation.
+
+> **Consequence: the term-structure score is computed from each cohort's ATM (50Δ) IVs,
+> not from the traded strike's IVs.** Per-strike FF is displayed, never scored.
+
+This cleanly separates the two axes, and it matches the teaching already on the
+Analyzer's Pair panel: *vertical skew picks the strike; the forward-vol edge picks the
+expiry pair.*
+
+### 3.4 The incumbent liquidity gate is wrong for SPX
+
+`isLiquidQuote` (`packages/core/src/picker/domain/rules.ts:103`) requires
+`spread/mid ≤ 10%` **and** `openInterest ≥ 100`. Measured over 1,218 SPX puts at 15–90 DTE:
+
+| Measure | Value |
+|---|---|
+| Spread / mid | p10 **0.4%**, p50 **0.6%**, p90 **1.0%**, max 7.8% |
+| Open interest | p25 **4**, p50 **39**, p75 153, p90 532 |
+| Legs with OI = 0 | 191 |
+| Legs with OI < 100 | **829 / 1,218 (68%)** |
+| Near-ATM SPXW legs failing OI ≥ 100 | **175 / 255 (69%)** |
+| Candidates surviving OI ≥ 100 on both legs | **450 / 2,454 (18%)** |
+| Of those 450, additionally failing the spread test | **0** |
+
+Two conclusions.
+
+1. **The spread gate is inert.** The entire distribution sits inside 1% of mid. PA's
+   12%/22%/58% figures are for retail single-name weeklies. It cannot discriminate here,
+   so a cost or liquidity **score term would be pure noise** — near-constant across every
+   candidate.
+2. **The OI gate is actively harmful.** It removes 82% of candidates, including 69% of
+   the near-ATM SPXW ladder — precisely the strikes the doctrine says to trade. Open
+   interest on a fresh SPXW weekly strike is legitimately low; that is not illiquidity.
+
+`volume` is also stored (`schema.ts:141`) and is equally thin at these tenors (near-ATM
+median 1). Neither open interest nor volume is a valid liquidity proxy for SPX weeklies.
+**The two-sided quote is.**
+
+### 3.5 The history ceiling — no percentile of anything is honest yet
+
+| Source | Range | Depth |
+|---|---|---|
+| `leg_observations` | 2026-06-12 → 07-27 | **30 distinct days** (24 weekdays), 14.5M rows |
+| `gex_snapshots` | 2026-06-23 → 07-27 | 25 days |
+| `skew_observations` | 2026-06-18 → 07-27 | 23 days, 610k rows |
+| `risk_reversal_observations` | 2026-06-18 → 07-27 | 23 days; 4,819 of 8,327 rows carry a rank |
+| `term_structure_observations` | 2026-07-01 → 07-27 | 17 days — **and keyed by `calendar_id`**, so it only covers pairs already held as positions |
+| `macro_observations` VIXCLS | 2026-06-30 → 07-23 | **17 rows** |
+
+Every percentile gate in the doctrine — FF 1-year band, slope percentile, IV percentile
+65–80, the VIX 80th-percentile kill switch — needs 250+ observations. We have 17 to 30.
+A percentile over 20 samples is a random number with a confident label, and the repo has
+already shipped that bug once: the second `risk_reversal_observations` row ever written
+reported `rrRank = 100` against a single prior value.
+
+One correction to an earlier audit claim: a per-expiry ATM-IV history **is** derivable
+today with a `GROUP BY` over `leg_observations` joined to `contracts` — no migration
+needed. The binding constraint is depth, not schema. That matters, because it means the
+fix is *waiting*, not *building*.
+
+> **Consequence: v1 ships levels and within-snapshot ranks. Zero time-series
+> percentiles.** The history accumulates from the tables that already exist; the band
+> gates land in v2 when there are 250 days of them.
+
+---
+
+## 4. The pipeline
+
+Five pure stages. No I/O below the application boundary. Same snapshot in, byte-identical
+ranking out.
+
+```
+ForReadingChainForPicker  (existing port, existing repo, unchanged)
+        │
+        ▼
+┌───────────────────────────────────────────────────────────────┐
+│ 1. cohorts    group rows by (root, expiration)                │
+│               → one spot, ATM strike, ATM IV, per-row delta   │
+├───────────────────────────────────────────────────────────────┤
+│ 2. enumerate  front cohort × back cohort × shared strike      │
+│               under the hard gates                            │
+├───────────────────────────────────────────────────────────────┤
+│ 3. measure    σ_fwd · cushion · FF(atm) · FF(strike) · slope  │
+│               · vSkew both legs · greeks both legs            │
+│               · net greeks · debit at haircut · spread cost   │
+├───────────────────────────────────────────────────────────────┤
+│ 4. score      cross-sectional rank of 4 terms → [0,100]       │
+├───────────────────────────────────────────────────────────────┤
+│ 5. rank       sort, deterministic tie-break, emit top N       │
+└───────────────────────────────────────────────────────────────┘
+```
+
+Compare to the incumbent: 7 orchestrator steps, 15 injected dependencies, a three-system
+VIX entry gate, a sizing tier ladder, two brake evaluators, and a persisted snapshot.
+The new engine needs **one** read.
+
+---
+
+## 5. The math, formula by formula
+
+Every quantity the engine emits. `T` is in years on a 365.25 basis, measured to the
+settlement instant (§8.3). IVs are decimals; vol points are `×100` at display only.
+
+### 5.1 Per cohort — one `(root, expiration)` group
+
+| Quantity | Formula | Notes |
+|---|---|---|
+| `spot` | one value per cohort | Not `rows[0]`. Assert agreement or take the consensus (§8.5) |
+| `atmStrike` | `argmin |K − S|`, ties to the lower strike | Existing: `chain-math.ts:113` |
+| `atmIv` | IV at `atmStrike` within this `(expiration, contractType, root)` | Existing: `chain-math.ts:160`. **Never substitutes a neighbouring strike** |
+| `delta(K)` | `bsmGreeks(S, K, T, σ_K, r, q, "P").delta` | The chain read carries no delta; it is solved per row |
+| `atm50Strike` | strike whose \|delta\| is closest to 0.50 | The doctrine's ATM (§2.9), distinct from `atmStrike` |
+| `atm50Iv` | IV at `atm50Strike` | **This is the IV that feeds the term-structure score** |
+| `extrinsic(K)` | `mark(K) − max(K − S, 0)` | Denominator for normalised theta |
+
+### 5.2 Per candidate — one `(root, strike, frontExp, backExp)`
+
+| Quantity | Formula |
+|---|---|
+| `fwdIv` | `computeFwdIv(T_f, atm50Iv_f, T_b, atm50Iv_b)` — reuse `fwd-iv.ts`, keep the `inverted` guard |
+| `cushion` | `atm50Iv_b − fwdIv` |
+| `ffAtm` | `atm50Iv_f / fwdIv − 1` — **the scored term-structure signal** |
+| `ffStrike` | `iv_f(K) / fwdIvAt(K) − 1` — displayed only (§3.3) |
+| `slope` | `(atm50Iv_b − atm50Iv_f) / (T_b − T_f)` — displayed |
+| `hSkew` | `iv_f(K) − iv_b(K)` — displayed |
+| `vSkewFront` | `iv_f(K) − atmIv_f` |
+| `vSkewBack` | `iv_b(K) − atmIv_b` |
+| `legGreeks` | `bsmGreeks` per leg, at that leg's own `(r, q)` and settlement-aware `T` |
+| `netGreeks` | `back − front` for each of delta, gamma, theta, vega |
+| `thetaCarry` | `θ_f / extrinsic_f − θ_b / extrinsic_b` — normalised decay (§2.4) |
+| `debit` | `haircutFill(backQuote, "buy") − haircutFill(frontQuote, "sell")` — reuse the 0.66 model |
+| `spreadCost` | round-trip width on both legs, as a fraction of `debit` — displayed |
+| `frontVrp` | `atm50Iv_f − RV20` |
+
+Sign convention, load-bearing: net = **back − front**, because the calendar is long the
+back leg and short the front. Getting it backwards flips every risk number.
+
+### 5.3 Null honesty
+
+A degraded input nulls **its own** field and nothing else. No field ever returns `NaN`,
+a fabricated `0`, or a silently-clean substitute. This is the existing rule in
+`chain-math.ts` and it carries forward verbatim — an inverted term structure prices no
+forward vol, so there is no edge to quote, so `edge` is `null`, not `0`. The incumbent
+scorer substitutes `0` there (`scoring.ts:139`); that is a bug the rewrite fixes.
+
+---
+
+## 6. The score
+
+Four terms. Each is a **cross-sectional percentile within the snapshot**, not an
+absolute threshold — forced by §3.2, and it is the same relative-value frame the
+doctrine itself uses. Deterministic: the same snapshot always produces the same ranks,
+and no history is required.
+
+| Term | Raw metric | Weight | Why this and not something else |
+|---|---|---|---|
+| `fwdEdge` | `ffAtm` | **45** | The author's own named ranking metric, measured on the ATM IVs so it reads term structure and not skew (§3.3). The forward-vol view *is* the trade |
+| `frontVrp` | `atm50Iv_f − RV20` | **25** | The house thesis, and the only term that looks outside the chain — therefore the only one not collinear with `fwdEdge` |
+| `thetaCarry` | `θ_f/extrinsic_f − θ_b/extrinsic_b` | **20** | Decay per unit of extrinsic sold, the author's own normalisation. Rewards carry without ranking the most dangerous front expiry |
+| `deltaBalance` | `1 − \|netΔ\| / maxNetΔ` | **10** | The trader's hard constraint, used as the strike discriminator within a pair |
+
+`score = Σ (weight × percentileWithinSnapshot(term))`, in `[0, 100]`.
+
+### 6.1 What is computed, shown, and deliberately not scored
+
+| Quantity | Scored? | Why |
+|---|---|---|
+| `cushion` | No | A monotone re-expression of `ffAtm` from the same two IVs. Scoring both double-counts one signal. Displayed, because it *is* the loss condition |
+| `slope`, `hSkew`, `ffStrike` | No | Same two IVs again |
+| Net vega | **Never** | Root-time flat. The one explicit prohibition in the corpus (§2.3) |
+| Raw net theta | No | Bought with short gamma in proportion (§2.4). `thetaCarry` is the honest form |
+| Spread cost / liquidity | No | Measured inert: p90 = 1.0% of mid (§3.4). A near-constant term is noise |
+| Open interest | No | Measured harmful as a gate, meaningless as a signal (§3.4) |
+| IV rank, VRP rank, FF band | No | 17–30 days of history (§3.5). A rank over 20 samples is a random number |
+| Probability of profit | No | EV is structure-invariant |
+| GEX fit, event adjustment, breakeven-vs-expected-move, debit fit | No | Five of the incumbent's nine terms; the audit found them cohort-wide constants, near-always satisfied post-gate, or weight-0 display |
+
+Nine terms become four. Every dropped term was dropped for a stated, measured reason.
+
+### 6.2 Ties
+
+Rank descending by `score`. Break ties in this order, all deterministic: higher `ffAtm`,
+then smaller `|netΔ|`, then lower `debit`, then lexicographic
+`(root, frontExpiry, backExpiry, strike)`. Never rely on input order.
+
+---
+
+## 7. The gates
+
+Hard, small, and each one earns its place.
+
+| # | Gate | Value | Basis |
+|---|---|---|---|
+| 1 | `frontDte ≥ 15` | **hard floor** | Trader's rule. Not configurable below 15 |
+| 2 | `backDte − frontDte ≥ 15` | **hard floor** | Trader's rule |
+| 3 | `frontDte ≤ frontDteMax` | default **60** | Covers 15/30, 21/45, 30/60, 21/60 |
+| 4 | `backDte ≤ 90` | data ceiling | Ingest bound (`BSM_MAX_DTE = 90`, `apps/worker/src/config.ts:25`) |
+| 5 | Both legs quotable | `bid > 0`, `ask ≥ bid`, `spread/mid ≤ 0.15` | §3.4. Loose on purpose — catches genuine garbage, discriminates nothing |
+| 6 | Both legs priceable | `bsmIv` non-null **and not the string `'NaN'`**, `> 0` | §8.1 — there are three states, not two |
+| 7 | Same root both legs | `root_f === root_b` | Mixing AM and PM settlement changes the front leg's expiry-day risk |
+| 8 | Forward vol defined | `computeFwdIv(...).guard === "ok"` | An inverted structure is dropped **with a reason**, never scored as 0 |
+
+### 7.1 Gates deliberately absent
+
+- **`openInterest ≥ 100`** — measured harmful (§3.4).
+- **The VIX entry gate.** The incumbent runs three threshold systems (4 arm/disarm rungs,
+  a continuous penalty band, a 4-tier ladder) over a once-a-day EOD series that cannot
+  flap; its own header concedes the three move independently. And the doctrine's kill
+  switch is a *percentile* we cannot compute from 17 rows. v1 emits the VIX **level** as
+  context and gates on nothing.
+- **Event blackout.** The corpus says nothing about SPX macro dates and the repo already
+  had to soften its own penalty 0.5 → 0.25 because it saturated. Emit "front spans
+  FOMC/CPI" and "back-only spans X" as unweighted row flags; let the human answer the
+  doctrine's own question, *why is IV high*.
+- **Sizing and Kelly.** The corpus supplies no distribution for a calendar, only "they
+  can go to 0." Emit one contract. The human sizes.
+
+---
+
+## 8. Landmine guards
+
+Each of these is already paid for in production. Each needs a named guard.
+
+### 8.1 `bsm_iv` has three states, not two
+
+`NULL` = never processed · the **string** `'NaN'` = permanent solve failure · a number =
+solved. Every read filters both. A widened read that forgets this fabricates numbers.
+Also: the BSM drain is bounded at 800 rows / ~11.7 min, newest-first, so older rows can
+stay `NULL` indefinitely. Never read a `NULL` IV as "no such contract."
+
+### 8.2 Root scoping is enforced by signature, not by comment
+
+Every cohort function takes `root` as a parameter, so it cannot be called root-blind.
+This is already true of `atmIv` and `riskReversalForExpiry` and it stays true. It was
+fixed for a reason: a root-blind cohort once measured a back IV of 68.89% against a
+front of 24.69% at the same strike.
+
+### 8.3 One time-to-expiry function
+
+The repo currently has **nine** T conventions, three inside the GEX path alone. Mixing
+whole-day and settlement-aware `T` is exactly what made theta read visibly low against
+ThinkOrSwim; the fix was applied to the engine's greeks only and the browser now repeats
+it (`chain-math.ts:200` uses `dte / 365.25`).
+
+The new engine uses **one** exported T function, taking `root` so it can pick AM 09:30 ET
+against PM 16:00 ET settlement. Unifying T is the one step in the plan that changes
+numbers on screen, so it lands alone, with a TOS comparison.
+
+### 8.4 Carry comes from the same expiry row as the IV
+
+Four carry regimes exist and have never been reconciled: `bsm_*` was solved with a flat
+`r` per date and constant `q = 0.013`; `gex_snapshots.implied_carry` is per-expiry;
+the GEX profile hardcodes `0.043 / 0.013` in the same row as `implied_carry`; the browser
+silently falls back to `{0.045, 0.013}`. Any reprice takes `r` and `q` from the **same
+expiry row** it took IV from, or it drifts from the server. A cohort with no carry entry
+is marked, not defaulted.
+
+### 8.5 One spot per cohort, passed explicitly
+
+Today `atmIv` measures against a screen-wide `rows[0].underlyingPrice` while `legGreeks`
+prices each leg against its own row's spot — and the chain is a vendor union, so
+"first row" is whichever vendor landed first.
+
+### 8.6 `dte` is frozen at the observation day
+
+A row observed yesterday whose expiration *was* yesterday has `dte === 0`, survives a
+`dte < 0` filter, and renders today as a tradeable 0DTE cohort. Drop on `dte <= 0`, or
+recompute against both the observation day and today. Never recompute `dte` downstream.
+
+### 8.7 Open interest is repaired at the read, not the row
+
+Schwab returns `openInterest: 0` for every contract outside RTH and writes about a minute
+after CBOE, so newest-row-wins zeroed ~2,971 contracts a day. The existing read uses
+`MAX(open_interest) OVER (PARTITION BY contract)` over the 10-minute union window. Keep
+it, even though the engine no longer gates on OI — it still displays it.
+
+### 8.8 Every statistic reports its sample count
+
+No rank, mean, or percentile is emitted without `n`. Below a configured floor the value
+is `null`, not a confident number. This is the `rrRank = 100`-against-one-prior-value bug.
+
+---
+
+## 9. The blocker that comes first
+
+**This is not optional and it is not part of the engine.**
+
+Ingest still writes `root: chain.root` (`packages/core/src/journal/application/fetchChain.ts:143`)
+— the *requested chain label*, not the OCC symbol — and formats `expiration` with local
+date getters off a UTC-midnight date (`:135-138`). Verified open at HEAD `6622dec`.
+
+Result, measured on production: **1,190 contracts carry `root='SPX'` on an OCC symbol
+reading SPXW, and every one also has `expiration` exactly one day early.** `root_only`
+mismatches are 0, which proves a single writer.
+
+The corruption is not cosmetic. Those two columns feed `computeT`, which picks AM 09:30 ET
+against PM 16:00 ET off `root`. Those legs were solved with `T` short by a full day — plus
+6.5 hours where the wrong date lands on a third Friday — so their `bsm_iv` and every greek
+are **biased high**, and that flows into `skew_observations`, the risk reversals, GEX gamma
+and the chain table.
+
+No engine-side care can detect this. A signature can guard a code path; it cannot guard a
+mislabelled row.
+
+Fix order:
+
+1. Derive both `root` and `expiration` from `parseOccSymbol(quote.occSymbol)`. The
+   trustworthy values are already computed at `leg-observations.ts:193` and thrown away at
+   `:197-207`.
+2. Take `upsertContracts` off `onConflictDoNothing()` (`leg-observations.ts:125`) so a
+   backfill can land.
+3. Backfill `contracts`, then re-solve the affected `leg_observations`.
+4. Add an assertion that `contracts.root` equals the OCC root.
+
+Note that commit `555e748` ("carry OCC root so SPX and SPXW stop colliding") fixed the
+**read and display** path, not the writer. Easy to mistake for closed.
+
+---
+
+## 10. Module layout
+
+Three new modules in `packages/core`, four kernels reused unchanged, **zero new ports,
+zero new tables, zero new fakes.**
+
+| Module | Lines (est.) | Contents |
+|---|---|---|
+| `packages/core/src/calendar/domain/cohort.ts` | ~130 | Group by `(root, expiration)`; resolve spot, `atmStrike`, `atmIv`, per-row delta, `atm50Strike`, `atm50Iv`, `extrinsic`. Promoted from `apps/web/src/lib/chain-math.ts` + `chain-risk-reversal.ts`, not rewritten |
+| `packages/core/src/calendar/domain/candidate.ts` | ~140 | Enumerate under the gates; compute every §5.2 quantity |
+| `packages/core/src/calendar/domain/score.ts` | ~80 | Cross-sectional percentile of four terms, weighted sum, tie-break |
+| `packages/core/src/calendar/application/rankCalendars.ts` | ~90 | One read → cohorts → candidates → score → top N. `Result<T,E>`, no throw |
+
+Reused verbatim:
+
+| Kernel | Where | Why it survives |
+|---|---|---|
+| `computeFwdIv` | `picker/domain/fwd-iv.ts:30` | 6 lines, the tagged `inverted` guard, property-tested |
+| `bsmGreeks` | `packages/quant/src/bsm.ts:125` | The one greeks kernel the server already uses |
+| `haircutFill` | `picker/domain/candidate-selection.ts:235` | The 0.66-of-width fill model. Stops every ranked debit being a fantasy about SPX mids |
+| `realizedVol` | `picker/domain/realized-vol.ts` | Only realized-vol implementation; null-honest |
+| `percentileRank` | `packages/shared/src/percentile-rank.ts:18` | The rank primitive for §6 |
+| `breakevens` | `picker/domain/breakevens.ts` | No closed form exists; returns `[]` rather than fabricating. Displayed, not scored |
+| `ForReadingChainForPicker` + `picker-chain.ts` | existing | The only root-correct, OI-repaired cohort read |
+
+### 10.1 A boundary-law docs fix, first
+
+`CLAUDE.md`'s layer table says `packages/core` may import **`packages/shared` only**.
+Core already imports `@morai/quant` (`packages/core/package.json:12`), and this engine
+will too. Per the repo's own rule — *docs before architecture changes* — the layer table
+gets corrected to name `packages/quant` as a permitted pure-math dependency **before**
+any of this code lands.
+
+---
+
+## 11. Contracts and API surface
+
+| Surface | Shape |
+|---|---|
+| Zod contract | `packages/contracts/src/calendar-rank.ts` — `rankedCalendar` + `rankedCalendarResponse`. New schema, not a widened `pickerCandidate`: the closed `BreakdownCriterion` union at `picker.ts:34` deliberately blocks new criteria, and that friction is correct |
+| HTTP | `GET /api/calendars/ranked?frontDteMax=&limit=` — thin: Zod-parse → use-case → map `Result` |
+| MCP | `rank_calendars`, same schema, same use-case |
+| In-memory twin | `memory/picker-chain.ts` already exists; no new fake needed |
+
+Each ranked row carries: identity (`root`, `strike`, `frontExpiry`, `backExpiry`, both
+DTEs), the score plus its four-term breakdown **with each term's raw value and its
+percentile**, every §5.2 metric, both legs' greeks and quotes, the debit, and the
+`fwdIvGuard`/`carrySource` provenance flags.
+
+The breakdown is not decoration. A score you cannot decompose is a score you cannot
+argue with, and the doctrine's own instruction is to find out *why*.
+
+---
+
+## 12. Test plan
+
+TDD red→green, per the repo rule. No production line without a failing test first.
+
+| Kind | What |
+|---|---|
+| **Oracles** | `σ_fwd` against all three of the author's worked examples (19.5%, 53.8%, 32.2%). `FF` against the KRE $36 case (47–52% window containing his stated 49%). Root-time law: `vega(T) × Δσ(T)` constant across a √T ladder |
+| **Property (fast-check)** | Null-in → null-out on every metric. Never `NaN`, never a fabricated 0. `atmStrike` optimality. Score ∈ `[0,100]`. Ranking is a total order. **Permuting the input rows does not change the output ranking** — the determinism guarantee |
+| **Regression** | Front 14 DTE never enumerates. Gap 14 never enumerates. Inverted structure is dropped with a reason, not scored 0. A cohort holding both roots at one strike never mixes them. A `'NaN'`-string IV never becomes a number |
+| **Cross-sectional** | Feed the real 2,454-candidate snapshot: assert the top-ranked candidate is near-ATM, i.e. that §3.3's skew leak is actually closed |
+| **Postgres** | testcontainers against real Postgres for the read. SQL is never mocked |
+| **Port hygiene** | Structurally prove the use-case cannot reach a gate/snapshot/macro read — copy the idea from `analyzeAdHocCalendar.test.ts:346` |
+
+---
+
+## 13. Out of scope for v1, and why
+
+| Deferred | Reason |
+|---|---|
+| Every time-series percentile (FF band, slope pct, IV pct, VIX pct, VRP rank) | 17–30 days of history. Ships in v2 by *waiting*, not building — the tables already exist (§3.5) |
+| The blended fair-value forecast and any dollar reprice at forecast vol | One of four inputs is proprietary, two need per-tenor IV history, and the published weights are not self-consistent. `RV20` alone is honest |
+| Kelly and position sizing | The corpus gives no distribution, only "they can go to 0" |
+| Conviction tiers | The boundary needs either the absolute FF (never fires) or a percentile (no history) |
+| Reverse calendars | Long only until the buy side is proven |
+| Daily re-entry re-scoring of open positions | Same `score.ts`, second caller. Nothing is lost by deferring it |
+| The 3–5 DTE front exit | Belongs to the exit advisor, not the ranker |
+| Any UI change | Explicitly out of this phase |
+
+---
+
+## 14. Removal plan for the incumbent
+
+Measured at HEAD `6622dec`: `packages/core/src/picker` is **4,224 production / 5,254 test
+/ 9,478 total** lines. Its ranked top-8 has **no live web consumer** —
+`apps/web/src/screens/useAnalyzerModel.ts:111` deliberately refuses to read it. The only
+readers are one MCP tool and a settings-modal diff.
+
+Order of work. Each step is green before the next begins.
+
+| # | Step | Behaviour change? |
+|---|---|---|
+| 1 | Fix the ingest writer (§9) + backfill + re-solve | Yes — corrects biased IVs |
+| 2 | Correct the `CLAUDE.md` layer table for `packages/quant` (§10.1) | No — docs |
+| 3 | Delete dead weight: `Analyzer 2.tsx` (688 lines, untracked, 11 of the 20 `apps/web` tsc errors), `event-rules.test.ts` (tests a module that does not exist), `rules.ts` retired event bucket, the two never-incremented `gateDrops` fields | No |
+| 4 | Promote the browser's chain math into `core/calendar/domain` | No — same formulas, new home |
+| 5 | Unify `T` on one root-aware function (§8.3) | **Yes** — lands alone, with a TOS comparison |
+| 6 | Build the new engine, TDD, behind its own route and tool | No — additive |
+| 7 | Verify the new ranking against the live chain and against hand-computed candidates | — |
+| 8 | Delete `packages/core/src/picker` and its adapters | Yes — removes the second engine |
+
+Steps 3 and 4 are roughly 1,500 lines out at **zero behaviour change**. Step 8 is the
+large one and it comes last, after the replacement is proven live.
+
+---
+
+## 15. Open decisions
+
+Not blockers. Recorded so they are decided on purpose rather than by accident.
+
+| # | Question | Recommendation |
+|---|---|---|
+| 1 | Is `FF = IV_front/σ_fwd − 1` the right Forward Factor? | Ship it, marked as inference, behind a swappable expression. It fits his one numbered case; nothing else does |
+| 2 | Weights 45/25/20/10 | Start there, from the doctrine's own emphasis. Re-derive only against a backtest, never by feel |
+| 3 | `RV20` window and estimator | Close-to-close over 21 daily closes, which already ships. Note the known bias: the "daily close" is a ~23:30Z sample in UTC buckets, not the 16:00 ET print |
+| 4 | Cross-root calendars (SPX front / SPXW back) | Blocked in v1 (gate 7). Tradeable, but the AM/PM settlement difference changes the front leg's expiry-day risk and nothing in the corpus covers it |
+| 5 | Strike granularity | Enumerate every shared strike. 2,454 candidates costs nothing |
+| 6 | `frontDteMax` default 60 | Confirmed by the trader's working windows. A knob, not a floor |
+
+---
+
+## Appendix A — Numbers, ours against theirs
+
+| Quantity | Predicting Alpha | Morai / SPX, measured 2026-07-27 |
+|---|---|---|
+| Underlying IV level | 60–105% (KRE, single names) | **16%** |
+| Forward Factor, entry gate | ≥ 16–20% | max **14.4%**, median **0.36%**, gate fires **0/2,465** |
+| Cushion `IV_back − σ_fwd` | 17–20 vol points | median **+0.02**, p10 −0.49, p90 +0.47 |
+| Spread as % of premium | 12% (retail weeklies), reject > 22% | p50 **0.6%**, p90 **1.0%** |
+| Liquidity screen | median volume | OI p50 **39**; near-ATM volume p50 **1** |
+| IV percentile window | 12 months | **17–30 days available** |
+| Candidate count | not stated | **2,454** full calendars, **124** expiry pairs |
+| Accept bar | 0.67–3.5% on margin over 10–37 days | not yet measurable — needs the dollar reprice deferred in §13 |
+
+## Appendix B — Sources
+
+- **Doctrine:** all 103 articles at `predictingalpha.com/blogs`, read in full on
+  2026-07-27. Per-article extraction with formulas, thresholds and verbatim quotes:
+  [doctrine.md](./doctrine.md).
+- **Current state:** four code audits at HEAD `6622dec`, plus a verification pass that
+  corrected five factual errors in them: [current-state.md](./current-state.md).
+- **Measurements:** direct read-only queries against the production database, cycle
+  `2026-07-27`. Every number in §3 and Appendix A is reproducible from the queries
+  recorded in [measurements.md](./measurements.md).

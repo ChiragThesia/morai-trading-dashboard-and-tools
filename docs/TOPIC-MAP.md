@@ -59,6 +59,20 @@ Path-loaded requirements. See [.claude/rules/README.md](../.claude/rules/README.
 | workflow.md | Everything | Docs-first, verification, change hygiene |
 | docs.md | All markdown | Documentation structure and maintenance |
 
+## Calendar Engine (`docs/calendar-engine/`)
+
+Design set for the deterministic calendar-ranking engine that replaces the picker.
+Start with the README.
+
+| Doc | Contents |
+|---|---|
+| [README.md](calendar-engine/README.md) | Index and reading order for the set |
+| [spec.mdx](calendar-engine/spec.mdx) | The specification: locked decisions, doctrine laws encoded, pipeline, four-term score, gates, landmine guards, module layout, test plan, removal plan |
+| [measurements.md](calendar-engine/measurements.md) | Every production figure the spec rests on, with its query |
+| [current-state.md](calendar-engine/current-state.md) | Audit of the three existing engines, duplication, knob inventory, data ceiling |
+| [doctrine.md](calendar-engine/doctrine.md) | Extracted doctrine from 103 Predicting Alpha articles — metrics, formulas, thresholds, attribution |
+| [critique.md](calendar-engine/critique.md) | Verification pass: errors found in the audit, open design decisions |
+
 ## Other
 
 | Doc | Contents |
