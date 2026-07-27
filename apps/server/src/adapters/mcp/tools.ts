@@ -31,6 +31,7 @@ import {
   previewRuleOverridesResponse,
   tradeHistoryResponse,
   tradeDetailResponse,
+  chainResponse,
 } from "@morai/contracts";
 import type {
   ForGettingStatus,
@@ -58,6 +59,7 @@ import type {
   ForRunningPreviewRuleOverrides,
   ForRunningGetTradeHistory,
   ForRunningGetTradeDetail,
+  ForRunningGetChain,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -830,6 +832,51 @@ export function registerGetCotTool(
       // Empty array on no data — never an error (COT-02 / MCP-02 stability).
       // Direct parse: CotEntry fields already match cotSeriesEntry types.
       const payload = cotResponse.parse(result.value);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
+  );
+}
+
+/**
+ * registerGetChainTool — registers the get_chain MCP tool (MCP-02).
+ *
+ * Architecture law (architecture-boundaries.md §3): adapter contains zero business logic.
+ * Pattern: call use-case → parse result through chainResponse schema → return content.
+ *
+ * Rule 9: the chain read-surface ships its HTTP route AND this tool in the same change.
+ * MCP-02: the SAME chainResponse schema used by GET /api/chain is used here, so a
+ * one-sided field rename fails `bun run typecheck`.
+ *
+ * ChainEntry fields are already plain strings and numbers (the use-case serialises
+ * observedAt to ISO), so chainResponse.parse(result.value) is direct.
+ *
+ * Returns a contract-valid EMPTY array (never an error) when the cohort is empty —
+ * the read never recomputes and never 404s from MCP.
+ */
+export function registerGetChainTool(
+  server: McpServer,
+  getChain: ForRunningGetChain,
+): void {
+  server.registerTool(
+    "get_chain",
+    {
+      title: "Get chain",
+      description:
+        "Returns the latest stored option-chain cohort as one row per strike × expiration × side — strike (×1000 int), expiration, contractType, dte, BSM implied vol, bid/ask, open interest, underlying price, source, and observation time. Same payload as GET /api/chain. Pure data, no scoring. Empty array when no cohort has been stored yet.",
+      // No input parameters — returns the latest stored cohort (no filters).
+      inputSchema: {},
+    },
+    async () => {
+      const result = await getChain();
+      if (!result.ok) {
+        // Flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      // Empty array on no data — never an error (MCP-02 stability).
+      const payload = chainResponse.parse(result.value);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
