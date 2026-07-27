@@ -272,6 +272,46 @@ Those two columns feed `computeT`, which picks AM 09:30 ET against PM 16:00 ET o
 `root` — so those legs were solved with `T` short by a full day and their `bsm_iv` is
 biased high. See [spec.mdx](./spec.mdx) §9.
 
+### 7.1 Repaired — migration 0028, applied 2026-07-27
+
+Writer fixed first (`64c5594`), then the stored rows repaired. Post-conditions, measured after
+applying:
+
+```
+root_wrong                              0   (of 26,115 contracts)
+exp_wrong                               0
+SPXW symbol still labelled SPX          0
+SPX + third Friday, now AM-settled  2,114
+```
+
+The row from the diagnosis above went from `root=SPX, expiration=2026-08-27` to
+`root=SPXW, expiration=2026-08-28`.
+
+**The repair is visible in the engine immediately**, because the chain read joins
+`leg_observations` to `contracts` at READ time rather than at write time — so cohort grouping,
+root scoping and DTE are corrected for every row, historical ones included:
+
+| | pre-repair | post-repair |
+|---|---|---|
+| `root-mismatch` drops | 1,028 | **126** |
+| `no-atm-reference` drops | 49 | **0** |
+| candidates | 7,314 | 9,465 |
+| expiry pairs | 109 | 101 |
+
+That last pair of rows is the interesting one. The sparse phantom "SPX" cohorts in §4.1 — a
+1-leg 7.7-delta cohort, a 2-leg 9.4-delta one — **were artifacts of the mislabelling**. Repairing
+`root` merged them back into their real SPXW cohorts, so every surviving cohort brackets 50 delta
+and `no-atm-reference` falls to zero. Fewer pairs, more candidates per pair.
+
+So the 44% forward-factor artifact had a DATA cause as well as a code cause. The 50-delta
+interpolation guard (spec §5.1.1) and this migration attack the same root cause from opposite
+ends, and both are worth keeping: the guard is what protects against the next sparse cohort,
+whatever creates it.
+
+**What is NOT repaired:** the stored `bsm_iv` on those contracts' historical observations. Those
+were solved against the wrong `T` and stay biased — see the migration's own header for the
+reasoning and the per-tenor size. Only the labels are corrected.
+
 ---
 
 ## 8. Carry, verified after the guard landed
