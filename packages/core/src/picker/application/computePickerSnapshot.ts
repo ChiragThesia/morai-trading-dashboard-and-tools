@@ -508,9 +508,14 @@ export function makeComputePickerSnapshotUseCase(
     const config = resolvePickerRuleConfig(pickerOverrides);
 
     // ── Step 1: Read the latest chain cohort ─────────────────────────────────
+    // The chain read returns BOTH wings (the Analyzer's 25-delta risk reversal needs the call
+    // side). The picker's universe is puts-only BY DESIGN — DELTA_BAND_MIN/MAX are negative put
+    // deltas — so the wing filter is applied HERE, at the read boundary, before spot/asOf/source
+    // and every downstream derivation: those reduce over the WHOLE cohort, so filtering any
+    // later would let call rows shift `spot` (a mean) and `source` (read off chain[0]).
     const chainResult = await deps.readChainForPicker();
     if (!chainResult.ok) return err(chainResult.error);
-    const chain = chainResult.value;
+    const chain = chainResult.value.filter((quote) => quote.contractType === "P");
 
     // Empty cohort → no usable data; write no row and return ok (D-18).
     if (chain.length === 0) return ok(undefined);

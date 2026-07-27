@@ -101,6 +101,24 @@ function realCandidateChain(): ChainQuoteForPicker[] {
   return chain;
 }
 
+/** realCandidateChain() with the CALL wing interleaved AHEAD of the puts -- the shape the widened
+ * chain read returns now that the repo no longer filters `contract_type = 'P'` (the Analyzer's
+ * 25-delta risk reversal needs both wings). The calls deliberately carry a DIFFERENT
+ * underlyingPrice and source, so any leak past the puts-only filter shows up in the snapshot's
+ * `spot` (a mean over every chain row) and `source` (read off chain[0]), not only in the
+ * candidate list. */
+function bothWingsChain(): ChainQuoteForPicker[] {
+  const strikes = [7650, 7600, 7550, 7500, 7450, 7400, 7350, 7300, 7250];
+  const expiries = ["2026-07-31", "2026-08-26", "2026-09-15"];
+  const calls: ChainQuoteForPicker[] = [];
+  for (const expiration of expiries) {
+    for (const strike of strikes) {
+      calls.push({ ...chainQuote(strike, expiration, 0.11, "C", 7480), source: "cboe" });
+    }
+  }
+  return [...calls, ...realCandidateChain()];
+}
+
 /** realCandidateChain() plus a gap-8 back expiry (2026-08-08, in the [3,10]d event-bucket
  * window) -- feeds the event-calendar bucket (28-05, PLAY-04) alongside the primary universe. */
 function realCandidateChainWithEventBucket(): ChainQuoteForPicker[] {
@@ -390,6 +408,23 @@ describe("makeComputePickerSnapshotUseCase", () => {
       if (prevCandidate === undefined || currCandidate === undefined) continue;
       expect(prevCandidate.score).toBeGreaterThanOrEqual(currCandidate.score);
     }
+  });
+
+  // Regression guard for the widened chain read: the repo now returns BOTH wings, so the
+  // puts-only universe (DELTA_BAND_MIN/MAX are negative put deltas) is the USE-CASE's job.
+  // The filter must run BEFORE spot/source/asOf are derived — those read the whole cohort.
+  it("a chain carrying BOTH wings persists a snapshot identical to the puts-only chain (universe stays puts-only)", async () => {
+    const putsOnly = baseDeps({ chain: realCandidateChain() });
+    const bothWings = baseDeps({ chain: bothWingsChain() });
+
+    const putsOnlyResult = await makeComputePickerSnapshotUseCase(putsOnly.deps)();
+    const bothWingsResult = await makeComputePickerSnapshotUseCase(bothWings.deps)();
+    expect(putsOnlyResult.ok).toBe(true);
+    expect(bothWingsResult.ok).toBe(true);
+
+    expect(putsOnly.rows).toHaveLength(1);
+    expect(bothWings.rows).toHaveLength(1);
+    expect(bothWings.rows[0]).toEqual(putsOnly.rows[0]);
   });
 
   it("GEX context null -> gexContextStatus missing AND every candidate's gexFit contributes 0", async () => {
