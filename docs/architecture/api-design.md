@@ -55,14 +55,24 @@ When no data matches, each route returns a contract-valid **EMPTY array, not an 
 validated against the SAME Zod schema in `packages/contracts/src/analytics.ts`. There is no
 second or inline analytics schema; a one-sided change fails `bun run typecheck`.
 
-### Chain read shape (the Analyzer chain table)
+### Chain read shape (the Analyzer chain surfaces)
 
 `GET /api/chain` serves the raw chain the Analyzer renders. No score, no rank, no verdict —
 the numbers only (D29 in [stack-decisions.md](stack-decisions.md)). One entry per contract:
 
 `strike` (the ×1000 int convention, never points), `expiration`, `contractType` (`C` | `P`),
-`dte`, `bsmIv` (**nullable** — null until the BSM job fills it, never fabricated), `bid`,
-`ask`, `openInterest`, `underlyingPrice`, `source`, `observedAt`.
+`root` (`SPX` | `SPXW`), `dte`, `bsmIv` (**nullable** — null until the BSM job fills it, never
+fabricated), `bid`, `ask`, `openInterest`, `underlyingPrice`, `source`, `observedAt`.
+
+**`root` is part of the row's identity, not decoration.** SPX is AM-settled (third-Friday
+monthlies), SPXW is PM-settled (weeklies); both quote the same strikes and their expirations
+overlap, so `(strike, expiration, contractType)` is **not unique**. Any consumer building a row
+key, grouping a cohort, or joining legs MUST include it. Omitting it shipped once: 242 rows
+collided onto one React key, most derived columns dashed because the map kept whichever twin
+arrived last, and one row measured an SPXW back leg against an SPX front (back IV 68.89% vs
+front 24.69%). That class of defect has every input present and finite, so nothing dashes — the
+cell just reads wrong. Web-side, `chain-math.atmIv` and `riskReversalForExpiry` therefore take
+`root` as a required parameter rather than trusting the caller to pre-filter.
 
 Rows are the stored per-contract quotes joined to contract metadata — `leg_observations` and
 `contracts` in [data-model.md](data-model.md). Nothing is computed at request time.
