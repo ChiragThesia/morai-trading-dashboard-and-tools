@@ -10,6 +10,7 @@ import fc from "fast-check";
 import { bsmGreeks } from "@morai/quant";
 import {
   mid,
+  atmIv,
   hSkew,
   vSkewVsAtm,
   forwardIv,
@@ -43,6 +44,67 @@ function row(over: Partial<ChainRow>): ChainRow {
 describe("mid", () => {
   it("averages bid and ask", () => {
     expect(mid(40, 42)).toBe(41);
+  });
+});
+
+describe("atmIv — the V-Skew reference, wing and expiry as ARGUMENTS", () => {
+  const SPOT = 6500;
+
+  /** Both wings at every strike, and the two wings carry DIFFERENT IVs. */
+  function bothWings(): ReadonlyArray<ChainRow> {
+    const out: ChainRow[] = [];
+    for (const e of [
+      { expiration: "2026-08-21", dte: 26, put: 0.15, call: 0.13 },
+      { expiration: "2026-09-18", dte: 54, put: 0.17, call: 0.19 },
+    ]) {
+      for (const k of [6400, 6450, 6500, 6550, 6600]) {
+        out.push(row({ strike: k * 1000, expiration: e.expiration, dte: e.dte, bsmIv: e.put, contractType: "P" }));
+        out.push(row({ strike: k * 1000, expiration: e.expiration, dte: e.dte, bsmIv: e.call, contractType: "C" }));
+      }
+    }
+    return out;
+  }
+
+  it("returns the IV of the strike nearest spot in the named expiry and wing", () => {
+    expect(atmIv(bothWings(), SPOT, "2026-08-21", "P")).toBeCloseTo(0.15, 12);
+  });
+
+  // The crossed value is asserted explicitly so a wing mix-up fails loudly instead of
+  // passing by accident. A fixture whose wings share an ATM IV would prove nothing.
+  it("never returns the OTHER wing's IV at the same strike and expiry", () => {
+    const rows = bothWings();
+    const put = atmIv(rows, SPOT, "2026-08-21", "P");
+    const call = atmIv(rows, SPOT, "2026-08-21", "C");
+
+    expect(put).toBeCloseTo(0.15, 12);
+    expect(put).not.toBeCloseTo(0.13, 6); // the call's IV — the crossed value
+    expect(call).toBeCloseTo(0.13, 12);
+    expect(call).not.toBeCloseTo(0.15, 6); // the put's IV — the crossed value
+  });
+
+  it("never returns another expiry's IV", () => {
+    const rows = bothWings();
+    expect(atmIv(rows, SPOT, "2026-09-18", "P")).toBeCloseTo(0.17, 12);
+    expect(atmIv(rows, SPOT, "2026-09-18", "P")).not.toBeCloseTo(0.15, 6);
+  });
+
+  it("is null when the ATM strike's own IV never solved — it does NOT fall back", () => {
+    // 6500 is the ATM strike and its IV is missing. Falling back to 6450 would keep the
+    // column populated while silently moving the reference strike, so "skew vs ATM" would
+    // mean something different on this row than on every other one.
+    const rows = bothWings().map((r) =>
+      r.strike === 6500_000 && r.contractType === "P" && r.expiration === "2026-08-21"
+        ? { ...r, bsmIv: null }
+        : r,
+    );
+    expect(atmIv(rows, SPOT, "2026-08-21", "P")).toBeNull();
+  });
+
+  it("is null when the expiry or wing is absent, and when spot is unknown", () => {
+    const rows = bothWings();
+    expect(atmIv(rows, SPOT, "2027-01-15", "P")).toBeNull();
+    expect(atmIv([], SPOT, "2026-08-21", "P")).toBeNull();
+    expect(atmIv(rows, null, "2026-08-21", "P")).toBeNull();
   });
 });
 

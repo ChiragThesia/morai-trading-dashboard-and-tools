@@ -38,6 +38,41 @@ export function mid(bid: number, ask: number): number {
   return (bid + ask) / 2;
 }
 
+/**
+ * ATM reference IV — the denominator of the V-Skew column.
+ *
+ * Expiry and wing are ARGUMENTS, not an invariant the caller has to remember.
+ * `vSkewVsAtm` sees only bare floats and cannot tell a call's IV from a put's,
+ * so the protection has to live here: getting the wing wrong now means typing
+ * the wrong wing, not forgetting an invisible four-step obligation.
+ *
+ * Returns null when the ATM strike's OWN IV never solved. It deliberately does
+ * NOT fall back to the nearest strike that did: a fallback keeps the column
+ * populated while silently moving the reference strike, so "skew vs ATM" would
+ * quietly mean something different on that row than on every other one. The em
+ * dash is the correct answer.
+ */
+export function atmIv(
+  rows: ReadonlyArray<ChainRow>,
+  spot: number | null,
+  expiration: string,
+  contractType: "C" | "P",
+): number | null {
+  if (spot === null) return null;
+  let nearest: ChainRow | undefined;
+  let nearestErr = Number.POSITIVE_INFINITY;
+  for (const row of rows) {
+    if (row.expiration !== expiration) continue;
+    if (row.contractType !== contractType) continue;
+    const err = Math.abs(row.strike / 1000 - spot);
+    if (err < nearestErr) {
+      nearestErr = err;
+      nearest = row;
+    }
+  }
+  return nearest?.bsmIv ?? null;
+}
+
 /** Horizontal (calendar) skew: back IV − front IV at one strike. */
 export function hSkew(frontIv: number | null, backIv: number | null): number | null {
   if (frontIv === null || backIv === null) return null;

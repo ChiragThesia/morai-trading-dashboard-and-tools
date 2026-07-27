@@ -15,7 +15,7 @@
  */
 import { useMemo, useState } from "react";
 import { useChain } from "./useChain.ts";
-import { buildCalendarRow } from "../lib/chain-math.ts";
+import { buildCalendarRow, atmIv } from "../lib/chain-math.ts";
 import type { ChainCalendarRow } from "../lib/chain-math.ts";
 import { riskReversalForExpiry } from "../lib/chain-risk-reversal.ts";
 import type { ChainRow } from "../lib/chain-contract.ts";
@@ -44,29 +44,6 @@ export interface ChainModel {
   readonly observedAt: string | null;
   readonly frontRr: number | null;
   readonly backRr: number | null;
-}
-
-/**
- * IV of the strike closest to spot.
- *
- * CALLER OBLIGATION: `rows` must already be narrowed to ONE expiry and ONE
- * contractType. Calls and puts trace different skew curves, so an ATM reference
- * taken from the other wing makes every V-Skew in the column quietly wrong —
- * and unlike every other value here it cannot null itself to say so.
- */
-function atmIv(rows: ReadonlyArray<ChainRow>, spot: number | null): number | null {
-  if (spot === null) return null;
-  let best: number | null = null;
-  let bestErr = Number.POSITIVE_INFINITY;
-  for (const row of rows) {
-    if (row.bsmIv === null) continue;
-    const err = Math.abs(row.strike / 1000 - spot);
-    if (err < bestErr) {
-      bestErr = err;
-      best = row.bsmIv;
-    }
-  }
-  return best;
 }
 
 export function useChainModel(): ChainModel {
@@ -113,11 +90,10 @@ export function useChainModel(): ChainModel {
     // filtered BEFORE the strike map is built, never after.
     const frontLegs = frontAll.filter((r) => r.contractType === contractType);
     const backLegs = backAll.filter((r) => r.contractType === contractType);
-    // ATM reference for V-Skew: taken from the WING-FILTERED rows, never frontAll/backAll.
-    // See atmIv's caller obligation — this is the one value in the table that cannot signal
-    // its own wrongness.
-    const frontAtm = atmIv(frontLegs, spot);
-    const backAtm = atmIv(backLegs, spot);
+    // V-Skew reference: chain-math's atmIv takes the expiry and wing as arguments, so the
+    // skew curve cannot be crossed here. Never resolve the ATM strike by hand.
+    const frontAtm = atmIv(rows, spot, frontExpiry, contractType);
+    const backAtm = atmIv(rows, spot, backExpiry, contractType);
     const backByStrike = new Map(backLegs.map((r) => [r.strike, r]));
     const out: ChainCalendarRow[] = [];
     for (const front of frontLegs) {
@@ -126,7 +102,7 @@ export function useChainModel(): ChainModel {
       out.push(buildCalendarRow(front, back, frontAtm, backAtm));
     }
     return out.sort((a, b) => a.strike - b.strike);
-  }, [frontAll, backAll, frontExpiry, backExpiry, contractType, spot]);
+  }, [rows, frontAll, backAll, frontExpiry, backExpiry, contractType, spot]);
 
   // RR spans BOTH option types of an expiry — it is a property of the expiry, not
   // of whichever side the table is currently showing.
