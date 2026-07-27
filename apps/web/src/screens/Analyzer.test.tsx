@@ -200,34 +200,50 @@ afterEach(() => {
 
 // ─── Chain table ──────────────────────────────────────────────────────────────
 
-describe("Analyzer — chain table", () => {
-  it("renders one row per strike quoted in both expiries, in strike order", () => {
+describe("Analyzer — chain browse", () => {
+  it("renders one row per (root, expiration) cohort, nearest expiry first", () => {
     render(<Analyzer />);
-    const rows = screen.getAllByTestId(/^chain-row-/);
-    expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual(
-      // Row identity is wing + strike ×1000. Keying on strike alone would collide the call
-      // and the put at each strike into one row and one expansion slot.
-      STRIKES.map((k) => `chain-row-SPXW-P-${k * 1000}`),
-    );
+    const rows = screen.getAllByTestId(/^chain-cohort-/);
+    // Cohort identity is root + expiration, never expiration alone: SPX and SPXW quote the same
+    // strikes on the same dates out of different books.
+    expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual([
+      `chain-cohort-SPXW-${FRONT.expiration}`,
+      `chain-cohort-SPXW-${BACK.expiration}`,
+    ]);
   });
 
-  // CELL RENDERING IS NOT TESTED HERE. Six assertions that lived at this spot — per-cell IV
-  // and skew values, expand-into-two-legs, sort + aria-sort, header direction flip, and the
-  // em-dash-never-zero rule — moved to `components/chain/ChainTable.test.tsx`, which owns the
-  // component that renders them. They were written against a stub table that tagged every
-  // cell; the shipped one tags only rows and detail rows, and duplicating its formatting
-  // assertions in a screen test means two places to update for one change.
+  // CELL RENDERING IS NOT TESTED HERE. Per-cell IV/skew/greek values, the em-dash-never-zero
+  // rule, sort direction and the pick buttons all live in `components/chain/ChainBrowse.test.tsx`
+  // and `ChainPair.test.tsx`, which own the components that render them. Duplicating their
+  // formatting assertions in a screen test means two places to update for one change.
   //
-  // This suite's job is WIRING: does the model reach the table, and does the screen react to
-  // the model. The V-Skew wing constraint — the one defect that renders a plausible wrong
+  // This suite's job is WIRING: does the model reach the surfaces, and does the screen react to
+  // the model. The V-Skew wing/root constraint — the defect class that renders a plausible wrong
   // number rather than a gap — is covered on the model side in `useChainModel.test.ts`.
 
-  it("only one row is expanded at a time", () => {
+  it("only one cohort's strike ladder is open at a time", () => {
     render(<Analyzer />);
-    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7500000"));
-    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7400000"));
-    expect(screen.getByTestId("chain-detail-SPXW-P-7400000")).toBeTruthy();
-    expect(screen.queryByTestId("chain-detail-SPXW-P-7500000")).toBeNull();
+    fireEvent.click(screen.getByTestId(`chain-cohort-SPXW-${FRONT.expiration}`));
+    fireEvent.click(screen.getByTestId(`chain-cohort-SPXW-${BACK.expiration}`));
+    expect(screen.getByTestId(`chain-strikes-SPXW-${BACK.expiration}`)).toBeTruthy();
+    expect(screen.queryByTestId(`chain-strikes-SPXW-${FRONT.expiration}`)).toBeNull();
+  });
+
+  it("shows every strike the cohort quotes, with no join to hide one", () => {
+    // The old table joined two expiries and emitted only the overlap. Front-month strikes below
+    // 7500 and back-month strikes above it means ZERO overlap — the old shape rendered nothing.
+    const rows = chainFixture().filter(
+      (r) =>
+        (r.expiration === FRONT.expiration && r.strike < 7500_000) ||
+        (r.expiration === BACK.expiration && r.strike > 7500_000),
+    );
+    mockChainReturn({ data: rows });
+    render(<Analyzer />);
+
+    fireEvent.click(screen.getByTestId(`chain-cohort-SPXW-${FRONT.expiration}`));
+    const ladder = screen.getByTestId(`chain-strikes-SPXW-${FRONT.expiration}`);
+    // 7400 and 7450 are quoted in August and NOT in September. They have rows.
+    expect(ladder.querySelectorAll("tr[data-testid^='chain-leg-']").length).toBe(2);
   });
 
   it("proposes nothing — no verdict, no score, no ranked rail", () => {
@@ -241,60 +257,90 @@ describe("Analyzer — chain table", () => {
   });
 });
 
-// ─── Expiry-pair header ───────────────────────────────────────────────────────
+// ─── Chain header + the pair hand-off ─────────────────────────────────────────
 
-describe("Analyzer — expiry pair header", () => {
-  it("defaults the selects to the two nearest expiries", () => {
-    render(<Analyzer />);
-    expect(screen.getByTestId("chain-front-select")).toHaveProperty("value", FRONT.expiration);
-    expect(screen.getByTestId("chain-back-select")).toHaveProperty("value", BACK.expiration);
-  });
+describe("Analyzer — chain header and the picked pair", () => {
+  /** Open a cohort and pick its 7500 strike into the given slot. */
+  function pickLeg(expiration: string, slot: "front" | "back"): void {
+    fireEvent.click(screen.getByTestId(`chain-cohort-SPXW-${expiration}`));
+    fireEvent.click(screen.getByTestId(`pick-${slot}-SPXW|${expiration}|P|7500000`));
+  }
 
-  it("choosing a different back expiry re-joins the table against it", () => {
-    const extra = STRIKES.flatMap((k) => [
-      chainRow({ strike: k * 1000, expiration: "2026-10-16", dte: 82, bsmIv: 0.19, contractType: "P" }),
-      chainRow({ strike: k * 1000, expiration: "2026-10-16", dte: 82, bsmIv: 0.185, contractType: "C" }),
-    ]);
-    mockChainReturn({ data: [...chainFixture(), ...extra] });
-    render(<Analyzer />);
-
-    fireEvent.change(screen.getByTestId("chain-back-select"), { target: { value: "2026-10-16" } });
-
-    expect(screen.getByTestId("chain-back-select")).toHaveProperty("value", "2026-10-16");
-    // The back leg is re-read from the newly chosen expiry: 19%, not the 17% of the old one.
-    // Asserted on the row's text rather than a cell testid — cell-level rendering belongs to
-    // ChainTable's own suite; what matters here is that the model re-joined.
-    expect(screen.getByTestId("chain-row-SPXW-P-7500000").textContent).toContain("19.00%");
-    expect(screen.getByTestId("chain-row-SPXW-P-7500000").textContent).not.toContain("17.00%");
-  });
-
-  it("switches the table between puts and calls", () => {
-    render(<Analyzer />);
-    // Puts by default, and the wing is part of the row's identity — so switching does not
-    // mutate a row in place, it replaces the put rows with call rows entirely. That is what
-    // stops the two wings colliding into one row and one expansion slot.
-    expect(screen.getByTestId("chain-row-SPXW-P-7500000").textContent).toContain("15.00%");
-    expect(screen.queryByTestId("chain-row-SPXW-C-7500000")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("chain-type-call"));
-
-    expect(screen.queryByTestId("chain-row-SPXW-P-7500000")).toBeNull();
-    expect(screen.getByTestId("chain-row-SPXW-C-7500000").textContent).toContain("14.50%");
-  });
-
-  it("reports spot and the observation instant from the chain itself", () => {
+  it("reports spot, the observation instant, and how many expiries are on offer", () => {
     render(<Analyzer />);
     expect(screen.getByTestId("chain-spot").textContent).toBe(SPOT.toFixed(2));
     expect(screen.getByTestId("chain-observed").textContent).toContain("ET");
+    expect(screen.getByTestId("chain-expiry-count").textContent).toBe("2");
   });
 
-  it("shows an em dash for the 25Δ RR when the chain is too narrow to reach either wing", () => {
+  it("switches the browse surface between puts and calls", () => {
     render(<Analyzer />);
-    expect(screen.getByTestId("chain-rr-front").textContent).toBe("—");
-    expect(screen.getByTestId("chain-rr-back").textContent).toBe("—");
+    fireEvent.click(screen.getByTestId(`chain-cohort-SPXW-${FRONT.expiration}`));
+    expect(screen.getByTestId(`chain-leg-SPXW|${FRONT.expiration}|P|7500000`).textContent).toContain(
+      "15.00%",
+    );
+    expect(screen.queryByTestId(`chain-leg-SPXW|${FRONT.expiration}|C|7500000`)).toBeNull();
+
+    fireEvent.click(screen.getByTestId("chain-type-call"));
+
+    // The open cohort STAYS open across a wing switch — you were looking at this expiry, and you
+    // still are. Only the legs inside it change side.
+    expect(screen.queryByTestId(`chain-leg-SPXW|${FRONT.expiration}|P|7500000`)).toBeNull();
+    expect(screen.getByTestId(`chain-leg-SPXW|${FRONT.expiration}|C|7500000`).textContent).toContain(
+      "14.50%",
+    );
   });
 
-  it("shows a real 25Δ RR once the ladder reaches both wings", () => {
+  it("shows the pair prompt until both legs are picked, then the calendar math", () => {
+    render(<Analyzer />);
+    expect(screen.getByTestId("chain-pair-empty")).toBeTruthy();
+
+    pickLeg(FRONT.expiration, "front");
+    // One leg is not a calendar.
+    expect(screen.getByTestId("chain-pair-empty")).toBeTruthy();
+
+    pickLeg(BACK.expiration, "back");
+    expect(screen.queryByTestId("chain-pair-empty")).toBeNull();
+    // H-Skew = front − back = 0.15 − 0.17 = −2.00 vol points. Negative means the BACK month is
+    // the rich one, which is the wrong way round for a calendar seller — and that is the honest
+    // reading of this fixture, not a bug.
+    expect(screen.getByTestId("chain-pair-hskew").textContent).toContain("−2.00");
+  });
+
+  it("hands the picked pair's TOS order into the Risk profile paste box", () => {
+    render(<Analyzer />);
+    pickLeg(FRONT.expiration, "front");
+    pickLeg(BACK.expiration, "back");
+
+    fireEvent.click(screen.getByTestId("chain-pair-send"));
+
+    // Filled, not auto-analyzed: the order line is what gets priced, so it stays visible and
+    // editable (qty, limit) before Analyze runs.
+    const input = screen.getByTestId("picker-paste-input");
+    expect(input).toHaveProperty("value", expect.stringContaining("7500 PUT"));
+    expect(input).toHaveProperty("value", expect.stringContaining("18 SEP 26"));
+  });
+
+  it("clears the picked pair when the wing switches — no mixed-wing calendar", () => {
+    render(<Analyzer />);
+    pickLeg(FRONT.expiration, "front");
+    pickLeg(BACK.expiration, "back");
+    expect(screen.queryByTestId("chain-pair-empty")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("chain-type-call"));
+
+    // A put front against a call back is not a calendar at all — the picks cannot survive.
+    expect(screen.getByTestId("chain-pair-empty")).toBeTruthy();
+  });
+
+  it("shows each cohort's own 25Δ RR, em-dashing a ladder too narrow to reach either wing", () => {
+    render(<Analyzer />);
+    const aug = screen.getByTestId(`chain-cohort-SPXW-${FRONT.expiration}`);
+    // The five-strike fixture cannot bracket ±25Δ. A dash, not a zero.
+    expect(aug.textContent).toContain("—");
+  });
+
+  it("shows a real 25Δ RR once a cohort's ladder reaches both wings", () => {
     const wide: ChainRow[] = [];
     for (const e of [FRONT, BACK]) {
       for (let k = 6600; k <= 8400; k += 25) {
@@ -306,8 +352,7 @@ describe("Analyzer — expiry pair header", () => {
     mockChainReturn({ data: wide });
     render(<Analyzer />);
 
-    expect(screen.getByTestId("chain-rr-front").textContent).not.toBe("—");
-    expect(screen.getByTestId("chain-rr-back").textContent).toMatch(/^[+-]/);
+    expect(screen.getByTestId(`chain-cohort-SPXW-${FRONT.expiration}`).textContent).toMatch(/[+−]\d/);
   });
 });
 
@@ -340,32 +385,31 @@ describe("Analyzer — chain load states", () => {
 
     const cold = screen.getByTestId("chain-cold-start");
     expect(cold.textContent).toContain("Chain warming up");
-    expect(screen.queryByTestId("chain-empty")).toBeNull();
+    expect(screen.queryAllByTestId(/^chain-cohort-/)).toEqual([]);
   });
 
-  it("empty: a settled chain with no strike in BOTH expiries says so", () => {
-    // Front-month strikes only exist below 7500, back-month only above — no overlap.
-    const rows = chainFixture().filter(
-      (r) =>
-        (r.expiration === FRONT.expiration && r.strike < 7500_000) ||
-        (r.expiration === BACK.expiration && r.strike > 7500_000),
-    );
-    mockChainReturn({ data: rows });
+  // There is no "no overlapping strikes" state any more. That state existed only because the old
+  // table joined two expiries; nothing is joined now, so a chain with expiries always has rows.
+  it("populated: the cohort list renders and no other state does", () => {
     render(<Analyzer />);
-
-    expect(screen.getByTestId("chain-empty").textContent).toContain(
-      "No strike is quoted in both of the selected expiries.",
-    );
-    expect(screen.queryAllByTestId(/^chain-row-/)).toEqual([]);
-  });
-
-  it("populated: the table renders and no other state does", () => {
-    render(<Analyzer />);
-    expect(screen.getAllByTestId(/^chain-row-/).length).toBe(STRIKES.length);
+    expect(screen.getAllByTestId(/^chain-cohort-/).length).toBe(2);
     expect(screen.queryByTestId("chain-loading")).toBeNull();
     expect(screen.queryByTestId("chain-error")).toBeNull();
     expect(screen.queryByTestId("chain-cold-start")).toBeNull();
-    expect(screen.queryByTestId("chain-empty")).toBeNull();
+  });
+
+  it("drops an expired cohort — a negative-DTE expiry cannot be traded", () => {
+    // P1 from the UAT: the cohort carried yesterday's expiry, so the old table defaulted its
+    // front leg to it and opened as a wall of em dashes.
+    mockChainReturn({
+      data: [
+        ...chainFixture(),
+        chainRow({ expiration: "2026-07-25", dte: -1, strike: 7500_000 }),
+      ],
+    });
+    render(<Analyzer />);
+    expect(screen.queryByTestId("chain-cohort-SPXW-2026-07-25")).toBeNull();
+    expect(screen.getAllByTestId(/^chain-cohort-/).length).toBe(2);
   });
 
   it("state precedence: loading wins over isError being simultaneously true", () => {
@@ -727,13 +771,18 @@ describe("Analyzer — one tree for all viewports", () => {
     render(<Analyzer />);
     expect(screen.getByTestId("analyzer-root")).toBeTruthy();
     expect(screen.queryByTestId("analyzer-mobile-root")).toBeNull();
-    expect(screen.getAllByTestId(/^chain-row-/).length).toBe(STRIKES.length);
+    expect(screen.getAllByTestId(/^chain-cohort-/).length).toBe(2);
   });
 
-  it("keeps every column at every viewport — the table scrolls sideways instead", () => {
+  it("keeps every column at every viewport — both tables scroll sideways instead", () => {
     render(<Analyzer />);
-    const wrapper = screen.getByTestId("chain-table-scroll");
-    expect(wrapper.className).toContain("overflow-x-auto");
-    expect(wrapper.querySelector("table")?.className).toContain("min-w-[");
+    const cohorts = screen.getByTestId("chain-cohorts-scroll");
+    expect(cohorts.className).toContain("overflow-x-auto");
+    expect(cohorts.querySelector("table")?.className).toContain("min-w-[");
+
+    fireEvent.click(screen.getByTestId(`chain-cohort-SPXW-${FRONT.expiration}`));
+    const ladder = screen.getByTestId("chain-ladder-scroll");
+    expect(ladder.className).toContain("overflow-x-auto");
+    expect(ladder.querySelector("table")?.className).toContain("min-w-[");
   });
 });

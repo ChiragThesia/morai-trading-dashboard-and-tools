@@ -32,6 +32,8 @@ const EXPIRY = "2026-09-18";
 const OTHER_EXPIRY = "2026-10-16";
 const SPOT = 6000;
 const DTE = 30;
+/** The default fixture root. SPX vs SPXW quote the same strikes, so root scopes the smile. */
+const ROOT = "SPXW" as const;
 
 /** 5400…6600 in 25-point steps — a dense near-the-money grid, both ±25Δ well inside. */
 const GRID: ReadonlyArray<number> = Array.from({ length: 49 }, (_, i) => 5400 + i * 25);
@@ -46,6 +48,7 @@ function makeRow(
     strike: Math.round(strikePoints * 1000), // ×1000 int convention
     expiration: EXPIRY,
     contractType,
+    root: ROOT,
     dte: DTE,
     bsmIv,
     underlyingPrice: SPOT,
@@ -74,7 +77,7 @@ const skewIv = (strikePoints: number): number => 0.2 + 0.35 * ((SPOT - strikePoi
 
 describe("riskReversalForExpiry", () => {
   it("returns ~0 for a flat smile (both wings interpolate the same level)", () => {
-    const rr = riskReversalForExpiry(makeChain(GRID, flatIv), EXPIRY, R, Q);
+    const rr = riskReversalForExpiry(makeChain(GRID, flatIv), EXPIRY, R, Q, ROOT);
     expect(rr).not.toBeNull();
     expect(rr ?? Number.NaN).toBeCloseTo(0, 12);
   });
@@ -99,22 +102,22 @@ describe("riskReversalForExpiry", () => {
     expect(expected).not.toBeNull();
     expect(expected ?? Number.NaN).toBeGreaterThan(0); // put skew ⇒ positive risk-reversal
 
-    expect(riskReversalForExpiry(rows, EXPIRY, R, Q)).toBe(expected);
+    expect(riskReversalForExpiry(rows, EXPIRY, R, Q, ROOT)).toBe(expected);
   });
 
   it("returns null when the chain is puts-only (call wing absent)", () => {
     const puts = makeChain(GRID, skewIv).filter((row) => row.contractType === "P");
-    expect(riskReversalForExpiry(puts, EXPIRY, R, Q)).toBeNull();
+    expect(riskReversalForExpiry(puts, EXPIRY, R, Q, ROOT)).toBeNull();
   });
 
   it("returns null when the chain is calls-only (put wing absent)", () => {
     const calls = makeChain(GRID, skewIv).filter((row) => row.contractType === "C");
-    expect(riskReversalForExpiry(calls, EXPIRY, R, Q)).toBeNull();
+    expect(riskReversalForExpiry(calls, EXPIRY, R, Q, ROOT)).toBeNull();
   });
 
   it("returns null when a whole wing has no bsmIv — never substitutes a default", () => {
     const rows = makeChain(GRID, (k, type) => (type === "C" ? null : skewIv(k)));
-    expect(riskReversalForExpiry(rows, EXPIRY, R, Q)).toBeNull();
+    expect(riskReversalForExpiry(rows, EXPIRY, R, Q, ROOT)).toBeNull();
   });
 
   it("drops individual bsmIv-null rows rather than defaulting them", () => {
@@ -125,9 +128,9 @@ describe("riskReversalForExpiry", () => {
       skewIv,
     );
 
-    const rr = riskReversalForExpiry(withNulls, EXPIRY, R, Q);
+    const rr = riskReversalForExpiry(withNulls, EXPIRY, R, Q, ROOT);
     expect(rr).not.toBeNull();
-    expect(rr).toBe(riskReversalForExpiry(withoutRows, EXPIRY, R, Q));
+    expect(rr).toBe(riskReversalForExpiry(withoutRows, EXPIRY, R, Q, ROOT));
   });
 
   it("only reads rows for the requested expiration", () => {
@@ -136,17 +139,48 @@ describe("riskReversalForExpiry", () => {
     const mixed = [...asked, ...other];
 
     // The asked-for expiration is puts-only — the other expiration's calls must not leak in.
-    expect(riskReversalForExpiry(mixed, EXPIRY, R, Q)).toBeNull();
-    expect(riskReversalForExpiry(mixed, OTHER_EXPIRY, R, Q)).not.toBeNull();
+    expect(riskReversalForExpiry(mixed, EXPIRY, R, Q, ROOT)).toBeNull();
+    expect(riskReversalForExpiry(mixed, OTHER_EXPIRY, R, Q, ROOT)).not.toBeNull();
+  });
+
+  // REGRESSION (prod, 2026-07-26). SPX and SPXW quote the SAME strike on the SAME date, so an
+  // expiration-only filter builds ONE smile out of TWO books. Nothing nulls: the interpolator
+  // gets two IVs per delta and walks a jagged mixture, returning a clean plausible wrong number.
+  // Same class as the cross-wing ATM — so root is a PARAMETER, not a caller convention.
+  it("only reads rows for the requested root — the twin's book is not part of the smile", () => {
+    // SPXW carries the real skew. SPX carries a wildly different level, so any leakage moves
+    // the headline by vol POINTS, not decimals. Differing levels are load-bearing: with equal
+    // IVs this test would pass whether or not root is respected.
+    const spxw = makeChain(GRID, skewIv);
+    const spx = makeChain(GRID, (k, t) => (skewIv(k) ?? 0) + (t === "P" ? 0.5 : -0.5), {
+      root: "SPX",
+    });
+    const mixed = [...spxw, ...spx];
+
+    const clean = riskReversalForExpiry(spxw, EXPIRY, R, Q, "SPXW");
+    expect(clean).not.toBeNull();
+    // Reading the mixed book gives the SAME answer as reading SPXW alone, in either array order.
+    // MEASURED CAVEAT: deleting the root filter leaves these two assertions GREEN — the core
+    // interpolator takes the TIGHTEST bracket around ±0.25Δ, and on this fixture the SPX points
+    // never win that bracket. They are an invariance check, not the teeth.
+    expect(riskReversalForExpiry(mixed, EXPIRY, R, Q, "SPXW")).toBe(clean);
+    expect(riskReversalForExpiry([...spx, ...spxw], EXPIRY, R, Q, "SPXW")).toBe(clean);
+    // THESE are the teeth — both fail when the root filter is deleted (verified by deleting it):
+    // SPX's own book must be a reachable, DIFFERENT number, not a copy of its twin's.
+    expect(riskReversalForExpiry(mixed, EXPIRY, R, Q, "SPX")).not.toBe(clean);
+  });
+
+  it("returns null when the requested root has no rows in that expiration", () => {
+    expect(riskReversalForExpiry(makeChain(GRID, skewIv), EXPIRY, R, Q, "SPX")).toBeNull();
   });
 
   it("returns null for no rows", () => {
-    expect(riskReversalForExpiry([], EXPIRY, R, Q)).toBeNull();
+    expect(riskReversalForExpiry([], EXPIRY, R, Q, ROOT)).toBeNull();
   });
 
   it("returns null at or past expiry — T=0 delta is a step, not interpolable", () => {
-    expect(riskReversalForExpiry(makeChain(GRID, skewIv, { dte: 0 }), EXPIRY, R, Q)).toBeNull();
-    expect(riskReversalForExpiry(makeChain(GRID, skewIv, { dte: -1 }), EXPIRY, R, Q)).toBeNull();
+    expect(riskReversalForExpiry(makeChain(GRID, skewIv, { dte: 0 }), EXPIRY, R, Q, ROOT)).toBeNull();
+    expect(riskReversalForExpiry(makeChain(GRID, skewIv, { dte: -1 }), EXPIRY, R, Q, ROOT)).toBeNull();
   });
 
   // ─── Property tests ────────────────────────────────────────────────────────
@@ -170,6 +204,7 @@ describe("riskReversalForExpiry", () => {
       const base = {
         strike: Math.round(strikePoints * 1000),
         expiration: EXPIRY,
+        root: ROOT,
         dte,
         underlyingPrice: spot,
       };
@@ -188,6 +223,8 @@ describe("riskReversalForExpiry", () => {
       strike: fc.integer({ min: 0, max: 12_000_000 }),
       expiration: fc.constantFrom(EXPIRY, OTHER_EXPIRY),
       contractType: fc.boolean().map((b): "C" | "P" => (b ? "C" : "P")),
+      // Both roots, so the never-NaN property also covers a chain carrying two books at once.
+      root: fc.constantFrom<"SPX" | "SPXW">("SPX", "SPXW"),
       dte: fc.integer({ min: -5, max: 400 }),
       bsmIv: fc.option(fc.double({ min: 0, max: 5, noNaN: true }), { nil: null }),
       underlyingPrice: fc.double({ min: 0, max: 12_000, noNaN: true }),
@@ -199,7 +236,7 @@ describe("riskReversalForExpiry", () => {
         fc.double({ min: -0.05, max: 0.2, noNaN: true }),
         fc.double({ min: -0.05, max: 0.2, noNaN: true }),
         (rows, r, q) => {
-          const rr = riskReversalForExpiry(rows, EXPIRY, r, q);
+          const rr = riskReversalForExpiry(rows, EXPIRY, r, q, ROOT);
           expect(rr === null || Number.isFinite(rr)).toBe(true);
         },
       ),
@@ -209,7 +246,7 @@ describe("riskReversalForExpiry", () => {
   it("property: a two-level smile prices at exactly (put-wing IV − call-wing IV)", () => {
     fc.assert(
       fc.property(arbSpot, arbDte, arbIv, arbIv, (spot, dte, ivPut, ivCall) => {
-        const rr = riskReversalForExpiry(twoLevelChain(spot, dte, ivPut, ivCall), EXPIRY, R, Q);
+        const rr = riskReversalForExpiry(twoLevelChain(spot, dte, ivPut, ivCall), EXPIRY, R, Q, ROOT);
         // Non-vacuous: this grid always brackets, so a null here is a real failure.
         expect(rr).not.toBeNull();
         expect(rr ?? Number.NaN).toBeCloseTo(ivPut - ivCall, 12);
@@ -221,7 +258,7 @@ describe("riskReversalForExpiry", () => {
     fc.assert(
       fc.property(arbSpot, arbDte, arbIv, arbIv, (spot, dte, ivPut, ivCall) => {
         const puts = twoLevelChain(spot, dte, ivPut, ivCall).filter((r) => r.contractType === "P");
-        expect(riskReversalForExpiry(puts, EXPIRY, R, Q)).toBeNull();
+        expect(riskReversalForExpiry(puts, EXPIRY, R, Q, ROOT)).toBeNull();
       }),
     );
   });

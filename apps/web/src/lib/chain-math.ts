@@ -133,12 +133,21 @@ export function atmStrike(
 /**
  * The ATM reference IV for one cohort — the `ivAtm` argument `vSkewVsAtm` needs.
  *
- * Exists to make the wing/expiry constraint UNVIOLATABLE rather than merely documented. The chain
- * returns both wings interleaved, so "nearest strike to spot" is only a well-formed question once
- * you have fixed an expiry AND a `contractType`; both are parameters here, so there is no way to
- * call this and accidentally read the call curve's ATM for a put row. Doing the filter at the call
- * site instead is the one mistake `vSkewVsAtm` cannot catch — by the time it receives two floats
- * the wing they came from is gone, and it would return a plausible, clean, wrong number.
+ * Exists to make the wing/expiry/root constraint UNVIOLATABLE rather than merely documented. The
+ * chain interleaves both wings AND both OCC roots, so "nearest strike to spot" is only a
+ * well-formed question once you have fixed an expiry, a `contractType` AND a `root`; all three
+ * are parameters here, so there is no way to call this and accidentally read the call curve's ATM
+ * for a put row, or SPXW's for an SPX one. Doing the filter at the call site instead is the one
+ * mistake `vSkewVsAtm` cannot catch — by the time it receives two floats, where they came from is
+ * gone, and it would return a plausible, clean, wrong number.
+ *
+ * Root binds for the same reason the wing does, and it bit in production: SPX (AM-settled
+ * monthlies) and SPXW (PM-settled weeklies) quote the SAME strike on the SAME date with different
+ * books, and at strike 6675000 one root's IV had solved while its twin's had not. A root-blind
+ * cohort holds both rows, so `find` returns whichever the vendor union emitted first — which is
+ * how an SPXW back leg once got measured against an SPX front (back IV 68.89% vs front 24.69%).
+ * Root also scopes `atmStrike`: the two roots list ragged strike ladders, so the twin's strikes
+ * must not be candidates for THIS root's ATM reference.
  *
  * Null when the cohort is empty, spot is unusable, or the ATM strike's own IV never solved. That
  * last one is deliberate and load-bearing: a neighbouring strike's IV is NOT a substitute
@@ -153,19 +162,22 @@ export function atmIv(
     readonly strike: number;
     readonly expiration: string;
     readonly contractType: "C" | "P";
+    readonly root: "SPX" | "SPXW";
     readonly bsmIv: number | null;
   }>,
   spot: number,
   expiration: string,
   contractType: "C" | "P",
+  root: "SPX" | "SPXW",
 ): number | null {
   const cohort = rows.filter(
-    (r) => r.expiration === expiration && r.contractType === contractType,
+    (r) => r.expiration === expiration && r.contractType === contractType && r.root === root,
   );
   const k = atmStrike(cohort, spot);
   if (k === null) return null;
-  // ponytail: first match wins. The chain read dedups per contract, so one strike in one cohort
-  // is one row; if a future union re-introduces duplicates, dedup upstream, not here.
+  // ponytail: first match wins. (expiration, contractType, root, strike) IS unique on the wire —
+  // the chain read dedups per OCC contract — so this find has exactly one candidate. If a future
+  // union re-introduces duplicates, dedup upstream, not here.
   const row = cohort.find((r) => r.strike === k);
   return row === undefined || !isNum(row.bsmIv) ? null : row.bsmIv;
 }

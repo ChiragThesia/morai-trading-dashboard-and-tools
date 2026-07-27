@@ -119,57 +119,101 @@ describe("atmStrike — strike nearest spot", () => {
   });
 });
 
-describe("atmIv — the ATM reference IV, wing and expiry enforced by signature", () => {
+describe("atmIv — the ATM reference IV, wing, expiry and ROOT enforced by signature", () => {
   // Both wings at every strike, with DIFFERENT IVs per wing. The differing IV is load-bearing:
   // a fixture where the two wings share an IV passes even when the lookup crosses them.
+  // Every row is SPXW so the root argument is not what makes these pass — the cross-root
+  // cases get their own fixture below.
   const chain = [
-    { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", bsmIv: 0.161 },
-    { strike: 7_300_000, expiration: "2026-08-21", contractType: "C", bsmIv: 0.121 },
-    { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", bsmIv: 0.1452 },
-    { strike: 7_400_000, expiration: "2026-08-21", contractType: "C", bsmIv: 0.1103 },
-    { strike: 7_400_000, expiration: "2026-09-18", contractType: "P", bsmIv: 0.1701 },
+    { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: 0.161 },
+    { strike: 7_300_000, expiration: "2026-08-21", contractType: "C", root: "SPXW", bsmIv: 0.121 },
+    { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: 0.1452 },
+    { strike: 7_400_000, expiration: "2026-08-21", contractType: "C", root: "SPXW", bsmIv: 0.1103 },
+    { strike: 7_400_000, expiration: "2026-09-18", contractType: "P", root: "SPXW", bsmIv: 0.1701 },
   ] as const;
 
   it("picks the IV of the ATM strike for the requested wing — never the other wing's", () => {
-    expect(atmIv(chain, 7420, "2026-08-21", "P")).toBeCloseTo(0.1452, 12);
-    expect(atmIv(chain, 7420, "2026-08-21", "C")).toBeCloseTo(0.1103, 12);
+    expect(atmIv(chain, 7420, "2026-08-21", "P", "SPXW")).toBeCloseTo(0.1452, 12);
+    expect(atmIv(chain, 7420, "2026-08-21", "C", "SPXW")).toBeCloseTo(0.1103, 12);
   });
 
   it("scopes to the requested expiry — a nearer strike in another expiry is not a candidate", () => {
-    expect(atmIv(chain, 7420, "2026-09-18", "P")).toBeCloseTo(0.1701, 12);
+    expect(atmIv(chain, 7420, "2026-09-18", "P", "SPXW")).toBeCloseTo(0.1701, 12);
   });
 
   it("re-finds the ATM strike WITHIN the wing, not across the whole chain", () => {
     // Only the 7300 put exists for this wing+expiry pair; spot sits nearer 7400, but the
     // 7400 rows belong to other cohorts and must not drag the reference strike.
     const sparse = [
-      { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", bsmIv: 0.161 },
-      { strike: 7_400_000, expiration: "2026-08-21", contractType: "C", bsmIv: 0.1103 },
+      { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: 0.161 },
+      { strike: 7_400_000, expiration: "2026-08-21", contractType: "C", root: "SPXW", bsmIv: 0.1103 },
     ] as const;
-    expect(atmIv(sparse, 7420, "2026-08-21", "P")).toBeCloseTo(0.161, 12);
+    expect(atmIv(sparse, 7420, "2026-08-21", "P", "SPXW")).toBeCloseTo(0.161, 12);
   });
 
   it("is null when the ATM strike's own IV never solved — never a neighbour's IV", () => {
     const gapped = [
-      { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", bsmIv: null },
-      { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", bsmIv: 0.161 },
+      { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: null },
+      { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: 0.161 },
     ] as const;
-    expect(atmIv(gapped, 7420, "2026-08-21", "P")).toBeNull();
+    expect(atmIv(gapped, 7420, "2026-08-21", "P", "SPXW")).toBeNull();
   });
 
   it("is null when no row matches the expiry/wing, or spot is unusable", () => {
-    expect(atmIv(chain, 7420, "2026-12-18", "P")).toBeNull();
-    expect(atmIv(chain, 7420, "2026-09-18", "C")).toBeNull();
-    expect(atmIv([], 7420, "2026-08-21", "P")).toBeNull();
-    expect(atmIv(chain, 0, "2026-08-21", "P")).toBeNull();
+    expect(atmIv(chain, 7420, "2026-12-18", "P", "SPXW")).toBeNull();
+    expect(atmIv(chain, 7420, "2026-09-18", "C", "SPXW")).toBeNull();
+    expect(atmIv([], 7420, "2026-08-21", "P", "SPXW")).toBeNull();
+    expect(atmIv(chain, 0, "2026-08-21", "P", "SPXW")).toBeNull();
   });
 
   it("composes with vSkewVsAtm to give a wing-correct vertical skew", () => {
     const put7300 = 0.161;
-    const skew = vSkewVsAtm(put7300, atmIv(chain, 7420, "2026-08-21", "P"));
+    const skew = vSkewVsAtm(put7300, atmIv(chain, 7420, "2026-08-21", "P", "SPXW"));
     expect(skew).toBeCloseTo(0.161 - 0.1452, 12);
     // Crossing the wings would have produced 0.161 − 0.1103; prove we did not.
     expect(skew).not.toBeCloseTo(0.161 - 0.1103, 6);
+  });
+
+  // ── Root, the second collider ───────────────────────────────────────────────
+  // SPX (AM-settled monthlies) and SPXW (PM-settled weeklies) quote the SAME strike on the
+  // SAME date. The wire contract now carries `root`, but a cohort filtered on expiry + wing
+  // alone still holds BOTH books, so `find(strike === k)` returns whichever arrived first.
+  // Same failure class as the wing: every input present and finite, so nothing dashes.
+  const bothRoots = [
+    { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", root: "SPX", bsmIv: 0.2511 },
+    { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: 0.1452 },
+    { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", root: "SPX", bsmIv: 0.2610 },
+    { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: 0.1610 },
+  ] as const;
+
+  it("reads the requested ROOT's ATM IV, never its twin's", () => {
+    expect(atmIv(bothRoots, 7420, "2026-08-21", "P", "SPX")).toBeCloseTo(0.2511, 12);
+    expect(atmIv(bothRoots, 7420, "2026-08-21", "P", "SPXW")).toBeCloseTo(0.1452, 12);
+  });
+
+  it("is null when the requested root's ATM IV never solved, even though its twin's did", () => {
+    // The exact production shape (handoff, strike 6675000): one root solved, the other not.
+    // Order matters — SPXW first, so a root-blind `find` would hand SPX the SPXW IV.
+    const oneSolved = [
+      { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: 0.2511 },
+      { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", root: "SPX", bsmIv: null },
+    ] as const;
+    expect(atmIv(oneSolved, 7420, "2026-08-21", "P", "SPX")).toBeNull();
+    expect(atmIv(oneSolved, 7420, "2026-08-21", "P", "SPXW")).toBeCloseTo(0.2511, 12);
+  });
+
+  it("re-finds the ATM strike within the ROOT — the twin's strike ladder cannot drag it", () => {
+    // SPX lists only 7300 here; spot sits nearer SPXW's 7400. A root-blind atmStrike would
+    // pick 7400, find no SPX row at it, and dash a reference that does exist.
+    const raggedLadders = [
+      { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", root: "SPX", bsmIv: 0.2610 },
+      { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", root: "SPXW", bsmIv: 0.1452 },
+    ] as const;
+    expect(atmIv(raggedLadders, 7420, "2026-08-21", "P", "SPX")).toBeCloseTo(0.2610, 12);
+  });
+
+  it("is null when the requested root has no rows at all in that cohort", () => {
+    expect(atmIv(chain, 7420, "2026-08-21", "P", "SPX")).toBeNull();
   });
 });
 

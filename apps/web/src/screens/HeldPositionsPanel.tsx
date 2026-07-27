@@ -17,7 +17,7 @@
 import { cn } from "@/lib/utils";
 import type { HeldPositionVerdict, ExitMetric, ExitVerdictEnum } from "@morai/contracts";
 import { Panel, PanelHeading } from "../components/system/index.tsx";
-import { GEX_FRESH_MS } from "./Market.tsx";
+import { formatAsOf } from "../lib/format-as-of.ts";
 
 /** The verdict's OWN color — shared by the value text (when not forced INDICATIVE) and the
  * CHANGED marker (Color contract: "a changed STOP shows CHANGED in text-value-negative..."). */
@@ -61,17 +61,6 @@ function formatMetric(metric: ExitMetric): string {
   const isFraction =
     metric.name === "pnlPct" || metric.name === "termInversion" || metric.name === "gammaOffStrike";
   return `${metric.name} ${sign}${isFraction ? `${(abs * 100).toFixed(1)}%` : abs}`;
-}
-
-/** Mirrors lib/format-as-of.ts's formatAsOf — same freshness window, same "as of HH:MM"
- * label, same never-"Invalid Date" NaN guard (unparseable falls back to stale, the safe
- * direction). */
-function formatAsOf(observedAt: string): { readonly label: string; readonly fresh: boolean } {
-  const ts = new Date(observedAt).getTime();
-  if (Number.isNaN(ts)) return { label: "as of —", fresh: false };
-  const ageMs = Date.now() - ts;
-  const hhmm = new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-  return { label: `as of ${hhmm}`, fresh: ageMs >= 0 && ageMs < GEX_FRESH_MS };
 }
 
 /**

@@ -34,7 +34,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D25 | Runtime rule overrides (Phase 29) | `rule_overrides` — single-row JSONB deltas-over-defaults table, keyed by fixed literal id `"default"` (mirrors `broker_tokens.app_id`, no DB CHECK constraint). **Overrides Phase 28 T-28-11** — constants stay the DEFAULTS; the row is an explicit layer merged over them at consumption time. | Low (drop the row, code defaults remain authoritative) | A curated knob needs per-calendar or per-user scope |
 | D27 | Live SPX spot + VIX-family fan-out; DISPLAY-LIVE/GATE-EOD law (Phase 38) | SPX spot rides the EXISTING greeks pipe (zero new Schwab calls); VIX family (`$VIX`/`$VVIX`/`$VIX9D`/`$VIX3M`) via a new sidecar `get_quotes` poll (~20s). Server fans out two new on-change-throttled SSE lanes (`spot`, `indices`) beside the existing ticks lane. **Law**: only DISPLAYED values ever live-tint — every gate (entry-gate verdict, stored `indicator.band`, hy-oas/FRED) keeps consuming stored EOD data, untouched. | Low (additive SSE lanes; sidecar poll loop) | A 5th regime indicator needs a live source OR the poll interval needs to shrink below ~20s |
 | D28 | Market news headlines vendor | **Alpaca News API** (Benzinga content) — REST poll on a `fetch-news` cron → `news_items` table → `GET /api/analytics/news` + `get_news` MCP tool. Schwab Trader API exposes no news endpoint (the TOS feed is display-only vendor licensing) | Low (one HTTP adapter behind `ForFetchingNewsHeadlines`; keys optional) | Alpaca drops free news access OR headline latency proves too slow vs TOS → Benzinga direct (paid) |
-| D29 | Analyzer surface | **Raw chain data table.** The Analyzer stops proposing scored calendars and renders the chain — skew, EDGE, IV, greeks per strike — off a new `GET /api/chain` + `get_chain` read surface. The picker engine keeps running and stays readable through `/api/picker/candidates` + `get_picker_candidates` | Low (additive read-only route; engine and rule registry untouched) | The chain table proves it needs a derived ranking after all |
+| D29 | Analyzer surface | **Raw chain data, two surfaces.** The Analyzer stops proposing scored calendars. Browse lists every `(root, expiration)` cohort and expands to its whole strike ladder; Pair renders the calendar math for two hand-picked legs. Fed by `GET /api/chain` + `get_chain`. The picker engine keeps running and stays readable through `/api/picker/candidates` + `get_picker_candidates` | Low (additive read-only route; engine and rule registry untouched) | Scanning the term structure across strikes proves painful → add a compare mode over one front leg, not a rebuilt inner join |
 
 ## D1 — Bun
 
@@ -585,11 +585,34 @@ for real use → Benzinga direct (paid).
 hero, a scoring-methodology panel. The trader reads the chain to pick a strike. The score
 answered a question they were not asking and buried the numbers they were.
 
-**Decision**: the Analyzer renders raw chain rows. Horizontal skew, vertical skew, EDGE, IV
-and greeks per strike, sortable. No score, no rank, no verdict. A new read surface feeds it —
-`GET /api/chain` plus the mirroring `get_chain` MCP tool (architecture rule 9) — returning the
-stored per-contract quotes as a plain array. Shape and empty-array contract:
+**Decision**: the Analyzer renders raw chain rows. No score, no rank, no verdict. A new read
+surface feeds it — `GET /api/chain` plus the mirroring `get_chain` MCP tool (architecture rule
+9) — returning the stored per-contract quotes as a plain array. Shape and empty-array contract:
 [api-design.md](api-design.md).
+
+**Amended 2026-07-27 — two surfaces, not one table.** The first shipped shape put one row per
+strike, pre-paired across two chosen expiries. That was an **inner join**: only strikes quoted
+in BOTH expiries got a row, so a strike listed in August but not September was silently absent —
+no dash, no marker. A hidden filter is the worst possible default on a screen whose premise is
+"the reader does the judging". The surface is now split:
+
+- **Browse** — row = one `(root, expiration)` cohort, all of them. Expanding it lists every
+  strike that cohort quotes, each as a single LEG: its own IV, vertical skew, Δ/Γ/Θ/vega,
+  bid/ask, open interest. Nothing joined, nothing hidden. This is the TOS Trade tab shape.
+- **Pair** — the front and back legs the user picked by hand. Only here does calendar math
+  exist: horizontal skew, forward IV, EDGE, net calendar greeks, the haircut debit, and a TOS
+  order line that fills the payoff panel's paste box.
+
+The cohort key is `(root, expiration)`, never expiration alone: SPX is AM-settled and SPXW
+PM-settled, both quote the same strikes on the same dates, and merging them is a
+two-books-one-row collision. Same reason `chain-math.atmIv` and `riskReversalForExpiry` both
+take `root` as a parameter rather than trusting the caller to pre-filter — a cross-root
+reference has every input present and finite, so it cannot null its own column.
+
+**Known cost, accepted**: the joined table let the whole term structure be *scanned* at a
+glance, since every row carried H-Skew/EDGE. Row-per-expiration loses that. If scanning proves
+painful the follow-up is a compare mode over one chosen front leg — "this strike against every
+back expiration" — not a rebuilt inner join.
 
 **The picker engine is NOT retired.** `compute-picker` keeps running on the pipeline chain,
 keeps writing `picker_snapshot`, and stays readable through `GET /api/picker/candidates` and
