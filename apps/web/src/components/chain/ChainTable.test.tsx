@@ -338,12 +338,14 @@ describe("ChainTable — chain data surface", () => {
   it("sorts by a data column, toggles direction, and keeps nulls last", () => {
     render(<ChainTable rows={ROWS} />);
 
+    // A metric opens DESCENDING — biggest first is what you want on a trading table.
     fireEvent.click(headerCell("Edge"));
-    expect(strikeOrder()).toEqual(["7400", "7500", "7450"]); // asc, null last
+    expect(strikeOrder()).toEqual(["7500", "7400", "7450"]); // desc, null last
 
     fireEvent.click(headerCell("Edge"));
-    expect(strikeOrder()).toEqual(["7500", "7400", "7450"]); // desc, null still last
+    expect(strikeOrder()).toEqual(["7400", "7500", "7450"]); // asc, null still last
 
+    // Strike is the axis: back to it and it reads low-to-high again.
     fireEvent.click(headerCell("Strike"));
     expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
   });
@@ -353,7 +355,7 @@ describe("ChainTable — chain data surface", () => {
 
     expect(headerCell("Strike").getAttribute("aria-sort")).toBe("ascending");
     fireEvent.click(headerCell("Edge"));
-    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("ascending");
+    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("descending");
     expect(headerCell("Strike").getAttribute("aria-sort")).toBe("none");
   });
 
@@ -424,5 +426,47 @@ describe("ChainTable — SPX vs SPXW at one strike", () => {
     fireEvent.click(a);
     expect(screen.getByTestId("chain-detail-SPXW-P-7400000")).toBeTruthy();
     expect(screen.queryByTestId("chain-detail-SPX-P-7400000")).toBeNull();
+  });
+});
+
+// A metric's FIRST click must land descending — biggest first. Ascending-first shows the
+// worst edge, the thinnest theta and the smallest debit on top, which reads as "the sort did
+// not work" even though it did. Strike is the exception: it is an axis, not a metric, so it
+// reads low-to-high like a chain always does.
+describe("ChainTable — first-click sort direction", () => {
+  it("sorts a metric descending on first click, and toggles on the second", () => {
+    render(<ChainTable rows={ROWS} />);
+
+    fireEvent.click(headerCell("Edge"));
+    // ROWS carry edge 0.004, null, 0.012 → 1.20 on top, null last.
+    expect(strikeOrder()).toEqual(["7500", "7400", "7450"]);
+    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("descending");
+
+    fireEvent.click(headerCell("Edge"));
+    expect(strikeOrder()).toEqual(["7400", "7500", "7450"]);
+    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("opens on strike ascending — the axis reads low-to-high, like any chain", () => {
+    render(<ChainTable rows={ROWS} />);
+    // Strike is already the active sort at mount, so this is the mount state, not a click.
+    expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
+    expect(headerCell("Strike").getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("returns to strike ascending after sorting by a metric", () => {
+    render(<ChainTable rows={ROWS} />);
+    fireEvent.click(headerCell("Debit"));
+    fireEvent.click(headerCell("Strike"));
+    expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
+    expect(headerCell("Strike").getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("keeps nulls last whichever direction a metric is sorted", () => {
+    render(<ChainTable rows={ROWS} />);
+    fireEvent.click(headerCell("Theta (Θ)"));
+    expect(strikeOrder()[2]).toBe("7450"); // the all-null row
+    fireEvent.click(headerCell("Theta (Θ)"));
+    expect(strikeOrder()[2]).toBe("7450");
   });
 });

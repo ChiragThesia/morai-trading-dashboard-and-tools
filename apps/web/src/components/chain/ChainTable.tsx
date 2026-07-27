@@ -362,6 +362,19 @@ function rowKey(r: ChainTableRow): string {
   return `${r.root}-${r.contractType}-${r.strike}`;
 }
 
+/**
+ * Which direction a column opens on its FIRST click.
+ *
+ * Strike is an axis, not a measurement — a chain reads low-to-high, so it opens ascending.
+ * Every other column is a metric, and on a metric you want the biggest number on top: opening
+ * ascending puts the worst edge, the thinnest theta and the smallest debit at the top, which
+ * reads as "the sort is broken" even though it sorted exactly as asked. Clicking again
+ * toggles, so nothing is unreachable.
+ */
+function firstDir(key: string): "asc" | "desc" {
+  return key === "strike" ? "asc" : "desc";
+}
+
 /** Nulls sort last in BOTH directions — "no data" is never the best or worst row. */
 function compare(a: number | null, b: number | null, dir: "asc" | "desc"): number {
   if (a === null) return b === null ? 0 : 1;
@@ -408,7 +421,7 @@ export function ChainTable({
           setSort((cur) =>
             cur.key === key
               ? { key, dir: cur.dir === "asc" ? "desc" : "asc" }
-              : { key, dir: "asc" },
+              : { key, dir: firstDir(key) },
           );
         }}
         wrapperClassName={SCROLL_WRAPPER}
