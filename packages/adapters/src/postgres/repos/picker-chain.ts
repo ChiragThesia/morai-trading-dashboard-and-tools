@@ -15,7 +15,12 @@ import type { Db } from "../db.ts";
  *     collapses to a single source whenever the cycle straddles a boundary (the exact
  *     2026-07-08 GEX regression); DISTINCT ON (contract) newest-first dedupes the
  *     near-ATM overlap so a contract never appears twice in the universe;
- * (3) JOIN contracts for strike/expiration (Pitfall 2), puts only (contract_type = 'P').
+ * (3) JOIN contracts for strike/expiration (Pitfall 2).
+ *
+ * BOTH wings are returned — calls AND puts. The Analyzer's 25-delta risk reversal
+ * (IV(25Δ put) − IV(25Δ call)) needs the call side. The picker's own universe is puts-only by
+ * design (DELTA_BAND_MIN/MAX are negative put deltas); that filter lives in the picker
+ * use-case (core/picker/application/computePickerSnapshot.ts), never in this read.
  *
  * bid/ask/open_interest ride along for the `liquidity` gate (rules.ts).
  *
@@ -46,7 +51,7 @@ export function makePostgresPickerChainRepo(db: Db): PostgresPickerChainRepo {
 
       const windowStart = new Date(latestTime.getTime() - LOOKBACK_MS);
 
-      // Step 2+3: lookback union, one row per contract (newest wins), puts only.
+      // Step 2+3: lookback union, one row per contract (newest wins), both wings.
       const rows = await db
         .selectDistinctOn([legObservations.contract], {
           contract: legObservations.contract,
@@ -65,11 +70,7 @@ export function makePostgresPickerChainRepo(db: Db): PostgresPickerChainRepo {
         .from(legObservations)
         .innerJoin(contracts, eq(legObservations.contract, contracts.occSymbol))
         .where(
-          and(
-            gte(legObservations.time, windowStart),
-            lte(legObservations.time, latestTime),
-            eq(contracts.contractType, "P"),
-          ),
+          and(gte(legObservations.time, windowStart), lte(legObservations.time, latestTime)),
         )
         // DISTINCT ON requires the distinct column to lead the ORDER BY; time DESC within
         // each contract makes the newest row win.

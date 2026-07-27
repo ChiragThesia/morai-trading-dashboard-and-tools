@@ -6,7 +6,8 @@ import type { ChainQuoteForPicker, ForReadingChainForPicker, StorageError } from
  * makeMemoryPickerChainRepo — in-memory twin of the Postgres picker-chain adapter.
  *
  * Read-only port (no write path to cross-check) — simply returns a supplied
- * ChainQuoteForPicker[] seed, mirroring the Postgres read shape (latest cohort, puts only).
+ * ChainQuoteForPicker[] seed, mirroring the Postgres read shape (latest cohort, BOTH wings —
+ * calls AND puts; the puts-only universe is the picker use-case's own filter).
  *
  * Architectural rule: every driven port change ships with its in-memory twin in the same
  * PR (architecture-boundaries.md §8).

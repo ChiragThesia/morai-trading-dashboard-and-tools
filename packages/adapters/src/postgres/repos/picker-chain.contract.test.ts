@@ -11,11 +11,12 @@ import { sql } from "drizzle-orm";
  *
  * Asserts:
  * - readChainForPicker returns ok([]) when leg_observations is empty (no crash).
- * - readChainForPicker returns the latest cohort's PUT rows only, with strike/expiration
- *   resolved via the contracts JOIN (Pitfall 2) and source projected from
- *   leg_observations.source (schwab_chain → "schwab", cboe → "cboe").
- * - A call row at the same cohort time is excluded (puts only).
- * - An older cohort's put row is excluded (latest cohort only).
+ * - readChainForPicker returns BOTH wings of the latest cohort (calls AND puts — the 25-delta
+ *   risk reversal needs the call side), with strike/expiration resolved via the contracts JOIN
+ *   (Pitfall 2) and source projected from leg_observations.source (schwab_chain → "schwab",
+ *   cboe → "cboe"). The puts-only universe is the PICKER's rule, applied in the picker
+ *   use-case — never here.
+ * - An older cohort's row is excluded (latest cohort only).
  */
 
 const dbUrl: string | undefined = inject("dbUrl");
@@ -44,7 +45,7 @@ describe.skipIf(shouldSkip)("postgres picker-chain adapter", () => {
     expect(result.value).toEqual([]);
   });
 
-  it("returns the latest cohort's PUT rows with strike/expiration/source, excluding calls and older cohorts", async () => {
+  it("returns BOTH wings of the latest cohort with strike/expiration/source, excluding older cohorts", async () => {
     if (!db) return;
     const repo = makePostgresPickerChainRepo(db);
 
@@ -77,15 +78,16 @@ describe.skipIf(shouldSkip)("postgres picker-chain adapter", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    // Only the latest-cohort PUT row — the older cohort row and the call row are excluded.
-    expect(result.value).toHaveLength(1);
-    const leg = result.value[0];
+    // Both latest-cohort rows — the put AND the call. Only the older cohort row is excluded.
+    expect(result.value).toHaveLength(2);
+    expect(result.value.map((l) => l.contractType).sort()).toEqual(["C", "P"]);
+
+    const leg = result.value.find((l) => l.contractType === "P");
     expect(leg).toBeDefined();
     if (leg === undefined) return;
 
     expect(leg.strike).toBe(7500000);
     expect(leg.expiration).toBe("2026-08-01");
-    expect(leg.contractType).toBe("P");
     expect(leg.bsmIv).toBe("0.16");
     expect(leg.underlyingPrice).toBe(7390);
     expect(leg.source).toBe("schwab"); // schwab_chain → "schwab"
@@ -97,6 +99,17 @@ describe.skipIf(shouldSkip)("postgres picker-chain adapter", () => {
     expect(leg.bid).toBe(2.0);
     expect(leg.ask).toBe(2.5);
     expect(leg.openInterest).toBe(700);
+
+    // The call wing carries the same projected shape — it is what the 25-delta risk
+    // reversal (IV(25Δ put) − IV(25Δ call)) reads.
+    const call = result.value.find((l) => l.contractType === "C");
+    expect(call).toBeDefined();
+    if (call === undefined) return;
+    expect(call.strike).toBe(7500000);
+    expect(call.expiration).toBe("2026-08-01");
+    expect(call.bsmIv).toBe("0.17");
+    expect(call.source).toBe("schwab");
+    expect(call.time.getTime()).toBe(latestTime.getTime());
   });
 
   // Same regression class as the 2026-07-08 GEX cohort bug: a dual-source cycle lands as

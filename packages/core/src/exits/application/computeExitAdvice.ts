@@ -97,13 +97,18 @@ function isExitRuleOverrides(value: unknown): value is ExitRuleOverrides {
   return isTakeOverrides(value["take"]) && isStopOverrides(value["stop"]);
 }
 
-/** Filters chain-for-roll quotes down to the calendar's own strike and maps to the evaluator's shape. */
+/**
+ * Filters chain-for-roll quotes down to the calendar's own strike AND its own wing, then maps
+ * to the evaluator's shape. The wing match matters: the shared chain read returns calls as well
+ * as puts, and a call is never a replacement front for a put calendar (nor the reverse).
+ */
 function toRollCandidates(
   quotes: ReadonlyArray<ChainQuoteForRoll>,
   strike: number,
+  optionType: "C" | "P",
 ): ReadonlyArray<RollCandidateQuote> {
   return quotes
-    .filter((q) => q.strike === strike)
+    .filter((q) => q.strike === strike && q.contractType === optionType)
     .map((q) => ({ expiration: q.expiration, bid: q.bid, ask: q.ask }));
 }
 
@@ -156,7 +161,9 @@ export function makeComputeExitAdviceUseCase(deps: ComputeExitAdviceDeps): ForRu
       if (snapshot === undefined) continue;
 
       const chainResult = await deps.readChainForRoll(position.strike);
-      const rollCandidates = chainResult.ok ? toRollCandidates(chainResult.value, position.strike) : [];
+      const rollCandidates = chainResult.ok
+        ? toRollCandidates(chainResult.value, position.strike, position.optionType)
+        : [];
 
       const marketSession: "rth" | "after-hours" =
         isWithinRth(snapshot.time) && !isNyseHoliday(snapshot.time) ? "rth" : "after-hours";

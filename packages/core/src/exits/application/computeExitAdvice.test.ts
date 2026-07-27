@@ -471,6 +471,69 @@ describe("computeExitAdvice — chain-for-roll read failure degrades gracefully"
   });
 });
 
+// ─── ROLL candidates match the calendar's own wing ───────────────────────────────
+//
+// The shared picker-chain read now returns BOTH wings (the Analyzer's 25-delta risk reversal
+// needs the call side), so `toRollCandidates` must match contractType as well as strike — a
+// call quote is not a replacement front for a PUT calendar.
+
+describe("computeExitAdvice — ROLL candidates are the calendar's own option type", () => {
+  it("a CALL quote at the calendar's strike is not a roll candidate for a PUT calendar", async () => {
+    const { persist, calls } = makePersistSpy();
+    // dteFront 13 (< the 14 ceiling), spot on strike, flat P&L — the ROLL rule's own gates all
+    // pass, so the verdict hinges purely on whether a replacement front is found.
+    const callOnlyChain: ReadonlyArray<ChainQuoteForRoll> = [
+      { strike: 7000, expiration: "2026-07-27", contractType: "C", bid: 100, ask: 106 },
+    ];
+
+    const useCase = makeComputeExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition({ strike: 7000, optionType: "P" })]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([
+        makeSnapshot({ spot: 7000, dteFront: 13, netMark: 4000 }),
+      ]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([]),
+      readEconomicEvents: fakeReadEvents(),
+      readChainForRoll: fakeReadChainForRoll(callOnlyChain),
+      persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
+      now: () => new Date("2026-07-09T15:05:00.000Z"),
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.verdict.verdict).not.toBe("ROLL");
+    expect(calls[0]?.verdict.roll).toBeNull();
+  });
+
+  it("the same-wing PUT quote at that strike IS a roll candidate", async () => {
+    const { persist, calls } = makePersistSpy();
+    const bothWingsChain: ReadonlyArray<ChainQuoteForRoll> = [
+      { strike: 7000, expiration: "2026-07-27", contractType: "C", bid: 100, ask: 106 },
+      { strike: 7000, expiration: "2026-07-27", contractType: "P", bid: 50, ask: 54 },
+    ];
+
+    const useCase = makeComputeExitAdviceUseCase({
+      readHeldPositions: fakeReadHeldPositions([makePosition({ strike: 7000, optionType: "P" })]),
+      readLatestSnapshotPerOpenCalendar: fakeReadSnapshots([
+        makeSnapshot({ spot: 7000, dteFront: 13, netMark: 4000 }),
+      ]),
+      readLatestVerdictsPerCalendar: fakeReadVerdicts([]),
+      readEconomicEvents: fakeReadEvents(),
+      readChainForRoll: fakeReadChainForRoll(bothWingsChain),
+      persistExitVerdict: persist,
+      readRuleOverrides: fakeReadRuleOverrides(),
+      now: () => new Date("2026-07-09T15:05:00.000Z"),
+    });
+
+    const result = await useCase();
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.verdict.verdict).toBe("ROLL");
+    expect(calls[0]?.verdict.roll?.suggestedFrontExpiry).toBe("2026-07-27");
+    // Priced off the PUT's bid/ask (50/54), never the call's (100/106).
+    expect(calls[0]?.verdict.roll?.estNewFrontCredit).toBeLessThan(54);
+  });
+});
+
 // ─── Runtime rule-settings overrides (29-11, RUNTIME-*) ──────────────────────────
 //
 // readRuleOverrides threading: fresh-per-run read, byte-identical omission, overridden
