@@ -42,15 +42,26 @@ type SortableColumn<T> = DataTableColumn<T> & {
 };
 
 /**
+ * Columns that are an AXIS rather than a measurement. A chain ladder reads low strike to high,
+ * and an expiry list reads soonest to furthest — so these open ASCENDING.
+ *
+ * `expiration` and `dte` are the same axis wearing two labels (the Expiry column sorts on dte),
+ * and both belong here. Leaving them out is subtle: the table's initial state is ascending, so
+ * they look right until you sort by something else and come back, at which point Expiry opens
+ * with October on top.
+ */
+const AXIS_COLUMNS: ReadonlySet<string> = new Set(["strike", "expiration", "dte"]);
+
+/**
  * Which direction a column opens on its FIRST click.
  *
- * Strike is an axis, not a measurement — a chain reads low-to-high, so it opens ascending. Every
- * other column is a metric, and on a metric you want the biggest number on top: opening ascending
- * puts the thinnest theta and the smallest skew at the top, which reads as "the sort is broken"
- * even though it sorted exactly as asked. Clicking again toggles, so nothing is unreachable.
+ * Every non-axis column is a metric, and on a metric you want the biggest number on top: opening
+ * ascending puts the thinnest theta and the smallest skew at the top, which reads as "the sort is
+ * broken" even though it sorted exactly as asked. Clicking again toggles, so nothing is
+ * unreachable.
  */
 function firstDir(key: string): "asc" | "desc" {
-  return key === "strike" ? "asc" : "desc";
+  return AXIS_COLUMNS.has(key) ? "asc" : "desc";
 }
 
 /** Nulls sort last in BOTH directions — "no data" is never the best or worst row. */

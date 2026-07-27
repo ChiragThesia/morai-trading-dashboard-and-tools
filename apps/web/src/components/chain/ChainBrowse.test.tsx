@@ -259,6 +259,41 @@ describe("ChainBrowse — sorting the ladder", () => {
   });
 });
 
+describe("ChainBrowse — sorting the cohort list", () => {
+  function cohortExpiries(): ReadonlyArray<string> {
+    return [...screen.getByTestId("chain-cohorts-scroll").querySelectorAll("tr[data-testid^='chain-cohort-']")].map(
+      (tr) => tr.getAttribute("data-testid") ?? "",
+    );
+  }
+
+  it("lists the soonest expiry first", () => {
+    renderBrowse();
+    expect(cohortExpiries()).toEqual([AUG_ROW, SEP_ROW]);
+  });
+
+  // Expiry and DTE are the SAME axis wearing two labels — the Expiry column sorts on dte — and an
+  // expiry list reads soonest-first. The initial state is ascending, so treating them as metrics
+  // looks correct until you sort by something else and come back: Expiry then opens with the
+  // furthest month on top. Same defect class as a metric column opening ascending.
+  it("re-opens an axis column ASCENDING after sorting by a metric", () => {
+    renderBrowse();
+    fireEvent.click(screen.getByText("ATM IV"));
+    fireEvent.click(screen.getByText("Expiry"));
+    expect(cohortExpiries()).toEqual([AUG_ROW, SEP_ROW]);
+
+    fireEvent.click(screen.getByText("ATM IV"));
+    fireEvent.click(screen.getByText("DTE"));
+    expect(cohortExpiries()).toEqual([AUG_ROW, SEP_ROW]);
+  });
+
+  it("opens a cohort metric DESCENDING, nulls last", () => {
+    renderBrowse();
+    fireEvent.click(screen.getByText("ATM IV"));
+    // September's ATM IV never solved — a null is neither the best nor the worst cohort.
+    expect(cohortExpiries()).toEqual([AUG_ROW, SEP_ROW]);
+  });
+});
+
 describe("ChainBrowse — one tree for all viewports", () => {
   it("wraps both tables in a horizontal-scroll container with a min-width", () => {
     renderBrowse();
