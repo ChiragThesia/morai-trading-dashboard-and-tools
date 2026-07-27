@@ -28,7 +28,7 @@ import type {
   StorageError,
 } from "@morai/core";
 import { z } from "zod";
-import { and, isNotNull, desc, max, asc, eq, gte, lte } from "drizzle-orm";
+import { and, isNotNull, desc, max, asc, eq, gte, lte, sql } from "drizzle-orm";
 import { legObservations, contracts, gexSnapshots } from "./schema.ts";
 import type { Db } from "./db.ts";
 
@@ -121,7 +121,20 @@ export function makePostgresGexSnapshotRepo(db: Db): PostgresGexSnapshotRepo {
           underlyingPrice: legObservations.underlyingPrice,
           bsmGamma: legObservations.bsmGamma,
           bsmIv: legObservations.bsmIv,
-          openInterest: legObservations.openInterest,
+          /**
+           * MAX across this contract's rows in the window, not the newest row's value — and GEX is
+           * the primary reason this matters, because gex = open interest × gamma. Schwab's chain
+           * returns `openInterest: 0` for every contract outside RTH and writes about a minute
+           * after CBOE, so the newest-row rule zeroed every strike overnight: production reported
+           * all 103 strikes at gex 0, netGammaAtSpot 0, both walls null, and `flip` collapsed to
+           * the profile grid's lowest point.
+           *
+           * Open interest is a once-daily OCC figure and never negative, so within one cohort
+           * window the larger of the two sources IS the reported value; an untraded strike still
+           * reads 0 because then both report 0. Postgres runs window functions BEFORE DISTINCT, so
+           * the surviving row already carries its partition's max. Mirrors picker-chain.ts.
+           */
+          openInterest: sql<number>`max(${legObservations.openInterest}) over (partition by ${legObservations.contract})`,
           // Raw mark — 34-03, parity-solver input (leg_observations.mark, already notNull).
           mark: legObservations.mark,
           // JOIN fields from contracts (Pitfall 2)

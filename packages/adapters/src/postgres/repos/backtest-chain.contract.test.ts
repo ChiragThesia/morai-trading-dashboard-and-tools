@@ -1,4 +1,4 @@
-import { describe, beforeAll, beforeEach } from "vitest";
+import { describe, beforeAll, beforeEach, it, expect } from "vitest";
 import { inject } from "vitest";
 import { runBacktestChainContractTests } from "../../__contract__/backtest-chain.contract.ts";
 import { makePostgresBacktestChainRepo } from "./backtest-chain.ts";
@@ -62,4 +62,50 @@ describe.skipIf(shouldSkip)("postgres backtest-chain adapter", () => {
       },
     }),
   );
+
+  /**
+   * REGRESSION (prod, 2026-07-27). Third consumer of the open-interest shadowing bug, after
+   * picker-chain and gex-snapshot. Schwab's chain returns `openInterest: 0` outside RTH and writes
+   * about a minute after CBOE, so `DISTINCT ON (contract) ORDER BY time DESC` served Schwab's zero
+   * for ~2,971 contracts a day. In a backtest that silently starves the `liquidity` gate on every
+   * replayed cohort whose newest row happened to be Schwab's — so the corpus the calibration reads
+   * was scored against open interest that did not exist.
+   *
+   * Open interest is a once-daily non-negative OCC figure, so MAX across sources in the cohort
+   * window is the reported value; an untraded strike still reads 0 because both sources report 0.
+   */
+  it("takes the MAX open interest per contract, so a Schwab zero cannot starve the liquidity gate", async () => {
+    if (!db) return;
+    const repo = makePostgresBacktestChainRepo(db);
+
+    const asOf = new Date("2026-06-24T04:35:00Z");
+    const cboeTime = new Date("2026-06-24T04:29:18Z");
+    const schwabTime = new Date("2026-06-24T04:30:21Z"); // newest — wins DISTINCT ON
+    const occ = "O:SPX260627P07250";
+
+    await db.execute(sql`
+      INSERT INTO contracts (occ_symbol, underlying, root, contract_type, exercise_style, strike, expiration, multiplier)
+      VALUES (${occ}, 'SPX', 'SPX', 'P', 'european', 7250000, '2026-06-27', 100)
+      ON CONFLICT DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO leg_observations
+        (time, contract, bid, ask, mark, underlying_price, bsm_iv, bsm_gamma, open_interest, volume, source)
+      VALUES
+        (${cboeTime.toISOString()}::timestamptz, ${occ}, '9.4', '9.9', '9.65', '7411', '0.16', '0.0011', 15926, 0, 'cboe'),
+        (${schwabTime.toISOString()}::timestamptz, ${occ}, '9.5', '10.0', '9.75', '7411', '0.16', '0.0011', 0, 0, 'schwab_chain')
+      ON CONFLICT DO NOTHING
+    `);
+
+    const result = await repo.readChainAsOf(asOf);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const leg = result.value.find((l) => l.occSymbol === occ);
+    expect(leg).toBeDefined();
+    if (leg === undefined) return;
+
+    expect(leg.openInterest).toBe(15926);
+    // Prices still come from the newest row — the fix is scoped to open interest.
+    expect(leg.bid).toBe(9.5);
+  });
 });

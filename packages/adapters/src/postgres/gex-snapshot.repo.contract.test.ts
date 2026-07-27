@@ -184,4 +184,52 @@ describe.skipIf(shouldSkip)("postgres gex-snapshot adapter", () => {
     expect(leg.openInterest).toBe(1000);
     expect(leg.underlyingPrice).toBe(7381);
   });
+
+  /**
+   * REGRESSION (prod, 2026-07-27). GEX is the primary victim of the open-interest shadowing bug:
+   * gex = open interest × gamma × …, so zero OI means zero gamma at every strike, which is exactly
+   * what production reported overnight — all 103 strikes at gex/coi/poi 0, netGammaAtSpot 0, both
+   * walls null, and `flip` degenerating to the profile grid's lowest point.
+   *
+   * Cause: Schwab's chain returns `openInterest: 0` for every contract outside RTH, it writes about
+   * a minute after CBOE, and this read took the newest row per contract. Fix is the same as
+   * picker-chain's — MAX over the contract's rows in the cohort window. Open interest is a
+   * once-daily non-negative OCC figure, so the max across sources is the reported value, and a
+   * genuinely untraded strike still reads 0 because both sources then report 0.
+   */
+  it("takes the MAX open interest per contract, so an overnight Schwab zero cannot zero out GEX", async () => {
+    if (!db) return;
+    const repo = makePostgresGexSnapshotRepo(db);
+
+    const cboeTime = new Date("2026-06-24T04:29:18Z");
+    const schwabTime = new Date("2026-06-24T04:30:21Z"); // newest — wins DISTINCT ON
+    const occ = "O:SPX260627P07300";
+
+    await db.execute(sql`
+      INSERT INTO contracts (occ_symbol, underlying, root, contract_type, exercise_style, strike, expiration, multiplier)
+      VALUES (${occ}, 'SPX', 'SPX', 'P', 'european', 7300000, '2026-06-27', 100)
+      ON CONFLICT DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO leg_observations
+        (time, contract, bid, ask, mark, underlying_price, bsm_iv, bsm_gamma, open_interest, volume, source)
+      VALUES
+        (${cboeTime.toISOString()}::timestamptz, ${occ}, '9.4', '9.9', '9.65', '7411', '0.16', '0.0011', 54150, 0, 'cboe'),
+        (${schwabTime.toISOString()}::timestamptz, ${occ}, '9.5', '10.0', '9.75', '7411', '0.16', '0.0011', 0, 0, 'schwab_chain')
+      ON CONFLICT DO NOTHING
+    `);
+
+    const result = await repo.readLegObsForGex();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const leg = result.value.find((l) => l.contract === occ);
+    expect(leg).toBeDefined();
+    if (leg === undefined) return;
+
+    // CBOE's real open interest survives the newer Schwab zero — otherwise this strike
+    // contributes nothing to gex and the walls go null.
+    expect(leg.openInterest).toBe(54150);
+    // Prices and gamma still come from the newest row; the fix is scoped to open interest.
+    expect(leg.underlyingPrice).toBe(7411);
+  });
 });

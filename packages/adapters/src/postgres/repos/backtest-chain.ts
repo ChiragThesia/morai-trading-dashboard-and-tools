@@ -1,7 +1,7 @@
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ChainLegQuoteAsOf, ForReadingChainAsOf, StorageError } from "@morai/core";
-import { and, asc, desc, eq, gte, isNotNull, lte, max } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, max, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -63,7 +63,19 @@ export function makePostgresBacktestChainRepo(db: Db): PostgresBacktestChainRepo
           bsmGamma: legObservations.bsmGamma,
           bsmTheta: legObservations.bsmTheta,
           bsmVega: legObservations.bsmVega,
-          openInterest: legObservations.openInterest,
+          /**
+           * MAX across this contract's rows in the cohort, not the newest row's value. Schwab's
+           * chain returns `openInterest: 0` outside RTH and writes about a minute after CBOE, so
+           * the newest-row rule served zero for ~2,971 contracts a day — which in a replay starves
+           * the `liquidity` gate on every cohort whose newest row was Schwab's, scoring the
+           * calibration corpus against open interest that did not exist.
+           *
+           * Open interest is a once-daily non-negative OCC figure, so the max across sources in the
+           * window IS the reported value; an untraded strike still reads 0 because both sources
+           * report 0. Postgres runs window functions BEFORE DISTINCT, so the surviving row already
+           * carries its partition's max. Mirrors picker-chain.ts and gex-snapshot.repo.ts.
+           */
+          openInterest: sql<number>`max(${legObservations.openInterest}) over (partition by ${legObservations.contract})`,
           source: legObservations.source,
           contractType: contracts.contractType,
           strike: contracts.strike,

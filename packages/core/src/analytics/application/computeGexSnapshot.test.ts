@@ -372,7 +372,14 @@ describe("near-term (≤45d DTE) level set", () => {
 // ─── impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04, TOSP-02) ─────
 
 describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04, TOSP-02)", () => {
-  const CARRY_EXPIRY = "2026-06-27";
+  // 31 days out from CYCLE_TIME (2026-06-23). The original fixture expired in 4 days, which
+  // `impliedDivYield` now refuses outright: parity's noise gain is 1/T, so under a week the solve
+  // cannot carry signal even when the marks are exact (prod 2026-07-27 read 29.8% at 0DTE). This
+  // test's intent is "recovers a KNOWN q", which only means something at a conditioned horizon, so
+  // the fixture moved rather than the assertion loosening. The refusal has its own tests in
+  // domain/implied-carry.test.ts. The flat 4.5% macro curve below makes the rate leg
+  // horizon-independent, so moving the date changes nothing else.
+  const CARRY_EXPIRY = "2026-07-24";
   const CARRY_STRIKE = 7400; // ATM: strike === spot, simplest bracket pick
   const KNOWN_R = 0.045;
   const KNOWN_Q = 0.013;
@@ -384,7 +391,7 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
   // own construction) rather than the UTC-anchored `${CARRY_EXPIRY}T00:00:00.000Z` string the
   // SUT used to build internally — so this oracle can't drift wrong in lockstep with a
   // UTC/local round-trip bug in the SUT (CR-01).
-  const EXPIRY_DATE = new Date(2026, 5, 27); // June 27 2026, local — month is 0-indexed
+  const EXPIRY_DATE = new Date(2026, 6, 24); // July 24 2026, local — month is 0-indexed
   const SETTLEMENT = settlementTimestamp("SPXW", EXPIRY_DATE);
   const CARRY_T = (SETTLEMENT.getTime() - CYCLE_TIME.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
 
@@ -393,7 +400,7 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
 
   const CARRY_LEGS: ReadonlyArray<LegObsForGex> = [
     makeLeg({
-      contract: "SPXW  260627C07400000",
+      contract: "SPXW  260724C07400000",
       contractType: "C",
       strike: 7400000,
       expiration: CARRY_EXPIRY,
@@ -402,7 +409,7 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
       bsmGamma: "0.001",
     }),
     makeLeg({
-      contract: "SPXW  260627P07400000",
+      contract: "SPXW  260724P07400000",
       contractType: "P",
       strike: 7400000,
       expiration: CARRY_EXPIRY,
@@ -447,7 +454,7 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
     const spy = makePersistSpy();
     const zeroMarkLegs: ReadonlyArray<LegObsForGex> = [
       makeLeg({
-        contract: "SPXW  260627C07400000",
+        contract: "SPXW  260724C07400000",
         contractType: "C",
         strike: 7400000,
         expiration: CARRY_EXPIRY,
@@ -456,7 +463,7 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
         bsmGamma: "0.001",
       }),
       makeLeg({
-        contract: "SPXW  260627P07400000",
+        contract: "SPXW  260724P07400000",
         contractType: "P",
         strike: 7400000,
         expiration: CARRY_EXPIRY,
@@ -504,7 +511,7 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
     // Only a call at this strike — no put to pair with (no ATM bracket).
     const callOnlyLegs: ReadonlyArray<LegObsForGex> = [
       makeLeg({
-        contract: "SPXW  260627C07400000",
+        contract: "SPXW  260724C07400000",
         contractType: "C",
         strike: 7400000,
         expiration: CARRY_EXPIRY,

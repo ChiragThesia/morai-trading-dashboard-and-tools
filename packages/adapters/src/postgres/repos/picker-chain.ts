@@ -1,7 +1,7 @@
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type { ChainQuoteForPicker, ForReadingChainForPicker, StorageError } from "@morai/core";
-import { and, asc, desc, eq, gte, isNotNull, lte, max } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, max, sql } from "drizzle-orm";
 import { legObservations, contracts } from "../schema.ts";
 import type { Db } from "../db.ts";
 
@@ -60,7 +60,25 @@ export function makePostgresPickerChainRepo(db: Db): PostgresPickerChainRepo {
           bsmIv: legObservations.bsmIv,
           bid: legObservations.bid,
           ask: legObservations.ask,
-          openInterest: legObservations.openInterest,
+          /**
+           * Open interest is the MAX across this contract's rows in the window, not the newest
+           * row's value.
+           *
+           * Schwab's chain returns `openInterest: 0` for every contract outside RTH (measured in
+           * prod 2026-07-27: 0.0% non-zero from 04:00Z to 10:00Z, 86.3% from 10:30Z). CBOE carries
+           * real OI in every snapshot. Both land in this same lookback window and Schwab writes
+           * about a minute AFTER CBOE, so the newest-row rule handed the whole chain Schwab's zeros
+           * overnight — 2,971 contracts a day. GEX is open interest × gamma, so it computed zero
+           * gamma everywhere and reported null call/put walls until RTH data arrived.
+           *
+           * MAX is correct, not a heuristic: open interest is a once-daily OCC figure and is never
+           * negative, so within one cohort window the larger of the two sources IS the reported
+           * value. A genuinely untraded strike still reads 0, because then both sources report 0.
+           *
+           * Postgres evaluates window functions BEFORE DISTINCT, so the surviving row already
+           * carries its partition's max — no second query, no subselect.
+           */
+          openInterest: sql<number>`max(${legObservations.openInterest}) over (partition by ${legObservations.contract})`,
           source: legObservations.source,
           contractType: contracts.contractType,
           strike: contracts.strike,
