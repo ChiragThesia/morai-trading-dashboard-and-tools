@@ -110,6 +110,7 @@ function chainRow(over: Partial<ChainRow>): ChainRow {
     strike: 7500_000,
     expiration: FRONT.expiration,
     contractType: "P",
+    root: "SPXW",
     dte: FRONT.dte,
     bsmIv: 0.15,
     bid: 40,
@@ -142,6 +143,7 @@ function chainFixture(): ReadonlyArray<ChainRow> {
           dte: e.dte,
           bsmIv: iv - 0.005,
           contractType: "C",
+          root: "SPXW",
         }),
       );
     }
@@ -205,7 +207,7 @@ describe("Analyzer — chain table", () => {
     expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual(
       // Row identity is wing + strike ×1000. Keying on strike alone would collide the call
       // and the put at each strike into one row and one expansion slot.
-      STRIKES.map((k) => `chain-row-P-${k * 1000}`),
+      STRIKES.map((k) => `chain-row-SPXW-P-${k * 1000}`),
     );
   });
 
@@ -222,10 +224,10 @@ describe("Analyzer — chain table", () => {
 
   it("only one row is expanded at a time", () => {
     render(<Analyzer />);
-    fireEvent.click(screen.getByTestId("chain-row-P-7500000"));
-    fireEvent.click(screen.getByTestId("chain-row-P-7400000"));
-    expect(screen.getByTestId("chain-detail-P-7400000")).toBeTruthy();
-    expect(screen.queryByTestId("chain-detail-P-7500000")).toBeNull();
+    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7500000"));
+    fireEvent.click(screen.getByTestId("chain-row-SPXW-P-7400000"));
+    expect(screen.getByTestId("chain-detail-SPXW-P-7400000")).toBeTruthy();
+    expect(screen.queryByTestId("chain-detail-SPXW-P-7500000")).toBeNull();
   });
 
   it("proposes nothing — no verdict, no score, no ranked rail", () => {
@@ -262,8 +264,8 @@ describe("Analyzer — expiry pair header", () => {
     // The back leg is re-read from the newly chosen expiry: 19%, not the 17% of the old one.
     // Asserted on the row's text rather than a cell testid — cell-level rendering belongs to
     // ChainTable's own suite; what matters here is that the model re-joined.
-    expect(screen.getByTestId("chain-row-P-7500000").textContent).toContain("19.00%");
-    expect(screen.getByTestId("chain-row-P-7500000").textContent).not.toContain("17.00%");
+    expect(screen.getByTestId("chain-row-SPXW-P-7500000").textContent).toContain("19.00%");
+    expect(screen.getByTestId("chain-row-SPXW-P-7500000").textContent).not.toContain("17.00%");
   });
 
   it("switches the table between puts and calls", () => {
@@ -271,13 +273,13 @@ describe("Analyzer — expiry pair header", () => {
     // Puts by default, and the wing is part of the row's identity — so switching does not
     // mutate a row in place, it replaces the put rows with call rows entirely. That is what
     // stops the two wings colliding into one row and one expansion slot.
-    expect(screen.getByTestId("chain-row-P-7500000").textContent).toContain("15.00%");
-    expect(screen.queryByTestId("chain-row-C-7500000")).toBeNull();
+    expect(screen.getByTestId("chain-row-SPXW-P-7500000").textContent).toContain("15.00%");
+    expect(screen.queryByTestId("chain-row-SPXW-C-7500000")).toBeNull();
 
     fireEvent.click(screen.getByTestId("chain-type-call"));
 
-    expect(screen.queryByTestId("chain-row-P-7500000")).toBeNull();
-    expect(screen.getByTestId("chain-row-C-7500000").textContent).toContain("14.50%");
+    expect(screen.queryByTestId("chain-row-SPXW-P-7500000")).toBeNull();
+    expect(screen.getByTestId("chain-row-SPXW-C-7500000").textContent).toContain("14.50%");
   });
 
   it("reports spot and the observation instant from the chain itself", () => {

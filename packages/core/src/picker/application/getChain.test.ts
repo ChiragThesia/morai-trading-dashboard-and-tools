@@ -52,6 +52,7 @@ describe("makeGetChainUseCase", () => {
         strike: 7400000,
         expiration: "2026-06-27",
         contractType: "P",
+        root: "SPXW",
         dte: 4,
         bsmIv: 0.1834,
         bid: 12.4,
@@ -122,5 +123,38 @@ describe("makeGetChainUseCase", () => {
     if (result.ok) return;
     expect(result.error.kind).toBe("storage-error");
     expect(result.error.message).toBe("connection refused");
+  });
+});
+
+// REGRESSION (prod, 2026-07-26). SPX (AM-settled monthlies) and SPXW (PM-settled weeklies)
+// quote the SAME strike on the SAME date — different OCC symbols, different books, different
+// quotes. `root` was missing from the entry shape, so the two arrived indistinguishable: the
+// Analyzer collided them onto one row key (242 duplicates live) and its strike join kept
+// whichever it saw last, which was often the twin whose IV had never solved.
+describe("getChain — SPX vs SPXW", () => {
+  it("carries root, so the two roots at one strike stay distinguishable", async () => {
+    const both: ReadonlyArray<ChainQuoteForPicker> = [
+      { ...ROW, root: "SPX", bsmIv: "0.2510849", bid: 10.1, ask: 11.1, openInterest: 3461 },
+      { ...ROW, root: "SPXW", bsmIv: null, bid: 10.7, ask: 11.2, openInterest: 264 },
+    ];
+    const getChain = makeGetChainUseCase({ readChain: async () => ok(both) });
+    const result = await getChain();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((r) => r.root)).toEqual(["SPX", "SPXW"]);
+    // Same strike/expiration/wing — root is the ONLY thing telling them apart.
+    expect(new Set(result.value.map((r) => r.strike)).size).toBe(1);
+    expect(result.value[0]?.bsmIv).toBeCloseTo(0.2510849, 9);
+    expect(result.value[1]?.bsmIv).toBeNull();
+  });
+
+  it("defaults an absent root to SPXW, matching the repo's own PM-settled fallback", async () => {
+    const noRoot: ChainQuoteForPicker = { ...ROW };
+    const getChain = makeGetChainUseCase({ readChain: async () => ok([noRoot]) });
+    const result = await getChain();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value[0]?.root).toBe("SPXW");
   });
 });

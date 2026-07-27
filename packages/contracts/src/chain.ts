@@ -23,6 +23,14 @@ export const chainRow = z.object({
   expiration: z.string(),
   /** Contract side — "C" call, "P" put. */
   contractType: z.enum(["C", "P"]),
+  /**
+   * OCC root. SPX is AM-settled (third-Friday monthlies), SPXW is PM-settled (weeklies).
+   * BOTH quote the same strikes and their expirations overlap, so
+   * (strike, expiration, contractType) is NOT unique — root is the field that separates them.
+   * Any consumer building a row key or joining legs by strike MUST include it, or the two
+   * books collide into one row and the reader silently gets whichever arrived last.
+   */
+  root: z.enum(["SPX", "SPXW"]),
   /** Calendar days to expiration (NOT trading days), computed server-side. 0 = 0DTE. */
   dte: z.number().int(),
   /**

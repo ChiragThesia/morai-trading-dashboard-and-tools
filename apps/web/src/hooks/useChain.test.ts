@@ -25,6 +25,7 @@ const ROW = {
   strike: 6400_000,
   expiration: "2026-08-21",
   contractType: "P",
+  root: "SPXW",
   dte: 26,
   bsmIv: 0.1249,
   bid: 40.1,

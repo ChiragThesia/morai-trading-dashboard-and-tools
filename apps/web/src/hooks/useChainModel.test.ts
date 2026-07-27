@@ -31,6 +31,7 @@ function row(over: Partial<ChainRow>): ChainRow {
     strike: 6500_000,
     expiration: "2026-08-21",
     contractType: "P",
+    root: "SPXW",
     dte: 26,
     bsmIv: 0.15,
     bid: 40,
@@ -265,5 +266,45 @@ describe("useChainModel — expiry header numbers", () => {
     const { result } = renderHook(() => useChainModel());
     expect(result.current.isError).toBe(true);
     expect(result.current.spot).toBeNull();
+  });
+});
+
+// REGRESSION (prod, 2026-07-26). SPX (AM-settled monthlies) and SPXW (PM-settled weeklies)
+// quote the SAME strike on the SAME date. Joining on strike alone kept whichever root the map
+// saw last — usually the twin whose IV had never solved — so most columns dashed, and one live
+// row paired an SPXW back against an SPX front (back IV 68.89% vs front 24.69%). Every input
+// present and finite, so nothing dashed: the row just read wrong. 242 row keys collided.
+describe("useChainModel — SPX vs SPXW", () => {
+  function bothRoots(): ReadonlyArray<ChainRow> {
+    const out: ChainRow[] = [];
+    for (const e of [
+      { expiration: "2026-08-21", dte: 26, base: 0.15 },
+      { expiration: "2026-09-18", dte: 54, base: 0.17 },
+    ]) {
+      for (const k of [6400, 6500, 6600]) {
+        const iv = e.base + (6500 - k) * 0.00002;
+        // SPXW carries the honest IV; SPX is deliberately far off so a crossed pair is loud.
+        out.push(row({ strike: k * 1000, expiration: e.expiration, dte: e.dte, bsmIv: iv, contractType: "P", root: "SPXW" }));
+        out.push(row({ strike: k * 1000, expiration: e.expiration, dte: e.dte, bsmIv: iv + 0.4, contractType: "P", root: "SPX" }));
+      }
+    }
+    return out;
+  }
+
+  it("emits both roots as separate rows instead of collapsing them", () => {
+    settled(bothRoots());
+    const { result } = renderHook(() => useChainModel());
+    expect(result.current.rows.length).toBe(6);
+    expect(result.current.rows.filter((r) => r.root === "SPXW").length).toBe(3);
+    expect(result.current.rows.filter((r) => r.root === "SPX").length).toBe(3);
+  });
+
+  it("never pairs an SPX leg against an SPXW leg at the same strike", () => {
+    settled(bothRoots());
+    const { result } = renderHook(() => useChainModel());
+    for (const r of result.current.rows) {
+      // A crossed pair puts a 0.4-vol gap into H-Skew; a clean one is the 2-vol term spread.
+      expect(r.hSkew).toBeCloseTo(-0.02, 12);
+    }
   });
 });

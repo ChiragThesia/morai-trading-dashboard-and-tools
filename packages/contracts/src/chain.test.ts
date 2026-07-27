@@ -19,6 +19,7 @@ const validRow = {
   strike: 7_400_000, // ×1000 → 7400 points
   expiration: "2026-08-21",
   contractType: "C",
+  root: "SPXW",
   dte: 27,
   bsmIv: 0.1249, // decimal → 12.49%
   bid: 118.4,

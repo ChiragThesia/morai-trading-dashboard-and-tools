@@ -936,6 +936,7 @@ describe("get_gex MCP tool", () => {
 
 /** One row of the frozen chain contract — strike is the ×1000 int (7400000 = 7400). */
 const CHAIN_ROW = {
+  root: "SPXW" as const,
   strike: 7400000,
   expiration: "2026-08-21",
   contractType: "P" as const,

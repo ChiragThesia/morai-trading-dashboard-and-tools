@@ -38,6 +38,13 @@ export type ChainEntry = {
   readonly strike: number; // ×1000 int (e.g. 7400000 = 7400 strike)
   readonly expiration: string; // YYYY-MM-DD
   readonly contractType: "C" | "P";
+  /**
+   * OCC root. SPX is AM-settled (third-Friday monthlies), SPXW is PM-settled (weeklies).
+   * BOTH quote the same strikes and their expiration dates overlap, so (strike, expiration,
+   * contractType) is NOT a unique key — root is what separates them. Consumers must carry it
+   * into any row identity or strike join, or the two books collide into one row.
+   */
+  readonly root: "SPX" | "SPXW";
   readonly dte: number; // calendar days, 0 on expiry day
   readonly bsmIv: number | null; // null = never solved or inversion failed — never 0
   readonly bid: number;
@@ -83,6 +90,9 @@ export function makeGetChainUseCase(deps: GetChainDeps): ForRunningGetChain {
         strike: row.strike,
         expiration: row.expiration,
         contractType: row.contractType,
+        // Absent root degrades to SPXW, mirroring picker-chain.ts's own PM-settled default —
+        // only SPX third-Friday contracts settle AM.
+        root: row.root ?? "SPXW",
         dte: daysBetween(observedAt.slice(0, 10), row.expiration),
         bsmIv: Number.isFinite(iv) ? iv : null,
         bid: row.bid,
