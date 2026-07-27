@@ -54,3 +54,46 @@ export function buildTosCalendarOrder(candidate: PickerCandidate, asOf: string):
 
   return `BUY +1 CALENDAR SPX 100 ${dates}${strike} ${type} @${price} LMT GTC`;
 }
+
+/** Two legs the user picked off the chain table, in the units the chain serves them in. */
+export interface TosPairOrder {
+  /** Strike ×1000, straight off the chain row. */
+  readonly strike: number;
+  readonly contractType: "C" | "P";
+  /** ISO `YYYY-MM-DD`, straight off the chain row — never asOf + dte. */
+  readonly frontExpiry: string;
+  readonly backExpiry: string;
+  /**
+   * Entry debit in INDEX POINTS, as `chain-math.calendarDebit` returns it. Not dollars —
+   * unlike `PickerCandidate.debit`, which is why this does not divide by 100. Null when
+   * neither leg had a fillable quote; the line then carries no price.
+   */
+  readonly debit: number | null;
+}
+
+/**
+ * Build the TOS order line for a front/back pair picked off the Analyzer chain.
+ *
+ * Sibling of `buildTosCalendarOrder`, and it exists for one reason: the chain hands over two
+ * literal expiry DATES, so there is no `asOf` + `dte` arithmetic to get wrong. Same output
+ * grammar — back leg first, `[AM]` on monthlies, debit in points — because the string's job is
+ * to survive `parseTosOrder`, which is what the paste box behind the payoff panel feeds.
+ *
+ * Deliberately LITERAL about which leg is which: it prints `backExpiry` first even if that date
+ * is earlier than `frontExpiry`. It does not sort them. `parseTosOrder` DOES sort, and would
+ * quietly re-label an inverted pair as a valid calendar — a plausible-but-wrong read of what the
+ * user picked. The caller gates the button on "back is strictly later" instead, where the pair's
+ * own flags already live.
+ */
+export function buildTosPairOrder(pair: TosPairOrder): string {
+  const back = parseLocalDateInput(pair.backExpiry);
+  const front = parseLocalDateInput(pair.frontExpiry);
+  // Mirrors the sibling's fallback: an unparseable date drops the date segment, never throws.
+  const dates = back === null || front === null ? "" : `${formatTosDate(back)}/${formatTosDate(front)} `;
+  // ponytail: /1000 inline rather than importing STRIKE_SCALE from chain-math, which would drag
+  // @morai/core + @morai/quant into this module for one constant.
+  const strike = pair.strike / 1000;
+  const type = pair.contractType === "C" ? "CALL" : "PUT";
+  const price = pair.debit === null ? "" : `@${pair.debit.toFixed(2)} `;
+  return `BUY +1 CALENDAR SPX 100 ${dates}${strike} ${type} ${price}LMT GTC`;
+}

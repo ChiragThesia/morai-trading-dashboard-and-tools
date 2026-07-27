@@ -37,6 +37,8 @@ export type ChainSmileRow = {
   /** YYYY-MM-DD. */
   readonly expiration: string;
   readonly contractType: "C" | "P";
+  /** OCC root — SPX (AM-settled monthlies) and SPXW (PM-settled weeklies) are separate books. */
+  readonly root: "SPX" | "SPXW";
   /** Calendar days to expiry. */
   readonly dte: number;
   /** Decimal, 0.1249 = 12.49%. Null when the BSM solve has not landed. */
@@ -45,14 +47,22 @@ export type ChainSmileRow = {
 };
 
 /**
- * riskReversalForExpiry — `IV(25Δ put) − IV(25Δ call)` for one expiration, in decimal
- * vol units (0.032 = 3.2 vol points). Positive = puts bid over calls, the usual equity
+ * riskReversalForExpiry — `IV(25Δ put) − IV(25Δ call)` for one expiration AND one OCC root, in
+ * decimal vol units (0.032 = 3.2 vol points). Positive = puts bid over calls, the usual equity
  * put skew.
  *
- * @param rows        - chain rows for any set of expirations; others are ignored
+ * ROOT IS A PARAMETER, not a caller convention, for the same reason `chain-math.atmIv` takes the
+ * wing: SPX and SPXW quote the SAME strikes on the SAME dates out of different books. An
+ * expiration-only filter builds ONE smile from TWO, handing the interpolator two IVs per delta.
+ * Nothing nulls — every input is present and finite — so it returns a clean, plausible, wrong
+ * number off a jagged mixture. That is the one failure mode this module cannot report, so the
+ * signature refuses to let it happen.
+ *
+ * @param rows        - chain rows for any set of expirations and roots; others are ignored
  * @param expiration  - the YYYY-MM-DD expiration to price
  * @param r           - risk-free rate (decimal)
  * @param q           - continuous dividend yield (decimal)
+ * @param root        - the OCC root whose book to read
  * @returns the risk-reversal, or null when either wing is missing or too sparse to bracket
  */
 export function riskReversalForExpiry(
@@ -60,11 +70,13 @@ export function riskReversalForExpiry(
   expiration: string,
   r: number,
   q: number,
+  root: "SPX" | "SPXW",
 ): number | null {
   const smile: SmileQuote[] = [];
 
   for (const row of rows) {
     if (row.expiration !== expiration) continue;
+    if (row.root !== root) continue;
 
     // A missing or non-physical IV is dropped, never defaulted — a fabricated vol would
     // land a fabricated delta in a wing and silently move the headline.

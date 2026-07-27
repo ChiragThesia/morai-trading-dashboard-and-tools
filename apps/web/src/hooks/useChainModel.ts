@@ -1,19 +1,28 @@
 /**
- * useChainModel — state + derivation for the Analyzer's chain data table.
+ * useChainModel — state + derivation for the Analyzer's TWO chain surfaces.
  *
- * Plays the role `useAnalyzerModel` plays for the payoff panel: the screen holds
- * no derivation of its own. Four jobs, no fifth:
+ * The screen used to show ONE table: row = a strike, pre-paired across two chosen expiries. That
+ * shape had a defect no dash could report — it was an INNER JOIN. Only strikes quoted in BOTH
+ * expiries got a row, so a strike listed in August but not September simply was not there. On a
+ * screen whose whole point is "give me the data, do not decide for me", a hidden filter is the
+ * worst possible default. So the join is gone, replaced by two surfaces (user, 2026-07-26):
  *
- *   1. Own the front/back expiry pair and the put/call switch.
- *   2. Group the flat chain by strike and join each strike's two legs.
- *   3. Hand each pair to chain-math (which does the arithmetic).
- *   4. Report the 25Δ risk reversal for each of the two expiries.
+ *   BROWSE — row = one (root, expiration) cohort, ALL of them. Expand it and you get every strike
+ *            that cohort lists, each priced as a single LEG. TOS Trade tab, nothing hidden.
+ *   PAIR   — the user picks a front leg and a back leg. Only then does calendar math happen:
+ *            H-Skew, forward IV, edge, net greeks, the haircut debit, and a TOS order line.
  *
- * It does NOT rank, score, filter-for-quality, or recommend. The table is data.
+ * Four jobs, no fifth:
+ *   1. Own the put/call switch and the two leg picks.
+ *   2. Group the flat chain into (root, expiration) cohorts and price each leg.
+ *   3. Hand the picked pair to chain-math (which does the arithmetic).
+ *   4. Report each cohort's ATM IV and 25Δ risk reversal.
+ *
+ * It does NOT rank, score, filter-for-quality, or recommend. The chain is data.
  *
  * No any/as/!.
  */
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { computeFwdIv } from "@morai/core";
 import { useChain } from "./useChain.ts";
 import { useGex } from "./useGex.ts";
@@ -29,15 +38,121 @@ import {
 import type { Carry } from "../lib/chain-math.ts";
 import { resolveCarry } from "../lib/resolve-carry.ts";
 import { riskReversalForExpiry } from "../lib/chain-risk-reversal.ts";
-import type { ChainTableLeg, ChainTableRow } from "../components/chain/ChainTable.tsx";
+import { buildTosPairOrder } from "../lib/tos-order.ts";
 import type { ChainRow } from "../lib/chain-contract.ts";
 
+// ─── Shapes ───────────────────────────────────────────────────────────────────
+
+/** The four fields that identify one option contract on the wire. */
+export interface ChainLegId {
+  readonly root: "SPX" | "SPXW";
+  readonly expiration: string;
+  readonly contractType: "C" | "P";
+  /** Strike ×1000, the integer the rest of the system stores. */
+  readonly strike: number;
+}
+
 /**
- * The forward vol implied between the two legs — the rate the market prices for the window
- * the calendar actually owns. Null on an inverted term structure: `computeFwdIv` guards a
- * negative radicand rather than returning NaN, and an inverted structure has no forward vol
- * to quote. (`edge` applies the same guard independently; this column is the raw reading
- * the edge is measured against.)
+ * One row of a cohort's strike ladder — a single LEG, not a calendar.
+ *
+ * Greeks are all-or-nothing: `legGreeks` returns null when the leg cannot be priced (no solved
+ * IV, at/past expiry, non-positive spot or strike), and a half-priced leg would be worse than a
+ * blank one. The row itself still appears with its bid/ask/OI — a gap is not a deletion.
+ */
+export interface ChainLegRow extends ChainLegId {
+  readonly dte: number;
+  readonly iv: number | null;
+  readonly bid: number;
+  readonly ask: number;
+  readonly openInterest: number;
+  readonly delta: number | null;
+  readonly gamma: number | null;
+  readonly theta: number | null;
+  readonly vega: number | null;
+  /**
+   * Vertical skew — this strike's IV minus the ATM strike's IV, same expiry, same wing, same
+   * root. Sourced from `chain-math.atmIv`, which takes all three as arguments so the reference
+   * cannot come off the wrong curve or the wrong book.
+   */
+  readonly vSkew: number | null;
+}
+
+/** One Browse row: everything one (root, expiration) quotes on the shown wing. */
+export interface ChainCohort {
+  readonly root: "SPX" | "SPXW";
+  readonly expiration: string;
+  readonly dte: number;
+  /** This cohort's ATM reference IV on the shown wing, or null if it never solved. */
+  readonly atmIv: number | null;
+  /** 25Δ risk reversal, `IV(25Δ put) − IV(25Δ call)`. Spans BOTH wings — a property of the
+   *  expiry, not of the side currently on screen. Null when the ladder cannot bracket ±25Δ. */
+  readonly riskReversal: number | null;
+  readonly strikes: ReadonlyArray<ChainLegRow>;
+}
+
+/** The calendar math for the two legs the user picked, and the three ways a pair can be odd. */
+export interface ChainPair {
+  readonly front: ChainLegRow;
+  readonly back: ChainLegRow;
+  /** Front IV − back IV. POSITIVE = the front is the rich one, the calendar seller's setup. */
+  readonly hSkew: number | null;
+  readonly fwdIv: number | null;
+  /** Front IV − forward IV. Same direction as hSkew; when they disagree, trust this one. */
+  readonly edge: number | null;
+  readonly debit: number | null;
+  readonly netDelta: number | null;
+  readonly netGamma: number | null;
+  readonly netTheta: number | null;
+  readonly netVega: number | null;
+  /** The two legs are different OCC roots — one AM-settled book against one PM-settled book. */
+  readonly rootMismatch: boolean;
+  /** The back leg is not strictly later than the front. Forward vol has no solution. */
+  readonly backNotLater: boolean;
+  /** Different strikes — a diagonal, not a calendar. */
+  readonly diagonal: boolean;
+  /**
+   * A paste-ready TOS order line, or null when the pair cannot be expressed as one calendar
+   * order: an inverted pair (parseTosOrder SORTS the dates and would silently re-label it), a
+   * diagonal (two strikes, one strike field), or a cross-root pair (two separate books).
+   */
+  readonly tosOrder: string | null;
+}
+
+export interface ChainModel {
+  readonly isLoading: boolean;
+  readonly isError: boolean;
+  readonly refetch: () => void;
+  /** Every tradeable (root, expiration) cohort, nearest expiry first. Nothing else filtered. */
+  readonly cohorts: ReadonlyArray<ChainCohort>;
+  readonly contractType: "C" | "P";
+  readonly setContractType: (contractType: "C" | "P") => void;
+  readonly frontLeg: ChainLegRow | null;
+  readonly backLeg: ChainLegRow | null;
+  readonly pickFront: (leg: ChainLegId) => void;
+  readonly pickBack: (leg: ChainLegId) => void;
+  readonly clearPair: () => void;
+  readonly pair: ChainPair | null;
+  readonly spot: number | null;
+  readonly observedAt: string | null;
+}
+
+/**
+ * Full row identity. All four fields bind: the chain carries both wings AND both OCC roots, and
+ * dropping any one of them collides two contracts onto one key. Dropping `root` alone did exactly
+ * that in production — 242 rows sharing a React key and an expansion slot, so opening one opened
+ * the other and sorting froze the duplicates in place.
+ */
+export function legKey(id: ChainLegId): string {
+  return `${id.root}|${id.expiration}|${id.contractType}|${id.strike}`;
+}
+
+// ─── Derivation ───────────────────────────────────────────────────────────────
+
+/**
+ * The forward vol implied between two legs — the rate the market prices for the window the
+ * calendar actually owns. Null on an inverted term structure: `computeFwdIv` guards a negative
+ * radicand rather than returning NaN, and an inverted structure has no forward vol to quote.
+ * (`edge` applies the same guard independently; this is the raw reading edge is measured against.)
  */
 function forwardIv(front: ChainRow, back: ChainRow): number | null {
   const ivF = front.bsmIv;
@@ -50,15 +165,13 @@ function forwardIv(front: ChainRow, back: ChainRow): number | null {
   return fwd.guard === "inverted" ? null : fwd.fwdIv;
 }
 
-/**
- * One chain row → one table leg. Greeks are all-or-nothing: `legGreeks` returns null when
- * the leg cannot be priced (no solved IV, at/past expiry, non-positive spot or strike), and
- * a half-priced leg would be worse than a blank one.
- */
-function toLeg(row: ChainRow, carry: Carry): ChainTableLeg {
+function toLeg(row: ChainRow, carry: Carry, cohortAtmIv: number | null): ChainLegRow {
   const greeks = legGreeks(row, carry);
   return {
-    expiry: row.expiration,
+    root: row.root,
+    expiration: row.expiration,
+    contractType: row.contractType,
+    strike: row.strike,
     dte: row.dte,
     iv: row.bsmIv,
     bid: row.bid,
@@ -68,72 +181,15 @@ function toLeg(row: ChainRow, carry: Carry): ChainTableLeg {
     gamma: greeks?.gamma ?? null,
     theta: greeks?.theta ?? null,
     vega: greeks?.vega ?? null,
+    vSkew: vSkewVsAtm(row.bsmIv, cohortAtmIv),
   };
 }
 
-/**
- * Compose one strike's two legs into a table row.
- *
- * Both legs are already known to share a strike, an expiry pair, AND a wing — the caller
- * filters by `contractType` before building the strike map, so a put front against a call
- * back is not reachable from here. `frontAtm` comes from `atmIv`, which takes the expiry and
- * the wing as arguments, so the V-Skew reference cannot be crossed either.
- */
-function buildRow(
-  front: ChainRow,
-  back: ChainRow,
-  frontAtm: number | null,
-  frontCarry: Carry,
-  backCarry: Carry,
-): ChainTableRow {
-  const frontGreeks = legGreeks(front, frontCarry);
-  const backGreeks = legGreeks(back, backCarry);
-  const net = netCalendarGreeks(frontGreeks, backGreeks);
-  return {
-    strike: front.strike,
-    contractType: front.contractType,
-    root: front.root,
-    deltaFront: frontGreeks?.delta ?? null,
-    ivFront: front.bsmIv,
-    ivBack: back.bsmIv,
-    hSkew: hSkew(front.bsmIv, back.bsmIv),
-    fwdIv: forwardIv(front, back),
-    edge: edge(front.dte, front.bsmIv, back.dte, back.bsmIv),
-    vSkew: vSkewVsAtm(front.bsmIv, frontAtm),
-    theta: net?.theta ?? null,
-    vega: net?.vega ?? null,
-    netDelta: net?.delta ?? null,
-    netGamma: net?.gamma ?? null,
-    debit: calendarDebit(front, back),
-    front: toLeg(front, frontCarry),
-    back: toLeg(back, backCarry),
-  };
-}
-
-export interface ChainExpiry {
-  readonly expiration: string;
-  readonly dte: number;
-}
-
-export interface ChainModel {
-  readonly isLoading: boolean;
-  readonly isError: boolean;
-  readonly refetch: () => void;
-  /** Every expiry in the chain, nearest first. */
-  readonly expirations: ReadonlyArray<ChainExpiry>;
-  /** Null until the first response lands, or when the user's pick left the chain. */
-  readonly frontExpiry: string | null;
-  readonly backExpiry: string | null;
-  readonly setFrontExpiry: (expiration: string) => void;
-  readonly setBackExpiry: (expiration: string) => void;
-  readonly contractType: "C" | "P";
-  readonly setContractType: (contractType: "C" | "P") => void;
-  /** One joined row per strike quoted in BOTH selected expiries, ascending. */
-  readonly rows: ReadonlyArray<ChainTableRow>;
-  readonly spot: number | null;
-  readonly observedAt: string | null;
-  readonly frontRr: number | null;
-  readonly backRr: number | null;
+/** What the pair surface needs to re-price a picked leg: the display row plus its raw source. */
+interface LegEntry {
+  readonly leg: ChainLegRow;
+  readonly row: ChainRow;
+  readonly carry: Carry;
 }
 
 export function useChainModel(): ChainModel {
@@ -142,121 +198,169 @@ export function useChainModel(): ChainModel {
   // The response is a bare array (200 [] when the chain is empty), not an envelope.
   const rows = useMemo<ReadonlyArray<ChainRow>>(() => data ?? [], [data]);
 
-  const expirations = useMemo<ReadonlyArray<ChainExpiry>>(() => {
-    const byExpiration = new Map<string, number>();
-    for (const row of rows) {
-      if (!byExpiration.has(row.expiration)) byExpiration.set(row.expiration, row.dte);
-    }
-    return [...byExpiration.entries()]
-      .map(([expiration, dte]) => ({ expiration, dte }))
-      .sort((a, b) => a.dte - b.dte);
-  }, [rows]);
-
-  // Null means "no pick yet" — the defaults below fill in from the chain itself,
-  // so the selects are usable the moment the first response lands.
-  const [frontPick, setFrontPick] = useState<string | null>(null);
-  const [backPick, setBackPick] = useState<string | null>(null);
-  const [contractType, setContractType] = useState<"C" | "P">("P");
-
-  const known = useMemo(() => new Set(expirations.map((e) => e.expiration)), [expirations]);
-  const frontExpiry =
-    frontPick !== null && known.has(frontPick) ? frontPick : (expirations[0]?.expiration ?? null);
-  const backExpiry =
-    backPick !== null && known.has(backPick) ? backPick : (expirations[1]?.expiration ?? null);
+  const [contractType, setContractTypeState] = useState<"C" | "P">("P");
+  // The picks are IDENTITIES, never leg objects. The chain polls every 30s; holding the object
+  // would freeze the pair's numbers at whatever the first response said while the rest of the
+  // screen refreshed — a stale panel that looks live.
+  const [frontKey, setFrontKey] = useState<string | null>(null);
+  const [backKey, setBackKey] = useState<string | null>(null);
 
   const spot = rows[0]?.underlyingPrice ?? null;
   const observedAt = rows[0]?.observedAt ?? null;
 
-  const frontAll = useMemo(
-    () => rows.filter((r) => r.expiration === frontExpiry),
-    [rows, frontExpiry],
-  );
-  const backAll = useMemo(() => rows.filter((r) => r.expiration === backExpiry), [rows, backExpiry]);
-
-  const joined = useMemo<ReadonlyArray<ChainTableRow>>(() => {
-    if (frontExpiry === null || backExpiry === null) return [];
-    // JOIN KEY = expiration + contractType + strike. The chain carries BOTH wings, so a
-    // strike-only join silently pairs a put front against a call back — and every input is
-    // present and finite, so the em-dash discipline never fires. The row just reads wrong.
-    // (Same bug shipped once in the exit advisor's toRollCandidates.) Both wings must be
-    // filtered BEFORE the strike map is built, never after.
-    const frontLegs = frontAll.filter((r) => r.contractType === contractType);
-    const backLegs = backAll.filter((r) => r.contractType === contractType);
-    // ROOT IS PART OF THE JOIN KEY, not just the wing. SPX (AM-settled monthlies) and SPXW
-    // (PM-settled weeklies) quote the SAME strike on the SAME date with different books. A
-    // strike-only map keeps whichever root it saw last — in production that was often the
-    // twin whose IV had never solved, which is why most columns rendered em dashes, and it
-    // once paired an SPXW back leg against an SPX front (back IV 68.89% vs front 24.69%,
-    // H-Skew −44.21). Like the wing, every input is present and finite, so nothing dashes:
-    // the row just reads wrong.
-    const keyOf = (r: ChainRow): string => `${r.root}-${r.strike}`;
-    // V-Skew reference: chain-math's atmIv takes the expiry and wing as arguments, so the
-    // skew curve cannot be crossed here. Never resolve the ATM strike by hand.
-    // A null spot means the cohort carried no usable underlying price — there is no honest
-    // "nearest strike" to measure against, so the whole V-Skew column dashes rather than
-    // measuring against an invented reference.
-    // Front leg only: the table carries ONE V-Skew column, measured on the leg you sell.
-    // The back leg's own vertical skew is computable the same way (atmIv on backExpiry) but
-    // has no column to land in yet — adding it means a column on ChainTable, not a change here.
-    const frontAtm = spot === null ? null : atmIv(rows, spot, frontExpiry, contractType);
-    // Carry is per-expiry (FRED-interpolated r + parity-implied q, resolved server-side),
-    // so each leg prices against its own expiry's rate. Degrades to the flat defaults when
-    // the GEX snapshot is absent or carries no entry — never throws, never blocks the table.
-    const frontCarry = resolveCarry(gex, frontExpiry);
-    const backCarry = resolveCarry(gex, backExpiry);
-    const backByKey = new Map(backLegs.map((r) => [keyOf(r), r]));
-    const out: ChainTableRow[] = [];
-    for (const front of frontLegs) {
-      const back = backByKey.get(keyOf(front));
-      if (back === undefined) continue;
-      out.push(buildRow(front, back, frontAtm, frontCarry, backCarry));
+  const { cohorts, byKey } = useMemo<{
+    cohorts: ReadonlyArray<ChainCohort>;
+    byKey: ReadonlyMap<string, LegEntry>;
+  }>(() => {
+    // Group by (root, expiration) — the pair that identifies one book on one date. Expiration
+    // alone is not a cohort: SPX (AM-settled monthlies) and SPXW (PM-settled weeklies) quote the
+    // same strikes on the same dates out of different books, and merging them is what put an
+    // SPXW back leg against an SPX front in production (back IV 68.89% vs front 24.69%).
+    const groups = new Map<string, { root: "SPX" | "SPXW"; expiration: string; dte: number }>();
+    for (const row of rows) {
+      // P1 (UAT): the cohort still carries yesterday's expiry, and an expired contract cannot be
+      // traded — it is stale junk, not data. 0DTE stays: it trades until the close.
+      if (!Number.isFinite(row.dte) || row.dte < 0) continue;
+      const key = `${row.root}|${row.expiration}`;
+      if (!groups.has(key)) {
+        groups.set(key, { root: row.root, expiration: row.expiration, dte: row.dte });
+      }
     }
-    return out.sort((a, b) => a.strike - b.strike);
-  }, [rows, frontAll, backAll, frontExpiry, backExpiry, contractType, spot, gex]);
 
-  // RR spans BOTH option types of an expiry — it is a property of the expiry, not of
-  // whichever side the table is currently showing, so it reads the unfiltered rows.
-  // Carry comes from that expiry's own entry, matching how the legs above are priced.
-  const frontRr = useMemo(
-    () =>
-      frontExpiry === null
-        ? null
-        : riskReversalForExpiry(
-            rows,
-            frontExpiry,
-            resolveCarry(gex, frontExpiry).rate,
-            resolveCarry(gex, frontExpiry).divYield,
-          ),
-    [rows, frontExpiry, gex],
-  );
-  const backRr = useMemo(
-    () =>
-      backExpiry === null
-        ? null
-        : riskReversalForExpiry(
-            rows,
-            backExpiry,
-            resolveCarry(gex, backExpiry).rate,
-            resolveCarry(gex, backExpiry).divYield,
-          ),
-    [rows, backExpiry, gex],
-  );
+    // Carry is per-expiry (FRED-interpolated r + parity-implied q, resolved server-side), so each
+    // leg prices against its own expiry's rate. Degrades to the flat defaults when the GEX
+    // snapshot is absent or carries no entry — never throws, never blocks the surface.
+    const carryFor = new Map<string, Carry>();
+    const carry = (expiration: string): Carry => {
+      const hit = carryFor.get(expiration);
+      if (hit !== undefined) return hit;
+      const resolved = resolveCarry(gex, expiration);
+      carryFor.set(expiration, resolved);
+      return resolved;
+    };
+
+    const out: ChainCohort[] = [];
+    const index = new Map<string, LegEntry>();
+    for (const group of groups.values()) {
+      const { root, expiration, dte } = group;
+      // ATM reference for THIS cohort. atmIv takes the expiry, the wing and the root, so the
+      // reference cannot come off another curve or another book — the one bad input in
+      // chain-math that cannot null itself, so it is enforced by signature.
+      const cohortAtmIv = spot === null ? null : atmIv(rows, spot, expiration, contractType, root);
+      const legs = rows
+        .filter(
+          (r) => r.root === root && r.expiration === expiration && r.contractType === contractType,
+        )
+        .sort((a, b) => a.strike - b.strike)
+        .map((row) => {
+          const entry: LegEntry = { leg: toLeg(row, carry(expiration), cohortAtmIv), row, carry: carry(expiration) };
+          index.set(legKey(entry.leg), entry);
+          return entry.leg;
+        });
+      out.push({
+        root,
+        expiration,
+        dte,
+        atmIv: cohortAtmIv,
+        // RR spans BOTH wings of the cohort, so it reads the unfiltered rows — it is a property
+        // of the expiry, not of whichever side the surface is showing. Root-scoped for the same
+        // reason atmIv is: one smile per book, never a mixture of two.
+        riskReversal: riskReversalForExpiry(rows, expiration, carry(expiration).rate, carry(expiration).divYield, root),
+        strikes: legs,
+      });
+    }
+    // Nearest expiry first; root breaks the tie so the order is stable across polls.
+    out.sort((a, b) => a.dte - b.dte || a.root.localeCompare(b.root));
+    return { cohorts: out, byKey: index };
+    // ponytail: prices EVERY leg of EVERY cohort up front, not just the expanded one — one wing
+    // of a full SPX chain is a few thousand bsmGreeks calls, well under a frame. If the chain
+    // grows enough to show, make `strikes` a getter memoised per cohort.
+  }, [rows, contractType, spot, gex]);
+
+  const frontEntry = frontKey === null ? undefined : byKey.get(frontKey);
+  const backEntry = backKey === null ? undefined : byKey.get(backKey);
+  const frontLeg = frontEntry?.leg ?? null;
+  const backLeg = backEntry?.leg ?? null;
+
+  const pair = useMemo<ChainPair | null>(() => {
+    if (frontEntry === undefined || backEntry === undefined) return null;
+    const front = frontEntry.row;
+    const back = backEntry.row;
+    const netGreeks = netCalendarGreeks(
+      legGreeks(front, frontEntry.carry),
+      legGreeks(back, backEntry.carry),
+    );
+    const rootMismatch = front.root !== back.root;
+    const backNotLater = !(back.dte > front.dte);
+    const diagonal = front.strike !== back.strike;
+    const debit = calendarDebit(front, back);
+    return {
+      front: frontEntry.leg,
+      back: backEntry.leg,
+      hSkew: hSkew(front.bsmIv, back.bsmIv),
+      fwdIv: forwardIv(front, back),
+      edge: edge(front.dte, front.bsmIv, back.dte, back.bsmIv),
+      debit,
+      netDelta: netGreeks?.delta ?? null,
+      netGamma: netGreeks?.gamma ?? null,
+      netTheta: netGreeks?.theta ?? null,
+      netVega: netGreeks?.vega ?? null,
+      rootMismatch,
+      backNotLater,
+      diagonal,
+      tosOrder:
+        backNotLater || diagonal || rootMismatch
+          ? null
+          : buildTosPairOrder({
+              strike: front.strike,
+              contractType: front.contractType,
+              frontExpiry: front.expiration,
+              backExpiry: back.expiration,
+              debit,
+            }),
+    };
+  }, [frontEntry, backEntry]);
+
+  const clearPair = useCallback((): void => {
+    setFrontKey(null);
+    setBackKey(null);
+  }, []);
+
+  // Switching the wing CLEARS the picks. The old model made a mixed-wing pair unrepresentable by
+  // filtering the wing before the join; here the picks are per-leg, so without this you could
+  // pick a put, toggle, pick a call, and get exactly the put-front/call-back pair the exit
+  // advisor shipped once — every input present and finite, so nothing dashes.
+  const setContractType = useCallback((next: "C" | "P"): void => {
+    setContractTypeState((cur) => {
+      if (cur !== next) {
+        setFrontKey(null);
+        setBackKey(null);
+      }
+      return next;
+    });
+  }, []);
+
+  const pickFront = useCallback((leg: ChainLegId): void => {
+    setFrontKey(legKey(leg));
+  }, []);
+  const pickBack = useCallback((leg: ChainLegId): void => {
+    setBackKey(legKey(leg));
+  }, []);
 
   return {
     isLoading: isPending && data === undefined,
     isError,
     refetch,
-    expirations,
-    frontExpiry,
-    backExpiry,
-    setFrontExpiry: setFrontPick,
-    setBackExpiry: setBackPick,
+    cohorts,
     contractType,
     setContractType,
-    rows: joined,
+    frontLeg,
+    backLeg,
+    pickFront,
+    pickBack,
+    clearPair,
+    pair,
     spot,
     observedAt,
-    frontRr,
-    backRr,
   };
 }

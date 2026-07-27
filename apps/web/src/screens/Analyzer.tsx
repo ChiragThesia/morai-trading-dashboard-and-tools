@@ -1,18 +1,25 @@
 /**
- * Analyzer — the option-chain DATA TABLE.
+ * Analyzer — the option chain as a DATA SURFACE, in two parts.
  *
  * The screen used to propose scored calendars. It does not any more (user,
  * 2026-07-26): "DO NOT ANALYZE or measure, just give me the data and then we can
  * determine how to auto surface best ones after." So the verdict hero, the WHY
  * column, the ranked candidate rail and every scoring helper are gone.
  *
- * What is here instead:
- *   1. An expiry-pair header — front/back selects, put/call switch, spot, the
- *      observation instant, and each expiry's 25Δ risk reversal.
- *   2. The chain table — one row per strike, horizontal skew, vertical skew,
- *      edge, debit and net greeks; click a row and both legs open in place.
+ * It then briefly showed ONE table whose rows were strikes pre-paired across two
+ * chosen expiries. That was an inner join — a strike quoted in August but not
+ * September had no row at all, with no dash to say so. The user asked for the TOS
+ * Trade tab shape instead: "this table should be by the expirations just like TOS.
+ * WE expand the EXPIRATION and it shows me details" and "I should have the choice
+ * to select strikes". Hence two surfaces:
+ *
+ *   1. Browse — row = one (root, expiration) cohort, ALL of them. Expand it for
+ *      that cohort's whole strike ladder: per-leg IV, V-Skew, greeks, market, OI.
+ *      Nothing joined, nothing hidden.
+ *   2. Pair — the front and back legs the user picked, and only then the calendar
+ *      math: H-Skew, forward IV, edge, net greeks, the haircut debit.
  *   3. The risk profile — paste a TOS order and see its payoff. Survives from the
- *      old screen unchanged; it is the only part that was never about ranking.
+ *      old screen unchanged; the Pair panel hands its order line straight into it.
  *
  * ONE TREE FOR ALL VIEWPORTS (Journal.tsx precedent). No `useIsDesktop` split, no
  * analyzer-mobile/. Responsiveness is the scroll wrapper plus a table min-width.
@@ -27,7 +34,8 @@ import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
-import { ChainTable } from "../components/chain/ChainTable.tsx";
+import { ChainBrowse } from "../components/chain/ChainBrowse.tsx";
+import { ChainPair } from "../components/chain/ChainPair.tsx";
 import { useChainModel } from "../hooks/useChainModel.ts";
 import { useAnalyzerModel, TODAY_CURVE_COLOR, EXPIRATION_CURVE_COLOR } from "./useAnalyzerModel.ts";
 
@@ -51,11 +59,6 @@ function formatObserved(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return DASH;
   return `${ET_STAMP.format(d)} ET`;
-}
-
-/** 0.0184 → "+1.84" vol points. */
-function volPts(v: number | null): string {
-  return v === null ? DASH : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}`;
 }
 
 // ─── Header stat ──────────────────────────────────────────────────────────────
@@ -85,9 +88,6 @@ function HeaderStat({
     </div>
   );
 }
-
-const SELECT_CLASS =
-  "min-w-0 rounded-[3px] border border-line-strong bg-transparent px-2 py-1.5 font-mono text-[11px] text-fg-primary";
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -157,8 +157,9 @@ export function Analyzer(): React.ReactElement {
     </div>
   );
 
-  // ── Chain body: five mutually-exclusive states, precedence
-  // loading → error → cold-start → empty (inside ChainTable) → populated. ──
+  // ── Chain body: four mutually-exclusive states, precedence
+  // loading → error → cold-start → populated. There is no "no overlapping strikes"
+  // state any more: nothing is joined, so a cohort with expiries always has rows. ──
   let chainBody: React.ReactElement;
   if (chain.isLoading) {
     chainBody = (
@@ -182,7 +183,7 @@ export function Analyzer(): React.ReactElement {
         </Button>
       </div>
     );
-  } else if (chain.expirations.length === 0) {
+  } else if (chain.cohorts.length === 0) {
     chainBody = (
       <div className="flex flex-col gap-1.5 p-6" data-testid="chain-cold-start">
         <p className="m-0 font-display text-sm font-bold text-fg-primary">Chain warming up</p>
@@ -191,21 +192,16 @@ export function Analyzer(): React.ReactElement {
         </p>
       </div>
     );
-  } else if (chain.rows.length === 0) {
-    // The chain HAS expiries, but no strike is quoted in both of the selected ones — so the
-    // join is legitimately empty. Distinct from cold start (no snapshot at all): here the
-    // fix is to pick a different pair, not to wait. Saying so beats an empty table, which
-    // reads as a bug.
-    chainBody = (
-      <div className="flex flex-col gap-1.5 p-6" data-testid="chain-empty">
-        <p className="m-0 font-display text-sm font-bold text-fg-primary">No overlapping strikes</p>
-        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
-          No strike is quoted in both of the selected expiries. Try a different pair.
-        </p>
-      </div>
-    );
   } else {
-    chainBody = <ChainTable rows={chain.rows} />;
+    chainBody = (
+      <ChainBrowse
+        cohorts={chain.cohorts}
+        frontLeg={chain.frontLeg}
+        backLeg={chain.backLeg}
+        onPickFront={chain.pickFront}
+        onPickBack={chain.pickBack}
+      />
+    );
   }
 
   const hasPasted = pastedCandidates.length > 0;
@@ -222,74 +218,37 @@ export function Analyzer(): React.ReactElement {
           {repullControl}
         </div>
 
-        {/* Expiry pair + side. Native selects — the OS picker is the best mobile
-            control there is, and it costs nothing. */}
-        <div className="mb-2 flex flex-wrap items-end gap-x-3 gap-y-2">
-          <label className="flex flex-col gap-0.5">
-            <span className="font-display text-[9px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
-              Front expiry
-            </span>
-            <select
-              data-testid="chain-front-select"
-              className={SELECT_CLASS}
-              value={chain.frontExpiry ?? ""}
-              onChange={(e) => {
-                chain.setFrontExpiry(e.target.value);
-              }}
-            >
-              {chain.expirations.map((e) => (
-                <option key={e.expiration} value={e.expiration}>
-                  {`${e.expiration} · ${e.dte}d`}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-0.5">
-            <span className="font-display text-[9px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
-              Back expiry
-            </span>
-            <select
-              data-testid="chain-back-select"
-              className={SELECT_CLASS}
-              value={chain.backExpiry ?? ""}
-              onChange={(e) => {
-                chain.setBackExpiry(e.target.value);
-              }}
-            >
-              {chain.expirations.map((e) => (
-                <option key={e.expiration} value={e.expiration}>
-                  {`${e.expiration} · ${e.dte}d`}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="flex items-center gap-1">
-            <Button
-              variant="toggle"
-              active={chain.contractType === "P"}
-              data-testid="chain-type-put"
-              onClick={() => {
-                chain.setContractType("P");
-              }}
-            >
-              Puts
-            </Button>
-            <Button
-              variant="toggle"
-              active={chain.contractType === "C"}
-              data-testid="chain-type-call"
-              onClick={() => {
-                chain.setContractType("C");
-              }}
-            >
-              Calls
-            </Button>
-          </div>
+        {/* Which wing to browse. The expiry pair is no longer a pair of selects — every
+            expiry is a row now, and the two legs are picked inside the ladder. */}
+        <div className="mb-2 flex flex-wrap items-center gap-1">
+          <Button
+            variant="toggle"
+            active={chain.contractType === "P"}
+            data-testid="chain-type-put"
+            onClick={() => {
+              chain.setContractType("P");
+            }}
+          >
+            Puts
+          </Button>
+          <Button
+            variant="toggle"
+            active={chain.contractType === "C"}
+            data-testid="chain-type-call"
+            onClick={() => {
+              chain.setContractType("C");
+            }}
+          >
+            Calls
+          </Button>
+          <span className="ml-1 font-mono text-[9.5px] text-fg-tertiary">
+            Switching sides clears the picked pair — a put front against a call back is not a
+            calendar.
+          </span>
         </div>
 
-        {/* Provenance + the two expiry-level skew numbers. */}
+        {/* Provenance. The 25Δ risk reversal is per-expiry, so it lives on each cohort row
+            rather than in a header that could only ever describe two of them. */}
         <div className="mb-2 flex flex-wrap gap-x-6 gap-y-2 border-t border-line-subtle pt-2">
           <HeaderStat
             label="Spot"
@@ -303,21 +262,33 @@ export function Analyzer(): React.ReactElement {
             value={formatObserved(chain.observedAt)}
             className={chain.observedAt === null ? "text-fg-tertiary" : "text-fg-secondary"}
           />
+          {/* NOT `chain-cohort-count`: that prefix belongs to the cohort ROWS, and a header
+              stat sharing it makes every `/^chain-cohort-/` query match one row too many. */}
           <HeaderStat
-            label="25Δ RR front"
-            testId="chain-rr-front"
-            value={volPts(chain.frontRr)}
-            className={chain.frontRr === null ? "text-fg-tertiary" : "text-fg-primary"}
-          />
-          <HeaderStat
-            label="25Δ RR back"
-            testId="chain-rr-back"
-            value={volPts(chain.backRr)}
-            className={chain.backRr === null ? "text-fg-tertiary" : "text-fg-primary"}
+            label="Expiries"
+            testId="chain-expiry-count"
+            value={String(chain.cohorts.length)}
+            className="text-fg-secondary"
           />
         </div>
 
         {chainBody}
+      </Panel>
+
+      {/* ── Calendar pair ───────────────────────────────────────────────── */}
+      <Panel>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <PanelHeading title="Calendar pair" />
+        </div>
+        <ChainPair
+          pair={chain.pair}
+          onClear={chain.clearPair}
+          // Fills the Risk profile box below rather than analyzing behind the user's back: the
+          // order line is what gets priced, so it should be visible and editable (qty, limit)
+          // before Analyze runs.
+          // ponytail: one extra click. Wire it straight through if that ever annoys.
+          onSendToPayoff={setPasteText}
+        />
       </Panel>
 
       {/* ── Risk profile ────────────────────────────────────────────────── */}
