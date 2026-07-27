@@ -186,6 +186,73 @@ export function runLegObservationsContractTests(
 
         expect(countAfterSecond).toBe(countAfterFirst);
       });
+
+      // chain-root-label fix: upsertContracts was onConflictDoNothing, so a corrected
+      // root/expiration could never land — the 26,109 contracts already stored would keep
+      // a root taken from the requested chain label (and a date one day early) forever.
+      // Read back through readPendingObs, the same path that feeds computeT's AM-vs-PM
+      // settlement choice, so the proof is that BSM sees the corrected labels.
+      it("a second upsert with a corrected root + expiration overwrites the stored row", async () => {
+        const occ = formatOccSymbol({
+          root: "SPXW",
+          expiry: new Date(2098, 3, 17),
+          type: "C",
+          strike: 8500,
+        });
+        const mislabelled: ContractRow = {
+          occSymbol: occ,
+          underlying: "SPX",
+          root: "SPX", // wrong: taken from the chain's response label
+          contractType: "C",
+          exerciseStyle: "european",
+          strike: 8500000,
+          expiration: "2098-04-16", // wrong: a local-getter read of a UTC-midnight expiry
+          multiplier: 100,
+        };
+        await repo.upsertContracts([mislabelled]);
+
+        // A pending observation for that contract — readPendingObs joins the two.
+        const obsTime = new Date(Date.UTC(2098, 3, 17, 15, 0, 0));
+        await repo.persistObservations([
+          {
+            time: obsTime,
+            contract: occ,
+            bid: 1.0,
+            ask: 1.1,
+            mark: 1.05,
+            underlyingPrice: 8000.0,
+            iv: 0.2,
+            delta: 0.5,
+            gamma: 0.001,
+            theta: -0.02,
+            vega: 0.3,
+            openInterest: 10,
+            volume: 5,
+            source: "cboe" as const,
+          },
+        ]);
+
+        // Same primary key, corrected labels.
+        const corrected: ContractRow = {
+          ...mislabelled,
+          root: "SPXW",
+          expiration: "2098-04-17",
+        };
+        const result = await repo.upsertContracts([corrected]);
+        expect(result.ok).toBe(true);
+
+        const pendingResult = await repo.readPendingObs(PENDING_LIMIT_ALL);
+        expect(pendingResult.ok).toBe(true);
+        if (!pendingResult.ok) return;
+
+        const match = pendingResult.value.find((p) => p.contract === occ);
+        expect(match).toBeDefined();
+        if (match === undefined) return;
+        expect(match.root).toBe("SPXW");
+        expect(match.expiry.getUTCFullYear()).toBe(2098);
+        expect(match.expiry.getUTCMonth() + 1).toBe(4);
+        expect(match.expiry.getUTCDate()).toBe(17);
+      });
     });
 
     describe("large batch (parameter-limit regression)", () => {

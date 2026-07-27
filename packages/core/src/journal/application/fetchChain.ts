@@ -1,4 +1,4 @@
-import { ok, err } from "@morai/shared";
+import { ok, err, parseOccSymbol } from "@morai/shared";
 import type { Result } from "@morai/shared";
 import type {
   ForFetchingChain,
@@ -124,26 +124,38 @@ function quoteToObservationRow(
  * exerciseStyle is always 'european' for SPX/SPXW (D-04).
  * strike is stored ×1000 int convention.
  * expiration is ISO date string YYYY-MM-DD.
+ *
+ * chain-root-label fix: `root` and `expiration` come from the quote's OWN OCC symbol, the
+ * only trustworthy source in the row. NOT from chain.root — the sidecar makes one Schwab
+ * "$SPX" call that returns BOTH SPX and SPXW contracts, so chain.root is a response label
+ * (apps/sidecar/chain_proxy.py) and labelling every contract with it mislabelled 1,190
+ * prod rows. NOT from quote.expiry either — that is a UTC-midnight Date, and local date
+ * getters on it read the previous day west of Greenwich. Both fields feed computeT's
+ * AM-vs-PM settlement choice, so either error biases bsm_iv and every greek.
+ *
+ * Returns null for a symbol that will not parse or carries an unexpected root: no row is
+ * better than a fabricated one (the caller drops the quote entirely).
  */
-function quoteToContractRow(
-  quote: RawQuote,
-  chain: RawChain,
-): ContractRow {
-  const strikeInt = Math.round(quote.strike * 1000);
+function quoteToContractRow(quote: RawQuote): ContractRow | null {
+  const parsed = parseOccSymbol(quote.occSymbol);
+  if (!parsed.ok) return null;
 
-  const expiry = quote.expiry;
-  const year = expiry.getFullYear();
-  const month = String(expiry.getMonth() + 1).padStart(2, "0");
-  const day = String(expiry.getDate()).padStart(2, "0");
-  const expiration = `${year}-${month}-${day}`;
+  const root = parsed.value.root;
+  if (root !== "SPX" && root !== "SPXW") return null;
+
+  // YYYY-MM-DD straight from the symbol's YYMMDD digits (OCC layout: 6-char root, then
+  // the date) — a string-to-string path has no timezone in it. parseOccSymbol above has
+  // already proven those six characters are a real calendar date.
+  const yymmdd = quote.occSymbol.slice(6, 12);
+  const expiration = `20${yymmdd.slice(0, 2)}-${yymmdd.slice(2, 4)}-${yymmdd.slice(4, 6)}`;
 
   return {
     occSymbol: quote.occSymbol,
     underlying: "SPX", // Both SPX and SPXW are on the SPX index
-    root: chain.root,
+    root,
     contractType: quote.contractType,
     exerciseStyle: "european",
-    strike: strikeInt,
+    strike: Math.round(quote.strike * 1000),
     expiration,
     multiplier: 100,
   };
@@ -175,9 +187,12 @@ function processChain(
     ) continue;
 
     const obs = quoteToObservationRow(quote, chain.observedAt, chain.spot, chain.source);
-    if (obs !== null) {
+    // Both or neither: an observation with no contract row is unusable downstream
+    // (readPendingObs skips and warns on exactly that shape).
+    const contract = quoteToContractRow(quote);
+    if (obs !== null && contract !== null) {
       observations.push(obs);
-      contracts.push(quoteToContractRow(quote, chain));
+      contracts.push(contract);
     }
   }
 

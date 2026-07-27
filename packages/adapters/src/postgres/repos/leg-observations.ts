@@ -119,9 +119,22 @@ export function makePostgresLegObservationsRepo(
 
       // Chunk to stay below Postgres's 65,534 bind-parameter limit.
       // 2,000 rows × 8 cols = 16,000 params per INSERT — comfortable margin.
+      // chain-root-label fix: root/expiration are UPDATED on conflict, not ignored. Under
+      // onConflictDoNothing a corrected label could never land — the already-stored rows
+      // would keep a root taken from the requested chain label (and a date one day early)
+      // forever, and those two columns drive computeT's AM-vs-PM settlement choice.
       for (let i = 0; i < values.length; i += INSERT_CHUNK_ROWS) {
         const slice = values.slice(i, i + INSERT_CHUNK_ROWS);
-        await db.insert(contracts).values(slice).onConflictDoNothing();
+        await db
+          .insert(contracts)
+          .values(slice)
+          .onConflictDoUpdate({
+            target: contracts.occSymbol,
+            set: {
+              root: sql`excluded.root`,
+              expiration: sql`excluded.expiration`,
+            },
+          });
       }
       return ok(undefined);
     } catch (e) {
