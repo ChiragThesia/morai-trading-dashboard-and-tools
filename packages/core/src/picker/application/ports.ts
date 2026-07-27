@@ -7,6 +7,7 @@
 // re-declared locally (analytics/journal precedent — no cross-context import).
 
 import type { Result } from "@morai/shared";
+import type { ChainEntry } from "./getChain.ts";
 import type { ForGettingOpenCalendars } from "../../journal/index.ts";
 import type { ForReadingRuleOverrides } from "../../settings/application/ports.ts";
 import type { PickerRuleOverrides } from "../domain/rule-config.ts";
@@ -321,6 +322,16 @@ export type ForRunningComputePicker = () => Promise<Result<void, StorageError>>;
  * Called by the HTTP route and MCP tool; returns the latest stored snapshot or null.
  */
 export type ForRunningGetPicker = () => Promise<Result<PickerSnapshotRow | null, StorageError>>;
+
+/**
+ * ForRunningGetChain — driver port for the get-chain use-case factory (Analyzer data table).
+ * Called by the HTTP route and MCP tool; returns the latest chain cohort as flat entry rows.
+ * Array read: an empty cohort is ok([]), never null.
+ *
+ * ChainEntry lives in getChain.ts (getCot.ts precedent — the response-shaped type is declared
+ * beside the mapper that builds it). The import is type-only, so this cycle has no runtime edge.
+ */
+export type ForRunningGetChain = () => Promise<Result<ReadonlyArray<ChainEntry>, StorageError>>;
 
 // ─── Ad-hoc analyze (Phase 30, Plan 04, D-02) ───────────────────────────────────
 
