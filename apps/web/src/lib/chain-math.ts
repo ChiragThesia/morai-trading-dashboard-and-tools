@@ -74,8 +74,10 @@ export function hSkew(ivFront: number | null, ivBack: number | null): number | n
  * Both constraints bind. Across expiries this measures term structure, not skew. Across wings it
  * measures nothing at all: calls and puts trace different curves, so a put's IV against the
  * call ATM is a subtraction of two unrelated numbers that still returns a clean-looking float.
- * The chain read returns both wings interleaved, so filtering to one expiry is NOT enough —
- * the caller must filter to one `contractType` before picking the ATM IV.
+ *
+ * This function cannot defend itself — it receives two floats with no memory of where they came
+ * from. Source the second argument from `atmIv`, which takes the expiry and the wing as arguments
+ * and so cannot be pointed at the wrong curve.
  */
 export function vSkewVsAtm(ivAtStrike: number | null, ivAtm: number | null): number | null {
   return diff(ivAtStrike, ivAtm);
@@ -126,6 +128,42 @@ export function atmStrike(
     }
   }
   return best;
+}
+
+/**
+ * The ATM reference IV for one cohort — the `ivAtm` argument `vSkewVsAtm` needs.
+ *
+ * Exists to make the wing/expiry constraint UNVIOLATABLE rather than merely documented. The chain
+ * returns both wings interleaved, so "nearest strike to spot" is only a well-formed question once
+ * you have fixed an expiry AND a `contractType`; both are parameters here, so there is no way to
+ * call this and accidentally read the call curve's ATM for a put row. Doing the filter at the call
+ * site instead is the one mistake `vSkewVsAtm` cannot catch — by the time it receives two floats
+ * the wing they came from is gone, and it would return a plausible, clean, wrong number.
+ *
+ * Null when the cohort is empty, spot is unusable, or the ATM strike's own IV never solved. That
+ * last one is deliberate: a neighbouring strike's IV is NOT a substitute reference. Silently
+ * shifting the reference strike would change what the whole vertical-skew column means.
+ */
+export function atmIv(
+  rows: ReadonlyArray<{
+    readonly strike: number;
+    readonly expiration: string;
+    readonly contractType: "C" | "P";
+    readonly bsmIv: number | null;
+  }>,
+  spot: number,
+  expiration: string,
+  contractType: "C" | "P",
+): number | null {
+  const cohort = rows.filter(
+    (r) => r.expiration === expiration && r.contractType === contractType,
+  );
+  const k = atmStrike(cohort, spot);
+  if (k === null) return null;
+  // ponytail: first match wins. The chain read dedups per contract, so one strike in one cohort
+  // is one row; if a future union re-introduces duplicates, dedup upstream, not here.
+  const row = cohort.find((r) => r.strike === k);
+  return row === undefined || !isNum(row.bsmIv) ? null : row.bsmIv;
 }
 
 /**

@@ -19,6 +19,7 @@ import {
   edge,
   vSkewVsAtm,
   atmStrike,
+  atmIv,
   legGreeks,
   netCalendarGreeks,
   calendarDebit,
@@ -115,6 +116,60 @@ describe("atmStrike — strike nearest spot", () => {
     expect(atmStrike([], 7420)).toBeNull();
     expect(atmStrike(rows, 0)).toBeNull();
     expect(atmStrike(rows, Number.NaN)).toBeNull();
+  });
+});
+
+describe("atmIv — the ATM reference IV, wing and expiry enforced by signature", () => {
+  // Both wings at every strike, with DIFFERENT IVs per wing. The differing IV is load-bearing:
+  // a fixture where the two wings share an IV passes even when the lookup crosses them.
+  const chain = [
+    { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", bsmIv: 0.161 },
+    { strike: 7_300_000, expiration: "2026-08-21", contractType: "C", bsmIv: 0.121 },
+    { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", bsmIv: 0.1452 },
+    { strike: 7_400_000, expiration: "2026-08-21", contractType: "C", bsmIv: 0.1103 },
+    { strike: 7_400_000, expiration: "2026-09-18", contractType: "P", bsmIv: 0.1701 },
+  ] as const;
+
+  it("picks the IV of the ATM strike for the requested wing — never the other wing's", () => {
+    expect(atmIv(chain, 7420, "2026-08-21", "P")).toBeCloseTo(0.1452, 12);
+    expect(atmIv(chain, 7420, "2026-08-21", "C")).toBeCloseTo(0.1103, 12);
+  });
+
+  it("scopes to the requested expiry — a nearer strike in another expiry is not a candidate", () => {
+    expect(atmIv(chain, 7420, "2026-09-18", "P")).toBeCloseTo(0.1701, 12);
+  });
+
+  it("re-finds the ATM strike WITHIN the wing, not across the whole chain", () => {
+    // Only the 7300 put exists for this wing+expiry pair; spot sits nearer 7400, but the
+    // 7400 rows belong to other cohorts and must not drag the reference strike.
+    const sparse = [
+      { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", bsmIv: 0.161 },
+      { strike: 7_400_000, expiration: "2026-08-21", contractType: "C", bsmIv: 0.1103 },
+    ] as const;
+    expect(atmIv(sparse, 7420, "2026-08-21", "P")).toBeCloseTo(0.161, 12);
+  });
+
+  it("is null when the ATM strike's own IV never solved — never a neighbour's IV", () => {
+    const gapped = [
+      { strike: 7_400_000, expiration: "2026-08-21", contractType: "P", bsmIv: null },
+      { strike: 7_300_000, expiration: "2026-08-21", contractType: "P", bsmIv: 0.161 },
+    ] as const;
+    expect(atmIv(gapped, 7420, "2026-08-21", "P")).toBeNull();
+  });
+
+  it("is null when no row matches the expiry/wing, or spot is unusable", () => {
+    expect(atmIv(chain, 7420, "2026-12-18", "P")).toBeNull();
+    expect(atmIv(chain, 7420, "2026-09-18", "C")).toBeNull();
+    expect(atmIv([], 7420, "2026-08-21", "P")).toBeNull();
+    expect(atmIv(chain, 0, "2026-08-21", "P")).toBeNull();
+  });
+
+  it("composes with vSkewVsAtm to give a wing-correct vertical skew", () => {
+    const put7300 = 0.161;
+    const skew = vSkewVsAtm(put7300, atmIv(chain, 7420, "2026-08-21", "P"));
+    expect(skew).toBeCloseTo(0.161 - 0.1452, 12);
+    // Crossing the wings would have produced 0.161 − 0.1103; prove we did not.
+    expect(skew).not.toBeCloseTo(0.161 - 0.1103, 6);
   });
 });
 
