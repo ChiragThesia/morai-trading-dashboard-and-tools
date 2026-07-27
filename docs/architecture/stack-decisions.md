@@ -34,6 +34,7 @@ Every entry: what we chose, why, what it costs to swap, and the trigger that reo
 | D25 | Runtime rule overrides (Phase 29) | `rule_overrides` — single-row JSONB deltas-over-defaults table, keyed by fixed literal id `"default"` (mirrors `broker_tokens.app_id`, no DB CHECK constraint). **Overrides Phase 28 T-28-11** — constants stay the DEFAULTS; the row is an explicit layer merged over them at consumption time. | Low (drop the row, code defaults remain authoritative) | A curated knob needs per-calendar or per-user scope |
 | D27 | Live SPX spot + VIX-family fan-out; DISPLAY-LIVE/GATE-EOD law (Phase 38) | SPX spot rides the EXISTING greeks pipe (zero new Schwab calls); VIX family (`$VIX`/`$VVIX`/`$VIX9D`/`$VIX3M`) via a new sidecar `get_quotes` poll (~20s). Server fans out two new on-change-throttled SSE lanes (`spot`, `indices`) beside the existing ticks lane. **Law**: only DISPLAYED values ever live-tint — every gate (entry-gate verdict, stored `indicator.band`, hy-oas/FRED) keeps consuming stored EOD data, untouched. | Low (additive SSE lanes; sidecar poll loop) | A 5th regime indicator needs a live source OR the poll interval needs to shrink below ~20s |
 | D28 | Market news headlines vendor | **Alpaca News API** (Benzinga content) — REST poll on a `fetch-news` cron → `news_items` table → `GET /api/analytics/news` + `get_news` MCP tool. Schwab Trader API exposes no news endpoint (the TOS feed is display-only vendor licensing) | Low (one HTTP adapter behind `ForFetchingNewsHeadlines`; keys optional) | Alpaca drops free news access OR headline latency proves too slow vs TOS → Benzinga direct (paid) |
+| D29 | Analyzer surface | **Raw chain data table.** The Analyzer stops proposing scored calendars and renders the chain — skew, EDGE, IV, greeks per strike — off a new `GET /api/chain` + `get_chain` read surface. The picker engine keeps running and stays readable through `/api/picker/candidates` + `get_picker_candidates` | Low (additive read-only route; engine and rule registry untouched) | The chain table proves it needs a derived ranking after all |
 
 ## D1 — Bun
 
@@ -577,3 +578,39 @@ direct or dxFeed adapter drops in with a composition-root wiring change only.
 
 **Revisit trigger**: Alpaca drops free news access, or headline latency vs TOS proves too slow
 for real use → Benzinga direct (paid).
+
+## D29 — The Analyzer becomes a chain data table; the picker engine stays
+
+**Context**: the Analyzer proposed scored calendars — a ranked candidate table, a verdict
+hero, a scoring-methodology panel. The trader reads the chain to pick a strike. The score
+answered a question they were not asking and buried the numbers they were.
+
+**Decision**: the Analyzer renders raw chain rows. Horizontal skew, vertical skew, EDGE, IV
+and greeks per strike, sortable. No score, no rank, no verdict. A new read surface feeds it —
+`GET /api/chain` plus the mirroring `get_chain` MCP tool (architecture rule 9) — returning the
+stored per-contract quotes as a plain array. Shape and empty-array contract:
+[api-design.md](api-design.md).
+
+**The picker engine is NOT retired.** `compute-picker` keeps running on the pipeline chain,
+keeps writing `picker_snapshot`, and stays readable through `GET /api/picker/candidates` and
+the `get_picker_candidates` MCP tool. The rule registry
+(`packages/core/src/picker/domain/rules.ts`) is untouched — no weight moves, no rule is added
+or dropped. Only the Analyzer stops rendering proposals.
+
+**Why not delete the engine too**: the scores are a research asset. PICK-04 calibration reads
+the stored snapshot corpus, `slopePercentile` ranks against it, and Claude still asks for
+ranked candidates over MCP. Deleting the engine to simplify one screen would burn the corpus.
+
+**Why a new route instead of widening the picker payload**: the picker snapshot is a *scored*
+shape — candidates, breakdowns, a rule set. A chain table wants contracts. Bolting rows onto
+the picker response would couple a data read to a scoring cadence and drag the whole engine
+into the Analyzer's load path.
+
+**Swap cost**: Low. The route is additive and read-only. Reverting the screen means rendering
+the existing `pickerSnapshotResponse` again — nothing was deleted server-side.
+
+**Revisit trigger**: the chain table proves it needs a derived ranking after all. Then it
+returns as an explicit, opt-in column — not the screen's premise.
+
+**References**: [picker-rules.md](picker-rules.md) (engine scope + the vertical-skew gap);
+[api-design.md](api-design.md); [mcp-and-plugins.md](mcp-and-plugins.md).

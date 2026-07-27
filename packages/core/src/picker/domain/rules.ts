@@ -21,8 +21,9 @@ import type { BreakdownCriterion } from "./types.ts";
 
 // ─────────────────────────────────────────────────────────────
 // Score weights (active rules must sum to 100 — enforced by rules.test.ts).
-// Rebalanced 2026-07-08 (user decision): fwd-edge is the purest math signal → 35;
-// slope 30. Previous 40/25 split was the uncalibrated mockup port (D-08).
+// fwdEdge is the largest single term at 25; slope carries 10. Both shrank from the
+// 2026-07-08 35/30 split when the 2026-07-09 promotions (thetaVega, vrp, debitFit)
+// took scored weight. Per-rule table + rationale: docs/architecture/picker-rules.md.
 // ─────────────────────────────────────────────────────────────
 export const WEIGHT_SLOPE = 10;
 export const WEIGHT_FWD_EDGE = 25;

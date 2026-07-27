@@ -28,6 +28,7 @@ Browser ─────(HTTP / Hono RPC)─────────▶ apps/serv
 | `get_journal` | `GET /api/journal/:id` — snapshot series, the core analysis tool |
 | `get_live_greeks` | `GET /api/greeks` |
 | `get_term_structure` / `get_skew` | analytics routes |
+| `get_chain` | `GET /api/chain` — raw option-chain rows, same array the Analyzer table renders |
 | `get_transactions` | `GET /api/transactions` — trade history for a date range |
 | `trigger_job` | `POST /api/jobs/:name/trigger` |
 

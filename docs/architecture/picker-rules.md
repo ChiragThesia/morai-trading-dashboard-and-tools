@@ -3,8 +3,17 @@
 The calendar-candidate picker scores SPX OTM-put calendars with ONE typed rule registry:
 `packages/core/src/picker/domain/rules.ts`. Every rule is a row — formula, inputs, weight,
 status, rationale, source. Adding a rule = adding a row (plus a weight rebalance and a test).
-The registry ships to the UI as `pickerSnapshotResponse.ruleSet`, so the Analyzer methodology
-panel renders the engine's actual table, never a copy.
+The registry ships in `pickerSnapshotResponse.ruleSet`, so every consumer renders the engine's
+actual table, never a copy.
+
+## Scope — this describes the engine, not a screen
+
+The Analyzer used to render these scores. It does not any more: it is a raw chain data table
+now — strikes, IV, greeks, skew, no verdict (D29 in [stack-decisions.md](stack-decisions.md)).
+
+Nothing below changed with it. `compute-picker` still runs on the pipeline chain, still writes
+`picker_snapshot`, and is still read through `GET /api/picker/candidates` and the
+`get_picker_candidates` MCP tool. The engine proposes; no screen has to listen.
 
 ## Rule kinds
 
@@ -42,7 +51,7 @@ User-locked 2026-07-08 (research-verified against tastytrade/SteadyOptions/ORATS
 | `liquidity` | each leg: (ask−bid)/mid ≤ 0.10 AND OI ≥ 100 | Untradeable markets produce fictional debits/breakevens. |
 (RETIRED as an entry gate 2026-07-09: the event-blackout was an EXIT discipline read as an
 entry block — it rejected structures the user actually trades, e.g. a Jul-30 front entered
-3 weeks before its Jul-29 FOMC. Now: `eventAdjustment` (w10) penalizes the score, and a
+3 weeks before its Jul-29 FOMC. Now: `eventAdjustment` (w5) penalizes the score, and a
 tier-1 event ≤3 days before the front expiry stamps `exitPlan.closeByExpiry` to the day
 BEFORE the event — the playbook's EVT trigger encoded as the hard-close date.)
 
@@ -89,6 +98,30 @@ criterion enum stays closed (T-19-04):
 2. "Back−front IV differential −1% to −3% ideal band" (fabricated source).
 3. "Fair debit = 25–40% of back-month premium" (fabricated source).
 4. "Further-OTM monotonically decreases debit and PoP".
+
+## Known gap — vertical skew never reaches the engine
+
+A calendar is a **horizontal**-skew trade. Its edge lives in the term structure, and `fwdEdge`
+and `slope` already harvest exactly that. That axis is covered.
+
+**Vertical** skew is the other axis, and it is the one that picks the strike. The engine has no
+vertical-skew rule. It has the opposite. `deltaNeutral` (weight 15) exists to SUPPRESS skew's
+pull: without it, skew-driven forward edge drags the rail toward richer, higher-|Δ| strikes a
+delta-neutral trader would never take — read the `deltaNeutral` rationale in `rules.ts`. So
+skew's influence on strike choice is damped today, never measured.
+
+The right metric already exists and is already stored. `interpolateRiskReversal`
+(`packages/core/src/analytics/domain/risk-reversal.ts`) computes the 25Δ risk reversal —
+IV(25Δ put) − IV(25Δ call), null when either wing cannot bracket. `compute-analytics` writes it
+to `risk_reversal_observations`; `GET /api/analytics/skew` and `get_skew` serve it. It reaches
+the UI. It never reaches the picker: no port carries it into `CandidateContext`, and no rule
+row consumes it. The RULE-01 tag table below records the same hole from the journal side —
+`iv-skew-favorable` has no scored counterpart.
+
+The gap stays open on purpose. A vertical-skew rule costs weight, and weight comes out of a
+term with more evidence behind it — PICK-04 arbitrates that, not intuition. Meanwhile the
+Analyzer chain table (D29) puts vertical skew in front of the trader as a *column*, which
+answers the same question without spending a single point of the 100.
 
 ## How to add a rule
 
