@@ -253,6 +253,10 @@ function StrikeLadder({
         columns={columns}
         rows={sortRows(cohort.strikes, columns, sort)}
         rowTestId={(r) => `chain-leg-${legKey(r)}`}
+        // No onRowClick here — everything a strike has is already in its columns, and the two
+        // pick buttons are the row's only verb. DataTable styles every row `cursor-pointer`, so
+        // override it: a row that looks clickable and does nothing is worse than a plain one.
+        rowClassName={() => "cursor-default"}
         sort={sort}
         onSortChange={(key) => {
           setSort((cur) => nextSort(cur, key));
