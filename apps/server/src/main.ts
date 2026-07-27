@@ -25,6 +25,7 @@ import {
   makePostgresNewsItemsRepo,
   makePostgresMacroObservationsRepo,
   makePostgresPickerSnapshotRepo,
+  makePostgresPickerChainRepo,
   makePostgresCalendarEventsRepo,
   makePostgresCalendarEventAnnotationsRepo,
   makePostgresExitVerdictsRepo,
@@ -55,6 +56,7 @@ import {
   makeGetMacroUseCase,
   makeGetRegimeBoardUseCase,
   makeGetPickerUseCase,
+  makeGetChainUseCase,
   makeGetCalendarEventsWithRulesUseCase,
   makeSetRuleTagsUseCase,
   makeSpotObserver,
@@ -100,6 +102,7 @@ import { journalLifecycleRoutes } from "./adapters/http/journal-lifecycle.routes
 import { brokerageRoutes } from "./adapters/http/brokerage.routes.ts";
 import { analyticsRoutes } from "./adapters/http/analytics.routes.ts";
 import { gexRoutes } from "./adapters/http/gex.routes.ts";
+import { chainRoutes } from "./adapters/http/chain.routes.ts";
 import { pickerRoutes } from "./adapters/http/picker.routes.ts";
 import { exitRoutes } from "./adapters/http/exits.routes.ts";
 import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
@@ -350,6 +353,15 @@ const setRuleOverrides = makeSetRuleOverridesUseCase({
 const pickerSnapshotRepo = makePostgresPickerSnapshotRepo(db);
 const getPicker = makeGetPickerUseCase({
   readPickerSnapshot: pickerSnapshotRepo.readPickerSnapshot,
+});
+
+// get-chain read use-case — backs GET /api/chain, the Analyzer tab's raw chain DATA TABLE.
+// Reuses the SAME ForReadingChainForPicker port the worker's compute-picker job reads
+// (apps/worker/src/main.ts:671), so the table shows the exact cohort the engine scored — no
+// second query path to drift. Pure stored-row read: nothing is scored or recomputed here.
+const pickerChainRepo = makePostgresPickerChainRepo(db);
+const getChain = makeGetChainUseCase({
+  readChain: pickerChainRepo.readChainForPicker,
 });
 
 // D-02 / MCP-02 (30-05): analyze-ad-hoc-calendar use-case — shared by POST /picker/analyze +
@@ -624,6 +636,9 @@ const apiRouter = new Hono()
   .route("/", analyticsRoutes(getTermStructure, getSkew, getCot, getMacro, getRegimeBoard, getNews))
   // GEX-01 (08-07): GET /api/analytics/gex — stored-row read (D-01, never recomputed)
   .route("/analytics", gexRoutes(getGex))
+  // GET /api/chain — raw per-strike chain rows for the Analyzer data table. Array read:
+  // an empty cohort is 200 + [], never 404.
+  .route("/", chainRoutes(getChain))
   // PICK-02 (19-07): GET /api/picker/candidates — stored-row read (D-04, never recomputed)
   // D-02 (30-05): POST /api/picker/analyze — ad-hoc pasted-calendar scoring
   .route("/", pickerRoutes(getPicker, analyzeAdHocCalendar))
