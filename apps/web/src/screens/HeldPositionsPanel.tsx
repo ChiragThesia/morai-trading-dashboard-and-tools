@@ -63,7 +63,7 @@ function formatMetric(metric: ExitMetric): string {
   return `${metric.name} ${sign}${isFraction ? `${(abs * 100).toFixed(1)}%` : abs}`;
 }
 
-/** Mirrors CandidateCard.tsx's local formatAsOf — same freshness window, same "as of HH:MM"
+/** Mirrors lib/format-as-of.ts's formatAsOf — same freshness window, same "as of HH:MM"
  * label, same never-"Invalid Date" NaN guard (unparseable falls back to stale, the safe
  * direction). */
 function formatAsOf(observedAt: string): { readonly label: string; readonly fresh: boolean } {

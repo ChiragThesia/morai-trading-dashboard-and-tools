@@ -454,6 +454,7 @@ export type {
   ForReadingPickerSlopeHistory,
   ForRunningComputePicker,
   ForRunningGetPicker,
+  ForRunningGetChain,
   AdHocCalendarInput,
   AdHocCalendarAnalysis,
   ForAnalyzingAdHocCalendar,
@@ -466,6 +467,11 @@ export type {
 export { makeGetPickerUseCase } from "./picker/index.ts";
 // PICK-01/PICK-03 (19-08): compute-picker use-case — chain-triggered by compute-gex-snapshot (D-04).
 export { makeComputePickerSnapshotUseCase } from "./picker/index.ts";
+// Analyzer chain data table: get-chain read use-case — the ONE apps→core wiring point the
+// GET /api/chain route + get_chain MCP tool need. Maps the latest chain cohort to flat
+// per-strike entries (dte, bsmIv, quote, OI). No scoring, never recomputed on read.
+export { makeGetChainUseCase } from "./picker/index.ts";
+export type { ChainEntry, GetChainDeps } from "./picker/index.ts";
 // D-02 (30-04): ad-hoc analyze use-case — scores ONE user-pasted PUT calendar with byte-parity
 // to the engine (T-30-10); the 30-05 HTTP route + MCP tool import this from @morai/core.
 export { makeAnalyzeAdHocCalendarUseCase } from "./picker/index.ts";
@@ -478,6 +484,7 @@ export { makePreviewPickerRuleOverridesUseCase } from "./picker/index.ts";
 export {
   selectCandidates,
   haircutFill,
+  computeFwdIv,
   scoreCalendarCandidates,
   RULE_SET_METADATA,
   realizedVol,
@@ -496,6 +503,7 @@ export type {
   BreakdownCriterion,
   ContextEntry,
   ExitPlan,
+  FwdIvResult,
 } from "./picker/index.ts";
 
 // ─── Phase 22: Journal calendar-lifecycle graph (JRNL-01) ─────────────────────

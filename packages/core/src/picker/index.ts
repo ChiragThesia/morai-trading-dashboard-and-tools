@@ -23,6 +23,7 @@ export type {
   ForReadingPickerSlopeHistory,
   ForRunningComputePicker,
   ForRunningGetPicker,
+  ForRunningGetChain,
   AdHocCalendarInput,
   AdHocCalendarAnalysis,
   ForAnalyzingAdHocCalendar,
@@ -35,6 +36,10 @@ export { makeGetPickerUseCase } from "./application/getPicker.ts";
 // PICK-01/PICK-03 (19-08): compute-picker use-case — chain-triggered by compute-gex-snapshot
 // (D-04); reads chain+GEX+events, scores candidates, persists exactly one snapshot row.
 export { makeComputePickerSnapshotUseCase } from "./application/computePickerSnapshot.ts";
+// Analyzer chain data table: get-chain read use-case — maps the latest chain cohort to flat
+// per-strike entries (dte, bsmIv, greeks inputs) for the HTTP route + MCP tool. No scoring.
+export { makeGetChainUseCase } from "./application/getChain.ts";
+export type { ChainEntry, GetChainDeps } from "./application/getChain.ts";
 // D-02 (30-04): ad-hoc analyze use-case — scores ONE user-pasted PUT calendar through the
 // SAME engine path as auto-surfaced candidates (T-30-10 parity); the ONE apps→core wiring
 // point 30-05's HTTP route + MCP tool need.
@@ -57,6 +62,10 @@ export type {
   SelectCandidatesResult,
   GateDrops,
 } from "./domain/candidate-selection.ts";
+// The forward-variance identity + its inverted-structure guard. Barrel-wired so the Analyzer
+// chain table's EDGE column reuses this exact function instead of re-deriving the formula.
+export { computeFwdIv } from "./domain/fwd-iv.ts";
+export type { FwdIvResult } from "./domain/fwd-iv.ts";
 export { scoreCalendarCandidates } from "./domain/scoring.ts";
 export type { ScoringParams } from "./domain/scoring.ts";
 export { RULE_SET_METADATA } from "./domain/rules.ts";

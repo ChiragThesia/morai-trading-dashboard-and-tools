@@ -10,8 +10,16 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";
 import type { ChainRow } from "../lib/chain-contract.ts";
 
-const { mockUseChain } = vi.hoisted(() => ({ mockUseChain: vi.fn() }));
+const { mockUseChain, mockUseGex } = vi.hoisted(() => ({
+  mockUseChain: vi.fn(),
+  mockUseGex: vi.fn(),
+}));
 vi.mock("./useChain.ts", () => ({ useChain: mockUseChain }));
+// The model reads GEX only for per-expiry carry (r, q). `resolveCarry` degrades to its flat
+// defaults on an absent snapshot, so an undefined-data stub exercises the same path the app
+// takes before the first GEX response lands.
+vi.mock("./useGex.ts", () => ({ useGex: mockUseGex }));
+mockUseGex.mockReturnValue({ data: undefined });
 
 import { useChainModel } from "./useChainModel.ts";
 
@@ -43,6 +51,7 @@ function chain(): ReadonlyArray<ChainRow> {
     { expiration: "2026-09-18", dte: 54, base: 0.17 },
   ];
   for (const e of expiries) {
+    // Index points here; `row()` scales to the ×1000 convention below.
     for (const k of [6400, 6450, 6500, 6550, 6600]) {
       const iv = e.base + (6500 - k) * 0.00002;
       out.push(row({ strike: k * 1000, expiration: e.expiration, dte: e.dte, bsmIv: iv, contractType: "P" }));
@@ -56,7 +65,7 @@ function chain(): ReadonlyArray<ChainRow> {
 
 function settled(rows: ReadonlyArray<ChainRow>): void {
   mockUseChain.mockReturnValue({
-    data: { rows },
+    data: rows,
     isPending: false,
     isError: false,
     refetch: vi.fn(),
@@ -106,14 +115,14 @@ describe("useChainModel — joined rows", () => {
   it("emits one row per strike present in BOTH legs, ascending", () => {
     settled(chain());
     const { result } = renderHook(() => useChainModel());
-    expect(result.current.rows.map((r) => r.strike)).toEqual([6400, 6450, 6500, 6550, 6600]);
+    expect(result.current.rows.map((r) => r.strike)).toEqual([6400_000, 6450_000, 6500_000, 6550_000, 6600_000]);
   });
 
   it("drops a strike the back month does not list", () => {
     const rows = chain().filter((r) => !(r.expiration === "2026-09-18" && r.strike === 6600_000));
     settled(rows);
     const { result } = renderHook(() => useChainModel());
-    expect(result.current.rows.map((r) => r.strike)).toEqual([6400, 6450, 6500, 6550]);
+    expect(result.current.rows.map((r) => r.strike)).toEqual([6400_000, 6450_000, 6500_000, 6550_000]);
   });
 
   it("shows puts by default and switches to calls on demand", () => {
@@ -145,7 +154,7 @@ describe("useChainModel — joined rows", () => {
       expect(row.back.iv).not.toBe(0.99);
     }
     // And the put wing's own skew is still the honest 2 vol points.
-    expect(result.current.rows.find((r) => r.strike === 6500)?.hSkew).toBeCloseTo(0.02, 12);
+    expect(result.current.rows.find((r) => r.strike === 6500_000)?.hSkew).toBeCloseTo(-0.02, 12);
   });
 
   it("keeps the call wing available to the risk reversal even while the table shows puts", () => {
@@ -161,23 +170,33 @@ describe("useChainModel — joined rows", () => {
   it("carries the horizontal skew, edge and net greeks the math module computes", () => {
     settled(chain());
     const { result } = renderHook(() => useChainModel());
-    const atm = result.current.rows.find((r) => r.strike === 6500);
+    const atm = result.current.rows.find((r) => r.strike === 6500_000);
     expect(atm).toBeDefined();
-    // back 0.17 − front 0.15 at the ATM strike.
-    expect(atm?.hSkew).toBeCloseTo(0.02, 12);
+    // H-Skew is front − back (chain-math owns this convention): 0.15 − 0.17. NEGATIVE here
+    // means the BACK month is the rich one, which is the wrong way round for a calendar
+    // seller. Positive would mean the front is rich — the setup you actually want, and the
+    // same direction `edge` reads. Do not flip this to make it look friendlier.
+    expect(atm?.hSkew).toBeCloseTo(-0.02, 12);
     expect(atm?.edge).not.toBeNull();
-    expect(atm?.net).not.toBeNull();
-    expect(atm?.debit).toBeCloseTo(0, 12); // identical quotes both months in this fixture
+    // Net greeks are back − front (long the back, short the front), all-or-nothing.
+    expect(atm?.netDelta).not.toBeNull();
+    expect(atm?.netGamma).not.toBeNull();
+    // Both months quote 40/42 here, so the MIDS cancel — but the debit is not 0, because
+    // the ORATS haircut crosses 66% of each leg's width on the natural side: buy the back at
+    // 40 + .66×2 = 41.32, sell the front at 42 − .66×2 = 40.68. The 0.64 is the round trip's
+    // real cost, and pricing this off mids is exactly the overstated edge the haircut exists
+    // to remove.
+    expect(atm?.debit).toBeCloseTo(0.64, 12);
   });
 
   it("measures vertical skew against the ATM strike of the SAME expiry", () => {
     settled(chain());
     const { result } = renderHook(() => useChainModel());
-    const atm = result.current.rows.find((r) => r.strike === 6500);
-    const wing = result.current.rows.find((r) => r.strike === 6400);
-    expect(atm?.frontVSkew).toBeCloseTo(0, 12);
+    const atm = result.current.rows.find((r) => r.strike === 6500_000);
+    const wing = result.current.rows.find((r) => r.strike === 6400_000);
+    expect(atm?.vSkew).toBeCloseTo(0, 12);
     // 100 points below spot at 0.00002/pt.
-    expect(wing?.frontVSkew).toBeCloseTo(0.002, 12);
+    expect(wing?.vSkew).toBeCloseTo(0.002, 12);
   });
 
   // REGRESSION, and the nastiest one in this file. vSkewVsAtm takes two bare floats —
@@ -193,17 +212,16 @@ describe("useChainModel — joined rows", () => {
     const { result } = renderHook(() => useChainModel());
 
     // Puts: ATM put IV 0.150. Reading the CALL ATM (0.145) would make this −0.005, not 0.
-    expect(result.current.rows.find((r) => r.strike === 6500)?.frontVSkew).toBeCloseTo(0, 12);
+    expect(result.current.rows.find((r) => r.strike === 6500_000)?.vSkew).toBeCloseTo(0, 12);
 
     act(() => {
       result.current.setContractType("C");
     });
 
     // Calls: ATM call IV 0.145. Reading the PUT ATM (0.150) would make this +0.005, not 0.
-    expect(result.current.rows.find((r) => r.strike === 6500)?.frontVSkew).toBeCloseTo(0, 12);
-    expect(result.current.rows.find((r) => r.strike === 6500)?.backVSkew).toBeCloseTo(0, 12);
+    expect(result.current.rows.find((r) => r.strike === 6500_000)?.vSkew).toBeCloseTo(0, 12);
     // …and the wing strike still measures the same 0.002 slope within its own wing.
-    expect(result.current.rows.find((r) => r.strike === 6400)?.frontVSkew).toBeCloseTo(0.002, 12);
+    expect(result.current.rows.find((r) => r.strike === 6400_000)?.vSkew).toBeCloseTo(0.002, 12);
   });
 });
 

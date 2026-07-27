@@ -1,335 +1,419 @@
 /**
- * ChainTable — the Analyzer's chain data table.
+ * ChainTable — the calendar chain as a DATA SURFACE. One row per strike per wing, for
+ * an already-picked front/back expiry pair (the selectors are the caller's job).
  *
- * ─────────────────────────────────────────────────────────────────────────────
- * INTEGRATION STUB (Unit 11 ← Unit 08). Unit 08 owns this path. It does not
- * exist in this worktree, so the DataTable-based expandable table is built here
- * against the ChainCalendarRow shape chain-math produces. Take Unit 08's file
- * wholesale on merge; Analyzer.tsx uses `ChainTable`, `DEFAULT_CHAIN_SORT`,
- * `cycleSort` and `sortChainRows` and nothing else.
- * ─────────────────────────────────────────────────────────────────────────────
+ * There is deliberately NO score, verdict, rank or ranking sort here. The table
+ * reports what the chain says; the reader does the judging. Sorting by any data
+ * column is fine — that is navigation, not measurement.
  *
- * One row per strike, front+back joined. Click a row and its two legs open in
- * place — the Journal trade-ledger idiom. Sort state is CALLER-owned, matching
- * the DataTable primitive.
+ * Structure copied from the Trade Ledger (screens/Journal.tsx): the shared
+ * DataTable primitive owns the sticky header and one <tr> per row, this file owns
+ * the sort + expansion state, and clicking a row expands both legs in place.
  *
- * One tree for all viewports (Journal.tsx precedent): the table sits in a
- * horizontal-scroll wrapper with a min-width. No column is ever dropped on a
- * small screen — this is a dense professional tool, so mobile gets progressive
- * disclosure, never fewer numbers.
+ * One tree for all viewports — no useIsDesktop split. The table sits in a
+ * horizontal-scroll wrapper with a min-width, so a phone scrolls sideways through
+ * the same 13 columns a desktop sees. Columns are never dropped on small screens:
+ * this is a dense professional tool, progressive disclosure beats fewer numbers.
  *
- * Nothing here ranks, scores, or recommends. It reports.
- *
- * No any/as/!.
+ * Every derived field is `number | null`. Null renders as an em dash in
+ * text-fg-tertiary — never 0, never a fabricated number.
  */
-import { DataTable } from "../system/index.tsx";
+
+import { useState } from "react";
+import * as React from "react";
+import { DataTable, SectionLabel, Stat, Tag } from "../system/index.tsx";
 import type { DataTableColumn } from "../system/index.tsx";
-import type { CalendarLeg, ChainCalendarRow, Greeks } from "../../lib/chain-math.ts";
+import { signClass } from "../../lib/position-format.ts";
 
-const DASH = "—";
+// ─── Row shape (mirrors what lib/chain-math.ts computes) ──────────────────────
 
-export type ChainSortKey = "strike" | "hSkew" | "edge" | "debit" | "netTheta" | "netVega";
-export interface ChainSortState {
-  readonly key: ChainSortKey;
-  readonly dir: "asc" | "desc";
+export interface ChainTableLeg {
+  readonly expiry: string;
+  readonly dte: number;
+  readonly iv: number | null;
+  readonly bid: number | null;
+  readonly ask: number | null;
+  readonly openInterest: number | null;
+  readonly delta: number | null;
+  readonly gamma: number | null;
+  readonly theta: number | null;
+  readonly vega: number | null;
 }
 
-/** Strike order is how an option chain is read — that is the default. */
-export const DEFAULT_CHAIN_SORT: ChainSortState = { key: "strike", dir: "asc" };
-
-export function cycleSort(current: ChainSortState, clicked: ChainSortKey): ChainSortState {
-  if (current.key !== clicked) return { key: clicked, dir: "desc" };
-  return { key: clicked, dir: current.dir === "desc" ? "asc" : "desc" };
-}
-
-/** Narrows DataTable's generic string key — DataTable knows nothing of this domain. */
-function isChainSortKey(key: string): key is ChainSortKey {
-  return (
-    key === "strike" ||
-    key === "hSkew" ||
-    key === "edge" ||
-    key === "debit" ||
-    key === "netTheta" ||
-    key === "netVega"
-  );
-}
-
-function sortValue(row: ChainCalendarRow, key: ChainSortKey): number | null {
-  switch (key) {
-    case "strike":
-      return row.strike;
-    case "hSkew":
-      return row.hSkew;
-    case "edge":
-      return row.edge;
-    case "debit":
-      return row.debit;
-    case "netTheta":
-      return row.net?.theta ?? null;
-    case "netVega":
-      return row.net?.vega ?? null;
-  }
-}
-
-/** Sorts a COPY. Unknown values sink to the bottom in BOTH directions. */
-export function sortChainRows(
-  rows: ReadonlyArray<ChainCalendarRow>,
-  sort: ChainSortState,
-): ReadonlyArray<ChainCalendarRow> {
-  return [...rows].sort((a, b) => {
-    const av = sortValue(a, sort.key);
-    const bv = sortValue(b, sort.key);
-    if (av === null && bv === null) return 0;
-    if (av === null) return 1;
-    if (bv === null) return -1;
-    return sort.dir === "asc" ? av - bv : bv - av;
-  });
+export interface ChainTableRow {
+  /** Strike ×1000, the integer the rest of the system stores. Divided down to display. */
+  readonly strike: number;
+  /**
+   * Which wing this calendar is. The chain read returns calls AND puts, so strike alone
+   * is NOT an identity — keying on it collides the two wings into one row. Because the
+   * wing lives on the row, a mixed-wing pair (put front against call back) is not
+   * expressible here at all; the caller owns pairing each leg to its own wing.
+   */
+  readonly contractType: "C" | "P";
+  readonly deltaFront: number | null;
+  readonly ivFront: number | null;
+  readonly ivBack: number | null;
+  /**
+   * Horizontal (calendar) skew: front IV − back IV, decimal vol. Fill from `hSkew` in
+   * chain-math, which owns this convention.
+   *
+   * POSITIVE means the FRONT expiry is the rich one — the calendar seller's setup, since
+   * you sell the front and buy the back. That matches `edge`'s sign (front IV − forward
+   * IV), so both term-structure columns read the same direction. Do not flip it.
+   */
+  readonly hSkew: number | null;
+  readonly fwdIv: number | null;
+  readonly edge: number | null;
+  /**
+   * Vertical skew across strikes, decimal vol.
+   *
+   * Fill this with `vSkewVsAtm(bsmIv, atmIv(rows, spot, expiration, contractType))` —
+   * do NOT hand-roll the ATM lookup. The reference IV must come from the same expiry
+   * AND the same wing, because calls and puts trace different skew curves, and
+   * `atmIv` takes both as arguments so a wrong-curve call is not expressible.
+   *
+   * Worth knowing why that helper exists rather than a doc comment: a cross-wing ATM
+   * is the one bad input in chain-math that cannot null itself. Every other degraded
+   * value nulls its own column and shows up here as a visible gap; this one returns a
+   * clean, plausible, wrong number that nothing downstream can distinguish.
+   *
+   * When the ATM strike's own IV never solved, `atmIv` returns null rather than
+   * falling back to the nearest strike that did — so this column dashes instead of
+   * silently re-basing one row against a different reference than its neighbours.
+   */
+  readonly vSkew: number | null;
+  readonly theta: number | null;
+  readonly vega: number | null;
+  readonly netDelta: number | null;
+  /** Net calendar gamma — you are short the front gamma, and that is the risk that
+   *  bites when spot runs at the short strike. Earns its own column, not a footnote. */
+  readonly netGamma: number | null;
+  readonly debit: number | null;
+  readonly front: ChainTableLeg;
+  readonly back: ChainTableLeg;
 }
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
-/** 0.1249 → "12.49%" */
-function pct(v: number | null): string {
-  return v === null ? DASH : `${(v * 100).toFixed(2)}%`;
+const DASH = "—";
+const INT = new Intl.NumberFormat("en-US");
+
+/**
+ * Take the sign from the ROUNDED value, not the raw one. Deriving it from the raw
+ * value prints "−0.00" for -0.0001 — a minus sign on a displayed zero, which reads
+ * as "slightly negative" while showing nothing, the same zero-vs-no-data ambiguity
+ * the em-dash rule exists to kill. Rounding first also folds -0 into +0.
+ */
+function round(v: number, dp: number): number {
+  return Number(v.toFixed(dp));
 }
 
-/** 0.02 → "+2.00" (vol points, always signed). */
-function volPts(v: number | null): string {
-  return v === null ? DASH : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}`;
+/** Minus sign is U+2212 throughout the app (see lib/position-format.ts). */
+function dec(v: number, dp: number): string {
+  const r = round(v, dp);
+  return r < 0 ? `−${Math.abs(r).toFixed(dp)}` : r.toFixed(dp);
 }
 
-function num(v: number | null, dp: number): string {
-  return v === null ? DASH : v.toFixed(dp);
+function signedDec(v: number, dp: number): string {
+  const r = round(v, dp);
+  return `${r >= 0 ? "+" : "−"}${Math.abs(r).toFixed(dp)}`;
 }
 
-function signed(v: number | null, dp: number): string {
-  return v === null ? DASH : `${v >= 0 ? "+" : ""}${v.toFixed(dp)}`;
+/** Decimal vol → percent: 0.1452 → "14.52%". Via dec() for the U+2212 minus. */
+function pct(v: number): string {
+  return `${dec(v * 100, 2)}%`;
 }
 
-/** Signed values get the semantic value colour; a missing one stays quiet. */
-function signClassOf(v: number | null): string {
-  if (v === null) return "text-fg-tertiary";
-  return v >= 0 ? "text-value-positive" : "text-value-negative";
+/** Decimal vol difference → signed vol points: -0.0061 → "−0.61". */
+function pts(v: number): string {
+  return signedDec(v * 100, 2);
 }
 
-function Cell({
-  testId,
-  value,
-  className,
+function int(v: number): string {
+  return INT.format(v);
+}
+
+/** "2026-08-11" → "Aug 11". Expiries are calendar dates, so read them in UTC. */
+function shortYmd(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return ymd;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * One numeric cell. Null is the whole point of this component: it renders the em
+ * dash in tertiary, never a zero. `sign` colours by sign — signed numbers only,
+ * per the design system (an accent colour must never stand in for a sign).
+ */
+function Num({
+  v,
+  fmt,
+  sign = false,
 }: {
-  readonly testId: string;
-  readonly value: string;
-  readonly className?: string;
+  v: number | null;
+  fmt: (n: number) => string;
+  sign?: boolean;
 }): React.ReactElement {
-  return (
-    <span data-testid={testId} className={className ?? "text-fg-primary"}>
-      {value}
-    </span>
-  );
-}
-
-function netOf(net: Greeks | null, pick: (g: Greeks) => number): number | null {
-  return net === null ? null : pick(net);
+  if (v === null) return <span className="text-fg-tertiary">{DASH}</span>;
+  return <span className={sign ? signClass(v) : undefined}>{fmt(v)}</span>;
 }
 
 // ─── Columns ──────────────────────────────────────────────────────────────────
 
-const COLUMNS: ReadonlyArray<DataTableColumn<ChainCalendarRow>> = [
+/**
+ * A column plus the raw number it sorts on — keeping the accessor next to the
+ * renderer means sorting can never drift from what the cell displays.
+ */
+type ChainColumn = DataTableColumn<ChainTableRow> & {
+  readonly value: (row: ChainTableRow) => number | null;
+};
+
+const COLS: ReadonlyArray<ChainColumn> = [
   {
     key: "strike",
     header: "Strike",
     align: "left",
     sortable: true,
-    headerTestId: "chain-sort-strike",
-    render: (r) => <Cell testId="chain-strike" value={r.strike.toFixed(0)} className="font-semibold text-fg-primary" />,
+    value: (r) => r.strike,
+    render: (r) => (
+      <span className="text-fg-primary">
+        {r.strike / 1000}
+        <span className="ml-1 text-fg-tertiary">{r.contractType}</span>
+      </span>
+    ),
   },
   {
-    key: "frontIv",
+    key: "deltaFront",
+    header: "Front Delta (Δ)",
+    sortable: true,
+    value: (r) => r.deltaFront,
+    render: (r) => <Num v={r.deltaFront} fmt={(n) => dec(n, 3)} />,
+  },
+  {
+    key: "ivFront",
     header: "Front IV",
-    render: (r) => <Cell testId="chain-front-iv" value={pct(r.front.iv)} className={r.front.iv === null ? "text-fg-tertiary" : "text-fg-primary"} />,
+    sortable: true,
+    value: (r) => r.ivFront,
+    render: (r) => <Num v={r.ivFront} fmt={pct} />,
   },
   {
-    key: "backIv",
+    key: "ivBack",
     header: "Back IV",
-    render: (r) => <Cell testId="chain-back-iv" value={pct(r.back.iv)} className={r.back.iv === null ? "text-fg-tertiary" : "text-fg-primary"} />,
+    sortable: true,
+    value: (r) => r.ivBack,
+    render: (r) => <Num v={r.ivBack} fmt={pct} />,
   },
   {
     key: "hSkew",
-    header: "H-Skew (back−front)",
+    header: "H-Skew",
     sortable: true,
-    headerTestId: "chain-sort-hSkew",
-    render: (r) => <Cell testId="chain-hskew" value={volPts(r.hSkew)} className={signClassOf(r.hSkew)} />,
+    value: (r) => r.hSkew,
+    render: (r) => <Num v={r.hSkew} fmt={pts} sign />,
+  },
+  {
+    key: "fwdIv",
+    header: "Fwd IV",
+    sortable: true,
+    value: (r) => r.fwdIv,
+    render: (r) => <Num v={r.fwdIv} fmt={pct} />,
   },
   {
     key: "edge",
-    header: "Edge (front−fwd)",
+    header: "Edge",
     sortable: true,
-    headerTestId: "chain-sort-edge",
-    render: (r) => <Cell testId="chain-edge" value={volPts(r.edge)} className={signClassOf(r.edge)} />,
+    value: (r) => r.edge,
+    render: (r) => <Num v={r.edge} fmt={pts} sign />,
   },
   {
-    key: "frontVSkew",
-    header: "V-Skew front",
-    render: (r) => <Cell testId="chain-front-vskew" value={volPts(r.frontVSkew)} className={signClassOf(r.frontVSkew)} />,
+    key: "vSkew",
+    header: "V-Skew",
+    sortable: true,
+    value: (r) => r.vSkew,
+    render: (r) => <Num v={r.vSkew} fmt={pts} sign />,
   },
   {
-    key: "backVSkew",
-    header: "V-Skew back",
-    render: (r) => <Cell testId="chain-back-vskew" value={volPts(r.backVSkew)} className={signClassOf(r.backVSkew)} />,
+    key: "theta",
+    header: "Theta (Θ)",
+    sortable: true,
+    value: (r) => r.theta,
+    render: (r) => <Num v={r.theta} fmt={(n) => dec(n, 2)} />,
+  },
+  {
+    key: "vega",
+    header: "Vega",
+    sortable: true,
+    value: (r) => r.vega,
+    render: (r) => <Num v={r.vega} fmt={(n) => dec(n, 2)} />,
+  },
+  {
+    key: "netDelta",
+    header: "Net Delta (Δ)",
+    sortable: true,
+    value: (r) => r.netDelta,
+    render: (r) => <Num v={r.netDelta} fmt={(n) => signedDec(n, 3)} sign />,
+  },
+  {
+    key: "netGamma",
+    header: "Net Gamma (Γ)",
+    sortable: true,
+    value: (r) => r.netGamma,
+    render: (r) => <Num v={r.netGamma} fmt={(n) => dec(n, 4)} sign />,
   },
   {
     key: "debit",
     header: "Debit",
     sortable: true,
-    headerTestId: "chain-sort-debit",
-    render: (r) => <Cell testId="chain-debit" value={num(r.debit, 2)} />,
-  },
-  {
-    key: "netDelta",
-    header: "Net Δ",
-    render: (r) => {
-      const v = netOf(r.net, (g) => g.delta);
-      return <Cell testId="chain-net-delta" value={signed(v, 3)} className={signClassOf(v)} />;
-    },
-  },
-  {
-    key: "netGamma",
-    header: "Net Γ",
-    render: (r) => {
-      const v = netOf(r.net, (g) => g.gamma);
-      return <Cell testId="chain-net-gamma" value={v === null ? DASH : v.toExponential(2)} className={signClassOf(v)} />;
-    },
-  },
-  {
-    key: "netTheta",
-    header: "Net Θ /day",
-    sortable: true,
-    headerTestId: "chain-sort-netTheta",
-    render: (r) => {
-      const v = netOf(r.net, (g) => g.theta);
-      return <Cell testId="chain-net-theta" value={signed(v, 3)} className={signClassOf(v)} />;
-    },
-  },
-  {
-    key: "netVega",
-    header: "Net Vega",
-    sortable: true,
-    headerTestId: "chain-sort-netVega",
-    render: (r) => {
-      const v = netOf(r.net, (g) => g.vega);
-      return <Cell testId="chain-net-vega" value={signed(v, 3)} className={signClassOf(v)} />;
-    },
-  },
-  {
-    key: "oiFront",
-    header: "OI front",
-    render: (r) => <Cell testId="chain-oi-front" value={r.front.openInterest.toString()} className="text-fg-secondary" />,
-  },
-  {
-    key: "oiBack",
-    header: "OI back",
-    render: (r) => <Cell testId="chain-oi-back" value={r.back.openInterest.toString()} className="text-fg-secondary" />,
+    value: (r) => r.debit,
+    render: (r) => <Num v={r.debit} fmt={(n) => dec(n, 2)} />,
   },
 ];
 
-// ─── Per-leg detail ───────────────────────────────────────────────────────────
+// ─── Expansion: the two legs, side by side ────────────────────────────────────
 
-function LegBlock({ label, leg, testId }: { readonly label: string; readonly leg: CalendarLeg; readonly testId: string }): React.ReactElement {
-  const g = leg.greeks;
-  const fields: ReadonlyArray<readonly [string, string, string]> = [
-    ["Expiry", leg.expiration, "text-fg-primary"],
-    ["DTE", leg.dte.toString(), "text-fg-primary"],
-    ["Bid", leg.bid.toFixed(2), "text-fg-primary"],
-    ["Ask", leg.ask.toFixed(2), "text-fg-primary"],
-    ["Mid", leg.mid.toFixed(2), "text-fg-primary"],
-    ["IV", pct(leg.iv), leg.iv === null ? "text-fg-tertiary" : "text-fg-primary"],
-    ["V-Skew", volPts(leg.vSkew), signClassOf(leg.vSkew)],
-    ["Δ", signed(g === null ? null : g.delta, 4), signClassOf(g === null ? null : g.delta)],
-    ["Γ", g === null ? DASH : g.gamma.toExponential(2), signClassOf(g === null ? null : g.gamma)],
-    ["Θ /day", signed(g === null ? null : g.theta, 4), signClassOf(g === null ? null : g.theta)],
-    ["Vega", signed(g === null ? null : g.vega, 4), signClassOf(g === null ? null : g.vega)],
-    ["OI", leg.openInterest.toString(), "text-fg-primary"],
-    ["Source", leg.source, "text-fg-tertiary"],
-    ["Observed", leg.observedAt, "text-fg-tertiary"],
-  ];
+function LegPanel({
+  label,
+  strike,
+  wing,
+  leg,
+}: {
+  label: string;
+  strike: number;
+  wing: "C" | "P";
+  leg: ChainTableLeg;
+}): React.ReactElement {
   return (
-    <div data-testid={testId} className="min-w-0 flex-1">
-      <div className="mb-1 font-display text-[10px] font-semibold tracking-[0.09em] text-fg-tertiary uppercase">
-        {label}
+    <div className="flex flex-col gap-1.5 rounded-md border border-line-subtle/60 bg-surface-raised/40 p-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <SectionLabel tone="dim">{label}</SectionLabel>
+        <Tag>{shortYmd(leg.expiry)}</Tag>
+        <span className="font-mono text-[10px] text-fg-tertiary">{leg.dte} DTE</span>
       </div>
-      <dl className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-x-3 gap-y-1 font-mono text-[10.5px] tabular-nums">
-        {fields.map(([name, value, cls]) => (
-          <div key={name} className="flex items-baseline justify-between gap-1.5">
-            <dt className="text-fg-tertiary">{name}</dt>
-            <dd className={cls}>{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 font-mono text-[11px]">
+        <Stat label="Strike" value={`${strike / 1000} ${wing}`} />
+        <Stat label="IV" value={<Num v={leg.iv} fmt={pct} />} />
+        <Stat label="Open Int" value={<Num v={leg.openInterest} fmt={int} />} />
+        <Stat label="Bid" value={<Num v={leg.bid} fmt={(n) => dec(n, 2)} />} />
+        <Stat label="Ask" value={<Num v={leg.ask} fmt={(n) => dec(n, 2)} />} />
+        <Stat label="Delta (Δ)" value={<Num v={leg.delta} fmt={(n) => dec(n, 3)} />} />
+        <Stat label="Gamma (Γ)" value={<Num v={leg.gamma} fmt={(n) => dec(n, 4)} />} />
+        <Stat label="Theta (Θ)" value={<Num v={leg.theta} fmt={(n) => dec(n, 2)} />} />
+        <Stat label="Vega" value={<Num v={leg.vega} fmt={(n) => dec(n, 2)} />} />
+      </div>
     </div>
   );
 }
 
-const LEGEND =
-  "IV and skews are decimals shown in vol points (+2.00 = 2 vol pts). H-Skew = back IV − front IV. " +
-  "Edge = front IV − the forward IV implied between the two expiries. V-Skew = this strike's IV − " +
-  "that expiry's ATM IV. Net greeks are long back, short front, per 1 contract. Θ is per calendar " +
-  "day, vega per vol point. An em dash means the value could not be computed — never 0.";
+function ChainDetailPanel({ row }: { row: ChainTableRow }): React.ReactElement {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-line-subtle/60 bg-surface-sunken/60 p-3">
+      {/* Legs stack on a phone and sit side by side from sm up — same tree, no columns dropped. */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <LegPanel
+          label="Front Leg"
+          strike={row.strike}
+          wing={row.contractType}
+          leg={row.front}
+        />
+        <LegPanel
+          label="Back Leg"
+          strike={row.strike}
+          wing={row.contractType}
+          leg={row.back}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-md border border-line-subtle/60 bg-surface-raised/40 p-2 font-mono text-[11px] sm:grid-cols-5">
+        <Stat
+          label="Net Delta (Δ)"
+          value={<Num v={row.netDelta} fmt={(n) => signedDec(n, 3)} sign />}
+        />
+        <Stat
+          label="Net Gamma (Γ)"
+          value={<Num v={row.netGamma} fmt={(n) => dec(n, 4)} sign />}
+        />
+        <Stat label="Net Theta (Θ)" value={<Num v={row.theta} fmt={(n) => dec(n, 2)} />} />
+        <Stat label="Net Vega" value={<Num v={row.vega} fmt={(n) => dec(n, 2)} />} />
+        <Stat label="Net Debit" value={<Num v={row.debit} fmt={(n) => dec(n, 2)} />} />
+      </div>
+    </div>
+  );
+}
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Table ────────────────────────────────────────────────────────────────────
 
-export interface ChainTableProps {
-  readonly rows: ReadonlyArray<ChainCalendarRow>;
-  /** Display strike (÷1000) of the expanded row, or null when none is open. */
-  readonly expandedStrike: number | null;
-  readonly onToggleExpand: (row: ChainCalendarRow) => void;
-  readonly sort: ChainSortState;
-  readonly onSortChange: (key: ChainSortKey) => void;
+// Shared mobile-friendly scroll recipe (Journal / AnalyzerMobile precedent).
+const SCROLL_WRAPPER = "-mx-2 overflow-x-auto px-2";
+
+type Sort = { readonly key: string; readonly dir: "asc" | "desc" };
+
+/**
+ * Row identity is wing + strike, never strike alone. The chain read returns calls AND
+ * puts: keyed on strike, the two wings collide into one React key and one expansion
+ * slot, so opening the put would open the call.
+ */
+function rowKey(r: ChainTableRow): string {
+  return `${r.contractType}-${r.strike}`;
+}
+
+/** Nulls sort last in BOTH directions — "no data" is never the best or worst row. */
+function compare(a: number | null, b: number | null, dir: "asc" | "desc"): number {
+  if (a === null) return b === null ? 0 : 1;
+  if (b === null) return -1;
+  return dir === "asc" ? a - b : b - a;
 }
 
 export function ChainTable({
   rows,
-  expandedStrike,
-  onToggleExpand,
-  sort,
-  onSortChange,
-}: ChainTableProps): React.ReactElement {
-  if (rows.length === 0) {
-    return (
-      <p data-testid="chain-empty" className="m-0 p-3 font-mono text-[11px] text-fg-tertiary">
-        No strike is quoted in both of the selected expiries.
-      </p>
-    );
-  }
+}: {
+  readonly rows: ReadonlyArray<ChainTableRow>;
+}): React.ReactElement {
+  const [sort, setSort] = useState<Sort>({ key: "strike", dir: "asc" });
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  const activeCol = COLS.find((c) => c.key === sort.key);
+  const sorted =
+    activeCol === undefined
+      ? [...rows]
+      : [...rows].sort((a, b) => compare(activeCol.value(a), activeCol.value(b), sort.dir));
 
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
+      {/* ponytail: no sticky strike column — that needs a per-cell class on the shared
+          DataTable primitive. Add it there if sideways scrolling loses people. */}
       <DataTable
-        columns={COLUMNS}
-        rows={rows}
-        rowTestId={(r) => `chain-row-${r.strike}`}
-        rowClassName={(r) => (r.strike === expandedStrike ? "bg-line-subtle/40" : "")}
-        onRowClick={onToggleExpand}
-        sort={sort}
-        onSortChange={(key) => {
-          if (isChainSortKey(key)) onSortChange(key);
+        columns={COLS}
+        rows={sorted}
+        rowTestId={(r) => `chain-row-${rowKey(r)}`}
+        onRowClick={(r) => {
+          setExpandedKey((cur) => (cur === rowKey(r) ? null : rowKey(r)));
         }}
         renderRowDetail={(r) =>
-          r.strike === expandedStrike ? (
-            <tr data-testid={`chain-detail-${r.strike}`}>
-              <td className="px-2 pb-2" colSpan={COLUMNS.length}>
-                <div className="flex flex-col gap-3 rounded-md border border-line-subtle/60 bg-surface-sunken/60 p-3 sm:flex-row">
-                  <LegBlock label="Front leg (short)" leg={r.front} testId="chain-leg-front" />
-                  <LegBlock label="Back leg (long)" leg={r.back} testId="chain-leg-back" />
-                </div>
+          rowKey(r) === expandedKey ? (
+            <tr data-testid={`chain-detail-${rowKey(r)}`}>
+              <td className="px-2 pb-2" colSpan={COLS.length}>
+                <ChainDetailPanel row={r} />
               </td>
             </tr>
           ) : null
         }
-        wrapperClassName="-mx-2 overflow-x-auto px-2"
+        sort={sort}
+        onSortChange={(key) => {
+          setSort((cur) =>
+            cur.key === key
+              ? { key, dir: cur.dir === "asc" ? "desc" : "asc" }
+              : { key, dir: "asc" },
+          );
+        }}
+        wrapperClassName={SCROLL_WRAPPER}
         wrapperTestId="chain-table-scroll"
-        tableClassName="min-w-[1180px]"
+        tableClassName="min-w-[1140px]"
       />
-      <p className="m-0 px-1 font-mono text-[9.5px] leading-[1.35] text-fg-tertiary">{LEGEND}</p>
+      <div className="px-1 font-mono text-[9.5px] leading-[1.3] text-fg-tertiary">
+        H-Skew = front IV − back IV, in vol points · V-Skew = IV change across strikes,
+        in vol points · Fwd IV = the vol implied between the two expiries · Edge = forward
+        IV − front IV, in vol points · Θ theta = $ per day · Vega = $ per 1-pt vol move ·
+        Γ gamma = how fast delta changes per point, negative = short gamma at the front
+        strike · Debit = front credit netted against back cost. Click a strike for both legs.
+      </div>
     </div>
   );
 }

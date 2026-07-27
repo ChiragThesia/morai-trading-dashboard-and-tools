@@ -1,169 +1,205 @@
 /**
- * chain-math — the Analyzer chain table's per-row arithmetic.
+ * chain-math.ts — the Analyzer chain table's per-strike column math.
  *
- * ─────────────────────────────────────────────────────────────────────────────
- * INTEGRATION STUB (Unit 11 ← Unit 06). Unit 06 owns this path. The file does
- * not exist in this worktree, so it is implemented here against the signatures
- * the plan froze (`hSkew`, `edge`, `vSkewVsAtm`, net greeks, `calendarDebit`).
- * On merge, take Unit 06's file wholesale — `useChainModel` only ever calls
- * `buildCalendarRow`, so that is the one signature that must survive.
- * ─────────────────────────────────────────────────────────────────────────────
+ * One row of that table is one strike, priced at a user-picked front and back expiry. Every
+ * column below is a pure function of those two legs. Nothing here fetches, caches, or reads a
+ * clock — the row's own `dte` is the only notion of time.
  *
- * Every function here is DATA, never judgement. Nothing scores, ranks, or
- * weights a calendar. A value that cannot be computed comes back `null` so the
- * table can render an em dash — it is never softened to 0.
+ * REUSE, NEVER RE-DERIVE. The three formulas that matter already exist and are the oracle the
+ * tests assert against:
+ *   - `computeFwdIv` (@morai/core) — the forward-variance identity + its inverted-structure guard
+ *   - `bsmGreeks`    (@morai/quant) — the ONE greeks kernel the server also uses (D-01)
+ *   - `haircutFill`  (@morai/core) — the ORATS 0.66-of-width 2-leg fill model
  *
- * Sign conventions match `packages/quant` (theta per calendar day, vega per vol
- * point, delta/gamma per share) and `packages/core/src/picker/domain/scoring.ts`
- * (edge = front IV − forward IV).
- *
- * No any/as/!.
+ * NULL HONESTY is the hard rule, mirroring the picker domain: a degraded input nulls its OWN
+ * column and nothing else. `bsmIv` is `number | null` because IV inversion can fail to solve, and
+ * a strike whose IV never solved has no skew, no edge, and no greeks. It does NOT have a zero
+ * one. No column here ever returns NaN, a fabricated 0, or a silently-clean number.
  */
-import { bsmGreeks } from "@morai/quant";
-import type { ChainRow } from "./chain-contract.ts";
+import { computeFwdIv, haircutFill } from "@morai/core";
+import { bsmGreeks, type BsmGreeks } from "@morai/quant";
 
-/** Same carry assumptions the payoff engine uses (useAnalyzerModel). */
-export const DEFAULT_RATE = 0.045;
-export const DEFAULT_DIV = 0.013;
+// ─── Conventions ──────────────────────────────────────────────────────────────
 
-export interface Greeks {
-  readonly delta: number;
-  readonly gamma: number;
-  readonly theta: number;
-  readonly vega: number;
-}
+/** Strikes arrive as integers scaled ×1000 — 7_400_000 is index level 7400. */
+export const STRIKE_SCALE = 1000;
 
-/** Quote midpoint. */
-export function mid(bid: number, ask: number): number {
-  return (bid + ask) / 2;
+/** BSM year basis, matching computeT and bsmGreeks' theta (D-04). */
+export const DAYS_PER_YEAR = 365.25;
+
+// ─── Input shapes ─────────────────────────────────────────────────────────────
+
+/**
+ * The fields of a chain row this module actually prices. Structural on purpose: the full row
+ * contract lives in `@morai/contracts` (chain.ts) and satisfies this without a conversion step,
+ * so there is no second copy of the row type to drift.
+ */
+export type ChainLeg = {
+  /** Strike ×1000. */
+  readonly strike: number;
+  /** Whole days to expiry. */
+  readonly dte: number;
+  /** Decimal IV (0.1249 = 12.49%), or null when the inversion never solved. */
+  readonly bsmIv: number | null;
+  readonly contractType: "C" | "P";
+  /** Spot at observation, in index points. */
+  readonly underlyingPrice: number;
+};
+
+/** Two-sided market for one leg. */
+export type ChainQuote = {
+  readonly bid: number;
+  readonly ask: number;
+};
+
+/** Per-expiry carry, as resolved by `resolveCarry`. */
+export type Carry = {
+  readonly rate: number;
+  readonly divYield: number;
+};
+
+// ─── Columns ──────────────────────────────────────────────────────────────────
+
+/**
+ * Horizontal skew — the term-structure differential AT this strike: frontIv − backIv.
+ * Positive means the front expiry is the rich one, which is the calendar seller's setup.
+ */
+export function hSkew(ivFront: number | null, ivBack: number | null): number | null {
+  return diff(ivFront, ivBack);
 }
 
 /**
- * ATM reference IV — the denominator of the V-Skew column.
+ * Vertical skew — this strike's IV against the ATM strike of the SAME expiry AND THE SAME WING.
  *
- * Expiry and wing are ARGUMENTS, not an invariant the caller has to remember.
- * `vSkewVsAtm` sees only bare floats and cannot tell a call's IV from a put's,
- * so the protection has to live here: getting the wing wrong now means typing
- * the wrong wing, not forgetting an invisible four-step obligation.
+ * Both constraints bind. Across expiries this measures term structure, not skew. Across wings it
+ * measures nothing at all: calls and puts trace different curves, so a put's IV against the
+ * call ATM is a subtraction of two unrelated numbers that still returns a clean-looking float.
  *
- * Returns null when the ATM strike's OWN IV never solved. It deliberately does
- * NOT fall back to the nearest strike that did: a fallback keeps the column
- * populated while silently moving the reference strike, so "skew vs ATM" would
- * quietly mean something different on that row than on every other one. The em
- * dash is the correct answer.
+ * This function cannot defend itself — it receives two floats with no memory of where they came
+ * from. Source the second argument from `atmIv`, which takes the expiry and the wing as arguments
+ * and so cannot be pointed at the wrong curve.
+ */
+export function vSkewVsAtm(ivAtStrike: number | null, ivAtm: number | null): number | null {
+  return diff(ivAtStrike, ivAtm);
+}
+
+/**
+ * EDGE — frontIv − fwdIv, the front leg's richness over the forward vol its own back leg implies.
+ *
+ * Null, never zero and never NaN, when `computeFwdIv` guards `"inverted"`: an inverted term
+ * structure prices no forward vol, so there is no edge to quote. Also null when the back leg is
+ * not strictly later than the front (the identity divides by tb − tf).
+ */
+export function edge(
+  tf: number,
+  ivFront: number | null,
+  tb: number,
+  ivBack: number | null,
+): number | null {
+  if (!isNum(ivFront) || !isNum(ivBack) || !isNum(tf) || !isNum(tb) || tb <= tf) return null;
+  const fwd = computeFwdIv(tf, ivFront, tb, ivBack);
+  return fwd.guard === "inverted" ? null : ivFront - fwd.fwdIv;
+}
+
+/**
+ * The chain's ATM strike — the one nearest spot, returned in the same ×1000 units it came in, so
+ * the caller can match it straight back against `row.strike`. Ties go to the lower strike, which
+ * keeps the pick deterministic on an evenly-spaced chain. Null on an empty chain or a spot of 0
+ * (a gap row), because there is no honest "nearest" to name.
+ *
+ * Safe to feed a both-wings chain: this returns a strike, not a row, so the duplicate strike per
+ * wing changes nothing. Picking the ATM *IV* at that strike is where the wing starts to matter.
+ */
+export function atmStrike(
+  rows: ReadonlyArray<{ readonly strike: number }>,
+  spot: number,
+): number | null {
+  if (!isNum(spot) || spot <= 0) return null;
+  let best: number | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const row of rows) {
+    if (!isNum(row.strike)) continue;
+    const dist = Math.abs(row.strike / STRIKE_SCALE - spot);
+    // Strict `<` keeps the FIRST-seen of an equal-distance pair; the `< best` tiebreak below
+    // makes that choice order-independent — the lower strike wins either way.
+    if (dist < bestDist || (dist === bestDist && best !== null && row.strike < best)) {
+      best = row.strike;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+/**
+ * The ATM reference IV for one cohort — the `ivAtm` argument `vSkewVsAtm` needs.
+ *
+ * Exists to make the wing/expiry constraint UNVIOLATABLE rather than merely documented. The chain
+ * returns both wings interleaved, so "nearest strike to spot" is only a well-formed question once
+ * you have fixed an expiry AND a `contractType`; both are parameters here, so there is no way to
+ * call this and accidentally read the call curve's ATM for a put row. Doing the filter at the call
+ * site instead is the one mistake `vSkewVsAtm` cannot catch — by the time it receives two floats
+ * the wing they came from is gone, and it would return a plausible, clean, wrong number.
+ *
+ * Null when the cohort is empty, spot is unusable, or the ATM strike's own IV never solved. That
+ * last one is deliberate and load-bearing: a neighbouring strike's IV is NOT a substitute
+ * reference. Vertical skew is rendered as a SORTABLE COLUMN, so a row silently measured against
+ * 7450 because 7400 never solved is not merely a slightly-off number — it is on a different
+ * scale from every row it gets ranked against, and the ranking is the artifact that tells the
+ * reader they ARE comparable. A visible gap costs one row; a re-based row corrupts its
+ * neighbours' order, invisibly, because the neighbours still look fine.
  */
 export function atmIv(
-  rows: ReadonlyArray<ChainRow>,
-  spot: number | null,
+  rows: ReadonlyArray<{
+    readonly strike: number;
+    readonly expiration: string;
+    readonly contractType: "C" | "P";
+    readonly bsmIv: number | null;
+  }>,
+  spot: number,
   expiration: string,
   contractType: "C" | "P",
 ): number | null {
-  if (spot === null) return null;
-  let nearest: ChainRow | undefined;
-  let nearestErr = Number.POSITIVE_INFINITY;
-  for (const row of rows) {
-    if (row.expiration !== expiration) continue;
-    if (row.contractType !== contractType) continue;
-    const err = Math.abs(row.strike / 1000 - spot);
-    if (err < nearestErr) {
-      nearestErr = err;
-      nearest = row;
-    }
-  }
-  return nearest?.bsmIv ?? null;
-}
-
-/** Horizontal (calendar) skew: back IV − front IV at one strike. */
-export function hSkew(frontIv: number | null, backIv: number | null): number | null {
-  if (frontIv === null || backIv === null) return null;
-  return backIv - frontIv;
-}
-
-/**
- * Vertical skew: this strike's IV − the ATM IV of the same expiry AND wing.
- *
- * CALLER OBLIGATION. Both arguments are bare floats — by the time they arrive,
- * `contractType` is gone and this function cannot tell a call's IV from a put's.
- * Calls and puts trace different skew curves, so mixing them returns a clean,
- * plausible, permanently wrong number. Unlike every other value in this module
- * it has no way to null itself in protest. The assembly site
- * (`useChainModel`) is what enforces the wing.
- */
-export function vSkewVsAtm(iv: number | null, atmIv: number | null): number | null {
-  if (iv === null || atmIv === null) return null;
-  return iv - atmIv;
-}
-
-/**
- * Forward IV implied between the two expiries — the forward-variance identity
- * (the same one `packages/core/src/picker/domain/fwd-iv.ts` uses). Null rather
- * than NaN when the structure is inverted hard enough to drive the radicand
- * negative, and null when the two legs share a DTE (no forward period exists).
- *
- * ponytail: DTE is used directly as the time unit, exactly as the core version
- * does — the day-count cancels inside the ratio.
- */
-export function forwardIv(
-  frontDte: number,
-  frontIv: number | null,
-  backDte: number,
-  backIv: number | null,
-): number | null {
-  if (frontIv === null || backIv === null) return null;
-  if (backDte <= frontDte) return null;
-  const radicand = (backDte * backIv * backIv - frontDte * frontIv * frontIv) / (backDte - frontDte);
-  if (radicand < 0) return null;
-  return Math.sqrt(radicand);
-}
-
-/**
- * Edge: front IV − forward IV. Positive means the front month is rich against
- * the forward the market itself is quoting — the thing a calendar is long.
- */
-export function edge(
-  frontDte: number,
-  frontIv: number | null,
-  backDte: number,
-  backIv: number | null,
-): number | null {
-  const fwd = forwardIv(frontDte, frontIv, backDte, backIv);
-  if (fwd === null || frontIv === null) return null;
-  return frontIv - fwd;
-}
-
-/** Debit paid for one calendar: back mid − front mid. */
-export function calendarDebit(frontMid: number, backMid: number): number {
-  return backMid - frontMid;
-}
-
-/**
- * BSM greeks for one chain leg. Null when the row carries no IV or has already
- * expired — the table shows an em dash rather than a fabricated zero.
- *
- * `strike` arrives ×1000 per the frozen row contract and is un-scaled here so no
- * caller has to remember.
- *
- * ponytail: T = dte/365. `computeT` is settlement-aware but needs a wall clock
- * and a root; the row hands us an integer DTE and nothing else. Upgrade path:
- * take `observedAt` + the expiry root once the endpoint carries them.
- */
-export function legGreeks(row: ChainRow): Greeks | null {
-  if (row.bsmIv === null || row.bsmIv <= 0) return null;
-  if (row.dte <= 0) return null;
-  if (row.underlyingPrice <= 0) return null;
-  return bsmGreeks(
-    row.underlyingPrice,
-    row.strike / 1000,
-    row.dte / 365,
-    row.bsmIv,
-    DEFAULT_RATE,
-    DEFAULT_DIV,
-    row.contractType,
+  const cohort = rows.filter(
+    (r) => r.expiration === expiration && r.contractType === contractType,
   );
+  const k = atmStrike(cohort, spot);
+  if (k === null) return null;
+  // ponytail: first match wins. The chain read dedups per contract, so one strike in one cohort
+  // is one row; if a future union re-introduces duplicates, dedup upstream, not here.
+  const row = cohort.find((r) => r.strike === k);
+  return row === undefined || !isNum(row.bsmIv) ? null : row.bsmIv;
 }
 
-/** Net greeks of the calendar: long the back leg, short the front. */
-export function netGreeks(front: Greeks | null, back: Greeks | null): Greeks | null {
+/**
+ * One leg's greeks through the shared BSM kernel — the same numbers the server computes (D-01).
+ *
+ * Null when the leg cannot be priced at all: IV never solved, IV is zero (gamma and vega divide
+ * by sigma), or the leg is at/past expiry (they also divide by √T). Those are undefined, not zero.
+ */
+export function legGreeks(leg: ChainLeg, carry: Carry): BsmGreeks | null {
+  const K = leg.strike / STRIKE_SCALE;
+  const S = leg.underlyingPrice;
+  const sigma = leg.bsmIv;
+  if (sigma === null || !isNum(sigma) || sigma <= 0) return null;
+  if (!isNum(S) || S <= 0 || !isNum(K) || K <= 0) return null;
+  if (!isNum(leg.dte) || leg.dte <= 0) return null;
+  if (!isNum(carry.rate) || !isNum(carry.divYield)) return null;
+
+  return bsmGreeks(S, K, leg.dte / DAYS_PER_YEAR, sigma, carry.rate, carry.divYield, leg.contractType);
+}
+
+/**
+ * Net calendar greeks — LONG the back leg, SHORT the front, so net = back − front.
+ *
+ * That sign convention is the whole point: a calendar is net-long vega (the back leg's vega is
+ * the larger) and net-short gamma (the front leg's gamma is the larger). Getting it backwards
+ * flips every risk number on the table. Null when either leg failed to price — a one-legged
+ * calendar has no net.
+ */
+export function netCalendarGreeks(
+  front: BsmGreeks | null,
+  back: BsmGreeks | null,
+): BsmGreeks | null {
   if (front === null || back === null) return null;
   return {
     delta: back.delta - front.delta,
@@ -173,76 +209,32 @@ export function netGreeks(front: Greeks | null, back: Greeks | null): Greeks | n
   };
 }
 
-/** One leg as the table renders it. */
-export interface CalendarLeg {
-  readonly expiration: string;
-  readonly dte: number;
-  readonly bid: number;
-  readonly ask: number;
-  readonly mid: number;
-  readonly iv: number | null;
-  readonly vSkew: number | null;
-  readonly openInterest: number;
-  readonly greeks: Greeks | null;
-  readonly source: "schwab" | "cboe";
-  readonly observedAt: string;
-}
-
-/** One joined front+back row of the chain table. */
-export interface ChainCalendarRow {
-  /** Display strike (already ÷1000). */
-  readonly strike: number;
-  readonly contractType: "C" | "P";
-  readonly front: CalendarLeg;
-  readonly back: CalendarLeg;
-  readonly hSkew: number | null;
-  readonly frontVSkew: number | null;
-  readonly backVSkew: number | null;
-  readonly edge: number | null;
-  readonly debit: number;
-  readonly net: Greeks | null;
-}
-
-function toLeg(row: ChainRow, atmIv: number | null): CalendarLeg {
-  return {
-    expiration: row.expiration,
-    dte: row.dte,
-    bid: row.bid,
-    ask: row.ask,
-    mid: mid(row.bid, row.ask),
-    iv: row.bsmIv,
-    vSkew: vSkewVsAtm(row.bsmIv, atmIv),
-    openInterest: row.openInterest,
-    greeks: legGreeks(row),
-    source: row.source,
-    observedAt: row.observedAt,
-  };
-}
-
 /**
- * Join a strike's front and back contracts into one table row.
+ * The calendar's entry debit at the ORATS fill haircut: BUY the back leg, SELL the front.
  *
- * `atmFrontIv` / `atmBackIv` are that expiry's at-the-money IV, supplied by the
- * caller because they are a property of the whole expiry, not of this strike.
+ * Ranking on mid overstates edge, so this crosses 66% of each leg's width off the natural side
+ * via the shared `haircutFill` — the same model the picker and the exits context price against.
+ * Null when either leg has no offer (ask ≤ 0 — you cannot buy what is not offered) or a crossed
+ * market, both of which mean there is no fill to quote.
  */
-export function buildCalendarRow(
-  frontRow: ChainRow,
-  backRow: ChainRow,
-  atmFrontIv: number | null,
-  atmBackIv: number | null,
-): ChainCalendarRow {
-  const front = toLeg(frontRow, atmFrontIv);
-  const back = toLeg(backRow, atmBackIv);
-  return {
-    strike: frontRow.strike / 1000,
-    contractType: frontRow.contractType,
-    front,
-    back,
-    hSkew: hSkew(front.iv, back.iv),
-    frontVSkew: front.vSkew,
-    backVSkew: back.vSkew,
-    edge: edge(front.dte, front.iv, back.dte, back.iv),
-    debit: calendarDebit(front.mid, back.mid),
-    net: netGreeks(front.greeks, back.greeks),
-  };
+export function calendarDebit(
+  frontQuote: ChainQuote,
+  backQuote: ChainQuote,
+): number | null {
+  if (!isQuotable(frontQuote) || !isQuotable(backQuote)) return null;
+  return haircutFill(backQuote, "buy") - haircutFill(frontQuote, "sell");
+}
+
+// ─── Internals ────────────────────────────────────────────────────────────────
+
+function isNum(v: number | null): v is number {
+  return v !== null && Number.isFinite(v);
+}
+
+function diff(a: number | null, b: number | null): number | null {
+  return isNum(a) && isNum(b) ? a - b : null;
+}
+
+function isQuotable(q: ChainQuote): boolean {
+  return isNum(q.bid) && isNum(q.ask) && q.ask > 0 && q.bid >= 0 && q.ask >= q.bid;
 }

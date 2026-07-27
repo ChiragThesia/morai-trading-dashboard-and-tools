@@ -27,13 +27,7 @@ import { Panel, PanelHeading, Button } from "../components/system/index.tsx";
 import { PayoffChart } from "../components/charts/PayoffChart.tsx";
 import { PayoffControls } from "../components/charts/PayoffControls.tsx";
 import { LiveStatusBadge } from "../components/LiveStatusBadge.tsx";
-import {
-  ChainTable,
-  DEFAULT_CHAIN_SORT,
-  cycleSort,
-  sortChainRows,
-} from "../components/chain/ChainTable.tsx";
-import type { ChainSortKey, ChainSortState } from "../components/chain/ChainTable.tsx";
+import { ChainTable } from "../components/chain/ChainTable.tsx";
 import { useChainModel } from "../hooks/useChainModel.ts";
 import { useAnalyzerModel, TODAY_CURVE_COLOR, EXPIRATION_CURVE_COLOR } from "./useAnalyzerModel.ts";
 
@@ -132,13 +126,9 @@ export function Analyzer(): React.ReactElement {
     repull,
   } = useAnalyzerModel();
 
-  const [expandedStrike, setExpandedStrike] = useState<number | null>(null);
-  const [sort, setSort] = useState<ChainSortState>(DEFAULT_CHAIN_SORT);
-  const sortedRows = useMemo(() => sortChainRows(chain.rows, sort), [chain.rows, sort]);
-
-  const handleSortChange = (key: ChainSortKey): void => {
-    setSort((prev) => cycleSort(prev, key));
-  };
+  // Sort and row expansion are ChainTable's own state — it is self-contained, unlike the
+  // candidate rail it replaced, which needed the screen to own sort so the score column
+  // could drive it. There is no score column now, so there is nothing to lift.
 
   // Re-pull chains — refreshes the data this whole screen reads.
   const repullControl = (
@@ -201,18 +191,21 @@ export function Analyzer(): React.ReactElement {
         </p>
       </div>
     );
-  } else {
+  } else if (chain.rows.length === 0) {
+    // The chain HAS expiries, but no strike is quoted in both of the selected ones — so the
+    // join is legitimately empty. Distinct from cold start (no snapshot at all): here the
+    // fix is to pick a different pair, not to wait. Saying so beats an empty table, which
+    // reads as a bug.
     chainBody = (
-      <ChainTable
-        rows={sortedRows}
-        expandedStrike={expandedStrike}
-        onToggleExpand={(row) => {
-          setExpandedStrike((cur) => (cur === row.strike ? null : row.strike));
-        }}
-        sort={sort}
-        onSortChange={handleSortChange}
-      />
+      <div className="flex flex-col gap-1.5 p-6" data-testid="chain-empty">
+        <p className="m-0 font-display text-sm font-bold text-fg-primary">No overlapping strikes</p>
+        <p className="m-0 font-mono text-[11px] text-fg-tertiary">
+          No strike is quoted in both of the selected expiries. Try a different pair.
+        </p>
+      </div>
     );
+  } else {
+    chainBody = <ChainTable rows={chain.rows} />;
   }
 
   const hasPasted = pastedCandidates.length > 0;

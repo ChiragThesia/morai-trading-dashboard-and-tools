@@ -1,106 +1,228 @@
 /**
- * chain-risk-reversal.test.ts — the 25-delta risk reversal for one expiry.
+ * chain-risk-reversal.test.ts — TDD suite for riskReversalForExpiry
  *
- * RR is the skew number a vol trader reads first: IV of the 25Δ put minus IV of
- * the 25Δ call. It is reported, never scored, and it is null whenever the chain
- * does not actually contain both wings near 25 delta.
+ * The 25Δ risk-reversal formula itself is NOT under test here — it ships in
+ * `packages/core/src/analytics/domain/risk-reversal.ts` and has its own property suite.
+ * What IS under test is the ADAPTER: chain rows carry `bsmIv` but no delta, so this
+ * module must compute delta per row (×1000 strike → index points, dte → 365.25-day-year
+ * T) and hand the resulting smile to the core interpolator unchanged.
+ *
+ * The two failure modes worth pinning:
+ *   1. Unit slips — forgetting the ×1000 strike divide or the 365.25 divisor silently
+ *      produces deltas that never bracket ±0.25 (→ always null), or the wrong ones.
+ *      Test 2 is an exact-equality oracle against the core function on the same smile.
+ *   2. Fabricating a wing — the chain read is puts-only until the sibling widening lands,
+ *      and a missing `bsmIv` must be dropped, never defaulted (T-17-01 "never DEFAULT_IV").
+ *      Tests 3-6 pin null-out, not number-out.
  */
-import { describe, it, expect } from "vitest";
-import { riskReversalForExpiry, RR_DELTA_TOLERANCE } from "./chain-risk-reversal.ts";
-import { legGreeks } from "./chain-math.ts";
-import type { ChainRow } from "./chain-contract.ts";
 
-function row(over: Partial<ChainRow>): ChainRow {
+import { describe, it, expect } from "vitest";
+import * as fc from "fast-check";
+import { bsmGreeks } from "@morai/quant";
+import { interpolateRiskReversal } from "@morai/core";
+import type { SmileQuote } from "@morai/core";
+import { riskReversalForExpiry, type ChainSmileRow } from "./chain-risk-reversal.ts";
+
+// ─── Fixtures ────────────────────────────────────────────────────────────────
+
+const R = 0.045; // risk-free rate (decimal)
+const Q = 0.013; // continuous dividend yield (D-01)
+const DAYS_PER_YEAR = 365.25; // D-04 basis
+const EXPIRY = "2026-09-18";
+const OTHER_EXPIRY = "2026-10-16";
+const SPOT = 6000;
+const DTE = 30;
+
+/** 5400…6600 in 25-point steps — a dense near-the-money grid, both ±25Δ well inside. */
+const GRID: ReadonlyArray<number> = Array.from({ length: 49 }, (_, i) => 5400 + i * 25);
+
+function makeRow(
+  strikePoints: number,
+  contractType: "C" | "P",
+  bsmIv: number | null,
+  overrides: Partial<ChainSmileRow> = {},
+): ChainSmileRow {
   return {
-    strike: 6500_000,
-    expiration: "2026-08-21",
-    contractType: "P",
-    dte: 30,
-    bsmIv: 0.15,
-    bid: 40,
-    ask: 42,
-    openInterest: 100,
-    underlyingPrice: 6500,
-    source: "schwab",
-    observedAt: "2026-07-26T18:00:00.000Z",
-    ...over,
+    strike: Math.round(strikePoints * 1000), // ×1000 int convention
+    expiration: EXPIRY,
+    contractType,
+    dte: DTE,
+    bsmIv,
+    underlyingPrice: SPOT,
+    ...overrides,
   };
 }
 
-/** A strike ladder wide enough to bracket both 25Δ wings. */
-function ladder(): ReadonlyArray<ChainRow> {
-  const out: ChainRow[] = [];
-  for (let k = 5800; k <= 7200; k += 25) {
-    // A downward-sloping smile: lower strikes carry more IV.
-    const iv = 0.2 - (k - 5800) * 0.00004;
-    out.push(row({ strike: k * 1000, bsmIv: iv, contractType: "P" }));
-    out.push(row({ strike: k * 1000, bsmIv: iv - 0.01, contractType: "C" }));
-  }
-  return out;
+/** A full both-wing chain: every strike carries a call and a put. */
+function makeChain(
+  strikes: ReadonlyArray<number>,
+  ivFor: (strikePoints: number, contractType: "C" | "P") => number | null,
+  overrides: Partial<ChainSmileRow> = {},
+): ChainSmileRow[] {
+  return strikes.flatMap((k) => [
+    makeRow(k, "P", ivFor(k, "P"), overrides),
+    makeRow(k, "C", ivFor(k, "C"), overrides),
+  ]);
 }
 
+const flatIv = (): number => 0.2;
+
+/** Classic equity put skew: IV falls monotonically as strike rises. */
+const skewIv = (strikePoints: number): number => 0.2 + 0.35 * ((SPOT - strikePoints) / SPOT);
+
+// ─── Example tests ───────────────────────────────────────────────────────────
+
 describe("riskReversalForExpiry", () => {
-  it("is put IV minus call IV at the strikes nearest 25 delta", () => {
-    const rows = ladder();
-    const rr = riskReversalForExpiry(rows);
+  it("returns ~0 for a flat smile (both wings interpolate the same level)", () => {
+    const rr = riskReversalForExpiry(makeChain(GRID, flatIv), EXPIRY, R, Q);
     expect(rr).not.toBeNull();
-
-    // Recompute by hand: find each wing independently and difference the IVs.
-    const nearest = (type: "C" | "P"): ChainRow | undefined => {
-      let best: ChainRow | undefined;
-      let bestErr = Number.POSITIVE_INFINITY;
-      for (const r of rows) {
-        if (r.contractType !== type) continue;
-        const g = legGreeks(r);
-        if (g === null) continue;
-        const err = Math.abs(Math.abs(g.delta) - 0.25);
-        if (err < bestErr) {
-          bestErr = err;
-          best = r;
-        }
-      }
-      return best;
-    };
-    const put = nearest("P");
-    const call = nearest("C");
-    expect(put).toBeDefined();
-    expect(call).toBeDefined();
-    if (put?.bsmIv == null || call?.bsmIv == null) return;
-    expect(rr).toBeCloseTo(put.bsmIv - call.bsmIv, 12);
+    expect(rr ?? Number.NaN).toBeCloseTo(0, 12);
   });
 
-  it("is positive when puts are bid over calls (the normal index smile)", () => {
-    const rr = riskReversalForExpiry(ladder());
+  it("matches the core interpolator exactly (pins ×1000 strike and 365.25-day T)", () => {
+    const rows = makeChain(GRID, skewIv);
+
+    // Oracle: build the same smile by hand, in the units the core function expects.
+    const oracle: ReadonlyArray<SmileQuote> = rows.map((row) => {
+      const iv = row.bsmIv ?? Number.NaN;
+      return {
+        underlying: "SPX",
+        expiration: row.expiration,
+        strike: row.strike,
+        iv,
+        delta: bsmGreeks(SPOT, row.strike / 1000, DTE / DAYS_PER_YEAR, iv, R, Q, row.contractType)
+          .delta,
+        moneyness: null,
+      };
+    });
+    const expected = interpolateRiskReversal(oracle);
+    expect(expected).not.toBeNull();
+    expect(expected ?? Number.NaN).toBeGreaterThan(0); // put skew ⇒ positive risk-reversal
+
+    expect(riskReversalForExpiry(rows, EXPIRY, R, Q)).toBe(expected);
+  });
+
+  it("returns null when the chain is puts-only (call wing absent)", () => {
+    const puts = makeChain(GRID, skewIv).filter((row) => row.contractType === "P");
+    expect(riskReversalForExpiry(puts, EXPIRY, R, Q)).toBeNull();
+  });
+
+  it("returns null when the chain is calls-only (put wing absent)", () => {
+    const calls = makeChain(GRID, skewIv).filter((row) => row.contractType === "C");
+    expect(riskReversalForExpiry(calls, EXPIRY, R, Q)).toBeNull();
+  });
+
+  it("returns null when a whole wing has no bsmIv — never substitutes a default", () => {
+    const rows = makeChain(GRID, (k, type) => (type === "C" ? null : skewIv(k)));
+    expect(riskReversalForExpiry(rows, EXPIRY, R, Q)).toBeNull();
+  });
+
+  it("drops individual bsmIv-null rows rather than defaulting them", () => {
+    const isEdge = (k: number): boolean => k <= 5500 || k >= 6500;
+    const withNulls = makeChain(GRID, (k) => (isEdge(k) ? null : skewIv(k)));
+    const withoutRows = makeChain(
+      GRID.filter((k) => !isEdge(k)),
+      skewIv,
+    );
+
+    const rr = riskReversalForExpiry(withNulls, EXPIRY, R, Q);
     expect(rr).not.toBeNull();
-    if (rr === null) return;
-    expect(rr).toBeGreaterThan(0);
+    expect(rr).toBe(riskReversalForExpiry(withoutRows, EXPIRY, R, Q));
   });
 
-  it("is null when one wing is missing entirely", () => {
-    const putsOnly = ladder().filter((r) => r.contractType === "P");
-    expect(riskReversalForExpiry(putsOnly)).toBeNull();
+  it("only reads rows for the requested expiration", () => {
+    const asked = makeChain(GRID, skewIv).filter((row) => row.contractType === "P");
+    const other = makeChain(GRID, skewIv, { expiration: OTHER_EXPIRY });
+    const mixed = [...asked, ...other];
+
+    // The asked-for expiration is puts-only — the other expiration's calls must not leak in.
+    expect(riskReversalForExpiry(mixed, EXPIRY, R, Q)).toBeNull();
+    expect(riskReversalForExpiry(mixed, OTHER_EXPIRY, R, Q)).not.toBeNull();
   });
 
-  it("is null when no strike lands within tolerance of 25 delta", () => {
-    // Two deep-ITM strikes only — nothing near 25Δ.
-    const rows = [
-      row({ strike: 7200_000, contractType: "P", bsmIv: 0.15 }),
-      row({ strike: 5000_000, contractType: "C", bsmIv: 0.15 }),
-    ];
-    expect(riskReversalForExpiry(rows)).toBeNull();
+  it("returns null for no rows", () => {
+    expect(riskReversalForExpiry([], EXPIRY, R, Q)).toBeNull();
   });
 
-  it("is null on an empty chain", () => {
-    expect(riskReversalForExpiry([])).toBeNull();
+  it("returns null at or past expiry — T=0 delta is a step, not interpolable", () => {
+    expect(riskReversalForExpiry(makeChain(GRID, skewIv, { dte: 0 }), EXPIRY, R, Q)).toBeNull();
+    expect(riskReversalForExpiry(makeChain(GRID, skewIv, { dte: -1 }), EXPIRY, R, Q)).toBeNull();
   });
 
-  it("ignores rows with no IV rather than treating them as 0", () => {
-    const rows = ladder().map((r) => (r.strike === 6500_000 ? { ...r, bsmIv: null } : r));
-    expect(riskReversalForExpiry(rows)).not.toBeNull();
+  // ─── Property tests ────────────────────────────────────────────────────────
+
+  /**
+   * Build a both-wing chain whose strike step scales with the smaller wing's σ√T, so the
+   * ±25Δ targets are always bracketed by an adjacent pair well inside MAX_BRACKET_WIDTH.
+   * Each wing carries a single flat IV level, so its interpolated 25Δ vol IS that level.
+   */
+  function twoLevelChain(
+    spot: number,
+    dte: number,
+    ivPut: number,
+    ivCall: number,
+  ): ChainSmileRow[] {
+    const step = 0.25 * Math.min(ivPut, ivCall) * Math.sqrt(dte / DAYS_PER_YEAR) * spot;
+    const rows: ChainSmileRow[] = [];
+    for (let k = -40; k <= 40; k += 1) {
+      const strikePoints = spot + k * step;
+      if (strikePoints <= 0) continue;
+      const base = {
+        strike: Math.round(strikePoints * 1000),
+        expiration: EXPIRY,
+        dte,
+        underlyingPrice: spot,
+      };
+      rows.push({ ...base, contractType: "P", bsmIv: ivPut });
+      rows.push({ ...base, contractType: "C", bsmIv: ivCall });
+    }
+    return rows;
+  }
+
+  const arbSpot = fc.double({ min: 3000, max: 8000, noNaN: true });
+  const arbDte = fc.integer({ min: 7, max: 120 });
+  const arbIv = fc.double({ min: 0.1, max: 0.4, noNaN: true });
+
+  it("property: never returns NaN or Infinity, whatever the rows carry", () => {
+    const arbRow: fc.Arbitrary<ChainSmileRow> = fc.record({
+      strike: fc.integer({ min: 0, max: 12_000_000 }),
+      expiration: fc.constantFrom(EXPIRY, OTHER_EXPIRY),
+      contractType: fc.boolean().map((b): "C" | "P" => (b ? "C" : "P")),
+      dte: fc.integer({ min: -5, max: 400 }),
+      bsmIv: fc.option(fc.double({ min: 0, max: 5, noNaN: true }), { nil: null }),
+      underlyingPrice: fc.double({ min: 0, max: 12_000, noNaN: true }),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.array(arbRow, { maxLength: 60 }),
+        fc.double({ min: -0.05, max: 0.2, noNaN: true }),
+        fc.double({ min: -0.05, max: 0.2, noNaN: true }),
+        (rows, r, q) => {
+          const rr = riskReversalForExpiry(rows, EXPIRY, r, q);
+          expect(rr === null || Number.isFinite(rr)).toBe(true);
+        },
+      ),
+    );
   });
 
-  it("exposes the delta tolerance it enforces", () => {
-    expect(RR_DELTA_TOLERANCE).toBeGreaterThan(0);
-    expect(RR_DELTA_TOLERANCE).toBeLessThan(0.25);
+  it("property: a two-level smile prices at exactly (put-wing IV − call-wing IV)", () => {
+    fc.assert(
+      fc.property(arbSpot, arbDte, arbIv, arbIv, (spot, dte, ivPut, ivCall) => {
+        const rr = riskReversalForExpiry(twoLevelChain(spot, dte, ivPut, ivCall), EXPIRY, R, Q);
+        // Non-vacuous: this grid always brackets, so a null here is a real failure.
+        expect(rr).not.toBeNull();
+        expect(rr ?? Number.NaN).toBeCloseTo(ivPut - ivCall, 12);
+      }),
+    );
+  });
+
+  it("property: stripping the call wing always yields null", () => {
+    fc.assert(
+      fc.property(arbSpot, arbDte, arbIv, arbIv, (spot, dte, ivPut, ivCall) => {
+        const puts = twoLevelChain(spot, dte, ivPut, ivCall).filter((r) => r.contractType === "P");
+        expect(riskReversalForExpiry(puts, EXPIRY, R, Q)).toBeNull();
+      }),
+    );
   });
 });

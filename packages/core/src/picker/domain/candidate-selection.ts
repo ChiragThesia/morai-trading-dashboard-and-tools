@@ -61,8 +61,9 @@ export const FRONT_DTE_MIN = 21;
 export const FRONT_DTE_MAX = 36;
 
 /**
- * Back-leg gap window relative to the front leg (user-locked 2026-07-08): every back expiry
- * with gap ∈ [21, 35] days is emitted (fwd-edge scoring ranks them).
+ * Back-leg gap window relative to the front leg (user-locked, widened from the original
+ * [21, 35]): every back expiry with gap ∈ [15, 90] days is emitted. Wide expensive backs are
+ * punished by debit-normalized scoring (fwdEdge, debitFit rank them), never banned here.
  */
 export const BACK_DTE_MIN_GAP = 15;
 export const BACK_DTE_MAX_GAP = 90;

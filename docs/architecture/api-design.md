@@ -32,6 +32,7 @@ export const journalRoutes = new Hono<Env>()
 | `GET /api/greeks` | live net greeks for open positions |
 | `GET /api/analytics/term-structure` | current + historical term slope (queryable by `calendarId`) |
 | `GET /api/analytics/skew` | risk-reversal series + rank (queryable by `underlying`/`expiration`) |
+| `GET /api/chain` | raw option-chain rows — the Analyzer chain table's only source |
 | `POST /api/jobs/:name/trigger` | manual job trigger (rebuild-journal etc.) — enqueues, returns job id |
 
 Mutations are rare by design — data flows in via jobs, not user POSTs. The journal is rebuilt
@@ -53,6 +54,24 @@ When no data matches, each route returns a contract-valid **EMPTY array, not an 
 **MCP-02:** the MCP `get_skew` / `get_term_structure` tools return the identical series,
 validated against the SAME Zod schema in `packages/contracts/src/analytics.ts`. There is no
 second or inline analytics schema; a one-sided change fails `bun run typecheck`.
+
+### Chain read shape (the Analyzer chain table)
+
+`GET /api/chain` serves the raw chain the Analyzer renders. No score, no rank, no verdict —
+the numbers only (D29 in [stack-decisions.md](stack-decisions.md)). One entry per contract:
+
+`strike` (the ×1000 int convention, never points), `expiration`, `contractType` (`C` | `P`),
+`dte`, `bsmIv` (**nullable** — null until the BSM job fills it, never fabricated), `bid`,
+`ask`, `openInterest`, `underlyingPrice`, `source`, `observedAt`.
+
+Rows are the stored per-contract quotes joined to contract metadata — `leg_observations` and
+`contracts` in [data-model.md](data-model.md). Nothing is computed at request time.
+
+Like the analytics routes this is an array read: no match returns a contract-valid **empty
+array with 200, never a 404**. An empty chain is a normal state, not a failure.
+
+The `get_chain` MCP tool returns the identical array against the same Zod schema in
+`packages/contracts` (MCP-02) — one schema, two adapters, a one-sided change fails typecheck.
 
 ## Error Model
 

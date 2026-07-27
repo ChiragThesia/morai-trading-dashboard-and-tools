@@ -26,6 +26,7 @@ import type {
   PickerPreviewResult,
   ForRunningGetGex,
   GexSnapshotRow,
+  ForRunningGetChain,
 } from "@morai/core";
 import {
   pickerSnapshotResponse,
@@ -37,6 +38,7 @@ import {
   setRuleOverridesResponse,
   previewRuleOverridesResponse,
   gexSnapshotResponse,
+  chainResponse,
 } from "@morai/contracts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -51,6 +53,7 @@ import {
   registerSetRuleOverridesTool,
   registerPreviewRuleOverridesTool,
   registerGetGexTool,
+  registerGetChainTool,
 } from "./tools.ts";
 import { exitRoutes } from "../http/exits.routes.ts";
 import { settingsRoutes } from "../http/settings.routes.ts";
@@ -923,5 +926,67 @@ describe("get_gex MCP tool", () => {
     const payload: unknown = JSON.parse(text);
     const parsed = gexSnapshotResponse.parse(payload);
     expect(parsed.impliedCarry).toBeNull();
+  });
+});
+
+// ── get_chain MCP tool (MCP-02 pair for GET /api/chain) ───────────────────────
+// Rule 9: the chain read-surface ships its HTTP route AND its MCP tool together.
+// Both parse through the SAME chainResponse contract, so a one-sided rename fails
+// `bun run typecheck`.
+
+/** One row of the frozen chain contract — strike is the ×1000 int (7400000 = 7400). */
+const CHAIN_ROW = {
+  strike: 7400000,
+  expiration: "2026-08-21",
+  contractType: "P" as const,
+  dte: 26,
+  bsmIv: 0.1249,
+  bid: 41.2,
+  ask: 42.8,
+  openInterest: 1834,
+  underlyingPrice: 7512.35,
+  source: "schwab" as const,
+  observedAt: "2026-07-26T14:30:00.000Z",
+};
+
+async function callGetChain(getChain: ForRunningGetChain): Promise<string> {
+  return callTool((server) => registerGetChainTool(server, getChain), "get_chain", {});
+}
+
+describe("get_chain MCP tool", () => {
+  it("registers get_chain and returns chainResponse-valid rows for a stored cohort", async () => {
+    const getChain: ForRunningGetChain = async () => ok([CHAIN_ROW]);
+    const text = await callGetChain(getChain);
+
+    const parsed = chainResponse.parse(JSON.parse(text));
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.strike).toBe(7400000);
+    expect(parsed[0]?.contractType).toBe("P");
+    expect(parsed[0]?.source).toBe("schwab");
+  });
+
+  it("emits an explicit null bsmIv for an unsolved row (nullable, not optional)", async () => {
+    const getChain: ForRunningGetChain = async () => ok([{ ...CHAIN_ROW, bsmIv: null }]);
+    const text = await callGetChain(getChain);
+
+    const parsed = chainResponse.parse(JSON.parse(text));
+    expect(parsed[0]?.bsmIv).toBeNull();
+    expect(JSON.parse(text)).toStrictEqual([{ ...CHAIN_ROW, bsmIv: null }]);
+  });
+
+  it("returns a contract-valid [] when no chain rows are stored (never an error)", async () => {
+    const getChain: ForRunningGetChain = async () => ok([]);
+    const text = await callGetChain(getChain);
+
+    expect(chainResponse.parse(JSON.parse(text))).toStrictEqual([]);
+  });
+
+  it("returns structured 'internal error' text on a storage error (never throws)", async () => {
+    const getChain: ForRunningGetChain = async () =>
+      err({ kind: "storage-error" as const, message: "db connection failed" });
+    const text = await callGetChain(getChain);
+
+    expect(text).toBe("internal error");
+    expect(text).not.toContain("db connection failed");
   });
 });

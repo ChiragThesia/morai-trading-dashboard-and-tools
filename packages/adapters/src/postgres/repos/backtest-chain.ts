@@ -9,11 +9,15 @@ import type { Db } from "../db.ts";
  * makePostgresBacktestChainRepo — Postgres implementation of ForReadingChainAsOf
  * (Phase 27, Plan 03).
  *
- * Generalizes picker-chain.ts's readChainForPicker with exactly ONE added predicate —
+ * Generalizes picker-chain.ts's readChainForPicker with ONE added predicate —
  * lte(legObservations.time, asOfT) — on the MAX(time WHERE bsm_iv IS NOT NULL) step, so
  * the "latest cohort" resolves to the newest cohort AT OR BEFORE asOfT, never after
  * (BT-01 no-lookahead). The identical 10-min lookback union + per-contract-newest-wins
- * dedup (DISTINCT ON) as the live picker/GEX readers applies unchanged, puts only.
+ * dedup (DISTINCT ON) as the live picker/GEX readers applies unchanged.
+ *
+ * Puts only: replay reproduces the picker's own puts-only universe, and the picker applies
+ * that filter in its use-case (computePickerSnapshot.ts) over the now-both-wings live read.
+ * Same universe either way — this repo just never reads the call wing it would discard.
  *
  * Returns the FULL column set (ChainLegQuoteAsOf) — bid/ask/OI/bsmIv for
  * candidate-universe generation AND mark/bsmDelta/bsmGamma/bsmTheta/bsmVega for exit-context

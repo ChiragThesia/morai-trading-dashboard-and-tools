@@ -27,6 +27,7 @@ import type {
   ForRunningPreviewRuleOverrides,
   ForRunningGetTradeHistory,
   ForRunningGetTradeDetail,
+  ForRunningGetChain,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -57,6 +58,7 @@ import {
   registerPreviewRuleOverridesTool,
   registerGetTradeHistoryTool,
   registerGetTradeDetailTool,
+  registerGetChainTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -107,6 +109,8 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  *         previewRuleOverridesRequest/Response AND the combined previewRuleOverrides use-case
  *         with POST /api/settings/rules/preview (byte-parity, no duplicated orchestration);
  *         injected as optional for backward compat with existing call sites.
+ * MCP-02 (chain data table): get_chain registered here — shares chainResponse with
+ *         GET /api/chain; injected as optional for backward compat with existing call sites.
  */
 export function makeMcpRouter(
   config: Config,
@@ -136,6 +140,7 @@ export function makeMcpRouter(
   getTradeHistory?: ForRunningGetTradeHistory,
   getTradeDetail?: ForRunningGetTradeDetail,
   getNews?: ForRunningGetNews,
+  getChain?: ForRunningGetChain,
 ): Hono {
   const router = new Hono();
 
@@ -238,6 +243,11 @@ export function makeMcpRouter(
     }
     if (getTradeDetail !== undefined) {
       registerGetTradeDetailTool(server, getTradeDetail);
+    }
+    // Chain data table / MCP-02: get_chain tool — optional, wired when the getChain
+    // use-case is available.
+    if (getChain !== undefined) {
+      registerGetChainTool(server, getChain);
     }
     return { server, transport };
   }

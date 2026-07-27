@@ -58,7 +58,7 @@ unknown class, so a regression is otherwise invisible until someone sees black-o
 ## DataTable
 
 `components/system/DataTable.tsx` is the one column-def table primitive every screen
-table renders through (Overview's positions, the Analyzer's candidates). Columns are
+table renders through (Overview's positions, the Analyzer's chain rows). Columns are
 `{ key, header, align?, mono?, sortable?, width?, render(row) }`; DataTable owns the
 sticky header and one `<tr>` per row and nothing else — sort state, selection, and row
 highlighting stay caller-owned via props. `renderRowDetail`/`footer` slots let a screen

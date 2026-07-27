@@ -55,25 +55,25 @@ describe("useChain", () => {
   });
 
   it("returns the parsed chain rows on success", async () => {
-    mockApiFetch.mockResolvedValueOnce(okResponse({ rows: [ROW] }));
+    mockApiFetch.mockResolvedValueOnce(okResponse([ROW]));
 
     const { result } = renderHook(() => useChain(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.rows).toHaveLength(1);
-    expect(result.current.data?.rows[0]?.strike).toBe(6400_000);
-    expect(result.current.data?.rows[0]?.bsmIv).toBe(0.1249);
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data?.[0]?.strike).toBe(6400_000);
+    expect(result.current.data?.[0]?.bsmIv).toBe(0.1249);
     expect(mockApiFetch).toHaveBeenCalledWith("/api/chain");
   });
 
   it("keeps a null bsmIv null — never coerced to 0", async () => {
-    mockApiFetch.mockResolvedValueOnce(okResponse({ rows: [{ ...ROW, bsmIv: null }] }));
+    mockApiFetch.mockResolvedValueOnce(okResponse([{ ...ROW, bsmIv: null }]));
 
     const { result } = renderHook(() => useChain(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.rows[0]?.bsmIv).toBeNull();
+    expect(result.current.data?.[0]?.bsmIv).toBeNull();
   });
 
   it("throws UnauthorizedError (non-retryable) on 401", async () => {
@@ -90,7 +90,7 @@ describe("useChain", () => {
   // The two cases below are retryable (unlike 401), so they assert the FIRST failure
   // rather than waiting out the 1s/2s/4s backoff to reach isError.
   it("fails on a body that does not match the row contract", async () => {
-    mockApiFetch.mockResolvedValue(okResponse({ rows: [{ ...ROW, contractType: "X" }] }));
+    mockApiFetch.mockResolvedValue(okResponse([{ ...ROW, contractType: "X" }]));
 
     const { result } = renderHook(() => useChain(), { wrapper });
 

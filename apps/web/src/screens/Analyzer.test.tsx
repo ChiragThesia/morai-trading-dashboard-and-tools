@@ -50,6 +50,13 @@ vi.mock("../hooks/useLiveStream.ts", () => ({
 const { mockUseChain } = vi.hoisted(() => ({ mockUseChain: vi.fn() }));
 vi.mock("../hooks/useChain.ts", () => ({ useChain: mockUseChain }));
 
+// useChainModel reads GEX only for per-expiry carry (r, q). `resolveCarry` falls back to its
+// flat defaults on an absent snapshot, so an undefined-data stub exercises the same path the
+// app takes before the first GEX response lands — and keeps this suite off a QueryClient.
+const { mockUseGex } = vi.hoisted(() => ({ mockUseGex: vi.fn() }));
+vi.mock("../hooks/useGex.ts", () => ({ useGex: mockUseGex }));
+mockUseGex.mockReturnValue({ data: undefined });
+
 const { mockUsePicker } = vi.hoisted(() => ({ mockUsePicker: vi.fn() }));
 vi.mock("../hooks/usePicker.ts", () => ({ usePicker: mockUsePicker }));
 
@@ -144,14 +151,14 @@ function chainFixture(): ReadonlyArray<ChainRow> {
 
 function mockChainReturn(
   overrides: Partial<{
-    data: { rows: ReadonlyArray<ChainRow> } | undefined;
+    data: ReadonlyArray<ChainRow> | undefined;
     isPending: boolean;
     isError: boolean;
     refetch: () => void;
   }> = {},
 ): void {
   mockUseChain.mockReturnValue({
-    data: { rows: chainFixture() },
+    data: chainFixture(),
     isPending: false,
     isError: false,
     refetch: vi.fn(),
@@ -196,87 +203,29 @@ describe("Analyzer — chain table", () => {
     render(<Analyzer />);
     const rows = screen.getAllByTestId(/^chain-row-/);
     expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual(
-      STRIKES.map((k) => `chain-row-${k}`),
+      // Row identity is wing + strike ×1000. Keying on strike alone would collide the call
+      // and the put at each strike into one row and one expansion slot.
+      STRIKES.map((k) => `chain-row-P-${k * 1000}`),
     );
   });
 
-  it("shows IV, horizontal skew, edge and net greeks on the row", () => {
-    render(<Analyzer />);
-    const row = screen.getByTestId("chain-row-7500");
-    expect(within(row).getByTestId("chain-front-iv").textContent).toBe("15.00%");
-    expect(within(row).getByTestId("chain-back-iv").textContent).toBe("17.00%");
-    expect(within(row).getByTestId("chain-hskew").textContent).toBe("+2.00");
-    expect(within(row).getByTestId("chain-edge").textContent).not.toBe("—");
-    expect(within(row).getByTestId("chain-net-delta").textContent).not.toBe("—");
-    expect(within(row).getByTestId("chain-net-gamma").textContent).not.toBe("—");
-    expect(within(row).getByTestId("chain-net-theta").textContent).not.toBe("—");
-    expect(within(row).getByTestId("chain-net-vega").textContent).not.toBe("—");
-  });
-
-  it("shows vertical skew against the same expiry's ATM strike", () => {
-    render(<Analyzer />);
-    expect(within(screen.getByTestId("chain-row-7500")).getByTestId("chain-front-vskew").textContent).toBe(
-      "+0.00",
-    );
-    expect(within(screen.getByTestId("chain-row-7400")).getByTestId("chain-front-vskew").textContent).toBe(
-      "+0.20",
-    );
-  });
-
-  it("clicking a row expands its two legs in place; clicking again collapses", () => {
-    render(<Analyzer />);
-    expect(screen.queryByTestId("chain-detail-7500")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("chain-row-7500"));
-    const detail = screen.getByTestId("chain-detail-7500");
-    expect(within(detail).getByTestId("chain-leg-front")).toBeTruthy();
-    expect(within(detail).getByTestId("chain-leg-back")).toBeTruthy();
-    expect(detail.textContent).toContain(FRONT.expiration);
-    expect(detail.textContent).toContain(BACK.expiration);
-
-    fireEvent.click(screen.getByTestId("chain-row-7500"));
-    expect(screen.queryByTestId("chain-detail-7500")).toBeNull();
-  });
+  // CELL RENDERING IS NOT TESTED HERE. Six assertions that lived at this spot — per-cell IV
+  // and skew values, expand-into-two-legs, sort + aria-sort, header direction flip, and the
+  // em-dash-never-zero rule — moved to `components/chain/ChainTable.test.tsx`, which owns the
+  // component that renders them. They were written against a stub table that tagged every
+  // cell; the shipped one tags only rows and detail rows, and duplicating its formatting
+  // assertions in a screen test means two places to update for one change.
+  //
+  // This suite's job is WIRING: does the model reach the table, and does the screen react to
+  // the model. The V-Skew wing constraint — the one defect that renders a plausible wrong
+  // number rather than a gap — is covered on the model side in `useChainModel.test.ts`.
 
   it("only one row is expanded at a time", () => {
     render(<Analyzer />);
-    fireEvent.click(screen.getByTestId("chain-row-7500"));
-    fireEvent.click(screen.getByTestId("chain-row-7400"));
-    expect(screen.getByTestId("chain-detail-7400")).toBeTruthy();
-    expect(screen.queryByTestId("chain-detail-7500")).toBeNull();
-  });
-
-  it("clicking a sortable header re-orders the rows and marks aria-sort", () => {
-    render(<Analyzer />);
-    const header = screen.getByTestId("chain-sort-edge");
-    fireEvent.click(header);
-
-    expect(header.getAttribute("aria-sort")).toBe("descending");
-    const first = screen.getAllByTestId(/^chain-row-/)[0]?.getAttribute("data-testid");
-    expect(first).not.toBe("chain-row-7400");
-  });
-
-  it("clicking the same header again flips the direction", () => {
-    render(<Analyzer />);
-    const header = screen.getByTestId("chain-sort-edge");
-    fireEvent.click(header);
-    fireEvent.click(header);
-    expect(header.getAttribute("aria-sort")).toBe("ascending");
-  });
-
-  it("shows an em dash — never a 0 — for a strike the BSM job has not priced", () => {
-    const rows = chainFixture().map((r) =>
-      r.strike === 7400_000 && r.expiration === FRONT.expiration && r.contractType === "P"
-        ? { ...r, bsmIv: null }
-        : r,
-    );
-    mockChainReturn({ data: { rows } });
-    render(<Analyzer />);
-
-    const row = screen.getByTestId("chain-row-7400");
-    expect(within(row).getByTestId("chain-front-iv").textContent).toBe("—");
-    expect(within(row).getByTestId("chain-hskew").textContent).toBe("—");
-    expect(within(row).getByTestId("chain-net-theta").textContent).toBe("—");
+    fireEvent.click(screen.getByTestId("chain-row-P-7500000"));
+    fireEvent.click(screen.getByTestId("chain-row-P-7400000"));
+    expect(screen.getByTestId("chain-detail-P-7400000")).toBeTruthy();
+    expect(screen.queryByTestId("chain-detail-P-7500000")).toBeNull();
   });
 
   it("proposes nothing — no verdict, no score, no ranked rail", () => {
@@ -304,29 +253,31 @@ describe("Analyzer — expiry pair header", () => {
       chainRow({ strike: k * 1000, expiration: "2026-10-16", dte: 82, bsmIv: 0.19, contractType: "P" }),
       chainRow({ strike: k * 1000, expiration: "2026-10-16", dte: 82, bsmIv: 0.185, contractType: "C" }),
     ]);
-    mockChainReturn({ data: { rows: [...chainFixture(), ...extra] } });
+    mockChainReturn({ data: [...chainFixture(), ...extra] });
     render(<Analyzer />);
 
     fireEvent.change(screen.getByTestId("chain-back-select"), { target: { value: "2026-10-16" } });
 
     expect(screen.getByTestId("chain-back-select")).toHaveProperty("value", "2026-10-16");
-    // back 19% − front 15% now.
-    expect(within(screen.getByTestId("chain-row-7500")).getByTestId("chain-back-iv").textContent).toBe(
-      "19.00%",
-    );
+    // The back leg is re-read from the newly chosen expiry: 19%, not the 17% of the old one.
+    // Asserted on the row's text rather than a cell testid — cell-level rendering belongs to
+    // ChainTable's own suite; what matters here is that the model re-joined.
+    expect(screen.getByTestId("chain-row-P-7500000").textContent).toContain("19.00%");
+    expect(screen.getByTestId("chain-row-P-7500000").textContent).not.toContain("17.00%");
   });
 
   it("switches the table between puts and calls", () => {
     render(<Analyzer />);
-    expect(within(screen.getByTestId("chain-row-7500")).getByTestId("chain-front-iv").textContent).toBe(
-      "15.00%",
-    );
+    // Puts by default, and the wing is part of the row's identity — so switching does not
+    // mutate a row in place, it replaces the put rows with call rows entirely. That is what
+    // stops the two wings colliding into one row and one expansion slot.
+    expect(screen.getByTestId("chain-row-P-7500000").textContent).toContain("15.00%");
+    expect(screen.queryByTestId("chain-row-C-7500000")).toBeNull();
 
     fireEvent.click(screen.getByTestId("chain-type-call"));
 
-    expect(within(screen.getByTestId("chain-row-7500")).getByTestId("chain-front-iv").textContent).toBe(
-      "14.50%",
-    );
+    expect(screen.queryByTestId("chain-row-P-7500000")).toBeNull();
+    expect(screen.getByTestId("chain-row-C-7500000").textContent).toContain("14.50%");
   });
 
   it("reports spot and the observation instant from the chain itself", () => {
@@ -350,7 +301,7 @@ describe("Analyzer — expiry pair header", () => {
         wide.push(chainRow({ ...e, strike: k * 1000, bsmIv: iv - 0.02, contractType: "C" }));
       }
     }
-    mockChainReturn({ data: { rows: wide } });
+    mockChainReturn({ data: wide });
     render(<Analyzer />);
 
     expect(screen.getByTestId("chain-rr-front").textContent).not.toBe("—");
@@ -382,7 +333,7 @@ describe("Analyzer — chain load states", () => {
   });
 
   it("cold start: settled with no expiries shows 'Chain warming up'", () => {
-    mockChainReturn({ data: { rows: [] } });
+    mockChainReturn({ data: [] });
     render(<Analyzer />);
 
     const cold = screen.getByTestId("chain-cold-start");
@@ -397,7 +348,7 @@ describe("Analyzer — chain load states", () => {
         (r.expiration === FRONT.expiration && r.strike < 7500_000) ||
         (r.expiration === BACK.expiration && r.strike > 7500_000),
     );
-    mockChainReturn({ data: { rows } });
+    mockChainReturn({ data: rows });
     render(<Analyzer />);
 
     expect(screen.getByTestId("chain-empty").textContent).toContain(
@@ -759,7 +710,7 @@ describe("Analyzer — LiveStatusBadge", () => {
 
   it("renders the badge even with no chain and nothing pasted", () => {
     setLiveStream("live");
-    mockChainReturn({ data: { rows: [] } });
+    mockChainReturn({ data: [] });
     render(<Analyzer />);
 
     expect(screen.getByText("LIVE")).toBeTruthy();

@@ -1,188 +1,397 @@
 /**
- * ChainTable.test.tsx — the chain data table.
+ * ChainTable.test.tsx — the calendar chain DATA table (one row per strike).
  *
- * One row per strike; clicking it expands the per-leg detail in place (the
- * Journal trade-ledger idiom). Every number is reported as-is; a value that
- * could not be computed renders an em dash, never a 0.
+ * Behaviors under test:
+ *   1. Exactly 13 columns, in the user's order — and NO score/verdict/rank column.
+ *   2. One row per strike; strike is the ×1000 integer divided down for display.
+ *   3. Null derived fields render "—", never 0 and never NaN.
+ *   4. Clicking a row expands both legs + net greeks in place; re-click collapses;
+ *      only one row is ever expanded.
+ *   5. Sorting by a data column works, toggles direction, and keeps nulls last.
+ *   6. The mobile recipe: horizontal-scroll wrapper + min-width table, one tree.
+ *   7. Both wings at one strike stay separate rows — the chain read returns calls AND
+ *      puts, so a strike-only identity would collide them.
  */
+
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
-import { ChainTable, DEFAULT_CHAIN_SORT, cycleSort, sortChainRows } from "./ChainTable.tsx";
-import { buildCalendarRow } from "../../lib/chain-math.ts";
-import type { ChainCalendarRow } from "../../lib/chain-math.ts";
-import type { ChainRow } from "../../lib/chain-contract.ts";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import React from "react";
+import { ChainTable } from "./ChainTable.tsx";
+import type { ChainTableRow, ChainTableLeg } from "./ChainTable.tsx";
 
-function leg(over: Partial<ChainRow>): ChainRow {
-  return {
-    strike: 6500_000,
-    expiration: "2026-08-21",
+const ROWS: ReadonlyArray<ChainTableRow> = [
+  {
+    strike: 7400000,
     contractType: "P",
-    dte: 26,
-    bsmIv: 0.15,
-    bid: 40,
-    ask: 42,
-    openInterest: 100,
-    underlyingPrice: 6500,
-    source: "schwab",
-    observedAt: "2026-07-26T18:00:00.000Z",
-    ...over,
-  };
-}
+    deltaFront: -0.412,
+    ivFront: 0.1452,
+    ivBack: 0.1391,
+    hSkew: -0.0061,
+    fwdIv: 0.133,
+    edge: 0.004,
+    vSkew: -0.0125,
+    theta: 38.52,
+    vega: 112.34,
+    netDelta: 0.018,
+    netGamma: -0.0009,
+    debit: 40.08,
+    front: {
+      expiry: "2026-08-11",
+      dte: 16,
+      iv: 0.1452,
+      bid: 102.9,
+      ask: 103.8,
+      openInterest: 1240,
+      delta: -0.412,
+      gamma: 0.0031,
+      theta: -12.4,
+      vega: 88.1,
+    },
+    back: {
+      expiry: "2026-08-31",
+      dte: 36,
+      iv: 0.1391,
+      bid: 142.8,
+      ask: 143.9,
+      openInterest: 860,
+      delta: -0.394,
+      gamma: 0.0022,
+      theta: -8.2,
+      vega: 200.4,
+    },
+  },
+  {
+    // Every derived field null — the "no data" row. Must never show 0 or NaN.
+    strike: 7450000,
+    contractType: "P",
+    deltaFront: null,
+    ivFront: null,
+    ivBack: null,
+    hSkew: null,
+    fwdIv: null,
+    edge: null,
+    vSkew: null,
+    theta: null,
+    vega: null,
+    netDelta: null,
+    netGamma: null,
+    debit: null,
+    front: {
+      expiry: "2026-08-11",
+      dte: 16,
+      iv: null,
+      bid: null,
+      ask: null,
+      openInterest: null,
+      delta: null,
+      gamma: null,
+      theta: null,
+      vega: null,
+    },
+    back: {
+      expiry: "2026-08-31",
+      dte: 36,
+      iv: null,
+      bid: null,
+      ask: null,
+      openInterest: null,
+      delta: null,
+      gamma: null,
+      theta: null,
+      vega: null,
+    },
+  },
+  {
+    strike: 7500000,
+    contractType: "P",
+    deltaFront: -0.508,
+    ivFront: 0.1521,
+    ivBack: 0.1444,
+    hSkew: -0.0077,
+    fwdIv: 0.1372,
+    edge: 0.012,
+    vSkew: 0.0091,
+    theta: 41.15,
+    vega: 120.6,
+    netDelta: -0.021,
+    netGamma: -0.0012,
+    debit: 43.25,
+    front: {
+      expiry: "2026-08-11",
+      dte: 16,
+      iv: 0.1521,
+      bid: 150.1,
+      ask: 151.4,
+      openInterest: 2200,
+      delta: -0.508,
+      gamma: 0.0034,
+      theta: -14.1,
+      vega: 91.7,
+    },
+    back: {
+      expiry: "2026-08-31",
+      dte: 36,
+      iv: 0.1444,
+      bid: 193.2,
+      ask: 194.8,
+      openInterest: 1150,
+      delta: -0.487,
+      gamma: 0.0024,
+      theta: -9.0,
+      vega: 212.3,
+    },
+  },
+];
 
-function calendarRow(strike: number, over: Partial<ChainRow> = {}): ChainCalendarRow {
-  return buildCalendarRow(
-    leg({ strike: strike * 1000, ...over }),
-    leg({ strike: strike * 1000, expiration: "2026-09-18", dte: 54, bsmIv: 0.17, bid: 66, ask: 70 }),
-    0.15,
-    0.17,
+const EXPECTED_COLUMNS = [
+  "Strike",
+  "Front Delta (Δ)",
+  "Front IV",
+  "Back IV",
+  "H-Skew",
+  "Fwd IV",
+  "Edge",
+  "V-Skew",
+  "Theta (Θ)",
+  "Vega",
+  "Net Delta (Δ)",
+  "Net Gamma (Γ)",
+  "Debit",
+];
+
+/** Every derived field rounds to zero — none of them may render a signed zero. */
+const TINY_LEG: ChainTableLeg = {
+  expiry: "2026-08-11",
+  dte: 16,
+  iv: 0.1452,
+  bid: 102.9,
+  ask: 103.8,
+  openInterest: 1240,
+  delta: -0.412,
+  gamma: 0.0031,
+  theta: -12.4,
+  vega: 88.1,
+};
+
+const TINY_ROW: ChainTableRow = {
+  strike: 7600000,
+  contractType: "P",
+  deltaFront: -0.412,
+  ivFront: 0.1452,
+  ivBack: 0.1391,
+  hSkew: -0.000004,
+  fwdIv: 0.133,
+  edge: -0.0000009,
+  vSkew: -0.0000002,
+  theta: -0.001,
+  vega: -0.004,
+  netDelta: -0.0000004,
+  netGamma: -0.00000001,
+  debit: 40.08,
+  front: TINY_LEG,
+  back: TINY_LEG,
+};
+
+/** Header text with the active-sort glyph stripped. */
+function headerTexts(): ReadonlyArray<string> {
+  return Array.from(document.querySelectorAll("th")).map((th) =>
+    (th.textContent ?? "").replace(/[▲▼]/g, "").trim(),
   );
 }
 
-const ROWS = [calendarRow(6400), calendarRow(6500), calendarRow(6600)];
+/** The <th> whose label is `label` (glyph-tolerant). */
+function headerCell(label: string): HTMLElement {
+  const th = Array.from(document.querySelectorAll("th")).find(
+    (el) => (el.textContent ?? "").replace(/[▲▼]/g, "").trim() === label,
+  );
+  if (th === undefined) throw new Error(`no column header "${label}"`);
+  return th;
+}
 
-function renderTable(
-  props: Partial<React.ComponentProps<typeof ChainTable>> = {},
-): ReturnType<typeof render> {
-  return render(
-    <ChainTable
-      rows={ROWS}
-      expandedStrike={null}
-      onToggleExpand={() => undefined}
-      sort={DEFAULT_CHAIN_SORT}
-      onSortChange={() => undefined}
-      {...props}
-    />,
+/** Numeric strike labels of the rendered body rows, in DOM order (wing tag stripped). */
+function strikeOrder(): ReadonlyArray<string> {
+  return Array.from(document.querySelectorAll('tr[data-testid^="chain-row-"]')).map(
+    (tr) => (/^[\d.]+/.exec((tr.querySelector("td")?.textContent ?? "").trim()) ?? [""])[0],
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+});
 
-describe("ChainTable — rows", () => {
-  it("renders one row per strike", () => {
-    renderTable();
-    expect(screen.getByTestId("chain-row-6400")).toBeTruthy();
-    expect(screen.getByTestId("chain-row-6500")).toBeTruthy();
-    expect(screen.getByTestId("chain-row-6600")).toBeTruthy();
+describe("ChainTable — chain data surface", () => {
+  it("renders exactly the 13 data columns in order, with no score/verdict/rank column", () => {
+    render(<ChainTable rows={ROWS} />);
+
+    expect(headerTexts()).toEqual(EXPECTED_COLUMNS);
+    for (const banned of ["Score", "Verdict", "Rank", "Grade"]) {
+      expect(screen.queryByText(banned)).toBeNull();
+    }
   });
 
-  it("shows both legs' IV as percentages on the row", () => {
-    renderTable();
-    const row = screen.getByTestId("chain-row-6500");
-    expect(within(row).getByTestId("chain-front-iv").textContent).toBe("15.00%");
-    expect(within(row).getByTestId("chain-back-iv").textContent).toBe("17.00%");
+  it("renders one row per strike with the ×1000 strike divided down and IVs as percents", () => {
+    render(<ChainTable rows={ROWS} />);
+
+    expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
+
+    const row = screen.getByTestId("chain-row-P-7400000");
+    expect(row.textContent).toContain("7400");
+    expect(row.textContent).toContain("−0.412"); // front delta
+    expect(row.textContent).toContain("14.52%"); // front IV
+    expect(row.textContent).toContain("13.91%"); // back IV
+    expect(row.textContent).toContain("−0.61"); // H-skew, vol points
+    expect(row.textContent).toContain("13.30%"); // forward IV
+    expect(row.textContent).toContain("+0.40"); // edge, vol points
+    expect(row.textContent).toContain("−1.25"); // V-skew, vol points
+    expect(row.textContent).toContain("38.52"); // theta
+    expect(row.textContent).toContain("112.34"); // vega
+    expect(row.textContent).toContain("+0.018"); // net delta
+    expect(row.textContent).toContain("−0.0009"); // net gamma — short gamma is the live risk
+    expect(row.textContent).toContain("40.08"); // debit
   });
 
-  it("shows horizontal skew and edge in vol points", () => {
-    renderTable();
-    const row = screen.getByTestId("chain-row-6500");
-    expect(within(row).getByTestId("chain-hskew").textContent).toBe("+2.00");
-    // front 15% vs the forward implied by 15/17 over 26/54 days → negative edge.
-    expect(within(row).getByTestId("chain-edge").textContent?.startsWith("-")).toBe(true);
+  it("never renders a signed zero: a value that rounds to zero drops its sign", () => {
+    render(<ChainTable rows={[TINY_ROW]} />);
+
+    const row = screen.getByTestId("chain-row-P-7600000");
+    // "−0.00" reads as "slightly negative" but prints as zero — the same
+    // zero-vs-no-data ambiguity the em-dash rule exists to prevent.
+    expect(row.textContent).not.toContain("−0.00");
+    expect(row.textContent).not.toContain("−0.000");
+    expect(row.textContent).not.toContain("NaN");
   });
 
-  it("shows the calendar's net greeks", () => {
-    renderTable();
-    const row = screen.getByTestId("chain-row-6500");
-    expect(within(row).getByTestId("chain-net-theta").textContent).not.toBe("—");
-    expect(within(row).getByTestId("chain-net-vega").textContent).not.toBe("—");
-  });
+  it("renders every null derived field as an em dash — never 0, never NaN", () => {
+    render(<ChainTable rows={ROWS} />);
 
-  it("renders an em dash — never a 0 — where the IV is missing", () => {
-    render(
-      <ChainTable
-        rows={[calendarRow(6500, { bsmIv: null })]}
-        expandedStrike={null}
-        onToggleExpand={() => undefined}
-        sort={DEFAULT_CHAIN_SORT}
-        onSortChange={() => undefined}
-      />,
+    const nullRow = screen.getByTestId("chain-row-P-7450000");
+    const cells = Array.from(nullRow.querySelectorAll("td")).map((td) =>
+      (td.textContent ?? "").trim(),
     );
-    const row = screen.getByTestId("chain-row-6500");
-    expect(within(row).getByTestId("chain-front-iv").textContent).toBe("—");
-    expect(within(row).getByTestId("chain-hskew").textContent).toBe("—");
-    expect(within(row).getByTestId("chain-edge").textContent).toBe("—");
-    expect(within(row).getByTestId("chain-net-theta").textContent).toBe("—");
+
+    // First cell is the strike + wing (real data); the other 12 are all null.
+    expect(cells[0]).toBe("7450P");
+    expect(cells.slice(1)).toEqual(Array.from({ length: 12 }, () => "—"));
+    expect(nullRow.textContent).not.toContain("NaN");
+    expect(nullRow.textContent).not.toMatch(/\b0(\.0+)?%/);
   });
 
-  it("renders an empty-state line instead of a headerless table when there are no rows", () => {
-    renderTable({ rows: [] });
-    expect(screen.getByTestId("chain-empty")).toBeTruthy();
-    expect(screen.queryByTestId("chain-row-6500")).toBeNull();
-  });
-});
+  it("expands a row into both legs plus the calendar net greeks; re-click collapses", () => {
+    render(<ChainTable rows={ROWS} />);
 
-describe("ChainTable — expansion", () => {
-  it("clicking a row asks the caller to expand it", () => {
-    const seen: number[] = [];
-    renderTable({ onToggleExpand: (r) => seen.push(r.strike) });
-    fireEvent.click(screen.getByTestId("chain-row-6500"));
-    expect(seen).toEqual([6500]);
-  });
+    expect(screen.queryByTestId("chain-detail-P-7400000")).toBeNull();
+    fireEvent.click(screen.getByTestId("chain-row-P-7400000"));
 
-  it("renders the per-leg detail only for the expanded strike", () => {
-    renderTable({ expandedStrike: 6500 });
-    expect(screen.getByTestId("chain-detail-6500")).toBeTruthy();
-    expect(screen.queryByTestId("chain-detail-6400")).toBeNull();
-  });
+    const detail = screen.getByTestId("chain-detail-P-7400000");
+    const text = detail.textContent ?? "";
 
-  it("the detail carries each leg's expiry, quote, IV and greeks", () => {
-    renderTable({ expandedStrike: 6500 });
-    const detail = screen.getByTestId("chain-detail-6500");
-    expect(within(detail).getByTestId("chain-leg-front")).toBeTruthy();
-    expect(within(detail).getByTestId("chain-leg-back")).toBeTruthy();
-    expect(detail.textContent).toContain("2026-08-21");
-    expect(detail.textContent).toContain("2026-09-18");
-    // bid/ask and the mid the debit is built from.
-    expect(detail.textContent).toContain("40.00");
-    expect(detail.textContent).toContain("42.00");
-    // provenance
-    expect(detail.textContent).toContain("schwab");
-  });
-});
+    // Both legs, side by side, each with the full per-leg record.
+    expect(text).toContain("Front");
+    expect(text).toContain("Back");
+    expect(text).toContain("Aug 11");
+    expect(text).toContain("Aug 31");
+    expect(text).toContain("16"); // front DTE
+    expect(text).toContain("36"); // back DTE
+    expect(text).toContain("102.90"); // front bid
+    expect(text).toContain("103.80"); // front ask
+    expect(text).toContain("1,240"); // front open interest
+    expect(text).toContain("0.0031"); // front gamma
+    expect(text).toContain("−12.40"); // front theta
+    expect(text).toContain("88.10"); // front vega
+    expect(text).toContain("200.40"); // back vega
 
-describe("ChainTable — sorting", () => {
-  it("defaults to ascending strike", () => {
-    expect(DEFAULT_CHAIN_SORT).toEqual({ key: "strike", dir: "asc" });
+    // Calendar net greeks — all four, gamma included (short gamma is the live risk).
+    expect(text).toContain("Net Delta");
+    expect(text).toContain("Net Gamma");
+    expect(text).toContain("Net Theta");
+    expect(text).toContain("Net Vega");
+    expect(text).toContain("−0.0009"); // net gamma
+
+    fireEvent.click(screen.getByTestId("chain-row-P-7400000"));
+    expect(screen.queryByTestId("chain-detail-P-7400000")).toBeNull();
   });
 
-  it("cycleSort opens a new column descending and flips on re-click", () => {
-    expect(cycleSort(DEFAULT_CHAIN_SORT, "edge")).toEqual({ key: "edge", dir: "desc" });
-    expect(cycleSort({ key: "edge", dir: "desc" }, "edge")).toEqual({ key: "edge", dir: "asc" });
+  it("keeps only one row expanded at a time", () => {
+    render(<ChainTable rows={ROWS} />);
+
+    fireEvent.click(screen.getByTestId("chain-row-P-7400000"));
+    expect(screen.getByTestId("chain-detail-P-7400000")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("chain-row-P-7500000"));
+    expect(screen.getByTestId("chain-detail-P-7500000")).toBeTruthy();
+    expect(screen.queryByTestId("chain-detail-P-7400000")).toBeNull();
   });
 
-  it("sortChainRows orders by the chosen key and direction", () => {
-    const asc = sortChainRows(ROWS, { key: "strike", dir: "asc" });
-    expect(asc.map((r) => r.strike)).toEqual([6400, 6500, 6600]);
-    const desc = sortChainRows(ROWS, { key: "strike", dir: "desc" });
-    expect(desc.map((r) => r.strike)).toEqual([6600, 6500, 6400]);
+  it("expanded legs show em dashes when the leg has no quote", () => {
+    render(<ChainTable rows={ROWS} />);
+
+    fireEvent.click(screen.getByTestId("chain-row-P-7450000"));
+    const detail = screen.getByTestId("chain-detail-P-7450000");
+    expect(detail.textContent).toContain("—");
+    expect(detail.textContent).not.toContain("NaN");
   });
 
-  it("sortChainRows pushes null values to the bottom in both directions", () => {
-    const rows = [calendarRow(6400, { bsmIv: null }), calendarRow(6500), calendarRow(6600)];
-    expect(sortChainRows(rows, { key: "edge", dir: "desc" }).at(-1)?.strike).toBe(6400);
-    expect(sortChainRows(rows, { key: "edge", dir: "asc" }).at(-1)?.strike).toBe(6400);
+  it("sorts by a data column, toggles direction, and keeps nulls last", () => {
+    render(<ChainTable rows={ROWS} />);
+
+    fireEvent.click(headerCell("Edge"));
+    expect(strikeOrder()).toEqual(["7400", "7500", "7450"]); // asc, null last
+
+    fireEvent.click(headerCell("Edge"));
+    expect(strikeOrder()).toEqual(["7500", "7400", "7450"]); // desc, null still last
+
+    fireEvent.click(headerCell("Strike"));
+    expect(strikeOrder()).toEqual(["7400", "7450", "7500"]);
   });
 
-  it("clicking a sortable header emits its key", () => {
-    const seen: string[] = [];
-    renderTable({ onSortChange: (k) => seen.push(k) });
-    fireEvent.click(screen.getByTestId("chain-sort-edge"));
-    expect(seen).toEqual(["edge"]);
-  });
-});
+  it("marks the sorted column with aria-sort", () => {
+    render(<ChainTable rows={ROWS} />);
 
-describe("ChainTable — one tree for all viewports", () => {
-  it("puts the table in a horizontal-scroll wrapper with a min width", () => {
-    renderTable();
+    expect(headerCell("Strike").getAttribute("aria-sort")).toBe("ascending");
+    fireEvent.click(headerCell("Edge"));
+    expect(headerCell("Edge").getAttribute("aria-sort")).toBe("ascending");
+    expect(headerCell("Strike").getAttribute("aria-sort")).toBe("none");
+  });
+
+  it("keeps both wings at the same strike as separate, independent rows", () => {
+    // The chain read returns calls AND puts. Identity is strike + contractType: keying
+    // on strike alone collides the wings — duplicate React keys, and expanding the put
+    // would open the call. A row is one wing by construction, so the props type cannot
+    // express a mixed-wing pair at all; the caller owns pairing each leg to its wing.
+    //
+    // The two wings MUST carry different IVs here. Give them the same IV and this test
+    // passes even if the rows are crossed, which is exactly the bug it exists to catch.
+    const put: ChainTableRow = { ...TINY_ROW, strike: 7400000, contractType: "P" };
+    const call: ChainTableRow = {
+      ...TINY_ROW,
+      strike: 7400000,
+      contractType: "C",
+      ivFront: 0.1103,
+      debit: 31.5,
+    };
+    render(<ChainTable rows={[put, call]} />);
+
+    const putRow = screen.getByTestId("chain-row-P-7400000");
+    const callRow = screen.getByTestId("chain-row-C-7400000");
+    expect(putRow).not.toBe(callRow);
+    expect(putRow.textContent).toContain("14.52%"); // the put's own front IV
+    expect(callRow.textContent).toContain("11.03%"); // the call's own front IV
+    expect(callRow.textContent).toContain("31.50"); // the call's own debit
+
+    // Expanding one wing must not expand the other.
+    fireEvent.click(putRow);
+    expect(screen.getByTestId("chain-detail-P-7400000")).toBeTruthy();
+    expect(screen.queryByTestId("chain-detail-C-7400000")).toBeNull();
+  });
+
+  it("uses the one-tree mobile recipe: horizontal-scroll wrapper + min-width table", () => {
+    render(<ChainTable rows={ROWS} />);
+
     const wrapper = screen.getByTestId("chain-table-scroll");
     expect(wrapper.className).toContain("overflow-x-auto");
-    const table = wrapper.querySelector("table");
-    expect(table?.className).toContain("min-w-[");
-  });
+    expect(wrapper.className).toContain("-mx-2");
 
-  it("renders the same column count at every viewport — no dropped columns", () => {
-    renderTable();
-    const headers = screen.getByTestId("chain-table-scroll").querySelectorAll("thead th");
-    expect(headers.length).toBeGreaterThanOrEqual(12);
+    const table = wrapper.querySelector("table");
+    expect(table?.className).toMatch(/min-w-\[\d+px\]/);
   });
 });
