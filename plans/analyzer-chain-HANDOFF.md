@@ -224,3 +224,12 @@ are: floor T, clamp q to a sane band, or fall back to the flat default below N d
 11. **A "sort looks stuck" report may be correct behaviour.** V-Skew descending matched
     strike-ascending on a live ladder because put skew is monotone there. Check the data's shape
     before believing the UI is broken.
+12. **Reviewer output is leads, not verdicts — and variance claims especially.** A reviewer
+    subagent cleared five categories correctly, then reported the `onPickFront={chain.pickFront}`
+    handoff as "parameter variance backwards, technically unsound". It is the opposite: passing
+    `(ChainLegId) => void` where `(ChainLegRow) => void` is wanted is the CONTRAVARIANT, sound
+    direction, and TS accepts it for that reason. Proved with a two-line probe under
+    `--strict --strictFunctionTypes` — only the reverse assignment errors (TS2322). Before acting
+    on a variance finding, compile that probe: it separates "TS allows it because it is sound"
+    from "TS allows it because of method bivariance", and only the second is real. Related:
+    `ChainLegId` is also the honest type for those functions, since they only call `legKey`.
