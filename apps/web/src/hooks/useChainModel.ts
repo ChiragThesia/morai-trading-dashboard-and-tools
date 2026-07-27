@@ -166,7 +166,11 @@ function forwardIv(front: ChainRow, back: ChainRow): number | null {
 }
 
 function toLeg(row: ChainRow, carry: Carry, cohortAtmIv: number | null): ChainLegRow {
-  const greeks = legGreeks(row, carry);
+  // Priced against the row's OWN observation instant, not a wall clock. That is what makes these
+  // greeks equal the server's for the same contract: the server prices a snapshot against that
+  // snapshot's `asOf`. A live clock would shrink T between 30-second polls and drift away from
+  // the server's numbers for no reason.
+  const greeks = legGreeks(row, carry, new Date(row.observedAt));
   return {
     root: row.root,
     expiration: row.expiration,
@@ -286,9 +290,11 @@ export function useChainModel(): ChainModel {
     if (frontEntry === undefined || backEntry === undefined) return null;
     const front = frontEntry.row;
     const back = backEntry.row;
+    // Each leg against its OWN observedAt — the two legs can come from different vendor rows in
+    // the same union, and pricing both off one leg's stamp would silently shift the other's T.
     const netGreeks = netCalendarGreeks(
-      legGreeks(front, frontEntry.carry),
-      legGreeks(back, backEntry.carry),
+      legGreeks(front, frontEntry.carry, new Date(front.observedAt)),
+      legGreeks(back, backEntry.carry, new Date(back.observedAt)),
     );
     const rootMismatch = front.root !== back.root;
     const backNotLater = !(back.dte > front.dte);

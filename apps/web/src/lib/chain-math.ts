@@ -16,7 +16,7 @@
  * a strike whose IV never solved has no skew, no edge, and no greeks. It does NOT have a zero
  * one. No column here ever returns NaN, a fabricated 0, or a silently-clean number.
  */
-import { computeFwdIv, haircutFill } from "@morai/core";
+import { computeFwdIv, haircutFill, yearsToSettlement } from "@morai/core";
 import { bsmGreeks, type BsmGreeks } from "@morai/quant";
 
 // ─── Conventions ──────────────────────────────────────────────────────────────
@@ -37,13 +37,17 @@ export const DAYS_PER_YEAR = 365.25;
 export type ChainLeg = {
   /** Strike ×1000. */
   readonly strike: number;
-  /** Whole days to expiry. */
+  /** Whole days to expiry. Display and gating only — never the pricing clock (see `legGreeks`). */
   readonly dte: number;
   /** Decimal IV (0.1249 = 12.49%), or null when the inversion never solved. */
   readonly bsmIv: number | null;
   readonly contractType: "C" | "P";
   /** Spot at observation, in index points. */
   readonly underlyingPrice: number;
+  /** `YYYY-MM-DD`. With `root`, this is what fixes the settlement instant. */
+  readonly expiration: string;
+  /** OCC root — decides AM 09:30 ET against PM 16:00 ET settlement on a third Friday. */
+  readonly root: "SPX" | "SPXW";
 };
 
 /** Two-sided market for one leg. */
@@ -183,21 +187,44 @@ export function atmIv(
 }
 
 /**
- * One leg's greeks through the shared BSM kernel — the same numbers the server computes (D-01).
+ * One leg's greeks through the shared BSM kernel — the same numbers the server computes (D-01),
+ * and now on the same CLOCK as the server too.
+ *
+ * This used to price at a whole-day `dte / 365.25` while the server priced the same contract at a
+ * settlement-aware T. Mixing those conventions is what made theta read wrong against ThinkOrSwim
+ * once already; it was fixed server-side and re-introduced here. The magnitude is modest —
+ * 0.22% to 0.61% on theta — but the DIRECTION FLIPS BY ROOT, because PM settlement (16:00 ET)
+ * falls after the expiry day's UTC midnight while AM settlement (09:30 ET) falls before it:
+ *
+ *     2026-08-11 SPXW  15 DTE   theta -2.8998 -> -2.8821   +0.61%
+ *     2026-08-21 SPX   25 DTE   theta -2.1718 -> -2.1770   -0.24%
+ *     2026-08-21 SPXW  25 DTE   theta -2.1718 -> -2.1635   +0.38%
+ *
+ * A bias that reverses sign across the exact axis this table puts side by side is worse than a
+ * uniform one. `yearsToSettlement` is the SAME function the calendar engine uses — the point is
+ * one T, not a second opinion. It takes the expiration as a STRING, so there is no Date whose
+ * UTC-vs-local flavour a caller can get wrong.
+ *
+ * `now` is injected. This module reads no clock.
  *
  * Null when the leg cannot be priced at all: IV never solved, IV is zero (gamma and vega divide
- * by sigma), or the leg is at/past expiry (they also divide by √T). Those are undefined, not zero.
+ * by sigma), an unparseable expiration, or a leg already settled (they also divide by √T). Those
+ * are undefined, not zero.
  */
-export function legGreeks(leg: ChainLeg, carry: Carry): BsmGreeks | null {
+export function legGreeks(leg: ChainLeg, carry: Carry, now: Date): BsmGreeks | null {
   const K = leg.strike / STRIKE_SCALE;
   const S = leg.underlyingPrice;
   const sigma = leg.bsmIv;
   if (sigma === null || !isNum(sigma) || sigma <= 0) return null;
   if (!isNum(S) || S <= 0 || !isNum(K) || K <= 0) return null;
-  if (!isNum(leg.dte) || leg.dte <= 0) return null;
   if (!isNum(carry.rate) || !isNum(carry.divYield)) return null;
 
-  return bsmGreeks(S, K, leg.dte / DAYS_PER_YEAR, sigma, carry.rate, carry.divYield, leg.contractType);
+  // yearsToSettlement returns 0 for an unparseable expiration AND for one already settled, and
+  // both are unpriceable for the same reason: gamma and vega divide by √T.
+  const T = yearsToSettlement(now, leg.expiration, leg.root);
+  if (T <= 0) return null;
+
+  return bsmGreeks(S, K, T, sigma, carry.rate, carry.divYield, leg.contractType);
 }
 
 /**

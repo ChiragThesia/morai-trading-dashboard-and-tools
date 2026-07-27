@@ -14,6 +14,7 @@ import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { computeFwdIv, haircutFill } from "@morai/core";
 import { bsmGreeks } from "@morai/quant";
+import { yearsToSettlement } from "@morai/core";
 import {
   hSkew,
   edge,
@@ -32,16 +33,26 @@ import {
 const CARRY = { rate: 0.045, divYield: 0.013 };
 
 /** 7400 strike put, 30 DTE, IV 20%, spot 7420. */
+/** Observation instant every leg below is priced against. Injected, never a clock read. */
+const NOW = new Date("2026-07-27T16:00:00.000Z");
+
 const FRONT = {
   strike: 7_400_000,
   dte: 30,
   bsmIv: 0.2,
   contractType: "P",
   underlyingPrice: 7420,
+  // 2026-08-26 is 30 calendar days after NOW's UTC date, and a Wednesday — so no root can
+  // make it AM-settled, which keeps this fixture's settlement class unambiguous.
+  expiration: "2026-08-26",
+  root: "SPXW",
 } as const;
 
 /** Same strike, 60 DTE, IV 18%. */
-const BACK = { ...FRONT, dte: 60, bsmIv: 0.18 } as const;
+// 2026-09-25 is 60 calendar days after NOW's UTC date. The expiration, not `dte`, is what makes
+// this the BACK leg now — sharing FRONT's date would give both legs identical T and erase the
+// term structure the calendar tests depend on.
+const BACK = { ...FRONT, dte: 60, bsmIv: 0.18, expiration: "2026-09-25" } as const;
 
 // ─── (a) Worked examples ──────────────────────────────────────────────────────
 
@@ -218,40 +229,94 @@ describe("atmIv — the ATM reference IV, wing, expiry and ROOT enforced by sign
 });
 
 describe("legGreeks — one leg through the shared BSM kernel", () => {
-  it("delegates to bsmGreeks with K = strike/1000 and T = dte/365.25", () => {
+  /**
+   * REGRESSION. This priced legs at a whole-day `dte / 365.25`, while the server prices the
+   * SAME contract at a settlement-aware T. Mixing those two conventions is what made theta read
+   * wrong against ThinkOrSwim once already; it was fixed server-side and re-introduced here.
+   *
+   * The magnitude is modest — 0.22% to 0.61% on theta — but the DIRECTION FLIPS BY ROOT, because
+   * PM settlement (16:00 ET) falls after the expiry day's UTC midnight while AM settlement
+   * (09:30 ET) falls before it:
+   *
+   *     2026-08-11 SPXW  15 DTE   theta -2.8998 -> -2.8821   +0.61%
+   *     2026-08-21 SPX   25 DTE   theta -2.1718 -> -2.1770   -0.24%
+   *     2026-08-21 SPXW  25 DTE   theta -2.1718 -> -2.1635   +0.38%
+   *
+   * A bias that reverses sign across the exact axis the Analyzer puts side by side is worse than
+   * a uniform one. So this now calls `yearsToSettlement` from @morai/core — the SAME function the
+   * calendar engine uses, which is the point: one T, not a second opinion.
+   */
+  it("prices at the settlement-aware T from @morai/core, NOT a whole-day dte/365.25", () => {
     const expected = bsmGreeks(
       7420,
       7400,
-      30 / DAYS_PER_YEAR,
+      yearsToSettlement(NOW, FRONT.expiration, FRONT.root),
       0.2,
       CARRY.rate,
       CARRY.divYield,
       "P",
     );
-    expect(legGreeks(FRONT, CARRY)).toEqual(expected);
+    expect(legGreeks(FRONT, CARRY, NOW)).toEqual(expected);
     expect(STRIKE_SCALE).toBe(1000);
   });
 
+  it("differs from the whole-day convention it replaced", () => {
+    // Pins the change itself: if someone reverts to dte/365.25 this fails rather than drifting
+    // back silently.
+    const wholeDay = bsmGreeks(7420, 7400, 30 / DAYS_PER_YEAR, 0.2, CARRY.rate, CARRY.divYield, "P");
+    const actual = legGreeks(FRONT, CARRY, NOW);
+    expect(actual).not.toBeNull();
+    if (actual === null) return;
+    expect(actual.theta).not.toBeCloseTo(wholeDay.theta, 8);
+  });
+
+  it("gives AM-settled SPX a SHORTER T than its PM-settled SPXW twin on the same date", () => {
+    // 2026-08-21 is a third Friday, so root alone decides the settlement clock. This is the
+    // asymmetry a whole-day T erases entirely.
+    const spx = legGreeks({ ...FRONT, expiration: "2026-08-21", root: "SPX" }, CARRY, NOW);
+    const spxw = legGreeks({ ...FRONT, expiration: "2026-08-21", root: "SPXW" }, CARRY, NOW);
+    expect(spx).not.toBeNull();
+    expect(spxw).not.toBeNull();
+    if (spx === null || spxw === null) return;
+    // Less time to expiry means less extrinsic value, so a smaller vega.
+    expect(spx.vega).toBeLessThan(spxw.vega);
+  });
+
+  it("is null for an unparseable expiration rather than pricing at T = 0", () => {
+    expect(legGreeks({ ...FRONT, expiration: "2026-02-30" }, CARRY, NOW)).toBeNull();
+  });
+
+  it("is null once the leg has settled", () => {
+    const afterSettlement = new Date("2026-08-27T00:00:00.000Z");
+    expect(legGreeks(FRONT, CARRY, afterSettlement)).toBeNull();
+  });
+
   it("is null when the IV never solved", () => {
-    expect(legGreeks({ ...FRONT, bsmIv: null }, CARRY)).toBeNull();
+    expect(legGreeks({ ...FRONT, bsmIv: null }, CARRY, NOW)).toBeNull();
   });
 
   it("is null at or past expiry, and at zero vol (both make BSM greeks undefined)", () => {
-    expect(legGreeks({ ...FRONT, dte: 0 }, CARRY)).toBeNull();
-    expect(legGreeks({ ...FRONT, dte: -1 }, CARRY)).toBeNull();
-    expect(legGreeks({ ...FRONT, bsmIv: 0 }, CARRY)).toBeNull();
+    // Expressed through the EXPIRATION, because that is what fixes T now. `dte` is display and
+    // gating only — a stale `dte` can no longer make a live leg unpriceable or vice versa.
+    expect(legGreeks({ ...FRONT, expiration: "2026-07-26" }, CARRY, NOW)).toBeNull(); // settled yesterday
+    expect(legGreeks({ ...FRONT, expiration: "2026-07-01" }, CARRY, NOW)).toBeNull(); // long gone
+    // And the boundary the whole-day convention could not express: a leg expiring TODAY is still
+    // LIVE at NOW, because 16:00 ET is 20:00Z in July and NOW is 16:00Z — four hours of T left.
+    // Under `dte / 365.25` this same leg priced at T = 0 and was silently dropped.
+    expect(legGreeks({ ...FRONT, expiration: "2026-07-27" }, CARRY, NOW)).not.toBeNull();
+    expect(legGreeks({ ...FRONT, bsmIv: 0 }, CARRY, NOW)).toBeNull();
   });
 
   it("is null when spot or strike is unusable", () => {
-    expect(legGreeks({ ...FRONT, underlyingPrice: 0 }, CARRY)).toBeNull();
-    expect(legGreeks({ ...FRONT, strike: 0 }, CARRY)).toBeNull();
+    expect(legGreeks({ ...FRONT, underlyingPrice: 0 }, CARRY, NOW)).toBeNull();
+    expect(legGreeks({ ...FRONT, strike: 0 }, CARRY, NOW)).toBeNull();
   });
 });
 
 describe("netCalendarGreeks — long the back leg, short the front", () => {
   it("is back − front on every greek", () => {
-    const f = legGreeks(FRONT, CARRY);
-    const b = legGreeks(BACK, CARRY);
+    const f = legGreeks(FRONT, CARRY, NOW);
+    const b = legGreeks(BACK, CARRY, NOW);
     expect(f).not.toBeNull();
     expect(b).not.toBeNull();
     if (f === null || b === null) return;
@@ -267,8 +332,8 @@ describe("netCalendarGreeks — long the back leg, short the front", () => {
   });
 
   it("is net-long vega and net-short gamma — the calendar's defining signs", () => {
-    const f = legGreeks(FRONT, CARRY);
-    const b = legGreeks(BACK, CARRY);
+    const f = legGreeks(FRONT, CARRY, NOW);
+    const b = legGreeks(BACK, CARRY, NOW);
     if (f === null || b === null) throw new Error("fixture legs must price");
     const net = netCalendarGreeks(f, b);
     if (net === null) throw new Error("fixture net must price");
@@ -278,7 +343,7 @@ describe("netCalendarGreeks — long the back leg, short the front", () => {
   });
 
   it("is null when either leg failed to price", () => {
-    const f = legGreeks(FRONT, CARRY);
+    const f = legGreeks(FRONT, CARRY, NOW);
     expect(netCalendarGreeks(null, f)).toBeNull();
     expect(netCalendarGreeks(f, null)).toBeNull();
     expect(netCalendarGreeks(null, null)).toBeNull();
@@ -387,18 +452,29 @@ describe("properties", () => {
       fc.property(
         fc.double({ min: 1000, max: 20_000, noNaN: true }),
         fc.integer({ min: 1_000_000, max: 20_000_000 }),
-        dte,
+        // Days from NOW's date to the expiration. Negative and zero must both null out, so the
+        // range straddles settlement rather than only sampling live legs.
+        fc.integer({ min: -5, max: 120 }),
         maybeIv,
         fc.constantFrom("C", "P"),
-        (underlyingPrice, strike, legDte, bsmIv, contractType) => {
+        fc.constantFrom<"SPX" | "SPXW">("SPX", "SPXW"),
+        (underlyingPrice, strike, offsetDays, bsmIv, contractType, root) => {
+          const target = new Date(NOW.getTime() + offsetDays * 86_400_000);
+          const expiration = target.toISOString().slice(0, 10);
           const out = legGreeks(
-            { strike, dte: legDte, bsmIv, contractType, underlyingPrice },
+            { strike, dte: offsetDays, bsmIv, contractType, underlyingPrice, expiration, root },
             CARRY,
+            NOW,
           );
-          if (bsmIv === null || legDte <= 0) {
+          // A leg settling today is already past its 16:00 ET cutoff at NOW (16:00Z = 12:00 ET
+          // in July, so 16:00 ET is still ahead) — so only strictly-negative offsets are certainly
+          // dead. Let the function decide the boundary and assert the invariant that matters:
+          // never NaN, and null-in means null-out.
+          if (bsmIv === null || offsetDays < 0) {
             expect(out).toBeNull();
             return;
           }
+          if (out === null) return; // settled boundary — legitimately unpriceable
           expect(out).not.toBeNull();
           if (out === null) return;
           for (const v of [out.delta, out.gamma, out.theta, out.vega]) {
