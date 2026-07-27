@@ -57,7 +57,16 @@ export interface ChainTableRow {
   readonly hSkew: number | null;
   readonly fwdIv: number | null;
   readonly edge: number | null;
-  /** Vertical skew across strikes, decimal vol. */
+  /**
+   * Vertical skew across strikes, decimal vol.
+   *
+   * CALLER CONSTRAINT (u06): the ATM IV this is measured against must come from the
+   * same expiry AND the same `contractType` as the row. Calls and puts trace different
+   * skew curves, so a put IV minus a call ATM subtracts two unrelated numbers. Unlike
+   * every other field here, this one cannot null itself when it is wrong — by the time
+   * chain-math sees two floats the wing is gone, so it returns a plausible, clean,
+   * wrong number. The wing lives on this row; filter on it before picking the ATM IV.
+   */
   readonly vSkew: number | null;
   readonly theta: number | null;
   readonly vega: number | null;

@@ -358,6 +358,9 @@ describe("ChainTable — chain data surface", () => {
     // on strike alone collides the wings — duplicate React keys, and expanding the put
     // would open the call. A row is one wing by construction, so the props type cannot
     // express a mixed-wing pair at all; the caller owns pairing each leg to its wing.
+    //
+    // The two wings MUST carry different IVs here. Give them the same IV and this test
+    // passes even if the rows are crossed, which is exactly the bug it exists to catch.
     const put: ChainTableRow = { ...TINY_ROW, strike: 7400000, contractType: "P" };
     const call: ChainTableRow = {
       ...TINY_ROW,
