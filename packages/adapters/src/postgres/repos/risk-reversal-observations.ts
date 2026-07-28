@@ -99,6 +99,7 @@ export function makePostgresRiskReversalObservationsRepo(
 
   const readRiskReversalHistory: ForReadingRiskReversalHistory = async (query: {
     readonly underlying: string;
+    readonly root: "SPX" | "SPXW";
     readonly expiration: string;
     readonly beforeOrAt: Date;
   }): Promise<Result<ReadonlyArray<number>, StorageError>> => {
@@ -110,6 +111,10 @@ export function makePostgresRiskReversalObservationsRepo(
         .where(
           and(
             eq(riskReversalObservations.underlying, query.underlying),
+            // PK member, and it belongs in the window too — measured 2026-07-28, three
+            // third-Friday expirations carry both roots (16 of 107 rows), and `underlying` is
+            // 'SPX' for both, so without this the rank pools two unrelated curves.
+            eq(riskReversalObservations.root, query.root),
             eq(riskReversalObservations.expiration, query.expiration),
             lte(riskReversalObservations.snapshotTime, query.beforeOrAt),
             isNotNull(riskReversalObservations.riskReversal),

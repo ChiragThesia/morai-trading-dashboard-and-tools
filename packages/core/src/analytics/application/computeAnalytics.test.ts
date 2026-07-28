@@ -432,7 +432,9 @@ describe("makeComputeAnalyticsUseCase — data-anchored cycle resolution (CR-01/
   });
 
   it("passes the resolved cycle (not now()) as beforeOrAt to the RR history reader", async () => {
-    let historyQuery: { underlying: string; expiration: string; beforeOrAt: Date } | undefined;
+    let historyQuery:
+      | { underlying: string; root: "SPX" | "SPXW"; expiration: string; beforeOrAt: Date }
+      | undefined;
     const smileStub = makeSmileStub(workedExampleSmile("SPX", "2026-07-17"), SNAPSHOT_TIME);
     const readSnapshots: ForReadingCalendarSnapshotsForCycle = async () =>
       ok([makeSnapshot(CAL_A, 0.05)]);
@@ -453,6 +455,9 @@ describe("makeComputeAnalyticsUseCase — data-anchored cycle resolution (CR-01/
 
     await useCase();
     expect(historyQuery?.underlying).toBe("SPX");
+    // The group's own book — `underlying` is 'SPX' for both, so root is what keeps the rank
+    // window from pooling the AM- and PM-settled curves.
+    expect(historyQuery?.root).toBe("SPXW");
     expect(historyQuery?.expiration).toBe("2026-07-17");
     expect(historyQuery?.beforeOrAt.getTime()).toBe(SNAPSHOT_TIME.getTime());
     expect(historyQuery?.beforeOrAt.getTime()).not.toBe(NOW.getTime());

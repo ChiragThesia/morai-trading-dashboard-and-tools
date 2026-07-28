@@ -162,6 +162,9 @@ export function makeComputeAnalyticsUseCase(
       if (riskReversal !== null) {
         const historyResult = await deps.readRrHistory({
           underlying: group.underlying,
+          // Same reason the write is keyed by root: `underlying` is always 'SPX', so without this
+          // the percentile ranks one book against a population holding both.
+          root: group.root,
           expiration: group.expiration,
           // Trailing window bounded by the resolved cycle anchor, NOT now().
           beforeOrAt: stampInstant,

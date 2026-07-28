@@ -95,6 +95,37 @@ export function runRiskReversalContractTests(
       expect(rows.find((r) => r.root === "SPX")?.riskReversal).toBeCloseTo(0.09, 9);
       expect(rows.find((r) => r.root === "SPXW")?.riskReversal).toBeCloseTo(0.04, 9);
     });
+
+    /**
+     * The READ half of the same defect. The write side got root at migration 0029, but the
+     * trailing-rank window still filtered on (underlying, expiration) alone — and `underlying` is
+     * the literal 'SPX' for both books, so the percentile ranked one book's risk reversal against
+     * a population holding both.
+     *
+     * Measured on production 2026-07-28: three expirations carry both roots (2026-08-21,
+     * 2026-09-18, 2026-10-16 — every one a third Friday, the only dates SPX quotes), 16 of the
+     * table's 107 rows. Every rr_rank written for those is a percentile over a mixed population.
+     */
+    it("ranks against ONE book — history is scoped by root", async () => {
+      const t1 = new Date("2026-07-28T14:00:00.000Z");
+      const t2 = new Date("2026-07-28T14:30:00.000Z");
+      await repo.storeRiskReversalObservations([
+        makeRow(t1, { root: "SPX", riskReversal: 0.09 }),
+        makeRow(t1, { root: "SPXW", riskReversal: 0.04 }),
+        makeRow(t2, { root: "SPX", riskReversal: 0.11 }),
+        makeRow(t2, { root: "SPXW", riskReversal: 0.05 }),
+      ]);
+
+      const result = await repo.readRiskReversalHistory({
+        underlying: UNDERLYING,
+        root: "SPX",
+        expiration: EXPIRY,
+        beforeOrAt: t2,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect([...result.value].sort((a, b) => a - b)).toEqual([0.09, 0.11]);
+    });
   });
 
   describe("risk-reversal-observations persistence contract", () => {
@@ -208,6 +239,7 @@ export function runRiskReversalContractTests(
 
         const result = await repo.readRiskReversalHistory({
           underlying: UNDERLYING,
+          root: "SPXW", // makeRow's default book
           expiration: EXPIRY,
           beforeOrAt: t4,
         });
@@ -228,6 +260,7 @@ export function runRiskReversalContractTests(
         ]);
         const result = await repo.readRiskReversalHistory({
           underlying: UNDERLYING,
+          root: "SPXW",
           expiration: EXPIRY,
           beforeOrAt: t2,
         });
@@ -245,6 +278,7 @@ export function runRiskReversalContractTests(
         ]);
         const result = await repo.readRiskReversalHistory({
           underlying: "SPX",
+          root: "SPXW",
           expiration: "2026-07-17",
           beforeOrAt: t1,
         });

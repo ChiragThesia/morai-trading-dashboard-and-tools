@@ -146,12 +146,15 @@ export type ForWritingTermStructureObservations = (
 ) => Promise<Result<void, StorageError>>;
 
 /**
- * ForReadingRiskReversalHistory — read prior risk-reversal values for a (underlying, expiration),
- * ordered oldest→newest, for computing the trailing-window rank. Excludes NULL risk-reversals.
+ * ForReadingRiskReversalHistory — read prior risk-reversal values for a
+ * (underlying, root, expiration), ordered oldest→newest, for computing the trailing-window rank.
+ * Excludes NULL risk-reversals.
  */
 export type ForReadingRiskReversalHistory = (
   query: {
     readonly underlying: string;
+    /** Part of the window key — see SmileQuote.root. Rank one book against itself, never a pool. */
+    readonly root: "SPX" | "SPXW";
     readonly expiration: string; // YYYY-MM-DD
     readonly beforeOrAt: Date;
   },

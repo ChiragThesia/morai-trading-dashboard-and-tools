@@ -64,6 +64,7 @@ export function makeMemoryRiskReversalObservationsRepo(): MemoryRiskReversalObse
 
   const readRiskReversalHistory: ForReadingRiskReversalHistory = async (query: {
     readonly underlying: string;
+    readonly root: "SPX" | "SPXW";
     readonly expiration: string;
     readonly beforeOrAt: Date;
   }): Promise<Result<ReadonlyArray<number>, StorageError>> => {
@@ -71,6 +72,8 @@ export function makeMemoryRiskReversalObservationsRepo(): MemoryRiskReversalObse
       .filter(
         (r) =>
           r.underlying === query.underlying &&
+          // Part of the window key — see the Postgres adapter. Rank a book against itself.
+          r.root === query.root &&
           r.expiration === query.expiration &&
           r.snapshotTime.getTime() <= query.beforeOrAt.getTime() &&
           r.riskReversal !== null,
