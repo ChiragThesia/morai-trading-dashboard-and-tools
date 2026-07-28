@@ -199,6 +199,10 @@ describe("runBacktest", () => {
     expect(report.caveats.length).toBeGreaterThan(0);
     expect(report.caveats.some((c) => c.includes("bsm"))).toBe(true);
     expect(report.caveats.some((c) => c.includes("event"))).toBe(true);
+    // Migration 0028's two residuals. Keyed on a fact unique to each caveat, not just "0028",
+    // so adding one of the pair cannot green the assertion for the other.
+    expect(report.caveats.some((c) => c.includes("0028") && c.includes("16.5"))).toBe(true);
+    expect(report.caveats.some((c) => c.includes("0028") && c.includes("BT-02"))).toBe(true);
 
     expect(persisted).toHaveLength(1);
     expect(persisted[0]?.report).toEqual(report);
