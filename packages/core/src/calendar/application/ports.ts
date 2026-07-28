@@ -7,8 +7,13 @@
  * Every driven port here is STRUCTURALLY satisfied by a repo that already exists, so this
  * context ships with no new adapter and no new test fake:
  *   - `ForReadingCalendarChain` ← `picker-chain.ts` (the only root-correct, OI-repaired read)
- *   - `ForReadingExpiryCarry`   ← the `implied_carry` array on the latest GEX snapshot
  *   - `ForReadingDailyCloses`   ← `picker-history.ts`
+ *
+ * There was a third, `ForReadingExpiryCarry`, reading the solved `implied_carry` array off the
+ * latest GEX snapshot. It is DELETED, and deliberately not replaced: it priced the two legs of
+ * one calendar on different (r, q), and that array is not the carry the stored `bsm_iv` was
+ * inverted at. `domain/cohort.ts` scar 4 carries the measurements. Carry now arrives as one
+ * injected constant, not a read.
  *
  * They are DECLARED here rather than imported from the picker context on purpose: the picker is
  * being deleted, and this context must not hold a reference into a module that is going away.
@@ -40,27 +45,6 @@ export type ForReadingCalendarChain = () => Promise<
 >;
 
 /**
- * Per-expiry carry, solved from put-call parity.
- *
- * Keyed by expiration only, with no root — because `r` and `q` are properties of the DATE, not
- * of the settlement style. An SPX and an SPXW cohort on the same date share carry, and that is
- * correct.
- *
- * Never re-solve this. It comes from the same computation that produced the stored `bsm_iv`,
- * and the guards on it are scar tissue: a 0DTE parity solve once returned a 29.8% dividend
- * yield, so the solver now refuses a horizon under seven days and clamps to [0, 0.10].
- */
-export type ExpiryCarry = {
-  readonly expiration: string;
-  readonly rate: number;
-  readonly divYield: number;
-};
-
-export type ForReadingExpiryCarry = () => Promise<
-  Result<ReadonlyArray<ExpiryCarry>, StorageError>
->;
-
-/**
  * Trailing daily closes, oldest first, for the realized-volatility comparable.
  *
  * Known bias, inherited and not fixable here: the "daily close" is a `DISTINCT ON (time::date)`
@@ -89,8 +73,6 @@ export type CalendarRanking = {
   readonly realizedVol: number | null;
   /** Front-leg DTE ceiling actually applied. The floors are constants and not reported. */
   readonly frontDteMax: number;
-  /** Expiries priced on the flat fallback carry rather than a solved per-expiry one. */
-  readonly defaultCarryExpiries: ReadonlyArray<string>;
 };
 
 export type RankCalendarsRequest = {

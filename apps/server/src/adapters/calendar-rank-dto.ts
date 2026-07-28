@@ -39,7 +39,6 @@ export function toRankedCalendarBody(ranking: CalendarRanking): RankedCalendarRe
     ...ranking,
     asOf: ranking.asOf.toISOString(),
     candidates: [...ranking.candidates],
-    defaultCarryExpiries: [...ranking.defaultCarryExpiries],
   };
   return rankedCalendarResponse.parse(body);
 }

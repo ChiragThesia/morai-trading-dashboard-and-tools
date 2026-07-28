@@ -1036,10 +1036,9 @@ function realRankCalendars(over: Partial<RankCalendarsDeps> = {}): ForRankingCal
           ...rankLadder("2026-09-11", 0.16),
         ]),
       ),
-    readExpiryCarry: () => Promise.resolve(ok([])),
     readDailyCloses: () => Promise.resolve(ok(Array.from({ length: 25 }, (_, i) => 7300 + i * 4))),
     now: () => RANK_NOW,
-    defaultCarry: { rate: 0.045, divYield: 0.013 },
+    carry: { rate: 0.045, divYield: 0.013 },
     ...over,
   });
 }

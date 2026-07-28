@@ -56,7 +56,6 @@ const ROW = {
   spreadCost: 2.4,
   frontLeg: LEG,
   backLeg: LEG,
-  carrySource: { front: "implied", back: "default" },
 };
 
 const DROPS = {
@@ -66,7 +65,7 @@ const DROPS = {
   "gap-floor": 44,
   "root-mismatch": 8,
   "not-tradeable": 91,
-  "no-iv": 0,
+  "no-iv-legs": 994,
   "term-inverted": 6,
   "no-atm-reference": 2,
 };
@@ -80,7 +79,6 @@ const BODY = {
   drops: DROPS,
   realizedVol: 0.1128,
   frontDteMax: 60,
-  defaultCarryExpiries: ["2026-09-18"],
 };
 
 describe("rankedCalendar", () => {
@@ -89,7 +87,6 @@ describe("rankedCalendar", () => {
     expect(parsed.root).toBe("SPXW");
     expect(parsed.strike).toBe(7400);
     expect(parsed.breakdown.fwdEdge.contribution).toBeCloseTo(43.38, 6);
-    expect(parsed.carrySource).toEqual({ front: "implied", back: "default" });
   });
 
   it("accepts null in every genuinely-nullable measurement", () => {
@@ -133,7 +130,6 @@ describe("rankedCalendarResponse", () => {
     expect(parsed.totalCandidates).toBe(2454);
     expect(parsed.expiryPairs).toBe(124);
     expect(parsed.drops["gap-floor"]).toBe(44);
-    expect(parsed.defaultCarryExpiries).toEqual(["2026-09-18"]);
   });
 
   it("accepts a null realizedVol — the VRP term dropping out is a reported state", () => {
@@ -147,7 +143,6 @@ describe("rankedCalendarResponse", () => {
       candidates: [],
       totalCandidates: 0,
       expiryPairs: 0,
-      defaultCarryExpiries: [],
     });
     expect(parsed.candidates).toEqual([]);
   });

@@ -65,7 +65,6 @@ function candidate(over: Partial<Candidate> = {}): Candidate {
     spreadCost: 2,
     frontLeg: leg(),
     backLeg: leg({ iv: 0.16, theta: -0.6 }),
-    carrySource: { front: "implied", back: "implied" },
     ...over,
   };
 }

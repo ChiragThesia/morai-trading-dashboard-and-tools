@@ -38,7 +38,7 @@ function quote(over: Partial<CalendarChainQuote> = {}): CalendarChainQuote {
   };
 }
 
-const opts = { now: NOW, contractType: "P" as const, carryOf: () => null, defaultCarry: FLAT };
+const opts = { now: NOW, contractType: "P" as const, carry: FLAT };
 
 describe("snapshotSpot — one spot for the whole snapshot", () => {
   it("takes the median, so one stale vendor row cannot move it", () => {
@@ -338,41 +338,20 @@ describe("buildCohorts — tradeability is marked, not filtered", () => {
   });
 });
 
-describe("buildCohorts — carry comes from the expiry, and its source is visible", () => {
-  it("uses the solved per-expiry carry when one exists", () => {
-    const solved: Carry = { rate: 0.0382, divYield: 0.0121 };
-    const c = buildCohorts([quote()], { ...opts, carryOf: () => solved })[0];
-    expect(c?.carry).toEqual(solved);
-    expect(c?.carrySource).toBe("implied");
-  });
-
-  it("falls back to the flat default and SAYS SO", () => {
-    const c = buildCohorts([quote()], opts)[0];
-    expect(c?.carry).toEqual(FLAT);
-    expect(c?.carrySource).toBe("default");
-  });
-
-  it("asks for carry per (expiration, root), not once for the snapshot", () => {
-    const asked: string[] = [];
-    buildCohorts(
-      [
-        quote({ root: "SPX", expiration: "2026-08-21" }),
-        quote({ root: "SPXW", expiration: "2026-08-21" }),
-        quote({ root: "SPXW", expiration: "2026-09-01" }),
-      ],
-      {
-        ...opts,
-        carryOf: (expiration, root) => {
-          asked.push(`${root}|${expiration}`);
-          return null;
-        },
-      },
+describe("buildCohorts — ONE carry for every cohort in the snapshot", () => {
+  it("prices two different expiries on the SAME carry, the one the caller supplied", () => {
+    // The defect this pins. `buildCohorts` used to take a per-expiry `carryOf` and fall back to a
+    // flat default, so the two legs of one calendar came out on DIFFERENT (r, q) whenever the GEX
+    // snapshot had solved one expiry and not the other. Measured live on 2026-07-28, that was
+    // 3,313 of 5,917 candidates (56%). netDelta is a DIFFERENCE of two deltas at one strike and is
+    // the only score term that selects the strike, so two carries made the delta-neutral strike
+    // an artifact of which expiries happened to solve. Fails if per-expiry carry is reintroduced.
+    const cohorts = buildCohorts(
+      [quote({ expiration: "2026-08-14" }), quote({ expiration: "2026-09-18" })],
+      opts,
     );
-    // Compared as a set: which keys were asked for is the claim, not their collation order.
-    expect(asked).toHaveLength(3);
-    expect(new Set(asked)).toEqual(
-      new Set(["SPX|2026-08-21", "SPXW|2026-08-21", "SPXW|2026-09-01"]),
-    );
+    expect(cohorts).toHaveLength(2);
+    expect(cohorts.map((c) => c.carry)).toEqual([FLAT, FLAT]);
   });
 });
 

@@ -39,19 +39,14 @@ export type CalendarChainQuote = {
   readonly source: "schwab" | "cboe";
 };
 
-/** Per-expiry carry. Both legs of a candidate take their own expiry's values, never a blend. */
+/**
+ * The snapshot's carry. ONE pair of values for every cohort, and it must be the carry the
+ * stored `bsm_iv` was inverted at — see `cohort.ts`'s scar 4 for what per-expiry carry cost.
+ */
 export type Carry = {
   readonly rate: number;
   readonly divYield: number;
 };
-
-/**
- * Where a cohort's carry came from. `"default"` means no solved per-expiry entry existed and
- * the flat fallback was used — surfaced rather than silently substituted, because a cohort
- * priced on a flat 4.5%/1.3% is not the same measurement as one priced on solved parity
- * carry, and today's browser hides exactly that difference.
- */
-export type CarrySource = "implied" | "default";
 
 /** One strike inside one cohort, priced. */
 export type CohortLeg = {
@@ -95,8 +90,8 @@ export type Cohort = {
   readonly dte: number;
   /** Years to the settlement instant. What the pricing uses. */
   readonly t: number;
+  /** The snapshot's one carry, carried per cohort so a reader never has to go looking for it. */
   readonly carry: Carry;
-  readonly carrySource: CarrySource;
   /** Strike nearest spot, ties to the lower. Null on an empty cohort. */
   readonly atmStrike: number | null;
   /** IV at `atmStrike`. Null when that strike's own IV never solved — never a neighbour's. */
@@ -125,7 +120,16 @@ export type Cohort = {
   readonly legs: ReadonlyArray<CohortLeg>;
 };
 
-/** Why a would-be candidate never became one. Counted, so an empty result is explainable. */
+/**
+ * Why a would-be candidate never became one. Counted, so an empty result is explainable.
+ *
+ * THE UNITS ARE NOT ALL THE SAME, and the names say which is which. `"no-iv-legs"` counts LEGS
+ * — single chain rows thrown away before any pair existed. Every other reason is counted at the
+ * granularity the gate itself runs at: the two `front-dte-*` reasons per front COHORT, the four
+ * middle reasons per expiry PAIR, `"not-tradeable"` per strike inside a pair. Only the leg
+ * counter carries its unit in its name because it is the only one whose unit a reader would
+ * otherwise guess wrong — the rest are all "a candidate that did not happen".
+ */
 export type DropReason =
   | "front-dte-floor"
   | "front-dte-ceiling"
@@ -133,8 +137,20 @@ export type DropReason =
   | "gap-floor"
   | "root-mismatch"
   | "not-tradeable"
-  | "no-iv"
+  | "no-iv-legs"
   | "term-inverted"
   | "no-atm-reference";
+
+/**
+ * The reasons `enumerateCandidates` can actually produce.
+ *
+ * `"no-iv-legs"` is excluded rather than initialised to zero, and that exclusion is the fix for
+ * a real defect: the reason was declared in the drops record, shipped in the Zod contract and
+ * returned by the API, and NOTHING ever incremented it. The leg is discarded in `buildCohorts`,
+ * one layer above enumeration, so enumeration cannot see it — and a counter the producing code
+ * cannot reach is a counter that reads 0 forever. Only the use-case, which holds both stages,
+ * can assemble a complete `DropCounts`.
+ */
+export type CandidateDropReason = Exclude<DropReason, "no-iv-legs">;
 
 export type DropCounts = Readonly<Record<DropReason, number>>;

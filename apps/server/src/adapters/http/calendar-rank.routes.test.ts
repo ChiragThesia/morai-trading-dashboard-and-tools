@@ -76,7 +76,6 @@ const ROW = {
   spreadCost: 2.4,
   frontLeg: LEG,
   backLeg: LEG,
-  carrySource: { front: "implied" as const, back: "default" as const },
 };
 
 const RANKING: CalendarRanking = {
@@ -92,13 +91,12 @@ const RANKING: CalendarRanking = {
     "gap-floor": 44,
     "root-mismatch": 8,
     "not-tradeable": 91,
-    "no-iv": 0,
+    "no-iv-legs": 994,
     "term-inverted": 6,
     "no-atm-reference": 2,
   },
   realizedVol: null,
   frontDteMax: 60,
-  defaultCarryExpiries: ["2026-09-18"],
 };
 
 const rankOk: ForRankingCalendars = async () => ok(RANKING);
@@ -211,10 +209,9 @@ const CHAIN: CalendarChainQuote[] = [
 function realDeps(over: Partial<RankCalendarsDeps> = {}): RankCalendarsDeps {
   return {
     readChain: () => Promise.resolve(ok(CHAIN)),
-    readExpiryCarry: () => Promise.resolve(ok([])),
     readDailyCloses: () => Promise.resolve(ok(Array.from({ length: 25 }, (_, i) => 7300 + i * 4))),
     now: () => NOW,
-    defaultCarry: { rate: 0.045, divYield: 0.013 },
+    carry: { rate: 0.045, divYield: 0.013 },
     ...over,
   };
 }

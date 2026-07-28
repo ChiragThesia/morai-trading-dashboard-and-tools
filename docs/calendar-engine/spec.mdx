@@ -595,8 +595,19 @@ Four carry regimes exist and have never been reconciled: `bsm_*` was solved with
 `r` per date and constant `q = 0.013`; `gex_snapshots.implied_carry` is per-expiry;
 the GEX profile hardcodes `0.043 / 0.013` in the same row as `implied_carry`; the browser
 silently falls back to `{0.045, 0.013}`. Any reprice takes `r` and `q` from the **same
-expiry row** it took IV from, or it drifts from the server. A cohort with no carry entry
-is marked, not defaulted.
+computation** that produced the IV it is repricing, or it drifts from the server.
+
+For this engine that resolves to ONE carry for the whole snapshot, not a per-expiry
+lookup with a fallback. `bsm_iv` is inverted by `computeBsmGreeks` at a flat `r` per
+observation date and a constant `q`, so there is no per-expiry regime to match — and
+`implied_carry`, being a different computation (FRED-interpolated `r`, parity-solved `q`),
+is not the one to match. The per-expiry read shipped first and was removed: it priced the
+two legs of one calendar on different `(r, q)` — 3,313 of 5,917 live candidates (56%) on
+2026-07-28, moving the delta-neutral strike on 1 of the top 10 pairs against that day's
+2-expiry carry array, and on 8 of 10 when the same chain is re-run against a 43-expiry
+array. Both runs also reordered the top 10 pairs, because carry moves delta and the
+forward factor reads off a 50-delta interpolation. See
+`packages/core/src/calendar/domain/cohort.ts` scar 4.
 
 ### 8.5 One spot per cohort, passed explicitly
 
@@ -708,7 +719,8 @@ any of this code lands.
 Each ranked row carries: identity (`root`, `strike`, `frontExpiry`, `backExpiry`, both
 DTEs), the score plus its four-term breakdown **with each term's raw value and its
 percentile**, every §5.2 metric, both legs' greeks and quotes, the debit, and the
-`fwdIvGuard`/`carrySource` provenance flags.
+`fwdIvGuard` provenance flag. There is no per-leg `carrySource`: §8.4 makes carry one
+snapshot-wide constant, so the flag could only ever report the same value.
 
 The breakdown is not decoration. A score you cannot decompose is a score you cannot
 argue with, and the doctrine's own instruction is to find out *why*.

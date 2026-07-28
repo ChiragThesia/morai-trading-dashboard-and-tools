@@ -29,7 +29,6 @@ export type { ScoredCalendar, ScoreTerm, ScoreTermKey } from "./domain/score.ts"
 export type {
   CalendarChainQuote,
   Carry,
-  CarrySource,
   Cohort,
   CohortLeg,
   DropCounts,
@@ -42,10 +41,8 @@ export { makeRankCalendarsUseCase } from "./application/rankCalendars.ts";
 export type { RankCalendarsDeps } from "./application/rankCalendars.ts";
 export type {
   CalendarRanking,
-  ExpiryCarry,
   ForRankingCalendars,
   ForReadingCalendarChain,
   ForReadingDailyCloses,
-  ForReadingExpiryCarry,
   RankCalendarsRequest,
 } from "./application/ports.ts";

@@ -82,7 +82,6 @@ import type {
   LatestSnapshotForOpenCalendar,
   GexContextForPicker,
   GexSnapshotRow,
-  ForReadingExpiryCarry,
 } from "@morai/core";
 import { ok, retryWithBackoff } from "@morai/shared";
 import { PgBoss } from "pg-boss";
@@ -421,23 +420,21 @@ const analyzeAdHocCalendar = makeAnalyzeAdHocCalendarUseCase({
 //   readChain        ← the SAME root-correct, OI-repaired picker-chain read the compute-picker
 //                      job and GET /api/chain use. Its 10-minute union and MAX(open_interest)
 //                      OVER (PARTITION BY contract) are measured outage fixes — never bypass it.
-//   readExpiryCarry  ← the implied_carry array on the latest GEX snapshot row. Carry is NEVER
-//                      re-solved here: it comes from the same computation that produced the
-//                      stored bsm_iv, and re-deriving it would drift from the server. A missing
-//                      or unresolved array degrades to [] → the use-case prices those expiries
-//                      on the flat fallback and NAMES them in defaultCarryExpiries.
 //   readDailyCloses  ← picker-history's trailing spot closes, for the realized-vol comparable.
-const readExpiryCarryFromGex: ForReadingExpiryCarry = async () => {
-  const result = await gexSnapshotRepo.readGexSnapshot();
-  if (!result.ok) return result;
-  return ok(result.value?.impliedCarry ?? []);
-};
+//
+// CARRY IS INJECTED, NOT READ. It used to be a third port over the latest GEX snapshot's solved
+// implied_carry array, which priced the two legs of one calendar on different (r, q) — and that
+// array never was the carry the stored bsm_iv was inverted at, whatever this comment used to
+// claim. compute-bsm-greeks inverts at (r = the DGS3MO observation for the row's date, q =
+// BSM_DIVIDEND_YIELD); computeImpliedCarry solves (FRED-interpolated r, put-call-parity q).
+// The pair below is the closest this composition root can get to the inversion's own carry:
+// q is the SAME constant the worker uses, r is the fallback rather than the observation. See
+// packages/core/src/calendar/domain/cohort.ts scar 4.
 const rankCalendars = makeRankCalendarsUseCase({
   readChain: pickerChainRepo.readChainForPicker,
-  readExpiryCarry: readExpiryCarryFromGex,
   readDailyCloses: pickerHistoryRepo.readDailySpotCloses,
   now: () => new Date(),
-  defaultCarry: { rate: config.BSM_RATE_FALLBACK, divYield: config.BSM_DIVIDEND_YIELD },
+  carry: { rate: config.BSM_RATE_FALLBACK, divYield: config.BSM_DIVIDEND_YIELD },
 });
 
 // EXIT-08 / MCP-02 (26-05): get-exit-advice read use-case — shared by GET /api/exits +

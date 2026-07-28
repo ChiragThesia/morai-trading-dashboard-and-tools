@@ -16,6 +16,30 @@
  *   3. ONE SPOT FOR THE SNAPSHOT. The chain is a two-vendor union, so `rows[0]` is whichever
  *      vendor landed first. Today the ATM reference measures against a screen-wide first row
  *      while each leg prices against its own row's spot — two spots on one screen.
+ *   4. ONE CARRY FOR THE SNAPSHOT, and it is the carry the IV was INVERTED at. This module used
+ *      to take a per-expiry `carryOf` with a flat fallback, which priced the two legs of one
+ *      calendar on different (r, q). Measured before/after against the live chain 2026-07-28,
+ *      read-only, same chain read for both sides:
+ *
+ *        latest carry array (2 solved expiries)   3,313 of 5,917 candidates (56%) mixed-carry;
+ *                                                 1 of the top 10 pairs changed strike
+ *        43-expiry array, same chain              1,150 of 6,850 (17%) mixed; 8 of the top 10
+ *                                                 changed strike, the largest 7400 → 7375
+ *
+ *      BOTH runs also reordered the top 10 PAIRS, which the strike framing does not predict:
+ *      carry reaches the pair score too, because `atm50Iv` is interpolated to |delta| = 0.50 and
+ *      delta is what carry moves. A mixed-carry pair was mismeasuring its forward factor as well
+ *      as its strike.
+ *
+ *      The per-expiry carry was not the more faithful of the two, which is why the fix is one
+ *      carry rather than better carry. `implied_carry` is solved by `computeImpliedCarry`
+ *      (FRED-interpolated r, put-call-parity q); `bsm_iv` is inverted by `computeBsmGreeks` at
+ *      (r = the DGS3MO observation for the row's date, q = BSM_DIVIDEND_YIELD, a constant).
+ *      Two different computations. The flat carry matches the inversion's q EXACTLY (both
+ *      configs default 0.013 — apps/server/src/config.ts:39, apps/worker/src/config.ts:27)
+ *      where the solved q on 2026-07-28 read 0.0002 and 0.0013, an order of magnitude off.
+ *      Repricing at a carry the inversion did not use breaks this repo's `invert → reprice
+ *      shares (r, q)` law, so the solved array is the branch that had to go.
  *
  * Legs that cannot be TRADED are kept and marked, not dropped: an unquotable strike still
  * belongs to the smile that defines the ATM reference. Only candidate enumeration requires
@@ -24,7 +48,7 @@
 
 import { bsmGreeks } from "@morai/quant";
 import { calendarDaysTo, yearsToSettlement } from "./time.ts";
-import type { CalendarChainQuote, Carry, CarrySource, Cohort, CohortLeg, Root } from "./types.ts";
+import type { CalendarChainQuote, Carry, Cohort, CohortLeg, Root } from "./types.ts";
 
 /** Strikes arrive ×1000. Converted here, once; no domain code downstream sees the ×1000 form. */
 const STRIKE_SCALE = 1000;
@@ -61,10 +85,11 @@ export type BuildCohortsOptions = {
   readonly now: Date;
   /** Which wing to build. Puts, for this trader. */
   readonly contractType: "C" | "P";
-  /** Solved per-expiry carry, or null when this expiry has none. */
-  readonly carryOf: (expiration: string, root: Root) => Carry | null;
-  /** Used only when `carryOf` returns null — and the cohort says so via `carrySource`. */
-  readonly defaultCarry: Carry;
+  /**
+   * ONE carry for every cohort in the snapshot, and it must be the carry the stored `bsm_iv`
+   * was INVERTED at. See the header — this is not a default with a better alternative.
+   */
+  readonly carry: Carry;
 };
 
 /**
@@ -137,13 +162,9 @@ export function buildCohorts(
     const t = yearsToSettlement(opts.now, group.expiration, group.root);
     if (t <= 0) continue;
 
-    const solved = opts.carryOf(group.expiration, group.root);
-    const carry: Carry = solved ?? opts.defaultCarry;
-    const carrySource: CarrySource = solved === null ? "default" : "implied";
-
     const legs: CohortLeg[] = [];
     for (const entry of group.byStrike.values()) {
-      const leg = priceLeg(entry.q, entry.iv, spot, t, carry, opts.contractType);
+      const leg = priceLeg(entry.q, entry.iv, spot, t, opts.carry, opts.contractType);
       if (leg !== null) legs.push(leg);
     }
     if (legs.length === 0) continue;
@@ -157,8 +178,7 @@ export function buildCohorts(
       expiration: group.expiration,
       dte,
       t,
-      carry,
-      carrySource,
+      carry: opts.carry,
       atmStrike,
       // No neighbour substitution, ever. A strike silently measured against 7450 because 7400
       // never solved is not slightly off — it is on a different scale from every row it gets
@@ -174,6 +194,36 @@ export function buildCohorts(
   // and expiration determines dte.
   cohorts.sort((a, b) => a.dte - b.dte || a.root.localeCompare(b.root));
   return cohorts;
+}
+
+/**
+ * countLegsWithoutIv — how many rows of the requested wing `buildCohorts` threw away for want of
+ * a usable IV. In LEGS, which is why the drop reason is named `"no-iv-legs"`.
+ *
+ * This is a second pass over the same quotes rather than a count returned alongside the cohorts,
+ * and the reason is bluntly that the alternative is worse: `buildCohorts` returns an array that
+ * ~25 call sites index directly, and widening it to `{ cohorts, noIvLegs }` rewrites all of them
+ * to report one integer. The pass is over ~9,300 rows and costs nothing measurable. What it must
+ * not become is a SECOND definition of "unusable" — so it calls the same `parseIv` the filter
+ * calls, and scopes to the same `contractType`. Both details are load-bearing. Measured on the
+ * chain read this engine actually consumes, 2026-07-28: 5,768 put rows, of which 700 are null
+ * and 708 are 'NaN' — 1,408 legs, 24.4% of the wing, previously reported as zero. Scoping
+ * matters because the wings do not fail alike: the same window's calls carried 0 'NaN' against
+ * the puts' 708, so counting both wings would roughly double the number into meaninglessness.
+ *
+ * Counted BEFORE cohorts are built and independently of the DTE gates, so this is every leg the
+ * chain could not price — not only the ones inside the ranked window. It answers "how much of
+ * the book was unreadable", which is the question a thin ranking raises.
+ */
+export function countLegsWithoutIv(
+  quotes: ReadonlyArray<CalendarChainQuote>,
+  contractType: "C" | "P",
+): number {
+  let count = 0;
+  for (const q of quotes) {
+    if (q.contractType === contractType && parseIv(q.bsmIv) === null) count += 1;
+  }
+  return count;
 }
 
 /**

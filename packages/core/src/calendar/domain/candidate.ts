@@ -21,7 +21,7 @@
 
 import { computeFwdIv } from "../../picker/domain/fwd-iv.ts";
 import { haircutFill } from "../../picker/domain/candidate-selection.ts";
-import type { Cohort, CohortLeg, DropCounts, DropReason, Root } from "./types.ts";
+import type { CandidateDropReason, Cohort, CohortLeg, Root } from "./types.ts";
 
 /**
  * The trader's rule, as hard constants. Not knobs.
@@ -107,27 +107,32 @@ export type Candidate = {
 
   readonly frontLeg: CohortLeg;
   readonly backLeg: CohortLeg;
-  readonly carrySource: { readonly front: Cohort["carrySource"]; readonly back: Cohort["carrySource"] };
 };
 
 export type EnumerateResult = {
   readonly candidates: ReadonlyArray<Candidate>;
-  /** Why would-be candidates never became one, so an empty result is explainable. */
-  readonly drops: DropCounts;
+  /**
+   * Why would-be candidates never became one, so an empty result is explainable.
+   *
+   * The reasons THIS STAGE can produce, which is not all of them: a leg with no usable IV is
+   * gone before enumeration ever sees it (`cohort.ts` `parseIv`), so `"no-iv-legs"` is not a key
+   * here. It used to be — initialised to 0 and never incremented, which made the API's drops
+   * record assert something false. The use-case holds both stages and assembles the full count.
+   */
+  readonly drops: Readonly<Record<CandidateDropReason, number>>;
 };
 
 export function enumerateCandidates(
   cohorts: ReadonlyArray<Cohort>,
   opts: EnumerateOptions,
 ): EnumerateResult {
-  const drops: Record<DropReason, number> = {
+  const drops: Record<CandidateDropReason, number> = {
     "front-dte-floor": 0,
     "front-dte-ceiling": 0,
     "back-dte-ceiling": 0,
     "gap-floor": 0,
     "root-mismatch": 0,
     "not-tradeable": 0,
-    "no-iv": 0,
     "term-inverted": 0,
     "no-atm-reference": 0,
   };
@@ -240,7 +245,6 @@ export function enumerateCandidates(
 
           frontLeg,
           backLeg,
-          carrySource: { front: front.carrySource, back: back.carrySource },
         });
       }
     }

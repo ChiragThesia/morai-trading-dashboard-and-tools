@@ -12,6 +12,7 @@ import { ok, err } from "@morai/shared";
 import { makeRankCalendarsUseCase } from "./rankCalendars.ts";
 import type { RankCalendarsDeps } from "./rankCalendars.ts";
 import type { CalendarChainQuote } from "../domain/types.ts";
+import type { ScoredCalendar } from "../domain/score.ts";
 
 const NOW = new Date("2026-07-27T16:00:00.000Z");
 const SPOT = 7401.89;
@@ -54,10 +55,9 @@ const CLOSES = Array.from({ length: 25 }, (_, i) => 7300 + i * 4);
 function deps(over: Partial<RankCalendarsDeps> = {}): RankCalendarsDeps {
   return {
     readChain: () => Promise.resolve(ok(CHAIN)),
-    readExpiryCarry: () => Promise.resolve(ok([])),
     readDailyCloses: () => Promise.resolve(ok(CLOSES)),
     now: () => NOW,
-    defaultCarry: { rate: 0.045, divYield: 0.013 },
+    carry: { rate: 0.045, divYield: 0.013 },
     ...over,
   };
 }
@@ -155,32 +155,57 @@ describe("rankCalendars — the happy path", () => {
   });
 });
 
-describe("rankCalendars — carry", () => {
-  it("uses solved per-expiry carry and reports nothing as defaulted", async () => {
-    const carry = [
-      { expiration: "2026-08-11", rate: 0.0382, divYield: 0.0121 },
-      { expiration: "2026-08-26", rate: 0.0383, divYield: 0.0122 },
-      { expiration: "2026-09-11", rate: 0.0384, divYield: 0.0123 },
+describe("rankCalendars — legs with no usable IV are COUNTED, not swallowed", () => {
+  it("reports the legs the cohort discarded, and counts only the requested wing", async () => {
+    // `cohort.ts` drops any row whose `bsmIv` is null (never processed — the IV drain is bounded
+    // at 800 rows a pass) or the literal 'NaN' (the inversion permanently failed). It dropped
+    // them silently: the drops record declared a "no-iv" reason that nothing ever incremented,
+    // so the API asserted 0 while a quarter of the live put book was being discarded. Measured
+    // on the engine's own chain read, 2026-07-28: 700 null + 708 'NaN' of 5,768 puts = 1,408
+    // legs, 24.4%. A counter that always reads 0 is not a missing feature, it is a false
+    // statement about the engine's behaviour.
+    const broken: CalendarChainQuote[] = CHAIN.map((q, i) =>
+      i % 3 === 0 ? { ...q, bsmIv: i === 0 ? null : "NaN" } : q,
+    );
+    // A call leg with no IV must NOT land in a put ranking's count — the wings are separate
+    // books and mixing them roughly doubles the number into meaninglessness.
+    const withCall: CalendarChainQuote[] = [
+      ...broken,
+      ...ladder({ expiration: "2026-08-11", ivAtm: 0.17 }).map((q) => ({
+        ...q,
+        contractType: "C" as const,
+        bsmIv: null,
+      })),
     ];
     const result = await makeRankCalendarsUseCase(
-      deps({ readExpiryCarry: () => Promise.resolve(ok(carry)) }),
+      deps({ readChain: () => Promise.resolve(ok(withCall)) }),
     )({});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.defaultCarryExpiries).toEqual([]);
-    expect(result.value.candidates[0]?.carrySource).toEqual({ front: "implied", back: "implied" });
+    expect(result.value.drops["no-iv-legs"]).toBe(3);
   });
+});
 
-  it("NAMES the expiries it had to price on the flat fallback", async () => {
-    // A cohort silently priced at a flat 4.5%/1.3% is not the same measurement as one priced on
-    // solved parity carry, and today's browser hides exactly that difference.
-    const carry = [{ expiration: "2026-08-11", rate: 0.0382, divYield: 0.0121 }];
-    const result = await makeRankCalendarsUseCase(
-      deps({ readExpiryCarry: () => Promise.resolve(ok(carry)) }),
+describe("rankCalendars — carry", () => {
+  it("prices both legs of every candidate on the one injected carry", async () => {
+    // Replaces two tests that pinned the OLD behaviour: a solved per-expiry carry array with a
+    // flat fallback for the expiries it did not cover. That combination priced the two legs of
+    // one calendar on different (r, q) — 56% of live candidates on 2026-07-28 — and netDelta,
+    // the only term that selects the strike, is a difference of exactly those two legs.
+    //
+    // Here the claim is only that the injected carry REACHES the ranking — this layer collapses
+    // to one row per expiry pair, so the row a given pair contributes is itself carry-dependent
+    // and is not a stable thing to diff. The both-legs-together claim is pinned one layer down,
+    // in domain/candidate.test.ts, where every strike is still enumerable.
+    const base = await makeRankCalendarsUseCase(deps())({});
+    const shifted = await makeRankCalendarsUseCase(
+      deps({ carry: { rate: 0.0396, divYield: 0.0002 } }),
     )({});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.defaultCarryExpiries).toEqual(["2026-08-26", "2026-09-11"]);
+    expect(base.ok && shifted.ok).toBe(true);
+    if (!base.ok || !shifted.ok) return;
+    expect(base.value.candidates.length).toBeGreaterThan(0);
+    const deltas = (rows: ReadonlyArray<ScoredCalendar>) => rows.map((c) => c.net.delta);
+    expect(deltas(shifted.value.candidates)).not.toEqual(deltas(base.value.candidates));
   });
 });
 
@@ -192,18 +217,6 @@ describe("rankCalendars — degradation", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe("storage-error");
-  });
-
-  it("still ranks when the carry read fails, marking every expiry as defaulted", async () => {
-    const result = await makeRankCalendarsUseCase(
-      deps({
-        readExpiryCarry: () => Promise.resolve(err({ kind: "storage-error", message: "no gex" })),
-      }),
-    )({});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.candidates.length).toBeGreaterThan(0);
-    expect(result.value.defaultCarryExpiries.length).toBeGreaterThan(0);
   });
 
   it("ranks identically with and without realized vol — it is context, not a term", async () => {
@@ -302,18 +315,15 @@ describe("rankCalendars — determinism", () => {
 });
 
 describe("port hygiene — the engine cannot reach what it must not", () => {
-  it("declares exactly five dependencies", () => {
+  it("declares exactly four dependencies", () => {
     // The incumbent reached fifteen. This assertion is the only thing that stops the same drift:
     // adding a gate, a persisted snapshot, a macro series or an events feed fails here first,
     // which forces the addition to be argued rather than absorbed.
+    //
+    // It was five. `readExpiryCarry` came out for correctness, not for the count — see
+    // domain/cohort.ts scar 4 — and carry is now one injected constant rather than a read.
     const keys = Object.keys(deps()).sort();
-    expect(keys).toEqual([
-      "defaultCarry",
-      "now",
-      "readChain",
-      "readDailyCloses",
-      "readExpiryCarry",
-    ]);
+    expect(keys).toEqual(["carry", "now", "readChain", "readDailyCloses"]);
   });
 
   it("has no dependency whose name suggests a gate, a snapshot or an event feed", () => {

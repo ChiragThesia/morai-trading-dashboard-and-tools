@@ -53,15 +53,46 @@ function ladder(over: {
 }
 
 function cohortsFrom(...groups: ReadonlyArray<CalendarChainQuote>[]): ReadonlyArray<Cohort> {
-  return buildCohorts(groups.flat(), {
-    now: NOW,
-    contractType: "P",
-    carryOf: () => null,
-    defaultCarry: FLAT,
-  });
+  return buildCohorts(groups.flat(), { now: NOW, contractType: "P", carry: FLAT });
 }
 
 const OPTS = { frontDteMax: 60 };
+
+describe("both legs of a calendar are priced on the same carry", () => {
+  it("reprices BOTH legs when the snapshot's carry moves, never one against the other", () => {
+    // The defect, stated at the layer where it bit. `net.delta` is `backLeg.delta −
+    // frontLeg.delta` at ONE strike, and it is the only score term that selects that strike.
+    // The engine used to take solved per-expiry carry with a flat fallback, and the solved
+    // entries covered monthlies while calendar front legs are 15-30 DTE weeklies — so the front
+    // leg moved with the fallback while the back leg sat on solved carry, and the delta-neutral
+    // strike partly measured that split. Measured live 2026-07-28: 3,313 of 5,917 candidates,
+    // and forcing one carry moved 8 of the top 10 pairs' strikes on a 43-expiry carry array.
+    const rows = [
+      ...ladder({ expiration: "2026-08-14", ivAtm: 0.17 }),
+      ...ladder({ expiration: "2026-09-18", ivAtm: 0.16 }),
+    ];
+    const build = (carry: Carry) =>
+      enumerateCandidates(buildCohorts(rows, { now: NOW, contractType: "P", carry }), OPTS)
+        .candidates;
+
+    const before = build(FLAT);
+    // The solved carry a live GEX snapshot offered on 2026-07-28: r 0.0389, q 0.0013 against the
+    // flat 0.045 / 0.013. Under the old code this pair of numbers reached one leg and not both.
+    const after = build({ rate: 0.0389, divYield: 0.0013 });
+    expect(before.length).toBeGreaterThan(0);
+
+    const sameStrike = after.find(
+      (c) =>
+        c.strike === before[0]?.strike &&
+        c.frontExpiration === before[0]?.frontExpiration &&
+        c.backExpiration === before[0]?.backExpiration,
+    );
+    expect(sameStrike).toBeDefined();
+    if (sameStrike === undefined || before[0] === undefined) return;
+    expect(sameStrike.frontLeg.delta).not.toBe(before[0].frontLeg.delta);
+    expect(sameStrike.backLeg.delta).not.toBe(before[0].backLeg.delta);
+  });
+});
 
 describe("the floors are the trader's rule and cannot be crossed", () => {
   it("exposes the floors as hard constants", () => {

@@ -12,6 +12,14 @@ import { z } from "zod";
 // STRIKE CONVENTION: points, e.g. 7400 — NOT the ×1000 integer chainResponse carries. The
 // engine converts once, in domain/cohort.ts, and nothing downstream of it sees ×1000.
 //
+// CARRY IS AN ENGINE INVARIANT, NOT A RESPONSE FIELD. Every leg in every candidate is priced on
+// ONE (r, q) — the carry the stored bsm_iv was inverted at. This response used to carry a
+// per-leg `carrySource` and a `defaultCarryExpiries` list, from the days when a solved
+// per-expiry carry priced some legs and a flat fallback priced the rest. That is exactly the
+// defect that was fixed (domain/cohort.ts scar 4): the two legs of one calendar came out on
+// different carry, which moved the delta-neutral strike. With one carry both fields would read
+// the same value on every response forever, and a field that cannot vary is not information.
+//
 // NULL-HONESTY: every field the engine can fail to measure is `.nullable()` here. That is not
 // defensive padding — `domain/candidate.ts` returns null rather than a fabricated zero for
 // ffStrike, thetaCarry and both vertical skews, and `domain/score.ts` drops a whole term to
@@ -132,15 +140,6 @@ export const rankedCalendar = z.object({
 
   frontLeg: calendarRankLeg,
   backLeg: calendarRankLeg,
-  /**
-   * Per-leg carry provenance. `"default"` means no solved per-expiry carry existed and the flat
-   * fallback priced that leg — surfaced rather than silently substituted, because a cohort priced
-   * on a flat rate is not the same measurement as one priced on solved parity carry.
-   */
-  carrySource: z.object({
-    front: z.enum(["implied", "default"]),
-    back: z.enum(["implied", "default"]),
-  }),
 });
 
 export type RankedCalendar = z.infer<typeof rankedCalendar>;
@@ -159,7 +158,7 @@ export const calendarRankDrops = z.object({
   "gap-floor": z.number().int(),
   "root-mismatch": z.number().int(),
   "not-tradeable": z.number().int(),
-  "no-iv": z.number().int(),
+  "no-iv-legs": z.number().int(),
   "term-inverted": z.number().int(),
   "no-atm-reference": z.number().int(),
 });
@@ -192,8 +191,6 @@ export const rankedCalendarResponse = z.object({
   realizedVol: z.number().nullable(),
   /** Front-leg DTE ceiling actually applied. The 15-day floors are constants, never reported. */
   frontDteMax: z.number().int(),
-  /** Expiries priced on the flat fallback carry rather than a solved per-expiry one. */
-  defaultCarryExpiries: z.array(z.string()),
 });
 
 export type RankedCalendarResponse = z.infer<typeof rankedCalendarResponse>;

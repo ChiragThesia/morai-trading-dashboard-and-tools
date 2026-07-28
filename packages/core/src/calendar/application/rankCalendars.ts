@@ -5,35 +5,37 @@
  * delegates every formula to `domain/`, and returns a `Result`. It never throws and never
  * persists.
  *
- * FIVE dependencies. The incumbent reached fifteen, plus a persisted snapshot, a three-system
+ * FOUR dependencies. The incumbent reached fifteen, plus a persisted snapshot, a three-system
  * VIX entry gate, a sizing ladder and two brake evaluators — and its ranked output has no live
- * web consumer. What this engine needs is one chain read; the carry and the closes are the two
- * inputs the domain cannot derive from a chain alone. A port-hygiene test pins the count, so a
- * sixth dependency has to be argued rather than absorbed.
+ * web consumer. What this engine needs is one chain read; the closes are the only other input
+ * the domain cannot derive from a chain alone. A port-hygiene test pins the count, so a fifth
+ * dependency has to be argued rather than absorbed.
  *
- * Degradation, in three tiers, and the tiers are deliberate:
+ * It was five. `readExpiryCarry` — the solved per-expiry `implied_carry` array off the latest
+ * GEX snapshot — is gone, and its removal is a CORRECTNESS fix, not tidying: it priced the two
+ * legs of one calendar on different (r, q), and it was never the carry the stored `bsm_iv` was
+ * inverted at in the first place. `domain/cohort.ts` scar 4 carries the measurements.
+ *
+ * Degradation, in two tiers, and the tiers are deliberate:
  *   - The CHAIN read is critical. A ranking without a chain is not a degraded ranking, it is
  *     not a ranking, so a failure propagates.
- *   - CARRY degrades to the flat fallback, and the affected expiries are NAMED in the result.
- *     Silently substituting flat carry is what the browser does today.
  *   - REALIZED VOL degrades to null. It is reported as snapshot context and no longer scores
  *     anything, so a missing value costs a comparable, never a ranking.
  */
 
 import { ok, err } from "@morai/shared";
 import type { Result } from "@morai/shared";
-import { buildCohorts, snapshotSpot } from "../domain/cohort.ts";
+import { buildCohorts, countLegsWithoutIv, snapshotSpot } from "../domain/cohort.ts";
 import { enumerateCandidates } from "../domain/candidate.ts";
 import { scoreCandidates } from "../domain/score.ts";
 import type { ScoredCalendar } from "../domain/score.ts";
 import { realizedVol } from "../../picker/domain/realized-vol.ts";
-import type { Carry, Root } from "../domain/types.ts";
+import type { Carry, DropCounts } from "../domain/types.ts";
 import type {
   CalendarRanking,
   ForRankingCalendars,
   ForReadingCalendarChain,
   ForReadingDailyCloses,
-  ForReadingExpiryCarry,
   RankCalendarsRequest,
   StorageError,
 } from "./ports.ts";
@@ -53,14 +55,15 @@ const RV_CLOSES_DAYS = 21;
 export type RankCalendarsDeps = {
   /** Critical: a failure fails the call. */
   readonly readChain: ForReadingCalendarChain;
-  /** Non-critical: a failure degrades every expiry to the flat fallback, and says so. */
-  readonly readExpiryCarry: ForReadingExpiryCarry;
-  /** Non-critical: a failure drops the VRP term for the whole snapshot. */
+  /** Non-critical: a failure drops the realized-vol comparable for the whole snapshot. */
   readonly readDailyCloses: ForReadingDailyCloses;
   /** Injected clock — the domain never reads one. */
   readonly now: () => Date;
-  /** Used only where no solved per-expiry carry exists. */
-  readonly defaultCarry: Carry;
+  /**
+   * The ONE carry every leg is priced on. Wire it to the same (r, q) the `bsm_iv` inversion
+   * used — never to a per-expiry solve. See `domain/cohort.ts` scar 4.
+   */
+  readonly carry: Carry;
 };
 
 export function makeRankCalendarsUseCase(deps: RankCalendarsDeps): ForRankingCalendars {
@@ -72,29 +75,6 @@ export function makeRankCalendarsUseCase(deps: RankCalendarsDeps): ForRankingCal
       if (!chainResult.ok) return err(chainResult.error);
       const quotes = chainResult.value;
 
-      // Carry: keyed by expiration only, because r and q are properties of the DATE, not of the
-      // settlement style. Never re-solved here — it comes from the same computation that
-      // produced the stored bsm_iv, and re-deriving it would drift from the server.
-      const carryResult = await deps.readExpiryCarry();
-      const carryByExpiration = new Map<string, Carry>();
-      if (carryResult.ok) {
-        for (const row of carryResult.value) {
-          if (Number.isFinite(row.rate) && Number.isFinite(row.divYield)) {
-            carryByExpiration.set(row.expiration, { rate: row.rate, divYield: row.divYield });
-          }
-        }
-      }
-
-      const defaulted = new Set<string>();
-      const carryOf = (expiration: string, _root: Root): Carry | null => {
-        const solved = carryByExpiration.get(expiration);
-        if (solved === undefined) {
-          defaulted.add(expiration);
-          return null;
-        }
-        return solved;
-      };
-
       const closesResult = await deps.readDailyCloses(RV_CLOSES_DAYS);
       const rv = closesResult.ok ? realizedVol(closesResult.value) : null;
 
@@ -103,15 +83,20 @@ export function makeRankCalendarsUseCase(deps: RankCalendarsDeps): ForRankingCal
       const frontDteMax = request.frontDteMax ?? DEFAULT_FRONT_DTE_MAX;
       const limit = request.limit ?? DEFAULT_LIMIT;
 
-      const cohorts = buildCohorts(quotes, {
-        now,
-        contractType,
-        carryOf,
-        defaultCarry: deps.defaultCarry,
-      });
+      const cohorts = buildCohorts(quotes, { now, contractType, carry: deps.carry });
 
       const { candidates, drops } = enumerateCandidates(cohorts, { frontDteMax });
       const scored = scoreCandidates(candidates);
+
+      // The full drops record is assembled HERE because it takes both stages to write it, and
+      // only this function holds both. `buildCohorts` discards a leg whose `bsm_iv` is null or
+      // the literal 'NaN' and cannot report it (it returns cohorts, not a tally); enumeration
+      // never sees that leg. The reason used to be declared in the record with a hard-wired 0 —
+      // 1,408 of 5,768 live put legs discarded (24.4%, 2026-07-28) while the API reported none.
+      const allDrops: DropCounts = {
+        ...drops,
+        "no-iv-legs": countLegsWithoutIv(quotes, contractType),
+      };
 
       // ONE ROW PER EXPIRY PAIR. `fwdEdge` is a property of the pair and constant across every
       // strike inside it, so within a pair only `deltaBalance` varies — and it is minimised at
@@ -149,12 +134,9 @@ export function makeRankCalendarsUseCase(deps: RankCalendarsDeps): ForRankingCal
         candidates: bestPerPair.slice(0, Math.max(0, limit)),
         totalCandidates: scored.length,
         expiryPairs: seenPairs.size,
-        drops,
+        drops: allDrops,
         realizedVol: rv,
         frontDteMax,
-        // Sorted so the result is deterministic; a Set's iteration order is insertion order,
-        // which would leak the cohort loop's sequence into the response.
-        defaultCarryExpiries: [...defaulted].sort(),
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
