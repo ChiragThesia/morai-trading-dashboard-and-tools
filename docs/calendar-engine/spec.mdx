@@ -739,6 +739,101 @@ The cross-seam test lives in `apps/server`, not `packages/contracts`, because co
 import core. It builds the real use-case, pushes a real body through the real route, and parses
 it with the real schema — a fixture that agreed with itself would pass while the two drifted.
 
+### 11.2 The second surface: the chain, priced per strike
+
+**Built.** Same engine, different shape — and the shape is the whole point.
+
+`rankCalendars` collapses to one row per expiry pair, because the pair is the decision the
+trader makes. The Analyzer's chain table asks the opposite question — *show me everything,
+decide nothing* — so it needs one row per **strike** inside every cohort. That mismatch, and
+nothing else, is why eight formulas the engine already owns are still written a second time in
+`apps/web/src/lib/chain-math.ts` (279 lines): `atmStrike`, `atmIv`, per-leg greeks, `hSkew`,
+`vSkewVsAtm`, `edge`, `netCalendarGreeks`, `calendarDebit`.
+
+| Surface | Shape |
+|---|---|
+| Use-case | `packages/core/src/calendar/application/priceChain.ts` — `makePriceChainUseCase`, THREE deps (`readChain`, `now`, `carry`), a strict subset of `rankCalendars`'s four. Nothing is scored, so nothing needs realized vol |
+| Zod contract | `packages/contracts/src/chain-surface.ts` — `pricedChainStrike` / `pricedChainCohort` / `pricedChainResponse`. Sits beside the raw `chainResponse`, which has other readers |
+| HTTP | `GET /api/chain/priced?contractType=` — a sibling of `GET /api/chain`, not a replacement |
+| MCP | `get_priced_chain`, same schema, same use-case |
+| Seam | `apps/server/src/adapters/chain-surface-dto.ts`, with the same load-bearing `body:` annotation as §11.1 |
+
+Two domain additions were needed, both deliberate and neither a fork of `buildCohorts`:
+
+1. **`Cohort.unpricedStrikes`** — the strikes a cohort quotes that no leg covers. The ranker
+   only ever wanted priced legs, so those strikes vanished with nothing able to report them. A
+   per-strike table cannot live with that: on 2026-07-28 the live put wing was 24.4% null or
+   `'NaN'`, and silently dropping a quarter of the ladder is the same hidden-filter defect that
+   killed the old inner-joined chain table. Collected in a second pass over the same quotes, on
+   `countLegsWithoutIv`'s precedent, so the priced path's sort and dedup order — which is what
+   makes the ranker's leg choice a property of the data — is left byte-identical. Nothing in
+   `enumerateCandidates` or `scoreCandidates` reads the new field. A gap is defined as
+   **quoted − priced**, never as "the IV did not parse": the two agree on every input the chain
+   produces today and diverge the first time `priceLeg` refuses a row whose IV *did* parse,
+   leaving that strike in neither array — which would move the ATM reference below and re-base
+   the whole cohort's vertical skew. A partition invariant in `cohort.test.ts` pins it.
+2. **`quotedAtm(cohort, spot)`** — a THIRD ATM reference, over `legs ∪ unpricedStrikes`.
+   `Cohort.atmStrike` runs over `legs`, which has already lost every strike without a usable IV,
+   so when the true nearest strike did not solve, `Cohort.atmIv` reports its **neighbour's** IV
+   under a name that says otherwise. The ranker tolerates that; a chain table cannot, because it
+   renders vertical skew as a sortable column and a silently re-based row corrupts its
+   neighbours' order while still looking fine. `Cohort.atmStrike` / `atmIv` are unchanged, so
+   the ranking does not move.
+
+`domain/pair.ts` carries the ungated two-leg arithmetic the Pair panel needs. It is not
+`enumerateCandidates`: that loop has already refused everything odd (both legs tradeable, front
+≥ 15 DTE, gap ≥ 15 days, one root, one strike), while the reader picks any two legs and the
+screen must MEASURE what they picked — including a diagonal, an inverted pair or a cross-root
+pair. Reusing the ranker would return nothing for exactly the pairs a reader clicks two rows to
+interrogate. Extracting one shared helper from `candidate.ts` is deliberately deferred to the
+switch; refactoring the shipped ranking path does not belong in the same change as adding a read
+surface.
+
+### 11.3 The differential test, and what the switch will visibly move
+
+`apps/server/src/adapters/chain-surface-differential.test.ts` feeds ONE fixture chain through
+`chain-math.ts` and through the core path and asserts equality field by field. It lives in
+`apps/server` because `apps` is the only element type ESLint's boundary rules let import both
+core and `apps/web`; a core-side test would be `core → apps`, the dependency law backwards.
+
+Three divergences are **inputs, not formulas**, so the shared fixture neutralises them (one spot
+on every row, one observation instant, and `gex = undefined` so `resolveCarry` returns the same
+flat pair the use-case is injected with) and each is then pinned in its own test:
+
+| What | Browser | Core | At the switch |
+|---|---|---|---|
+| Spot | `rows[0].underlyingPrice` | lower median of every usable quote | Nothing on a clean chain. On a stale vendor row, the browser can price the whole screen against a level the index never traded at |
+| Carry | per-expiry, off the GEX snapshot's solved `implied_carry` | ONE injected `(r, q)` | Greeks move wherever one leg's expiry had a solved entry and the other's did not — 3,313 of 5,917 candidates on 2026-07-28. §8.4 is the standing reason |
+| Clock | each row's own `observedAt` | the injected `now` | Nothing on a clean snapshot; it moves when the two vendors' rows are stamped a minute apart, which they routinely are |
+
+The fourth cannot be neutralised and is the one real formula difference: `chain-math.edge` passes
+whole **DTE days** into `computeFwdIv`, while the core path passes years to the **settlement**
+instant. The identity is scale-invariant in `t`, so days-versus-years alone cancels — but the
+settlement clock is not a uniform rescale of `dte`, so `t_f/t_b ≠ dte_f/dte_b`. Measured on a
+17/52-day pair from 2026-07-28 15:30Z, core minus browser:
+
+```
+SPXW   t_f/t_b 0.32934132   vs dte 0.32692308   edge −0.001163 vol points
+SPX    t_f/t_b 0.33105939   vs dte 0.32692308   edge −0.001995 vol points
+```
+
+Root-dependent by nearly a factor of two on the same two dates, because 2026-09-18 is a third
+Friday and the SPX back leg therefore settles AM. Same defect class as commit `cc06625` and the
+scar already written into `chain-math.legGreeks` — fixed for greeks, never fixed for `edge`.
+Core is right.
+
+Two divergences that were **predicted and are stale**, asserted so they cannot come back: the
+`0`-for-inverted substitution is the retired picker scorer (`picker/domain/scoring.ts:139`), not
+this engine, which drops with a named `term-inverted` reason and returns null from `pairMetrics`;
+the `×100`-into-dollars net greeks are likewise the picker
+(`picker/domain/candidate-selection.ts:433-445`), while `pair.ts` returns index points, the same
+units the browser uses.
+
+**The read needs no widening.** `main.ts` wires the SAME `pickerChainRepo.readChainForPicker` to
+both `getChain` (`:366`) and `rankCalendars` (`:434`), and `priceChain` consumes that repo port
+directly — the raw row with `bsmIv: string | null` and `time: Date`, not `/api/chain`'s already
+flattened `ChainEntry`. Every field the surface needs is in it.
+
 ---
 
 ## 12. Test plan

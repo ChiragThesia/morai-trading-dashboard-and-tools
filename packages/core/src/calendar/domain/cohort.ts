@@ -48,7 +48,14 @@
 
 import { bsmGreeks } from "@morai/quant";
 import { calendarDaysTo, yearsToSettlement } from "./time.ts";
-import type { CalendarChainQuote, Carry, Cohort, CohortLeg, Root } from "./types.ts";
+import type {
+  CalendarChainQuote,
+  Carry,
+  Cohort,
+  CohortLeg,
+  Root,
+  UnpricedStrike,
+} from "./types.ts";
 
 /** Strikes arrive ×1000. Converted here, once; no domain code downstream sees the ×1000 form. */
 const STRIKE_SCALE = 1000;
@@ -151,6 +158,13 @@ export function buildCohorts(
     group.byStrike.set(row.q.strike, { q: row.q, iv: row.iv });
   }
 
+  // A SECOND PASS over the same quotes, on `countLegsWithoutIv`'s precedent and for the same
+  // reason: the priced path above is left byte-identical rather than widened. Its sort/dedup
+  // order — newest row, then higher IV — is what makes the ranker's leg choice a property of the
+  // data, and threading a nullable IV back through that comparator would let a newer null row
+  // beat an older solved one. The pass is over ~9,300 rows and costs nothing measurable.
+  const quotedByGroup = groupQuotedStrikes(quotes, opts.contractType);
+
   const cohorts: Cohort[] = [];
   for (const group of groups.values()) {
     const dte = calendarDaysTo(opts.now, group.expiration);
@@ -173,6 +187,14 @@ export function buildCohorts(
     const atmStrike = nearestStrike(legs, spot);
     const atm50 = interpolateFiftyDeltaIv(legs);
 
+    // QUOTED MINUS PRICED. A strike is a gap exactly when it did not become a leg — which also
+    // handles the schwab+cboe union, where one vendor's row solves and the other's does not:
+    // subtracting by strike means the ladder can never show the same strike twice.
+    const priced = new Set(legs.map((l) => l.strike));
+    const unpricedStrikes = (quotedByGroup.get(`${group.root}|${group.expiration}`) ?? []).filter(
+      (s) => !priced.has(s.strike),
+    );
+
     cohorts.push({
       root: group.root,
       expiration: group.expiration,
@@ -187,6 +209,7 @@ export function buildCohorts(
       atm50Iv: atm50?.iv ?? null,
       atm50BracketWidth: atm50?.bracketWidth ?? null,
       legs,
+      unpricedStrikes,
     });
   }
 
@@ -237,6 +260,95 @@ function parseIv(raw: string | null): number | null {
   if (raw === null) return null;
   const value = Number.parseFloat(raw);
   return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * quotedAtm — the ATM reference measured over every strike the cohort QUOTES, priced or not.
+ *
+ * A third ATM reference, deliberately, because `Cohort.atmStrike` answers a different question.
+ * `atmStrike` runs over `legs`, and `legs` has already lost every strike without a usable IV — so
+ * when the true nearest strike did not solve, `Cohort.atmIv` reports its NEIGHBOUR's IV under a
+ * name that says otherwise. The ranker can live with that; a per-strike table cannot, because it
+ * renders vertical skew as a SORTABLE column and a silently re-based row corrupts its neighbours'
+ * order while still looking fine.
+ *
+ * Null strike on an absent cohort or an unusable spot; null IV when the nearest strike is one
+ * that never solved. Never a neighbour's IV, and never a fabricated 0.
+ */
+export function quotedAtm(
+  cohort: Cohort | null,
+  spot: number,
+): { readonly strike: number | null; readonly iv: number | null } {
+  if (cohort === null || !Number.isFinite(spot) || spot <= 0) return { strike: null, iv: null };
+
+  let best: number | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const strike of [
+    ...cohort.legs.map((l) => l.strike),
+    ...cohort.unpricedStrikes.map((s) => s.strike),
+  ]) {
+    const dist = Math.abs(strike - spot);
+    // Strict `<` keeps the first-seen of an equal-distance pair; the `< best` tiebreak makes that
+    // choice order-independent — the lower strike wins either way.
+    if (dist < bestDist || (dist === bestDist && best !== null && strike < best)) {
+      best = strike;
+      bestDist = dist;
+    }
+  }
+
+  return { strike: best, iv: ivAt(cohort.legs, best) };
+}
+
+/**
+ * groupQuotedStrikes — EVERY strike the wing quotes, keyed `(root, expiration)`.
+ *
+ * Deliberately not "the strikes whose IV failed to parse". The caller subtracts the strikes that
+ * became legs, so a gap is defined as `quoted − priced` — which is what "could not price" means,
+ * and it is the ONLY definition that makes the gap set and the leg set provably partition the
+ * ladder. Filtering on the IV instead would agree with it in every case the chain produces today
+ * and quietly disagree the first time `priceLeg` refuses a row whose IV DID parse (non-finite
+ * greeks), leaving that strike in neither array. `quotedAtm` scans the union to find the ATM
+ * strike, so a strike missing from both does not merely vanish from one row — it re-bases the
+ * whole cohort's vertical skew against the wrong reference.
+ *
+ * Within a group a duplicate strike dedups to the newest observation, matching the priced path.
+ */
+function groupQuotedStrikes(
+  quotes: ReadonlyArray<CalendarChainQuote>,
+  contractType: "C" | "P",
+): Map<string, UnpricedStrike[]> {
+  const byGroup = new Map<string, Map<number, UnpricedStrike>>();
+
+  const rows = quotes
+    .filter((q) => q.contractType === contractType)
+    .sort(
+      (a, b) =>
+        (a.root ?? DEFAULT_ROOT).localeCompare(b.root ?? DEFAULT_ROOT) ||
+        a.expiration.localeCompare(b.expiration) ||
+        a.strike - b.strike ||
+        a.time.getTime() - b.time.getTime(),
+    );
+
+  for (const q of rows) {
+    const strike = q.strike / STRIKE_SCALE;
+    if (!Number.isFinite(strike) || strike <= 0) continue;
+    const key = `${q.root ?? DEFAULT_ROOT}|${q.expiration}`;
+    const existing = byGroup.get(key);
+    const byStrike = existing ?? new Map<number, UnpricedStrike>();
+    if (existing === undefined) byGroup.set(key, byStrike);
+    byStrike.set(strike, {
+      strike,
+      bid: Number.isFinite(q.bid) ? q.bid : 0,
+      ask: Number.isFinite(q.ask) ? q.ask : 0,
+      openInterest: Number.isFinite(q.openInterest) ? q.openInterest : 0,
+    });
+  }
+
+  const out = new Map<string, UnpricedStrike[]>();
+  for (const [key, byStrike] of byGroup) {
+    out.set(key, [...byStrike.values()].sort((a, b) => a.strike - b.strike));
+  }
+  return out;
 }
 
 function priceLeg(

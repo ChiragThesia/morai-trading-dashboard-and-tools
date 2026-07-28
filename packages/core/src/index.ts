@@ -708,13 +708,31 @@ export {
   GAP_DAYS_FLOOR,
   BACK_DTE_CEILING,
   makeRankCalendarsUseCase,
+  // The per-strike chain surface: the SAME engine in the shape the Analyzer's chain table needs
+  // (one row per strike per cohort, nothing ranked), plus the ungated two-leg arithmetic that
+  // table's Pair panel measures. Replaces apps/web/src/lib/chain-math.ts.
+  makePriceChainUseCase,
+  pairMetrics,
+  quotedAtm,
+  // The ranking's own history (0031): composes rankCalendars and keeps what it returns, so the
+  // SCORE_WEIGHTS can eventually be re-derived against a backtest instead of by feel.
+  makeRecordCalendarRankingUseCase,
 } from "./calendar/index.ts";
 export type {
   CalendarChainQuote,
   CalendarRanking,
   Candidate,
+  ChainCohortView,
+  ChainStrikeRow,
+  ChainSurface,
   Cohort,
   CohortLeg,
+  ForPricingChain,
+  PairLeg,
+  PairMetrics,
+  PriceChainDeps,
+  PriceChainRequest,
+  UnpricedStrike,
   DropCounts,
   DropReason,
   ForRankingCalendars,
@@ -725,4 +743,10 @@ export type {
   ScoreTerm,
   ScoreTermKey,
   ScoredCalendar,
+  // The ranking history's port and its row (0031).
+  CalendarRankingRow,
+  ForPersistingCalendarRanking,
+  ForRecordingCalendarRanking,
+  RecordCalendarRankingDeps,
+  RecordedRanking,
 } from "./calendar/index.ts";

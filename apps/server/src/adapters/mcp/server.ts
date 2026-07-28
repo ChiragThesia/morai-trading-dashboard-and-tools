@@ -29,6 +29,7 @@ import type {
   ForRunningGetTradeDetail,
   ForRunningGetChain,
   ForRankingCalendars,
+  ForPricingChain,
 } from "@morai/core";
 import type { Config } from "../../config.ts";
 import { bearerAuth } from "./bearer.ts";
@@ -61,6 +62,7 @@ import {
   registerGetTradeDetailTool,
   registerGetChainTool,
   registerRankCalendarsTool,
+  registerPricedChainTool,
 } from "./tools.ts";
 import type { ForTriggeringJob } from "../http/jobs.routes.ts";
 
@@ -117,6 +119,10 @@ import type { ForTriggeringJob } from "../http/jobs.routes.ts";
  *         rankedCalendarResponse AND the calendar-rank-dto mappers with
  *         GET /api/calendars/ranked; injected as optional for backward compat with existing
  *         call sites.
+ * MCP-02 (priced chain): get_priced_chain registered here — shares pricedChainQuery +
+ *         pricedChainResponse AND the chain-surface-dto mappers with GET /api/chain/priced.
+ *         A SIBLING of get_chain, not a replacement: that one returns the raw vendor union,
+ *         this one returns it grouped into cohorts with greeks and skew already solved.
  */
 export function makeMcpRouter(
   config: Config,
@@ -148,6 +154,7 @@ export function makeMcpRouter(
   getNews?: ForRunningGetNews,
   getChain?: ForRunningGetChain,
   rankCalendars?: ForRankingCalendars,
+  priceChain?: ForPricingChain,
 ): Hono {
   const router = new Hono();
 
@@ -260,6 +267,11 @@ export function makeMcpRouter(
     // rankCalendars use-case is available. Same use-case as GET /api/calendars/ranked.
     if (rankCalendars !== undefined) {
       registerRankCalendarsTool(server, rankCalendars);
+    }
+    // Priced chain / MCP-02: get_priced_chain tool — optional, wired when the priceChain
+    // use-case is available. Same use-case as GET /api/chain/priced.
+    if (priceChain !== undefined) {
+      registerPricedChainTool(server, priceChain);
     }
     return { server, transport };
   }

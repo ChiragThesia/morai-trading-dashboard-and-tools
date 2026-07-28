@@ -77,6 +77,20 @@ export type CohortLeg = {
 };
 
 /**
+ * One strike the cohort QUOTES but could not price — no usable `bsm_iv`, so no greeks.
+ *
+ * Kept because a per-strike view must show it. The ranker never sees this: a candidate needs
+ * two priced legs, and `enumerateCandidates` reads `Cohort.legs` only.
+ */
+export type UnpricedStrike = {
+  /** Index points, not ×1000 — same convention as `CohortLeg.strike`. */
+  readonly strike: number;
+  readonly bid: number;
+  readonly ask: number;
+  readonly openInterest: number;
+};
+
+/**
  * One `(root, expiration)` group, priced.
  *
  * Root is part of the key and not an afterthought: SPX and SPXW quote the SAME strike on the
@@ -118,6 +132,14 @@ export type Cohort = {
    */
   readonly atm50BracketWidth: number | null;
   readonly legs: ReadonlyArray<CohortLeg>;
+  /**
+   * Strikes this cohort quotes that no leg covers, ascending. The gap, named.
+   *
+   * Added for the per-strike chain surface, which renders one row per strike and cannot silently
+   * drop 24.4% of the live put wing (the null + 'NaN' share measured 2026-07-28). Ranking is
+   * untouched — nothing in `enumerateCandidates` or `scoreCandidates` reads this field.
+   */
+  readonly unpricedStrikes: ReadonlyArray<UnpricedStrike>;
 };
 
 /**

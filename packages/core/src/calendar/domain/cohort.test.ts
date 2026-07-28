@@ -15,7 +15,7 @@
 
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { buildCohorts, snapshotSpot } from "./cohort.ts";
+import { buildCohorts, quotedAtm, snapshotSpot } from "./cohort.ts";
 import type { CalendarChainQuote, Carry } from "./types.ts";
 
 const NOW = new Date("2026-07-27T16:00:00.000Z");
@@ -158,6 +158,102 @@ describe("buildCohorts — the three states of bsmIv", () => {
     expect(cohorts).toHaveLength(1);
     expect(cohorts[0]?.legs).toHaveLength(2);
     expect(cohorts[0]?.legs.map((l) => l.strike)).toEqual([7250, 7350]);
+  });
+});
+
+describe("buildCohorts — an unpriceable strike is reported, not deleted", () => {
+  // The ranker only ever wanted the priced legs, so a strike with no usable IV vanished and
+  // nothing downstream could tell it had ever been quoted. A per-strike chain view cannot live
+  // with that: the Analyzer's Browse table shows one row per strike, and a silent 24.4% (the
+  // live put wing's null + 'NaN' share, 2026-07-28) is the same hidden-filter defect that killed
+  // the old inner-joined chain table. `unpricedStrikes` is that report. `legs` is unchanged, so
+  // `enumerateCandidates` — which reads `legs` and nothing else — cannot see this field at all.
+
+  it("carries the strike, its quote and its open interest, in POINTS", () => {
+    const cohorts = buildCohorts(
+      [
+        quote({ strike: 7_400_000, bsmIv: "0.162" }),
+        quote({ strike: 7_350_000, bsmIv: null, bid: 41.2, ask: 42.8, openInterest: 1234 }),
+      ],
+      opts,
+    );
+    expect(cohorts[0]?.unpricedStrikes).toEqual([
+      { strike: 7350, bid: 41.2, ask: 42.8, openInterest: 1234 },
+    ]);
+  });
+
+  it("reports every state of bsmIv that cannot be priced, and only those", () => {
+    const cohorts = buildCohorts(
+      [
+        quote({ strike: 7_400_000, bsmIv: "NaN" }),
+        quote({ strike: 7_350_000, bsmIv: "0.17" }),
+        quote({ strike: 7_300_000, bsmIv: null }),
+        quote({ strike: 7_250_000, bsmIv: "0" }),
+        quote({ strike: 7_200_000, bsmIv: "0.18" }),
+      ],
+      opts,
+    );
+    expect(cohorts[0]?.legs.map((l) => l.strike)).toEqual([7200, 7350]);
+    expect(cohorts[0]?.unpricedStrikes.map((s) => s.strike)).toEqual([7250, 7300, 7400]);
+  });
+
+  it("does not report a strike one vendor priced and the other did not", () => {
+    // The chain is a schwab+cboe union. A strike is unpriced only when NO row for it solved —
+    // otherwise the ladder would show the same strike twice, once as a row and once as a gap.
+    const cohorts = buildCohorts(
+      [
+        quote({ strike: 7_400_000, bsmIv: null, source: "schwab" }),
+        quote({ strike: 7_400_000, bsmIv: "0.162", source: "cboe" }),
+      ],
+      opts,
+    );
+    expect(cohorts[0]?.legs).toHaveLength(1);
+    expect(cohorts[0]?.unpricedStrikes).toEqual([]);
+  });
+
+  it("PARTITIONS the ladder: every quoted strike is a leg or a gap, never both, never neither", () => {
+    // The invariant `quotedAtm` rests on. It scans `legs ∪ unpricedStrikes` to find the strike
+    // nearest spot, so a strike missing from BOTH does not merely lose its own row — it can move
+    // the ATM reference and re-base the whole cohort's vertical skew against the wrong strike.
+    //
+    // This is why a gap is defined as `quoted − priced` rather than as "the IV did not parse".
+    // The two agree on every input the chain produces today and would diverge the first time
+    // `priceLeg` refuses a row whose IV DID parse.
+    const rows = [
+      quote({ strike: 7_300_000, bsmIv: "0.181" }),
+      quote({ strike: 7_350_000, bsmIv: "NaN" }),
+      quote({ strike: 7_400_000, bsmIv: "0.162" }),
+      quote({ strike: 7_425_000, bsmIv: null }),
+      quote({ strike: 7_450_000, bsmIv: "0", bid: 0, ask: 0 }),
+      quote({ strike: 7_500_000, bsmIv: "0.150", root: "SPX" }),
+      quote({ strike: 7_550_000, bsmIv: null, expiration: "2026-09-18" }),
+    ];
+    const cohorts = buildCohorts(rows, opts);
+    expect(cohorts.length).toBeGreaterThan(0);
+
+    for (const c of cohorts) {
+      const quoted = new Set(
+        rows
+          .filter((r) => (r.root ?? "SPXW") === c.root && r.expiration === c.expiration)
+          .map((r) => r.strike / 1000),
+      );
+      const legs = c.legs.map((l) => l.strike);
+      const gaps = c.unpricedStrikes.map((s) => s.strike);
+      expect(new Set([...legs, ...gaps])).toEqual(quoted);
+      expect(legs.filter((s) => gaps.includes(s))).toEqual([]);
+      expect(legs.length + gaps.length).toBe(quoted.size);
+    }
+  });
+
+  it("scopes to the requested wing, like every other count in this module", () => {
+    const cohorts = buildCohorts(
+      [
+        quote({ strike: 7_400_000, bsmIv: "0.162" }),
+        quote({ strike: 7_350_000, contractType: "C", bsmIv: null }),
+      ],
+      opts,
+    );
+    expect(cohorts[0]?.unpricedStrikes).toEqual([]);
   });
 });
 
@@ -306,6 +402,55 @@ describe("buildCohorts — the ATM references are two different questions", () =
     // The two references answer different questions, so they give different IVs. For a put the
     // 50-delta point sits above spot, where the smile is lower.
     expect(c?.atm50Iv).not.toBe(c?.atmIv);
+  });
+});
+
+describe("quotedAtm — the ATM reference a per-strike view must use", () => {
+  // THIS IS A THIRD ATM REFERENCE, and it exists because `Cohort.atmStrike` answers a different
+  // question. `atmStrike` is the nearest strike among the PRICED legs, because unpriceable legs
+  // are gone before it runs — so when the true ATM strike never solved, `Cohort.atmIv` silently
+  // reports its NEIGHBOUR's IV. That is tolerable for the ranker, whose vSkew is one reported
+  // column among many. It is not tolerable for the chain table, where vertical skew is a SORTABLE
+  // column: a row measured against 7450 because 7400 never solved is on a different scale from
+  // every row it gets ranked against, and the ranking is the artifact that tells the reader they
+  // ARE comparable. A visible gap costs one row; a re-based row corrupts its neighbours' order
+  // invisibly, because the neighbours still look fine.
+
+  const ladder = [
+    quote({ strike: 7_350_000, bsmIv: "0.172" }),
+    quote({ strike: 7_400_000, bsmIv: "0.162" }),
+    quote({ strike: 7_450_000, bsmIv: "0.155" }),
+  ];
+
+  it("names the strike nearest spot across every quoted strike, priced or not", () => {
+    const cohort = buildCohorts(
+      [...ladder, quote({ strike: 7_405_000, bsmIv: null })],
+      opts,
+    )[0];
+    expect(cohort).toBeDefined();
+    // Spot 7401.89: 7405 is 3.11 away, 7400 is 1.89 — but make the unpriced strike the winner.
+    expect(quotedAtm(cohort ?? null, 7404).strike).toBe(7405);
+  });
+
+  it("reports a NULL iv when the nearest strike never solved — never the neighbour's", () => {
+    const cohort = buildCohorts([...ladder, quote({ strike: 7_405_000, bsmIv: "NaN" })], opts)[0];
+    expect(quotedAtm(cohort ?? null, 7404)).toEqual({ strike: 7405, iv: null });
+  });
+
+  it("reads the strike's own iv when it did solve", () => {
+    const cohort = buildCohorts(ladder, opts)[0];
+    expect(quotedAtm(cohort ?? null, 7401.89)).toEqual({ strike: 7400, iv: 0.162 });
+  });
+
+  it("breaks a tie toward the lower strike, so the pick is order-independent", () => {
+    const cohort = buildCohorts(ladder, opts)[0];
+    expect(quotedAtm(cohort ?? null, 7375).strike).toBe(7350);
+  });
+
+  it("names nothing on an absent cohort or an unusable spot", () => {
+    const cohort = buildCohorts(ladder, opts)[0];
+    expect(quotedAtm(null, 7401.89)).toEqual({ strike: null, iv: null });
+    expect(quotedAtm(cohort ?? null, 0)).toEqual({ strike: null, iv: null });
   });
 });
 

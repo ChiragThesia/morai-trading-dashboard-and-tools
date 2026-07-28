@@ -10,8 +10,10 @@
 
 // ── Domain: the math ──
 export { yearsToSettlement, calendarDaysTo, DAYS_PER_YEAR } from "./domain/time.ts";
-export { buildCohorts, snapshotSpot } from "./domain/cohort.ts";
+export { buildCohorts, quotedAtm, snapshotSpot } from "./domain/cohort.ts";
 export type { BuildCohortsOptions } from "./domain/cohort.ts";
+export { pairMetrics } from "./domain/pair.ts";
+export type { PairLeg, PairMetrics } from "./domain/pair.ts";
 export {
   enumerateCandidates,
   FRONT_DTE_FLOOR,
@@ -34,15 +36,29 @@ export type {
   DropCounts,
   DropReason,
   Root,
+  UnpricedStrike,
 } from "./domain/types.ts";
 
 // ── Application: the use-case and its ports ──
 export { makeRankCalendarsUseCase } from "./application/rankCalendars.ts";
 export type { RankCalendarsDeps } from "./application/rankCalendars.ts";
+export { makePriceChainUseCase } from "./application/priceChain.ts";
+export type { PriceChainDeps } from "./application/priceChain.ts";
+export { makeRecordCalendarRankingUseCase } from "./application/recordCalendarRanking.ts";
+export type { RecordCalendarRankingDeps } from "./application/recordCalendarRanking.ts";
 export type {
   CalendarRanking,
+  CalendarRankingRow,
+  ChainCohortView,
+  ChainStrikeRow,
+  ChainSurface,
+  ForPersistingCalendarRanking,
+  ForPricingChain,
   ForRankingCalendars,
   ForReadingCalendarChain,
   ForReadingDailyCloses,
+  ForRecordingCalendarRanking,
+  PriceChainRequest,
   RankCalendarsRequest,
+  RecordedRanking,
 } from "./application/ports.ts";

@@ -33,6 +33,7 @@ import {
   tradeDetailResponse,
   chainResponse,
   rankCalendarsQuery,
+  pricedChainQuery,
 } from "@morai/contracts";
 // The compile-time link between the core row type and the mirrored chain schema — see
 // registerGetChainTool. Type-only, so it adds nothing to the bundle.
@@ -65,6 +66,7 @@ import type {
   ForRunningGetTradeDetail,
   ForRunningGetChain,
   ForRankingCalendars,
+  ForPricingChain,
 } from "@morai/core";
 export { registerTriggerJobTool } from "./tools/trigger-job.ts";
 import { toStatusResponse } from "../status-dto.ts";
@@ -76,6 +78,7 @@ import { toOverridesPatch, toPreviewInput } from "../rule-overrides-bridge.ts";
 // The calendar engine's ONE query→request and ranking→wire mapping pair, shared with
 // calendar-rank.routes.ts so MCP-02 parity is structural rather than duplicated.
 import { toRankCalendarsRequest, toRankedCalendarBody } from "../calendar-rank-dto.ts";
+import { toPriceChainRequest, toPricedChainBody } from "../chain-surface-dto.ts";
 
 /**
  * registerStatusTool — registers the get_status MCP tool on the given McpServer.
@@ -1509,6 +1512,61 @@ export function registerRankCalendarsTool(
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(toRankedCalendarBody(result.value)) },
+        ],
+      };
+    },
+  );
+}
+
+/**
+ * registerPricedChainTool — registers the get_priced_chain MCP tool.
+ *
+ * Architecture law (architecture-boundaries.md §3 / §9): adapter contains zero business logic,
+ * and a new use-case ships its HTTP route and its MCP tool together over ONE contract.
+ * Pattern: safeParse args (the SAME pricedChainQuery the HTTP route validates) → call the SAME
+ * priceChain use-case → map Result → parse through pricedChainResponse → return content.
+ *
+ * SIBLING OF get_chain, NOT A REPLACEMENT. get_chain returns the raw two-vendor union, one flat
+ * row per contract. This returns the same read grouped into (root, expiration) cohorts with
+ * greeks, the ATM reference and vertical skew solved server-side — the eight formulas that
+ * currently run a second time in the browser (apps/web/src/lib/chain-math.ts). For an agent the
+ * practical difference is that a strike's delta, theta and vertical skew arrive measured rather
+ * than needing a BSM kernel on the other end.
+ *
+ * MCP-02: pricedChainQuery / pricedChainResponse are shared with GET /api/chain/priced, and both
+ * adapters map through the same chain-surface-dto functions — parity is structural, not "the same
+ * conversion written twice". A one-sided field change fails `bun run typecheck`.
+ *
+ * An empty chain is a successful payload with `cohorts: []`, never an error. A chain-read failure
+ * maps to flat "internal error" text — no DB internals leaked, never a throw.
+ */
+export function registerPricedChainTool(server: McpServer, priceChain: ForPricingChain): void {
+  server.registerTool(
+    "get_priced_chain",
+    {
+      title: "Get Priced Chain",
+      description:
+        "The latest option chain grouped into (root, expiration) cohorts and priced server-side: every strike carries its IV, bid/ask, open interest, BSM greeks at the settlement clock, and vertical skew against its own cohort's ATM reference. Strikes the chain quoted but could not price appear with their market and null greeks — nothing is hidden, ranked or scored. Returns one spot for the snapshot, the observation instant, and each cohort's DTE and years-to-settlement. Optional contractType (default P).",
+      inputSchema: pricedChainQuery.shape,
+    },
+    async (args) => {
+      // Reuse the SAME pricedChainQuery schema as the HTTP route's query (MCP-02).
+      const parsed = pricedChainQuery.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "invalid params" }) }],
+        };
+      }
+
+      const result = await priceChain(toPriceChainRequest(parsed.data));
+      if (!result.ok) {
+        // Flat error — never expose storage internals.
+        return { content: [{ type: "text" as const, text: "internal error" }] };
+      }
+
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(toPricedChainBody(result.value)) },
         ],
       };
     },

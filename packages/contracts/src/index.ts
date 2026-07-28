@@ -85,6 +85,23 @@ export type {
 export { chainRow, chainResponse } from "./chain.ts";
 export type { ChainRow, ChainResponse } from "./chain.ts";
 
+// Priced-chain contracts — the same chain grouped into (root, expiration) cohorts with greeks,
+// the ATM reference and vertical skew solved SERVER-side. Sits beside the raw `chainResponse`
+// rather than replacing it: that one has other readers, and the Analyzer's chain table is
+// repointed separately.
+export {
+  pricedChainStrike,
+  pricedChainCohort,
+  pricedChainResponse,
+  pricedChainQuery,
+} from "./chain-surface.ts";
+export type {
+  PricedChainStrike,
+  PricedChainCohort,
+  PricedChainResponse,
+  PricedChainQuery,
+} from "./chain-surface.ts";
+
 // Brokerage contracts (MCP-02: shared by HTTP routes and MCP tools for positions/transactions/orders)
 export {
   positionsResponse,

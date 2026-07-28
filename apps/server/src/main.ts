@@ -74,6 +74,7 @@ import {
   makeStartReauth,
   makeExchangeReauth,
   makeRankCalendarsUseCase,
+  makePriceChainUseCase,
 } from "@morai/core";
 import type {
   Calendar,
@@ -106,6 +107,7 @@ import { gexRoutes } from "./adapters/http/gex.routes.ts";
 import { chainRoutes } from "./adapters/http/chain.routes.ts";
 import { pickerRoutes } from "./adapters/http/picker.routes.ts";
 import { calendarRankRoutes } from "./adapters/http/calendar-rank.routes.ts";
+import { chainSurfaceRoutes } from "./adapters/http/chain-surface.routes.ts";
 import { exitRoutes } from "./adapters/http/exits.routes.ts";
 import { jobsRoutes } from "./adapters/http/jobs.routes.ts";
 import { makeMcpRouter } from "./adapters/mcp/server.ts";
@@ -437,6 +439,16 @@ const rankCalendars = makeRankCalendarsUseCase({
   carry: { rate: config.BSM_RATE_FALLBACK, divYield: config.BSM_DIVIDEND_YIELD },
 });
 
+// The SAME engine in the shape the Analyzer's chain table needs: one row per strike per cohort
+// instead of one row per ranked expiry pair. Same chain read, same clock, and it MUST be the same
+// carry object — two surfaces on one screen priced on different (r, q) is the defect
+// packages/core/src/calendar/domain/cohort.ts scar 4 already paid for once.
+const priceChain = makePriceChainUseCase({
+  readChain: pickerChainRepo.readChainForPicker,
+  now: () => new Date(),
+  carry: { rate: config.BSM_RATE_FALLBACK, divYield: config.BSM_DIVIDEND_YIELD },
+});
+
 // EXIT-08 / MCP-02 (26-05): get-exit-advice read use-case — shared by GET /api/exits +
 // get_exit_advice MCP tool over the ONE exitsResponse contract. Reuses calendarsRepo +
 // calendarSnapshotsRepo (already built above), adapted into the exits-owned
@@ -674,6 +686,10 @@ const apiRouter = new Hono()
   // Calendar engine (§11): GET /api/calendars/ranked — ranked on read from the latest chain
   // cohort. Mounted after calendarRoutes, whose only GET is the exact path /calendars.
   .route("/", calendarRankRoutes(rankCalendars))
+  // Priced chain: GET /api/chain/priced — the chain grouped into cohorts with greeks, the ATM
+  // reference and vertical skew solved server-side. A SIBLING of GET /chain (mounted above),
+  // not a replacement; Hono matches exact paths, so neither shadows the other.
+  .route("/", chainSurfaceRoutes(priceChain))
   // EXIT-08 (26-05): GET /api/exits — read-time exit-advice snapshot (MCP-02)
   .route("/", exitRoutes(getExitAdvice))
   // RUNTIME-* (29-13): GET/PUT /api/settings/rules — curated rule-override surface (MCP-02)
@@ -763,6 +779,7 @@ const mcpRouter = makeMcpRouter(
   getNews,
   getChain,
   rankCalendars,
+  priceChain,
 );
 app.route("", mcpRouter);
 
