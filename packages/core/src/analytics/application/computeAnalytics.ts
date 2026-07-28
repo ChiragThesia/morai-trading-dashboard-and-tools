@@ -115,14 +115,15 @@ export function makeComputeAnalyticsUseCase(
     // back to the smile's own resolved leg instant (skew/RR only; no term rows were written).
     const stampInstant = snapshotAnchor ?? cycleTime;
 
-    // R1: write the full per-strike smile — one row per (underlying, expiration, strike), stamped
-    // with the resolved cycle instant.
+    // R1: write the full smile — one row per CONTRACT (both wings at every strike), stamped with
+    // the resolved cycle instant.
     const skewRows: SkewObservationRow[] = quotes.map((q) => ({
       snapshotTime: stampInstant,
       underlying: q.underlying,
       root: q.root,
       expiration: q.expiration,
       strike: q.strike,
+      contractType: q.contractType,
       iv: q.iv,
       delta: q.delta,
       moneyness: q.moneyness,

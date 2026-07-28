@@ -31,6 +31,12 @@ export type SmileQuote = {
   readonly root: "SPX" | "SPXW";
   readonly expiration: string; // YYYY-MM-DD
   readonly strike: number; // ×1000 int
+  /**
+   * Call or put. One quote is emitted per SOLVED LEG, so both wings arrive at every strike with
+   * two different IVs — that is what a smile is. Omitting it made them collide on the skew PK,
+   * where onConflictDoNothing discarded one: 1,748 of 3,521 quotes (49.6%) in one live batch.
+   */
+  readonly contractType: "C" | "P";
   readonly iv: number;
   readonly delta: number | null;
   readonly moneyness: number | null;
@@ -68,6 +74,8 @@ export type SkewObservationRow = {
   readonly root: "SPX" | "SPXW";
   readonly expiration: string; // YYYY-MM-DD
   readonly strike: number; // ×1000 int
+  /** Part of the PK — see SmileQuote.contractType. Without it the two wings overwrite each other. */
+  readonly contractType: "C" | "P";
   readonly iv: number;
   readonly delta: number | null;
   readonly moneyness: number | null;

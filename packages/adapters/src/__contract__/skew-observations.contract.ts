@@ -45,6 +45,9 @@ function makeRow(
     expiration: overrides.expiration ?? EXPIRY,
     strike,
     root: overrides.root ?? "SPXW",
+    // Defaults to the put wing so it agrees with the default delta of −0.25 below: a fixture
+    // whose sign and type disagree would be a contract that cannot exist.
+    contractType: overrides.contractType ?? "P",
     iv: overrides.iv ?? 0.2,
     delta: "delta" in overrides ? (overrides.delta ?? null) : -0.25,
     moneyness: "moneyness" in overrides ? (overrides.moneyness ?? null) : 0.98,
@@ -111,6 +114,67 @@ export function runSkewContractTests(
     it("still treats a re-write of the SAME root as idempotent", async () => {
       const t = new Date("2026-07-28T15:00:00.000Z");
       const row = makeRow(t, 7_400_000, { root: "SPX", iv: 0.2469 });
+      await repo.storeSkewObservations([row]);
+      await repo.storeSkewObservations([row]);
+      expect(await repo.countObservations(UNDERLYING)).toBe(1);
+    });
+  });
+
+  /**
+   * REGRESSION (measured on production, 2026-07-28). 0029 added `root` to this key and stopped
+   * one column short: the key stayed
+   * (snapshot_time, underlying, root, expiration, strike) with NO contract_type.
+   *
+   * readSmile emits one quote per SOLVED LEG, so it emits the CALL and the PUT at every strike --
+   * two different contracts, identical on every one of those five columns. They collide inside a
+   * SINGLE batch, where `onConflictDoNothing` discards one. No error, no metric.
+   *
+   * Measured on the live cohort behind snapshot_time 2026-07-28T14:00:00Z: 3,521 quotes, 1,773
+   * distinct values of the old key, 3,521 distinct once contract_type joins it -- so the column
+   * resolves the collision completely, with nothing left over. The table holds exactly 1,773 rows
+   * for that stamp: 1,748 of them (49.6%) were thrown away in one call.
+   *
+   * Which wing survived is whichever the join emitted first -- a query plan, not a rule. Lifetime
+   * that left 9,479 calls against 903 puts, and the owner trades PUT calendars.
+   *
+   * A dedupe in the repo would NOT fix this. These are not duplicate rows; they are the two wings
+   * of one smile, and dropping either is the data loss, however deterministically it is chosen.
+   */
+  describe("skew-observations: the call and the put at one strike are two contracts", () => {
+    let repo: SkewObservationsRepo;
+
+    beforeEach(async () => {
+      const seed = getSeedContext();
+      repo = makeRepo(seed);
+      await seed.seedNoop();
+    });
+
+    it("keeps BOTH wings at the same snapshot, root, expiration and strike", async () => {
+      const t = new Date("2026-07-28T14:00:00.000Z");
+      // The exact collision: identical on every column of the 0029 key, opposite wings.
+      const call = makeRow(t, 7_400_000, { contractType: "C", delta: 0.31, iv: 0.1712 });
+      const put = makeRow(t, 7_400_000, { contractType: "P", delta: -0.29, iv: 0.2469 });
+
+      const result = await repo.storeSkewObservations([call, put]);
+      expect(result.ok).toBe(true);
+      expect(await repo.countObservations(UNDERLYING)).toBe(2);
+
+      const read = await repo.readSkewSmileDetail({
+        underlying: UNDERLYING,
+        expiration: EXPIRY,
+      });
+      expect(read.ok).toBe(true);
+      if (!read.ok) return;
+      const types = read.value.map((r) => r.contractType).sort();
+      expect(types).toStrictEqual(["C", "P"]);
+      // Each wing keeps its OWN vol -- half a smile cannot bracket ±25Δ.
+      expect(read.value.find((r) => r.contractType === "C")?.iv).toBeCloseTo(0.1712, 9);
+      expect(read.value.find((r) => r.contractType === "P")?.iv).toBeCloseTo(0.2469, 9);
+    });
+
+    it("still treats a re-write of the SAME wing as idempotent", async () => {
+      const t = new Date("2026-07-28T14:00:00.000Z");
+      const row = makeRow(t, 7_400_000, { contractType: "C", delta: 0.31, iv: 0.1712 });
       await repo.storeSkewObservations([row]);
       await repo.storeSkewObservations([row]);
       expect(await repo.countObservations(UNDERLYING)).toBe(1);

@@ -189,14 +189,22 @@ UNIQUE key, so a same-snapshot-time re-run inserts zero new rows (`onConflictDoN
 #### `skew_observations` — per-strike volatility smile
 ```
 snapshot_time   timestamptz    ┐
-underlying      varchar(16)    │ PK (snapshot_time, underlying, expiration, strike)
+underlying      varchar(16)    │ PK (snapshot_time, underlying, root,
+root            varchar(8)     │     expiration, strike, contract_type)
 expiration      date           │  = per-grain UNIQUE key
-strike          int            ┘  -- ×1000 convention (7100 → 7100000)
+strike          int            │  -- ×1000 convention (7100 → 7100000)
+contract_type   enum(C,P)      ┘
 iv              numeric        -- from leg_observations.bsm_iv
 delta           numeric NULL   -- interpolation source for the ±25Δ points
 moneyness       numeric NULL
 ```
-One row per smile point — `(underlying, expiration, strike)` in `leg_observations`.
+One row per CONTRACT, not per strike. Every strike carries a call AND a put, with two
+different IVs — that is what a smile is. `root` and `contract_type` are both in the key
+because both were missing from it and both cost data. Without `root` the SPX and SPXW books
+collided and `onConflictDoNothing` dropped 30% of every snapshot (fixed in 0029). Without
+`contract_type` the two wings collided and it dropped 49.6% — 1,748 of 3,521 quotes in one
+measured batch (fixed in 0030). Rows written before 0030 are still missing a wing; 0030
+labelled the survivors from `delta`'s sign but could not bring the discarded ones back.
 
 #### `risk_reversal_observations` — 25Δ risk-reversal + trailing rank
 ```

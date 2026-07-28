@@ -197,6 +197,12 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
         root: "SPXW" as const,
         expiration: leg.expiration,
         strike: leg.strike,
+        // The twin has no contracts table, so the seeded delta's sign is its only wing signal —
+        // the same rule migration 0030 used to backfill the stored history. Ceiling: smileStore is
+        // keyed without contract type, so the twin cannot hold BOTH wings at one strike. The
+        // Postgres adapter reads the real contracts.contract_type and is the one under contract
+        // test for that (skew-observations.contract.ts).
+        contractType: leg.bsmDelta !== null && parseFloat(leg.bsmDelta) > 0 ? "C" : "P",
         iv: parseFloat(leg.bsmIv),
         delta: leg.bsmDelta !== null ? parseFloat(leg.bsmDelta) : null,
         moneyness: computeMoneyness(leg.strike, spot),

@@ -102,6 +102,7 @@ export function riskReversalForExpiry(
       underlying: "", // inert: interpolateRiskReversal reads only `delta` and `iv`
       expiration: row.expiration,
       strike: row.strike,
+      contractType: row.contractType,
       iv,
       delta,
       moneyness: null, // inert, see above

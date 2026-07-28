@@ -294,9 +294,9 @@ export const orphanFills = pgTable("orphan_fills", {
 }).enableRLS();
 
 // ─── 11. skew_observations — per-strike volatility smile (analytics, Phase 6) ─
-// Append-only smile detail. One row per (underlying, expiration, strike) present in
-// leg_observations at a snapshot time. Time-leading composite PK = per-grain UNIQUE key;
-// re-run for the same snapshot time is a no-op (onConflictDoNothing).
+// Append-only smile detail. One row per CONTRACT present in leg_observations at a snapshot time —
+// which is a call AND a put at every strike, not one row per strike. Time-leading composite PK =
+// per-grain UNIQUE key; re-run for the same snapshot time is a no-op (onConflictDoNothing).
 
 export const skewObservations = pgTable(
   "skew_observations",
@@ -309,6 +309,10 @@ export const skewObservations = pgTable(
     expiration: date("expiration").notNull(),
     // Strike stored ×1000 int convention (7100 → 7100000), like contracts.strike
     strike: integer("strike").notNull(),
+    // PK member (0030). The call and the put at one strike are two contracts with two different
+    // IVs — the whole point of a smile. Without this column they collided on the key and
+    // onConflictDoNothing dropped one: 1,748 of 3,521 quotes, 49.6%, in a single live batch.
+    contractType: contractTypeEnum("contract_type").notNull(),
     // IV from leg_observations.bsm_iv
     iv: numeric("iv").notNull(),
     // Interpolation source for the ±25Δ points; nullable when delta unavailable
@@ -317,7 +321,14 @@ export const skewObservations = pgTable(
   },
   (table) => [
     primaryKey({
-      columns: [table.snapshotTime, table.underlying, table.root, table.expiration, table.strike],
+      columns: [
+        table.snapshotTime,
+        table.underlying,
+        table.root,
+        table.expiration,
+        table.strike,
+        table.contractType,
+      ],
     }),
   ],
 ).enableRLS();

@@ -3,10 +3,9 @@
  *
  * Implements ForWritingSkewObservations + ForReadingSkewSmileDetail using a plain Map — no Docker,
  * always available for unit tests. Idempotency mirrors Postgres onConflictDoNothing on the
- * composite PK (snapshot_time, underlying, expiration, strike):
- *   key = `${snapshotTime.toISOString()}|${underlying}|${expiration}|${strike}` — a second write
- *   of the same grain is a no-op. iv/delta/moneyness are held as numbers|null, never re-encoded,
- *   so they round-trip exactly (null stays null).
+ * composite PK (snapshot_time, underlying, root, expiration, strike, contract_type): a second
+ * write of the same grain is a no-op. iv/delta/moneyness are held as numbers|null, never
+ * re-encoded, so they round-trip exactly (null stays null).
  *
  * Architecture law (architecture-boundaries.md §8): every driven port change updates this twin.
  */
@@ -32,8 +31,9 @@ export function makeMemorySkewObservationsRepo(): MemorySkewObservationsRepo {
 
   const keyOf = (row: SkewObservationRow): string =>
     // root is part of the key: `underlying` is always 'SPX', so without it the AM- and
-    // PM-settled books collide and first-write-wins throws one away.
-    `${row.snapshotTime.toISOString()}|${row.underlying}|${row.root}|${row.expiration}|${row.strike}`;
+    // PM-settled books collide and first-write-wins throws one away. contract_type likewise —
+    // the call and the put at one strike are two contracts carrying two different IVs.
+    `${row.snapshotTime.toISOString()}|${row.underlying}|${row.root}|${row.expiration}|${row.strike}|${row.contractType}`;
 
   const storeSkewObservations: ForWritingSkewObservations = async (
     rows: ReadonlyArray<SkewObservationRow>,

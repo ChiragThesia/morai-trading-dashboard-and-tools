@@ -405,6 +405,9 @@ export function makePostgresLegObservationsRepo(
           root: contracts.root,
           expiration: contracts.expiration,
           strike: contracts.strike,
+          // Carried so the call and the put at one strike stay two rows. Both wings are emitted
+          // here (one quote per solved leg); dropping this is what collapsed them downstream.
+          contractType: contracts.contractType,
           bsmIv: legObservations.bsmIv,
           bsmDelta: legObservations.bsmDelta,
           underlyingPrice: legObservations.underlyingPrice,
@@ -426,6 +429,8 @@ export function makePostgresLegObservationsRepo(
         root: row.root === "SPX" ? "SPX" : "SPXW",
         expiration: row.expiration,
         strike: row.strike,
+        // contracts.contract_type is the pg enum ('C','P') — already the union, no narrowing.
+        contractType: row.contractType,
         iv: parseFloat(row.bsmIv ?? "NaN"),
         delta: row.bsmDelta !== null ? parseFloat(row.bsmDelta) : null,
         // moneyness = K/S from underlying_price (spot); null when spot is non-finite-positive.

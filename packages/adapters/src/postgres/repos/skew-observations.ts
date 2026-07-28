@@ -2,8 +2,8 @@
  * makePostgresSkewObservationsRepo — Postgres implementation of the skew (per-strike smile) ports.
  *
  * storeSkewObservations: bulk INSERT onConflictDoNothing on the composite PK
- *   (snapshot_time, underlying, expiration, strike) — re-running for the same grain is a no-op
- *   (ANLY-01 R1 idempotency).
+ *   (snapshot_time, underlying, root, expiration, strike, contract_type) — re-running for the same
+ *   grain is a no-op (ANLY-01 R1 idempotency).
  * readSkewSmileDetail: SELECT ordered by snapshot_time ASC, optional underlying/expiration filter;
  *   empty array when none (never null/error).
  *
@@ -24,7 +24,7 @@ import { and, eq, asc } from "drizzle-orm";
 import { skewObservations } from "../schema.ts";
 import type { Db } from "../db.ts";
 
-/** Stay below Postgres's 65,534 bind-parameter limit (7 cols × 2000 = 14,000 params). */
+/** Stay below Postgres's 65,534 bind-parameter limit (9 cols × 2000 = 18,000 params). */
 const INSERT_CHUNK_ROWS = 2000;
 
 export type PostgresSkewObservationsRepo = {
@@ -45,6 +45,8 @@ export function makePostgresSkewObservationsRepo(db: Db): PostgresSkewObservatio
         root: row.root,
         expiration: row.expiration,
         strike: row.strike,
+        // PK member — see the schema. Without it the two wings overwrite each other.
+        contractType: row.contractType,
         iv: String(row.iv),
         delta: row.delta !== null ? String(row.delta) : null,
         moneyness: row.moneyness !== null ? String(row.moneyness) : null,
@@ -83,6 +85,8 @@ export function makePostgresSkewObservationsRepo(db: Db): PostgresSkewObservatio
         root: row.root === "SPX" ? ("SPX" as const) : ("SPXW" as const),
         expiration: row.expiration,
         strike: row.strike,
+        // contract_type is the pg enum ('C','P') — already the union, no narrowing needed.
+        contractType: row.contractType,
         iv: parseFloat(row.iv),
         delta: row.delta !== null ? parseFloat(row.delta) : null,
         moneyness: row.moneyness !== null ? parseFloat(row.moneyness) : null,

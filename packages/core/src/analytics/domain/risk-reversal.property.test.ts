@@ -20,6 +20,9 @@ const quote = (delta: number, iv: number): SmileQuote => ({
   root: "SPXW" as const,
   expiration: "2026-07-17",
   strike: 5500000,
+  // The wing follows the generated delta's sign — a quote whose type and sign disagree would be
+  // a contract that cannot exist.
+  contractType: delta > 0 ? "C" : "P",
   iv,
   delta,
   moneyness: 1.0,
