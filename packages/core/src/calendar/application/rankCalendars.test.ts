@@ -70,8 +70,10 @@ describe("rankCalendars — the happy path", () => {
 
     const { candidates, totalCandidates, expiryPairs, spot, asOf } = result.value;
     expect(candidates.length).toBeGreaterThan(0);
-    expect(totalCandidates).toBe(candidates.length);
-    expect(expiryPairs).toBeGreaterThan(0);
+    // One row per pair, so the ranked rows ARE the pairs — while `totalCandidates` keeps
+    // reporting every strike that was measured to produce them.
+    expect(expiryPairs).toBe(candidates.length);
+    expect(totalCandidates).toBeGreaterThan(expiryPairs);
     expect(spot).toBe(SPOT);
     expect(asOf).toEqual(NOW);
 
@@ -98,12 +100,36 @@ describe("rankCalendars — the happy path", () => {
     );
   });
 
-  it("reports the realized vol the VRP term actually used", async () => {
+  it("reports the realized vol as snapshot context", async () => {
     const result = await makeRankCalendarsUseCase(deps())({});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.realizedVol).not.toBeNull();
-    expect(result.value.candidates[0]?.breakdown.frontVrp.weight).toBeGreaterThan(0);
+  });
+
+  /**
+   * REGRESSION (live chain, 2026-07-28). Two of the score's terms are properties of the expiry
+   * PAIR and constant across every strike inside it, so only `deltaBalance` varies within a
+   * pair — and it is minimised at the money. The ranked list was therefore the single winning
+   * pair's strike ladder walking outward from delta-neutral: the live top ten was ten strikes
+   * of SPXW 2026-08-14 / 2026-08-31, 7365 through 7410. Twenty-five rows describing one trade.
+   *
+   * The pair is the decision; the strike inside it is a detail of that decision. One row per
+   * pair, and because the list is already sorted descending, keeping the first occurrence keeps
+   * the best strike in each pair.
+   */
+  it("returns at most one row per expiry pair — a strike ladder is not a ranking", async () => {
+    const result = await makeRankCalendarsUseCase(deps())({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const pairs = result.value.candidates.map(
+      (c) => `${c.root}|${c.frontExpiration}|${c.backExpiration}`,
+    );
+    expect(pairs.length).toBeGreaterThan(1);
+    expect(new Set(pairs).size).toBe(pairs.length);
+    // The full candidate space is still reported — collapsing the view hides nothing.
+    expect(result.value.totalCandidates).toBeGreaterThan(pairs.length);
   });
 
   it("reports the front ceiling it applied and respects it", async () => {
@@ -180,22 +206,23 @@ describe("rankCalendars — degradation", () => {
     expect(result.value.defaultCarryExpiries.length).toBeGreaterThan(0);
   });
 
-  it("still ranks when realized vol is unavailable, dropping the VRP term and saying so", async () => {
-    const result = await makeRankCalendarsUseCase(
+  it("ranks identically with and without realized vol — it is context, not a term", async () => {
+    const withRv = await makeRankCalendarsUseCase(deps())({});
+    const withoutRv = await makeRankCalendarsUseCase(
       deps({ readDailyCloses: () => Promise.resolve(ok([])) }),
     )({});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.realizedVol).toBeNull();
-    expect(result.value.candidates.length).toBeGreaterThan(0);
-    expect(result.value.candidates[0]?.breakdown.frontVrp.weight).toBe(0);
+    expect(withRv.ok && withoutRv.ok).toBe(true);
+    if (!withRv.ok || !withoutRv.ok) return;
 
-    // The surviving three terms renormalise to 100, so the scale is unchanged and snapshots
-    // with and without realized vol stay comparable. Leaving the dead term in at weight 25
-    // would cap every score in this snapshot at 75 instead.
-    const weights = Object.values(result.value.candidates[0]?.breakdown ?? {}).map((t) => t.weight);
-    expect(weights.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 9);
-    expect(result.value.candidates[0]?.score ?? 0).toBeGreaterThan(75);
+    expect(withRv.value.realizedVol).not.toBeNull();
+    expect(withoutRv.value.realizedVol).toBeNull();
+    expect(withoutRv.value.candidates.length).toBeGreaterThan(0);
+
+    // Losing the closes costs a reported comparable and nothing else. When it WAS a score term,
+    // this same degradation silently reshuffled the ranking.
+    expect(withoutRv.value.candidates.map((c) => c.score)).toEqual(
+      withRv.value.candidates.map((c) => c.score),
+    );
   });
 
   it("returns an empty ranking with drop counts, not an error, when nothing qualifies", async () => {

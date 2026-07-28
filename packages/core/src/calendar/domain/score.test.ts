@@ -70,19 +70,39 @@ function candidate(over: Partial<Candidate> = {}): Candidate {
   };
 }
 
-const RV20 = 0.12;
-
 describe("weights", () => {
-  it("sums to 100 across exactly three terms", () => {
+  it("sums to 100 across exactly two terms", () => {
     const values = Object.values(SCORE_WEIGHTS);
-    expect(values).toHaveLength(3);
+    expect(values).toHaveLength(2);
     expect(values.reduce((a, b) => a + b, 0)).toBe(100);
   });
 
   it("puts the most weight on the forward-vol edge — the calendar IS that trade", () => {
-    expect(SCORE_WEIGHTS.fwdEdge).toBe(45);
-    expect(SCORE_WEIGHTS.frontVrp).toBe(25);
+    expect(SCORE_WEIGHTS.fwdEdge).toBe(70);
     expect(SCORE_WEIGHTS.deltaBalance).toBe(30);
+  });
+
+  /**
+   * REGRESSION (live chain, 2026-07-28). `frontVrp` was a score term at weight 25, justified in
+   * the spec as "the only term that looks outside the chain — therefore the only one not
+   * collinear with fwdEdge". Both halves of that were false as implemented.
+   *
+   * It ranked `frontRefIv − realizedVol`, and `realizedVol` is ONE SCALAR for the whole
+   * snapshot. `percentileRank` counts `h <= value`, so subtracting the same constant from every
+   * candidate leaves every comparison unchanged: measured against the live chain, doubling
+   * realized vol from 0.12 to 0.30 produced a byte-identical ranking. The one input that came
+   * from outside the chain could not move the answer.
+   *
+   * What remained was `frontRefIv`, which is a per-COHORT constant — 21 distinct values across
+   * 7,951 candidates — and a higher front IV lowers forward vol, so it drives `fwdEdge` up too.
+   * Measured correlation of the two terms' percentiles: 0.954. A quarter of the score was
+   * `fwdEdge` a second time.
+   *
+   * A variance risk premium on ONE underlying is not a cross-sectional quantity at all. It is
+   * context for the whole snapshot, and it is reported there (`CalendarRanking.realizedVol`).
+   */
+  it("does not score frontVrp — one scalar cannot rank a snapshot against itself", () => {
+    expect(Object.keys(SCORE_WEIGHTS)).not.toContain("frontVrp");
   });
 
   /**
@@ -114,7 +134,7 @@ describe("scoring is a ranking within the snapshot", () => {
     // and is asserted rather than left to surprise a future reader.
     const best = candidate({ strike: 7400, ffAtm: 0.09, frontRefIv: 0.2, thetaCarry: 0.05, net: { delta: 0, gamma: -1, theta: 1, vega: 1 } });
     const worst = candidate({ strike: 7300, ffAtm: -0.05, frontRefIv: 0.13, thetaCarry: 0.001, net: { delta: 0.9, gamma: -1, theta: 1, vega: 1 } });
-    const scored = scoreCandidates([best, worst], { realizedVol: RV20 });
+    const scored = scoreCandidates([best, worst]);
 
     expect(scored[0]?.strike).toBe(7400);
     expect(scored[0]?.score).toBe(100);
@@ -125,7 +145,7 @@ describe("scoring is a ranking within the snapshot", () => {
     const many = Array.from({ length: 50 }, (_, i) =>
       candidate({ strike: 7000 + i * 5, ffAtm: i / 1000, frontRefIv: 0.13 + i / 1000, thetaCarry: i / 10000, net: { delta: (50 - i) / 100, gamma: -1, theta: 1, vega: 1 } }),
     );
-    const scored = scoreCandidates(many, { realizedVol: RV20 });
+    const scored = scoreCandidates(many);
     expect(scored[0]?.score).toBe(100);
     expect(scored[scored.length - 1]?.score ?? 100).toBeCloseTo(2, 9);
   });
@@ -135,8 +155,8 @@ describe("scoring is a ranking within the snapshot", () => {
     // 7% one on SPX are the same signal at different scales.
     const spx = [0.01, 0.03, 0.07].map((ff, i) => candidate({ strike: 7300 + i * 50, ffAtm: ff }));
     const kre = [0.1, 0.3, 0.7].map((ff, i) => candidate({ strike: 7300 + i * 50, ffAtm: ff }));
-    const a = scoreCandidates(spx, { realizedVol: RV20 }).map((c) => c.strike);
-    const b = scoreCandidates(kre, { realizedVol: RV20 }).map((c) => c.strike);
+    const a = scoreCandidates(spx).map((c) => c.strike);
+    const b = scoreCandidates(kre).map((c) => c.strike);
     expect(a).toEqual(b);
   });
 
@@ -146,7 +166,7 @@ describe("scoring is a ranking within the snapshot", () => {
       candidate({ strike: 7400, ffAtm: 0.08 }),
       candidate({ strike: 7450, ffAtm: 0.04 }),
     ];
-    expect(scoreCandidates(cands, { realizedVol: RV20 }).map((c) => c.strike)).toEqual([
+    expect(scoreCandidates(cands).map((c) => c.strike)).toEqual([
       7400, 7450, 7350,
     ]);
   });
@@ -157,17 +177,20 @@ describe("scoring is a ranking within the snapshot", () => {
       candidate({ strike: 7400, net: { delta: -0.01, gamma: -1, theta: 1, vega: 1 } }),
       candidate({ strike: 7450, net: { delta: 0.15, gamma: -1, theta: 1, vega: 1 } }),
     ];
-    expect(scoreCandidates(cands, { realizedVol: RV20 }).map((c) => c.strike)).toEqual([
+    expect(scoreCandidates(cands).map((c) => c.strike)).toEqual([
       7400, 7450, 7350,
     ]);
   });
 
-  it("prefers a front leg richer against realized vol", () => {
+  it("IGNORES the front leg's own implied vol level — that is not a cross-sectional signal", () => {
+    // `frontVrp` used to rank exactly this and nothing else. Two candidates differing ONLY in
+    // frontRefIv must now tie on score and fall through to the tie-break.
     const cands = [
       candidate({ strike: 7350, frontRefIv: 0.13 }),
       candidate({ strike: 7400, frontRefIv: 0.22 }),
     ];
-    expect(scoreCandidates(cands, { realizedVol: RV20 })[0]?.strike).toBe(7400);
+    const scored = scoreCandidates(cands);
+    expect(scored[0]?.score).toBe(scored[1]?.score);
   });
 
   it("IGNORES thetaCarry when ranking, however extreme it is", () => {
@@ -177,27 +200,25 @@ describe("scoring is a ranking within the snapshot", () => {
       candidate({ strike: 7350, thetaCarry: 0.2, ffAtm: 0.01 }),
       candidate({ strike: 7400, thetaCarry: 0.001, ffAtm: 0.08 }),
     ];
-    expect(scoreCandidates(cands, { realizedVol: RV20 })[0]?.strike).toBe(7400);
+    expect(scoreCandidates(cands)[0]?.strike).toBe(7400);
   });
 });
 
 describe("the breakdown is the argument, not decoration", () => {
   it("reports every term's raw value, percentile, weight and contribution", () => {
-    const scored = scoreCandidates(
-      [candidate({ ffAtm: 0.05 }), candidate({ strike: 7350, ffAtm: 0.01 })],
-      { realizedVol: RV20 },
-    );
+    const scored = scoreCandidates([
+      candidate({ ffAtm: 0.05 }),
+      candidate({ strike: 7350, ffAtm: 0.01 }),
+    ]);
     const top = scored[0];
     expect(top).toBeDefined();
     if (top === undefined) return;
 
     expect(top.breakdown.fwdEdge.raw).toBeCloseTo(0.05, 12);
     expect(top.breakdown.fwdEdge.percentile).toBe(100);
-    expect(top.breakdown.fwdEdge.weight).toBe(45);
-    expect(top.breakdown.fwdEdge.contribution).toBeCloseTo(45, 9);
+    expect(top.breakdown.fwdEdge.weight).toBe(70);
+    expect(top.breakdown.fwdEdge.contribution).toBeCloseTo(70, 9);
 
-    // frontVrp raw is IV_front(50Δ) − RV20, in decimal vol.
-    expect(top.breakdown.frontVrp.raw).toBeCloseTo(0.162 - RV20, 12);
     // deltaBalance raw is the signed net delta itself, so a reader sees the number they know.
     expect(top.breakdown.deltaBalance.raw).toBeCloseTo(0.01, 12);
   });
@@ -205,7 +226,6 @@ describe("the breakdown is the argument, not decoration", () => {
   it("sums the contributions to exactly the score", () => {
     const scored = scoreCandidates(
       [0.01, 0.03, 0.05, 0.07].map((ff, i) => candidate({ strike: 7300 + i * 50, ffAtm: ff })),
-      { realizedVol: RV20 },
     );
     for (const c of scored) {
       const sum = Object.values(c.breakdown).reduce((a, t) => a + t.contribution, 0);
@@ -221,35 +241,36 @@ describe("missing inputs degrade honestly", () => {
       candidate({ strike: 7350, net: { delta: Number.NaN, gamma: -1, theta: 1, vega: 1 } }),
       candidate({ strike: 7400, net: { delta: 0.01, gamma: -1, theta: 1, vega: 1 } }),
     ];
-    const scored = scoreCandidates(cands, { realizedVol: RV20 });
+    const scored = scoreCandidates(cands);
     const missing = scored.find((c) => c.strike === 7350);
     expect(missing?.breakdown.deltaBalance.raw).toBeNull();
     expect(missing?.breakdown.deltaBalance.percentile).toBeNull();
     expect(missing?.breakdown.deltaBalance.contribution).toBe(0);
   });
 
-  it("drops the VRP term entirely when realized vol is unavailable, and renormalises", () => {
-    // With no realized vol the term is ABSENT, not merely bad — it cannot discriminate, so
-    // leaving it in at zero would cap every score at 75 and make snapshots incomparable.
+  it("drops a term unmeasurable across the WHOLE snapshot, and renormalises the rest", () => {
+    // A term nobody can show a value on is ABSENT, not merely bad — it cannot discriminate, so
+    // leaving it in at zero would cap every score at 70 and make snapshots incomparable.
+    const nan = { delta: Number.NaN, gamma: -1, theta: 1, vega: 1 };
     const cands = [
-      candidate({ strike: 7350, ffAtm: 0.01 }),
-      candidate({ strike: 7400, ffAtm: 0.08 }),
+      candidate({ strike: 7350, ffAtm: 0.01, net: nan }),
+      candidate({ strike: 7400, ffAtm: 0.08, net: nan }),
     ];
-    const scored = scoreCandidates(cands, { realizedVol: null });
+    const scored = scoreCandidates(cands);
     expect(scored[0]?.score).toBe(100);
-    expect(scored[0]?.breakdown.frontVrp.weight).toBe(0);
-    expect(scored[0]?.breakdown.frontVrp.raw).toBeNull();
-    // The surviving three terms renormalise to 100.
+    expect(scored[0]?.breakdown.deltaBalance.weight).toBe(0);
+    expect(scored[0]?.breakdown.deltaBalance.raw).toBeNull();
+    // The surviving term renormalises to 100.
     const active = Object.values(scored[0]?.breakdown ?? {}).reduce((a, t) => a + t.weight, 0);
     expect(active).toBeCloseTo(100, 9);
   });
 
   it("returns an empty array for an empty candidate set, never a divide by zero", () => {
-    expect(scoreCandidates([], { realizedVol: RV20 })).toEqual([]);
+    expect(scoreCandidates([])).toEqual([]);
   });
 
   it("gives a single candidate a defined score rather than a null percentile", () => {
-    const scored = scoreCandidates([candidate()], { realizedVol: RV20 });
+    const scored = scoreCandidates([candidate()]);
     expect(scored).toHaveLength(1);
     expect(Number.isFinite(scored[0]?.score ?? Number.NaN)).toBe(true);
   });
@@ -261,8 +282,8 @@ describe("determinism", () => {
     const a = candidate({ strike: 7400, frontExpiration: "2026-08-11" });
     const b = candidate({ strike: 7350, frontExpiration: "2026-08-11" });
     const c = candidate({ strike: 7400, frontExpiration: "2026-08-17" });
-    const forward = scoreCandidates([a, b, c], { realizedVol: RV20 });
-    const reverse = scoreCandidates([c, b, a], { realizedVol: RV20 });
+    const forward = scoreCandidates([a, b, c]);
+    const reverse = scoreCandidates([c, b, a]);
     expect(forward.map((x) => `${x.frontExpiration}|${x.strike}`)).toEqual(
       reverse.map((x) => `${x.frontExpiration}|${x.strike}`),
     );
@@ -292,8 +313,8 @@ describe("determinism", () => {
               net: { delta: s.delta, gamma: -1, theta: 1, vega: 1 },
             }),
           );
-          const a = scoreCandidates(cands, { realizedVol: RV20 });
-          const b = scoreCandidates([...cands].reverse(), { realizedVol: RV20 });
+          const a = scoreCandidates(cands);
+          const b = scoreCandidates([...cands].reverse());
           expect(a.map((x) => x.score)).toEqual(b.map((x) => x.score));
         },
       ),
@@ -308,7 +329,6 @@ describe("determinism", () => {
         (ffs) => {
           const scored = scoreCandidates(
             ffs.map((ff, i) => candidate({ strike: 7000 + i, ffAtm: ff })),
-            { realizedVol: RV20 },
           );
           for (const c of scored) {
             expect(c.score).toBeGreaterThanOrEqual(0);

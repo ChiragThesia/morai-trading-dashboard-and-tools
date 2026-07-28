@@ -415,7 +415,6 @@ honestly.
 | `thetaCarry` | `θ_f / extrinsic_f − θ_b / extrinsic_b` — normalised decay (§2.4) |
 | `debit` | `haircutFill(backQuote, "buy") − haircutFill(frontQuote, "sell")` — reuse the 0.66 model |
 | `spreadCost` | round-trip width on both legs, as a fraction of `debit` — displayed |
-| `frontVrp` | `atm50Iv_f − RV20` |
 
 Sign convention, load-bearing: net = **back − front**, because the calendar is long the
 back leg and short the front. Getting it backwards flips every risk number.
@@ -432,22 +431,33 @@ scorer substitutes `0` there (`scoring.ts:139`); that is a bug the rewrite fixes
 
 ## 6. The score
 
-Four terms. Each is a **cross-sectional percentile within the snapshot**, not an
+Two terms. Each is a **cross-sectional percentile within the snapshot**, not an
 absolute threshold — forced by §3.2, and it is the same relative-value frame the
 doctrine itself uses. Deterministic: the same snapshot always produces the same ranks,
 and no history is required.
 
 | Term | Raw metric | Weight | Picks | Why this and not something else |
 |---|---|---|---|---|
-| `fwdEdge` | `ffAtm` | **45** | the pair | The author's own named ranking metric, measured on the 50Δ IVs so it reads term structure and not skew (§3.3). The forward-vol view *is* the trade |
-| `frontVrp` | `atm50Iv_f − RV20` | **25** | the pair | The house thesis, and the only term that looks outside the chain — therefore the only one not collinear with `fwdEdge` |
+| `fwdEdge` | `ffAtm` | **70** | the pair | The author's own named ranking metric, measured on the 50Δ IVs so it reads term structure and not skew (§3.3). The forward-vol view *is* the trade |
 | `deltaBalance` | `−\|netΔ\|` | **30** | the strike | The trader's hard constraint. Measured on the live ladder, `\|netΔ\|` is minimised **near the money** (−0.042 at 736 OTM, +0.008 at 16 OTM, +0.098 at 244 ITM), so it selects the strike the doctrine also prescribes |
 
-`score = Σ (weight × percentileWithinSnapshot(term))`, in `[0, 100]`. Two terms are
-strike-invariant and pick the expiry pair; one picks the strike inside it. That split is the
+`score = Σ (weight × percentileWithinSnapshot(term))`, in `[0, 100]`. One term is
+strike-invariant and picks the expiry pair; one picks the strike inside it. That split is the
 engine's shape.
 
-### 6.0 A fourth term was removed after live measurement
+**Output is one row per expiry pair.** Because `fwdEdge` is constant across every strike in a
+pair, only `deltaBalance` varies inside one — so an uncollapsed list is the winning pair's
+strike ladder walking outward from delta-neutral. Measured live before the collapse, the top
+ten was ten strikes of a single SPXW 2026-08-14 / 2026-08-31 calendar, 7365 through 7410:
+twenty-five rows describing one trade. The list is sorted first, so the row kept per pair is
+its best strike. `totalCandidates` still reports the whole enumerated space.
+
+### 6.0 Two terms were removed after live measurement
+
+Neither removal is a tuning change. In each case the live chain showed the term could not
+measure what it was added to measure.
+
+#### `thetaCarry` (was weight 20) ranked the most extreme strike available
 
 `thetaCarry` — `θ_f/extrinsic_f − θ_b/extrinsic_b` — shipped as a fourth term at weight 20 and
 put the top-ranked live candidate **721 points out of the money**, scoring it at the 93rd
@@ -467,6 +477,32 @@ runs monotonically from 55,070 deep OTM to negative deep ITM.
 
 The weight went to `deltaBalance`, which the same measurement shows is minimised near the money.
 `thetaCarry` remains on every candidate as a reported metric and is never scored.
+
+#### `frontVrp` (was weight 25) was `fwdEdge` a second time
+
+Measured 2026-07-28, against the same live chain that produced every other figure here.
+
+`frontVrp` ranked `atm50Iv_f − RV20`, and `RV20` is **one scalar for the whole snapshot**.
+`percentileRank` counts `h <= value`, so subtracting the same constant from every candidate
+changes no comparison. Doubling realized vol from 0.12 to 0.30 produced a **byte-identical
+ranking** — the one input that came from outside the chain could not move the answer.
+
+What remained was `atm50Iv_f`, a per-**cohort** constant taking 21 distinct values across 7,951
+candidates. And a richer front leg lowers forward vol, so it drives `fwdEdge` up with it:
+
+| Measurement | Value |
+|---|---|
+| `corr(fwdEdge percentile, frontVrp percentile)` | **0.954** |
+| Distinct `frontVrp` raw values | 21, across 7,951 candidates |
+| Ranking change from RV 0.12 → 0.30 | none |
+
+So its stated justification — *the only term that looks outside the chain, therefore the only
+one not collinear with `fwdEdge`* — was false on both counts, and a quarter of the score was
+`fwdEdge` restated. A variance risk premium on a **single underlying** is not a cross-sectional
+quantity at all: every candidate shares the same realized vol. It is snapshot context, reported
+as `CalendarRanking.realizedVol` beside every candidate's `frontRefIv`, and never scored.
+
+The weight went to `fwdEdge`, leaving the strike discriminator untouched at 30.
 
 ### 6.1 What is computed, shown, and deliberately not scored
 
@@ -633,7 +669,7 @@ zero new tables, zero new fakes.**
 |---|---|---|
 | `packages/core/src/calendar/domain/cohort.ts` | ~130 | Group by `(root, expiration)`; resolve spot, `atmStrike`, `atmIv`, per-row delta, `atm50Strike`, `atm50Iv`, `extrinsic`. Promoted from `apps/web/src/lib/chain-math.ts` + `chain-risk-reversal.ts`, not rewritten |
 | `packages/core/src/calendar/domain/candidate.ts` | ~140 | Enumerate under the gates; compute every §5.2 quantity |
-| `packages/core/src/calendar/domain/score.ts` | ~80 | Cross-sectional percentile of three terms, weighted sum, tie-break |
+| `packages/core/src/calendar/domain/score.ts` | ~80 | Cross-sectional percentile of two terms, weighted sum, tie-break |
 | `packages/core/src/calendar/application/rankCalendars.ts` | ~90 | One read → cohorts → candidates → score → top N. `Result<T,E>`, no throw |
 
 Reused verbatim:
@@ -755,7 +791,7 @@ Not blockers. Recorded so they are decided on purpose rather than by accident.
 | # | Question | Recommendation |
 |---|---|---|
 | 1 | Is `FF = IV_front/σ_fwd − 1` the right Forward Factor? | Ship it, marked as inference, behind a swappable expression. It fits his one numbered case; nothing else does |
-| 2 | Weights 45/25/30 | Start there, from the doctrine's emphasis plus the one measured correction in §6.0. Re-derive only against a backtest, never by feel |
+| 2 | Weights 70/30 | Start there, from the doctrine's emphasis plus the two measured corrections in §6.0. Re-derive only against a backtest, never by feel |
 | 3 | `RV20` window and estimator | Close-to-close over 21 daily closes, which already ships. Note the known bias: the "daily close" is a ~23:30Z sample in UTC buckets, not the 16:00 ET print |
 | 4 | Cross-root calendars (SPX front / SPXW back) | Blocked in v1 (gate 7). Tradeable, but the AM/PM settlement difference changes the front leg's expiry-day risk and nothing in the corpus covers it |
 | 5 | Strike granularity | Enumerate every shared strike. 2,454 candidates costs nothing |

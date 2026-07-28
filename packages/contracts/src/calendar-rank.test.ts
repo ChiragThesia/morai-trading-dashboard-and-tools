@@ -37,7 +37,7 @@ const ROW = {
   backDte: 53,
   gapDays: 28,
   score: 91.2,
-  breakdown: { fwdEdge: TERM, frontVrp: TERM, deltaBalance: TERM },
+  breakdown: { fwdEdge: TERM, deltaBalance: TERM },
   fwdIv: 0.1589,
   cushion: 0.0021,
   ffAtm: 0.0771,
@@ -101,16 +101,15 @@ describe("rankedCalendar", () => {
       thetaCarry: null,
       breakdown: {
         fwdEdge: TERM,
-        frontVrp: { raw: null, percentile: null, weight: 0, contribution: 0 },
-        deltaBalance: TERM,
+        deltaBalance: { raw: null, percentile: null, weight: 0, contribution: 0 },
       },
     });
     expect(parsed.ffStrike).toBeNull();
     expect(parsed.vSkewFront).toBeNull();
     expect(parsed.vSkewBack).toBeNull();
     expect(parsed.thetaCarry).toBeNull();
-    expect(parsed.breakdown.frontVrp.raw).toBeNull();
-    expect(parsed.breakdown.frontVrp.percentile).toBeNull();
+    expect(parsed.breakdown.deltaBalance.raw).toBeNull();
+    expect(parsed.breakdown.deltaBalance.percentile).toBeNull();
   });
 
   it("rejects a root outside the SPX/SPXW union", () => {
@@ -122,10 +121,8 @@ describe("rankedCalendar", () => {
     expect(() => rankedCalendar.parse(withoutFwdIv)).toThrow();
   });
 
-  it("rejects a breakdown missing one of the three terms", () => {
-    expect(() =>
-      rankedCalendar.parse({ ...ROW, breakdown: { fwdEdge: TERM, frontVrp: TERM } }),
-    ).toThrow();
+  it("rejects a breakdown missing one of the two terms", () => {
+    expect(() => rankedCalendar.parse({ ...ROW, breakdown: { fwdEdge: TERM } })).toThrow();
   });
 });
 

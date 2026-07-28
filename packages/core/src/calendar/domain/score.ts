@@ -33,6 +33,8 @@
  *   - Spread cost and open interest. Measured inert or harmful on SPX: spread is p90 1.0% of
  *     mid, and an OI ≥ 100 gate removes 82% of candidates including 69% of the near-the-money
  *     SPXW ladder. A near-constant term is noise with a weight attached.
+ *   - The front leg's variance risk premium. It shipped as a term and was removed; see
+ *     SCORE_WEIGHTS. A quantity that is the same for every candidate cannot order them.
  *   - Anything ranked against history. There are 30 days of it.
  */
 
@@ -40,31 +42,41 @@ import { percentileRank } from "@morai/shared";
 import type { Candidate } from "./candidate.ts";
 
 /**
- * The three weights, summing to 100.
+ * The two weights, summing to 100.
  *
- * Two of them pick the expiry PAIR and are strike-invariant by construction; one picks the
- * STRIKE within that pair. That split is the engine's whole shape.
+ * One picks the expiry PAIR and is strike-invariant by construction; one picks the STRIKE
+ * within that pair. That split is the engine's whole shape.
  *
- * `fwdEdge` (45) carries the most because a calendar IS a forward-volatility trade and nothing
- * else. `frontVrp` (25) is next because it is the corpus's single edge claim AND the only term
- * that looks outside the chain, which makes it the only one not collinear with `fwdEdge`.
- * `deltaBalance` (30) selects the strike.
+ * `fwdEdge` (70) carries the pair because a calendar IS a forward-volatility trade and nothing
+ * else. `deltaBalance` (30) selects the strike.
  *
- * `thetaCarry` WAS a fourth term at weight 20 and was removed after it ranked a live candidate
- * 721 points out of the money. Theta as a share of extrinsic is U-shaped in strike with its
- * minimum at the money (measured across one pair's ladder: 0.0302 at 736 OTM, 0.0074 at 16 OTM,
- * 0.0285 at 244 ITM), so ranking it rewards the most extreme strike available. The doctrine uses
- * that ratio to compare TENORS, never strikes. Its weight went to `deltaBalance`, which the same
- * measurement shows is minimised near the money — the trader's delta-neutral constraint doing
- * the strike selection it was always meant to do, and agreeing with the doctrine's own rule that
- * a delta-neutral SPX calendar belongs at the money.
+ * TWO TERMS HAVE BEEN REMOVED, both after the live chain contradicted the reason they were
+ * added. Neither is a tuning change; each was a term that could not measure what it claimed to.
  *
- * These are a starting point taken from the doctrine's emphasis and one measured correction.
- * They should be re-derived against a backtest, never adjusted by feel.
+ * `thetaCarry` (was 20) ranked a live candidate 721 points out of the money. Theta as a share of
+ * extrinsic is U-shaped in strike with its minimum at the money (measured across one pair's
+ * ladder: 0.0302 at 736 OTM, 0.0074 at 16 OTM, 0.0285 at 244 ITM), so ranking it rewards the
+ * most extreme strike available. The doctrine uses that ratio to compare TENORS, never strikes.
+ *
+ * `frontVrp` (was 25) was `IV_front(50Δ) − RV20`, and RV20 is ONE SCALAR for the whole snapshot.
+ * `percentileRank` counts `h <= value`, so subtracting the same constant from every candidate
+ * changes no comparison: measured on the live chain, doubling realized vol from 0.12 to 0.30
+ * left the ranking byte-identical. Its stated justification — the only term looking outside the
+ * chain, therefore the only one not collinear with `fwdEdge` — failed on both counts. What it
+ * actually ranked was `frontRefIv`, a per-cohort constant taking 21 distinct values across 7,951
+ * candidates; and since a richer front leg lowers forward vol, it drove `fwdEdge` up with it.
+ * Measured correlation between the two terms' percentiles: 0.954.
+ *
+ * A variance risk premium on a single underlying is snapshot context, not a cross-sectional
+ * signal. It is reported as `CalendarRanking.realizedVol` alongside every candidate's
+ * `frontRefIv`, which is where a reader can judge it.
+ *
+ * Both removed weights went to `fwdEdge`, leaving the strike discriminator untouched at 30.
+ * These are the doctrine's emphasis plus two measured corrections. They should be re-derived
+ * against a backtest, never adjusted by feel.
  */
 export const SCORE_WEIGHTS = {
-  fwdEdge: 45,
-  frontVrp: 25,
+  fwdEdge: 70,
   deltaBalance: 30,
 } as const;
 
@@ -86,24 +98,13 @@ export type ScoredCalendar = Candidate & {
   readonly breakdown: Readonly<Record<ScoreTermKey, ScoreTerm>>;
 };
 
-export type ScoreContext = {
-  /**
-   * Trailing realized volatility, decimal, as a comparable for the front leg's implied.
-   * Null when it could not be computed — the VRP term then drops out entirely rather than
-   * scoring every candidate at zero, which would cap the whole snapshot at 75.
-   */
-  readonly realizedVol: number | null;
-};
-
-const TERM_KEYS: ReadonlyArray<ScoreTermKey> = ["fwdEdge", "frontVrp", "deltaBalance"];
+const TERM_KEYS: ReadonlyArray<ScoreTermKey> = ["fwdEdge", "deltaBalance"];
 
 /** Each term's raw metric. Higher is always better, so ranking needs no per-term direction. */
-function rawValue(key: ScoreTermKey, c: Candidate, ctx: ScoreContext): number | null {
+function rawValue(key: ScoreTermKey, c: Candidate): number | null {
   switch (key) {
     case "fwdEdge":
       return Number.isFinite(c.ffAtm) ? c.ffAtm : null;
-    case "frontVrp":
-      return ctx.realizedVol === null ? null : c.frontRefIv - ctx.realizedVol;
     case "deltaBalance":
       // Negated so that larger is better, matching every other term. The breakdown reports the
       // signed net delta itself, because that is the number the trader recognises.
@@ -112,26 +113,25 @@ function rawValue(key: ScoreTermKey, c: Candidate, ctx: ScoreContext): number | 
 }
 
 /** What the reader sees. Differs from the ranked value only where ranking needed a sign flip. */
-function reportedValue(key: ScoreTermKey, c: Candidate, ctx: ScoreContext): number | null {
+function reportedValue(key: ScoreTermKey, c: Candidate): number | null {
   if (key === "deltaBalance") return Number.isFinite(c.net.delta) ? c.net.delta : null;
-  return rawValue(key, c, ctx);
+  return rawValue(key, c);
 }
 
 export function scoreCandidates(
   candidates: ReadonlyArray<Candidate>,
-  ctx: ScoreContext,
 ): ReadonlyArray<ScoredCalendar> {
   if (candidates.length === 0) return [];
 
   // One pass to collect each term's distribution across the snapshot. A term with no measurable
   // value anywhere is INACTIVE — absent rather than merely bad — so its weight is removed and
-  // the survivors renormalise to 100. Otherwise a snapshot missing realized vol would produce
-  // scores that are not comparable with one that has it.
+  // the survivors renormalise to 100. Otherwise a snapshot where one term is unmeasurable would
+  // produce scores that are not comparable with one where it is.
   const ranked = new Map<ScoreTermKey, number[]>();
   for (const key of TERM_KEYS) {
     const values: number[] = [];
     for (const c of candidates) {
-      const v = rawValue(key, c, ctx);
+      const v = rawValue(key, c);
       if (v !== null && Number.isFinite(v)) values.push(v);
     }
     ranked.set(key, values);
@@ -145,7 +145,6 @@ export function scoreCandidates(
   const scored = candidates.map((c) => {
     const terms: Record<ScoreTermKey, ScoreTerm> = {
       fwdEdge: emptyTerm(),
-      frontVrp: emptyTerm(),
       deltaBalance: emptyTerm(),
     };
     let score = 0;
@@ -156,11 +155,11 @@ export function scoreCandidates(
       // Renormalised so the best available candidate can still reach 100 when a term is absent.
       const weight = inactive ? 0 : (SCORE_WEIGHTS[key] / activeTotal) * 100;
 
-      const value = rawValue(key, c, ctx);
+      const value = rawValue(key, c);
       if (inactive || value === null) {
         // A candidate that cannot show a value on an ACTIVE term scores zero on it. Skipping it
         // instead would reward missing data — the absence of a measurement is not a good number.
-        terms[key] = { raw: reportedValue(key, c, ctx), percentile: null, weight, contribution: 0 };
+        terms[key] = { raw: reportedValue(key, c), percentile: null, weight, contribution: 0 };
         continue;
       }
 
@@ -168,7 +167,7 @@ export function scoreCandidates(
       const percentile = pct === null ? 0 : pct;
       const contribution = (weight * percentile) / 100;
       score += contribution;
-      terms[key] = { raw: reportedValue(key, c, ctx), percentile, weight, contribution };
+      terms[key] = { raw: reportedValue(key, c), percentile, weight, contribution };
     }
 
     return { ...c, score: clamp01Hundred(score), breakdown: terms };

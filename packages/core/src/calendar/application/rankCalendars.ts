@@ -16,8 +16,8 @@
  *     not a ranking, so a failure propagates.
  *   - CARRY degrades to the flat fallback, and the affected expiries are NAMED in the result.
  *     Silently substituting flat carry is what the browser does today.
- *   - REALIZED VOL degrades to null, which drops the VRP term for the whole snapshot and
- *     renormalises the other three so scores stay comparable.
+ *   - REALIZED VOL degrades to null. It is reported as snapshot context and no longer scores
+ *     anything, so a missing value costs a comparable, never a ranking.
  */
 
 import { ok, err } from "@morai/shared";
@@ -25,6 +25,7 @@ import type { Result } from "@morai/shared";
 import { buildCohorts, snapshotSpot } from "../domain/cohort.ts";
 import { enumerateCandidates } from "../domain/candidate.ts";
 import { scoreCandidates } from "../domain/score.ts";
+import type { ScoredCalendar } from "../domain/score.ts";
 import { realizedVol } from "../../picker/domain/realized-vol.ts";
 import type { Carry, Root } from "../domain/types.ts";
 import type {
@@ -110,11 +111,25 @@ export function makeRankCalendarsUseCase(deps: RankCalendarsDeps): ForRankingCal
       });
 
       const { candidates, drops } = enumerateCandidates(cohorts, { frontDteMax });
-      const scored = scoreCandidates(candidates, { realizedVol: rv });
+      const scored = scoreCandidates(candidates);
 
-      const pairs = new Set(
-        scored.map((c) => `${c.root}|${c.frontExpiration}|${c.backExpiration}`),
-      );
+      // ONE ROW PER EXPIRY PAIR. `fwdEdge` is a property of the pair and constant across every
+      // strike inside it, so within a pair only `deltaBalance` varies — and it is minimised at
+      // the money. Ranked without this collapse, the list is the winning pair's strike ladder
+      // walking outward from delta-neutral: measured live, the top ten was ten strikes of one
+      // SPXW 2026-08-14 / 2026-08-31 calendar, 7365 through 7410. Twenty-five rows, one trade.
+      //
+      // The pair is the decision the trader is making; the strike is a detail of it. `scored` is
+      // already sorted descending, so keeping the first occurrence keeps the best strike in each
+      // pair. `totalCandidates` still reports the whole space, so nothing is hidden.
+      const bestPerPair: ScoredCalendar[] = [];
+      const seenPairs = new Set<string>();
+      for (const c of scored) {
+        const pair = `${c.root}|${c.frontExpiration}|${c.backExpiration}`;
+        if (seenPairs.has(pair)) continue;
+        seenPairs.add(pair);
+        bestPerPair.push(c);
+      }
 
       // `asOf` is the newest observation the cohort actually carries, not the clock: the result
       // must say which snapshot it describes, and the clock is not that.
@@ -126,9 +141,9 @@ export function makeRankCalendarsUseCase(deps: RankCalendarsDeps): ForRankingCal
       return ok({
         asOf,
         spot: snapshotSpot(quotes) ?? 0,
-        candidates: scored.slice(0, Math.max(0, limit)),
+        candidates: bestPerPair.slice(0, Math.max(0, limit)),
         totalCandidates: scored.length,
-        expiryPairs: pairs.size,
+        expiryPairs: seenPairs.size,
         drops,
         realizedVol: rv,
         frontDteMax,

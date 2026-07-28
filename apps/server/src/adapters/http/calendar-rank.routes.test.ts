@@ -56,8 +56,7 @@ const ROW = {
   score: 91.2,
   breakdown: {
     fwdEdge: TERM,
-    frontVrp: { raw: null, percentile: null, weight: 0, contribution: 0 },
-    deltaBalance: TERM,
+    deltaBalance: { raw: null, percentile: null, weight: 0, contribution: 0 },
   },
   fwdIv: 0.1589,
   cushion: 0.0021,
@@ -238,33 +237,32 @@ describe("cross-seam: a REAL engine result satisfies the REAL contract", () => {
     const top = parsed.candidates[0];
     expect(top).toBeDefined();
     if (top === undefined) return;
-    const sum =
-      top.breakdown.fwdEdge.contribution +
-      top.breakdown.frontVrp.contribution +
-      top.breakdown.deltaBalance.contribution;
+    const sum = top.breakdown.fwdEdge.contribution + top.breakdown.deltaBalance.contribution;
     expect(sum).toBeCloseTo(top.score, 6);
     expect(top.frontDte).toBeGreaterThanOrEqual(15);
     expect(top.gapDays).toBeGreaterThanOrEqual(15);
   });
 
-  it("survives the null-honest path: no realized vol → null term raw/percentile on the wire", async () => {
-    // The engine drops the VRP term for the whole snapshot when realized vol is unavailable.
-    // A contract that made raw/percentile/realizedVol required would throw here, on real data,
-    // having passed every hand-written fixture.
-    const app = buildTestApp(
+  it("survives the null-honest path: no realized vol → null on the wire, ranking unchanged", async () => {
+    // Realized vol is snapshot CONTEXT, not a score term. A contract that made it required would
+    // throw here, on real data, having passed every hand-written fixture — and a ranking that
+    // still moved when it vanished would mean it was quietly scoring something after all.
+    const withRv = buildTestApp(makeRankCalendarsUseCase(realDeps()));
+    const withoutRv = buildTestApp(
       makeRankCalendarsUseCase(realDeps({ readDailyCloses: () => Promise.resolve(ok([])) })),
     );
-    const res = await app.request("/calendars/ranked");
-    expect(res.status).toBe(200);
+    const [a, b] = await Promise.all([
+      withRv.request("/calendars/ranked"),
+      withoutRv.request("/calendars/ranked"),
+    ]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
 
-    const parsed = rankedCalendarResponse.parse(await res.json());
-    expect(parsed.realizedVol).toBeNull();
-    const top = parsed.candidates[0];
-    expect(top).toBeDefined();
-    if (top === undefined) return;
-    expect(top.breakdown.frontVrp.raw).toBeNull();
-    expect(top.breakdown.frontVrp.percentile).toBeNull();
-    expect(top.breakdown.frontVrp.weight).toBe(0);
+    const parsedA = rankedCalendarResponse.parse(await a.json());
+    const parsedB = rankedCalendarResponse.parse(await b.json());
+    expect(parsedA.realizedVol).not.toBeNull();
+    expect(parsedB.realizedVol).toBeNull();
+    expect(parsedB.candidates.map((c) => c.score)).toEqual(parsedA.candidates.map((c) => c.score));
   });
 
   it("passes the request through to the engine: frontDteMax bounds the front leg", async () => {

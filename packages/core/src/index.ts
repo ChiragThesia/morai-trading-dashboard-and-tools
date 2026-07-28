@@ -724,7 +724,6 @@ export type {
   ForReadingExpiryCarry,
   RankCalendarsDeps,
   RankCalendarsRequest,
-  ScoreContext,
   ScoreTerm,
   ScoreTermKey,
   ScoredCalendar,

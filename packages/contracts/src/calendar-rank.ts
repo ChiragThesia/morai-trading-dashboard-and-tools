@@ -7,7 +7,7 @@ import { z } from "zod";
 //
 // A NEW schema, deliberately not a widened pickerCandidate: picker.ts's
 // `breakdownEntry.criterion` is a CLOSED enum that blocks new criteria by design, and this
-// engine's three terms (fwdEdge / frontVrp / deltaBalance) are not that enum's members.
+// engine's two terms (fwdEdge / deltaBalance) are not that enum's members.
 //
 // STRIKE CONVENTION: points, e.g. 7400 — NOT the ×1000 integer chainResponse carries. The
 // engine converts once, in domain/cohort.ts, and nothing downstream of it sees ×1000.
@@ -88,7 +88,6 @@ export const rankedCalendar = z.object({
   score: z.number().min(0).max(100),
   breakdown: z.object({
     fwdEdge: calendarScoreTerm,
-    frontVrp: calendarScoreTerm,
     deltaBalance: calendarScoreTerm,
   }),
 

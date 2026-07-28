@@ -25,12 +25,7 @@ export type {
   NetGreeks,
 } from "./domain/candidate.ts";
 export { scoreCandidates, SCORE_WEIGHTS } from "./domain/score.ts";
-export type {
-  ScoredCalendar,
-  ScoreContext,
-  ScoreTerm,
-  ScoreTermKey,
-} from "./domain/score.ts";
+export type { ScoredCalendar, ScoreTerm, ScoreTermKey } from "./domain/score.ts";
 export type {
   CalendarChainQuote,
   Carry,
