@@ -637,3 +637,56 @@ export const brokerTransactions = pgTable("broker_transactions", {
   raw: jsonb("raw").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
+
+// ─── 25. calendar_ranking — the calendar engine's own ranking history (0031) ──
+// One row per ranked expiry PAIR per cycle. Normalised rather than picker_snapshot's JSONB
+// blob: the full ScoredCalendar measured ~1.3 KB of JSON against ~150 B here (2.2 GB/year vs
+// 250 MB), and a weight backtest regresses forward P&L on the term percentiles across weeks —
+// a column scan here, an unnest-every-blob there. Every field a replay can rebuild from
+// leg_observations as of as_of is deliberately absent; see calendar/application/ports.ts.
+// The key carries contract_type and strike even though each is a single literal per write —
+// 0029 and 0030 are what a key missing a non-varying column costs. Writer uses
+// onConflictDoNothing: idempotent per cycle, and unlike DO UPDATE it cannot raise on an
+// in-batch duplicate (0224db1). Full reasoning in migrations/0031_calendar_ranking.sql.
+
+export const calendarRanking = pgTable(
+  "calendar_ranking",
+  {
+    // The cohort's observation instant — never the clock.
+    asOf: timestamp("as_of", { withTimezone: true }).notNull(),
+    root: varchar("root", { length: 8 }).notNull(),
+    contractType: contractTypeEnum("contract_type").notNull(),
+    frontExpiration: date("front_expiration").notNull(),
+    backExpiration: date("back_expiration").notNull(),
+    // Index points, NOT the ×1000 chain convention.
+    strike: numeric("strike").notNull(),
+    rank: integer("rank").notNull(),
+    score: numeric("score").notNull(),
+    fwdEdgeRaw: numeric("fwd_edge_raw"),
+    fwdEdgePercentile: numeric("fwd_edge_percentile"),
+    deltaBalanceRaw: numeric("delta_balance_raw"),
+    deltaBalancePercentile: numeric("delta_balance_percentile"),
+    fwdIv: numeric("fwd_iv").notNull(),
+    frontRefIv: numeric("front_ref_iv").notNull(),
+    backRefIv: numeric("back_ref_iv").notNull(),
+    debit: numeric("debit").notNull(),
+    netTheta: numeric("net_theta").notNull(),
+    netVega: numeric("net_vega").notNull(),
+    spot: numeric("spot"),
+    // The cycle's mid-drain tell — unrecoverable once compute-bsm-greeks finishes.
+    noIvLegs: integer("no_iv_legs").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      name: "calendar_ranking_pkey",
+      columns: [
+        table.asOf,
+        table.root,
+        table.contractType,
+        table.frontExpiration,
+        table.backExpiration,
+        table.strike,
+      ],
+    }),
+  ],
+).enableRLS();

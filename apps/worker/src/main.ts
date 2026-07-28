@@ -51,6 +51,7 @@ import {
   makePostgresPickerChainRepo,
   makePostgresPickerSnapshotRepo,
   makePostgresPickerHistoryRepo,
+  makePostgresCalendarRankingRepo,
   makePostgresExitVerdictsRepo,
   makePostgresRuleOverridesRepo,
 } from "@morai/adapters";
@@ -66,6 +67,8 @@ import {
   makeSyncTransactionsUseCase,
   hashFillIds,
   makeRebuildJournalUseCase,
+  makeRankCalendarsUseCase,
+  makeRecordCalendarRankingUseCase,
   makeRecomputeSnapshotPnlUseCase,
   makeWipeDerivedFillsUseCase,
   selectChainSources,
@@ -107,6 +110,7 @@ import { makeRegisterOpenCalendarsHandler } from "./handlers/register-open-calen
 import { makeSelfHealJournalHandler } from "./handlers/self-heal-journal.ts";
 import { makeRepairJournalHistoryHandler } from "./handlers/repair-journal-history.ts";
 import { makeComputePickerHandler } from "./handlers/compute-picker.ts";
+import { makePersistCalendarRankingHandler } from "./handlers/persist-calendar-ranking.ts";
 import { makeComputeExitAdviceHandler } from "./handlers/compute-exit-advice.ts";
 import { makeFetchEconomicEventsHandler } from "./handlers/fetch-economic-events.ts";
 import { registerAllJobs } from "./schedule.ts";
@@ -824,6 +828,34 @@ const computeExitAdviceHandler = makeComputeExitAdviceHandler({
   computeExitAdviceUseCase,
 });
 
+// 0031: the calendar engine's ranking history. `rankCalendars` computes on read and never
+// persists, so its SCORE_WEIGHTS (fwdEdge 70 / deltaBalance 30) have no corpus to be re-derived
+// against — score.ts requires exactly that and forbids adjusting them by feel. This wires the
+// SAME engine the server already exposes at GET /api/calendars/ranked and rank_calendars, then
+// keeps what it returns.
+//
+// The deps mirror apps/server/src/main.ts's rankCalendars wiring EXACTLY, and they have to: a
+// ranking recorded on a different chain read or a different carry is not the ranking the reader
+// saw. readChain is the same root-correct, OI-repaired picker-chain read; readDailyCloses the
+// same trailing closes; carry the same injected constant pair (q is the worker's own BSM
+// constant, r the fallback rather than the per-row observation — calendar/domain/cohort.ts scar
+// 4). Both repos are already constructed above; no new adapter beyond the ranking's own.
+const calendarRankingRepo = makePostgresCalendarRankingRepo(db);
+
+const recordCalendarRankingUseCase = makeRecordCalendarRankingUseCase({
+  rankCalendars: makeRankCalendarsUseCase({
+    readChain: pickerChainRepo.readChainForPicker,
+    readDailyCloses: pickerHistoryRepo.readDailySpotCloses,
+    now: () => new Date(),
+    carry: { rate: config.BSM_RATE_FALLBACK, divYield: config.BSM_DIVIDEND_YIELD },
+  }),
+  persistRanking: calendarRankingRepo.insertCalendarRanking,
+});
+
+const persistCalendarRankingHandler = makePersistCalendarRankingHandler({
+  recordCalendarRankingUseCase,
+});
+
 // Register all 12 queues, 8 crons, and 12 work handlers via registerAllJobs (Plan 05-04 + 08-06 + 13-05 + 19-08).
 // 11-06 (GW-03): refresh-tokens retired. 13-05 (COT-01): fetch-cot added. 19-08: compute-picker +
 // fetch-economic-events added — 12 queues, 7 scheduled jobs.
@@ -848,8 +880,9 @@ await registerAllJobs(boss, {
   registerOpenCalendars: registerOpenCalendarsHandler,
   selfHealJournal: selfHealJournalHandler,
   repairJournalHistory: repairJournalHistoryHandler,
+  persistCalendarRanking: persistCalendarRankingHandler,
 });
 
 console.warn(
-  "morai worker: pg-boss started; 19 queues created, 9 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-news, fetch-economic-events, self-heal-journal); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars + repair-journal-history on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
+  "morai worker: pg-boss started; 20 queues created, 10 jobs scheduled (fetch-schwab-chain, fetch-rates, compute-bsm-greeks, sync-transactions, sync-fills, fetch-cot, fetch-news, fetch-economic-events, self-heal-journal, persist-calendar-ranking); snapshot-calendars + compute-analytics + compute-gex-snapshot + compute-picker + compute-exit-advice chain-triggered only; rebuild-journal + recompute-snapshot-pnl + wipe-derived-fills + register-open-calendars + repair-journal-history on-demand only; refresh-tokens RETIRED (GW-03 — sidecar sole writer)",
 );

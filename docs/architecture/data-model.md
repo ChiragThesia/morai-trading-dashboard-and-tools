@@ -386,6 +386,92 @@ report        jsonb NOT NULL       -- BacktestReport: mismatches, attribution,
 
 **RLS enabled**, mirroring every other table in this schema.
 
+### `calendar_ranking` — the calendar engine's own ranking history (0031)
+
+One row per ranked expiry PAIR per cycle. Written by the `persist-calendar-ranking`
+job; nothing reads it yet. It exists because `rankCalendars` computes on read and
+never persists, so the engine's `SCORE_WEIGHTS` (fwdEdge 70 / deltaBalance 30) have
+no corpus to be re-derived against — and `score.ts` requires exactly that and forbids
+adjusting them by feel. The only history that exists today, `picker_snapshot`,
+belongs to the engine being retired.
+
+**Not a JSONB blob**, unlike `picker_snapshot`. The full `ScoredCalendar` measured
+~1.3 KB of JSON per row (both leg quotes, both leg greeks, every reported-not-scored
+field) against ~150 B for these 20 columns: 2.2 GB a year against 250 MB. A weight
+backtest also regresses forward P&L on the term percentiles across weeks of cycles,
+which is a column scan here and an unnest-every-blob there.
+
+**The whole ranking, not a top-N.** Measured 2026-07-28: 2,981 candidates collapse to
+96 pairs a cycle, 48 cycles a day — ~4,600 rows a day, against `leg_observations`'
+measured 824,198. Storing only the top 25 would truncate the cross-section at the 74th
+percentile, and every score term IS a percentile.
+
+**What is deliberately absent**: every field a replay can rebuild from
+`leg_observations` as of `as_of` — both legs' quotes and greeks, `cushion`, `slope`,
+`ffStrike`, the skews, `spreadCost`, the DTEs. What is kept is what a replay can never
+recover: what the engine said (rank, score, each term's raw + percentile), what it
+would have cost (`debit` at the fill haircut), the references it was priced against
+(the two 50-delta IVs and the forward vol, all computed on an injected carry that is a
+config constant), and how sound the cohort was (`spot`, `no_iv_legs`).
+
+```
+as_of                    timestamptz  -- PK. The COHORT's observation instant, never
+                                      -- the clock; re-running it is a no-op
+root                     varchar(8)   -- PK. SPX | SPXW
+contract_type            contract_type-- PK. See below
+front_expiration         date         -- PK
+back_expiration          date         -- PK
+strike                   numeric      -- PK. Index points, NOT the ×1000 convention
+rank                     integer      -- 1-based within (as_of, contract_type)
+score                    numeric
+fwd_edge_raw             numeric      -- ffAtm; NULL when unmeasurable
+fwd_edge_percentile      numeric
+delta_balance_raw        numeric      -- SIGNED net delta, as reported
+delta_balance_percentile numeric
+fwd_iv                   numeric
+front_ref_iv             numeric      -- the 50-delta references
+back_ref_iv              numeric
+debit                    numeric      -- index points, at the fill haircut
+net_theta                numeric      -- the P&L decomposition a replay cannot redo
+net_vega                 numeric
+spot                     numeric      -- NULL, never a fabricated 0
+no_iv_legs               integer      -- see below
+```
+
+**`contract_type` and `strike` are in the key even though each is a single literal per
+write.** `rankCalendars` ranks one wing per call and has already collapsed to one row
+per `(root, front, back)`. Migration 0030 left `contract_type` out of the skew key on
+exactly that "it never varies" reasoning and 49.6% of every smile was silently
+discarded for that table's whole life; 0029 was the same shape. A constant column
+cannot discriminate — so the key carries the discriminator the second wing will need,
+without a migration.
+
+**`no_iv_legs` is the cycle's soundness tell and is unrecoverable.** The chain read
+anchors its window on `max(time) WHERE bsm_iv IS NOT NULL`, so a cohort's `as_of`
+advances as soon as its FIRST leg solves, while `compute-bsm-greeks` is still draining
+the rest. Measured 2026-07-28: the 18:00:22Z cohort carried 853 unsolved put legs at
+18:05Z and 0 by 18:14Z, on top of ~830 permanently-unsolvable wing legs every settled
+cohort carries. The cron's `25,55` offset is what keeps a write out of that window;
+this column is what makes a write that landed in it anyway identifiable, because after
+the drain finishes no replay can tell.
+
+**Writer**: bulk INSERT `ON CONFLICT DO NOTHING` on the six-column PK — first-write-wins,
+so a re-run for the same `as_of` writes nothing, and unlike `DO UPDATE` it cannot raise
+"command cannot affect row a second time" on an in-batch duplicate (commit `0224db1`,
+~80-minute outage). One statement, no chunking: the use-case caps a write at 200 rows ×
+20 columns = 4,000 bind parameters, 6% of Postgres's 65,534 limit.
+
+**No secondary index** — the PK's leading `as_of` already serves the range scan a
+backtest walks.
+
+**RLS enabled**, mirroring every other table in this schema.
+
+**Job**: `persist-calendar-ranking`, cron `25,55 * * * *` (America/New_York), 24/7, no
+RTH gate. A CRON and deliberately NOT chain-triggered: chaining off the ingest pipeline
+fires during the BSM drain described above, and first-write-wins would make that starved
+ranking the cycle's permanent record. The queue is outside the ingest chain, so a failed
+write is a gap in this history and never a broken pipeline.
+
 ## Migrations
 
 - drizzle-kit generated SQL in `packages/adapters/postgres/migrations/`.

@@ -93,6 +93,7 @@ export type AllHandlers = {
   readonly registerOpenCalendars: PgBossHandler;
   readonly selfHealJournal: PgBossHandler;
   readonly repairJournalHistory: PgBossHandler;
+  readonly persistCalendarRanking: PgBossHandler;
 };
 
 const POLLING_INTERVAL = { pollingIntervalSeconds: 30 };
@@ -136,6 +137,7 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.createQueue("register-open-calendars"); // JRNL-02: on-demand only, account-wide; no cron
   await boss.createQueue("self-heal-journal"); // HIST-03: sparse hourly cron — see below
   await boss.createQueue("repair-journal-history"); // HIST-04: on-demand only, no cron; operator repair
+  await boss.createQueue("persist-calendar-ranking"); // 0031: the calendar engine's ranking history — cron only, deliberately NOT chain-triggered (see below)
   // refresh-tokens: RETIRED (GW-03) — sidecar auto-refreshes both Schwab apps; no TS refresher
 
   // ── Phase 2: schedules (idempotent — safe on every boot) ─────────────────────
@@ -228,6 +230,24 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
     { tz: "America/New_York" },
   );
 
+  // 0031: the calendar engine's ranking history. A CRON, and deliberately NOT chain-triggered
+  // off the ingest pipeline like compute-picker is — the offset is the design.
+  //
+  // readChainForPicker anchors its cohort window on `max(time) WHERE bsm_iv IS NOT NULL`, so a
+  // new cohort's asOf advances the moment its FIRST leg solves, while compute-bsm-greeks is
+  // still draining the rest. A chain-trigger fires exactly then, and the write is first-write-
+  // wins, so the starved ranking would become that cycle's permanent record. Measured
+  // 2026-07-28: the 18:00:22Z cohort carried 853 unsolved put legs at 18:05Z and 0 by 18:14Z.
+  // :25/:55 sits ~25 minutes behind the half-hourly chain fetch and 5 minutes ahead of the next
+  // one. Every row also stores no_iv_legs, so a cycle that beat the drain anyway is visible.
+  // 24/7, no RTH gate — the chain fetch is 24/7 and the write is idempotent.
+  await boss.schedule(
+    "persist-calendar-ranking",
+    "25,55 * * * *", // 25 min after each half-hourly chain fetch, 24/7
+    null,
+    { tz: "America/New_York" },
+  );
+
   // snapshot-calendars: NO schedule — chain-triggered only by compute-bsm-greeks (D-03 / Pitfall 2)
   // compute-analytics: NO schedule — chain-triggered only by snapshot-calendars (06-04)
   // compute-gex-snapshot: NO schedule — chain-triggered only by compute-analytics (08-06 D-01)
@@ -263,4 +283,5 @@ export async function registerAllJobs(boss: JobScheduler, handlers: AllHandlers)
   await boss.work("register-open-calendars", POLLING_INTERVAL, handlers.registerOpenCalendars);
   await boss.work("self-heal-journal", POLLING_INTERVAL, handlers.selfHealJournal);
   await boss.work("repair-journal-history", POLLING_INTERVAL, handlers.repairJournalHistory);
+  await boss.work("persist-calendar-ranking", POLLING_INTERVAL, handlers.persistCalendarRanking);
 }

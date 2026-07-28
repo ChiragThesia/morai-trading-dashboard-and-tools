@@ -132,6 +132,13 @@ export type { PostgresPickerSnapshotRepo } from "./postgres/repos/picker-snapsho
 export { makeMemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
 export type { MemoryPickerSnapshotRepo } from "./memory/picker-snapshot.ts";
 
+// 0031: calendar-ranking repo — postgres + in-memory twin (architecture-boundaries §8).
+// The calendar engine's ranking history: one row per ranked expiry pair per cycle.
+export { makePostgresCalendarRankingRepo } from "./postgres/repos/calendar-ranking.ts";
+export type { PostgresCalendarRankingRepo } from "./postgres/repos/calendar-ranking.ts";
+export { makeMemoryCalendarRankingRepo } from "./memory/calendar-ranking.ts";
+export type { MemoryCalendarRankingRepo } from "./memory/calendar-ranking.ts";
+
 // Phase 26 (26-03): exit-verdicts repo — postgres + in-memory twin (architecture-boundaries §8)
 export { makePostgresExitVerdictsRepo } from "./postgres/repos/exit-verdicts.ts";
 export type { PostgresExitVerdictsRepo } from "./postgres/repos/exit-verdicts.ts";
