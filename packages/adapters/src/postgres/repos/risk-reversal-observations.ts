@@ -48,6 +48,9 @@ export function makePostgresRiskReversalObservationsRepo(
           rows.map((row) => ({
             snapshotTime: row.snapshotTime,
             underlying: row.underlying,
+            // PK member: `underlying` is always 'SPX', so root is the only thing keeping the
+            // AM- and PM-settled books from overwriting each other.
+            root: row.root,
             expiration: row.expiration,
             // NULL stays NULL — never fabricated, never coerced to 0 (R2).
             riskReversal: row.riskReversal !== null ? String(row.riskReversal) : null,
@@ -81,6 +84,8 @@ export function makePostgresRiskReversalObservationsRepo(
       const mapped: RiskReversalObservationRow[] = rows.map((row) => ({
         snapshotTime: row.snapshotTime,
         underlying: row.underlying,
+        // Narrow the varchar back to the union; unknown degrades to PM-settled.
+        root: row.root === "SPX" ? ("SPX" as const) : ("SPXW" as const),
         expiration: row.expiration,
         riskReversal: row.riskReversal !== null ? parseFloat(row.riskReversal) : null,
         rrRank: row.rrRank !== null ? parseFloat(row.rrRank) : null,

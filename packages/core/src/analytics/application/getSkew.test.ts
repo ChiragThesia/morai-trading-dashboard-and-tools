@@ -13,6 +13,7 @@ import type { ForReadingSkewSeries, RiskReversalObservationRow } from "./ports.t
 const ROW: RiskReversalObservationRow = {
   snapshotTime: new Date("2026-07-01T19:00:00Z"),
   underlying: "SPX",
+  root: "SPXW" as const,
   expiration: "2026-07-17",
   riskReversal: 0.06,
   rrRank: 50,

@@ -41,6 +41,7 @@ function makeRow(
   return {
     snapshotTime,
     underlying: overrides.underlying ?? UNDERLYING,
+    root: overrides.root ?? "SPXW",
     expiration: overrides.expiration ?? EXPIRY,
     riskReversal: "riskReversal" in overrides ? (overrides.riskReversal ?? null) : 0.06,
     rrRank: "rrRank" in overrides ? (overrides.rrRank ?? null) : 50,
@@ -59,6 +60,43 @@ export function runRiskReversalContractTests(
   makeRepo: (seed: RiskReversalSeedContext) => RiskReversalObservationsRepo,
   getSeedContext: () => RiskReversalSeedContext,
 ): void {
+  /**
+   * REGRESSION (measured on production, 2026-07-28). The PK was
+   * (snapshot_time, underlying, expiration) with NO root, and `underlying` is always the literal
+   * 'SPX'. SPX and SPXW quote the same expirations with DIFFERENT books, so their two risk
+   * reversals collided and `onConflictDoNothing` silently kept whichever was written first.
+   *
+   * Worse than losing a row: a risk reversal is interpolated across a smile, so merging the two
+   * books first produced a 25-delta bracket spanning two unrelated curves — a number belonging
+   * to neither. Sister case to the skew_observations regression.
+   */
+  describe("risk-reversal: SPX and SPXW are different books", () => {
+    let repo: RiskReversalObservationsRepo;
+
+    beforeEach(async () => {
+      const seed = getSeedContext();
+      repo = makeRepo(seed);
+      await seed.seedNoop();
+    });
+
+    it("keeps BOTH roots at the same snapshot and expiration", async () => {
+      const t = new Date("2026-07-28T15:00:00.000Z");
+      const spx = makeRow(t, { root: "SPX", riskReversal: 0.09 });
+      const spxw = makeRow(t, { root: "SPXW", riskReversal: 0.04 });
+
+      const result = await repo.storeRiskReversalObservations([spx, spxw]);
+      expect(result.ok).toBe(true);
+
+      const read = await repo.readRiskReversalSeries({ underlying: UNDERLYING });
+      expect(read.ok).toBe(true);
+      if (!read.ok) return;
+      const rows = read.value.filter((r) => r.expiration === EXPIRY);
+      expect(rows.map((r) => r.root).sort()).toStrictEqual(["SPX", "SPXW"]);
+      expect(rows.find((r) => r.root === "SPX")?.riskReversal).toBeCloseTo(0.09, 9);
+      expect(rows.find((r) => r.root === "SPXW")?.riskReversal).toBeCloseTo(0.04, 9);
+    });
+  });
+
   describe("risk-reversal-observations persistence contract", () => {
     let repo: RiskReversalObservationsRepo;
 

@@ -194,6 +194,7 @@ export function makeMemoryLegObservationsRepo(): MemoryLegObservationsRepo {
       const spot = leg.underlyingPrice === undefined ? Number.NaN : parseFloat(leg.underlyingPrice);
       smile.push({
         underlying: leg.underlying,
+        root: "SPXW" as const,
         expiration: leg.expiration,
         strike: leg.strike,
         iv: parseFloat(leg.bsmIv),

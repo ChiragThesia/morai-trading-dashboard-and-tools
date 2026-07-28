@@ -400,6 +400,9 @@ export function makePostgresLegObservationsRepo(
       const rows = await db
         .select({
           underlying: contracts.underlying,
+          // Carried so the smile can be split per book. `underlying` is always 'SPX', so
+          // dropping root here is what let the two books collide downstream.
+          root: contracts.root,
           expiration: contracts.expiration,
           strike: contracts.strike,
           bsmIv: legObservations.bsmIv,
@@ -419,6 +422,8 @@ export function makePostgresLegObservationsRepo(
 
       const smile: SmileQuote[] = rows.map((row) => ({
         underlying: row.underlying,
+        // Unknown root degrades to SPXW, the PM-settled case — mirrors picker-chain.ts.
+        root: row.root === "SPX" ? "SPX" : "SPXW",
         expiration: row.expiration,
         strike: row.strike,
         iv: parseFloat(row.bsmIv ?? "NaN"),

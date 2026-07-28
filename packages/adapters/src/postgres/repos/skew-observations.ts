@@ -41,6 +41,8 @@ export function makePostgresSkewObservationsRepo(db: Db): PostgresSkewObservatio
       const values = rows.map((row) => ({
         snapshotTime: row.snapshotTime,
         underlying: row.underlying,
+        // PK member — see the schema. Without it the two books overwrite each other.
+        root: row.root,
         expiration: row.expiration,
         strike: row.strike,
         iv: String(row.iv),
@@ -77,6 +79,8 @@ export function makePostgresSkewObservationsRepo(db: Db): PostgresSkewObservatio
       const mapped: SkewObservationRow[] = rows.map((row) => ({
         snapshotTime: row.snapshotTime,
         underlying: row.underlying,
+        // Narrow the varchar back to the union; unknown degrades to PM-settled.
+        root: row.root === "SPX" ? ("SPX" as const) : ("SPXW" as const),
         expiration: row.expiration,
         strike: row.strike,
         iv: parseFloat(row.iv),

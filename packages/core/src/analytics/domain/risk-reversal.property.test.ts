@@ -17,6 +17,7 @@ import type { SmileQuote } from "../application/ports.ts";
 
 const quote = (delta: number, iv: number): SmileQuote => ({
   underlying: "SPX",
+  root: "SPXW" as const,
   expiration: "2026-07-17",
   strike: 5500000,
   iv,

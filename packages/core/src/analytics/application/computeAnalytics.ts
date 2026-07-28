@@ -120,6 +120,7 @@ export function makeComputeAnalyticsUseCase(
     const skewRows: SkewObservationRow[] = quotes.map((q) => ({
       snapshotTime: stampInstant,
       underlying: q.underlying,
+      root: q.root,
       expiration: q.expiration,
       strike: q.strike,
       iv: q.iv,
@@ -130,12 +131,23 @@ export function makeComputeAnalyticsUseCase(
     if (!skewWrite.ok) return err(skewWrite.error);
 
     // R2: per (underlying, expiration) group → 25Δ risk-reversal + trailing-window rank.
-    const groups = new Map<string, { underlying: string; expiration: string; points: SmileQuote[] }>();
+    // Grouped by (underlying, ROOT, expiration). Without root the AM- and PM-settled books
+    // merge into ONE smile, so the 25Δ interpolation brackets across two unrelated curves and
+    // returns a risk reversal that belongs to neither.
+    const groups = new Map<
+      string,
+      { underlying: string; root: "SPX" | "SPXW"; expiration: string; points: SmileQuote[] }
+    >();
     for (const q of quotes) {
-      const key = `${q.underlying}|${q.expiration}`;
+      const key = `${q.underlying}|${q.root}|${q.expiration}`;
       const existing = groups.get(key);
       if (existing === undefined) {
-        groups.set(key, { underlying: q.underlying, expiration: q.expiration, points: [q] });
+        groups.set(key, {
+          underlying: q.underlying,
+          root: q.root,
+          expiration: q.expiration,
+          points: [q],
+        });
       } else {
         existing.points.push(q);
       }
@@ -161,6 +173,7 @@ export function makeComputeAnalyticsUseCase(
       rrRows.push({
         snapshotTime: stampInstant,
         underlying: group.underlying,
+        root: group.root,
         expiration: group.expiration,
         riskReversal,
         rrRank,

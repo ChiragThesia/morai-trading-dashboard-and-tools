@@ -22,6 +22,13 @@ export type StorageError = {
  */
 export type SmileQuote = {
   readonly underlying: string;
+  /**
+   * OCC root. SPX (AM-settled third-Friday monthlies) and SPXW (PM-settled weeklies) quote the
+   * SAME strike on the SAME date with DIFFERENT books, and `underlying` is always the literal
+   * 'SPX' — so root is the ONLY field separating them. Omitting it made the two collide on the
+   * skew PK, where onConflictDoNothing silently discarded one: 709 of 2,341 rows per live cycle.
+   */
+  readonly root: "SPX" | "SPXW";
   readonly expiration: string; // YYYY-MM-DD
   readonly strike: number; // ×1000 int
   readonly iv: number;
@@ -57,6 +64,8 @@ export type CalendarSnapshotForCycle = {
 export type SkewObservationRow = {
   readonly snapshotTime: Date;
   readonly underlying: string;
+  /** Part of the PK — see SmileQuote.root. Without it the two books overwrite each other. */
+  readonly root: "SPX" | "SPXW";
   readonly expiration: string; // YYYY-MM-DD
   readonly strike: number; // ×1000 int
   readonly iv: number;
@@ -72,6 +81,8 @@ export type SkewObservationRow = {
 export type RiskReversalObservationRow = {
   readonly snapshotTime: Date;
   readonly underlying: string;
+  /** Part of the PK — see SmileQuote.root. One smile per book, never a blend of the two. */
+  readonly root: "SPX" | "SPXW";
   readonly expiration: string; // YYYY-MM-DD
   readonly riskReversal: number | null;
   readonly rrRank: number | null;

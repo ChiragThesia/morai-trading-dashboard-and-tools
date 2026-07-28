@@ -31,7 +31,9 @@ export function makeMemorySkewObservationsRepo(): MemorySkewObservationsRepo {
   const store = new Map<string, SkewObservationRow>();
 
   const keyOf = (row: SkewObservationRow): string =>
-    `${row.snapshotTime.toISOString()}|${row.underlying}|${row.expiration}|${row.strike}`;
+    // root is part of the key: `underlying` is always 'SPX', so without it the AM- and
+    // PM-settled books collide and first-write-wins throws one away.
+    `${row.snapshotTime.toISOString()}|${row.underlying}|${row.root}|${row.expiration}|${row.strike}`;
 
   const storeSkewObservations: ForWritingSkewObservations = async (
     rows: ReadonlyArray<SkewObservationRow>,

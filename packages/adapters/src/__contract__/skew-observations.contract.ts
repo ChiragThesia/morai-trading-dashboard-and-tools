@@ -44,6 +44,7 @@ function makeRow(
     underlying: overrides.underlying ?? UNDERLYING,
     expiration: overrides.expiration ?? EXPIRY,
     strike,
+    root: overrides.root ?? "SPXW",
     iv: overrides.iv ?? 0.2,
     delta: "delta" in overrides ? (overrides.delta ?? null) : -0.25,
     moneyness: "moneyness" in overrides ? (overrides.moneyness ?? null) : 0.98,
@@ -62,6 +63,60 @@ export function runSkewContractTests(
   makeRepo: (seed: SkewSeedContext) => SkewObservationsRepo,
   getSeedContext: () => SkewSeedContext,
 ): void {
+  /**
+   * REGRESSION (measured on production, 2026-07-28). The PK was
+   * (snapshot_time, underlying, expiration, strike) with NO root, and `underlying` is always the
+   * literal 'SPX'. SPX (AM-settled third-Friday monthlies) and SPXW (PM-settled weeklies) quote
+   * the SAME strike on the SAME date with DIFFERENT books, so the two collide on that key and
+   * `onConflictDoNothing` silently discards one of them -- arbitrarily, whichever the batch
+   * ordered second.
+   *
+   * Measured on one live cycle: 709 colliding keys against 1,632 rows actually stored. Roughly
+   * 30% of every skew snapshot was being thrown away, and had been for the life of the table.
+   * This is the only per-strike IV history the project has, and it is the dataset the v2
+   * percentile gates are waiting to accumulate -- so it was accumulating 30% wrong.
+   *
+   * Same failure mode as the contracts upsert outage the day before: a conflict clause papering
+   * over a key that cannot distinguish two real rows.
+   */
+  describe("skew-observations: SPX and SPXW are different books", () => {
+    let repo: SkewObservationsRepo;
+
+    beforeEach(async () => {
+      const seed = getSeedContext();
+      repo = makeRepo(seed);
+      await seed.seedNoop();
+    });
+
+    it("keeps BOTH roots at the same snapshot, expiration and strike", async () => {
+      const t = new Date("2026-07-28T15:00:00.000Z");
+      // The exact collision: identical on every old PK column, different book, different IV.
+      const spx = makeRow(t, 7_400_000, { root: "SPX", iv: 0.2469 });
+      const spxw = makeRow(t, 7_400_000, { root: "SPXW", iv: 0.1712 });
+
+      const result = await repo.storeSkewObservations([spx, spxw]);
+      expect(result.ok).toBe(true);
+      expect(await repo.countObservations(UNDERLYING)).toBe(2);
+
+      const read = await repo.readSkewSmileDetail(UNDERLYING, EXPIRY);
+      expect(read.ok).toBe(true);
+      if (!read.ok) return;
+      const roots = read.value.map((r) => r.root).sort();
+      expect(roots).toStrictEqual(["SPX", "SPXW"]);
+      // And each keeps its OWN implied vol -- the whole point of separating the books.
+      expect(read.value.find((r) => r.root === "SPX")?.iv).toBeCloseTo(0.2469, 9);
+      expect(read.value.find((r) => r.root === "SPXW")?.iv).toBeCloseTo(0.1712, 9);
+    });
+
+    it("still treats a re-write of the SAME root as idempotent", async () => {
+      const t = new Date("2026-07-28T15:00:00.000Z");
+      const row = makeRow(t, 7_400_000, { root: "SPX", iv: 0.2469 });
+      await repo.storeSkewObservations([row]);
+      await repo.storeSkewObservations([row]);
+      expect(await repo.countObservations(UNDERLYING)).toBe(1);
+    });
+  });
+
   describe("skew-observations persistence contract", () => {
     let repo: SkewObservationsRepo;
 

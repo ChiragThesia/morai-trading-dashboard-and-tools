@@ -303,6 +303,9 @@ export const skewObservations = pgTable(
   {
     snapshotTime: timestamp("snapshot_time", { withTimezone: true }).notNull(),
     underlying: varchar("underlying", { length: 16 }).notNull(),
+    // PK member. `underlying` is always 'SPX', so root is the only thing separating the
+    // AM-settled and PM-settled books that quote the same strike on the same date.
+    root: varchar("root", { length: 8 }).notNull(),
     expiration: date("expiration").notNull(),
     // Strike stored ×1000 int convention (7100 → 7100000), like contracts.strike
     strike: integer("strike").notNull(),
@@ -314,7 +317,7 @@ export const skewObservations = pgTable(
   },
   (table) => [
     primaryKey({
-      columns: [table.snapshotTime, table.underlying, table.expiration, table.strike],
+      columns: [table.snapshotTime, table.underlying, table.root, table.expiration, table.strike],
     }),
   ],
 ).enableRLS();
@@ -329,6 +332,8 @@ export const riskReversalObservations = pgTable(
   {
     snapshotTime: timestamp("snapshot_time", { withTimezone: true }).notNull(),
     underlying: varchar("underlying", { length: 16 }).notNull(),
+    // PK member — see skewObservations.root.
+    root: varchar("root", { length: 8 }).notNull(),
     expiration: date("expiration").notNull(),
     // NULL when ±25Δ cannot be bracketed — never a guessed number
     riskReversal: numeric("risk_reversal"),
@@ -337,7 +342,7 @@ export const riskReversalObservations = pgTable(
   },
   (table) => [
     primaryKey({
-      columns: [table.snapshotTime, table.underlying, table.expiration],
+      columns: [table.snapshotTime, table.underlying, table.root, table.expiration],
     }),
   ],
 ).enableRLS();

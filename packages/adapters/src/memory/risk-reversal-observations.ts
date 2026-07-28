@@ -38,7 +38,8 @@ export function makeMemoryRiskReversalObservationsRepo(): MemoryRiskReversalObse
   const store = new Map<string, RiskReversalObservationRow>();
 
   const keyOf = (row: RiskReversalObservationRow): string =>
-    `${row.snapshotTime.toISOString()}|${row.underlying}|${row.expiration}`;
+    // root is part of the key — see the Postgres PK. One smile per book, never a blend.
+    `${row.snapshotTime.toISOString()}|${row.underlying}|${row.root}|${row.expiration}`;
 
   const storeRiskReversalObservations: ForWritingRiskReversalObservations = async (
     rows: ReadonlyArray<RiskReversalObservationRow>,

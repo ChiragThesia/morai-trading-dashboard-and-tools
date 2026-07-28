@@ -202,10 +202,10 @@ function makeWriteRrSpy() {
 // The worked-example smile (06-03): IV(25Δ put)=0.200, IV(25Δ call)=0.140 → rr=0.06.
 function workedExampleSmile(underlying: string, expiration: string): SmileQuote[] {
   return [
-    { underlying, expiration, strike: 5400000, iv: 0.18, delta: -0.2, moneyness: 0.98 },
-    { underlying, expiration, strike: 5300000, iv: 0.22, delta: -0.3, moneyness: 0.96 },
-    { underlying, expiration, strike: 5600000, iv: 0.15, delta: 0.3, moneyness: 1.02 },
-    { underlying, expiration, strike: 5550000, iv: 0.13, delta: 0.2, moneyness: 1.01 },
+    { underlying, root: "SPXW" as const, expiration, strike: 5400000, iv: 0.18, delta: -0.2, moneyness: 0.98 },
+    { underlying, root: "SPXW" as const, expiration, strike: 5300000, iv: 0.22, delta: -0.3, moneyness: 0.96 },
+    { underlying, root: "SPXW" as const, expiration, strike: 5600000, iv: 0.15, delta: 0.3, moneyness: 1.02 },
+    { underlying, root: "SPXW" as const, expiration, strike: 5550000, iv: 0.13, delta: 0.2, moneyness: 1.01 },
   ];
 }
 
@@ -289,8 +289,8 @@ describe("makeComputeAnalyticsUseCase — skew / risk-reversal half", () => {
     const rrSpy = makeWriteRrSpy();
     // Put wing too shallow to reach −0.25 → unbracketable.
     const unbracketable: SmileQuote[] = [
-      { underlying: "SPX", expiration: "2026-07-17", strike: 5600000, iv: 0.17, delta: 0.1, moneyness: 1.02 },
-      { underlying: "SPX", expiration: "2026-07-17", strike: 5700000, iv: 0.16, delta: 0.05, moneyness: 1.04 },
+      { underlying: "SPX", root: "SPXW" as const, expiration: "2026-07-17", strike: 5600000, iv: 0.17, delta: 0.1, moneyness: 1.02 },
+      { underlying: "SPX", root: "SPXW" as const, expiration: "2026-07-17", strike: 5700000, iv: 0.16, delta: 0.05, moneyness: 1.04 },
     ];
     const smileStub = makeSmileStub(unbracketable);
     const readRrHistory: ForReadingRiskReversalHistory = async () => ok([]);
