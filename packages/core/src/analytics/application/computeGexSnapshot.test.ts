@@ -419,6 +419,43 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
     }),
   ];
 
+  // A second expiry in the SAME cohort whose ATM marks imply q = −12%. 24 DTE from CYCLE_TIME,
+  // deliberately well clear of MIN_SOLVE_YEARS (7 days), so the horizon refusal cannot be what
+  // rejects it — only the [0, 0.10] plausibility band can.
+  const POISON_EXPIRY = "2026-07-17";
+  const POISON_Q = -0.12; // the live 2026-08-23 reading that motivated the band
+  const POISON_SETTLEMENT = settlementTimestamp("SPXW", new Date(2026, 6, 17));
+  const POISON_T =
+    (POISON_SETTLEMENT.getTime() - CYCLE_TIME.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  // C − P = S·e^{−qT} − K·e^{−rT}, the whole difference put in the call — the same construction
+  // domain/implied-carry.test.ts's `parityMarks` uses, so parity recovers POISON_Q exactly.
+  const POISON_PUT_MARK = 5;
+  const POISON_CALL_MARK =
+    CARRY_STRIKE * Math.exp(-POISON_Q * POISON_T) -
+    CARRY_STRIKE * Math.exp(-KNOWN_R * POISON_T) +
+    POISON_PUT_MARK;
+
+  const POISON_LEGS: ReadonlyArray<LegObsForGex> = [
+    makeLeg({
+      contract: "SPXW  260717C07400000",
+      contractType: "C",
+      strike: 7400000,
+      expiration: POISON_EXPIRY,
+      underlyingPrice: CARRY_STRIKE,
+      mark: String(POISON_CALL_MARK),
+      bsmGamma: "0.001",
+    }),
+    makeLeg({
+      contract: "SPXW  260717P07400000",
+      contractType: "P",
+      strike: 7400000,
+      expiration: POISON_EXPIRY,
+      underlyingPrice: CARRY_STRIKE,
+      mark: String(POISON_PUT_MARK),
+      bsmGamma: "0.001",
+    }),
+  ];
+
   // Flat DGS1MO = DGS3MO = 4.5% — interpolation is constant regardless of the exact DTE
   // bracket, so this oracle isolates the parity recovery without also pinning down the
   // interpolation's day-count bracket math.
@@ -448,6 +485,47 @@ describe("impliedCarry — per-expiry FRED rate + parity-implied divYield (34-04
     if (entry === undefined) return;
     expect(entry.rate).toBeCloseTo(KNOWN_R, 6);
     expect(entry.divYield).toBeCloseTo(KNOWN_Q, 6);
+  });
+
+  // The band guard has to be ON THE WRITE PATH, not merely inside the solver.
+  //
+  // f30ff16 added the [0, 0.10] band to `impliedDivYield` only AFTER 10,834 of 30,476 production
+  // entries (35.5%, spread over 622 snapshots, every one at cycle_time <= 2026-07-27T11:30:00Z)
+  // had already been persisted out of band, ranging −13.49 to +13.00. Nothing downstream bounds
+  // q: `gex-snapshot.repo.ts`'s and `contracts/src/gex.ts`'s schemas are bare `z.number()`, and
+  // `chain-math.ts` checks only finiteness before handing it to `bsmGreeks` — so a stored −13.42
+  // makes e^{−qT} astronomical and every greek and theoretical price on the Analyzer chain and
+  // the mobile overview calendar legs renders garbage.
+  //
+  // domain/implied-carry.test.ts pins the band inside the solver. This pins the one thing that
+  // test cannot: that `computeImpliedCarry` — the solver's only caller — drops the refused expiry
+  // from the row it hands to `persistGexSnapshot` instead of re-admitting it. A clean sibling
+  // expiry rides along so the assertion is "selective skip", not "the whole field collapsed",
+  // which the macro-miss and no-ATM-pair tests below already cover.
+  it("drops an out-of-band expiry from the persisted row and keeps its clean sibling", async () => {
+    const spy = makePersistSpy();
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub([...CARRY_LEGS, ...POISON_LEGS]),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+      readMacroObservations: flatRateMacroStub,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    // Selective: the well-conditioned expiry still writes its solved q.
+    expect(row.impliedCarry).not.toBeNull();
+    const clean = row.impliedCarry?.find((e) => e.expiration === CARRY_EXPIRY);
+    expect(clean).toBeDefined();
+    expect(clean?.divYield ?? Number.NaN).toBeCloseTo(KNOWN_Q, 6);
+
+    // The −12% expiry reaches the writer as NO ENTRY at all. `resolveCarry` then falls back to
+    // DEFAULT_DIV rather than pricing a chart off a negative index dividend yield — a missing
+    // number, never a fabricated one.
+    expect(row.impliedCarry?.find((e) => e.expiration === POISON_EXPIRY)).toBeUndefined();
   });
 
   it("rejects a zero-mark leg at the ATM strike instead of feeding a stale-zero mark into parity (WR-01)", async () => {
