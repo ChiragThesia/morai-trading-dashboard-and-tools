@@ -75,8 +75,8 @@ export type ForReadingDailyCloses = (
 export type CalendarRanking = {
   /** Observation instant of the chain cohort this ranking was computed from. */
   readonly asOf: Date;
-  /** One spot for the whole snapshot. */
-  readonly spot: number;
+  /** One spot for the whole snapshot; null when no quote carried a usable underlying price. */
+  readonly spot: number | null;
   /** Ranked best-first. Length capped by the request's `limit`. */
   readonly candidates: ReadonlyArray<ScoredCalendar>;
   /** How many candidates survived every gate, before the limit was applied. */

@@ -247,6 +247,25 @@ describe("rankCalendars — degradation", () => {
     if (!result.ok) return;
     expect(result.value.candidates).toHaveLength(0);
     expect(result.value.totalCandidates).toBe(0);
+    // The path a stalled pipeline actually takes: no rows, so no spot to report.
+    expect(result.value.spot).toBeNull();
+  });
+
+  /**
+   * A price is NEVER given a `?? fallback`. `snapshotSpot` returns null when no row carries a
+   * positive finite underlying price, and the response used to turn that into `0` — a number a
+   * reader would take for a real quote. `buildCohorts` refuses the same input, so the ranking is
+   * empty either way; what changes is whether the response admits it could not measure spot.
+   */
+  it("reports a null spot rather than 0 when no quote carries a usable underlying price", async () => {
+    const noSpot = CHAIN.map((q) => ({ ...q, underlyingPrice: 0 }));
+    const result = await makeRankCalendarsUseCase(
+      deps({ readChain: () => Promise.resolve(ok(noSpot)) }),
+    )({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.spot).toBeNull();
+    expect(result.value.candidates).toHaveLength(0);
   });
 
   it("never throws, whatever a driven port does", async () => {

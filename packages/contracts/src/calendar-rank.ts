@@ -175,8 +175,12 @@ export type CalendarRankDrops = z.infer<typeof calendarRankDrops>;
 export const rankedCalendarResponse = z.object({
   /** Full ISO 8601 instant of the chain cohort this ranking was computed from. */
   asOf: z.string().datetime(),
-  /** One spot for the whole snapshot. */
-  spot: z.number(),
+  /**
+   * One spot for the whole snapshot; null when no quote carried a usable underlying price.
+   * Nullable per this file's NULL-HONESTY rule — `domain/cohort.ts`'s `snapshotSpot` returns
+   * null for a gap cycle, and a required field here forced the engine to fabricate a 0.
+   */
+  spot: z.number().nullable(),
   /** Ranked best-first, capped by the request's limit. */
   candidates: z.array(rankedCalendar),
   /** How many candidates survived every gate, BEFORE the limit was applied. */

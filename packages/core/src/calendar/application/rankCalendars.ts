@@ -140,7 +140,12 @@ export function makeRankCalendarsUseCase(deps: RankCalendarsDeps): ForRankingCal
 
       return ok({
         asOf,
-        spot: snapshotSpot(quotes) ?? 0,
+        // NULL, never 0. A price is never given a `?? fallback` — a fabricated 0 renders as a
+        // real quote and a reader acts on it. `buildCohorts` refuses the same input (it returns
+        // [] when `snapshotSpot` is null), so a null here always ships with an empty candidate
+        // list; what the null buys is a response that says it could not measure spot rather than
+        // one that asserts the index traded at zero.
+        spot: snapshotSpot(quotes),
         candidates: bestPerPair.slice(0, Math.max(0, limit)),
         totalCandidates: scored.length,
         expiryPairs: seenPairs.size,
