@@ -1,0 +1,173 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is Gamma?
+	•	Delta Revisited
+	•	Gamma Drive Variance Risk Premium
+	•	Gamma and Option Pricing
+	•	At-the-Money (ATM) Options
+	•	Out-of-the-Money (OTM) and In-the-Money (ITM) Options
+	•	Time to Expiration
+	•	The Cost of Being Long Gamma
+	•	Conclusion
+What is Gamma in Options Selling: Understanding the Rate of Change in Delta
+
+Sean Ryan·September 23, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is Gamma?
+	•	Delta Revisited
+	•	Gamma Drive Variance Risk Premium
+	•	Gamma and Option Pricing
+	•	At-the-Money (ATM) Options
+	•	Out-of-the-Money (OTM) and In-the-Money (ITM) Options
+	•	Time to Expiration
+	•	The Cost of Being Long Gamma
+	•	Conclusion
+There’s a saying I like which goes “One man’s theta is another man’s gamma”. I like this a lot because it paints a clear picture of the relationship between how we get paid as option sellers, and what we are getting paid for. Gamma is a really important greek for option sellers to understand. It measures the rate of change in Delta. It’s the thing that gets option buyers paid when there is a big move. In this article, we are going to dive deep into gamma land to make sure we understand why someone pays us theta, and what exactly they are receiving.
+
+Key Takeaways
+
+	1	Gamma Definition: Gamma measures the rate of change of Delta with respect to the price changes of the underlying asset. It provides insights into how much the Delta of an option will change for a $1 movement in the underlying asset.
+	2	Gamma’s Impact: High Gamma can lead to rapid changes in Delta, resulting in significant P&L swings. Understanding Gamma helps option sellers manage risk, make timely adjustments, and make informed strategic decisions.
+	3	Gamma Characteristics: Gamma is highest for at-the-money (ATM) options and increases as the expiration date approaches. When we sell options, gamma is what the buyer is really paying us for. Gamma is what makes options a great hedge for some, and a great lottery ticket for others. It’s also what makes options a great product to sell, because gamma is something people are willing to pay for.
+
+
+
+Click here for an overview of all the option greeks.
+
+What is Gamma?
+
+Gamma measures the rate at which Delta changes as the price of the underlying asset changes. Unlike Delta, which provides a straightforward ratio of how much an option’s price will change with a $1 move in the underlying asset, Gamma gives us a second-order measure of how much Delta itself will change. This is critical because Delta is not a static value; it fluctuates as the underlying asset’s price changes. When gamma is high, it means that delta will change quickly. If our delta changes quickly, then the change in our PnL due to delta can move quickly too.
+
+Delta Revisited
+
+To recap briefly, Delta measures the change in the option’s price for a $1 change in the underlying asset. For example:
+
+	•	Apple (AAPL) at $200:
+	◦	220 Call Option (Delta = 0.30)
+	◦	200 Call Option (At the Money Delta = 0.50)
+
+
+
+If AAPL increases from $200 to $201:
+
+	•	The 220 call option’s Delta might increase from 0.30 to 0.34.
+	•	The 200 call option’s Delta might increase from 0.50 to 0.54.
+
+
+
+Gamma essentially quantifies the curvature in the relationship between the option’s price and the price of the underlying asset. For example, if you own a 220 call option on AAPL with a Delta of 0.30 and a Gamma of 0.04, a $1 increase in AAPL will raise the Delta from 0.30 to 0.34.
+
+
+
+Gamma Drive Variance Risk Premium
+
+As option sellers one of the most important questions that we need to answer is “Why are we getting paid?”. Gamma gives us an answer to this question. You see, if you are looking for a hedge, you want something that is able to increase rapidly in value when there is a big move. It’s the same thing if you are looking for a lottery ticket.
+
+Gamma is really what gives options the convexity that so many market participants look for. It’s the reason that there is high demand, and as such, it’s the reason that the variance risk premiumexists.
+
+Gamma and Option Pricing
+
+Here is how different factors impact gamma:
+
+At-the-Money (ATM) Options
+
+Gamma is highest for at-the-money (ATM) options. This is because small changes in the price of the underlying asset can significantly affect whether the option is in the money (ITM) or out of the money (OTM).
+
+Out-of-the-Money (OTM) and In-the-Money (ITM) Options
+
+Gamma is lower for deep out-of-the-money (OTM) and deep in-the-money (ITM) options. These options are less sensitive to small price changes in the underlying asset because their probabilities of expiring ITM or OTM are already skewed.
+
+
+
+Time to Expiration
+
+Gamma is also influenced by the time to expiration. The closer an option is to its expiration date, the higher its Gamma. Conversely, options with a longer time to expiration have lower Gamma.
+
+
+
+The Cost of Being Long Gamma
+
+Most retail traders and many institutions who look to buy options are interested because it drives exponential returns as the rate of change in the underlying stock price increases. But this does not come without a cost. This cost is represented by Theta, another Greek that measures the time decay of an option’s price.
+
+When you are long Gamma, you benefit from rapid price movements, but you also incur a Theta cost, which represents the daily erosion of the option’s value as it approaches expiration.
+
+If you want to really dive into how the relationship between Gamma, Theta, and another Greek called Vega are all related, you can read our article on how volatility is actually synthetically the same as time.
+
+Conclusion
+
+Most of the time when we run an option selling strategy we are trading the spread between implied and realized volatility. We are basically saying that we believe the implied volatility set by the market on average outpaces the realized volatility that we see over the same time period. This is the “plain english” way of saying that we believe our theta gains will outweigh our gamma losses.
+
+We need to understand the relationship between theta and gamma if we want to be profitable option sellers. It’s the foundation of why we get paid. This article gives you a clear definition of gamma, which you will want to keep in mind as you continue reading more into the world of option selling strategy.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

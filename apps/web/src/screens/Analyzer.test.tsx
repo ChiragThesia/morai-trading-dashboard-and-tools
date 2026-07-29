@@ -16,6 +16,7 @@ import { assertDefined } from "@morai/shared";
 import { pickerSnapshotFixture } from "@morai/contracts";
 import type { AnalyzeAdHocCalendarResponse } from "@morai/contracts";
 import type { UseLiveStreamResult } from "../hooks/useLiveStream.ts";
+import type { PricedChainCohort, PricedChainResponse } from "@morai/contracts";
 import type { ChainRow } from "../lib/chain-contract.ts";
 
 vi.mock("../components/charts/PayoffChart.tsx", async (importOriginal) => {
@@ -46,12 +47,18 @@ vi.mock("../hooks/useLiveStream.ts", () => ({
   STALL_THRESHOLD_MS: 20_000,
 }));
 
-// The chain fetch — mocked at the hook, so no QueryClientProvider is needed.
+// The PRICED chain — the surface the table renders. Mocked at the hook, so no
+// QueryClientProvider is needed. Every load state on this screen comes off this query.
+const { mockUsePricedChain } = vi.hoisted(() => ({ mockUsePricedChain: vi.fn() }));
+vi.mock("../hooks/usePricedChain.ts", () => ({ usePricedChain: mockUsePricedChain }));
+
+// The RAW chain — read for the 25Δ risk reversal alone (it spans both wings; the priced endpoint
+// serves one). It must never gate the table, which is why it has no load state here.
 const { mockUseChain } = vi.hoisted(() => ({ mockUseChain: vi.fn() }));
 vi.mock("../hooks/useChain.ts", () => ({ useChain: mockUseChain }));
 
-// useChainModel reads GEX only for per-expiry carry (r, q). `resolveCarry` falls back to its
-// flat defaults on an absent snapshot, so an undefined-data stub exercises the same path the
+// useChainModel reads GEX only for the risk reversal's carry (r, q). `resolveCarry` falls back to
+// its flat defaults on an absent snapshot, so an undefined-data stub exercises the same path the
 // app takes before the first GEX response lands — and keeps this suite off a QueryClient.
 const { mockUseGex } = vi.hoisted(() => ({ mockUseGex: vi.fn() }));
 vi.mock("../hooks/useGex.ts", () => ({ useGex: mockUseGex }));
@@ -151,21 +158,88 @@ function chainFixture(): ReadonlyArray<ChainRow> {
   return out;
 }
 
-function mockChainReturn(
+/** The raw chain, for the risk-reversal column only. No load state — it never gates the table. */
+function mockChainReturn(rows: ReadonlyArray<ChainRow> | undefined = chainFixture()): void {
+  mockUseChain.mockReturnValue({ data: rows });
+}
+
+// ─── Priced-surface fixture ───────────────────────────────────────────────────
+//
+// The same book as `chainFixture`, in the shape GET /api/chain/priced returns it: grouped into
+// cohorts, greeks and vertical skew already solved, strikes in INDEX POINTS rather than ×1000.
+// `t` is deliberately NOT `dte / 365.25` — it is years to the settlement instant, which is the
+// clock the pair math runs on.
+
+const PRICED_FRONT = { ...FRONT, t: 26.68 / 365.25, base: 0.15 };
+const PRICED_BACK = { ...BACK, t: 54.7 / 365.25, base: 0.17 };
+
+function pricedCohort(
+  e: { expiration: string; dte: number; t: number; base: number },
+  wing: "C" | "P",
+  strikes: ReadonlyArray<number>,
+): PricedChainCohort {
+  const ivAt = (k: number): number => e.base + (7500 - k) * 0.00002 - (wing === "C" ? 0.005 : 0);
+  const atmStrike = strikes.includes(7500) ? 7500 : (strikes[0] ?? null);
+  const atmIv = atmStrike === null ? null : ivAt(atmStrike);
+  return {
+    root: "SPXW",
+    expiration: e.expiration,
+    dte: e.dte,
+    t: e.t,
+    atmStrike,
+    atmIv,
+    strikes: strikes.map((k) => ({
+      strike: k,
+      iv: ivAt(k),
+      bid: 40,
+      ask: 42,
+      openInterest: 500,
+      delta: -0.5,
+      gamma: 0.0004,
+      theta: -2.9,
+      vega: 5.1,
+      vSkew: atmIv === null ? null : ivAt(k) - atmIv,
+    })),
+  };
+}
+
+function pricedFixture(
+  wing: "C" | "P" = "P",
+  frontStrikes: ReadonlyArray<number> = STRIKES,
+  backStrikes: ReadonlyArray<number> = STRIKES,
+): PricedChainResponse {
+  return {
+    asOf: OBSERVED,
+    spot: SPOT,
+    contractType: wing,
+    cohorts: [
+      pricedCohort(PRICED_FRONT, wing, frontStrikes),
+      pricedCohort(PRICED_BACK, wing, backStrikes),
+    ],
+  };
+}
+
+/**
+ * The priced query's return. Keyed on the WING the hook was called with, because the endpoint
+ * serves one wing per call and the put/call toggle is a refetch — a fixed return value would make
+ * the toggle look like it changed nothing.
+ */
+function mockPricedReturn(
   overrides: Partial<{
-    data: ReadonlyArray<ChainRow> | undefined;
+    data: PricedChainResponse | undefined;
     isPending: boolean;
     isError: boolean;
     refetch: () => void;
   }> = {},
+  build: (wing: "C" | "P") => PricedChainResponse | undefined = (wing) => pricedFixture(wing),
 ): void {
-  mockUseChain.mockReturnValue({
-    data: chainFixture(),
+  mockUsePricedChain.mockImplementation((wing: "C" | "P") => ({
+    data: build(wing),
     isPending: false,
     isError: false,
     refetch: vi.fn(),
     ...overrides,
-  });
+  }));
 }
 
 function mockUsePickerReturn(overrides: Record<string, unknown> = {}): void {
@@ -188,6 +262,7 @@ const PARAMS: ScenarioParams = {
 };
 
 beforeEach(() => {
+  mockPricedReturn();
   mockChainReturn();
   mockUsePickerReturn();
   mockAnalyzePending.value = false;
@@ -232,12 +307,9 @@ describe("Analyzer — chain browse", () => {
   it("shows every strike the cohort quotes, with no join to hide one", () => {
     // The old table joined two expiries and emitted only the overlap. Front-month strikes below
     // 7500 and back-month strikes above it means ZERO overlap — the old shape rendered nothing.
-    const rows = chainFixture().filter(
-      (r) =>
-        (r.expiration === FRONT.expiration && r.strike < 7500_000) ||
-        (r.expiration === BACK.expiration && r.strike > 7500_000),
+    mockPricedReturn({}, (wing) =>
+      pricedFixture(wing, [7400, 7450], [7550, 7600]),
     );
-    mockChainReturn({ data: rows });
     render(<Analyzer />);
 
     fireEvent.click(screen.getByTestId(`chain-cohort-SPXW-${FRONT.expiration}`));
@@ -349,7 +421,7 @@ describe("Analyzer — chain header and the picked pair", () => {
         wide.push(chainRow({ ...e, strike: k * 1000, bsmIv: iv - 0.02, contractType: "C" }));
       }
     }
-    mockChainReturn({ data: wide });
+    mockChainReturn(wide);
     render(<Analyzer />);
 
     expect(screen.getByTestId(`chain-cohort-SPXW-${FRONT.expiration}`).textContent).toMatch(/[+−]\d/);
@@ -360,7 +432,7 @@ describe("Analyzer — chain header and the picked pair", () => {
 
 describe("Analyzer — chain load states", () => {
   it("loading: text-only 'Loading chain…' when isPending && data === undefined", () => {
-    mockChainReturn({ data: undefined, isPending: true });
+    mockPricedReturn({ data: undefined, isPending: true });
     render(<Analyzer />);
 
     expect(screen.getByTestId("chain-loading").textContent).toBe("Loading chain…");
@@ -371,7 +443,7 @@ describe("Analyzer — chain load states", () => {
 
   it("error: shows the failure copy and a Retry that calls refetch()", () => {
     const refetch = vi.fn();
-    mockChainReturn({ data: undefined, isPending: false, isError: true, refetch });
+    mockPricedReturn({ data: undefined, isPending: false, isError: true, refetch });
     render(<Analyzer />);
 
     expect(screen.getByTestId("chain-error").textContent).toContain("Couldn't load the chain.");
@@ -380,7 +452,10 @@ describe("Analyzer — chain load states", () => {
   });
 
   it("cold start: settled with no expiries shows 'Chain warming up'", () => {
-    mockChainReturn({ data: [] });
+    // Also the shape the engine returns when the snapshot carried no usable spot: it refuses to
+    // price a cohort against a price the index never traded at, so `cohorts` is empty and this
+    // panel is what the reader gets — not a table of dashes.
+    mockPricedReturn({ data: { asOf: OBSERVED, spot: null, contractType: "P", cohorts: [] } });
     render(<Analyzer />);
 
     const cold = screen.getByTestId("chain-cold-start");
@@ -398,22 +473,24 @@ describe("Analyzer — chain load states", () => {
     expect(screen.queryByTestId("chain-cold-start")).toBeNull();
   });
 
-  it("drops an expired cohort — a negative-DTE expiry cannot be traded", () => {
-    // P1 from the UAT: the cohort carried yesterday's expiry, so the old table defaulted its
-    // front leg to it and opened as a wall of em dashes.
-    mockChainReturn({
-      data: [
-        ...chainFixture(),
-        chainRow({ expiration: "2026-07-25", dte: -1, strike: 7500_000 }),
-      ],
-    });
+  // WHO DROPS AN EXPIRED COHORT MOVED. The browser used to filter `dte < 0` itself; the engine
+  // does it now, against the settlement instant rather than a calendar day, and it is pinned in
+  // `packages/core/src/calendar/domain/cohort.test.ts`. What this screen must guarantee instead
+  // is that it adds no filter of its OWN — every cohort the server sends gets a row, because a
+  // hidden filter is the defect the whole surface exists to remove.
+  it("renders every cohort the server sends and filters none of them itself", () => {
+    const third = pricedCohort({ expiration: "2026-10-16", dte: 82, t: 82.7 / 365.25, base: 0.18 }, "P", STRIKES);
+    mockPricedReturn({}, (wing) => ({ ...pricedFixture(wing), cohorts: [...pricedFixture(wing).cohorts, third] }));
     render(<Analyzer />);
-    expect(screen.queryByTestId("chain-cohort-SPXW-2026-07-25")).toBeNull();
-    expect(screen.getAllByTestId(/^chain-cohort-/).length).toBe(2);
+    expect(screen.getAllByTestId(/^chain-cohort-/).map((r) => r.getAttribute("data-testid"))).toEqual([
+      `chain-cohort-SPXW-${FRONT.expiration}`,
+      `chain-cohort-SPXW-${BACK.expiration}`,
+      "chain-cohort-SPXW-2026-10-16",
+    ]);
   });
 
   it("state precedence: loading wins over isError being simultaneously true", () => {
-    mockChainReturn({ data: undefined, isPending: true, isError: true });
+    mockPricedReturn({ data: undefined, isPending: true, isError: true });
     render(<Analyzer />);
 
     expect(screen.getByTestId("chain-loading")).toBeTruthy();
@@ -421,7 +498,7 @@ describe("Analyzer — chain load states", () => {
   });
 
   it("the Re-pull control stays usable in every state", () => {
-    mockChainReturn({ data: undefined, isPending: true });
+    mockPricedReturn({ data: undefined, isPending: true });
     render(<Analyzer />);
     expect(screen.getByTestId("repull-chains-button")).toBeTruthy();
   });
@@ -756,7 +833,8 @@ describe("Analyzer — LiveStatusBadge", () => {
 
   it("renders the badge even with no chain and nothing pasted", () => {
     setLiveStream("live");
-    mockChainReturn({ data: [] });
+    mockPricedReturn({ data: { asOf: OBSERVED, spot: null, contractType: "P", cohorts: [] } });
+    mockChainReturn([]);
     render(<Analyzer />);
 
     expect(screen.getByText("LIVE")).toBeTruthy();

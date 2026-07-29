@@ -1,0 +1,155 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is a Call Option?
+	•	Here’s a practical example to illustrate this concept:
+	•	Visualizing a Call Option
+	•	The Role of Premium in Call Options
+	•	Why Sell Call Options?
+	•	Conclusion
+Call Option Explained: A Simple Guide For New Option Traders
+
+Sean Ryan·September 1, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is a Call Option?
+	•	Here’s a practical example to illustrate this concept:
+	•	Visualizing a Call Option
+	•	The Role of Premium in Call Options
+	•	Why Sell Call Options?
+	•	Conclusion
+In this blog post I am going to continue going over the basics of options and talk about what a call option is and how they work. As option sellers we are going to be dealing with call options pretty much all of the time, so you need to know how they work and the view they express on the market.
+
+Key Takeaways
+
+	1	Call Option Basics:
+	◦	A call option is a contract you purchase which gives you the right, but not the obligation, to buy a stock at a specified price (strike price) within a set timeframe.
+	2	Profit and Loss (P&L) Graph:
+	◦	The P&L graph for a call option shows that you start making money as the stock price rises above the strike price plus the premium paid. The premium is the cost of purchasing the option, and your maximum loss is limited to this premium.
+	3	Why Sell Call Options:
+	◦	Sellers of call options believe the stock price will not rise significantly and that the options are overpriced. By selling call options, they collect the premium as profit if the stock price stays below the strike price plus the premium.
+
+
+
+A good follow up to this article is the one on put options, which are the other type of option contract available to be traded.
+
+What is a Call Option?
+
+Definition: A call option is a contract that can be bought or sold which gives the buyer the right to purchase a stock at a specific price within a certain timeframe.
+
+Here’s a practical example to illustrate this concept:
+
+Suppose you want the right to buy Apple stock at $200 per share, while the current market price is $190 per share. You go to the market and buy a call option contract expiring in 30 days with a strike price of $200 for $5.
+
+If, in 30 days, Apple’s stock price rises to $260, you have the right to buy Apple at $200 and then sell it at the current market price of $260. This means your call option is now worth $60 per contract. Your profit would be equal to the difference between the strike price + the premium you paid and the current price. In this scenario you would profit $55 per contract.
+
+Visualizing a Call Option
+
+Let’s visualize what a call option looks like on a graph. On the y-axis, we have the profit and loss (P&L), and on the x-axis, we have stock price.
+
+This is what the P&L graph of a call option looks like:
+
+
+
+As you can see, your maximum loss is limited to the premium you paid for the call option. This is visualized by the blue line (which is the PnL line) going flat as you move more left on the graph. You can also see how your PnL rapidly increases as the stock price increases, representing the “convexity” of the call option payoff which most option buyers find very attractive (a big reason there is so much demand for them).
+
+The Role of Premium in Call Options
+
+While a call option offers unlimited upside potential with no risk of losing more than the premium paid, it’s important to understand the cost involved. The premium is the price you pay to purchase the call option. Let’s consider this in our example.
+
+Assume you pay $5 for the call option. The P&L graph now changes slightly because you must account for the premium paid. If Apple’s stock price goes down, you lose the $5 premium. If Apple’s stock price rises, you only start making money after covering the premium cost.
+
+Here’s how it breaks down:
+
+	•	You have the right to buy Apple at $300 (strike price).
+	•	If Apple’s stock price rises to $302, you can buy at $300 and sell at $302, making a $2 profit.
+	•	However, since you paid $5 for the option, your net loss is $3 ($2 profit – $5 premium).
+
+Therefore, your break-even point is $305 ($300 strike price + $5 premium). You only start making a profit once Apple’s stock price exceeds $305.
+
+Why Sell Call Options?
+
+The way the premium is determined for a call option is based on the supply and demand for it. Typically the option price that you see in the market is based on the likelihood that the stock price increases to a point where the option reaches it’s “breakeven” price. The reason we are on average attracted to selling these call options is because the implied future price of the stock that is baked into the option prices actually is a bit higher on average than what is most likely to happen. The reason for this is because of the risk profile of the option.
+
+Think about it. If buying or selling a call option was 0 expected value, who would ever sell them? The seller is the one holding the convexity risk, meaning that on any given trade they can only make a fixed amount and are risking losing exponentially more. Everyone would choose to be a buyer of options if there was no difference. Which is why there is.
+
+In order to incentivize people to be sellers of these call options, there is an embedded premium for the seller which makes it such that on average the option seller makes a small profit. When you look over a large sample of these trades, you will see that being a net seller of call options yields a profit. This is due to a phenomenon that we discuss in many other blog posts called the variance risk premium.
+
+This is why option trading firms are built on the idea of selling options, and not the other way around. And this is why retail traders who see longevity in their option trading careers (and actually make money) are typically on the sell side.
+
+Conclusion
+
+A call option gives you the right, but not the obligation, to buy a stock at a specific price within a certain period. This provides the potential for unlimited upside with limited downside, making call options an attractive investment tool. However, the stock must rise enough to cover the premium paid for the option to be profitable.
+
+
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

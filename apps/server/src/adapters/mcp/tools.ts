@@ -1528,8 +1528,8 @@ export function registerRankCalendarsTool(
  *
  * SIBLING OF get_chain, NOT A REPLACEMENT. get_chain returns the raw two-vendor union, one flat
  * row per contract. This returns the same read grouped into (root, expiration) cohorts with
- * greeks, the ATM reference and vertical skew solved server-side — the eight formulas that
- * currently run a second time in the browser (apps/web/src/lib/chain-math.ts). For an agent the
+ * greeks, the ATM reference and vertical skew solved server-side — the same surface the
+ * Analyzer's chain table reads, so an agent and the screen see one set of numbers. For an agent the
  * practical difference is that a strike's delta, theta and vertical skew arrive measured rather
  * than needing a BSM kernel on the other end.
  *

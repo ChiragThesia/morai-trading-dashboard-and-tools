@@ -1,0 +1,198 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is Volatility?
+	•	Comparing Coca-Cola and Tesla
+	•	The Impact of Volatility on Option Prices
+	•	Why Volatility Matters in Options Trading
+	•	Key Takeaways About Volatility
+	•	The Importance of Volatility for Options Traders
+	•	Conclusion
+What is Volatility In Options and Why Is It Important For Option Sellers?
+
+Sean Ryan·September 26, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is Volatility?
+	•	Comparing Coca-Cola and Tesla
+	•	The Impact of Volatility on Option Prices
+	•	Why Volatility Matters in Options Trading
+	•	Key Takeaways About Volatility
+	•	The Importance of Volatility for Options Traders
+	•	Conclusion
+Option prices are based on volatility. Options were invented as ways to trade volatility. If you want to run a successful option selling portfolio, you must have a complete and thorough understanding of what volatility is and how it relates to the value of options.
+
+This article is going to introduce you to the concept of volatility. It’s a way for you to take a small step in the direction of truly understanding how options work.
+
+You will find that as you dive deeper into the world of Predicting Alpha, you will also be diving deeper into the concept of volatility. I say this not to scare you, but to prepare you for how important this concept is. Understanding volatility can significantly change how you approach options trading and reveal where real opportunities lie. This article will introduce you to the concept of volatility, using real-world examples to illustrate its impact on option pricing.
+
+I’m actually really excited to talk to you about this topic. So let’s get into it!
+
+Key Takeaways
+
+	1	Volatility Measures Price Fluctuations:
+	◦	Volatility refers to the size of moves that we see in a stock’s price, regardless of what direction it actually goes. High volatility indicates larger price swings, while low volatility indicates smaller price movements.
+	2	Volatility Impacts Option Prices:
+	◦	Options on more volatile stocks are priced higher because they reflect greater risk and potential reward. For example, a highly volatile stock like Tesla will have more expensive options compared to a stable stock like Coca-Cola.
+	3	Trading Options Means Trading Volatility:
+	◦	Understanding and analyzing volatility is crucial for options traders. The price of an option is determined by the expected volatility of the underlying asset, making volatility a key factor in identifying profitable trading opportunities.
+
+What is Volatility?
+
+Volatility refers to the size of the moves in a stock’s price over a given period. It measures how much a stock’s price fluctuates, regardless of the direction of the movement. Understanding volatility is essential because it directly affects the price of options. The more a stock is expected to move, the higher the price of its options.
+
+
+
+It is extremely important to understand that when we are talking about volatility we are not talking about the direction. You can have volatile moves to the upside. You can have volatile moves to the downside.
+
+You can even have periods of volatility that result in no change in the stock price (goes up a lot, then down a lot).
+
+On the other side, you can have periods of low volatility that results in very substantial price changes if the stock slowly trends in one direction over time. Kind of like how over a long period of time the S&P 500 has gone up a lot, but doesn’t move much day to day (it just slowly drifts up over time).
+
+Volatility is the size of moves. Not the direction. We must never forget this.
+
+Comparing Coca-Cola and Tesla
+
+To understand volatility better, let’s compare two well-known stocks: Coca-Cola and Tesla.
+
+Coca-Cola: A Stable Stock
+
+Coca-Cola is a company with strong fundamentals, a long history, and widespread analysis. Its stock price tends to have small day-to-day changes. For example:
+
+	•	Day 1: -1%
+	•	Day 2: +1%
+	•	Day 3: +1%
+	•	Day 4: -1%
+
+
+
+Graphically, Coca-Cola’s stock price might look like this:
+
+
+
+This pattern shows steady growth with minor fluctuations, indicating low volatility.
+
+Gamestop: A Volatile Stock
+
+In contrast, Gamestop is known for its significant daily movements. Gamestop can experience substantial gains or losses within a short period. For example:
+
+	•	Day 1: +9%
+	•	Day 2: +7%
+	•	Day 3: -10%
+	•	Day 4: +15%
+
+
+
+Graphically, Gamestop’s stock price might look like this:
+
+
+
+This pattern demonstrates much larger fluctuations compared to a company like Coca-Cola, indicating that Gamestop is experiencing a period of high volatility.
+
+The Impact of Volatility on Option Prices
+
+Now, let’s consider how volatility affects the pricing of options for these two stocks. Suppose both companies are trading at $100 per share (to make it an apples-to-apples comparison).
+
+	•	Coca-Cola: Low volatility might lead to an option price of $3 for a three-day call option.
+	•	Gamestop: High volatility might lead to an option price of $10 for the same type of option.
+
+
+
+Why is Gamestop’s option more expensive? The greater the volatility, the higher the risk and potential reward, making options on more volatile stocks pricier.
+
+Why Volatility Matters in Options Trading
+
+Volatility is the lens that profitable option traders view the world through. It is what determines how options are priced.
+
+When we think about the world through the lens of volatility, we can see option prices for what they truly are: a reflection of how much the market thinks a stock will move in the future.
+
+This allows us to see option trading for what it really is: betting on whether a stock will move more or less than the market implies.
+
+With this new framing, combined with our previous lessons on expected value, we are able to start to ask questions like: “What kind of strategies allow us to take advantage of the difference between implied and realized volatility? Why should these strategies have positive expected value?”.
+
+This is how we need to be thinking if we want to make money. It’s the way all professionals are thinking about trading (because they want to make money).
+
+Key Takeaways About Volatility
+
+	•	Volatility Measures the Size of Moves: Volatility is about how much a stock’s price fluctuates over a given period.
+	•	Volatility Determines Option Prices: Options are priced based on the expected volatility of the underlying asset.
+	•	Volatility is Non-Directional: It’s about the extent of price changes, not the direction.
+
+The Importance of Volatility for Options Traders
+
+A common mistake among new traders is to overlook the importance of volatility. Some might say they prefer trading based on direction rather than volatility. However, if you’re trading options, you’re inherently trading volatility. The price of an option is determined by the expected volatility of the underlying asset. Therefore, trading options means you’re trading volatility, whether you realize it or not.
+
+Conclusion
+
+I hope that this article has drilled the importance of volatility into your head. If you want to make money selling options, you need to understand it. So much of the blogs you will read on our website are to teach you more about volatility. The more you understand, the better you will trade. Remember, at the end of the day all we do is click buttons on the screen. Buy. Sell. Click click. It’s everything we know, all the work before we click our mouse, that will inherently determine if we are the ones to get paid.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

@@ -1,0 +1,242 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What Does Skew Look Like in the Market?
+	•	Example Option Chain for SPY
+	•	This Is What We Call “Put Skew”
+	•	Other Shapes That Skew Can Have
+	•	Flat Skew: Equal Chances For Different Moves
+	•	Bullish Skew: Retail Influence
+	•	Skew Smile: Upcoming Decision Or Change
+	•	Conclusion – Why Skew Matters To You
+How To Read Option Volatility Skew to Understand Future Expected Moves
+
+Sean Ryan·September 21, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What Does Skew Look Like in the Market?
+	•	Example Option Chain for SPY
+	•	This Is What We Call “Put Skew”
+	•	Other Shapes That Skew Can Have
+	•	Flat Skew: Equal Chances For Different Moves
+	•	Bullish Skew: Retail Influence
+	•	Skew Smile: Upcoming Decision Or Change
+	•	Conclusion – Why Skew Matters To You
+As a follow up to our Introduction to Skew, we will dive deeper into what skew can look like for different types of tickers and under different scenarios. We will talk about the implications of what we see and how we can use this to improve our trading decisions.
+
+Key Takeaways
+
+	1	Put Skew: What we usually see for stocks/ETFs. Implies the risk is to the downside and the most likely move is to the upside.
+	2	Call Skew: What we usually see when retail traders are buying up all the calls. Implies the risk is to the upside and the most likely move is to the downside.
+	3	Flat Skew: What we usually see when the market doesn’t know what is going to happen. Implies that the likelihood of up & down moves, large & small moves is similar.
+	4	Skew Smile: What we usually see when there is an event that is going to change the stock price significantly. Implies the risk is to the upside and the downside.
+
+What Does Skew Look Like in the Market?
+
+To understand skew, let’s start by examining the option chain for a popular index, the S&P 500 (SPY). An option chain lists all the available strike prices for calls and puts, along with their implied volatilities (IV).
+
+Example Option Chain for SPY
+
+Imagine SPY is trading at $500. The option chain might look something like this:
+
+Strike Price
+IV (%)
+180
+30
+190
+29
+200
+28
+210
+27
+220
+26
+
+In this table, we can see that implied volatility increases as we move further OTM (out-the-money) for puts, and it decreases as we move further OTM for calls. This pattern reflects the market’s perception that OTM puts (similar to in-the-money calls) are more expensive due to higher risk of large downward moves in the stock price.
+
+This Is What We Call “Put Skew”
+
+This is what we normally see for stocks and ETFs. The reason is because the most common risk profile for stocks is that they trend upwards and the risk of a big move is to the downside. Options prices reflect this.
+
+We can visualize this skew by plotting the implied volatility against the strike prices:
+
+	•	X-Axis: Strike Prices (180, 190, 200, 210, 220)
+	•	Y-Axis: Implied Volatility (26%, 27%, 28%, 29%, 30%)
+
+
+
+The graph would show a downward-sloping curve, indicating higher IV for lower strikes (OTM puts and ITM calls) and lower IV for higher strikes (OTM calls and ITM puts).
+
+Other Shapes That Skew Can Have
+
+Flat Skew: Equal Chances For Different Moves
+
+If the market believed that the potential returns of a ticker are normally distributed (equal chance of an up move and a down move) then the skew we see on the option chain would be flat. While uncommon, this is not impossible.
+
+In my experience, this is something that we see when the market is really uncertain about what is going to happen with a stock. Think about it like this, when there is a skew it’s because the market knows where the risk is.
+
+“The OTM puts are more expensive because if there is going to be a big move, it’s likely to be to the downside”.
+
+But if the OTM puts and OTM calls are the same price, the market is saying to us “I don’t know which direction this stock will go if there is an outsized move”.
+
+A situation like this typically occurs when the odds of a small move, big move, up move, and down move are basically the same.
+
+In this case, where the probability of up and down moves of any size is equal, the implied volatility would be flat across all strike prices. The graph would look like a straight horizontal line:
+
+Strike Price
+IV (%)
+180
+28
+190
+28
+200
+28
+210
+28
+220
+28
+
+This scenario rarely occurs in equity markets because of the inherent asymmetry in stock price movements.
+
+
+
+Bullish Skew: Retail Influence
+
+In some cases, particularly with stocks favored by retail traders (e.g., GME, AMC, etc), the skew might show elevated IV for OTM calls due to excessive bullish sentiment:
+
+Strike Price
+IV (%)
+180
+25
+190
+26
+200
+27
+210
+35
+220
+40
+
+This bullish skew indicates that retail traders are aggressively buying OTM calls, inflating their prices. Option sellers can take advantage of this by selling these overpriced calls.
+
+
+
+In these cases, we can say that the risk is to the upside. “If GME is going to experience a massive move, is it more likely to be to the upside or the downside?” is the way we would want to be thinking about things when comparing our view against the skew we see in the market.
+
+Skew Smile: Upcoming Decision Or Change
+
+Let’s say a biotech company has a pending clinical trial. Depending on the outcome, the drug they have been working on for the last year will either be approved for sale or denied.
+
+As you can imagine, the outcome of this trial is a big deal for the company. If approved, the share price will skyrocket. If denied, it will crash.
+
+What we know for sure, is that the share price should change drastically.
+
+In situations like this, it’s common to see what we call a “volatility smile” in the skew.
+
+In this situation, when we look at the option chain, we will see that both the call and put out-the-money IV are higher than the at-the-money IV.
+
+It may look something like this:
+
+Strike Price
+IV (%)
+95
+35
+75
+30
+50
+25
+25
+30
+5
+35
+
+Note: Instead of using strike prices, another way that skew is often represented is using the call delta. Remember, because of put/call parity we can use the call delta as a way to represent the IV for the calls and puts at the strike that would equate to this call delta. This is a way to set skews up to be comparable across tickers easily.
+
+When we actually visualize it on a chart, it would look like this:
+
+
+
+You can see where the term “volatility smile” comes from now, right? It’s a smiley face.
+
+
+
+Conclusion – Why Skew Matters To You
+
+Something important to note is that skew is dynamic. When new information enters the market, the skew can change quickly. For certain tickers there will be a “typical” skew shape though. For example, with most equities it is common to see put skew. When we see a deviation from this, it can present trading opportunities if we expect the skew to revert to its “typical” shape. This is where something like a risk reversal can become extremely profitable.
+
+Everything that we look at in the market when it comes to implied volatility numbers, the option chain, and the characteristics of volatility such as skew holds value to us as traders because it helps us understand what the market is implying about the future. You can think of it as a way that we as traders are able to aggregate all of the buying and selling pressures in the market to see the distribution of future potential moves for a ticker.
+
+As traders, the way that we always want to be thinking about this is looking for areas where we disagree with it. The reason this is important is because it is where we disagree with the market that we are able to find unique trading opportunities. The market prices in something, and it’s when you think it should be priced differently that an opportunity can be found.
+
+In order to disagree, we need to understand a) how a certain dynamic works and b) what are the different ways that this dynamic (such as skew) can present itself and what is being implied in each situation. That is what it takes to find an edge, and now you know in depth how one of the most important concepts in option selling works!
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

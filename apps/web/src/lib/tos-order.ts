@@ -79,7 +79,7 @@ export interface TosPairOrder {
   readonly frontExpiry: string;
   readonly backExpiry: string;
   /**
-   * Entry debit in INDEX POINTS, as `chain-math.calendarDebit` returns it. Not dollars —
+   * Entry debit in INDEX POINTS, as `pairMetrics` (@morai/core) returns it. Not dollars —
    * unlike `PickerCandidate.debit`, which is why this does not divide by 100. Null when
    * neither leg had a fillable quote; the line then carries no price.
    */
@@ -111,8 +111,8 @@ export function buildTosPairOrder(pair: TosPairOrder): string {
   const fmt = pair.root === "SPX" ? formatTosDate : plainTosDate;
   // Mirrors the sibling's fallback: an unparseable date drops the date segment, never throws.
   const dates = back === null || front === null ? "" : `${fmt(back)}/${fmt(front)} `;
-  // ponytail: /1000 inline rather than importing STRIKE_SCALE from chain-math, which would drag
-  // @morai/core + @morai/quant into this module for one constant.
+  // ponytail: /1000 inline rather than importing a shared constant, which would drag
+  // @morai/core + @morai/quant into this module for one number.
   const strike = pair.strike / 1000;
   const type = pair.contractType === "C" ? "CALL" : "PUT";
   const price = pair.debit === null ? "" : `@${pair.debit.toFixed(2)} `;

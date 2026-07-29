@@ -1,0 +1,167 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	The Three Circles of Volatility
+	•	1. Market Volatility
+	•	2. Non-Event Volatility
+	•	3. Event Volatility
+	•	How These Forms of Volatility Affect Option Pricing
+	•	Isolating Volatility for Strategic Trading
+	•	Conclusion
+The 3 Types Of Volatility That Impact Option Prices: Market, Event and Non-Event Volatility
+
+Sean Ryan·September 24, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	The Three Circles of Volatility
+	•	1. Market Volatility
+	•	2. Non-Event Volatility
+	•	3. Event Volatility
+	•	How These Forms of Volatility Affect Option Pricing
+	•	Isolating Volatility for Strategic Trading
+	•	Conclusion
+Every single ticker experiences volatility. And if you want to be a profitable option seller, it’s crucial to understand the different ways that volatility can present itself.
+
+To help you make sense of volatility, we created a conceptual model called the Three Circles of Volatility model, which will help you clearly understand the different types of volatility or the different sources of volatility when analyzing a stock.
+
+
+
+The three types of volatility that can impact a stock are (1) Market Volatility (2) Non-Event Volatility and (3) Event Volatility.
+
+Once you understand these, you should have a pretty refined view on what volatility is. That’s why we suggest this blog as a follow up to our article that introduces the concept of volatility to you.
+
+Key Takeaways
+
+	1	Market Volatility:
+	◦	This form of volatility affects all stocks within the market, driven by macroeconomic factors such as interest rates, inflation, geopolitical events, and overall investor sentiment. It overhangs all individual stocks and impacts their price movements universally. You can remember this using the saying “The rising tide lifts all ships”. In option speak we would say: “The rising market volatility impacts all stocks”.
+	2	Non-Event Volatility:
+	◦	This reflects the regular day-to-day movements of an individual stock, influenced by company fundamentals, industry trends, and typical trading patterns. Different stocks exhibit different levels of non-event volatility, which is inherent to the stock itself regardless of broader market conditions. This is the day to day movement that we see for a ticker when market conditions are stable.
+	3	Event Volatility:
+	◦	Driven by specific events related to a company, such as product releases, shareholder meetings, or earnings reports, event volatility can cause substantial price changes in a short period. This type of volatility can account for a significant portion of a stock’s annual movement and option prices will reflect the impact of these events. This is categorically different from non-event volatility and is actually something we can isolate and trade if we choose to do so.
+
+The Three Circles of Volatility
+
+1. Market Volatility
+
+The first circle is Market Volatility. This form of volatility pertains to the entire market. When the market becomes volatile, all individual stocks within the market are affected. This i s easily observed through a concept called correlation. When market conditions are normal, on any given day, some stocks go up and other ones go down. The correlation between stocks is pretty low on average. But let’s say that the market crashes. In this case, you can expect that most stocks will experience a significant drop in price. They become more correlated, almost completely correlated in fact! Market volatility overhangs all the stocks, and its impact is universal across different sectors and companies.
+
+
+
+This type of volatility is driven by macroeconomic factors such as interest rates, inflation, geopolitical events, and overall investor sentiment. When significant news hits the market, it can cause widespread panic or euphoria, leading to large-scale buying or selling.
+
+2. Non-Event Volatility
+
+If we zoom in on a specific company, the first thing we will find is a type of volatility called Non-Event Volatility. This form of volatility reflects the regular day-to-day movements of a stock, driven by the fundamentals of the company and its typical trading patterns. Different stocks exhibit different levels of non-event volatility. For instance, Coca-Cola might exhibit smaller daily price changes compared to a company like Gamestop, which would typically have larger daily swings. Non-event volatility is inherent to the stock itself, regardless of broader market conditions.
+
+
+
+Non-event volatility is influenced by factors such as company performance, industry trends, and investor perception. For example, a stable company with consistent earnings and low debt might have lower volatility, while a tech startup with high growth potential but uncertain earnings could exhibit higher volatility. As traders, recognizing the typical non-event volatility of a stock helps us set realistic expectations for its price movements.
+
+3. Event Volatility
+
+The third and most specific circle is Event Volatility. This type of volatility is driven by specific events related to a company, such as product releases, shareholder meetings, or earnings reports. Event volatility can account for 30% to 70% of a stock’s annual movement, making it a significant factor to consider. Major events can cause substantial price changes in a short period, significantly impacting option prices.
+
+
+
+Event volatility is often anticipated and can lead to heightened trading activity as investors and traders position themselves ahead of significant announcements. For example, an earnings report can drastically change the market’s perception of a company’s value, leading to sharp price movements. This hype can lead to inflated option premiums around events. Infact, one of the two strategies we focus on at Predicting Alpha is Earnings Trading, which has a clearly defined premium that has been around for years.
+
+How These Forms of Volatility Affect Option Pricing
+
+Understanding these three forms of volatility is crucial for options traders because they directly influence option pricing. Let’s break down how these different volatilities play out over the life of an option.
+
+Example Scenario
+
+Imagine we’re looking at a stock like Tesla, currently trading at $100, and we are considering a call option with 10 days to expiration. If the market believes Tesla will move within a 10% range over the next 10 days, the option price will reflect this expected movement.
+
+Now, let’s say there’s an earnings event scheduled within this 10-day period. The market might anticipate a significant price movement due to this event, leading to higher option premiums. This is because the potential for a large price change increases the likelihood that the option will end up in the money, thus making it more valuable.
+
+Isolating Volatility for Strategic Trading
+
+With a clear understanding of the three circles of volatility, traders can employ strategic approaches to isolate and capitalize on specific forms of volatility. For instance, if you want to trade the event volatility around an earnings report, you might enter an options position just before the earnings announcement and exit shortly after, focusing on the volatility induced by the event itself.
+
+This would allow you to focus on the heightened uncertainty and increased demand for options associated with major events, while minimizing exposure to broader market volatility and non-event day-to-day fluctuations.
+
+Conclusion
+
+All three forms of volatility are present in the prices of the options that we trade. It’s important to understand what drives the value of the product we are trading because when you buy or sell an option you are explicitly taking a view on each of these things. Depending on the trade you are trying to place, you structure it differently to give you more or less exposure to the different types of volatility that are available to trade, which is exactly what we have covered in this article.
+
+
+
+Once again, the three forms of volatility that you must be aware of are:
+
+
+
+	•	Market Volatility: Impacts all stocks universally within the market.
+	•	Non-Event Volatility: Reflects the regular daily movements of a specific stock.
+	•	Event Volatility: Driven by specific events such as earnings reports or product launches
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

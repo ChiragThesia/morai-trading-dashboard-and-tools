@@ -1,0 +1,176 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Step 1: Price Out the Straddle
+	•	Step 2: Determine Your Conviction
+	•	Step 3: Place the Wings
+	•	Understanding Risk and Reward
+	•	Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+	•	Practical Application and Examples
+	•	Conclusion
+Where to Place Option Wings When Selling Iron Butterflys and Iron Condors
+
+Sean Ryan·September 26, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Step 1: Price Out the Straddle
+	•	Step 2: Determine Your Conviction
+	•	Step 3: Place the Wings
+	•	Understanding Risk and Reward
+	•	Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+	•	Practical Application and Examples
+	•	Conclusion
+One of the most frequently asked questions about iron butterflys and iron condors is: “Where should I place the wings?”
+
+Understanding the purpose and structure of an iron butterfly is straightforward for many, but determining the optimal placement of the wings often poses a challenge.
+
+So I am going to give you a systematic three-step method for determining where to place the wings so you never need to wonder about it again.
+
+Key Takeaways
+
+	1	Systematic Three-Step Approach:
+	◦	Step 1: Price out the straddle by selling a call and a put at the same strike price.
+	◦	Step 2: Determine your conviction level (high or moderate) based on market research and confidence.
+	◦	Step 3: Place the wings accordingly—standard conviction places wings one straddle price away, while high conviction places them two straddle prices away.
+	2	Practical Example:
+	◦	Stock Trading at $20: Sell a straddle for $3.
+	◦	Moderate Conviction: Place the wings at $17 and $23.
+	◦	High Conviction: Place the wings at $14 and $26.
+	3	Risk Management:
+	◦	Placing the wings costs money but limits potential losses.
+	◦	The systematic approach helps manage risk while stopping you from putting the wings so close that it completely destroys your edge
+
+Step 1: Price Out the Straddle
+
+The first step in determining where to place the wings of your iron butterfly is to price out the straddle. For a moment, let’s set aside the wings and focus on the body of the trade. By pricing out the straddle, you understand the credit you would receive if you were to sell a straddle at the current stock price.
+
+
+
+For instance, if a stock is trading at $20 and you decide to sell a straddle, you would sell both a put and a call at the $20 strike price. Suppose this straddle is priced at $3. This figure will be crucial in the next steps.
+
+Step 2: Determine Your Conviction
+
+Conviction in trading refers to your confidence level that the trade will be profitable. This step is critical because it influences how far you place the wings from the current stock price.
+
+
+
+	•	High Conviction: If you have high confidence in your trade, based on robust research or a strong market indicator, you might choose to place the wings further away. This means you are willing to take on more risk for a potentially higher reward.
+	•	Low or Moderate Conviction: For most trades, where you don’t have strong conviction, it’s safer to place the wings closer. This limits your risk but also caps your potential profit.
+
+Step 3: Place the Wings
+
+Using the straddle price from Step 1, you will determine the placement of your wings based on your conviction from Step 2. The general rule is:
+
+	•	Standard Conviction: Place the wings one straddle price (in this example, $3) away from the current stock price. For a stock trading at $20 with a $3 straddle price, the wings would be placed at $17 and $23.
+	•	High Conviction: Place the wings two straddle prices away. For the same stock and straddle price, the wings would be at $14 and $26.
+
+
+
+Understanding Risk and Reward
+
+It’s crucial to remember that buying the wings costs money, which reduces the initial credit received from selling the straddle. However, this trade-off comes with the benefit of limiting your potential losses, converting an otherwise risky strategy into one with controlled risk.
+
+Fundamentally, as option sellers the reason we are getting paid is for holding the risk of big moves.
+
+So even though I said above that there are situations where it is ok to buy your wings 1x the straddle price away, my actual opinion is that you buy them at least 2x the straddle price away (or just don’t buy them).
+
+A good rule of thumb is that the wings should be cheap in dollar terms compared to the premium that you collect from selling the short straddle.
+
+Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+
+If you asked this question, you are doing a great job in learning how to think about volatility. The reason that we move away from thinking in implied volatility terms and think about the price of our wings in dollar terms is because the wings are certainly going to be more expensive in terms of implied volatility. We already know that given the shape of the skew, the implied volatility will be higher the further out-the-money that we go.
+
+But at a certain point, the cost of the wings because so low that it doesn’t matter what the implied volatility is. In the end of the day, the wings are entirely an expense. We basically assume, and hope, that they expire worthless. So all that matters is how much it’s costing us to have this protection.
+
+This is also one of the reason that we always aim to put our wings as far out as possible. They are meant to hedge away the worst case scenario, not give us a “good risk reward”. We have to remember that as volatility traders we are getting paid to take on risk that others do not want on their books. In order to get paid, we actually need to take on some risk.
+
+Practical Application and Examples
+
+Applying the systematic approach to real trades solidifies your understanding. Let’s look at several scenarios with varying conviction levels and stock prices.
+
+Example 1: Low Conviction Trade
+
+	•	Stock Price: $50
+	•	Straddle Price: $5
+	•	Wings Placement: $45 and $55
+
+Example 2: High Conviction Trade
+
+	•	Stock Price: $50
+	•	Straddle Price: $5
+	•	Wings Placement: $40 and $60
+
+Conclusion
+
+Placing the wings on your iron butterfly doesn’t have to be a complex process. By following the systematic three-step approach—pricing out the straddle, determining your conviction, and placing the wings accordingly—you can make this an easy decision and get back to looking for better trades to be taking. Remember, practice makes perfect. As you gain experience, this process will become second nature, helping you execute trades with confidence and precision.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

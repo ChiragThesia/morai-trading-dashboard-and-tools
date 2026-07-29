@@ -1,0 +1,229 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways:
+	•	What is a Straddle?
+	•	Why Use a Straddle?
+	•	Straddles Are The Implied Move Range Between Now and Expiration
+	•	How to Use a Straddle
+	•	Calculating The Breakeven Points For Your Straddle
+	•	A Note About Finding Trading Opportunities
+	•	Risk Management in Straddles
+	•	Conclusion
+What is a Short Straddle? A Comprehensive Guide for Option Sellers
+
+Sean Ryan·August 24, 2024
+
+On this page
+On this page
+	•	Key Takeaways:
+	•	What is a Straddle?
+	•	Why Use a Straddle?
+	•	Straddles Are The Implied Move Range Between Now and Expiration
+	•	How to Use a Straddle
+	•	Calculating The Breakeven Points For Your Straddle
+	•	A Note About Finding Trading Opportunities
+	•	Risk Management in Straddles
+	•	Conclusion
+A straddle is the most commonly used tool by professional option sellers. It’s the way we say to the market “Hey buddy, I think implied volatility is going to be higher than realized volatility. Pay me if I am right.”.
+
+In previous blogs we talked about all of the things you need to know about why option sellers get paid, what volatility is, and why we care about measuring implied and realized volatility.
+
+In this blog I am going to show you what you actually can do about it.
+
+Key Takeaways:
+
+	1	Straddle Definition:
+	◦	A straddle involves selling both a call and a put option on the same stock, with the same strike price and expiration date. It is typically executed at the money, meaning the strike price is close to the current trading price of the underlying asset.
+	2	Profit from Stability:
+	◦	Straddles are ideal for profiting from minimal price movements in the underlying stock, capitalizing on the difference between implied and realized volatility with the majority of profits being realized due to time decay.
+	3	Risk Management:
+	◦	There are 3 ways to manage your risk: (1) sizing (2) diversification (3) stop loss. We break each of these down for you.
+
+The straddle is one of two or three “structures” you are going to be using on a regular basis in your option selling journey. So make sure you understand them, go practice trading a few on a paper account, and make sure you ask all the questions you have so you feel entirely confident in how this tool should be put to work.
+
+What is a Straddle?
+
+A straddle involves selling both a call and a put option on the same stock, with the same strike price, and the same expiration date. Typically, straddles are executed at the money, meaning the strike price is close to the current trading price of the underlying asset.
+
+Example:
+
+	•	Underlying Asset: Apple (AAPL) trading at $200
+	•	Straddle Position: Sell the $200 call and the $200 put with the same expiration date (e.g., July 17th)
+
+This setup creates an upside down “V-shaped” payoff diagram where the point of the V is at the strike price of the options.
+
+r
+
+Why Use a Straddle?
+
+Whenever we place a trade, we are expressing our view onto the market. The straddle is a trade structure which allows us to express a view on the difference between implied and realized volatility.
+
+Something I will say all of the time to Predicting Alpha members is “If you need to hit a nail, use a hammer. I guess you could use the back of a screwdriver.. But why would you when you could just use a hammer”.
+
+I basically apply the same logic when it comes to picking the option structure you choose to trade. Before you pick a structure you need to know what view you are trying to express, or rather, what job you are trying to get done. Then you just pick the best tool for the job.
+
+If you are looking to trade the difference between implied and realized volatility, or simply put, capture the variance risk premium, the straddle is the best tool for the job.
+
+Straddles Are The Implied Move Range Between Now and Expiration
+
+Straddles are the best tool to use to capture the variance risk premium when you are a retail trader. The reason for this is because the price of the straddle represents the implied move range for a stock over a given time period. Assuming that you delta hedge the position, the difference between the price you sold the straddle for and the average intrinsic value at expiration should be the variance risk premium for the position.
+
+How to Use a Straddle
+
+When to Place a Straddle
+
+Straddles are the trade you place when you think that implied volatility will outpace realized volatility and you do not have a view on what direction the stock will trend.
+
+Example:
+
+	•	Implied Move: 10%
+	•	Actual Move: 7%
+
+In this scenario, the options market overestimates the potential movement, making it a profitable opportunity to sell a straddle.
+
+Calculating The Breakeven Points For Your Straddle
+
+Break-even Calculation:
+
+	•	Call Break-even: Strike Price + Total Premium Received
+	•	Put Break-even: Strike Price – Total Premium Received
+
+Example Calculation:
+
+	•	Call Premium: $4
+	•	Put Premium: $5
+	•	Total Premium Received: $9
+
+Break-even Points:
+
+	•	Upper Break-even: $209 ($200 + $9)
+	•	Lower Break-even: $191 ($200 – $9)
+
+A Note About Finding Trading Opportunities
+
+I want to take a second here to really emphasize that the thing that gets you paid in the end of the day is not the straddle. It’s the idea that you are trading.
+
+The straddle is simply the tool that we use to express our view on the market. It’s the easy part.
+
+The part that requires a deeper understanding and some clear guidance in a lot of cases is identifying clear reasons why you should be getting paid as a trader.
+
+This is why we created Predicting Alpha. To build a small, tight knit group of option sellers who are looking to get serious about trading.
+
+It’s hard to find robust strategies that actually make money. That is why we focus on two. Selling volatility on ETFs (using straddles and/or strangles) and selling volatility around Earnings Events, once again using straddles or strangles.
+
+These strategies aren’t secrets so we wrote some blogs that go over them which you can find here.
+
+And if you are looking to take your trading to the next level and start running some strategies that will serve you for a lifetime, click here to see if there are still spots available (we are only making 1,000 available in order to protect the integrity of the strategy).
+
+Risk Management in Straddles
+
+The maximum profit in a short straddle is limited to the total premium received for both options. But if things were to go wrong, you could take an exponentially greater loss. This is the nature of running a short volatility strategy. You will have many small winners, and the occasional big loser.
+
+If we know that we will certainly take some big losses along the way, how do we manage a trade such as a short straddle to ensure that we are not wiped out? That our losses can be contained such that we can continue to trade into the future?
+
+There are three primary ways that we go about doing this. (1) Sizing and (2) diversification (3) stopping out of trades when a catastrophe occurs.
+
+How trade sizing works as a risk management technique
+
+If you are trading straddles, you should be only trading a small amount of your capital in a single position, such that if the “worst case” scenario happens it is just big enough that the trade is meaningful, but just small enough that it does stop or discourage you from continuing to trade.
+
+One way that you can see how much size you have on each trade is by looking at the trade analysis tab in your brokerage and stressing your position to see how much money you would lose if a massive move were to occur. If this loss exceeds 10% of your account for a single position, then you are probably sized too big. Keep in mind that you need to be stressing this to a very unlikely scenario, such as 3-4 times bigger than the implied move.
+
+Another way that you can see your position sizing is by looking at how much margin your brokerage is asking you to put up for your trade. If the margin requirement for a single position is greater than 10-15% of your portfolio, you are definitely too big for most trades.
+
+There is actually an entire discussion that we can have around margin utilization, so I wrote a blog about it.
+
+How diversification works for risk management
+
+The beauty about trading is that in a lot of strategies you are able to reduce your overall portfolio variance (and your overall risk) by taking many trades. This is what is meant by diversification.
+
+For example in our ETF strategy, one of the things we talk about is trading a complete basket of ETFs, where each one represents a different sector, industry, or region in the world. The point of doing this is to reduce our concentration to any one factor besides the variance risk premium itself. This way we get an even cleaner exposure to the risk premium and our dependence on the performance of any one asset is reduced.
+
+How Stop Losses Work For Risk Management
+
+The third and final way in which we discuss risk management is setting a stop loss. The way that I am going to describe this for you will be pretty different that the way that you hear it being talked about in other trading publications.
+
+You see, I do not mean that you should set a % or $ stop loss. These aren’t really effective in the world of volatility trading because you may still want to stay in the position even if you are currently losing money. The trade may still be a good trade, and one of the things we talk about in detail during our onboarding education for members is letting go of the idea that you can time things, embracing the variance, and trying to trade based on strong principles.
+
+So when I say setting a stop loss, what I actually mean is stopping out of trades if a catastrophic level event occurs. If the implied volatility shoots up to the highest level we have seen in the last year (you can use something like IV percentile to measure this) then it would be a signal to close out the trade.
+
+The reason we use this (and actually don’t trade things that are in their highest IV Percentiles) is because even though the variance risk premium is still present, the profit/loss variance is at it’s highest. This means that if there were going to be a time where you risk blowing up, it’s here.
+
+Since the variance risk premium isn’t going anywhere, we are under no obligation to trade through these times. So, we don’t! Just close out the trade if things get ugly, and reopen when things calm down. Or just go find something else to trade. The variance risk premium can be found in so many places.
+
+Conclusion
+
+You are going to be using straddles pretty often. If they scare you, then you just don’t understand them well enough. They are one of the most valuable structures that we have the ability to trade. It’s your hammer to the market’s nail.
+
+If you are feeling a bit overwhelmed with all of this reading, my opinion is to go and place a paper trade to get a feel for how the straddle actually works. Just sell a 30 DTE straddle on SPY and see what happens. Try delta hedging it. See if you can extract the premium.
+
+No amount of theory is going to replace the experience that you get from practice. So seriously, just go do it.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

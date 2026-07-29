@@ -1,0 +1,231 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key takeaways
+	•	Are you here for fun or to make money?
+	•	How the pros look at trading
+	•	The blue pill or the red pill
+	•	Think about who is trading against you
+	•	Especially with options, one of the main allures is convexity
+	•	How option sellers provide real value to the market
+	•	The core of every good strategy: a reason to get paid
+	•	Conclusion
+How to Make Money Selling Options: The Truth About What It Takes To Run A Profitable Portfolio
+
+Sean Ryan·August 21, 2024
+
+On this page
+On this page
+	•	Key takeaways
+	•	Are you here for fun or to make money?
+	•	How the pros look at trading
+	•	The blue pill or the red pill
+	•	Think about who is trading against you
+	•	Especially with options, one of the main allures is convexity
+	•	How option sellers provide real value to the market
+	•	The core of every good strategy: a reason to get paid
+	•	Conclusion
+When it comes to trading there is really only one core reason that we should be doing it.
+
+The answer?
+
+To make as much money as possible, as quickly as possible.
+
+Trading is one of the ways that we as individuals are able to get paid for our views on the world. It’s a way for us to grow our capital significantly beyond what we can via conventional investment methods. This is the magnet that attracts millions of people, professional and retail to the world of trading.
+
+The point of this section is to make it clear what we as traders need to prioritize if we want to be successful. We will talk about why option selling as a general approach to trading makes sense, the core principles behind what makes an option selling strategy profitable, and some examples of what it takes to turn your trading portfolio from a hobby into a profitable business for yourself.
+
+Key takeaways
+
+	1	Taking the red pill – your pursuit of excitement is killing your gains:
+	◦	Everyone says they want to make money. 99% of retail traders are clearly seeking fun based on their actions, with making money being a welcome bonus if it happens. You need to choose what actually matters to you and adjust your behavior to match it.
+	2	Treat your trading like a business
+	◦	Successful trading, particularly in options, requires providing real value to the market. The demand for options, driven by hedging and speculative needs, creates opportunities for traders who understand and can exploit the variance risk premium.
+	3	Variance Risk Premium:
+	◦	The variance risk premium is a well-documented phenomenon where option prices tend to be higher than their intrinsic value at expiration. This premium is why people sell options in the first place. It’s the backbone of how we make money, and without it, we would go find something else to trade.
+
+
+
+Are you here for fun or to make money?
+
+Before we can get started with more practical topics, we need to have an honest, slightly awkward conversation.
+
+I have one question that I want you to answer. Not to me. To yourself.
+
+Why are you trading?
+
+If you answered “To make money” Then congratulations, you gave the right answer!
+
+The only reason we should be trading is to make money, and as much of it as possible. It’s the mark of success in trading. The only “KPI” that truly matters, and because of this, if you asked 100 traders this question, the odds are 100 of them would say the same thing.
+
+But do they actually mean it? Do YOU actually mean it?
+
+Said another way, Do your actions match your words?
+
+This is where the conversation gets a bit awkward.
+
+If you look at the way most retail traders behave, you would observe that the overwhelming majority of them (almost all) want to do fun stuff, and it is a bonus if they make money.
+
+They may not even know this, but it’s what their actions say.
+
+They want the thrill of the big payoff. They want to feel like they are able to see things that others don’t. They want the glory, the excitement, the rush.
+
+And this runs entirely counterintuitive to how one would go about things if their primary objective was to make money.
+
+How the pros look at trading
+
+Look at the way that professionals talk about trading. “Exciting” is not a word you hear thrown around much. They talk about trading as if it’s a job. Know why? Because it is.
+
+Profitable trading is actually objectively boring. Professionals make money for providing liquidity and resolving inefficiencies. In options, this often takes the form of providing insurance and holding risks that are unattractive to others. We are essentially glorified insurance providers with some added complications in the execution department.
+
+But insurance providers get paid. And if you are in this game for the right reasons, that’s really all that matters.
+
+The blue pill or the red pill
+
+
+
+If you have been looking for a way to cut through the noise or if reading to this point came as a breath of fresh air we welcome you to continue on through our content. It’s going to be really awesome. You will learn a lot. You will start running some cool strategies. And you are going to be pretty bored (not really, but it’s not as exciting as gambling).
+
+And if you want to get really serious about things, you can join our limited membership for option sellers.
+
+Think about who is trading against you
+
+In order to understand why you can run a profitable option selling portfolio, you need to understand a bit about the people on the other side of your trade.
+
+
+
+Especially with options, one of the main allures is convexity
+
+The majority of retail traders are attracted to the world of options trading because of the exponential pay-offs that they present the opportunity for. You can buy an option for $100, and potentially make thousands if there is a significant move in the underlying stock. This type of risk/reward scenario is extremely attractive.
+
+The problem is that there is no logical reason why we should get paid for doing this.
+
+One of the “aha” moments that traders who go on to become profitable experience is that running a profitable portfolio is akin to running a profitable business.
+
+You experience this moment once you realize that you are actually trading in a real market, and that there is a person on the other side of your trade. Once you realize this, you are naturally brought to the conclusion that if you are going to be the one receiving money, the other person is going to be losing money. And if we assume that on average the person on the other side of our trade isn’t a charity who is just trying to give us money for no reason, then we must have a logical reason for being paid by someone else.
+
+And this is why we say that trading is akin to running a business. You get paid for providing real value into the market.
+
+
+
+Once you realize this, you have taken the first step out of the world of gambling and into the world of profitable trading.
+
+How option sellers provide real value to the market
+
+Building on the idea that in order to get paid as a trader, you need to be providing value, the reason that you can get paid for being an option trader is because of this convexity that others seek.
+
+You see, options represent one of the greatest ways to hedge a portfolio, and they also represent one of the greatest ways to place a leveraged bet.
+
+This means that there is a demand for options from people who are seeking protection, and from those seeking a gamble.
+
+If this is true, we should see it reflected in option prices
+
+And we do! When we examine the prices of options historically, we see that the price that an option is sold for tends to be a few points higher than what it’s intrinsic value is at expiration. This means that on average, there is a small premium baked into the price of options for option sellers.
+
+This premium makes sense according to supply and demand
+
+This premium is pretty logical. Because of the nature of an options payoff graph, it makes sense that there is a lot more demand to buy options than there is to sell them. And as it is with any other economic situation, when there is more demand than supply, prices go up.
+
+Why serious traders are attracted to trading options: the variance risk premium
+
+This premium that we see for option sellers is not a secret. It’s actually one of the most well studied phenomena in trading. It’s called the variance risk premium. The variance risk premium is the tendency for option prices to be higher than their intrinsic value at expiration (note: by intrinsic value we mean how much they are worth at expiration, when there is no time value left).
+
+This is what attracts us to it.
+
+The core of every good strategy: a reason to get paid
+
+In the world of options, that reason is the variance risk premium
+
+Thanks to this premium, we have the ability to make money trading options. There is a demand for options that needs to be filled. For being the ones to fill this demand, we can get paid.
+
+I know this isn’t as exciting as being told you are going to become a millionaire overnight, but it’s the real way that traders get paid.
+
+The harsh reality of trading is that there is no reason someone is going to just hand you millions of dollars. If you buy into the notion that we are actively engaged in a real market, and that whenever we make a dollar, someone else is losing a dollar, then if you continue to pursue a reason to get paid that involves getting rich overnight, then you are essentially asking someone to hand you a million dollars.
+
+Could you get lucky? Yes.
+
+Should you be betting your financial future on getting lucky? Up to you, but we prefer to have a bit more control.
+
+Conclusion
+
+If the goal is to make money the first step is to step off the emotional rollercoaster of stock picking, technical analysis, and thinking that if you just spend a bit more time on the charts you will be able to see something the rest of the market can’t.
+
+The reality is that we perceive way more control than we actually have, and by accepting that we have less control than we thought we are able to stop getting in our own way and focus on things that actually make money.
+
+For example, one of the core strategies our members run is the ETF Premium strategy. It works great. It takes less than 30 minutes / week to run. All we do? Use a tool that tells us if a risk premium has existed for an ETF historically and if it’s been monetizeable. If yes, it falls into a “sell” bucket and then whole bucket gets sold. The rest of what we do is entirely focused on monetizing this risk premium and minimizing transaction costs.
+
+That’s it. No magic. But guess what? It actually works.
+
+Just a heads up, we have posted hundreds of videos and blogs about option selling / volatility trading. These are always going to be free.
+
+But as for our tools, courses, and community, we have a maximum capacity of 1,000 traders.
+
+If you have option selling experience and are looking for somewhere to buckle down and get serious about your trading, click here to learn more about what we’ve got going on.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

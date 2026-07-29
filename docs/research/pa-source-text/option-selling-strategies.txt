@@ -1,0 +1,205 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Understanding Volatility Trading
+	•	Betting on volatility: Long and short volatility
+	•	The tool to trade volatility: straddles
+	•	Long Straddle: Betting on Volatility
+	•	Short Straddle: Betting Against Volatility
+	•	Important: Straddles are tools, not strategies
+	•	Conclusion
+Structures Used In Option Selling Strategies: Long and Short Straddles
+
+Sean Ryan·September 25, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Understanding Volatility Trading
+	•	Betting on volatility: Long and short volatility
+	•	The tool to trade volatility: straddles
+	•	Long Straddle: Betting on Volatility
+	•	Short Straddle: Betting Against Volatility
+	•	Important: Straddles are tools, not strategies
+	•	Conclusion
+In options trading there are two fundamental opinions that a trader can express on the market. Long volatility and short volatility. These views are fundamentally your opinion on the difference between implied and realized volatility. When you are long volatility, you are saying that you think realized volatility will be higher than implied volatility. If you are short volatility, you are saying that you think implied volatility will be higher than realized volatility.
+
+As retail traders there is no direct way to buy and sell volatility. But we are able to express a view on volatility through the options market, which is what the majority of profitable option sellers do.
+
+In this article, we’ll explore how to trade long and short volatility using straddles.
+
+Key Takeaways
+
+	•	Volatility Trading: Options trading fundamentally revolves around trading the size of the moves a stock experiences rather than just taking a directional view on the stock. If you think implied volatility > realized volatility, you want to be short volatility. If you think realized volatility > implied volatility, you want to be long volatility. Most profitable option portfolios are short volatility because of the variance risk premium.
+	•	Long Straddle: This strategy involves buying both a call and a put option at the same strike price and expiration date. It profits from significant price movements in either direction, making it ideal when you expect high volatility but are uncertain about the direction of the price movement.
+	•	Short Straddle: This strategy involves selling both a call and a put option at the same strike price and expiration date. It profits when the stock price remains stable, making it suitable when you expect low volatility and minimal price movement
+	•	Straddles are not the reason you make money: I go on a rant about how straddles are just the tool you use to complete the job, and not the reason you get paid. You get paid for having good ideas.
+
+Understanding Volatility Trading
+
+Options trading is fundamentally about trading volatility. Trading options is not really about taking a view on the direction of the underlying stock. Rather, it’s about taking a view on how much the stock will move – its volatility. We have covered this topic in a number of other articles (blog 1, blog 2, blog 3) so we are just going to cut to the chase now – what do you do once you have developed an opinion on whether volatility is cheap or expensive?
+
+Betting on volatility: Long and short volatility
+
+	1	If you think realized volatility will be higher than implied volatility, you think volatility is cheap and want to be buying it. We call this being “Long Volatility”.
+	2	If you think implied volatility will be higher than realized volatility, you think volatility is expensive and want to be selling it. We call this being “Short Volatility”.
+
+
+
+The tool to trade volatility: straddles
+
+Once you know if you want to be long or short volatility, you need to place a trade that properly expresses this view on the market. The tool that is used to do this is called a straddle.
+
+You can think of wanting to take a view on volatility as “hitting a nail” and a straddle as a “hammer”. When you want to hit a nail, you use a hammer, plain and simple.
+
+What we are going to do now is go over what a “long straddle” and “short straddle” look like, and how you structure them.
+
+Long Straddle: Betting on Volatility
+
+A long straddle is an options trading strategy where you buy both a call and a put option at the same strike price and expiration date. This position profits from significant price movements in either direction. Here’s how it works:
+
+Example: Long Straddle on Apple
+
+	1	Assume Apple is trading at $200 per share.
+	2	You buy a $200 call option and a $200 put option.
+
+
+
+The profit and loss (P&L) graph for this strategy looks like this:
+
+
+
+In this example:
+
+	•	If Apple rises to $220 (outside of break even price), the call option gains significant value, and you make money.
+	•	If Apple drops to $180 (outside of break even price), the put option gains significant value, and you make money.
+	•	If Apple stays around $200 (inside of break even prices), you lose the premium paid for the options.
+
+
+
+The long straddle is a long volatility strategy because you profit from price moves in either direction that are greater than implied by the market. It’s ideal when you expect increased volatility but are unsure of the direction.
+
+Short Straddle: Betting Against Volatility
+
+A short straddle involves selling both a call and a put option at the same strike price and expiration date. This options trading strategy benefits when the stock price remains stable. Here’s how it works:
+
+Example: Short Straddle on Apple
+
+	1	Assume Apple is trading at $200 per share.
+	2	You sell a $200 call option and a $200 put option.
+
+
+
+The profit and loss (P&L) graph for this strategy looks like this:
+
+
+
+In this example:
+
+	•	If Apple stays around $200 (inside of break even prices), you keep the premium received from selling the options.
+	•	If Apple rises to $220 or drops to $180 (outside of break even prices), you incur losses as the options gain value for the buyer.
+
+
+
+The short straddle is a short volatility strategy because you profit from reduced volatility and a stable stock price. It’s ideal when you expect low volatility and minimal price movement.
+
+Note: two other structures that are commonly used are strangles and iron butterflies.
+
+Important: Straddles are tools, not strategies
+
+Something that I will hear traders often say which drives me crazy is they will say things like “My strategy is selling straddles” or “My strategy is short puts”. Saying something like this is the equivalent of an electrician saying “I make money because hammer” or “I get paid because screwdriver”.
+
+
+
+When you change the context to any other career or venture, it becomes blatantly obvious that saying you get paid because of the tool you use is ridiculous. Yet for some reason in trading it is actually what is expected.
+
+We need to remember something really important. We don’t get paid because of the structure that we trade. We get paid for providing value to the market that the person on the other side of our trade is willing to compensate us for.
+
+	•	Providing protection against large moves around earnings events
+	•	Holding the risk that equities experience a large drop in value
+	•	Providing liquidity on tickers where no one is willing to be on the sell side of options
+
+
+
+These are a few of the blatant ways that we can get paid as option traders (shameless plug: these are the strategies we have optimized at Predicting Alpha).
+
+So the next time you are trying to get clear on the reason you are getting paid, think about what value you provide to the market. That is the reason you get paid. If you can’t clearly articulate it in “non options” terms, then you may not have a clear enough grasp on your strategy to really scale it up.
+
+Conclusion
+
+When you want to express a view on volatility, you trade a straddle (or a strangle) . It’s not the reason you get paid, but it’s the tool you use to express your view on the market.
+
+The short straddle is pretty much the most common trade placed by option sellers because it gives you the exact exposures you want in order to express a short volatility view (see greeks for more information).
+
+Now that you know about how this structure works and how to express a view on volatility, the best way to get comfortable with it is to go out and try it. Even if it’s on a paper account, placing a trade and seeing how your PnL changes is going to be a huge help and teach you way more than any article ever could.
+
+By the way if you are going to do that, you should probably learn about delta hedging too and give that a try.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

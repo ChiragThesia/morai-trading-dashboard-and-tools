@@ -1,0 +1,210 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is a Strategy?
+	•	The Importance of Reproducibility
+	•	Examples of Trading Strategies
+	•	The Core Components of a Trading Strategy
+	•	Building a Strategy: Collecting Variance Risk Premium (VRP)
+	•	Defining the Strategy Clearly
+	•	Understanding Strategy Performance Over Time
+	•	Emotions and Strategy Adherence
+	•	The Role of Risk Management
+	•	Conclusion
+Mastering Option Selling Strategy Development: Creating A Profitable System
+
+Sean Ryan·September 23, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is a Strategy?
+	•	The Importance of Reproducibility
+	•	Examples of Trading Strategies
+	•	The Core Components of a Trading Strategy
+	•	Building a Strategy: Collecting Variance Risk Premium (VRP)
+	•	Defining the Strategy Clearly
+	•	Understanding Strategy Performance Over Time
+	•	Emotions and Strategy Adherence
+	•	The Role of Risk Management
+	•	Conclusion
+If you have read our previous articles about what makes trading profitable and how volatility works, you are pretty much ready to start looking into your first strategy.
+
+This article is going to dive into the world of what a profitable strategy looks like and what it would take to actually build one for yourself.
+
+You can think of this as a framework for profitable trading that goes from thesis all the way to execution.
+
+Key Takeaways
+
+	1	Understanding Strategy Essentials:
+	◦	A trading strategy is a reproducible approach that, when applied systematically, leads to consistent profitability.
+	◦	It consists of a clear thesis, thorough historical testing, positive expected value, and effective risk management.
+	2	Components of a Robust Strategy:
+	◦	Thesis: Develop a clear rationale for why your strategy should work, such as exploiting variance risk premium.
+	◦	Testing: Use historical data to validate the strategy’s performance over various market conditions.
+	◦	Positive Expected Value: Ensure the strategy generates profits over the long term, as confirmed by backtesting.
+	◦	Risk Management: Implement strict rules to protect capital, like limiting risk exposure per trade.
+
+What is a Strategy?
+
+A strategy is a reproducible idea that you can bet on consistently. It’s an approach that, when applied systematically, leads to profitable outcomes over time.
+
+For instance, in poker, a simple strategy might be to go all-in every time you get pocket aces. This approach, due to the strength of pocket aces, is likely to be profitable in the long run. If we charted the P&L (profit and loss) of this strategy, it would look something like this:
+
+
+
+While this strategy does exhibit a high degree of variance, pocket aces is the best hand you can have pre-flop. So by getting all your chips in the middle, you get yourself into a nice sized pot with an advantage. (Obviously this assumes that you have the ability to reload your bankroll. Bankroll management is a topic we discuss in this article)
+
+The Importance of Reproducibility
+
+For a strategy to be effective, it must be reproducible. This means you can apply it multiple times under similar conditions and expect similar outcomes. One-off market events, like the USO debacle in March 2020 when oil prices were extremely mispriced, are not strategies. They are unique opportunities. While profitable, they can’t be relied upon for consistent returns. True strategies need to offer steady, repeatable opportunities to trade.
+
+Examples of Trading Strategies
+
+In the trading world, several well-known strategies exist:
+
+	•	Buy and Hold: Purchasing equities and holding them indefinitely.
+	•	Value Investing: Buying undervalued companies.
+	•	Trend Following: Investing in companies with strong upward trends.
+	•	Systematic Volatility Selling: Selling volatility on a basket of ETFs that exhibit positive variance risk premium (hint: we do this at Predicting Alpha).
+	•	Systematic Volatility Selling Around Earnings: Selling volatility on a basket of stocks that have an upcoming earnings event (hint: we also do this at Predicting Alpha).
+
+The Core Components of a Trading Strategy
+
+A robust trading strategy consists of four essential elements:
+
+	1	Thesis: A rationale for why the strategy should work.
+	2	Testing: Historical data analysis to validate the strategy.
+	3	Positive Expected Value: The strategy should generate profits over the long run.
+	4	Risk Management: A system to control and limit losses.
+
+Building a Strategy: Collecting Variance Risk Premium (VRP)
+
+Let’s build a strategy example based on collecting the variance risk premium (VRP) by selling delta 20 strangles on the S&P 500.
+
+Step 1: Developing a Thesis
+
+The thesis for this strategy is based on the need for downside protection in equity markets. By selling insurance (strangles), traders can earn a premium, assuming the risk of outsized moves.
+
+Step 2: Testing the Strategy
+
+Testing an options strategy can be challenging, but resources like research papers and historical data can help. You can also create your own backtests of performance to test your strategy (*cough* or use the Predicting Alpha Terminal *cough*).
+
+Step 3: Ensuring Positive Expected Value
+
+A strategy must generate positive returns over the long term. For example, the backtest data for selling 30-day strangles on the S&P 500 shows a gradual increase in P&L, indicating a positive expected value.
+
+Step 4: Implementing Risk Management
+
+Effective risk management is crucial. For this strategy, we might decide never to risk more than 30% of our bankroll on any single trade. This ensures that even during downturns, our capital is protected.
+
+Defining the Strategy Clearly
+
+To trade this strategy effectively, it needs to be well-defined:
+
+	•	Action: Sell 30-day expiration delta 20 strangles on the S&P 500.
+	•	Frequency: Roll the position every 20 days.
+	•	Risk Management: Never risk more than 25% of your bankroll.
+
+Understanding Strategy Performance Over Time
+
+Let’s consider the performance of this option-selling strategy over a long period, such as from 2020 to 2080. The overall P&L might look impressive when viewed over decades:
+
+
+
+However, zooming in on shorter periods reveals that there will be drawdowns:
+
+
+
+We have to accept that even in a profitable strategy, at any point in time we are just a dot on our PnL curve. There will be drawdowns, and we need to be ready for them.
+
+The only way that we can survive them is by understanding the long term expectancy of the decisions we are making. We need to understand our strategy, why we are getting paid, and what the future may look like. We even need to understand what the extent of this drawdown could look like.  A prime example of this is the S&P 500. When we see a drawdown in the market, no one freaks out (not that badly at least). People don’t close out their long equity portfolios. They are calm. Why? Because they have seen this before. They understand how the S&P moves. They expect drawdowns. All I am suggesting in this section is that we need to expect the same for the strategies we develop.
+
+Emotions and Strategy Adherence
+
+One of the biggest benefits of having a well-defined strategy is that it helps remove emotions from trading. When you have a clear set of rules to follow, you’re less likely to make impulsive decisions based on fear or greed. Instead, you stick to the plan, knowing that it has a positive expected value over the long run.
+
+The Role of Risk Management
+
+Risk management comes into play once we know that we have an edge. Risk management is the science of balancing drawdowns with maximizing your returns. This is a whole topic on its own, which we discuss in this article about bankroll management.
+
+Conclusion
+
+If we were to sum up everything that you need to consider when it comes to the development of a good trading strategy, here is what you want to keep in mind:
+
+	•	Reproducibility: Ensure your strategy can be applied consistently over time.
+	•	Thesis Development: Have a clear rationale for why the strategy should work.
+	•	Thorough Testing: Use historical data to validate your strategy.
+	•	Positive Expected Value: Aim for long-term profitability.
+	•	Robust Risk Management: Implement rules to protect your capital and optimize your returns.
+
+If you are able to integrate of of these things into a trading strategy, it’s like that you have found something pretty good. A clear reason. you get padil, some data to support your claim, and an idea of how to optimize your trade management to extract the edge you found. Pretty straightforward, right?! But obviously much harder in practice. That is why when someone finds an edge, they protect it!
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

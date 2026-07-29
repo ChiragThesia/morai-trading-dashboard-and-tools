@@ -1,0 +1,132 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	The Underlying Asset: A Complete Definition
+	•	Visualizing the Underlying Asset’s Movement
+	•	Options as Derivatives
+	•	Conclusion
+What Are Underlying Shares? Option Selling Basics
+
+Sean Ryan·September 23, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	The Underlying Asset: A Complete Definition
+	•	Visualizing the Underlying Asset’s Movement
+	•	Options as Derivatives
+	•	Conclusion
+Options are what we call a derivative product. They are based on another asset. To fully understand what an option is, we need to grasp what it’s based on: the underlying stock.
+
+For example, if you are trading options on Apple, the underlying would be Apple’s share price.
+
+This is a pretty easy concept to understand so we aren’t going to spend too long discussing it. But you just need to understand it. So read over this article once, and then move onto some more juicy topics that will actually push you towards becoming a more profitable option seller.
+
+Key Takeaways
+
+	1	Underlying Asset Definition:
+	◦	The underlying asset is the financial instrument on which an option is based. For instance, in an Apple call option, Apple’s share price is the underlying asset. Understanding the underlying asset is crucial as it directly impacts the option’s value.
+	2	Profit and Loss (P&L) Relationship:
+	◦	The P&L relationship for stocks is linear; as the stock price increases, your profit increases proportionally, and vice versa. This linear movement of the underlying asset forms the basis for the complex behavior of options.
+	3	Impact of Volatility on Options: Volatility:
+	◦	which measures the price fluctuations of the underlying asset, significantly affects options pricing. High volatility increases the option’s price due to a higher expected movement in the future, while low volatility results in lower option prices due to less expected movement in the future.
+
+The Underlying Asset: A Complete Definition
+
+The underlying asset is the financial instrument on which an option is based. In our example, if you buy a call option on Apple, the option’s value is derived from Apple’s share price. When you buy Apple shares for $200, you are essentially purchasing a $200 slice of the company. An option, on the other hand, is a contract that gives you the right to buy or sell these shares at a specific price within a certain timeframe. This is why it is called a derivative. It is based on something else, in this case, Apple shares.
+
+Visualizing the Underlying Asset’s Movement
+
+To understand how the underlying asset affects options, let’s visualize its price movement conceptually.
+
+The Profit and Loss Relationship
+
+The profit and loss (P&L) relationship for a stock like Apple is linear. If you own Apple shares and the price moves up, your P&L increases proportionally. Conversely, if the price drops, your P&L decreases. This linear relationship is crucial to understand as it forms the basis for the more complex movements seen in options trading.
+
+
+
+	•	Positive Price Movement: As the price of Apple increases, your profit increases proportionally.
+	•	Negative Price Movement: As the price of Apple decreases, your loss increases proportionally.
+
+
+
+This direct correlation between the share price movement and your P&L is fundamental to how stocks behave.
+
+Options as Derivatives
+
+Options are derivatives, meaning their value is derived from the underlying asset’s price. When you buy a call option, you are not purchasing the physical shares but a contract based on those shares. The options market revolves around predicting how the underlying stock moves—not just the direction, but also the volatility. For example the image below shows the payoff for a straddle, which is the most common structure used by option sellers.
+
+
+
+Conclusion
+
+Like I said, this was a short and sweet blog (or at least it was meant to be). At this point you should fully understand that options are based on the stocks for the company you are looking at. Yea, that’s really it. Let’s move on to some more fun topics.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

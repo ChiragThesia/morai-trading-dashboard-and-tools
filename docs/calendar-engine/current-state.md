@@ -34,6 +34,19 @@ the history depth, the null risk-reversal rows) was traced to the handoff docume
 than to a query the audit shows. All of them have since been re-measured directly and are
 recorded with their queries in [measurements.md](./measurements.md).
 
+## Superseded — the browser's copy of the math is gone
+
+`apps/web/src/lib/chain-math.ts` is **deleted**, and with it the audit's central duplication
+finding. `useChainModel` now reads `GET /api/chain/priced`, so the cohorts, per-leg greeks, ATM
+reference and vertical skew are the calendar engine's, and the two-leg math is `pairMetrics`.
+Wherever the body below cites `chain-math.ts:NNN`, read it as history. This closes landmines
+**4**, **9**, **10** and **14** (one engine, one spot, one clock, one settlement-aware T) and the
+first four rows of the duplication table in §3. Still open and unchanged: **12** — the risk
+reversal is the one column left in the browser, because it spans both wings and a server twin
+would put `calendar/domain` into `analytics/domain`, which architecture-boundaries §7 forbids. It
+therefore still resolves carry per expiry off the GEX snapshot, which is a different convention
+from the one carry every other number on that table is now priced on.
+
 ---
 
 ## 1. Verdict in five sentences
@@ -472,7 +485,7 @@ Each one is already paid for. Each needs a named guard in whatever replaces the 
 | 5 | **Three `bsm_*` states, not two.** NULL = never processed, the STRING `'NaN'` = permanent solve failure, a number = solved | `computeBsmGreeks.ts:156-165`; consumers exclude both at `leg-observations.ts:381-384` and `gex.ts:93-96` | Every read filters `IS NOT NULL AND <> 'NaN'`. A widened read that forgets this fabricates numbers |
 | 6 | **Schwab OI = 0 outside RTH.** Newest-row-wins zeroed ~2,971 contracts a day, making every strike gex 0 and both walls null | `picker-chain.ts:81`, `gex-snapshot.repo.ts:137` | `MAX(open_interest) OVER (PARTITION BY contract)` over the window, never the newest row's value |
 | 7 | **Strict `max(time)` collapses the dual-source cohort.** The 2026-07-08 regression | `picker-chain.ts:36, 44-95` | Always union `[maxTime − 10 min, maxTime]` with `DISTINCT ON (contract)` newest-wins |
-| 8 | **`dte` is frozen at the snapshot's observation day, and the staleness filter stops one day short.** A row observed yesterday whose expiration WAS yesterday has `dte === 0`, survives `row.dte < 0`, and renders today as a tradeable 0DTE cohort | `getChain.ts:96`, `useChainModel.ts:221-223` (the comment at `:221-222` shows the author aiming at exactly this class) | Drop on `dte <= 0` **or** recompute against the observation day and today. Do not recompute `dte` in the browser |
+| 8 | **`dte` is frozen at the snapshot's observation day, and the staleness filter stops one day short.** A row observed yesterday whose expiration WAS yesterday has `dte === 0`, survives `row.dte < 0`, and renders today as a tradeable 0DTE cohort | `getChain.ts:96`, `useChainModel.ts:221-223` (the comment at `:221-222` shows the author aiming at exactly this class) | Recompute against today — `Cohort.dte` is `calendarDaysTo(injected now, expiration)`, so a gone expiry reads −1 however stale the snapshot. NOT `dte <= 0` as well: that also refuses the expiry that expires today and still trades (192 quoted SPXW puts on 2026-07-29). Settlement is `yearsToSettlement`'s question. Do not recompute `dte` in the browser |
 | 9 | **Cohort `dte`, screen spot and stamp all come from whichever row arrived first**, and the chain is a vendor union | `useChainModel.ts:208-209, 224-228` | Take the max/consensus, or assert the values agree across the cohort |
 | 10 | **Two spots in one screen.** `atmIv`/`atmStrike` measure against the screen-wide `rows[0].underlyingPrice` while `legGreeks` prices each leg against its own `row.underlyingPrice` | `useChainModel.ts:208, 249` vs `chain-math.ts:193` | One spot per cohort, passed explicitly |
 | 11 | **The pair → risk-profile handoff destroys both real IVs.** The Send button writes a TOS string, `parseTosOrder` back-solves ONE flat IV (default 0.15) and it is sent as both legs' IV | `Analyzer.tsx:290`, `tos-parser.ts:72-76`, `useAnalyzerModel.ts:253-254` | Pass the picked legs as data, not through a string. Never `?? fallback` an IV |

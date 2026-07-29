@@ -1,0 +1,179 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is Theta?
+	•	An Example of Time Decay In Options
+	•	Why Does Theta Exist?
+	•	The Relationship Between Theta and Gamma
+	•	Practical Implications of Theta for Option Sellers
+	•	Theta as Rent
+	•	Theta Decay Near Expiration
+	•	Assessing Theta on the Option Chain
+	•	Conclusion
+What is Theta In Option Selling: The Cost of Holding an Option Over Time
+
+Sean Ryan·September 14, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is Theta?
+	•	An Example of Time Decay In Options
+	•	Why Does Theta Exist?
+	•	The Relationship Between Theta and Gamma
+	•	Practical Implications of Theta for Option Sellers
+	•	Theta as Rent
+	•	Theta Decay Near Expiration
+	•	Assessing Theta on the Option Chain
+	•	Conclusion
+Theta is the greek that most option sellers are familiar with because it tells us about how much we are getting paid each day when we sell an option. Theta represents the daily loss in the value of an option due to the passage of time, assuming all other factors remain constant.
+
+Key Takeaways
+
+	1	Defining Theta: Theta measures the daily decay in an option’s value due to the passage of time, with faster decay as expiration nears.
+	2	Impact on Traders: Option sellers benefit from Theta as it erodes the option’s value, allowing them to profit from the premium decay, but must balance this with potential Gamma risk.
+	3	Theta is Not Free Money: The reason someone is paying you theta is for access to gamma. There is no free money in the market and we should only be selling options when we believe the theta gains will outweigh the gamma losses.
+
+
+
+Click here for an overview of all the option greeks.
+
+
+
+What is Theta?
+
+Theta measures the rate at which an option’s value decreases as time passes. Unlike Delta, which measures the sensitivity of an option’s price to changes in the underlying asset, Theta deals solely with the impact of time on the option’s price. Essentially, Theta quantifies the “time decay” of an option, reflecting how the probability of a significant price movement diminishes as the expiration date approaches or as implied volatility decreases.
+
+
+
+An Example of Time Decay In Options
+
+To illustrate the concept of Theta, consider the following scenario:
+
+	•	Initial Position: You buy a $10 call option on Apple (AAPL).
+	•	Time: 30 days until expiration.
+	•	Underlying Price and Implied Volatility: Remain constant.
+
+As time progresses, the option’s value will gradually decrease due to the diminishing likelihood of a significant price movement in the underlying asset. Let’s break down this process:
+
+	•	Day 0: Option Price = $10
+	•	Day 1: Option Price = $9.50 (Theta = -$0.50)
+	•	Day 2: Option Price = $9.00 (Theta = -$0.50)
+	•	…
+	•	Expiration Day: Option Price = $0 (if the option expires out of the money)
+
+Why Does Theta Exist?
+
+Theta exists because the potential for a substantial price movement in the underlying asset decreases as the expiration date approaches. The value of an option contract today is less than it is on expiration day (assuming we hold all variables the same). For example, if you buy a call option on Shopify (SHOP) with 30 days until expiration, there is a significant chance of a large price movement within that period. However, as you get closer to the expiration date, the likelihood of such a movement diminishes, and so does the option’s value.
+
+The Relationship Between Theta and Gamma
+
+A saying that I like is “One man’s Theta is another man’s Gamma”.
+
+Theta and Gamma are inversely related. When you buy an option (long Gamma), you are paying for the potential of quick and substantial price movements. This payment comes in the form of Theta, which is the daily erosion of the option’s value. Conversely, when you sell an option (short Gamma), you are collecting Theta every day, as long as the underlying asset does not experience significant price movements.
+
+This is why we say there is no such thing as free money when you are selling options. The amount of theta you collect is directly proportional to the amount of gamma exposure you carry.
+
+Practical Implications of Theta for Option Sellers
+
+Theta as Rent
+
+Think of Theta as the “rent” the option buyer pays for holding an option. Every day, the option loses value due to time decay. If you are an option buyer, you pay this rent, and if you are an option seller, you collect it. In exchange for this rent, you are giving someone access to a “property”, which in the case of options, is gamma.
+
+Now just like you would expect with houses, the bigger the house, the more the rent costs. As such, the more the gamma, the higher the “rent” too.
+
+If you want to collect large amounts of theta, then you are going to be providing access to large amount of gamma. There is no way around it. This comes back to understanding why option sellers get paid to begin with.
+
+Theta Decay Near Expiration
+
+Theta decay accelerates as the option approaches expiration. The reason this happens is because at expiration, if the option has no intrinsic value then the theta must decay the option to zero.
+
+So on the last day, the theta decay of the option is 100% of the extrinsic value. But when there is 30 days to expiration, it might just be 3% of the extrinsic value.
+
+This means that short-term options experience a more rapid decline in value compared to long-term options. For example:
+
+	•	30 days until expiration: option price: Theta = $0.50/day, 3% of the option’s value.
+	•	10 days until expiration: Theta = $0.50/day, 10% of the option’s value
+
+This characteristic makes selling short-term options more appealing to some traders, as they can collect Theta more quickly. However, it also comes with increased risk, as short-term options are more sensitive to sudden price movements in the underlying asset.
+
+Assessing Theta on the Option Chain
+
+When analyzing an option chain, you might see Theta values listed for various strike prices and expiration dates. For example:
+
+	•	AAPL $100 Call Option (30 days to expiration): Theta = -0.05
+
+This means that the option loses $0.05 in value each day due to time decay. If the option is currently priced at $4.00, it will be worth $3.95 the next day, assuming no other changes.
+
+Conclusion
+
+Theta is a fundamental Greek that measures the time decay of an option’s price. As an option seller, understanding Theta allows you to capitalize on the daily erosion of option premiums, enhancing your profitability. However, it’s crucial to balance your Theta collection with Gamma exposure and manage the associated risks effectively.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

@@ -1,0 +1,246 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Why Delta Hedge?
+	•	How Delta Hedging Works, Generally Speaking
+	•	How to Interpret the Delta Number You See On Your Brokerage For Your Trades
+	•	Example of what delta hedging looks like:
+	•	Another Example To Really Make Things Clear
+	•	Adjusting for Delta Changes
+	•	How Often Should I Hedge My Deltas?
+	•	Hedging on a fixed schedule
+	•	Hedge When Your Delta Breaches A Threshold
+	•	Practical Considerations
+	•	Conclusion
+Mastering Delta Hedging: A Comprehensive Guide for Option Sellers
+
+Sean Ryan·August 23, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Why Delta Hedge?
+	•	How Delta Hedging Works, Generally Speaking
+	•	How to Interpret the Delta Number You See On Your Brokerage For Your Trades
+	•	Example of what delta hedging looks like:
+	•	Another Example To Really Make Things Clear
+	•	Adjusting for Delta Changes
+	•	How Often Should I Hedge My Deltas?
+	•	Hedging on a fixed schedule
+	•	Hedge When Your Delta Breaches A Threshold
+	•	Practical Considerations
+	•	Conclusion
+When we are running option selling strategies, an important part is maintaining a delta-neutral exposure in our positions. We are trying to monetize the difference between implied/ realized volatility, and delta is noise that can get in the way of us doing this successfully. The process of removing our delta exposure is what we call delta hedging. In this article, we are going to cover everything you need to know to do it successfully.
+
+Key Takeaways
+
+	1	Why We Delta Hedge: Delta hedging helps option sellers maintain a directionally neutral position, mitigating risks from underlying asset price movements while maintaining our exposures to theta, gamma and vega (the things we actually want to trade).
+	2	How To Adjust Your Delta: The article covers how to interpret your delta exposure and how you actually adjust it through the buying and selling of shares.
+	3	Delta Hedging Approaches: Daily hedging and threshold hedging are two common approaches used by retail traders to delta hedge that effectively balance frequency with transaction costs.
+
+
+
+By the end of this article you will have all of the knowledge you need to start delta hedging your short volatility positions. Let’s jump into it!
+
+Why Delta Hedge?
+
+A key part about trading is knowing what view you are trying to express and then structuring a trade that properly expresses your view. As option sellers, we are looking to monetize the difference between implied and realized volatility. We typically do not have a view on the direction the stock is going to move, and we definitely don’t want direction to play a big role in our PnL.
+
+This is why we structure our trades to be delta neutral at the start. We sell at the money straddles, or strangles where the call and put legs have the same delta. This way their deltas “cancel out” and the overall position ends up with a delta of zero.
+
+Unfortunately, stocks don’t just stay in the same place. So as the trade progresses, the stock price will move. What used to be at-the-money, is now above or below spot price. And what used to be delta neutral, will now make/lose money depending on which direction the stock moves.
+
+
+
+When running an option selling strategy, you don’t want your profit and loss (P&L) to be heavily influenced by the direction the underlying asset’s price drifts. The entire basis for running these strategies is to capture the variance risk premium, the difference between implied and realized volatility.
+
+If we were professional traders, we would use something called a variance swap to do this. This is a financial instrument whose PnL is literally the difference between implied and realized volatility.
+
+But we don’t have access to trading those. So we use options to accomplish the same goal, with the difference being that we need to take care of that pesky delta exposure that comes with using options.
+
+This is what delta hedging is designed to do. It’s a process of managing our trade such that we maintain our delta neutral positioning over the lifetime of the trade.
+
+How Delta Hedging Works, Generally Speaking
+
+Delta hedging works by trading shares to counteract the new delta exposure due to the underlying stock moving. If the stock trends up and we become negative delta (we make money if the stock goes down) then we buy some shares so that it neutralizes the negative delta exposure.
+
+If the stock goes down and we now have positive delta (we make money if the stock goes up) then we short some shares (or close out some long shares if we already bought some) to bring us back to a delta neutral state.
+
+This is how delta hedging works. Its entire purpose is to remove the noise that is introduced to our trade through delta. As retail traders, it’s not going to be perfect, but by using one of the approaches we discuss in this blog you should be able to get pretty close to trading the literal difference between implied and realized volatility (close enough that the noise from delta becomes irrelevant over a large number of trades).
+
+How to Interpret the Delta Number You See On Your Brokerage For Your Trades
+
+Delta represents the sensitivity of an option’s price to changes in the price of the underlying asset. For instance, if you own shares of Apple (AAPL), your position has a Delta of 1. This means if Apple’s stock price increases by $1, your position’s value increases by $1. Conversely, if you hold 1,000 shares of Apple, a $1 increase in Apple’s price translates to a $1,000 increase in your position’s value.
+
+When you look at the option chain, the delta exposure of your position will be expressed as a value between -1 and 1. If you have a delta exposure of 1, it’s equivalent to just holding shares. If you have a delta exposure of -1, it’s equivalent to just holding short shares.
+
+The way you interpret the delta number for your position is by multiplying it by the number of lots you have open and then multiplying it again by 100. That is how much delta exposure your option position has.
+
+Example of what delta hedging looks like:
+
+Here is the easy way to think about how delta hedging works:
+
+You adjust the balance of the shares you have to act as a counterweight to your delta exposure.
+
+Let’s walk through an example:
+
+Let’s say you have 1 short straddle on XYZ company and after a couple days it has -0.2 delta. This means that for every 1 dollar that the underlying stock decreases in value, your position is going to increase in value by $20. It also means that for every 1 dollar the underlying stock increases in value, your position is going to decrease in value by $20.
+
+We obviously don’t want that as volatility traders. So in order to hedge this risk, we are going to need to purchase 20 shares, which will add 0.2 delta to our “overall position”.
+
+	•	Our option position has -0.2 delta
+	•	Our shares position has 0.2 delta
+	•	Our overall delta exposure is now 0
+
+Then let’s say that the stock continues to rally and now our option position has -0.4 delta. How many shares do we need to trade now? If you said 40, you would be wrong. Why? You forgot that we are already holding 20 shares!
+
+	•	Our option position has -0.4 delta
+	•	Our shares position has 0.2 delta
+	•	Our overall delta exposure is now -0.2
+
+So we only need to buy another 20 shares to bring us to neutral.
+
+	•	Our option position has -0.4 delta
+	•	Our shares position has 0.4 delta
+	•	Our overall delta exposure is now 0
+
+And that is how delta hedging works in a nutshell. You have your option position. Then you have your accompanying shares.
+
+You adjust the balance of the shares you have to act as a counterweight to your delta exposure.
+
+Another Example To Really Make Things Clear
+
+Let’s consider an example where you sell a straddle on Apple, currently trading at $200. A straddle involves selling a call and a put option with the same strike price and expiration date. By selling the 200 strike straddle, you’re initially Delta neutral, meaning your position is not influenced by small movements in Apple’s stock price.
+
+
+
+However, as Apple’s price moves, your Delta changes. If Apple’s price increases to $210, your position becomes short Delta, indicating that further increases in Apple’s price will result in losses. To remain Delta neutral, you need to adjust your position.
+
+
+
+
+
+Adjusting for Delta Changes
+
+When your position becomes short Delta, you can hedge by buying shares of the underlying stock. For instance, if your Delta is -50, you would buy 50 shares of Apple. This action counteracts the negative Delta, making your position Delta neutral again.
+
+Continuous Hedging
+
+
+
+
+
+Delta hedging is a continuous process.You adjust the balance of the shares you have to act as a counterweight to your delta exposure.
+
+How Often Should I Hedge My Deltas?
+
+When you first learn about delta hedging it becomes very easy to spend your entire day in front of your computer screen hedging every single delta that your position picks up. While technically this would be the most “delta neutral” way to go about things, it does not come without costs. In particular, there are two costs.
+
+	1	Financial costs: every time that you delta hedge you are going to be paying some money. At Least a couple pennies when you cross the bid/ask spread. This adds up, and as good traders we care about our overhead.
+	2	Time costs: You didn’t become a trader to spend your life hedging deltas. You don’t want to be watching every tick for the rest of your life for a minute optimization of your implied vs realized volatility exposure.
+
+So what do you do instead?
+
+What we have found to make the most sense is to do one of the two following things:
+
+	1	Hedge on a fixed schedule
+	2	Hedge when your delta breaches a certain threshold
+
+Hedging on a fixed schedule
+
+This is a really common approach. It can be as simple as this: “I hedge my deltas once every day at market close”. Or “I hedge my deltas at market open and market close”.
+
+That’s it. At whatever interval you set, you adjust the number of shares that you have to bring your overall delta exposure back to zero. Then you go away until the next time you are supposed to hedge. Simple.
+
+Hedge When Your Delta Breaches A Threshold
+
+This one is a bit more tricky but it can yield just as good or better results. The idea behind this approach is that you as a trader have accepted a certain degree of “noise” and “variance” in your trade due to delta.
+
+“I am comfortable carrying +/- 30 delta on this trade”.
+
+There are no fixed rules for what the threshold needs to be, all you need to do is pick what delta xposure you are comfortable with and then if your position breaches this threshold, you hedge your delta back to zero. That’s it!
+
+Picking when to delta hedge does not need to be any more complicated than this. There are some techniques that may yield slightly better results, but in the grand scheme of things you will be fine following one of the above approaches.
+
+I am not trying to discourage you from exploring other avenues for delta hedging, I am simply saying that its not necessary at this stage. By doing one of the above approaches, you are already receiving 90% of the value that delta hedging aims to bring you.
+
+Practical Considerations
+
+	1	Transaction Costs: Frequent hedging can lead to significant transaction costs, especially for small accounts. It’s crucial to balance the benefits of hedging with the costs associated with frequent trading.
+	2	Slippage: In volatile markets, the price at which you execute your hedge may differ from the market price, leading to slippage. Be mindful of this when planning your hedging strategy.
+	3	Risk Tolerance: Your risk tolerance and account size will influence your hedging decisions. Larger accounts can absorb more significant price movements, while smaller accounts might need more frequent adjustments.
+
+Conclusion
+
+Delta hedging is an important part of volatility trading. We need to really understand why we are doing it, how to measure it, and how to make decisions and put together our approach for doing it. In this article, you have received all of the theoretical knowledge that you need to actually start doing it.
+
+The next step is to actually start doing it. You will learn much more from putting on a short straddle and delta hedging than you did from reading this article. Practice is certainly the best teacher in this case. So get out there and trade!
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

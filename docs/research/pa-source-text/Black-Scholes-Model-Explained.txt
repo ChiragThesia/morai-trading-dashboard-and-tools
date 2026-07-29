@@ -1,0 +1,146 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Understanding the Black-Scholes Model
+	•	This is What The Equation Looks Like
+	•	Important: Do You Need To Know How To Do The Calculation?
+	•	Practical Application
+	•	Why Do We Think About Options In Terms Of Implied Volatility?
+Black Scholes Model Explained: The Foundation of Option Pricing
+
+Sean Ryan·September 5, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Understanding the Black-Scholes Model
+	•	This is What The Equation Looks Like
+	•	Important: Do You Need To Know How To Do The Calculation?
+	•	Practical Application
+	•	Why Do We Think About Options In Terms Of Implied Volatility?
+There is a formula that exists. A magical formula. It’s called the Black-Scholes model, and it’s the most commonly used formula for determining option prices and volatility. Everything from implied volatility to option greeks are derived from this formula. So while we may not need to “use it”, it’s important to understand why it exists.
+
+
+
+It can be pretty complicated at first glance. But don’t worry. We are going to break it down and by the end of this article you will understand why this model is important and everything you need to know to understand its role in the world of option trading.
+
+Key Takeaways
+
+	1	Black-Scholes Model: A mathematical model used to price options, using inputs such as call price, strike price, days until expiration, dividends, and interest rate to calculate implied volatility or option price.
+	2	Implied Volatility: Reflects the market’s forecast of future volatility, crucial for evaluating option prices. It provides insight into market expectations and potential price movements.
+	3	Practical Application: In reality you are never going to need to use this formula yourself, because the math is handled for you by your brokerage (and the Predicting Alpha Terminal). Knowing what’s happening behind the scenes is useful for your own confidence in the information being presented to you and tying everything together so you can see the full picture when it comes to options and volatility trading.
+
+Understanding the Black-Scholes Model
+
+The Black-Scholes model is a mathematical model used for pricing options. It takes several inputs and provides an output, either the implied volatility or the option price. The key variables in this model are:
+
+	1	Call/Put Price: The current market price of the call or put option.
+	2	Strike Price: The predetermined price at which the option can be exercised.
+	3	Days Until Expiration: The remaining time until the option expires.
+	4	Dividends: Any dividends paid by the underlying stock.
+	5	Interest Rate: The risk-free interest rate.
+
+
+
+These inputs are plugged into the Black-Scholes formula, which then calculates the implied volatility or the option price. This process is similar to a function you might have encountered in high school math, where you input certain values to get a result.
+
+This is What The Equation Looks Like
+
+
+
+
+
+By inputting the variables into the Black-Scholes formula, you can solve for the implied volatility. This is the volatility figure you often see quoted in options trading platforms.
+
+Conversely, if you have the implied volatility, you can input it along with the other variables to calculate the option price.
+
+Important: Do You Need To Know How To Do The Calculation?
+
+The short answer is no. There will be some traders who insist that you must know this equation and recite it to yourself before you go to bed each night.
+
+But the reality is that your brokerage is already handling all the math for you. You are able to see the outputs – the implied volatility and option prices that we care about right on your screen.
+
+What is really important is to understand that this equation exists and it’s the model most commonly used to determine option prices and implied volatility.
+
+Practical Application
+
+Let’s apply this to a real-world example. Suppose you want to price an Apple call option with a $200 strike price, 30 days until expiration, no dividends, and an interest rate of 0%. If the implied volatility is 30%, you can use the Black-Scholes model to calculate the call price.
+
+If the call price comes out to $5 with an implied volatility of 30%, what happens if you believe the realized volatility (the actual volatility you expect) will be 15% instead? Plugging 15% into the model might give you a new call price of $2.50.
+
+This discrepancy between the market price ($5) and your calculated price ($2.50) based on lower expected volatility is what we are looking for when we are trading. A difference between the market price and our opinion on fair value. If the market is overvaluing the option, we want to be selling it!
+
+Why Do We Think About Options In Terms Of Implied Volatility?
+
+Implied volatility is crucial because it reflects the market’s forecast of future volatility. When traders talk about options prices, they often discuss implied volatility rather than the dollar price. This is because, as the name suggests, the price of an option implies how much future volatility the market expects. By converting to implied volatility and away from dollar prices, it allows for a standardization, and “apples to apples” comparison of options across different tickers.
+
+For example, if we only looked at option prices, we would always say that the call option on a penny stock is “cheaper” than the call options on Amazon. Since Amazon trades at such a high share price, the dollar cost for the options is certain to be multiple times higher. But in reality, the penny stock options may be implying higher volatility, and this just isn’t visible to us if we use the “dollar” lens.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

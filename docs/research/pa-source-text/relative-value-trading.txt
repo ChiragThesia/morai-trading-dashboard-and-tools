@@ -1,0 +1,174 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Understanding Relative Value
+	•	The Basic Concept
+	•	Real-World Example: Pepsi vs. Coca-Cola
+	•	Another Example: Cross-Exchange Crypto Arbitrage
+	•	The Role of Volatility
+	•	Relative Value in Professional Trading
+	•	Market-Neutral Strategies
+	•	Volatility Arbitrage
+	•	Trading The Alpha Leg
+	•	Implementing Relative Value Trading
+	•	Conclusion
+Introduction to Relative Value Trading: A Profitable Way To Sell Options
+
+Sean Ryan·September 25, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Understanding Relative Value
+	•	The Basic Concept
+	•	Real-World Example: Pepsi vs. Coca-Cola
+	•	Another Example: Cross-Exchange Crypto Arbitrage
+	•	The Role of Volatility
+	•	Relative Value in Professional Trading
+	•	Market-Neutral Strategies
+	•	Volatility Arbitrage
+	•	Trading The Alpha Leg
+	•	Implementing Relative Value Trading
+	•	Conclusion
+One of my favorite option selling topics is relative value trading. It’s based on finding price discrepancies between similar assets and is arguably one of the best approaches to strategy development. Let’s explore how relative value trading works, its applications, and a real-world example that made me some decent coin back in the day.
+
+Key Takeaways
+
+	1	Concept of Relative Value Trading: It involves exploiting price discrepancies between similar assets, like buying cheap and selling expensive at the same time. An example is trading between Pepsi and Coca-Cola stocks when their prices diverge abnormally, expecting them to converge.
+	2	Role of Volatility in Relative Value Trading: The strategy also applies to volatility, where traders exploit differences in implied volatility between related assets. For instance, selling volatility on one asset while buying on another when their volatilities diverge, expecting them to align.
+	3	Practical Applications and Tools: Tools and platforms that provide detailed volatility data and historical performance comparisons are essential for identifying and executing relative value trades effectively.
+
+
+
+Note: if you are reading about relative value trading please read this article about trading mentality. It’s going to make a lot of stuff click for you.
+
+Understanding Relative Value
+
+The Basic Concept
+
+Imagine you own a $5,000 TV. You check Kijiji, and it’s priced at $5,000 there too. Then, you find a similar TV on Amazon for $3,000. What would you do? Naturally, you would sell your $5,000 TV and buy the $3,000 one, pocketing the difference. This is relative value trading in a nutshell.
+
+
+
+It might be hard to believe that opportunities like this can actually be found in the market. But they actually do exist. They can be found whenever there are things that “shake up” the market, when there is not much liquidity, or when there is one asset that is much more efficient than a similar, correlated asset.
+
+Real-World Example: Pepsi vs. Coca-Cola
+
+Let’s apply this concept to stocks. Consider Pepsi and Coca-Cola—both giants in the beverage industry with similar market caps and fundamentals. Typically, their stock prices move in tandem.
+
+Imagine a scenario where Coca-Cola’s stock shoots up while Pepsi’s stock plummets. This creates a relative value opportunity: we can sell Coca-Cola and buy Pepsi, betting that their prices will converge again.
+
+
+
+This strategy allows us to profit whether Pepsi’s price rises, Coca-Cola’s price falls, or both.
+
+Another Example: Cross-Exchange Crypto Arbitrage
+
+Since options are a relatively new product in the crypto space, you will often be able to see discrepancies in the implied volatility for options on the same crypto coin, just on different exchanges. If you are able to buy and sell the same thing at different implied volatilities, then you are able to lock in an arbitrage for yourself. Of course when it comes to actually doing this there can be some more nuances (the risk that one of the exchanges pulls an FTX) for example, but generally speaking there can be opportunity looking into areas like this, and I share it with you just to get you thinking about what relative value trading can look like in different forms.
+
+The Role of Volatility
+
+Relative value trading extends beyond stock prices to the volatility market. For instance, if Pepsi’s implied volatility is 60% while Coca-Cola’s is 20%, despite their similar nature, we have a mispricing. We could buy volatility on Coca-Cola and sell volatility on Pepsi, expecting their volatilities to converge.
+
+Relative Value in Professional Trading
+
+Market-Neutral Strategies
+
+Professional traders often use relative value trades to remain market-neutral—insensitive to the market’s direction. Since you are long and short an asset at the same time, it positions you so that you don’t lose money if the market moves up or down. Your PnL is based on the relative performance of similar assets.
+
+Volatility Arbitrage
+
+Volatility arbitrage is a popular form of relative value trading in the professional space. By identifying discrepancies in implied volatility between two related assets, traders can construct strategies that exploit these inefficiencies.You can think of this as the options version of the Pepsi and Coke example above.
+
+Trading The Alpha Leg
+
+One of the challenges that retail traders face when looking to run these relative value strategies is that they can be quite margin intensive. That is why one of the popular approaches is to trade the “alpha leg”, or the side of the relative value trade that we believe is inefficient.
+
+What we mean by this is that whenever there is a relative value trade, it’s likely that only one side of it is causing the opportunity.
+
+For example, if SPY (S&P 500 ETF) has an implied volatility of 20% and a small-cap ETF that is correlated to SPY has 60%, we can sell a straddle on the small-cap ETF, assuming SPY’s implied volatility is more accurate.
+
+By doing this we reduce the margin requirements and the complexities that come with managing this trade, while holding on to the majority of the value that comes from this type of opportunity.
+
+Now obviously when you only trade the one side you are increasing your exposures to things outside of the relationship between the two assets, but this “noise” is unlikely to completely overstate the opportunity you are trading if you have actually found one of substance.
+
+Implementing Relative Value Trading
+
+Here are three steps you can follow to put on a relative value trade of your own.
+
+	1	Identify Similar Assets: Look for pairs like Pepsi and Coca-Cola or IWM and SPY.
+	2	Compare Their Implied/Realized Volatility Ratios: Look at the relationship between their ratios and see if there is a recent break.
+	3	Construct Trades: Use structures like straddles or strangles to sell volatility on the expensive side and buy volatility on the cheaper side.
+
+Conclusion
+
+Relative value trading is powerful. It’s one of the few areas left in the market where a retail trader can find some really juicy alpha. Just remember that, just like other approaches, it’s your fundamental ideas about where there can be a relative value opportunity that will really get you paid. Once you have found them, the next biggest challenge will be getting really clear about how to monetize them.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

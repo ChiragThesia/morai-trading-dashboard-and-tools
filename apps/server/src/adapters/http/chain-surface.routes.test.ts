@@ -129,6 +129,43 @@ describe("GET /chain/priced — the real engine through the real contract", () =
     expect(parsed.data.cohorts[0]?.strikes.map((s) => s.strike)).toEqual([7350, 7400, 7425]);
   });
 
+  it("carries a 0DTE cohort and an all-unpriced one through the schema", async () => {
+    // The seam the engine's own tests cannot reach. `pricedChainCohort.dte` is `z.number().int()`
+    // with no lower bound and `strikes` has no `.min()`, so neither shape is rejected — but that
+    // is a property of a schema written before either shape could occur, and it has to be proved
+    // rather than read. A 0DTE cohort reaches this route every trading day.
+    const withBoth = makePriceChainUseCase({
+      readChain: () =>
+        Promise.resolve(
+          ok([
+            ...rows,
+            // Expires on the observation date, PM-settled, 4.5 hours of life left.
+            quote({ expiration: "2026-07-28", bsmIv: "0.2410", bid: 8.1, ask: 8.9 }),
+            // An expiry the bounded IV drain has not reached: quoted, solved nowhere.
+            quote({ expiration: "2026-09-18", bsmIv: null, bid: 108.5, ask: 111.9 }),
+          ]),
+        ),
+      now: () => NOW,
+      carry: { rate: 0.045, divYield: 0.013 },
+    });
+
+    const res = await app(withBoth).request("/chain/priced");
+    expect(res.status).toBe(200);
+    const parsed = pricedChainResponse.safeParse(await res.json());
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    const zero = parsed.data.cohorts.find((c) => c.expiration === "2026-07-28");
+    expect(zero?.dte).toBe(0);
+    expect(zero?.t ?? 0).toBeGreaterThan(0);
+    expect(zero?.strikes).toHaveLength(1);
+
+    const unsolved = parsed.data.cohorts.find((c) => c.expiration === "2026-09-18");
+    expect(unsolved?.strikes.map((s) => s.iv)).toEqual([null]);
+    expect(unsolved?.atmIv).toBeNull();
+    expect(unsolved?.strikes[0]?.bid).toBe(108.5);
+  });
+
   it("carries the unpriceable strike to the wire with its market and null greeks", async () => {
     const res = await app(priceChain).request("/chain/priced");
     const parsed = pricedChainResponse.parse(await res.json());

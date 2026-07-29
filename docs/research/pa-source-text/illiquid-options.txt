@@ -1,0 +1,254 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Trading in Illiquid Markets
+	•	Example
+	•	Revisiting Our VOD Example
+	•	Evaluating the Trade Without Proper Pricing
+	•	Checking the Trade
+	•	Understanding the Impact of Execution on Trade Quality
+	•	Determining Flexibility in Getting a Fill
+	•	Valuing and Flexibility in Trading
+	•	Applying Valuation Principles to Options Trading
+	•	Conclusion
+How to Trade Illiquid Options: The Keys to Success For Selling Options With a Wide Bid Ask Spread
+
+Sean Ryan·August 29, 2024
+
+On this page
+On this page
+	•	Trading in Illiquid Markets
+	•	Example
+	•	Revisiting Our VOD Example
+	•	Evaluating the Trade Without Proper Pricing
+	•	Checking the Trade
+	•	Understanding the Impact of Execution on Trade Quality
+	•	Determining Flexibility in Getting a Fill
+	•	Valuing and Flexibility in Trading
+	•	Applying Valuation Principles to Options Trading
+	•	Conclusion
+This post will teach you the essential techniques for trading options in illiquid markets.
+
+Low-capacity spaces often contain some of the best trading opportunities for retail traders due to their typically less efficient pricing. However, one of the most challenging and often overlooked aspects of trading in low-capacity markets is execution.
+
+Often, execution can be the difference between a profitable strategy and an unprofitable one.
+
+This is because our edge is usually small, and poor execution can significantly diminish profits over time.
+
+This is why I often advise new option sellers to stick to liquid names. The bid-ask spreads are much tighter, and execution has less of an impact on your outcomes.
+
+However, the problem with strictly sticking to liquid names is that, as retail traders, there is often more opportunity to be found in smaller, less liquid names.
+
+With fewer eyes on a stock, its volatility is likely to be priced less efficiently, providing us with the chance to better price volatility than the market!
+
+Trading in Illiquid Markets
+
+But if the market is illiquid, how can we trade it?
+
+The short answer is that we need to determine the volatility line we want to sell at and then aim to get filled at the corresponding option prices.
+
+This post will delve into understanding the volatility line you are selling at so you can trade illiquid stocks with greater confidence. To illustrate this concept, we will use $VOD as our trade example.
+
+When $VOD showed up in my scan, the 15.5 puts expiring January 7, 2022, had a bid of $0.67 and an ask of $1.94.
+
+Suppose I tried to get filled at the midpoint, $1.30, and succeeded. I might think, “Nice, I got filled at a fair price!”
+
+But here’s the issue: In this case, the midpoint is not a fair value. It’s not even the market’s fair value.
+
+The midpoint is simply the price halfway between the bid and the ask.
+
+If the person on the ask side is more aggressive, then the midpoint will be much more favorable to the buyer than to the seller. Conversely, if the person on the bid side is more aggressive, the midpoint will appear much more favorable to the seller.
+
+This is because the midpoint can be easily influenced by small actions from either side of the market.
+
+Example
+
+Imagine we are looking at a stock with an illiquid options market.
+
+When examining an option, we see the bid is $0.50 and the ask is $5.00. There is 1 lot on the bid (one person looking to buy one contract at the bid) and 1 lot on the ask (one person looking to sell one contract at the ask).
+
+In this scenario, the midpoint is $2.75. However, this midpoint doesn’t necessarily represent fair value; it’s just the arithmetic mean of the wide bid-ask spread. If either side becomes more aggressive, the midpoint could shift significantly, further illustrating the challenges of trading in illiquid markets.
+
+
+
+The scenario described above illustrates this market. Given the significant gap between the bid and the ask, the midpoint is $2.75.
+
+But what if a new market participant enters and offers to sell options at $3.50? Now, the ask on this option chain changes to $3.50 instead of $5.00!
+
+
+
+This change illustrates how drastically the midpoint can shift. Initially, the midpoint was $2.75, but with the new ask at $3.50, the midpoint is now $2.00. So, which is the market’s true fair value?
+
+In illiquid markets, we can’t rely on the midpoint to estimate fair value.
+
+In highly liquid markets like QQQ, SPY, or AAPL, the midpoint is a useful indicator because the market is competitive, with knowledgeable participants setting the bid and ask prices. Therefore, the midpoint serves as a good estimate of market fair value. However, in illiquid markets, the midpoint is meaningless.
+
+Revisiting Our VOD Example
+
+At the time of the trade, my brokerage was showing an implied volatility (IV) of around 50% for the VOD put options. However, given the wide bid-ask spread, how do we know if this IV is accurate? To determine if we can actually sell at 50% IV, we need to answer this question:
+
+“If I wanted to sell VOD puts at 50% IV, what price would I need to sell the put options for?”
+
+To answer this, we can use a Black-Scholes calculator to determine the price the options should be worth at the desired level of implied volatility.
+
+
+
+I input the current price, strike price, expiration, and the implied volatility my brokerage was showing. Once I ran the calculation, the result showed that the put premium should be $1.12.
+
+With this information, I can conclude:
+
+If I want to sell put options at a 50% IV on VOD, I need to collect at least $1.12 in premium for each option.
+
+If I collect more than $1.12, I am selling at a higher IV. If I collect less than $1.12, I am selling at a lower IV.
+
+Evaluating the Trade Without Proper Pricing
+
+Let’s imagine we didn’t know how to price the options accurately and blindly attempted to get a fill. Consider this scenario:
+
+We analyzed the data and concluded that VOD options were expensive at a 50% IV since the stock was only realizing 30% volatility. Therefore, it seemed like an easy sell. The market was illiquid, so we worked our order and eventually sold a put option for $0.95.
+
+Is this a good trade? Did we even sell at the intended implied volatility?
+
+In this case, selling the put option for $0.95 is not a good trade. Based on our earlier Black-Scholes calculation, selling at 50% IV would require a premium of $1.12. By selling for $0.95, we effectively sold at a lower implied volatility than intended. This means we did not achieve the expected benefit of selling at 50% IV, and the trade may not align with our initial analysis and strategy.
+
+Checking the Trade
+
+To determine if our trade was good, we need to use a calculator that allows us to input the basic option information. This time, instead of adjusting the volatility to get the price, we will input the price to get the implied volatility.
+
+By entering the option’s current price, strike price, expiration date, and the premium we received ($0.95), we can calculate the implied volatility at which we sold the option.
+
+Using this approach, we can find out whether we sold the VOD puts at the intended 50% IV or if it was lower, confirming whether our trade was aligned with our initial strategy.
+
+
+
+Understanding the Impact of Execution on Trade Quality
+
+Just like with the previous calculator, I input the option basics (put option, underlying price, strike price, expiration date), but this time I also entered the price at which I sold the option ($0.95).
+
+The output revealed the implied volatility of the option I sold, given the sale price.
+
+Because I was too aggressive with my order, I actually sold at a 40% IV instead of the intended 50% IV. With my fair value at around 35% IV, I almost erased all of my edge by being too aggressive. I didn’t know when to stop, and I either left money on the table or potentially made a negative expected value (EV) trade.
+
+I hope this example with VOD makes it clear how crucial it is to know the volatility line you want to sell at and to ensure you get filled at that level for successful trading.
+
+Determining Flexibility in Getting a Fill
+
+Once we’ve priced the option and know the implied volatility (IV) we want to sell at, the next step is to determine how flexible we can be with the fill price.
+
+For our VOD example, we’re aiming to get $1.12 for the put option. But would $1.11 be acceptable? How about $1.05? How do we figure out the minimum price we are happy to collect on this trade?
+
+The answer depends on the amount of edge you have on the trade. This is why accurate valuation is crucial.
+
+Valuing and Flexibility in Trading
+
+Here’s a clear example to illustrate the point (not options-related, but it demonstrates the concept well).
+
+Let’s say you know for sure that AAPL is going to $200 tomorrow. How much should you be willing to pay for AAPL today?
+
+The answer is, obviously, anything below $200.
+
+Maybe with some room for error, depending on your confidence.
+
+But the key point is that you have to value it. You need to be able to say that AAPL is worth $200.
+
+Applying Valuation Principles to Options Trading
+
+The same valuation principles apply to options trading. Here’s how we can think about this for VOD:
+
+	1	Implied and Realized Volatility: VOD is currently trading at 50% IV, while it is realizing about 32% volatility.
+	2	Fair Value Estimate: Based on your analysis, you believe the fair value is closer to 35-40% IV.
+	3	Margin for Error: Incorporate a margin for error in case your calculations are slightly off. This ensures that even if your estimate isn’t perfect, you still have a buffer.
+	4	Risk-Reward Assessment: Ensure that there is enough potential profit to justify the risk of the stock moving significantly.
+
+Knowing this, it doesn’t make sense for me to get filled at the 40% IV line. It’s too close to my fair value estimate and doesn’t leave much room for error or profit.
+
+Therefore, anything below about 47% IV wouldn’t be a trade I’d consider. Using the option calculator and adjusting for this, I can conclude:
+
+	•	Target Price: $1.12 for the put option
+	•	Minimum Acceptable Price: $1.06
+
+If I can’t get a fill above $1.06, the trade isn’t worth taking. I’ll either wait for a fill or move on to another opportunity. I’ve seen many traders get too aggressive with their orders and then wonder why they are losing money.
+
+By always knowing the volatility line you are selling at, you can avoid this problem and better capitalize on illiquid markets.
+
+Conclusion
+
+Most of the time, traders think that once they have found a good idea, the hard work is done. But what you come to realize as you continue to improve and find your own edges, is that one of the hardest parts of trading is actually the execution. Usually, this is the difference between a +EV and -EV strategy. I will consider this post a success if it has made that clear and provided a solution when liquidity makes it hard to find market fair value.
+
+Always remember, when trading in an illiquid market, we need to price our options.
+
+This is crucial. If we can’t price the option when we go to trade it, all the work we put into trying to price it beforehand is jeopardized.
+
+Conversely, when we are able to price the volatility we are aiming to get filled at, we are free to explore illiquid option chains for potential opportunities. These tend to be lower capacity spaces with fewer eyes on them, offering more opportunities for retail traders.
+
+As retail traders, we are all relatively “small fish.” We don’t need to be in the ocean to find food; we can hunt in a pond.
+
+When you can price the volatility you need to be trading at, hunting in the pond becomes much more satisfying.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

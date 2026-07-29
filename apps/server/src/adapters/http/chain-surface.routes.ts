@@ -14,10 +14,10 @@ import { toPriceChainRequest, toPricedChainBody } from "../chain-surface-dto.ts"
  * SIBLING OF /chain, NOT A REPLACEMENT. GET /chain returns the raw two-vendor union — one flat
  * row per contract with `bsmIv` and nothing else derived. This route returns that same read
  * grouped into (root, expiration) cohorts with greeks, the ATM reference and vertical skew
- * already solved, because those eight formulas currently run in the BROWSER
- * (apps/web/src/lib/chain-math.ts) and a second implementation of a formula is a second thing to
- * be wrong. The web app is NOT repointed by this change; that is a separate, reviewable step, and
- * `apps/server/src/adapters/chain-surface-differential.test.ts` is the evidence it is safe.
+ * already solved, because those eight formulas used to run a second time in the BROWSER and a
+ * second implementation of a formula is a second thing to be wrong. `useChainModel` now reads
+ * THIS route and the browser copy is deleted. GET /chain still has readers — the Analyzer's 25Δ
+ * risk-reversal column needs both wings, and this route serves one.
  *
  * Computed ON READ from the latest chain cohort, like /calendars/ranked and unlike
  * /picker/candidates: the mapping is deterministic over one chain read, so a stored snapshot

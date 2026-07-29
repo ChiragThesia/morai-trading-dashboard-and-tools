@@ -1,0 +1,162 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is Exercising an Option?
+	•	Why Traders Rarely Exercise Options Before Expiration
+	•	Assignment: The Other Side of Exercising
+	•	The Misconception About Early Assignment
+	•	But Sean, what if I don’t have the shares available?
+	•	Conclusion
+Worried About Early Assignment in Option Selling? It's Not As Scary As You Think
+
+Sean Ryan·September 11, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is Exercising an Option?
+	•	Why Traders Rarely Exercise Options Before Expiration
+	•	Assignment: The Other Side of Exercising
+	•	The Misconception About Early Assignment
+	•	But Sean, what if I don’t have the shares available?
+	•	Conclusion
+One of the biggest fears that I hear expressed by option sellers is: “What do I do if I get assigned early!”
+
+Exercise and assignment are a real part of the option market, so the idea that this could happen to you is very real, and especially as your trade approaches expiration, there will be situations where it will happen.
+
+However, it is not the big bad scary monster that you will see posts on Reddit make it out to be. In fact, there are some inherent good things with early assignments that benefit option sellers.
+
+In this article we are going to break down the concepts of exercising options and getting assigned as an option seller. These terms are referring to the process involved in converting options into actual stock positions and the obligations of option sellers. So let’s go over them and debunk some of the fears traders have.
+
+Key Takeaways
+
+	•	Exercising an Option
+	◦	Exercising means converting an option contract into actual stock. As an example, if someone exercises their call options, it gives them the right to buy the underlying stock at a specific price. They would immediately acquire 100 shares per option contract exercised at the strike price they picked when purchasing the contracts.
+	•	Assignment in Options
+	◦	Assignment is the obligation for the seller if the buyer exercises the option. For example, if you sell a call option and the buyer exercises it, you must provide the underlying shares at the strike price. Assignment obligates sellers to fulfill the contract terms if the contract is exercised.
+	•	Early Assignment Advantage
+	◦	Contrary to common fears, early assignment can benefit option sellers. If an option buyer exercises early, the extrinsic value of the option disappears, allowing the seller to keep the premium that represents the extrinsic value. This scenario can lead to a profitable outcome for the seller.
+
+What is Exercising an Option?
+
+Exercising an option means converting the option contract into the actual stock. Here’s a simple breakdown:
+
+	•	Call Option: Gives you the right to buy the underlying stock at a specific price (strike price).
+	•	Example: If you buy a $200 call option for Apple, you have the right to buy 100 Apple shares at $200.
+
+When you exercise this option, you convert it into shares. One option contract equals 100 shares of the underlying stock. So, if you exercise one $200 call option, you would get 100 shares of Apple at $200 each.
+
+Why Traders Rarely Exercise Options Before Expiration
+
+The reason that contracts are usually not exercised early is because an option contract is composed of intrinsic and extrinsic value. The article I just linked explains these terms in depth so we won’t do that here. But to make a long story short, when you exercise an option before the expiration of the contract, the option buyer is forgoing all of the extrinsic value that remains on the contract.
+
+Rather than exercising early, it could make more sense to just sell the option contract to someone else on the open market so that the price you receive includes both the intrinsic value and the extrinsic value.
+
+This is why it’s pretty rare to see early exercising of options.
+
+Assignment: The Other Side of Exercising
+
+While exercising an option is a choice for the buyer, assignment is an obligation for the seller. Here’s how it works:
+
+	•	When You Sell an Option: You are short the option, meaning you have the obligation to fulfill the contract if the buyer exercises it.
+	•	Assignment: If the buyer exercises the option, the seller must provide the underlying shares.
+
+For example, if you sell a $200 call option for Apple, and the buyer exercises it, you must provide 100 shares of Apple at $200 each.
+
+
+
+The Misconception About Early Assignment
+
+Many new traders worry about early assignments, especially if they lack the capital to cover the shares. However, early assignments can actually be beneficial for option sellers. Here’s why:
+
+	•	To Start, You Sell a Call Option: Suppose you sell a $200 call option for $5 when Apple is trading at $200.
+	•	The price of Apple changes. And it is now trading at $210 and there are still 10 days to expiration: The option contract is now trading for $11 ($10 intrinsic, $1 extrinsic representing the 10 days to expiration remaining).
+	◦	You should be at a loss of 6 dollars right now on the position
+	•	Early Assignment: If the buyer exercises early, you must provide the shares. This means you would lose $5 on the position, but keep the extra $1 in extrinsic value that remained.
+
+Since someone exercised the option early, you actually saved a dollar per contract!
+
+
+
+But Sean, what if I don’t have the shares available?
+
+If you don’t have the shares, you become short 100 shares. You can immediately buy back the shares in the market, effectively neutralizing your position and keeping the premium as profit. You will have the capacity to do this because of the margin you posted when you originally sold the option (this covers this risk).
+
+See? It’s really not as scary as you might be led to believe. In reality, it’s actually a marginally good thing.
+
+Two last things that I will mention are that you shouldn’t be counting on early assignments to be the driver of your profits as a trader. Most of the time early assignment happens extremely close to expiration, so the amount of extrinsic value that is remaining will be marginal.
+
+The second thing that I need to mention is that it’s important to close out the shares as soon as possible if you do get assigned. The reason is because you will be converted from having an option position to a delta position. This means that you will make or lose money depending on which direction the stock moves now, which is not what you signed up for as an option seller. So you need to set up assignment alerts in your brokerage so you are not in for a surprise if you do get assigned early but are not made aware of it.
+
+Conclusion
+
+Exercising and assignment are fundamental concepts in options trading. Understanding these processes helps traders make informed decisions and manage their risks effectively. Remember, while exercising an option converts it into shares, assignment obligates the seller to provide the shares if the buyer exercises. Contrary to popular belief, early assignment can be advantageous for option sellers, as it allows them to keep the entire premium received.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

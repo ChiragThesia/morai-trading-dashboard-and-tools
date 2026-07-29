@@ -1,0 +1,215 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	How The Strategy Works
+	•	Why do we need to trade the longer dated options?
+	•	How do we usually monetize these vega opportunities?
+	•	How Long Do We Hold These Trades For?
+	•	Practical Application and Examples
+	•	Leveraging the Terminal for Vega Opportunities
+	•	Conclusion
+How To Trade Changes In Implied Volatility and Profit Off Vega: Option Volatility Trading
+
+Sean Ryan·September 26, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	How The Strategy Works
+	•	Why do we need to trade the longer dated options?
+	•	How do we usually monetize these vega opportunities?
+	•	How Long Do We Hold These Trades For?
+	•	Practical Application and Examples
+	•	Leveraging the Terminal for Vega Opportunities
+	•	Conclusion
+Most of the time when we are selling options we are trading the difference between implied and realized volatility. This is the most common way for us to extract the variance risk premium. But there are some unique situations where the real opportunity is not found in trading this dynamic, but actually trading the change in the level of implied volatility itself.
+
+When implied volatility explodes, selling longer dated options can be the most lucrative way to trade. By selling longer dated options in these unique scenarios, we are able to make money from a decrease in the level of implied volatility that comes with everyone “calming down” as they absorb the new information that has entered the market.
+
+In this article I am going to walk you through how to monetize changes in the level of implied volatility and share some examples of how this can lead to outsized returns compared to regular short volatility trades.
+
+Key Takeaways
+
+	1	Selling Longer Dated Options Is Awesome: When implied volatility explodes, rather than taking on the gamma risk of selling short dated options, you can trade longer dated options and make money if the implied volatility calms downs.
+	2	Vega Trades Are Optimal In Unique Situations: Short squeezes, Meme stocks, IPOs, and when major news is released can create massive market uncertainty and cause longer dated options to severely inflate in price. These are the situations where we want to be running these vega strategies.
+	3	Effective Risk Management: Normally with these trades risk management means two things. The first is not using all your margin right away, because if implied volatility increases the trade can actually become even better. You will also want to have a stop loss at a certain point if the trade is clearly going against you.
+
+Note: Before we jump in I want to note that you need to understand what vega is in order to find and execute these types of trades properly. If you aren’t totally familiar, click here to read our article about vega.
+
+How The Strategy Works
+
+Imagine a situation where a major piece of news comes out for a ticker.
+
+Let’s say that this news caused the stock to move like crazy. On the day the news came out, the stock increased in value by 40%. Since then, it’s moved between 3-4% a day.
+
+When we look at the term structure, we see that for every expiration, there has been a massive change in implied volatility. The market is clearly pricing in that this stock is going to continue to move.
+
+We might see something like we do in the image below.
+
+
+
+To some degree a term structure like this makes sense. Some major news came out, realized volatility is high right now, there’s a good chance that the stock keeps moving.
+
+But does it really make sense that the stock is going to continue moving at elevated levels for the next 6-12 months?
+
+I mean.. Maybe? But if the news is out, and priced in, why should it continue to move so unpredictably?
+
+It’s at this point that we can start to look for a vega trade. We don’t want to trade the short dated options because we know the stock is probably going to keep moving in the short term. But over time as things find their place and settle down, these longer dated options should experience some very fast decay as the implied volatility moves back down to more “normal” levels.
+
+That in a nutshell is how these vega strategies work.
+
+We look for times when the entire option chain becomes elevated for a ticker. This happens in short squeezes, around IPOs and when major news comes out. There are other situations where it happens but these are a few of the obvious ones.
+
+Why do we need to trade the longer dated options?
+
+Long-dated options are highly sensitive to changes in implied volatility.
+
+For instance, a two-year option with high vega can experience substantial price movements even if the underlying stock remains relatively stable. This makes them ideal for traders looking to capitalize on volatility mispricings.
+
+On the other hand, if you are trading a longer dated option and there is a big move but the implied volatility remains unchanged, you may not see a significant change in the price of the options you have traded. This makes them ideal for situations where you expect short term realized volatility to remain high.
+
+
+
+As you can see in the drawing above, as DTE increases, your position’s exposure to day to day movements in the underlying (gamma/theta) decreases, and your sensitivity to changes in implied volatility increases.
+
+
+
+How do we usually monetize these vega opportunities?
+
+The most common way that I have traded these situations I described above is by selling a wide strangle on a further dated expiration. I am usually looking at expirations between 90-180 DTE.
+
+
+
+Even though we know that vega is highest at the money, I will typically opt to sell a wide strangle because I want to really minimize the impact of realized volatility on my position. Having the wider strikes acts as another layer of defense as I try to isolate the level of implied volatility.
+
+How Long Do We Hold These Trades For?
+
+Just because we are trading a longer dated expiration, doesn’t mean that we are holding this trade for the entire duration.
+
+Remember, the trade is based on a change in the level of implied volatility. It’s not a 90 DTE trade on the implied vs realized volatility over 90 DTE.
+
+We close the trade out when implied volatility comes down.
+
+In my experience this is usually over the course of 1-3 weeks. So we actually only hold this trade for 10-20% of the time to expiration.
+
+
+
+These vega strategies create some very interesting opportunities for selling options. When there is a stock that has had massive moves recently you can potentially sell longer dated volatility as a way to avoid impact from the short term moves and still profit from the change in implied volatility as things calm down. Let’s look at an example:
+
+Example: GME Long-Dated Options
+
+Consider GameStop (GME) during its volatility spikes. In January 2021, the 90-day options had an implied volatility of 322%, which dropped to 179% by February. This shift represents a massive vega play.
+
+And if we examine the even longer-dated options (e.g., two-year options), you would notice a significant drop in implied volatility, from 153% to 113%. Such a move can yield substantial profits. For instance, a one-lot straddle initially priced at $560 dropped to $340, resulting in significant gains due to the vega collapse.
+
+Practical Application and Examples
+
+Example 1: GME Vega Trade
+
+	•	Initial Setup:
+	◦	Implied Volatility (IV): 153%
+	◦	Option Price: $560
+	•	After IV Drop:
+	◦	Implied Volatility (IV): 113%
+	◦	Option Price: $340
+	•	Profit: $220 per lot
+
+
+
+This example highlights the potential for substantial gains by trading vega in high-volatility environments.
+
+Example 2: Tesla Long-Dated Options
+
+Tesla’s implied volatility in 2020 presented another vega opportunity. Let’s explore a hypothetical scenario:
+
+	•	Initial Setup:
+	◦	Implied Volatility (IV): 75%
+	◦	Option Price: $858
+	•	After IV Drop:
+	◦	Implied Volatility (IV): 57%
+	◦	Option Price: Significantly lower (I can’t remember the exact return we made, but it was high 🙂 )
+
+
+
+Tesla’s long-dated options provided a lucrative opportunity for vega traders as implied volatility normalized.
+
+Leveraging the Terminal for Vega Opportunities
+
+I built a scan inside the Predicting Alpha Terminal specifically for these types of trading opportunities. I called it my “distressed volatility” scanner.
+
+The way it works is by looking for stocks where across the entire term structure there is an IV rank greater than 80. This indicates to me that the entire option chain is elevated, which usually means something is going on.
+
+I have found a lot of really good opportunities with this scan. Not every day, but frequently enough that I am always keeping an eye on it.
+
+Conclusion
+
+In a previous blog I shared a quote from one of our mentors about how most of the time we play tight to the vest, but once in a while we need to leverage up when we find a big opportunity. Searching for these vega trades can lead to these “big opportunity” types of trades. Some of the best trades in my career were betting on changes in the level of implied volatility. Now that you know about them, hopefully you can go on to find some absolute whales of trades too.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

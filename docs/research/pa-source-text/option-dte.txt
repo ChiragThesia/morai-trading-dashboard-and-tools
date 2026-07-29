@@ -1,0 +1,133 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways:
+	•	Understanding Days to Expiration (DTE)
+	•	Choosing the Right Expiration Date
+	•	Near-Dated Options for Realized Volatility Exposure:
+	•	Longer-Dated Options for Implied Volatility Exposure:
+	•	Ideas Such As The Distressed Volatility Strategy Are Why It’s Important To Be Surrounded By Good Traders
+	•	A little secret
+Mastering Days to Expiration (Option DTE) in Options Trading
+
+Sean Ryan·September 26, 2024
+
+On this page
+On this page
+	•	Key Takeaways:
+	•	Understanding Days to Expiration (DTE)
+	•	Choosing the Right Expiration Date
+	•	Near-Dated Options for Realized Volatility Exposure:
+	•	Longer-Dated Options for Implied Volatility Exposure:
+	•	Ideas Such As The Distressed Volatility Strategy Are Why It’s Important To Be Surrounded By Good Traders
+	•	A little secret
+This blog is going to teach you how to pick the right expiration to trade for your option selling trades.
+
+The choice you make for which Days to Expiration (DTE) you trade is a pivotal part of how you express your view on the market, so you need to understand how it impacts your position. This article will cover everything you need to know to start making better decisions.
+
+Note: In order to get the most value out of this blog post, you need to understand option greeks. If you want a refresher then click here to read our article that explains how the Greeks work.
+
+Key Takeaways:
+
+	1	Near dated expirations are sensitive to theta and gamma: Near dated options (typically less than 30 DTE) give you a lot of exposure to the difference between implied and realized volatility. Regardless of changes in sentiment, if realized volatility is less than implied you should be making money as an option seller..
+	2	Far dated expirations are sensitive to vega: Farther dated options (typically greater than 60 DTE) give you a lot of exposure to changes in implied volatility. Regardless of how much the stock moves on any given day, what really drivers your returns is if implied volatility increases or decreases.
+
+Understanding Days to Expiration (DTE)
+
+Before we dive into how to pick the DTE that is best suited for the type of strategy you are running, let’s define it. DTE is the number of days from now until the option contract expires. For example, when you hear that an option has 30 DTE, it means that the option will expire in 30 days. I wrote an article that goes in depth about how DTEs work, which you can read here.
+
+Choosing the Right Expiration Date
+
+There is no one-size-fits-all answer when it comes to selecting the expiration date for your options. All of the different expirations can be visualized to form what is called the term structure, which will help us pick. The choice depends on your market outlook and the specific circumstances surrounding the trade. However, some general guidelines can help you make better decisions:
+
+Near-Dated Options for Realized Volatility Exposure:
+
+For trades focusing on the IV versus RV spread, near-dated options (typically no more than 30 days to expiration) are preferred. This is the most common DTE range that is used when we are running strategies focused on the variance risk premium. The reason we do this is because research shows us that the greatest concentration of variance risk premium is in shorter dated options and slightly out of the money. And this makes sense when you start to think about options through the lens of risk exposures. The reason it makes sense is because when you have a shorter DTE, you are more sensitive to big moves. And big moves are exactly what options are designed to insure against. There is a saying that “Vega wounds, but gamma kills”, and this saying (while not something that we endorse) really speaks to the reason that the risk premium is most present in shorter dated contracts. It’s where the risk is, and therefore it’s where the risk premium is too.
+
+Longer-Dated Options for Implied Volatility Exposure:
+
+For trades focusing on changes in the IV, longer dated options (typically more than 60 DTE) are preferred. These contracts are really only traded in a couple of scenarios (well, at least in the world of Predicting Alpha) The first scenario where we are trading longer dated contracts is if we want to buy a hedge for our ETF Premium strategy. The way that we will typically hedge for this strategy is by buying a 90 DTE delta 20 strangle to act as protection over the weekly short strangles that we are rolling to collect the variance risk premium. We find that going out in time not only saves us transaction costs because a single hedge can protect us for multiple positions, but we also find that on average the risk premium we are paying by going further out in time is less than the risk premium we are collecting by selling the shorter dated expirations.
+
+The second situation in which we would be trading these longer dated contracts is when we actually have a view on the level of implied volatility. This is part of a strategy I call my Distressed Volatility strategy. While this is not something that is really taught in Predicting Alpha (it’s not systematic), it is something that a lot of our members do (including myself). The idea here is that when there are catastrophic level events that happen to individual stocks, or extremely bullish events like a short squeeze or an IPO, the term structure becomes extremely unrealistic and the implied volatility of longer dated contracts will become extremely inflated for a short period of time.
+
+The reason this happens is because the stock is starting to move a lot and everyone thinks that we should see similar levels of movement for the foreseeable future. However when it comes to option contracts, people will be bidding up the 90, even 180 contracts to the point where they are implying the insane levels of movement we are seeing in the short term to continue for a very long time. When you look at this rationally, you know that it’s overpriced and it doesn’t take long to come to the conclusion that we should be getting a piece of the action. The way that we structure a trade in these scenarios involves selling the longer dated options because we want to maximize our exposure to vega. The reason we want as much vega exposure as possible relative to theta/gamma, is because we actually agree that the stock will keep moving in the short term. We just think that as the market eventually calms down a bit, they will realize that the madness will not last forever and the longer dated volatility will also calm down. This is an example of the other type of scenario, the strategy we run, which involves trading longer dated contracts over these short dated contracts.
+
+Ideas Such As The Distressed Volatility Strategy Are Why It’s Important To Be Surrounded By Good Traders
+
+The distressed volatility strategy is not something that I invented on my own. It actually was first brought to my attention during the meme stock craziness that happened back in the day by some of our members. Together, we came up with this approach to monetizing the inflated option premiums in a way that reduced our exposure to the short term insanity while still allowing us to get in on the action while it was hot.
+
+A little secret
+
+You know.. (shameless plug incoming).. We are actually still looking for some traders to join our little community. To start running some strategies with us. It’s only for 1,000 traders (and then we close the doors) but we haven’t hit the cap yet. Interested? Click here to check out this super cool landing page I put together for you. But be warned, this is for serious option sellers only.
+
+That’s not even me being mean, it’s just true. If you aren’t ready to give up a lot of the excitement that comes with yoloing and hunting for wild ways to make money, you just won’t enjoy what we are doing. Putting it simply, we are focused on boring things that actually make money.
+
+Anyways hopefully this blog really helped you understand how to think about DTEs when you are structuring your trade. It’s important. Don’t neglect it. Happy trading!
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

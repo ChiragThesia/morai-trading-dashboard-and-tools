@@ -1,0 +1,172 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	The Contract: Option Chain
+	•	The Two Parties: Bid and Ask
+	•	The Right to Buy or Sell: Puts and Calls
+	•	The Given Price: Strike Price
+	•	The Time Frame: Expiration Date
+	•	The Premium: Option Price
+	•	Bringing It All Together
+	•	Conclusion
+How to Read an Option Chain: Identifying Option Information When Placing A Trade
+
+Sean Ryan·September 22, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	The Contract: Option Chain
+	•	The Two Parties: Bid and Ask
+	•	The Right to Buy or Sell: Puts and Calls
+	•	The Given Price: Strike Price
+	•	The Time Frame: Expiration Date
+	•	The Premium: Option Price
+	•	Bringing It All Together
+	•	Conclusion
+I recently wrote a blog which broke down options into the Six Key Characteristics that define them. To sum it up, we defined an option as a contract between two people that gives the purchaser the right to buy or sell a stock at a given price within a specified timeframe, and the purchaser pays a premium for that right.
+
+This definition is really pretty. But we need to translate our conceptual understanding into what you actually see in the options market if you want to actually place some trades. So that is what we are going to do in this blog.
+
+I am going to show you exactly where each of the characteristics of an option can be seen on the option chain in your brokerage and how they all come together to create the navigation you use to structure your trades.
+
+Key Takeaways
+
+	1	Option Chain Representation:
+	◦	The option chain in your brokerage account lists all available contracts, showcasing the market structure for options trading. It splits into calls and puts, displaying various strike prices and expiration dates for each contract.
+	2	Bid and Ask Prices:
+	◦	The bid price is what buyers are willing to pay, and the ask price is what sellers are asking for. The difference between these two prices helps establish the market price for the contract, reflecting supply and demand dynamics.
+	3	Contract Elements:
+	◦	Options include the right to buy or sell (calls and puts), a specific price (strike price), a timeframe (expiration date), and a premium (option price). Understanding these elements is crucial for analyzing and executing trades effectively.
+
+The Contract: Option Chain
+
+When you want to see the contracts that are available to be traded, you need to open up the option chain for the ticker you are interested in. When you go into your brokerage account, you’ll see the option chain displayed as a list, split into calls and puts. This list includes all the different contracts you can engage in as a trader. You’ll see the rest of these features fill out onto this display as we go, but it’s crucial to understand that all contracts are listed here. When you want to buy or sell a contract, you come to this option chain and select the one you want.
+
+
+
+The Two Parties: Bid and Ask
+
+The presence of two people in an option contract is depicted by the bid and ask prices. The bid price is what someone is willing to pay to buy the contract, and the ask price is what someone is willing to sell it for. There is usually a difference between these two prices due to supply and demand, with the bid price being slightly lower than the ask price. If you wanted to immediately buy or sell a contract you can do so at the bid and ask prices. Or if you have a specific price you want to trade at in between the two, you can set your own price and see if someone is willing to trade with you there. You can learn more about this in our blog post about trade execution.
+
+
+
+The Right to Buy or Sell: Puts and Calls
+
+The right to buy or sell a stock in the options market is represented by puts and calls. A put option gives you the right to sell a stock, while a call option gives you the right to buy a stock. The option chain is split into two sides. One for calls and one for puts. Usually the left side represents the call options and the right side is for the puts (every broker I have used follows this pattern, but maybe yours is slightly different if it’s not IBKR or Thinkorswim.
+
+
+
+The Given Price: Strike Price
+
+The given price at which you can buy or sell the stock, as mentioned in the previous blog, is known as the strike price in the options market. In the option chain, you’ll see various strike prices listed, such as $95, $100, $105, etc. Each contract in the option chain is associated with a specific strike price. If you buy a put option with a strike price of $100, you have the right to sell the underlying stock at $100.
+
+The strike prices are usually listed in the middle of the option chain, in between the call side and the put side. The reason they do this is because at each strike price there are both call and put contracts listed. By placing the strike prices here you can look across the row for each strike price to see information about the calls and puts that are trading for it. When you are ready to learn more about some of the characteristics of different strike prices, you can read our articles about option skew.
+
+
+
+The Time Frame: Expiration Date
+
+Options have a specific timeframe or expiration date. The expiration date is when the option contract expires and is no longer valid. The option chain displays multiple expiration dates, each with its own set of contracts. For example, you might have a July 15th expiration date, and another for September 16th. Note that option contracts are only looking into the future, so you will not see expirations for dates that have passed. When it comes to finding the trade you want to place, you will need to filter the option chain by these expiration dates to see the relevant contracts available for trading.
+
+Something you might notice when looking at the expirations is that there appears to be a pattern for the monthly expirations about which date they appear on. If you noticed this then congratulations, you are very sharp! There is a pattern. The monthly expirations typically take place on the third Friday of each month.
+
+All of these expirations come together to form a part of the option chain called the term structure.
+
+
+
+The Premium: Option Price
+
+The premium, or the price you pay for the option, is simply referred to as the price of the contract in the option chain. Each contract has a price, which varies based on several factors we will discuss in future posts. For now, understand that the premium is what you pay to buy the contract. For example, an option might be priced at $10, $12, or $12, and this price is listed alongside the other characteristics in the option chain.
+
+The price you pay for an option, or sell an option for fluctuates over time. The range in which you can currently attempt to trade a contract for right now is defined by the bid and ask prices, which we discussed earlier in the article.
+
+
+
+Bringing It All Together
+
+To summarize, here’s how the six characteristics of options translate into what you see in the options market:
+
+	1	Contracts: Represented by the option chain.
+	2	Two People: Depicted by the bid and ask prices.
+	3	Right to Buy or Sell: Defined by puts and calls.
+	4	Given Price: Shown as the strike price.
+	5	Timeframe: Indicated by the expiration date.
+	6	Premium: Listed as the option price.
+
+
+
+When you go into your brokerage account and look at the option chain, you’ll see all these elements. This comprehensive understanding will give you the confidence to navigate the options market and place trades with a clear mental picture of what you are dealing with.
+
+Conclusion
+
+If you remember from the article before this one about the six characteristics of options, we are really able to explain what an option is in simple terms that anyone (even non-traders) can understand. But in order to put these things into practice we need to actually be able to see how these characteristics present themselves to us in the option chain. Always remember, we need to thoroughly understand the product we trade if we want to be able to generate returns.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

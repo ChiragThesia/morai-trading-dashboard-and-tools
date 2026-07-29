@@ -145,7 +145,7 @@ describe("buildTosPairOrder — a TOS order line for two legs picked off the cha
   });
 
   it("takes the debit in index points as given — never a /100 dollar conversion", () => {
-    // chain-math's calendarDebit already returns index points, unlike PickerCandidate.debit
+    // pairMetrics' debit already returns index points, unlike PickerCandidate.debit
     // (dollars). Dividing again would understate a $4875 calendar as @0.49.
     expect(buildTosPairOrder({ ...PAIR, debit: 4.5 })).toContain("@4.50 ");
   });

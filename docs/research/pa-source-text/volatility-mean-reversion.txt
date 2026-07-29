@@ -1,0 +1,159 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Volatility: An Overview
+	•	Characteristic 1: Mean Reversion
+	•	Characteristic 2: Clustering
+	•	Practical Example: Temperature Analogy
+	•	Volatility Regimes
+	•	Volatility Smiles and Skews
+	•	Conclusion
+Volatility Mean Reversion and Clustering: Option Selling Characteristics
+
+Sean Ryan·September 23, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Volatility: An Overview
+	•	Characteristic 1: Mean Reversion
+	•	Characteristic 2: Clustering
+	•	Practical Example: Temperature Analogy
+	•	Volatility Regimes
+	•	Volatility Smiles and Skews
+	•	Conclusion
+Everybody seems to think that volatility is some unpredictable wild horse that bucks and kicks and does whatever it wants. But this is actually untrue. Volatility is something we can measure. It’s something with very distinct characteristics that repeat themselves over time. And after you read this article, you will see exactly what I am talking about for yourself and be able to use this knowledge to have a better understanding of the market and (maybe) make some money. Today, we’ll dive into two key characteristics of volatility: mean reversion and clustering.
+
+Key Takeaways
+
+	•	Mean Reversion:
+	◦	Volatility tends to oscillate around a long-term average. If it spikes above the average, it is likely to decrease, and if it drops below the average, it is expected to rise. This characteristic suggests that buying options when volatility is low and selling when it is high could be profitable, as volatility is likely to revert to its mean over time.
+	•	Clustering:
+	◦	Volatility exhibits a tendency to remain similar over short periods. If a stock shows high volatility today, it is likely to continue showing high volatility tomorrow, and vice versa for low volatility. This gradual change in volatility allows traders to anticipate short-term movements and make informed decisions based on the current volatility trend.
+
+Volatility: An Overview
+
+Before we get into the specifics, let’s recap what volatility is. Volatility refers to the extent of variation in the price of a financial instrument over time. In simpler terms, it measures how much the price of an asset fluctuates. High volatility means large price swings, while low volatility indicates smaller movements. Volatility is a critical component in the options market, as it directly influences the pricing of options. I wrote like 10 articles about this, here’s one.
+
+Volatility is actually something we can measure and understand. It’s something with characteristics that we can easily observe and predict. Let’s talk about the first one.
+
+Characteristic 1: Mean Reversion
+
+The first characteristic of volatility we need to understand is mean reversion. This concept is rooted in the idea that volatility tends to oscillate around a long-term average, or mean.
+
+What is Mean Reversion?
+
+Mean reversion suggests that if volatility deviates significantly from its average, it is likely to return to that average over time. For instance, if the long-term average volatility of a stock is 20%, and current volatility spikes to 30%, we can expect it to eventually decrease back toward 20%. Conversely, if volatility drops to 10%, it is likely to rise back to 20%.
+
+
+
+Implications for Trading
+
+Mean reversion implies that buying options when volatility is low (below the mean) and selling them when volatility is high (above the mean) could be a profitable strategy. Obviously it’s not really as simple as this but as a general principle it does in fact work.
+
+Part of the reason why it is not so simple is the second characteristic of volatility, clustering.
+
+Characteristic 2: Clustering
+
+The second characteristic of volatility is clustering. This concept refers to the tendency of volatility to be similar over short periods.
+
+What is Clustering?
+
+Clustering means that if a stock shows high volatility today, it is likely to exhibit high volatility tomorrow as well. Conversely, if volatility is low today, it will probably remain low in the near future.
+
+
+
+Implications for Trading
+
+Understanding clustering can help traders forecast short-term movements. If Apple moved up 5% today, it is likely to experience a similar magnitude of movement tomorrow, whether up or down. In another example, if a meme stock moves up 20% today, we can expect it to move around this number tomorrow, maybe 18% or 23%.
+
+Clustering indicates that volatility trends persist over short periods, allowing traders to anticipate potential price swings.
+
+Practical Example: Temperature Analogy
+
+Think of volatility like the weather. If today is a hot summer day at 80 degrees, tomorrow is likely to be around the same temperature. We don’t usually see a drastic change from summer to winter overnight. Similarly, volatility doesn’t shift dramatically from high to low in a single day; if it was low today, it’s likely to be low tomorrow.
+
+
+
+Volatility Regimes
+
+Volatility can also exist in different regimes or states, where it behaves differently under various market conditions. You can think of this like a macro level clustering effect. For instance, during periods of market stress or economic uncertainty, volatility can spike dramatically and stay elevated for extended periods. Recognizing these regimes and adjusting your expectations around what implied and realized volatility should look like is important.
+
+Volatility Smiles and Skews
+
+Another advanced concept is the volatility smile or skew, which refers to the pattern that implied volatility forms across different strike prices. This pattern can provide insights into market expectations and potential mispricings. Understanding these patterns can offer additional opportunities for sophisticated traders to profit from volatility.
+
+Conclusion
+
+As you progress in your journey as an option seller (or volatility trader if you want to use the more “professional term”) you will observe these characteristics in real time, all the time. It’s not a secret, it’s just the way volatility behaves. It’s pretty cool when you start to see it out in the real world, because it helps you grow in confidence that you are learning meaningful things.
+
+If you want to learn about another characteristic of volatility you can click here to read my article on Autocorrelation. Always remember that the more you understand about the behaviour of volatility, the more you will understand how options are priced (and how they change in price). We trade volatility. That’s how option sellers make money. Understanding how it works is step one to running a profitable book.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

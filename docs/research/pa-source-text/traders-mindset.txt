@@ -1,0 +1,190 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	The Trader’s Rat Race: Why Focusing Solely on Psychology Is a Trap
+	•	The Importance of Strategy Over Psychology
+	•	Professional Psychology: When and How It Matters
+	•	Here’s a basketball analogy to help make things clear.
+	•	The Psychology of the Market: Understanding Bias
+	•	Self-Attribution Bias: The Trap of Overconfidence
+	•	Hindsight Bias: The Illusion of Predictability
+	•	Loss Aversion: The Bias That Bankrupts Traders
+	•	Conclusion: Strategy First, Then Psychology
+The Truth About Trading Psychology: The Real Reason You're Not Profitable
+
+Sean Ryan·August 25, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	The Trader’s Rat Race: Why Focusing Solely on Psychology Is a Trap
+	•	The Importance of Strategy Over Psychology
+	•	Professional Psychology: When and How It Matters
+	•	Here’s a basketball analogy to help make things clear.
+	•	The Psychology of the Market: Understanding Bias
+	•	Self-Attribution Bias: The Trap of Overconfidence
+	•	Hindsight Bias: The Illusion of Predictability
+	•	Loss Aversion: The Bias That Bankrupts Traders
+	•	Conclusion: Strategy First, Then Psychology
+Trader psychology is often touted as the main reason why many traders fail to beat the market. From day one, traders hear that their lack of success is due to being too greedy, not managing risk properly, or simply not having the right mindset.
+
+Every “guru” out there points to trader psychology as the culprit behind every bad trade. But how much does trader psychology actually impact your bottom line?
+
+This article is going to make some of you frustrated. But I promise that I come from a place of love as I go over this topic.
+
+The reality is that most trading psychology is nonsense. The reason most people are losing money is because they have a poor strategy. You can’t “risk manage” your way to success at a roulette table. You can’t “control” your way to winning in a -EV trading strategy.
+
+This article is going to break it down, explain the real role of psychology in trading, and hopefully put you on (or keep you on) the path to finding an edge.
+
+Key Takeaways
+
+	1	Strategy Over Psychology:
+	◦	Trading success hinges more on having a strategy with positive expected value than on perfecting trader psychology alone.
+	◦	Even with disciplined psychology, a flawed strategy won’t make money. Strategy must always come first. If you are losing money, question your strategy before your psychology.
+	2	Understanding Market Biases:
+	◦	Recognize common biases like self-attribution, hindsight bias, and loss aversion that affect trading decisions.
+	◦	Mitigate these biases through systematic trading approaches and data-driven decision-making.
+	◦	Recognize these biases in others and how it can create trading opportunities for you.
+
+The Trader’s Rat Race: Why Focusing Solely on Psychology Is a Trap
+
+
+
+It’s easy to understand why traders fixate on improving their psychology. When you’re taught to trade based on subjective patterns and interpretations, it feels natural to blame yourself when things go wrong.
+
+This creates what I call the “Traders rat race.” You constantly work on yourself, always feeling like you’re just about to turn the corner to success. Mentors preach, “Master yourself, and you’ll master the markets.” But what if the strategy you’re using has no edge?
+
+If you have been “working on your psychology” for any meaningful amount of time, you are probably subconsciously aware that it’s not giving you an edge. You might see some improvements such as not doing really dumb stuff like yoloing your life savings, but putting really dumb things aside, it’s probably done nothing for your trade execution, expected returns, and actual dollars in your bank account.
+
+The truth is, no amount of psychological fine-tuning can turn a losing strategy into a winning one. If the strategy itself lacks a positive expected value, you will remain stuck in this rat maze, endlessly chasing the illusion of success without ever truly achieving it.
+
+It’s a harsh reality. It sucks. But it’s reality nonetheless. We have to embrace it and start focusing on what actually moves the needle.
+
+The Importance of Strategy Over Psychology
+
+Let’s take a step back and think in terms of expected value. In trading, like any game of chance, expected value is crucial.
+
+If you’re playing a game with a negative expected value, no amount of psychological mastery will make you profitable.
+
+Consider this analogy: Who will win in the long run—a drunk dealer at a blackjack table or a sober guru monk?
+
+
+
+The dealer wins because the game has a positive expected value for the house. As long as he can stand up and deal the cards, he will come out ahead in the long run. Similarly, in trading, if your strategy doesn’t have a positive expected value, your psychology won’t save you.
+
+Understanding the concept of expected value is fundamental to becoming a successful trader. If the overall expected value of your trades is positive, you have a strategy that can lead to long-term profitability. And at this point it’s worth focusing on psychology. Without this, even the best psychological mindset won’t help you win consistently.
+
+Professional Psychology: When and How It Matters
+
+Psychology does play a role, but only when you have the skills to win.
+
+Here’s a basketball analogy to help make things clear.
+
+Think of a professional basketball player in their third year of the NBA. A world-class sports psychologist could help them become one of the best.
+
+But if you gave that same psychologist to your buddy Joe from down the block, would Joe make it to the NBA? Unlikely, especially if Joe can’t even do a layup. Psychology’s value shines when you already have the skill. But it doesn’t replace the skill.
+
+In trading, this means that once you have a solid, statistically sound strategy, psychology can help you execute that strategy more effectively.
+
+It can help you stick to your trading plan, manage your risk, and avoid common emotional pitfalls like fear and greed. However, without a good strategy, all the psychological coaching in the world won’t make you a profitable trader. Here’s an article that teaches you how professionals think about strategy.
+
+The Psychology of the Market: Understanding Bias
+
+To truly leverage psychology in trading, focus on the psychology of others in the market. The market is made up of people, and people have biases. If you can understand how they think, you can understand how they act. Remember, there is someone on the other side of our trades, and the more we can understand how they are behaving, the better decisions we can make about when to engage with them. Here are three major biases that every trader must understand:
+
+	1	Self-Attribution Bias
+	2	Hindsight Bias
+	3	Loss Aversion
+
+Self-Attribution Bias: The Trap of Overconfidence
+
+Self-attribution bias is the tendency to attribute successes to our own actions and failures to external factors. This is rampant in the technical analysis community. For example, if we see a breakout and make a profitable trade, we credit our skill. But if the trade fails, we blame market manipulation or bad luck. This bias prevents us from learning from mistakes and recognizing when luck was a factor.
+
+Not every profitable trade is a good trade, and not every good trade is profitable.
+
+Self-attribution bias can lead to overconfidence, which is dangerous in trading. Overconfident traders are more likely to take excessive risks, believing that their skills are superior to what they actually are. This usually leads to a blow up.
+
+Hindsight Bias: The Illusion of Predictability
+
+Hindsight bias makes us believe that past events were predictable and, therefore, that we can predict future events with similar accuracy. Looking back, it’s easy to see how events led to the current market situation. However, predicting the future is not as straightforward because there are countless possible outcomes. The saying “history doesn’t repeat itself, but it often rhymes” holds true. We can learn from the past, but we can’t rely on it to predict the future precisely.
+
+Loss Aversion: The Bias That Bankrupts Traders
+
+Loss aversion is the tendency to hold onto losing positions longer than we should, hoping they will rebound. This bias is a major cause of trader bankruptcy. For instance, you buy a stock at $10, expecting it to rise to $13. If it drops to $7, instead of cutting your losses, you might buy more, thinking you’re getting a bargain. Eventually, the stock could drop to $1, and you’re left holding the bag. There’s a good chance we have all experienced this before (I know I have, multiple times).
+
+Loss aversion can be particularly damaging because it prevents traders from accepting small losses and moving on. Instead, they hold onto losing positions, allowing the losses to grow. Obviously one of the big concerns with this is that you lose money on the trade. But the damage is greater than we think. The reason? By choosing to stay in this position, you are forgoing being in another position that may have been profitable.
+
+A tip for combating loss aversion is to ask yourself “If I did not have a trade on right now, would I enter into the position that I have?” If the answer is no, get out! Every single moment that passes, you are saying “I still think this is a good trade”. So if you no longer think this, get out of the trade.
+
+Conclusion: Strategy First, Then Psychology
+
+Just have a winning strategy before you start blaming yourself. Life is a lot better when you have a tangible thing to work on. It’s more fun, it’s more profitable, and it actually gets you somewhere.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

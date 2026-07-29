@@ -12,14 +12,16 @@
  * Everything this returns already existed as a number the engine computes; what did not exist is
  * the SHAPE. `rankCalendars` collapses to one row per expiry pair, because the pair is the
  * decision a trader makes. The Analyzer's chain table asks the opposite question and needs one
- * row per strike per cohort. That mismatch is the only reason `apps/web/src/lib/chain-math.ts`
- * still computes atmStrike, atmIv, per-leg greeks and vertical skew in the browser.
+ * row per strike per cohort. That mismatch was the only reason the browser held a second copy of
+ * atmStrike, atmIv, per-leg greeks and vertical skew; `useChainModel` reads this surface now and
+ * that copy is deleted.
  *
  * CARRY IS ONE VALUE FOR THE SNAPSHOT, and it must be the carry the stored `bsm_iv` was inverted
- * at — see `domain/cohort.ts` scar 4 for what a per-expiry carry cost the ranker. The browser
- * copy still resolves carry PER EXPIRY off the GEX snapshot's solved `implied_carry` array
- * (`apps/web/src/lib/resolve-carry.ts`), which is the defect this engine already fixed. It is the
- * largest visible change waiting at the switch, and it is deliberate.
+ * at — see `domain/cohort.ts` scar 4 for what a per-expiry carry cost the ranker. The browser copy
+ * resolved carry PER EXPIRY off the GEX snapshot's solved `implied_carry` array, which is the
+ * defect this engine fixed; it was the largest visible change the switch shipped, and it was
+ * deliberate. One reader of that array survives on purpose — the 25Δ risk reversal, which has no
+ * server twin (architecture-boundaries §7 forbids `calendar/domain → analytics/domain`).
  */
 
 import { ok, err } from "@morai/shared";

@@ -1,13 +1,14 @@
 /**
  * pair.test.ts — the ungated calendar arithmetic for two picked legs.
  *
- * These are the four formulas the browser still owns (`apps/web/src/lib/chain-math.ts`:
- * `hSkew`, `edge`, `netCalendarGreeks`, `calendarDebit`). The tests below pin the core side's
- * behaviour; the differential test at
- * `apps/server/src/adapters/chain-surface-differential.test.ts` pins that the two agree.
+ * These are the four formulas the Analyzer's Pair panel renders (`hSkew`, `edge`, the net greeks
+ * and the haircut debit). The browser used to own a second copy of them in
+ * `apps/web/src/lib/chain-math.ts`; that copy is gone and `useChainModel` calls this one, so
+ * these tests are now the only pin on those numbers.
  */
 
 import { describe, it, expect } from "vitest";
+import { assertDefined } from "@morai/shared";
 import { pairMetrics } from "./pair.ts";
 import type { PairLeg } from "./pair.ts";
 import type { CohortLeg } from "./types.ts";
@@ -101,6 +102,7 @@ describe("pairMetrics — net greeks", () => {
       { delta: -0.48, gamma: 0.0004, theta: -1.8, vega: 9.4 },
     );
     const net = pairMetrics(front, back).net;
+    assertDefined(net, "two priced legs must produce a net");
     expect(net.delta).toBeCloseTo(0.02, 12);
     expect(net.gamma).toBeCloseTo(-0.0002, 12);
     expect(net.theta).toBeCloseTo(1.1, 12);
@@ -115,7 +117,57 @@ describe("pairMetrics — net greeks", () => {
     // the same as the browser's unscaled ones (candidate-selection.ts:433-445), which put two
     // unit spaces on one screen. This engine's numbers are the browser's numbers.
     const { front, back } = pair({ vega: 5 }, { vega: 9 });
-    expect(pairMetrics(front, back).net.vega).toBe(4);
+    expect(pairMetrics(front, back).net?.vega).toBe(4);
+  });
+});
+
+describe("pairMetrics — a leg the chain quoted but never priced", () => {
+  /**
+   * The Pair surface hands over whatever the reader clicked, and a Front/Back button sits on
+   * EVERY strike row — including the ones whose IV never solved (24.4% of the live put wing on
+   * 2026-07-28). The greeks are null with the IV, because the chain surface prices a leg
+   * all-or-nothing. The BID AND ASK are not: a strike that never priced is still a strike with a
+   * market, so the debit remains a fact.
+   */
+  const GAP: PairLeg["leg"] = {
+    iv: null,
+    bid: 58,
+    ask: 60.5,
+    delta: null,
+    gamma: null,
+    theta: null,
+    vega: null,
+  };
+  const gapPair = (): { front: PairLeg; back: PairLeg } => ({
+    front: { t: FRONT_T, leg: GAP },
+    back: { t: BACK_T, leg: leg({ iv: 0.16 }) },
+  });
+
+  it("nulls hSkew instead of subtracting a missing IV as zero", () => {
+    // Arithmetic on a null reads it as 0, so an unpriced front once measured a −0.16 skew: every
+    // input finite, a clean plausible number, nothing to dash. That is the scar this guards.
+    const { front, back } = gapPair();
+    expect(pairMetrics(front, back).hSkew).toBeNull();
+  });
+
+  it("nulls the forward vol and the edge", () => {
+    const { front, back } = gapPair();
+    const m = pairMetrics(front, back);
+    expect(m.fwdIv).toBeNull();
+    expect(m.edge).toBeNull();
+  });
+
+  it("nulls the WHOLE net greeks object, never four separately-null greeks", () => {
+    // All-or-nothing, matching the per-leg rule one layer down: a half-priced net is worse than
+    // a blank one, and `net.delta` alone would read as a real hedge ratio.
+    const { front, back } = gapPair();
+    expect(pairMetrics(front, back).net).toBeNull();
+  });
+
+  it("still quotes the debit — a strike that never priced still has a market", () => {
+    const { front, back } = gapPair();
+    // buy the back at 60 + 0.66·2 = 61.32; sell the front at 60.5 − 0.66·2.5 = 58.85.
+    expect(pairMetrics(front, back).debit ?? 0).toBeCloseTo(61.32 - 58.85, 10);
   });
 });
 

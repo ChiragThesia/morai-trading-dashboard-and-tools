@@ -1,0 +1,162 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is a Back Spread?
+	•	Example of a Back Spread
+	•	Sensitivity to Skew
+	•	Picking the DTE For Your Back Spread
+	•	Risk Management
+	•	Leverage and Account Size
+	•	Managing the Trade
+	•	Conclusion
+Mastering Back Ratio Spreads: A Comprehensive Guide for Option Sellers
+
+Sean Ryan·September 25, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is a Back Spread?
+	•	Example of a Back Spread
+	•	Sensitivity to Skew
+	•	Picking the DTE For Your Back Spread
+	•	Risk Management
+	•	Leverage and Account Size
+	•	Managing the Trade
+	•	Conclusion
+Back spreads, also known as ratio spreads, are an option selling structure that is highly sensitive to skew and offers a great way for traders to monetize the variance risk premium in ETFs. This article will cover what back spreads are, when and why to use them, and how to manage the associated risks.
+
+Key Takeaways
+
+	1	How to Structure: Buy an at-the-money put, sell two out-the-money puts
+	2	Sensitivity to Skew: They are usually traded into steep put skew which makes them a common structure to use with ETFs.
+	3	Able to Collect A Credit: Selling two OTM options with higher implied volatility allows you to collect substantial premiums, which offsets the initial premium paid for the long put. This typically yields a small profit in a rally, a large profit if there is a small drop in price, and then a large loss if there is a big down move.
+	4	Risk Management: Proper leverage and trade size management are crucial to avoid excessive risk. This is a structure that is typically traded continuously (rolling into new positions) so you want to make sure you are sized appropriately to absorb any large moves against you.
+
+What is a Back Spread?
+
+A back spread is an options strategy that involves buying one at-the-money (ATM) option and selling multiple out-of-the-money (OTM) options of the same type (calls or puts). This strategy capitalizes on the difference in implied volatility between the ATM and OTM options, making it highly sensitive to skew.
+
+
+
+Example of a Back Spread
+
+Let’s say you believe the skew in the S&P 500 (SPY) is overpriced. Here’s how you can set up a back spread:
+
+	1	Buy an ATM Put: Purchase an at-the-money put for $5.
+	2	Sell Multiple OTM Puts: Sell two out-the-money puts for $3 each, collecting $6 in premiums.
+
+In this example, you are long one put, short two puts, and the net credit is $1 ($6 received – $5 paid).
+
+How Does It Work?
+
+	•	Make a Small Profit If SPY Rallies: Since you collected a credit for the position, you are able to keep the credit if the ticker rallies to the upside..
+	•	Make a Large Profit If Small Move Down: Since there is a gap between the put option you bought and the two puts that you sold, you are able to generate a larger return if there is a small move down. This can be a massive return relative to the premium collected and will vary based on the steepness of the skew.
+	•	Take a Large Loss If There Is A Big Move Down: The primary risk is if the stock moves sharply in the direction where you are naked (uncovered). In our example, if SPY drops significantly below the strikes you sold, you would face substantial losses.
+Sensitivity to Skew
+
+Back spreads are particularly effective in markets with high skew, where the implied volatility for OTM options is much higher than that for ATM options. This makes them an attractive structure to use on ETFs, where there is usually a very steep and consistent put skew. This difference allows you to collect higher premiums on the OTM options you sell, enhancing the strategy’s profitability.
+
+
+
+The time series below shows you how the 30 DTE skew for SPY changes over time
+
+
+
+As you can see, even at the lowest levels there is still a steep put skew (if the number is above 0, there is put skew). This shows how at basically all times there is put skew on the SPY.
+
+Picking the DTE For Your Back Spread
+
+We have found that the optimal timeframe for trading back spreads is 30-60 DTE. Especially when trading this structure on ETFs, this is the sweet spot for this structure. This is meant to be a pretty hands off approach, so by going a bit further out in time, the size of the premium becomes enough that your breakevens are wide and you are able to feel comfortable that in the majority of cases you will yield a positive return, while only taking a loss when downside volatility is significant (situations where you should expect to be losing anyways when selling volatility).
+
+Risk Management
+
+Leverage and Account Size
+
+Proper risk management is critical when trading back spreads. When determining how much leverage to use, a good rule of thumb is to position yourself such that your margin utilization is less than 50%
+
+Managing the Trade
+
+This is a pretty hands-off trade. There are basically two rules for management that I follow.
+
+The first is that I roll into a new position when it is 75% of the way to expiration. So if I am trading a 60 DTE back spread, I will roll into a new position after 45 days.
+
+The second is that if the implied volatility increases to above the 80th percentile, I will close out the trade because the variance becomes too high. Even though the variance risk premium is still present when implied volatility is at its highest, this is also the time when you will experience the most variance. By taking off the position during times like this, you reduce the likelihood of a massive drawdown. Given the leverage we have and the steepness of our PnL decline if we experience significant downside variance, this is a rule of thumb that I personally follow.
+
+Conclusion
+
+Back spreads are powerful tools for traders who understand skew and volatility. They offer the potential for significant profits, especially in markets with high skew. Here are the key takeaways:
+
+	1	Sensitivity to Skew: Back spreads are highly sensitive to skew, making them ideal for markets with significant volatility differences between ATM and OTM options.
+	2	Premium Collection: By selling OTM options with higher implied volatility, you can collect substantial premiums that generate a return for you even if the ticker rallies.
+	3	Risk Management: Proper leverage and account size management are crucial to avoid excessive risk.
+	4	Timing: Trade 30-60 DTE and take off the position when it is 75% of the way to expiration. Roll into a new position.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

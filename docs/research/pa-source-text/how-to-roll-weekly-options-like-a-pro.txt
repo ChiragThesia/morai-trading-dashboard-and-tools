@@ -1,0 +1,167 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	The Best Way to Close Your Current Short Strangle
+	•	When to Enter New Short Strangles
+	•	Do We Delta Hedge the Short Strangles?
+How to Roll Weekly Options Like a Pro
+
+Sean Ryan·November 22, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	The Best Way to Close Your Current Short Strangle
+	•	When to Enter New Short Strangles
+	•	Do We Delta Hedge the Short Strangles?
+In this article I am going to teach you how to effectively roll into new positions when selling weekly option contracts on ETF. This article is a supplement to our ETF Premium Strategy article which teaches a profitable way to monetize the variance risk premium in ETFs.
+
+Key Takeaways
+
+	1	End-of-Week Trade Management: Close your current short strangle and enter a new delta 20 short strangle expiring in 7 days before market close on Friday to maximize efficiency and premium decay.
+	2	Cost-Effective Closing Strategies: Manage positions based on where the underlying stock price is relative to the strikes—let expire worthless, close to avoid assignment, or trade shares to neutralize assignment risks. The goal is to minimize costs and unwanted exposures.
+	3	Delta Neutral Reset: Avoid active delta hedging by resetting the position weekly with new short strangles, treating the strategy as a continuous, month-long trade hedged through restriking.
+
+
+
+If we go back to our picture of the trade cycle that we run for each ETF (in the ETF Premium Strategy), there’s an important question that we haven’t addressed yet. This question is how do we manage our trades at the end of each week during the cycle? Do we close out the position? Let it expire? What do we do if the underlying stock price has moved past our strike?
+
+
+
+So let’s go over how to manage trades on Friday at market close.
+
+Every Friday there are two things that need to happen. By market close on Friday we must:
+
+	1	Be out of the strangle we sold last week.
+	2	Be in the short strangle we are going to hold for the coming week.
+
+The Best Way to Close Your Current Short Strangle
+
+Let’s start by talking about how to manage the current short strangle position that we have. Our goal is to get out of the trade so that we can roll into the next position. We want to do this for the lowest cost possible, because we know that a big part of our edge comes from effectively managing our commissions and slippage.
+
+There are three potential scenarios we can find ourselves in on expiration day:
+
+	1	The underlying stock price is safely between our strikes and our options will expire out-the-money.
+	2	The underlying stock price is very close to our strikes and our options could expire in the money or out the money
+	3	The underlying stock price has moved beyond our strikes and our options will expire in the money.
+
+
+
+In each of these scenarios, our goal has not changed. We still want to close the trade. But the most cost effective action is different. So let’s go through each of them individually now.
+
+Situation 1: The underlying stock is safely between our strikes and our options will expire out-the-money.
+
+
+
+In this case, what we want to do is take no action. If we do nothing, the options will expire worthless and nothing will happen. This means we will “exit” the position for zero commissions, and we do not need to cross the bid/ask spread either. This saves us a lot of money over time.
+
+Situation 2: The underlying stock price is very close to our strikes and our options could expire in the money or out the money
+
+
+
+In this case, what we want to do is close out the position. While there’s a chance that the options could expire worthless, there is also a chance that they will expire in the money, which means we will get assigned shares (long or short depending on which strike is breached). This means we will be carrying a lot of delta exposure over the weekend, which is an exposure that we do not want and can cause a significant impact to our returns. To avoid this, we simply accept the transaction costs + slippage and close out the trade.
+
+Situation 3: The underlying stock price has moved beyond our strikes and our options will expire in the money.
+
+
+
+In this case we know that we are going to be assigned shares (long or short) and we need to decide on the best way to deal with it. There are two options available to us. The first is to enter short shares to neutralize the assignment that we are going to be taking. This way, we do not get stuck with a long or short delta position over the weekend.
+
+	•	If our short call is breached, we are going to want to purchase 100 shares right at market close for every call option that will get assigned. Remember, a call option gives someone the right to buy 100 shares from us at the strike price, so if we have the shares in our “inventory” then those get given to the person who bought our option, leaving us with zero shares at the end of the day.
+
+	•	If our short put is breached, we are going to want to short 100 shares right at market close for every put option that will get assigned. Remember, a put option gives someone the right to sell 100 shares to us at the strike price, so if we are short the shares then when the person sells us their shares via the option being exercised we are going to be left with zero shares at the end of the day.
+
+
+
+Our second option is to simply close out the position like you do in scenario two. In this case, you are going to be incurring a commission and slippage cost, but the most important thing is to be out of the position by market close. This is a reasonable approach as well.
+
+When to Enter New Short Strangles
+
+Once you have successfully managed your trades that are expiring, the last thing you need to do is prepare the trades for the coming week. To do this is very simple. You structure out a new delta 20 short strangle expiring in 7 days and place the trade near market close. Remember to push for the best fill possible (every penny counts!)
+
+Hey Sean, I don’t have enough buying power left to put on a new position since I am waiting for the short strangles from last week to expire!
+
+This can happen sometimes because there will be a short period of time right before market close where you will have this weeks short position plus next weeks short position on. And in this short period of time, the margin requirement will be significantly increased. If you don’t have enough margin available to do this, you basically have two choices. The first choice is to wait until Monday to put on the new trades. But this is not ideal since there is a lot of premium decay over the weekend that we want exposure to. So the second, and potentially more ideal option is to actually pay to close out the option position that would expire worthless so that you can free up the margin to enter the next trade. It’s not ideal to have to do this, but it’s more important to get exposure to the risk premium over the weekend.
+
+Do We Delta Hedge the Short Strangles?
+
+This is a great question. If you were wondering about this, it’s a very bullish sign on your success with this strategy.
+
+In short the answer is no, I do not actively delta hedge the short strangle positions. The reason is because the strikes are already wide (delta 20) and they expire weekly.
+
+At the end of each week, we are technically bringing ourselves back to delta neutral because the new strangle that we sell is going to be created by shorting the delta 20 call and delta 20 put. So effectively, we are delta hedging the position weekly.
+
+It’s for this reason that I find it really valuable to not think of this strategy as individual week long trades. Rather, it is more effective to think about it as a month long trade where you are delta hedging weekly be restriking your short position with a new short strangle. By thinking about the position this way, you are
+
+Think about the strategy as a month long trade that is delta hedged weekly. The way we are delta hedging is actually by restriking the position.
+
+Now you know how to manage your trades! Everything from how to think about the structures, to managing the positions has been covered.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+September 26, 2024
+What is Volatility In Options and Why Is It Important For Option Sellers?
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

@@ -1,0 +1,213 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is an Iron Butterfly?
+	•	Construction of an Iron Butterfly
+	•	How To Pick Where To Place Your Wings
+	•	So how do we actually pick where to put our wings?
+	•	Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+	•	Why Use an Iron Butterfly?
+	•	When to Use an Iron Butterfly
+	•	Managing an Iron Butterfly
+	•	Sizing Your Trade To Manage Your Risk
+	•	Delta Hedging Your Iron Butterfly
+	•	Real-World Application: Managing Iron Butterflys
+	•	Conclusion
+What is an Iron Butterfly and How Do You Trade Them: A Comprehensive Guide for Option Sellers
+
+Sean Ryan·September 18, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is an Iron Butterfly?
+	•	Construction of an Iron Butterfly
+	•	How To Pick Where To Place Your Wings
+	•	So how do we actually pick where to put our wings?
+	•	Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+	•	Why Use an Iron Butterfly?
+	•	When to Use an Iron Butterfly
+	•	Managing an Iron Butterfly
+	•	Sizing Your Trade To Manage Your Risk
+	•	Delta Hedging Your Iron Butterfly
+	•	Real-World Application: Managing Iron Butterflys
+	•	Conclusion
+So you want to sell volatility but aren’t comfortable holding the unlimited loss exposures that come with a short straddle or strangle. This is where our trusty tool the iron butterfly comes into play.
+
+I’m not going to sugar coat it and say that they are the best way, because they aren’t. If you are an option seller, you are getting paid for holding risk exposures that others don’t want. If you hedge away these risk exposures (or part of them), then you are going to make less money.
+
+But the lower returns come with the benefit of allowing you to reduce your PnL variance.
+
+In this blog post, we will dive deep into iron butterflys, covering when and why to use them, their construction, and effective risk management strategies.
+
+Key Takeaways
+
+	1	Iron Butterfly Structure: An iron butterfly is constructed by selling a call and a put at the same strike price (forming the body) and buying a call and a put at different strike prices (forming the wings). This strategy is used to profit from low volatility and range-bound price movements.
+	2	Where To Place The Wings: The wings of the iron butterfly limit potential losses, making it a risk-managed strategy. The way we choose where to put the wings is by putting the 1-2x the straddle price away from the body.
+	3	Optimal Use Case: Iron butterflys are ideal for low volatility environments and when the underlying asset is expected to stay within a specific trading range.
+
+What is an Iron Butterfly?
+
+An iron butterfly is a four-legged options strategy that involves selling a call and a put at one strike price (forming the body) and buying a call and a put at different strike prices (forming the wings). This setup creates a range-bound strategy where the goal is for the underlying stock to stay within the sold strikes, allowing the trader to profit from time decay and a decrease in implied volatility.
+
+Construction of an Iron Butterfly
+
+To construct an iron butterfly, follow these steps:
+
+	1	Sell a Call and a Put (Short Straddle): These are typically at or near the money.
+	2	Buy a Call and a Put (Long Strangle): These are further out of the money to limit risk.
+
+Example:
+
+	•	Underlying Asset: XYZ Company trading at $200 share price
+	•	Sell the 200 Call and 200 Put
+	•	Buy the 220 Call and 180 Put
+
+
+
+This creates a net credit trade, where the trader collects a premium from selling the at-the-money options and pays a smaller premium for the out-of-the-money options, thus limiting potential losses.
+
+How To Pick Where To Place Your Wings
+
+Where to place your wings is one of the most important things when trading iron butterflys.
+
+The reason this is so important is because the reason we are getting paid as option sellers is for being the ones to hold the risk of a large move. Buying wings is counter to the reason we are getting paid. We are the providers of the hedge, yet we are buying a hedge ourselves. If not done perfectly, it will erode the already thin margins we try to monetize through the variance risk premium.
+
+That is not to say that any hedge we purchase will make us turn a winning strategy into a losing one. Even in the insurance industry, which is most comparable to option selling, we see that insurance providers actually buy insurance themselves, giving way for an entire industry called re-insurance.
+
+So it’s cool that you want to buy wings. It’s why you are interested in the iron butterfly to begin with. But you need to make sure that the goal with buying wings is to hedge away worst case scenarios, not just to create a good risk reward trading. Option selling is inherently bad “risk/reward”. You are collecting premiums for holding the risk of outsized moves. If you have a good ratio of of risk and reward on each trade, that is a sure sign that you have entirely eroded your edge by not taking on any risk worth getting paid for.
+
+So how do we actually pick where to put our wings?
+
+At Predicting Alpha we have a simple rule that we follow to make sure that we are putting our wings a reasonable distance away from the strikes we are selling. The long story short is that you should be taking the price of the straddle (the body of your iron butterfly), multiplying the premium you collected by 3x and then putting the wings that far away from the current stock price (at the closest).
+
+The reason you need to be putting them far out is because if you put them too close you are going to pay too much for the wings and completely destroy the edge in your trade, making it such that you shouldn’t even bother placing the trade in the first place. The cost of your wings should be very cheap in dollar terms, maybe just a few pennies, and you should think of them as a cost of doing business for your strategy.
+
+Even though the reason we are trading an iron butterfly instead of a short straddle is because we are more risk averse, we still need to hold some risk. If we don’t, there is no reason someone should be paying us, and that means they don’t pay us.
+
+Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+
+If you asked this question, you are doing a great job in learning how to think about volatility. The reason that we move away from thinking in implied volatility terms and think about the price of our wings in dollar terms is because the wings are certainly going to be more expensive in terms of implied volatility. We already know that given the shape of the skew, the implied volatility will be higher the further out-the-money that we go.
+
+But at a certain point, the cost of the wings because so low that it doesn’t matter what the implied volatility is. At the end of the day, the wings are entirely an expense. We basically assume, and hope, that they expire worthless. So all that matters is how much it’s costing us to have this protection.
+
+This is also one of the reason that we always aim to put our wings as far out as possible. They are meant to hedge away the worst case scenario, not give us a “good risk reward”. We have to remember that as volatility traders we are getting paid to take on risk that others do not want on their books. In order to get paid, we actually need to take on some risk.
+
+Why Use an Iron Butterfly?
+
+The reason that you would trade an iron butterfly is because it gives you a similar risk exposure as a short straddle does, but with a max loss that is defined instead of a theoretically unlimited max loss as you have with short straddles.
+
+You would trade an Iron Butterfly because you are willing to give up some of your premium and reduce your long term expected value in exchange for reduced PnL variance and to avoid the larger drawdowns that (will inevitably) occur when you are running a short volatility strategy.
+
+When to Use an Iron Butterfly
+
+You would use an iron butterfly in the same situations as you would a short straddle. You can click here to read out article about short straddles if you want more clarification.
+
+Iron butterflys are the trade you place when you think that implied volatility will outpace realized volatility and you do not have a view on what direction the stock will trend.
+
+They are a tool used to capture the variance risk premium when you are a retail trader. The reason for this is because the price of the iron butterfly (minus the cost of the wings) represents the implied move range for a stock over a given time period. Assuming that you delta hedge the position, the difference between the price you sold the iron butterfly for and the average intrinsic value at expiration should be the variance risk premium for the position.
+
+Managing an Iron Butterfly
+
+Iron butterflys are pretty easy to manage because they already have a built in stop loss. The main things that you need to do are (1) size the trade appropriately and (2) delta hedge the position to maintain your exposure to just implied vs realized volatility.
+
+Sizing Your Trade To Manage Your Risk
+
+If you are trading butterflys, you should be only trading a small amount of your capital in a single position, such that if the “worst case” scenario happens it is just big enough that the trade is meaningful, but just small enough that it does stop or discourage you from continuing to trade.
+
+One way that you can see how much size you have on each trade is by looking at the trade analysis tab in your brokerage and stressing your position to see how much money you would lose if you were to go past one of your wings. If this loss exceeds 10% of your account for a single position, then you are definitely sized too big.
+
+Another way that you can see your position sizing is by looking at how much margin your brokerage is asking you to put up for your trade. If the margin requirement for a single position is greater than 10-15% of your portfolio, you are definitely too big for most trades.
+
+There is actually an entire discussion that we can have around margin utilization, so I wrote a blog about it.
+
+Delta Hedging Your Iron Butterfly
+
+When it comes to trading delta neutral strategies like iron butterflys, you need to maintain your exposure to implied vs realized volatility as the position progresses. In order to do this, we need to use a system called delta hedging. This is a big topic, so I wrote an entire article about it which you can read by clicking here.
+
+Seriously, read it before you start trading. It’s important.
+
+Real-World Application: Managing Iron Butterflys
+
+	1	Identify the Trade: You think there will be lower realized volatility than implied for Apple which is currently trading at $200 per share.
+	2	Construct the Iron Butterfly:
+	◦	Sell the 200 Call and 200 Put
+	◦	Buy the 220 Call and 180 Put
+	3	Monitor the Trade: Keep an eye on Apple’s price movement and implied volatility.
+	4	Delta Hedge: Use one of the delta hedging strategies we teach to maintain your exposure to implied vs realized volatility.
+	5	Close Before Expiration: Close out the position before expiration to avoid any assignment risks, then start looking for the next trade to allocate your newly freed capital to!
+
+Conclusion
+
+Iron butterflys are pretty good. You just need to be careful about where you place the wings. If you put them too close, you run the risk of ruining your edge. There is literally nothing worse than placing good trades that should get you paid and then losing money because we didn’t structure things correctly.
+
+Follow the guidelines set out in this article (or just trade naked straddles) and you will be good to!
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

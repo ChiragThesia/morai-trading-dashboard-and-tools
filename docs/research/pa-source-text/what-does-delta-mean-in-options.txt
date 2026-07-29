@@ -1,0 +1,224 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is Delta?
+	•	Delta in Stocks
+	•	Delta in Options
+	•	Call Options
+	•	Put Options
+	•	Understanding Delta from an Option Seller’s Perspective
+	•	The Synthetics: Call and Put Delta Relationship
+	•	What to do About Delta: Delta Hedging
+	•	Conclusion
+What Does Delta Mean In Options? Controlling Direction When Selling Options
+
+Sean Ryan·September 12, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is Delta?
+	•	Delta in Stocks
+	•	Delta in Options
+	•	Call Options
+	•	Put Options
+	•	Understanding Delta from an Option Seller’s Perspective
+	•	The Synthetics: Call and Put Delta Relationship
+	•	What to do About Delta: Delta Hedging
+	•	Conclusion
+Delta is one of the option greeks that every option seller has heard of, but may not fully understand. It’s one of the most important concepts that option sellers have to be familiar with because we need to understand it in order to structure our trades correctly and manage them properly. Failing to understand how delta exposure impacts our positions is going to lead to losses. Thoroughly understanding it will lead to expressing our view on the market correctly. so let’s get familiar with this term and what it means.
+
+Key Takeaways
+
+	1	Delta Explained: Delta measures the sensitivity of an option’s price to changes in the price of the underlying asset. For call options, Delta ranges from 0 to 1, indicating the degree of price movement, while for put options, Delta ranges from -1 to 0, indicating an inverse price movement.
+	2	Impact on Option Sellers: If we only have a view on implied vs realized volatility or the level of implied volatility, we need to be structuring our trades in a way that is delta neutral. Meaning, whether the stock goes up or down does not impact our PnL..
+	3	Managing Delta Exposure: After we put a trade on, there is a period of time when we are holding the trade. During this time, the underlying stock will inevitably drift around. As it drifts, our delta exposure will change and we need to be prepared to adjust our position to maintain our delta neutral exposure.
+
+
+
+Click here for an overview of all the option greeks.
+
+What is Delta?
+
+Delta is one of the option greeks. It’s a metric that helps us understand the exposure that our position gives us. It’s a characteristic, a description that we use when we are trying to understand how our position’s value changes as things change in the market. Delta measures the sensitivity of an option’s price to changes in the price of the underlying asset. In simpler terms, Delta tells us how much the price of an option will change for every $1 change in the price of the underlying stock.
+
+Delta in Stocks
+
+The easiest way to initially grasp the concept of delta is to just think about stocks. If you own a stock, Delta is straightforward. Let’s say you buy shares of Apple (AAPL) at $200. For every $1 increase in Apple’s stock price, your position will gain $1 per share. Conversely, for every $1 decrease, your position will lose $1 per share. This direct correlation gives the stock a Delta of 1.
+
+Example:
+
+	•	Buying 1,000 shares of AAPL at $200:
+	◦	If AAPL increases by $1, you gain $1,000 (1,000 shares x $1).
+	◦	If AAPL decreases by $1, you lose $1,000 (1,000 shares x $1).
+
+This linear relationship means that owning shares directly exposes you to the full price movement of the stock, making the Delta 1 for stocks.
+
+Delta in Options
+
+Options, however, have a more complex relationship with the underlying asset’s price. The Delta of an option indicates how much the option’s price will change for a $1 change in the price of the underlying stock. Let’s explore how Delta works for both call and put options.
+
+Call Options
+
+Call options give the holder the right to buy the underlying asset at a specified strike price. The Delta for call options ranges from 0 to 1. A higher Delta indicates a greater sensitivity to price changes in the underlying asset.
+
+Example:
+
+	•	Apple (AAPL) at $100:
+	◦	90 Call Option (Delta = 0.60)
+	◦	100 Call Option (Delta = 0.50)
+	◦	110 Call Option (Delta = 0.30)
+
+If AAPL increases from $100 to $101:
+
+	•	The 90 call option will increase by $0.60.
+	•	The 100 call option will increase by $0.50.
+	•	The 110 call option will increase by $0.30.
+
+Since each option contract represents 100 shares, the dollar impact on the position is amplified:
+
+	•	90 Call Option: $0.60 x 100 = $60
+	•	100 Call Option: $0.50 x 100 = $50
+	•	110 Call Option: $0.30 x 100 = $30
+
+Put Options
+
+Put options give the holder the right to sell the underlying asset at a specified strike price. The Delta for put options ranges from -1 to 0. A negative Delta indicates that the option’s price moves inversely to the underlying asset’s price.
+
+Example:
+
+	•	Apple (AAPL) at $100:
+	◦	90 Put Option (Delta = -0.70)
+	◦	100 Put Option (Delta = -0.50)
+	◦	110 Put Option (Delta = -0.40)
+
+If AAPL increases from $100 to $101:
+
+	•	The 90 put option will decrease by $0.70.
+	•	The 100 put option will decrease by $0.50.
+	•	The 110 put option will decrease by $0.40.
+
+Similarly, for each contract representing 100 shares, the dollar impact is:
+
+	•	90 Put Option: $0.70 x 100 = $70
+	•	100 Put Option: $0.50 x 100 = $50
+	•	110 Put Option: $0.40 x 100 = $40
+
+Understanding Delta from an Option Seller’s Perspective
+
+As an option seller, Delta helps you gauge your exposure to price movements in the underlying asset. Just like you will see with the other greeks, delta is one of the exposures that we have in our trades, which we either want or hedge away.
+
+Selling Call Options
+
+When you sell a call option, you are taking on a short position in Delta. For example, if you sell the 100 call option with a Delta of 0.50, you will have a Delta of -0.50. This means that for every $1 increase in AAPL, the option’s price will increase by $0.50, potentially leading to a loss for the seller.
+
+Selling Put Options
+
+When you sell a put option, you are taking on a long position in Delta. For instance, if you sell the 100 put option with a Delta of -0.50, you will have a Delta of 0.50. This means that for every $1 increase in AAPL, the option’s price will decrease by $0.50, potentially leading to a profit for the seller.
+
+Selling A Straddle
+
+So what happens if you sell a call and a put? Well, the delta exposures would be combined! The call option gave you a delta of -.50, and the put option gave you a delta of 0.50. Combined, this would be a delta of zero!
+
+This is how we go about creating delta neutral positions, and this is why straddles are such a common way for retail traders to sell volatility.
+
+The Synthetics: Call and Put Delta Relationship
+
+In the options market, the relationship between call and put Deltas is crucial. For any given strike price, the sum of the call Delta and the put Delta must equal 1. This relationship is vital for creating synthetic positions and understanding the complete risk profile.
+
+
+
+There is an interesting way to view the relationship between calls and puts through the lens of delta.
+
+The difference between a call and a put is 100 shares.
+
+Literally. If you sell a call option, which gives you a delta of -0.5, and then buy 100 shares, which gives you a delta of +1.00, your new delta is +0.5, which is the delta that the put option would have.
+
+Your call option would literally become a put option. The same thing happens if you sold a put and shorted 100 shares.
+
+I suggest that you go into your brokerage and try this for yourself. When I first understood this, it blew my mind and really helped me to grasp how delta changes the exposures that you have.
+
+What to do About Delta: Delta Hedging
+
+The primary reason option sellers even look at the world of options is because of a concept called the variance risk premium. In short, it’s the idea that implied volatility tends to overstate realized volatility. Without this phenomenon, we wouldn’t really be trading options in the first place. It’s the primary reason that there are returns to be had and a business to be built selling options.
+
+But when we talk about volatility one of the most important things for us to understand is that volatility is not the same thing as direction. So when we are running an option selling strategy, more often then not we will want to have a delta of 0. We want our profits and losses to be driven by the difference between the implied and realized volatility. We want our profits to from extracting the variance risk premium.
+
+The reason why understanding Delta is so important is because when we put on a trade, let’s say an at-the-money straddle, the position will be Delta neutral at inception (when we put on the trade). But over time, the stock is going to start trending, and all of a sudden we will see that our trade starts to pick up some delta exposure. What was once our ideal structure is now.. not.
+
+We are going to need to adjust our position to bring it back to the ideal exposures that we want (the whole reason we need to understand the greeks to begin with). The way we do this is through a process called delta hedging, which is an entire article in itself!
+
+The general idea is that by trading more contracts or shares you are able to add/remove some of your delta exposure, bringing you back into a position where the direction the stock moves no longer impacts your PnL. This is an ongoing process that option sellers utilize over the lifetime of their trade to help ensure that they maintain the proper exposures (so they get paid!).
+
+Conclusion
+
+Figuring out what this delta thing is all about is really important. It’s one of the key characteristics of the options that we trade, and it’s something that can have a massive impact on our returns if left unchecked. Always remember, when you are running an option selling portfolio, it’s your responsibility to thoroughly understand the product you are trading. This is your business, so dive deep in the knowledge, master the product, and then start running an excellent business for yourself!
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

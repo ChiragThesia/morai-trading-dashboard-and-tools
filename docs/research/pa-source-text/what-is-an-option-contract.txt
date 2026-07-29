@@ -1,0 +1,140 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Options Are Contracts
+	•	Options Involve Two Parties
+	•	Options Grant Rights
+	•	Options Have a Strike Price
+	•	Options Have an Expiration Date
+	•	Options Have a Premium
+	•	Conclusion
+What is an Option Contract? 6 Characteristics That Every Option Has
+
+Sean Ryan·September 22, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Options Are Contracts
+	•	Options Involve Two Parties
+	•	Options Grant Rights
+	•	Options Have a Strike Price
+	•	Options Have an Expiration Date
+	•	Options Have a Premium
+	•	Conclusion
+This guide explains exactly what an option is and paints a picture of them that you can use to really understand what you are trading. This is really a guide for traders who are completely new to options but that doesn’t mean it isn’t important. The first step on the road to options mastery is to understand what an option is.
+
+Regardless of whether you trade calls or puts, all options share the same six characteristics that define them. Understanding these characteristics will allow you to conceptualize what an option is, visualize how it works, and set the foundation for your options journey.
+
+Key Takeaways
+
+	1	Options Are Contracts: Options are financial contracts traded in a separate market from stocks, allowing traders to exchange rights rather than the underlying asset itself. This contractual nature is fundamental to understanding how options function.
+	2	Options Grant Rights with Obligations: When you buy an option, you gain the right to buy or sell a stock at a specified strike price, while the seller of the option has the obligation to fulfill the order if the option is exercised. This dynamic defines the roles and risks for both parties involved in the contract.
+	3	Options Have Defined Terms: Every option comes with a specific strike price, expiration date, and premium. The strike price determines the price at which the stock can be bought or sold, the expiration date sets the timeframe for exercising the option, and the premium is the cost of acquiring the option. These terms are crucial for understanding the value and timing of option trades.
+
+
+
+There are 6 key characteristics that define an option. We are going to break them down one by one so you can have a thorough understanding of how options are structured and traded.
+
+After you read this document, check out part two where we translate these characteristics into what you actually see in your brokerage.
+
+Options Are Contracts
+
+The first characteristic that defines an option is that it is a contract. When you buy or sell an option, you are not trading the stock itself. Instead, you are trading a contract in a separate market from the stock market. In the stock market, you exchange shares of a company. In the options market, a contract is created when you buy or sell an option.
+
+Options Involve Two Parties
+
+Options are contracts that take place between two people. This is crucial to understand because many people think of options as them versus the market. Trading is not like blackjack, where players play against the house. Instead, it is more like poker, where players compete against each other. Each trade you place has another person on the other side of that transaction.
+
+
+
+Options Grant Rights
+
+An option is a contract between two people that gives you the right to either buy or sell a stock. This characteristic means that when you buy an option, you are purchasing the right to buy or sell a stock, while the seller of the option has an obligation to fulfill the order if you choose to exercise it.
+
+Options Have a Strike Price
+
+An option gives you the right to buy or sell a stock at a given price, known as the strike price. For example, you might buy an option contract that gives you the right to buy or sell Apple at $250. The strike price is the agreed-upon price at which the underlying stock can be bought or sold if the option is exercised.
+
+Options Have an Expiration Date
+
+These contracts don’t last forever. Options have a timeframe associated with them, known as the expiration date. When you buy an options contract, it will have a specific expiration date, which could be in 30 days, two days, or two years. This expiration date is the deadline by which the option must be exercised. For example, you might buy an option contract giving you the right to buy Apple at $250 within the next 30 days.
+
+Options Have a Premium
+
+The final characteristic of an option is that it has a premium, which is the price of the option. The reason someone would sell you an option is that they are getting paid to do it. Revisiting our Apple example, you could buy an option contract that gives you the right to buy Apple at $250 in the next 30 days, and the market might price this option at $15. This premium is what the buyer pays to the seller for the rights that the option contract grants.
+
+Conclusion
+
+Options are contracts between two parties, granting rights to buy or sell at a specific price within a given timeframe, and they come with a premium.
+
+Every option you trade will have these characteristics. You don’t need to sit here and memorize them. They will become second nature to you in no time. But you need to understand them.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

@@ -1,0 +1,193 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is a Vertical Spread?
+	•	Trading Vertical Spreads with Skew
+	•	Practical Application of Vertical Spreads
+	•	Managing Vertical Spreads
+	•	Conclusion
+How to Trade Vertical Spreads -An Option Trade For Betting on Direction While Leveraging Volatility Skew
+
+Sean Ryan·September 15, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is a Vertical Spread?
+	•	Trading Vertical Spreads with Skew
+	•	Practical Application of Vertical Spreads
+	•	Managing Vertical Spreads
+	•	Conclusion
+One of the most beautiful parts of trading options is that you can create a structure to express your exact view on the market. For example you could literally express the view “I think the stock is going to trend down but not as aggressively as implied by the market”. If this is the view you have, a great structure to trade is a vertical spread, and by the end of this article you’ll know exactly how to do it.
+
+Key Takeaways
+
+	1	Vertical Spread Definition: An efficient way to use options for directional bets. Useful for when you think a stock is going to trend in a particular direction.
+	2	When to Trade Verticals: Utilize call spreads for bullish views and put spreads for bearish views to manage risk and leverage market conditions.
+	3	Skew Trading: Trading Verticals into steep volatility skew improves the structure, making it a much better risk/reward for your trade.
+
+What is a Vertical Spread?
+
+Vertical spreads are also known as call or put spreads. They allow traders to express bullish or bearish views with limited risk and margin requirements while giving a great risk reward ratio, especially when traded into steep skew.
+
+A vertical spread involves buying one option and selling another option of the same type (call or put) but with a different strike price. You can use them to express both bullish and bearish views.
+
+Example: Bullish Call Spread
+
+Consider a scenario where Apple (AAPL) is trading at $190 per share. If you’re bullish on Apple you can use a call spread.
+
+	•	Buy the 190 Call: This option costs $10.
+	•	Sell the 200 Call: This option fetches $6.
+
+
+
+The cost of the call spread is the difference between the premiums paid and received:
+
+	•	Cost: $10 (buy) – $6 (sell) = $4.
+
+Your maximum profit is the difference between the strike prices minus the cost of the spread:
+
+	•	Max Profit: ($200 – $190) – $4 = $6.
+
+The maximum risk is limited to the debit paid for the spread:
+
+	•	Max Loss: $4.
+
+Example: Bearish Put Spread
+
+Now, let’s consider a bearish scenario where you believe Apple’s stock will decline.
+
+	•	Buy the 190 Put: This option costs $9.
+	•	Sell the 180 Put: This option fetches $4.
+
+
+
+The cost of the put spread is:
+
+	•	Cost: $9 (buy) – $4 (sell) = $5.
+
+Your maximum profit is:
+
+	•	Max Profit: ($190 – $180) – $5 = $5.
+
+The maximum risk is:
+
+	•	Max Loss: $5.
+
+Trading Vertical Spreads with Skew
+
+When you find yourself in a situation where you have a directional view and the option skew is sloping in that direction, you are able to leverage the shape of the skew to structure a directional trade with a great risk/reward ratio.
+
+
+
+Once you have identified a trading opportunity where you have lets say a bullish view and there is call skew, all you need to do is buy a lower strike call and sell a higher strike one.
+
+
+
+I will typically buy a call option at-the-money or just slightly out-the-money, then finance it by selling a further out-the-money call. This works because the implied volatility of the further out-the-money strike call will be higher than the implied volatility of the call that is closer to the money.
+
+When you find yourself in a situation where you have a bearish perspective and there is put skew, you do the same thing on the put side.
+
+Example: Trading Skew
+
+Suppose the implied volatility for the 160 call is 50%, while the 180 call has an implied volatility of 75%. This skew creates a situation where we can construct an attractive bullish bet because if we sell a 180 call, it can be used to finance the 160 call that we want to purchase. Doing this makes sense if we think the stock is likely to trend upwards because we are able to reduce our cost basis by “selling” the payoff we would receive if there was a massive move to the upside.
+
+Practical Application of Vertical Spreads
+
+When to Use Vertical Spreads
+
+	1	Bullish or Bearish Outlook: Use call spreads for bullish views and put spreads for bearish views.
+	2	Skew Considerations: Trading vertical spreads into the skew creates good risk reward scenarios.
+
+Choosing Strikes and Expirations
+
+	1	Strike Prices: Select strikes based on your market outlook. For a moderately bullish view, choose strikes close to the current price. For a strong bullish view, select strikes further out.
+	2	Expiration Dates: Longer expirations provide more margin for error but move slower. Shorter expirations offer higher potential payoffs but offer less time for the move to happen in the direction you forecast.
+
+Example: Selecting Strikes
+
+If Apple is trading at $200:
+
+	•	Moderate Bullish: Buy the 200 call and sell the 210 call.
+	•	Strong Bullish: Buy the 210 call and sell the 220 call.
+
+
+
+The risk-reward profile varies with the strike selection, with further out-of-the-money strikes offering higher potential rewards for lower initial costs.
+
+Managing Vertical Spreads
+
+Given the limited loss of a vertical spread, my personal approach is to actually hold them until expiration. Forecasting direction on a day to day basis can be really tricky, so I will typically not get too picky with closing out if I am experiencing a loss. I will enter the trade with the expectation that my stop loss is zero, and I size my trade such that the total debit I pay for the position is equal to the stop loss amount that I would have set.
+
+Conclusion
+
+Vertical spreads are an awesome way to make a directional bet. When you find a situation where the skew increases in the direction you think the stock will move, in the timeframe you think it will happen, there are few better ways to trade than a vertical spread.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

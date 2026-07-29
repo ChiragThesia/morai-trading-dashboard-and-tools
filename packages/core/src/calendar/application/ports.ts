@@ -94,8 +94,9 @@ export type ForRankingCalendars = (
 // SAME engine, DIFFERENT shape. `ForRankingCalendars` answers "which calendar should I put on",
 // and collapses to one row per expiry pair to answer it. The Analyzer's chain table asks the
 // opposite question — "show me everything, decide nothing" — so it needs one row per STRIKE
-// inside every cohort. That shape mismatch, and nothing else, is why the same eight formulas are
-// still written a second time in `apps/web/src/lib/chain-math.ts`.
+// inside every cohort. That shape mismatch is why this port exists alongside the ranker; it used
+// to be the reason the browser held a second copy of the same eight formulas, which is now
+// deleted (`useChainModel` reads this surface).
 //
 // It ranks nothing, scores nothing and filters nothing for quality. The only rows missing from a
 // cohort's ladder are the ones the chain never quoted.

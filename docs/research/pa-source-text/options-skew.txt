@@ -1,0 +1,224 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	The Basics of Skew and Normal Distribution
+	•	Normal Distribution
+	•	Real-World Stock Returns: Skewed Distribution
+	•	How Skew Effects Options Pricing
+	•	Skew and Options Market
+	•	Why Are Puts More Expensive?
+	•	Practical Example: S&P 500 Options
+	•	Two Core Questions Skew Helps Us Answer
+	•	Conclusion
+Introduction to Options Skew: A Game Changer for Option Sellers
+
+Sean Ryan·September 19, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	The Basics of Skew and Normal Distribution
+	•	Normal Distribution
+	•	Real-World Stock Returns: Skewed Distribution
+	•	How Skew Effects Options Pricing
+	•	Skew and Options Market
+	•	Why Are Puts More Expensive?
+	•	Practical Example: S&P 500 Options
+	•	Two Core Questions Skew Helps Us Answer
+	•	Conclusion
+When we look at the option chain for any given company, we have two primary dimensions that we can look across. The first is time, which is represented by the different expirations. The second is underlying price, which is represented by the different strike prices available on each expiration.
+
+Both the expirations and the different strikes have characteristics that define them. There are typical “shapes” that each take on, and “abnormal” shapes that happen under different market conditions. In this article we are going to focus on the characteristics of how the value of different strikes look on an option chain, which is a concept typically referred to as skew.
+
+Skew helps us describe the shape of an option chain by looking at how implied volatility changes across different strikes. When you look at the implied volatility for options at different strikes, you will notice how they are not evenly distributed as you move away from the at the money strikes. This is skew in action, and it tells us more than you would think about what the market believes will happen in the future for a stock. Let’s dive in and explore what skew is, how it differs from normal distributions, and how it affects the options market.
+
+Note: After you read this article, click here to read the second part of our education on skew.
+
+Key Takeaways
+
+	1	Normal vs. Skewed Distribution: Normal distribution features symmetrical probabilities of returns, while skewed distribution reflects real-world stock behavior with small up moves being the most frequent, and large down moves being more frequent than large up moves.
+	2	Impact on Options Pricing: Skew affects options pricing, making out-of-the-money (OTM) puts more expensive due to higher implied volatility, reflecting greater downside risk. It makes sense that OTM puts are the most expensive (and also carry the most variance risk premium) because this is the most common purchase by those looking to hedge.
+	3	Implications for Option Sellers: Skew tells us about where the market implies the most likely moves to be and where the risk is on a ticker. Skew can also be used to structure trades in a way that gives a better pay off if it matches the view you are trying to express.
+
+The Basics of Skew and Normal Distribution
+
+To understand skew, we first need to revisit some fundamental concepts. In options trading, we often refer to the future distribution of a stock’s returns. The reason we do this is because the prices of options try to inform us about what the movement for a stock may look like in the future. Before we jump into skew, let’s look at what a normal distribution is to become familiar again with what a distribution is to begin with.
+
+Normal Distribution
+
+A normal distribution is a statistical concept that shows us how likely different outcomes are, where most data points cluster around the mean (average), and the probabilities of extreme values (large moves) are symmetrical on both sides.
+
+In a normal distribution:
+
+	•	The mean, median, and mode are all the same.
+	•	The probability of a large upward move is the same as the probability of a large downward move.
+	•	This distribution is symmetrical, creating a bell-shaped curve.
+
+
+
+For instance, if we graph the S&P 500’s returns over time and assume it was normally distributed, it would look like this: :
+
+	•	On the Y-axis, we have the frequency of returns.
+	•	On the X-axis, we have the magnitude of returns.
+
+
+
+In a normal distribution, most returns cluster around a central value, with fewer large moves in either direction.
+
+Real-World Stock Returns: Skewed Distribution
+
+However, real-world stock returns do not follow a normal distribution.
+
+Have you ever heard the saying that stocks go up like an escalator and down like an elevator? This saying is actually describing the skewness of stock price returns.
+
+
+
+Where they trend up and crash down. Since we know that stocks go up in value over time, this saying also implies that these small up moves (escalator) happen more often than large down moves (elevator).
+
+This creates a skewed distribution, which can be visualized as follows:
+
+
+
+	•	The most frequent return (mode) is positive, indicating many small upward moves.
+	•	The median (middle value) is lower than the mode but higher than the mean.
+	•	The mean (average return) is pulled down by the infrequent but large downward moves.
+
+
+
+In other words, while the S&P 500 might move up 57% of the time, the down moves, though less frequent, are often larger.
+
+How Skew Effects Options Pricing
+
+Understanding that stock returns are skewed, not normally distributed, is crucial for options trading. This skewness impacts how options are priced in the market.
+
+Skew and Options Market
+
+In the options market, skew refers to the difference in implied volatility between out-of-the-money (OTM) puts and calls. Here’s what you typically observe:
+
+
+
+	•	OTM Puts: These tend to have higher implied volatility and, therefore, are more expensive.
+	•	OTM Calls: These usually have lower implied volatility and are cheaper.
+
+
+
+This pricing reflects the market’s expectation of a skewed distribution of returns. Because the market anticipates that stocks are more likely to experience significant downward moves (e.g., due to economic downturns, earnings misses, etc.), OTM puts are priced higher to account for this risk.
+
+Why Are Puts More Expensive?
+
+The primary reason is because options are most commonly used to hedge risk.
+
+	•	Downside Risk: Since options are insurance products they are meant to hedge away risk. When you think about stock, what is the risky thing that could happen? It’s that the company drops significantly in value! So the most common purchase for options are puts.
+	•	Asymmetrical Returns: While companies often experience steady growth, they are less likely to have explosive upward moves compared to the potential for sharp declines.
+
+
+
+For example, consider a company that goes bankrupt. The stock can lose most, if not all, of its value, but it can’t experience an equivalent explosive move to the upside without significant fundamental changes.
+
+Practical Example: S&P 500 Options
+
+Let’s take a look at a practical example to illustrate how skew manifests in the options market. Imagine the S&P 500 is trading at 4000. If we look at the options chain, we might see the following implied volatilities:
+
+	•	OTM Put (3800 strike): Implied volatility of 25%
+	•	ATM Option (4000 strike): Implied volatility of 20%
+	•	OTM Call (4200 strike): Implied volatility of 15%
+
+In this scenario:
+
+	•	The OTM put is more expensive, reflecting higher implied volatility due to the greater perceived risk of a significant downward move.
+	•	The ATM option has moderate implied volatility, as it is at the current price level.
+	•	The OTM call is cheaper, with lower implied volatility, reflecting the lower probability of a large upward move.
+
+
+
+By understanding this skew, you can make more informed decisions about which options to sell, helping you maximize your profits while managing risk effectively.
+
+Two Core Questions Skew Helps Us Answer
+
+When we look at the skew for a ticker, it helps us answer two important questions.
+
+	1	Where is the risk?
+	2	What is most likely to happen?
+
+
+
+\The skew helps us answer these questions because people are more willing to purchase options to protect against risk. If the risk is to the downside, then we should expect that the out-the-money puts are more expensive than the out-the-money calls.
+
+By nature of telling us that the risk is to the downside (bigger move, lower chance), it also informs us what the market thinks is most likely to happen, which would be a smaller move to the upside!
+
+Insights like this become really valuable when analyzing companies which have had major fundamental changes recently, or a large event occur. The stock may have changed in value recently, implied volatility may be through the roof, and we are trying to understand what the market anticipates to happen in the future. This is what the skew will tell us.
+
+Better yet, If we disagree with the skew then some really fantastic trading opportunities can come out of it through the use of structures like vertical spreads.
+
+Conclusion
+
+This is the first of many articles written about skew. This introduction scratched the surface and you should have a decent idea of what skew is. Here is the other article I wrote on this topic if you wanted to really develop your understanding of skew.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

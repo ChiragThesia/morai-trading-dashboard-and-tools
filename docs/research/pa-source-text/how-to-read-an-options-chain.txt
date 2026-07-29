@@ -1,0 +1,193 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is an Option Chain?
+	•	Key Terms: In the Money, At the Money, and Out of the Money
+	•	Intrinsic Value and Extrinsic Value
+	•	Expirations
+	•	Conclusion
+How to Read an Options Chain: Key Terms You Need to Know
+
+Sean Ryan·September 24, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is an Option Chain?
+	•	Key Terms: In the Money, At the Money, and Out of the Money
+	•	Intrinsic Value and Extrinsic Value
+	•	Expirations
+	•	Conclusion
+So you understand a bit about how options work. You get the necessary approvals from your brokerage. You open the option chain on your brokerage.. And have absolutely no idea what you are looking at.
+
+When you go to place a trade in the market, you are going to need to navigate the option chain to make sure that you trade the right things to give you the exposures that express your view on the market correctly.
+
+You have a trade idea. You open your brokerage, go to the option chain and look up the ticker you want to trade. This lists all the expirations, bid prices, ask prices, and strike prices that are available.
+
+By the end of this blog you will understand what you are looking at and how to navigate it to structure your trades correctly.
+
+Key Takeaways
+
+	1	Understanding the Option Chain:
+	◦	The option chain provides a snapshot of available options for a particular stock, including details like current stock price, strike prices, available expirations, implied volatilities, and bid and ask prices. This is where you go to place your trades.
+	2	Key Terms – ITM, ATM, OTM:
+	◦	In the Money (ITM) options have intrinsic value (call options with strike prices below the stock price, and put options with strike prices above the stock price). At the Money (ATM) options have strike prices close to the stock price. Out of the Money (OTM) options have no intrinsic value (call options with strike prices above the stock price, and put options with strike prices below the stock price) and are entirely made up of their “time value”.
+	3	Expirations:
+	◦	Each ticker will have multiple expirations available ranging from daily to yearly and everything in between. For each of these expirations, an option chain will be available which will contain the different strikes, prices, etc, that you previously learned about.
+	4	Intrinsic and Extrinsic Value:
+	◦	Intrinsic value is the tangible value if an option were exercised today (calculated as the difference between stock price and strike price for calls, and vice versa for puts). Extrinsic value is the additional value beyond the intrinsic value, including time value and other external factors. Understanding these values helps assess whether an option is fairly priced and its potential profitability.
+
+What is an Option Chain?
+
+An option chain provides a snapshot of available options for a particular stock, including all the details you need to place a trade. This is where you go to see the real time quotes for different option contracts (how much people are trading them for and other key data points). It shows you the tangible version of the 6 characteristics of an option. An option chain shows you the following information:
+
+	•	Current Stock Price: If the market is open, it’s the current price. If closed, it’s the price at close.
+	•	Strike Prices: Various strike prices for call and put options.
+	•	Bid and Ask Prices: Current bid (buy) and ask (sell) prices for each strike price.
+
+
+
+Most brokerages will also allow you to edit the information that is available on the chain to help you make better decisions. This can include:
+
+	•	Implied Volatility: Typically based on the mid price between the bid and ask, this is the amount of volatility (annualized) implied by the price of the option contract
+	•	Delta: This is one of the option greeks which is often used in determining which strikes you want to trade. Delta tells you about you exposure to what direction the stock moves.
+	•	There are many more options available, but these are the most common ones people will add.
+
+
+
+Here is an example of what a basic option chain may look like, with some color coding to help you as we go through the next section which talks about the different strike prices for options.
+
+
+
+Key Terms: In the Money, At the Money, and Out of the Money
+
+Throughout your options trading career, you will hear the terms “in the money,” “at the money,” and “out of the money” used basically all the time. Understanding these terms is essential.
+
+In the Money (ITM)
+
+This means that the current strike price would have some value already if you were to execute it today. We call this “intrinsic value”.
+
+	•	Call Options: An in-the-money call option has a strike price below the current stock price. For instance, if Apple is trading at $241, an ITM call might have a strike price of $235, $230, or $210.
+	•	Put Options: An in-the-money put option has a strike price above the current stock price. If Apple is trading at $241, an ITM put might have a strike price of $245, $250, or $260.
+
+At the Money (ATM)
+
+When someone refers to the At The Money options, what they mean is the option contracts with a strike price that is closest to the current stock price.
+
+	•	Call and Put Options: An at-the-money option has a strike price very near the current stock price. If Apple is trading at $241 and there is no exact $241 strike price, the closest strike price, such as $240, would be considered at the money.
+
+Out of the Money (OTM)
+
+When someone refers to Out-The-Money options, they are describing option contracts that have no intrinsic value if they are executed right now.
+
+	•	Call Options: An out-of-the-money call option has a strike price above the current stock price. If Apple is trading at $241, an OTM call might have a strike price of $245, $250, or $260.
+	•	Put Options: An out-of-the-money put option has a strike price below the current stock price. If Apple is trading at $241, an OTM put might have a strike price of $235, $230, or $210.
+
+
+
+It’s important to note that an in-the-money call option is the same as an out-of-the-money put option, and vice versa.
+
+Intrinsic Value and Extrinsic Value
+
+When you were reading the previous section you may have found yourself wondering “What the heck is intrinsic and extrinsic value?” This is a fair question and one that we can answer pretty quickly.
+
+
+
+Intrinsic Value
+
+Intrinsic value is the real, tangible value of an option if it were exercised today. It is calculated as follows:
+
+	•	Call Options: Intrinsic value = whichever of the following is highest: (Stock Price – Strike Price), or 0
+	◦	Example: If Apple is trading at $100 and you have an $80 strike call option, the intrinsic value is $20 ($100 – $80).
+	◦	Example: If Apple is trading at $100 and you have a $110 strike call option, the intrinsic value is $0.
+	•	Put Options: Intrinsic value = whichever of the following is highest,(Strike Price – Stock Price), or 0.
+	◦	Example: If Apple is trading at $100 and you have a $120 strike put option, the intrinsic value is $20 ($120 – $100).
+	◦	Example: If Apple is trading at $100 and you have a $90 strike put option, the intrinsic value is $0.
+
+Extrinsic Value
+
+Extrinsic value is the additional value of an option beyond its intrinsic value. It includes the time value and any other external factors affecting the option’s price.
+
+	•	Extrinsic Value: Option Price – Intrinsic Value
+	◦	Example: If the $80 strike call option (with $20 intrinsic value) is trading at $25, the extrinsic value is $5 ($25 – $20).
+
+
+
+When we are trading options, we are looking at the world through the lens of volatility (a concept explained thoroughly in many other blogs that we have written). Volatility is related to the time value of an option, so when we are running our option selling portfolio we are primarily trading the extrinsic value of options. That is why understanding these values helps you determine whether an option is fairly priced and assess its potential profitability.
+
+Expirations
+
+When you open the option chain you will notice that there are a bunch of different dates you can pick from. Some may be just a couple days in the future while others could be a year away. These dates are the different expiration dates that are available for you to trade option contracts on. If you remember from our Six Characteristics of Options blog, all option contracts have an expiration date. In the reality of the market, this is where you would go to pick which expiration date you want to trade. We are going to discuss in other blogs how you go about picking which expiration you want to trade, but for now what you need to understand is that this is what this function in your brokerage is for so you are not surprised when you see it.
+
+Conclusion
+
+The option chain is a vital tool in options trading, providing all the necessary information to place trades (and the capabilities to actually do it in your brokerage). Familiarizing yourself with the terms you are going to see, as well as understanding intrinsic and extrinsic values, will enhance your ability to evaluate and execute options strategies effectively.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

@@ -582,8 +582,10 @@ front of 24.69% at the same strike.
 
 The repo currently has **nine** T conventions, three inside the GEX path alone. Mixing
 whole-day and settlement-aware `T` is exactly what made theta read visibly low against
-ThinkOrSwim; the fix was applied to the engine's greeks only and the browser now repeats
-it (`chain-math.ts:200` uses `dte / 365.25`).
+ThinkOrSwim; the fix was applied to the engine's greeks only, and the browser's copy repeated
+it on a whole-day `dte / 365.25`. That copy is deleted — the chain table reads the engine's
+settlement-aware numbers — so the whole-day convention survives on this screen in exactly one
+place: `chain-risk-reversal.ts`, which solves the deltas its interpolation runs on.
 
 The new engine uses **one** exported T function, taking `root` so it can pick AM 09:30 ET
 against PM 16:00 ET settlement. Unifying T is the one step in the plan that changes
@@ -594,7 +596,8 @@ numbers on screen, so it lands alone, with a TOS comparison.
 Four carry regimes exist and have never been reconciled: `bsm_*` was solved with a flat
 `r` per date and constant `q = 0.013`; `gex_snapshots.implied_carry` is per-expiry;
 the GEX profile hardcodes `0.043 / 0.013` in the same row as `implied_carry`; the browser
-silently falls back to `{0.045, 0.013}`. Any reprice takes `r` and `q` from the **same
+silently falls back to `{0.045, 0.013}` (now only for the 25Δ risk-reversal column, the one
+number on the chain table that is not the engine's). Any reprice takes `r` and `q` from the **same
 computation** that produced the IV it is repricing, or it drifts from the server.
 
 For this engine that resolves to ONE carry for the whole snapshot, not a per-expiry
@@ -615,11 +618,19 @@ Today `atmIv` measures against a screen-wide `rows[0].underlyingPrice` while `le
 prices each leg against its own row's spot — and the chain is a vendor union, so
 "first row" is whichever vendor landed first.
 
-### 8.6 `dte` is frozen at the observation day
+### 8.6 `dte` is frozen at the observation day — on the WIRE
 
 A row observed yesterday whose expiration *was* yesterday has `dte === 0`, survives a
-`dte < 0` filter, and renders today as a tradeable 0DTE cohort. Drop on `dte <= 0`, or
-recompute against both the observation day and today. Never recompute `dte` downstream.
+`dte < 0` filter, and renders today as a tradeable 0DTE cohort. That is the wire's
+`dte`, computed per row against the row's own `observedAt` (`getChain.ts:96`).
+
+The engine takes the second of the two fixes, never the first. `Cohort.dte` is
+`calendarDaysTo(injected now, expiration)`, so an expiry that has been and gone reads
+−1 however stale the snapshot is. Dropping on `dte <= 0` on top of that was belt and
+braces, and it cost a real row: it also refused the expiry that expires TODAY and still
+trades — 192 quoted SPXW puts on 2026-07-29. "Has it settled?" is `yearsToSettlement`'s
+question, and it is root-aware, which calendar arithmetic cannot be. Never recompute
+`dte` downstream.
 
 ### 8.7 Open interest is repaired at the read, not the row
 
@@ -746,9 +757,10 @@ it with the real schema — a fixture that agreed with itself would pass while t
 `rankCalendars` collapses to one row per expiry pair, because the pair is the decision the
 trader makes. The Analyzer's chain table asks the opposite question — *show me everything,
 decide nothing* — so it needs one row per **strike** inside every cohort. That mismatch, and
-nothing else, is why eight formulas the engine already owns are still written a second time in
+nothing else, was why eight formulas the engine already owns were written a second time in
 `apps/web/src/lib/chain-math.ts` (279 lines): `atmStrike`, `atmIv`, per-leg greeks, `hSkew`,
-`vSkewVsAtm`, `edge`, `netCalendarGreeks`, `calendarDebit`.
+`vSkewVsAtm`, `edge`, `netCalendarGreeks`, `calendarDebit`. **`useChainModel` reads this surface
+now and that file is deleted**; §11.3 records what the switch moved.
 
 | Surface | Shape |
 |---|---|
@@ -794,16 +806,28 @@ Two domain additions were needed, both deliberate and neither a fork of `buildCo
 ≥ 15 DTE, gap ≥ 15 days, one root, one strike), while the reader picks any two legs and the
 screen must MEASURE what they picked — including a diagonal, an inverted pair or a cross-root
 pair. Reusing the ranker would return nothing for exactly the pairs a reader clicks two rows to
-interrogate. Extracting one shared helper from `candidate.ts` is deliberately deferred to the
-switch; refactoring the shipped ranking path does not belong in the same change as adding a read
-surface.
+interrogate. `PairLeg.leg` takes NULLABLE `iv` and greeks, because the reader can click Front on
+a strike the chain quoted and never priced — 24.4% of the live put wing — and arithmetic reads a
+null as zero, which would have produced a clean, plausible, wrong `hSkew` and a "net" that is
+really the back leg's raw greeks. Extracting one shared helper from `candidate.ts` remains
+deferred: refactoring the shipped ranking path does not belong in the same change as a read
+surface or a screen repointing.
 
-### 11.3 The differential test, and what the switch will visibly move
+### 11.3 The differential test, and what the switch moved
 
-`apps/server/src/adapters/chain-surface-differential.test.ts` feeds ONE fixture chain through
-`chain-math.ts` and through the core path and asserts equality field by field. It lives in
+`apps/server/src/adapters/chain-surface-differential.test.ts` fed ONE fixture chain through
+`chain-math.ts` and through the core path and asserted equality field by field. It lived in
 `apps/server` because `apps` is the only element type ESLint's boundary rules let import both
 core and `apps/web`; a core-side test would be `core → apps`, the dependency law backwards.
+
+**It was deleted with its oracle at the switch** — a differential test with one side removed
+compares nothing. It ran green on its last day, 22 tests, including the case added for the
+switch: an unpriced front leg nulls `hSkew`, `fwdIv`, `edge` and the whole net on both sides and
+still quotes the same debit. Its core-only assertions moved to
+`packages/core/src/calendar/application/priceChain.test.ts` (the strike ladder: the priced ∪
+quoted union, gaps keeping their market, vertical skew against the ATM strike's own IV, and every
+skew nulled when that strike never solved). The table below is the record of what the switch
+changed on screen.
 
 Three divergences are **inputs, not formulas**, so the shared fixture neutralises them (one spot
 on every row, one observation instant, and `gex = undefined` so `resolveCarry` returns the same
@@ -831,12 +855,13 @@ Friday and the SPX back leg therefore settles AM. Same defect class as commit `c
 scar already written into `chain-math.legGreeks` — fixed for greeks, never fixed for `edge`.
 Core is right.
 
-Two divergences that were **predicted and are stale**, asserted so they cannot come back: the
+Two divergences that were **predicted and are stale**, so the switch moved neither: the
 `0`-for-inverted substitution is the retired picker scorer (`picker/domain/scoring.ts:139`), not
 this engine, which drops with a named `term-inverted` reason and returns null from `pairMetrics`;
 the `×100`-into-dollars net greeks are likewise the picker
 (`picker/domain/candidate-selection.ts:433-445`), while `pair.ts` returns index points, the same
-units the browser uses.
+units the browser used. Both are still asserted, in `domain/pair.test.ts`, so they cannot come
+back once the differential test is gone.
 
 **The read needs no widening.** `main.ts` wires the SAME `pickerChainRepo.readChainForPicker` to
 both `getChain` (`:366`) and `rankCalendars` (`:434`), and `priceChain` consumes that repo port

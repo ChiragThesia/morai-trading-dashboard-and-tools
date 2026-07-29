@@ -1,0 +1,168 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Why Statistics Matter in Trading
+	•	Key Statistical Concepts: Mean, Median, and Mode
+	•	Conclusion
+Statistics For Option Selling: Essential Concepts You Need To Know
+
+Sean Ryan·September 26, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Why Statistics Matter in Trading
+	•	Key Statistical Concepts: Mean, Median, and Mode
+	•	Conclusion
+There are some basic statistical concepts that you need to be familiar with in order to be a good option seller. In this article we are going to cover some of the statistics 101 ideas that you need to know to at least get started.
+
+You might be wondering why statistics matter in trading. The answer is simple: options trading, like all trading, is a probability-based game. And trust me, if you don’t think the math is important, then you just don’t know the right math.
+
+In this post we are going to keep things simple. My hope is that by the end of it you will understand some of the basic statistical concepts that you will carry forward into your analysis of strategies, returns, etc.
+
+Key Takeaways
+
+	1	Mean (Average):
+	◦	The mean is the sum of a set of numbers divided by the count of those numbers. It’s a measure of central tendency, giving an idea of the “typical” value in a data set. In options trading, the mean is often used to represent the expected value, helping traders predict average outcomes over time.
+	2	Median:
+	◦	The median is the middle number in a sorted list of numbers, providing a more accurate representation of the central tendency when data has outliers or skewed values. In trading, the median helps understand the typical daily movements, especially when there are extreme values affecting the data set.
+	3	Mode:
+	◦	The mode is the most frequently occurring number in a data set, indicating the most common outcome. In trading, the mode helps set realistic expectations by identifying the most common price movements or returns, providing insights into likely future behavior.
+
+
+
+Oh by the way I wrote more blogs about statistics as a follow up to this one. Check out the ones I wrote about the statistical characteristics of option volatility and another one about autocorrelation in options (more stats stuff).
+
+Why Statistics Matter in Trading
+
+Options trading, along with stock and forex trading, relies heavily on probabilities. Knowing the basics of statistics helps you make informed decisions, evaluate risks, and predict potential outcomes more accurately. While you don’t need to be a math whiz, having a firm grasp of fundamental statistical concepts is essential.
+
+Key Statistical Concepts: Mean, Median, and Mode
+
+In this article we are just going to focus on three key statistical measures: the mean, the median, and the mode. These measures help you understand and interpret data, making them invaluable concepts for any trader.
+
+The Mean (Average)
+
+The mean, or average, is the sum of a set of numbers divided by the count of those numbers. It’s a measure of central tendency, giving you an idea of the “typical” value in a data set.
+
+	•	Example: Consider the numbers 4, 5, and 6.
+	◦	Mean = (4 + 5 + 6) / 3 = 15 / 3 = 5
+
+
+
+In options trading, the mean can represent the expected value. For instance, if you roll a six-sided die, the mean roll would be:
+
+	•	Mean = (1 + 2 + 3 + 4 + 5 + 6) / 6 = 21 / 6 = 3.5
+
+
+
+Although you can’t roll a 3.5, this value represents the average outcome if you rolled the die many times.
+
+The Median
+
+The median is the middle number in a sorted list of numbers. It’s particularly useful when your data set has outliers or skewed values that could distort the mean.
+
+	•	Example: Consider the numbers 1, 2, 3, 4, and 10 billion.
+	◦	Median = 3
+
+
+
+In this example, the mean would be heavily skewed by the outlier (10 billion), giving a distorted view of the data. The median, however, provides a more accurate representation of the central tendency.
+
+In trading, if you’re analyzing stock price movements over 10 days and one day has an extreme move due to an earnings announcement, the median will give you a better sense of the typical daily movement.
+
+The Mode
+
+The mode is the most frequently occurring number in a data set. It tells you what is most common or likely to happen.
+
+	•	Example: Consider the numbers 1, 2, 2, 2, 4, 8, and 10.
+	◦	Mode = 2
+
+
+
+The mode can be useful in trading to understand the most common price movements or returns. If a 2% move is the most frequent daily change in a stock, the mode helps you set realistic expectations for future movements.
+
+Conclusion
+
+To summarize, here are the three key statistical concepts:
+
+	•	Mean: The average value, giving an overall expected outcome.
+	•	Median: The middle value, providing a better measure when data has outliers.
+	•	Mode: The most frequent value, indicating the most likely outcome.
+
+
+
+These concepts are not just academic—they have practical applications in trading. By understanding and applying these measures, you can better analyze market data, set realistic expectations, and make more informed trading decisions.
+
+If you liked this blog, make sure to check out the other statistics ones that I wrote (amongst the dozens of volatility trading ones). For example, I wrote a couple blogs about the statistical characteristics of option volatility (blog 1, blog 2) and another one about autocorrelation in options (more stats stuff).
+
+
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

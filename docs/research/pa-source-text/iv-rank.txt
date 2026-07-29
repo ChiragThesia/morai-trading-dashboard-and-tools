@@ -1,0 +1,202 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Real-world Analogy
+	•	Does A Low Volatility Regime Mean Options Are Cheap?
+	•	Low Vol Pricing Method 1: IV/RV Ratios
+	•	Low Vol Pricing Method 2: S&P Volatility as a Benchmark
+	•	The Role of Correlation and Beta
+	•	Picking An Efficient Benchmark: It Doesn’t Need To Be The S&P
+	•	Conclusion
+How to Sell Options Profitably When IV Rank is Low
+
+Sean Ryan·August 26, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Real-world Analogy
+	•	Does A Low Volatility Regime Mean Options Are Cheap?
+	•	Low Vol Pricing Method 1: IV/RV Ratios
+	•	Low Vol Pricing Method 2: S&P Volatility as a Benchmark
+	•	The Role of Correlation and Beta
+	•	Picking An Efficient Benchmark: It Doesn’t Need To Be The S&P
+	•	Conclusion
+Compared to a couple years ago, the VIX is pretty low. We are used to seeing VIX at 25 or higher, and now it’s just at 15. Many traders think that this means there are no trading opportunities, but this is simply not true. Our perception of where implied volatility should be is skewed because we have been in a high volatility environment for so long.
+
+In this article we are going to talk about how to sell options profitably when we are in a lower volatility environment.
+
+Key Takeaways
+
+	1	IV/RV Ratios Don’t Change, So Use Them: Even when we move from a high to low volatility environment the spread between IV/RV remains in the same range, meaning that we can still use this to estimate the risk premium even when things are slowing down
+	2	The Idea That There’s No Premium To Harvest When IV Is Low, is a Myth: As a % of the implied volatility, the variance risk premium is on average the same regardless of the level of implied volatility. Keep on selling.
+	3	Using S&P Volatility as a Benchmark: By comparing the IV/RV ratios of other assets like Apple to the S&P benchmark, traders can determine if these assets are trading at a premium or discount. This analysis helps in identifying mispriced options that can be profitably traded.
+	4	Benchmark against the most correlated ETF: One way to improve this analysis is to substitute the S&P as the benchmark for whichever major ETF is most correlated with the ticker you are analyzing.
+
+Real-world Analogy
+
+Imagine renting a Mustang and driving at high speeds. When you return to the neighborhood and slow down to 40 or 50, it feels like you’re crawling, even though you’re still moving at a dangerous speed.
+
+
+
+This analogy perfectly illustrates what trading in a lower volatility environment feels like, especially coming out of a situation like Covid.
+
+Does A Low Volatility Regime Mean Options Are Cheap?
+
+When we are thinking about implied volatility, an important consideration is the volatility regime that we are in. The reason this is important is because all of the typical measures that we would use to give context to the current level of implied volatility are based on the past. If we are coming out of a high volatility regime and moving into a low volatility regime, then today’s volatility will appear significantly cheap because in absolute terms it is lower than what was observed over the last year for example.
+
+
+
+But that does not mean it is cheap, because under the new market environment it may be entirely reasonable that volatility stay at the new levels for the foreseeable future.
+
+And if this is true, then we need a way to consider the implied volatility we are seeing in the context of the new environment which we find ourselves in.
+
+Typical metrics such as IV rank and percentile won’t work, since they rely on the historical data. So what can we do?
+
+Low Vol Pricing Method 1: IV/RV Ratios
+
+
+
+One way that we can price volatility regardless of the volatility regime that we are in is by transforming the implied and realized volatility into a ratio.
+
+The reason this is effective is because regardless of the volatility regime that we are in there should be a variance risk premium present. As you can see in the image below, regardless of what level the VIX is at, the variance risk premium as a % of the implied volatility remains pretty constant.
+
+
+
+What this means is that even when we change regimes, the spread between implied and realized volatility should persist.
+
+That is why we can use the ratio of implied and realized volatility to benchmark where the fair value of options should be.
+
+Here is what the IV30/RV20 ratio for SPY looks like over the last two years. In this same time period, we have seen the VIX drop from about 25 to 15.
+
+
+
+Even though we have seen this massive decline in the level of volatility, indicating a change in the volatility regime, we continue to see the IV/RV ratio oscillate within the same range.
+
+
+
+Here is what the implied volatility and the IV/RV ratio look like next to each other. Even as the implied volatility drops, the ratio remains in the same range.
+
+That is why using ratios like this is an effective way to measure the variance risk premium and identify option selling opportunities even during a low volatility regime.
+
+NOTE: The Variance Risk Premium Is Present Even When IV is Lower – Just Keep Selling Vol
+
+A really important thing that I want to point out from the VIX variance risk premium table (see below) is that regardless of what level the VIX is at, the variance risk premium is present and as a percentage of the implied volatility it is constant.
+
+
+
+The reason we really need to put emphasis on this is because it proves to us that even when the volatility environment is calmer, there is still ample opportunity to sell options. Nothing really changes.
+
+In fact when you analyze the returns from selling volatility, one could argue that the real time when you shouldn’t be selling options is if the vix is about the 80th percentile. Even though this is when the VRP is the highest in absolute terms, it is also when you experience the most variance. So if there were going to be a time when you could “blow up”, this would be it.
+
+Low Vol Pricing Method 2: S&P Volatility as a Benchmark
+
+Another way that you can price volatility when we have moved from a high to low volatility environment is by benchmarking against a really efficient measure of volatility.. S&P vol is highly efficient due to its liquidity and the number of participants. We compare other assets to this benchmark as a way to price volatility on a relative value basis.
+
+Practical Application: Relative Value Analysis
+
+Let’s apply this concept using real-world examples. We’ll use the S&P vol as our benchmark to determine if other assets are overpriced or underpriced.
+
+Step-by-Step Process
+
+	1	Plot S&P Volatility: Compare the implied volatility (IV) to the realized volatility (RV) of the S&P.
+	2	Identify the Benchmark Ratio: For the S&P, this ratio is typically around 1.3 (IV is 1.3 times RV).
+	3	Compare Other Assets: Plot the IV/RV ratio for other assets like Apple to see if they align with the S&P benchmark.
+
+Example: Apple vs. S&P
+
+By plotting Apple’s IV/RV ratio alongside the S&P, we can see if Apple is trading at a premium or discount relative to the benchmark. This helps us identify potential trading opportunities.
+
+
+
+Here is what the IV/RV ratio for SPY and AAPL look like beside each other. As you can see, the ratio for AAPL had recently deviated significantly from SPY, and then began to come back in line with it.
+
+The Role of Correlation and Beta
+
+When assessing the relative value of vol, consider the correlation and beta of the asset to the benchmark (e.g., S&P).
+
+Practical Considerations
+
+	•	Correlation Analysis: Use the correlation between the asset and the S&P to adjust the IV/RV ratio.
+	•	Beta Adjustment: Multiply the beta by the benchmark vol to get a more accurate fair value.
+
+Picking An Efficient Benchmark: It Doesn’t Need To Be The S&P
+
+The S&P is often used as the benchmark when we are explaining this type of analysis to trades because everyone understands that it is a fair representation of the market at large. But when you are analyzing individual tickers, they may not share a great correlation with the overall market. In these cases, it would actually make more sense to use a more correlated ETF as a benchmark rather than the S&P.
+
+The benchmark is meant to effectively represent what the implied/realized volatility ratio for a ticker like the one you are trading should be. The more accurately the benchmark you.
+
+Conclusion
+
+We always need to remember that when we are using the IV Rank metric to help us search for trades, it is comparing the current environment to the past. When we are coming out of times where everything is high, something “normal” will be indicated as low even though this may not be the reality. We can’t allow our recency bias to influence us and trick us into thinking normal is low.
+
+By using the methods outlined in this article, you will have an easy way to see beyond the bias that is inherent to the IV Rank metric. You’ll know how to price volatility regardless of the regime, and that is a powerful method to have in your option selling arsenal.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

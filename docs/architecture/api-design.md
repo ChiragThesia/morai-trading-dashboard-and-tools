@@ -71,8 +71,9 @@ key, grouping a cohort, or joining legs MUST include it. Omitting it shipped onc
 collided onto one React key, most derived columns dashed because the map kept whichever twin
 arrived last, and one row measured an SPXW back leg against an SPX front (back IV 68.89% vs
 front 24.69%). That class of defect has every input present and finite, so nothing dashes — the
-cell just reads wrong. Web-side, `chain-math.atmIv` and `riskReversalForExpiry` therefore take
-`root` as a required parameter rather than trusting the caller to pre-filter.
+cell just reads wrong. Server-side the cohort key is `(root, expiration)` throughout the calendar
+engine; web-side the one surviving derivation, `riskReversalForExpiry`, takes `root` as a required
+parameter rather than trusting the caller to pre-filter.
 
 Rows are the stored per-contract quotes joined to contract metadata — `leg_observations` and
 `contracts` in [data-model.md](data-model.md). Nothing is computed at request time.

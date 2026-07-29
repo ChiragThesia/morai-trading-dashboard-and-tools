@@ -1,0 +1,159 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is an Iron Condor?
+	•	Why Use an Iron Condor?
+	•	Practical Application of Iron Condors
+	•	Why This Works
+	•	Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+	•	Structuring and Managing Iron Condors Choosing Strikes
+	•	Conclusion
+How to Trade Iron Condors - Ultimate Guide For Option Sellers
+
+Sean Ryan·September 13, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is an Iron Condor?
+	•	Why Use an Iron Condor?
+	•	Practical Application of Iron Condors
+	•	Why This Works
+	•	Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+	•	Structuring and Managing Iron Condors Choosing Strikes
+	•	Conclusion
+One of the hardest hurdles for retail traders to overcome when they look at the world of option selling is the idea of carrying the unlimited risk exposure that is technically a part of your position when you selling a straddle or a strangle.
+
+It makes sense that we would have a natural aversion towards an undefined risk profile. Even though, as we have covered in previous articles, the only reason we are running option selling strategies in the first place is because there is compensation for holding this risk, it makes sense that we are draw towards defining our risk profiles. The solution that was created to handle this problem is to trade a structure like the Iron Condor, which is what we are going to be covering in this article today.
+
+A common way that retail option sellers will structure their trades is an Iron Condor. It is popular because it allows you to structure a trade with a high probability of profit while also having a max loss built into your position.
+
+Key Takeaways
+
+	•	The Core of The Trade Is A Short Strangle: The part of the iron condor that makes you money is the short strangle that you sell. This will usually be sold at strikes between 30-40 delta.
+	•	How To Pick The Strikes For Your Wings: Select long strikes to be equal distance from your short strikes on both sides, and put them as far out as you are comfortable doing. At a minimum, the should be at least 1x the strangle price further away that the short strikes.
+	•	Managing Positions: Implement a delta hedging approach to maintain your directionless view over the lifetime of your trade. Besides that, plan to hold the trade to expiration unless it moves far beyond your max loss level.
+
+
+
+Iron Condors have been a popular trade structure for a pretty long time. It’s usually the go-to trade for new option sellers who understand the importance of being delta neutral, but are still getting started and are not totally comfortable with the true nature of the risk profile that comes with just straight up selling straddles or strangles.
+
+What is an Iron Condor?
+
+
+
+An iron condor is an options strategy where the body strikes are not at the same price. This differs from an iron butterfly where the body strikes are identical (a short straddle). For instance, if Apple (AAPL) is trading at $200, an iron butterfly might involve selling both the $200 put and call, and buying the protective wings at $170 and $230. In an iron condor, the strikes might be spread out, such as selling the $180 put, buying the $160 put, selling the $220 call, and buying the $240 call.
+
+Why Use an Iron Condor?
+
+A common misconception about iron condors is that the benefit of using them is that they offer a higher probability of profit, and therefore they are better than iron butterflys. While it is true that it increases the probability of profit, it doesn’t really matter because it doesn’t actually change your expected value. This is something that we have covered in our discussion about straddles VS strangles.
+
+The true advantage of an iron condor is the ability to capitalize on market skew. Skew refers to the difference in implied volatility between out-of-the-money (OTM) puts and calls. In particular, the type of skew that we look for is called a volatility smile. This is when the implied volatility for both the out-the-money calls and the out-the-money puts are higher than the at-the-money implied volatility.
+
+
+
+In this situation, it is advantageous to sell the out-the-money options because even though they may be cheaper in dollar terms, they are more expensive in volatility terms. If we already hold the view that volatility is expensive, we want to be selling where it’s higher, and so being short the strangle makes more sense than being short the straddle.
+
+Practical Application of Iron Condors
+
+Let’s say Apple is trading at $200, and you observe a volatility smile in the 30 DTE skew. A iron butterfly is what you typically trade, but in this case, given the skew, you opt for an iron condor:
+
+	•	Sell the $180 Put:More expensive due to higher implied volatility compared to at-the-money.
+	•	Buy the $160 Put: Protective wing, chosen because it’s relatively cheap in dollar terms.
+	•	Sell the $220 Call: More expensive due to higher implied volatility compared to at-the-money.
+	•	Buy the $240 Call: Protective wing chosen because it’s relatively cheap in dollar terms.
+
+Why This Works
+
+In this setup, you’re selling options with inflated premiums (due to skew) and buying cheaper protection. This improves your risk-reward ratio compared to a traditional iron condor where you might be selling at-the-money options with less favorable premiums.
+
+Why Do We Look For Cheap Wings In Dollar Terms Instead Of Implied Volatility Terms?
+
+If you asked this question, you are doing a great job in learning how to think about volatility. The reason that we move away from thinking in implied volatility terms and think about the price of our wings in dollar terms is because the wings are certainly going to be more expensive in terms of implied volatility. We already know that given the shape of the skew, the implied volatility will be higher the further out-the-money that we go.
+
+But at a certain point, the cost of the wings becomes so low that it doesn’t matter what the implied volatility is. At the end of the day, the wings are entirely an expense. We basically assume, and hope, that they expire worthless. So all that matters is how much it’s costing us to have this protection.
+
+This is also one of the reasons that we always aim to put our wings as far out as possible. They are meant to hedge away the worst case scenario, not give us a “good risk reward”. We have to remember that as volatility traders we are getting paid to take on risks that others do not want on their books. In order to get paid, we actually need to take on some risk.
+
+Structuring and Managing Iron Condors Choosing Strikes
+
+Here are some general guidelines you can follow for choosing the strikes for your Iron Condor:
+
+	1	Estimate the Standard Deviation: Use the straddle price to gauge the expected move. For instance, if the straddle price is $6 and the stock is trading at $50, the standard deviation is $6.
+	2	Set Short Strikes: Place short strikes one standard deviation away. For example, sell the $44 put and the $56 call.
+	3	Determine Long Strikes: Select long strikes to be equal distance from your short strikes on both sides, and put them as far out as you are comfortable doing. At a minimum, they should be at least 1x more than the distance from at-the-money to your short strike on each side.
+
+Conclusion
+
+I am personally not a huge fan of iron condors. My belief is that as volatility traders we are getting paid for taking on the risk that other people avoid or do not want. In order for us to get paid, we need to actually hold this risk. The reason? No one is trying to give away free money, so markets are priced relatively efficiently. The variance risk premium we aim to monetize is not so large that it can carry the cost of expensive wings (which also have a variance risk premium priced into them).
+
+But I will say that I think anything that helps get retail option sellers away from the idea that they need to be trading direction is a net positive. So if this is the stepping stone that you need in order to get to a point where you are comfortable with the risk profile of being short volatility then go for it! Just remember that it will have an impact on your expected value, and over time the cost of the wings you are buying is going to significantly eat into your returns.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

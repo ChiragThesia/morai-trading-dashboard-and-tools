@@ -51,8 +51,8 @@ export type ChainSmileRow = {
  * decimal vol units (0.032 = 3.2 vol points). Positive = puts bid over calls, the usual equity
  * put skew.
  *
- * ROOT IS A PARAMETER, not a caller convention, for the same reason `chain-math.atmIv` takes the
- * wing: SPX and SPXW quote the SAME strikes on the SAME dates out of different books. An
+ * ROOT IS A PARAMETER, not a caller convention, for the same reason the calendar engine keys a
+ * cohort on it: SPX and SPXW quote the SAME strikes on the SAME dates out of different books. An
  * expiration-only filter builds ONE smile from TWO, handing the interpolator two IVs per delta.
  * Nothing nulls — every input is present and finite — so it returns a clean, plausible, wrong
  * number off a jagged mixture. That is the one failure mode this module cannot report, so the

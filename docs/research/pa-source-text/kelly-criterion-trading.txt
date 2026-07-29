@@ -1,0 +1,172 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Understanding Bankroll Management
+	•	The Impact of High Volatility Events
+	•	Optimizing Your Bet Size
+	•	Example Calculation
+	•	Iron Butterflys and the Kelly Criterion
+	•	Practical Considerations
+	•	Conclusion
+Kelly Criterion Trading: How To Manage Your Bankroll To Maximize Your Returns
+
+Sean Ryan·September 18, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Understanding Bankroll Management
+	•	The Impact of High Volatility Events
+	•	Optimizing Your Bet Size
+	•	Example Calculation
+	•	Iron Butterflys and the Kelly Criterion
+	•	Practical Considerations
+	•	Conclusion
+When running a trading strategy doesn’t it always seem like you either bet too big and risk blowing up, or you bet too small and leave money on the table? This is why one of the most important things about trading is bankroll management. Bankroll management can make or break your trading strategy, turning a winning approach into a losing one if not handled properly, and turning a great strategy into a mediocre one if you don’t know how big you can bet
+
+The article will delve into why bankroll management is essential and how the Kelly Criterion, a mathematical formula used by professional gamblers and traders alike, is used to optimize long-term gains while minimizing the risk of bankruptcy.
+
+Key Takeaways
+
+	1	Essential for Longevity: Proper bankroll management is crucial for traders to sustain profitability and avoid catastrophic losses, even with effective trading strategies.
+	2	The Kelly Criterion: Utilizing the Kelly Criterion helps traders optimize their bet sizes, balancing growth potential with risk to enhance long-term returns while minimizing the chance of bankruptcy.
+	3	Practical Application: Once you know the mathematical “optimal bet size”, you can adjust it based on your personal risk tolerances and whether you prefer to optimize for absolute returns or PnL variance.
+
+Understanding Bankroll Management
+
+
+
+Bankroll management is about determining the amount of capital you want to risk on each trade. If you don’t know how to manage your bankroll, you are playing a dangerous game. You can take a profitable strategy with positive expectancy and turn it into a losing one just by not knowing how big you should be betting. Think about it like this. Imagine you decided to buy the S&P 500. This should be a pretty reasonable way to grow your wealth, right? Now what if you decided to use maximum leverage and put all of your money into it? Not quite as reasonable now, is it. While you may experience periods of outsized gains, you will also experience a massive drawdown at some point. And if you are leveraged to the max, it’s likely a drawdown you can’t recover from.
+
+Without proper bankroll management, even the best trading strategies can fail.
+
+The Impact of High Volatility Events
+
+To illustrate the importance of bankroll management, let’s consider a real-world example. Back in the day, our trading group experienced a five standard deviation move with CRM (Salesforce), one of the most significant earnings blowouts we’ve seen. Such moves are rare but can happen, and they emphasize why it’s vital to manage your bankroll effectively. Many traders underestimate their max loss until it hits them, potentially wiping out their accounts if they bet too large. We managed to survive this situation with a loss that was not “out of the question” because we had spent the time in advance to consider how big we should be betting given that moves of this size do occur and that we need to be prepared for them.
+
+Optimizing Your Bet Size
+
+The Kelly Criterion is a mathematical formula used to determine the optimal size of a series of bets. This criterion helps maximize your bankroll’s growth rate while minimizing the risk of going broke. Here’s the formula:
+
+
+
+Where:
+
+	•	f* is the fraction of the bankroll to wager.
+	•	b is the net odds received on the wager (profit per unit bet).
+	•	p is the probability of winning.
+	•	q is the probability of losing, which is 1−p1 – p1−p.
+
+Example Calculation
+
+Imagine you go to a casino with $1,000 and play a game with a 60% chance of winning. If you win, you receive 1.2 times your bet; if you lose, you lose the amount bet. How much should you bet each time to maximize your long-term growth?
+
+	•	Probability of Winning (P): 0.60
+	•	Odds (B): 1.2
+
+
+
+Plugging these into the Kelly Criterion formula:
+
+
+
+This result means you should bet 26.7% of your bankroll, or $267, on each trade to optimize your long-term growth.
+
+Iron Butterflys and the Kelly Criterion
+
+Let’s apply the Kelly Criterion to an options trading strategy, specifically the iron butterfly. An iron butterfly involves selling a call and a put at one strike price (near the money) and buying a call and a put at different strike prices (out of the money). This strategy profits from low volatility, where the underlying asset stays within a specific range.
+
+Example Scenario:
+
+	•	Winning Scenario: Profit of $500
+	•	Losing Scenario: Loss of $1,000
+	•	Probability of Winning: 68% (0.68)
+
+
+
+Using the Kelly Criterion:
+
+
+
+This result means you should risk 4% of your bankroll on each iron butterfly trade.
+
+Practical Considerations
+
+While the Kelly Criterion provides an optimal betting size, it’s essential to consider practical aspects:
+
+	1	Risk Tolerance: Adjust the Kelly fraction based on your risk tolerance. If you’re risk-averse, consider betting less than the Kelly recommendation.
+	2	Market Conditions: Market volatility and liquidity can impact the performance of your trades. Adjust your strategy accordingly.
+	3	Diversification: Spread your risk across multiple trades or strategies to avoid significant losses from a single event.
+
+Conclusion
+
+We need to be thinking about our bankroll. We have done the hard work of finding a good strategy. We don’t want to leave any money on the table. And we definitely don’t want to bet too big and blow up. Bankroll management is a critical component of successful trading. By using tools like the Kelly Criterion, we can optimize our bet sizes. A good rule of thumb is that while it can be “ok” to bet less than kelly, it is not ok to bet more than kelly. Leaving money on the table is not favorable, but at least you stay in the game. If you bet too big, well, we all know what happens!
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

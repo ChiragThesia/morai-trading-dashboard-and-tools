@@ -1,0 +1,232 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Is The Market REALLY Like A Casino?
+	•	The four people who could be on the other side of your trade
+	•	1. Funds
+	•	Characteristics of Funds
+	•	Trading Against Funds
+	•	2. Retail Traders
+	•	Characteristics of Retail Traders
+	•	Trading Against Retail Traders
+	•	3. Sophisticated Traders
+	•	Characteristics of Sophisticated Traders
+	•	Trading Against Sophisticated Traders
+	•	4. Market Makers
+	•	Characteristics of Market Makers
+	•	Trading with Market Makers
+	•	Conclusion
+Who Trades Options: The 4 Groups That Are On The Other Side Of Your Trade
+
+Sean Ryan·August 22, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Is The Market REALLY Like A Casino?
+	•	The four people who could be on the other side of your trade
+	•	1. Funds
+	•	Characteristics of Funds
+	•	Trading Against Funds
+	•	2. Retail Traders
+	•	Characteristics of Retail Traders
+	•	Trading Against Retail Traders
+	•	3. Sophisticated Traders
+	•	Characteristics of Sophisticated Traders
+	•	Trading Against Sophisticated Traders
+	•	4. Market Makers
+	•	Characteristics of Market Makers
+	•	Trading with Market Makers
+	•	Conclusion
+Retail traders have a habit of viewing the market as a faceless, monolithic entity they are up against. Like a gambler facing off against a casino. trade. But in reality trading is less like roulette, and more like poker, where you are directly competing against individual players.
+
+You see this thing we call a market is exactly that. A market. A place where buyers and sellers come together to engage in transactions. A place where supply meets demand. A place where people come together to engage with each other.
+
+
+
+Once you accept that you are engaging in a market with other, real people. A most important question presents itself: Who is on the other side of our trade?
+
+This article is designed to answer that question.
+
+Key Takeaways
+
+	1	Ask Yourself – Who Is Buying These Options?
+	◦	Understand the different types of market participants: Funds, Retail Traders, Sophisticated Traders, and Market Makers.
+	◦	Each group has distinct motivations and behaviors that influence their trading decisions.
+	2	Understand Their Behaviour
+	◦	If you can understand why someone is on the other side of your trade, you can determine if they are someone you should be trading with
+	◦	For example, we know that on average retail traders and hedge funds are less price sensitive since their motivation is either leverage or protection, not pricing the option.
+
+Is The Market REALLY Like A Casino?
+
+A common analogy used to describe markets is that of a casino. Where some people are like the gambler, and other people are like the casino. Trade as if you are the casino is something you may hear often.
+
+While I agree with the sentiment behind this saying (trade with an edge, positive expected value), the analogy of comparing the market to a casino is not quite accurate. You see when people picture a casino in their mind, they picture slot machines and roulette tables. Games where it’s you versus the house.
+
+But trading is not quite like this. When we place a trade, it’s not the same person/entity on the other side. “The house” is not on the other side of our trades.
+
+Rather, it’s another person. For this reason, trading is a lot more like poker. Where a bunch of different players sit down and engage with each other, placing bets on future outcomes with each other.
+
+If we accept this to be true, one of the most important things when it comes to trading is picking who you play with. If you decided that you wanted to make a living playing poker, which would you rather play with: a table of drunk businessmen looking to pass a few hours while waiting for their flight? Or a table of professional poker players?
+
+
+
+The answer should be obvious. You want to play with the drunk businessmen. Why? You will have an inherent edge/advantage over them. You are there with the intention to make money on the game you are playing. They are there to have fun. If they lose money, it’s ok because they were there for the gamble. This is a perfect situation to be in.
+
+When we are trading, we always want to be asking ourselves Who are we playing with and WHY are they engaging with us?
+
+We may never know exactly who that person is, but if we can get a good idea who it is, we can understand their intentions. If we can understand their intentions, we can determine if this is someone who we can expect to generate returns trading with.
+
+The four people who could be on the other side of your trade
+
+In reality, each trade involves a counterparty—another person or entity who has a different view of the market. Understanding who this counterparty is and their motivations can give you a significant advantage. There are four primary groups you might be trading against:
+
+	1	Funds
+	2	Retail Traders
+	3	Sophisticated Traders
+	4	Market Makers
+
+
+
+Let’s delve into each of these groups and their characteristics.
+
+1. Funds
+
+Funds, including mutual funds, hedge funds, and pension funds, are often on the other side of trades. Their primary motivation for trading options is to manage risk and hedge their equity portfolios against big losses. They are usually buying put options. They are not the most price sensitive bunch, because their primary motivation is insurance and not to save a couple pennies on the puts they are buying (they know they are paying a premium and are willing to do it). We like trading with them for this reason.
+
+
+
+Characteristics of Funds
+
+	•	Portfolio Management: Funds typically hold large portfolios of stocks. They use options primarily to hedge these positions.
+	•	Risk Management: They are more focused on avoiding losses than on making large profits. For example, if a single stock represents more than X% of their portfolio, they might be required to hedge it, especially around significant events like earnings reports.
+	•	Obligatory Hedging: Funds often buy puts or sell calls to hedge their positions, regardless of the cost.
+
+Trading Against Funds
+
+We like trading against funds. They are price insensitive, and are often obligated to purchase options to hedge their portfolios. This creates an opportunity for us to come in, identify the areas where they are paying the largest risk premiums, and be the ones to provide them with that “insurance”.
+
+2. Retail Traders
+
+Ah, the typical retail trader. We have all been them, we may still be them. These are the individuals you see on reddit. This is your cousin who can’t stop telling you about how he is all in on AMC at Thanksgiving dinner. They make up a large portion of the market but are often the least sophisticated participants in options trading.
+
+
+
+Characteristics of Retail Traders
+
+	•	Attracted by Leverage: Retail traders are drawn to options because of the perceived leverage. They hope to amplify their gains, but often overlook the complexities and risks.
+	•	Price Insensitivity: Retail traders typically focus on the potential profits rather than the cost of options. This makes them willing to overpay, especially in volatile markets.
+	•	High Failure Rate: Most retail traders lose money, especially in options trading, where the complexity and volatility are higher.
+
+Trading Against Retail Traders
+
+Retail traders are often your best counterparties. Their lack of price sensitivity and tendency to buy high and sell low are exactly the persona we want to be trading with. It might sound harsh, but it’s the reality of trading. We want to be trading with people who understand less about options and volatility. We want to be trading with people who are looking for a gamble. We like trading with retail traders.
+
+3. Sophisticated Traders
+
+This is a scary group to trade against. Sophisticated traders are professionals who understand the intricacies of options trading. They might work for proprietary trading firms, hedge funds, or as independent traders. These traders have an edge, and it’s unlikely that we know more than them.
+
+
+
+Characteristics of Sophisticated Traders
+
+	•	Deep Understanding of Options: They know how options work and what drives their prices.
+	•	Efficiency Seekers: They excel at finding mispriced options and exploiting these inefficiencies.
+	•	Advanced Models and Information: They often have access to better models, data, and sometimes even insider information.
+
+Trading Against Sophisticated Traders
+
+You want to avoid trading against sophisticated traders whenever possible. They are highly knowledgeable and often have an edge over retail traders. If you suspect a sophisticated trader is on the other side of your trade, we probably don’t want to be trading. It’s hard to know if they are on the other side from us. Usually a sign that they might be there is when things appear to be mispriced, but you can’t quite understand why.
+
+4. Market Makers
+
+The “Darth Vaders” of trading. Market makers are often misunderstood and sometimes seen as the “enemy” by retail traders. But this is just not true. In fact, we need them. Their role is to provide liquidity and keep the bid-ask spreads tight, which as their name would imply, creates the market for us to trade. They get paid for holding inventory and effectively managing the market around different companies. A lot of the time this is actually who we are trading with.
+
+
+
+Characteristics of Market Makers
+
+	•	Liquidity Providers: They ensure there’s enough liquidity in the market by always being ready to buy or sell options.
+	•	Spread Management: They profit from the spread between the bid and the ask prices, rather than directional bets on the market.
+	•	Neutral Positions: Market makers typically remain delta-neutral, meaning they hedge away directional risks.
+
+Trading with Market Makers
+
+While market makers facilitate trades, they are often not the ultimate counterparty in a significant trade. Instead, they bridge the gap between buyers and sellers. What this means is that a lot of the time the person who actually fills our order is a market maker, but they are then turning around and trying to offload the position to the true “demand” for the position, which is one of the other groups.
+
+Conclusion
+
+Every time that you place a trade, ask yourself: Who is on the other side and why are they trading with me? Doing this will help you:
+
+	•	Understand Motivations: Each group has different reasons for trading options. We want to be trading people who are price insensitive. People looking for insurance, and people looking for gambles.
+	•	Increase Conviction: If you know a retail trader is on the other side, you can be more confident in your position. Conversely, if a sophisticated trader is likely your counterparty, you might approach the trade with more caution (or just not do it).
+	•	Refine Strategies: You can build your entire strategies based on trying to engage with particular groups of people. In the article we wrote about research, a big part of understanding your trade is deciphering who is driving demand. A good strategy is like a good business, they know who their customers are.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

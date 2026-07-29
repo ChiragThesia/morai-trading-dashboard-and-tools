@@ -1,0 +1,162 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	What is a Put Option?
+	•	Visualizing a Put Option
+	•	The Role of Premium in Put Options
+	•	Why Sell Put Options?
+	•	Who Buys Put Options?
+	•	Conclusion
+Put Option Explained: A Simple Guide For New Option Traders
+
+Sean Ryan·September 1, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	What is a Put Option?
+	•	Visualizing a Put Option
+	•	The Role of Premium in Put Options
+	•	Why Sell Put Options?
+	•	Who Buys Put Options?
+	•	Conclusion
+This article will give you a simple and clear definition of what a put option is and how they work. A put option gives you the right to sell a stock at a specific price within a certain period. Understanding how put options work is crucial for anyone looking to master options trading and leverage the benefits they offer.
+
+Key Takeaways
+
+	1	Put Option Basics:
+	◦	A put option gives you the right, but not the obligation, to sell a stock at a predetermined strike price within a specified timeframe. This allows you to profit from declining stock prices while limiting potential losses to the premium paid.
+	2	Profit and Loss (P&L) Graph:
+	◦	The P&L graph for a put option shows that you make money as the stock price falls below the strike price minus the premium paid. If the stock price rises, your maximum loss is limited to the premium paid.
+	3	Leverage and Premium:
+	◦	Put options offer significant leverage, allowing for substantial gains if the stock price drops significantly. However, it’s crucial to understand the premium and break-even points to effectively manage risk and maximize profitability.
+
+
+
+A good follow up to this article is the one on call options, which are the other type of option contract available to be traded.
+
+What is a Put Option?
+
+A put option is a contract between two people which provides the right to sell a stock at a predetermined price (strike price) within a specified timeframe for a fixed cost to the buyer. Here’s a practical example to illustrate this concept:
+
+Suppose you want the right to sell Apple stock at $190 per share, while the current market price is $200 per share. You go to the market and buy a put option contract expiring in 30 days with a strike price of $190 for $5.
+
+If, in 30 days, Apple’s stock price falls to lets say $150, you have the right to sell Apple at $190 and you can go into the market and buy it for $150. This means your put option is now worth $40 per contract. Your profit would be equal to the difference between the strike price + the premium you paid and the current price. In this scenario you would profit $35 per contract.
+
+Visualizing a Put Option
+
+Let’s visualize a put option using a profit and loss (P&L) graph. On the y-axis, we have the P&L, and on the x-axis, we have stock price.
+
+Here’s what the P&L graph of a put option looks like:
+
+
+
+Your max loss is limited to the premium you paid for the put option. This is visualized by the blue line (which is the PnL line) going flat as you move more right on the graph. You can also see how your PnL rapidly increases as the stock price decreases, representing the “convexity” of the put option payoff which most option buyers find very attractive (a big reason there is so much demand for them).
+
+The Role of Premium in Put Options
+
+Just like with call options, put options come with a premium. The premium is the price you pay to purchase the put option. This cost impacts your break-even point and overall profitability. Let’s consider this in our example.
+
+Assume you pay $5 for the put option. The P&L graph now adjusts slightly because you must account for the premium paid. If Apple’s stock price doesn’t move or goes up, you lose the $5 premium.
+
+Here’s how it breaks down:
+
+	1	You have the right to sell Apple at $300 (strike price).
+	2	If Apple’s stock price drops to $295, you can sell at $300 and make $5, but since you paid $5 for the option, your net profit is zero.
+
+Therefore, your break-even point is $295 ($300 strike price – $5 premium). You start making a profit once Apple’s stock price drops below $295.
+
+Why Sell Put Options?
+
+The way the premium is determined for a put option is based on the supply and demand for it. Typically the option price that you see in the market is based on the likelihood that the stock price decreases to a point where the put option reaches its “breakeven” price. The reason we are on average attracted to selling these put options is because the implied future price of the stock that is baked into the put option prices actually is a bit lower on average than what is most likely to happen. The reason for this is because of the risk profile of the option.
+
+Think about it. If buying or selling a put option was 0 expected value, who would ever sell them? The seller is the one holding the convexity risk, meaning that on any given trade they can only make a fixed amount (the premium) and are risking losing exponentially more. Everyone would choose to be a buyer of options if there was no difference. Which is why there is.
+
+In order to incentivize people to be sellers of these put options, there is an embedded premium for the seller which makes it such that on average the option seller makes a small profit. When you look over a large sample of these trades, you will see that being a net seller of put options yields a profit. This is due to a phenomenon that we discuss in many other blog posts called the variance risk premium.
+
+This is why option trading firms are built on the idea of selling options, and not the other way around. And this is why retail traders who see longevity in their option trading careers (and actually make money) are typically on the sell side.
+
+Who Buys Put Options?
+
+Put options are the type of contract that are most commonly traded. The reason for this is because when options were first introduced to the market, their primary purpose was to act as insurance for long equity portfolios. Since the risk with equities is to the downside, the put option was more commonly traded since it is ithe way that funds would protect their portfolios.
+
+Put options have been seen as more attractive ways to hedge portfolios compared to other approaches such as diversification because it’s the only form of hedging that doesn’t fail in a market downturn. Diversification for example becomes less effective in a market crash because the correlation between different equities increases towards 1 when the market is going down. This is why put options are typically so popular and are usually traded by funds looking for protection on their portfolios.
+
+One other group that trades put option contracts regularly are retail traders who are looking to express a leveraged directional view that a stock is going to decrease in value rapidly over a given timeframe. The reason they are attracted to this is because they like the idea of being able to take limited risk while having the potential for an exponential gain. Retail traders tend to be very price insensitive and will make up a lot of the demand in situations where there is a lot of news around a ticker and when there has recently been a large move.
+
+Conclusion
+
+A put option is a contract that you can buy or sell which gives the buyer the right, but not the obligation, to sell a stock at a specific price within a certain period.
+
+Put options are typically purchased by funds who are looking to hedge their long equity portfolios and retail traders who are looking to express a directional view on a stock with leverage.
+
+Option sellers need to understand how put options work because they need to be aware of the risk exposures they are taking on when they sell a contract.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

@@ -1,0 +1,200 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Traders Debate Straddles VS Strangles All The Time
+	•	Reasons You Should Choose to Trade a Straddle
+	•	Reasons You Should Choose to Trade a Strangle
+	•	Conclusion: What I Think Makes Sense To Do
+Straddle VS Strangles: Which is Better For Option Sellers?
+
+Sean Ryan·August 18, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Traders Debate Straddles VS Strangles All The Time
+	•	Reasons You Should Choose to Trade a Straddle
+	•	Reasons You Should Choose to Trade a Strangle
+	•	Conclusion: What I Think Makes Sense To Do
+In this article I am going to help you choose between whether you should trade straddles or strangles for your option selling strategies. We will address some of the misconceptions and boil down to the real deciding factors between the two.
+
+Key Takeaways
+
+	1	Straddle vs. Strangle Basics:
+	◦	Straddles involve buying at-the-money call and put options, while strangles involve out-of-the-money options. Strangles offer wider breakeven points, increasing the probability of profit but reducing potential gains compared to straddles.
+	2	Impact on Expected Value:
+	◦	Despite different risk profiles, both straddles and strangles can yield similar expected values over time. The choice between them alters trade-offs but doesn’t necessarily change the overall profitability potential.
+	3	Practical Considerations:
+	◦	Straddle Benefits: Ideal for accurately reflecting implied vs. realized volatility. Provides clear feedback on trade performance, crucial for understanding strategy effectiveness.
+	◦	Strangle Benefits: Reduces transaction and hedging costs by allowing wider delta hedging thresholds. Higher probability of trades expiring between strikes can save on closing costs.
+
+Traders Debate Straddles VS Strangles All The Time
+
+When it comes to choosing which structure is optimal to use for trading volatility, I often hear a debate between straddles and strangles.
+
+We have already covered what a straddle is, so now I want to quickly talk about what a strangle is and why someone may choose to trade them. A strangle is an option structure that is similar to a straddle, except instead of trading at the money strikes, you trade out the money strikes.
+
+For example, if a stock is trading at $100
+
+	•	A straddle would be structure by selling the $100 call and the $100 put
+	•	A strangle would be structure by selling (for example) the $90 put and the $110 call
+
+The reason that a lot of traders prefer to trade strangles over straddles is because they are “wider”. Meaning that there is a greater chance that the stock price will stay between your strikes.
+
+But this “wider breakeven” does not come for free, and this is often what traders forget.
+
+In exchange for the wider break evens, you are also collecting less premium. This means that in the case where you have a “winner”, you actually make less money.
+
+Your probability of profit increases, but the amount you win when you are correct decreases.
+
+Also. the losses you take can be higher since a move outside of your break evens can be higher relative to the premium you collected.
+
+If you remember from our earlier article about expected value, what really matters in the end of the day is how much you are supposed to make on average per trade/bet that you place. This is how you actually determine if you are running a profitable strategy.
+
+The interesting thing about the debate about straddles versus strangles is that regardless of which one you pick, it doesn’t really impact your expected value. All we are doing is changing the variables in the equation, but we are still getting the same outcome.
+
+Let me show you what I mean:
+
+Example 1: Straddle Expected Value Simulation
+
+	•	Bet: $10
+	•	Probability of winning: 60% (0.6)
+	•	Risk/Reward: 1:1
+
+
+
+Example 2: Strangle Expected Value Simulation
+
+	•	Bet: $10
+	•	Probability of winning: 80% (0.8)
+	•	Risk/Reward: 1:0.5
+
+
+
+As you can see, in example 2 the probability of profit was increased, but the amount you win was decreased. There was no material impact on the expected value. All that happened is we got to the same number via a different route.
+
+And it makes sense that this would be the case. Think about it.
+
+Why should one tool be better than another tool if they give us the same exposures to the market?
+
+If we think about our trade in terms of their greeks, you would see that they actually provide us with the same exposures:
+
+
+
+So in theory, there is really no long term difference when you want to choose between straddles and strangles.
+
+But in practice, there are some differences. Both structures have their strengths especially in the context of retail traders, so let’s talk about them now to help you pick between them.
+
+Reasons You Should Choose to Trade a Straddle
+
+The number one reason you should choose to trade the straddle is because the width of the straddle is equivalent to the implied move for the ticker you are analyzing. Since the majority of our trades are based on the difference between implied volatility and realized volatility, we want our PnL to reflect that as accurately as possible.
+
+Think about it. If you were trading a structure that was very wide, there is a chance that you could be trading tickers that have higher realized volatility compared to implied and still making money. At first glance, this doesn’t sound like such a bad thing, but it really is.
+
+Think about it. The risk with option selling is not that you sometimes have small losers. It’s that once in a while you are going to have big losers, or that you are running a strategy that has long term negative expected value.
+
+If you are running trades that should have lost you money in theory, and you are not receiving that feedback from the market, then you are setting yourself up for long term failure.
+
+Straddles are the purest way to trade the implied vs realized move. You get the right feedback, and the right time, and are able to adjust your trades accordingly.
+
+Reasons You Should Choose to Trade a Strangle
+
+The primary reason you should choose to trade a strangle is actually not because it increases your probability of profit. It’s because selling strangles can help you reduce your transaction and hedging costs.
+
+When it comes to option trading, the biggest hurdle once you have found a profitable strategy is overcoming all of the transaction costs and slippage that come with running the strategy. Trading is not cheap, and these costs really add up and can destroy your edge.
+
+When you choose to trade a strangle, a couple of things happen:
+
+	1	You can set a wider threshold for delta hedging.
+	◦	Since the breakeven strikes are wider, you can be a bit looser with your delta hedging which reduces costs.
+	2	There is a higher chance that it expires between your strikes.
+	◦	You do not need to pay to close out the position.
+
+Over a large number of trades these two things really add up. The money you save from not needing to delta hedge as frequently plus only having to cross the spread one way (when you enter the trade) can be the difference between +EV and -EV.
+
+Conclusion: What I Think Makes Sense To Do
+
+If you are a new trader or you are starting to run a new strategy, i think the best thing you can do is trade straddles. You really need that feedback about if you are doing things well.
+
+Even though you are going to be paying a bit more costs, it’s worth it in the early days because trading a straddle makes it much more difficult to hide behind higher probabilities of profit. You will know very quickly if your view on the market is getting you paid, and that is worth more than a few extra points on your trade.
+
+But as you become more confident in your trading, you need to really start caring about the cost of your trade. And it’s at this time that I would argue in favor of the strangle.
+
+You understand how it changes your expected value formula, you have confidence that your strategy is actually profitable, and now by trading the strangle you are increasing the likelihood that you can let the trade expire worthless so you don’t need to pay costs to close out the position.
+
+That sounds pretty good to me.
+
+In fact, in the ETF Premium strategy that we run with the Predicting Alpha members, I personally trade delta 20 strangles that expire weekly. I do this entirely for the reasons described above.
+
+We need to watch our costs, and the strangle really helps us to do that.
+
+
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+

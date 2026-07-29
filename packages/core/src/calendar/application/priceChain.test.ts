@@ -1,11 +1,15 @@
 /**
- * priceChain.test.ts — the per-strike chain surface's read, its wing and its degradations.
+ * priceChain.test.ts — the per-strike chain surface's read, its LADDER, its wing and its
+ * degradations.
  *
- * The FORMULAS are not asserted here. They are asserted against the browser implementation this
- * surface replaces, at `apps/server/src/adapters/chain-surface-differential.test.ts` — that is the
- * only place both sides can be imported, and a second set of hand-written expectations here would
- * be a second thing to keep in step. What this file pins is everything the differential test
- * cannot see: what happens when the read fails, when the chain is empty, and when spot is gone.
+ * The greeks, the ATM reference and the forward-vol identity are pinned in `domain/` — this file
+ * does not restate them. What it owns is `toView`: the shape the use-case assembles out of a
+ * cohort, which is the only thing between the domain and the wire.
+ *
+ * That ladder block was previously covered by a differential test against the browser copy of
+ * these formulas (`apps/server/src/adapters/chain-surface-differential.test.ts`). The browser copy
+ * is gone — `useChainModel` reads this surface — so the differential test went with it and its
+ * ladder assertions moved here.
  */
 
 import { describe, it, expect } from "vitest";
@@ -84,6 +88,62 @@ describe("priceChain — the wing", () => {
     if (!result.ok) return;
     expect(result.value.contractType).toBe("C");
     expect(result.value.cohorts[0]?.strikes.map((r) => r.strike)).toEqual([7350]);
+  });
+});
+
+describe("priceChain — the strike ladder", () => {
+  /** 7350 and 7400 solve; 7425 is quoted and never solved. Spot 7401.89 puts the ATM at 7400. */
+  const LADDER = [
+    quote({ strike: 7_425_000, bsmIv: null, bid: 58.0, ask: 60.5, openInterest: 66 }),
+    quote({ strike: 7_350_000, bsmIv: "0.1724", bid: 33.1, ask: 34.9, openInterest: 1290 }),
+    quote(),
+  ];
+
+  async function ladder(rows: ReadonlyArray<CalendarChainQuote> = LADDER) {
+    const result = await makePriceChainUseCase(deps({ readChain: () => Promise.resolve(ok(rows)) }))(
+      {},
+    );
+    if (!result.ok) throw new Error(result.error.message);
+    const cohort = result.value.cohorts[0];
+    if (cohort === undefined) throw new Error("no cohort");
+    return cohort;
+  }
+
+  it("unions the priced legs with the quoted-but-unpriced ones, ascending by strike", async () => {
+    // The union IS the surface's contract. Dropping the unpriced strike would be a hidden filter
+    // on a screen whose whole purpose is to hide nothing — and it was silent on 24.4% of the live
+    // put wing (the null + 'NaN' share measured 2026-07-28).
+    const cohort = await ladder();
+    expect(cohort.strikes.map((r) => r.strike)).toEqual([7350, 7400, 7425]);
+  });
+
+  it("leaves an unpriced strike's greeks null and keeps its market — a gap is not a deletion", async () => {
+    const cohort = await ladder();
+    const gap = cohort.strikes.find((r) => r.strike === 7425);
+    expect([gap?.iv, gap?.delta, gap?.gamma, gap?.theta, gap?.vega, gap?.vSkew]).toEqual([
+      null, null, null, null, null, null,
+    ]);
+    expect([gap?.bid, gap?.ask, gap?.openInterest]).toEqual([58.0, 60.5, 66]);
+  });
+
+  it("measures vertical skew against the ATM strike's OWN IV", async () => {
+    const cohort = await ladder();
+    expect(cohort.atmStrike).toBe(7400);
+    expect(cohort.atmIv).toBeCloseTo(0.162, 12);
+    expect(cohort.strikes.find((r) => r.strike === 7400)?.vSkew).toBeCloseTo(0, 12);
+    expect(cohort.strikes.find((r) => r.strike === 7350)?.vSkew).toBeCloseTo(0.1724 - 0.162, 12);
+  });
+
+  it("nulls EVERY vertical skew when the ATM strike itself never solved", async () => {
+    // A neighbour's IV is not a substitute reference. V-Skew renders as a sortable column, so a
+    // row silently re-based on 7350 is not merely slightly off — it is on a different scale from
+    // every row it gets ranked against, and the ranking is what tells the reader they compare.
+    const cohort = await ladder(LADDER.map((q) => (q.strike === 7_400_000 ? { ...q, bsmIv: null } : q)));
+    expect(cohort.atmStrike).toBe(7400);
+    expect(cohort.atmIv).toBeNull();
+    expect(cohort.strikes.every((r) => r.vSkew === null)).toBe(true);
+    // The 7350 leg still prices — a missing reference kills the skew column, not the greeks.
+    expect(cohort.strikes.find((r) => r.strike === 7350)?.delta).not.toBeNull();
   });
 });
 

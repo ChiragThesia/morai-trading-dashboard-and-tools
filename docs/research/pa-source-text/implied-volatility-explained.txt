@@ -1,0 +1,225 @@
+Predicting AlphaPredicting Alpha
+	•	Platform
+	•	Resources
+	•	Pricing
+	•	About
+LoginJoin Now
+On this page
+	•	Key Takeaways
+	•	Why Implied Volatility Matters
+	•	The Basics of Option Pricing
+	•	Implied Volatility vs. Price
+	•	Calculating Implied Volatility
+	•	The Black-Scholes Model
+	•	Practical Example
+	•	Using Implied Volatility for Trading
+	•	Historical Implied Volatility
+	•	Implied Volatility and Option Strategies
+	•	Comparing Options Using Implied Volatility
+	•	Absolute and Relative Comparisons
+	•	Real-World Example
+	•	Advanced Concepts and Real-World Applications
+	•	Practical Trading Scenarios
+	•	How to speak the language of Volatility
+	•	The nature of being short volatility
+	•	Conclusion
+Implied Volatility Explained: The Lens Of Option Trading
+
+Sean Ryan·September 16, 2024
+
+On this page
+On this page
+	•	Key Takeaways
+	•	Why Implied Volatility Matters
+	•	The Basics of Option Pricing
+	•	Implied Volatility vs. Price
+	•	Calculating Implied Volatility
+	•	The Black-Scholes Model
+	•	Practical Example
+	•	Using Implied Volatility for Trading
+	•	Historical Implied Volatility
+	•	Implied Volatility and Option Strategies
+	•	Comparing Options Using Implied Volatility
+	•	Absolute and Relative Comparisons
+	•	Real-World Example
+	•	Advanced Concepts and Real-World Applications
+	•	Practical Trading Scenarios
+	•	How to speak the language of Volatility
+	•	The nature of being short volatility
+	•	Conclusion
+As an option seller, the most important concept that we need to understand is called implied volatility. This is the concept that once understood will really start to move the needle on your option selling skills.
+
+The reason implied volatility is such an important concept is because options are volatility products. The reason they exist is because they allow traders to express a view on how much a stock is going to move on a future, rather than just what direction it will move (as you can do already with stock).
+
+Professional option traders think and speak about options in terms of implied volatility, not price. In this article, we are going to explain why.
+
+Key Takeaways
+
+	1	Implied Volatility vs. Price: IV provides a standardized way to assess if an option is fairly priced, expensive, or cheap. It frames the way an option is being priced in the context of what it implies for the future of the ticker it’s being traded on. This helps traders compare options across different stocks and timeframes.
+	2	Calculating Implied Volatility: The Black-Scholes model uses inputs like current stock price, strike price, time to expiration, dividends, and risk-free interest rate to determine IV. Understanding IV helps traders predict how options are priced.
+	3	Using Implied Volatility: Traders analyze IV to gauge if current levels are high or low, design strategies based on IV changes, and compare options using IV for better trading opportunities and risk management.
+
+Why Implied Volatility Matters
+
+The Basics of Option Pricing
+
+To begin, let’s understand the basics of option pricing. Imagine a stock trading at $100, and we are looking at the 105 strike call option. This option could be priced at $2, $3, or $8, but how do we determine if it’s a good trade? The price alone doesn’t provide enough information. We need to understand what the price of the option is telling us about what the market thinks will happen in the future, since that is what will determine if the option increases or decreases in value as time moves forward.
+
+Implied Volatility vs. Price
+
+Implied volatility (IV) is something we have defined in depth in previous articles. In simple terms it is a reflection of the market’s expectations of how much a stock will move in the future. Professionals always prefer to convert option prices to implied volatility so they can asses whether an option is fairly priced, expensive, or cheap. This approach allows them to compare options across different stocks and timeframes on a consistent basis.
+
+For example, if a stock is trading at $100 and the 105 strike call option is priced at $3.70, what does that mean? Without context, we can’t determine if $3.70 is a good price.
+
+Calculating Implied Volatility
+
+The Black-Scholes Model
+
+The Black-Scholes model is a widely used mathematical model for pricing options. It takes several inputs:
+
+	•	Current stock price
+	•	Strike price
+	•	Time to expiration
+	•	Dividends
+	•	Risk-free interest rate
+	•	Implied volatility
+
+
+
+Given these inputs, the model can calculate the option price. Conversely, if we know the option price and other variables, we can determine the implied volatility. This calculation helps traders understand what the market expects in terms of future volatility.
+
+Practical Example
+
+Let’s consider an example where the stock is trading at $100, and we look at the 105 strike call option with 30 days to expiration. If the implied volatility is 30%, the Black-Scholes model might price the option at $1.56. If the implied volatility increases to 40%, the option price might rise to $2.60. This change illustrates how volatility impacts option pricing.
+
+Using Implied Volatility for Trading
+
+The first thing to note is that implied volatility is not something you are going to need to calculate for yourself. In your brokerage, and in the Predicting Alpha terminal, these calculations are done for you. What is really important is knowing how to interpret it and how to determine if it is fair value or not.
+
+There are two core ways to determine if the price of an option is cheap or expensive. To keep things simple at this stage we are just going to focus on the first way, which is historical analysis.
+
+Historical Implied Volatility
+
+By analyzing historical implied volatility, traders can determine if the current IV is high or low compared to historical levels. For instance, if the IV for Apple is currently 38% and has historically ranged between 20% and 40%, traders can assess if the current level is relatively high or low. Given the characteristics of volatility, we know that over time it should return to its means, and this may lead us to think that the implied volatility for Apple is expensive right now.
+
+Implied Volatility and Option Strategies
+
+The reason we run option strategies in the first place is because of the variance risk premium. We know that on average the implied volatility overstates the realized volatility. We know why this is often the case.
+
+When we are constructing strategies, traders will often prefer to use the implied volatility numbers because it allows for us to create analysis that can be applied across many tickers. Since many strategies will require a degree of diversification, using a “language” that applies to all tickers is attractive.
+
+And since options are volatility products, speaking in the language of volatility just makes sense.
+
+Comparing Options Using Implied Volatility
+
+Absolute and Relative Comparisons
+
+Implied volatility allows traders to compare options both absolutely (within the same stock) and relatively (across different stocks). For instance, if the 120 call option for Apple has an IV of 50% and the 125 call option has an IV of 45%, a trader can compare these options more effectively. If another stock’s option has a significantly different IV, the trader can quickly recognize the difference in expected future movement between the tickers even if they are trading at drastically different share prices.
+
+Real-World Example
+
+Consider two stocks: Apple (trading at $200 / share) and a micro cap company (trading at $1 / share). The 200 strike call option for Apple might be priced at $2.40, while the 1 strike call option for the micro cap company maybe be trading at $0.50. Without considering IV, these prices seem incomparable. Or in the worst case, you may find some traders argue that the call option on the micro cap is cheaper than the one for Apple. However, by looking at the IV (say 30% for Apple and 250% for the biotech company), you can easily compare the two and what they are saying about their respective companies.
+
+Advanced Concepts and Real-World Applications
+
+Practical Trading Scenarios
+
+Let’s explore a real-world example. Suppose you are looking at options for BCLI, a biotech company. The implied volatility for the 17.50 strike call might be 262%, while the 12.50 call is 185%. At first glance, this discrepancy might seem like an arbitrage opportunity. However, upon further analysis, you might realize that the higher IV is due to the increased uncertainty and risk associated with the biotech company’s future.
+
+How to speak the language of Volatility
+
+Since options are volatility product and we think about the value of options through the lens of implied volatility, it also makes sense that we speak about them in terms of implied volatility.
+
+Just like how with a stock, you can be long the stock or short the stock. With options, the way we speak about them is the same. You can be either long volatility or short volatility.
+
+A very important distinction here is that whether you are long or volatility does not mean you think the stock will go up or down.
+
+When you are long volatility, you are stating that you believe the stock will experience a higher level of volatility than implied by the market.
+
+When you are short volatility, you are stating that you believe the stock will experience a lower level of volatility than implied by the market.
+
+Because of the variance risk premium which we just spoke about, short volatility is the view that most professional option traders are expressing through their strategies. They are usually selling options. The entire reason they run strategies in the option space is because this phenomenon exists.
+
+The nature of being short volatility
+
+When you are short volatility (selling options) what you are saying to the market is that you believe implied volatility will be higher than the realized volatility. The nature of this trade and strategies that are based on it is that most of the time you will receive the option premium. You will experience many small winners and then once in a while, lets say if the market crashes, you will experience a big loser.
+
+Similar to selling insurance, you usually collect the premium and once in a while someone will crash their car and you will have to pay out to cover it.
+
+The reason we are able to do this effectively is because the variance risk premium makes it such that the premiums we collect on most days outweighs the losses we take if there is an outsized move.
+
+
+
+Conclusion
+
+Implied volatility is what makes it possible for us to trade options effectively. The deeper you get into the world of option selling, the more you will naturally gravitate towards thinking about everything in terms of volatility.
+
+Learn to speak the language of implied volatility. It’s the lingo used by the professionals. It’s the right way to be thinking about the product (options) that you trade.
+
+An added bonus of learning to view the world of options through the lens of implied volatility is that it will help you search through the noise that you will encounter while trying to learn more about options online. If you encounter someone who doesn’t understand that options are volatility products and doesn’t teach you about this, then you can be pretty certain that they do not know what they are talking about. The reality is, that it’s a pretty complicated topic and that most people who are trading options because they just want to have a little gamble aren’t going to be interested in learning these things. So you will find that most people who are creating education that is simplified to appeal to that base do not talk about these things, and you should avoid this content.
+
+Learn implied volatility. Set yourself up to continue learning the right things in the future. Become a better option trader. Profit.
+Share
+	•	
+	•	
+	•	
+	•	
+	•	
+Do You Want Better Returns?
+Hey, I'm Sean Ryan. I'm determined to help traders run a profitable book that makes money right now and in the long run.
+Curious How
+
+We published the complete research for our new portfolio.
+
+Read Research
+Get Weekly Portfolio Insights
+
+
+
+Get Weekly Updates
+
+Learn how to run our new portfolio for free!
+
+Access Now
+Keep reading
+More like this
+
+December 11, 2025
+The Ultimate Guide to Selling Options for 2026
+A free, comprehensive resource covering everything you need to know to run a profitable option selling portfolio including theory, strategies, and advanced topics typically not taught to traders.
+
+November 22, 2024
+How to Roll Weekly Options Like a Pro
+
+October 23, 2024
+$224,914.81 Profit Across 1,381 Trades: A Live Breakdown of Earnings Strategy Returns
+
+
+
+
+
+Predicting AlphaPredicting Alpha
+The world's first hedge-fund-as-a-service.
+	•	
+	•	
+	•	
+Product
+	•	Platform
+	•	Pricing
+Resources
+	•	Blogs
+	•	Courses
+	•	Research
+Company
+	•	About
+	•	Contact
+Legal
+	•	Privacy
+	•	Terms
+	•	Risk Disclosure
+Start running this portfolio
+Run an evidence-based portfolio that beats the market.
+Join Now
+© 2026 Predicting Alpha. All rights reserved.
+All systems operationalPrivacyTermsRisk Disclosure
+
