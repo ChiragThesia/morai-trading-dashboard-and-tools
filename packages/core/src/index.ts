@@ -710,7 +710,7 @@ export {
   makeRankCalendarsUseCase,
   // The per-strike chain surface: the SAME engine in the shape the Analyzer's chain table needs
   // (one row per strike per cohort, nothing ranked), plus the ungated two-leg arithmetic that
-  // table's Pair panel measures. Replaces apps/web/src/lib/chain-math.ts.
+  // table's Pair panel measures. Replaced apps/web/src/lib/chain-math.ts, now deleted.
   makePriceChainUseCase,
   pairMetrics,
   quotedAtm,
@@ -722,6 +722,10 @@ export type {
   CalendarChainQuote,
   CalendarRanking,
   Candidate,
+  // The snapshot's one (r, q). Both use-case dep shapes reference it, so a caller composing
+  // either needs the name. It was missing here — invisible because the only importer is a test
+  // file and `apps/server/tsconfig.json` excludes `*.test.ts` from the build.
+  Carry,
   ChainCohortView,
   ChainStrikeRow,
   ChainSurface,

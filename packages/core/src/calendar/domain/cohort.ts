@@ -166,33 +166,44 @@ export function buildCohorts(
   const quotedByGroup = groupQuotedStrikes(quotes, opts.contractType);
 
   const cohorts: Cohort[] = [];
-  for (const group of groups.values()) {
-    const dte = calendarDaysTo(opts.now, group.expiration);
-    // `dte <= 0` and not `< 0`: dte is frozen at the observation day, so a row observed
-    // yesterday whose expiration WAS yesterday arrives with dte 0 and would otherwise render
-    // today as a tradeable 0DTE cohort. A contract expiring today is also not a calendar leg.
-    if (dte === null || dte <= 0) continue;
+  // ITERATE THE QUOTED GROUPS, NOT THE PRICED ONES. `groups` above is keyed off rows that already
+  // carry a usable IV, so an expiry the bounded IV drain has not reached yet forms no group at
+  // all — and a cohort that never exists cannot be rescued by `unpricedStrikes` below. Measured
+  // on the live chain read 2026-07-29, two put groups were in exactly that state: SPXW 2026-07-27
+  // (199 strikes quoted, 0 solved) and SPXW 2026-11-29 (1 quoted, 0 solved). Nothing is lost by
+  // dropping the other direction: a group present in `groups` but absent here holds only
+  // non-positive or non-finite strikes, which `priceLeg` refuses for the same reason
+  // `groupQuotedStrikes` skips them, so it could never have produced a leg OR a gap.
+  for (const [key, quoted] of quotedByGroup) {
+    const dte = calendarDaysTo(opts.now, quoted.expiration);
+    // `< 0` and not `<= 0`. This dte is measured against the INJECTED `now`, not against the
+    // observation day, so an expiry that has already been and gone arrives negative however stale
+    // the snapshot is — a row observed yesterday whose expiration WAS yesterday reads −1 and is
+    // refused here. That leaves dte 0 meaning one thing only: expires today, still trading. The
+    // guard used to conflate the two and cost the chain table every 0DTE row it had — 192 quoted
+    // SPXW puts on 2026-07-29 alone. "Has it settled?" is `yearsToSettlement`'s question, and it
+    // is asked next; it is root-aware, which calendar arithmetic cannot be.
+    if (dte === null || dte < 0) continue;
 
-    const t = yearsToSettlement(opts.now, group.expiration, group.root);
+    const t = yearsToSettlement(opts.now, quoted.expiration, quoted.root);
     if (t <= 0) continue;
 
     const legs: CohortLeg[] = [];
-    for (const entry of group.byStrike.values()) {
+    for (const entry of groups.get(key)?.byStrike.values() ?? []) {
       const leg = priceLeg(entry.q, entry.iv, spot, t, opts.carry, opts.contractType);
       if (leg !== null) legs.push(leg);
     }
-    if (legs.length === 0) continue;
     legs.sort((a, b) => a.strike - b.strike);
 
     const atm50 = interpolateFiftyDeltaIv(legs);
 
     // QUOTED MINUS PRICED. A strike is a gap exactly when it did not become a leg — which also
     // handles the schwab+cboe union, where one vendor's row solves and the other's does not:
-    // subtracting by strike means the ladder can never show the same strike twice.
+    // subtracting by strike means the ladder can never show the same strike twice. There is no
+    // empty-cohort guard because there cannot be an empty cohort: a key exists here only because
+    // some strike was quoted, so `legs ∪ unpricedStrikes` is never empty.
     const priced = new Set(legs.map((l) => l.strike));
-    const unpricedStrikes = (quotedByGroup.get(`${group.root}|${group.expiration}`) ?? []).filter(
-      (s) => !priced.has(s.strike),
-    );
+    const unpricedStrikes = quoted.strikes.filter((s) => !priced.has(s.strike));
 
     // Resolved over every strike the cohort QUOTES, not only the ones that priced. Scanning
     // `legs` instead — which has already lost every strike without a usable IV — is how a strike
@@ -204,8 +215,8 @@ export function buildCohorts(
     );
 
     cohorts.push({
-      root: group.root,
-      expiration: group.expiration,
+      root: quoted.root,
+      expiration: quoted.expiration,
       dte,
       t,
       carry: opts.carry,
@@ -311,8 +322,19 @@ export function quotedAtm(
   return { strike: best, iv: ivAt(cohort.legs, best) };
 }
 
+/** One `(root, expiration)` group as the WING QUOTES it — before anything was priced. */
+type QuotedGroup = {
+  readonly root: Root;
+  readonly expiration: string;
+  /** Ascending by strike. Every strike quoted, whether or not its IV solved. */
+  readonly strikes: ReadonlyArray<UnpricedStrike>;
+};
+
 /**
  * groupQuotedStrikes — EVERY strike the wing quotes, keyed `(root, expiration)`.
+ *
+ * Carries `root` and `expiration` alongside the strikes because this map, not the priced one, is
+ * what `buildCohorts` iterates: a group whose every row is still unsolved exists only here.
  *
  * Deliberately not "the strikes whose IV failed to parse". The caller subtracts the strikes that
  * became legs, so a gap is defined as `quoted − priced` — which is what "could not price" means,
@@ -328,8 +350,11 @@ export function quotedAtm(
 function groupQuotedStrikes(
   quotes: ReadonlyArray<CalendarChainQuote>,
   contractType: "C" | "P",
-): Map<string, UnpricedStrike[]> {
-  const byGroup = new Map<string, Map<number, UnpricedStrike>>();
+): Map<string, QuotedGroup> {
+  const byGroup = new Map<
+    string,
+    { root: Root; expiration: string; byStrike: Map<number, UnpricedStrike> }
+  >();
 
   const rows = quotes
     .filter((q) => q.contractType === contractType)
@@ -344,11 +369,12 @@ function groupQuotedStrikes(
   for (const q of rows) {
     const strike = q.strike / STRIKE_SCALE;
     if (!Number.isFinite(strike) || strike <= 0) continue;
-    const key = `${q.root ?? DEFAULT_ROOT}|${q.expiration}`;
+    const root = q.root ?? DEFAULT_ROOT;
+    const key = `${root}|${q.expiration}`;
     const existing = byGroup.get(key);
-    const byStrike = existing ?? new Map<number, UnpricedStrike>();
-    if (existing === undefined) byGroup.set(key, byStrike);
-    byStrike.set(strike, {
+    const group = existing ?? { root, expiration: q.expiration, byStrike: new Map() };
+    if (existing === undefined) byGroup.set(key, group);
+    group.byStrike.set(strike, {
       strike,
       bid: Number.isFinite(q.bid) ? q.bid : 0,
       ask: Number.isFinite(q.ask) ? q.ask : 0,
@@ -356,9 +382,13 @@ function groupQuotedStrikes(
     });
   }
 
-  const out = new Map<string, UnpricedStrike[]>();
-  for (const [key, byStrike] of byGroup) {
-    out.set(key, [...byStrike.values()].sort((a, b) => a.strike - b.strike));
+  const out = new Map<string, QuotedGroup>();
+  for (const [key, group] of byGroup) {
+    out.set(key, {
+      root: group.root,
+      expiration: group.expiration,
+      strikes: [...group.byStrike.values()].sort((a, b) => a.strike - b.strike),
+    });
   }
   return out;
 }

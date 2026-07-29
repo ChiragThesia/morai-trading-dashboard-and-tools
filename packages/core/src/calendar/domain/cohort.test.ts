@@ -128,21 +128,29 @@ describe("buildCohorts — root is part of the key", () => {
 });
 
 describe("buildCohorts — the three states of bsmIv", () => {
+  /**
+   * These three used to assert "the cohort is empty", which was a PROXY for "the leg is dropped"
+   * and stopped being a true one when a cohort where nothing solved became a ladder of gaps. The
+   * claim under test never changed: an unusable IV produces no LEG. It now also produces a named
+   * gap, which is the whole point — the strike is refused, not erased.
+   */
+  function noLegs(bsmIv: string | null): void {
+    const cohorts = buildCohorts([quote({ bsmIv })], opts);
+    expect(cohorts).toHaveLength(1);
+    expect(cohorts[0]?.legs).toHaveLength(0);
+    expect(cohorts[0]?.unpricedStrikes.map((s) => s.strike)).toEqual([7400]);
+  }
+
   it("drops a leg whose IV is null", () => {
-    const cohorts = buildCohorts([quote({ bsmIv: null })], opts);
-    expect(cohorts).toHaveLength(0);
+    noLegs(null);
   });
 
   it("drops a leg whose IV is the literal string 'NaN' — the permanent-failure marker", () => {
-    for (const s of ["NaN", "nan"]) {
-      expect(buildCohorts([quote({ bsmIv: s })], opts)).toHaveLength(0);
-    }
+    for (const s of ["NaN", "nan"]) noLegs(s);
   });
 
   it("drops a leg whose IV parses to zero or negative — gamma and vega divide by sigma", () => {
-    for (const s of ["0", "0.0", "-0.15"]) {
-      expect(buildCohorts([quote({ bsmIv: s })], opts)).toHaveLength(0);
-    }
+    for (const s of ["0", "0.0", "-0.15"]) noLegs(s);
   });
 
   it("keeps the solved legs in a cohort where a sibling failed", () => {
@@ -527,13 +535,15 @@ describe("buildCohorts — wing and staleness", () => {
     expect(cohorts[0]?.legs[0]?.strike).toBe(7400);
   });
 
-  it("drops an already-settled cohort, including one that expires TODAY", () => {
-    // dte is frozen at the observation day, so a row observed yesterday whose expiration WAS
-    // yesterday arrives with dte 0 and would otherwise render as a tradeable 0DTE cohort.
+  it("drops a cohort that expired BEFORE today, however recently", () => {
+    // The staleness half of the old `dte <= 0` guard, kept. `dte` is measured against the
+    // injected `now`, so a row observed yesterday whose expiration WAS yesterday arrives at
+    // dte −1 and is refused — no observation-date comparison is needed to tell the two apart.
+    // Live on 2026-07-29: SPXW 2026-07-27 still sat in the chain read with 199 quoted puts.
     const cohorts = buildCohorts(
       [
-        quote({ expiration: "2026-07-27" }), // today
         quote({ expiration: "2026-07-26" }), // yesterday
+        quote({ expiration: "2026-07-21" }), // last week
         quote({ expiration: "2026-08-11" }), // real
       ],
       opts,
@@ -543,6 +553,76 @@ describe("buildCohorts — wing and staleness", () => {
 
   it("drops a cohort whose expiration string is unparseable", () => {
     expect(buildCohorts([quote({ expiration: "2026-02-30" })], opts)).toHaveLength(0);
+  });
+});
+
+describe("buildCohorts — 0DTE trades until ITS OWN close", () => {
+  it("keeps a cohort expiring TODAY that has not settled yet", () => {
+    // `NOW` is 16:00Z — noon in New York, four hours before a PM-settled close. The cohort is
+    // live and quoted, and the per-strike chain surface has to show it: on 2026-07-29 the SPXW
+    // 0DTE expiry carried 192 quoted puts, every one of them invisible under the old guard.
+    // `useChainModel.ts` (apps/web) has kept 0DTE all along — this is the engine catching up.
+    const cohorts = buildCohorts(
+      [quote({ expiration: "2026-07-27" }), quote({ expiration: "2026-08-11" })],
+      opts,
+    );
+    expect(cohorts.map((c) => c.expiration)).toEqual(["2026-07-27", "2026-08-11"]);
+    expect(cohorts[0]?.dte).toBe(0);
+    expect(cohorts[0]?.t ?? 0).toBeGreaterThan(0);
+  });
+
+  it("drops the same-dated cohort whose settlement instant has ALREADY passed", () => {
+    // The two roots settle at different instants on a third Friday, so at one `now` the same
+    // expiration date is live on one book and gone on the other. 2026-08-21 is the third Friday:
+    // SPX settles 09:30 ET (13:30Z), SPXW 16:00 ET (20:00Z). At 16:00Z the AM book is finished.
+    // This is `yearsToSettlement`'s job, not the DTE guard's — which is exactly why the DTE
+    // guard does not need to reach for `<= 0` to express "a settled contract is not tradeable".
+    const friday = new Date("2026-08-21T16:00:00.000Z");
+    const cohorts = buildCohorts(
+      [
+        quote({ expiration: "2026-08-21", root: "SPX", time: friday }),
+        quote({ expiration: "2026-08-21", root: "SPXW", time: friday }),
+      ],
+      { ...opts, now: friday },
+    );
+    expect(cohorts.map((c) => c.root)).toEqual(["SPXW"]);
+  });
+});
+
+describe("buildCohorts — a cohort where NOTHING solved is a ladder of gaps, not a deletion", () => {
+  it("emits the cohort with every strike in `unpricedStrikes` and no legs", () => {
+    // The loss this closes. Groups were keyed off rows that already carried a usable IV, so an
+    // expiry the bounded IV drain had not reached yet formed no group at all — and a cohort that
+    // never exists cannot be rescued by the gap list further down. Live on 2026-07-29 the chain
+    // read carried two such put groups: SPXW 2026-07-27 (199 quoted, 0 solved) and SPXW
+    // 2026-11-29 (1 quoted, 0 solved).
+    const cohorts = buildCohorts(
+      [
+        quote({ expiration: "2026-08-11", strike: 7_350_000, bsmIv: null }),
+        quote({ expiration: "2026-08-11", strike: 7_400_000, bsmIv: "NaN" }),
+        quote({ expiration: "2026-08-11", strike: 7_450_000, bsmIv: null }),
+      ],
+      opts,
+    );
+    expect(cohorts).toHaveLength(1);
+    const only = cohorts[0];
+    expect(only?.legs).toHaveLength(0);
+    expect(only?.unpricedStrikes.map((s) => s.strike)).toEqual([7350, 7400, 7450]);
+    // The quotes survive intact — a gap row is a row with a market and no greeks.
+    expect(only?.unpricedStrikes[1]?.bid).toBe(60);
+    expect(only?.unpricedStrikes[1]?.ask).toBe(61);
+    // The ATM strike is still resolvable over the quoted union; its IV is not, and is not faked.
+    expect(only?.atmStrike).toBe(7400);
+    expect(only?.atmIv).toBeNull();
+    expect(only?.atm50Iv).toBeNull();
+    expect(only?.atm50BracketWidth).toBeNull();
+  });
+
+  it("still emits nothing when the group quotes no usable strike at all", () => {
+    // An empty ladder is not a row. A non-positive strike is refused by the pricing path AND by
+    // the quoted-strike pass, so this group has neither a leg nor a gap to show.
+    expect(buildCohorts([quote({ strike: 0, bsmIv: null })], opts)).toHaveLength(0);
+    expect(buildCohorts([quote({ strike: -1_000, bsmIv: "0.16" })], opts)).toHaveLength(0);
   });
 });
 

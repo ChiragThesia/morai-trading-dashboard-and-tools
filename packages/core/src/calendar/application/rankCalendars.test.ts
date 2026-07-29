@@ -314,6 +314,140 @@ describe("rankCalendars — determinism", () => {
   });
 });
 
+/**
+ * THE PIN. `buildCohorts` is shared between this use-case and the per-strike chain surface, so
+ * every row the surface needs back is a row the ranker starts seeing too. This block is the
+ * evidence that admitting them cannot move a ranking.
+ *
+ * The expected list below is HARDCODED from a run against the code as it stood before 0DTE and
+ * all-unpriced cohorts were admitted. A dynamically-recomputed expectation would pass whatever
+ * the engine did; these four rows are what it actually produced.
+ */
+describe("rankCalendars — THE PIN: widening cohort admission never moves the ranking", () => {
+  /** Five ladders that genuinely rank: two roots, three expiries, 15/30/46 DTE. */
+  const RANKABLE: CalendarChainQuote[] = [
+    ...ladder({ expiration: "2026-08-11", ivAtm: 0.17 }),
+    ...ladder({ expiration: "2026-08-26", ivAtm: 0.165 }),
+    ...ladder({ expiration: "2026-09-11", ivAtm: 0.16 }),
+    ...ladder({ expiration: "2026-08-11", ivAtm: 0.171, root: "SPX" }),
+    ...ladder({ expiration: "2026-08-26", ivAtm: 0.166, root: "SPX" }),
+  ];
+
+  /**
+   * The three cohorts this session recovered, plus the one it must keep refusing.
+   *
+   * 2026-07-27 IS `NOW`'s date — a live 0DTE cohort, PM-settled, four hours from the close.
+   * 2026-08-20's rows all carry a null `bsm_iv`, which is the live SPXW 2026-11-29 shape
+   * (quoted 1, solved 0, measured 2026-07-29). 2026-07-26 expired yesterday and stays out.
+   */
+  const RECOVERED: CalendarChainQuote[] = [
+    ...ladder({ expiration: "2026-07-27", ivAtm: 0.31 }),
+    ...ladder({ expiration: "2026-07-27", ivAtm: 0.3, root: "SPX" }),
+    ...ladder({ expiration: "2026-08-20", ivAtm: 0.168 }).map((q) => ({ ...q, bsmIv: null })),
+    ...ladder({ expiration: "2026-07-26", ivAtm: 0.4 }),
+  ];
+
+  /** Captured from a run on the pre-change engine. Never recomputed. */
+  const EXPECTED_RANKING = [
+    { root: "SPXW", strike: 7350, front: "2026-08-26", back: "2026-09-11", score: 100 },
+    { root: "SPXW", strike: 7350, front: "2026-08-11", back: "2026-09-11", score: 67.5 },
+    { root: "SPXW", strike: 7400, front: "2026-08-11", back: "2026-08-26", score: 57.5 },
+    { root: "SPX", strike: 7400, front: "2026-08-11", back: "2026-08-26", score: 42.5 },
+  ];
+
+  async function rank(chain: ReadonlyArray<CalendarChainQuote>) {
+    const result = await makeRankCalendarsUseCase(
+      deps({ readChain: () => Promise.resolve(ok(chain)) }),
+    )({});
+    if (!result.ok) throw new Error(`rankCalendars failed: ${result.error.message}`);
+    return result.value;
+  }
+
+  const identity = (r: Awaited<ReturnType<typeof rank>>) =>
+    r.candidates.map((c) => ({
+      root: c.root,
+      strike: c.strike,
+      front: c.frontExpiration,
+      back: c.backExpiration,
+      score: c.score,
+    }));
+
+  it("ranks the rankable chain to exactly the four rows it always ranked it to", async () => {
+    const clean = await rank(RANKABLE);
+    expect(identity(clean)).toEqual(EXPECTED_RANKING);
+    expect(clean.totalCandidates).toBe(12);
+    expect(clean.expiryPairs).toBe(4);
+  });
+
+  it("ranks it to the SAME four rows with 0DTE, all-unpriced and expired cohorts mixed in", async () => {
+    const extended = await rank([...RANKABLE, ...RECOVERED]);
+    expect(identity(extended)).toEqual(EXPECTED_RANKING);
+    expect(extended.totalCandidates).toBe(12);
+    expect(extended.expiryPairs).toBe(4);
+    expect(extended.spot).toBe(SPOT);
+    expect(extended.realizedVol).not.toBeNull();
+    expect(extended.frontDteMax).toBe(60);
+  });
+
+  /**
+   * THE ONE THING THAT DID MOVE, and it moved by an amount that is arithmetic rather than noise.
+   *
+   * A cohort that now exists is a cohort enumeration walks, so it gets counted where it fails.
+   * Three more cohorts survive `buildCohorts` here — two 0DTE (one per root) and one whose every
+   * strike is unpriced at 24 DTE — and the deltas below are what walking them costs:
+   *
+   *   front-dte-floor    0 → 2    one per 0DTE cohort; 0 is under the 15-day floor
+   *   gap-floor          9 → 21   the six legal fronts each meet three more same-root backs
+   *   root-mismatch     12 → 22   and each meets the other root's new cohorts too
+   *   no-atm-reference   0 → 1    the all-unpriced cohort has no legs, so no 50-delta reference;
+   *                               it is a legal front at 24 DTE and pairs once, with 2026-09-11
+   *
+   * Every one of those is a drop that was ALREADY happening and was invisible: a cohort discarded
+   * during grouping is discarded under no reason at all. `no-iv-legs` does not move, because it
+   * was never gated on DTE — it counts legs across the whole read. That matters beyond this test:
+   * `recordCalendarRanking` persists `no-iv-legs` and nothing else from this record, so the
+   * ranking history written to Postgres is byte-identical too.
+   */
+  it("counts the newly-visible cohorts where they fail, and moves no other field", async () => {
+    const clean = await rank(RANKABLE);
+    const extended = await rank([...RANKABLE, ...RECOVERED]);
+
+    expect(clean.drops).toEqual({
+      "front-dte-floor": 0,
+      "front-dte-ceiling": 0,
+      "back-dte-ceiling": 0,
+      "gap-floor": 9,
+      "root-mismatch": 12,
+      "not-tradeable": 0,
+      "term-inverted": 0,
+      "no-atm-reference": 0,
+      "no-iv-legs": 0,
+    });
+    expect(extended.drops).toEqual({
+      "front-dte-floor": 2,
+      "front-dte-ceiling": 0,
+      "back-dte-ceiling": 0,
+      "gap-floor": 21,
+      "root-mismatch": 22,
+      "not-tradeable": 0,
+      "term-inverted": 0,
+      "no-atm-reference": 1,
+      "no-iv-legs": 3,
+    });
+  });
+
+  it("cannot reach a candidate from a 0DTE cohort, whichever leg it would be", async () => {
+    // The claim the whole widening rests on, verified rather than trusted. FRONT_DTE_FLOOR is 15,
+    // so a 0DTE cohort is never a front; GAP_DAYS_FLOOR is 15 and a 0DTE back against any legal
+    // front gives a gap of −15 or worse, so it is never a back either. Two hard constants, both
+    // documented in candidate.ts as the trader's rule and not a knob.
+    const extended = await rank([...RANKABLE, ...RECOVERED]);
+    expect(extended.candidates.every((c) => c.frontDte >= 15 && c.gapDays >= 15)).toBe(true);
+    expect(extended.candidates.some((c) => c.frontExpiration === "2026-07-27")).toBe(false);
+    expect(extended.candidates.some((c) => c.backExpiration === "2026-07-27")).toBe(false);
+  });
+});
+
 describe("port hygiene — the engine cannot reach what it must not", () => {
   it("declares exactly four dependencies", () => {
     // The incumbent reached fifteen. This assertion is the only thing that stops the same drift:
