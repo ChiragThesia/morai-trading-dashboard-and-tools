@@ -421,16 +421,16 @@ describe("buildCohorts — the ATM references are two different questions", () =
   });
 });
 
-describe("quotedAtm — the ATM reference a per-strike view must use", () => {
-  // THIS IS A THIRD ATM REFERENCE, and it exists because `Cohort.atmStrike` answers a different
-  // question. `atmStrike` is the nearest strike among the PRICED legs, because unpriceable legs
-  // are gone before it runs — so when the true ATM strike never solved, `Cohort.atmIv` silently
-  // reports its NEIGHBOUR's IV. That is tolerable for the ranker, whose vSkew is one reported
-  // column among many. It is not tolerable for the chain table, where vertical skew is a SORTABLE
-  // column: a row measured against 7450 because 7400 never solved is on a different scale from
-  // every row it gets ranked against, and the ranking is the artifact that tells the reader they
-  // ARE comparable. A visible gap costs one row; a re-based row corrupts its neighbours' order
-  // invisibly, because the neighbours still look fine.
+describe("quotedAtm — the same reference, re-asked at an arbitrary spot", () => {
+  // This block was written when `Cohort.atmStrike` scanned only the PRICED legs and so returned a
+  // NEIGHBOUR when the true nearest strike had not solved. That is now fixed at the source, and
+  // these cases pin the agreement: at the cohort's own spot, quotedAtm returns exactly
+  // `{ strike: cohort.atmStrike, iv: cohort.atmIv }`.
+  //
+  // What the function still earns is its `spot` PARAMETER. A cohort's ATM is frozen at the
+  // instant the snapshot was built; a chain table watching a live spot must re-ask the question
+  // as the index moves, which a stored field cannot answer. The cases below that pass a spot
+  // other than the cohort's — 7404, 7375 — are the ones that would be untestable without it.
 
   const ladder = [
     quote({ strike: 7_350_000, bsmIv: "0.172" }),

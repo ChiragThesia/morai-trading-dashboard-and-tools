@@ -271,17 +271,21 @@ function parseIv(raw: string | null): number | null {
 }
 
 /**
- * quotedAtm — the ATM reference measured over every strike the cohort QUOTES, priced or not.
+ * quotedAtm — the ATM reference measured over every strike the cohort QUOTES, priced or not,
+ * AT AN ARBITRARY SPOT.
  *
- * A third ATM reference, deliberately, because `Cohort.atmStrike` answers a different question.
- * `atmStrike` runs over `legs`, and `legs` has already lost every strike without a usable IV — so
- * when the true nearest strike did not solve, `Cohort.atmIv` reports its NEIGHBOUR's IV under a
- * name that says otherwise. The ranker can live with that; a per-strike table cannot, because it
- * renders vertical skew as a SORTABLE column and a silently re-based row corrupts its neighbours'
- * order while still looking fine.
+ * This once existed because `Cohort.atmStrike` was resolved over `legs` and so returned a
+ * neighbour when the true nearest strike had not solved. That is fixed — `atmStrike` now scans
+ * the same quoted union — so at the cohort's OWN spot this returns exactly
+ * `{ strike: cohort.atmStrike, iv: cohort.atmIv }`.
  *
- * Null strike on an absent cohort or an unusable spot; null IV when the nearest strike is one
- * that never solved. Never a neighbour's IV, and never a fabricated 0.
+ * What it still buys is the `spot` parameter. A cohort's ATM is frozen at the instant the
+ * snapshot was built; a chain table watching a live spot needs to re-ask the question as the
+ * index moves, and cannot do that from a stored field. That, and the null-cohort guard, are the
+ * only reasons to prefer it over reading the two fields directly.
+ *
+ * Null strike on an absent cohort or an unusable spot; null IV when the nearest quoted strike is
+ * one that never solved. Never a neighbour's IV, and never a fabricated 0.
  */
 export function quotedAtm(
   cohort: Cohort | null,

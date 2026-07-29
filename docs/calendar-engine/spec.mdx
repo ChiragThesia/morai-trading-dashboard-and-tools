@@ -772,13 +772,22 @@ Two domain additions were needed, both deliberate and neither a fork of `buildCo
    produces today and diverge the first time `priceLeg` refuses a row whose IV *did* parse,
    leaving that strike in neither array — which would move the ATM reference below and re-base
    the whole cohort's vertical skew. A partition invariant in `cohort.test.ts` pins it.
-2. **`quotedAtm(cohort, spot)`** — a THIRD ATM reference, over `legs ∪ unpricedStrikes`.
-   `Cohort.atmStrike` runs over `legs`, which has already lost every strike without a usable IV,
-   so when the true nearest strike did not solve, `Cohort.atmIv` reports its **neighbour's** IV
-   under a name that says otherwise. The ranker tolerates that; a chain table cannot, because it
-   renders vertical skew as a sortable column and a silently re-based row corrupts its
-   neighbours' order while still looking fine. `Cohort.atmStrike` / `atmIv` are unchanged, so
-   the ranking does not move.
+2. **`quotedAtm(cohort, spot)`** — the same reference, re-asked at an arbitrary spot.
+   It was introduced as a *third* ATM reference because `Cohort.atmStrike` scanned only `legs`,
+   which has already lost every strike without a usable IV — so when the true nearest strike did
+   not solve, `Cohort.atmIv` reported its **neighbour's** IV under a name that said otherwise.
+   That is now fixed at the source: `atmStrike` scans the same quoted union, and at the cohort's
+   own spot `quotedAtm` returns exactly `{ strike: atmStrike, iv: atmIv }`.
+
+   What the function still earns is its `spot` **parameter**. A cohort's ATM is frozen at the
+   instant the snapshot was built; a chain table watching a live spot has to re-ask the question
+   as the index moves, and a stored field cannot answer that.
+
+   Fixing `atmStrike` did not move the ranking, and this is worth stating because it was assumed
+   to: `atmIv` reaches `vSkewFront` / `vSkewBack` only, both reported and never scored. The score
+   reads `ffAtm` — derived from `atm50Iv`, the separate interpolated 50Δ reference — and
+   `net.delta`. The tie-break reads neither. Measured on the live chain the day of the fix,
+   0 of 35 cohorts were affected; the defect is latent and bites only as the chain degrades.
 
 `domain/pair.ts` carries the ungated two-leg arithmetic the Pair panel needs. It is not
 `enumerateCandidates`: that loop has already refused everything odd (both legs tradeable, front
