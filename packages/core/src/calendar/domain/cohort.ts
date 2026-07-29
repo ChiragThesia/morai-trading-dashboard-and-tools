@@ -184,7 +184,6 @@ export function buildCohorts(
     if (legs.length === 0) continue;
     legs.sort((a, b) => a.strike - b.strike);
 
-    const atmStrike = nearestStrike(legs, spot);
     const atm50 = interpolateFiftyDeltaIv(legs);
 
     // QUOTED MINUS PRICED. A strike is a gap exactly when it did not become a leg — which also
@@ -193,6 +192,15 @@ export function buildCohorts(
     const priced = new Set(legs.map((l) => l.strike));
     const unpricedStrikes = (quotedByGroup.get(`${group.root}|${group.expiration}`) ?? []).filter(
       (s) => !priced.has(s.strike),
+    );
+
+    // Resolved over every strike the cohort QUOTES, not only the ones that priced. Scanning
+    // `legs` instead — which has already lost every strike without a usable IV — is how a strike
+    // 48 points from the money came to be labelled ATM: the substitution was never in `atmIv`,
+    // it was in choosing the strike. Must be computed after `unpricedStrikes` for that reason.
+    const atmStrike = nearestStrike(
+      [...legs.map((l) => l.strike), ...unpricedStrikes.map((s) => s.strike)],
+      spot,
     );
 
     cohorts.push({
@@ -396,13 +404,16 @@ function priceLeg(
 }
 
 /** Strike nearest spot; ties to the LOWER strike, which keeps the pick order-independent. */
-function nearestStrike(legs: ReadonlyArray<CohortLeg>, spot: number): number | null {
+function nearestStrike(strikes: ReadonlyArray<number>, spot: number): number | null {
   let best: number | null = null;
   let bestDist = Number.POSITIVE_INFINITY;
-  for (const leg of legs) {
-    const dist = Math.abs(leg.strike - spot);
-    if (dist < bestDist) {
-      best = leg.strike;
+  for (const strike of strikes) {
+    const dist = Math.abs(strike - spot);
+    // Strict `<` keeps the first-seen of an equal-distance pair; the `< best` tiebreak makes that
+    // choice order-independent — the lower strike wins either way, whatever order the union
+    // happens to concatenate priced and unpriced strikes in.
+    if (dist < bestDist || (dist === bestDist && best !== null && strike < best)) {
+      best = strike;
       bestDist = dist;
     }
   }

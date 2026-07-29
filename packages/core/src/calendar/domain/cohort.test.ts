@@ -283,16 +283,32 @@ describe("buildCohorts — the ATM references are two different questions", () =
     expect(buildCohorts([...even].reverse(), opts)[0]?.atmStrike).toBe(7390);
   });
 
+  /**
+   * REGRESSION. This test previously asserted the exact substitution its own title refuses:
+   * spot 7401.89, 7400 quoted but unsolved, and it expected `atmStrike` 7450 with that strike's
+   * own IV — a reference 48 points from the money, labelled ATM.
+   *
+   * `atmStrike` was resolved over `legs`, which has already lost every strike without a usable
+   * IV. So the neighbour substitution never happened in `atmIv` at all; it happened one line
+   * earlier, when the strike itself was chosen. The guard comment above `atmIv` stated the law
+   * correctly and sat above the wrong line.
+   *
+   * `atmIv` reaches `vSkewFront`/`vSkewBack` only — both reported, never scored, never in the
+   * tie-break — so this corrects two displayed numbers and cannot move the ranking. Measured on
+   * the live chain the day of the fix: 0 of 35 cohorts were affected, because near the money
+   * everything solves. It bites when the chain degrades, which is when a silently re-based skew
+   * is worth least.
+   */
   it("nulls atmIv rather than substituting a neighbour when the ATM strike never solved", () => {
     const holed = [
       quote({ strike: 7_400_000, bsmIv: "NaN" }),
       quote({ strike: 7_450_000, bsmIv: "0.155" }),
     ];
     const c = buildCohorts(holed, opts)[0];
-    // 7400 is gone from the cohort entirely, so the nearest SOLVED strike becomes ATM.
-    // The point is that no leg silently inherits 7400's missing IV.
-    expect(c?.atmStrike).toBe(7450);
-    expect(c?.atmIv).toBeCloseTo(0.155, 6);
+    // 7400 is what the cohort QUOTES nearest the money, so it is the ATM strike whether or not
+    // it solved. It did not solve, so there is no ATM IV — not 7450's.
+    expect(c?.atmStrike).toBe(7400);
+    expect(c?.atmIv).toBeNull();
   });
 
   /**
