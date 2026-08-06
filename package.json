@@ -2,7 +2,10 @@
   "name": "morai",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "test": "vitest run",
@@ -10,7 +13,10 @@
     "lint": "eslint .",
     "migrate": "bun run apps/worker/src/migrate.ts",
     "tokens": "bun run --filter @morai/web tokens",
-    "design-sync": "bash .design-sync/resync.sh"
+    "design-sync": "bash .design-sync/resync.sh",
+    "tv:push": "bun --env-file=.env run tools/tradingview/push-gex.ts",
+    "tv:watch": "bun --env-file=.env run tools/tradingview/push-gex.ts --watch",
+    "tv:last": "bun --env-file=.env run tools/tradingview/push-gex.ts --last-good"
   },
   "devDependencies": {
     "@types/bun": "latest",
