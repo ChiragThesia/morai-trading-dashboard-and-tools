@@ -309,8 +309,11 @@ describe("side-specific walls, bracketing spot (SpotGamma convention)", () => {
 });
 
 describe("near-term (≤45d DTE) level set", () => {
-  // Cycle date 2026-06-23 → 45d boundary 2026-08-07.
-  const NEAR_EXP = "2026-06-27"; // 4d — near
+  // Cycle date 2026-06-23 → window is [8d, 45d], i.e. 2026-07-01 … 2026-08-07.
+  // NEAR_EXP was 2026-06-27 (4.3d) until the window gained a floor; that date now sits
+  // BELOW the floor and is excluded by design, so it moved inside the window. The
+  // assertion it supports — far-dated OI must not own the near-term walls — is unchanged.
+  const NEAR_EXP = "2026-07-17"; // 24.3d — inside the window
   const FAR_EXP = "2026-09-18"; // 87d — far
 
   it("computes nearTerm walls from ≤45d legs only (far-dated OI excluded)", async () => {
@@ -345,6 +348,47 @@ describe("near-term (≤45d DTE) level set", () => {
     expect(
       row.nearTerm?.flip === null || typeof row.nearTerm?.flip === "number",
     ).toBe(true);
+  });
+
+  // The window has a FLOOR as well as a ceiling. Measured on the live book 2026-08-06:
+  // 0-7d carried 28.2% of |GEX| while 15-30d carried 41.1%. That sub-week gamma is real —
+  // it pins price today — but it has evaporated long before a 15-30 DTE calendar matures,
+  // so letting it set the levels describes a tape the position never lives in.
+  it("excludes sub-floor legs from nearTerm so 0DTE churn cannot own the walls", async () => {
+    const ULTRA_SHORT_EXP = "2026-06-27"; // 4.3d from CYCLE_TIME — below the floor
+    const HORIZON_EXP = "2026-07-17"; // 24.3d — where a 15-30 DTE calendar actually sits
+
+    const legs: ReadonlyArray<LegObsForGex> = [
+      // Sub-week churn carrying far more OI than the horizon legs. With no floor these
+      // own BOTH walls; with the floor they must not appear at all.
+      makeLeg({ contractType: "C", strike: 7800000, bsmGamma: "0.004", openInterest: 400000, expiration: ULTRA_SHORT_EXP }),
+      makeLeg({ contractType: "P", strike: 7100000, bsmGamma: "0.004", openInterest: 400000, expiration: ULTRA_SHORT_EXP }),
+      // The horizon concentrations that should survive (spot is 7381).
+      makeLeg({ contractType: "C", strike: 7600000, bsmGamma: "0.003", openInterest: 69015, expiration: HORIZON_EXP }),
+      makeLeg({ contractType: "P", strike: 7300000, bsmGamma: "0.002", openInterest: 52786, expiration: HORIZON_EXP }),
+    ];
+
+    const spy = makePersistSpy();
+    const useCase = makeComputeGexSnapshotUseCase({
+      readLegObsForGex: makeReadLegsStub(legs),
+      persistGexSnapshot: spy.persist,
+      now: () => NOW,
+      readMacroObservations: EMPTY_MACRO_STUB,
+    });
+
+    await useCase();
+    const row = spy.written[0];
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+
+    // All-expiry walls still see everything — the sub-week OI dominates there.
+    expect(row.callWall).toBe(7800);
+    expect(row.putWall).toBe(7100);
+
+    // Near-term must reflect the holding horizon, not this week's churn.
+    expect(row.nearTerm).not.toBeNull();
+    expect(row.nearTerm?.callWall).toBe(7600);
+    expect(row.nearTerm?.putWall).toBe(7300);
   });
 
   it("nearTerm is null when every leg is beyond 45d", async () => {

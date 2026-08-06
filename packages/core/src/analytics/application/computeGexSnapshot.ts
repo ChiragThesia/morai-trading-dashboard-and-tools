@@ -39,8 +39,24 @@ const GRID_HALF_WIDTH = 600;
 /** Grid step size (index points). */
 const GRID_STEP = 20;
 
-/** Near-term level-set horizon: legs with calendar DTE ≤ this feed nearTerm. */
-const NEAR_TERM_MAX_DTE_DAYS = 45;
+/**
+ * Default calendar-DTE window feeding the nearTerm level set.
+ *
+ * The CEILING (45d) keeps far-dated OI out. Round-number LEAPS strikes carry enormous
+ * open interest whose gamma is near zero, and pickWalls scans by OI-weighted gamma with
+ * no DTE bound, so without a ceiling the walls land on a parking lot: measured live
+ * 2026-08-05 with spot 7729, the all-expiry put wall sat at 7000 (9.4% away, net GEX
+ * −1.12 Bn) while the near-term put wall sat at 7700, 0.4% away.
+ *
+ * The FLOOR (8d) keeps sub-week churn out. Measured on the live book 2026-08-06, gamma
+ * by DTE bucket was 0-7d 28.2%, 8-14d 11.9%, 15-30d 41.1%, 31-45d 14.2%, >45d 4.6%.
+ * The 0-7d share is real gamma that genuinely pins price today, but it has decayed to
+ * nothing well before a 15-30 DTE position matures — so including it sets levels for a
+ * tape the trade never lives in. The floor is 8 rather than 15 deliberately: a front leg
+ * opened at 15-30 DTE ages down THROUGH the 8-14d bucket, so that band is still the
+ * position's own gamma and belongs in the window.
+ */
+const NEAR_TERM_DTE_WINDOW: DteWindow = { minDays: 8, maxDays: 45 };
 
 // 34-04 (TOSP-02): matches the client's DAYS_PER_YEAR convention (D-02, scenario-engine.ts)
 // so the T calibrated here and the T re-priced client-side use the same day-count.
@@ -202,6 +218,20 @@ export type ComputeGexSnapshotDeps = {
    * NEVER used as the persisted cycle_time (06-06 / CR-01/CR-02 design).
    */
   readonly now: () => Date;
+  /**
+   * Calendar-DTE window feeding the nearTerm level set. Optional — omitting it uses
+   * NEAR_TERM_DTE_WINDOW. Injected rather than hardcoded because the right floor depends
+   * on the holding horizon being traded, and that is a trading decision, not a domain
+   * constant: a 15-30 DTE calendar wants sub-week gamma excluded, a 0DTE scalper wants
+   * only sub-week gamma. Both are correct for their book.
+   */
+  readonly nearTermDteWindow?: DteWindow;
+};
+
+/** Inclusive calendar-DTE bounds for a level set. */
+export type DteWindow = {
+  readonly minDays: number;
+  readonly maxDays: number;
 };
 
 export function makeComputeGexSnapshotUseCase(
@@ -286,15 +316,16 @@ export function makeComputeGexSnapshotUseCase(
       .map(([date, gex]) => ({ date, gex }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // ── Step 8b: near-term (≤45d DTE) level set ──────────────────────────────
-    // Far-dated OI (e.g. Sept quarterly 8000s) can dominate the all-expiry walls
-    // with a structural level irrelevant intraday; recompute walls + flip from
-    // only the near-dated legs. Null when no near-term legs solve.
+    // ── Step 8b: near-term level set ─────────────────────────────────────────
+    // Recompute walls + flip from only the legs inside the holding-horizon DTE window
+    // (see NEAR_TERM_DTE_WINDOW for why it has both a floor and a ceiling). Null when
+    // no leg falls inside the window.
+    const dteWindow = deps.nearTermDteWindow ?? NEAR_TERM_DTE_WINDOW;
     const nearLegs = legs.filter((leg) => {
       // Same expiry anchor as buildProfile (~4pm ET on expiration date).
       const expiryMs = new Date(leg.expiration + "T21:00:00Z").getTime();
       const dteDays = (expiryMs - leg.time.getTime()) / 86_400_000;
-      return dteDays >= 0 && dteDays <= NEAR_TERM_MAX_DTE_DAYS;
+      return dteDays >= dteWindow.minDays && dteDays <= dteWindow.maxDays;
     });
 
     let nearTerm: GexSnapshotRow["nearTerm"] = null;
