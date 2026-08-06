@@ -17,7 +17,7 @@ import { bsmPrice } from "../domain/bsm.ts";
 // Canonical test contract symbol (formatOccSymbol produces a valid branded OccSymbol)
 const TEST_CONTRACT = formatOccSymbol({
   root: "SPXW",
-  expiry: new Date(2026, 5, 19), // 2026-06-19
+  expiry: new Date(Date.UTC(2026, 5, 19)), // 2026-06-19
   type: "C",
   strike: 5900,
 });
@@ -326,10 +326,13 @@ describe("makeComputeBsmGreeksUseCase", () => {
     // Setup: 2026-06-11 is the expiry day. SPXW PM-settles at 16:00 ET.
     // obs.time = 15:30 ET = 19:30 UTC (30 minutes before cutoff → T > 0 from obs.time)
     // now      = 16:30 ET = 20:30 UTC (30 minutes AFTER cutoff → T = 0 from now)
-    // expiry   = new Date(2026, 5, 11) — local date (same day)
+    // expiry   = UTC midnight on the same day. It MUST be built with Date.UTC: computeT
+    //            reads the expiry's UTC components, so a local-midnight Date east of
+    //            Greenwich resolves to the PREVIOUS calendar day and puts the cutoff
+    //            before obsTime — manufacturing the exact T=0 NaN this test asserts against.
     const obsTime = new Date(Date.UTC(2026, 5, 11, 19, 30, 0)); // 2026-06-11T19:30Z = 15:30 EDT
     const nowTime = new Date(Date.UTC(2026, 5, 11, 20, 30, 0)); // 2026-06-11T20:30Z = 16:30 EDT
-    const expiryDate = new Date(2026, 5, 11); // local date for SPXW PM cutoff calc
+    const expiryDate = new Date(Date.UTC(2026, 5, 11)); // UTC midnight — see note above
 
     // Build a valid mark: use bsmPrice with a sigma of 0.5 and the T from obs.time.
     // T ≈ 30 min / 525960 min/yr ≈ 5.7e-5 years (short but positive).
@@ -485,7 +488,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       makePendingObs({
         contract: formatOccSymbol({
           root: "SPXW",
-          expiry: new Date(2026, 5, 19),
+          expiry: new Date(Date.UTC(2026, 5, 19)),
           type: "C",
           strike: 5000 + i,
         }),
@@ -529,7 +532,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       makePendingObs({
         contract: formatOccSymbol({
           root: "SPXW",
-          expiry: new Date(2026, 5, 19),
+          expiry: new Date(Date.UTC(2026, 5, 19)),
           type: "C",
           strike: 5000 + i,
         }),
@@ -581,7 +584,7 @@ describe("makeComputeBsmGreeksUseCase", () => {
       makePendingObs({
         contract: formatOccSymbol({
           root: "SPXW",
-          expiry: new Date(2026, 5, 19),
+          expiry: new Date(Date.UTC(2026, 5, 19)),
           type: "C",
           strike: 5000 + i,
         }),
