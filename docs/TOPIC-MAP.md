@@ -36,6 +36,20 @@ Operator-facing runbooks for manual, non-automatable procedures.
 |---|---|
 | [schwab-reauth-runbook.md](operations/schwab-reauth-runbook.md) | Weekly Schwab re-auth: the in-app Reconnect wizard (primary path), the CLI OAuth exchange + sidecar restart (fallback), Railway deploy prerequisites, post-recovery verification |
 
+## Learnings (`docs/learnings/`)
+
+Retrospective analysis. Not a source of truth for how the system works today.
+
+| Doc | Contents |
+|---|---|
+| [README.md](learnings/README.md) | Index of the learnings set: citation scheme (L/D/V/P/R), the five most-likely-to-be-re-broken laws, the code-salvage verdict table, sources harvested |
+| [LAWS.md](learnings/LAWS.md) | 89 stack-independent engineering laws, grouped by pain, opening with the ten that cost the most. Keys and silent row loss, backlog shape, units and null and Infinity, failure handling, staleness, boundaries, UI, security |
+| [domain-trading.md](learnings/domain-trading.md) | 47 options/vol/calendar facts, split hard into verified (measurement shown) and claimed (asserted only) |
+| [vendors-and-infra.md](learnings/vendors-and-infra.md) | 69 traps by vendor — Schwab, CBOE, FRED, CFTC, Alpaca, Supabase/Supavisor, pg-boss, Railway, Recharts, TradingView, ThinkorSwim, the agent harness. Each with trap, tell, workaround |
+| [process-and-verification.md](learnings/process-and-verification.md) | 32 entries on how work went right and wrong: the green-suite family, oracle construction, diagnosis discipline, the numbered catch ledger |
+| [refuted.md](learnings/refuted.md) | 48 anti-laws: 18 beliefs held and disproved, 30 approaches abandoned. Read before re-adopting any picker or calendar heuristic |
+| [app-postmortem.md](learnings/app-postmortem.md) | v1 postmortem: intent vs actual use, what paid for itself, what did not, failure taxonomy ranked by damage, the green-suite meta-failure. Input to [REBUILD-BRIEF.md](../REBUILD-BRIEF.md) |
+
 ## Docs on Docs (`docs/docs-on-docs/`)
 
 How to write and maintain documentation.
