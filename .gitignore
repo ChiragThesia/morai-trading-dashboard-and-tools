@@ -32,3 +32,15 @@ ds-bundle/
 .design-sync/node_modules
 apps/web/types/
 apps/web/dist/ds-styles.css
+
+# Generated code-intel / graph artifacts (regenerable)
+.codegraph/
+graphify-out/
+.fallow/
+.planning/graphs/*
+!.planning/graphs/GRAPH_REPORT.md
+
+# iCloud sync collision artifacts (see CLEANUP-MANIFEST.md section 8)
+# Verified 2026-08-26: zero tracked files match these patterns.
+* 2
+* 2.*
