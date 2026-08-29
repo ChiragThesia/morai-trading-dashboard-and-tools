@@ -2,58 +2,63 @@
 paths:
   - "packages/**/*.ts"
   - "apps/**/*.ts"
+  - "src/**/*.ts"
   - "!**/*.test.ts"
 ---
 
-# Architecture Boundaries
+# Architecture Boundaries — undecided, deliberately
 
-Hexagonal architecture: dependencies point inward, frameworks live in adapters.
+**This rule does not currently mandate an architecture.** v1's was hexagonal with a strict inward
+dependency law. That system has been deleted, and the postmortem's verdict on the architecture was
+**half-paid** — not vindicated, not refuted. Re-imposing it by default would encode a conclusion the
+evidence does not support.
 
-## Requirements
+If you are reading this because you are writing the first code of the rebuild: the decision is
+yours to make, and this rule exists to make sure it is made on evidence rather than inherited.
 
-Every source file MUST:
+## What the evidence says
 
-1. **Respect the dependency law.** Imports flow `apps → adapters → core → shared` and
-   `web → contracts → shared`. Never the reverse. No exceptions.
-2. **Keep the hexagon pure.** `packages/core` imports ONLY `packages/shared`,
-   `packages/quant` (pure numerics — BSM pricing, greeks, IV inversion) and `zod`
-   (parse-don't-cast at application boundaries). Never: hono, drizzle-orm, pg-boss,
-   vendor SDKs, `process.env`, node I/O builtins. `packages/quant` is held to the same
-   purity bar — if it ever grows I/O it stops being importable from core.
-3. **Keep adapters thin.** Routes, MCP tools, and job handlers contain zero business
-   logic. Pattern is always: Zod-parse input → call use-case → map Result → respond.
-4. **Confine Drizzle** to `packages/adapters/postgres/`. No SQL or ORM types in core
-   or routes.
-5. **Use fine-grained function-type ports** named `ForVerbingNoun`. Use-cases are
-   factories: `makeXxx(deps)` returning the driver port.
-6. **Read `process.env` once**, in the composition root (`apps/*/src/main.ts`),
-   Zod-parsed. Typed config flows inward.
-7. **Cross bounded contexts through application ports** — never import another
-   context's `domain/`.
-8. **Ship the in-memory twin.** Every driven port change updates its implementation in
-   `packages/adapters/memory/` in the same PR.
-9. **Keep adapter surfaces in sync.** New use-case ⇒ HTTP route + MCP tool in the same
-   PR, unless explicitly scoped otherwise.
+Read `docs/learnings/app-postmortem.md` before deciding. Its findings, in short:
 
-MUST NOT:
+**Paid for itself.**
 
-- Add `eslint-disable` for a boundary rule. If the rule blocks you, the design is
-  wrong — fix the design or update the architecture docs first with rationale.
-- Touch `packages/core` to perform a technology swap. If a swap requires it, the port
-  abstraction failed — fix the port and document why.
+- **Function-type ports.** Ports typed as plain functions, not interfaces, made every test double a
+  one-line function. No mocking framework was ever needed. This is the single most reusable idea
+  from v1.
+- **Pure domain, thin I/O wrapper.** This is what let the backtest harness replay the live code
+  path instead of a forked copy of it.
+- **The in-memory twin.** One in-memory adapter per driven port, maintained alongside the real one.
 
-## Swap Discipline
+**Did not.**
 
-Replacing a technology (broker, queue, DB, host):
+- **Swap flexibility.** The whole point of the port abstraction is cheap technology substitution. In
+  the system's entire life there was **one** swap, and it was a connection-string change. The
+  abstraction was paid for continuously and cashed in once.
+- **The law's absolutism.** A whole workspace package existed so that 177 lines could be shared
+  across a boundary the rule forbade crossing — despite a narrow carve-out precedent already
+  existing for exactly that case.
 
-1. Update `docs/architecture/stack-decisions.md` FIRST (decision, why, swap).
-2. Write the new adapter implementing the existing ports.
-3. Change wiring in the composition root only.
+**Insufficient evidence to judge:** the design-system consolidation, and the volume of planning
+artifacts produced per phase.
+
+## Requirements for the rebuild
+
+Whatever structure is chosen:
+
+1. **Decide explicitly and write it down before the second file.** An architecture that accretes is
+   an architecture nobody can defend or change.
+2. **Keep the numerical core dependency-free.** This is not an architectural preference, it is what
+   made `packages/quant` portable enough to survive the deletion intact. Pricing and greeks import
+   nothing.
+3. **Parse at the boundary, do not cast.** See `typescript.md`.
+4. **If you introduce a boundary, enforce it mechanically.** An unenforced boundary is a comment.
+   v1 used `eslint-plugin-boundaries`; that file is deleted, and any replacement is a fresh choice.
+5. **Do not add an abstraction for a swap you cannot name a date for.** This is the postmortem's
+   sharpest lesson. One swap in a system's lifetime does not repay a continuous tax.
 
 ## Where to Look
 
-- [docs/architecture/hexagonal-ddd.md](../../docs/architecture/hexagonal-ddd.md) - Layers, port naming with examples, bounded contexts, per-context directory shape
-- [docs/architecture/design-system.md](../../docs/architecture/design-system.md) - The web UI design-system layers, tokens, and DataTable/Button primitives
-- [docs/architecture/monorepo-layout.md](../../docs/architecture/monorepo-layout.md) - Workspace dependency graph, composition roots
-- [docs/architecture/stack-decisions.md](../../docs/architecture/stack-decisions.md) - Decision table, swap costs, revisit triggers
-- ESLint boundary configuration in `eslint.config.js` - mechanical enforcement (source of truth once scaffolded)
+- `docs/learnings/app-postmortem.md` — the full judgment, with evidence
+- `docs/learnings/LAWS.md` — the architecture and boundary laws, cited by number
+- `salvage/platform-patterns.md` — the six patterns worth carrying, concretely described
+- `REBUILD-BRIEF.md` §4 — architecture guidance argued from the postmortem, not from doctrine

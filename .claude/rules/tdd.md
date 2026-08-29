@@ -1,9 +1,8 @@
 ---
 paths:
-  - "packages/**/*.ts"
-  - "apps/**/*.ts"
-  - "apps/**/*.tsx"
-  - "**/*.test.ts"
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "!node_modules/**"
 ---
 
 # TDD Red→Green
@@ -39,12 +38,20 @@ MUST NOT:
 
 ## Scope
 
-Applies to: `packages/*`, server/worker adapter logic, UI component logic (hooks, data
+Applies to: domain and numerical code, adapter logic, and UI component logic (hooks, data
 transforms).
 Exempt: pure wiring in composition roots, static config, docs, styling-only UI tweaks.
 
+There is no code in this repo today, so this rule is dormant. It wakes with the first `.ts` file
+of the rebuild.
+
 ## Where to Look
 
-- [docs/architecture/testing-tdd.md](../../docs/architecture/testing-tdd.md) - Test pyramid, stack (Vitest, fast-check, testcontainers, msw), calibration gates
-- [docs/architecture/hexagonal-ddd.md](../../docs/architecture/hexagonal-ddd.md) - Why function-type ports make test doubles plain functions
-- `.claude/templates/` - Test templates (created with scaffolding)
+- [docs/learnings/process-and-verification.md](../../docs/learnings/process-and-verification.md) - 39 entries on how verification actually failed here, including the green-suite family
+- [salvage/invariants.md](../../salvage/invariants.md) - 130 invariants recovered from 59 property-test files, stated independently of any framework
+- [salvage/oracle-fixtures.md](../../salvage/oracle-fixtures.md) - the 13 ground-truth calendars any fill-pairing implementation must pass before it touches money
+
+Two cautions carried from v1, both earned: a property test can generate the adversarial input and
+then assert on the wrong output, and a property test's own expected-value reconstruction can encode
+the same bug as the implementation. A green suite is evidence, not proof — this project shipped
+production bugs past green suites at least ten times.

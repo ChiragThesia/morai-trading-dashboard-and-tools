@@ -1,78 +1,91 @@
-# Morai — Trading Dashboard & Tools
+# Morai
 
-Online trading app: web UI + typed API + background jobs + MCP server, one system.
-Collect trading data (Schwab/CBOE), keep per-calendar journal (30-min RTH snapshots of
-price/greeks/term-structure), compute derived analytics (skew, BSM greeks), expose all to
-browser + Claude Code.
+**There is no application in this repository right now.** It was deleted on 2026-08-29, deliberately,
+and this repo currently holds only what was worth keeping from it. A rebuild is intended but has not
+started.
 
-## STRICT RULES
+If you are looking for `apps/` or `packages/`, they are gone. Do not try to run, build, test, or
+deploy anything. There is no `package.json`, no lockfile, no test suite, and no CI.
 
-Rules in `.claude/rules/` load by file path (YAML `paths:` frontmatter), mandatory.
-Priority: user instruction > rules > docs. See
-[.claude/rules/README.md](.claude/rules/README.md) for how system work.
+## What the project is
 
-| Rule | Loads for |
+A single trader's system for running delta-neutral SPX calendar and diagonal spreads. Front legs
+typically 8-45 DTE, puts, on SPXW weeklies and SPX monthlies. Small account.
+
+v1 collected option chains from Schwab and CBOE, computed BSM greeks server-side, kept a 30-minute
+RTH snapshot of every open calendar, derived analytics (skew, GEX, term structure, calendar
+ranking), and exposed all of it to a web UI and to Claude Code over MCP. It ran live on Railway,
+Supabase and Vercel for roughly three months.
+
+## What happened to it
+
+Deleted at commit `fd4f8d3` — 1,594 files, about 170,000 lines. The infrastructure went with it:
+Railway services down, Vercel project and morai.wtf deleted, Supabase project deleted after a
+verified 2.5 GB `pg_dump` to local cold storage.
+
+The decision was the owner's. The knowledge was extracted first, which is what this repo is now.
+
+## What is here
+
+| Path | What it holds |
 |---|---|
-| [architecture-boundaries](.claude/rules/architecture-boundaries.md) | `packages/**`, `apps/**` TS |
-| [tdd](.claude/rules/tdd.md) | TS source + tests |
-| [typescript](.claude/rules/typescript.md) | all TS/TSX |
-| [workflow](.claude/rules/workflow.md) | everything |
-| [docs](.claude/rules/docs.md) | all markdown |
+| `docs/learnings/` | **337 numbered, cross-cited entries.** The core asset. |
+| `docs/rebuild-research/` | OptionStrat teardown measured off the wire, trading-journal research, the analyzer/journal spec, and the Phase 0 measurement verdict |
+| `salvage/*.md` | 3,853 lines read *out* of the deleted code before it went |
+| `knowledge-base/` | The trading research corpus. Read-only. |
+| `REBUILD-BRIEF.md` | Scope, PORT/REWRITE/DROP verdicts, open questions |
+| `docs/architecture/` | **Stale.** Describes the deleted system. See below. |
 
-Non-negotiables, one line each:
-1. **Dependencies point inward** — `core` import only `shared`; frameworks live in adapters.
-2. **TDD red→green** — no production code without failing test run first; commit at green only.
-3. **No `any`, no `as`, no `!`** — parse with Zod, use `Result<T,E>`, `assertDefined`.
-4. **Docs before architecture changes** — update `docs/architecture/stack-decisions.md` first.
+### docs/learnings — cite these by number
 
-## Documentation
+| File | Contents |
+|---|---|
+| `LAWS.md` | 101 stack-independent laws (`L001`-`L101`), opening with the ten that cost the most |
+| `vendors-and-infra.md` | 91 traps (`V001`-`V091`) — Schwab, CBOE, FRED, CFTC, Alpaca, Supabase, pg-boss, Railway, TradingView, macOS/iCloud, the agent harness |
+| `domain-trading.md` | 53 measured facts (`D001`-`D053`), VERIFIED split from CLAIMED |
+| `refuted.md` | 53 entries (`R001`-`R053`) — beliefs held, acted on, and disproved |
+| `process-and-verification.md` | 39 entries (`P001`-`P039`) |
+| `app-postmortem.md` | What paid for itself in v1 and what did not |
 
-- Full index: [docs/TOPIC-MAP.md](docs/TOPIC-MAP.md)
-- Writing/maintaining docs: [docs/docs-on-docs/](docs/docs-on-docs/)
-- All prose follow [Hemingway style](docs/docs-on-docs/hemingway-style.md)
+Every entry carries its mechanism, its cost, and its source. **IDs are append-only.** They are cited
+across files and from `REBUILD-BRIEF.md`; renumbering breaks those citations silently.
 
-## Architecture
+## Before writing any code
 
-Hexagonal (ports & adapters) + DDD-lite. Full doc set: `docs/architecture/` (start
-`overview.md`). Swap-friendly by design: brokers, queue, DB, host all adapters.
+Read, in this order:
 
-| Layer | Where | May import |
-|---|---|---|
-| Domain + Application (hexagon) | `packages/core/` | `packages/shared`, `packages/quant`, `zod` — nothing else |
-| Driven adapters (DB, Schwab, CBOE, queue) | `packages/adapters/` | core ports, shared |
-| Driving adapters (HTTP, MCP, job handlers) | inside `apps/*` | core, adapters, contracts |
-| API contracts (Zod) | `packages/contracts/` | zod, shared |
-| Web UI | `apps/web/` | contracts (HTTP via Hono RPC) + core pure functions (no ports/adapters; eslint boundaries enforce) |
+1. `REBUILD-BRIEF.md` — especially §3 (non-negotiables) and §6 (open questions)
+2. `docs/learnings/LAWS.md` — at minimum the "ten that cost the most" table
+3. `salvage/measured-constants.md` — 31 constants with the experiment behind them, and **40 with
+   none**, listed as such so you know which are free to choose fresh
+4. `docs/rebuild-research/analyzer-and-journal-spec.md` — what the rebuild is supposed to be
 
-## Stack
+The single highest-value habit: when about to make a decision this project has already made, grep
+`docs/learnings/` first. That is what it is for.
 
-Bun · Hono (+RPC, Zod) · Supabase (Postgres 16) + Drizzle · pg-boss jobs ·
-Vitest (+fast-check, testcontainers, msw) · MCP (streamable HTTP). Hosting: Railway (API+worker) ·
-Supabase (DB) · Vercel (web, deferred). React + Vite + Tailwind + shadcn/ui for `apps/web` when UI
-work starts (deferred — backend + data layer first). Rationale + swap costs:
-`docs/architecture/stack-decisions.md`.
+## Known-stale, not yet fixed
 
-## Layout
+- **`docs/architecture/`** — 18 files describing the deleted system's API, data model, jobs,
+  deployment, monorepo layout and streaming. Its durable content was harvested into
+  `docs/learnings/`; the files themselves have not been pruned. Treat as history, not as
+  instruction.
+- **`docs/operations/schwab-reauth-runbook.md`** — a runbook for infrastructure that is down.
+- **`docs/TOPIC-MAP.md`** — indexes both of the above as though current.
 
-```
-apps/        web | server (API+static+MCP) | worker (pg-boss)
-packages/    core (hexagon) | adapters | contracts | shared
-docs/        architecture/ (source of truth)
-knowledge-base/   synthesized trading knowledge — READ-ONLY reference
-```
+## Open decisions
 
-## Commands (once scaffolded)
+Recorded so they are not silently re-decided:
 
-```bash
-bun install
-bun run dev          # server + web + worker
-bun run test         # vitest workspace
-bun run typecheck && bun run lint
-bun run migrate
-```
+- **Does a rendered UI get rebuilt at all?** Current answer: monitoring surface only, then reassess.
+  TradingView is the cockpit; the position-monitoring view is the thing it cannot serve.
+- **Three measurements are owed** before the ranking engine comes back: the FF-percentile regression
+  against realised P&L, the index-vs-single-name slope sign flip (`R009`, still marked *claimed*),
+  and the AM-settlement anchor (settled in `docs/rebuild-research/phase0-measurements.md` — the
+  Friday-morning family is correct, but 09:30 ET is a lower bound, not a citable minute).
+- **The repo lives on an iCloud-synced Desktop.** This is a live problem, not a historical one. See
+  `V091`.
 
-## Current State
+## Style
 
-Live. Backend + web are built and deployed (Railway API/worker · Supabase · Vercel web,
-morai.wtf); milestones v1.0–v1.2 shipped, v1.3 in progress. Application code is active —
-follow the TDD red→green + hexagonal-boundary rules above for every change.
+All prose follows `docs/docs-on-docs/hemingway-style.md`. Short sentences, active voice, no hedging.
+Every claim carries its evidence.

@@ -32,7 +32,7 @@ Never duplicate content:
 1. **Rules** (`.claude/rules/`) - Requirements (MUST/SHOULD)
 2. **Templates** (`.claude/templates/`) - Canonical structure (created with scaffolding)
 3. **Docs** (`docs/`) - Detailed explanations
-4. **Real code** (`apps/`, `packages/`) - Working examples
+4. **Real code** - Working examples. None exists today; the rebuild restores this tier.
 
 Rules reference docs, docs show examples, examples demonstrate patterns.
 
