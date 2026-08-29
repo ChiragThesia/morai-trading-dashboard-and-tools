@@ -1,1 +1,0 @@
-ALTER TABLE "calendars" ADD COLUMN "option_type" "contract_type" NOT NULL;

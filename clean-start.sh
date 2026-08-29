@@ -49,10 +49,39 @@ rm -f  cleanup-tier1.sh # served its purpose
 # docs/learnings/vendors-and-infra.md as V091 before this deletion.
 rm -f  CLEANUP-MANIFEST.md
 
-# salvage/tools/ — a byte-identical copy of tools/. Two copies of live Pine work
-# that is still being edited; the copy drifts the moment a .pine file changes and
-# nothing marks which is authoritative. tools/ is the original and stays.
-rm -rf salvage/tools
+# ---------------------------------------------------------------------------
+# salvage/ — keep the extracted prose, drop the copied code.
+#
+# The 6 .md files are the reason salvage exists: 3,853 lines read OUT of code
+# that no longer exists, and they are not reconstructible now that it is gone.
+# The code copies below are just that — copies. All committed at e47696c, so:
+#     git checkout e47696c -- salvage/code
+# ---------------------------------------------------------------------------
+rm -rf salvage/tools        # was a byte-identical duplicate of tools/
+rm -rf salvage/code         # quant, shared, iv-inversion, fill-pairing, calendar-event
+rm -rf salvage/python       # the FastAPI Schwab sidecar
+rm -rf salvage/oracle       # journal-oracle.test.ts, the 13 ground-truth calendars
+rm -rf salvage/migrations   # 0010, 0017, 0028, 0029, 0030
+
+# ---------------------------------------------------------------------------
+# tools/ — DESTRUCTIVE AND MOSTLY UNRECOVERABLE. Deleted on explicit instruction.
+#
+# 7 of its 11 files have NEVER been committed. There is no git copy:
+#     expected-move.pine        44K   live, verified study
+#     isotropic-trend.pine     124K   in progress
+#     breadth.pine
+#     backtest-expected-move.ts / .md
+#     verify-expected-move.ts
+#     watchlists-calendar.md
+# 4 more (README.md, gamma-levels.pine, push-gex.ts, vol-state.pine) have
+# uncommitted modifications; only their last committed state survives, at:
+#     git checkout e53171d -- tools/
+#
+# Partial mitigation, unverified: the .pine studies were saved into TradingView
+# itself, so those may be recoverable from the TV account. The .ts and .md files
+# were never anywhere but this disk.
+# ---------------------------------------------------------------------------
+rm -rf tools
 
 # ---------------------------------------------------------------------------
 # 3. Root config pointing at workspaces and infrastructure that are gone
@@ -67,7 +96,7 @@ echo
 echo "After:  $(du -sh . | cut -f1)"
 echo
 echo "Kept:"
-for p in docs salvage knowledge-base tools REBUILD-BRIEF.md CLAUDE.md .claude .env .env.local .env.example .gitignore; do
+for p in docs salvage knowledge-base REBUILD-BRIEF.md CLAUDE.md .claude .env .env.local .env.example .gitignore; do
   [ -e "$p" ] && printf "  %-22s %s\n" "$p" "$(du -sh "$p" 2>/dev/null | cut -f1)"
 done
 echo

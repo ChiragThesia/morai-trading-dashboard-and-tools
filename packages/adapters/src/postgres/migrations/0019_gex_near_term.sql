@@ -1,1 +1,0 @@
-ALTER TABLE "gex_snapshots" ADD COLUMN "near_term" jsonb;
