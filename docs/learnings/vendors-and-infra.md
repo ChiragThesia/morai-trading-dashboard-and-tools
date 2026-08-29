@@ -864,3 +864,49 @@ See [L082](LAWS.md#l082-setting-value-on-a-react-controlled-input-is-silently-ig
 **Workaround.** Close the `EventSource` inside `onerror`, mint a fresh ticket, and reconnect manually with backoff (commit 6b52bca). See [L083](LAWS.md#l083-authenticate-an-sse-stream-with-a-short-lived-opaque-ticket-never-a-jwt-in-the-query-string) for why the ticket is single-use in the first place.
 
 **Source.** Project memory, Phase 12 livestream cascade.
+
+---
+
+## macOS and iCloud Drive
+
+### V091. A repo inside a synced folder gets silent duplicate files, and one can reach git history.
+
+**Trap.** iCloud Drive syncs `~/Desktop` and `~/Documents` by default. When two writers touch the same path — two machines, or one machine racing the sync daemon — iCloud does not merge and does not error. It keeps both versions and renames one by appending ` 2` before the extension. Build tools and index caches, which write constantly, produce these by the hundred.
+
+Measured in this repo: 116 collision artifacts in the working tree, plus a `codegraph 2.lock` through `codegraph 14.lock` series — thirteen abandoned, sync-collided index runs. Three families: 13 empty ` 2` directories, 30 ` 2` directories inside `node_modules`, and 73 ` 2.*` files, nearly all `.d.ts` under `dist/`.
+
+The damage is not the wasted bytes — 200 KiB total. It is that **one collision got committed**: `.planning/phases/37-.../37-REVIEW 2.md`. Once tracked, git replicated it into all eleven agent worktrees on every checkout. The mechanism outran the cleanup and entered history, where deleting the working copy cannot reach it.
+
+**Tell.** Any file or directory whose basename ends in ` 2`, or contains ` 2.` before the extension. Confirm the cause two ways:
+
+```
+ls -d ~/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop
+xattr ~/Desktop        # com.apple.file-provider-domain-id
+```
+
+**Workaround — bandaid.** Delete them and add the pattern to `.gitignore`:
+
+```
+* 2
+* 2.*
+```
+
+Verify no tracked file matches before adding it, or the rule silently ignores real work:
+
+```
+git ls-files | grep -E '(^|/)[^/]* 2(\.[^/]*)?$'
+```
+
+This treats the symptom. The artifacts return, because the cause is the filesystem.
+
+**Workaround — real fix.** Move the repository off the synced volume. Three things break, all recoverable:
+
+1. **Worktree registrations.** Git stores absolute paths, so every linked worktree breaks at once. Run `git worktree repair <paths>` from the new location and pass the paths explicitly — a bare `git worktree repair` fixes the main worktree's record as seen from linked worktrees, not the stale absolute paths in `.git/worktrees/*/gitdir`.
+2. **Hardcoded paths**, most often hook commands in `.claude/settings.json`. Grep for the old path before moving.
+3. **The Claude Code project key.** Claude Code derives its per-project directory from the working-directory path with `/` replaced by `-`. Move the repo and it computes a new key, finds nothing, and starts with empty memory. The old memory is not deleted — it is orphaned under a key nothing looks up any more. Rename the directory under `~/.claude/projects/` to the new derived key in the same sitting as the move, then open a session in the new path and confirm the memory index loads.
+
+Do the move **after** any large cleanup. Pushing gigabytes through a sync daemon is slow and can itself collide.
+
+**A second-order trap worth stating separately.** Backups do not escape this by being in a different folder. A backup directory created on the same synced Desktop produced its own collision — two `.bundle` files with different checksums, one silently stale. A backup on the volume you are protecting against is not a backup.
+
+**Source.** Measured in this repo 2026-08-25 to 2026-08-29; `37-REVIEW 2.md` is the committed instance.

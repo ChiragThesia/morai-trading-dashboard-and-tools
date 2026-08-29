@@ -40,7 +40,7 @@ than restating it.
 |---|---|---|
 | [LAWS.md](LAWS.md) | 101 (L001–L101) | The centrepiece. Silent row loss, backlog death loops, numbers that lie, failure handling, boundaries. Opens with the ten that cost the most. |
 | [domain-trading.md](domain-trading.md) | 53 (D001–D053) | Measured options and vol knowledge, split hard into verified and claimed. Independent of any codebase. |
-| [vendors-and-infra.md](vendors-and-infra.md) | 90 (V001–V090) | Every trap in Schwab, CBOE, FRED, CFTC, Alpaca, TradingView, Recharts, Tailwind, Supabase, pg-boss, Bun, Vitest, Railway, Vercel and the agent harness. Conditional on the vendor. |
+| [vendors-and-infra.md](vendors-and-infra.md) | 91 (V001–V091) | Every trap in Schwab, CBOE, FRED, CFTC, Alpaca, TradingView, Recharts, Tailwind, Supabase, pg-boss, Bun, Vitest, Railway, Vercel, macOS/iCloud and the agent harness. Conditional on the vendor. |
 | [process-and-verification.md](process-and-verification.md) | 39 (P001–P039) | A green test suite is the most reliable way this project ever shipped a production bug. Includes the numbered catch ledger. |
 | [refuted.md](refuted.md) | 53 (R001–R053) | Beliefs held, acted on, and disproved — plus 31 approaches tried and abandoned. |
 
