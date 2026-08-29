@@ -1,0 +1,212 @@
+//@version=6
+// MORAI · Gamma Levels — dealer gamma structure drawn on the price axis.
+//
+// WHY THIS ONE IS ALLOWED TO BE PUSHED
+//   Every other MORAI number belongs in MORAI. This one does not, for a structural reason:
+//   Pine has no network primitive, and TradingView carries no per-strike SPX contracts —
+//   SPXW does not resolve, there is no OPRA exchange, and the charting library exposes zero
+//   option keys. So GEX can be neither fetched nor computed here. And a gamma level is
+//   useless as a number: its whole meaning is where it sits relative to live price. That is
+//   the one thing MORAI structurally cannot draw and a chart trivially can.
+//
+//   blob format: flip|callWall|putWall|netGamma|unixMillis|k:gex,k:gex,...
+//   e.g. 7502.24|7650|7400|129.03|1754069859000|7450:-2.1,7500:0.8,7650:6.1
+//
+//   Field 6 (the per-strike profile) is OPTIONAL and appended, so a blob written before it
+//   existed still parses — the parse only requires 3 fields. Absent or empty, no zones draw.
+//
+//   Written by `bun run tv:push` (tools/tradingview/push-gex.ts), which reads the newest
+//   gex_snapshots row and sets this input over CDP. The manual fields below are the same
+//   field set by hand, so manual use rehearses the automated path exactly.
+indicator("MORAI · Gamma Levels", overlay = true, max_lines_count = 10, max_labels_count = 16,
+     max_boxes_count = 30)
+
+// ─── Inputs ────────────────────────────────────────────────────────────────
+string gBlob = input.text_area("", "Γ blob (flip|call|put|net|unixMs)")
+float  gFlip = input.float(0.0, "Manual · flip")
+float  gCall = input.float(0.0, "Manual · call wall")
+float  gPut  = input.float(0.0, "Manual · put wall")
+int    gAge  = input.int(45, "Stale after (min)", minval = 5,
+     tooltip = "Past this age the levels draw dashed and faded, and the background tint is " +
+               "suppressed. A gamma regime inferred from an old snapshot is worse than none.")
+bool   gTint = input.bool(true, "Tint background by gamma regime")
+// A level far from spot forces TradingView's autoscale to fit it, squashing the candles into
+// a band — a put wall 6.5% away flattened the whole chart. Such a level is also not
+// actionable intraday. Beyond this distance the level is NOT drawn; it still shows in the
+// corner readout, so nothing is hidden — it just stops wrecking the scale.
+// 0 disables the filter and draws everything.
+// 4% not 3%: measured on 2026-08-05, the near-term call wall sat at 8000 against spot 7729,
+// which is +3.5% — a genuine front-cycle concentration that a 3% filter silently swallowed,
+// leaving the pane looking broken. 4% clears it while still excluding the far-dated junk.
+float gMaxPct = input.float(4.0, "Hide levels beyond % from spot", minval = 0, step = 0.5,
+     tooltip = "Also set the price scale to 'Scale price chart only' (right-click the scale) " +
+               "so no indicator can rescale the candles.")
+// APPEND-ONLY: push-gex.ts addresses the blob by POSITION (BLOB_INPUT = "in_0"). Inserting an
+// input above the blob silently repoints that constant at the wrong field. New inputs go here,
+// at the bottom, always.
+bool gZones = input.bool(true, "Draw per-strike gamma zones")
+
+// ─── Parse ─────────────────────────────────────────────────────────────────
+gNum(string s) =>
+    float v = str.tonumber(s)
+    na(v) ? 0.0 : v
+
+var float gF = 0.0, var float gC = 0.0, var float gP = 0.0
+var float gN = 0.0, var float gTs = 0.0, var bool gSrcBlob = false
+var array<float> zK = array.new<float>()
+var array<float> zG = array.new<float>()
+
+if barstate.islast
+    array<string> parts = str.split(str.replace_all(gBlob, " ", ""), "|")
+    array.clear(zK)
+    array.clear(zG)
+    if array.size(parts) >= 3
+        // A malformed blob must never silently draw a wrong level — fall back to manual.
+        gF := gNum(array.get(parts, 0))
+        gC := gNum(array.get(parts, 1))
+        gP := gNum(array.get(parts, 2))
+        gN := array.size(parts) >= 4 ? gNum(array.get(parts, 3)) : 0.0
+        gTs := array.size(parts) >= 5 ? gNum(array.get(parts, 4)) : 0.0
+        gSrcBlob := true
+        if array.size(parts) >= 6
+            array<string> pairs = str.split(array.get(parts, 5), ",")
+            // Guarded: `for i = 0 to size - 1` on an EMPTY array counts DOWN from 0 to -1 and
+            // executes, rather than skipping. Pine's for is bidirectional, not a no-op.
+            if array.size(pairs) > 0
+                for i = 0 to array.size(pairs) - 1
+                    array<string> kv = str.split(array.get(pairs, i), ":")
+                    if array.size(kv) == 2
+                        float k = gNum(array.get(kv, 0))
+                        if k > 0
+                            array.push(zK, k)
+                            array.push(zG, gNum(array.get(kv, 1)))
+    else
+        gF := gFlip, gC := gCall, gP := gPut, gN := 0.0, gTs := 0.0
+        gSrcBlob := false
+
+float gAgeMin = gTs > 0 ? (timenow - gTs) / 60000.0 : na
+bool  gStale  = not na(gAgeMin) and gAgeMin > gAge
+bool  gHave   = gF > 0 or gC > 0 or gP > 0
+bool  gLong   = gHave and gF > 0 and close > gF
+
+gFade(color c) => gStale ? color.new(c, 55) : c
+
+// True when a level is close enough to spot to be worth drawing.
+gNear(float px) =>
+    px <= 0 ? false : gMaxPct <= 0 ? true : math.abs(px - close) / close * 100.0 <= gMaxPct
+
+// ─── Draw ──────────────────────────────────────────────────────────────────
+var line lnF = na, var line lnC = na, var line lnP = na
+var label lbF = na, var label lbC = na, var label lbP = na
+
+// Recreated on the last bar only. Creating a line per bar silently exhausts the drawing
+// budget — Pine garbage-collects the oldest rather than raising an error.
+gDraw(line ln, label lb, float px, color c, string tag, bool dashed) =>
+    line.delete(ln)
+    label.delete(lb)
+    line  nl = na
+    label nb = na
+    if gNear(px)
+        nl := line.new(bar_index, px, bar_index + 1, px, extend = extend.both,
+             color = gFade(c), width = dashed ? 1 : 2,
+             style = dashed or gStale ? line.style_dashed : line.style_solid)
+        nb := label.new(bar_index + 10, px, tag + "  " + str.tostring(px, "#.##"),
+             style = label.style_label_left, color = #0f1521, textcolor = gFade(c),
+             size = size.small)
+    [nl, nb]
+
+if barstate.islast
+    [x1, y1] = gDraw(lnF, lbF, gF, #a78bfa, "FLIP", true)
+    lnF := x1, lbF := y1
+    [x2, y2] = gDraw(lnC, lbC, gC, #26a69a, "CALL WALL", false)
+    lnC := x2, lbC := y2
+    [x3, y3] = gDraw(lnP, lbP, gP, #ef5350, "PUT WALL", false)
+    lnP := x3, lbP := y3
+
+// ─── Per-strike gamma zones ────────────────────────────────────────────────
+// Opacity carries the magnitude; only the top three strikes state a number. Bands are half the
+// TIGHTEST strike gap tall, so two adjacent strikes can never overlap — overlapping translucent
+// boxes darken additively and would read as a concentration that is not in the data.
+// Suppressed entirely when stale, for the same reason the regime tint is: a gamma structure
+// inferred from an old snapshot is worse than none.
+var array<box>   zBox = array.new<box>()
+var array<label> zLab = array.new<label>()
+
+if barstate.islast
+    // Delete unconditionally, then redraw under the guard — otherwise turning the zones off,
+    // or a blob going stale, would leave the previous set frozen on the chart.
+    if array.size(zBox) > 0
+        for i = 0 to array.size(zBox) - 1
+            box.delete(array.get(zBox, i))
+    if array.size(zLab) > 0
+        for i = 0 to array.size(zLab) - 1
+            label.delete(array.get(zLab, i))
+    array.clear(zBox)
+    array.clear(zLab)
+
+    int zN = array.size(zK)
+    if gZones and not gStale and zN > 0
+        float minGap = na
+        if zN > 1
+            for i = 1 to zN - 1
+                float d = math.abs(array.get(zK, i) - array.get(zK, i - 1))
+                if d > 0
+                    minGap := na(minGap) ? d : math.min(minGap, d)
+        float h = (na(minGap) ? close * 0.001 : minGap) / 2.0
+
+        array<float> mags = array.new<float>()
+        for i = 0 to zN - 1
+            array.push(mags, math.abs(array.get(zG, i)))
+        float maxAbs = array.max(mags)
+        // Third-largest magnitude — the cutoff for carrying a printed value.
+        array.sort(mags, order.descending)
+        float cut = array.get(mags, math.min(2, array.size(mags) - 1))
+
+        if maxAbs > 0
+            for i = 0 to zN - 1
+                float k = array.get(zK, i)
+                float g = array.get(zG, i)
+                // Same distance gate as the levels: a far zone drags autoscale exactly like a
+                // far line does, and is no more actionable intraday.
+                if gNear(k)
+                    array.push(zBox, box.new(bar_index, k + h, bar_index + 1, k - h,
+                         extend = extend.both, border_width = 0,
+                         bgcolor = color.new(g > 0 ? #26a69a : #ef5350,
+                              int(92 - 22 * math.abs(g) / maxAbs))))
+                    if math.abs(g) >= cut
+                        array.push(zLab, label.new(bar_index + 10, k, str.tostring(g, "#.##"),
+                             style = label.style_none, size = size.tiny,
+                             textcolor = g > 0 ? #26a69a : #ef5350))
+
+// Above the flip dealers are long gamma and hedging damps moves; below it, hedging
+// amplifies. Never imply a regime from stale data.
+bgcolor(gTint and gHave and gF > 0 and not gStale
+     ? color.new(gLong ? #26a69a : #ef5350, 94) : na, title = "Gamma regime")
+
+// ─── Status ────────────────────────────────────────────────────────────────
+// Three cells, bottom-right, out of the way: the regime word, net gamma, and the freshness
+// of the data behind both. Anything suppressed by the distance filter is named here rather
+// than vanishing — a wall you cannot see is still a wall.
+var table st = table.new(position.bottom_right, 2, 3, border_width = 0,
+     frame_width = 1, frame_color = #27313f)
+
+if barstate.islast
+    string offList = (gC > 0 and not gNear(gC) ? "call " + str.tostring(gC, "#") + " " : "") +
+         (gP > 0 and not gNear(gP) ? "put " + str.tostring(gP, "#") + " " : "") +
+         (gF > 0 and not gNear(gF) ? "flip " + str.tostring(gF, "#") : "")
+    bool anyOff = str.length(str.replace_all(offList, " ", "")) > 0
+
+    table.cell(st, 0, 0, "Γ", text_color = #9aa3b8, text_size = size.small)
+    table.cell(st, 1, 0, not gHave ? "NO LEVELS" : gLong ? "LONG Γ" : "SHORT Γ",
+         text_color = not gHave ? #5c6879 : gLong ? #26a69a : #ef5350, text_size = size.small)
+
+    table.cell(st, 0, 1, "net", text_color = #9aa3b8, text_size = size.small)
+    table.cell(st, 1, 1, gN == 0 ? "—" : str.tostring(gN, "#.##") + " Bn/1%",
+         text_color = #d6dbe4, text_size = size.small)
+
+    table.cell(st, 0, 2, anyOff ? "off" : "age", text_color = #9aa3b8, text_size = size.small)
+    table.cell(st, 1, 2, anyOff ? offList
+         : not gHave ? "—"
+         : na(gAgeMin) ? (gSrcBlob ? "no timestamp" : "manual")
+         : (gStale ? "STALE " : "") + str.tostring(gAgeMin, "#") + "m",
+         text_color = gStale or anyOff ? #f0b429 : #5c6879, text_size = size.small)
