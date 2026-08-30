@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from morai.db.base import Base
-from morai.settings import settings
+from morai.settings import get_settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 # alembic.ini's sqlalchemy.url stays empty — the repository is public, and a DSN
 # carries a password. Read it from settings at runtime instead (D-15's SecretStr,
 # unwrapped here and nowhere else in this file).
-config.set_main_option("sqlalchemy.url", settings.async_dsn)
+config.set_main_option("sqlalchemy.url", get_settings().async_dsn)
 
 target_metadata = Base.metadata
 

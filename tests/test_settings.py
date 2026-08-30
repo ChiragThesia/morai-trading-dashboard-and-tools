@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from morai.settings import Settings
+from morai.settings import Settings, load_settings
 
 RAW_DSN = "postgresql://user:sekret-password@host:5432/db"
 
@@ -71,3 +71,37 @@ def test_sync_dsn_swaps_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", RAW_DSN)
     settings = Settings.model_validate({})
     assert settings.sync_dsn == "postgresql://user:sekret-password@host:5432/db"
+
+
+def test_boot_failure_never_echoes_the_rejected_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """NN-34: a rejected key is often a credential, so the boot error names fields and
+    withholds values.
+
+    pydantic's own ValidationError renders each rejected key together with its
+    `input_value`. Against a real `.env` that means the error text *is* the secret, on
+    its way to stderr and from there into the platform log. `load_settings` converts
+    that into a RuntimeError carrying field names and failure types only.
+    """
+    _clear_env(monkeypatch)
+    secret = "cAnAryToKeN-must-never-be-printed"
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"DATABASE_URL={RAW_DSN}\nSCHWAB_TRADER_APP_SECRET={secret}\n")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        load_settings()
+
+    message = str(exc_info.value)
+    # The offending field is named, so the operator knows what to fix...
+    assert "schwab_trader_app_secret" in message
+    # ...but its value never appears, and neither does the DSN password.
+    assert secret not in message
+    assert "sekret-password" not in message
+    # Nothing carrying the value may remain reachable on the exception. `from None`
+    # alone is not enough -- it sets __suppress_context__ but leaves __context__
+    # attached, and a logger that walks the chain would still emit the secret.
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert secret not in repr(exc_info.value)
