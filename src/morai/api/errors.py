@@ -116,4 +116,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 def install_error_handling(app: FastAPI) -> None:
     """Wire the request-id middleware and both opaque handlers onto `app` at
     construction."""
-    # TODO(01-06 red commit): not yet wired.
+    app.add_middleware(BaseHTTPMiddleware, dispatch=request_id_middleware)
+    app.add_exception_handler(
+        ResponseValidationError, response_validation_exception_handler
+    )
+    app.add_exception_handler(Exception, unhandled_exception_handler)
