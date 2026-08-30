@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 current_phase: 1
 current_phase_name: Walking Skeleton
 status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-08-30T23:21:22.153Z"
+stopped_at: Completed 01-07-PLAN.md
+last_updated: "2026-08-30T23:22:02.740Z"
 last_activity: 2026-08-30
 last_activity_desc: The tracer -- one money value proven identical across HTTP, Postgres NUMERIC(14,4) and JSON in CI (plan 01-03)
-state_head: dcf488e071302469bf2e321b9c014771ddb0ceb6
+state_head: f3d765b9f82a7436e3be52e18089d2cc4f262349
 progress:
   total_phases: 11
   completed_phases: 0
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P03 | 9min | 2 tasks | 13 files |
 | Phase 01 P05 | 8min | 3 tasks | 8 files |
 | Phase 01-walking-skeleton P06 | 25min | 2 tasks | 4 files |
+| Phase 01 P07 | 20min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,8 @@ Recent decisions affecting current work:
 - [Phase 1]: 01-05: committed-secret guard uses a shape heuristic (16+ chars, letters and digits) instead of a file exclusion list, so existing test fixtures with fake passwords never trip it
 - [Phase 1]: Request-id propagation uses contextvars.ContextVar[str], not request.state (State.__getattr__ returns Any, which reportAny flags)
 - [Phase 1]: Negative-control response models locally set revalidate_instances='always' so model_construct() actually re-validates -- otherwise FastAPI returns a silent 200 for a broken response
+- [Phase 1]: PsycopgConnector (psycopg v3) is the worker's connector -- Procrastinate ships no asyncpg connector; pool capped explicitly (min_size=1, max_size=2) as its own NN-28 budget line
+- [Phase 1]: Procrastinate's schema.sql wrapped verbatim into Alembic revision 0002, split into per-statement op.execute() calls -- asyncpg's protocol rejects multi-statement strings
 
 ### Pending Todos
 
@@ -121,6 +124,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T23:21:22.140Z
-Stopped at: Completed 01-06-PLAN.md
+Last session: 2026-08-30T23:22:02.726Z
+Stopped at: Completed 01-07-PLAN.md
 Resume file: None
