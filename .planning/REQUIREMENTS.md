@@ -164,17 +164,88 @@ Capture ships in v1 precisely so these become possible later on data that alread
 
 ## Traceability
 
-Populated during roadmap creation.
+Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and success criteria.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| — | — | Pending |
+| AUTH-01 | Phase 2 | Pending |
+| AUTH-02 | Phase 2 | Pending |
+| AUTH-03 | Phase 2 | Pending |
+| AUTH-04 | Phase 2 | Pending |
+| AUTH-05 | Phase 2 | Pending |
+| AUTH-06 | Phase 3 | Pending |
+| AUTH-07 | Phase 2 | Pending |
+| AUTH-08 | Phase 2 | Pending |
+| CRYPT-01 | Phase 3 | Pending |
+| CRYPT-02 | Phase 3 | Pending |
+| CRYPT-03 | Phase 3 | Pending |
+| CRYPT-04 | Phase 3 | Pending |
+| CRYPT-05 | Phase 3 | Pending |
+| CONN-01 | Phase 4 | Pending |
+| CONN-02 | Phase 4 | Pending |
+| CONN-03 | Phase 4 | Pending |
+| CONN-04 | Phase 4 | Pending |
+| CONN-05 | Phase 4 | Pending |
+| CONN-06 | Phase 4 | Pending |
+| CONN-07 | Phase 4 | Pending |
+| INGEST-01 | Phase 6 | Pending |
+| INGEST-02 | Phase 6 | Pending |
+| INGEST-03 | Phase 6 | Pending |
+| INGEST-04 | Phase 6 | Pending |
+| INGEST-05 | Phase 6 | Pending |
+| INGEST-06 | Phase 6 | Pending |
+| LEDGER-01 | Phase 5 | Pending |
+| LEDGER-02 | Phase 5 | Pending |
+| LEDGER-03 | Phase 5 | Pending |
+| LEDGER-04 | Phase 3 | Pending |
+| LEDGER-05 | Phase 7 | Pending |
+| LEDGER-06 | Phase 7 | Pending |
+| LEDGER-07 | Phase 7 | Pending |
+| LEDGER-08 | Phase 1 | Pending |
+| LEDGER-09 | Phase 5 | Pending |
+| LEDGER-10 | Phase 7 | Pending |
+| LEDGER-11 | Phase 5 | Pending |
+| LEDGER-12 | Phase 5 | Pending |
+| RECON-01 | Phase 9 | Pending |
+| RECON-02 | Phase 9 | Pending |
+| RECON-03 | Phase 9 | Pending |
+| RECON-04 | Phase 9 | Pending |
+| INTENT-01 | Phase 10 | Pending |
+| INTENT-02 | Phase 10 | Pending |
+| INTENT-03 | Phase 10 | Pending |
+| INTENT-04 | Phase 10 | Pending |
+| INTENT-05 | Phase 10 | Pending |
+| INTENT-06 | Phase 10 | Pending |
+| INTENT-07 | Phase 10 | Pending |
+| INTENT-08 | Phase 10 | Pending |
+| SNAP-01 | Phase 8 | Pending |
+| SNAP-02 | Phase 8 | Pending |
+| SNAP-03 | Phase 8 | Pending |
+| SNAP-04 | Phase 8 | Pending |
+| SNAP-05 | Phase 8 | Pending |
+| API-01 | Phase 9 | Pending |
+| API-02 | Phase 11 | Pending |
+| API-03 | Phase 11 | Pending |
+| API-04 | Phase 11 | Pending |
+| API-05 | Phase 11 | Pending |
+| API-06 | Phase 11 | Pending |
+| API-07 | Phase 1 | Pending |
+| OPS-01 | Phase 1 | Pending |
+| OPS-02 | Phase 1 | Pending |
+| OPS-03 | Phase 1 | Pending |
+| OPS-04 | Phase 1 | Pending |
+| OPS-05 | Phase 6 | Pending |
+| OPS-06 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 62 total
-- Mapped to phases: 0
-- Unmapped: 62 ⚠️
+- v1 requirements: 68 total
+- Mapped to phases: 68
+- Unmapped: 0 ✓
+
+The earlier count of 62 was wrong. Counting the requirement IDs above the line gives 68: AUTH 8,
+CRYPT 5, CONN 7, INGEST 6, LEDGER 12, RECON 4, INTENT 8, SNAP 5, API 7, OPS 6. No requirement was
+added or removed to reach it — only the total was miscounted.
 
 ---
 *Requirements defined: 2026-08-29*
-*Last updated: 2026-08-29 after initial definition*
+*Last updated: 2026-08-29 after roadmap creation — traceability populated, coverage corrected to 68*
