@@ -61,16 +61,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 10 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Scaffold: pinned interpreter, dependency stack, both type checkers, local Postgres, gate script, settings, Alembic environment
-- [ ] 01-02-PLAN.md — Tracer: one money value end to end through HTTP, strict Pydantic, asyncpg, `NUMERIC(14,4)` and back, plus the float canary
-- [ ] 01-03-PLAN.md — Money unit safety: `points_to_usd` with a required multiplier, and the column-suffix metadata guard
-- [ ] 01-04-PLAN.md — Gate teeth: violating fixtures with rule-code assertions, the suppression-reason scan, repo hygiene
-- [ ] 01-05-PLAN.md — API boundary: request id, opaque error envelope, and routes that are supposed to fail
-- [ ] 01-06-PLAN.md — Worker: Procrastinate on its own psycopg pool, one heartbeat, schema owned by Alembic
-- [ ] 01-07-PLAN.md — CI: four named jobs, a Postgres service container, and proof the workflow goes red
-- [ ] 01-08-PLAN.md — Railway deploy via `.railway/railway.ts`, the V039 re-measurement, and the V092 entry
-- [ ] 01-09-PLAN.md — Root docs made true, and the red-then-green evidence document
-- [ ] 01-10-PLAN.md — Branch ruleset on `main`, and a pull request GitHub refuses to merge
+- [ ] 01-01-PLAN.md — Scaffold: 3.13 pin, dependency stack, both type checkers, gate script, settings, Alembic env. No database needed
+- [ ] 01-02-PLAN.md — CI: four named jobs plus the Postgres service container that is this project's only usable test database
+- [ ] 01-03-PLAN.md — Tracer: the float canary, then one money value end to end through HTTP, strict Pydantic, asyncpg and `NUMERIC(14,4)`, proven in CI
+- [ ] 01-04-PLAN.md — Money unit safety: `points_to_usd` with a required multiplier, and the column-suffix metadata guard
+- [ ] 01-05-PLAN.md — Gate teeth: violating fixtures with rule-code assertions, the suppression-reason scan, repo hygiene
+- [ ] 01-06-PLAN.md — API boundary: request id, opaque error envelope, and routes that are supposed to fail
+- [ ] 01-07-PLAN.md — Worker: Procrastinate on its own psycopg pool, one heartbeat, schema owned by Alembic
+- [ ] 01-08-PLAN.md — Railway deploy; criterion 4 on real Railway Postgres and criterion 1's V039 measurement, as separate evidence; V092
+- [ ] 01-09-PLAN.md — Root docs made true, red-then-green evidence, and both criterion wording notes
+- [ ] 01-10-PLAN.md — Branch ruleset after the checks are seen reporting, a PR GitHub refuses, an auto-merge that needs no human, then the branching flip
 **UI hint**: no
 
 ### Phase 2: Identity, Sessions, and Tenant Isolation

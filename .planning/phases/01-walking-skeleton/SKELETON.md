@@ -34,18 +34,20 @@ story, and no story was invented for it.
 | Configuration | One `pydantic-settings` model, `extra="forbid"`, secrets typed `SecretStr` (D-15) | A missing variable kills boot and names the field instead of surfacing as a 500 on the first request that needs it. |
 | Health check | `/health` liveness only, no database call (D-14) | Railway checks health only at deploy time, so a database-dependent `/health` costs a failed deploy. Reachability lives on a separate endpoint Railway does not probe. |
 | Deployment target | Railway, two services from one repo, nixpacks builder, no Dockerfile (D-19) | Web: `hypercorn --bind '[::]:$PORT'`. Worker: `procrastinate worker`. Railway owns the base image, so `V092` records the Python version and base image alongside the bind result. |
+| Address family | One `[::]` dual-stack bind, non-negotiable | **V039 re-measured and CONFIRMED.** Railway's public edge is IPv4-only (`healthcheck.railway.app` has no AAAA from three independent resolvers); Railway's private network is IPv6. One dual-stack socket serves both, which uvicorn's CLI could not do. A public `curl -6` failing is the expected control, not a reason to change the bind. Trap: `railway.app` returns Cloudflare AAAA records fronting the marketing site — dig the deployment edge, not the homepage. |
 | Railway config | `.railway/railway.ts` Infrastructure as Code | Config-as-code is deprecated and **new services cannot opt into it at all**. Both services here are new. |
 | Directory layout | `src/` layout, one installable package `morai`, submodules `api/`, `worker/`, `money/`, `db/`, managed by uv with a committed `uv.lock` (D-18) | pytest imports the installed package, so a test cannot pass by accidentally importing from the working directory. |
-| Merge gate | GitHub Actions, four separately named jobs, plus a branch ruleset on `main` (D-16) | Public repo, so rulesets are available on the free plan and Actions minutes are unmetered. Separate job names give precise failure attribution and are what the ruleset references. |
-| Test database | docker-compose locally, `services: postgres` in CI, both pinned to major 18 (D-17) | Matches the live Railway Postgres (`ghcr.io/railwayapp-templates/postgres-ssl:18`, read 2026-08-30). Rejected: testcontainers (a dependency plus Docker inside the test run) and a Railway dev database (cost, latency, shared mutable state). |
+| Merge gate | GitHub Actions jobs `typecheck-basedpyright`, `typecheck-mypy`, `lint-ruff`, `test-pytest`, plus a branch ruleset on `main` with zero required approvals (D-16) | Public repo, so rulesets are available on the free plan and Actions minutes are unmetered. Separate job names give precise failure attribution and are the exact strings the ruleset references. Zero required approvals means `gh pr merge --squash --auto` closes the loop hands-off, which every later phase depends on. The ruleset is created only after all four checks are observed reporting — a required check that has never reported blocks every pull request forever, with no error. |
+| Test database | **GitHub Actions `services: postgres`, pinned to major 18.** `docker-compose.yml` ships per D-17 but is unverified — Docker's daemon is broken on the authoring machine and Railway's Postgres is private-network-only, so there is no local database at all | Matches the live Railway Postgres (`ghcr.io/railwayapp-templates/postgres-ssl:18`, read 2026-08-30). A Railway TCP proxy was deliberately not created: widening the production database's attack surface to fix local tooling is the wrong trade. Rejected: testcontainers (a dependency plus Docker inside the test run) and a Railway dev database (cost, latency, shared mutable state). |
+| Where each test runs | Pure-Python tests and the type gate run anywhere; DB-backed tests are `@pytest.mark.db` and run in CI; the authoritative money round-trip runs on the deployed Railway service | Follows from having no local database. `uv run pytest -m "not db"` is the local default. DB fixtures fail loudly rather than skipping — a silently-skipped round-trip test is the exact failure this phase exists to prevent. |
 
 ## Stack Touched in Phase 1
 
 - [x] Project scaffold — uv, `src/` layout, pinned interpreter, ruff, both type checkers, pytest
 - [x] Routing — `GET /health` and `POST /gate/money-roundtrip`, contracts by return annotation
-- [x] Database — one real write and one real read, through Alembic-managed schema, against real Postgres
+- [x] Database — one real write and one real read, through Alembic-managed schema, proven in CI and again on real Railway Postgres
 - [x] Background worker — a second process on its own pool, dequeuing and completing a real job
-- [x] Deployment — two Railway services against the existing Postgres, plus a documented local full-stack run
+- [x] Deployment — two Railway services against the existing Postgres
 - [x] CI and merge gate — four required checks and a ruleset that refuses a merge
 
 No UI. There is no interactive element to wire, because this milestone ships no rendered client.
@@ -65,6 +67,9 @@ Recorded so a later phase does not re-litigate this one's minimalism:
 - Purging the two collision artifacts already in git history — needs a history rewrite, judged not worth it for two files
 - Hypothesis property tests — Phase 5, when the ledger needs them
 - Mutation testing — Phase 5 owns OPS-06
+- A working local database. Docker is broken on this machine and the production Postgres is
+  private-network-only. Repairing Docker, or exposing Railway Postgres publicly, are both out of
+  scope. CI is the test database.
 
 ## Permanent Surface, Not Scaffolding
 
@@ -74,6 +79,19 @@ only in CI. Phase 3 drops the table with an explicit migration when the real sch
 
 `tests/gate/` is a first-class directory. Every gate this phase installs ships with a fixture that
 must fail — the same pattern as the oracle's fourteenth synthetic negative control.
+
+## Two Criteria Met in Substance, Not in Literal Wording
+
+Both are recorded in `01-RED-GREEN-EVIDENCE.md`; the ROADMAP is not edited.
+
+**Criterion 4** asks for a value carrying more precision than a float can hold. `NUMERIC(14,4)` holds
+at most 14 significant digits and a double carries about 15.95, so no such value exists inside the
+column. Met by asserting bit-inexactness instead.
+
+**Criterion 1** asks for the health check to answer over both IPv4 and IPv6 from one `[::]` bind.
+Railway's public edge has no IPv6 at all, so the IPv6 half is proven over the private network, from
+the worker to `http://<web>.railway.internal:$PORT/health` — which is the path the dual-stack bind
+exists for.
 
 ## Subsequent Slice Plan
 
