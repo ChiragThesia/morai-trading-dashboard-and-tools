@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 current_phase: 1
 current_phase_name: Walking Skeleton
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-08-30T22:58:30.000Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-08-30T23:21:22.153Z"
 last_activity: 2026-08-30
-last_activity_desc: "The tracer -- one money value proven identical across HTTP, Postgres NUMERIC(14,4) and JSON in CI (plan 01-03)"
-state_head: 01a5489cd164d7a52f8dc79d5db0114cda9cdcc0
+last_activity_desc: The tracer -- one money value proven identical across HTTP, Postgres NUMERIC(14,4) and JSON in CI (plan 01-03)
+state_head: dcf488e071302469bf2e321b9c014771ddb0ceb6
 progress:
   total_phases: 11
   completed_phases: 0
   total_plans: 10
-  completed_plans: 3
-  percent: 30
+  completed_plans: 4
+  percent: 0
 ---
 
 # Project State
@@ -29,11 +29,11 @@ window equals the broker's cash delta over that window, checked every ingest cyc
 ## Current Position
 
 Phase: 1 of 11 (Walking Skeleton)
-Plan: 3 of 10 in current phase
-Status: Executing
+Plan: 4 of 10 in current phase
+Status: Ready to execute
 Last activity: 2026-08-30 — The tracer: money round-trip proven in CI (plan 01-03)
 
-Progress: [███░░░░░░░] 30%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [███░░░░░░░] 30%
 |------|----------|-------|-------|
 | Phase 01 P02 | 25min | 2 tasks | 2 files |
 | Phase 01 P03 | 9min | 2 tasks | 13 files |
+| Phase 01-walking-skeleton P06 | 25min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,8 @@ Recent decisions affecting current work:
 - [Phase 1, 01-03]: Float canary asserts bit-inexactness (`Decimal(float(x)) != x`), not a visible digit flip -- NUMERIC(14,4)'s 14-sig-fig ceiling is narrower than a double's ~15.95, so no value both fits the column and visibly loses a digit
 - [Phase 1, 01-03]: `StrictDecimalField` (`BeforeValidator`) fixes the R-02 gap between D-03's Decimal-as-JSON-string wire format and D-12's strict request models
 - [Phase 1, 01-03]: pytest session shares one asyncio event loop (`asyncio_default_fixture_loop_scope`/`asyncio_default_test_loop_scope = "session"`) so the app's `lru_cache`d `AsyncEngine` isn't handed to a second loop mid-suite
+- [Phase 1]: Request-id propagation uses contextvars.ContextVar[str], not request.state (State.__getattr__ returns Any, which reportAny flags)
+- [Phase 1]: Negative-control response models locally set revalidate_instances='always' so model_construct() actually re-validates -- otherwise FastAPI returns a silent 200 for a broken response
 
 ### Pending Todos
 
@@ -114,6 +117,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T22:58:30.000Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-08-30T23:21:22.140Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None
