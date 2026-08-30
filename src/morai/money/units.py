@@ -18,3 +18,21 @@ from typing import NewType
 
 Usd = NewType("Usd", Decimal)
 IndexPoints = NewType("IndexPoints", Decimal)
+
+# The SPX contract multiplier. Lives here and nowhere else under `src/` -- enforced
+# by tests/test_money_units.py's grep -- so every conversion names it explicitly
+# rather than inheriting a bare number from a call site.
+SPX_CONTRACT_MULTIPLIER = 100
+
+
+def points_to_usd(pts: IndexPoints, multiplier: int) -> Usd:
+    """Convert index points to dollars. The multiplier is required, never defaulted.
+
+    v1 stored `openNetDebit` in dollars and fed it to a formula expecting index
+    points, off by the contract multiplier: a +$395 trade displayed as -$319,850,
+    five rounds of oracle-driven debugging before the bug was found (D-02, NN-8).
+    A defaulted multiplier is how a caller stops thinking about which contract it
+    is converting -- forcing it as a required argument makes that a visible
+    call-site decision instead.
+    """
+    return Usd(Decimal(pts) * Decimal(multiplier))
