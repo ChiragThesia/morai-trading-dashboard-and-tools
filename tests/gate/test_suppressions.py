@@ -29,7 +29,9 @@ _MARKER_WORD = "why"
 REASON_MARKER = f"{_MARKER_PREFIX} {_MARKER_WORD}:"
 
 # A suppression that names its rule: `# type: ignore[code]`, `# pyright: ignore[code]`,
-# or ruff's own `# noqa: CODE`.
+# or ruff's own rule-code suppression comment (the pattern below, not spelled out
+# here as a standalone comment, since ruff's own comment scanner would try to parse
+# this sentence as one).
 _RULE_CODED_SUPPRESSION = re.compile(
     r"#\s*(?:type:\s*ignore\[[^\]]+\]|pyright:\s*ignore\[[^\]]+\]|noqa:\s*\S+)"
 )
@@ -64,11 +66,15 @@ def _tracked_python_files() -> list[Path]:
 
 def find_unjustified_suppressions(paths: list[Path]) -> list[str]:
     """Return `path:lineno` for every rule-coded suppression missing a reason on
-    the same line.
-
-    NOT YET IMPLEMENTED -- placeholder for the red run (D-08).
-    """
-    raise NotImplementedError
+    the same line."""
+    offenders: list[str] = []
+    for path in paths:
+        absolute_path = REPO_ROOT / path
+        contents = absolute_path.read_text()
+        for lineno, line in enumerate(contents.splitlines(), start=1):
+            if _RULE_CODED_SUPPRESSION.search(line) and REASON_MARKER not in line:
+                offenders.append(f"{path}:{lineno}")
+    return offenders
 
 
 def test_real_tree_has_no_unjustified_suppressions() -> None:
