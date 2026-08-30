@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 current_phase: 1
 current_phase_name: Walking Skeleton
-status: planning
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-08-30T22:35:45.064Z"
-last_activity: 2026-08-29
-last_activity_desc: Roadmap created; 68 v1 requirements mapped across 11 phases
-state_head: 890529ee8cf378a3da7ec0b81abccee98cf8dfb6
+status: executing
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-08-30T22:58:30.000Z"
+last_activity: 2026-08-30
+last_activity_desc: "The tracer -- one money value proven identical across HTTP, Postgres NUMERIC(14,4) and JSON in CI (plan 01-03)"
+state_head: 01a5489cd164d7a52f8dc79d5db0114cda9cdcc0
 progress:
   total_phases: 11
   completed_phases: 0
   total_plans: 10
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 30
 ---
 
 # Project State
@@ -29,11 +29,11 @@ window equals the broker's cash delta over that window, checked every ingest cyc
 ## Current Position
 
 Phase: 1 of 11 (Walking Skeleton)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-08-29 — Roadmap created; 68 v1 requirements mapped across 11 phases
+Plan: 3 of 10 in current phase
+Status: Executing
+Last activity: 2026-08-30 — The tracer: money round-trip proven in CI (plan 01-03)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P02 | 25min | 2 tasks | 2 files |
+| Phase 01 P03 | 9min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,9 @@ Recent decisions affecting current work:
 
 - [Phase 1]: CI push trigger unfiltered by branch, since Task 2 needs a red run observed on a throwaway branch pushed directly
 - [Phase 1]: test-pytest Postgres pinned to major 18 (postgres:18-alpine), matching the live Railway Postgres image, superseding 01-RESEARCH.md's illustrative postgres:17 example
+- [Phase 1, 01-03]: Float canary asserts bit-inexactness (`Decimal(float(x)) != x`), not a visible digit flip -- NUMERIC(14,4)'s 14-sig-fig ceiling is narrower than a double's ~15.95, so no value both fits the column and visibly loses a digit
+- [Phase 1, 01-03]: `StrictDecimalField` (`BeforeValidator`) fixes the R-02 gap between D-03's Decimal-as-JSON-string wire format and D-12's strict request models
+- [Phase 1, 01-03]: pytest session shares one asyncio event loop (`asyncio_default_fixture_loop_scope`/`asyncio_default_test_loop_scope = "session"`) so the app's `lru_cache`d `AsyncEngine` isn't handed to a second loop mid-suite
 
 ### Pending Todos
 
@@ -110,6 +114,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T22:35:45.051Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-08-30T22:58:30.000Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None

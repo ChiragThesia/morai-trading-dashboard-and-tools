@@ -58,7 +58,7 @@ API, a job, or a stored invariant.
 - [ ] **LEDGER-05**: A position's closed state is derived from net quantity per leg, never from a stored status column
 - [ ] **LEDGER-06**: A SETTLEMENT event is generated from a leg's expiry and strike, with no fill required
 - [ ] **LEDGER-07**: Settlement style is recorded per leg, so a PM-settled SPXW front leg and an AM-settled SPX back leg coexist inside one position
-- [ ] **LEDGER-08**: Every money field's unit is fixed by its type, so passing index points where dollars are expected fails type-check
+- [x] **LEDGER-08**: Every money field's unit is fixed by its type, so passing index points where dollars are expected fails type-check
 - [ ] **LEDGER-09**: Re-deriving the events for a broker order is idempotent and produces the same result as the first derivation
 - [ ] **LEDGER-10**: A campaign — a chain of rolled positions — is a read model computed from events, not a separately maintained table
 - [ ] **LEDGER-11**: The 13-calendar oracle passes, including the shared-front-leg case and the stale-status case
@@ -98,14 +98,14 @@ API, a job, or a stored invariant.
 - [ ] **API-04**: A cohort's numbers are returned alongside the user's own trailing baseline
 - [ ] **API-05**: No ratio is returned with statistical confidence language attached to it
 - [ ] **API-06**: User can export their complete data losslessly as JSON, and tabular objects as CSV
-- [ ] **API-07**: Every response is validated against a typed schema before it leaves the process
+- [x] **API-07**: Every response is validated against a typed schema before it leaves the process
 
 ### Engineering and operations
 
 - [x] **OPS-01**: The type checker runs in strict mode and fails the build on any `Any`, `cast`, or unjustified ignore
 - [x] **OPS-02**: Every test is written before the implementation it covers
 - [x] **OPS-03**: Money values round-trip Python ↔ Postgres ↔ JSON with no precision loss
-- [ ] **OPS-04**: The system runs as separate web and worker processes in Railway containers against Postgres
+- [x] **OPS-04**: The system runs as separate web and worker processes in Railway containers against Postgres
 - [ ] **OPS-05**: A batch insert never exceeds the Postgres bind-parameter ceiling
 - [ ] **OPS-06**: Mutation testing runs against the ledger and reports surviving mutants
 
@@ -201,7 +201,7 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | LEDGER-05 | Phase 7 | Pending |
 | LEDGER-06 | Phase 7 | Pending |
 | LEDGER-07 | Phase 7 | Pending |
-| LEDGER-08 | Phase 1 | Pending |
+| LEDGER-08 | Phase 1 | Complete |
 | LEDGER-09 | Phase 5 | Pending |
 | LEDGER-10 | Phase 7 | Pending |
 | LEDGER-11 | Phase 5 | Pending |
@@ -229,11 +229,11 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | API-04 | Phase 11 | Pending |
 | API-05 | Phase 11 | Pending |
 | API-06 | Phase 11 | Pending |
-| API-07 | Phase 1 | Pending |
+| API-07 | Phase 1 | Complete |
 | OPS-01 | Phase 1 | Complete |
 | OPS-02 | Phase 1 | Complete |
 | OPS-03 | Phase 1 | Complete |
-| OPS-04 | Phase 1 | Pending |
+| OPS-04 | Phase 1 | Complete |
 | OPS-05 | Phase 6 | Pending |
 | OPS-06 | Phase 5 | Pending |
 
