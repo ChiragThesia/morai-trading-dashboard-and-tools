@@ -32,7 +32,10 @@ def test_heartbeat_is_registered_as_a_periodic_task() -> None:
     """A cron-scheduled task, not a job the web process enqueues -- Phase 1's
     scope per D-13. Registered on the app's own `periodic_registry`, keyed by
     (task name, periodic id); this project uses no periodic id."""
-    periodic_task = app.periodic_registry.periodic_tasks[("heartbeat", "")]
+    # `PeriodicRegistry.periodic_tasks` is a bare `dict[tuple[str, str],
+    # PeriodicTask]` in procrastinate/periodic.py -- an unparameterized generic
+    # in the vendor's own source, confirmed by reading it, not this file's doing.
+    periodic_task = app.periodic_registry.periodic_tasks[("heartbeat", "")]  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]  # why: vendor's PeriodicTask value type is unparameterized (D-06)
     assert periodic_task.cron == "* * * * *"
 
 
@@ -70,6 +73,5 @@ async def test_heartbeat_defers_and_reaches_succeeded(
         assert status_after is Status.SUCCEEDED
 
     assert any(
-        record.getMessage().startswith("heartbeat run at ")
-        for record in caplog.records
+        record.getMessage().startswith("heartbeat run at ") for record in caplog.records
     )
