@@ -641,8 +641,45 @@ CREATE TRIGGER procrastinate_trigger_delete_jobs_v1
 """
 
 
+def _split_sql_statements(sql: str) -> list[str]:
+    """Split a SQL script into individual statements at top-level semicolons,
+    treating `$$ ... $$` dollar-quoted bodies (every function/DO block in this
+    file) as atomic so a semicolon inside a function body never splits it.
+
+    Needed because asyncpg's extended query protocol -- what SQLAlchemy's
+    async dialect uses for `op.execute()` -- refuses "multiple commands into a
+    prepared statement" (measured this session, CI's `test-pytest` job): the
+    whole schema.sql passed as one `op.execute()` call fails outright.
+    Splitting changes nothing about the SQL itself -- concatenating the
+    returned pieces reconstructs the original string exactly -- it only
+    changes how many `op.execute()` calls carry it.
+    """
+    statements: list[str] = []
+    buf: list[str] = []
+    in_dollar_quote = False
+    i = 0
+    length = len(sql)
+    while i < length:
+        if sql[i : i + 2] == "$$":
+            in_dollar_quote = not in_dollar_quote
+            buf.append("$$")
+            i += 2
+            continue
+        char = sql[i]
+        buf.append(char)
+        if char == ";" and not in_dollar_quote:
+            statements.append("".join(buf))
+            buf = []
+        i += 1
+    tail = "".join(buf).strip()
+    if tail:
+        statements.append(tail)
+    return statements
+
+
 def upgrade() -> None:
-    op.execute(_PROCRASTINATE_SCHEMA_SQL)
+    for statement in _split_sql_statements(_PROCRASTINATE_SCHEMA_SQL):
+        op.execute(statement)
 
 
 def downgrade() -> None:
