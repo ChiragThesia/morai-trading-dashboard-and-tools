@@ -10,11 +10,12 @@ guard fired, not merely *a* guard.
 `pyproject.toml` excludes `tests/gate/fixtures` from basedpyright, mypy and ruff, so
 the real gate run stays clean with these fixtures on disk (D-07) -- but that exclusion
 also applies to a checker invoked with an *explicit* path to a fixture file
-[MEASURED locally, this session: `basedpyright tests/gate/fixtures/violation_explicit_any.py`
-reports 0 errors]. Each case therefore copies its fixture into a directory outside
-`tests/gate/fixtures` before invoking the checker, with this repository as the
-subprocess's working directory so the copy still resolves against the project's own
-`pyproject.toml` config and its installed `morai` package.
+[MEASURED locally, this session: `basedpyright` against
+`tests/gate/fixtures/violation_explicit_any.py` directly reports 0 errors]. Each case
+therefore copies its fixture into a directory outside `tests/gate/fixtures` before
+invoking the checker, with this repository as the subprocess's working directory so
+the copy still resolves against the project's own `pyproject.toml` config and its
+installed `morai` package.
 
 Marker note for the explicit-Any fixture: mypy does **not** flag it. `[tool.mypy]`
 deliberately omits `disallow_any_explicit` -- it false-positives on every pydantic
@@ -58,7 +59,7 @@ def _run_checker_against_fixture(
     )
 
 
-CASES: list[pytest.ParameterSet] = [
+CASES = [
     pytest.param(
         "violation_explicit_any.py",
         ["uv", "run", "basedpyright"],
