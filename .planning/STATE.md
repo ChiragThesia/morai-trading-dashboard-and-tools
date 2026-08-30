@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 current_phase: 1
 current_phase_name: Walking Skeleton
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-08-30T23:16:59.921Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-08-30T23:21:22.153Z"
 last_activity: 2026-08-30
 last_activity_desc: The tracer -- one money value proven identical across HTTP, Postgres NUMERIC(14,4) and JSON in CI (plan 01-03)
-state_head: b7405e9a65ffb1f6750a13fd16ca8bae38e4445b
+state_head: dcf488e071302469bf2e321b9c014771ddb0ceb6
 progress:
   total_phases: 11
   completed_phases: 0
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P02 | 25min | 2 tasks | 2 files |
 | Phase 01 P03 | 9min | 2 tasks | 13 files |
 | Phase 01 P05 | 8min | 3 tasks | 8 files |
+| Phase 01-walking-skeleton P06 | 25min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,8 @@ Recent decisions affecting current work:
 - [Phase 1]: 01-05: tests/gate/fixtures exclusion applies to explicit checker paths too, not only glob discovery -- meta-test copies fixtures to tmp_path before invoking each checker
 - [Phase 1]: 01-05: dropped the false mypy-vs-explicit-Any assertion (disallow_any_explicit deliberately off); substituted basedpyright's reportIgnoreCommentWithoutRule on the bare-ignore fixture
 - [Phase 1]: 01-05: committed-secret guard uses a shape heuristic (16+ chars, letters and digits) instead of a file exclusion list, so existing test fixtures with fake passwords never trip it
+- [Phase 1]: Request-id propagation uses contextvars.ContextVar[str], not request.state (State.__getattr__ returns Any, which reportAny flags)
+- [Phase 1]: Negative-control response models locally set revalidate_instances='always' so model_construct() actually re-validates -- otherwise FastAPI returns a silent 200 for a broken response
 
 ### Pending Todos
 
@@ -118,6 +121,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T23:16:59.908Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-08-30T23:21:22.140Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None

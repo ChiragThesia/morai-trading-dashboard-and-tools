@@ -13,11 +13,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.api.errors import install_error_handling
 from morai.api.models import MoneyRoundtripRequest, MoneyRoundtripResponse
 from morai.db.models import GateMoneyProbe
 from morai.db.session import get_db_session
 
 app = FastAPI()
+install_error_handling(app)
 
 
 class HealthResponse(BaseModel):
