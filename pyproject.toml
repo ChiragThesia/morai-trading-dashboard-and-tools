@@ -75,6 +75,13 @@ select = ["E", "F", "PGH", "TID"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Session-scoped, not the default per-function loop: `morai.db.session.get_engine`
+# is `lru_cache`d, matching production (one process, one event loop, one pool for
+# its life). A fresh loop per test function would hand that cached asyncpg pool to
+# a second loop on the next db-marked test and raise "attached to a different loop"
+# -- measured this session, plan 01-03 Task 2.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 addopts = "-q"
 markers = [
   "db: test requires a live Postgres connection",
