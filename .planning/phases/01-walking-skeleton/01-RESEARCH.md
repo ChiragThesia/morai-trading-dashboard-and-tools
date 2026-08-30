@@ -1310,7 +1310,10 @@ ROADMAP - record the discrepancy where verification will read it.
    the environment existing) — that's exactly what the V092 test's step 3 confirms empirically.
 
 3. **Does FastAPI's `jsonable_encoder` (used for non-Pydantic-model responses) serialize `Decimal`
-   the same way `model_dump_json()` does?**
+   the same way `model_dump_json()` does?** — **(RESOLVED — not applicable.)** D-11 mandates a
+   Pydantic return-type annotation on every route, which routes serialization through pydantic's own
+   serializer and never through `jsonable_encoder`. Plan 01-06 adds a grep test asserting no route
+   under `src/morai/api/` uses the response-model keyword, which keeps it that way.
    - What we know: `model_dump_json()`'s default (string) is measured and confirmed this session.
      D-11 mandates every route declare a Pydantic return-type annotation, which routes response
      serialization through pydantic's own serializer, not `jsonable_encoder`'s manual type dispatch.
@@ -1319,7 +1322,12 @@ ROADMAP - record the discrepancy where verification will read it.
      only so a future reader doesn't assume it was checked.
 
 4. **Should Phase 1's Postgres round trip be independently verified against a real, running
-   Postgres instance (not just documented `asyncpg`/SQLAlchemy `Numeric↔Decimal` behavior)?**
+   Postgres instance (not just documented `asyncpg`/SQLAlchemy `Numeric↔Decimal` behavior)?** —
+   **(RESOLVED — yes, twice, and not locally.)** Docker's daemon is broken on this machine and
+   Railway's Postgres is private-network-only, so the local container this question assumed is not
+   available. The round trip is proven in CI against the GitHub Actions `services: postgres`
+   container (plan 01-03), and again authoritatively against real Railway Postgres by the deployed
+   `/gate/money-roundtrip` smoke test (plan 01-08 task 1) — which is what D-13 asked for.
    - What we know: this researcher attempted exactly this (a throwaway `postgres:17-alpine`
      container) but the local Docker daemon was unresponsive this session (`500 Internal Server
      Error` from the Docker socket) and the attempt was abandoned rather than burning further budget
