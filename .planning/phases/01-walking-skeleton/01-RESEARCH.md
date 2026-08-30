@@ -236,11 +236,8 @@ generally.
 - **R-02:** Pydantic v2 strict-mode semantics for `Decimal` with JSON input. **Resolved** — see
   "R-02: Pydantic Strict Mode and Decimal" below.
 - **R-03:** Whether branch rulesets / required status checks are available on this repository's
-  GitHub plan for a private repo. **NOT resolved by this document — deliberately.** The orchestrator
-  told this researcher R-03 is already settled and would supply the answer to incorporate; that
-  answer had not arrived by the time this file was written. See Open Questions for the one fact this
-  researcher independently observed while checking unrelated repo state (`gh api` — the repo is
-  currently public), offered without drawing R-03's conclusion from it.
+  GitHub plan for a private repo. **Resolved by the orchestrator — see "R-03: GitHub Branch
+  Rulesets" below.** Short answer: available, because the repo is public. D-16 stands as written.
 
 ### Claude's Discretion
 
@@ -1079,18 +1076,88 @@ Railway pattern" language is still directionally correct but should be read as "
 | A5 | Rejecting bare JSON integers (not just floats) for money fields in `StrictDecimalField` is the right call, symmetric with D-03 | R-02 | Low — easy to loosen later (add `int` to the allowed-instance check) without touching D-01/D-03/D-12 |
 | A6 | `[tool.pydantic-mypy]` key names (`init_forbid_extra`, `init_typed`, `warn_required_dynamic_aliases`) carried forward from `.claude/CLAUDE.md`'s own prior research, not re-verified against pydantic's mypy-plugin docs this session | The Type Gate | Low — these are long-stable pydantic-mypy-plugin config keys; worth a 30-second doc check before the planner locks the exact `pyproject.toml`, not worth blocking this document on |
 
+## Orchestrator Addendum
+
+Two items resolved by the orchestrator after this document's first draft. Both are measured, both
+change what the planner must write.
+
+### R-03: GitHub Branch Rulesets — RESOLVED, D-16 stands
+
+Branch rulesets and required status checks **are available** on this repository. D-16 needs no
+rewording and criterion 2 is satisfiable as written.
+
+Measured this session via `gh api`:
+
+    repos/ChiragThesia/morai-trading-dashboard-and-tools
+      -> {"private": false, "visibility": "public", "owner_type": "User", "plan": null}
+    repos/.../rulesets  -> []          (none configured; greenfield, no conflict)
+    user                -> {"login": "ChiragThesia", "plan": null}   (free plan)
+
+**Mechanism.** GitHub gates rulesets and branch protection on repository *visibility*, not on
+account plan alone. Public repos get them on every plan including Free; it is **private** repos on
+Free that lose the feature. R-03 was flagged as a risk because CONTEXT.md assumed a *private* repo
+("available ... for a private repo"). That assumption was wrong — the repo is public — which is why
+the risk evaporates. [VERIFIED: live `gh api`; the rulesets endpoint returned a readable empty array
+rather than 403/404, which a plan lacking the feature would not.]
+
+**Two consequences the planner must carry:**
+
+1. **GitHub Actions is free and unmetered on public repos.** The D-16 four-way gate (basedpyright,
+   `mypy --strict`, ruff, pytest) has no minutes budget to design around. Do not consolidate jobs or
+   trim a matrix as a cost optimisation — there is no cost. Prefer separate named jobs, because the
+   ruleset's required-check list references job names and separate names give precise failure
+   attribution.
+
+2. **The repository is public. This is a standing constraint for every later phase.** No secret may
+   ever reach the repo, and Phase 3's envelope encryption and Phase 4's OAuth both have to assume a
+   world-readable source tree. Already verified by the orchestrator: `.env` is gitignored
+   (`.gitignore:3`) and has never been committed (`git log --all -- .env` is empty); `.env.example`
+   holds placeholders only. Watch specifically for a secret tempted into a committed file by the
+   Railway work — a Dockerfile `ARG`, a `.railway/railway.ts` literal, a Procrastinate config module.
+
+### Criterion 4 contains a false premise — the canary proves bit-inexactness, not digit loss
+
+ROADMAP criterion 4 asks for a money value that round-trips Python -> Postgres `NUMERIC` -> JSON ->
+Python with identical digits, "**including a value carrying more precision than a float can hold**."
+
+That second clause is **not achievable inside `NUMERIC(14,4)`**, and the plan must not pretend
+otherwise. `NUMERIC(14,4)` permits at most 14 significant digits. An IEEE-754 double carries about
+15.95 decimal digits of round-trip precision. 14 < 15.95, so *every* value the column can hold
+survives a float transit with its digits intact. There is no value that both fits the column and
+visibly loses a digit.
+
+Measured independently by the orchestrator (Python 3.14.7), reproducing the researcher's result:
+
+| Value (fits `NUMERIC(14,4)`) | `Decimal(float(x)) == x` | `Decimal(repr(float(x))) == x` |
+|---|---|---|
+| `9999999999.9999` | False | **True** |
+| `1234567890.1234` | False | **True** |
+| `0.0001`          | False | **True** |
+| `7425.5000`       | True  | True  (exact binary fraction) |
+| `1234567890123456789` (19 digits, contrast) | False | **False** |
+
+**What the canary must therefore assert.** Not "digits are lost without Decimal" — that is
+unprovable at this width and any test claiming it would be dishonest. Instead assert
+**bit-inexactness**: `Decimal(float(x)) != Decimal(x)` for the chosen canary. That is the property
+that actually matters, because it proves the value *cannot* have transited a float without being
+altered — which is precisely the regression the ledger needs to be protected against.
+
+Use `Decimal("9999999999.9999")` (the column ceiling, maximal stress on precision and scale) plus
+one mid-range fixture such as `Decimal("1234567890.1234")`. Do **not** use `7425.5000` as the
+canary — it is an exact binary fraction and is bit-exact as a double, so it would pass the assertion
+for the wrong reason and silently stop testing anything.
+
+**Action for the planner:** implement the test as described, and add one sentence to the phase's
+verification notes recording that criterion 4's "more precision than a float can hold" clause was
+found unachievable at `NUMERIC(14,4)` and was satisfied by the bit-inexactness assertion instead.
+The criterion is met in substance; its literal wording was imprecise. Do not silently reword the
+ROADMAP - record the discrepancy where verification will read it.
+
+
 ## Open Questions
 
-1. **R-03 — GitHub branch rulesets on this repo's plan**
-   - What we know: the orchestrator told this researcher R-03 is already settled and would supply
-     the answer; it had not arrived by the time this document was finalized. Independently observed
-     while checking unrelated repo state: `gh api repos/ChiragThesia/morai-trading-dashboard-and-tools`
-     reports `{"private": false, "visibility": "public"}` [VERIFIED: `gh api`, this session].
-   - What's unclear: whatever the orchestrator's settled answer actually is, and why R-03 was
-     flagged as a risk in the first place if the repo is public.
-   - Recommendation: the planner should pull the orchestrator's answer directly rather than rely on
-     the bare fact above — this researcher was explicitly told not to investigate the substance of
-     R-03 further, and did not.
+1. ~~**R-03 — GitHub branch rulesets on this repo's plan**~~ — **CLOSED.** See "R-03: GitHub Branch
+   Rulesets" in the resolved-findings section. Rulesets are available; D-16 needs no change.
 
 2. **Does Railway's health check reach a deployed container over IPv4, IPv6, or both?**
    - What we know: Railway's own healthchecks doc doesn't say. This session's own DNS probe shows
