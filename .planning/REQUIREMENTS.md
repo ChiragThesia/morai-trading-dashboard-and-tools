@@ -102,9 +102,9 @@ API, a job, or a stored invariant.
 
 ### Engineering and operations
 
-- [ ] **OPS-01**: The type checker runs in strict mode and fails the build on any `Any`, `cast`, or unjustified ignore
-- [ ] **OPS-02**: Every test is written before the implementation it covers
-- [ ] **OPS-03**: Money values round-trip Python ↔ Postgres ↔ JSON with no precision loss
+- [x] **OPS-01**: The type checker runs in strict mode and fails the build on any `Any`, `cast`, or unjustified ignore
+- [x] **OPS-02**: Every test is written before the implementation it covers
+- [x] **OPS-03**: Money values round-trip Python ↔ Postgres ↔ JSON with no precision loss
 - [ ] **OPS-04**: The system runs as separate web and worker processes in Railway containers against Postgres
 - [ ] **OPS-05**: A batch insert never exceeds the Postgres bind-parameter ceiling
 - [ ] **OPS-06**: Mutation testing runs against the ledger and reports surviving mutants
@@ -230,14 +230,15 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | API-05 | Phase 11 | Pending |
 | API-06 | Phase 11 | Pending |
 | API-07 | Phase 1 | Pending |
-| OPS-01 | Phase 1 | Pending |
-| OPS-02 | Phase 1 | Pending |
-| OPS-03 | Phase 1 | Pending |
+| OPS-01 | Phase 1 | Complete |
+| OPS-02 | Phase 1 | Complete |
+| OPS-03 | Phase 1 | Complete |
 | OPS-04 | Phase 1 | Pending |
 | OPS-05 | Phase 6 | Pending |
 | OPS-06 | Phase 5 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 68 total
 - Mapped to phases: 68
 - Unmapped: 0 ✓
