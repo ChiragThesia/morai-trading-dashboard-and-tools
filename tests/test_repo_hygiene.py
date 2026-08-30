@@ -16,11 +16,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 _THIS_FILE_RELATIVE = Path(__file__).resolve().relative_to(REPO_ROOT)
 
-# NOT YET IMPLEMENTED -- placeholder for the red run (D-08). Matches nothing.
-_ICLOUD_COLLISION = re.compile(r"(?!)")
+# A space, the digit two, then either end of name or a dot -- "foo 2.md",
+# "CotCard.test 2.tsx" (V091). Matched against a path component so a collision
+# anywhere in the tree is caught, not only at the repo root.
+_ICLOUD_COLLISION = re.compile(r" 2(\.[^/]*)?$")
 
 # A Postgres URL carrying a userinfo password: scheme://user:password@host.
-_POSTGRES_URL_WITH_PASSWORD = re.compile(r"postgres(?:ql)?://[^:/\s]+:(?P<password>[^@/\s]+)@")
+_POSTGRES_URL_WITH_PASSWORD = re.compile(
+    r"postgres(?:ql)?://[^:/\s]+:(?P<password>[^@/\s]+)@"
+)
 
 # Directories a learnings entry or a planning doc may legitimately discuss a
 # connection-string *shape* in, without that discussion being able to fail the build.
@@ -43,10 +47,12 @@ def _looks_like_a_real_credential(password: str) -> bool:
     `tests/test_settings.py`) is a short, letters-only word. A real Railway-issued
     password is long and alphanumeric. This never inspects a real password's actual
     value -- only what a value shaped like one looks like.
-
-    NOT YET IMPLEMENTED -- placeholder for the red run (D-08).
     """
-    raise NotImplementedError
+    return (
+        len(password) >= 16
+        and any(char.isdigit() for char in password)
+        and any(char.isalpha() for char in password)
+    )
 
 
 def test_no_tracked_path_matches_icloud_collision_pattern() -> None:
@@ -93,7 +99,9 @@ def test_no_tracked_file_carries_a_real_looking_postgres_password() -> None:
             if _looks_like_a_real_credential(match.group("password")):
                 offenders.append(rel_path)
                 break
-    assert offenders == [], f"Postgres URL with a real-looking password tracked in: {offenders}"
+    assert offenders == [], (
+        f"Postgres URL with a real-looking password tracked in: {offenders}"
+    )
 
 
 def test_env_example_holds_placeholders_only() -> None:
