@@ -47,10 +47,28 @@ def test_settings_expose_a_single_database_url() -> None:
     assert list(Settings.model_fields) == ["database_url"]
 
 
+class _CollectingHandler(logging.Handler):
+    """Attached directly to `morai.worker.app`'s own logger, not the root
+    logger -- `pytest`'s `caplog` relies on a handler at root, and this
+    session's `migrated_db` fixture (exercised by `test_money_roundtrip.py`,
+    collected first) runs Alembic, whose `env.py` calls
+    `logging.config.fileConfig(alembic.ini)`. `fileConfig`'s default
+    `disable_existing_loggers=True` disables every already-instantiated
+    logger not named in that ini (measured this session: it silently zeroed
+    `caplog.records` here) and resets root's level to `alembic.ini`'s
+    `WARNING`, which this logger would otherwise inherit. Attaching straight
+    to the logger and resetting its own state below bypasses both."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.INFO)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
 @pytest.mark.db
-async def test_heartbeat_defers_and_reaches_succeeded(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+async def test_heartbeat_defers_and_reaches_succeeded() -> None:
     """Defers the heartbeat by name (`App.configure_task`, not the periodic
     decorator's own narrowed type -- the decorator strips `timestamp` from the
     public signature since the periodic deferrer injects it at schedule time),
@@ -58,20 +76,26 @@ async def test_heartbeat_defers_and_reaches_succeeded(
     `wait=False` (stop once caught up) plus an outer `asyncio.wait_for` timeout,
     so a dequeue failure fails the test rather than hanging CI. Confirms the
     terminal status is `succeeded` and that the task logged its run."""
-    async with app.open_async():
-        job_id = await app.configure_task("heartbeat").defer_async(
-            timestamp=int(time.time())
-        )
+    worker_logger = logging.getLogger("morai.worker.app")
+    handler = _CollectingHandler()
+    worker_logger.addHandler(handler)
+    worker_logger.disabled = False
+    worker_logger.setLevel(logging.INFO)
 
-        status_before = await app.job_manager.get_job_status_async(job_id)
-        assert status_before is Status.TODO
+    try:
+        async with app.open_async():
+            job_id = await app.configure_task("heartbeat").defer_async(
+                timestamp=int(time.time())
+            )
 
-        with caplog.at_level(logging.INFO, logger="morai.worker.app"):
+            status_before = await app.job_manager.get_job_status_async(job_id)
+            assert status_before is Status.TODO
+
             await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
 
-        status_after = await app.job_manager.get_job_status_async(job_id)
-        assert status_after is Status.SUCCEEDED
+            status_after = await app.job_manager.get_job_status_async(job_id)
+            assert status_after is Status.SUCCEEDED
+    finally:
+        worker_logger.removeHandler(handler)
 
-    assert any(
-        record.getMessage().startswith("heartbeat run at ") for record in caplog.records
-    )
+    assert any(msg.startswith("heartbeat run at ") for msg in handler.messages)
