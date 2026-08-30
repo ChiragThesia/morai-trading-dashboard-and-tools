@@ -1,0 +1,22 @@
+# UNVERIFIED on the authoring machine: Docker's daemon is broken here (`docker info`
+# returns a 500 from the API socket), so nothing in Phase 1 starts this file and no
+# success criterion depends on it. It exists for a future developer with a working
+# daemon. Do not attempt to start it, and do not attempt to repair Docker (D-17).
+#
+# postgres:18-alpine matches the version Railway's own Postgres runs
+# (ghcr.io/railwayapp-templates/postgres-ssl:18, read from its deploy configuration
+# 2026-08-30). Local-only credentials below are not a real secret.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: morai
+      POSTGRES_PASSWORD: morai
+      POSTGRES_DB: morai
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U morai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

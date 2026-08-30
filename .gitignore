@@ -44,3 +44,15 @@ graphify-out/
 # Verified 2026-08-26: zero tracked files match these patterns.
 * 2
 * 2.*
+
+# Python (Phase 1 walking skeleton)
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+.coverage
