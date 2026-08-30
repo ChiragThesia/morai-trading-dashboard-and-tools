@@ -3,9 +3,16 @@
 A validation error is the code path most likely to have a secret in scope (`NN-34`) --
 Phase 4 puts real Schwab tokens through this exact envelope, so it has to be safe
 *before* there is anything valuable to leak. Both handlers below return exactly
-`{"error": "internal", "request_id": "..."}` and nothing else; the full detail (field
-names, submitted values, the Pydantic message) goes to the server log only, keyed by
-that same id.
+`{"error": "internal", "request_id": "..."}` and nothing else.
+
+The server log gets field *locations* and failure types, keyed by that same id -- never
+the submitted values. `ResponseValidationError.errors()` attaches an `input` key
+holding the offending value, and on the response path that value is an object this
+system built, which in Phase 4 holds a Schwab access token. Logging the error list
+whole would put it in the Railway log, and `NN-34` forbids that outright. See
+`_redacted_error_locations`, and note that `exc_info` is omitted on that handler for
+the same reason: a formatted traceback ends with `str(exc)`, which re-renders the very
+inputs being suppressed.
 
 The 422 path (`RequestValidationError`) is deliberately untouched. That detail names
 the *client's* own field and its own submitted value -- nothing server-side is in
@@ -69,6 +76,33 @@ def _opaque_500(request_id: str) -> JSONResponse:
     )
 
 
+def _redacted_error_locations(exc: Exception) -> list[str]:
+    """Field locations and failure types from a validation error. Never the values.
+
+    `ResponseValidationError.errors()` attaches an `input` key holding the offending
+    value, and for a *response* model that value is an object this system built. In
+    Phase 4 that object carries a Schwab access token. Logging the error list whole
+    would write it to the Railway log, which `NN-34` forbids outright -- an OAuth code
+    or app secret is bearer-equivalent and is never rendered, never logged, never
+    echoed in an error.
+
+    `exc_info` is deliberately omitted at the call site for the same reason: the
+    formatted traceback ends with `str(exc)`, which re-renders those same inputs. The
+    request id plus the route path are enough to find the failure; the value is not
+    needed to fix a shape mismatch. This mirrors `settings.load_settings`, which hit
+    the identical trap on the configuration path.
+    """
+    if not isinstance(exc, ResponseValidationError):
+        return [type(exc).__name__]
+    return [
+        "{}: {}".format(
+            ".".join(str(part) for part in err.get("loc", ())) or "<root>",
+            err.get("type", "unknown"),
+        )
+        for err in exc.errors()
+    ]
+
+
 async def request_id_middleware(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
@@ -94,12 +128,11 @@ async def response_validation_exception_handler(
     typed as the subclass directly, since Starlette's `ExceptionHandler` alias is
     itself typed against the base `Exception`."""
     request_id = _current_request_id()
-    detail = exc.errors() if isinstance(exc, ResponseValidationError) else str(exc)
     logger.error(
-        "response validation failed request_id=%s detail=%s",
+        "response validation failed request_id=%s path=%s detail=%s",
         request_id,
-        detail,
-        exc_info=exc,
+        request.url.path,
+        _redacted_error_locations(exc),
     )
     return _opaque_500(request_id)
 

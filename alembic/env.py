@@ -16,7 +16,13 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers defaults to True, which silently switches off every
+    # logger not named in alembic.ini and resets root to WARNING. Alembic runs inside
+    # a session-scoped test fixture here, so that default poisons the whole pytest
+    # session: any test collected afterwards sees caplog capture nothing, with no
+    # error and no clue why. Plan 01-07 lost time to exactly that. Migrations have no
+    # business reconfiguring the host process's logging.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # alembic.ini's sqlalchemy.url stays empty — the repository is public, and a DSN
 # carries a password. Read it from settings at runtime instead (D-15's SecretStr,

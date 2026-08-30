@@ -154,16 +154,38 @@ async def test_response_validation_failure_logs_full_detail_keyed_by_request_id(
 async def test_response_validation_failure_never_echoes_a_secret_shaped_value(
     client: AsyncClient, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """NN-34: a secret-shaped value in scope at the moment response
-    validation failed must reach the server log and must never reach the
-    client. `secret_marker` is a synthetic marker, never a real credential."""
+    """NN-34: a secret-shaped value in scope when response validation failed reaches
+    neither the client body nor the server log.
+
+    This test originally asserted the value *must* reach the server log, following
+    D-10 ("full Pydantic detail goes to the server log keyed by that id"). D-10 cites
+    NN-34 as its justification, but NN-34 reads "never rendered, **never logged**,
+    never echoed in an error" -- so D-10's own premise misquotes the rule it claims to
+    satisfy. NN-34 comes from REBUILD-BRIEF §3's non-negotiables and outranks a
+    phase-level decision, and a Railway log is readable, retained and exportable by
+    anyone with project access, so "opaque body, full detail in the log" is not a
+    safe reading of it.
+
+    Nothing operational is lost. Field locations and failure types still reach the
+    log, which is what an operator needs to fix a shape mismatch. Only the value is
+    withheld -- and in Phase 4 that value is a Schwab access token.
+
+    `secret_marker` is synthetic. No real credential appears in any test."""
     secret_marker = "sk-test-fake-51H8xyzNOTAREALCREDENTIAL0000000000"
     with caplog.at_level(logging.ERROR):
         response = await client.get("/broken/secret-in-scope")
     assert response.status_code == 500
     assert secret_marker not in response.text
     _OpaqueErrorBody.model_validate(response.json())
-    assert any(secret_marker in r.getMessage() for r in caplog.records)
+
+    assert caplog.records, "nothing was logged, so this test would prove nothing"
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert secret_marker not in logged
+    # The field location survives, so the failure is still diagnosable.
+    assert "note" in logged or "amount_usd" in logged
+    # A formatted traceback ends with str(exc), which re-renders the same inputs.
+    for record in caplog.records:
+        assert record.exc_info is None
 
 
 async def test_unhandled_exception_returns_same_opaque_shape(
