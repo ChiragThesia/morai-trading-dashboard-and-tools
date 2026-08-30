@@ -1,13 +1,21 @@
 """The tracer: one money value through the whole stack.
 
-RED: `/gate/money-roundtrip` does not exist yet -- only `/health` is wired. This is
-the failing half of `tests/test_money_roundtrip.py`'s red/green commit pair (D-08).
+Both routes declare their contract by return type annotation, never the
+`response_model=` keyword (D-11) — the keyword is invisible to the type checker;
+FastAPI 0.89+ infers `response_model` from the annotation, so one declaration gets
+two gates: basedpyright at build time and FastAPI at runtime.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from morai.api.models import MoneyRoundtripRequest, MoneyRoundtripResponse
+from morai.db.models import GateMoneyProbe
+from morai.db.session import get_db_session
 
 app = FastAPI()
 
@@ -22,3 +30,23 @@ async def health() -> HealthResponse:
     deploy time, so a database-dependent `/health` costs a failed deploy, not a
     restart loop."""
     return HealthResponse(status="ok")
+
+
+@app.post("/gate/money-roundtrip")
+async def money_roundtrip(
+    body: MoneyRoundtripRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> MoneyRoundtripResponse:
+    """Insert, commit, then re-read through a fresh `SELECT` — the response is built
+    from what the database gave back, never from what the client sent."""
+    probe = GateMoneyProbe(amount_usd=body.amount_usd)
+    session.add(probe)
+    await session.commit()
+
+    fresh = (
+        await session.execute(
+            select(GateMoneyProbe).where(GateMoneyProbe.id == probe.id)
+        )
+    ).scalar_one()
+
+    return MoneyRoundtripResponse(probe_id=fresh.id, amount_usd=fresh.amount_usd)
