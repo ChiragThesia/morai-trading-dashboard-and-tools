@@ -533,24 +533,42 @@ source, raw markdown, this session]:
   reject that `Host` header if it does host-based filtering (not a concern for this phase, noted for
   later).
 
-### Whether the health check itself is IPv4, IPv6, or both — genuinely unverified by Railway's own docs
+### Whether the public health check path is IPv4, IPv6, or both — now definite
 
-The healthchecks page **does not state** which address family the check uses. This session ran its
-own DNS probe as a partial, indirect signal [VERIFIED: `dig`, this session, 2026-08-30]:
+**Update, following the orchestrator's request for a definite answer:** the original pass called
+this a directional signal only. It no longer is. Re-ran the DNS probe against three independent
+resolvers (system, Google `8.8.8.8`, Cloudflare `1.1.1.1`) to rule out a local-resolver artifact, and
+checked whether Railway documents IPv6 for the public path at all [VERIFIED: `dig`, three resolvers,
+this session, 2026-08-30]:
 
 ```
-healthcheck.railway.app  A     34.107.141.139
-healthcheck.railway.app  AAAA  (empty -- no record)
+healthcheck.railway.app  A     34.107.141.139   (identical across all three resolvers)
+healthcheck.railway.app  AAAA  (empty -- no record, all three resolvers)
 up.railway.app            A     69.46.46.126
-up.railway.app            AAAA  (empty -- no record)
+up.railway.app            AAAA  (empty -- no record, all three resolvers)
 ```
 
-Both Railway-operated hostnames tested resolve **A-only** — no `AAAA` record either way. This is
-suggestive that Railway's public edge is IPv4-primary for these hostnames today, but it is **not**
-proof of which address family the health check uses to reach a deployed container internally — that
-hop plausibly happens over Railway's own infrastructure, not the public DNS path these commands
-tested. Treat as a directional signal, not the answer; the V092 test design below is built to not
-depend on this guess.
+Three independent resolvers agreeing on "no `AAAA` record" rules out a caching or local-resolver
+quirk. This is corroborated by Railway's own documented custom-domain mechanism
+[CITED: WebSearch summary of `station.railway.com` and `docs.railway.com/networking/domains`, this
+session]: **Railway does not issue `A`/`AAAA` records for custom domains at all** — adding one gets a
+`CNAME` + `TXT` pair, never an IP address — and there is an **open, unresolved feature request** on
+Railway's own community forum asking for "static public IPv4/IPv6 addresses" and "direct A/AAAA
+records," which would not exist as an open ask if the platform already did this.
+
+**Definite finding:** Railway's public edge — both auto-generated `*.up.railway.app` domains and
+custom domains — is **IPv4-only today**, for all public-facing traffic, not just this project's
+future service. There is no public path over which an IPv6 health check (or any other IPv6 request)
+can reach a Railway-hosted service. This is a platform boundary, not something a container's bind
+configuration can work around.
+
+**Consequence for criterion 1 and the V092 test:** criterion 1's IPv6 half **cannot** be
+demonstrated over the public internet, ever, on this platform, regardless of how the container binds.
+It can only be demonstrated over Railway's private network (`<service>.railway.internal`), which is
+dual-stack for a new environment per the next finding below. The V092 test design (below) is written
+to prove exactly that split, not to attempt an IPv6 curl against the public domain and treat its
+failure as inconclusive — that failure is the expected, permanent shape of the platform, not a probe
+result to interpret.
 
 ### The private-networking baseline changed since v1's original V039 measurement
 
@@ -586,10 +604,10 @@ live smoke test.
 Design, not execution — no service is deployed yet. Once `/health` is live on Railway:
 
 1. **From outside Railway, over IPv4:** `curl -4 -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/health` — expect `200`.
-2. **From outside Railway, over IPv6:** `curl -6 -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/health`. Given the DNS finding above (public Railway domains currently resolve A-only), this call will most likely fail to even resolve/connect — that is itself a result, not a test-design failure: it would mean the **public** path is IPv4-only regardless of what the container binds, and IPv6 is only reachable Railway-internally.
-3. **From inside Railway, over the private network:** deploy a second, trivial service (or use the worker) that does `curl -sS -o /dev/null -w '%{http_code}\n' http://<web-service>.railway.internal:$PORT/health` — this is the actual IPv6 (or dual-stack, per the finding above) path Railway's own docs describe, and is the correct place to prove the private-network half of the original `V039` claim.
+2. **From outside Railway, over IPv6:** `curl -6 -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/health` — expect this to **fail to resolve/connect**, definitely, per the finding above. Run it anyway and record the exact `curl` error text; a passing result here would itself be the surprise worth writing up.
+3. **From inside Railway, over the private network:** deploy a second, trivial service (or use the worker) that does `curl -sS -o /dev/null -w '%{http_code}\n' http://<web-service>.railway.internal:$PORT/health` — this is the **only** valid IPv6 test on this platform, per the finding above, not a fallback for when step 2 fails.
 4. **Record all three raw outputs** (HTTP code or connection error, verbatim) in `V092`, alongside the exact Python version and base image nixpacks produced (`railway logs` or the deployment's build log names both) — D-19's own requirement.
-5. If step 2 fails to connect while steps 1 and 3 succeed, that is a **refutation-with-nuance** of V039's literal framing ("Railway needs an IPv4 health check") — the health check itself may only ever be reachable over IPv4 in the first place, making the "and an IPv6 private network" half the only part that was ever really about dual-stack binding. Write this nuance into V092 rather than a flat "confirmed" or "refuted".
+5. **Write `V092` as a refutation-with-nuance of `V039`'s literal framing**, not a flat "confirmed" or "refuted": "Railway needs an IPv4 health check" undersells it — the public health check can *only ever* be IPv4, on this platform, full stop; there is no public IPv6 path to lose by binding wrong. The "and an IPv6 private network" half is where dual-stack binding actually matters, and it is now dual-stack-by-default for new environments (previous finding) rather than IPv6-only as it was for v1. State both halves explicitly so a future reader doesn't read `V092` as a simple confirm/refute of `V039`.
 
 ## Procrastinate: Migrations and the Connector Mismatch
 
@@ -1114,6 +1132,128 @@ rather than 403/404, which a plan lacking the feature would not.]
    (`.gitignore:3`) and has never been committed (`git log --all -- .env` is empty); `.env.example`
    holds placeholders only. Watch specifically for a secret tempted into a committed file by the
    Railway work — a Dockerfile `ARG`, a `.railway/railway.ts` literal, a Procrastinate config module.
+   **Checked this document's own examples against exactly that risk:** the `.railway/railway.ts`
+   example above uses only `db.env.DATABASE_URL`/`preserve()`-style references, never a literal
+   value; the Procrastinate connector example reads `settings.database_url_sync`, not an inline
+   `conninfo` string. Neither needs revision.
+
+### The concrete ruleset: exact check names, so the workflow and the ruleset cannot drift apart
+
+D-16 names four tools (basedpyright, `mypy --strict`, ruff, pytest) but not four check *names* —
+those only exist once a workflow file defines them, and the ruleset has to reference the identical
+strings or a passing PR still won't satisfy it. Below is the minimum workflow that produces exactly
+the checks the ruleset requires, both written together so they can't drift.
+
+**`.github/workflows/ci.yml`** — four separate jobs, not one job with four steps. Separate jobs give
+four independently-named checks (needed for the ruleset to reference them, and for precise failure
+attribution); given CI minutes are free and unmetered on a public repo (previous point), there is no
+cost reason to consolidate them.
+
+```yaml
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  typecheck-basedpyright:
+    name: typecheck-basedpyright
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3   # [ASSUMED: current tag not re-verified this session -- pin exact version at execution time
+      - run: uv sync --dev
+      - run: uv run basedpyright
+
+  typecheck-mypy:
+    name: typecheck-mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --dev
+      - run: uv run mypy src tests
+
+  lint-ruff:
+    name: lint-ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --dev
+      - run: uv run ruff check .
+
+  test-pytest:
+    name: test-pytest
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17   # D-17 -- pin to the same version docker-compose.yml uses locally
+        env: { POSTGRES_PASSWORD: postgres }   # local-only, CI-only credential -- not a real secret
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --dev
+      - run: uv run pytest
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+```
+
+**The four required-check names this workflow produces:** `typecheck-basedpyright`,
+`typecheck-mypy`, `lint-ruff`, `test-pytest` — each job's explicit `name:` field, which is what
+appears in the Checks API and what a ruleset's `required_status_checks[].context` must match
+character-for-character.
+
+**The ruleset itself**, targeting `main` only (per D-16's own wording — "a ruleset on `main`") — no
+required approving-review count, since D-16 asks the type/test gate to block the merge, not a second
+human reviewer, and this is presently a solo-plus-friends project:
+
+```json
+{
+  "name": "main-ci-gate",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          { "context": "typecheck-basedpyright" },
+          { "context": "typecheck-mypy" },
+          { "context": "lint-ruff" },
+          { "context": "test-pytest" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+[CITED: GitHub REST API docs, `docs.github.com/en/rest/repos/rules` — WebFetch summary of the
+official reference, this session; the JSON field names (`target`, `conditions.ref_name`,
+`rules[].type`, `required_status_checks[].context`) are GitHub's own stable ruleset API shape, not
+this researcher's invention]. **How to apply it:** `gh` has no `gh ruleset create` — confirmed this
+session (`gh ruleset --help` lists only `check`/`list`/`view`, all read-only). Create it via
+`gh api repos/ChiragThesia/morai-trading-dashboard-and-tools/rulesets -X POST --input ruleset.json`
+or the repo Settings → Rules UI; either produces the same ruleset the read-only `gh ruleset view`
+commands can then confirm.
 
 ### Criterion 4 contains a false premise — the canary proves bit-inexactness, not digit loss
 
@@ -1159,15 +1299,15 @@ ROADMAP - record the discrepancy where verification will read it.
 1. ~~**R-03 — GitHub branch rulesets on this repo's plan**~~ — **CLOSED.** See "R-03: GitHub Branch
    Rulesets" in the resolved-findings section. Rulesets are available; D-16 needs no change.
 
-2. **Does Railway's health check reach a deployed container over IPv4, IPv6, or both?**
-   - What we know: Railway's own healthchecks doc doesn't say. This session's own DNS probe shows
-     the public `healthcheck.railway.app` and `*.up.railway.app` hostnames resolve A-only (no AAAA).
-   - What's unclear: whether that public-DNS observation reflects the actual health-check-to-container
-     hop, which plausibly happens over Railway's internal infrastructure rather than the public path
-     tested.
-   - Recommendation: the V092 test design above (three separate curl vectors) is built specifically
-     to answer this empirically rather than guess — run it as part of Phase 1's own deploy, don't
-     try to resolve it further in research.
+2. ~~**Does Railway's health check reach a deployed container over IPv4, IPv6, or both?**~~ —
+   **CLOSED.** Re-verified across three independent DNS resolvers and corroborated by Railway's own
+   documented custom-domain mechanism (no `A`/`AAAA` issued at all, only `CNAME`+`TXT`) and an open
+   community feature request for IPv6 support. Definite: Railway's public edge is IPv4-only, full
+   stop — see "Whether the public health check path is IPv4, IPv6, or both — now definite" above.
+   The remaining, still-open half is *not* address family but the private-network mechanism itself:
+   whether this specific project's new environment actually gets dual-stack `.railway.internal` DNS
+   as documented (very likely, per the 2025-10-16 cutover date, but not something verifiable without
+   the environment existing) — that's exactly what the V092 test's step 3 confirms empirically.
 
 3. **Does FastAPI's `jsonable_encoder` (used for non-Pydantic-model responses) serialize `Decimal`
    the same way `model_dump_json()` does?**
@@ -1305,9 +1445,13 @@ narrow: the API input boundary, error handling, and process configuration.
   Python-specific guidance exists
 - `curl` of Procrastinate's own `docs/howto/basics/connector.md` and `migrations.html` — connector
   list and migration-file format
-- `dig` against `healthcheck.railway.app` / `up.railway.app` — A-only, no AAAA, this session
-- `gh api repos/ChiragThesia/morai-trading-dashboard-and-tools`, `gh api user` — repo visibility
+- `dig` against `healthcheck.railway.app` / `up.railway.app`, cross-checked against three independent
+  resolvers (system, `8.8.8.8`, `1.1.1.1`) — A-only, no AAAA, unanimous, this session
+- `gh api repos/ChiragThesia/morai-trading-dashboard-and-tools`, `gh api user`,
+  `gh api repos/.../rulesets` (returned `[]`, not 403/404) — repo visibility and ruleset availability,
+  independently corroborating the orchestrator's own `gh api` findings
 - `railway --help` and subcommand `--help` output — CLI surface
+- `gh ruleset --help` — confirms no `gh ruleset create`; ruleset creation needs `gh api` or the web UI
 - `gsd_run query package-legitimacy check --ecosystem pypi ...` — Package Legitimacy Audit
 
 ### Secondary (MEDIUM confidence — WebSearch/WebFetch summary of official docs, not raw bytes)
@@ -1317,6 +1461,11 @@ narrow: the API input boundary, error handling, and process configuration.
 - `docs.astral.sh/ruff/rules/banned-api/` — `TID251` config shape
 - `blog.railway.com/p/database-reference-variables` — older `${{Service.VAR}}` syntax, superseded by
   `.railway/railway.ts`'s typed accessor per the primary-source fetch above
+- `docs.github.com/en/rest/repos/rules` — repository ruleset JSON field names (`target`,
+  `conditions.ref_name`, `rules[].type`, `required_status_checks[].context`)
+- WebSearch of `station.railway.com` (open feature request for IPv6/`A`/`AAAA` on custom domains) +
+  `docs.railway.com/networking/domains` — corroborates the direct DNS finding that Railway's public
+  edge issues no `A`/`AAAA` records for custom domains, only `CNAME`+`TXT`
 
 ### Tertiary (LOW confidence — this researcher's synthesis, not directly sourced)
 
@@ -1332,16 +1481,20 @@ narrow: the API input boundary, error handling, and process configuration.
 - R-02 (Pydantic strict Decimal): HIGH — directly measured at both the pydantic layer and, critically,
   read from FastAPI's own installed source rather than assumed
 - Railway deployment shape: HIGH for the documented mechanics (config-as-code deprecation, IaC syntax,
-  healthcheck behavior, private-networking dual-stack date) — all primary-source `curl`; MEDIUM for
-  which address family the health check itself uses to reach a container (undocumented, only an
-  indirect DNS signal available, resolved into a concrete test design for Phase 1 to run instead of
-  guessed at)
+  healthcheck behavior, private-networking dual-stack date) — all primary-source `curl`; HIGH (raised
+  from the first draft's MEDIUM) for the public health check's address family, now that it's
+  cross-checked against three independent DNS resolvers plus Railway's own documented custom-domain
+  mechanism and an open community feature request corroborating "no public IPv6 today"; MEDIUM
+  remains only for whether *this specific new environment* actually gets dual-stack private-network
+  DNS as documented — verifiable only once the environment exists, which is what V092's step 3 does
 - Procrastinate connector/migration findings: HIGH — primary-source `curl` of Procrastinate's own
   docs; MEDIUM for the specific "wrap SQL in Alembic" recommendation, which is this researcher's
   synthesis rather than Procrastinate's own stated guidance
 - Type gate (basedpyright/mypy config): HIGH — the load-bearing claim (strict mode doesn't imply
   `reportAny`) was run twice locally with opposite configs and opposite results
-- R-03: not resolved — deliberately deferred to the orchestrator per explicit instruction
+- R-03: RESOLVED (see Orchestrator Addendum) — rulesets available, repo is public, D-16 stands;
+  the concrete required-check names and ruleset JSON are specified so the workflow and the ruleset
+  cannot drift apart
 
 **Research date:** 2026-08-30
 **Valid until:** Railway-specific findings (config-as-code deprecation, dual-stack networking date,
