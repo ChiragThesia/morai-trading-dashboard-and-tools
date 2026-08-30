@@ -1504,3 +1504,44 @@ should be re-checked if Phase 1's actual deploy happens more than a week after t
 Library version pins and the pydantic/basedpyright/FastAPI behavioral findings — valid for the
 standard **30 days**; none of that is Railway-platform-dependent and none showed any sign of being
 mid-change.
+
+---
+
+## Orchestrator Addendum 2 — V039 independently reproduced, with one trap named
+
+The researcher's IPv4-only finding is confirmed. Reproduced independently across three resolvers:
+
+    healthcheck.railway.app   AAAA -> (none)  system, 8.8.8.8, 1.1.1.1  [all agree]
+                              A    -> 34.107.141.139
+    railway.app               AAAA -> 2606:4700::6812:af6, 2606:4700::6812:bf6
+                              A    -> 104.18.10.246, 104.18.11.246
+
+**The trap:** `railway.app` *does* return AAAA records, so a future reader can "disprove" this finding
+by digging the wrong hostname. Those addresses are in `2606:4700::/32` — Cloudflare. They front
+Railway's own marketing website. They are not the edge that serves deployed applications. The edge
+that serves deployments is `healthcheck.railway.app` and the `*.up.railway.app` domains, and those
+have no AAAA records at all. Dig the deployment edge, not the company's homepage.
+
+**What this means for criterion 1 — it is achievable, and it is exactly what V039 describes.**
+
+Railway's public edge is IPv4-only. Railway's *private* network is IPv6-only. That combination is
+the entire reason V039 exists: a service must accept an IPv4 health check from the public edge and
+IPv6 traffic from the private network *on one socket*, which is what a single `[::]` dual-stack bind
+gives you and what uvicorn could not do from the CLI.
+
+So the two halves of criterion 1 are proven on two different paths, and neither is optional:
+
+| Half | Path | How it is proven |
+|---|---|---|
+| IPv4 | public edge -> web service | `curl -4` against the generated `*.up.railway.app` domain |
+| IPv6 | private network -> web service | `curl -6` (or plain curl) from the **worker** service to `http://<web>.railway.internal:PORT` |
+
+The IPv6 half requires a second service to originate the request from inside the private network.
+The worker service is already in this phase's scope, so this costs no extra infrastructure — but it
+does mean the V039 evidence cannot be captured until both services are deployed. Sequence it there.
+
+A public `curl -6` against the `*.up.railway.app` domain is an **expected-failure control**, not a
+probe. Record its failure as confirming the IPv4-only edge, and do not treat it as a phase failure.
+
+**Verdict on V039: re-measured and CONFIRMED, not refuted.** The mechanism holds and the
+dual-stack `[::]` bind is still required. Record it that way against criterion 1.
