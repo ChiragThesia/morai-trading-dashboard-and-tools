@@ -26,10 +26,8 @@ from decimal import Decimal
 CEILING = Decimal("9999999999.9999")
 # CONTEXT.md's own mid-range example.
 MID_RANGE = Decimal("1234567890.1234")
-# RED, DELIBERATE: this control value is 7425.5, an exact binary fraction (a sum of
-# negative powers of two), which round-trips a float exactly. Asserting `!=` for it
-# is a wrong expectation on purpose, so the first run of this suite fails for a real
-# reason and not a typo — see the module's TDD note in 01-03-PLAN.md.
+# 7425.5 is an exact binary fraction (a sum of negative powers of two), so it
+# round-trips a float exactly.
 EXACT_BINARY_FRACTION = Decimal("7425.5000")
 
 
@@ -47,4 +45,4 @@ def test_exact_binary_fraction_control_is_bit_exact() -> None:
     explicitly so a future reader hunting for "a value that looks different when
     printed" does not swap this in as the canary — it would pass for the wrong reason
     and silently test nothing."""
-    assert Decimal(float(EXACT_BINARY_FRACTION)) != EXACT_BINARY_FRACTION
+    assert Decimal(float(EXACT_BINARY_FRACTION)) == EXACT_BINARY_FRACTION
