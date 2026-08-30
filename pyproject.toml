@@ -42,9 +42,19 @@ reportIgnoreCommentWithoutRule = "error"
 
 [tool.mypy]
 strict = true
-disallow_any_explicit = true
 plugins = []
 exclude = ["tests/gate/fixtures"]
+# D-05 named `disallow_any_explicit` alongside `strict`. Measured this session (with
+# and without `plugins = pydantic.mypy`): it false-positives on the class-declaration
+# line of *any* pydantic.BaseModel/BaseSettings subclass — `class S(BaseModel): pass`
+# alone fails with "Explicit Any is not allowed", because BaseModel's own dataclass-
+# transform init signature carries `Any` and mypy attributes that to the subclass
+# statement. Every model in this codebase derives from BaseModel or BaseSettings
+# (D-01, D-09, D-15), so this would suppress on every model file for zero additional
+# signal: basedpyright's `reportExplicitAny` (below) already bans Any written in our
+# own code, correctly scoped — confirmed clean against this exact class. D-05's own
+# division of labour already assigns Any-detection primarily to basedpyright; omitted
+# here rather than carrying a suppression comment on every model class in the project.
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
