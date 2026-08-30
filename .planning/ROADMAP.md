@@ -62,7 +62,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. A route that returns an object not matching its declared response model raises inside the process rather than serialising it to a client.
   6. The repository's root `CLAUDE.md` no longer tells a reader there is no application, no test suite and no CI, because after this phase that is false. It is stale the moment this phase lands, so it is updated inside it.
 
-**Plans:** 3/10 plans executed
+**Plans:** 4/10 plans executed
 
 Plans:
 
@@ -70,7 +70,7 @@ Plans:
 - [x] 01-02-PLAN.md — CI: four named jobs plus the Postgres service container that is this project's only usable test database
 - [x] 01-03-PLAN.md — Tracer: the float canary, then one money value end to end through HTTP, strict Pydantic, asyncpg and `NUMERIC(14,4)`, proven in CI
 - [ ] 01-04-PLAN.md — Money unit safety: `points_to_usd` with a required multiplier, and the column-suffix metadata guard
-- [ ] 01-05-PLAN.md — Gate teeth: violating fixtures with rule-code assertions, the suppression-reason scan, repo hygiene
+- [x] 01-05-PLAN.md — Gate teeth: violating fixtures with rule-code assertions, the suppression-reason scan, repo hygiene
 - [ ] 01-06-PLAN.md — API boundary: request id, opaque error envelope, and routes that are supposed to fail
 - [ ] 01-07-PLAN.md — Worker: Procrastinate on its own psycopg pool, one heartbeat, schema owned by Alembic
 - [ ] 01-08-PLAN.md — Railway deploy; criterion 4 on real Railway Postgres and criterion 1's V039 measurement, as separate evidence; V092
@@ -301,7 +301,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Walking Skeleton | 3/10 | In Progress|  |
+| 1. Walking Skeleton | 4/10 | In Progress|  |
 | 2. Identity, Sessions, and Tenant Isolation | 0/TBD | Not started | - |
 | 3. Envelope Encryption and the Schema Contract | 0/TBD | Not started | - |
 | 4. Schwab Connection and Token Lifecycle | 0/TBD | Not started | - |
