@@ -57,6 +57,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The test suite runs in CI on every push, a red test blocks merge, and each phase's verification output carries its own red-then-green evidence.
   4. A money value round-trips Python → Postgres `NUMERIC` → JSON → Python with identical digits, including a value carrying more precision than a float can hold, and passing an index-point value where dollars are expected fails type-check before the process runs.
   5. A route that returns an object not matching its declared response model raises inside the process rather than serialising it to a client.
+  6. The repository's root `CLAUDE.md` no longer tells a reader there is no application, no test suite and no CI, because after this phase that is false. It is stale the moment this phase lands, so it is updated inside it.
 **Plans**: TBD
 **UI hint**: no
 
@@ -76,7 +77,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **UI hint**: no
 
 ### Phase 3: Envelope Encryption and the Schema Contract
-**Goal**: Trading data is unreadable without the master key, the columns that must stay readable are decided and written down, and the database makes a netted ROLL impossible to store.
+**Goal**: The tables the ledger writes exist, trading data in them is unreadable without the master key, the columns that must stay readable are decided and written down, and the database makes a netted ROLL impossible to store.
 **Mode:** mvp
 **Depends on**: Phase 2
 **Parallel with**: Nothing — Phases 4, 5 and 10 all write or read under this boundary
@@ -87,6 +88,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Rotating the master key re-wraps every user's data key without touching a single row of trade ciphertext, and versioned rows still read under the key they were written with.
   4. Inserting a ROLL row carrying only a netted amount is rejected by a database `CHECK` constraint, not by application code that a later caller could bypass.
   5. Deleting an account destroys that user's data key, after which their rows decrypt to nothing.
+  6. The raw fill, leg, position and event tables exist with the plaintext/ciphertext split applied, and a fill can be written and read back through exactly one write path — the same one Phase 6's ingest will use and Phase 5's oracle will seed through. A second path into the fill table does not exist.
 **Plans**: TBD
 **UI hint**: no
 
@@ -109,8 +111,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### Phase 5: Event Derivation and the Oracle Gate
 **Goal**: Events are derived from stored fills correctly enough to pass the only genuine oracle this project owns — before any real Schwab connection exists.
 **Mode:** mvp
-**Depends on**: Phase 3
+**Depends on**: Phase 3 — specifically its criterion 6, the fill/leg/position/event tables and the single write path into them
 **Parallel with**: Phase 4, Phase 6
+**Note**: The oracle seeds 52 fills across 13 calendars directly into the Phase 3 schema, through the same write path Phase 6's ingest will later use — never a fixture-only path. `salvage/oracle-fixtures.md` asserts 52 fills written and **zero orphaned fills after a full sweep**, which is a storage-layer assertion, so the fills must be really stored. Seeding through a second path would be two implementations of the same write, which is the shape of the bug that made a +$395 trade read as −$319,850 (`LEDGER-01`). This is what lets the phase run with no Schwab connection, and it is why Phase 3 must land the tables rather than only the encryption boundary.
 **Requirements**: LEDGER-01, LEDGER-02, LEDGER-03, LEDGER-09, LEDGER-11, LEDGER-12, OPS-06
 **Success Criteria** (what must be TRUE):
   1. All 13 real Schwab calendars in `salvage/oracle-fixtures.md` produce their expected `openNetDebit` and `closeNetCredit` matched to two decimal places, including the shared-front-leg case and the stale-status case, and the 14th synthetic negative control fails as designed.
