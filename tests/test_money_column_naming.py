@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from sqlalchemy import Column, Integer, MetaData, Numeric, Table
 
-import morai.db.models  # noqa: F401  # populates Base.metadata as an import side effect
+import morai.db.models as _models
 from morai.db.base import Base
+
+assert _models  # imported for its side effect: populates Base.metadata
 
 _UNIT_SUFFIXES = ("_usd", "_pts")
 
@@ -23,11 +25,21 @@ def _numeric_columns_missing_unit_suffix(metadata: MetaData) -> list[str]:
     """Report every `Numeric` column not ending in a known unit suffix, as
     `table.column` strings -- a failure must answer the next question without
     re-running anything."""
-    raise NotImplementedError
+    return [
+        f"{table.name}.{column.name}"
+        for table in metadata.tables.values()
+        for column in table.columns
+        if isinstance(column.type, Numeric) and not column.name.endswith(_UNIT_SUFFIXES)
+    ]
 
 
 def _numeric_column_count(metadata: MetaData) -> int:
-    raise NotImplementedError
+    return sum(
+        1
+        for table in metadata.tables.values()
+        for column in table.columns
+        if isinstance(column.type, Numeric)
+    )
 
 
 def test_real_schema_names_every_money_column() -> None:
@@ -63,6 +75,4 @@ def test_unsuffixed_numeric_column_is_reported() -> None:
         Column("amount", Numeric(14, 4)),
     )
 
-    assert _numeric_columns_missing_unit_suffix(synthetic) == [
-        "synthetic_probe.amount"
-    ]
+    assert _numeric_columns_missing_unit_suffix(synthetic) == ["synthetic_probe.amount"]
