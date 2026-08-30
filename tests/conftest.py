@@ -4,16 +4,6 @@ import os
 from collections.abc import AsyncGenerator, Iterator
 from pathlib import Path
 
-import pytest
-import pytest_asyncio
-from alembic import command
-from alembic.config import Config
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-
-from morai.settings import get_settings
-
 # `morai.settings` instantiates a module-level `Settings` singleton at import time
 # (D-15 — boot fails loudly, not on first request). That means `DATABASE_URL` must be
 # present *before* pytest collects any test module that imports `morai.settings`,
@@ -23,6 +13,31 @@ from morai.settings import get_settings
 os.environ.setdefault(
     "DATABASE_URL", "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 )
+
+# The autouse fixture below isolates each *test* from the developer's `.env`, but some
+# modules read configuration at import time -- `morai.worker.app` builds its
+# Procrastinate App, and therefore its connector DSN, at module scope, because the
+# `procrastinate ... worker` CLI needs a module-level `app` to find. Import happens
+# during collection, before any fixture can run.
+#
+# Point the settings model at a non-existent env file for the whole test session, so
+# that import-time load reads the environment only. chdir is NOT the tool here: doing
+# it at conftest import runs before pytest resolves its relative `testpaths`, and
+# discovery then finds nothing and the suite silently passes zero tests.
+os.environ.setdefault("MORAI_ENV_FILE", "")
+
+# ruff: noqa: E402 -- the environment setup above must run before `morai.settings`
+# is imported. `Settings.model_config` resolves `env_file` at class-definition
+# time, so importing first would bake in `.env` before the override is visible.
+import pytest
+import pytest_asyncio
+from alembic import command
+from alembic.config import Config
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+from morai.settings import get_settings
 
 
 @pytest.fixture(autouse=True)

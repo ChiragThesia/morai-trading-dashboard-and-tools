@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from morai.settings import Settings, load_settings
+from morai.settings import Settings, get_settings, load_settings
 
 RAW_DSN = "postgresql://user:sekret-password@host:5432/db"
 
@@ -53,8 +53,16 @@ def test_unknown_extra_env_key_raises(
     env_file = tmp_path / ".env"
     env_file.write_text(f"DATABASE_URL={RAW_DSN}\nSOME_UNKNOWN_KEY=value\n")
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(ValidationError):
+    # The session sets MORAI_ENV_FILE="" so import-time loads ignore the developer's
+    # real `.env`. That resolves into `model_config` when the class is defined, so a
+    # test wanting its own env file has to override the resolved entry. Without this
+    # the model reads no file at all and this test would still raise -- on a *missing*
+    # database_url, not on the extra key it exists to catch. Passing for the wrong
+    # reason is worse than failing.
+    monkeypatch.setitem(Settings.model_config, "env_file", str(env_file))
+    with pytest.raises(ValidationError) as exc_info:
         Settings.model_validate({})
+    assert "some_unknown_key" in str(exc_info.value).lower()
 
 
 def test_async_dsn_swaps_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -89,6 +97,8 @@ def test_boot_failure_never_echoes_the_rejected_value(
     env_file = tmp_path / ".env"
     env_file.write_text(f"DATABASE_URL={RAW_DSN}\nSCHWAB_TRADER_APP_SECRET={secret}\n")
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(Settings.model_config, "env_file", str(env_file))
+    get_settings.cache_clear()
 
     with pytest.raises(RuntimeError) as exc_info:
         load_settings()

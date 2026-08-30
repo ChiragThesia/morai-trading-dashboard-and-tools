@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic import SecretStr, ValidationError
@@ -12,7 +13,13 @@ class Settings(BaseSettings):
     surfacing as a 500 on the first request that needs it (D-15)."""
 
     model_config = SettingsConfigDict(
-        extra="forbid", env_file=".env", case_sensitive=False
+        extra="forbid",
+        # `.env` in normal operation. Tests set MORAI_ENV_FILE="" so an import-time
+        # `get_settings()` reads the environment only and never picks up whatever the
+        # developer happens to have in `.env` -- on this machine, v1-era keys this
+        # backend does not declare, which `extra="forbid"` then rejects.
+        env_file=os.environ.get("MORAI_ENV_FILE", ".env") or None,
+        case_sensitive=False,
     )
 
     database_url: SecretStr

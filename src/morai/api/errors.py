@@ -51,10 +51,29 @@ from contextvars import ContextVar
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import ResponseValidationError
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
+
+
+class _ErrorLocation(BaseModel):
+    """One validation error, reduced to the two fields that are safe to log.
+
+    `extra="ignore"` is the point of this model. Pydantic's error dicts also carry
+    `input` -- the offending value -- along with `msg` and `url`. Declaring only `loc`
+    and `type` means the value is dropped at the parse boundary and is not present in
+    the object the logger is handed. The redaction is structural, not a discipline
+    someone has to remember at each call site."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    loc: tuple[str | int, ...] = ()
+    type: str = "unknown"
+
+
+_ERROR_LIST: TypeAdapter[list[_ErrorLocation]] = TypeAdapter(list[_ErrorLocation])
 
 REQUEST_ID_HEADER = "X-Request-Id"
 
@@ -94,12 +113,12 @@ def _redacted_error_locations(exc: Exception) -> list[str]:
     """
     if not isinstance(exc, ResponseValidationError):
         return [type(exc).__name__]
+    # `errors()` is untyped, so every element reads as Any and trips reportAny. A
+    # TypeAdapter is the narrowing this project allows -- unlike cast it actually
+    # checks the shape at runtime instead of asserting it to the checker.
     return [
-        "{}: {}".format(
-            ".".join(str(part) for part in err.get("loc", ())) or "<root>",
-            err.get("type", "unknown"),
-        )
-        for err in exc.errors()
+        "{}: {}".format(".".join(str(part) for part in d.loc) or "<root>", d.type)
+        for d in _ERROR_LIST.validate_python(exc.errors())
     ]
 
 
