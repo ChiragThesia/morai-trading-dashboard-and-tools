@@ -55,6 +55,12 @@ class _BrokenResponse(_RevalidatedResponse):
     amount_usd: UsdField
 
 
+class _SecretShapedResponse(_RevalidatedResponse):
+    probe_id: int
+    note: str
+    amount_usd: UsdField
+
+
 class _NeedsCount(ApiModel):
     count: int
 
@@ -95,6 +101,18 @@ def raises_route() -> dict[str, str]:
     raise RuntimeError("boom -- deliberately unhandled")
 
 
+# negative control for NN-34: `note` carries a secret-shaped value and is
+# present (not the field that's missing), so pydantic's own error detail --
+# what reaches the server log -- includes it. Proves the client's body
+# cannot, structurally, ever carry what was in scope at the moment of
+# failure. A synthetic marker; no real credential belongs in a test.
+@APP.get("/broken/secret-in-scope")
+def secret_in_scope_route() -> _SecretShapedResponse:
+    return _SecretShapedResponse.model_construct(
+        probe_id=1, note="sk-test-fake-51H8xyzNOTAREALCREDENTIAL0000000000"
+    )
+
+
 @APP.post("/needs-count")
 def needs_count_route(body: _NeedsCount) -> _NeedsCount:
     return body
@@ -131,6 +149,21 @@ async def test_response_validation_failure_logs_full_detail_keyed_by_request_id(
     assert matching, "no server log line carries the response's request id"
     # the field name this test's own body omitted must be in the server-only log.
     assert "amount_usd" in matching[0].getMessage()
+
+
+async def test_response_validation_failure_never_echoes_a_secret_shaped_value(
+    client: AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """NN-34: a secret-shaped value in scope at the moment response
+    validation failed must reach the server log and must never reach the
+    client. `secret_marker` is a synthetic marker, never a real credential."""
+    secret_marker = "sk-test-fake-51H8xyzNOTAREALCREDENTIAL0000000000"
+    with caplog.at_level(logging.ERROR):
+        response = await client.get("/broken/secret-in-scope")
+    assert response.status_code == 500
+    assert secret_marker not in response.text
+    _OpaqueErrorBody.model_validate(response.json())
+    assert any(secret_marker in r.getMessage() for r in caplog.records)
 
 
 async def test_unhandled_exception_returns_same_opaque_shape(
