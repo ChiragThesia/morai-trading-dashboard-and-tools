@@ -25,6 +25,7 @@ tooling phase that defers them.
 ## Phases
 
 **Phase Numbering:**
+
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
@@ -45,6 +46,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Walking Skeleton
+
 **Goal**: A typed FastAPI web service and a separate worker run on Railway against Postgres, and the build fails when the project's engineering constraints are violated.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
@@ -52,17 +54,20 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: OPS-01, OPS-02, OPS-03, OPS-04, LEDGER-08, API-07
 **Owns spike**: Hypercorn vs uvicorn dual-stack binding on real Railway hardware. Measured in v1 (`V039`), flagged partially stale. A cheap live smoke test against the deployed service settles it — this is the first phase that deploys anything.
 **Success Criteria** (what must be TRUE):
+
   1. The deployed Railway web service answers its health check over both IPv4 and IPv6 from a single `[::]` bind, and the result is recorded against `V039` as re-measured or refuted.
   2. A branch that introduces `Any`, a `cast`, or an unjustified `# type: ignore` fails CI under the strict type gate, and cannot be merged.
   3. The test suite runs in CI on every push, a red test blocks merge, and each phase's verification output carries its own red-then-green evidence.
   4. A money value round-trips Python → Postgres `NUMERIC` → JSON → Python with identical digits, including a value carrying more precision than a float can hold, and passing an index-point value where dollars are expected fails type-check before the process runs.
   5. A route that returns an object not matching its declared response model raises inside the process rather than serialising it to a client.
   6. The repository's root `CLAUDE.md` no longer tells a reader there is no application, no test suite and no CI, because after this phase that is false. It is stale the moment this phase lands, so it is updated inside it.
-**Plans:** 10 plans
+
+**Plans:** 2/10 plans executed
 
 Plans:
-- [ ] 01-01-PLAN.md — Scaffold: 3.13 pin, dependency stack, both type checkers, gate script, settings, Alembic env. No database needed
-- [ ] 01-02-PLAN.md — CI: four named jobs plus the Postgres service container that is this project's only usable test database
+
+- [x] 01-01-PLAN.md — Scaffold: 3.13 pin, dependency stack, both type checkers, gate script, settings, Alembic env. No database needed
+- [x] 01-02-PLAN.md — CI: four named jobs plus the Postgres service container that is this project's only usable test database
 - [ ] 01-03-PLAN.md — Tracer: the float canary, then one money value end to end through HTTP, strict Pydantic, asyncpg and `NUMERIC(14,4)`, proven in CI
 - [ ] 01-04-PLAN.md — Money unit safety: `points_to_usd` with a required multiplier, and the column-suffix metadata guard
 - [ ] 01-05-PLAN.md — Gate teeth: violating fixtures with rule-code assertions, the suppression-reason scan, repo hygiene
@@ -71,9 +76,11 @@ Plans:
 - [ ] 01-08-PLAN.md — Railway deploy; criterion 4 on real Railway Postgres and criterion 1's V039 measurement, as separate evidence; V092
 - [ ] 01-09-PLAN.md — Root docs made true, red-then-green evidence, and both criterion wording notes
 - [ ] 01-10-PLAN.md — Branch ruleset after the checks are seen reporting, a PR GitHub refuses, an auto-merge that needs no human, then the branching flip
+
 **UI hint**: no
 
 ### Phase 2: Identity, Sessions, and Tenant Isolation
+
 **Goal**: Accounts exist, sessions are invalidated server-side, and no request can reach another user's data.
 **Mode:** mvp
 **Depends on**: Phase 1
@@ -81,30 +88,36 @@ Plans:
 **Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05, AUTH-07, AUTH-08
 **Owns spike**: Postgres connection topology on Railway — direct connection, session-mode pooler, or transaction-mode pooler. UNVERIFIED at research time. Row-level-security safety via `SET LOCAL` depends on the answer (`V027`, `V028`), so it is settled here, before the isolation design is written against an assumption.
 **Success Criteria** (what must be TRUE):
+
   1. Admin can create an account and issue a setup link that works exactly once — a second use of the same link is rejected — and can reset a user's password with no email service anywhere in the loop.
   2. A logged-in user stays logged in across a browser restart, and after logout a replayed session cookie is rejected because the session was destroyed server-side, not only client-side.
   3. A request authenticated as user A that asks for user B's trading data returns not-found, including when A is the admin, and the isolation suite passes against the real Railway pooling configuration rather than only a direct-connection test container.
   4. Every privileged read of user data writes an audit row naming reader, subject, and time, and a privileged read that bypasses the audited path does not compile or does not pass review.
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 3: Envelope Encryption and the Schema Contract
+
 **Goal**: The tables the ledger writes exist, trading data in them is unreadable without the master key, the columns that must stay readable are decided and written down, and the database makes a netted ROLL impossible to store.
 **Mode:** mvp
 **Depends on**: Phase 2
 **Parallel with**: Nothing — Phases 4, 5 and 10 all write or read under this boundary
 **Requirements**: CRYPT-01, CRYPT-02, CRYPT-03, CRYPT-04, CRYPT-05, AUTH-06, LEDGER-04
 **Success Criteria** (what must be TRUE):
+
   1. A real `pg_dump` restored with the master key unavailable yields no readable price, quantity, P&L, or free-text entry field, and no two ciphertext rows share a `(key, nonce)` pair.
   2. The plaintext-by-design column set — `user_id`, `order_id`, `occ_symbol`, timestamps, join keys — is documented in the migration with the query each column exists to serve, and both the shared-front-leg disambiguation query and the reconciliation window query run in SQL against it.
   3. Rotating the master key re-wraps every user's data key without touching a single row of trade ciphertext, and versioned rows still read under the key they were written with.
   4. Inserting a ROLL row carrying only a netted amount is rejected by a database `CHECK` constraint, not by application code that a later caller could bypass.
   5. Deleting an account destroys that user's data key, after which their rows decrypt to nothing.
   6. The raw fill, leg, position and event tables exist with the plaintext/ciphertext split applied, and a fill can be written and read back through exactly one write path — the same one Phase 6's ingest will use and Phase 5's oracle will seed through. A second path into the fill table does not exist.
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 4: Schwab Connection and Token Lifecycle
+
 **Goal**: Each user connects their own Schwab account and repairs it themselves when the 7-day refresh token dies, without operator help.
 **Mode:** mvp
 **Depends on**: Phase 3
@@ -112,15 +125,18 @@ Plans:
 **Requirements**: CONN-01, CONN-02, CONN-03, CONN-04, CONN-05, CONN-06, CONN-07
 **Owns open question**: `schwab-py` type coverage — whether it ships a `py.typed` marker. UNVERIFIED. The answer sets the shape of the project-owned `Protocol` that wraps every vendor call, which is what keeps OPS-01 honest at the vendor boundary.
 **Success Criteria** (what must be TRUE):
+
   1. Two users can run OAuth callbacks concurrently and each lands on their own connection record; a `state` value replayed a second time is rejected because the first use consumed it in one atomic `DELETE ... RETURNING` (`NN-35`).
   2. After a complete OAuth flow, no captured log line, error response, or response body contains the authorization code or the redirect URL — proven by a test that searches the captured output (`NN-34`).
   3. A user whose connection has expired re-authorises themselves and the existing connection record is repaired, not duplicated — the row count for that user stays at one.
   4. Two concurrent refreshes of one user's token serialise on that user's own lock and neither produces `invalid_grant`, while a refresh for user A never blocks a refresh for user B.
   5. Connection health reads back as healthy, expiring-soon, or expired with an `expires_at`, alongside the timestamp of the last successful sync, so a silent gap is a queryable fact rather than an absence.
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 5: Event Derivation and the Oracle Gate
+
 **Goal**: Events are derived from stored fills correctly enough to pass the only genuine oracle this project owns — before any real Schwab connection exists.
 **Mode:** mvp
 **Depends on**: Phase 3 — specifically its criterion 6, the fill/leg/position/event tables and the single write path into them
@@ -128,15 +144,18 @@ Plans:
 **Note**: The oracle seeds 52 fills across 13 calendars directly into the Phase 3 schema, through the same write path Phase 6's ingest will later use — never a fixture-only path. `salvage/oracle-fixtures.md` asserts 52 fills written and **zero orphaned fills after a full sweep**, which is a storage-layer assertion, so the fills must be really stored. Seeding through a second path would be two implementations of the same write, which is the shape of the bug that made a +$395 trade read as −$319,850 (`LEDGER-01`). This is what lets the phase run with no Schwab connection, and it is why Phase 3 must land the tables rather than only the encryption boundary.
 **Requirements**: LEDGER-01, LEDGER-02, LEDGER-03, LEDGER-09, LEDGER-11, LEDGER-12, OPS-06
 **Success Criteria** (what must be TRUE):
+
   1. All 13 real Schwab calendars in `salvage/oracle-fixtures.md` produce their expected `openNetDebit` and `closeNetCredit` matched to two decimal places, including the shared-front-leg case and the stale-status case, and the 14th synthetic negative control fails as designed.
   2. A fill's OPEN/CLOSE role comes from the broker's own reported `positionEffect`; mutating a position's status column changes no derived event, because no derivation path reads it.
   3. A fill on a contract shared by two positions resolves through the other legs of the same broker order, and is left explicitly unresolved rather than guessed when no single anchor exists (`NN-11`).
   4. Re-running derivation over the same `(user, order_id)` scope produces an identical event set, and the whole derivation completes with no broker call made from the process.
   5. A mutation-testing pass against the ledger module reports zero surviving mutants for seeded sign-flip, rounding, and off-by-one faults.
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 6: Raw Ingest and Backfill
+
 **Goal**: Each connected user's fills and the broker's own transaction records land immutably, on a schedule, and repeating the work changes nothing.
 **Mode:** mvp
 **Depends on**: Phase 3, Phase 4
@@ -144,29 +163,35 @@ Plans:
 **Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-05, INGEST-06, OPS-05
 **Owns spike**: Railway execution model. Native cron starts a fresh container per run and expects it to exit, which conflicts with a long-running worker holding a 30-minute scheduler. This is the first phase that needs scheduled work, so the model is decided once here and Phase 8's cadence inherits the decision rather than re-deciding it.
 **Success Criteria** (what must be TRUE):
+
   1. Fills pull on a schedule for every connected user under one documented execution model, and that model survives a redeploy without losing or double-firing a cycle.
   2. The broker's own transaction records land in their own table, fed directly from Schwab and never written by the derivation pipeline, so the reconciliation invariant has a comparison source independent of the code it checks.
   3. A raw fill is stored exactly as the broker reported it — signed amount unmodified and never passed through `abs()` (`NN-10`), `positionEffect` preserved — and no later write mutates it.
   4. Running ingest twice over an overlapping window, and running a manual re-sync repeatedly, changes nothing past the first successful write.
   5. A user connecting for the first time gets existing open positions and recent history backfilled; a sync run is queryable for when it ran, how many fills landed and what errored; and a batch insert chunks at or below 2,000 rows so the Postgres bind-parameter ceiling is never reached (`NN-5`).
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 7: Position and Campaign Read Models
+
 **Goal**: Open/closed state, per-leg settlement, and rolled-position chains are computed from events, with no second writer for anything derivable.
 **Mode:** mvp
 **Depends on**: Phase 5, Phase 6
 **Parallel with**: Nothing — Phases 8, 9 and 10 all wait on this one
 **Requirements**: LEDGER-05, LEDGER-06, LEDGER-07, LEDGER-10
 **Success Criteria** (what must be TRUE):
+
   1. A position's closed state is computed from net quantity per leg, and no status column exists anywhere that could disagree with it.
   2. A leg that reaches expiry generates a SETTLEMENT event from its expiry and strike with no fill present and no broker call made.
   3. A PM-settled SPXW front leg and an AM-settled SPX back leg sit inside one position, each settling on its own style and its own date.
   4. A campaign returns as a chain of rolled positions computed from events, and dropping the campaign read model and recomputing it from events yields the identical chain.
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 8: Snapshot Capture
+
 **Goal**: Every open position is repriced on the 30-minute RTH cadence from day one, and a slot without data is recorded as a gap rather than invented.
 **Mode:** mvp
 **Depends on**: Phase 4, Phase 7
@@ -174,15 +199,18 @@ Plans:
 **Note**: Placed as early as its dependencies allow. It needs the position aggregate and a market read, and nothing else. Snapshot data is the one thing in this system that cannot be backfilled — v1's largest permanent regret was capturing marks live-write-only and losing them.
 **Requirements**: SNAP-01, SNAP-02, SNAP-03, SNAP-04, SNAP-05
 **Success Criteria** (what must be TRUE):
+
   1. Every open position under a healthy connection has a mark row for each 30-minute RTH slot, on the cadence inherited from Phase 6's execution-model decision.
   2. A slot with no market data stores an explicit gap; no row anywhere carries an interpolated, fabricated, or carried-forward value (`NN-16`).
   3. A later real observation heals a gap, a real observation is never replaced by a gap, and an upsert never silently no-ops a corrected backfill (`NN-6`).
   4. The repair path is runnable and rebuilds marks from the raw observations actually stored, and it ships in this phase alongside the writer rather than a phase later.
   5. A user whose connection is expired gets an honest gap row for that slot rather than a skipped row that later reads as if the position did not exist.
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 9: Reconciliation Invariant and Status Endpoint
+
 **Goal**: The core value is enforced and queryable — realised P&L equals the broker's cash delta, checked every ingest cycle.
 **Mode:** mvp
 **Depends on**: Phase 6, Phase 7
@@ -190,14 +218,17 @@ Plans:
 **Owns open question**: The window boundary — RTH trading days, calendar days, or rolling 24 hours. The principle ("a closed window is never re-checked") is settled; the exact delineation is not, and RECON-01 is untestable until it is. Decided at the start of this phase and written down.
 **Requirements**: RECON-01, RECON-02, RECON-03, RECON-04, API-01
 **Success Criteria** (what must be TRUE):
+
   1. Over any closed window, the sum of realised P&L derived from events equals the broker's cash delta from the independently-sourced transaction table, net of transfers.
   2. That check runs automatically at the end of every ingest cycle, per user, as a test rather than a displayed number, and a deliberately seeded discrepancy of one cent fails it.
   3. A failure names the failing window, not a bare boolean, so the next question is answerable without re-running anything.
   4. Reconciliation status is its own endpoint, cheap enough to poll before rendering anything, and while it is failing the API marks the dependent numbers untrustworthy rather than serving them plain.
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 10: The Pre-commitment Record
+
 **Goal**: What the user said they would do is captured before the position opens, and structurally cannot change afterwards.
 **Mode:** mvp
 **Depends on**: Phase 3 (capture surface and encrypted free-text fields), Phase 7 (open/closed state, which INTENT-06's immutability gate reads)
@@ -205,25 +236,30 @@ Plans:
 **Note**: INTENT-01 through INTENT-05 and INTENT-08 need only Phase 3 and could be built earlier. INTENT-06's immutability gate and INTENT-07's at-close capture both read open/closed state, which Phase 7's LEDGER-05 is the only thing that supplies — so the phase as a whole lands after Phase 7.
 **Requirements**: INTENT-01, INTENT-02, INTENT-03, INTENT-04, INTENT-05, INTENT-06, INTENT-07, INTENT-08
 **Success Criteria** (what must be TRUE):
+
   1. Before a position opens, the user records a thesis, a structured if-then invalidation trigger, an exit plan with a numeric profit target and a numeric stop, a planned DTE window as two integers, and the combo mid at submit plus the net price submitted.
   2. An update to any entry-intent field after the position has opened is rejected structurally — by a constraint or a trigger, not by a service-layer conditional a later caller could route around.
   3. At close the user records plan-followed yes or no plus one sentence, and the close is not complete without it.
   4. A tag outside the closed vocabulary of four is rejected, and a free-text value submitted into a tag field is rejected rather than stored.
+
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 11: Review API Surface
+
 **Goal**: A client can render the entire review surface from this API alone, with nothing computed on the client and no misleading statistics offered.
 **Mode:** mvp
 **Depends on**: Phase 7, Phase 9, Phase 10
 **Parallel with**: Nothing — it aggregates everything upstream
 **Requirements**: API-02, API-03, API-04, API-05, API-06
 **Success Criteria** (what must be TRUE):
+
   1. The campaign endpoint returns one row per campaign with its roll events nested underneath, each roll showing its open debit and close credit separately.
   2. Drift is queryable against the immutable entry record — positions held past their stated DTE window, exits that overrode the declared stop, and sizes outside the declared cap.
   3. A cohort's numbers come back alongside the user's own trailing baseline, in the same response.
   4. No response attaches a confidence interval, a p-value, or a significance claim to any ratio.
   5. An export returns the user's complete data losslessly as JSON and tabular objects as CSV, and re-reading the JSON reproduces every stored value with no precision loss.
+
 **Plans**: TBD
 **UI hint**: no
 
@@ -265,7 +301,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Walking Skeleton | 0/10 | Planned | - |
+| 1. Walking Skeleton | 2/10 | In Progress|  |
 | 2. Identity, Sessions, and Tenant Isolation | 0/TBD | Not started | - |
 | 3. Envelope Encryption and the Schema Contract | 0/TBD | Not started | - |
 | 4. Schwab Connection and Token Lifecycle | 0/TBD | Not started | - |
@@ -283,6 +319,7 @@ All 68 v1 requirements in `.planning/REQUIREMENTS.md` map to exactly one phase. 
 duplicates. The requirement-to-phase table lives in `REQUIREMENTS.md` under Traceability.
 
 Note: `REQUIREMENTS.md` previously recorded a total of 62. The actual count of v1 requirement IDs is
+
 68. The count has been corrected there.
 
 ---

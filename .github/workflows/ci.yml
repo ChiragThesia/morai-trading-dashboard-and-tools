@@ -1,0 +1,80 @@
+# The gate. Every job runs the exact command tools/gate.sh runs for that tool, so CI and
+# local cannot drift apart (D-05, D-06, OPS-01). The four job names below are referenced
+# verbatim by plan 01-10's branch ruleset -- a rename here silently deadlocks every future
+# pull request (GitHub waits forever for a required check that never reports).
+#
+# `push` (no branch filter) so a throwaway branch's run is observable without a PR --
+# Task 2 of 01-02-PLAN.md pushes a deliberate violation straight to a branch and reads its
+# run. `pull_request` is restricted to `main`, which is the only merge path this repo has.
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck-basedpyright:
+    name: typecheck-basedpyright
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+      - run: uv sync --frozen
+      - run: uv run basedpyright
+
+  typecheck-mypy:
+    name: typecheck-mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+      - run: uv sync --frozen
+      - run: uv run mypy src tests
+
+  lint-ruff:
+    name: lint-ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+
+  test-pytest:
+    name: test-pytest
+    runs-on: ubuntu-latest
+    # postgres:18-alpine -- same major docker-compose.yml pins, which is the major the live
+    # Railway Postgres runs (ghcr.io/railwayapp-templates/postgres-ssl:18). This container is
+    # the only place a @pytest.mark.db test can run at all: Docker's local daemon is broken
+    # and Railway's Postgres is private-network-only (D-17).
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: morai
+          POSTGRES_PASSWORD: morai
+          POSTGRES_DB: morai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U morai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Local-only, CI-only credential matching docker-compose.yml -- not a real secret.
+      DATABASE_URL: postgresql://morai:morai@localhost:5432/morai
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+      - run: uv sync --frozen
+      # The revision chain is empty at this point in the phase, so this is a no-op upgrade
+      # that still proves the Alembic import path and the database connection -- exactly
+      # what should be proven before any schema exists.
+      - run: uv run alembic upgrade head
+      - run: uv run pytest

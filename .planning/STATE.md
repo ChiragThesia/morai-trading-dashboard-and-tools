@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 current_phase: 1
 current_phase_name: Walking Skeleton
 status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-08-30T04:34:58.911Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-08-30T22:35:45.064Z"
 last_activity: 2026-08-29
 last_activity_desc: Roadmap created; 68 v1 requirements mapped across 11 phases
-state_head: 1541693fddf9ed7d3a1821d74e0035a717a973fc
+state_head: 890529ee8cf378a3da7ec0b81abccee98cf8dfb6
 progress:
   total_phases: 11
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 10
+  completed_plans: 2
   percent: 0
 ---
 
@@ -55,6 +55,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01 P02 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -74,6 +79,9 @@ Recent decisions affecting current work:
 
 - [Roadmap]: No separate tooling phase. OPS-01 and OPS-02 are established in Phase 1 and every later
   phase is held to them.
+
+- [Phase 1]: CI push trigger unfiltered by branch, since Task 2 needs a red run observed on a throwaway branch pushed directly
+- [Phase 1]: test-pytest Postgres pinned to major 18 (postgres:18-alpine), matching the live Railway Postgres image, superseding 01-RESEARCH.md's illustrative postgres:17 example
 
 ### Pending Todos
 
@@ -102,6 +110,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T04:34:58.900Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-walking-skeleton/01-CONTEXT.md
+Last session: 2026-08-30T22:35:45.051Z
+Stopped at: Completed 01-02-PLAN.md
+Resume file: None
