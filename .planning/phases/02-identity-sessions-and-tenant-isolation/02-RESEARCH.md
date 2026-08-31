@@ -1231,3 +1231,52 @@ practical reasoning as Phase 1's own Railway findings: an actively-developed pla
 feature itself is presented as a relatively new addition. Postgres RLS semantics, SQLAlchemy pooling
 defaults, and the Argon2id API — 30 days, none of it is platform-dependent or showed any sign of
 being mid-change.
+
+---
+
+## Orchestrator Addendum — CI's own Postgres user is a superuser too
+
+The research above flags that Railway's `postgres` role is *probably* a superuser and that
+this would make every RLS policy silently inert. The same hazard exists in CI, and there
+it is not an inference — it is documented.
+
+`.github/workflows/ci.yml` runs its Postgres service with
+`DATABASE_URL=postgresql://morai:morai@localhost:5432/morai`, so `POSTGRES_USER=morai`.
+The official Docker Postgres image's own documentation says, verbatim [VERIFIED: fetched
+raw from `docker-library/docs`, this session]:
+
+> ### `POSTGRES_USER`
+> This optional environment variable is used in conjunction with `POSTGRES_PASSWORD` to
+> set a user and its password. **This variable will create the specified user with
+> superuser power** and a database with the same name.
+
+**So an isolation test that connects to CI's Postgres as `morai` proves nothing.** RLS
+would be bypassed for exactly the same reason as in production, every policy would be
+inert, and the suite would still pass — because the application's own query filter would
+mask the absence of enforcement. The test would be measuring the filter and reporting it
+as the policy.
+
+Consequences, both required:
+
+1. **The CI isolation suite must create and connect as its own non-superuser role.** Do not
+   test RLS through the container's default user. The suite needs two roles: the superuser
+   to set up schema and policies, and a `NOSUPERUSER NOBYPASSRLS` role to run the
+   assertions through.
+
+2. **The suite must assert its own connection is not privileged**, before it asserts
+   anything about isolation:
+
+   ```sql
+   SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+   ```
+
+   Both must be false. Without this guard the suite can silently degrade — someone changes
+   a fixture, the tests run as a superuser again, and a green suite now certifies an
+   isolation guarantee that no longer exists. That is the same failure shape as Phase 1's
+   worktree false-green, where a suite passed only because a gitignored `.env` was absent
+   from the worktree, and it is worth guarding against explicitly rather than trusting a
+   convention.
+
+This makes CI a *stronger* proof of the RLS design than a smoke test against the deployed
+service would be: in CI both roles are under the suite's control, so the negative case can
+be asserted directly rather than merely hoped for.
