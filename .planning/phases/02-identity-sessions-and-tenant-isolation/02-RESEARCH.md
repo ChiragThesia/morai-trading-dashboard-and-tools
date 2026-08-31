@@ -33,10 +33,12 @@ cannot promise. The one finding that makes-or-breaks this recommendation, verifi
 Postgres documentation this session: **superusers and `BYPASSRLS` roles always bypass row security,
 full stop, and `FORCE ROW LEVEL SECURITY` does not change that** — it only binds the table *owner*.
 Railway's Postgres template creates exactly one role, `postgres`, via the official Postgres image's
-standard `initdb` bootstrap process, which is definitionally a superuser. **The app's runtime
-`DATABASE_URL` must not be `postgres` once RLS is the enforcement mechanism, or every policy is
-silently inert** — this is the single most important finding in this document, and it is the kind of
-mistake that would pass every application-level test while providing zero real isolation. A new,
+standard `initdb` bootstrap process, which is definitionally a superuser — **inferred from two
+independently-verified facts, not from a direct query against the live role** (no live connection was
+made this session; see the full caveat and the one-line check the plan should run below). **The app's
+runtime `DATABASE_URL` must not be `postgres` once RLS is the enforcement mechanism, or every policy
+is silently inert** — this is the single most important finding in this document, and it is the kind
+of mistake that would pass every application-level test while providing zero real isolation. A new,
 least-privilege Postgres role is a required Phase 2 deliverable, not an optional hardening step.
 
 The remaining three success criteria resolve to patterns this codebase has already established and
@@ -308,6 +310,21 @@ no custom role logic). Postgres's own documentation names the role `initdb` crea
 superuser"** [VERIFIED: `postgresql.org/docs/current/app-initdb.html`] — superuser status is definitional
 for the role `initdb` bootstraps a cluster with; there is no unprivileged variant.
 
+**What this claim actually rests on, stated precisely so it isn't mistaken for a measurement:** this
+session did **not** run `SELECT rolsuper FROM pg_roles WHERE rolname = 'postgres'` against the live
+Railway database — direct connection was explicitly out of scope for this research (no
+`DATABASE_PUBLIC_URL`, instructed not to proxy one). The superuser conclusion is a two-step
+**inference**, each step independently verified this session, chained together: (1) the template
+adds no custom role logic on top of the stock image [VERIFIED: template README], and (2) the stock
+image's bootstrap role is, by Postgres's own naming and design, always a superuser [VERIFIED: Postgres
+docs]. This is about as strong as an inference gets without the direct query — but it is still an
+inference, not a query result, and the plan should close that gap with a **one-line, cheap, direct
+check the moment a migration can run against the real database**: `SELECT rolsuper FROM pg_roles
+WHERE rolname = current_user;` inside the same Alembic migration that creates `morai_app`, asserting
+`false` for whatever role Alembic itself is *not* running as — or more directly, run it once by hand
+against Railway and record the literal output before trusting the RLS design on top of it. Treat the
+RLS recommendation below as contingent on that one-line check passing, not as already confirmed.
+
 **Consequence: the app's current `DATABASE_URL` (role `postgres`) would make every RLS policy on
 every table silently inert.** This is not a hypothetical edge case to note in passing — it is the
 central fact that decides whether RLS does anything at all here, and it means creating a new,
@@ -355,7 +372,45 @@ second field for this — see Code Examples.
 **Recommendation: Postgres RLS is the primary, structural mechanism.** The repository/capability
 pattern built for AUTH-08 (below) is *not* a competing alternative — it is complementary, solving a
 different problem (audit-writing, not row-visibility) and is layered on top of RLS-protected tables,
-not instead of them.
+not instead of them. This is one recommendation, not a menu — the table above is the comparison that
+produced it, not two options left standing for the planner to pick between.
+
+### What would have to be true for the app-level layer to win instead
+
+Named explicitly, so this decision is revisitable on stated grounds later rather than re-litigated
+from scratch, and so an unattended executor isn't left guessing why RLS was chosen over the more
+familiar alternative:
+
+- **If this project's own stated threat model were looser.** `.claude/CLAUDE.md`'s own Security
+  bullets already require "no cross-user view" and "audit log on privileged reads" as hard
+  constraints, independent of this document. Those two constraints are exactly what RLS is good at
+  enforcing structurally and an app-level filter is not. A project with a casual, low-stakes data
+  model and no such constraint could reasonably choose the simpler, more familiar app-level pattern
+  and accept the discipline risk — this project explicitly cannot, since the data behind the
+  isolation boundary is brokerage-linked.
+- **If the extra moving part (a second, least-privilege DB role, provisioned and wired outside
+  Alembic's normal reach) were infeasible or disproportionately costly.** It isn't here — `CREATE
+  ROLE` is one migration statement run as the existing superuser, and the only real cost is one
+  manually-set Railway variable (Operational step, above). A platform that made creating additional
+  Postgres roles genuinely hard or unsupported would tip this calculus.
+- **If the team's own familiarity and debugging speed mattered more than the enforcement guarantee.**
+  RLS is a real, known Postgres criticism: a query that looks like `SELECT * FROM positions` silently
+  returns fewer rows than expected, and a developer unfamiliar with the table's policy can lose real
+  time before realizing *why*. An app-level `.where(user_id == ...)` is visible in the code that runs
+  it, which is easier to reason about at a glance. This is the strongest legitimate argument for the
+  app-level layer, and it is a real cost RLS imposes — named here rather than glossed over, and judged
+  not to outweigh the enforcement guarantee for a system whose whole reason for existing is to not
+  leak brokerage-linked trading data across users.
+- **If queries against these tables routinely needed to run as an elevated/reporting role** (a BI tool,
+  a bulk export job, an ops dashboard reading across all users by design) **that would have to bypass
+  RLS as a matter of course.** At that point RLS's bypass mechanism (a second privileged role) starts
+  to look like the same discipline problem app-level scoping already has, just moved one level down.
+  Not this project's shape today — Phase 11's export endpoint is explicitly per-user, not cross-user —
+  but worth naming as the condition under which RLS's advantage narrows.
+
+None of these conditions hold for Morai Journal as currently scoped. If a future phase changes the
+threat model, the user count, or the query patterns enough that one of them starts to hold, that is
+the signal to revisit this decision — not a reason to second-guess it now.
 
 ### The isolation suite needs something to test against — Phase 2 has no real trading table yet
 
@@ -1158,8 +1213,11 @@ couldn't be fully closed without a real deploy in Phase 1).
   a verified Postgres/SQLAlchemy mechanic or this project's own already-established precedent);
   MEDIUM on completeness, since multi-tenant RLS-in-production war stories were sampled via
   WebSearch, not exhaustively reviewed
-- The superuser/BYPASSRLS finding: HIGH — directly quoted from official Postgres documentation,
-  cross-checked against the specific template's own README
+- The superuser/BYPASSRLS *rule* (who RLS ignores, and that FORCE doesn't change it): HIGH — directly
+  quoted from official Postgres documentation. That the live `postgres` role on this specific Railway
+  instance actually has superuser status: MEDIUM — a two-step inference from verified facts, explicitly
+  **not** a direct query against the live role (no connection was made this session); the plan owes
+  one cheap query to close this before trusting the RLS design on top of it, per the caveat above
 - Argon2id parameters: HIGH for the measured local numbers and the verified API; MEDIUM for how they
   translate to Railway's actual container, which is explicitly unmeasured and flagged as a required
   Wave-0-adjacent step
