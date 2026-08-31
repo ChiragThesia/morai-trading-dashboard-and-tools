@@ -35,10 +35,10 @@ API, a job, or a stored invariant.
 - [x] **CONN-01**: User can connect their own Schwab account through an OAuth flow they start themselves
 - [x] **CONN-02**: The OAuth CSRF state is a single-use, TTL'd server-side nonce consumed by one atomic delete
 - [x] **CONN-03**: An OAuth code and its redirect URL never appear in a log, an error response, or a response body
-- [ ] **CONN-04**: User can read their connection health as healthy, expiring-soon, or expired, with an `expires_at`
+- [x] **CONN-04**: User can read their connection health as healthy, expiring-soon, or expired, with an `expires_at`
 - [x] **CONN-05**: User can re-authorise an expired connection themselves, repairing the existing connection record rather than creating a second one
 - [x] **CONN-06**: A token refresh holds a lock scoped to that one user, so one user's refresh never blocks or corrupts another's
-- [ ] **CONN-07**: User can see when their connection last synced successfully, so a silent gap is a queryable fact
+- [x] **CONN-07**: User can see when their connection last synced successfully, so a silent gap is a queryable fact
 
 ### Ingest
 
@@ -184,10 +184,10 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | CONN-01 | Phase 4 | Complete |
 | CONN-02 | Phase 4 | Complete |
 | CONN-03 | Phase 4 | Complete |
-| CONN-04 | Phase 4 | Pending |
+| CONN-04 | Phase 4 | Complete |
 | CONN-05 | Phase 4 | Complete |
 | CONN-06 | Phase 4 | Complete |
-| CONN-07 | Phase 4 | Pending |
+| CONN-07 | Phase 4 | Complete |
 | INGEST-01 | Phase 6 | Pending |
 | INGEST-02 | Phase 6 | Pending |
 | INGEST-03 | Phase 6 | Pending |

@@ -159,14 +159,14 @@ Plans:
   4. Two concurrent refreshes of one user's token serialise on that user's own lock and neither produces `invalid_grant`, while a refresh for user A never blocks a refresh for user B.
   5. Connection health reads back as healthy, expiring-soon, or expired with an `expires_at`, alongside the timestamp of the last successful sync, so a silent gap is a queryable fact rather than an absence.
 
-**Plans**: 3/4 plans executed, 3 waves
+**Plans**: 4/4 plans executed, 3 waves
 
 Plans:
 
 - [x] 04-01-PLAN.md — Wave 1. Tracer: `schwab-py` pinned, the local `typings/schwab/` stubs that make the untyped vendor legible to both checkers, migration 0010 (`schwab_connections`, RLS, encrypted token and account hash), the `Protocol` pair and the one adapter that imports the vendor, and one full OAuth handshake against the fake proved to land its token in Postgres — plus account deletion and the two gate meta-tests
 - [x] 04-02-PLAN.md — Wave 2. Criteria 1, 2 and 3: barrier-enforced concurrent callbacks each landing their own row, one `oauth_state` nonce consumed exactly once across two engines, no code or redirect URL in any captured log or body, and a re-auth that repairs one row instead of accumulating two
 - [x] 04-03-PLAN.md — Wave 2. Criterion 4: the `pg_advisory_xact_lock(hashtext(user_id))` critical section acquired before the token read, with both positive controls — one user's concurrent refreshes serialise with no `invalid_grant`, and user A's refresh never blocks user B's
-- [ ] 04-04-PLAN.md — Wave 3. Criterion 5: all three health bands proven at their boundaries with an injected `now`, an `expires_at` a refresh cannot move, and `last_synced_at` left honestly null because no sync exists until Phase 6
+- [x] 04-04-PLAN.md — Wave 3. Criterion 5: all three health bands proven at their boundaries with an injected `now`, an `expires_at` a refresh cannot move, and `last_synced_at` left honestly null because no sync exists until Phase 6
 
 **UI hint**: no
 
@@ -341,7 +341,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Walking Skeleton | 4/10 | In Progress|  |
 | 2. Identity, Sessions, and Tenant Isolation | 6/6 | In Progress|  |
 | 3. Envelope Encryption and the Schema Contract | 7/7 | In Progress|  |
-| 4. Schwab Connection and Token Lifecycle | 3/4 | In Progress|  |
+| 4. Schwab Connection and Token Lifecycle | 4/4 | In Progress|  |
 | 5. Fill Pairing and the Oracle Gate | 0/TBD | Not started | - |
 | 6. Raw Ingest and Backfill | 0/TBD | Not started | - |
 | 7. Position and Campaign Read Models | 0/TBD | Not started | - |
