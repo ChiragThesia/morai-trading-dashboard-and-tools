@@ -1,8 +1,9 @@
 """Direct proof that a netted-only ROLL cannot be stored (D3-09, LEDGER-04,
 criterion 4).
 
-The `roll_has_both_legs` CHECK constraint (migration 0008) rejects a ROLL
-row missing either amount ciphertext -- proven here through raw
+This module proves two separate things, and neither substitutes for the
+other. The `roll_has_both_legs` CHECK constraint (migration 0008) rejects a
+ROLL row missing either amount ciphertext -- proven here through raw
 `sa.text()` INSERT statements executed on the superuser session, never
 through the ORM and never through any write path, because criterion 4's
 whole point is that the guard holds for a caller who never touches
@@ -12,12 +13,17 @@ and accepted rows below carry arbitrary non-null bytes, and Postgres has no
 way to inspect what they decrypt to. That is Phase 5's 13-calendar oracle's
 job.
 
+`insert_events()` (Task 3, `morai.ledger.events`) is proven in this same
+module because the constraint proof and the write-path proof both guard
+one invariant and should never drift apart.
+
 `@pytest.mark.db` -- runs only where Postgres is reachable.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -26,6 +32,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.ledger.events import EventWrite, insert_events, read_events
 from tests.identity.conftest import SeededUsers
 from tests.ledger.conftest import (
     SeededPosition,
@@ -94,6 +101,15 @@ async def _insert_event_raw(
             "close_ciphertext": close_ciphertext,
             "close_nonce": close_nonce,
         },
+    )
+
+
+async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
+    """Mirrors `tests/test_isolation.py`/`test_tracer_encrypted_fill.py`'s
+    own `_set_current_user` exactly."""
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
     )
 
 
@@ -216,3 +232,107 @@ async def test_settlement_with_both_amounts_null_is_accepted(
         ).scalar_one()
     )
     assert count == 1
+
+
+# --- Task 3: insert_events()/read_events() write-path proof ---------------
+# Lives in this file, not a sibling, so the constraint proof and the
+# write-path proof guard one invariant and cannot drift apart.
+
+
+async def test_roll_round_trips_both_amounts_under_distinct_nonces(
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    await _set_current_user(app_db_session, provisioned_users.user_a)
+    await insert_events(
+        app_db_session,
+        provisioned_users.user_a,
+        [
+            EventWrite(
+                position_id=seeded_position.position_id,
+                event_type="ROLL",
+                event_time=_EVENT_TIME,
+                fill_ids_hash=None,
+                open_debit_usd=Decimal("125.50"),
+                close_credit_usd=Decimal("110.25"),
+            )
+        ],
+    )
+
+    row = (
+        await app_db_session.execute(
+            text(
+                "SELECT open_debit_usd_nonce, close_credit_usd_nonce FROM events "
+                "WHERE event_type = 'ROLL'"
+            )
+        )
+    ).one()
+    assert row[0] != row[1]
+
+    records = await read_events(app_db_session, provisioned_users.user_a)
+    assert len(records) == 1
+    assert records[0].open_debit_usd == Decimal("125.50")
+    assert records[0].close_credit_usd == Decimal("110.25")
+
+
+async def test_insert_events_raises_before_reaching_db_for_one_sided_roll(
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    """The database constraint remains the backstop, not the only guard."""
+    await _set_current_user(app_db_session, provisioned_users.user_a)
+    with pytest.raises(ValueError, match="ROLL"):
+        await insert_events(
+            app_db_session,
+            provisioned_users.user_a,
+            [
+                EventWrite(
+                    position_id=seeded_position.position_id,
+                    event_type="ROLL",
+                    event_time=_EVENT_TIME,
+                    fill_ids_hash=None,
+                    open_debit_usd=Decimal("125.50"),
+                    close_credit_usd=None,
+                )
+            ],
+        )
+
+    count = _INT.validate_python(
+        (
+            await app_db_session.execute(
+                text("SELECT COUNT(*) FROM events WHERE event_type = 'ROLL'")
+            )
+        ).scalar_one()
+    )
+    assert count == 0
+
+
+async def test_settlement_with_no_amounts_reads_back_as_none(
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    """A SETTLEMENT's absent amounts write four NULLs and read back as
+    `None` -- never zero (NN-16, D3-11)."""
+    await _set_current_user(app_db_session, provisioned_users.user_a)
+    await insert_events(
+        app_db_session,
+        provisioned_users.user_a,
+        [
+            EventWrite(
+                position_id=seeded_position.position_id,
+                event_type="SETTLEMENT",
+                event_time=_EVENT_TIME,
+                fill_ids_hash=None,
+                open_debit_usd=None,
+                close_credit_usd=None,
+            )
+        ],
+    )
+
+    records = await read_events(app_db_session, provisioned_users.user_a)
+    assert len(records) == 1
+    assert records[0].open_debit_usd is None
+    assert records[0].close_credit_usd is None
