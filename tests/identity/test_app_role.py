@@ -130,3 +130,39 @@ async def test_login_lookup_is_still_executable_by_the_app_role(
         )
     ).one()
     assert _BOOL.validate_python(row[0]) is True
+
+
+async def test_app_role_can_insert_but_not_read_or_alter_audit_log(
+    app_db_session: AsyncSession,
+) -> None:
+    """WR-05: migration 0006 narrows `morai_app`'s table-level grant on
+    `audit_log` to `INSERT` only, so the "app role can append and cannot
+    read its own trail back" guarantee (`identity/audit.py`'s own docstring)
+    has an independent floor at the GRANT layer, not only at RLS. Checks the
+    grant directly via `has_table_privilege`, the same mechanism the two
+    `has_function_privilege` tests above use for the login_lookup grant.
+    """
+    insertable = (
+        await app_db_session.execute(
+            text("SELECT has_table_privilege('morai_app', 'audit_log', 'INSERT')")
+        )
+    ).one()
+    selectable = (
+        await app_db_session.execute(
+            text("SELECT has_table_privilege('morai_app', 'audit_log', 'SELECT')")
+        )
+    ).one()
+    updatable = (
+        await app_db_session.execute(
+            text("SELECT has_table_privilege('morai_app', 'audit_log', 'UPDATE')")
+        )
+    ).one()
+    deletable = (
+        await app_db_session.execute(
+            text("SELECT has_table_privilege('morai_app', 'audit_log', 'DELETE')")
+        )
+    ).one()
+    assert _BOOL.validate_python(insertable[0]) is True
+    assert _BOOL.validate_python(selectable[0]) is False
+    assert _BOOL.validate_python(updatable[0]) is False
+    assert _BOOL.validate_python(deletable[0]) is False
