@@ -38,6 +38,13 @@ _UNIT_EXEMPT_BINARY_COLUMNS = frozenset(
         "user_data_keys.wrap_nonce",
         "fills.quantity_ciphertext",
         "fills.quantity_nonce",
+        # Phase 4: a Schwab account hash and an OAuth token are connection
+        # metadata, not money -- no more a unit-carrying value than
+        # `fills.quantity_ciphertext` is (D4-11).
+        "schwab_connections.account_hash_ciphertext",
+        "schwab_connections.account_hash_nonce",
+        "schwab_connections.token_ciphertext",
+        "schwab_connections.token_nonce",
     }
 )
 

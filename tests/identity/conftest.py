@@ -33,7 +33,8 @@ async def clean_identity_tables(migrated_db: None) -> AsyncGenerator[None, None]
         await conn.execute(
             text(
                 "TRUNCATE TABLE users, sessions, setup_tokens, audit_log, "
-                "user_data_keys, fills, positions, legs, events CASCADE"
+                "user_data_keys, fills, positions, legs, events, "
+                "schwab_connections CASCADE"
             )
         )
     await engine.dispose()

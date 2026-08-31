@@ -103,6 +103,12 @@ WITH all_nonces AS (
     UNION ALL
     SELECT user_id, key_version, close_credit_usd_nonce AS nonce
     FROM events WHERE close_credit_usd_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, token_nonce AS nonce
+    FROM schwab_connections WHERE token_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, account_hash_nonce AS nonce
+    FROM schwab_connections WHERE account_hash_nonce IS NOT NULL
 )
 SELECT user_id, key_version, nonce, COUNT(*) AS collision_count
 FROM all_nonces
@@ -111,13 +117,19 @@ HAVING COUNT(*) > 1
 """
 
 # The schema-drift guard's ground truth for the per-user DEK domain: every
-# (table, nonce column) pair the query above unions over.
+# (table, nonce column) pair the query above unions over. Phase 4 adds
+# `schwab_connections.token_nonce`/`account_hash_nonce` -- both encrypted
+# under the connecting user's own Phase 3 DEK (D4-11, same domain as
+# fills/events), so both belong in this union, not the KEK-scoped query
+# below.
 _EXPECTED_NONCE_COLUMNS: frozenset[tuple[str, str]] = frozenset(
     {
         ("fills", "quantity_nonce"),
         ("fills", "price_usd_nonce"),
         ("events", "open_debit_usd_nonce"),
         ("events", "close_credit_usd_nonce"),
+        ("schwab_connections", "token_nonce"),
+        ("schwab_connections", "account_hash_nonce"),
     }
 )
 

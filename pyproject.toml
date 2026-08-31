@@ -16,6 +16,7 @@ dependencies = [
   "posthog==7.44.2",
   "argon2-cffi==25.1.0",
   "cryptography==50.0.1",
+  "schwab-py==1.5.1",
 ]
 
 [dependency-groups]
@@ -43,11 +44,17 @@ typeCheckingMode = "strict"
 reportAny = "error"
 reportExplicitAny = "error"
 reportIgnoreCommentWithoutRule = "error"
+# D4-01: schwab-py 1.5.1 ships no py.typed marker, so every vendor symbol
+# resolves to Any without this. Local partial stubs cover exactly the ~6
+# symbols src/morai/vendor/schwab_adapter.py uses.
+stubPath = "typings"
 
 [tool.mypy]
 strict = true
 plugins = []
 exclude = ["tests/gate/fixtures"]
+# D4-01: same reasoning as [tool.basedpyright].stubPath above.
+mypy_path = "typings"
 # D-05 named `disallow_any_explicit` alongside `strict`. Measured this session (with
 # and without `plugins = pydantic.mypy`): it false-positives on the class-declaration
 # line of *any* pydantic.BaseModel/BaseSettings subclass — `class S(BaseModel): pass`
