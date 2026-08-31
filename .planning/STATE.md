@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-current_phase: 1
-current_phase_name: Walking Skeleton
+current_phase: 2
+current_phase_name: Identity, Sessions, and Tenant Isolation
 status: executing
-stopped_at: Completed 01-07-PLAN.md
-last_updated: "2026-08-30T23:22:02.740Z"
-last_activity: 2026-08-30
-last_activity_desc: The tracer -- one money value proven identical across HTTP, Postgres NUMERIC(14,4) and JSON in CI (plan 01-03)
-state_head: f3d765b9f82a7436e3be52e18089d2cc4f262349
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-08-31T05:02:44.540Z"
+last_activity: 2026-08-31
+last_activity_desc: morai_app least-privilege role, migration 0003 (five tables, RLS ENABLE+FORCE), and one authenticated RLS-filtered request end to end (plan 02-01)
+state_head: 7d79993022ed09b98abf969f28d7b76b1e9b79c3
 progress:
   total_phases: 11
-  completed_phases: 0
-  total_plans: 10
-  completed_plans: 4
-  percent: 0
+  completed_phases: 1
+  total_plans: 16
+  completed_plans: 8
+  percent: 50
 ---
 
 # Project State
@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** The ledger is correct across rolls and settlements — the sum of realised P&L over any
 window equals the broker's cash delta over that window, checked every ingest cycle.
-**Current focus:** Phase 1 — Walking Skeleton
+**Current focus:** Phase 2 — Identity, Sessions, and Tenant Isolation
 
 ## Current Position
 
-Phase: 1 of 11 (Walking Skeleton)
-Plan: 4 of 10 in current phase
+Phase: 2 of 11 (Identity, Sessions, and Tenant Isolation)
+Plan: 2 of 6 in current phase
 Status: Ready to execute
-Last activity: 2026-08-30 — The tracer: money round-trip proven in CI (plan 01-03)
+Last activity: 2026-08-31 — morai_app role, migration 0003, and one authenticated RLS-filtered request end to end (plan 02-01)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P05 | 8min | 3 tasks | 8 files |
 | Phase 01-walking-skeleton P06 | 25min | 2 tasks | 4 files |
 | Phase 01 P07 | 20min | 2 tasks | 4 files |
+| Phase 02 P01 | 40min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,8 @@ Recent decisions affecting current work:
 - [Phase 1]: Negative-control response models locally set revalidate_instances='always' so model_construct() actually re-validates -- otherwise FastAPI returns a silent 200 for a broken response
 - [Phase 1]: PsycopgConnector (psycopg v3) is the worker's connector -- Procrastinate ships no asyncpg connector; pool capped explicitly (min_size=1, max_size=2) as its own NN-28 budget line
 - [Phase 1]: Procrastinate's schema.sql wrapped verbatim into Alembic revision 0002, split into per-statement op.execute() calls -- asyncpg's protocol rejects multi-statement strings
+- [Phase 2]: [Phase 2, 02-01]: SET LOCAL cannot bind a query parameter -- use set_config(name, value, true) for RLS context, measured against real Postgres/asyncpg
+- [Phase 2]: [Phase 2, 02-01]: morai_app (NOSUPERUSER NOBYPASSRLS) is a required deliverable; get_db_session runs every route through it, get_engine() stays the DDL/superuser-only engine
 
 ### Pending Todos
 
@@ -124,6 +127,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-30T23:22:02.726Z
-Stopped at: Completed 01-07-PLAN.md
+Last session: 2026-08-31T05:02:31.412Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None

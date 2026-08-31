@@ -43,7 +43,17 @@ def test_settings_expose_a_single_database_url() -> None:
     """The connector is built from `settings.sync_dsn`, and no second database
     environment variable exists for the worker -- `Settings` (`extra="forbid"`)
     declares exactly one DSN field, the same one the web process's `async_dsn`
-    derives from."""
+    derives from.
+
+    Phase 2 adds a second connection *identity* without adding a second DSN
+    *field*: `app_async_dsn` composes the web process's app-role connection
+    from this same `database_url`'s host plus a new credential field
+    (`morai_app_db_password`), which contains none of "database"/"dsn"/
+    "postgres" and so does not appear in `dsn_fields` below. "Exactly one DSN
+    field" is still true and still means what it says -- it does not mean
+    "exactly one connection identity" now that the web process runs as
+    `morai_app` while this worker (and Alembic) still runs as the superuser
+    role named by `database_url` directly."""
     dsn_fields = [
         name
         for name in Settings.model_fields

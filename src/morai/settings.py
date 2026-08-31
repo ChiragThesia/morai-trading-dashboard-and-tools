@@ -5,6 +5,7 @@ from functools import lru_cache
 
 from pydantic import SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine.url import make_url
 
 
 class Settings(BaseSettings):
@@ -24,6 +25,16 @@ class Settings(BaseSettings):
 
     database_url: SecretStr
 
+    # One secret, not a second full DSN (phase 2). `app_async_dsn` composes the
+    # web process's runtime DSN from `database_url`'s already-correct host and
+    # database plus this password and the fixed `morai_app` role -- a second
+    # full `APP_DATABASE_URL` would duplicate the host/database in a place that
+    # can drift out of agreement with `database_url`. Optional on the model,
+    # not on `app_async_dsn`'s consumers: the worker process never reads it, and
+    # a required field would kill the worker's boot over a variable it never
+    # touches.
+    morai_app_db_password: SecretStr | None = None
+
     # Telemetry. Optional by design: with no key, `morai.telemetry` is a no-op, so
     # local development, CI and a fresh clone need no PostHog account. Set
     # POSTHOG_API_KEY as a Railway variable in production -- never in a committed file,
@@ -40,6 +51,33 @@ class Settings(BaseSettings):
     @property
     def sync_dsn(self) -> str:
         return self.database_url.get_secret_value()
+
+    @property
+    def app_async_dsn(self) -> str:
+        """The web process's runtime DSN: `database_url`'s own host, port and
+        database, with the role and password swapped to the least-privilege
+        `morai_app` role (phase 2's RLS design -- see alembic/versions/0003).
+
+        Raises before composing anything if the password is unset, naming only
+        the field. Following `load_settings`'s precedent exactly: the `raise`
+        sits outside any `except`, so no original exception carrying a value
+        stays attached as `__context__` for a chain-walking logger to find
+        (`NN-34`).
+        """
+        password = self.morai_app_db_password
+        if password is None:
+            raise RuntimeError(
+                "Configuration rejected. `morai_app_db_password` is required to "
+                "build the web process's database connection, and is withheld "
+                "deliberately even when present -- values are never rendered "
+                "(NN-34)."
+            )
+        url = make_url(self.database_url.get_secret_value()).set(
+            drivername="postgresql+asyncpg",
+            username="morai_app",
+            password=password.get_secret_value(),
+        )
+        return url.render_as_string(hide_password=False)
 
 
 def load_settings() -> Settings:

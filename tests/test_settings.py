@@ -81,6 +81,58 @@ def test_sync_dsn_swaps_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.sync_dsn == "postgresql://user:sekret-password@host:5432/db"
 
 
+def test_app_async_dsn_preserves_host_and_replaces_role(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`app_async_dsn` composes from `database_url`'s own host/port/database --
+    only the username and password change, and only via `make_url(...).set(...)`,
+    never string surgery."""
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", RAW_DSN)
+    monkeypatch.setenv("MORAI_APP_DB_PASSWORD", "app-role-secret")
+    settings = Settings.model_validate({})
+    assert (
+        settings.app_async_dsn
+        == "postgresql+asyncpg://morai_app:app-role-secret@host:5432/db"
+    )
+
+
+def test_app_async_dsn_raises_when_password_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """NN-34: the message names the missing field only -- never the DSN, the
+    password, or the host it would have composed from."""
+    _clear_env(monkeypatch)
+    monkeypatch.delenv("MORAI_APP_DB_PASSWORD", raising=False)
+    monkeypatch.setenv("DATABASE_URL", RAW_DSN)
+    settings = Settings.model_validate({})
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _ = settings.app_async_dsn
+
+    message = str(exc_info.value)
+    assert "morai_app_db_password" in message
+    assert "sekret-password" not in message
+    assert "host" not in message
+    # Same D-15/NN-34 shape as `load_settings`: nothing carrying a value stays
+    # attached on the raised exception for a chain-walking logger to find.
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_settings_model_fields_still_yield_exactly_one_dsn_field() -> None:
+    """`morai_app_db_password` is a credential, not a DSN -- the filter this
+    project's `test_settings_expose_a_single_database_url` uses must still see
+    exactly one DSN-shaped field after this phase adds a second connection
+    identity."""
+    dsn_fields = [
+        name
+        for name in Settings.model_fields
+        if "database" in name or "dsn" in name or "postgres" in name
+    ]
+    assert dsn_fields == ["database_url"]
+
+
 def test_boot_failure_never_echoes_the_rejected_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
