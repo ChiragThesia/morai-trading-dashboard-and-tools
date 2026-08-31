@@ -88,19 +88,22 @@ def migrated_db() -> None:
 
 
 @pytest_asyncio.fixture
-async def clean_gate_money_probe(migrated_db: None) -> AsyncGenerator[None, None]:
-    """Truncate `gate_money_probe` before each db-marked test, so tests don't leak
-    rows into each other. Truncating rather than recreating the schema, per plan."""
+async def clean_fills_table(migrated_db: None) -> AsyncGenerator[None, None]:
+    """Truncate `fills` before each db-marked test, so tests don't leak rows into
+    each other. Replaces the retired `clean_gate_money_probe` (03-07) now that the
+    money round-trip proof runs against the encrypted fill path instead of
+    `gate_money_probe` -- nothing reachable from this fixture names that table any
+    more. Truncating rather than recreating the schema, per plan."""
     engine = create_async_engine(get_settings().async_dsn)
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE TABLE gate_money_probe RESTART IDENTITY"))
+        await conn.execute(text("TRUNCATE TABLE fills RESTART IDENTITY CASCADE"))
     await engine.dispose()
     yield
 
 
 @pytest_asyncio.fixture
 async def db_session(
-    clean_gate_money_probe: None,
+    clean_fills_table: None,
 ) -> AsyncGenerator[AsyncSession, None]:
     """One `AsyncSession` per test, on its own engine — a connection independent of
     the app's own (`morai.db.session.get_engine`), so a test reading through this
@@ -112,7 +115,7 @@ async def db_session(
 
 
 @pytest_asyncio.fixture
-async def client(clean_gate_money_probe: None) -> AsyncGenerator[AsyncClient, None]:
+async def client(clean_fills_table: None) -> AsyncGenerator[AsyncClient, None]:
     """An httpx client against the real ASGI app over `ASGITransport` — no network
     socket, but the full FastAPI/Pydantic/SQLAlchemy stack runs for real."""
     from morai.api.app import app
