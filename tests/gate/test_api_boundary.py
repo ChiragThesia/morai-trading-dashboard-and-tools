@@ -197,15 +197,30 @@ async def test_unhandled_exception_returns_same_opaque_shape(
     assert body.error == "internal"
 
 
-async def test_unhandled_exception_logs_full_detail_keyed_by_request_id(
+async def test_unhandled_exception_logs_the_type_but_never_exc_info(
     client: AsyncClient, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """CR-02 (`04-REVIEW.md`): this test previously asserted the opposite --
+    `any(r.exc_info for r in matching)`, "log line must carry the
+    traceback" -- which was itself the leak CR-02 found.
+    `unhandled_exception_handler`'s `exc_info=exc` rendered a formatted
+    traceback whose last line is `str(exc)`, and for a real vendor
+    exception that message is not under this codebase's control (it can
+    embed an OAuth code/URL, `NN-34`). The corrected invariant: the log
+    line still carries the request id and the exception type name -- enough
+    to find and classify the failure -- but `exc_info` is never attached."""
     with caplog.at_level(logging.ERROR):
         response = await client.get("/broken/raises")
     body = _OpaqueErrorBody.model_validate(response.json())
     matching = [r for r in caplog.records if body.request_id in r.getMessage()]
     assert matching, "no server log line carries the response's request id"
-    assert any(r.exc_info for r in matching), "log line must carry the traceback"
+    assert any("RuntimeError" in r.getMessage() for r in matching), (
+        "log line must name the exception type"
+    )
+    assert not any(r.exc_info for r in matching), (
+        "exc_info must never be attached -- str(exc) is not under this "
+        "codebase's control for a real vendor exception (CR-02)"
+    )
 
 
 async def test_successful_response_carries_a_request_id_header(

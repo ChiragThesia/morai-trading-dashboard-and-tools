@@ -315,10 +315,9 @@ async def test_no_log_record_contains_the_code_from_a_real_vendor_exception_shap
         params={"code": fake_code, "grant_type": "authorization_code"},
     )
     bad_response = httpx.Response(400, request=bad_request)
-    try:
+    with pytest.raises(httpx.HTTPStatusError) as raised:
         bad_response.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        vendor_exc: httpx.HTTPStatusError = exc
+    vendor_exc = raised.value
     # Sanity: prove the fixture itself carries the secret, so a later green
     # result means the handler redacted it -- not that the fixture never
     # had it.
