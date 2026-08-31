@@ -69,6 +69,11 @@ jobs:
     env:
       # Local-only, CI-only credential matching docker-compose.yml -- not a real secret.
       DATABASE_URL: postgresql://morai:morai@localhost:5432/morai
+      # Local-only, CI-only credential for the least-privilege `morai_app` role
+      # migration 0003 creates -- not a real secret. Short and letters-only so
+      # test_no_tracked_file_carries_a_real_looking_postgres_password keeps
+      # passing by shape, not by exception.
+      MORAI_APP_DB_PASSWORD: moraiapp
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.0.1
