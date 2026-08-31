@@ -1,5 +1,5 @@
-"""The tracer (AUTH-07) and the admin-driven account lifecycle (AUTH-01,
-AUTH-02, AUTH-05, AUTH-08).
+"""The tracer (AUTH-07), the admin-driven account lifecycle (AUTH-01,
+AUTH-02, AUTH-05, AUTH-08), and login (AUTH-02, AUTH-03).
 
 Every route declares its contract by return type annotation, never
 `response_model=` (D-11), matching `api/app.py`'s existing routes.
@@ -7,10 +7,11 @@ Every route declares its contract by return type annotation, never
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import TypeAdapter
 from sqlalchemy import select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
@@ -21,13 +22,16 @@ from morai.api.models_identity import (
     AdminCreateUserRequest,
     AdminCreateUserResponse,
     AdminResetPasswordResponse,
+    LoginRequest,
+    LoginResponse,
     SetupRequest,
     SetupResponse,
 )
 from morai.db.models import GateUserScopedProbe, User
+from morai.db.models import Session as SessionRow
 from morai.db.session import get_db_session
 from morai.identity.audit import get_user_for_management, open_audited_read
-from morai.identity.passwords import hash_password
+from morai.identity.passwords import hash_password, needs_rehash, verify_password
 from morai.identity.rls import require_rls_context
 from morai.identity.sessions import (
     AuthenticatedUser,
@@ -35,6 +39,7 @@ from morai.identity.sessions import (
     get_current_user,
 )
 from morai.identity.setup_tokens import TokenPurpose, consume_token, issue_token
+from morai.identity.tokens import generate_token, hash_token
 
 router = APIRouter()
 
@@ -45,6 +50,22 @@ router = APIRouter()
 # in the moment and consumed promptly.
 _SETUP_TOKEN_TTL = timedelta(days=7)
 _RESET_TOKEN_TTL = timedelta(hours=1)
+
+_SESSION_COOKIE_TTL = timedelta(days=30)
+
+# T-02-36: built once at import time, from a fixed throwaway string -- never
+# per request, which would itself be a timing difference. Both login failure
+# branches (unknown username, and an account whose password_hash is still
+# null) verify against this so neither skips the Argon2 cost the real
+# wrong-password path pays, and neither is a username or account-state
+# oracle in status, body, or timing class.
+_DUMMY_LOGIN_HASH = hash_password("not-a-real-password -- timing control only")
+
+# `login_lookup(text)`'s row (migration 0004) reads as `Any` through raw
+# `text()` SQL -- same untyped-boundary shape `identity/rls.py` already
+# narrows with a TypeAdapter (D-06), not `cast`.
+_UUID: TypeAdapter[UUID] = TypeAdapter(UUID)
+_OPTIONAL_STR: TypeAdapter[str | None] = TypeAdapter(str | None)
 
 
 class UserScopedProbeResponse(ApiModel):
@@ -215,3 +236,109 @@ async def setup(
         )
     await session.commit()
     return SetupResponse()
+
+
+@router.post("/login")
+async def login(
+    body: LoginRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_db_session),
+) -> LoginResponse:
+    """Unauthenticated -- username and password from an untrusted caller are
+    the only credentials, and no RLS context exists yet: establishing one is
+    what a successful login does.
+
+    **Migration 0004's `login_lookup(text)`, not `select(User)`.** `users`
+    carries `self_or_admin`, `FORCE`d (migration 0003) -- with no context
+    set, that policy permits nothing, so an ordinary ORM `SELECT` here
+    returns zero rows for every username, correct or not (found as a Rule 1
+    bug during this task's own RED: every correct-credentials test failed
+    401, not the 200 `<done>` expects). `login_lookup` is a `SECURITY
+    DEFINER` function, exposing exactly the two columns login needs (`id`,
+    `password_hash`) for exactly one row, without widening what an
+    unauthenticated caller can read from `users` any further than that --
+    see the migration's own docstring for why a wider RLS policy was
+    rejected instead.
+
+    Unknown username and wrong password are indistinguishable in status,
+    body and timing class (T-02-36): both raise the identical
+    `HTTPException`, and both pay exactly one Argon2 verify -- the real
+    stored hash on the wrong-password path, `_DUMMY_LOGIN_HASH` on every
+    other path (unknown username, or an account created but never set up
+    via `/setup`, D2-02/AUTH-01).
+    """
+    row = (
+        await session.execute(
+            text("SELECT * FROM login_lookup(:username)"),
+            {"username": body.username},
+        )
+    ).one_or_none()
+
+    if row is None:
+        verify_password(_DUMMY_LOGIN_HASH, body.password)
+        raise HTTPException(status_code=401, detail="invalid credentials")
+
+    user_id = _UUID.validate_python(row[0])
+    stored_hash = _OPTIONAL_STR.validate_python(row[1])
+
+    if stored_hash is None:
+        verify_password(_DUMMY_LOGIN_HASH, body.password)
+        raise HTTPException(status_code=401, detail="invalid credentials")
+
+    if not verify_password(stored_hash, body.password):
+        raise HTTPException(status_code=401, detail="invalid credentials")
+
+    # The password is verified -- establish the RLS context now, same as
+    # /setup does immediately after its own pre-authentication lookup, so
+    # every further touch of `users` (the rehash below) goes through the
+    # normal, RLS-respecting morai_app path rather than needing a second
+    # SECURITY DEFINER escape hatch.
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+    )
+
+    if needs_rehash(stored_hash):
+        # A lazy per-login upgrade, not a bulk migration -- if the Railway
+        # measurement (D2-03, tools/measure_argon2.py) forces a parameter
+        # change, existing hashes catch up one login at a time.
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(password_hash=hash_password(body.password))
+        )
+
+    raw_token = generate_token()
+    session.add(
+        SessionRow(
+            token_hash=hash_token(raw_token),
+            user_id=user_id,
+            expires_at=datetime.now(UTC) + _SESSION_COOKIE_TTL,
+        )
+    )
+    await session.commit()
+
+    # World B (the UI ends up on a different registrable domain than the
+    # API, e.g. a Vercel domain calling a railway.app API) changes exactly
+    # three things at this call site, and only here (D2-07, 02-RESEARCH.md
+    # "Cookie attributes"):
+    #   1. samesite="lax" -> samesite="none", which Starlette requires
+    #      pairing with secure=True (already set below) -- browsers reject
+    #      SameSite=None without Secure.
+    #   2. CORS configured with an explicit origin, never "*", plus
+    #      Access-Control-Allow-Credentials: true.
+    #   3. A real CSRF defence (a double-submit token) -- SameSite=Lax *is*
+    #      the CSRF mitigation in World A and is gone once it flips to None.
+    response.set_cookie(
+        key="morai_session",
+        value=raw_token,
+        max_age=int(_SESSION_COOKIE_TTL.total_seconds()),  # 30 days -- D2-06,
+        # persistent so the session survives a browser restart; no sliding
+        # renewal -- every renewal path is another place a revoked session
+        # can be resurrected.
+        httponly=True,
+        secure=True,
+        samesite="lax",  # World A default -- see the three-item list above
+        path="/",
+    )
+    return LoginResponse()

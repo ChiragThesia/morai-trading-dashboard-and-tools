@@ -35,3 +35,15 @@ class SetupResponse(ApiModel):
     """Deliberately empty. A successful setup must not confirm which account
     it belonged to -- no user id, no username, nothing beyond the 200
     itself."""
+
+
+class LoginRequest(ApiModel):
+    username: str
+    password: str
+
+
+class LoginResponse(ApiModel):
+    """Deliberately empty -- same reasoning as `SetupResponse`. The session
+    cookie is the only credential a client needs; `/me` is where a client
+    asks who it is, and a login response that names the account is one more
+    place a token-adjacent value can end up in a log."""
