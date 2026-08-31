@@ -11,15 +11,24 @@ clean assertion and the planted-collision assertion, so the two cannot drift
 apart -- and by the drift-guard proof, so a schema change cannot silently
 outrun it either.
 
-Scope note: `user_data_keys.wrap_nonce` is deliberately EXCLUDED from this
-query and from the drift guard's expected column set. It is encrypted under
-the single global KEK, not a per-`(user_id, key_version)` DEK -- grouping it
-into this exact triple would be a modeling error, not an omission: two
-different users legitimately sharing a `wrap_nonce` value would collide
-under the *real* key (the one global KEK) but land in different
-`(user_id, key_version)` groups here and never be flagged. Wrapped-DEK nonce
-uniqueness is a different invariant with a different key domain; not this
-plan's scope.
+Two key domains, two queries. `user_data_keys.wrap_nonce` is excluded from
+`_NONCE_COLLISION_QUERY` above and checked by `_KEK_NONCE_COLLISION_QUERY`
+instead. It is encrypted under the single global KEK, not a
+per-`(user_id, key_version)` DEK, so folding it into that triple would be a
+modeling error: two different users sharing a `wrap_nonce` collide under the
+*real* key -- the one live KEK -- but land in different
+`(user_id, key_version)` groups and would never be flagged.
+
+That reasoning is right, and an earlier version of this module drew the
+wrong conclusion from it: it excluded `wrap_nonce` from the query AND from
+the drift guard, and stopped there. The domain mismatch is a reason to write
+a second, correctly-scoped query -- not a reason to leave the invariant
+unchecked. A `wrap_nonce` reuse across two users is the most damaging
+collision available in this schema (it forfeits confidentiality and
+authenticity for two wrapped DEKs at once, and every user's trade data hangs
+off those DEKs), and until `test_no_two_users_share_a_wrap_nonce_under_the_live_kek`
+existed, nothing in this suite would have reported it. Found in Phase 3's
+code review as WR-01.
 
 NIST SP 800-38D Sec 8.3 caps random-nonce GCM at 2^32 invocations per key.
 This project's realistic volume -- a handful of users, generously 5,000
@@ -33,6 +42,7 @@ is added here or elsewhere in this phase.
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -100,9 +110,8 @@ GROUP BY user_id, key_version, nonce
 HAVING COUNT(*) > 1
 """
 
-# The schema-drift guard's ground truth: every (table, nonce column) pair
-# the query above unions over, excluding user_data_keys.wrap_nonce (see
-# module docstring).
+# The schema-drift guard's ground truth for the per-user DEK domain: every
+# (table, nonce column) pair the query above unions over.
 _EXPECTED_NONCE_COLUMNS: frozenset[tuple[str, str]] = frozenset(
     {
         ("fills", "quantity_nonce"),
@@ -112,12 +121,36 @@ _EXPECTED_NONCE_COLUMNS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
+# The KEK domain. `user_data_keys.wrap_nonce` is encrypted under the single
+# global KEK, so its uniqueness scope is the whole table -- NOT
+# `(user_id, key_version)`. Two different users sharing a `wrap_nonce` is a
+# real AES-GCM `(key, nonce)` reuse under the one live key, and the per-user
+# query above structurally cannot see it: those rows land in different
+# groups. It needs its own query, not an exemption.
+#
+# No `key_version` partitioning, and the reason is not obvious:
+# `crypto/rotation.py` overwrites `wrapped_dek` and `wrap_nonce` in place and
+# does NOT bump `key_version`, so `key_version` here tracks the DEK
+# generation, not the KEK's. Every live row is wrapped under the current KEK
+# at all times, so the collision scope is simply every row in the table.
+# Partitioning by `key_version` would hide a real cross-generation collision;
+# there is only ever one live KEK to collide under.
+_EXPECTED_KEK_NONCE_COLUMNS: frozenset[tuple[str, str]] = frozenset(
+    {("user_data_keys", "wrap_nonce")}
+)
+
+_KEK_NONCE_COLLISION_QUERY = """
+SELECT wrap_nonce, COUNT(*) AS n
+FROM user_data_keys
+GROUP BY wrap_nonce
+HAVING COUNT(*) > 1
+"""
+
 _DRIFT_GUARD_QUERY = """
 SELECT table_name, column_name
 FROM information_schema.columns
 WHERE table_schema = 'public'
   AND column_name ~ '_nonce$'
-  AND table_name <> 'user_data_keys'
 ORDER BY table_name, column_name
 """
 
@@ -303,19 +336,76 @@ async def test_union_query_returns_exactly_the_planted_cross_column_collision(
 async def test_nonce_column_drift_guard_matches_the_union_query(
     superuser_db_session: AsyncSession,
 ) -> None:
-    """The set of `(table, nonce column)` pairs the query unions over must
-    equal every `_nonce`-suffixed column `information_schema.columns`
-    actually reports (excluding `user_data_keys.wrap_nonce`, see module
-    docstring) -- a new ciphertext column added in a later phase without a
-    matching branch fails this, not just the union query silently missing
-    it."""
+    """Every `_nonce`-suffixed column `information_schema.columns` reports
+    must be covered by one of the two collision queries -- the per-user DEK
+    union, or the KEK-scoped `user_data_keys` query. A new ciphertext column
+    added in a later phase without a matching branch fails this, not just
+    the union query silently missing it.
+
+    The guard scans the WHOLE schema, `user_data_keys` included. It used to
+    exclude that table outright, which meant a second nonce column added
+    there later would have escaped both queries and this guard as well."""
     rows = (await superuser_db_session.execute(text(_DRIFT_GUARD_QUERY))).all()
     actual = frozenset((row[0], row[1]) for row in rows)
-    assert actual == _EXPECTED_NONCE_COLUMNS, (
-        "A ciphertext nonce column exists that the union query does not "
-        f"cover, or vice versa. Query covers: {sorted(_EXPECTED_NONCE_COLUMNS)}, "
+    covered = _EXPECTED_NONCE_COLUMNS | _EXPECTED_KEK_NONCE_COLUMNS
+    assert actual == covered, (
+        "A ciphertext nonce column exists that neither collision query "
+        f"covers, or vice versa. Queries cover: {sorted(covered)}, "
         f"information_schema reports: {sorted(actual)}"
     )
+
+
+async def test_no_two_users_share_a_wrap_nonce_under_the_live_kek(
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """Criterion 1b in the KEK domain. Every row of `user_data_keys` is
+    wrapped under the one live master key, so two users sharing a
+    `wrap_nonce` is an AES-GCM `(key, nonce)` reuse against that key -- the
+    catastrophic case, since it leaks the XOR of two wrapped DEKs and
+    forfeits the authentication guarantee for both.
+
+    The per-user union query cannot catch this: it groups by
+    `(user_id, key_version, nonce)`, so two users colliding land in two
+    different groups and are never compared."""
+    rows = (await superuser_db_session.execute(text(_KEK_NONCE_COLLISION_QUERY))).all()
+    assert rows == [], (
+        f"wrap_nonce reused across {len(rows)} group(s) under the live KEK: {rows}"
+    )
+
+
+async def test_the_kek_query_reports_a_planted_wrap_nonce_collision(
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """The positive control for the query above. Without it, a query that
+    can never return a row is indistinguishable from one whose subject never
+    collides -- and this project's own standard is that a gate which has
+    never rejected anything is decoration.
+
+    Forces two users' `wrap_nonce` values equal, asserts the query reports
+    exactly that one group, then rolls back so nothing is left behind."""
+    duplicate_nonce = os.urandom(12)
+    await superuser_db_session.execute(
+        text("UPDATE user_data_keys SET wrap_nonce = :n WHERE user_id = :u"),
+        {"n": duplicate_nonce, "u": provisioned_users.user_a},
+    )
+    await superuser_db_session.execute(
+        text("UPDATE user_data_keys SET wrap_nonce = :n WHERE user_id = :u"),
+        {"n": duplicate_nonce, "u": provisioned_users.user_b},
+    )
+    try:
+        rows = (
+            await superuser_db_session.execute(text(_KEK_NONCE_COLLISION_QUERY))
+        ).all()
+        assert len(rows) == 1, f"expected exactly one collision group, got {rows}"
+        # Raw `text()` Rows type every column as `Any`; `TypeAdapter` is this
+        # project's narrowing at such a boundary (D-06) -- it checks the shape
+        # at runtime, unlike `cast`, which only asserts it to the checker.
+        assert _BYTES.validate_python(rows[0][0]) == duplicate_nonce
+        assert _INT.validate_python(rows[0][1]) == 2
+    finally:
+        await superuser_db_session.rollback()
 
 
 async def test_drift_guard_fails_when_a_nonce_column_is_uncovered(
