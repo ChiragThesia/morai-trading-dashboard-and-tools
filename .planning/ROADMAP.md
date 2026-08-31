@@ -94,7 +94,7 @@ Plans:
   3. A request authenticated as user A that asks for user B's trading data returns not-found, including when A is the admin, and the isolation suite passes against the real Railway pooling configuration rather than only a direct-connection test container.
   4. Every privileged read of user data writes an audit row naming reader, subject, and time, and a privileged read that bypasses the audited path does not compile or does not pass review.
 
-**Plans**: 4/6 plans executed, 4 waves
+**Plans**: 5/6 plans executed, 4 waves
 
 Plans:
 
@@ -102,7 +102,7 @@ Plans:
 - [x] 02-02-PLAN.md — Wave 2. The isolation suite made capable of failing: a superuser positive control behind every zero-rows claim, admin-not-exempt by name, and a boot gate on the runtime role
 - [x] 02-03-PLAN.md — Wave 2. Argon2id at OWASP's higher-security band, with the Railway measurement scripted and recorded as owed
 - [x] 02-04-PLAN.md — Wave 2. The audit capability object, with a `tests/gate/` fixture proving both checkers reject the natural bypass by name
-- [ ] 02-05-PLAN.md — Wave 3. Setup and reset links: one atomic `DELETE ... RETURNING` mechanism, three routes, and the admin bootstrap script
+- [x] 02-05-PLAN.md — Wave 3. Setup and reset links: one atomic `DELETE ... RETURNING` mechanism, three routes, and the admin bootstrap script
 - [ ] 02-06-PLAN.md — Wave 4. Login, logout with server-side destruction, and the operator runbook for the four steps this session could not perform
 
 **Criterion 3, pooling clause — met in substance.** The spike's answer is that there is no
@@ -320,7 +320,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/10 | In Progress|  |
-| 2. Identity, Sessions, and Tenant Isolation | 4/6 | In Progress|  |
+| 2. Identity, Sessions, and Tenant Isolation | 5/6 | In Progress|  |
 | 3. Envelope Encryption and the Schema Contract | 0/TBD | Not started | - |
 | 4. Schwab Connection and Token Lifecycle | 0/TBD | Not started | - |
 | 5. Fill Pairing and the Oracle Gate | 0/TBD | Not started | - |
