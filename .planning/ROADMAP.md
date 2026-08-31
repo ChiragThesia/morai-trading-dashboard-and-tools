@@ -150,7 +150,7 @@ Plans:
 **Depends on**: Phase 3
 **Parallel with**: Phase 5 (derivation needs no broker connection)
 **Requirements**: CONN-01, CONN-02, CONN-03, CONN-04, CONN-05, CONN-06, CONN-07
-**Owns open question**: `schwab-py` type coverage — whether it ships a `py.typed` marker. UNVERIFIED. The answer sets the shape of the project-owned `Protocol` that wraps every vendor call, which is what keeps OPS-01 honest at the vendor boundary.
+**Owns open question**: `schwab-py` type coverage — whether it ships a `py.typed` marker. **SETTLED (D4-01, measured):** the published 1.5.1 wheel was downloaded and listed and contains no `py.typed` anywhere; `types-schwab-py` and `schwab-py-stubs` both 404 on PyPI. Under PEP 561 that makes every vendor symbol resolve to `Any`. The answer shapes the phase: a local `typings/schwab/` partial stub package makes the vendor legible to both checkers, and the project-owned `Protocol` sits alongside it — complementary, not alternatives — keeping OPS-01 honest at the vendor boundary with exactly one suppression in the tree.
 **Success Criteria** (what must be TRUE):
 
   1. Two users can run OAuth callbacks concurrently and each lands on their own connection record; a `state` value replayed a second time is rejected because the first use consumed it in one atomic `DELETE ... RETURNING` (`NN-35`).
@@ -159,7 +159,15 @@ Plans:
   4. Two concurrent refreshes of one user's token serialise on that user's own lock and neither produces `invalid_grant`, while a refresh for user A never blocks a refresh for user B.
   5. Connection health reads back as healthy, expiring-soon, or expired with an `expires_at`, alongside the timestamp of the last successful sync, so a silent gap is a queryable fact rather than an absence.
 
-**Plans**: TBD
+**Plans**: 4 plans, 3 waves
+
+Plans:
+
+- [ ] 04-01-PLAN.md — Wave 1. Tracer: `schwab-py` pinned, the local `typings/schwab/` stubs that make the untyped vendor legible to both checkers, migration 0010 (`schwab_connections`, RLS, encrypted token and account hash), the `Protocol` pair and the one adapter that imports the vendor, and one full OAuth handshake against the fake proved to land its token in Postgres — plus account deletion and the two gate meta-tests
+- [ ] 04-02-PLAN.md — Wave 2. Criteria 1, 2 and 3: barrier-enforced concurrent callbacks each landing their own row, one `oauth_state` nonce consumed exactly once across two engines, no code or redirect URL in any captured log or body, and a re-auth that repairs one row instead of accumulating two
+- [ ] 04-03-PLAN.md — Wave 2. Criterion 4: the `pg_advisory_xact_lock(hashtext(user_id))` critical section acquired before the token read, with both positive controls — one user's concurrent refreshes serialise with no `invalid_grant`, and user A's refresh never blocks user B's
+- [ ] 04-04-PLAN.md — Wave 3. Criterion 5: all three health bands proven at their boundaries with an injected `now`, an `expires_at` a refresh cannot move, and `last_synced_at` left honestly null because no sync exists until Phase 6
+
 **UI hint**: no
 
 ### Phase 5: Fill Pairing and the Oracle Gate
