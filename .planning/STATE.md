@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-current_phase: 03
-current_phase_name: Envelope Encryption and the Schema Contract
+current_phase: 04
+current_phase_name: Schwab Connection and Token Lifecycle
 status: executing
 stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-08-31T14:25:34.917Z"
+last_updated: "2026-08-31T18:29:26.878Z"
 last_activity: 2026-08-31
-last_activity_desc: Phase 03 execution started
-state_head: 4e63c6b240b9e9f9a0a8e74228cce1a0d1801d06
+last_activity_desc: Phase 04 execution started
+state_head: fd4c88220c9bc58c75ef6f1d777c38a9991c55b0
 progress:
   total_phases: 11
   completed_phases: 0
-  total_plans: 23
-  completed_plans: 13
+  total_plans: 27
+  completed_plans: 20
   percent: 0
 ---
 
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** The ledger is correct across rolls and settlements — the sum of realised P&L over any
 window equals the broker's cash delta over that window, checked every ingest cycle.
-**Current focus:** Phase 03 — Envelope Encryption and the Schema Contract
+**Current focus:** Phase 04 — Schwab Connection and Token Lifecycle
 
 ## Current Position
 
-Phase: 03 (Envelope Encryption and the Schema Contract) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 03
-Last activity: 2026-08-31 — Phase 03 execution started
+Phase: 04 (Schwab Connection and Token Lifecycle) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 04
+Last activity: 2026-08-31 — Phase 04 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -128,6 +128,7 @@ Five open decisions are assigned to owning phases rather than left floating — 
   `reportAny` flags every call. The project therefore owns a `Protocol` over exactly the
   four methods it uses, with one adapter module as the sole importer of `schwab` and
   `model_validate()` at every call site. Recorded as `D4-01`..`D4-05` in `04-CONTEXT.md`.
+
 - Phase 6: Railway execution model, cron container vs long-running worker — Phase 8 inherits it
 - Phase 9: Reconciliation window boundary — RECON-01 is untestable until it is fixed
 
@@ -165,6 +166,7 @@ NEW infrastructure-only items, deferred on the same basis as Phase 2's (user dec
    `CRYPT-01`'s own Manual-Only Verification in `03-VALIDATION.md`: a local test can prove the
    app reads the KEK from its environment, never that production has one configured. Without
    it the deployed services cannot unwrap any user's data key.
+
 4. `tools/rotate_kek.py` has never been run against a real deployment (stated plainly in
    `03-04-SUMMARY.md`). Rotation is verified locally as all-or-nothing with byte-identical
    trade ciphertext, but an operator decision is owed on whether shipping an unexercised
