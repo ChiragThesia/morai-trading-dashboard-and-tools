@@ -14,9 +14,26 @@ What exists now:
 | Deployed | Railway project `morai-journal` — `web` + `worker` + Postgres, live at `web-production-183cf.up.railway.app` |
 | Migrations | Alembic, sole authority. Procrastinate's own schema is wrapped into revision 0002 |
 
-Run the gate with `bash tools/gate.sh`. Locally use `uv run pytest -m "not db"` — there is no
-reachable database on a dev machine (Docker's daemon is broken here, and Railway's Postgres is
-private-network-only), so DB-marked tests run in CI. They fail loudly rather than skipping.
+## Running the tests — read this before you push anything
+
+**There is a local Postgres. Use it.** The full suite, DB tests included, runs in about 12 seconds:
+
+```bash
+export DATABASE_URL="postgresql://morai:morai@localhost:5432/morai"
+export MORAI_APP_DB_PASSWORD="localdevpassword"
+export MORAI_ENV_FILE=""
+uv run pytest -q            # all 103, ~12s
+bash tools/gate.sh          # + ruff, basedpyright, mypy
+```
+
+Postgres 18 runs natively via Homebrew (`brew services start postgresql@18`) — **not** Docker,
+whose daemon is broken on this machine. Same major as CI and Railway, and the `morai` role is a
+superuser exactly as `POSTGRES_USER` is in CI, so local and CI agree on RLS behaviour.
+`docker-compose.yml` is a leftover; ignore it.
+
+**Do not push to CI to find out whether a test passes.** A CI round-trip is roughly three minutes
+against twelve seconds locally. Phase 2 lost four hours to that loop. Push when the local gate is
+green, not to discover whether it is.
 
 If you are looking for `apps/` or `packages/`, those were v1's layout and are gone. This is a `src/`
 layout with one installable package.

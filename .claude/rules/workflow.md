@@ -96,3 +96,27 @@ Conflicts → surface them, don't silently pick.
 - [docs/learnings/README.md](../../docs/learnings/README.md) - how the 337 entries are organised and cited
 - [REBUILD-BRIEF.md](../../REBUILD-BRIEF.md) - scope, PORT/REWRITE/DROP, open questions
 - [docs/docs-on-docs/hemingway-style.md](../../docs/docs-on-docs/hemingway-style.md) - prose style, enforced on all documentation
+
+### Speed — do not burn hours on ceremony
+
+Three rules, each written after losing real time to its absence.
+
+**Test locally. A CI round-trip is a last resort, not a workflow.** Postgres 18 runs natively on
+this machine (`brew services start postgresql@18`) and the full suite including DB tests takes ~12
+seconds. CI takes ~3 minutes. See `CLAUDE.md` for the exact env vars. Phase 2's isolation plan spent
+**four hours** in a push-and-wait loop that local Postgres would have collapsed into minutes. Push
+when the local gate is green — not to find out whether it is.
+
+**Take the cheapest honest red.** TDD requires observing a test fail before implementing it. It does
+NOT require manufacturing an interesting failure. The natural red — `ImportError` on a module that
+does not exist yet, `AttributeError` on an unwritten function — is a real red and costs nothing.
+**Never build temporary scaffolding to produce a more satisfying one.** Phase 2's `02-02` plan
+instructed an executor to "force the red by temporarily pointing `app_db_session` at `async_dsn`",
+and that single instruction produced three throwaway commits, four hours, and zero implementation.
+A property of the finished suite — that it is capable of failing — is proven by the guards it ships
+with, not by a ceremony performed before it exists.
+
+**Time-box and report.** If a single plan task has run past roughly thirty minutes with no committed
+progress, stop and say so. A blocker reported early is cheap. The same blocker discovered four hours
+later has cost the run its whole night. This applies to executors especially: "blocked because X" is
+always a better outcome than a fourth variation of a fix that has already failed three times.
