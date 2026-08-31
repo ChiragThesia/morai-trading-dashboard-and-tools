@@ -16,7 +16,13 @@ export default defineRailway(() => {
   // first slow migration.
   const web = service("web", {
     source: github(REPO, { rootDirectory: "." }),
-    start: "alembic upgrade head && hypercorn --bind '[::]:$PORT' morai.api.app:app",
+    // Double quotes around the bind, not single. Single quotes stop the shell
+    // expanding $PORT, so hypercorn receives the literal "[::]:$PORT", tries to
+    // resolve $PORT as a service name, and dies with
+    // `socket.gaierror: [Errno -2] Name or service not known` before it ever
+    // listens -- which then presents as a healthcheck timeout rather than as a
+    // config error. Measured on deploy 7b637749.
+    start: 'alembic upgrade head && hypercorn --bind "[::]:$PORT" morai.api.app:app',
     healthcheck: "/health",
     env: { DATABASE_URL: Postgres.env.DATABASE_URL },
   });
