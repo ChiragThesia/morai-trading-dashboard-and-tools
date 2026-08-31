@@ -10,10 +10,16 @@ here, Railway's Postgres is private-network-only).
 
 Fixtures (`app_db_session`, `superuser_db_session`, `seeded_users`,
 `clean_identity_tables`) live in `tests/identity/conftest.py`, one directory
-below this file, so pytest's normal conftest-scoping does not reach them --
-`pytest_plugins` below registers that module explicitly rather than
-importing its fixture functions by name (which would leave unused imports
-under this project's `F401` gate).
+below this file, so pytest's normal conftest-scoping does not reach them.
+`pytest_plugins = ["tests.identity.conftest"]` was tried first and rejected
+(Rule 1, measured): pytest already auto-loads that file as a directory
+conftest for everything under `tests/identity/`, and registering the same
+module a second time under a dotted name raises `ValueError: Plugin already
+registered under a different name` the moment both are collected in one
+session. Importing the fixture *functions* directly avoids the double
+registration -- pytest resolves a fixture by name from the requesting
+module's own namespace, so an imported `@pytest.fixture` object works
+exactly like a locally-defined one.
 """
 
 from __future__ import annotations
@@ -28,9 +34,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.db.models import GateUserScopedProbe
 from morai.settings import get_settings
-from tests.identity.conftest import SeededUsers
+from tests.identity.conftest import (  # noqa: F401 -- fixtures, resolved by pytest via name lookup in this module's namespace, not called directly
+    SeededUsers,
+    app_db_session,
+    clean_identity_tables,
+    seeded_users,
+    superuser_db_session,
+)
 
-pytest_plugins = ["tests.identity.conftest"]
 pytestmark = pytest.mark.db
 
 # TEMPORARY -- red evidence only, per 02-02-PLAN.md Task 1's <action>: "force
