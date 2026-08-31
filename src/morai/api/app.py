@@ -15,11 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.api.errors import install_error_handling
 from morai.api.models import MoneyRoundtripRequest, MoneyRoundtripResponse
+from morai.api.routes_identity import router as identity_router
 from morai.db.models import GateMoneyProbe
 from morai.db.session import get_db_session
 
 app = FastAPI()
 install_error_handling(app)
+app.include_router(identity_router)
 
 
 class HealthResponse(BaseModel):
