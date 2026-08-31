@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 import pytest
@@ -116,6 +117,43 @@ def test_app_async_dsn_raises_when_password_unset(
     assert "host" not in message
     # Same D-15/NN-34 shape as `load_settings`: nothing carrying a value stays
     # attached on the raised exception for a chain-walking logger to find.
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_master_key_bytes_raises_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.delenv("MORAI_MASTER_KEY", raising=False)
+    monkeypatch.setenv("DATABASE_URL", RAW_DSN)
+    settings = Settings.model_validate({})
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _ = settings.master_key_bytes
+
+    message = str(exc_info.value)
+    assert "morai_master_key" in message
+    # Same D-15/NN-34 shape as `app_async_dsn`: nothing carrying a value
+    # stays attached on the raised exception for a chain-walking logger.
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_master_key_bytes_raises_when_wrong_length(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", RAW_DSN)
+    # base64 of 16 bytes, not the required 32 -- the wrong-length case.
+    short_key = base64.b64encode(b"x" * 16).decode()
+    monkeypatch.setenv("MORAI_MASTER_KEY", short_key)
+    settings = Settings.model_validate({})
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _ = settings.master_key_bytes
+
+    message = str(exc_info.value)
+    assert "morai_master_key" in message
+    assert short_key not in message
     assert exc_info.value.__cause__ is None
     assert exc_info.value.__context__ is None
 

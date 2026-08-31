@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 from functools import lru_cache
 
@@ -42,6 +44,12 @@ class Settings(BaseSettings):
     posthog_api_key: SecretStr | None = None
     posthog_host: str = "https://us.i.posthog.com"
 
+    # The KEK (D3-06), base64-encoded in the environment. Optional on the
+    # model for the same reason `morai_app_db_password` is: Alembic and the
+    # worker never unwrap a user's data key and must not die over a
+    # variable they never touch.
+    morai_master_key: SecretStr | None = None
+
     @property
     def async_dsn(self) -> str:
         return self.database_url.get_secret_value().replace(
@@ -78,6 +86,37 @@ class Settings(BaseSettings):
             password=password.get_secret_value(),
         )
         return url.render_as_string(hide_password=False)
+
+    @property
+    def master_key_bytes(self) -> bytes:
+        """The KEK, base64-decoded to exactly 32 bytes for AES-256-GCM
+        (D3-06, CRYPT-01).
+
+        Raises before decoding anything is used if the value is unset, not
+        valid base64, or does not decode to exactly 32 bytes -- naming only
+        the field, following `app_async_dsn`'s own precedent: the raise
+        sits outside any `except`, so no original exception carrying the
+        value stays attached as `__context__` (NN-34).
+        """
+        key = self.morai_master_key
+        if key is None:
+            raise RuntimeError(
+                "Configuration rejected. `morai_master_key` is required to "
+                "unwrap any user's data key, and is withheld deliberately "
+                "even when present -- values are never rendered (NN-34)."
+            )
+        decoded: bytes | None
+        try:
+            decoded = base64.b64decode(key.get_secret_value(), validate=True)
+        except (binascii.Error, ValueError):
+            decoded = None
+        if decoded is None or len(decoded) != 32:
+            raise RuntimeError(
+                "Configuration rejected. `morai_master_key` must be base64 "
+                "of exactly 32 bytes for AES-256-GCM; its value is withheld "
+                "deliberately (NN-34)."
+            )
+        return decoded
 
 
 def load_settings() -> Settings:
