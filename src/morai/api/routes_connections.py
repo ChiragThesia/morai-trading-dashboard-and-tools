@@ -147,4 +147,5 @@ async def connection(
         health=health.value,
         expires_at=expires_at,
         last_synced_at=record.last_synced_at,
+        reauth_notified_at=record.reauth_notified_at,
     )

@@ -25,3 +25,4 @@ class ConnectionResponse(ApiModel):
     health: str
     expires_at: datetime
     last_synced_at: datetime | None
+    reauth_notified_at: datetime | None
