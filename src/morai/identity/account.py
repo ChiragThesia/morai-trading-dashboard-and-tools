@@ -32,7 +32,7 @@ from uuid import UUID
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.db.models import Event, Fill, Leg, Position
+from morai.db.models import Event, Fill, Leg, Position, SchwabConnection
 from morai.db.models import Session as SessionRow
 from morai.db.models import SetupToken, User, UserDataKey
 
@@ -52,8 +52,15 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
        parents so no foreign key is violated) -- now provably inert
        ciphertext. Deleted for storage and RLS-simplicity reasons, not for
        confidentiality; confidentiality was already won by step 1.
-    3. Identity rows (`sessions`, `setup_tokens`) -- revokes any live session
-       and any outstanding setup or reset token for this user. See the
+    3. Identity rows (`sessions`, `setup_tokens`, `schwab_connections`) --
+       revokes any live session, any outstanding setup or reset token, and
+       any live Schwab connection for this user (Phase 4). A Schwab
+       connection's stored token is a bearer credential against a real
+       brokerage account, so removing the row revokes that access too --
+       but exactly as with the trade rows in step 2, the encrypted token
+       is already made unreadable by step 1 destroying the wrapped data
+       key. This delete exists so the final `DELETE FROM users` has no
+       dangling child, and for storage, not for confidentiality. See the
        module docstring for why this step used to also clear
        `gate_user_scoped_probe`, and no longer needs to.
     4. `users` itself, last -- every foreign key above points at this row.
@@ -67,5 +74,8 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
 
     await session.execute(delete(SessionRow).where(SessionRow.user_id == user_id))
     await session.execute(delete(SetupToken).where(SetupToken.user_id == user_id))
+    await session.execute(
+        delete(SchwabConnection).where(SchwabConnection.user_id == user_id)
+    )
 
     await session.execute(delete(User).where(User.id == user_id))

@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.api.models_identity import AdminCreateUserResponse
 from morai.crypto.envelope import unwrap_dek
-from morai.db.models import Event, Fill, Leg, Position
+from morai.db.models import Event, Fill, Leg, Position, SchwabConnection
 from morai.db.models import Session as SessionRow
 from morai.db.models import SetupToken, User, UserDataKey
 from morai.identity.account import delete_account
@@ -31,6 +31,8 @@ from morai.identity.setup_tokens import TokenPurpose, issue_token
 from morai.identity.tokens import generate_token, hash_token
 from morai.ledger.fills import FillWrite, insert_fills
 from morai.settings import get_settings
+from morai.vendor.connections import upsert_connection
+from morai.vendor.protocol import ExchangedToken
 from tests.identity.conftest import SeededUsers
 from tests.ledger.conftest import (
     SeededPosition,
@@ -308,6 +310,60 @@ async def test_delete_me_with_a_valid_session_deletes_the_account_and_clears_coo
 async def test_delete_me_without_a_session_returns_401(client: AsyncClient) -> None:
     response = await client.delete("/me")
     assert response.status_code == 401
+
+
+async def test_deleting_an_account_with_a_schwab_connection_leaves_no_orphan_row(
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """Phase 4: `schwab_connections.user_id -> users.id` is an uncascaded
+    foreign key -- without the delete Task 2 adds, this transaction fails
+    on that constraint the moment a connection row exists for the account
+    being deleted."""
+    await superuser_db_session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(provisioned_users.user_a)},
+    )
+    await upsert_connection(
+        superuser_db_session,
+        provisioned_users.user_a,
+        ExchangedToken(
+            token={"refresh_token": "user-a-token"}, created_at=_EXECUTION_TIME
+        ),
+        "user-a-account-hash",
+    )
+    await superuser_db_session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(provisioned_users.user_b)},
+    )
+    await upsert_connection(
+        superuser_db_session,
+        provisioned_users.user_b,
+        ExchangedToken(
+            token={"refresh_token": "user-b-token"}, created_at=_EXECUTION_TIME
+        ),
+        "user-b-account-hash",
+    )
+    await superuser_db_session.commit()
+
+    await delete_account(superuser_db_session, provisioned_users.user_a)
+    await superuser_db_session.commit()
+
+    assert (
+        await superuser_db_session.execute(
+            select(SchwabConnection).where(
+                SchwabConnection.user_id == provisioned_users.user_a
+            )
+        )
+    ).all() == []
+    remaining = (
+        await superuser_db_session.execute(
+            select(SchwabConnection).where(
+                SchwabConnection.user_id == provisioned_users.user_b
+            )
+        )
+    ).scalar_one_or_none()
+    assert remaining is not None
 
 
 async def test_deleting_ones_own_account_does_not_touch_another_users(
