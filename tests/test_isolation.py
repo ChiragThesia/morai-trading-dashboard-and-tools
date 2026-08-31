@@ -24,17 +24,23 @@ exactly like a locally-defined one.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 from pydantic import TypeAdapter
-from sqlalchemy import insert, text
+from sqlalchemy import Insert, insert, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.api.routes_identity import UserScopedProbeResponse
-from morai.db.models import GateUserScopedProbe
+from morai.api.routes_identity import PositionResponse
+from morai.db.models import Event, Fill, Leg, Position, UserDataKey
+from morai.ledger.events import EventWrite, insert_events
+from morai.ledger.fills import FillWrite, insert_fills
 from tests.identity.conftest import (
     SeededUsers,
     app_db_session,
@@ -42,6 +48,7 @@ from tests.identity.conftest import (
     seeded_users,
     superuser_db_session,
 )
+from tests.ledger.conftest import clean_ledger_tables, provisioned_users
 
 from tests.identity.test_tracer_scoped_read import (
     _seed_session,  # pyright: ignore[reportPrivateUsage]  # why: reusing plan 02-01's own cookie/auth helper, not reinventing it -- the leading underscore is a test-internal convention, not a real access boundary between two files in the same suite
@@ -57,7 +64,9 @@ __all__ = [
     "SeededUsers",
     "app_db_session",
     "clean_identity_tables",
+    "clean_ledger_tables",
     "client",
+    "provisioned_users",
     "seeded_users",
     "superuser_db_session",
 ]
@@ -76,13 +85,15 @@ _OPTIONAL_STR: TypeAdapter[str | None] = TypeAdapter(str | None)
 
 # Shared by both arms of the positive control (the app-role arm and the
 # superuser arm) -- one module-level constant so the two queries cannot drift
-# apart. No `WHERE user_id = ...` anywhere: the absence is the test.
-_CROSS_TENANT_SELECT = text("SELECT id, user_id FROM gate_user_scoped_probe")
+# apart. No `WHERE user_id = ...` anywhere: the absence is the test. Moved
+# onto `positions` from `gate_user_scoped_probe` (03-06): the isolation
+# proof now runs against a real trading table, not a stand-in for one.
+_CROSS_TENANT_SELECT = text("SELECT id, user_id FROM positions")
 
 # Task 2's HTTP arm parses the listing route's response the same way
 # `tests/identity/test_tracer_scoped_read.py` does -- reused, not reinvented.
-_PROBE_LIST: TypeAdapter[list[UserScopedProbeResponse]] = TypeAdapter(
-    list[UserScopedProbeResponse]
+_POSITION_LIST: TypeAdapter[list[PositionResponse]] = TypeAdapter(
+    list[PositionResponse]
 )
 
 
@@ -148,7 +159,7 @@ async def test_raw_cross_tenant_select_as_app_role_returns_only_the_context_user
     ids = {_UUID.validate_python(row[0]) for row in rows}
     owners = {_UUID.validate_python(row[1]) for row in rows}
     assert owners == {seeded_users.user_a}
-    assert seeded_users.probe_b not in ids
+    assert seeded_users.position_b not in ids
 
 
 async def test_the_identical_select_as_superuser_returns_every_seeded_row(
@@ -163,7 +174,7 @@ async def test_the_identical_select_as_superuser_returns_every_seeded_row(
     await _set_current_user(superuser_db_session, seeded_users.user_a)
     rows = (await superuser_db_session.execute(_CROSS_TENANT_SELECT)).all()
     ids = {_UUID.validate_python(row[0]) for row in rows}
-    assert {seeded_users.probe_a, seeded_users.probe_b} <= ids
+    assert {seeded_users.position_a, seeded_users.position_b} <= ids
 
 
 async def test_unset_context_returns_zero_rows(
@@ -190,10 +201,10 @@ async def test_context_set_to_a_user_with_no_rows_returns_zero_rows(
     app_db_session: AsyncSession,
     seeded_users: SeededUsers,
 ) -> None:
-    """A third seeded user (the admin, who owns no `gate_user_scoped_probe`
-    row) who owns no rows. Distinguishes "the policy excluded rows" from
-    "the context is broken and always excludes everything", which the
-    previous two tests together otherwise leave open."""
+    """A third seeded user (the admin, who owns no `positions` row) who
+    owns no rows. Distinguishes "the policy excluded rows" from "the
+    context is broken and always excludes everything", which the previous
+    two tests together otherwise leave open."""
     await _set_current_user(app_db_session, seeded_users.admin)
     rows = (await app_db_session.execute(_CROSS_TENANT_SELECT)).all()
     assert rows == []
@@ -205,13 +216,13 @@ async def test_a_write_for_another_user_is_rejected_by_the_policy(
 ) -> None:
     """The `WITH CHECK` half of the policy has its own test; a `USING`-only
     policy would let a user plant rows in another user's namespace, and this
-    is the only thing that catches that."""
+    is the only thing that catches that. A plain ORM insert against
+    `positions`, not the fill write path -- this is a test of the policy
+    alone, and needs no data key."""
     await _set_current_user(app_db_session, seeded_users.user_a)
     with pytest.raises(DBAPIError):
         await app_db_session.execute(
-            insert(GateUserScopedProbe).values(
-                user_id=seeded_users.user_b, note="planted by A"
-            )
+            insert(Position).values(user_id=seeded_users.user_b)
         )
 
 
@@ -227,11 +238,13 @@ async def test_admin_is_not_exempt_from_the_probe_table_policy(
 ) -> None:
     """The case most likely to be wrong: the admin genuinely does need
     cross-user reach on `users` for AUTH-01/AUTH-05, so the instinct is to
-    grant it everywhere. `gate_user_scoped_probe` carries no admin clause
-    (migration 0003) -- doing so here would make Phase 3's whole encryption
-    boundary decorative (D2-08, 02-RESEARCH.md Pitfall 4). Context set exactly
-    as the real auth dependency produces it for an admin: both
-    `app.current_user_id` and `app.is_admin`."""
+    grant it everywhere. `positions` carries no admin clause (migration
+    0008) -- doing so here would make this phase's whole encryption boundary
+    decorative (D2-08, D3-18), and now genuinely would: this is no longer a
+    stand-in table proving a principle for later, it is one of the real
+    trading tables the principle protects. Context set exactly as the real
+    auth dependency produces it for an admin: both `app.current_user_id`
+    and `app.is_admin`."""
     await _set_current_user(app_db_session, seeded_users.admin, is_admin=True)
     rows = (await app_db_session.execute(_CROSS_TENANT_SELECT)).all()
     assert rows == []
@@ -261,12 +274,12 @@ async def test_admin_gets_404_for_another_users_probe_row_over_http(
     superuser_db_session: AsyncSession,
     seeded_users: SeededUsers,
 ) -> None:
-    """The HTTP arm. An admin session cookie asking for another user's probe
-    row gets not-found, not forbidden (D2-08) -- the detail route has no
-    admin path."""
+    """The HTTP arm. An admin session cookie asking for another user's
+    position gets not-found, not forbidden (D2-08) -- the detail route has
+    no admin path."""
     token = await _seed_session(superuser_db_session, seeded_users.admin)
     response = await client.get(
-        f"/gate/user-scoped-probe/{seeded_users.probe_b}",
+        f"/gate/positions/{seeded_users.position_b}",
         cookies={"morai_session": token},
     )
     assert response.status_code == 404
@@ -284,11 +297,11 @@ async def test_the_two_404_bodies_are_byte_identical(
     (per-request by design)."""
     token = await _seed_session(superuser_db_session, seeded_users.admin)
     another_users_row = await client.get(
-        f"/gate/user-scoped-probe/{seeded_users.probe_b}",
+        f"/gate/positions/{seeded_users.position_b}",
         cookies={"morai_session": token},
     )
     truly_absent_row = await client.get(
-        f"/gate/user-scoped-probe/{uuid4()}",
+        f"/gate/positions/{uuid4()}",
         cookies={"morai_session": token},
     )
     assert another_users_row.status_code == 404
@@ -313,12 +326,259 @@ async def test_admin_probe_listing_returns_only_the_admins_own_rows(
     seeded_users: SeededUsers,
 ) -> None:
     """The listing route, like the detail route, has no admin path. The admin
-    owns no `gate_user_scoped_probe` row (`SeededUsers`), so the only correct
-    response is an empty list -- never A's or B's rows."""
+    owns no `positions` row (`SeededUsers`), so the only correct response is
+    an empty list -- never A's or B's rows."""
     token = await _seed_session(superuser_db_session, seeded_users.admin)
-    response = await client.get(
-        "/gate/user-scoped-probe", cookies={"morai_session": token}
-    )
+    response = await client.get("/gate/positions", cookies={"morai_session": token})
     assert response.status_code == 200
-    rows = _PROBE_LIST.validate_json(response.content)
+    rows = _POSITION_LIST.validate_json(response.content)
     assert rows == []
+
+
+# --- Task 3: the same guarantee across all five new tables. `positions`
+# already has its own eleven guards above; this widens the cross-tenant and
+# write-rejection claims to `user_data_keys`, `legs`, `fills` and `events`
+# too, so a table added to this schema without a policy fails a test rather
+# than passing silently (T-03-32).
+
+_NEW_TRADING_TABLES = ("user_data_keys", "positions", "legs", "fills", "events")
+
+
+@dataclass(frozen=True)
+class _DualUserRows:
+    """One position (with one leg on it), one fill and one event per user.
+    `positions`/`legs` are seeded through the superuser session -- no
+    dedicated write path exists for them this phase
+    (`tests/ledger/conftest.py`'s own `seeded_position` precedent). `fills`/
+    `events` go through their real write paths (`insert_fills`/
+    `insert_events`), so this guard exercises the encrypted tables as they
+    are actually written, not a hand-built approximation."""
+
+    position_a: UUID
+    position_b: UUID
+
+
+@pytest_asyncio.fixture
+async def two_user_trading_rows(
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> _DualUserRows:
+    position_a = (
+        await superuser_db_session.execute(
+            insert(Position)
+            .values(user_id=provisioned_users.user_a)
+            .returning(Position.id)
+        )
+    ).scalar_one()
+    position_b = (
+        await superuser_db_session.execute(
+            insert(Position)
+            .values(user_id=provisioned_users.user_b)
+            .returning(Position.id)
+        )
+    ).scalar_one()
+    await superuser_db_session.execute(
+        insert(Leg).values(
+            position_id=position_a,
+            user_id=provisioned_users.user_a,
+            leg_role="front",
+            occ_symbol="TWO-USER-GUARD-A",
+            root="SPXW",
+        )
+    )
+    await superuser_db_session.execute(
+        insert(Leg).values(
+            position_id=position_b,
+            user_id=provisioned_users.user_b,
+            leg_role="front",
+            occ_symbol="TWO-USER-GUARD-B",
+            root="SPXW",
+        )
+    )
+    await insert_fills(
+        superuser_db_session,
+        provisioned_users.user_a,
+        [
+            FillWrite(
+                order_id="two-user-guard",
+                occ_symbol="TWO-USER-GUARD-A",
+                leg_index=0,
+                execution_time=datetime.now(UTC),
+                position_effect="OPEN",
+                side="BUY",
+                quantity=Decimal("1"),
+                price_usd=Decimal("100.00"),
+            )
+        ],
+    )
+    await insert_fills(
+        superuser_db_session,
+        provisioned_users.user_b,
+        [
+            FillWrite(
+                order_id="two-user-guard",
+                occ_symbol="TWO-USER-GUARD-B",
+                leg_index=0,
+                execution_time=datetime.now(UTC),
+                position_effect="OPEN",
+                side="BUY",
+                quantity=Decimal("1"),
+                price_usd=Decimal("100.00"),
+            )
+        ],
+    )
+    await insert_events(
+        superuser_db_session,
+        provisioned_users.user_a,
+        [
+            EventWrite(
+                position_id=position_a,
+                event_type="OPEN",
+                event_time=datetime.now(UTC),
+                fill_ids_hash=None,
+                open_debit_usd=Decimal("100.00"),
+                close_credit_usd=None,
+            )
+        ],
+    )
+    await insert_events(
+        superuser_db_session,
+        provisioned_users.user_b,
+        [
+            EventWrite(
+                position_id=position_b,
+                event_type="OPEN",
+                event_time=datetime.now(UTC),
+                fill_ids_hash=None,
+                open_debit_usd=Decimal("100.00"),
+                close_credit_usd=None,
+            )
+        ],
+    )
+    await superuser_db_session.commit()
+    return _DualUserRows(position_a=position_a, position_b=position_b)
+
+
+@pytest.mark.parametrize("table_name", _NEW_TRADING_TABLES)
+async def test_cross_tenant_select_excludes_other_users_rows_on_every_new_table(
+    app_db_session: AsyncSession,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    two_user_trading_rows: _DualUserRows,
+    table_name: str,
+) -> None:
+    """Every table in `_NEW_TRADING_TABLES` gets the same bracketed proof
+    the eleven guards above give `positions` alone: no `WHERE` clause, an
+    app-role arm and a superuser positive control running byte-identical
+    SQL, differing only in which role executes it. A table shipped without
+    a policy fails this parametrized case rather than passing silently."""
+    query = text(f"SELECT user_id FROM {table_name}")
+
+    await _set_current_user(app_db_session, provisioned_users.user_a)
+    app_owners = {
+        _UUID.validate_python(row[0])
+        for row in (await app_db_session.execute(query)).all()
+    }
+    assert app_owners == {provisioned_users.user_a}
+
+    await _set_current_user(superuser_db_session, provisioned_users.user_a)
+    superuser_owners = {
+        _UUID.validate_python(row[0])
+        for row in (await superuser_db_session.execute(query)).all()
+    }
+    assert {provisioned_users.user_a, provisioned_users.user_b} <= superuser_owners
+
+
+def _plant_statement(
+    table_name: str, victim_user_id: UUID, victim_position_id: UUID
+) -> Insert:
+    """The row a compromised or malicious `user_a` session would try to
+    plant in `user_b`'s namespace -- one shape per table, with every
+    NOT NULL column satisfied so the policy's `WITH CHECK` is what fails
+    the insert, not an unrelated column constraint. `key_version`/PK values
+    are chosen never to collide with a row `two_user_trading_rows` already
+    seeded, so a collision can't be mistaken for a policy rejection."""
+    if table_name == "user_data_keys":
+        return insert(UserDataKey).values(
+            user_id=victim_user_id,
+            key_version=99,
+            wrapped_dek=b"planted-wrapped-dek",
+            wrap_nonce=b"planted-nonc",
+        )
+    if table_name == "positions":
+        return insert(Position).values(user_id=victim_user_id)
+    if table_name == "legs":
+        return insert(Leg).values(
+            position_id=victim_position_id,
+            user_id=victim_user_id,
+            leg_role="planted",
+            occ_symbol="PLANTED",
+            root="SPXW",
+        )
+    if table_name == "fills":
+        return insert(Fill).values(
+            user_id=victim_user_id,
+            order_id="planted-order",
+            occ_symbol="PLANTED",
+            leg_index=99,
+            execution_time=datetime.now(UTC),
+            position_effect="OPEN",
+            side="BUY",
+            key_version=1,
+        )
+    if table_name == "events":
+        return insert(Event).values(
+            user_id=victim_user_id,
+            position_id=victim_position_id,
+            event_type="OPEN",
+            event_time=datetime.now(UTC),
+            key_version=1,
+        )
+    raise AssertionError(f"no plant statement defined for {table_name}")
+
+
+@pytest.mark.parametrize("table_name", _NEW_TRADING_TABLES)
+async def test_a_write_for_another_user_is_rejected_on_every_new_table(
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    two_user_trading_rows: _DualUserRows,
+    table_name: str,
+) -> None:
+    """The `WITH CHECK` half of the policy, widened to all five tables.
+    `Fill`'s own `_write_token` constructor gate is irrelevant here -- this
+    uses `insert(Fill)`, a Core statement naming the table directly, the
+    same bypass `Fill.__init__`'s own docstring names as its honest
+    ceiling, exactly like the single-table guard above does for
+    `positions`."""
+    await _set_current_user(app_db_session, provisioned_users.user_a)
+    statement = _plant_statement(
+        table_name, provisioned_users.user_b, two_user_trading_rows.position_b
+    )
+    with pytest.raises(DBAPIError):
+        await app_db_session.execute(statement)
+
+
+@pytest.mark.parametrize("table_name", _NEW_TRADING_TABLES)
+async def test_no_policy_on_a_new_table_names_the_admin_setting(
+    superuser_db_session: AsyncSession, table_name: str
+) -> None:
+    """`users` is the one deliberate admin-clause exception in this schema
+    (migration 0003) -- a data table inheriting it makes this phase's
+    encryption boundary decorative (`identity/audit.py`'s own docstring,
+    D3-18). Now that the encrypted tables exist, this check is mechanical
+    rather than a review convention, matching
+    `tests/ledger/test_schema_contract.py`'s identical assertion for
+    `positions`/`legs`/`events` -- widened here to include `fills` and
+    `user_data_keys` too, which that file's own scope never covered."""
+    rows = (
+        await superuser_db_session.execute(
+            text(
+                "SELECT qual, with_check FROM pg_policies WHERE tablename = :table_name"
+            ),
+            {"table_name": table_name},
+        )
+    ).all()
+    combined = " ".join(
+        f"{_STR.validate_python(row[0])} {_STR.validate_python(row[1])}" for row in rows
+    )
+    assert "is_admin" not in combined

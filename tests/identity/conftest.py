@@ -18,20 +18,22 @@ import pytest_asyncio
 from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from morai.db.models import GateUserScopedProbe, User
+from morai.db.models import Position, User
 from morai.settings import get_settings
 
 
 @pytest_asyncio.fixture
 async def clean_identity_tables(migrated_db: None) -> AsyncGenerator[None, None]:
-    """Truncate every phase-2 table before each db-marked test, on the
-    superuser engine, so tests don't leak rows into each other."""
+    """Truncate every phase-2 table, plus the phase-3 trading tables
+    `seeded_users` now seeds a position into, before each db-marked test, on
+    the superuser engine, so identity tests and ledger tests don't leak rows
+    into each other (03-06 Task 1)."""
     engine = create_async_engine(get_settings().async_dsn)
     async with engine.begin() as conn:
         await conn.execute(
             text(
                 "TRUNCATE TABLE users, sessions, setup_tokens, audit_log, "
-                "gate_user_scoped_probe CASCADE"
+                "user_data_keys, fills, positions, legs, events CASCADE"
             )
         )
     await engine.dispose()
@@ -66,15 +68,18 @@ async def superuser_db_session(
 
 @dataclass(frozen=True)
 class SeededUsers:
-    """Two non-admin users, one admin, and one `gate_user_scoped_probe` row
-    per non-admin user -- inserted through the superuser session, since RLS
-    has not been established for any of these rows at insert time."""
+    """Two non-admin users, one admin, and one `positions` row per
+    non-admin user -- inserted through the superuser session, since RLS has
+    not been established for any of these rows at insert time. Replaces
+    `gate_user_scoped_probe`'s two probe rows (03-06 Task 1): nothing seeds
+    or truncates that table any more, which is what makes 03-07's drop a
+    schema change rather than a coverage loss."""
 
     user_a: UUID
     user_b: UUID
     admin: UUID
-    probe_a: UUID
-    probe_b: UUID
+    position_a: UUID
+    position_b: UUID
 
 
 @pytest_asyncio.fixture
@@ -94,21 +99,21 @@ async def seeded_users(superuser_db_session: AsyncSession) -> SeededUsers:
             insert(User).values(username="admin", is_admin=True).returning(User.id)
         )
     ).scalar_one()
-    probe_a = (
+    position_a = (
         await superuser_db_session.execute(
-            insert(GateUserScopedProbe)
-            .values(user_id=user_a, note="user a's probe row")
-            .returning(GateUserScopedProbe.id)
+            insert(Position).values(user_id=user_a).returning(Position.id)
         )
     ).scalar_one()
-    probe_b = (
+    position_b = (
         await superuser_db_session.execute(
-            insert(GateUserScopedProbe)
-            .values(user_id=user_b, note="user b's probe row")
-            .returning(GateUserScopedProbe.id)
+            insert(Position).values(user_id=user_b).returning(Position.id)
         )
     ).scalar_one()
     await superuser_db_session.commit()
     return SeededUsers(
-        user_a=user_a, user_b=user_b, admin=admin, probe_a=probe_a, probe_b=probe_b
+        user_a=user_a,
+        user_b=user_b,
+        admin=admin,
+        position_a=position_a,
+        position_b=position_b,
     )

@@ -15,10 +15,10 @@ through the superuser session (there is no admin-driven password-setting
 flow independent of `/setup`'s token consumption, and testing login doesn't
 need to also exercise `/setup`).
 
-Task 1's client-restart test proves persistence against
-`/gate/user-scoped-probe` (an existing authenticated route, plan 02-01)
-rather than `/me`, so that test doesn't reach forward into this task's own
-deliverable.
+Task 1's client-restart test proves persistence against `/gate/positions`
+(an existing authenticated route, plan 02-01, repointed onto the real
+`positions` table by 03-06) rather than `/me`, so that test doesn't reach
+forward into this task's own deliverable.
 """
 
 from __future__ import annotations
@@ -116,11 +116,11 @@ async def test_persistent_cookie_survives_a_client_restart(
         raw_token = login.cookies["morai_session"]
 
     async with AsyncClient(transport=transport, base_url="http://test") as second:
-        probe_response = await second.get(
-            "/gate/user-scoped-probe", cookies={"morai_session": raw_token}
+        positions_response = await second.get(
+            "/gate/positions", cookies={"morai_session": raw_token}
         )
 
-    assert probe_response.status_code == 200
+    assert positions_response.status_code == 200
 
 
 async def test_stored_token_hash_is_sha256_of_raw_and_raw_appears_nowhere(

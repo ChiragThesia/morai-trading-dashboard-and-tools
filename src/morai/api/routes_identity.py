@@ -28,7 +28,7 @@ from morai.api.models_identity import (
     SetupRequest,
     SetupResponse,
 )
-from morai.db.models import GateUserScopedProbe, User
+from morai.db.models import Position, User
 from morai.db.models import Session as SessionRow
 from morai.db.session import get_db_session
 from morai.identity.account import delete_account
@@ -76,41 +76,48 @@ _UUID: TypeAdapter[UUID] = TypeAdapter(UUID)
 _OPTIONAL_STR: TypeAdapter[str | None] = TypeAdapter(str | None)
 
 
-class UserScopedProbeResponse(ApiModel):
-    probe_id: UUID
-    note: str
+class PositionResponse(ApiModel):
+    position_id: UUID
+    opened_at: datetime | None
 
 
-@router.get("/gate/user-scoped-probe")
-async def list_user_scoped_probes(
+@router.get("/gate/positions")
+async def list_positions(
     _: AuthenticatedUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
-) -> list[UserScopedProbeResponse]:
+) -> list[PositionResponse]:
     """No `WHERE user_id` -- RLS is the filter (`identity/sessions.py`'s
     `SET LOCAL`), and the absence of that clause is the point of this route.
-    Do not "fix" it; a future reader's instinct will be to add one."""
-    rows = (await session.execute(select(GateUserScopedProbe))).scalars().all()
-    return [UserScopedProbeResponse(probe_id=row.id, note=row.note) for row in rows]
+    Do not "fix" it; a future reader's instinct will be to add one.
+
+    Returns plaintext columns only -- the position id and its `opened_at`.
+    This route exists to prove isolation on the deployed service, exactly
+    the role `gate_user_scoped_probe`'s own docstring assigned to whatever
+    replaced it (AUTH-07, moved onto real trading data in Phase 3); it must
+    not grow into Phase 5's decrypting read API.
+    """
+    rows = (await session.execute(select(Position))).scalars().all()
+    return [
+        PositionResponse(position_id=row.id, opened_at=row.opened_at) for row in rows
+    ]
 
 
-@router.get("/gate/user-scoped-probe/{probe_id}")
-async def get_user_scoped_probe(
-    probe_id: UUID,
+@router.get("/gate/positions/{position_id}")
+async def get_position(
+    position_id: UUID,
     _: AuthenticatedUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
-) -> UserScopedProbeResponse:
+) -> PositionResponse:
     """Again no `WHERE user_id`. A row belonging to another user is filtered
     out by the policy and is therefore *absent* -- so the not-found path is
     reached with no extra code (`02-RESEARCH.md`'s comparison table calls
     this out as falling out of RLS naturally)."""
     row = (
-        await session.execute(
-            select(GateUserScopedProbe).where(GateUserScopedProbe.id == probe_id)
-        )
+        await session.execute(select(Position).where(Position.id == position_id))
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="not found")
-    return UserScopedProbeResponse(probe_id=row.id, note=row.note)
+    return PositionResponse(position_id=row.id, opened_at=row.opened_at)
 
 
 @router.post("/admin/users")
