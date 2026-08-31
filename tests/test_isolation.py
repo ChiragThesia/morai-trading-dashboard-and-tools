@@ -24,17 +24,19 @@ exactly like a locally-defined one.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from uuid import UUID
 
 import pytest
+import pytest_asyncio
 from pydantic import TypeAdapter
 from sqlalchemy import insert, text
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from morai.db.models import GateUserScopedProbe
 from morai.settings import get_settings
-from tests.identity.conftest import (  # noqa: F401 -- fixtures, resolved by pytest via name lookup in this module's namespace, not called directly
+from tests.identity.conftest import (
     SeededUsers,
     app_db_session,
     clean_identity_tables,
@@ -42,22 +44,32 @@ from tests.identity.conftest import (  # noqa: F401 -- fixtures, resolved by pyt
     superuser_db_session,
 )
 
+# Re-exported, not merely imported: these names are never referenced by an
+# expression in this module -- pytest finds them by name lookup in this
+# module's namespace when resolving a same-named fixture parameter. `__all__`
+# tells both ruff (F401) and basedpyright (reportUnusedImport) that the
+# import is the point, without a per-line noqa.
+__all__ = [
+    "SeededUsers",
+    "app_db_session",
+    "clean_identity_tables",
+    "seeded_users",
+    "superuser_db_session",
+]
+
 pytestmark = pytest.mark.db
 
+
 # TEMPORARY -- red evidence only, per 02-02-PLAN.md Task 1's <action>: "force
-# the red by temporarily pointing `app_db_session` at `async_dsn`". A local
-# fixture in this module shadows the real one `pytest_plugins` registers
-# (pytest resolves the closest-scope fixture first), connecting as the
-# superuser role instead of `morai_app` -- reproducing exactly the regression
-# this suite exists to catch. Deleted before the real commit.
-from collections.abc import AsyncGenerator
-
-import pytest_asyncio
-from sqlalchemy.ext.asyncio import create_async_engine
-
-
+# the red by temporarily pointing `app_db_session` at `async_dsn`". This
+# local fixture shadows the imported one above (pytest resolves the
+# module's own namespace before a same-named import elsewhere), connecting
+# as the superuser role instead of `morai_app` -- reproducing exactly the
+# regression this suite exists to catch. Deleted before the real commit.
 @pytest_asyncio.fixture
-async def app_db_session(clean_identity_tables: None) -> AsyncGenerator[AsyncSession, None]:  # noqa
+async def app_db_session(  # noqa: F811 # why: deliberate shadow, temporary red evidence only, see comment above
+    clean_identity_tables: None,
+) -> AsyncGenerator[AsyncSession, None]:
     engine = create_async_engine(get_settings().async_dsn)
     async with AsyncSession(engine) as session:
         yield session
@@ -70,6 +82,8 @@ async def app_db_session(clean_identity_tables: None) -> AsyncGenerator[AsyncSes
 # (`row[0]`), never attribute access, matching that file's own convention.
 _BOOL: TypeAdapter[bool] = TypeAdapter(bool)
 _UUID: TypeAdapter[UUID] = TypeAdapter(UUID)
+_STR: TypeAdapter[str] = TypeAdapter(str)
+_OPTIONAL_STR: TypeAdapter[str | None] = TypeAdapter(str | None)
 
 # Shared by both arms of the positive control (the app-role arm and the
 # superuser arm) -- one module-level constant so the two queries cannot drift
@@ -112,8 +126,10 @@ async def test_the_test_connection_cannot_bypass_rls(
         False,
         False,
     )
-    result = await app_db_session.execute(text("SELECT current_setting('is_superuser')"))
-    assert result.scalar_one() == "off"
+    result = await app_db_session.execute(
+        text("SELECT current_setting('is_superuser')")
+    )
+    assert _STR.validate_python(result.scalar_one()) == "off"
 
 
 async def test_raw_cross_tenant_select_as_app_role_returns_only_the_context_user_rows(
@@ -155,11 +171,13 @@ async def test_unset_context_returns_zero_rows(
     A5: `user_id = NULL` is NULL, not TRUE, so an unset context excludes
     every row). Paired with an assertion that the setting really is unset,
     so this test says *why* it got zero rows rather than only that it did."""
-    setting = (
-        await app_db_session.execute(
-            text("SELECT current_setting('app.current_user_id', true)")
-        )
-    ).scalar_one()
+    setting = _OPTIONAL_STR.validate_python(
+        (
+            await app_db_session.execute(
+                text("SELECT current_setting('app.current_user_id', true)")
+            )
+        ).scalar_one()
+    )
     assert setting is None
     rows = (await app_db_session.execute(_CROSS_TENANT_SELECT)).all()
     assert rows == []
