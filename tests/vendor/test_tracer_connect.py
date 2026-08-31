@@ -1,5 +1,5 @@
 """Task 1: one OAuth handshake, end to end, with the token proved to be in
-Postgres (CONN-01, CONN-02, CONN-03, CONN-04, CONN-07, D4-11).
+Postgres (CONN-01, CONN-02, CONN-03, CONN-04, CONN-05, CONN-07, D4-11).
 
 `@pytest.mark.db` throughout -- every test drives the real ASGI app over
 `httpx.ASGITransport` against real Postgres, matching
@@ -158,6 +158,39 @@ async def test_replaying_the_same_callback_returns_400_and_adds_no_second_row(
         (await superuser_db_session.execute(select(SchwabConnection))).scalars().all()
     )
     assert len(rows) == 1
+
+
+async def test_reauth_repairs_the_row_instead_of_duplicating_it(
+    logged_in_client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    install_fake_schwab_auth: FakeSchwabAuth,
+) -> None:
+    """CONN-05, D4-09: a second, genuinely distinct OAuth handshake for the
+    same already-connected user repairs the existing row -- an `UPDATE`,
+    never a second `INSERT`. Asserted two ways: the row count stays
+    exactly 1, and the row's own `token_created_at` moves to the second
+    handshake's later timestamp, so this is a real repair, not a no-op
+    that happens to leave the count unchanged."""
+    first_state = await _connect(logged_in_client)
+    first_callback = await logged_in_client.get(
+        "/schwab/callback", params={"code": "fake-auth-code-1", "state": first_state}
+    )
+    assert first_callback.status_code == 200
+
+    later_created_at = _TOKEN_CREATED_AT + timedelta(days=1)
+    install_fake_schwab_auth.fixed_created_at = later_created_at
+
+    second_state = await _connect(logged_in_client)
+    second_callback = await logged_in_client.get(
+        "/schwab/callback", params={"code": "fake-auth-code-2", "state": second_state}
+    )
+    assert second_callback.status_code == 200
+
+    rows = (
+        (await superuser_db_session.execute(select(SchwabConnection))).scalars().all()
+    )
+    assert len(rows) == 1
+    assert rows[0].token_created_at == later_created_at
 
 
 async def test_no_log_record_contains_the_code_or_state(
