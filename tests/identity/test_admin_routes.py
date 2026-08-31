@@ -238,6 +238,42 @@ async def test_reset_password_for_a_nonexistent_user_returns_404(
     assert rows == []
 
 
+async def test_setup_with_a_password_reset_token_actually_changes_the_password(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """WR-03: every HTTP-level `/setup` test elsewhere in this file uses a
+    `SETUP`-purpose token from `POST /admin/users`. `/setup` tries `SETUP`
+    first, then falls back to `PASSWORD_RESET` -- this is the fallback
+    branch's only end-to-end coverage, driving `POST
+    /admin/users/{id}/reset-password` then `POST /setup` with the returned
+    `reset_token`. The branch was already correct; this is a regression
+    guard, not a bug fix."""
+    admin_token = await _seed_session(superuser_db_session, seeded_users.admin)
+
+    reset = await client.post(
+        f"/admin/users/{seeded_users.user_a}/reset-password",
+        cookies={"morai_session": admin_token},
+    )
+    assert reset.status_code == 200
+    reset_body = _RESET_RESPONSE.validate_json(reset.content)
+
+    setup = await client.post(
+        "/setup",
+        json={"token": reset_body.reset_token, "password": _NEW_PASSWORD},
+    )
+    assert setup.status_code == 200
+
+    row = (
+        await superuser_db_session.execute(
+            select(User).where(User.id == seeded_users.user_a)
+        )
+    ).scalar_one()
+    assert row.password_hash is not None
+    assert verify_password(row.password_hash, _NEW_PASSWORD) is True
+
+
 async def test_password_update_without_rls_context_matches_zero_rows(
     app_db_session: AsyncSession, seeded_users: SeededUsers
 ) -> None:
