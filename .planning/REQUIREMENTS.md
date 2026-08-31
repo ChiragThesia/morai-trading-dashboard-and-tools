@@ -15,8 +15,8 @@ API, a job, or a stored invariant.
 
 - [x] **AUTH-01**: Admin can create a user account and issue a single-use setup link
 - [x] **AUTH-02**: User can set their password from that link, which is consumed on first use and never works twice
-- [ ] **AUTH-03**: User can log in with username and password and stay logged in across sessions
-- [ ] **AUTH-04**: User can log out, invalidating the session server-side rather than only client-side
+- [x] **AUTH-03**: User can log in with username and password and stay logged in across sessions
+- [x] **AUTH-04**: User can log out, invalidating the session server-side rather than only client-side
 - [x] **AUTH-05**: Admin can reset a user's password without any email service in the loop
 - [ ] **AUTH-06**: User can delete their own account, purging their data and destroying their data key
 - [x] **AUTH-07**: No endpoint returns one user's trading data to another user, including to the admin
@@ -170,8 +170,8 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 |-------------|-------|--------|
 | AUTH-01 | Phase 2 | Complete |
 | AUTH-02 | Phase 2 | Complete |
-| AUTH-03 | Phase 2 | Pending |
-| AUTH-04 | Phase 2 | Pending |
+| AUTH-03 | Phase 2 | Complete |
+| AUTH-04 | Phase 2 | Complete |
 | AUTH-05 | Phase 2 | Complete |
 | AUTH-06 | Phase 3 | Pending |
 | AUTH-07 | Phase 2 | Complete |

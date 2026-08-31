@@ -113,7 +113,13 @@ Five open decisions are assigned to owning phases rather than left floating — 
 "Open Decisions and Their Owners":
 
 - Phase 1: Hypercorn vs uvicorn dual-stack binding on real Railway hardware (`V039`, partially stale)
-- Phase 2: Postgres pooling topology on Railway (UNVERIFIED) — RLS safety depends on it
+- Phase 2: Railway pooling topology is SETTLED — `02-RESEARCH.md` confirmed against live
+  Railway docs and `railway variables` that no pooler sits in front of this Postgres, so the
+  `set_config(..., true)` RLS context and its query share a transaction. What remains open is
+  narrower: the isolation suite has never run against the live deployment, because none of
+  `docs/operations/phase-2-operator-steps.md`'s four steps have been performed —
+  `MORAI_APP_DB_PASSWORD` is not yet set on Railway, so the deployed services cannot connect
+  as `morai_app` at all. Tracked as human verification in `02-VERIFICATION.md`.
 - Phase 4: `schwab-py` `py.typed` coverage (UNVERIFIED) — sets the vendor `Protocol` shape
 - Phase 6: Railway execution model, cron container vs long-running worker — Phase 8 inherits it
 - Phase 9: Reconciliation window boundary — RECON-01 is untestable until it is fixed
