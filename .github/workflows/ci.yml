@@ -74,6 +74,13 @@ jobs:
       # test_no_tracked_file_carries_a_real_looking_postgres_password keeps
       # passing by shape, not by exception.
       MORAI_APP_DB_PASSWORD: moraiapp
+      # Local-only, CI-only KEK for the envelope encryption migration 0007 introduces
+      # -- not a real secret. Base64 of exactly 32 bytes, as `settings.master_key_bytes`
+      # requires for AES-256-GCM. It decodes to the ASCII string
+      # "morai-local-dev-key-not-a-secret", so anyone who decodes it reads what it is.
+      # The production KEK lives only in Railway's environment (D3-06) and is never
+      # tracked here.
+      MORAI_MASTER_KEY: bW9yYWktbG9jYWwtZGV2LWtleS1ub3QtYS1zZWNyZXQ=
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.0.1

@@ -21,10 +21,18 @@ What exists now:
 ```bash
 export DATABASE_URL="postgresql://morai:morai@localhost:5432/morai"
 export MORAI_APP_DB_PASSWORD="localdevpassword"
+export MORAI_MASTER_KEY="bW9yYWktbG9jYWwtZGV2LWtleS1ub3QtYS1zZWNyZXQ="
 export MORAI_ENV_FILE=""
-uv run pytest -q            # all 103, ~12s
+uv run pytest -q            # ~13s
 bash tools/gate.sh          # + ruff, basedpyright, mypy
 ```
+
+`MORAI_MASTER_KEY` is the KEK the envelope encryption unwraps each user's data key with
+(`D3-06`, migration 0007). It must be base64 of **exactly 32 bytes** for AES-256-GCM, or
+`settings.master_key_bytes` refuses to start. Omit it and eight crypto and ledger tests
+error at setup rather than fail — the value above is a local/CI stand-in that decodes to
+the ASCII string `morai-local-dev-key-not-a-secret`. The real KEK exists only in Railway's
+environment and is in no tracked file.
 
 Postgres 18 runs natively via Homebrew (`brew services start postgresql@18`) — **not** Docker,
 whose daemon is broken on this machine. Same major as CI and Railway, and the `morai` role is a
