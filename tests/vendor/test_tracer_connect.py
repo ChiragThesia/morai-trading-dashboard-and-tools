@@ -39,6 +39,9 @@ _TOKEN_CREATED_AT = datetime(2026, 8, 31, 12, 0, tzinfo=UTC)
 
 _CONNECT_RESPONSE: TypeAdapter[ConnectResponse] = TypeAdapter(ConnectResponse)
 _CONNECTION_RESPONSE: TypeAdapter[ConnectionResponse] = TypeAdapter(ConnectionResponse)
+# The opaque 500 envelope from `api/errors.py`'s `_opaque_500` -- narrowed
+# here rather than read via `.json()`, which types as `Any` (reportAny).
+_ERROR_ENVELOPE: TypeAdapter[dict[str, str]] = TypeAdapter(dict[str, str])
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -193,37 +196,91 @@ async def test_reauth_repairs_the_row_instead_of_duplicating_it(
     assert rows[0].token_created_at == later_created_at
 
 
-async def test_no_log_record_contains_the_code_or_state(
+async def test_no_log_record_or_response_body_contains_the_code_url_or_state(
     logged_in_client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
+    install_fake_schwab_auth: FakeSchwabAuth,
 ) -> None:
-    """CONN-03, D4-08, `NN-34`: mirrors
-    `test_no_log_record_from_login_contains_password_token_or_hash`'s own
-    shape, scoped to loggers under the `morai` namespace -- not the whole
-    `caplog.text`. `httpx`'s own client-side request logger (`INFO
-    HTTP Request: GET http://test/schwab/callback?code=...&state=...`) is
-    an artifact of driving this test over `ASGITransport` in-process, not
-    a code path this project wrote, and would fail this assertion for
-    every GET request regardless of application behaviour. Proves the
-    application's own logger never carries the bearer-equivalent code or
-    state; it cannot prove Hypercorn's access log stays off in production
-    -- that gap is recorded honestly as Manual-Only in `04-VALIDATION.md`,
-    not claimed here."""
+    """CONN-03, D4-08, `NN-34`: widened (04-02 Task 2) from the original
+    success-only proof to also cover the received URL, and to drive a
+    rejected-state and a failing-exchange callback alongside the
+    successful one. Still scoped to loggers under the `morai` namespace --
+    plus `schwab` and `authlib`, explicit regression guards named by 04-02
+    -- not the whole `caplog.text`. `httpx`'s own client-side request
+    logger (`INFO HTTP Request: GET
+    http://test/schwab/callback?code=...&state=...`) is an artifact of
+    driving this test over `ASGITransport` in-process, not a code path
+    this project wrote, and would fail this assertion for every GET
+    request regardless of application behaviour -- that reasoning from the
+    original test is sound and is kept, not weakened.
+
+    Raises the root logger to DEBUG via `caplog.at_level`, and explicitly
+    raises the `schwab` and `authlib` loggers to DEBUG by name too, so a
+    leak from either would be caught rather than filtered out by a
+    module-level level setting. Research grepped both and found no logging
+    on the OAuth exchange path, so this stays green -- that is the honest
+    result, not a weakened assertion manufacturing a red.
+
+    Proves the application's own logger, and the vendor/OAuth-library
+    loggers, never carry the bearer-equivalent code, state or received URL
+    across a successful callback, a rejected-state callback, and a
+    callback whose vendor exchange raises -- and that none of the three
+    response bodies does either. It cannot prove Hypercorn's access log
+    stays off in production -- that gap is recorded honestly as
+    Manual-Only in `04-VALIDATION.md`, not claimed here."""
+    from morai.api.app import app
+
     raw_code = "fake-auth-code-should-never-be-logged"
-    with caplog.at_level(logging.DEBUG):
+    never_issued_state = "state-never-issued-should-never-be-logged"
+
+    with (
+        caplog.at_level(logging.DEBUG),
+        caplog.at_level(logging.DEBUG, logger="schwab"),
+        caplog.at_level(logging.DEBUG, logger="authlib"),
+    ):
         raw_state = await _connect(logged_in_client)
-        callback_response = await logged_in_client.get(
+        success = await logged_in_client.get(
             "/schwab/callback", params={"code": raw_code, "state": raw_state}
         )
-    assert callback_response.status_code == 200
+        assert success.status_code == 200
+
+        rejected = await logged_in_client.get(
+            "/schwab/callback",
+            params={"code": raw_code, "state": never_issued_state},
+        )
+        assert rejected.status_code == 400
+
+        failing_state = await _connect(logged_in_client)
+        install_fake_schwab_auth.raise_on_exchange = RuntimeError(
+            "exchange failed -- proving the opaque-500 path leaks nothing"
+        )
+        # The callback route is unauthenticated (`test_callback_with_no_
+        # session_cookie_still_succeeds` proves this) -- no cookie needed
+        # on this fresh client, which exists only for its
+        # `raise_app_exceptions=False`.
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as rc:
+            failing = await rc.get(
+                "/schwab/callback", params={"code": raw_code, "state": failing_state}
+            )
+        assert failing.status_code == 500
 
     app_log_text = "\n".join(
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("morai")
+        if record.name.startswith(("morai", "schwab", "authlib"))
     )
-    assert raw_state not in app_log_text
-    assert raw_code not in app_log_text
+    received_url_fragment = f"code={raw_code}&state="
+    for secret in (raw_state, raw_code, never_issued_state, received_url_fragment):
+        assert secret not in app_log_text
+        assert secret not in success.text
+        assert secret not in rejected.text
+        assert secret not in failing.text
+
+    # The leak-free path still gives an operator something to correlate on.
+    body = _ERROR_ENVELOPE.validate_json(failing.content)
+    assert body["error"] == "internal"
+    assert "request_id" in body
 
 
 async def test_callback_with_no_session_cookie_still_succeeds(
