@@ -49,6 +49,8 @@ arbitrary `(token_created_at, now)` pairs; that is not the same claim.
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -62,7 +64,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from morai.crypto.envelope import decrypt_field, encrypt_field, unwrap_dek
 from morai.db.models import SchwabConnection
 from morai.settings import get_settings
-from morai.vendor.protocol import ExchangedToken
+from morai.vendor.protocol import (
+    ExchangedToken,
+    SchwabAuth,
+    SchwabClient,
+    TokenHolder,
+    WrappedToken,
+)
 
 # Raw `text()` results type every column as `Any` -- same untyped-boundary
 # shape `ledger/fills.py` already established. `TypeAdapter` narrows at
@@ -70,6 +78,9 @@ from morai.vendor.protocol import ExchangedToken
 _INT: TypeAdapter[int] = TypeAdapter(int)
 _BYTES: TypeAdapter[bytes] = TypeAdapter(bytes)
 _JSON_VALUE: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
+# `WrappedToken` lives in `protocol.py` -- `TokenHolder`'s closures and this
+# module's own unwrap-after-refresh step share the one shape.
+_WRAPPED_TOKEN: TypeAdapter[WrappedToken] = TypeAdapter(WrappedToken)
 
 
 class ConnectionDataKeyMissing(RuntimeError):
@@ -275,3 +286,96 @@ async def read_connection(
         last_synced_at=row.last_synced_at,
         key_version=row.key_version,
     )
+
+
+class ConnectionNotFound(RuntimeError):
+    """Raised by `schwab_client_for_user` when the user has no
+    `schwab_connections` row -- there is no token to build a client from."""
+
+
+@asynccontextmanager
+async def schwab_client_for_user(
+    session: AsyncSession, user_id: UUID, auth: SchwabAuth
+) -> AsyncGenerator[SchwabClient]:
+    """Yields a live `SchwabClient` for one user, holding that user's own
+    advisory lock for the whole body (CONN-06, D4-10). The order below is
+    the requirement, not an implementation detail.
+
+    First, `pg_advisory_xact_lock(hashtext(:uid))` -- the user id bound as a
+    parameter, verified live against local Postgres 18 including with a
+    bound parameter rather than a literal, the same primitive
+    `tools/create_admin.py` already uses. Transaction-scoped, so it releases
+    on the caller's own commit or on a crash, with no separate unlock to
+    forget. Not `SELECT ... FOR UPDATE` on the connection row: that would
+    hold a row lock across the refresh's own network call.
+
+    Second -- and only after the lock is granted -- read and decrypt the
+    stored token. Reading before locking is the bug this ordering exists to
+    prevent: a waiter that loaded the token first would present the value
+    the winner has already rotated away from, and Schwab answers a stale
+    refresh token with `invalid_grant`.
+
+    Third, yield a client built over a `TokenHolder` seeded with that
+    token.
+
+    Fourth, after the body returns normally, if the holder shows the
+    vendor wrote a new token, re-encrypt it under the user's current DEK
+    and `UPDATE` the row -- `token_ciphertext`, `token_nonce` and
+    `key_version` only. `token_created_at` is left alone: it is the
+    vendor's own `creation_timestamp`, which `schwab-py` explicitly does
+    not update on an ordinary refresh, and moving it here would reset the
+    seven-day expiry clock on every automatic refresh and make the expiry
+    invisible. If the body raises, this step never runs and nothing here is
+    persisted -- the caller's own transaction rollback is what undoes the
+    rest.
+
+    Does not commit -- the caller owns the transaction (D4-20). Here that
+    is not a style choice twice over: the lock's lifetime and the write's
+    durability are the same transaction, deliberately.
+
+    Collision arithmetic, recorded rather than defended against: `hashtext`
+    returns an int4, so for a handful of users the birthday-style collision
+    probability is on the order of 10 / 2^32. A collision would cause a
+    false extra serialisation between two unrelated users -- safe, briefly
+    slower -- and never a false sharing of token data, since the key gates
+    a critical section and is never a join key or a cache key.
+    """
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:uid))"),
+        {"uid": str(user_id)},
+    )
+
+    connection = await read_connection(session, user_id)
+    if connection is None:
+        raise ConnectionNotFound(
+            f"No schwab_connections row for user_id={user_id} -- nothing to "
+            "build a client from."
+        )
+
+    holder = TokenHolder(
+        token={
+            "creation_timestamp": int(connection.token_created_at.timestamp()),
+            "token": connection.token,
+        }
+    )
+
+    client = await auth.build_client(holder.read, holder.write)
+    yield client
+
+    if holder.wrote:
+        wrapped = _WRAPPED_TOKEN.validate_python(holder.token)
+        dek, key_version = await _current_dek(session, user_id)
+        token_ciphertext, token_nonce = encrypt_field(
+            json.dumps(wrapped.token).encode("utf-8"),
+            dek,
+            _connection_associated_data("token_ciphertext", user_id=user_id),
+        )
+        await session.execute(
+            update(SchwabConnection)
+            .where(SchwabConnection.user_id == user_id)
+            .values(
+                token_ciphertext=token_ciphertext,
+                token_nonce=token_nonce,
+                key_version=key_version,
+            )
+        )

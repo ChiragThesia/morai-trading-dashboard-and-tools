@@ -17,7 +17,8 @@ blob, then handed back to schwab-py unchanged on the next read.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
@@ -50,6 +51,52 @@ class AccountNumberEntry(BaseModel):
     hash_value: str = Field(alias="hashValue")
 
 
+class WrappedToken(BaseModel):
+    """The shape schwab-py's own `TokenMetadata.wrap_token_in_metadata`
+    exchanges with both `token_write_func` and `token_read_func` --
+    `{'creation_timestamp': int, 'token': ...}` (verified against the real
+    1.5.1 wheel). Lives here, not `schwab_adapter.py`, because `TokenHolder`
+    below needs it too, and this module is the shared home for every shape
+    vendor JSON validates into (D4-03)."""
+
+    creation_timestamp: int
+    token: JsonValue
+
+
+@dataclass
+class TokenHolder:
+    """A mutable holder for one user's current vendor token, read and
+    written by plain synchronous closures handed to schwab-py's
+    `client_from_access_functions`. `wrote` records whether the vendor ever
+    called `write`, so a caller knows whether there is anything new to
+    persist.
+
+    Both closures below are plain `def`, **never** `async def` --
+    schwab-py's own wrapping in `schwab/auth.py` calls them with no
+    `await` anywhere in the real 1.5.1 wheel, even on the `asyncio=True`
+    path. An `async def` closure here would return a coroutine that is
+    assigned and immediately discarded -- no exception, no warning until
+    Python's own "coroutine was never awaited" message fires at
+    garbage-collection time, and the rotated token would silently never
+    persist (landmine 1, T-04-17). Do not make these `async def` for
+    consistency with the rest of this async codebase -- that is the exact
+    mistake this comment exists to head off.
+
+    `token` is the raw, opaque vendor token blob -- schwab-py's own wrapped
+    shape (`WrappedToken`), never inspected further here."""
+
+    token: object
+
+    wrote: bool = field(default=False, init=False)
+
+    def read(self) -> object:
+        return self.token
+
+    def write(self, token: object) -> None:
+        self.token = token
+        self.wrote = True
+
+
 class SchwabClient(Protocol):
     """Exactly the four methods this project calls (D4-02). `get_option_chain`
     and `get_quotes` are named for Phase 8's snapshot capture -- this
@@ -72,9 +119,12 @@ class SchwabClient(Protocol):
 
 
 class SchwabAuth(Protocol):
-    """Exactly the two methods this plan's OAuth handshake calls -- building
-    the authorize URL for a given raw state, and exchanging a received
-    callback URL for a token plus a live `SchwabClient` (D4-06).
+    """Exactly the three methods this project's OAuth handshake and refresh
+    path call -- building the authorize URL for a given raw state,
+    exchanging a received callback URL for a token plus a live
+    `SchwabClient` (D4-06), and building a `SchwabClient` from an existing
+    token via a pair of synchronous read/write closures (CONN-06). A wider
+    `Protocol` is a larger lie about what this project depends on (D4-02).
 
     `exchange_callback` takes `raw_state` explicitly rather than an
     `AuthContext` the caller would have to persist across the redirect:
@@ -82,10 +132,22 @@ class SchwabAuth(Protocol):
     off the `AuthContext` it is handed (verified against the real 1.5.1
     wheel), and this project's own fixed callback URL plus the state
     `consume_token()` just returned are the only two values that throwaway
-    object needs."""
+    object needs.
+
+    `build_client`'s two callables mirror `client_from_access_functions`'s
+    own `token_read_func`/`token_write_func` parameters exactly -- verified
+    against the real 1.5.1 wheel, neither is ever awaited by the library, so
+    both must be plain synchronous callables here too (see `TokenHolder`'s
+    own docstring)."""
 
     def build_authorize_url(self, raw_state: str) -> str: ...
 
     async def exchange_callback(
         self, received_url: str, *, raw_state: str
     ) -> tuple[ExchangedToken, SchwabClient]: ...
+
+    async def build_client(
+        self,
+        token_read_func: Callable[[], object],
+        token_write_func: Callable[[object], None],
+    ) -> SchwabClient: ...
