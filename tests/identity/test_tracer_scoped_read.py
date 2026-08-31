@@ -75,10 +75,15 @@ async def test_authenticated_user_sees_only_their_own_probe_rows(
         "/gate/user-scoped-probe", cookies={"morai_session": token}
     )
     assert response.status_code == 200
-    # `response.json()` types as `Any` (httpx's own stub) -- validated through
-    # the response model, the untrusted-input boundary this project's
-    # no-`Any` policy requires, rather than indexed as a raw list of dicts.
-    rows = _PROBE_LIST.validate_python(response.json())
+    # `validate_json`, not `validate_python(response.json())`: pydantic's
+    # strict mode has JSON-mode semantics for types with no native JSON
+    # representation (UUID included) -- a JSON string is the *correct* wire
+    # form, not a coercion to reject. `validate_python` on the pre-parsed
+    # dict would reject that same string as strict mode's Python-mode rule
+    # (measured this session: `ApiModel`'s own `UserScopedProbeResponse`,
+    # `strict=True`, rejects `is_instance_of` via `validate_python` on a str,
+    # but accepts it via `validate_json`).
+    rows = _PROBE_LIST.validate_json(response.content)
     assert {row.probe_id for row in rows} == {seeded_users.probe_a}
 
 
