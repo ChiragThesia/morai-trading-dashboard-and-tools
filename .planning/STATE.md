@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 current_phase: 2
 current_phase_name: Identity, Sessions, and Tenant Isolation
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-08-31T05:02:44.540Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-08-31T05:25:23.855Z"
 last_activity: 2026-08-31
 last_activity_desc: morai_app least-privilege role, migration 0003 (five tables, RLS ENABLE+FORCE), and one authenticated RLS-filtered request end to end (plan 02-01)
-state_head: 7d79993022ed09b98abf969f28d7b76b1e9b79c3
+state_head: 72fd395c3b8ce39a6cdae6fe8bdc5d994e79cc2c
 progress:
   total_phases: 11
-  completed_phases: 1
+  completed_phases: 0
   total_plans: 16
-  completed_plans: 8
-  percent: 50
+  completed_plans: 9
+  percent: 0
 ---
 
 # Project State
@@ -29,11 +29,11 @@ window equals the broker's cash delta over that window, checked every ingest cyc
 ## Current Position
 
 Phase: 2 of 11 (Identity, Sessions, and Tenant Isolation)
-Plan: 2 of 6 in current phase
+Plan: 3 of 6 in current phase
 Status: Ready to execute
 Last activity: 2026-08-31 — morai_app role, migration 0003, and one authenticated RLS-filtered request end to end (plan 02-01)
 
-Progress: [█████░░░░░] 50%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [█████░░░░░] 50%
 | Phase 01-walking-skeleton P06 | 25min | 2 tasks | 4 files |
 | Phase 01 P07 | 20min | 2 tasks | 4 files |
 | Phase 02 P01 | 40min | 3 tasks | 17 files |
+| Phase 02 P04 | 22min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Recent decisions affecting current work:
 - [Phase 1]: Procrastinate's schema.sql wrapped verbatim into Alembic revision 0002, split into per-statement op.execute() calls -- asyncpg's protocol rejects multi-statement strings
 - [Phase 2]: [Phase 2, 02-01]: SET LOCAL cannot bind a query parameter -- use set_config(name, value, true) for RLS context, measured against real Postgres/asyncpg
 - [Phase 2]: [Phase 2, 02-01]: morai_app (NOSUPERUSER NOBYPASSRLS) is a required deliverable; get_db_session runs every route through it, get_engine() stays the DDL/superuser-only engine
+- [Phase 2]: 02-04: audit.py's own module docstring carries the three-paragraph honest ceiling (what type-checks, what falls back to a runtime guard, what neither covers) so a later reader of the code, not just the plan, finds the caveat
+- [Phase 2]: 02-04: open_audited_read() writes via raw text() SQL, not insert(AuditLog).values(...) -- the ORM construct silently appends an implicit RETURNING for the server-generated id, and audit_log's INSERT-only RLS policy has no SELECT policy to permit that read back (found in CI, no reachable local database)
 
 ### Pending Todos
 
@@ -127,6 +130,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-08-31T05:02:31.412Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-08-31T05:25:23.839Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
