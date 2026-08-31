@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-current_phase: 02
-current_phase_name: Identity, Sessions, and Tenant Isolation
+current_phase: 03
+current_phase_name: Envelope Encryption and the Schema Contract
 status: executing
 stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-08-31T10:52:14.228Z"
+last_updated: "2026-08-31T14:25:34.917Z"
 last_activity: 2026-08-31
-last_activity_desc: Phase 02 execution started
-state_head: ed05015b89939986372a26628ccd47e57c8a9d83
+last_activity_desc: Phase 03 execution started
+state_head: 4e63c6b240b9e9f9a0a8e74228cce1a0d1801d06
 progress:
   total_phases: 11
   completed_phases: 0
-  total_plans: 16
-  completed_plans: 10
+  total_plans: 23
+  completed_plans: 13
   percent: 0
 ---
 
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** The ledger is correct across rolls and settlements — the sum of realised P&L over any
 window equals the broker's cash delta over that window, checked every ingest cycle.
-**Current focus:** Phase 02 — Identity, Sessions, and Tenant Isolation
+**Current focus:** Phase 03 — Envelope Encryption and the Schema Contract
 
 ## Current Position
 
-Phase: 02 (Identity, Sessions, and Tenant Isolation) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 02
-Last activity: 2026-08-31 — Phase 02 execution started
+Phase: 03 (Envelope Encryption and the Schema Contract) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 03
+Last activity: 2026-08-31 — Phase 03 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -120,6 +120,7 @@ Five open decisions are assigned to owning phases rather than left floating — 
   `docs/operations/phase-2-operator-steps.md`'s four steps have been performed —
   `MORAI_APP_DB_PASSWORD` is not yet set on Railway, so the deployed services cannot connect
   as `morai_app` at all. Tracked as human verification in `02-VERIFICATION.md`.
+
 - Phase 4: `schwab-py` `py.typed` coverage (UNVERIFIED) — sets the vendor `Protocol` shape
 - Phase 6: Railway execution model, cron container vs long-running worker — Phase 8 inherits it
 - Phase 9: Reconciliation window boundary — RECON-01 is untestable until it is fixed
@@ -142,6 +143,7 @@ Owed on live Railway:
 1. `docs/operations/phase-2-operator-steps.md` steps 1-4 (set `MORAI_APP_DB_PASSWORD`, deploy,
    bootstrap the admin), then `tools/isolation_smoke.py` against the live deployment. Until
    step 1 runs, the deployed services cannot connect as `morai_app` at all.
+
 2. `tools/measure_argon2.py` on the real Railway container — `D2-03`'s owed measurement. The
    Argon2id band must be tuned on production hardware, not copied from a laptop.
 
