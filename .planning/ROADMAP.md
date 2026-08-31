@@ -86,7 +86,7 @@ Plans:
 **Depends on**: Phase 1
 **Parallel with**: Nothing — Phase 3 needs the account record this phase creates
 **Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05, AUTH-07, AUTH-08
-**Owns spike**: Postgres connection topology on Railway — direct connection, session-mode pooler, or transaction-mode pooler. UNVERIFIED at research time. Row-level-security safety via `SET LOCAL` depends on the answer (`V027`, `V028`), so it is settled here, before the isolation design is written against an assumption.
+**Owns spike**: Postgres connection topology on Railway — direct connection, session-mode pooler, or transaction-mode pooler. Row-level-security safety via `SET LOCAL` depends on the answer (`V027`, `V028`), so it is settled here, before the isolation design is written against an assumption. **RESOLVED 2026-08-31 (`02-RESEARCH.md`): direct connection, no pooler of any kind.** Read live from the provisioned service's own variables — one `DATABASE_URL` to `postgres.railway.internal:5432`, no unpooled variant — and cross-checked against Railway's own documentation that pooling is opt-in. `V027`/`V028` are Supavisor-specific and do not apply. `SET LOCAL` is safe, backed by transaction scoping and SQLAlchemy's `pool_reset_on_return="rollback"` default. Do not re-run this spike.
 **Success Criteria** (what must be TRUE):
 
   1. Admin can create an account and issue a setup link that works exactly once — a second use of the same link is rejected — and can reset a user's password with no email service anywhere in the loop.
@@ -94,7 +94,22 @@ Plans:
   3. A request authenticated as user A that asks for user B's trading data returns not-found, including when A is the admin, and the isolation suite passes against the real Railway pooling configuration rather than only a direct-connection test container.
   4. Every privileged read of user data writes an audit row naming reader, subject, and time, and a privileged read that bypasses the audited path does not compile or does not pass review.
 
-**Plans**: TBD
+**Plans**: 6 plans, 4 waves
+
+Plans:
+- [ ] 02-01-PLAN.md — Wave 1. Tracer: the least-privilege `morai_app` role, migration 0003 (five tables, RLS enable + force, policies), and one authenticated RLS-filtered request end to end
+- [ ] 02-02-PLAN.md — Wave 2. The isolation suite made capable of failing: a superuser positive control behind every zero-rows claim, admin-not-exempt by name, and a boot gate on the runtime role
+- [ ] 02-03-PLAN.md — Wave 2. Argon2id at OWASP's higher-security band, with the Railway measurement scripted and recorded as owed
+- [ ] 02-04-PLAN.md — Wave 2. The audit capability object, with a `tests/gate/` fixture proving both checkers reject the natural bypass by name
+- [ ] 02-05-PLAN.md — Wave 3. Setup and reset links: one atomic `DELETE ... RETURNING` mechanism, three routes, and the admin bootstrap script
+- [ ] 02-06-PLAN.md — Wave 4. Login, logout with server-side destruction, and the operator runbook for the four steps this session could not perform
+
+**Criterion 3, pooling clause — met in substance.** The spike's answer is that there is no
+pooling configuration on Railway. CI's `services: postgres` container is therefore the same
+topology in kind, not a lesser stand-in. The deploy-time run D2-10 asks for ships as
+`tools/isolation_smoke.py` and an operator step; deploys are blocked by the permission
+classifier, so it is recorded as unrun rather than claimed. Same precedent as Phase 1's two
+criteria met in substance.
 **UI hint**: no
 
 ### Phase 3: Envelope Encryption and the Schema Contract
