@@ -91,3 +91,42 @@ async def test_rls_enable_and_force_match_the_migration(
         _BOOL.validate_python(row[0]),
         _BOOL.validate_python(row[1]),
     ) == (expected, expected)
+
+
+async def test_login_lookup_is_not_executable_by_public(
+    app_db_session: AsyncSession,
+) -> None:
+    """`login_lookup` is `SECURITY DEFINER` and owned by a superuser, so its
+    body reads `users` past migration 0003's `self_or_admin` policy. The
+    default `PUBLIC` `EXECUTE` grant that `CREATE FUNCTION` attaches would
+    hand that read to every role in the database, including ones added later
+    for unrelated reasons. Migration 0005 revokes it; this asserts the revoke
+    is still in force rather than that it once ran.
+    """
+    row = (
+        await app_db_session.execute(
+            text(
+                "SELECT has_function_privilege('public', 'login_lookup(text)', "
+                "'EXECUTE')"
+            )
+        )
+    ).one()
+    assert _BOOL.validate_python(row[0]) is False
+
+
+async def test_login_lookup_is_still_executable_by_the_app_role(
+    app_db_session: AsyncSession,
+) -> None:
+    """The counterpart to the revoke: narrowing the grant must not have taken
+    login with it. Without this, a revoke that removed `morai_app`'s access too
+    would still pass the test above.
+    """
+    row = (
+        await app_db_session.execute(
+            text(
+                "SELECT has_function_privilege('morai_app', "
+                "'login_lookup(text)', 'EXECUTE')"
+            )
+        )
+    ).one()
+    assert _BOOL.validate_python(row[0]) is True
