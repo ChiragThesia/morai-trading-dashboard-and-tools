@@ -131,6 +131,36 @@ async def test_consuming_the_same_token_a_second_time_returns_400(
     assert second.status_code == 400
 
 
+async def test_setup_with_a_short_password_returns_422_and_does_not_consume_the_token(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """`SetupRequest.password` carries `Field(min_length=12)` (WR-01). Pydantic
+    validates the request body before the route body ever runs, so `/setup`'s
+    `consume_token` call is never reached -- the token must still be usable
+    afterwards, which this test proves directly rather than assuming."""
+    admin_token = await _seed_session(superuser_db_session, seeded_users.admin)
+    created = await client.post(
+        "/admin/users",
+        json={"username": "short-password-user"},
+        cookies={"morai_session": admin_token},
+    )
+    created_body = _CREATE_RESPONSE.validate_json(created.content)
+
+    rejected = await client.post(
+        "/setup",
+        json={"token": created_body.setup_token, "password": "short"},
+    )
+    assert rejected.status_code == 422
+
+    retry = await client.post(
+        "/setup",
+        json={"token": created_body.setup_token, "password": _NEW_PASSWORD},
+    )
+    assert retry.status_code == 200
+
+
 async def test_non_admin_calling_either_admin_route_gets_404_not_403(
     client: AsyncClient,
     superuser_db_session: AsyncSession,

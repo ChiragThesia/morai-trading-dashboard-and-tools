@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from pydantic import Field
+
 from morai.api.models import ApiModel
 
 
@@ -28,7 +30,10 @@ class AdminResetPasswordResponse(ApiModel):
 
 class SetupRequest(ApiModel):
     token: str
-    password: str
+    # These accounts are linked to brokerage credentials -- the same reasoning
+    # `passwords.py`'s docstring uses to justify the higher Argon2id band
+    # (D2-03). Hashing strength is moot against a trivially guessable input.
+    password: str = Field(min_length=12)
 
 
 class SetupResponse(ApiModel):
