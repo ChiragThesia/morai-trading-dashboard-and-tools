@@ -46,6 +46,7 @@ from morai.identity.sessions import (
 )
 from morai.identity.setup_tokens import TokenPurpose, consume_token, issue_token
 from morai.identity.tokens import generate_token, hash_token
+from morai.ledger.fills import provision_data_key
 
 router = APIRouter()
 
@@ -127,6 +128,24 @@ async def create_user(
     route is admin-only, so username enumeration is not the concern here, and
     the bare body matches this API's opaque-envelope convention rather than
     signalling anything secret.
+
+    Provisions the new user's data key (CRYPT-01, D3-05) in the same
+    transaction as the user row and its setup token -- a failure anywhere
+    in this function rolls back all of it, so the account and its key exist
+    together or not at all; a user without a key is an account whose first
+    fill could never be written, which is a worse state than no account.
+
+    `user_data_keys` carries a `WITH CHECK` on `app.current_user_id`
+    (migration 0007); inserting the new user's key row under the admin's
+    own context (still active from `get_current_admin`) is rejected by
+    that policy. Do **not** solve this by adding an admin clause to
+    `user_data_keys` -- D2-08 and D3-18 forbid it outright, and
+    `identity/audit.py`'s own docstring states that a data table inheriting
+    `users`' admin clause makes this whole encryption boundary decorative.
+    Instead, the transaction-local RLS context is switched to the newly
+    created user, exactly as `/setup` does from a consumed token's own user
+    id, and `require_rls_context` confirms it took before the key is
+    written.
     """
     user = User(username=body.username)
     session.add(user)
@@ -139,6 +158,14 @@ async def create_user(
     raw_token = await issue_token(
         session, user_id=user.id, purpose=TokenPurpose.SETUP, ttl=_SETUP_TOKEN_TTL
     )
+
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user.id)},
+    )
+    await require_rls_context(session)
+    await provision_data_key(session, user.id)
+
     await session.commit()
     return AdminCreateUserResponse(user_id=user.id, setup_token=raw_token)
 
