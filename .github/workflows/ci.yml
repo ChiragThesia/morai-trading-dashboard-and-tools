@@ -82,4 +82,9 @@ jobs:
       # that still proves the Alembic import path and the database connection -- exactly
       # what should be proven before any schema exists.
       - run: uv run alembic upgrade head
+      # TEMPORARY -- 02-01-PLAN.md Task 2's own <verify> command, run once here because
+      # there is no local database to run it against. Proves downgrade() is real, not
+      # decorative (drops morai_app cleanly, including its outstanding grants) before
+      # this step is removed again.
+      - run: uv run alembic upgrade head && uv run alembic downgrade -1 && uv run alembic upgrade head
       - run: uv run pytest
