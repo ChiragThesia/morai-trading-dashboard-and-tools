@@ -44,6 +44,15 @@ than leaving that distinction implicit.
 D4-15's honest limit: the real seven-day window has never been observed
 against a live Schwab connection. This function is proven correct for
 arbitrary `(token_created_at, now)` pairs; that is not the same claim.
+
+Two permanently-null columns, by design, each with its own owner
+(D4-13, D4-16): `last_synced_at` is written only after a genuinely
+successful sync, and no sync exists until Phase 6, which owns real
+ingest. `reauth_notified_at` records that a re-auth notification is
+due; delivery belongs to a later phase, since no email vendor exists
+in this system and none was added back here. A reader finding both
+columns NULL should find the reason here, not have to go looking for
+it.
 """
 
 from __future__ import annotations
@@ -100,6 +109,7 @@ class ConnectionRecord:
     token: JsonValue
     token_created_at: datetime
     last_synced_at: datetime | None
+    reauth_notified_at: datetime | None
     key_version: int
 
 
@@ -121,6 +131,30 @@ _EXPIRING_SOON_THRESHOLD = timedelta(hours=12)
 def derive_connection_health(
     token_created_at: datetime, now: datetime
 ) -> tuple[ConnectionHealth, datetime]:
+    """`healthy`, `expiring_soon` or `expired`, plus the `expires_at` it was
+    derived from. `now` is an ordinary parameter, never read from the
+    system clock inside this function (D4-12) -- the exact same call
+    proves this module's own boundary tests and serves
+    `GET /schwab/connection`, so the route cannot drift from what the
+    tests assert.
+
+    `expires_at` is `token_created_at + _REFRESH_TOKEN_LIFETIME` (seven
+    days) for every input, including ones already past it -- a past
+    `expires_at` is a fact worth returning, not an absence. The seven days
+    is V001, the vendor's own hard, server-side, unextendable
+    refresh-token lifetime, verified against the real 1.5.1 wheel.
+    `_EXPIRING_SOON_THRESHOLD` (twelve hours) carries less weight: it is
+    not a measured vendor fact, only an adaptation of v1's own operational
+    practice of notifying at roughly six and a half days of token age
+    (Assumptions Log A2, 04-RESEARCH.md), reused here as a display
+    threshold.
+
+    D4-15's honest limit, stated here and not only in a plan: this
+    function is proven correct for arbitrary `(token_created_at, now)`
+    pairs -- the arithmetic is right. The real seven-day window has never
+    been observed against a live Schwab connection. Those are not the
+    same claim.
+    """
     expires_at = token_created_at + _REFRESH_TOKEN_LIFETIME
     remaining = expires_at - now
     if remaining <= timedelta(0):
@@ -284,6 +318,7 @@ async def read_connection(
         token=token,
         token_created_at=row.token_created_at,
         last_synced_at=row.last_synced_at,
+        reauth_notified_at=row.reauth_notified_at,
         key_version=row.key_version,
     )
 

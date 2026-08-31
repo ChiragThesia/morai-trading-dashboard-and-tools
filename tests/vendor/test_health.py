@@ -144,9 +144,7 @@ async def _run_a_refresh(user_id: UUID, auth: FakeSchwabAuth) -> None:
             ConnectionHealth.EXPIRING_SOON,
             id="expiring_soon-1s-before-expiry",
         ),
-        pytest.param(
-            _LIFETIME, ConnectionHealth.EXPIRED, id="expired-at-expiry-exact"
-        ),
+        pytest.param(_LIFETIME, ConnectionHealth.EXPIRED, id="expired-at-expiry-exact"),
         pytest.param(
             _LIFETIME + timedelta(seconds=1),
             ConnectionHealth.EXPIRED,
@@ -178,7 +176,9 @@ def test_health_bands_and_boundaries(
     [
         pytest.param(timedelta(hours=1), "healthy", id="healthy-via-route"),
         pytest.param(
-            _LIFETIME - timedelta(hours=6), "expiring_soon", id="expiring_soon-via-route"
+            _LIFETIME - timedelta(hours=6),
+            "expiring_soon",
+            id="expiring_soon-via-route",
         ),
         pytest.param(timedelta(days=8), "expired", id="expired-via-route"),
     ],
@@ -238,7 +238,9 @@ async def test_refresh_does_not_move_the_reported_expires_at(
     assert before.status_code == 200
     before_body = _CONNECTION_RESPONSE.validate_json(before.content)
 
-    refresh_auth = FakeSchwabAuth(fixed_created_at=_TOKEN_CREATED_AT, account_entries=[])
+    refresh_auth = FakeSchwabAuth(
+        fixed_created_at=_TOKEN_CREATED_AT, account_entries=[]
+    )
     await _run_a_refresh(provisioned_users.user_a, refresh_auth)
 
     after = await logged_in_client.get("/schwab/connection")
@@ -299,7 +301,9 @@ async def test_last_synced_at_and_reauth_notified_at_stay_null_after_refresh(
     )
     assert callback.status_code == 200
 
-    refresh_auth = FakeSchwabAuth(fixed_created_at=_TOKEN_CREATED_AT, account_entries=[])
+    refresh_auth = FakeSchwabAuth(
+        fixed_created_at=_TOKEN_CREATED_AT, account_entries=[]
+    )
     await _run_a_refresh(provisioned_users.user_a, refresh_auth)
 
     response = await logged_in_client.get("/schwab/connection")
