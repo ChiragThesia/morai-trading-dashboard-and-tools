@@ -56,3 +56,6 @@ __pycache__/
 *.egg-info/
 build/
 .coverage
+
+# npm pulls the Railway TS SDK in for .railway/railway.ts (IaC). Never committed.
+node_modules/
