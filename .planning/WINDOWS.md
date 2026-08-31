@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 0
 waived_count: 0
-fixed_count: 0
+fixed_count: 1
 total_count: 1
-last_updated: 2026-08-31T11:05:09.671Z
+last_updated: 2026-08-31T11:23:13.513Z
 ---
 
 # Broken Windows Ledger
@@ -15,7 +15,7 @@ last_updated: 2026-08-31T11:05:09.671Z
 
 | id | phase | kind | file | line | description | status | reason | recorded_at | resolved_at |
 |----|-------|------|------|------|-------------|--------|--------|-------------|-------------|
-| 1 | 02 | deviation | tests/test_isolation.py |  | Plan 02-02 Task 2 (admin-exemption tests, HTTP not-found posture, byte-identical-404 assertion) was never implemented -- tests/test_isolation.py has only Task 1's six tests. | open |  | 2026-08-31T11:05:09.671Z |  |
+| 1 | 02 | deviation | tests/test_isolation.py |  | Plan 02-02 Task 2 (admin-exemption tests, HTTP not-found posture, byte-identical-404 assertion) was never implemented -- tests/test_isolation.py has only Task 1's six tests. | fixed |  | 2026-08-31T11:05:09.671Z | 2026-08-31T11:23:13.513Z |
 
 ````json
 [
@@ -26,10 +26,10 @@ last_updated: 2026-08-31T11:05:09.671Z
     "file": "tests/test_isolation.py",
     "line": null,
     "description": "Plan 02-02 Task 2 (admin-exemption tests, HTTP not-found posture, byte-identical-404 assertion) was never implemented -- tests/test_isolation.py has only Task 1's six tests.",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-08-31T11:05:09.671Z",
-    "resolved_at": null
+    "resolved_at": "2026-08-31T11:23:13.513Z"
   }
 ]
 ````
