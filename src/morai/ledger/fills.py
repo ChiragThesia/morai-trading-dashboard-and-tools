@@ -36,6 +36,15 @@ from morai.settings import get_settings
 
 _FILL_WRITE_TOKEN = object()
 
+
+class DataKeyMissing(RuntimeError):
+    """Raised by `read_fills`/`read_events` when a row's `key_version` has
+    no matching `user_data_keys` row -- the account's data key has been
+    crypto-shredded (D3-08, AUTH-06). A `None` or empty return here would
+    make a crypto-shred indistinguishable from an empty account;
+    criterion 5's proof needs that difference to be observable."""
+
+
 # Raw `text()` results type every column as `Any` -- same untyped-boundary
 # shape `identity/rls.py` and `alembic/versions/0003_identity_and_rls.py`
 # already established. `TypeAdapter` narrows at that boundary (D-06).
@@ -236,7 +245,14 @@ async def read_fills(session: AsyncSession, user_id: UUID) -> list[FillRecord]:
                     ),
                     {"user_id": user_id, "key_version": row.key_version},
                 )
-            ).one()
+            ).one_or_none()
+            if key_row is None:
+                raise DataKeyMissing(
+                    f"No user_data_keys row for user_id={user_id} "
+                    f"key_version={row.key_version} -- the account's data "
+                    "key has been destroyed (crypto-shred, D3-08). This "
+                    "user's trade rows cannot be decrypted."
+                )
             dek_cache[row.key_version] = unwrap_dek(
                 _BYTES.validate_python(key_row[0]),
                 _BYTES.validate_python(key_row[1]),

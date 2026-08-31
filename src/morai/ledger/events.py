@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from morai.crypto.envelope import decrypt_field, encrypt_field, unwrap_dek
 from morai.db.models import Event
 from morai.ledger.fills import (
+    DataKeyMissing,
     _decode_decimal,  # pyright: ignore[reportPrivateUsage]  # why: the same Decimal-as-UTF-8-text encoding fills.py already established (D3-17) -- a second serialization is exactly the drift risk this reuse avoids.
     _encode_decimal,  # pyright: ignore[reportPrivateUsage]  # why: see _decode_decimal above.
 )
@@ -205,7 +206,14 @@ async def read_events(session: AsyncSession, user_id: UUID) -> list[EventRecord]
                     ),
                     {"user_id": user_id, "key_version": row.key_version},
                 )
-            ).one()
+            ).one_or_none()
+            if key_row is None:
+                raise DataKeyMissing(
+                    f"No user_data_keys row for user_id={user_id} "
+                    f"key_version={row.key_version} -- the account's data "
+                    "key has been destroyed (crypto-shred, D3-08). This "
+                    "user's trade rows cannot be decrypted."
+                )
             dek_cache[row.key_version] = unwrap_dek(
                 _BYTES.validate_python(key_row[0]),
                 _BYTES.validate_python(key_row[1]),
