@@ -8,6 +8,9 @@ two gates: basedpyright at build time and FastAPI at runtime.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -17,9 +20,27 @@ from morai.api.errors import install_error_handling
 from morai.api.models import MoneyRoundtripRequest, MoneyRoundtripResponse
 from morai.api.routes_identity import router as identity_router
 from morai.db.models import GateMoneyProbe
-from morai.db.session import get_db_session
+from morai.db.session import get_db_session, get_session_maker
+from morai.identity.rls import assert_connection_cannot_bypass_rls
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    """Refuses to start if the runtime connection can bypass RLS
+    (`02-RESEARCH.md` Pitfall 1). Cost is nil: the web service's start
+    command already runs `alembic upgrade head` before hypercorn, so the
+    database must be reachable at boot regardless -- this is a check on a
+    connection that has to work anyway, not a new failure mode.
+
+    `/health` stays liveness-only with no database call (D-14); this gate is
+    at startup, not on the probe path.
+    """
+    async with get_session_maker()() as session:
+        await assert_connection_cannot_bypass_rls(session)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 install_error_handling(app)
 app.include_router(identity_router)
 
