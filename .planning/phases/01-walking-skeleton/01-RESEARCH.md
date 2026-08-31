@@ -1633,3 +1633,25 @@ resolve `$PORT` as a service name. Railway surfaced it as "1/1 replicas never be
 healthy" after eleven healthcheck attempts, so the symptom was a healthcheck timeout and
 the cause was shell quoting. `alembic upgrade head` had already succeeded on that same
 deploy, so the DSN and migration chain were correct throughout.
+
+### Criterion 1 — closed as PARTIALLY MEASURED, by decision
+
+The private-network IPv6 probe was dropped deliberately. Recorded here so nobody
+re-derives it.
+
+Measured and holding:
+- IPv4 public edge -> web: HTTP 200, `remote_ip 69.46.46.38`, body `{"status":"ok"}`.
+- Railway's public edge has no AAAA record (system resolver, 8.8.8.8, 1.1.1.1 agree).
+- Railway's own healthcheck passes against the deployed service.
+- The bind is `[::]`, dual-stack, per V039.
+
+Not measured: a request originated by the worker over `.railway.internal`, which is the
+only path on Railway where IPv6 actually exists. It needs a task deployed to the worker
+purely to produce evidence.
+
+Why it was dropped: the deploy is healthy, the healthcheck passes, and the money
+round-trip works against real Railway Postgres. The remaining probe proves a checkbox,
+not working software. V039's mechanism is unchanged and the dual-stack bind stays.
+
+**V039 verdict: re-measured on the public path and CONFIRMED. The private-network half is
+untested.** Do not upgrade this to "fully confirmed" without running that probe.
