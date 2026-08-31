@@ -121,7 +121,13 @@ Five open decisions are assigned to owning phases rather than left floating — 
   `MORAI_APP_DB_PASSWORD` is not yet set on Railway, so the deployed services cannot connect
   as `morai_app` at all. Tracked as human verification in `02-VERIFICATION.md`.
 
-- Phase 4: `schwab-py` `py.typed` coverage (UNVERIFIED) — sets the vendor `Protocol` shape
+- Phase 4: `schwab-py` `py.typed` coverage — **SETTLED 2026-08-31, measured not recalled.**
+  The published 1.5.1 wheel was downloaded and listed: no `py.typed` marker. Neither
+  `types-schwab-py` nor `schwab-py-stubs` exists on PyPI (both HTTP 404). Under PEP 561 the
+  package is untyped to mypy and basedpyright, so every symbol from it is `Any` and
+  `reportAny` flags every call. The project therefore owns a `Protocol` over exactly the
+  four methods it uses, with one adapter module as the sole importer of `schwab` and
+  `model_validate()` at every call site. Recorded as `D4-01`..`D4-05` in `04-CONTEXT.md`.
 - Phase 6: Railway execution model, cron container vs long-running worker — Phase 8 inherits it
 - Phase 9: Reconciliation window boundary — RECON-01 is untestable until it is fixed
 
