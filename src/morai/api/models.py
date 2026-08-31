@@ -10,17 +10,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from morai.money.api_types import UsdField
-
 
 class ApiModel(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
-
-
-class MoneyRoundtripRequest(ApiModel):
-    amount_usd: UsdField
-
-
-class MoneyRoundtripResponse(ApiModel):
-    probe_id: int
-    amount_usd: UsdField

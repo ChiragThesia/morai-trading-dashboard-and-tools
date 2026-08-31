@@ -12,10 +12,12 @@ So this file asserts the property the ledger actually needs — bit-inexactness,
 `Decimal(float(x)) != x` — instead of a visible digit flip, which would be
 unprovable at this column width and a dishonest claim to make.
 
-The route this canary guards (`POST /gate/money-roundtrip`) never touches `float`
-itself: `Decimal` end to end, asyncpg's native `Numeric` <-> `Decimal` binding, D-03's
-string-JSON wire format. This test's job is to show what *would* happen if it did —
-proof of the failure mode the route's design prevents, not luck.
+The path this canary guards -- Phase 1's now-retired `POST /gate/money-roundtrip`,
+and since 03-07, `insert_fills`/`read_fills`'s encrypted fill path -- never touches
+`float` itself: `Decimal` end to end, `Numeric`/`Decimal` and encrypted-`bytea`/
+`Decimal` binding alike, D-03's string-JSON wire format. This test's job is to show
+what *would* happen if it did -- proof of the failure mode that design prevents, not
+luck.
 """
 
 from __future__ import annotations
