@@ -11,7 +11,7 @@ this machine where nothing else DB-shaped can. No database. No `db` marker.
 
 from __future__ import annotations
 
-from sqlalchemy import Column, Integer, MetaData, Numeric, Table
+from sqlalchemy import Column, Integer, LargeBinary, MetaData, Numeric, Table
 
 import morai.db.models as _models
 from morai.db.base import Base
@@ -76,3 +76,21 @@ def test_unsuffixed_numeric_column_is_reported() -> None:
     )
 
     assert _numeric_columns_missing_unit_suffix(synthetic) == ["synthetic_probe.amount"]
+
+
+def test_unsuffixed_binary_money_column_is_reported() -> None:
+    """Negative control, mirrored onto a ciphertext column (D3-12): a `bytea`
+    column is not excused from naming its unit just because it isn't
+    `Numeric`. RED on arrival -- the walker above doesn't look at
+    `LargeBinary` columns at all yet."""
+    synthetic = MetaData()
+    Table(
+        "synthetic_probe",
+        synthetic,
+        Column("id", Integer, primary_key=True),
+        Column("amount_ciphertext", LargeBinary),
+    )
+
+    assert _numeric_columns_missing_unit_suffix(synthetic) == [
+        "synthetic_probe.amount_ciphertext"
+    ]
