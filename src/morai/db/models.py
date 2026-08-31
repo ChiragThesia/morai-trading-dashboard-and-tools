@@ -27,6 +27,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    UniqueConstraint,
     false,
     func,
 )
@@ -208,6 +209,119 @@ class Fill(Base):
                 "one directly bypasses encryption (D3-13, D3-15)."
             )
         super().__init__(**kwargs)
+
+
+class Position(Base):
+    """One traded structure -- a calendar or diagonal, front and back legs
+    grouped under this row (CRYPT-02, migration 0008). No stored status
+    column: a position's closed state is derived from net quantity per leg
+    (LEDGER-05), the exact thing a status column's absence guards against
+    -- calendar `65aac62e` reported open after its real close order fully
+    unwound both legs, because the status column had drifted from the
+    fills that actually closed it.
+    """
+
+    __tablename__ = "positions"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    opened_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class Leg(Base):
+    """One leg (front or back) of a position (migration 0008). `user_id` is
+    denormalized from `positions` deliberately, so its own RLS policy
+    evaluates without a join to `positions` -- matching every other
+    user-scoped table in this schema rather than inventing a join-based
+    policy this codebase has never used. `root` is the settlement-style
+    discriminator (`SPX` AM vs `SPXW` PM) at the grain LEDGER-07 needs it:
+    per leg, not per position, since a PM-settled front and an AM-settled
+    back can coexist inside one calendar.
+    """
+
+    __tablename__ = "legs"
+    __table_args__: tuple[UniqueConstraint] = (
+        UniqueConstraint(
+            "position_id", "leg_role", name="legs_position_id_leg_role_key"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    position_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("positions.id"), nullable=False
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    leg_role: Mapped[str] = mapped_column(Text, nullable=False)
+    occ_symbol: Mapped[str] = mapped_column(Text, nullable=False)
+    root: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class Event(Base):
+    """One derived ledger event -- OPEN, CLOSE, ROLL or SETTLEMENT
+    (migration 0008, CRYPT-02). A ROLL's `open_debit_usd`/`close_credit_usd`
+    stay split across two ciphertext/nonce column pairs, never netted into
+    one figure -- the `roll_has_both_legs` CHECK constraint on this table
+    makes a netted-only ROLL unstorable regardless of which caller writes
+    the row (D3-09, LEDGER-04). Both pairs are nullable: a non-ROLL event
+    that never opens or never closes leaves the relevant pair `NULL`,
+    never a sentinel, never zero (NN-16, D3-11).
+
+    `morai.ledger.events.insert_events()` is this phase's write path into
+    this table. Unlike `Fill`, this model carries no `_write_token`
+    sentinel gate -- 03-RESEARCH.md's Open Question 2 treats a
+    compile-time-checked single-writer gate on `events` as Phase 5's
+    concern, once Phase 5 actually derives events from fills and a second
+    writer becomes a real temptation.
+    """
+
+    __tablename__ = "events"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    position_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("positions.id"), nullable=False
+    )
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    event_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    fill_ids_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    open_debit_usd_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    open_debit_usd_nonce: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    close_credit_usd_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    close_credit_usd_nonce: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    key_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class GateUserScopedProbe(Base):
