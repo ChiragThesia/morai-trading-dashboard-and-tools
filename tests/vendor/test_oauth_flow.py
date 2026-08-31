@@ -209,12 +209,8 @@ async def test_two_overlapping_callbacks_each_land_their_own_users_row(
         assert response_a.status_code == 200
         assert response_b.status_code == 200
 
-        record_a = await read_connection(
-            superuser_db_session, provisioned_users.user_a
-        )
-        record_b = await read_connection(
-            superuser_db_session, provisioned_users.user_b
-        )
+        record_a = await read_connection(superuser_db_session, provisioned_users.user_a)
+        record_b = await read_connection(superuser_db_session, provisioned_users.user_b)
         assert record_a is not None
         assert record_b is not None
         assert record_a.account_hash == f"HASH-{state_a}"
