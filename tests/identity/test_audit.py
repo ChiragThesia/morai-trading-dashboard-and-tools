@@ -27,7 +27,13 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.db.models import AuditLog
-from morai.identity.audit import AuditedRead, get_user_for_management, open_audited_read
+from morai.identity.audit import (
+    AuditedRead,
+    ReaderId,
+    SubjectId,
+    get_user_for_management,
+    open_audited_read,
+)
 from tests.identity.conftest import SeededUsers
 
 
@@ -39,7 +45,9 @@ async def test_open_audited_read_commit_writes_one_row_naming_reader_subject_and
 ) -> None:
     before = datetime.now(UTC)
     await open_audited_read(
-        app_db_session, reader_id=seeded_users.admin, subject_id=seeded_users.user_a
+        app_db_session,
+        reader_id=ReaderId(seeded_users.admin),
+        subject_id=SubjectId(seeded_users.user_a),
     )
     await app_db_session.commit()
     after = datetime.now(UTC)
@@ -68,7 +76,9 @@ async def test_open_audited_read_rollback_leaves_zero_rows(
     exactly the failure this test exists to catch.
     """
     await open_audited_read(
-        app_db_session, reader_id=seeded_users.admin, subject_id=seeded_users.user_a
+        app_db_session,
+        reader_id=ReaderId(seeded_users.admin),
+        subject_id=SubjectId(seeded_users.user_a),
     )
     await app_db_session.rollback()
 
@@ -90,7 +100,9 @@ async def test_get_user_for_management_returns_subject_row_for_admin_reader(
         text("SELECT set_config('app.is_admin', 'true', true)")
     )
     proof = await open_audited_read(
-        app_db_session, reader_id=seeded_users.admin, subject_id=seeded_users.user_a
+        app_db_session,
+        reader_id=ReaderId(seeded_users.admin),
+        subject_id=SubjectId(seeded_users.user_a),
     )
 
     subject = await get_user_for_management(app_db_session, proof)
@@ -115,7 +127,9 @@ def test_constructing_auditedread_directly_raises_runtime_error() -> None:
     site, not by basedpyright or mypy.
     """
     with pytest.raises(RuntimeError, match="AUTH-08"):
-        AuditedRead(reader_id=uuid4(), subject_id=uuid4(), _token=object())
+        AuditedRead(
+            reader_id=ReaderId(uuid4()), subject_id=SubjectId(uuid4()), _token=object()
+        )
 
 
 @pytest.mark.db
@@ -127,7 +141,9 @@ async def test_repr_excludes_token_value(
     `repr()` produces, never logged or printed.
     """
     proof = await open_audited_read(
-        app_db_session, reader_id=seeded_users.admin, subject_id=seeded_users.user_a
+        app_db_session,
+        reader_id=ReaderId(seeded_users.admin),
+        subject_id=SubjectId(seeded_users.user_a),
     )
     await app_db_session.rollback()
     assert "_token" not in repr(proof)

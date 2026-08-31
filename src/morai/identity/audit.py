@@ -35,6 +35,7 @@ decorative.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import NewType
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -43,6 +44,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from morai.db.models import User
 
 _FACTORY_SENTINEL = object()
+
+# WR-04: `reader_id` and `subject_id` are both plain `UUID`s -- a transposed
+# call site (`open_audited_read(reader_id=user_id, subject_id=admin_id)`)
+# type-checks cleanly either way and silently inverts the audit record. A
+# `NewType` per role makes that swap a real basedpyright/mypy error instead:
+# passing a bare `UUID`, or the wrong role's `NewType`, where the other is
+# expected is now rejected at the call site, not just at runtime.
+ReaderId = NewType("ReaderId", UUID)
+SubjectId = NewType("SubjectId", UUID)
 
 
 @dataclass(frozen=True)
@@ -57,8 +67,8 @@ class AuditedRead:
     since the only thing ever done with it is an identity comparison.
     """
 
-    reader_id: UUID
-    subject_id: UUID
+    reader_id: ReaderId
+    subject_id: SubjectId
     _token: object = field(repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -70,7 +80,7 @@ class AuditedRead:
 
 
 async def open_audited_read(
-    session: AsyncSession, *, reader_id: UUID, subject_id: UUID
+    session: AsyncSession, *, reader_id: ReaderId, subject_id: SubjectId
 ) -> AuditedRead:
     """D2-12: the audit row and the capability that unlocks the read are produced
     in the same call, on the same session -- so committing the caller's own

@@ -31,7 +31,12 @@ from morai.api.models_identity import (
 from morai.db.models import GateUserScopedProbe, User
 from morai.db.models import Session as SessionRow
 from morai.db.session import get_db_session
-from morai.identity.audit import get_user_for_management, open_audited_read
+from morai.identity.audit import (
+    ReaderId,
+    SubjectId,
+    get_user_for_management,
+    open_audited_read,
+)
 from morai.identity.passwords import hash_password, needs_rehash, verify_password
 from morai.identity.rls import require_rls_context
 from morai.identity.sessions import (
@@ -157,7 +162,7 @@ async def reset_password(
     """
     try:
         proof = await open_audited_read(
-            session, reader_id=admin.user_id, subject_id=user_id
+            session, reader_id=ReaderId(admin.user_id), subject_id=SubjectId(user_id)
         )
     except IntegrityError:
         await session.rollback()
