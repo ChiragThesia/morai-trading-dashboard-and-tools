@@ -33,8 +33,8 @@ from sqlalchemy import insert, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.api.routes_identity import UserScopedProbeResponse
-from morai.db.models import GateUserScopedProbe
+from morai.api.routes_identity import PositionResponse
+from morai.db.models import Position
 from tests.identity.conftest import (
     SeededUsers,
     app_db_session,
@@ -76,13 +76,15 @@ _OPTIONAL_STR: TypeAdapter[str | None] = TypeAdapter(str | None)
 
 # Shared by both arms of the positive control (the app-role arm and the
 # superuser arm) -- one module-level constant so the two queries cannot drift
-# apart. No `WHERE user_id = ...` anywhere: the absence is the test.
-_CROSS_TENANT_SELECT = text("SELECT id, user_id FROM gate_user_scoped_probe")
+# apart. No `WHERE user_id = ...` anywhere: the absence is the test. Moved
+# onto `positions` from `gate_user_scoped_probe` (03-06): the isolation
+# proof now runs against a real trading table, not a stand-in for one.
+_CROSS_TENANT_SELECT = text("SELECT id, user_id FROM positions")
 
 # Task 2's HTTP arm parses the listing route's response the same way
 # `tests/identity/test_tracer_scoped_read.py` does -- reused, not reinvented.
-_PROBE_LIST: TypeAdapter[list[UserScopedProbeResponse]] = TypeAdapter(
-    list[UserScopedProbeResponse]
+_POSITION_LIST: TypeAdapter[list[PositionResponse]] = TypeAdapter(
+    list[PositionResponse]
 )
 
 
@@ -148,7 +150,7 @@ async def test_raw_cross_tenant_select_as_app_role_returns_only_the_context_user
     ids = {_UUID.validate_python(row[0]) for row in rows}
     owners = {_UUID.validate_python(row[1]) for row in rows}
     assert owners == {seeded_users.user_a}
-    assert seeded_users.probe_b not in ids
+    assert seeded_users.position_b not in ids
 
 
 async def test_the_identical_select_as_superuser_returns_every_seeded_row(
@@ -163,7 +165,7 @@ async def test_the_identical_select_as_superuser_returns_every_seeded_row(
     await _set_current_user(superuser_db_session, seeded_users.user_a)
     rows = (await superuser_db_session.execute(_CROSS_TENANT_SELECT)).all()
     ids = {_UUID.validate_python(row[0]) for row in rows}
-    assert {seeded_users.probe_a, seeded_users.probe_b} <= ids
+    assert {seeded_users.position_a, seeded_users.position_b} <= ids
 
 
 async def test_unset_context_returns_zero_rows(
@@ -190,10 +192,10 @@ async def test_context_set_to_a_user_with_no_rows_returns_zero_rows(
     app_db_session: AsyncSession,
     seeded_users: SeededUsers,
 ) -> None:
-    """A third seeded user (the admin, who owns no `gate_user_scoped_probe`
-    row) who owns no rows. Distinguishes "the policy excluded rows" from
-    "the context is broken and always excludes everything", which the
-    previous two tests together otherwise leave open."""
+    """A third seeded user (the admin, who owns no `positions` row) who
+    owns no rows. Distinguishes "the policy excluded rows" from "the
+    context is broken and always excludes everything", which the previous
+    two tests together otherwise leave open."""
     await _set_current_user(app_db_session, seeded_users.admin)
     rows = (await app_db_session.execute(_CROSS_TENANT_SELECT)).all()
     assert rows == []
@@ -205,13 +207,13 @@ async def test_a_write_for_another_user_is_rejected_by_the_policy(
 ) -> None:
     """The `WITH CHECK` half of the policy has its own test; a `USING`-only
     policy would let a user plant rows in another user's namespace, and this
-    is the only thing that catches that."""
+    is the only thing that catches that. A plain ORM insert against
+    `positions`, not the fill write path -- this is a test of the policy
+    alone, and needs no data key."""
     await _set_current_user(app_db_session, seeded_users.user_a)
     with pytest.raises(DBAPIError):
         await app_db_session.execute(
-            insert(GateUserScopedProbe).values(
-                user_id=seeded_users.user_b, note="planted by A"
-            )
+            insert(Position).values(user_id=seeded_users.user_b)
         )
 
 
@@ -227,11 +229,13 @@ async def test_admin_is_not_exempt_from_the_probe_table_policy(
 ) -> None:
     """The case most likely to be wrong: the admin genuinely does need
     cross-user reach on `users` for AUTH-01/AUTH-05, so the instinct is to
-    grant it everywhere. `gate_user_scoped_probe` carries no admin clause
-    (migration 0003) -- doing so here would make Phase 3's whole encryption
-    boundary decorative (D2-08, 02-RESEARCH.md Pitfall 4). Context set exactly
-    as the real auth dependency produces it for an admin: both
-    `app.current_user_id` and `app.is_admin`."""
+    grant it everywhere. `positions` carries no admin clause (migration
+    0008) -- doing so here would make this phase's whole encryption boundary
+    decorative (D2-08, D3-18), and now genuinely would: this is no longer a
+    stand-in table proving a principle for later, it is one of the real
+    trading tables the principle protects. Context set exactly as the real
+    auth dependency produces it for an admin: both `app.current_user_id`
+    and `app.is_admin`."""
     await _set_current_user(app_db_session, seeded_users.admin, is_admin=True)
     rows = (await app_db_session.execute(_CROSS_TENANT_SELECT)).all()
     assert rows == []
@@ -261,12 +265,12 @@ async def test_admin_gets_404_for_another_users_probe_row_over_http(
     superuser_db_session: AsyncSession,
     seeded_users: SeededUsers,
 ) -> None:
-    """The HTTP arm. An admin session cookie asking for another user's probe
-    row gets not-found, not forbidden (D2-08) -- the detail route has no
-    admin path."""
+    """The HTTP arm. An admin session cookie asking for another user's
+    position gets not-found, not forbidden (D2-08) -- the detail route has
+    no admin path."""
     token = await _seed_session(superuser_db_session, seeded_users.admin)
     response = await client.get(
-        f"/gate/user-scoped-probe/{seeded_users.probe_b}",
+        f"/gate/positions/{seeded_users.position_b}",
         cookies={"morai_session": token},
     )
     assert response.status_code == 404
@@ -284,11 +288,11 @@ async def test_the_two_404_bodies_are_byte_identical(
     (per-request by design)."""
     token = await _seed_session(superuser_db_session, seeded_users.admin)
     another_users_row = await client.get(
-        f"/gate/user-scoped-probe/{seeded_users.probe_b}",
+        f"/gate/positions/{seeded_users.position_b}",
         cookies={"morai_session": token},
     )
     truly_absent_row = await client.get(
-        f"/gate/user-scoped-probe/{uuid4()}",
+        f"/gate/positions/{uuid4()}",
         cookies={"morai_session": token},
     )
     assert another_users_row.status_code == 404
@@ -313,12 +317,10 @@ async def test_admin_probe_listing_returns_only_the_admins_own_rows(
     seeded_users: SeededUsers,
 ) -> None:
     """The listing route, like the detail route, has no admin path. The admin
-    owns no `gate_user_scoped_probe` row (`SeededUsers`), so the only correct
-    response is an empty list -- never A's or B's rows."""
+    owns no `positions` row (`SeededUsers`), so the only correct response is
+    an empty list -- never A's or B's rows."""
     token = await _seed_session(superuser_db_session, seeded_users.admin)
-    response = await client.get(
-        "/gate/user-scoped-probe", cookies={"morai_session": token}
-    )
+    response = await client.get("/gate/positions", cookies={"morai_session": token})
     assert response.status_code == 200
-    rows = _PROBE_LIST.validate_json(response.content)
+    rows = _POSITION_LIST.validate_json(response.content)
     assert rows == []

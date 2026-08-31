@@ -285,9 +285,20 @@ async def test_seed_oracle_produces_52_fills_13_positions_26_legs(
 ) -> None:
     await seed_oracle(superuser_db_session, app_db_session, provisioned_users.user_a)
 
+    # Excludes `provisioned_users.position_a`/`position_b` -- `seeded_users`
+    # (tests/identity/conftest.py) now seeds one stand-in `positions` row
+    # per non-admin user in place of the retired probe rows (03-06 Task 1),
+    # so a bare `COUNT(*)` would count 15, not 13. This test's own claim is
+    # about what `seed_oracle` produces, not the fixture stack underneath.
     position_count = _INT.validate_python(
         (
-            await superuser_db_session.execute(text("SELECT COUNT(*) FROM positions"))
+            await superuser_db_session.execute(
+                text("SELECT COUNT(*) FROM positions WHERE id NOT IN (:pa, :pb)"),
+                {
+                    "pa": provisioned_users.position_a,
+                    "pb": provisioned_users.position_b,
+                },
+            )
         ).scalar_one()
     )
     leg_count = _INT.validate_python(
