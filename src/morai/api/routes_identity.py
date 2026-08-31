@@ -303,11 +303,23 @@ async def login(
         # A lazy per-login upgrade, not a bulk migration -- if the Railway
         # measurement (D2-03, tools/measure_argon2.py) forces a parameter
         # change, existing hashes catch up one login at a time.
-        await session.execute(
+        rehash_result = await session.execute(
             update(User)
             .where(User.id == user_id)
             .values(password_hash=hash_password(body.password))
         )
+        # Same class of write as /setup's password UPDATE above, and the same
+        # rowcount guard (WR-02): today this is provably safe (the RLS context
+        # was just set two statements earlier, same transaction), but a future
+        # regression that broke that ordering would otherwise silently and
+        # permanently prevent this hash from ever being upgraded -- no error,
+        # no log line, login itself still succeeds either way.
+        if not isinstance(rehash_result, CursorResult) or rehash_result.rowcount != 1:
+            raise RuntimeError(
+                "login route: rehash UPDATE did not match exactly one row -- "
+                "the RLS context was not established correctly for this "
+                "user id."
+            )
 
     raw_token = generate_token()
     session.add(

@@ -30,6 +30,7 @@ from uuid import UUID
 
 import pytest
 import pytest_asyncio
+from argon2 import PasswordHasher
 from httpx import ASGITransport, AsyncClient
 from pydantic import TypeAdapter
 from sqlalchemy import select, update
@@ -38,7 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from morai.api.routes_identity import MeResponse
 from morai.db.models import Session as SessionRow
 from morai.db.models import User
-from morai.identity.passwords import hash_password
+from morai.identity.passwords import hash_password, needs_rehash
 from tests.identity.conftest import SeededUsers
 
 pytestmark = pytest.mark.db
@@ -187,6 +188,41 @@ async def test_a_user_never_set_up_cannot_log_in_with_any_password(
 
     assert empty_password.status_code == 401
     assert real_looking_password.status_code == 401
+
+
+async def test_login_upgrades_a_weaker_hash_to_current_parameters(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """WR-02: the lazy-rehash `UPDATE` in `/login` actually rewrites the row.
+    Seeds a hash from a deliberately weaker `PasswordHasher` (the same
+    `needs_rehash` fixture shape `test_passwords.py` uses), logs in, and
+    asserts `needs_rehash` is now False against the stored hash -- proving
+    the write happened, not just that the pure function detects staleness."""
+    weaker_hasher = PasswordHasher(time_cost=1, memory_cost=8, parallelism=1)
+    weaker_hash = weaker_hasher.hash(_PASSWORD)
+    await superuser_db_session.execute(
+        update(User)
+        .where(User.id == seeded_users.user_a)
+        .values(password_hash=weaker_hash)
+    )
+    await superuser_db_session.commit()
+    assert needs_rehash(weaker_hash) is True
+
+    response = await client.post(
+        "/login", json={"username": "user-a", "password": _PASSWORD}
+    )
+    assert response.status_code == 200
+
+    row = (
+        await superuser_db_session.execute(
+            select(User).where(User.id == seeded_users.user_a)
+        )
+    ).scalar_one()
+    assert row.password_hash is not None
+    assert row.password_hash != weaker_hash
+    assert needs_rehash(row.password_hash) is False
 
 
 async def test_no_log_record_from_login_contains_password_token_or_hash(
