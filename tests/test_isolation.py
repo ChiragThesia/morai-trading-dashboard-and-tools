@@ -1,0 +1,193 @@
+"""Phase 2's equivalent of Phase 1's thirteen-fixture oracle (`02-CONTEXT.md`
+`<specifics>`). Every zero-rows claim this file makes is bracketed by a
+privilege precondition on its own connection and by a superuser positive
+control running byte-identical SQL -- without both, "zero rows" only proves
+the table was reachable, not that a policy fired.
+
+`@pytest.mark.db` -- runs only where Postgres is reachable (CI's
+`test-pytest` job). There is no local database (Docker's daemon is broken
+here, Railway's Postgres is private-network-only).
+
+Fixtures (`app_db_session`, `superuser_db_session`, `seeded_users`,
+`clean_identity_tables`) live in `tests/identity/conftest.py`, one directory
+below this file, so pytest's normal conftest-scoping does not reach them.
+`pytest_plugins = ["tests.identity.conftest"]` was tried first and rejected
+(Rule 1, measured): pytest already auto-loads that file as a directory
+conftest for everything under `tests/identity/`, and registering the same
+module a second time under a dotted name raises `ValueError: Plugin already
+registered under a different name` the moment both are collected in one
+session. Importing the fixture *functions* directly avoids the double
+registration -- pytest resolves a fixture by name from the requesting
+module's own namespace, so an imported `@pytest.fixture` object works
+exactly like a locally-defined one.
+"""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+import pytest
+from pydantic import TypeAdapter
+from sqlalchemy import insert, text
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from morai.db.models import GateUserScopedProbe
+from tests.identity.conftest import (
+    SeededUsers,
+    app_db_session,
+    clean_identity_tables,
+    seeded_users,
+    superuser_db_session,
+)
+
+# Re-exported, not merely imported: these names are never referenced by an
+# expression in this module -- pytest finds them by name lookup in this
+# module's namespace when resolving a same-named fixture parameter. `__all__`
+# tells both ruff (F401) and basedpyright (reportUnusedImport) that the
+# import is the point, without a per-line noqa.
+__all__ = [
+    "SeededUsers",
+    "app_db_session",
+    "clean_identity_tables",
+    "seeded_users",
+    "superuser_db_session",
+]
+
+pytestmark = pytest.mark.db
+
+
+# `Row` (raw `text()` results) types every column as `Any` -- same
+# untyped-boundary shape `tests/identity/test_app_role.py` already
+# established. `TypeAdapter` narrows at that boundary (D-06); indexed access
+# (`row[0]`), never attribute access, matching that file's own convention.
+_BOOL: TypeAdapter[bool] = TypeAdapter(bool)
+_UUID: TypeAdapter[UUID] = TypeAdapter(UUID)
+_STR: TypeAdapter[str] = TypeAdapter(str)
+_OPTIONAL_STR: TypeAdapter[str | None] = TypeAdapter(str | None)
+
+# Shared by both arms of the positive control (the app-role arm and the
+# superuser arm) -- one module-level constant so the two queries cannot drift
+# apart. No `WHERE user_id = ...` anywhere: the absence is the test.
+_CROSS_TENANT_SELECT = text("SELECT id, user_id FROM gate_user_scoped_probe")
+
+
+async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
+    """`set_config`, not `SET LOCAL ... :uid` -- Postgres's `SET` grammar only
+    accepts a literal there, never a bind parameter (`identity/sessions.py`'s
+    module docstring, measured in CI during plan 02-01)."""
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+    )
+
+
+async def test_the_test_connection_cannot_bypass_rls(
+    app_db_session: AsyncSession,
+) -> None:
+    """Every other assertion in this file is meaningless if this one fails.
+
+    Named first, on purpose: if the connection making a zero-rows claim can
+    itself bypass RLS (superuser or `BYPASSRLS`), every "zero rows" result
+    below would mean nothing -- it would be measuring an inert policy and
+    reporting it as a working one. CI's own Postgres user (`morai`,
+    `POSTGRES_USER`-created) is a superuser by the official image's own
+    documentation, which is exactly the hazard this test exists to catch
+    before it can hide behind an application-filter false green.
+    """
+    row = (
+        await app_db_session.execute(
+            text(
+                "SELECT rolsuper, rolbypassrls FROM pg_roles "
+                "WHERE rolname = current_user"
+            )
+        )
+    ).one()
+    assert (_BOOL.validate_python(row[0]), _BOOL.validate_python(row[1])) == (
+        False,
+        False,
+    )
+    result = await app_db_session.execute(
+        text("SELECT current_setting('is_superuser')")
+    )
+    assert _STR.validate_python(result.scalar_one()) == "off"
+
+
+async def test_raw_cross_tenant_select_as_app_role_returns_only_the_context_user_rows(
+    app_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """No `WHERE` clause anywhere in `_CROSS_TENANT_SELECT` -- routing through
+    a repository would re-introduce the application filter this test exists
+    to look past. Raw SQL through `sa.text`, not the ORM."""
+    await _set_current_user(app_db_session, seeded_users.user_a)
+    rows = (await app_db_session.execute(_CROSS_TENANT_SELECT)).all()
+    assert rows, "expected at least user A's own seeded row"
+    ids = {_UUID.validate_python(row[0]) for row in rows}
+    owners = {_UUID.validate_python(row[1]) for row in rows}
+    assert owners == {seeded_users.user_a}
+    assert seeded_users.probe_b not in ids
+
+
+async def test_the_identical_select_as_superuser_returns_every_seeded_row(
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """The positive control. If this test ever fails, the previous test's
+    green is worthless -- it proves the previous test measured a policy and
+    not an empty table, a misspelled relation, or a seed fixture that
+    quietly did nothing. Same `_CROSS_TENANT_SELECT` constant, same `SET
+    LOCAL`-equivalent context; only the connecting role differs."""
+    await _set_current_user(superuser_db_session, seeded_users.user_a)
+    rows = (await superuser_db_session.execute(_CROSS_TENANT_SELECT)).all()
+    ids = {_UUID.validate_python(row[0]) for row in rows}
+    assert {seeded_users.probe_a, seeded_users.probe_b} <= ids
+
+
+async def test_unset_context_returns_zero_rows(
+    app_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """Confirms the policy fails closed by construction (research Assumption
+    A5: `user_id = NULL` is NULL, not TRUE, so an unset context excludes
+    every row). Paired with an assertion that the setting really is unset,
+    so this test says *why* it got zero rows rather than only that it did."""
+    setting = _OPTIONAL_STR.validate_python(
+        (
+            await app_db_session.execute(
+                text("SELECT current_setting('app.current_user_id', true)")
+            )
+        ).scalar_one()
+    )
+    assert setting is None
+    rows = (await app_db_session.execute(_CROSS_TENANT_SELECT)).all()
+    assert rows == []
+
+
+async def test_context_set_to_a_user_with_no_rows_returns_zero_rows(
+    app_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """A third seeded user (the admin, who owns no `gate_user_scoped_probe`
+    row) who owns no rows. Distinguishes "the policy excluded rows" from
+    "the context is broken and always excludes everything", which the
+    previous two tests together otherwise leave open."""
+    await _set_current_user(app_db_session, seeded_users.admin)
+    rows = (await app_db_session.execute(_CROSS_TENANT_SELECT)).all()
+    assert rows == []
+
+
+async def test_a_write_for_another_user_is_rejected_by_the_policy(
+    app_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """The `WITH CHECK` half of the policy has its own test; a `USING`-only
+    policy would let a user plant rows in another user's namespace, and this
+    is the only thing that catches that."""
+    await _set_current_user(app_db_session, seeded_users.user_a)
+    with pytest.raises(DBAPIError):
+        await app_db_session.execute(
+            insert(GateUserScopedProbe).values(
+                user_id=seeded_users.user_b, note="planted by A"
+            )
+        )
