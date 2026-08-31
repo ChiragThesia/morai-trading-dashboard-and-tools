@@ -120,6 +120,18 @@ CASES = [
         "arg-type",
         id="mypy-unaudited_read-arg-type",
     ),
+    pytest.param(
+        "violation_second_fill_writer.py",
+        ["uv", "run", "basedpyright"],
+        "reportCallIssue",
+        id="basedpyright-second_fill_writer-reportCallIssue",
+    ),
+    pytest.param(
+        "violation_second_fill_writer.py",
+        ["uv", "run", "mypy"],
+        "call-arg",
+        id="mypy-second_fill_writer-call-arg",
+    ),
 ]
 
 
