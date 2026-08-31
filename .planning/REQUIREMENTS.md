@@ -20,7 +20,7 @@ API, a job, or a stored invariant.
 - [ ] **AUTH-05**: Admin can reset a user's password without any email service in the loop
 - [ ] **AUTH-06**: User can delete their own account, purging their data and destroying their data key
 - [x] **AUTH-07**: No endpoint returns one user's trading data to another user, including to the admin
-- [ ] **AUTH-08**: Every privileged read of user data writes an audit entry naming reader, subject, and time
+- [x] **AUTH-08**: Every privileged read of user data writes an audit entry naming reader, subject, and time
 
 ### Encryption
 
@@ -175,7 +175,7 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | AUTH-05 | Phase 2 | Pending |
 | AUTH-06 | Phase 3 | Pending |
 | AUTH-07 | Phase 2 | Complete |
-| AUTH-08 | Phase 2 | Pending |
+| AUTH-08 | Phase 2 | Complete |
 | CRYPT-01 | Phase 3 | Pending |
 | CRYPT-02 | Phase 3 | Pending |
 | CRYPT-03 | Phase 3 | Pending |
