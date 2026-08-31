@@ -910,3 +910,38 @@ Do the move **after** any large cleanup. Pushing gigabytes through a sync daemon
 **A second-order trap worth stating separately.** Backups do not escape this by being in a different folder. A backup directory created on the same synced Desktop produced its own collision — two `.bundle` files with different checksums, one silently stale. A backup on the volume you are protecting against is not a backup.
 
 **Source.** Measured in this repo 2026-08-25 to 2026-08-29; `37-REVIEW 2.md` is the committed instance.
+
+---
+
+### V092
+
+**SQLAlchemy silently appends `RETURNING` to an INSERT, and RLS rejects it.**
+
+An `insert(Model).values(...)` against a table with row-level security enabled fails with a
+policy violation, even though the policy permits the insert. The error names a read
+permission nobody asked for.
+
+**Mechanism.** When a mapped column carries a `server_default` — a generated id, a
+`now()` timestamp — SQLAlchemy needs the server-assigned value back to populate the ORM
+object. On Postgres it gets it by appending `RETURNING <col>` to the statement. That
+`RETURNING` is a **read**, and a table whose policy set is INSERT-only has no `SELECT`
+policy to permit it. The insert is allowed; the invisible read is not.
+
+Nothing in the Python source says `RETURNING`. It is added by the dialect, so grepping the
+codebase for it finds nothing and the statement looks innocent.
+
+**Where it bit.** Phase 2's `audit_log`, deliberately INSERT-only: an audit row may be
+written and never read back through the app's own role. Every write failed until the ORM
+insert was replaced with raw `text()` SQL, which SQLAlchemy passes through unaugmented.
+
+**The fix, and the choice behind it.** Either write the row with `text()`, or add a `SELECT`
+policy. Prefer `text()` when the table is meant to be append-only — adding a `SELECT`
+policy to satisfy an ORM implementation detail widens the actual security boundary to work
+around a convenience. That is the wrong trade for an audit table.
+
+**Generalises.** Any RLS table with a `server_default` and a restricted `SELECT` policy has
+this. Phase 3 onward adds several. Expect it, rather than rediscovering it each time.
+
+**Source.** Measured 2026-08-31 in CI against `postgres:18-alpine`, plan 02-04. Found only
+because the test ran against a real database — no local Postgres is reachable in this
+project, so the ORM path had never been exercised under a policy before.
