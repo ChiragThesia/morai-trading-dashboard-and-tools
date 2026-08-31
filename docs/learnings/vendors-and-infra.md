@@ -945,3 +945,47 @@ this. Phase 3 onward adds several. Expect it, rather than rediscovering it each 
 **Source.** Measured 2026-08-31 in CI against `postgres:18-alpine`, plan 02-04. Found only
 because the test ran against a real database — no local Postgres is reachable in this
 project, so the ORM path had never been exercised under a policy before.
+
+---
+
+### V093
+
+**A git worktree isolates the filesystem, not the database. Parallel agents collide in Postgres.**
+
+Two GSD executor agents ran in parallel worktrees on plans with disjoint `files_modified`.
+Both suites went intermittently red. The failing tests were scattered, varied run to run,
+and lived in files neither agent had touched.
+
+**Mechanism.** Worktree isolation is a filesystem guarantee. Each agent gets its own
+checkout and its own branch. Nothing about it scopes `DATABASE_URL`. Both agents read the
+same env var, connected to the same literal local Postgres, and ran the same fixtures that
+truncate and re-seed shared tables. Each was tearing down the other's rows mid-transaction.
+
+The symptoms do not look like contention. They look like unrelated bugs: `NoResultFound`
+on a freshly-provisioned user's own encryption key, a login route returning 401 for a
+request the test had just authenticated, `UniqueViolationError` and `DeadlockDetectedError`
+on tables the plan never mentions.
+
+**Why the obvious control does not catch it.** The first agent ran the right experiment —
+re-run with my own new test files excluded — saw the same failures, and concluded the flake
+was pre-existing. The control ruled out its own files. It could not rule out the sibling
+process, which was invisible to it. A control that omits the confound confirms the wrong
+hypothesis with real evidence, which is worse than no evidence.
+
+**The measurement.** After both worktrees merged and no agent was running, the suite was
+run four times on the merged tree: once via `bash tools/gate.sh` (exit 0, 267 passed,
+ruff/basedpyright/mypy clean) and three more times via `uv run pytest -q`. All four green.
+Zero failures. The failures exist only under concurrency.
+
+**The fix.** Give each worktree its own database — suffix `DATABASE_URL` per worktree,
+create and drop it around the run — or serialise the DB-backed portion of parallel waves.
+The orchestrator already checks that parallel plans touch disjoint files. Disjoint files
+are not disjoint state.
+
+**Generalises.** Any parallel-agent harness that isolates checkouts but shares a service —
+a database, a Redis, a message broker, a fixed port — has this. The louder the isolation
+guarantee, the more confidently the wrong conclusion gets recorded.
+
+**Source.** Measured in this repo 2026-08-31, Phase 4 wave 2, plans 04-02 and 04-03 against
+native Postgres 18. Both agents reported the collision from opposite sides before either
+identified it.
