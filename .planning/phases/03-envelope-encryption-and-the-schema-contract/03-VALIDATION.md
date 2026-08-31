@@ -3,8 +3,8 @@ phase: 3
 slug: envelope-encryption-and-the-schema-contract
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-08-31
 ---
 
@@ -30,7 +30,13 @@ Environment for every DB-marked run — Postgres 18 runs natively via Homebrew, 
 export DATABASE_URL="postgresql://morai:morai@localhost:5432/morai"
 export MORAI_APP_DB_PASSWORD="localdevpassword"
 export MORAI_ENV_FILE=""
+# New this phase. Base64 of a 32-byte ASCII string that says what it is. Local only.
+export MORAI_MASTER_KEY="bG9jYWxkZXZtYXN0ZXJrZXktMzJieXRlcy10ZXN0MDA="
 ```
+
+`pg_dump`, `pg_restore`, `psql` and `createdb` are installed but **not on the default PATH** —
+they live in `/opt/homebrew/opt/postgresql@18/bin`, confirmed on this machine. Plan 03-03
+resolves them explicitly rather than assuming PATH.
 
 ---
 
@@ -48,14 +54,39 @@ green, never to discover whether it is (`.claude/rules/workflow.md`, Speed).
 
 ## Per-Task Verification Map
 
-Populated by the planner as tasks are written. Every task carrying `type: tdd` needs an
-`<automated>` verify command, and the red-then-green output is part of its deliverable.
+Every task carries an `<automated>` verify command, and the red-then-green output is part of
+its deliverable. Every command below is prefixed by `$ENV`, which stands for:
+
+```
+MORAI_ENV_FILE= DATABASE_URL=postgresql://morai:morai@localhost:5432/morai MORAI_APP_DB_PASSWORD=localdevpassword MORAI_MASTER_KEY=bG9jYWxkZXZtYXN0ZXJrZXktMzJieXRlcy10ZXN0MDA=
+```
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| *(planner fills)* | | | | | | | | | ⬜ pending |
+| 03-01-T1 | 03-01 | 1 | CRYPT-01, CRYPT-02, CRYPT-03 | T-03-01, T-03-02, T-03-06, T-03-07 | A `Decimal` round-trips through per-column AES-GCM under a wrapped per-user key; RLS enforced on both new tables; the KEK is never rendered | tracer + db | `$ENV uv run pytest -q tests/ledger/test_tracer_encrypted_fill.py tests/test_settings.py -x` | ❌ created by the task | ⬜ pending |
+| 03-01-T2 | 03-01 | 1 | CRYPT-02 | T-03-03, T-03-04 | Tamper, wrong key, wrong nonce and wrong row all raise `InvalidTag`; a nonce is fresh per call | unit | `$ENV uv run pytest -q tests/crypto/test_envelope.py -x` | ❌ created by the task | ⬜ pending |
+| 03-01-T3 | 03-01 | 1 | CRYPT-02 | T-03-05 | A second writer into the fill table is rejected by both checkers, with the marker pinned from a real run | gate | `uv run pytest -q tests/gate/test_type_gate.py -x` | ✅ extends existing | ⬜ pending |
+| 03-02-T1 | 03-02 | 2 | CRYPT-02, CRYPT-03 | T-03-12 | RLS enable + force, admin-free policy and verb-narrowed grants on `positions`, `legs`, `events` | db | `$ENV uv run pytest -q tests/ledger/test_schema_contract.py -x` | ❌ created by the task | ⬜ pending |
+| 03-02-T2 | 03-02 | 2 | LEDGER-04 | T-03-09, T-03-10 | A netted-only ROLL is rejected by Postgres on a connection that bypasses the application, and the error names the constraint | db | `$ENV uv run pytest -q tests/ledger/test_roll_check_constraint.py -x` | ❌ created by the task | ⬜ pending |
+| 03-02-T3 | 03-02 | 2 | LEDGER-04, CRYPT-02 | T-03-11, T-03-13 | A ROLL's two amounts are encrypted separately under two distinct nonces; no plaintext netted column exists | db | `$ENV uv run pytest -q tests/ledger -x` | ❌ created by the task | ⬜ pending |
+| 03-03-T1 | 03-03 | 3 | CRYPT-05 | T-03-14, T-03-15, T-03-18 | A real dump restored into a scratch database yields no plaintext bytes to a reader with no key; the naive literal grep is demonstrated passing on an unencrypted value | db | `$ENV uv run pytest -q tests/test_pg_dump_confidentiality.py -x` | ❌ created by the task | ⬜ pending |
+| 03-03-T2 | 03-03 | 3 | CRYPT-05 | T-03-16, T-03-17 | No `(user_id, key_version, nonce)` triple repeats across any ciphertext column; a planted cross-column collision is caught; a new column with no branch fails the drift guard | db | `$ENV uv run pytest -q tests/crypto/test_nonce_uniqueness.py -x` | ❌ created by the task | ⬜ pending |
+| 03-04-T1 | 03-04 | 3 | CRYPT-01 | T-03-21 | A new account's data key is provisioned in the same transaction, without an admin clause on the key table | db | `$ENV uv run pytest -q tests/identity/test_account_deletion.py -x` | ❌ created by the task | ⬜ pending |
+| 03-04-T2 | 03-04 | 3 | CRYPT-04 | T-03-22, T-03-23, T-03-24 | Trade ciphertext is byte-identical before and after a master-key rotation; wrapped keys all changed; a wrong old key raises before any write | db | `$ENV uv run pytest -q tests/test_key_rotation.py -x` | ❌ created by the task | ⬜ pending |
+| 03-04-T3 | 03-04 | 3 | AUTH-06 | T-03-19, T-03-20, T-03-25 | Key destroyed first, rows second; with the key gone and rows present, reads raise a named missing-key error; `DELETE /me` names no other user | db | `$ENV uv run pytest -q tests/test_crypto_shred.py tests/identity/test_account_deletion.py -x` | ❌ created by the task | ⬜ pending |
+| 03-05-T1 | 03-05 | 3 | CRYPT-03 | T-03-30 | All 52 oracle fills are seeded through `insert_fills()` with no test-only fast path | db | `$ENV uv run pytest -q tests/ledger/test_plaintext_queries.py -k seed -x` | ❌ created by the task | ⬜ pending |
+| 03-05-T2 | 03-05 | 3 | CRYPT-03 | T-03-26, T-03-27, T-03-28, T-03-29 | Both queries run against plaintext columns only, proved against the schema's own column list; the window total is summed in Python after decrypt | db | `$ENV uv run pytest -q tests/ledger/test_plaintext_queries.py -x` | ❌ created by the task | ⬜ pending |
+| 03-06-T1 | 03-06 | 4 | CRYPT-02 | T-03-34, T-03-35 | The deployed gate route serves `positions`, returns plaintext columns only, and still answers not-found rather than forbidden | db + http | `$ENV uv run pytest -q tests/identity -x` | ✅ repoints existing | ⬜ pending |
+| 03-06-T2 | 03-06 | 4 | CRYPT-02 | T-03-31 | All eleven isolation guards run green against real trading tables, with the privilege precondition and the superuser positive control intact | db + http | `$ENV uv run pytest -q tests/test_isolation.py -v` | ✅ repoints existing | ⬜ pending |
+| 03-06-T3 | 03-06 | 4 | CRYPT-02 | T-03-32, T-03-33 | All five new tables refuse cross-tenant reads and planted writes, and no policy on any of them names the admin setting | db | `$ENV uv run pytest -q tests/test_isolation.py tests/identity/test_app_role.py -x` | ✅ extends existing | ⬜ pending |
+| 03-07-T1 | 03-07 | 5 | CRYPT-02 | T-03-37, T-03-39 | A `Decimal` survives Python, encryption, Postgres `bytea`, decryption and JSON unchanged, read on an independent connection | db | `$ENV uv run pytest -q tests/test_money_roundtrip.py tests/test_decimal_canary.py -x` | ✅ repoints existing | ⬜ pending |
+| 03-07-T2 | 03-07 | 5 | CRYPT-03 | T-03-38 | Every money column names its unit whether `NUMERIC` or `bytea`; two synthetic negative controls fire; the vacuity guard counts both types | unit | `uv run pytest -q tests/test_money_column_naming.py -x` | ✅ extends existing | ⬜ pending |
+| 03-07-T3 | 03-07 | 5 | CRYPT-02, CRYPT-03 | T-03-36, T-03-40 | Both probe tables dropped by a reversible migration, after the isolation proof moved; the full suite green with the models and the money-probe route gone | db | `$ENV uv run pytest -q` | ✅ full suite | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+**Sampling continuity:** no three consecutive tasks lack an automated verify — every task has
+one, and every one runs locally in seconds against native Postgres.
 
 ---
 
@@ -78,9 +109,16 @@ phase is judged on; a test that cannot fail against a broken implementation does
 
 ## Wave 0 Requirements
 
-- [ ] `tests/ledger/__init__.py`, `tests/ledger/conftest.py` — fixtures for the new trading tables
-- [ ] `tests/crypto/` — envelope-encryption unit tests (no DB needed for the primitive)
-- [ ] No framework install needed — pytest, pytest-asyncio and Hypothesis are already present
+No separate Wave 0 plan. Every test file is written by the task that needs it, test-first,
+which is this project's own established TDD shape and is what makes the red-then-green output
+a deliverable rather than a ceremony. The scaffolding each item names lands here:
+
+- [x] `tests/ledger/__init__.py`, `tests/ledger/conftest.py` — plan 03-01 Task 1, extended by
+      03-02 Task 2 with the position/leg seed and the new tables' truncation
+- [x] `tests/crypto/__init__.py`, `tests/crypto/test_envelope.py` — plan 03-01 Task 2, no DB
+      marker, pure `bytes` in and out
+- [x] No framework install needed — pytest, pytest-asyncio and Hypothesis are already present.
+      `cryptography==50.0.1` is a runtime dependency added by plan 03-01 Task 1, not a test one
 
 ---
 
@@ -109,11 +147,13 @@ probe tables go.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 25s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify — 18 tasks across 7 plans, every one with a command
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references — each scaffolding item is created by the task that
+      needs it, listed above
+- [x] No watch-mode flags
+- [x] Feedback latency < 25s — the slowest scoped command is the full suite at roughly 13s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** planner sign-off 2026-08-31. Execution has not run; every status above is
+⬜ pending until it does.
