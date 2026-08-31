@@ -1280,3 +1280,51 @@ Consequences, both required:
 This makes CI a *stronger* proof of the RLS design than a smoke test against the deployed
 service would be: in CI both roles are under the suite's control, so the negative case can
 be asserted directly rather than merely hoped for.
+
+---
+
+## Orchestrator Addendum 2 — the recommended `SET LOCAL` pattern does not work
+
+**Every `SET LOCAL app.current_user_id = :uid` example above is wrong and will not run.**
+Corrected here rather than edited in place, so the reasoning that produced the error stays
+visible. Measured against real Postgres in CI during plan 02-01, not inferred.
+
+Postgres's `SET` is utility grammar, not a normal statement. Its right-hand side accepts a
+literal or a keyword — never a bind parameter. Passing one raises, at execution:
+
+    asyncpg.exceptions.PostgresSyntaxError: syntax error at or near "$1"
+
+This is the load-bearing statement of the entire RLS design, so it would have failed on
+first contact with a real database.
+
+**Use `set_config` instead.** It is an ordinary function call, so it takes parameters
+normally, and its third argument `true` gives exactly the transaction-scoped semantics
+`SET LOCAL` was chosen for:
+
+```python
+await session.execute(
+    text("SELECT set_config('app.current_user_id', :uid, true)"),
+    {"uid": str(user_id)},
+)
+```
+
+Read side is unchanged — `current_setting('app.current_user_id', true)`.
+
+**The same grammar limit applies to `CREATE ROLE ... PASSWORD`,** which matters more,
+because the obvious workaround there is an injection bug. Do **not** f-string the password
+into the DDL. Pass it as a genuine bind parameter to Postgres's own `quote_literal()` and
+embed only the server-escaped result, so the escaping is done by the server that will parse
+it rather than by Python string formatting.
+
+Both corrections are documented in `src/morai/identity/sessions.py`'s module docstring, at
+the call site, so a later reader who copies from this research file finds the working form
+in the code even if they miss this addendum. Plan 02-01's CI runs carry the red-then-green
+evidence: `33358562048` failing, `33358848325` green with 83 tests passing.
+
+**A third, smaller correction from the same wave.** `TypeAdapter(...).validate_python(response.json())`
+rejects a UUID field's JSON string under `ApiModel`'s `strict=True`, because
+`validate_python` applies `is_instance_of` semantics. Use `validate_json(response.content)`:
+pydantic runs separate JSON-mode strict rules where a UUID's string form is correct rather
+than a coercion to reject. This is the same class of trap as Phase 1's `Decimal`
+`BeforeValidator` finding — strict mode means different things on the Python path and the
+JSON path, and the API sits on the JSON one.
