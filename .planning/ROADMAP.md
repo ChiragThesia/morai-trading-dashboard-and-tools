@@ -129,7 +129,7 @@ criteria met in substance.
   5. Deleting an account destroys that user's data key, after which their rows decrypt to nothing.
   6. The raw fill, leg, position and event tables exist with the plaintext/ciphertext split applied, and a fill can be written and read back through exactly one write path — the same one Phase 6's ingest will use and Phase 5's oracle will seed through. A second path into the fill table does not exist.
 
-**Plans**: 6/7 plans executed, 5 waves
+**Plans**: 7/7 plans executed, 5 waves
 
 Plans:
 
@@ -139,7 +139,7 @@ Plans:
 - [x] 03-04-PLAN.md — Wave 3. The data key's lifecycle: provisioned with the account, re-wrapped on master-key rotation with trade ciphertext proved byte-identical, and destroyed before the rows on account deletion
 - [x] 03-05-PLAN.md — Wave 3. Criterion 2: both SQL queries executed against real Postgres over the plaintext set, seeded from the 52 oracle fills through `insert_fills()`
 - [x] 03-06-PLAN.md — Wave 4. The carried obligation, first half: the eleven isolation guards repointed at the real trading tables and observed green, widened to all five, before anything is dropped
-- [ ] 03-07-PLAN.md — Wave 5. The carried obligation, second half: migration 0009 drops both probe tables, and the `Decimal` round-trip and unit-suffix proofs move onto the encrypted schema
+- [x] 03-07-PLAN.md — Wave 5. The carried obligation, second half: migration 0009 drops both probe tables, and the `Decimal` round-trip and unit-suffix proofs move onto the encrypted schema
 
 **UI hint**: no
 
@@ -332,7 +332,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/10 | In Progress|  |
 | 2. Identity, Sessions, and Tenant Isolation | 6/6 | In Progress|  |
-| 3. Envelope Encryption and the Schema Contract | 6/7 | In Progress|  |
+| 3. Envelope Encryption and the Schema Contract | 7/7 | In Progress|  |
 | 4. Schwab Connection and Token Lifecycle | 0/TBD | Not started | - |
 | 5. Fill Pairing and the Oracle Gate | 0/TBD | Not started | - |
 | 6. Raw Ingest and Backfill | 0/TBD | Not started | - |
