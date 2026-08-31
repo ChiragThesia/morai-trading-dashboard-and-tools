@@ -70,11 +70,11 @@ async def test_superuser_connection_is_actually_a_superuser(
     [
         ("users", True),
         ("audit_log", True),
-        ("gate_user_scoped_probe", True),
         ("sessions", False),
         ("setup_tokens", False),
         # The five phase-3 trading tables (03-06 Task 3) -- each carries the
-        # same ENABLE+FORCE RLS shape as gate_user_scoped_probe once did.
+        # same ENABLE+FORCE RLS shape gate_user_scoped_probe once did, before
+        # 03-07 dropped it (migration 0009).
         ("user_data_keys", True),
         ("fills", True),
         ("positions", True),

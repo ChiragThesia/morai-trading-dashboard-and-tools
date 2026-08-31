@@ -40,7 +40,6 @@ app = procrastinate.App(
 # real cadence is Phase 6's owned spike; this cron is not a preview of it.
 @app.task(name="heartbeat")
 async def heartbeat(timestamp: int) -> None:
-    """Logs its own run and returns. No table of its own -- `gate_money_probe`
-    is the only table Phase 1 creates (D-13); this task's durable evidence is
-    its own row in `procrastinate_jobs`."""
+    """Logs its own run and returns. No table of its own -- this task's
+    durable evidence is its own row in `procrastinate_jobs`."""
     logger.info("heartbeat run at %s", datetime.now(UTC).isoformat())

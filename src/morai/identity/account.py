@@ -12,16 +12,17 @@ must not: that reordering silently undoes the crypto-shred property, and
 nothing downstream would notice until an incident report asked why deleted
 account's trade data was still readable.
 
-`gate_user_scoped_probe` (Phase 2's isolation-proof scaffolding, `user_id ->
-users.id` foreign key) is deleted alongside the identity rows even though
-this plan's own `<behavior>` block does not name it: `users.id` cannot be
-deleted while any row still references it, and `seeded_users`'s own fixture
-seeds one probe row per user, so leaving this out makes every deletion in
-this plan's own test suite fail on a foreign-key violation, not a crypto
-concern -- a real blocker (Rule 3), not scope creep. 03-VALIDATION.md's own
-"Carried Obligation" section already names dropping this table outright as
-owed elsewhere in this phase; until that migration lands, any row here is a
-real foreign key this function must clear.
+`gate_user_scoped_probe` no longer needs clearing here. Plan 03-04 added a
+`delete(GateUserScopedProbe)` step to the identity-rows block below because
+the table carried an uncascaded `user_id -> users.id` foreign key and
+`seeded_users`'s own fixture seeded one probe row per user, so `DELETE FROM
+users` failed on that foreign key otherwise -- a real blocker, documented as
+such at the time, pointing at 03-VALIDATION.md's "Carried Obligation" section
+for the actual fix. Migration 0009 (plan 03-07) is that fix: it drops
+`gate_user_scoped_probe` outright, so the foreign key it carried is gone with
+it, and the step that once cleared it is no longer merely unnecessary --
+its justification no longer exists. Recorded here, not deleted silently, so
+a future reader can see why the step was there and why it left.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from uuid import UUID
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.db.models import Event, Fill, GateUserScopedProbe, Leg, Position
+from morai.db.models import Event, Fill, Leg, Position
 from morai.db.models import Session as SessionRow
 from morai.db.models import SetupToken, User, UserDataKey
 
@@ -51,11 +52,10 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
        parents so no foreign key is violated) -- now provably inert
        ciphertext. Deleted for storage and RLS-simplicity reasons, not for
        confidentiality; confidentiality was already won by step 1.
-    3. Identity rows (`sessions`, `setup_tokens`, `gate_user_scoped_probe` --
-       see the module docstring for why the last of these is here at all)
-       -- revokes any live session and any outstanding setup or reset token
-       for this user, and clears the one other foreign key `users.id`
-       still carries.
+    3. Identity rows (`sessions`, `setup_tokens`) -- revokes any live session
+       and any outstanding setup or reset token for this user. See the
+       module docstring for why this step used to also clear
+       `gate_user_scoped_probe`, and no longer needs to.
     4. `users` itself, last -- every foreign key above points at this row.
     """
     await session.execute(delete(UserDataKey).where(UserDataKey.user_id == user_id))
@@ -67,8 +67,5 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
 
     await session.execute(delete(SessionRow).where(SessionRow.user_id == user_id))
     await session.execute(delete(SetupToken).where(SetupToken.user_id == user_id))
-    await session.execute(
-        delete(GateUserScopedProbe).where(GateUserScopedProbe.user_id == user_id)
-    )
 
     await session.execute(delete(User).where(User.id == user_id))
