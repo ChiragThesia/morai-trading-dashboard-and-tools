@@ -2,21 +2,22 @@
 imported by anything under `src/`.
 
 Runs the four HTTP assertions from plan 02-02 Task 2's admin-exemption cases
-against a live deployment: an admin cannot read another user's probe row
-(404), the 404 for that real row is byte-identical (status, body, headers
-apart from `X-Request-Id`/`Date`) to the 404 for a UUID matching no row
-anywhere, and the admin's own listing never includes it.
+against a live deployment, now against `positions` (03-06): an admin cannot
+read another user's position (404), the 404 for that real row is
+byte-identical (status, body, headers apart from `X-Request-Id`/`Date`) to
+the 404 for a UUID matching no row anywhere, and the admin's own listing
+never includes it.
 
 Usage, once plan 02-06's login route exists to obtain both cookies:
 
     uv run python tools/isolation_smoke.py \\
         --base-url https://web-production-183cf.up.railway.app \\
         --admin-cookie <morai_session for the admin user> \\
-        --user-cookie <morai_session for a non-admin user who owns a probe row>
+        --user-cookie <morai_session for a non-admin user who owns a position>
 
 The admin cookie belongs to a user with `is_admin=True`; the user cookie
-belongs to any non-admin user who owns at least one `gate_user_scoped_probe`
-row (the tracer route from plan 02-01 seeds this data, or seed one directly).
+belongs to any non-admin user who owns at least one `positions` row (seed
+one directly, or via an account that has traded).
 
 **This has not been run against a deployment.** Deploys are blocked by the
 permission classifier active in the session that wrote it. It ships as a
@@ -60,37 +61,36 @@ def run(base_url: str, admin_cookie: str, user_cookie: str) -> list[str]:
     failures: list[str] = []
 
     with httpx.Client(base_url=base_url) as client:
-        listing = _get(client, "/gate/user-scoped-probe", user_cookie)
+        listing = _get(client, "/gate/positions", user_cookie)
         rows = listing.json() if listing.status_code == 200 else []
         if listing.status_code != 200 or not rows:
             failures.append(
-                "could not discover the user's own probe row via "
-                f"GET /gate/user-scoped-probe (status {listing.status_code}, "
-                f"{len(rows)} rows) -- seed one before running this script"
+                "could not discover the user's own position via "
+                f"GET /gate/positions (status {listing.status_code}, "
+                f"{len(rows)} rows) -- seed a position for this user before "
+                "running this script"
             )
             return failures
-        user_probe_id = rows[0]["probe_id"]
+        user_position_id = rows[0]["position_id"]
 
-        real_404 = _get(
-            client, f"/gate/user-scoped-probe/{user_probe_id}", admin_cookie
-        )
+        real_404 = _get(client, f"/gate/positions/{user_position_id}", admin_cookie)
         if real_404.status_code != 404:
             failures.append(
-                "admin reading another user's real probe row returned "
+                "admin reading another user's real position returned "
                 f"{real_404.status_code}, expected 404"
             )
 
-        fake_404 = _get(client, f"/gate/user-scoped-probe/{uuid4()}", admin_cookie)
+        fake_404 = _get(client, f"/gate/positions/{uuid4()}", admin_cookie)
         if fake_404.status_code != 404:
             failures.append(
-                "admin reading a nonexistent probe id returned "
+                "admin reading a nonexistent position id returned "
                 f"{fake_404.status_code}, expected 404"
             )
 
         if real_404.content != fake_404.content:
             failures.append(
                 "the two 404 bodies differ in bytes -- this discloses that "
-                "the real probe row exists"
+                "the real position exists"
             )
 
         if _filtered_headers(real_404) != _filtered_headers(fake_404):
@@ -99,11 +99,11 @@ def run(base_url: str, admin_cookie: str, user_cookie: str) -> list[str]:
                 "X-Request-Id/Date/Content-Length"
             )
 
-        admin_listing = _get(client, "/gate/user-scoped-probe", admin_cookie)
-        admin_probe_ids = {row["probe_id"] for row in admin_listing.json()}
-        if user_probe_id in admin_probe_ids:
+        admin_listing = _get(client, "/gate/positions", admin_cookie)
+        admin_position_ids = {row["position_id"] for row in admin_listing.json()}
+        if user_position_id in admin_position_ids:
             failures.append(
-                "the admin's own probe listing includes another user's row"
+                "the admin's own position listing includes another user's row"
             )
 
     return failures
