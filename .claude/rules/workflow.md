@@ -5,8 +5,13 @@ paths:
 
 # Working in This Repo
 
-**There is no application here.** It was deleted at `fd4f8d3`. This repo holds the knowledge
-extracted from it, and a rebuild that has not started. See `CLAUDE.md`.
+**The rebuild is underway.** v1 was deleted at `fd4f8d3`; this repo kept the knowledge and Phase 1
+landed on 2026-08-31. There is a Python package under `src/morai/`, a test suite, CI, and a
+deployment. See `CLAUDE.md` for what exists and how to run it.
+
+This file sits **above** `CLAUDE.md` in the order of authority below, so a stale claim here
+outranks a correct one there. It said "there is no application" until Phase 1 made that false.
+Keep it current for the same reason.
 
 ## Requirements
 

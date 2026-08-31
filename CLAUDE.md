@@ -1,11 +1,25 @@
 # Morai
 
-**There is no application in this repository right now.** It was deleted on 2026-08-29, deliberately,
-and this repo currently holds only what was worth keeping from it. A rebuild is intended but has not
-started.
+**The rebuild has started.** v1 was deleted on 2026-08-29 at commit `fd4f8d3` — 1,594 files, about
+170,000 lines — and this repo kept the knowledge instead. Phase 1 of the rebuild landed on
+2026-08-31.
 
-If you are looking for `apps/` or `packages/`, they are gone. Do not try to run, build, test, or
-deploy anything. There is no `package.json`, no lockfile, no test suite, and no CI.
+What exists now:
+
+| | |
+|---|---|
+| `src/morai/` | Python 3.13 package — `api/`, `worker/`, `money/`, `db/`, `settings.py`, `telemetry.py` |
+| `tests/` | 60 tests. `tests/gate/` holds fixtures that prove the type gate rejects what it claims to |
+| CI | `.github/workflows/ci.yml` — `typecheck-basedpyright`, `typecheck-mypy`, `lint-ruff`, `test-pytest`, with a Postgres 18 service |
+| Deployed | Railway project `morai-journal` — `web` + `worker` + Postgres, live at `web-production-183cf.up.railway.app` |
+| Migrations | Alembic, sole authority. Procrastinate's own schema is wrapped into revision 0002 |
+
+Run the gate with `bash tools/gate.sh`. Locally use `uv run pytest -m "not db"` — there is no
+reachable database on a dev machine (Docker's daemon is broken here, and Railway's Postgres is
+private-network-only), so DB-marked tests run in CI. They fail loudly rather than skipping.
+
+If you are looking for `apps/` or `packages/`, those were v1's layout and are gone. This is a `src/`
+layout with one installable package.
 
 ## What the project is
 
