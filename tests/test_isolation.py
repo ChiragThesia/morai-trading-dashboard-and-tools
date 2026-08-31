@@ -232,7 +232,7 @@ async def test_a_write_for_another_user_is_rejected_by_the_policy(
 # an exception (02-CONTEXT.md D2-08 and `<specifics>`).
 
 
-async def test_admin_is_not_exempt_from_the_probe_table_policy(
+async def test_admin_is_not_exempt_from_the_positions_table_policy(
     app_db_session: AsyncSession,
     seeded_users: SeededUsers,
 ) -> None:
@@ -269,7 +269,7 @@ async def test_admin_can_read_another_users_account_row(
     assert _UUID.validate_python(row[0]) == seeded_users.user_a
 
 
-async def test_admin_gets_404_for_another_users_probe_row_over_http(
+async def test_admin_gets_404_for_another_users_position_row_over_http(
     client: AsyncClient,
     superuser_db_session: AsyncSession,
     seeded_users: SeededUsers,
@@ -320,7 +320,7 @@ async def test_the_two_404_bodies_are_byte_identical(
     assert headers_a == headers_b
 
 
-async def test_admin_probe_listing_returns_only_the_admins_own_rows(
+async def test_admin_position_listing_returns_only_the_admins_own_rows(
     client: AsyncClient,
     superuser_db_session: AsyncSession,
     seeded_users: SeededUsers,
