@@ -18,7 +18,19 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, false, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    LargeBinary,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    false,
+    func,
+)
+from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -107,6 +119,95 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class UserDataKey(Base):
+    """The per-user wrapped AES-256-GCM data key (CRYPT-01, D3-05, D3-06,
+    D3-07). Only `wrapped_dek`/`wrap_nonce` are stored -- the raw DEK is
+    generated, wrapped and discarded in-process by
+    `morai.ledger.fills.provision_data_key`, and never written here. No
+    `UPDATE` grant (migration 0007): re-wrapping under a rotated KEK is an
+    operator script on the superuser engine, never an app-role write.
+    """
+
+    __tablename__ = "user_data_keys"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True
+    )
+    key_version: Mapped[int] = mapped_column(
+        SmallInteger, primary_key=True, server_default=sa_text("1")
+    )
+    wrapped_dek: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    wrap_nonce: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class Fill(Base):
+    """One trade execution, price and quantity encrypted under the writing
+    user's own data key (CRYPT-02, D3-01, D3-12, D3-15). Composite primary
+    key carries every discriminating column, including `leg_index`, whose
+    value is a single literal today -- `NN-1`: "it never varies today" is
+    not "it can never vary".
+
+    `insert_fills()` in `morai.ledger.fills` is the only intended way into
+    this table -- see `__init__` below for the enforcement, and its own
+    honest ceiling.
+    """
+
+    __tablename__ = "fills"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True
+    )
+    order_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    occ_symbol: Mapped[str] = mapped_column(Text, primary_key=True)
+    leg_index: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    execution_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), primary_key=True
+    )
+    position_effect: Mapped[str] = mapped_column(Text, nullable=False)
+    side: Mapped[str] = mapped_column(Text, nullable=False)
+    quantity_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    quantity_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    price_usd_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    price_usd_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    key_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __init__(self, *, _write_token: object, **kwargs: object) -> None:
+        """`_write_token` has no default -- omitting it is a missing-argument
+        error at the call site under basedpyright/mypy (Task 3's compile-time
+        gate), not a silently-accepted `None` (D3-13). Passing anything but
+        the sentinel `insert_fills()` holds raises here, at runtime (Task
+        2's companion guard) -- the same split `identity/audit.py` already
+        documents: type checkers verify shapes, not provenance.
+
+        SQLAlchemy's ORM does not call `__init__` when reconstructing a
+        `Fill` from a query result -- it uses `__new__` plus direct
+        attribute restoration, so an ordinary `SELECT` is unaffected by
+        this guard. The honest ceiling: a Core `insert(Fill.__table__)`
+        statement naming the table bypasses this constructor entirely, so
+        this blocks the ergonomic second path, not every conceivable one.
+        """
+        from morai.ledger.fills import (
+            _FILL_WRITE_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: the sentinel and its only legitimate holder (insert_fills) live in one module by design (D3-13); the leading underscore marks it module-private in intent, not a real access boundary between these two cooperating modules -- same convention tests/test_isolation.py already uses for _seed_session.
+        )
+
+        if _write_token is not _FILL_WRITE_TOKEN:
+            raise RuntimeError(
+                "Fill must be constructed by insert_fills() -- constructing "
+                "one directly bypasses encryption (D3-13, D3-15)."
+            )
+        super().__init__(**kwargs)
 
 
 class GateUserScopedProbe(Base):
