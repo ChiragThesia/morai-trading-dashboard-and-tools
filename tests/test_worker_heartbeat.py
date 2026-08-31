@@ -44,7 +44,12 @@ def test_settings_expose_a_single_database_url() -> None:
     environment variable exists for the worker -- `Settings` (`extra="forbid"`)
     declares exactly one DSN field, the same one the web process's `async_dsn`
     derives from."""
-    assert list(Settings.model_fields) == ["database_url"]
+    dsn_fields = [
+        name
+        for name in Settings.model_fields
+        if "database" in name or "dsn" in name or "postgres" in name
+    ]
+    assert dsn_fields == ["database_url"]
 
 
 class _CollectingHandler(logging.Handler):

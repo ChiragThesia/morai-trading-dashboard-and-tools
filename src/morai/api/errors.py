@@ -55,6 +55,8 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from morai.telemetry import capture_exception
+
 logger = logging.getLogger(__name__)
 
 
@@ -147,11 +149,19 @@ async def response_validation_exception_handler(
     typed as the subclass directly, since Starlette's `ExceptionHandler` alias is
     itself typed against the base `Exception`."""
     request_id = _current_request_id()
+    locations = _redacted_error_locations(exc)
     logger.error(
         "response validation failed request_id=%s path=%s detail=%s",
         request_id,
         request.url.path,
-        _redacted_error_locations(exc),
+        locations,
+    )
+    # Field locations are already value-free -- `_ErrorLocation` drops pydantic's
+    # `input` key at the parse boundary -- so they are safe to forward.
+    capture_exception(
+        exc,
+        request_id=request_id,
+        context={"path": request.url.path, "locations": ", ".join(locations)},
     )
     return _opaque_500(request_id)
 
@@ -162,6 +172,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     must never be able to carry it."""
     request_id = _current_request_id()
     logger.error("unhandled exception request_id=%s", request_id, exc_info=exc)
+    # Only the path -- never the query string, which routinely carries tokens.
+    capture_exception(exc, request_id=request_id, context={"path": request.url.path})
     return _opaque_500(request_id)
 
 

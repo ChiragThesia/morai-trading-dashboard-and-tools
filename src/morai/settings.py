@@ -24,6 +24,13 @@ class Settings(BaseSettings):
 
     database_url: SecretStr
 
+    # Telemetry. Optional by design: with no key, `morai.telemetry` is a no-op, so
+    # local development, CI and a fresh clone need no PostHog account. Set
+    # POSTHOG_API_KEY as a Railway variable in production -- never in a committed file,
+    # because this repository is public.
+    posthog_api_key: SecretStr | None = None
+    posthog_host: str = "https://us.i.posthog.com"
+
     @property
     def async_dsn(self) -> str:
         return self.database_url.get_secret_value().replace(
