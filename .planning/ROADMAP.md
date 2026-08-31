@@ -94,7 +94,7 @@ Plans:
   3. A request authenticated as user A that asks for user B's trading data returns not-found, including when A is the admin, and the isolation suite passes against the real Railway pooling configuration rather than only a direct-connection test container.
   4. Every privileged read of user data writes an audit row naming reader, subject, and time, and a privileged read that bypasses the audited path does not compile or does not pass review.
 
-**Plans**: 2/6 plans executed, 4 waves
+**Plans**: 4/6 plans executed, 4 waves
 
 Plans:
 
@@ -320,7 +320,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/10 | In Progress|  |
-| 2. Identity, Sessions, and Tenant Isolation | 2/6 | In Progress|  |
+| 2. Identity, Sessions, and Tenant Isolation | 4/6 | In Progress|  |
 | 3. Envelope Encryption and the Schema Contract | 0/TBD | Not started | - |
 | 4. Schwab Connection and Token Lifecycle | 0/TBD | Not started | - |
 | 5. Fill Pairing and the Oracle Gate | 0/TBD | Not started | - |
