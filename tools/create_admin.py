@@ -27,7 +27,7 @@ import asyncio
 import sys
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from morai.db.models import User
@@ -42,6 +42,22 @@ _SETUP_TOKEN_TTL = timedelta(days=7)
 async def main(username: str) -> int:
     session_maker = async_sessionmaker(get_engine(), expire_on_commit=False)
     async with session_maker() as session:
+        # WR-06: the check below and the insert further down are otherwise
+        # check-then-act -- two concurrent invocations could both observe zero
+        # admins and both proceed. `pg_advisory_xact_lock`, not
+        # `SELECT ... FOR UPDATE`: `FOR UPDATE` locks rows that already exist,
+        # and the state this guard exists to protect is exactly zero admin
+        # rows, so `FOR UPDATE` would lock nothing and not prevent the race at
+        # all. The advisory lock takes effect the instant it is acquired
+        # regardless of what rows exist, and releases automatically at the end
+        # of this transaction (commit, or the implicit rollback on session
+        # close below when an admin already exists) -- a fixed key because
+        # this script guards one global condition ("does any admin exist"),
+        # not a per-row resource.
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext('morai:create_admin'))")
+        )
+
         existing_admin = (
             await session.execute(select(User.id).where(User.is_admin.is_(True)))
         ).first()
