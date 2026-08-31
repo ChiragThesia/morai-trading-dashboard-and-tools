@@ -39,11 +39,12 @@ so it doesn't block the event loop.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import httpx
 import schwab.auth
-from pydantic import BaseModel, JsonValue, TypeAdapter
+from pydantic import JsonValue, TypeAdapter
 from schwab.client import AsyncClient
 
 from morai.settings import SchwabCredentials
@@ -51,6 +52,7 @@ from morai.vendor.protocol import (
     AccountNumberEntry,
     ExchangedToken,
     SchwabClient,
+    WrappedToken,
 )
 
 
@@ -64,19 +66,10 @@ _ACCOUNT_NUMBERS: TypeAdapter[list[AccountNumberEntry]] = TypeAdapter(
 _JSON_VALUE: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 
 
-class _WrappedToken(BaseModel):
-    """The shape schwab-py's own `TokenMetadata.wrap_token_in_metadata`
-    hands to `token_write_func`: `{'creation_timestamp': int, 'token': ...}`
-    (verified against the real 1.5.1 wheel). `token` is `JsonValue`, never
-    `dict[str, Any]` -- this project never inspects the vendor token's
-    internal shape; it is captured, encrypted and stored as an opaque blob,
-    then handed back to schwab-py unchanged on the next read."""
-
-    creation_timestamp: int
-    token: JsonValue
-
-
-_WRAPPED_TOKEN: TypeAdapter[_WrappedToken] = TypeAdapter(_WrappedToken)
+# `WrappedToken` itself lives in `protocol.py` -- `TokenHolder`'s own
+# closures need it too, and this module and that one should not carry two
+# copies of the same vendor shape.
+_WRAPPED_TOKEN: TypeAdapter[WrappedToken] = TypeAdapter(WrappedToken)
 
 
 class _RealSchwabClient:
@@ -172,3 +165,28 @@ class SchwabAuthAdapter:
             created_at=datetime.fromtimestamp(wrapped.creation_timestamp, tz=UTC),
         )
         return exchanged, _RealSchwabClient(client)
+
+    async def build_client(
+        self,
+        token_read_func: Callable[[], object],
+        token_write_func: Callable[[object], None],
+    ) -> SchwabClient:
+        """Wraps `client_from_access_functions` -- the low-level primitive
+        for a caller that already holds a token (CONN-06's refresh path), as
+        opposed to `exchange_callback`'s fresh-grant path. `token_read_func`/
+        `token_write_func` are passed straight through: `TokenHolder`'s own
+        closures already have the exact plain-synchronous signature the
+        vendor calls (verified against the real 1.5.1 wheel; see
+        `protocol.py`'s `TokenHolder` docstring for why neither may be
+        `async def`). Same `asyncio.to_thread` wrapping as
+        `exchange_callback`, for the same reason: the vendor's own
+        construction is a real synchronous call, not truly async."""
+        client = await asyncio.to_thread(
+            schwab.auth.client_from_access_functions,
+            self._credentials.api_key,
+            self._credentials.app_secret,
+            token_read_func,
+            token_write_func,
+            asyncio=True,
+        )
+        return _RealSchwabClient(client)

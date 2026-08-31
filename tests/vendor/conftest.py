@@ -15,29 +15,36 @@ establishes).
 
 `FakeSchwabAuth`/`FakeSchwabClient` implement `SchwabAuth`/`SchwabClient`
 with zero network calls (D4-05) -- built complete here, in this one place,
-even though this plan's own tests exercise only the success path and the
-one-row replay guard. Plans 04-02, 04-03 and 04-04 all depend on this same
-fake and none of them touches this file; growing it incrementally across
-four plans would make it a file three of them serialise behind.
+by plan 04-01, even though that plan's own tests exercised only the success
+path and the one-row replay guard. Plans 04-02, 04-03 and 04-04 all depend
+on this same fake; 04-02 touches only its own new test files, but 04-03
+adds `SchwabAuth.build_client` to the real `Protocol` (CONN-06) and this
+fake grows the matching method here, in the one place it already lives,
+rather than in a second fake.
 """
 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from pydantic import JsonValue
+from pydantic import BaseModel, JsonValue, TypeAdapter
 from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from morai.db.models import User
 from morai.identity.passwords import hash_password
 from morai.settings import get_settings
-from morai.vendor.protocol import AccountNumberEntry, ExchangedToken, SchwabClient
+from morai.vendor.protocol import (
+    AccountNumberEntry,
+    ExchangedToken,
+    SchwabClient,
+    WrappedToken,
+)
 from tests.identity.conftest import (
     SeededUsers,
     app_db_session,
@@ -115,6 +122,17 @@ async def logged_in_client(
         yield client
 
 
+class _FakeRefreshToken(BaseModel):
+    """The shape this fake's own tokens always carry -- see
+    `FakeSchwabAuth.exchange_callback`'s `{"refresh_token": ...}` payload."""
+
+    refresh_token: str
+
+
+_WRAPPED_TOKEN: TypeAdapter[WrappedToken] = TypeAdapter(WrappedToken)
+_FAKE_REFRESH_TOKEN: TypeAdapter[_FakeRefreshToken] = TypeAdapter(_FakeRefreshToken)
+
+
 class SchwabInvalidGrantError(RuntimeError):
     """Shaped like Schwab's own `invalid_grant` OAuth error -- raised when a
     refresh token this fake has already rotated away from is handed back."""
@@ -178,10 +196,14 @@ class FakeSchwabAuth:
     fail loudly (via `asyncio.wait_for`'s `TimeoutError`) if they were
     serialised instead. `refresh_gate`, if set, is awaited inside
     `refresh` before it proceeds -- letting a test hold one user inside a
-    critical section while another runs. `raise_on_exchange`, if set, is
-    raised from `exchange_callback` after the barrier wait -- the
-    `invalid_grant`/expired-refresh/rate-limit shapes above are what a
-    caller sets it to."""
+    critical section while another runs. `entered_refresh`, if set, is
+    `.set()` by `refresh` the instant it is called, before it checks
+    anything or waits on `refresh_gate` -- a test observes this to know the
+    critical section has genuinely been entered (the advisory lock already
+    held) before it starts a second flow, rather than guessing with a fixed
+    sleep. `raise_on_exchange`, if set, is raised from `exchange_callback`
+    after the barrier wait -- the `invalid_grant`/expired-refresh/rate-limit
+    shapes above are what a caller sets it to."""
 
     fixed_created_at: datetime
     account_entries: list[AccountNumberEntry]
@@ -189,6 +211,7 @@ class FakeSchwabAuth:
     exchange_barrier_timeout: float = 5.0
     refresh_gate: asyncio.Event | None = None
     refresh_gate_timeout: float = 5.0
+    entered_refresh: asyncio.Event | None = None
     raise_on_exchange: Exception | None = None
     calls: list[CallRecord] = field(default_factory=list)
     _rotated_refresh_tokens: set[str] = field(default_factory=set)
@@ -217,14 +240,37 @@ class FakeSchwabAuth:
         )
         return exchanged, client
 
+    async def build_client(
+        self,
+        token_read_func: Callable[[], object],
+        token_write_func: Callable[[object], None],
+    ) -> SchwabClient:
+        """Implements `SchwabAuth.build_client` (CONN-06, plan 04-03) by
+        reusing `refresh`'s own rotation/gate/`invalid_grant` machinery:
+        reads the current wrapped token, rotates its refresh token exactly
+        as `refresh` would, then writes the rotated wrapped token back.
+        `creation_timestamp` passes through unchanged, matching schwab-py's
+        own real behaviour of never touching it on an ordinary refresh."""
+        wrapped = _WRAPPED_TOKEN.validate_python(token_read_func())
+        current = _FAKE_REFRESH_TOKEN.validate_python(wrapped.token)
+        rotated_refresh_token = await self.refresh(current.refresh_token)
+        token_write_func(
+            {
+                "creation_timestamp": wrapped.creation_timestamp,
+                "token": {"refresh_token": rotated_refresh_token},
+            }
+        )
+        return FakeSchwabClient(account_entries=self.account_entries)
+
     async def refresh(self, refresh_token: str) -> str:
-        """Not part of the `SchwabAuth` `Protocol` -- refresh is plan
-        04-02's own concern. A plain method this fake exposes so that
-        plan's tests can drive the rotation/rate-limit/expiry shapes
-        without a second fake. Rotates deterministically; raises
-        `SchwabInvalidGrantError` if handed a value already rotated away
-        from."""
+        """Not part of the `SchwabAuth` `Protocol` directly -- `build_client`
+        above calls it. A plain method this fake exposes so a test can drive
+        the rotation/rate-limit/expiry shapes without a second fake.
+        Rotates deterministically; raises `SchwabInvalidGrantError` if
+        handed a value already rotated away from."""
         entered_at = datetime.now(UTC)
+        if self.entered_refresh is not None:
+            self.entered_refresh.set()
         if refresh_token in self._rotated_refresh_tokens:
             raise SchwabInvalidGrantError(
                 "refresh_token has already been rotated away from"
