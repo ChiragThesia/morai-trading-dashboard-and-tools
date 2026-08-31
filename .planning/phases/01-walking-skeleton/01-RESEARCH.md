@@ -1553,3 +1553,83 @@ probe. Record its failure as confirming the IPv4-only edge, and do not treat it 
 
 **Verdict on V039: re-measured and CONFIRMED, not refuted.** The mechanism holds and the
 dual-stack `[::]` bind is still required. Record it that way against criterion 1.
+
+
+---
+
+## Orchestrator Addendum 3 — live deploy measurements
+
+Taken against the deployed service, `web-production-183cf.up.railway.app`, on
+2026-08-31. Railway project `morai-journal`, services `web`, `worker`, `Postgres` (image
+`ghcr.io/railwayapp-templates/postgres-ssl:18`).
+
+### Criterion 4 — MET, against real Railway Postgres
+
+Both canaries POSTed to the deployed `/gate/money-roundtrip`. Raw response bytes:
+
+    {"probe_id":1,"amount_usd":"9999999999.9999"}
+    {"probe_id":2,"amount_usd":"1234567890.1234"}
+
+Identical digits after Python -> strict Pydantic -> asyncpg -> `NUMERIC(14,4)` -> JSON
+-> back. This is the first run against production infrastructure rather than a CI
+service container, which is the whole reason D-13 specified the route.
+
+`amount_usd` returns as a **JSON string**, not a number. That is D-03 working as
+designed: a JSON number would transit a float on the way out and lose precision
+silently. Asserting on the raw bytes rather than a parsed body is what makes the
+distinction visible.
+
+### Criterion 1 / V039 — public edge is IPv4-only, CONFIRMED again
+
+    curl -4 https://web-production-183cf.up.railway.app/health
+      -> HTTP 200, remote_ip 69.46.46.38, body {"status":"ok"}
+
+    dig +short AAAA web-production-183cf.up.railway.app
+      -> (empty) from the system resolver, 8.8.8.8 and 1.1.1.1 alike
+
+The `[::]` dual-stack bind serves the IPv4 public health check. Railway's healthcheck
+passed on the deploy.
+
+### A SECOND trap on this finding — `curl -6` appears to succeed
+
+`curl -6 https://<domain>/health` returns **HTTP 200**, which looks like proof the
+public edge speaks IPv6. It is not. The connection reports:
+
+    remote_ip = ::ffff:69.46.46.38
+
+That is an IPv4-mapped IPv6 address. macOS's `getaddrinfo` synthesizes `::ffff:x.x.x.x`
+entries for `AF_INET6` when only an A record exists, so curl opens an `AF_INET6` socket
+that carries IPv4 underneath. Confirmed directly:
+
+    socket.getaddrinfo(domain, 443, AF_INET6) -> ::ffff:69.46.46.38
+
+**So an expected-failure control written as "assert `curl -6` fails" will itself fail on
+macOS, for a reason that has nothing to do with Railway.** A correct control asserts one
+of: no AAAA record resolves, or the connected `remote_ip` is not `::ffff:`-prefixed.
+
+That is now two independent ways to reach a confident wrong answer about V039:
+
+| Trap | Wrong conclusion | Correct check |
+|---|---|---|
+| Digging `railway.app` (Cloudflare fronts it, has AAAA) | "the edge has IPv6" | dig the `*.up.railway.app` deploy domain |
+| `curl -6` succeeding via `::ffff:` mapping | "the edge has IPv6" | assert `remote_ip` is not `::ffff:`-prefixed |
+
+### Still owed for criterion 1
+
+The genuine IPv6 half -- worker -> web over `.railway.internal` -- has NOT been measured
+yet. It cannot be run from a laptop: Railway's private network is only reachable from
+inside the environment. It needs a request originated by the deployed worker.
+
+### One deploy failure worth keeping
+
+The first `web` deploy (`7b637749`) failed with:
+
+    sock.bind(binding)
+    socket.gaierror: [Errno -2] Name or service not known
+
+The start command was `hypercorn --bind '[::]:$PORT' ...` -- **single**-quoted, so the
+shell never expanded `$PORT`. Hypercorn received the literal `[::]:$PORT` and tried to
+resolve `$PORT` as a service name. Railway surfaced it as "1/1 replicas never became
+healthy" after eleven healthcheck attempts, so the symptom was a healthcheck timeout and
+the cause was shell quoting. `alembic upgrade head` had already succeeded on that same
+deploy, so the DSN and migration chain were correct throughout.
