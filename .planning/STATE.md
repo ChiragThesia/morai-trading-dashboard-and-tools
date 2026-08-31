@@ -126,6 +126,27 @@ Five open decisions are assigned to owning phases rather than left floating — 
 
 REQUIREMENTS.md recorded 62 v1 requirements; the actual count is 68. Corrected in that file.
 
+## Deferred Verification
+
+Phase 2's code is complete and its other four success criteria are verified. Criterion 3b —
+"the isolation suite passes against the real Railway pooling configuration" — cannot be closed
+from a development machine and is deferred by explicit user decision (2026-08-31), not skipped.
+`02-VERIFICATION.md` keeps `status: human_needed`; it was NOT rewritten to `passed`.
+
+| Phase | State | Resume |
+|-------|-------|--------|
+| 2 | verification_deferred_human | /gsd-verify-work 2 |
+
+Owed on live Railway:
+
+1. `docs/operations/phase-2-operator-steps.md` steps 1-4 (set `MORAI_APP_DB_PASSWORD`, deploy,
+   bootstrap the admin), then `tools/isolation_smoke.py` against the live deployment. Until
+   step 1 runs, the deployed services cannot connect as `morai_app` at all.
+2. `tools/measure_argon2.py` on the real Railway container — `D2-03`'s owed measurement. The
+   Argon2id band must be tuned on production hardware, not copied from a laptop.
+
+Neither blocks Phase 3, which is local schema and encryption work with no deployment dependency.
+
 ## Deferred Items
 
 Items acknowledged and deferred at milestone close, most recent first:
