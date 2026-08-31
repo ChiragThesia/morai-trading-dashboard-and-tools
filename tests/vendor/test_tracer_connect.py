@@ -20,6 +20,7 @@ import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -281,6 +282,73 @@ async def test_no_log_record_or_response_body_contains_the_code_url_or_state(
     body = _ERROR_ENVELOPE.validate_json(failing.content)
     assert body["error"] == "internal"
     assert "request_id" in body
+
+
+async def test_no_log_record_contains_the_code_from_a_real_vendor_exception_shape(
+    logged_in_client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+    install_fake_schwab_auth: FakeSchwabAuth,
+) -> None:
+    """CR-02 (`04-REVIEW.md`): the sibling test above proves the opaque-500
+    path is clean for a synthetic, author-controlled `RuntimeError` message
+    that deliberately carries none of the three secrets -- it cannot prove
+    anything about `unhandled_exception_handler`'s actual bug, since that
+    handler's `exc_info=exc` renders a formatted traceback whose last line
+    is `str(exc)`, and `str(exc)` for a *real* vendor exception is not under
+    this codebase's control.
+
+    This test raises a real `httpx.HTTPStatusError` -- the exact exception
+    type `SchwabAuthAdapter.exchange_callback` would see from a failing
+    real token exchange -- built by calling `Response.raise_for_status()`
+    on a 400 whose request URL embeds a fake authorization code. httpx's
+    own formatter produces the message text, not this test, so `str(exc)`
+    genuinely contains the code the way a real Schwab 400 response would.
+    """
+    from morai.api.app import app
+
+    fake_code = "FAKE-AUTH-CODE-MUST-NEVER-LEAK-9f3d2a"
+    raw_state = await _connect(logged_in_client)
+
+    bad_request = httpx.Request(
+        "GET",
+        "https://api.schwabapi.com/v1/oauth/token",
+        params={"code": fake_code, "grant_type": "authorization_code"},
+    )
+    bad_response = httpx.Response(400, request=bad_request)
+    try:
+        bad_response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        vendor_exc: httpx.HTTPStatusError = exc
+    # Sanity: prove the fixture itself carries the secret, so a later green
+    # result means the handler redacted it -- not that the fixture never
+    # had it.
+    assert fake_code in str(vendor_exc)
+
+    install_fake_schwab_auth.raise_on_exchange = vendor_exc
+
+    with (
+        caplog.at_level(logging.DEBUG),
+        caplog.at_level(logging.DEBUG, logger="schwab"),
+        caplog.at_level(logging.DEBUG, logger="authlib"),
+    ):
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as rc:
+            failing = await rc.get(
+                "/schwab/callback", params={"code": "irrelevant", "state": raw_state}
+            )
+    assert failing.status_code == 500
+
+    # Formatting each record the way a real handler would -- `getMessage()`
+    # alone does not render `exc_info` into text, and the CR-02 bug lives
+    # entirely inside that rendering.
+    formatter = logging.Formatter()
+    app_log_text = "\n".join(
+        formatter.format(record)
+        for record in caplog.records
+        if record.name.startswith(("morai", "schwab", "authlib"))
+    )
+    assert fake_code not in app_log_text
+    assert fake_code not in failing.text
 
 
 async def test_callback_with_no_session_cookie_still_succeeds(
