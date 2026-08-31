@@ -1,5 +1,12 @@
-"""Tests for login (AUTH-02, AUTH-03): a session that survives a client
-restart, and the two login failure branches made indistinguishable.
+"""Tests for login, logout and `/me` (AUTH-02, AUTH-03, AUTH-04): a session
+that survives a client restart, a logout that deletes the row rather than
+flags it, and the two login failure branches made indistinguishable.
+
+Twelve tests: Task 1's seven (login), plus Task 2's five covering six named
+behaviors -- Task 2's row-absence and replayed-cookie-rejection checks are
+one function by the plan's own explicit instruction (D2-05), so splitting
+them apart is not an option: split, both halves would pass against a
+client-side-only logout.
 
 `@pytest.mark.db` throughout -- every test drives the real ASGI app over
 `httpx.ASGITransport` against real Postgres, matching
@@ -8,10 +15,10 @@ through the superuser session (there is no admin-driven password-setting
 flow independent of `/setup`'s token consumption, and testing login doesn't
 need to also exercise `/setup`).
 
-The client-restart test proves persistence against `/gate/user-scoped-probe`
-(an existing authenticated route, plan 02-01) rather than `/me` -- `/me`
-belongs to plan 02-06's own logout task and does not exist yet when this
-task's tests run.
+Task 1's client-restart test proves persistence against
+`/gate/user-scoped-probe` (an existing authenticated route, plan 02-01)
+rather than `/me`, so that test doesn't reach forward into this task's own
+deliverable.
 """
 
 from __future__ import annotations
@@ -24,9 +31,11 @@ from uuid import UUID
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from pydantic import TypeAdapter
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.api.routes_identity import MeResponse
 from morai.db.models import Session as SessionRow
 from morai.db.models import User
 from morai.identity.passwords import hash_password
@@ -35,6 +44,8 @@ from tests.identity.conftest import SeededUsers
 pytestmark = pytest.mark.db
 
 _PASSWORD = "correct horse battery staple 4"
+
+_ME_RESPONSE: TypeAdapter[MeResponse] = TypeAdapter(MeResponse)
 
 
 async def _set_password(
@@ -55,6 +66,9 @@ async def client(clean_identity_tables: None) -> AsyncGenerator[AsyncClient, Non
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+# --- Task 1: login ---
 
 
 async def test_correct_credentials_return_200_and_a_well_formed_cookie(
@@ -203,3 +217,109 @@ async def test_no_log_record_from_login_contains_password_token_or_hash(
     assert "a-second-wrong-one" not in log_text
     assert raw_token not in log_text
     assert row.token_hash not in log_text
+
+
+# --- Task 2: logout and /me ---
+
+
+async def test_logout_deletes_the_row_and_the_replayed_cookie_is_rejected(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """D2-05, bound into one function on purpose: split apart, both halves
+    pass against a client-side-only logout that never touches the row."""
+    await _set_password(superuser_db_session, seeded_users.user_a, _PASSWORD)
+    login = await client.post(
+        "/login", json={"username": "user-a", "password": _PASSWORD}
+    )
+    raw_token = login.cookies["morai_session"]
+
+    logout = await client.post("/logout", cookies={"morai_session": raw_token})
+    assert logout.status_code == 204
+
+    # Read through the superuser session -- sessions carries no RLS policy,
+    # so this is "the row is gone", not "the row is invisible to me".
+    rows = (
+        (
+            await superuser_db_session.execute(
+                select(SessionRow).where(SessionRow.user_id == seeded_users.user_a)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert rows == []
+
+    replay = await client.get("/me", cookies={"morai_session": raw_token})
+    assert replay.status_code == 401
+
+
+async def test_logging_out_twice_returns_the_same_result_the_second_time(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    await _set_password(superuser_db_session, seeded_users.user_a, _PASSWORD)
+    login = await client.post(
+        "/login", json={"username": "user-a", "password": _PASSWORD}
+    )
+    raw_token = login.cookies["morai_session"]
+
+    first = await client.post("/logout", cookies={"morai_session": raw_token})
+    second = await client.post("/logout", cookies={"morai_session": raw_token})
+
+    assert first.status_code == 204
+    # The row is already gone by the second call -- the identical 401 an
+    # unauthenticated request gets (see the no-cookie case below), not a
+    # crash.
+    assert second.status_code == 401
+
+
+async def test_logout_with_no_cookie_returns_401(client: AsyncClient) -> None:
+    response = await client.post("/logout")
+    assert response.status_code == 401
+
+
+async def test_one_users_logout_does_not_touch_another_users_session(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    await _set_password(superuser_db_session, seeded_users.user_a, _PASSWORD)
+    await _set_password(superuser_db_session, seeded_users.user_b, _PASSWORD)
+
+    login_a = await client.post(
+        "/login", json={"username": "user-a", "password": _PASSWORD}
+    )
+    token_a = login_a.cookies["morai_session"]
+    login_b = await client.post(
+        "/login", json={"username": "user-b", "password": _PASSWORD}
+    )
+    token_b = login_b.cookies["morai_session"]
+
+    logout_a = await client.post("/logout", cookies={"morai_session": token_a})
+    assert logout_a.status_code == 204
+
+    still_valid = await client.get("/me", cookies={"morai_session": token_b})
+    assert still_valid.status_code == 200
+
+
+async def test_me_returns_the_callers_own_record_and_nothing_names_another(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    await _set_password(superuser_db_session, seeded_users.user_a, _PASSWORD)
+    login = await client.post(
+        "/login", json={"username": "user-a", "password": _PASSWORD}
+    )
+    raw_token = login.cookies["morai_session"]
+
+    response = await client.get("/me", cookies={"morai_session": raw_token})
+
+    assert response.status_code == 200
+    body = _ME_RESPONSE.validate_json(response.content)
+    assert body.user_id == seeded_users.user_a
+    assert body.username == "user-a"
+    assert body.is_admin is False

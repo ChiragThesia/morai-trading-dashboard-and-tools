@@ -1,5 +1,6 @@
 """The tracer (AUTH-07), the admin-driven account lifecycle (AUTH-01,
-AUTH-02, AUTH-05, AUTH-08), and login (AUTH-02, AUTH-03).
+AUTH-02, AUTH-05, AUTH-08), and login/logout/`/me` (AUTH-02, AUTH-03,
+AUTH-04).
 
 Every route declares its contract by return type annotation, never
 `response_model=` (D-11), matching `api/app.py`'s existing routes.
@@ -10,9 +11,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import TypeAdapter
-from sqlalchemy import select, text, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -342,3 +343,55 @@ async def login(
         path="/",
     )
     return LoginResponse()
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    response: Response,
+    morai_session: str | None = Cookie(default=None),
+    _: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Deletes the row -- never a flag -- so a replayed cookie is rejected
+    because the row is gone (D2-05), not because a value says expired.
+
+    `get_current_user` is the dependency that makes a missing or
+    already-invalid session 401 here, exactly like every other authenticated
+    route in this file -- a second logout call with the same (now stale)
+    cookie gets that same 401, not a crash. `morai_session` is read again
+    directly because deleting the specific row needs the raw token to
+    compute its hash; `get_current_user`'s own `AuthenticatedUser` carries
+    only the user id, not the token.
+    """
+    if morai_session is None:
+        # Unreachable in practice -- get_current_user already required this
+        # exact cookie to reach this point -- kept so the type checker never
+        # has to see `morai_session: str | None` below.
+        raise HTTPException(status_code=401, detail="not authenticated")
+
+    await session.execute(
+        delete(SessionRow).where(SessionRow.token_hash == hash_token(morai_session))
+    )
+    await session.commit()
+    response.delete_cookie(key="morai_session", path="/")
+
+
+class MeResponse(ApiModel):
+    user_id: UUID
+    username: str
+    is_admin: bool
+
+
+@router.get("/me")
+async def me(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MeResponse:
+    """Reads the caller's own row -- `User.id == user.user_id` is the only
+    filter, and RLS's `self` clause (migration 0003) is what actually
+    confines it to exactly one row, this user's own. No request shape here
+    can name another user's row; there is no input beyond the cookie."""
+    row = (
+        await session.execute(select(User).where(User.id == user.user_id))
+    ).scalar_one()
+    return MeResponse(user_id=row.id, username=row.username, is_admin=row.is_admin)
