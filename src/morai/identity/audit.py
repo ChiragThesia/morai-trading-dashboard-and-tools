@@ -37,10 +37,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from sqlalchemy import insert, select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.db.models import AuditLog, User
+from morai.db.models import User
 
 _FACTORY_SENTINEL = object()
 
@@ -78,9 +78,26 @@ async def open_audited_read(
     deliberately does not call `session.commit()`; doing so here would let the
     audit row commit while the read that follows could still fail or roll back
     on its own, which is exactly the split-fate D2-12 forbids.
+
+    **Measured against real Postgres in CI, this plan's own push:** the ORM-style
+    `insert(AuditLog).values(...)` looked right and type-checked, but failed at
+    runtime with `InsufficientPrivilegeError: new row violates row-level security
+    policy for table "audit_log"` -- not because the insert was rejected, but
+    because `AuditLog.id`'s `server_default` makes SQLAlchemy append an implicit
+    `RETURNING audit_log.id` to fetch the generated value, and a `RETURNING`
+    clause is itself a read that Postgres RLS checks against the table's SELECT
+    policies. `audit_log` deliberately carries none (migration 0003's own
+    `append_only` policy is INSERT-only) -- the app role can append and cannot
+    read its own trail back, including via the write statement's own return
+    value. Plain `text()` SQL is not augmented by SQLAlchemy's implicit-returning
+    machinery, so it is what this insert uses instead.
     """
     await session.execute(
-        insert(AuditLog).values(reader_id=reader_id, subject_id=subject_id)
+        text(
+            "INSERT INTO audit_log (reader_id, subject_id) "
+            "VALUES (:reader_id, :subject_id)"
+        ),
+        {"reader_id": reader_id, "subject_id": subject_id},
     )
     return AuditedRead(
         reader_id=reader_id, subject_id=subject_id, _token=_FACTORY_SENTINEL
