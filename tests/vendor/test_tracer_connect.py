@@ -1,5 +1,5 @@
 """Task 1: one OAuth handshake, end to end, with the token proved to be in
-Postgres (CONN-01, CONN-02, CONN-04, CONN-07, D4-11).
+Postgres (CONN-01, CONN-02, CONN-03, CONN-04, CONN-07, D4-11).
 
 `@pytest.mark.db` throughout -- every test drives the real ASGI app over
 `httpx.ASGITransport` against real Postgres, matching
@@ -16,6 +16,7 @@ FastAPI's `dependency_overrides` against `routes_connections.get_schwab_auth`.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
@@ -157,6 +158,39 @@ async def test_replaying_the_same_callback_returns_400_and_adds_no_second_row(
         (await superuser_db_session.execute(select(SchwabConnection))).scalars().all()
     )
     assert len(rows) == 1
+
+
+async def test_no_log_record_contains_the_code_or_state(
+    logged_in_client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """CONN-03, D4-08, `NN-34`: mirrors
+    `test_no_log_record_from_login_contains_password_token_or_hash`'s own
+    shape, scoped to loggers under the `morai` namespace -- not the whole
+    `caplog.text`. `httpx`'s own client-side request logger (`INFO
+    HTTP Request: GET http://test/schwab/callback?code=...&state=...`) is
+    an artifact of driving this test over `ASGITransport` in-process, not
+    a code path this project wrote, and would fail this assertion for
+    every GET request regardless of application behaviour. Proves the
+    application's own logger never carries the bearer-equivalent code or
+    state; it cannot prove Hypercorn's access log stays off in production
+    -- that gap is recorded honestly as Manual-Only in `04-VALIDATION.md`,
+    not claimed here."""
+    raw_code = "fake-auth-code-should-never-be-logged"
+    with caplog.at_level(logging.DEBUG):
+        raw_state = await _connect(logged_in_client)
+        callback_response = await logged_in_client.get(
+            "/schwab/callback", params={"code": raw_code, "state": raw_state}
+        )
+    assert callback_response.status_code == 200
+
+    app_log_text = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name.startswith("morai")
+    )
+    assert raw_state not in app_log_text
+    assert raw_code not in app_log_text
 
 
 async def test_callback_with_no_session_cookie_still_succeeds(
