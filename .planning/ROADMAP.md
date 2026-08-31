@@ -129,15 +129,15 @@ criteria met in substance.
   5. Deleting an account destroys that user's data key, after which their rows decrypt to nothing.
   6. The raw fill, leg, position and event tables exist with the plaintext/ciphertext split applied, and a fill can be written and read back through exactly one write path — the same one Phase 6's ingest will use and Phase 5's oracle will seed through. A second path into the fill table does not exist.
 
-**Plans**: 2/7 plans executed, 5 waves
+**Plans**: 5/7 plans executed, 5 waves
 
 Plans:
 
 - [x] 03-01-PLAN.md — Wave 1. Tracer: `cryptography`, the env-held master key, `crypto/envelope.py`, migration 0007 (`user_data_keys` and `fills`, RLS, documented plaintext columns), and one `Decimal` written and read back through the single write path
 - [x] 03-02-PLAN.md — Wave 2. Migration 0008 (`positions`, `legs`, `events`), the netted-ROLL `CHECK` proved by raw SQL on a connection that bypasses the application, and the events write path that keeps a compound event's two amounts split
-- [ ] 03-03-PLAN.md — Wave 3. Criterion 1: a real `pg_dump` restored into a scratch database and compared as raw bytes with no key present, plus the `(key, nonce)` invariant unioned across every ciphertext column
-- [ ] 03-04-PLAN.md — Wave 3. The data key's lifecycle: provisioned with the account, re-wrapped on master-key rotation with trade ciphertext proved byte-identical, and destroyed before the rows on account deletion
-- [ ] 03-05-PLAN.md — Wave 3. Criterion 2: both SQL queries executed against real Postgres over the plaintext set, seeded from the 52 oracle fills through `insert_fills()`
+- [x] 03-03-PLAN.md — Wave 3. Criterion 1: a real `pg_dump` restored into a scratch database and compared as raw bytes with no key present, plus the `(key, nonce)` invariant unioned across every ciphertext column
+- [x] 03-04-PLAN.md — Wave 3. The data key's lifecycle: provisioned with the account, re-wrapped on master-key rotation with trade ciphertext proved byte-identical, and destroyed before the rows on account deletion
+- [x] 03-05-PLAN.md — Wave 3. Criterion 2: both SQL queries executed against real Postgres over the plaintext set, seeded from the 52 oracle fills through `insert_fills()`
 - [ ] 03-06-PLAN.md — Wave 4. The carried obligation, first half: the eleven isolation guards repointed at the real trading tables and observed green, widened to all five, before anything is dropped
 - [ ] 03-07-PLAN.md — Wave 5. The carried obligation, second half: migration 0009 drops both probe tables, and the `Decimal` round-trip and unit-suffix proofs move onto the encrypted schema
 
@@ -332,7 +332,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Walking Skeleton | 4/10 | In Progress|  |
 | 2. Identity, Sessions, and Tenant Isolation | 6/6 | In Progress|  |
-| 3. Envelope Encryption and the Schema Contract | 2/7 | In Progress|  |
+| 3. Envelope Encryption and the Schema Contract | 5/7 | In Progress|  |
 | 4. Schwab Connection and Token Lifecycle | 0/TBD | Not started | - |
 | 5. Fill Pairing and the Oracle Gate | 0/TBD | Not started | - |
 | 6. Raw Ingest and Backfill | 0/TBD | Not started | - |
