@@ -137,6 +137,7 @@ from a development machine and is deferred by explicit user decision (2026-08-31
 | Phase | State | Resume |
 |-------|-------|--------|
 | 2 | verification_deferred_human | /gsd-verify-work 2 |
+| 3 | verification_deferred_human | /gsd-verify-work 3 |
 
 Owed on live Railway:
 
@@ -148,6 +149,24 @@ Owed on live Railway:
    Argon2id band must be tuned on production hardware, not copied from a laptop.
 
 Neither blocks Phase 3, which is local schema and encryption work with no deployment dependency.
+
+Phase 3 verified 6/6 success criteria against live code and a live database, and carries two
+NEW infrastructure-only items, deferred on the same basis as Phase 2's (user decision
+2026-08-31). `03-VERIFICATION.md` keeps `status: human_needed`; it was NOT rewritten to
+`passed`.
+
+3. Confirm `MORAI_MASTER_KEY` is set on Railway's `web` and `worker` services. This is
+   `CRYPT-01`'s own Manual-Only Verification in `03-VALIDATION.md`: a local test can prove the
+   app reads the KEK from its environment, never that production has one configured. Without
+   it the deployed services cannot unwrap any user's data key.
+4. `tools/rotate_kek.py` has never been run against a real deployment (stated plainly in
+   `03-04-SUMMARY.md`). Rotation is verified locally as all-or-nothing with byte-identical
+   trade ciphertext, but an operator decision is owed on whether shipping an unexercised
+   rotation path is acceptable.
+
+Neither blocks Phase 4 (Schwab connection) or Phase 5 (fill pairing against the oracle), both
+of which are local work. Item 3 belongs with Phase 2's item 1 — the same Railway deploy that
+sets `MORAI_APP_DB_PASSWORD` should set `MORAI_MASTER_KEY`.
 
 ## Deferred Items
 
