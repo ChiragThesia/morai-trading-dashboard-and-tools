@@ -94,11 +94,18 @@ async def test_get_user_for_management_returns_subject_row_for_admin_reader(
     )
 
     subject = await get_user_for_management(app_db_session, proof)
-    await app_db_session.commit()
 
+    # Asserted before commit deliberately: `app_db_session` is a plain
+    # `AsyncSession` with the default `expire_on_commit=True`, so reading an
+    # ORM attribute after a commit re-triggers a lazy refresh query outside an
+    # awaited context and raises `MissingGreenlet` (measured in CI, this
+    # plan's own push) -- a test-file mistake, not a claim about production
+    # code, where `get_db_session`'s own sessionmaker sets
+    # `expire_on_commit=False`.
     assert subject is not None
     assert subject.id == seeded_users.user_a
     assert subject.username == "user-a"
+    await app_db_session.commit()
 
 
 def test_constructing_auditedread_directly_raises_runtime_error() -> None:
