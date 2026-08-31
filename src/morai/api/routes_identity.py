@@ -31,6 +31,7 @@ from morai.api.models_identity import (
 from morai.db.models import GateUserScopedProbe, User
 from morai.db.models import Session as SessionRow
 from morai.db.session import get_db_session
+from morai.identity.account import delete_account
 from morai.identity.audit import (
     ReaderId,
     SubjectId,
@@ -439,3 +440,21 @@ async def me(
         await session.execute(select(User).where(User.id == user.user_id))
     ).scalar_one()
     return MeResponse(user_id=row.id, username=row.username, is_admin=row.is_admin)
+
+
+@router.delete("/me", status_code=204)
+async def delete_me(
+    response: Response,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Crypto-shreds and deletes the caller's own account (AUTH-06, D3-08,
+    T-03-20). No path parameter names the target -- the session's own user
+    id, from `get_current_user`, is the only account this route can ever
+    address, so there is no route shape that can name another user's
+    account. Clears the session cookie the way `logout` does; the
+    underlying row is already gone as part of `delete_account` above.
+    """
+    await delete_account(session, user.user_id)
+    await session.commit()
+    response.delete_cookie(key="morai_session", path="/")

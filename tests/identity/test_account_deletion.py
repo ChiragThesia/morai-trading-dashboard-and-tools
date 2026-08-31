@@ -23,11 +23,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.api.models_identity import AdminCreateUserResponse
 from morai.crypto.envelope import unwrap_dek
+from morai.db.models import Event, Fill, Leg, Position
 from morai.db.models import Session as SessionRow
-from morai.db.models import User, UserDataKey
+from morai.db.models import SetupToken, User, UserDataKey
+from morai.identity.account import delete_account
+from morai.identity.setup_tokens import TokenPurpose, issue_token
 from morai.identity.tokens import generate_token, hash_token
+from morai.ledger.fills import FillWrite, insert_fills
 from morai.settings import get_settings
 from tests.identity.conftest import SeededUsers
+from tests.ledger.conftest import (
+    SeededPosition,
+    clean_ledger_tables,
+    provisioned_users,
+    seeded_position,
+)
+
+# Re-exported, not merely imported -- pytest resolves a fixture's own
+# dependencies (`provisioned_users`/`seeded_position` both need
+# `clean_ledger_tables`) by name lookup in the *requesting* module's
+# namespace. `tests/ledger/conftest.py` is not an applicable conftest for
+# this directory, so `clean_ledger_tables` must be importable here too,
+# even though no test body below references it directly (matching
+# `tests/ledger/test_tracer_encrypted_fill.py`'s own convention).
+__all__ = ["clean_ledger_tables", "provisioned_users", "seeded_position"]
 
 pytestmark = pytest.mark.db
 
@@ -179,3 +198,138 @@ async def test_a_failure_provisioning_the_key_leaves_no_user_row_behind(
         .all()
     )
     assert rows == []
+
+
+# --- Task 3: deletion destroys the key first and the rows second ------
+
+
+async def test_delete_account_removes_every_row_across_every_table(
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    """`seeded_position` already seeds a position and two legs for user_a --
+    covers positions/legs without extra seeding here."""
+    await superuser_db_session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(provisioned_users.user_a)},
+    )
+    await insert_fills(
+        superuser_db_session,
+        provisioned_users.user_a,
+        [
+            FillWrite(
+                order_id="del-a-1",
+                occ_symbol="SPXW260618P07275000",
+                leg_index=0,
+                execution_time=_EXECUTION_TIME,
+                position_effect="OPEN",
+                side="BUY",
+                quantity=None,
+                price_usd=None,
+            )
+        ],
+    )
+    await _seed_session(superuser_db_session, provisioned_users.user_a)
+    await issue_token(
+        superuser_db_session,
+        user_id=provisioned_users.user_a,
+        purpose=TokenPurpose.SETUP,
+        ttl=timedelta(days=1),
+    )
+    await superuser_db_session.commit()
+
+    await delete_account(superuser_db_session, provisioned_users.user_a)
+    await superuser_db_session.commit()
+
+    assert (
+        await superuser_db_session.execute(
+            select(UserDataKey).where(UserDataKey.user_id == provisioned_users.user_a)
+        )
+    ).all() == []
+    assert (
+        await superuser_db_session.execute(
+            select(Fill).where(Fill.user_id == provisioned_users.user_a)
+        )
+    ).all() == []
+    assert (
+        await superuser_db_session.execute(
+            select(Event).where(Event.user_id == provisioned_users.user_a)
+        )
+    ).all() == []
+    assert (
+        await superuser_db_session.execute(
+            select(Leg).where(Leg.user_id == provisioned_users.user_a)
+        )
+    ).all() == []
+    assert (
+        await superuser_db_session.execute(
+            select(Position).where(Position.user_id == provisioned_users.user_a)
+        )
+    ).all() == []
+    assert (
+        await superuser_db_session.execute(
+            select(SessionRow).where(SessionRow.user_id == provisioned_users.user_a)
+        )
+    ).all() == []
+    assert (
+        await superuser_db_session.execute(
+            select(SetupToken).where(SetupToken.user_id == provisioned_users.user_a)
+        )
+    ).all() == []
+    assert (
+        await superuser_db_session.execute(
+            select(User).where(User.id == provisioned_users.user_a)
+        )
+    ).scalar_one_or_none() is None
+
+
+async def test_delete_me_with_a_valid_session_deletes_the_account_and_clears_cookie(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    token = await _seed_session(superuser_db_session, seeded_users.user_a)
+
+    response = await client.delete("/me", cookies={"morai_session": token})
+
+    assert response.status_code == 204
+    raw_cookie = response.headers["set-cookie"].lower()
+    assert "morai_session=" in raw_cookie
+
+    row = (
+        await superuser_db_session.execute(
+            select(User).where(User.id == seeded_users.user_a)
+        )
+    ).scalar_one_or_none()
+    assert row is None
+
+
+async def test_delete_me_without_a_session_returns_401(client: AsyncClient) -> None:
+    response = await client.delete("/me")
+    assert response.status_code == 401
+
+
+async def test_deleting_ones_own_account_does_not_touch_another_users(
+    client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """No route shape names another user's account -- proven the only way an
+    HTTP test can: deleting the caller's own account leaves a second user's
+    row and session fully intact."""
+    token_a = await _seed_session(superuser_db_session, seeded_users.user_a)
+    token_b = await _seed_session(superuser_db_session, seeded_users.user_b)
+
+    response = await client.delete("/me", cookies={"morai_session": token_a})
+    assert response.status_code == 204
+
+    row_a = (
+        await superuser_db_session.execute(
+            select(User).where(User.id == seeded_users.user_a)
+        )
+    ).scalar_one_or_none()
+    assert row_a is None
+
+    still_there = await client.get("/me", cookies={"morai_session": token_b})
+    assert still_there.status_code == 200
