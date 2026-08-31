@@ -108,6 +108,18 @@ CASES = [
         "arg-type",
         id="mypy-unit_confusion-arg-type",
     ),
+    pytest.param(
+        "violation_unaudited_read.py",
+        ["uv", "run", "basedpyright"],
+        "reportArgumentType",
+        id="basedpyright-unaudited_read-reportArgumentType",
+    ),
+    pytest.param(
+        "violation_unaudited_read.py",
+        ["uv", "run", "mypy"],
+        "arg-type",
+        id="mypy-unaudited_read-arg-type",
+    ),
 ]
 
 
