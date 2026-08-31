@@ -54,6 +54,10 @@ from morai.identity.tokens import generate_token, hash_token
 class TokenPurpose(StrEnum):
     SETUP = "setup"
     PASSWORD_RESET = "password_reset"
+    # D4-07: the OAuth CSRF `state` nonce reuses this exact shape --
+    # `purpose` is a bare `sa.String()` with no CHECK constraint (verified
+    # in 0003), so this new member needs no migration.
+    OAUTH_STATE = "oauth_state"
 
 
 async def issue_token(

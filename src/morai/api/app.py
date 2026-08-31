@@ -21,6 +21,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from morai.api.errors import install_error_handling
+from morai.api.routes_connections import router as connections_router
 from morai.api.routes_identity import router as identity_router
 from morai.db.session import get_session_maker
 from morai.identity.rls import assert_connection_cannot_bypass_rls
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 app = FastAPI(lifespan=lifespan)
 install_error_handling(app)
 app.include_router(identity_router)
+app.include_router(connections_router)
 
 
 class HealthResponse(BaseModel):

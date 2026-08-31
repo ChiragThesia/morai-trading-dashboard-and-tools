@@ -171,6 +171,30 @@ def test_settings_model_fields_still_yield_exactly_one_dsn_field() -> None:
     assert dsn_fields == ["database_url"]
 
 
+def test_schwab_credentials_raises_and_names_all_missing_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """NN-34: the message names the missing fields only -- never a value,
+    and nothing carrying a value stays attached for a chain-walking
+    logger to find (same shape as `app_async_dsn`/`master_key_bytes`)."""
+    _clear_env(monkeypatch)
+    monkeypatch.delenv("SCHWAB_API_KEY", raising=False)
+    monkeypatch.delenv("SCHWAB_APP_SECRET", raising=False)
+    monkeypatch.delenv("SCHWAB_CALLBACK_URL", raising=False)
+    monkeypatch.setenv("DATABASE_URL", RAW_DSN)
+    settings = Settings.model_validate({})
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _ = settings.schwab_credentials
+
+    message = str(exc_info.value)
+    assert "schwab_api_key" in message
+    assert "schwab_app_secret" in message
+    assert "schwab_callback_url" in message
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
 def test_boot_failure_never_echoes_the_rejected_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

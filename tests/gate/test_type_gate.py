@@ -132,6 +132,12 @@ CASES = [
         "call-arg",
         id="mypy-second_fill_writer-call-arg",
     ),
+    pytest.param(
+        "violation_schwab_json_boundary.py",
+        ["uv", "run", "basedpyright"],
+        "reportAny",
+        id="basedpyright-schwab_json_boundary-reportAny",
+    ),
 ]
 
 

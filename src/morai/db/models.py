@@ -264,6 +264,51 @@ class Leg(Base):
     root: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class SchwabConnection(Base):
+    """One user's Schwab OAuth connection (migration 0010, CONN-01..CONN-07).
+
+    `user_id` is the primary key -- one row per user by construction, not by
+    a runtime uniqueness check. That is what makes D4-09's repair-in-place
+    (`UPDATE ... WHERE user_id = :uid`, `INSERT` only when `rowcount` is
+    zero) natural rather than enforced.
+
+    No `_write_token` constructor gate, unlike `Fill`: that gate exists
+    because `fills` is immutable and had a documented second-writer threat
+    (D3-13). This table's write path is one function
+    (`morai.vendor.connections.upsert_connection`) and nothing in
+    CONTEXT.md asks for a compile-time single-writer gate here -- recorded
+    as a deliberate omission, not an oversight.
+
+    `token_created_at` is plaintext by design: it is `schwab-py`'s own
+    `TokenMetadata.creation_timestamp`, which the vendor explicitly does not
+    update on an ordinary refresh, and it is connection metadata, not
+    trading data -- the same precedent `positions.opened_at` already sets.
+    """
+
+    __tablename__ = "schwab_connections"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True
+    )
+    account_hash_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    account_hash_nonce: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    token_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    token_nonce: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    key_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    token_created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reauth_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class Event(Base):
     """One derived ledger event -- OPEN, CLOSE, ROLL or SETTLEMENT
     (migration 0008, CRYPT-02). A ROLL's `open_debit_usd`/`close_credit_usd`

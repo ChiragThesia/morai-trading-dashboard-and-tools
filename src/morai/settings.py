@@ -3,11 +3,23 @@ from __future__ import annotations
 import base64
 import binascii
 import os
+from dataclasses import dataclass
 from functools import lru_cache
 
 from pydantic import SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine.url import make_url
+
+
+@dataclass(frozen=True)
+class SchwabCredentials:
+    """The three Schwab developer-app values, unwrapped once at the one call
+    site that needs them (`vendor/schwab_adapter.py`) -- never crosses an
+    API boundary, so a plain frozen dataclass, not an `ApiModel`."""
+
+    api_key: str
+    app_secret: str
+    callback_url: str
 
 
 class Settings(BaseSettings):
@@ -49,6 +61,48 @@ class Settings(BaseSettings):
     # worker never unwrap a user's data key and must not die over a
     # variable they never touch.
     morai_master_key: SecretStr | None = None
+
+    # Phase 4: the Schwab developer app's own credentials. Optional on the
+    # model for the same reason `morai_master_key` is -- Alembic and the
+    # worker never touch these and must not die over a variable they never
+    # read. `.env` holds v1-era Schwab credentials this plan's own tests
+    # never touch (D4-14, every vendor interaction runs against the
+    # `Protocol` fake) -- these fields exist so a real deploy can set them,
+    # not so this phase's test suite reads them.
+    schwab_api_key: SecretStr | None = None
+    schwab_app_secret: SecretStr | None = None
+    schwab_callback_url: str | None = None
+
+    @property
+    def schwab_credentials(self) -> SchwabCredentials:
+        """Raises before composing anything if any of the three is unset,
+        naming only the missing field names -- following
+        `app_async_dsn`/`master_key_bytes`'s own precedent exactly: the
+        raise sits outside any `except`, so no original exception carrying a
+        value stays attached as `__context__` for a chain-walking logger to
+        find (`NN-34`)."""
+        api_key = self.schwab_api_key
+        app_secret = self.schwab_app_secret
+        callback_url = self.schwab_callback_url
+        missing: list[str] = []
+        if api_key is None:
+            missing.append("schwab_api_key")
+        if app_secret is None:
+            missing.append("schwab_app_secret")
+        if callback_url is None:
+            missing.append("schwab_callback_url")
+        if api_key is None or app_secret is None or callback_url is None:
+            raise RuntimeError(
+                "Configuration rejected. The following Schwab credential "
+                "fields are required and are withheld deliberately even "
+                "when present -- values are never rendered (NN-34): "
+                + ", ".join(missing)
+            )
+        return SchwabCredentials(
+            api_key=api_key.get_secret_value(),
+            app_secret=app_secret.get_secret_value(),
+            callback_url=callback_url,
+        )
 
     @property
     def async_dsn(self) -> str:
