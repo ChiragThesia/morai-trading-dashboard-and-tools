@@ -14,7 +14,7 @@ test-first evidence convention, the money-unit type system, the API validation b
 deployed vertical slice that proves a `Decimal` survives Python → Postgres `NUMERIC` → JSON → Python
 unchanged on real Railway hardware.
 
-Not in this phase: accounts, sessions, encryption, Schwab, trade tables, event derivation. Each owns
+Not in this phase: accounts, sessions, encryption, Schwab, trade tables, fill pairing. Each owns
 its own phase. The `gate_money_probe` table is the only table Phase 1 creates.
 
 </domain>

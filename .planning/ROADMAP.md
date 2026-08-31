@@ -6,7 +6,7 @@ This milestone builds a backend and nothing else — an API, its jobs, and its s
 starts with a deployed walking skeleton that makes the engineering constraints enforceable, then
 lays identity and tenant isolation, then the encryption boundary and the schema contract that the
 encryption boundary constrains. From there the two riskiest workstreams run side by side: the
-Schwab connection, which is the most operationally fragile part of the system, and event derivation,
+Schwab connection, which is the most operationally fragile part of the system, and fill pairing,
 which is the money code. Derivation is deliberately not blocked on the connection — the 13-calendar
 oracle in `salvage/oracle-fixtures.md` is fixture data with independently-computed expected values,
 so the code class that produced v1's −$319,850 can be proven correct before OAuth exists. Ingest
@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: Identity, Sessions, and Tenant Isolation** - Accounts, server-side sessions, and no path from one user to another user's data
 - [ ] **Phase 3: Envelope Encryption and the Schema Contract** - Per-user data keys, a documented plaintext column set, and a database that cannot store a netted ROLL
 - [ ] **Phase 4: Schwab Connection and Token Lifecycle** - Self-service OAuth, per-user refresh locks, and queryable connection health
-- [ ] **Phase 5: Event Derivation and the Oracle Gate** - Events derived from fills, proven against the 13-calendar oracle before any broker connection exists
+- [ ] **Phase 5: Fill Pairing and the Oracle Gate** - Broker leg fills paired into OPEN/CLOSE/ROLL/SETTLE events with correct net debit and credit, proven against the 13-calendar oracle before any broker connection exists
 - [ ] **Phase 6: Raw Ingest and Backfill** - Immutable fills and independent broker transactions landing on a schedule, idempotently
 - [ ] **Phase 7: Position and Campaign Read Models** - Open/closed state, per-leg settlement, and rolled-position chains computed from events
 - [ ] **Phase 8: Snapshot Capture** - Every open position repriced on the 30-minute RTH cadence, with honest gaps and a repair path
@@ -135,9 +135,11 @@ Plans:
 **Plans**: TBD
 **UI hint**: no
 
-### Phase 5: Event Derivation and the Oracle Gate
+### Phase 5: Fill Pairing and the Oracle Gate
 
-**Goal**: Events are derived from stored fills correctly enough to pass the only genuine oracle this project owns — before any real Schwab connection exists.
+**Goal**: The broker's individual leg fills are paired into OPEN, CLOSE, ROLL and SETTLE events with the correct net debit and credit — correctly enough to pass the only genuine oracle this project owns, before any real Schwab connection exists.
+
+Concretely: Schwab reports four unrelated rows for a calendar (buy back leg, sell front leg, sell back leg, buy front leg) and never says they belong together or what the trade earned. This phase turns those rows into `OPEN net debit 10.20` / `CLOSE net credit 10.55` → +$35. It is the code class that cost v1 −$319,850 by netting a ROLL into one event instead of recording the close and the open separately, and it is where the two documented hard cases live: a front-month leg shared by two calendars (`8a63aa81` / `6303e6af`, identical OCC symbol `SPXW 260618P07275000`) and a stale status column (`65aac62e`).
 **Mode:** mvp
 **Depends on**: Phase 3 — specifically its criterion 6, the fill/leg/position/event tables and the single write path into them
 **Parallel with**: Phase 4, Phase 6
@@ -271,7 +273,7 @@ that can genuinely overlap.
 | Phase | Can run alongside | Why |
 |-------|-------------------|-----|
 | 4 — Schwab Connection | 5 | Derivation is proven against fixture data and needs no broker connection |
-| 5 — Event Derivation | 4, 6 | The oracle is 13 seeded fixtures with independently-computed expected values |
+| 5 — Fill Pairing | 4, 6 | The oracle is 13 seeded fixtures with independently-computed expected values |
 | 6 — Raw Ingest | 5 | Ingest needs the schema and the connection, not the derivation code |
 | 8 — Snapshot Capture | 9, 10 | Snapshots attach to the position aggregate, not to the event stream |
 | 9 — Reconciliation | 8, 10 | Needs its two inputs, not the snapshot writer |
@@ -305,7 +307,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Identity, Sessions, and Tenant Isolation | 0/TBD | Not started | - |
 | 3. Envelope Encryption and the Schema Contract | 0/TBD | Not started | - |
 | 4. Schwab Connection and Token Lifecycle | 0/TBD | Not started | - |
-| 5. Event Derivation and the Oracle Gate | 0/TBD | Not started | - |
+| 5. Fill Pairing and the Oracle Gate | 0/TBD | Not started | - |
 | 6. Raw Ingest and Backfill | 0/TBD | Not started | - |
 | 7. Position and Campaign Read Models | 0/TBD | Not started | - |
 | 8. Snapshot Capture | 0/TBD | Not started | - |

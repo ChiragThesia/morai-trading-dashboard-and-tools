@@ -59,7 +59,7 @@ Recorded so a later phase does not re-litigate this one's minimalism:
 - Accounts, sessions, tenant isolation, audit logging — Phase 2
 - Envelope encryption, the plaintext column set, the real trade schema — Phase 3
 - Schwab OAuth, per-user refresh locks, connection health — Phase 4
-- Event derivation and the 13-calendar oracle — Phase 5
+- Fill pairing and the 13-calendar oracle — Phase 5
 - `/ready` (database reachability, migration head, worker heartbeat freshness) — grows into Phase 4's connection-health endpoint
 - A typed error envelope with machine-readable codes — Phases 2 and 4, which have real error cases
 - A startup contract test asserting every settings field exists in Railway's variable list — needs a Railway API call in CI
