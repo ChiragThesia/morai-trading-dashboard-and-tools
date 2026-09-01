@@ -18,6 +18,16 @@ phase, and this repo's own change-hygiene rule ("minimal impact... no
 drive-by refactors mixed into other work") forbids exactly that. Out of
 scope for this phase, named here so the omission reads as a decision, not
 an oversight.
+
+## Contract (WR-02): both functions raise `DataKeyMissing`, never let
+## `NoResultFound` escape
+
+`current_dek` and `dek_for_version` answer the identical question --
+"does this user have a usable DEK" -- over the identical table. Both raise
+this module's own `DataKeyMissing` when the row is absent; neither lets
+`sqlalchemy.exc.NoResultFound` propagate. A caller that needs to tell
+"crypto-shredded" apart from every other failure catches `DataKeyMissing`
+around either call, uniformly.
 """
 
 from __future__ import annotations
@@ -39,18 +49,25 @@ _BYTES: TypeAdapter[bytes] = TypeAdapter(bytes)
 
 
 class DataKeyMissing(RuntimeError):
-    """Raised by `dek_for_version` when the user's `user_data_keys` row for
-    that `key_version` does not exist -- the account's data key has been
-    crypto-shredded (D3-08, AUTH-06). Mirrors
-    `vendor.connections.ConnectionDataKeyMissing`/`ledger.fills.DataKeyMissing`
-    exactly; kept local rather than imported so this shared module does not
-    depend on either caller's own package for an unrelated error type."""
+    """Raised by both `current_dek` and `dek_for_version` when the user's
+    `user_data_keys` row does not exist -- the account's data key has been
+    crypto-shredded (D3-08, AUTH-06). WR-02: the two functions answer the
+    identical question ("does this user have a usable DEK") over the
+    identical table, so both raise this domain error rather than letting
+    SQLAlchemy's own `NoResultFound` leak from only one of them -- a caller
+    can `except DataKeyMissing` around either and get the same contract.
+    Mirrors `vendor.connections.ConnectionDataKeyMissing`/
+    `ledger.fills.DataKeyMissing` exactly; kept local rather than imported
+    so this shared module does not depend on either caller's own package
+    for an unrelated error type."""
 
 
 async def current_dek(session: AsyncSession, user_id: UUID) -> tuple[bytes, int]:
     """The user's highest-`key_version` DEK, unwrapped in-process only.
-    Copies `morai.ledger.fills._current_dek`'s body verbatim -- see this
-    module's own docstring for why this is a promotion, not a rewrite."""
+    Raises `DataKeyMissing` (WR-02) rather than the `.one()` shape's own
+    `sqlalchemy.exc.NoResultFound` -- a crypto-shredded account must
+    classify as `DATA_KEY_MISSING`, not `UNKNOWN`, wherever a caller does
+    need a DEK."""
     row = (
         await session.execute(
             text(
@@ -59,7 +76,12 @@ async def current_dek(session: AsyncSession, user_id: UUID) -> tuple[bytes, int]
             ),
             {"user_id": user_id},
         )
-    ).one()
+    ).one_or_none()
+    if row is None:
+        raise DataKeyMissing(
+            f"No user_data_keys row for user_id={user_id} -- the account's "
+            "data key has been destroyed (crypto-shred, D3-08)."
+        )
     key_version = _INT.validate_python(row[0])
     wrapped_dek = _BYTES.validate_python(row[1])
     wrap_nonce = _BYTES.validate_python(row[2])
