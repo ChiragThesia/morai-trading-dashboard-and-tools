@@ -222,6 +222,38 @@ def test_opened_at_is_earliest_open_event_time_and_none_without_one() -> None:
     assert state_no_open.opened_at is None
 
 
+def test_opened_at_treats_a_roll_as_an_opening_event_too() -> None:
+    """WR-01 (`07-REVIEW.md`): a position opened by a ROLL (D7-10: the
+    ROLL hangs on the newly-opened position) has no OPEN event at all --
+    `opened_at` must still report the ROLL's own `event_time`, not
+    `None`."""
+    position_id = uuid4()
+    t_roll = datetime(2026, 3, 1, tzinfo=UTC)
+    legs = (LegRow(id=uuid4(), position_id=position_id, occ_symbol="LEGA"),)
+    fills = [
+        _fill(
+            occ_symbol="LEGA",
+            side="BUY",
+            quantity=Decimal("1"),
+            execution_time=t_roll,
+        )
+    ]
+    events = [_event(position_id=position_id, event_type="ROLL", event_time=t_roll)]
+
+    state = derive_position_state(position_id, legs, fills, events)
+    assert state.opened_at == t_roll
+
+    # A position with both an OPEN and a later ROLL (e.g. after a second,
+    # unrelated leg change) still reports the earliest of the two.
+    t_open = datetime(2026, 1, 1, tzinfo=UTC)
+    mixed_events = [
+        _event(position_id=position_id, event_type="OPEN", event_time=t_open),
+        _event(position_id=position_id, event_type="ROLL", event_time=t_roll),
+    ]
+    mixed_state = derive_position_state(position_id, legs, fills, mixed_events)
+    assert mixed_state.opened_at == t_open
+
+
 def test_sign_convention_never_uses_absolute_value() -> None:
     """Test 6: the sign convention never uses an absolute value -- a SELL
     of 3 against a BUY of 1 nets to a negative quantity, not a positive

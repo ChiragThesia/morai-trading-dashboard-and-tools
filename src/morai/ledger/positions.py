@@ -273,8 +273,14 @@ def derive_position_state(
     known and at least one is non-zero, and `None` when any leg's net is
     `None` -- a position with any gapped leg is not reported closed, and
     is not reported open either (D7-03). Derives `opened_at` from the
-    earliest `event_time` among events whose `event_type` is `"OPEN"`, and
-    `None` when there is none (D7-01). Derives `closed_at` as the latest
+    earliest `event_time` among events whose `event_type` is `"OPEN"` or
+    `"ROLL"` (WR-01, `07-REVIEW.md`) -- a position opened by a ROLL has no
+    `"OPEN"` event at all, only the ROLL itself (D7-10: a ROLL hangs on
+    the *newly opened* position), so excluding it would report a known
+    open time as `None`, which is an avoidable gap rather than an honest
+    one (`NN-16` protects against fabricating a value, not against
+    omitting one that is already known) -- and `None` when there is
+    neither (D7-01). Derives `closed_at` as the latest
     `event_time` among the events present when `is_closed` is `True`, and
     `None` otherwise. `leg_nets` is sorted by `occ_symbol` so two runs are
     comparable element-wise.
@@ -304,7 +310,9 @@ def derive_position_state(
     else:
         is_closed = False
 
-    open_times = [event.event_time for event in events if event.event_type == "OPEN"]
+    open_times = [
+        event.event_time for event in events if event.event_type in ("OPEN", "ROLL")
+    ]
     opened_at = min(open_times) if open_times else None
 
     closed_at: datetime | None = None
