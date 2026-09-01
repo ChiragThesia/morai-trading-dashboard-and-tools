@@ -226,3 +226,12 @@ None — no external service configuration required.
 *Phase: 08-snapshot-capture*
 *Plan: 02*
 *Completed: 2026-09-01*
+
+## Self-Check: PASSED
+
+- All 4 key files confirmed present on disk (`ls -la`): `tests/ingest/test_snapshot_gap_upsert.py`, `src/morai/ingest/snapshots.py`, `tests/ingest/test_snapshot_capture.py`, this SUMMARY.
+- All 3 task commit hashes confirmed in `git log --oneline`: `fb07a8c`, `863aac0`, `cb8d7d6`.
+- `bash tools/gate.sh` green: ruff, ruff format, basedpyright strict, mypy strict, full pytest — 535 passed, 0 failed.
+- `tests/ledger/test_oracle_gate.py`/`oracle_seed.py` untouched (`git diff --stat` empty).
+- `git status --short` confirms only this plan's own `files_modified` (plus this SUMMARY) were touched; `tests/ingest/conftest.py` untouched.
+- The positive control (inverting the `where=` clause's second disjunct) was performed live and its `AssertionError` observed before revert; `git diff -- src/morai/ingest/snapshots.py` was empty immediately before that task's commit, confirming the revert was exact.
