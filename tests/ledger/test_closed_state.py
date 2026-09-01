@@ -82,9 +82,7 @@ def _fill(
     )
 
 
-def _event(
-    *, position_id: UUID, event_type: str, event_time: datetime
-) -> EventRecord:
+def _event(*, position_id: UUID, event_type: str, event_time: datetime) -> EventRecord:
     return EventRecord(
         id=uuid4(),
         user_id=_USER_ID,
@@ -110,10 +108,21 @@ def test_two_legs_each_net_zero_position_closed_at_latest_event_time() -> None:
         LegRow(id=uuid4(), position_id=position_id, occ_symbol="LEGB"),
     )
     fills = [
-        _fill(occ_symbol="LEGA", side="BUY", quantity=Decimal("1"), execution_time=t_open),
-        _fill(occ_symbol="LEGA", side="SELL", quantity=Decimal("1"), execution_time=t_close),
-        _fill(occ_symbol="LEGB", side="SELL", quantity=Decimal("1"), execution_time=t_open),
-        _fill(occ_symbol="LEGB", side="BUY", quantity=Decimal("1"), execution_time=t_close),
+        _fill(
+            occ_symbol="LEGA", side="BUY", quantity=Decimal("1"), execution_time=t_open
+        ),
+        _fill(
+            occ_symbol="LEGA",
+            side="SELL",
+            quantity=Decimal("1"),
+            execution_time=t_close,
+        ),
+        _fill(
+            occ_symbol="LEGB", side="SELL", quantity=Decimal("1"), execution_time=t_open
+        ),
+        _fill(
+            occ_symbol="LEGB", side="BUY", quantity=Decimal("1"), execution_time=t_close
+        ),
     ]
     events = [
         _event(position_id=position_id, event_type="OPEN", event_time=t_open),
@@ -137,7 +146,9 @@ def test_leg_with_no_offsetting_sell_nets_nonzero_and_stays_open() -> None:
     t_open = datetime(2026, 1, 1, tzinfo=UTC)
     legs = (LegRow(id=uuid4(), position_id=position_id, occ_symbol="LEGA"),)
     fills = [
-        _fill(occ_symbol="LEGA", side="BUY", quantity=Decimal("1"), execution_time=t_open)
+        _fill(
+            occ_symbol="LEGA", side="BUY", quantity=Decimal("1"), execution_time=t_open
+        )
     ]
     events = [_event(position_id=position_id, event_type="OPEN", event_time=t_open)]
 
@@ -148,9 +159,7 @@ def test_leg_with_no_offsetting_sell_nets_nonzero_and_stays_open() -> None:
     assert state.leg_nets[0].net_quantity == Decimal("1")
 
 
-def test_unrecognised_side_makes_leg_net_none_and_position_neither_open_nor_closed() -> (
-    None
-):
+def test_unrecognised_side_makes_leg_net_none_and_neither_open_nor_closed() -> None:
     """Test 3: a fill whose `side` is neither `BUY` nor `SELL` makes that
     leg's net `None`, and the position is reported neither open nor
     closed -- `is_closed` is `None`, never `False` (D7-03, NN-16)."""
@@ -158,7 +167,9 @@ def test_unrecognised_side_makes_leg_net_none_and_position_neither_open_nor_clos
     t_open = datetime(2026, 1, 1, tzinfo=UTC)
     legs = (LegRow(id=uuid4(), position_id=position_id, occ_symbol="LEGA"),)
     fills = [
-        _fill(occ_symbol="LEGA", side="XFER", quantity=Decimal("1"), execution_time=t_open)
+        _fill(
+            occ_symbol="LEGA", side="XFER", quantity=Decimal("1"), execution_time=t_open
+        )
     ]
     events = [_event(position_id=position_id, event_type="OPEN", event_time=t_open)]
 
@@ -191,7 +202,12 @@ def test_opened_at_is_earliest_open_event_time_and_none_without_one() -> None:
     t_later = datetime(2026, 1, 5, tzinfo=UTC)
     legs = (LegRow(id=uuid4(), position_id=position_id, occ_symbol="LEGA"),)
     fills = [
-        _fill(occ_symbol="LEGA", side="BUY", quantity=Decimal("1"), execution_time=t_earlier)
+        _fill(
+            occ_symbol="LEGA",
+            side="BUY",
+            quantity=Decimal("1"),
+            execution_time=t_earlier,
+        )
     ]
     events = [
         _event(position_id=position_id, event_type="OPEN", event_time=t_later),
