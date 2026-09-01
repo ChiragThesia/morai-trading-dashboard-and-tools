@@ -41,16 +41,24 @@ from tests.vendor.conftest import (
     _WRAPPED_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: see _FAKE_REFRESH_TOKEN above.
     FakeSchwabAuth,
     FakeSchwabClient,
+    clean_connection_tables,
+    logged_in_client,
 )
 
 # Re-exported, not merely imported -- see this module's own docstring and
-# `tests/vendor/conftest.py`'s identical convention.
+# `tests/vendor/conftest.py`'s identical convention. `clean_connection_tables`/
+# `logged_in_client` (task 2, 06-03-PLAN.md): `tests/vendor/conftest.py` is
+# not an ancestor conftest of this directory, so `logged_in_client`'s own
+# fixture dependencies must be re-exported here too, not only the fixture
+# itself, for pytest to resolve them by name.
 __all__ = [
     "SeededUsers",
     "app_db_session",
+    "clean_connection_tables",
     "clean_identity_tables",
     "clean_ingest_tables",
     "clean_ledger_tables",
+    "logged_in_client",
     "provisioned_users",
     "seeded_users",
     "superuser_db_session",
