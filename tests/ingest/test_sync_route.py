@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import morai.worker.app as worker_app
 from morai.api.job_queue import app as job_queue_app
+from morai.api.models_connections import SyncRunResponse
 from morai.db.models import BrokerTransaction
 from morai.ingest.sync_runs import SyncTrigger, read_sync_runs
 from morai.ledger.fills import read_fills
@@ -36,6 +37,7 @@ pytestmark = pytest.mark.db
 
 _TOKEN_CREATED_AT = datetime(2026, 1, 1, tzinfo=UTC)
 _STR: TypeAdapter[str] = TypeAdapter(str)
+_SYNC_RUN_LIST: TypeAdapter[list[SyncRunResponse]] = TypeAdapter(list[SyncRunResponse])
 
 
 @pytest.fixture(autouse=True)
@@ -250,3 +252,187 @@ async def test_deferral_connection_role_is_morai_app_not_superuser() -> None:
             "SELECT current_user"
         )
     assert _STR.validate_python(row["current_user"]) == "morai_app"
+
+
+# --- Task 3: reading the record -- one user's sync history, and nobody
+# else's (INGEST-06). Its own tests below, beside task 2's, per the plan's
+# own action text.
+
+_PASSWORD = "correct horse battery staple 4"
+
+
+async def _login_client(
+    superuser_db_session: AsyncSession, user_id: UUID, username: str
+) -> AsyncClient:
+    """One authenticated `AsyncClient` for either seeded user, mirroring
+    `tests/vendor/test_oauth_flow.py::_login_client` exactly -- needed
+    here because the isolation test below needs both users logged in at
+    once, and `logged_in_client` only ever logs in `user_a`."""
+    from httpx import ASGITransport
+    from morai.api.app import app as fastapi_app
+    from morai.identity.passwords import hash_password
+    from morai.db.models import User
+    from sqlalchemy import update
+
+    await superuser_db_session.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(password_hash=hash_password(_PASSWORD))
+    )
+    await superuser_db_session.commit()
+
+    transport = ASGITransport(app=fastapi_app)
+    client = AsyncClient(transport=transport, base_url="http://test")
+    login = await client.post(
+        "/login", json={"username": username, "password": _PASSWORD}
+    )
+    assert login.status_code == 200
+    client.cookies.set("morai_session", login.cookies["morai_session"])
+    return client
+
+
+async def test_sync_runs_route_returns_the_users_own_history_most_recent_first(
+    clean_ingest_tables: None,
+    superuser_db_session: AsyncSession,
+    logged_in_client: AsyncClient,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An authenticated user's own runs, most recent first, each carrying
+    started, finished, trigger, status, both landed counts and the
+    classified error code."""
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+    user_id = provisioned_users.user_a
+    await _seed_connection(superuser_db_session, user_id)
+
+    response = await logged_in_client.post("/schwab/sync")
+    assert response.status_code == 200
+    await _drain_sync_user_jobs()
+
+    listing = await logged_in_client.get("/schwab/sync-runs")
+    assert listing.status_code == 200
+    runs = _SYNC_RUN_LIST.validate_json(listing.content)
+    assert len(runs) == 1
+    run = runs[0]
+    assert run.trigger == "manual"
+    assert run.status == "succeeded"
+    assert run.fills_landed == 2
+    assert run.broker_transactions_landed == 1
+    assert run.error_code is None
+
+
+async def test_sync_runs_route_returns_an_empty_list_and_200_for_no_runs(
+    clean_ingest_tables: None,
+    logged_in_client: AsyncClient,
+) -> None:
+    """No history is a real answer here, unlike a missing connection --
+    `200` and `[]`, never `404`."""
+    response = await logged_in_client.get("/schwab/sync-runs")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_sync_runs_route_serialises_a_failed_runs_counts_as_null(
+    clean_ingest_tables: None,
+    logged_in_client: AsyncClient,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed run (no connection seeded here) serialises its landed
+    counts as JSON `null`, never `0` -- the `NN-16` failure at the API
+    boundary, not only at the column. No exception text or vendor payload
+    appears anywhere in the body.
+
+    `POST /schwab/sync` itself 404s for a user with no connection (task
+    2's own guard) before it ever defers, so a failed run needs the
+    scheduled path's own defer directly -- the same shape
+    `test_sync_runs.py::test_missing_connection_fails_and_writes_a_classified_run_row`
+    already exercises."""
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+    user_id = provisioned_users.user_a
+
+    async with app.open_async():
+        await app.configure_task("sync_user").defer_async(user_id=str(user_id))
+    await _drain_sync_user_jobs()
+
+    listing = await logged_in_client.get("/schwab/sync-runs")
+    assert listing.status_code == 200
+    runs = _SYNC_RUN_LIST.validate_json(listing.content)
+    assert len(runs) == 1
+    run = runs[0]
+    assert run.status == "failed"
+    assert run.fills_landed is None
+    assert run.broker_transactions_landed is None
+    assert run.error_code == "connection_not_found"
+    # No vendor payload leaks through: the response carries exactly the
+    # fixed schema `SyncRunResponse` declares -- `_SYNC_RUN_LIST.validate_json`
+    # above already rejects an unexpected extra field with `extra="forbid"`
+    # (`api/models.py::ApiModel`), so parsing successfully is itself part
+    # of this proof.
+    assert set(run.model_dump().keys()) == {
+        "started_at",
+        "finished_at",
+        "trigger",
+        "status",
+        "fills_landed",
+        "broker_transactions_landed",
+        "error_code",
+    }
+
+
+async def test_sync_runs_route_rejects_an_unauthenticated_call(
+    clean_ingest_tables: None,
+) -> None:
+    """The same rejection every other protected route gives."""
+    from httpx import ASGITransport
+    from morai.api.app import app as fastapi_app
+
+    transport = ASGITransport(app=fastapi_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/schwab/sync-runs")
+    assert response.status_code == 401
+
+
+async def test_sync_runs_route_isolates_users_with_a_superuser_positive_control(
+    clean_ingest_tables: None,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A user sees zero of another user's runs even when the other user
+    has several -- proved with a superuser query confirming the other
+    user's rows genuinely exist, the same bracketed shape
+    `tests/test_isolation.py` uses throughout."""
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+    user_a = provisioned_users.user_a
+    user_b = provisioned_users.user_b
+    await _seed_connection(superuser_db_session, user_a)
+    await _seed_connection(superuser_db_session, user_b)
+
+    client_a = await _login_client(superuser_db_session, user_a, "user-a")
+    client_b = await _login_client(superuser_db_session, user_b, "user-b")
+    try:
+        response_a = await client_a.post("/schwab/sync")
+        assert response_a.status_code == 200
+        await _drain_sync_user_jobs()
+        response_b = await client_b.post("/schwab/sync")
+        assert response_b.status_code == 200
+        await _drain_sync_user_jobs()
+
+        listing_a = await client_a.get("/schwab/sync-runs")
+        assert listing_a.status_code == 200
+        runs_a = _SYNC_RUN_LIST.validate_json(listing_a.content)
+        assert len(runs_a) == 1
+        assert runs_a[0].trigger == "manual"
+    finally:
+        await client_a.aclose()
+        await client_b.aclose()
+
+    all_rows = (
+        await superuser_db_session.execute(text("SELECT user_id FROM sync_runs"))
+    ).all()
+    owners = {row[0] for row in all_rows}
+    assert {user_a, user_b} <= owners
