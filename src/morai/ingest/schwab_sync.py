@@ -347,10 +347,21 @@ async def sync_user(
     happen before `read_connection`, which itself reads an RLS-protected
     table.
 
-    Opens `schwab_client_for_user`, which already holds this user's own
-    `pg_advisory_xact_lock` for the whole body (`vendor/connections.py`) --
-    no second lock acquisition here, the same reuse `sync_events`'s own
-    docstring documents for the identical race.
+    Takes this user's own `pg_advisory_xact_lock` as its very next action,
+    before `read_connection` and before `sync_windows` -- the same shape
+    `sync_events`'s own docstring documents for the identical race
+    (`ledger/pairing.py`, CR-02, `05-REVIEW.md`). `last_synced_at` is the
+    value that decides which windows get synced; reading it before the
+    lock let two overlapping calls for the same user compute windows from
+    the same stale read (WR-01, `06-REVIEW.md`). `schwab_client_for_user`
+    (`vendor/connections.py`) then acquires this same lock again as its
+    own first action -- a harmless no-op re-acquisition within the same
+    transaction, `pg_advisory_xact_lock` being re-entrant there, not a
+    second, independent critical section. The lock is transaction-scoped,
+    so it stays held through the caller's own `last_synced_at` write and
+    releases only at that commit -- what actually serialises two full
+    sync cycles for one user end to end, not merely the window this
+    function's own body covers.
 
     Never calls `get_transactions` with both dates unset -- every call
     passes the window's own explicit `start_date`/`end_date` from
@@ -368,6 +379,10 @@ async def sync_user(
     """
     await session.execute(
         text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+    )
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:uid))"),
         {"uid": str(user_id)},
     )
 
