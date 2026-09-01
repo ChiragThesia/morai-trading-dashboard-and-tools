@@ -53,6 +53,11 @@ from morai.ingest.schwab_sync import (
     sync_all_connected_users as run_sync_all_connected_users,
 )
 from morai.ingest.schwab_sync import sync_user as run_sync_user
+from morai.ingest.snapshots import (
+    capture_all_connected_users as run_capture_all_connected_users,
+)
+from morai.ingest.snapshots import capture_user_snapshot as run_capture_user_snapshot
+from morai.ingest.snapshots import rth_slot_for
 from morai.ingest.sync_runs import (
     SyncStatus,
     SyncTrigger,
@@ -106,6 +111,38 @@ async def sync_all_connected_users_task(timestamp: int) -> None:
     """
     async with AsyncSession(get_engine()) as session:
         await run_sync_all_connected_users(session)
+        await session.commit()
+
+
+@app.periodic(cron="0,30 * * * *")
+@app.task(name="capture_all_connected_users")
+async def capture_all_connected_users_task(timestamp: int) -> None:
+    """Fires every thirty minutes in UTC, on every day (D8-06) -- Eastern
+    RTH membership is the *runtime* filter, computed by `rth_slot_for`
+    below, because a cron expression carrying its own hour range drifts an
+    hour twice a year. A tick outside the grid returns immediately: it
+    defers nothing and writes nothing, not even a `snapshot_runs` row,
+    because it was never a slot to begin with (D8-05).
+
+    Honest ceiling, read directly from the installed `procrastinate` 3.9.0
+    source (`periodic.py`'s own `MAX_DELAY = 60 * 10`): a worker down for
+    more than ten minutes across a slot boundary produces **no job at all**
+    for that slot, not even a gap-writing one -- Procrastinate never gives
+    this task a chance to run for it. That hole is invisible in
+    `snapshot_observations`/`snapshot_marks` and visible only in
+    `snapshot_runs` (plan 08-04's own table), named here so a reader meets
+    the gap where the mechanism lives, not only in a research doc.
+
+    Opens its own session on the superuser engine, exactly as
+    `sync_all_connected_users_task` does -- see that task's own docstring
+    for why this one cross-tenant read is correct.
+    """
+    moment = datetime.fromtimestamp(timestamp, tz=UTC)
+    slot = rth_slot_for(moment)
+    if slot is None:
+        return
+    async with AsyncSession(get_engine()) as session:
+        await run_capture_all_connected_users(session, slot_time=slot)
         await session.commit()
 
 
@@ -201,5 +238,48 @@ async def sync_user_task(
             update(SchwabConnection)
             .where(SchwabConnection.user_id == UUID(user_id))
             .values(last_synced_at=started_at)
+        )
+        await session.commit()
+
+
+@app.task(name="snapshot_user")
+async def snapshot_user_task(
+    user_id: str, slot_time: str, *, trigger: str = "scheduled"
+) -> None:
+    """Reprices one connected user's open legs for one RTH slot (Phase 8,
+    SNAP-01).
+
+    Opens one session from `get_session_maker()` -- `morai_app`, never
+    this module's own superuser Procrastinate pool -- and calls
+    `assert_connection_cannot_bypass_rls` on it before touching a
+    protected table, mirroring `sync_user_task`'s own call exactly (this
+    module's own docstring: the whole security finding Phase 6 exists to
+    close). `capture_user_snapshot` itself sets `app.current_user_id` as
+    its first action, the same split `sync_user`/`sync_user_task` already
+    use.
+
+    `observed_at` is read once here, at task start, and threaded through
+    to `capture_user_snapshot` -- never read again inside the shell, so
+    every leg in one run shares one wall-clock reading. Does not swallow
+    exceptions: a raised error propagates so `procrastinate_jobs` and this
+    phase's own data agree, the same discipline `sync_user_task` already
+    follows.
+
+    `trigger` is accepted but not yet recorded anywhere -- the
+    `snapshot_runs` row this parameter is for is plan 08-04's own scope
+    (D8-15); this task is deliberately incomplete on that axis for now,
+    named here rather than left silent.
+    """
+    observed_at = datetime.now(UTC)
+    parsed_slot_time = datetime.fromisoformat(slot_time)
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        await assert_connection_cannot_bypass_rls(session)
+        await run_capture_user_snapshot(
+            session,
+            UUID(user_id),
+            slot_time=parsed_slot_time,
+            observed_at=observed_at,
+            auth=get_schwab_auth(),
         )
         await session.commit()

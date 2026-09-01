@@ -112,6 +112,15 @@ WITH all_nonces AS (
     UNION ALL
     SELECT user_id, key_version, raw_nonce AS nonce
     FROM broker_transactions WHERE raw_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, raw_nonce AS nonce
+    FROM snapshot_observations WHERE raw_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, mark_usd_nonce AS nonce
+    FROM snapshot_marks WHERE mark_usd_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, spot_usd_nonce AS nonce
+    FROM snapshot_marks WHERE spot_usd_nonce IS NOT NULL
 )
 SELECT user_id, key_version, nonce, COUNT(*) AS collision_count
 FROM all_nonces
@@ -135,6 +144,9 @@ _EXPECTED_NONCE_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("schwab_connections", "token_nonce"),
         ("schwab_connections", "account_hash_nonce"),
         ("broker_transactions", "raw_nonce"),
+        ("snapshot_observations", "raw_nonce"),
+        ("snapshot_marks", "mark_usd_nonce"),
+        ("snapshot_marks", "spot_usd_nonce"),
     }
 )
 

@@ -37,6 +37,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy import text as sa_text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -571,3 +572,149 @@ class Event(Base):
                 "guarantee D7-14 exists to enforce."
             )
         super().__init__(**kwargs)
+
+
+class SnapshotObservation(Base):
+    """The raw layer: one vendor `get_quotes` element, verbatim and
+    encrypted, per leg per RTH slot (migration 0015, D8-01, D8-04,
+    SNAP-01/SNAP-02). `(leg_id, slot_time)` is the composite key -- never
+    `occ_symbol`: `leg_id` already functionally determines `user_id` and
+    `root` through the existing foreign-key chain, and a trader re-entering
+    a closed contract in a new position would silently collide two
+    positions' history onto one `occ_symbol` key (`NN-1`, Pitfall 4,
+    08-RESEARCH.md).
+
+    `gap_reason` non-NULL and every payload column NULL, or the reverse --
+    never both, never neither (`snapshot_observations_gap_xor_payload_check`,
+    D8-09, `L041`). A gap is honest, never a sentinel (`NN-16`).
+
+    No `_write_token` constructor gate, unlike `Fill`/`Event`. This table
+    has two legitimate entry points sharing one write path each --
+    `write_snapshot_observations` (this plan) and the repair path (plan
+    08-04) -- the same shape `insert_events` already ships without a
+    sentinel (`sync_runs`' own docstring sets the precedent: a sentinel is
+    reserved for a table where a *second* writer would be a bug, not where
+    two entry points share one function). See `08-PATTERNS.md`.
+    """
+
+    __tablename__ = "snapshot_observations"
+    __table_args__: tuple[UniqueConstraint] = (
+        UniqueConstraint(
+            "leg_id", "slot_time", name="snapshot_observations_leg_slot_key"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    leg_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("legs.id"), nullable=False
+    )
+    slot_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    gap_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    raw_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    key_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SnapshotMark(Base):
+    """The derived layer: one parsed mark and spot per leg per RTH slot
+    (migration 0015, D8-01, D8-09/D8-10, SNAP-01/SNAP-02/SNAP-03). Same
+    composite key as `SnapshotObservation`, same gap-xor discipline
+    (`snapshot_marks_gap_xor_mark_check`) -- except the spot pair sits
+    outside the "real row" branch: a real mark whose payload carried no
+    underlying price is a real mark with an honest missing spot, not a gap
+    for the whole row (`NN-16`).
+
+    This table's own asymmetric `ON CONFLICT ... DO UPDATE ... WHERE`
+    (D8-10, `write_snapshot_marks`) is the one write path this migration's
+    grant list adds `UPDATE` for -- a real observation may heal a gap, a
+    gap may never overwrite a real observation.
+
+    No `_write_token` constructor gate, for the identical reasoning
+    `SnapshotObservation`'s own docstring gives.
+    """
+
+    __tablename__ = "snapshot_marks"
+    __table_args__: tuple[UniqueConstraint] = (
+        UniqueConstraint("leg_id", "slot_time", name="snapshot_marks_leg_slot_key"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    leg_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("legs.id"), nullable=False
+    )
+    slot_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    gap_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mark_usd_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    mark_usd_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    spot_usd_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    spot_usd_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    key_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SnapshotRun(Base):
+    """One row per attempted `snapshot_user` run -- what ran, what landed,
+    what errored (migration 0015, D8-15, `L042`). Mirrors `SyncRun` exactly:
+    same plaintext-by-design call (operational metadata, not trading data),
+    same nullable count columns (a failed run landed an unknown number of
+    rows, not zero -- `NN-16` applied to a count), same two `CHECK`
+    constraints on `trigger`/`status`.
+
+    No unique constraint on `(user_id, slot_time)`: a repair run
+    legitimately produces a second row for a slot already captured, and
+    this table's whole job is telling those two runs apart.
+
+    This migration lands the table only. No `_write_token` gate, mirroring
+    `SyncRun`'s own reasoning: its writer is plan 08-04's own two-session
+    split (`snapshot_user_task`), never application code directly.
+    """
+
+    __tablename__ = "snapshot_runs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    slot_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    finished_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    trigger: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    legs_attempted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    marks_written: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gaps_by_reason: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
