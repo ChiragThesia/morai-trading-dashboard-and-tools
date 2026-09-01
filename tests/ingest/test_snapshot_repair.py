@@ -20,19 +20,32 @@ discipline).
 from __future__ import annotations
 
 import ast
+import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 
 import pytest
+from procrastinate.jobs import Status
 from sqlalchemy import insert, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import morai.worker.app as worker_app
 from morai.crypto.data_keys import dek_for_version
 from morai.crypto.envelope import decrypt_field, generate_dek, wrap_dek
-from morai.db.models import SnapshotMark, SnapshotObservation, UserDataKey
-from morai.ingest.snapshot_repair import repair_snapshot_marks
+from morai.db.models import (
+    Leg,
+    Position,
+    SnapshotMark,
+    SnapshotObservation,
+    UserDataKey,
+)
+from morai.identity.rls import (
+    assert_connection_cannot_bypass_rls as real_assert_connection_cannot_bypass_rls,
+)
+from morai.ingest import snapshot_repair
+from morai.ingest.snapshot_repair import RepairOutcome, repair_snapshot_marks
 from morai.ingest.snapshots import (
     SnapshotGapReason,
     SnapshotWrite,
@@ -41,9 +54,11 @@ from morai.ingest.snapshots import (
     write_snapshot_observations,
 )
 from morai.settings import get_settings
+from morai.worker.app import app
 from tests.identity.conftest import SeededUsers
 from tests.ingest.conftest import QUOTE_PAYLOAD
 from tests.ledger.conftest import SeededPosition
+from tools.repair_snapshots import main as tools_main
 
 pytestmark = pytest.mark.db
 
@@ -176,6 +191,33 @@ async def _decrypt_mark_usd(
             ),
         ).decode("utf-8")
     )
+
+
+async def _seed_leg_for_user(session: AsyncSession, user_id: UUID) -> UUID:
+    """A second user's own position/leg, inserted the same way
+    `tests/ledger/conftest.py::seeded_position` does -- `seeded_position`
+    itself seeds only `user_a`; the CLI's no-user-id fan-out needs a real
+    leg under `user_b` too, to prove a second user's rows are repaired."""
+    position_id = (
+        await session.execute(
+            insert(Position).values(user_id=user_id).returning(Position.id)
+        )
+    ).scalar_one()
+    leg_id = (
+        await session.execute(
+            insert(Leg)
+            .values(
+                position_id=position_id,
+                user_id=user_id,
+                leg_role="front",
+                occ_symbol="SPXW260618P07275000",
+                root="SPXW",
+            )
+            .returning(Leg.id)
+        )
+    ).scalar_one()
+    await session.commit()
+    return leg_id
 
 
 async def test_repair_writes_real_marks_from_stored_observations_with_no_prior_marks(
@@ -546,3 +588,209 @@ async def test_repair_produces_no_market_data_gap_when_payload_no_longer_parses(
     )
     assert mark.gap_reason == "no_market_data"
     assert mark.mark_usd_ciphertext is None
+
+
+async def test_repair_snapshot_marks_job_rebuilds_marks_via_a_drained_worker(
+    clean_snapshot_tables: None,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    """Defers `repair_snapshot_marks` by name onto the real `worker.app.app`
+    and drains it with a bounded `run_worker_async(wait=False)`, mirroring
+    `test_snapshot_capture.py`'s own tracer -- the genuine production call
+    path, not a direct function call."""
+    user_id = provisioned_users.user_a
+    await _seed_observation(
+        app_db_session,
+        user_id,
+        leg_id=seeded_position.front_leg_id,
+        slot_time=_SLOT_TIME,
+        observed_at=_SLOT_TIME,
+        raw_payload=QUOTE_PAYLOAD,
+    )
+
+    async with app.open_async():
+        job_id = await app.configure_task("repair_snapshot_marks").defer_async(
+            user_id=str(user_id)
+        )
+        status_before = await app.job_manager.get_job_status_async(job_id)
+        assert status_before is Status.TODO
+
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+
+        status_after = await app.job_manager.get_job_status_async(job_id)
+        assert status_after is Status.SUCCEEDED
+
+    mark = await _read_mark_row(
+        app_db_session, user_id, seeded_position.front_leg_id, _SLOT_TIME
+    )
+    assert mark.gap_reason is None
+    assert await _decrypt_mark_usd(app_db_session, user_id, mark) == _FRONT_MARK
+
+
+async def test_repair_task_asserts_rls_before_touching_a_protected_table(
+    clean_snapshot_tables: None,
+    provisioned_users: SeededUsers,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`repair_snapshot_marks_task` opens a `morai_app` session and asserts
+    it cannot bypass RLS before touching a protected table -- the same
+    call `snapshot_user_task` already makes (Phase 6's own finding, T-08-16)."""
+    calls: list[bool] = []
+
+    async def spy(session: AsyncSession) -> None:
+        calls.append(True)
+        await real_assert_connection_cannot_bypass_rls(session)
+
+    monkeypatch.setattr(worker_app, "assert_connection_cannot_bypass_rls", spy)
+
+    user_id = provisioned_users.user_a
+    async with app.open_async():
+        job_id = await app.configure_task("repair_snapshot_marks").defer_async(
+            user_id=str(user_id)
+        )
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status = await app.job_manager.get_job_status_async(job_id)
+        assert status is Status.SUCCEEDED
+
+    assert calls == [True]
+
+
+async def test_both_entry_points_call_the_identical_repair_function(
+    clean_snapshot_tables: None,
+    provisioned_users: SeededUsers,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Patches `repair_snapshot_marks` at its defining module
+    (`morai.ingest.snapshot_repair`) and observes both the drained worker
+    job and the CLI's `main` call it -- a wrapper that grew its own copy
+    of the logic would still pass a behavioural test and would fail this
+    one (D8-13)."""
+    calls: list[UUID] = []
+
+    async def fake_repair(
+        session: AsyncSession, user_id: UUID, *, since: datetime | None = None
+    ) -> RepairOutcome:
+        calls.append(user_id)
+        return RepairOutcome(observations_read=0, marks_written=0, gaps_by_reason={})
+
+    monkeypatch.setattr(snapshot_repair, "repair_snapshot_marks", fake_repair)
+
+    user_id = provisioned_users.user_a
+    async with app.open_async():
+        job_id = await app.configure_task("repair_snapshot_marks").defer_async(
+            user_id=str(user_id)
+        )
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status = await app.job_manager.get_job_status_async(job_id)
+        assert status is Status.SUCCEEDED
+
+    exit_code = await tools_main([str(user_id)])
+    assert exit_code == 0
+
+    assert calls == [user_id, user_id]
+
+
+async def test_cli_main_with_one_user_id_rebuilds_marks_and_exits_zero(
+    clean_snapshot_tables: None,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    user_id = provisioned_users.user_a
+    await _seed_observation(
+        app_db_session,
+        user_id,
+        leg_id=seeded_position.front_leg_id,
+        slot_time=_SLOT_TIME,
+        observed_at=_SLOT_TIME,
+        raw_payload=QUOTE_PAYLOAD,
+    )
+
+    exit_code = await tools_main([str(user_id)])
+    assert exit_code == 0
+
+    mark = await _read_mark_row(
+        app_db_session, user_id, seeded_position.front_leg_id, _SLOT_TIME
+    )
+    assert mark.gap_reason is None
+    assert await _decrypt_mark_usd(app_db_session, user_id, mark) == _FRONT_MARK
+
+
+async def test_cli_main_with_no_user_id_repairs_every_user_with_stored_observations(
+    clean_snapshot_tables: None,
+    app_db_session: AsyncSession,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    user_a = provisioned_users.user_a
+    user_b = provisioned_users.user_b
+    await _seed_observation(
+        app_db_session,
+        user_a,
+        leg_id=seeded_position.front_leg_id,
+        slot_time=_SLOT_TIME,
+        observed_at=_SLOT_TIME,
+        raw_payload=QUOTE_PAYLOAD,
+    )
+    user_b_leg_id = await _seed_leg_for_user(superuser_db_session, user_b)
+    await _seed_observation(
+        app_db_session,
+        user_b,
+        leg_id=user_b_leg_id,
+        slot_time=_SLOT_TIME,
+        observed_at=_SLOT_TIME,
+        raw_payload=QUOTE_PAYLOAD,
+    )
+
+    exit_code = await tools_main([])
+    assert exit_code == 0
+
+    mark_a = await _read_mark_row(
+        app_db_session, user_a, seeded_position.front_leg_id, _SLOT_TIME
+    )
+    mark_b = await _read_mark_row(app_db_session, user_b, user_b_leg_id, _SLOT_TIME)
+    assert mark_a.gap_reason is None
+    assert mark_b.gap_reason is None
+    assert await _decrypt_mark_usd(app_db_session, user_a, mark_a) == _FRONT_MARK
+    assert await _decrypt_mark_usd(app_db_session, user_b, mark_b) == _FRONT_MARK
+
+
+async def test_cli_rejects_a_non_uuid_user_id_without_echoing_it(
+    clean_snapshot_tables: None,
+    provisioned_users: SeededUsers,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bad_value = "not-a-uuid-value-98765"
+    exit_code = await tools_main([bad_value])
+    assert exit_code != 0
+    combined = "".join(capsys.readouterr())
+    assert bad_value not in combined
+
+
+async def test_cli_help_exits_zero_and_names_every_option(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        await tools_main(["--help"])
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "user_id" in out
+    assert "--since" in out
+    assert "--backfill-gaps" in out
+
+
+def test_cli_module_reimplements_no_parser() -> None:
+    """The anti-drift assertion for the CLI's own half of D8-13: no
+    parser reimplemented locally, only the shared function called."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    source = (repo_root / "tools/repair_snapshots.py").read_text()
+    tree = ast.parse(source)
+    offenders = [
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("parse_quote")
+    ]
+    assert offenders == []

@@ -49,6 +49,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from morai.db.models import SchwabConnection
 from morai.db.session import get_engine, get_session_maker
 from morai.identity.rls import assert_connection_cannot_bypass_rls
+from morai.ingest import snapshot_repair
 from morai.ingest.schwab_sync import (
     sync_all_connected_users as run_sync_all_connected_users,
 )
@@ -281,5 +282,45 @@ async def snapshot_user_task(
             slot_time=parsed_slot_time,
             observed_at=observed_at,
             auth=get_schwab_auth(),
+        )
+        await session.commit()
+
+
+@app.task(name="repair_snapshot_marks")
+async def repair_snapshot_marks_task(user_id: str, since: str | None = None) -> None:
+    """Rebuilds one user's `snapshot_marks` from the raw observations
+    already stored, with no vendor call (Phase 8, plan 08-03, SNAP-04,
+    `D8-13`).
+
+    A thin wrapper over `snapshot_repair.repair_snapshot_marks` -- it holds
+    no logic of its own, exactly as `sync_user_task` is a thin wrapper over
+    `sync_user`. Opens one session from `get_session_maker()` -- `morai_app`,
+    never this module's own superuser Procrastinate pool -- and calls
+    `assert_connection_cannot_bypass_rls` before touching a protected table,
+    mirroring `snapshot_user_task`'s own call exactly (this module's own
+    docstring: the whole security finding Phase 6 exists to close).
+
+    Calls `snapshot_repair.repair_snapshot_marks` through the module
+    object, not an aliased import -- this is what lets both entry points
+    (this task and `tools/repair_snapshots.py`) be proven to reach the
+    identical function by patching it at its own defining module
+    (`morai.ingest.snapshot_repair`); an aliased `from ... import X as Y`
+    binds a separate name at import time that a later patch on the
+    defining module would not reach.
+
+    No `@app.periodic` decorator: repair is triggered on demand, not on a
+    cadence -- a scheduled repair would compete with the live writer for
+    the same per-user advisory lock on every slot for no benefit.
+    """
+    parsed_since = datetime.fromisoformat(since) if since is not None else None
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        await assert_connection_cannot_bypass_rls(session)
+        await session.execute(
+            text("SELECT set_config('app.current_user_id', :uid, true)"),
+            {"uid": user_id},
+        )
+        await snapshot_repair.repair_snapshot_marks(
+            session, UUID(user_id), since=parsed_since
         )
         await session.commit()
