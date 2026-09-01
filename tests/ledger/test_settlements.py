@@ -172,5 +172,7 @@ def test_derive_settlements_takes_no_session_and_reads_no_clock() -> None:
     assert parameter_names == ["legs", "events", "as_of"]
     assert signature.parameters["as_of"].kind == inspect.Parameter.KEYWORD_ONLY
     for name, parameter in signature.parameters.items():
-        annotation = str(parameter.annotation)
-        assert "AsyncSession" not in annotation, name
+        # `str(parameter)` (not `.annotation`, which typeshed types as
+        # `Any`) renders the parameter's full "name: annotation" text --
+        # a plain `str`, no `Any` boundary to cross (reportAny).
+        assert "AsyncSession" not in str(parameter), name
