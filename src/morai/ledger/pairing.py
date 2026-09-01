@@ -30,7 +30,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.ledger.events import EventWrite, insert_events
+from morai.ledger.events import EventWrite, insert_events, read_events
 from morai.ledger.fills import FillRecord, read_fills
 
 # Raw `text()` results type every column as `Any` -- same untyped-boundary
@@ -351,6 +351,23 @@ async def sync_events(
     `identity/audit.py::open_audited_read` all already follow. An internal
     commit here would reset the transaction-local GUC the caller's next
     RLS-scoped query depends on.
+
+    Idempotency (LEDGER-09): before inserting, reads existing `events` for
+    the user and builds the set of already-stored `(position_id,
+    event_type, fill_ids_hash)` triples, then inserts only the drafts
+    whose triple is absent. This is read-compare-skip, not
+    delete-then-reinsert, for two recorded reasons: migration 0008 grants
+    `events` no `UPDATE` at all, and a two-step wipe-then-reingest is not
+    atomic across the step boundary, so a crash between the delete and the
+    insert would leave the scope with zero events rather than
+    stale-but-present ones (L069, L005).
+
+    Honest limit: a draft whose `position_id` and `event_type` already
+    exist under a *different* hash is inserted as a second row rather than
+    replacing the first, because correcting a stored event would need a
+    delete-then-reinsert this phase deliberately does not own. Fills are
+    immutable, so this phase cannot reach that path; naming it here is
+    what stops a later reader from assuming it was handled.
     """
     resolutions = await resolve_fill_positions(session, user_id)
     fills = await read_fills(session, user_id)
@@ -359,6 +376,12 @@ async def sync_events(
         fills = [fill for fill in fills if fill.order_id in wanted]
 
     derivation = derive_events(fills, resolutions)
+
+    existing = await read_events(session, user_id)
+    existing_triples = {
+        (record.position_id, record.event_type, record.fill_ids_hash)
+        for record in existing
+    }
 
     drafts = [
         EventWrite(
@@ -370,6 +393,8 @@ async def sync_events(
             close_credit_usd=event.close_credit_usd,
         )
         for event in derivation.events
+        if (event.position_id, event.event_type.value, event.fill_ids_hash)
+        not in existing_triples
     ]
     if drafts:
         await insert_events(session, user_id, drafts)
