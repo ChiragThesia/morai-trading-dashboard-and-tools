@@ -185,6 +185,15 @@ None - no external service configuration required.
 - Phase 9's reconciliation invariant can now assume ROLL rows exist and are correctly split — no further deferral remains on the money side of a roll.
 - `commission_usd` stays `None` and unpersisted this phase (D5-04, unchanged) — Phase 9 is still the phase that has to confront that gap.
 
+## Self-Check: PASSED
+
+- FOUND: `src/morai/ledger/pairing.py`
+- FOUND: `tests/ledger/test_roll_derivation.py`
+- FOUND: `.planning/phases/07-position-and-campaign-read-models/07-05-SUMMARY.md`
+- FOUND commit: `980bdea`
+- FOUND commit: `9b203e7`
+- FOUND commit: `f5f8958`
+
 ---
 *Phase: 07-position-and-campaign-read-models*
 *Completed: 2026-09-01*
