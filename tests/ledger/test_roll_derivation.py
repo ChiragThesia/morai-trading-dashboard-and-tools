@@ -1,6 +1,6 @@
-"""D7-09/D7-10: positive ROLL derivation (Task 1 of this plan; Task 2
-extends this file with the campaign-chain read over derived rolls,
-ROADMAP criterion 4).
+"""D7-09/D7-10: positive ROLL derivation, and the campaign chain read
+through the derived rows it produces (ROADMAP criterion 4, closing D5-01's
+deferral).
 
 Every fixture in this file is synthetic (D7-13). No independent oracle
 exists for ROLL -- unlike the 13 real calendars in `oracle_seed.py`, whose
@@ -13,14 +13,18 @@ ROLL events, byte-identically with `test_oracle_gate.py`'s own invariant.
 Tests 1-8 are pure -- hand-built `FillRecord`s and a hand-built
 `resolutions` mapping, no database, no `pytest.mark.db` -- proving
 `derive_events`'s roll pass in isolation, the same no-marker convention
-`test_pairing_pure.py`/`test_position_creation.py` already use. Test 9 is
-`db`-marked: the oracle's own negative guard at full scale, closing
-D5-01's own hard-stop requirement.
+`test_pairing_pure.py`/`test_position_creation.py` already use. Tests 9-12
+are `db`-marked: Test 9 is the oracle's own negative guard at full scale;
+Tests 10-12 seed fills through `insert_fills`, create positions through
+`create_positions`, and derive events through `sync_events` -- the real
+write path end to end, never a test-only fast path -- then read the
+resulting chain through `read_campaign_for_position` (`ledger/campaigns.py`,
+07-04).
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -29,7 +33,8 @@ from pydantic import TypeAdapter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.ledger.fills import FillRecord
+from morai.ledger.campaigns import CampaignLink, read_campaign_for_position
+from morai.ledger.fills import FillRecord, FillWrite, insert_fills
 from morai.ledger.pairing import (
     EventType,
     FillKey,
@@ -37,6 +42,7 @@ from morai.ledger.pairing import (
     derive_events,
     sync_events,
 )
+from morai.ledger.positions import create_positions
 from tests.identity.conftest import SeededUsers
 from tests.ledger.conftest import (
     app_db_session,
@@ -60,6 +66,7 @@ __all__ = [
     "superuser_db_session",
 ]
 
+_UUID: TypeAdapter[UUID] = TypeAdapter(UUID)
 _INT: TypeAdapter[int] = TypeAdapter(int)
 
 # --- Tests 1-8: pure fixtures, synthetic, never a real oracle id (D7-13) --
@@ -411,3 +418,202 @@ async def test_full_oracle_derives_zero_roll_events(
         ).scalar_one()
     )
     assert roll_count == 0
+
+
+# --- Tests 10-12: the campaign chain over derived rolls, end to end (db) --
+
+_CAMP_OPEN_ORDER_ID = "SYN-CAMP-OPEN"
+_CAMP_ROLL_ORDER_PREFIX = "SYN-CAMP-ROLL"
+_CAMP_EXECUTION_TIME_0 = datetime(2026, 6, 1, 14, 30, tzinfo=UTC)
+
+# Three synthetic, single-leg contracts at the same root and strike,
+# chained by expiry -- front, first roll, second roll. Never a real oracle
+# id (D7-13).
+_CAMP_SYMBOL_FRONT = "SPXW260601P07300000"
+_CAMP_SYMBOL_ROLL_1 = "SPXW260629P07300000"
+_CAMP_SYMBOL_ROLL_2 = "SPXW260727P07300000"
+
+
+async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
+    """Mirrors `tests/test_isolation.py`/`test_campaigns.py`'s own
+    `_set_current_user` exactly."""
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+    )
+
+
+async def _position_id_for_symbol(
+    session: AsyncSession, user_id: UUID, occ_symbol: str
+) -> UUID:
+    row = (
+        await session.execute(
+            text(
+                "SELECT position_id FROM legs "
+                "WHERE user_id = :uid AND occ_symbol = :occ_symbol"
+            ),
+            {"uid": str(user_id), "occ_symbol": occ_symbol},
+        )
+    ).one()
+    return _UUID.validate_python(row[0])
+
+
+async def _roll_event_count(session: AsyncSession) -> int:
+    return _INT.validate_python(
+        (
+            await session.execute(
+                text("SELECT COUNT(*) FROM events WHERE event_type = 'ROLL'")
+            )
+        ).scalar_one()
+    )
+
+
+async def _build_roll_chain(
+    app_db_session: AsyncSession, user_id: UUID, symbols: list[str]
+) -> list[UUID]:
+    """`len(symbols)` positions chained root-to-newest, through the real
+    pipeline `ingest/schwab_sync.py::sync_user` uses: `insert_fills`
+    (the one write path), `create_positions` (07-01's creation path), and
+    `sync_events` (this plan's roll pass), never a direct `events` insert.
+    Returns position ids in root-to-newest order."""
+    await insert_fills(
+        app_db_session,
+        user_id,
+        [
+            FillWrite(
+                order_id=_CAMP_OPEN_ORDER_ID,
+                occ_symbol=symbols[0],
+                leg_index=0,
+                execution_time=_CAMP_EXECUTION_TIME_0,
+                position_effect="OPENING",
+                side="SELL",
+                quantity=Decimal("1"),
+                price_usd=Decimal("10.00"),
+            )
+        ],
+    )
+    await create_positions(app_db_session, user_id)
+    await sync_events(app_db_session, user_id)
+
+    for i in range(1, len(symbols)):
+        execution_time = _CAMP_EXECUTION_TIME_0 + timedelta(days=i)
+        order_id = f"{_CAMP_ROLL_ORDER_PREFIX}-{i}"
+        await insert_fills(
+            app_db_session,
+            user_id,
+            [
+                FillWrite(
+                    order_id=order_id,
+                    occ_symbol=symbols[i - 1],
+                    leg_index=0,
+                    execution_time=execution_time,
+                    position_effect="CLOSING",
+                    side="BUY",
+                    quantity=Decimal("1"),
+                    price_usd=Decimal("8.00"),
+                ),
+                FillWrite(
+                    order_id=order_id,
+                    occ_symbol=symbols[i],
+                    leg_index=1,
+                    execution_time=execution_time,
+                    position_effect="OPENING",
+                    side="SELL",
+                    quantity=Decimal("1"),
+                    price_usd=Decimal("9.00"),
+                ),
+            ],
+        )
+        await create_positions(app_db_session, user_id)
+        await sync_events(app_db_session, user_id)
+
+    return [
+        await _position_id_for_symbol(app_db_session, user_id, symbol)
+        for symbol in symbols
+    ]
+
+
+@pytest.mark.db
+async def test_two_position_roll_sequence_reads_as_a_depth_0_1_chain(
+    app_db_session: AsyncSession,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """Behavior 10: seed fills for an opening order, then a roll order
+    that closes the first expiry and opens a second, run the creation
+    path and `sync_events`, and read the campaign through
+    `read_campaign_for_position`. The chain has two members, depth 0 at
+    the original position and depth 1 at the rolled-into one."""
+    user_id = provisioned_users.user_a
+    await _set_current_user(app_db_session, user_id)
+
+    position_ids = await _build_roll_chain(
+        app_db_session, user_id, [_CAMP_SYMBOL_FRONT, _CAMP_SYMBOL_ROLL_1]
+    )
+
+    chain = await read_campaign_for_position(app_db_session, position_ids[1])
+
+    assert [link.depth for link in chain] == [0, 1]
+    assert [link.position_id for link in chain] == position_ids
+    assert len({link.campaign_root_id for link in chain}) == 1
+    assert chain[0].campaign_root_id == position_ids[0]
+
+
+@pytest.mark.db
+async def test_three_position_roll_sequence_reads_as_depths_0_1_2(
+    app_db_session: AsyncSession,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """Behavior 11: a three-leg-deep roll sequence returns depths 0, 1, 2
+    in order, rooted at the first position."""
+    user_id = provisioned_users.user_a
+    await _set_current_user(app_db_session, user_id)
+
+    position_ids = await _build_roll_chain(
+        app_db_session,
+        user_id,
+        [_CAMP_SYMBOL_FRONT, _CAMP_SYMBOL_ROLL_1, _CAMP_SYMBOL_ROLL_2],
+    )
+
+    chain = await read_campaign_for_position(app_db_session, position_ids[2])
+
+    assert [link.depth for link in chain] == [0, 1, 2]
+    assert [link.position_id for link in chain] == position_ids
+    assert len({link.campaign_root_id for link in chain}) == 1
+
+
+@pytest.mark.db
+async def test_second_sync_events_pass_over_the_same_fills_adds_no_duplicate_roll(
+    app_db_session: AsyncSession,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """Behavior 12: re-running `sync_events` over the same fills leaves
+    the chain unchanged and adds no duplicate ROLL row -- the broadened
+    idempotency key holds for ROLL as well as SETTLEMENT."""
+    user_id = provisioned_users.user_a
+    await _set_current_user(app_db_session, user_id)
+
+    position_ids = await _build_roll_chain(
+        app_db_session, user_id, [_CAMP_SYMBOL_FRONT, _CAMP_SYMBOL_ROLL_1]
+    )
+
+    chain_before = await read_campaign_for_position(app_db_session, position_ids[1])
+    roll_count_before = await _roll_event_count(app_db_session)
+
+    await sync_events(app_db_session, user_id)
+
+    chain_after = await read_campaign_for_position(app_db_session, position_ids[1])
+    roll_count_after = await _roll_event_count(app_db_session)
+
+    assert roll_count_after == roll_count_before
+    assert chain_after == chain_before
+    assert chain_after == [
+        CampaignLink(
+            campaign_root_id=position_ids[0], position_id=position_ids[0], depth=0
+        ),
+        CampaignLink(
+            campaign_root_id=position_ids[0], position_id=position_ids[1], depth=1
+        ),
+    ]
