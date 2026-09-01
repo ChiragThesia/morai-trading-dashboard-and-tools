@@ -232,6 +232,11 @@ async def _seed_many_roll_events(
             fill_ids_hash=None,
             open_debit_usd=Decimal(f"{i}.1100"),
             close_credit_usd=Decimal(f"{i}.2200"),
+            # D7-10: a ROLL requires a non-NULL rolled_from_position_id;
+            # this module's own claim is about nonce uniqueness, not
+            # roll-chain semantics, so the FK target need not differ from
+            # position_id itself.
+            rolled_from_position_id=position_id,
         )
         for i in range(count)
     ]
@@ -318,6 +323,7 @@ async def test_union_query_returns_exactly_the_planted_cross_column_collision(
                 fill_ids_hash=None,
                 open_debit_usd=Decimal("50.0000"),
                 close_credit_usd=Decimal("25.0000"),
+                rolled_from_position_id=seeded_position.position_id,
             )
         ],
     )

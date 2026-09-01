@@ -93,6 +93,7 @@ def _event(*, position_id: UUID, event_type: str, event_time: datetime) -> Event
         open_debit_usd=None,
         close_credit_usd=None,
         key_version=1,
+        rolled_from_position_id=None,
     )
 
 

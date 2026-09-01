@@ -164,6 +164,7 @@ async def test_rotation_touches_no_trade_ciphertext(
                 fill_ids_hash=None,
                 open_debit_usd=Decimal("125.50"),
                 close_credit_usd=Decimal("110.25"),
+                rolled_from_position_id=seeded_position.position_id,
             )
         ],
     )

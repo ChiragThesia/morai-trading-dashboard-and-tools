@@ -207,11 +207,16 @@ class Fill(Base):
 class Position(Base):
     """One traded structure -- a calendar or diagonal, front and back legs
     grouped under this row (CRYPT-02, migration 0008). No stored status
-    column: a position's closed state is derived from net quantity per leg
-    (LEDGER-05), the exact thing a status column's absence guards against
-    -- calendar `65aac62e` reported open after its real close order fully
-    unwound both legs, because the status column had drifted from the
-    fills that actually closed it.
+    column, and no stored `opened_at`/`closed_at` either as of migration
+    0014 -- a position's closed state, including its own open/close
+    timestamps, is derived from net quantity per leg
+    (`morai.ledger.positions.derive_position_state`, LEDGER-05, D7-01),
+    the exact thing a status column's absence guards against. Calendar
+    `65aac62e` reported open after its real close order fully unwound both
+    legs, because the status column had drifted from the fills that
+    actually closed it -- `closed_at` was that same column wearing a
+    different type, and keeping it while merely not writing it would have
+    been weaker: the column would still exist to disagree.
 
     `create_positions()` in `morai.ledger.positions` is the only intended
     way into this table -- see `__init__` below for the enforcement,
@@ -225,12 +230,6 @@ class Position(Base):
     )
     user_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
-    )
-    opened_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    closed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -493,12 +492,21 @@ class Event(Base):
     that never opens or never closes leaves the relevant pair `NULL`,
     never a sentinel, never zero (NN-16, D3-11).
 
-    `morai.ledger.events.insert_events()` is this phase's write path into
-    this table. Unlike `Fill`, this model carries no `_write_token`
-    sentinel gate -- 03-RESEARCH.md's Open Question 2 treats a
-    compile-time-checked single-writer gate on `events` as Phase 5's
-    concern, once Phase 5 actually derives events from fills and a second
-    writer becomes a real temptation.
+    `rolled_from_position_id` (migration 0014, D7-10) is non-NULL if and
+    only if `event_type = 'ROLL'` -- enforced both by the
+    `roll_has_rolled_from_position` CHECK and by `insert_events`' own
+    pre-database guard. A ROLL row hangs on the newly opened position and
+    points back at the closed one, making the newest position in a chain
+    its own campaign head.
+
+    `morai.ledger.events.insert_events()` is this table's one write path,
+    and as of migration 0014 that is enforced the same way `Fill`/
+    `Position`/`Leg` already are -- see `__init__` below. This is a
+    changed decision, not the original one: 03-RESEARCH.md's Open Question
+    2 deliberately left `events` ungated at migration 0008, on the
+    reasoning that a second writer was not yet a real temptation. Phase 7
+    adds ROLL and SETTLEMENT writers, which is exactly the trigger that
+    Open Question 2 named for revisiting it.
     """
 
     __tablename__ = "events"
@@ -530,6 +538,36 @@ class Event(Base):
         LargeBinary, nullable=True
     )
     key_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    rolled_from_position_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("positions.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    def __init__(self, *, _write_token: object, **kwargs: object) -> None:
+        """`_write_token` has no default -- omitting it is a missing-argument
+        error at the call site under basedpyright/mypy, not a silently
+        accepted `None` (D7-14). Passing anything but the sentinel
+        `insert_events()` holds raises here, at runtime -- mirrors
+        `Fill.__init__`'s identical split exactly: type checkers verify
+        shapes, not provenance.
+
+        SQLAlchemy's ORM does not call `__init__` when reconstructing an
+        `Event` from a query result -- it uses `__new__` plus direct
+        attribute restoration, so an ordinary `SELECT` is unaffected by
+        this guard. The honest ceiling: a Core `insert(Event.__table__)`
+        statement naming the table bypasses this constructor entirely, so
+        this blocks the ergonomic second path, not every conceivable one.
+        """
+        from morai.ledger.events import (
+            _EVENT_WRITE_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: the sentinel and its only legitimate holder (insert_events) live in one module by design (D7-14); the leading underscore marks it module-private in intent, not a real access boundary between these two cooperating modules -- same convention Fill.__init__ already uses.
+        )
+
+        if _write_token is not _EVENT_WRITE_TOKEN:
+            raise RuntimeError(
+                "Event must be constructed by insert_events() -- "
+                "constructing one directly bypasses the single-writer "
+                "guarantee D7-14 exists to enforce."
+            )
+        super().__init__(**kwargs)

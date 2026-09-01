@@ -94,6 +94,7 @@ async def test_reads_raise_with_the_key_destroyed_and_rows_still_present(
                 fill_ids_hash=None,
                 open_debit_usd=Decimal("125.50"),
                 close_credit_usd=Decimal("110.25"),
+                rolled_from_position_id=seeded_position.position_id,
             )
         ],
     )
