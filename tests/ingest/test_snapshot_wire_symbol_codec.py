@@ -128,3 +128,28 @@ def test_malformed_input_symbol_raises_value_error_naming_the_symbol() -> None:
     swallowed."""
     with pytest.raises(ValueError, match="not-a-real-symbol"):
         to_schwab_wire_symbol("not-a-real-symbol")
+
+
+def test_a_strike_that_would_overflow_the_8_digit_field_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """IN-01: `parse_occ_symbol`'s own 8-digit strike field makes this
+    unreachable through a real `occ_symbol` string today -- proven here by
+    monkeypatching `parse_occ_symbol` to return an out-of-range contract,
+    the only way to exercise the guard without a parser that can produce
+    one. A future widening of that field must fail loudly here rather than
+    silently emit a >21-character wire symbol."""
+    import morai.ingest.snapshots as snapshots_module
+    from morai.ledger.pairing import OccContract
+
+    oversized = OccContract(
+        root="SPX", expiry=_SPX_EXPIRY, option_type="P", strike=Decimal("100000")
+    )
+
+    def _fake_parse(occ_symbol: str) -> OccContract:
+        del occ_symbol  # unused -- the whole point is to bypass parsing
+        return oversized
+
+    monkeypatch.setattr(snapshots_module, "parse_occ_symbol", _fake_parse)
+    with pytest.raises(ValueError, match="does not fit the wire format"):
+        to_schwab_wire_symbol("irrelevant-once-patched")

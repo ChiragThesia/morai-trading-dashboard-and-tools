@@ -175,7 +175,20 @@ def to_schwab_wire_symbol(occ_symbol: str) -> str:
     yy = str(contract.expiry.year)[-2:]
     mm = f"{contract.expiry.month:02d}"
     dd = f"{contract.expiry.day:02d}"
-    strike_thousandths = f"{int(contract.strike * 1000):08d}"
+    # IN-01: `:08d` is a minimum-width specifier, not a fixed one --
+    # `parse_occ_symbol`'s own 8-digit strike field makes this unreachable
+    # today (max 99999.999 -> 99999999, exactly 8 digits), but an explicit
+    # bound makes that true by construction rather than by luck, so a
+    # future widening of `parse_occ_symbol`'s strike range fails loudly
+    # here instead of silently producing a >21-character wire symbol that
+    # reads as a permanent vendor gap.
+    strike_thousandths_int = int(contract.strike * 1000)
+    if not 0 <= strike_thousandths_int <= 99_999_999:
+        raise ValueError(
+            f"strike {contract.strike} does not fit the wire format's "
+            f"8-digit thousandths field for occ_symbol={occ_symbol!r}"
+        )
+    strike_thousandths = f"{strike_thousandths_int:08d}"
     return f"{padded_root}{yy}{mm}{dd}{contract.option_type}{strike_thousandths}"
 
 
