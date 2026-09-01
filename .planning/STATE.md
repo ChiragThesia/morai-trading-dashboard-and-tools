@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-current_phase: 1
-current_phase_name: Walking Skeleton
-status: planning
+current_phase: 07
+current_phase_name: Position and Campaign Read Models
+status: executing
 stopped_at: Phase 05 complete, ready to plan Phase 1
-last_updated: "2026-09-01T11:45:49.363Z"
+last_updated: "2026-09-01T16:10:27.705Z"
 last_activity: 2026-09-01
-last_activity_desc: Phase 05 complete, transitioned to Phase 1
-state_head: 67240872c721e554b0c02c6c073360f052a95734
+last_activity_desc: Phase 07 execution started
+state_head: 8246f3519ba803b7e1bdc69536661a5100d2eb6c
 progress:
   total_phases: 11
   completed_phases: 1
-  total_plans: 30
-  completed_plans: 27
+  total_plans: 38
+  completed_plans: 30
   percent: 9
 ---
 
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** The ledger is correct across rolls and settlements — the sum of realised P&L over any
 window equals the broker's cash delta over that window, checked every ingest cycle.
-**Current focus:** Phase 04 — Schwab Connection and Token Lifecycle
+**Current focus:** Phase 07 — Position and Campaign Read Models
 
 ## Current Position
 
-Phase: 1 — Walking Skeleton
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-01 — Phase 05 complete, transitioned to Phase 1
+Phase: 07 (Position and Campaign Read Models) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 07
+Last activity: 2026-09-01 — Phase 07 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -162,7 +162,6 @@ policy inert for exactly the rows this phase adds -- silently, with the whole su
 start without that password. See `06-USER-SETUP.md`.
 
 `06-VERIFICATION.md` keeps `status: human_needed`; it was NOT rewritten to `passed`.
-
 
 Phase 4's code is complete and all five of its success criteria are verified against live
 code, a live database, and live test runs (283 passed, gate exit 0). The one open item is
