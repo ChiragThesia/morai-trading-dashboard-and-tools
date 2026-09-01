@@ -35,7 +35,11 @@ from tests.identity.conftest import (
     seeded_users,
     superuser_db_session,
 )
-from tests.ledger.conftest import clean_ledger_tables, provisioned_users
+from tests.ledger.conftest import (
+    clean_ledger_tables,
+    provisioned_users,
+    seeded_position,
+)
 from tests.vendor.conftest import (
     _FAKE_REFRESH_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: this fixture's TxFakeSchwabAuth.build_client reproduces FakeSchwabAuth.build_client's own rotation body exactly (see its docstring below), so it needs the same TypeAdapter that module already validates the fake token shape with -- one cooperating pair, same convention db/models.py already uses for _FILL_WRITE_TOKEN.
     _WRAPPED_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: see _FAKE_REFRESH_TOKEN above.
@@ -58,8 +62,11 @@ __all__ = [
     "clean_identity_tables",
     "clean_ingest_tables",
     "clean_ledger_tables",
+    "clean_snapshot_tables",
     "logged_in_client",
     "provisioned_users",
+    "quote_fake_auth",
+    "seeded_position",
     "seeded_users",
     "superuser_db_session",
     "tx_fake_auth",
@@ -254,4 +261,96 @@ def tx_fake_auth() -> TxFakeSchwabAuth:
         fixed_created_at=datetime(2026, 1, 1, tzinfo=UTC),
         account_entries=[],
         transactions=TX_PAYLOAD,
+    )
+
+
+@pytest_asyncio.fixture
+async def clean_snapshot_tables(
+    clean_ledger_tables: None,
+) -> AsyncGenerator[None, None]:
+    """Truncate `snapshot_observations, snapshot_marks, snapshot_runs`
+    before each db-marked test, on the superuser engine -- same shape as
+    `clean_ingest_tables`."""
+    engine = create_async_engine(get_settings().async_dsn)
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "TRUNCATE TABLE snapshot_observations, snapshot_marks, "
+                "snapshot_runs CASCADE"
+            )
+        )
+    await engine.dispose()
+    yield
+
+
+# Keyed by the two wire-format symbols `tests/ledger/conftest.py::seeded_position`'s
+# legs produce (front SPXW260618P07275000, back SPX260717P07275000) -- the same
+# padded literals `TX_PAYLOAD` above already uses for the identical two contracts.
+# Four-decimal marks for the Decimal-precision canary (D3-17); both legs share one
+# underlying price, a fair approximation for one calendar's two expiries.
+QUOTE_PAYLOAD: JsonValue = {
+    "SPXW  260618P07275000": {
+        "quote": {"mark": 44.8567, "underlyingPrice": 6203.1234},
+    },
+    "SPX   260717P07275000": {
+        "quote": {"mark": 30.1233, "underlyingPrice": 6203.1234},
+    },
+}
+
+
+@dataclass
+class QuoteFakeSchwabClient(FakeSchwabClient):
+    """`FakeSchwabClient` with a constructor field for the `get_quotes`
+    payload it returns -- the base fake's own `get_quotes` unconditionally
+    returns `{}` (Phase 4's own tests never needed more)."""
+
+    quotes: JsonValue = field(default_factory=dict)
+
+    async def get_quotes(self, symbols: list[str]) -> JsonValue:
+        return self.quotes
+
+
+@dataclass
+class QuoteFakeSchwabAuth(FakeSchwabAuth):
+    """`FakeSchwabAuth` whose `build_client` returns a
+    `QuoteFakeSchwabClient` carrying this fixture's own `quotes` payload,
+    instead of the base `FakeSchwabClient`. Reproduces
+    `FakeSchwabAuth.build_client`'s own rotation body exactly -- only the
+    returned client type differs, the same pattern `TxFakeSchwabAuth`
+    above already establishes for the sync suite."""
+
+    quotes: JsonValue = field(default_factory=dict)
+    last_client: QuoteFakeSchwabClient | None = field(default=None, init=False)
+
+    async def build_client(
+        self,
+        token_read_func: Callable[[], object],
+        token_write_func: Callable[[object], None],
+    ) -> SchwabClient:
+        wrapped = _WRAPPED_TOKEN.validate_python(token_read_func())
+        current = _FAKE_REFRESH_TOKEN.validate_python(wrapped.token)
+        rotated_refresh_token = await self.refresh(current.refresh_token)
+        token_write_func(
+            {
+                "creation_timestamp": wrapped.creation_timestamp,
+                "token": {"refresh_token": rotated_refresh_token},
+            }
+        )
+        client = QuoteFakeSchwabClient(
+            account_entries=self.account_entries, quotes=self.quotes
+        )
+        self.last_client = client
+        return client
+
+
+@pytest.fixture
+def quote_fake_auth() -> QuoteFakeSchwabAuth:
+    """A fake `SchwabAuth` whose `build_client` returns a
+    `QuoteFakeSchwabClient` fixed to `QUOTE_PAYLOAD` -- one connection,
+    one populated `get_quotes` response for both of `seeded_position`'s
+    legs."""
+    return QuoteFakeSchwabAuth(
+        fixed_created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        account_entries=[],
+        quotes=QUOTE_PAYLOAD,
     )

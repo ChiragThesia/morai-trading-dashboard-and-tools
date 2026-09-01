@@ -52,6 +52,15 @@ _UNIT_EXEMPT_BINARY_COLUMNS = frozenset(
         # `schwab_connections.token_ciphertext` above.
         "broker_transactions.raw_ciphertext",
         "broker_transactions.raw_nonce",
+        # Phase 8, D8-04: the whole raw `get_quotes` response element for
+        # one leg at one slot, serialized and encrypted as one opaque
+        # blob -- the identical shape and reasoning as
+        # `broker_transactions.raw_ciphertext` above. `snapshot_marks`'
+        # own `mark_usd_ciphertext`/`spot_usd_ciphertext` are NOT exempt:
+        # those are single-value USD fields and correctly carry the
+        # `_usd` suffix instead.
+        "snapshot_observations.raw_ciphertext",
+        "snapshot_observations.raw_nonce",
     }
 )
 
