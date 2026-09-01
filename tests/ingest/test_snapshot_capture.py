@@ -9,17 +9,40 @@ enabled it; this suite's own assertion travels the real path for exactly
 that reason.
 
 `@pytest.mark.db` -- runs only where Postgres is reachable, same
-convention as `tests/ingest/test_sync_tracer.py`.
+convention as `tests/ingest/test_sync_tracer.py`. As of 08-02 Task 3, not
+every test in this module carries that marker -- the RTH grid's own tests
+(`rth_slot_for`/`rth_slots_between`) are pure and run with no database
+reachable at all (`-m "not db"`), so each db-backed test below carries its
+own `@pytest.mark.db` decorator instead of a module-level `pytestmark`.
+
+## The scheduler-level hole this grid sits above
+
+`rth_slot_for`/`rth_slots_between` are correct for every instant they are
+asked about. They say nothing about whether they were ever asked: a worker
+down for more than Procrastinate's own ten-minute `PeriodicDeferrer`
+backfill ceiling across a slot boundary produces **no job at all** for
+that slot (`worker/app.py::capture_all_connected_users_task`'s own
+docstring, verified against the installed `procrastinate` 3.9.0 source).
+Neither `snapshot_observations` nor `snapshot_marks` carries even a gap
+row for a slot no job ever ran for -- that hole is invisible in this
+phase's own tables and visible only in `snapshot_runs` (plan 08-04's own
+table) and repairable as an honest `slot_not_captured` gap (plan 08-03).
+Naming it here keeps a future reader of this module from concluding the
+grid itself is broken when the scheduler, not the grid, is what stalled.
 """
 
 from __future__ import annotations
 
+import ast
 import asyncio
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import HTTPStatusError, Request, Response
@@ -37,7 +60,10 @@ from morai.ingest.snapshots import (
 )
 from morai.ingest.snapshots import (
     SnapshotVendorError,
+    capture_all_connected_users,
     capture_user_snapshot,
+    rth_slot_for,
+    rth_slots_between,
 )
 from morai.ledger.fills import FillWrite, insert_fills
 from morai.settings import get_settings
@@ -54,7 +80,11 @@ from tests.vendor.conftest import (
     FakeSchwabClient,
 )
 
-pytestmark = pytest.mark.db
+# No module-level `pytestmark` here, unlike every other file in this test
+# package (`08-02-PLAN.md` Task 3): this module now also carries the RTH
+# grid's pure tests, which must run with no Postgres reachable
+# (`-m "not db"`). Every db-backed test below carries its own
+# `@pytest.mark.db` decorator instead.
 
 # Monday, 10:30 ET (EDT, UTC-4) -- on the RTH grid (D8-06).
 _SLOT_TIME = datetime(2026, 6, 15, 14, 30, tzinfo=UTC)
@@ -341,6 +371,7 @@ def _http_status_error(status_code: int) -> HTTPStatusError:
     return HTTPStatusError("vendor error", request=request, response=response)
 
 
+@pytest.mark.db
 async def test_snapshot_user_job_reprices_both_open_legs_end_to_end(
     clean_snapshot_tables: None,
     superuser_db_session: AsyncSession,
@@ -455,6 +486,7 @@ async def test_snapshot_user_job_reprices_both_open_legs_end_to_end(
         assert decrypted_raw == QUOTE_PAYLOAD
 
 
+@pytest.mark.db
 async def test_non_rth_tick_defers_nothing_and_writes_nothing(
     clean_snapshot_tables: None,
     superuser_db_session: AsyncSession,
@@ -506,6 +538,7 @@ _PARTIAL_QUOTE_PAYLOAD: JsonValue = {
 }
 
 
+@pytest.mark.db
 async def test_expired_connection_writes_gap(
     clean_snapshot_tables: None,
     superuser_db_session: AsyncSession,
@@ -575,6 +608,7 @@ async def test_expired_connection_writes_gap(
     assert all(row.raw_ciphertext is None for row in observation_rows)
 
 
+@pytest.mark.db
 async def test_vendor_call_failure_writes_gap_and_raises(
     clean_snapshot_tables: None,
     superuser_db_session: AsyncSession,
@@ -643,6 +677,7 @@ async def test_vendor_call_failure_writes_gap_and_raises(
     assert {row.gap_reason for row in observation_rows} == {"vendor_error"}
 
 
+@pytest.mark.db
 async def test_partial_response_gaps_only_the_missing_leg(
     clean_snapshot_tables: None,
     superuser_db_session: AsyncSession,
@@ -695,6 +730,7 @@ async def test_partial_response_gaps_only_the_missing_leg(
     assert gap_reason_by_leg[seeded_position.back_leg_id] == "no_market_data"
 
 
+@pytest.mark.db
 async def test_three_gap_reasons_are_distinguishable_in_the_data(
     clean_snapshot_tables: None,
     superuser_db_session: AsyncSession,
@@ -787,6 +823,7 @@ async def test_three_gap_reasons_are_distinguishable_in_the_data(
     assert set(reasons) == {"connection_expired", "vendor_error", "no_market_data"}
 
 
+@pytest.mark.db
 async def test_one_users_vendor_failure_leaves_the_other_users_job_succeeded(
     clean_snapshot_tables: None,
     superuser_db_session: AsyncSession,
@@ -852,6 +889,7 @@ async def test_one_users_vendor_failure_leaves_the_other_users_job_succeeded(
     assert all(row.gap_reason is None for row in mark_rows_b)
 
 
+@pytest.mark.db
 async def test_two_concurrent_captures_for_one_user_and_slot_land_one_row_per_leg(
     clean_snapshot_tables: None,
     superuser_db_session: AsyncSession,
@@ -903,3 +941,292 @@ async def test_two_concurrent_captures_for_one_user_and_slot_land_one_row_per_le
         ).scalar_one()
     )
     assert count == 2
+
+
+# --- 08-02 Task 3: the RTH grid -- daylight saving, half days, empties ----
+#
+# Tests 1-6 and 10 are pure and carry no `@pytest.mark.db` -- proving the
+# 30-minute Eastern grid needs no Postgres (`-m "not db"`). Tests 7-9 are
+# db-marked and run through the real writer/deferred task.
+#
+# A local `_TEST_EASTERN` rather than importing `snapshots.py`'s own
+# private `_EASTERN`: every case here states its own wall-clock intent by
+# constructing a `datetime` directly in Eastern and letting the function
+# under test convert it, exactly the discipline the plan itself asks for.
+
+_TEST_EASTERN = ZoneInfo("America/New_York")
+
+
+@pytest.mark.parametrize(
+    ("eastern_time", "expect_slot"),
+    [
+        pytest.param(time(9, 30), True, id="0930-rth-open"),
+        pytest.param(time(10, 0), True, id="1000-on-grid"),
+        pytest.param(time(15, 30), True, id="1530-on-grid"),
+        pytest.param(time(16, 0), True, id="1600-rth-close"),
+        pytest.param(time(9, 29), False, id="0929-before-open"),
+        pytest.param(time(9, 45), False, id="0945-off-grid"),
+        pytest.param(time(16, 30), False, id="1630-after-close"),
+        pytest.param(time(8, 0), False, id="0800-before-open"),
+    ],
+)
+def test_rth_slot_for_an_ordinary_wednesday(
+    eastern_time: time, expect_slot: bool
+) -> None:
+    """Test 1: 09:30, 10:00, 15:30 and 16:00 Eastern on an ordinary
+    Wednesday (2026-06-17) each return a slot; 09:29, 09:45, 16:30 and
+    08:00 each return nothing."""
+    moment = datetime.combine(date(2026, 6, 17), eastern_time, tzinfo=_TEST_EASTERN)
+    result = rth_slot_for(moment)
+    assert (result is not None) is expect_slot
+
+
+@pytest.mark.parametrize(
+    "day",
+    [date(2026, 6, 20), date(2026, 6, 21)],
+    ids=["saturday", "sunday"],
+)
+def test_rth_slot_for_a_weekend_returns_none(day: date) -> None:
+    """Test 2: Saturday and Sunday at 10:00 Eastern return nothing."""
+    moment = datetime.combine(day, time(10, 0), tzinfo=_TEST_EASTERN)
+    assert rth_slot_for(moment) is None
+
+
+def test_rth_slot_for_the_same_eastern_hour_maps_to_two_different_utc_hours() -> None:
+    """Test 3: a UTC instant that is 10:00 Eastern in March under daylight
+    saving, and a UTC instant that is 10:00 Eastern in December under
+    standard time, both return a slot -- the same wall-clock hour maps to
+    two different UTC hours and both are inside RTH. Asserted on the UTC
+    hour itself, so a fixed-offset implementation cannot pass both."""
+    summer = datetime(2026, 3, 11, 10, 0, tzinfo=_TEST_EASTERN)  # EDT, UTC-4
+    winter = datetime(2026, 12, 9, 10, 0, tzinfo=_TEST_EASTERN)  # EST, UTC-5
+    assert summer.astimezone(UTC).hour != winter.astimezone(UTC).hour
+
+    assert rth_slot_for(summer) is not None
+    assert rth_slot_for(winter) is not None
+
+
+def test_rth_slot_for_a_fixed_utc_hour_is_not_always_ten_am_eastern() -> None:
+    """Test 4 (`D8-06`): the UTC instant that was 10:00 Eastern in summer
+    (14:00 UTC) is 09:00 Eastern in winter -- before RTH open -- and
+    returns nothing. This is the exact failure a fixed UTC hour range
+    produces twice a year."""
+    same_utc_hour_in_winter = datetime(2026, 12, 9, 14, 0, tzinfo=UTC)
+    assert rth_slot_for(same_utc_hour_in_winter) is None
+
+
+def test_rth_slots_between_one_ordinary_wednesday_returns_fourteen_slots() -> None:
+    """Test 5: `rth_slots_between` over one ordinary trading day returns
+    exactly 14 slots, first 09:30 Eastern and last 16:00 Eastern."""
+    start = datetime(2026, 6, 17, 0, 0, tzinfo=UTC)
+    end = datetime(2026, 6, 18, 0, 0, tzinfo=UTC)
+    slots = rth_slots_between(start, end)
+
+    assert len(slots) == 14
+    assert slots[0].astimezone(_TEST_EASTERN).time() == time(9, 30)
+    assert slots[-1].astimezone(_TEST_EASTERN).time() == time(16, 0)
+
+
+def test_rth_slots_between_spring_forward_span_has_no_duplicate_or_missing_slot() -> (
+    None
+):
+    """Test 6 (2026's own spring-forward weekend, second Sunday in March,
+    2026-03-08): a span crossing it returns the right count per day --
+    computed here from the calendar itself, not a hardcoded total, so the
+    assertion states what "right" means rather than merely repeating a
+    number -- and no duplicate or missing instant."""
+    start = datetime(2026, 3, 2, 0, 0, tzinfo=UTC)  # Monday before
+    end = datetime(2026, 3, 13, 0, 0, tzinfo=UTC)  # Friday after
+    slots = rth_slots_between(start, end)
+
+    assert len(slots) == len(set(slots))  # no duplicate instant
+
+    weekday_count = 0
+    day = start.astimezone(_TEST_EASTERN).date()
+    last_day = end.astimezone(_TEST_EASTERN).date()
+    while day <= last_day:
+        if day.weekday() < 5:
+            weekday_count += 1
+        day += timedelta(days=1)
+    assert len(slots) == weekday_count * 14
+
+
+def test_rth_slot_for_and_rth_slots_between_are_pure() -> None:
+    """Test 10: `rth_slot_for`/`rth_slots_between` take their moment as a
+    parameter and read no system clock -- asserted structurally, mirroring
+    `tests/ledger/test_pairing_pure.py`'s own AST-walk convention rather
+    than trusting a comment."""
+    source_path = Path(inspect.getfile(rth_slot_for))
+    tree = ast.parse(source_path.read_text(), filename=str(source_path))
+    target_names = {"rth_slot_for", "rth_slots_between"}
+    functions = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in target_names
+    ]
+    assert len(functions) == 2
+
+    clock_reading_names = {"now", "utcnow", "today"}
+    for function in functions:
+        for node in ast.walk(function):
+            if isinstance(node, ast.Attribute) and node.attr in clock_reading_names:
+                raise AssertionError(
+                    f"{function.name} reads the system clock via .{node.attr}"
+                )
+            if isinstance(node, ast.Name) and node.id in clock_reading_names:
+                raise AssertionError(
+                    f"{function.name} reads the system clock via {node.id}"
+                )
+
+
+@pytest.mark.db
+async def test_half_day_produces_honest_gaps_for_the_unserved_slots(
+    clean_snapshot_tables: None,
+    superuser_db_session: AsyncSession,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    """Test 7: a half day is modelled here as a live capture where the
+    fake simply has no quote for an afternoon slot -- the honest outcome
+    is a `no_market_data` gap for that slot, with no market-holiday or
+    half-day calendar anywhere in the code (`08-RESEARCH.md`'s own "don't
+    hand-roll" finding). No row for that slot carries a value copied from
+    the morning."""
+    user_id = provisioned_users.user_a
+    await _open_the_seeded_position(superuser_db_session, user_id)
+    await _seed_connection_with(
+        superuser_db_session,
+        user_id,
+        refresh_token="fake-refresh-user-a",
+        token_created_at=_HEALTHY_TOKEN_CREATED_AT_FOR_SLOTS,
+    )
+    await _set_current_user(app_db_session, user_id)
+
+    morning_slot = datetime(2026, 6, 17, 13, 30, tzinfo=UTC)  # 09:30 ET
+    afternoon_slot = datetime(2026, 6, 17, 17, 0, tzinfo=UTC)  # 13:00 ET
+
+    await capture_user_snapshot(
+        app_db_session,
+        user_id,
+        slot_time=morning_slot,
+        observed_at=morning_slot,
+        auth=_ScriptedQuoteFakeSchwabAuth(
+            fixed_created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            account_entries=[],
+            quotes=QUOTE_PAYLOAD,
+        ),
+    )
+    await capture_user_snapshot(
+        app_db_session,
+        user_id,
+        slot_time=afternoon_slot,
+        observed_at=afternoon_slot,
+        auth=_ScriptedQuoteFakeSchwabAuth(
+            fixed_created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            account_entries=[],
+            quotes={},
+        ),
+    )
+
+    morning_rows = (
+        (
+            await app_db_session.execute(
+                select(SnapshotMark).where(SnapshotMark.slot_time == morning_slot)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    afternoon_rows = (
+        (
+            await app_db_session.execute(
+                select(SnapshotMark).where(SnapshotMark.slot_time == afternoon_slot)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(morning_rows) == 2
+    assert all(row.gap_reason is None for row in morning_rows)
+    assert len(afternoon_rows) == 2
+    assert all(row.gap_reason == "no_market_data" for row in afternoon_rows)
+    assert all(row.mark_usd_ciphertext is None for row in afternoon_rows)
+
+
+@pytest.mark.db
+async def test_user_with_zero_open_positions_completes_with_zero_attempts(
+    clean_snapshot_tables: None,
+    superuser_db_session: AsyncSession,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """Test 8: a user with zero open positions (no `seeded_position`
+    fixture at all here -- no `positions`/`legs` rows exist for this user)
+    completes with `legs_attempted` zero, writes no row, and does not
+    raise."""
+    user_id = provisioned_users.user_a
+    await _seed_connection_with(
+        superuser_db_session,
+        user_id,
+        refresh_token="fake-refresh-user-a",
+        token_created_at=_HEALTHY_TOKEN_CREATED_AT_FOR_SLOTS,
+    )
+    await _set_current_user(app_db_session, user_id)
+
+    outcome = await capture_user_snapshot(
+        app_db_session,
+        user_id,
+        slot_time=_SLOT_TIME,
+        observed_at=_SLOT_TIME,
+        auth=_ScriptedQuoteFakeSchwabAuth(
+            fixed_created_at=datetime(2026, 1, 1, tzinfo=UTC), account_entries=[]
+        ),
+    )
+    assert outcome.legs_attempted == 0
+    assert outcome.marks_written == 0
+
+    count = _INT.validate_python(
+        (
+            await app_db_session.execute(text("SELECT count(*) FROM snapshot_marks"))
+        ).scalar_one()
+    )
+    assert count == 0
+
+
+@pytest.mark.db
+async def test_periodic_tick_with_no_open_positions_defers_and_writes_nothing(
+    clean_snapshot_tables: None,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """Test 9: a connected user with no open position still gets a
+    deferred `snapshot_user` job -- the fan-out doesn't know about
+    positions, `read_open_legs` is where that's decided -- and the drained
+    job writes nothing and does not raise."""
+    user_id = provisioned_users.user_a
+    await _seed_connection_with(
+        superuser_db_session,
+        user_id,
+        refresh_token="fake-refresh-user-a",
+        token_created_at=_healthy_token_created_at_now(),
+    )
+
+    async with app.open_async():
+        deferred = await capture_all_connected_users(
+            superuser_db_session, slot_time=_SLOT_TIME
+        )
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        jobs = await app.job_manager.list_jobs_async(task="snapshot_user")
+
+    assert user_id in deferred
+    assert any(job.status == Status.SUCCEEDED.value for job in jobs)
+
+    count = _INT.validate_python(
+        (
+            await superuser_db_session.execute(
+                text("SELECT count(*) FROM snapshot_marks")
+            )
+        ).scalar_one()
+    )
+    assert count == 0
