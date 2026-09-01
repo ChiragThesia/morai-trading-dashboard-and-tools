@@ -232,6 +232,28 @@ def _roll_pairs(
     ambiguity and the pair is left unformed rather than guessed (NN-11):
     those fills then fall through to the ordinary OPEN/CLOSE path,
     exactly as they do today.
+
+    Known, documented limitation (WR-02, `07-REVIEW.md`): a single-order
+    roll of *both* legs of one calendar is undetectable by this
+    predicate, and that is deliberate, not an oversight. A calendar's
+    front and back legs share `root`/`strike`/`option_type` by
+    construction, so "roll the whole calendar forward" in one broker
+    order (close-front, close-back, open-new-front, open-new-back, all
+    at one strike/root) makes `close-front` match *both*
+    `open-new-front` and `open-new-back` under `detect_roll` -- two
+    candidates, not one. The ambiguity rule above then correctly refuses
+    to guess which is which, so *neither* leg of the roll forms a pair
+    at all; both closing/opening fills fall through to the ordinary
+    OPEN/CLOSE path instead, and the new calendar is created with no
+    `rolled_from_position_id`. Consequence: `campaign_chain` never links
+    the new calendar to the one it replaced -- campaign continuity
+    breaks silently for this roll shape, with no error or log line
+    naming it. This is NN-11's "leave unformed rather than guess"
+    discipline working as intended, not a bug to loosen the predicate
+    for. If continuity for this shape matters before Phase 8, the fix is
+    to extend disambiguation with `leg_index`/relative-position matching
+    (pair same-`leg_index` closing/opening fills first), not to relax
+    the strike/root/type-only predicate itself.
     """
     by_order: dict[str, list[FillRecord]] = {}
     for fill in fills:
@@ -829,6 +851,14 @@ def detect_roll(closing: FillRecord, opening: FillRecord) -> bool:
     `_signed_leg_amount`/`_net_amount`, the same oracle-proven functions,
     also unmodified. That is the condition D7-09 resolves the deferral
     on: no new arithmetic, only a new caller for an already-strict guard.
+
+    Known, documented limitation (WR-02, `07-REVIEW.md`), stated fully in
+    `_roll_pairs`'s own docstring: because this predicate matches purely
+    on `(root, strike, option_type)`, a single-order roll of *both* legs
+    of one calendar (which share all three) is undetectable -- each
+    closing fill matches two opening candidates, `_roll_pairs`'s
+    ambiguity rule correctly refuses to guess between them, and neither
+    leg forms a ROLL at all. Deliberate per NN-11, not a bug.
     """
     if closing.order_id != opening.order_id:
         return False
