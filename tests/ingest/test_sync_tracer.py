@@ -5,6 +5,13 @@ execution model and closing `T-06-01`'s security finding end to end.
 
 `@pytest.mark.db` -- runs only where Postgres is reachable, same convention
 as `tests/test_worker_heartbeat.py`.
+
+**07-01-PLAN.md Task 1's own tracer coverage (D7-12, Pitfall 3,
+07-RESEARCH.md):** the same drained job additionally proves the position/leg
+creation path and the (previously unwired) `sync_events` call both run
+inside `sync_user`'s transaction -- before this phase, nothing under `src/`
+ever created a `positions`/`legs` row and `sync_events` had zero call sites
+outside `tests/`, so `positions`/`legs`/`events` stayed production-empty.
 """
 
 from __future__ import annotations
@@ -22,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import morai.worker.app as worker_app
 from morai.crypto.envelope import decrypt_field
-from morai.db.models import BrokerTransaction
+from morai.db.models import BrokerTransaction, Event, Leg, Position
 from morai.ingest.broker_transactions import (
     _broker_transaction_associated_data,  # pyright: ignore[reportPrivateUsage]  # why: this test decrypts the raw copy back to prove byte-for-byte fidelity with the sent payload -- it needs the exact AAD helper insert_broker_transactions uses, the same convention test_pg_dump_confidentiality.py already uses for ledger.fills._current_dek.
     _current_dek,  # pyright: ignore[reportPrivateUsage]  # why: see _broker_transaction_associated_data above -- same cooperating-test convention.
@@ -145,6 +152,90 @@ async def test_sync_user_job_lands_one_broker_transaction_and_two_fills(
     assert by_leg[1].price_usd == Decimal("30.1233")
     assert by_leg[1].position_effect == "OPENING"
     assert by_leg[1].occ_symbol == "SPX260717P07275000"
+
+    # --- positions/legs: the missing creation path this phase adds
+    # (D7-12) -- proving sync_user's transaction now writes them, not
+    # only a test seed. `provisioned_users.position_a` is a pre-existing,
+    # legless row `seeded_users` (tests/identity/conftest.py) always seeds
+    # per user -- a Phase 2/3 isolation-testing artifact, unrelated to and
+    # predating this plan's creation path -- so the new position this sync
+    # creates is the one *other* row, not the only row. ---
+    position_rows = (
+        (
+            await app_db_session.execute(
+                select(Position).where(Position.user_id == user_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    new_position_ids = {row.id for row in position_rows} - {
+        provisioned_users.position_a
+    }
+    assert len(position_rows) == 2
+    assert len(new_position_ids) == 1
+
+    leg_rows = (
+        (
+            await app_db_session.execute(
+                select(Leg).where(Leg.user_id == user_id).order_by(Leg.leg_role)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(leg_rows) == 2
+    assert leg_rows[0].position_id in new_position_ids
+    assert leg_rows[1].position_id in new_position_ids
+    assert (leg_rows[0].leg_role, leg_rows[0].occ_symbol, leg_rows[0].root) == (
+        "back",
+        "SPX260717P07275000",
+        "SPX",
+    )
+    assert (leg_rows[1].leg_role, leg_rows[1].occ_symbol, leg_rows[1].root) == (
+        "front",
+        "SPXW260618P07275000",
+        "SPXW",
+    )
+
+    # --- events: derive_events wired through sync_events (Pitfall 3 --
+    # sync_events had zero call sites under src/ before this phase). ---
+    open_event_rows = (
+        (
+            await app_db_session.execute(
+                select(Event).where(
+                    Event.user_id == user_id, Event.event_type == "OPEN"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(open_event_rows) >= 1
+
+
+def test_position_and_leg_reject_construction_without_the_write_token() -> None:
+    """D7-12/D7-14: the sentinel gate on `Position`/`Leg`, mirroring
+    `Fill.__init__`'s own gate. Constructing either with a wrong token
+    raises `RuntimeError` at runtime -- the compile-time half (omitting
+    `_write_token` is a missing-argument error) is proved by
+    `bash tools/gate.sh`'s basedpyright/mypy steps, not by this test.
+    No database needed -- construction fails before any I/O."""
+    stray_token = object()
+    dummy_id = UUID("00000000-0000-4000-8000-000000000000")
+
+    with pytest.raises(RuntimeError):
+        Position(_write_token=stray_token, user_id=dummy_id)
+
+    with pytest.raises(RuntimeError):
+        Leg(
+            _write_token=stray_token,
+            position_id=dummy_id,
+            user_id=dummy_id,
+            leg_role="front",
+            occ_symbol="SPXW260618P07275000",
+            root="SPXW",
+        )
 
 
 async def test_missing_connection_fails_the_job_and_writes_nothing(

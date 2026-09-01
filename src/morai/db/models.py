@@ -212,6 +212,10 @@ class Position(Base):
     -- calendar `65aac62e` reported open after its real close order fully
     unwound both legs, because the status column had drifted from the
     fills that actually closed it.
+
+    `create_positions()` in `morai.ledger.positions` is the only intended
+    way into this table -- see `__init__` below for the enforcement,
+    mirroring `Fill.__init__` exactly (D7-12, D7-14).
     """
 
     __tablename__ = "positions"
@@ -232,6 +236,35 @@ class Position(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    def __init__(self, *, _write_token: object, **kwargs: object) -> None:
+        """`_write_token` has no default -- omitting it is a missing-argument
+        error at the call site under basedpyright/mypy, not a silently
+        accepted `None` (D7-12, D7-14). Passing anything but the sentinel
+        `create_positions()` holds raises here, at runtime -- mirrors
+        `Fill.__init__`'s identical split exactly: type checkers verify
+        shapes, not provenance.
+
+        SQLAlchemy's ORM does not call `__init__` when reconstructing a
+        `Position` from a query result -- it uses `__new__` plus direct
+        attribute restoration, so an ordinary `SELECT` is unaffected by
+        this guard. The honest ceiling: a Core `insert(Position)` statement
+        naming the table bypasses this constructor entirely, so this
+        blocks the ergonomic second path, not every conceivable one --
+        which is why `tests/ledger/conftest.py` and
+        `tests/ledger/oracle_seed.py` keep working unchanged.
+        """
+        from morai.ledger.positions import (
+            _POSITION_WRITE_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: the sentinel and its only legitimate holder (create_positions) live in one module by design (D7-12); the leading underscore marks it module-private in intent, not a real access boundary between these two cooperating modules -- same convention Fill.__init__ already uses.
+        )
+
+        if _write_token is not _POSITION_WRITE_TOKEN:
+            raise RuntimeError(
+                "Position must be constructed by create_positions() -- "
+                "constructing one directly bypasses the single-writer "
+                "guarantee D7-12/D7-14 exist to enforce."
+            )
+        super().__init__(**kwargs)
+
 
 class Leg(Base):
     """One leg (front or back) of a position (migration 0008). `user_id` is
@@ -242,6 +275,10 @@ class Leg(Base):
     discriminator (`SPX` AM vs `SPXW` PM) at the grain LEDGER-07 needs it:
     per leg, not per position, since a PM-settled front and an AM-settled
     back can coexist inside one calendar.
+
+    `create_positions()` in `morai.ledger.positions` is the only intended
+    way into this table -- see `__init__` below for the enforcement,
+    mirroring `Fill.__init__` exactly (D7-12, D7-14).
     """
 
     __tablename__ = "legs"
@@ -263,6 +300,35 @@ class Leg(Base):
     leg_role: Mapped[str] = mapped_column(Text, nullable=False)
     occ_symbol: Mapped[str] = mapped_column(Text, nullable=False)
     root: Mapped[str] = mapped_column(Text, nullable=False)
+
+    def __init__(self, *, _write_token: object, **kwargs: object) -> None:
+        """`_write_token` has no default -- omitting it is a missing-argument
+        error at the call site under basedpyright/mypy, not a silently
+        accepted `None` (D7-12, D7-14). Passing anything but the sentinel
+        `create_positions()` holds raises here, at runtime -- mirrors
+        `Fill.__init__`'s identical split exactly: type checkers verify
+        shapes, not provenance.
+
+        SQLAlchemy's ORM does not call `__init__` when reconstructing a
+        `Leg` from a query result -- it uses `__new__` plus direct
+        attribute restoration, so an ordinary `SELECT` is unaffected by
+        this guard. The honest ceiling: a Core `insert(Leg)` statement
+        naming the table bypasses this constructor entirely, so this
+        blocks the ergonomic second path, not every conceivable one --
+        which is why `tests/ledger/conftest.py` and
+        `tests/ledger/oracle_seed.py` keep working unchanged.
+        """
+        from morai.ledger.positions import (
+            _LEG_WRITE_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: the sentinel and its only legitimate holder (create_positions) live in one module by design (D7-12); the leading underscore marks it module-private in intent, not a real access boundary between these two cooperating modules -- same convention Fill.__init__ already uses.
+        )
+
+        if _write_token is not _LEG_WRITE_TOKEN:
+            raise RuntimeError(
+                "Leg must be constructed by create_positions() -- "
+                "constructing one directly bypasses the single-writer "
+                "guarantee D7-12/D7-14 exist to enforce."
+            )
+        super().__init__(**kwargs)
 
 
 class SchwabConnection(Base):
