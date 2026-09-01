@@ -240,7 +240,15 @@ Plans:
   3. A PM-settled SPXW front leg and an AM-settled SPX back leg sit inside one position, each settling on its own style and its own date.
   4. A campaign returns as a chain of rolled positions computed from events, and dropping the campaign read model and recomputing it from events yields the identical chain.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Tracer: one Schwab order becomes a position, its legs and an OPEN event, end to end through the real worker (D7-12, Pitfall 3)
+- [ ] 07-02-PLAN.md — Closed state derived from net quantity per leg, and migration 0014 drops the stored timestamps, adds the roll link and creates the campaign view (LEDGER-05, D7-01, D7-15)
+- [ ] 07-03-PLAN.md — Per-leg SETTLEMENT derivation with AM/PM style from `legs.root`, and the broadened idempotency key (LEDGER-06, LEDGER-07)
+- [ ] 07-04-PLAN.md — Campaign chain read model over the view, with the drop-and-recompute and cross-user isolation proofs (LEDGER-10, Pitfall 1)
+- [ ] 07-05-PLAN.md — Positive ROLL derivation reusing the oracle-proven money functions, closing the campaign chain end to end (LEDGER-10, D7-09)
+
 **UI hint**: no
 
 ### Phase 8: Snapshot Capture
