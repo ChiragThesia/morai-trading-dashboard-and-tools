@@ -83,6 +83,23 @@ jobs:
       MORAI_MASTER_KEY: bW9yYWktbG9jYWwtZGV2LWtleS1ub3QtYS1zZWNyZXQ=
     steps:
       - uses: actions/checkout@v7
+      # The runner ships Ubuntu's default pg_dump (16.x), but the service container above
+      # is Postgres 18. pg_dump refuses to dump a server newer than itself -- "aborting
+      # because of server version mismatch" -- so tests/test_pg_dump_confidentiality.py
+      # fails on tooling rather than on anything it is trying to prove. Install the
+      # matching major from PGDG. Locally this never appears: Homebrew's postgresql@18
+      # ships pg_dump 18 alongside the server, so client and server always agree.
+      - name: Install the Postgres 18 client so pg_dump matches the service major
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
+          pg_dump --version
       - uses: astral-sh/setup-uv@v10.0.1
       - run: uv sync --frozen
       # The revision chain is empty at this point in the phase, so this is a no-op upgrade
