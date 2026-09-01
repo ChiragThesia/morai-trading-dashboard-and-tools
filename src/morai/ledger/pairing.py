@@ -12,16 +12,20 @@ control and the seeded-fault suite. It is not proven against Schwab's live
 payload shape, which Phase 6 first exercises for real.
 
 Scope this phase (D5-01): OPEN and CLOSE only. Positive ROLL and SETTLE
-derivation are deferred to a phase with a real fixture for them; nothing
-here builds a ROLL-detection guard or emits a ROLL/SETTLEMENT event.
+derivation are deferred to a phase with a real fixture for them. This
+module does add `detect_roll` -- the negative guard proving that one real
+order (`1006797510202`) which shares two calendars is NOT a roll -- but
+no derivation path calls it and nothing here emits a ROLL/SETTLEMENT
+event.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -400,3 +404,93 @@ async def sync_events(
         await insert_events(session, user_id, drafts)
 
     return derivation
+
+
+# --- detect_roll's negative guard (D5-01) -----------------------------------
+#
+# Inverts `tests/ledger/oracle_seed.py::occ_symbol_for`'s own stated
+# convention: root ("SPXW" or "SPX" -- this project's two roots, tried
+# longest-first so "SPXW" is never mistaken for "SPX" plus a stray "W"),
+# then six digits of YYMMDD, then a single option-type letter, then eight
+# digits of strike in thousandths.
+_OCC_SYMBOL_RE = re.compile(
+    r"^(?P<root>SPXW|SPX)"
+    r"(?P<yy>\d{2})(?P<mm>\d{2})(?P<dd>\d{2})"
+    r"(?P<option_type>[A-Z])"
+    r"(?P<strike>\d{8})$"
+)
+
+
+@dataclass(frozen=True)
+class OccContract:
+    """One OCC-convention option contract, parsed from its symbol."""
+
+    root: str
+    expiry: date
+    option_type: str
+    strike: Decimal
+
+
+def parse_occ_symbol(occ_symbol: str) -> OccContract:
+    """Inverts `occ_symbol_for`'s own stated convention exactly: root,
+    then six digits of `YYMMDD`, then a single option-type letter, then
+    eight digits of strike in thousandths. Divides the strike by
+    `Decimal(1000)`, never a float (D3-17). Raises `ValueError` naming the
+    offending symbol when the shape does not match -- a malformed
+    contract is a gap and a gap is honest, never a guess (`NN-16`)."""
+    match = _OCC_SYMBOL_RE.match(occ_symbol)
+    if match is None:
+        raise ValueError(f"malformed OCC symbol: {occ_symbol!r}")
+    try:
+        expiry = date(
+            2000 + int(match.group("yy")),
+            int(match.group("mm")),
+            int(match.group("dd")),
+        )
+    except ValueError as exc:
+        raise ValueError(f"malformed OCC symbol: {occ_symbol!r}") from exc
+    strike = Decimal(match.group("strike")) / Decimal(1000)
+    return OccContract(
+        root=match.group("root"),
+        expiry=expiry,
+        option_type=match.group("option_type"),
+        strike=strike,
+    )
+
+
+def detect_roll(closing: FillRecord, opening: FillRecord) -> bool:
+    """D5-01's negative guard only. Returns True only when every part of
+    the strict requirement holds: the two fills share an `order_id`, the
+    first is classified CLOSE and the second OPEN from their own
+    `position_effect` values, their parsed contracts share a root, a
+    strike and an option type, and their expiries differ. Anything else
+    is False.
+
+    Per D5-01 this ships as the negative guard only: it is proved False
+    on the one real order that shares a broker order across two
+    calendars (`1006797510202`, closing `60c46a57` at strike 7425 and
+    opening `24f1e72e` at strike 7475), and no positive ROLL derivation
+    exists this phase because the oracle contains no ROLL and no SETTLE
+    at all. Building the positive path now, verified only against
+    fixtures written by the same reasoning that wrote the code, would
+    reproduce the exact conditions of the -$319,850 loss. `insert_events`
+    already refuses a ROLL missing either amount and migration 0008's
+    `roll_has_both_legs` CHECK is the database-level backstop; this
+    predicate is the third guard and the only one that runs before a
+    draft is built.
+    """
+    if closing.order_id != opening.order_id:
+        return False
+    if classify_fill(closing.position_effect) is not FillRole.CLOSE:
+        return False
+    if classify_fill(opening.position_effect) is not FillRole.OPEN:
+        return False
+    closing_contract = parse_occ_symbol(closing.occ_symbol)
+    opening_contract = parse_occ_symbol(opening.occ_symbol)
+    if closing_contract.root != opening_contract.root:
+        return False
+    if closing_contract.option_type != opening_contract.option_type:
+        return False
+    if closing_contract.strike != opening_contract.strike:
+        return False
+    return closing_contract.expiry != opening_contract.expiry
