@@ -124,13 +124,16 @@ class FillRole(StrEnum):
 
 
 class EventType(StrEnum):
-    """The two event types this phase derives. Values are exactly the
-    strings migration 0008's `events_event_type_check` permits; `ROLL` and
-    `SETTLEMENT` are also permitted by that CHECK but are out of this
-    phase's scope (D5-01) and have no member here."""
+    """The event types this module derives. Values are exactly the
+    strings migration 0008's `events_event_type_check` permits. `ROLL` is
+    also permitted by that CHECK but is out of this phase's scope (D5-01)
+    and has no member here. `SETTLEMENT` (D7-05/D7-06) is derived by
+    `ledger/settlements.py::derive_settlements` and folded into
+    `sync_events` below -- no fill, no broker call."""
 
     OPEN = "OPEN"
     CLOSE = "CLOSE"
+    SETTLEMENT = "SETTLEMENT"
 
 
 @dataclass(frozen=True)
@@ -352,6 +355,7 @@ async def sync_events(
     user_id: UUID,
     *,
     order_ids: Collection[str] | None = None,
+    as_of: datetime | None = None,
 ) -> Derivation:
     """The shell: resolve, read, derive, write. Calls
     `resolve_fill_positions` and `read_fills` for the whole user, always,
@@ -372,22 +376,43 @@ async def sync_events(
     commit here would reset the transaction-local GUC the caller's next
     RLS-scoped query depends on.
 
-    Idempotency (LEDGER-09): before inserting, reads existing `events` for
-    the user and builds the set of already-stored `(position_id,
-    event_type, fill_ids_hash)` triples, then inserts only the drafts
-    whose triple is absent. This is read-compare-skip, not
-    delete-then-reinsert, for two recorded reasons: migration 0008 grants
-    `events` no `UPDATE` at all, and a two-step wipe-then-reingest is not
-    atomic across the step boundary, so a crash between the delete and the
-    insert would leave the scope with zero events rather than
-    stale-but-present ones (L069, L005).
+    `as_of` (D7-06) is this function's own clock -- it never reads
+    `datetime.now()` itself. When `None` (the default), settlement
+    derivation is skipped entirely and this function behaves exactly as
+    it did before this phase: the oracle suite and every existing caller
+    need no change, and the 13-calendar gate stays byte-identical (D7-13).
+    When supplied, `read_legs`/`derive_settlements`
+    (`ledger/settlements.py`) run after the OPEN/CLOSE derivation, over
+    the same `existing` events already read below, and their drafts join
+    the same `insert_events` call -- still the one write path into
+    `events`.
 
-    Honest limit: a draft whose `position_id` and `event_type` already
-    exist under a *different* hash is inserted as a second row rather than
-    replacing the first, because correcting a stored event would need a
-    delete-then-reinsert this phase deliberately does not own. Fills are
-    immutable, so this phase cannot reach that path; naming it here is
-    what stops a later reader from assuming it was handled.
+    Idempotency (LEDGER-09, widened by D7-05/Pitfall 2): before inserting,
+    reads existing `events` for the user and builds the set of
+    already-stored `(position_id, event_type, event_time, fill_ids_hash)`
+    4-tuples, then inserts only the drafts whose tuple is absent. The key
+    widened from a 3-tuple to include `event_time` because a SETTLEMENT's
+    `fill_ids_hash` is always `None` (D7-05) and `events` carries no
+    `leg_id` column -- two legs of one position would otherwise produce an
+    identical 3-tuple and the second leg's SETTLEMENT would be silently
+    skipped as "already exists" on the very first sync. Adding
+    `event_time` is redundant-but-harmless for OPEN/CLOSE, where it is
+    already fully determined by the fill group that produced a given
+    `fill_ids_hash` (LEDGER-09), and load-bearing for SETTLEMENT.
+
+    This is read-compare-skip, not delete-then-reinsert, for two recorded
+    reasons: migration 0008 grants `events` no `UPDATE` at all, and a
+    two-step wipe-then-reingest is not atomic across the step boundary,
+    so a crash between the delete and the insert would leave the scope
+    with zero events rather than stale-but-present ones (L069, L005).
+
+    Honest limit: a draft whose `position_id`, `event_type` and
+    `event_time` already exist under a *different* hash is inserted as a
+    second row rather than replacing the first, because correcting a
+    stored event would need a delete-then-reinsert this phase
+    deliberately does not own. Fills are immutable, so this phase cannot
+    reach that path; naming it here is what stops a later reader from
+    assuming it was handled.
 
     Concurrency (CR-02, `05-REVIEW.md`): takes this user's own
     `pg_advisory_xact_lock` before the read-compare-skip window below, the
@@ -399,6 +424,12 @@ async def sync_events(
     both read the same `existing_triples` under read-committed isolation
     and both insert, duplicating an OPEN or CLOSE event.
     """
+    # Local import: `ledger/settlements.py` imports `parse_occ_symbol` from
+    # this module, so a module-level import here would be circular. Same
+    # precedent as `db/models.py`'s constructor sentinels (`ledger/events.py`'s
+    # own docstring).
+    from morai.ledger.settlements import derive_settlements, read_legs
+
     await session.execute(
         text("SELECT pg_advisory_xact_lock(hashtext(:uid))"),
         {"uid": str(user_id)},
@@ -413,8 +444,8 @@ async def sync_events(
     derivation = derive_events(fills, resolutions)
 
     existing = await read_events(session, user_id)
-    existing_triples = {
-        (record.position_id, record.event_type, record.fill_ids_hash)
+    existing_keys = {
+        (record.position_id, record.event_type, record.event_time, record.fill_ids_hash)
         for record in existing
     }
 
@@ -428,9 +459,33 @@ async def sync_events(
             close_credit_usd=event.close_credit_usd,
         )
         for event in derivation.events
-        if (event.position_id, event.event_type.value, event.fill_ids_hash)
-        not in existing_triples
+        if (
+            event.position_id,
+            event.event_type.value,
+            event.event_time,
+            event.fill_ids_hash,
+        )
+        not in existing_keys
     ]
+
+    if as_of is not None:
+        # `derive_settlements` already excludes any leg whose
+        # `(position_id, event_time)` matches an existing SETTLEMENT row in
+        # `existing` (D7-06) -- no second idempotency check needed here.
+        legs = await read_legs(session, user_id)
+        settlement_drafts = derive_settlements(legs, existing, as_of=as_of)
+        drafts.extend(
+            EventWrite(
+                position_id=draft.position_id,
+                event_type=EventType.SETTLEMENT.value,
+                event_time=draft.event_time,
+                fill_ids_hash=None,
+                open_debit_usd=None,
+                close_credit_usd=None,
+            )
+            for draft in settlement_drafts
+        )
+
     if drafts:
         await insert_events(session, user_id, drafts)
 

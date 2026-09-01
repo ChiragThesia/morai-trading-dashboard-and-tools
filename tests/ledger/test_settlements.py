@@ -23,6 +23,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.ledger.events import EventRecord, read_events
@@ -82,6 +83,19 @@ def _leg(
         leg_role=leg_role,
         occ_symbol=occ_symbol,
         root=root,
+    )
+
+
+async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
+    """`set_config` is a function call, not `SET`, because the parameter
+    needs a bind, not a literal, and Postgres's `SET` grammar only accepts
+    a literal there. Mirrors `tests/test_isolation.py::_set_current_user`
+    and `tests/ledger/test_position_creation.py`'s own copy exactly --
+    `app_db_session` (unlike `seeded_position`'s `superuser_db_session`)
+    needs `app.current_user_id` set before an RLS-scoped read/write."""
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
     )
 
 
@@ -226,6 +240,7 @@ async def test_sync_events_mixed_style_position_lands_two_settlement_rows(
     `as_of`; the sync must land exactly TWO settlement rows, not one
     (Pitfall 2's regression, asserted at the `sync_events` level)."""
     as_of = datetime(2026, 12, 31, tzinfo=UTC)
+    await _set_current_user(app_db_session, provisioned_users.user_a)
 
     await sync_events(app_db_session, provisioned_users.user_a, as_of=as_of)
     await app_db_session.commit()
@@ -235,9 +250,7 @@ async def test_sync_events_mixed_style_position_lands_two_settlement_rows(
     assert len(settlement_records) == 2
     event_times = {r.event_time for r in settlement_records}
     assert len(event_times) == 2
-    assert {r.position_id for r in settlement_records} == {
-        seeded_position.position_id
-    }
+    assert {r.position_id for r in settlement_records} == {seeded_position.position_id}
     assert all(r.fill_ids_hash is None for r in settlement_records)
 
 
@@ -251,6 +264,7 @@ async def test_sync_events_settlement_resync_adds_no_further_rows(
     """Test 2 (db): syncing the same position a second time adds no
     further settlement rows."""
     as_of = datetime(2026, 12, 31, tzinfo=UTC)
+    await _set_current_user(app_db_session, provisioned_users.user_a)
 
     await sync_events(app_db_session, provisioned_users.user_a, as_of=as_of)
     await app_db_session.commit()
@@ -258,6 +272,7 @@ async def test_sync_events_settlement_resync_adds_no_further_rows(
     first_settlements = [r for r in first if r.event_type == "SETTLEMENT"]
     assert len(first_settlements) == 2
 
+    await _set_current_user(app_db_session, provisioned_users.user_a)
     await sync_events(app_db_session, provisioned_users.user_a, as_of=as_of)
     await app_db_session.commit()
     second = await read_events(superuser_db_session, provisioned_users.user_a)
@@ -275,6 +290,7 @@ async def test_sync_events_settlement_rows_have_null_money_and_hash(
     """Test 3 (db): each settlement row's `fill_ids_hash` and both money
     fields are `None` -- never zero (D7-05, D7-07, NN-16)."""
     as_of = datetime(2026, 12, 31, tzinfo=UTC)
+    await _set_current_user(app_db_session, provisioned_users.user_a)
 
     await sync_events(app_db_session, provisioned_users.user_a, as_of=as_of)
     await app_db_session.commit()
@@ -298,6 +314,7 @@ async def test_sync_events_no_settlement_row_before_expiry(
     """Test 4 (db): a position whose legs have not yet reached expiry
     produces no settlement row -- `as_of` well before both."""
     as_of = datetime(2020, 1, 1, tzinfo=UTC)
+    await _set_current_user(app_db_session, provisioned_users.user_a)
 
     await sync_events(app_db_session, provisioned_users.user_a, as_of=as_of)
     await app_db_session.commit()
@@ -316,6 +333,7 @@ async def test_sync_events_with_no_as_of_derives_no_settlements(
     """`as_of=None` (the default): settlement derivation is skipped
     entirely -- the oracle suite and every existing caller need no
     change and the 13-calendar gate stays byte-identical (D7-13)."""
+    await _set_current_user(app_db_session, provisioned_users.user_a)
     await sync_events(app_db_session, provisioned_users.user_a)
     await app_db_session.commit()
 
