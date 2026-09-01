@@ -87,6 +87,13 @@ class Settings(BaseSettings):
     # NOTHING on their full primary keys.
     schwab_tx_sync_overlap_days: int = 1
 
+    # Phase 6, D6-03: chosen, not measured -- the deployed worker runs jobs
+    # strictly serially at Procrastinate's default concurrency of one, so an
+    # unthrottled manual re-sync lets one user starve every other user's
+    # scheduled cycle (T-06-17). Read off the caller's own most recent
+    # sync_runs row, not new state.
+    schwab_sync_cooldown_seconds: int = 60
+
     @property
     def schwab_credentials(self) -> SchwabCredentials:
         """Raises before composing anything if any of the three is unset,
@@ -150,6 +157,36 @@ class Settings(BaseSettings):
             )
         url = make_url(self.database_url.get_secret_value()).set(
             drivername="postgresql+asyncpg",
+            username="morai_app",
+            password=password.get_secret_value(),
+        )
+        return url.render_as_string(hide_password=False)
+
+    @property
+    def app_sync_dsn(self) -> str:
+        """The web process's deferral-only Procrastinate connection DSN
+        (`api/job_queue.py`, task 2): `database_url`'s own host, port and
+        database, with the role and password swapped to the
+        least-privilege `morai_app` role -- mirrors `app_async_dsn` exactly,
+        with the plain `postgresql://` scheme `database_url` already
+        carries rather than `+asyncpg`: Procrastinate's `PsycopgConnector`
+        needs a psycopg connection string, not an asyncpg one.
+
+        Raises before composing anything if the password is unset, naming
+        only the field. Following `app_async_dsn`'s own precedent exactly:
+        the `raise` sits outside any `except`, so no original exception
+        carrying a value stays attached as `__context__` for a
+        chain-walking logger to find (`NN-34`).
+        """
+        password = self.morai_app_db_password
+        if password is None:
+            raise RuntimeError(
+                "Configuration rejected. `morai_app_db_password` is required to "
+                "build the web process's deferral connection, and is withheld "
+                "deliberately even when present -- values are never rendered "
+                "(NN-34)."
+            )
+        url = make_url(self.database_url.get_secret_value()).set(
             username="morai_app",
             password=password.get_secret_value(),
         )

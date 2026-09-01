@@ -41,16 +41,24 @@ from tests.vendor.conftest import (
     _WRAPPED_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: see _FAKE_REFRESH_TOKEN above.
     FakeSchwabAuth,
     FakeSchwabClient,
+    clean_connection_tables,
+    logged_in_client,
 )
 
 # Re-exported, not merely imported -- see this module's own docstring and
-# `tests/vendor/conftest.py`'s identical convention.
+# `tests/vendor/conftest.py`'s identical convention. `clean_connection_tables`/
+# `logged_in_client` (task 2, 06-03-PLAN.md): `tests/vendor/conftest.py` is
+# not an ancestor conftest of this directory, so `logged_in_client`'s own
+# fixture dependencies must be re-exported here too, not only the fixture
+# itself, for pytest to resolve them by name.
 __all__ = [
     "SeededUsers",
     "app_db_session",
+    "clean_connection_tables",
     "clean_identity_tables",
     "clean_ingest_tables",
     "clean_ledger_tables",
+    "logged_in_client",
     "provisioned_users",
     "seeded_users",
     "superuser_db_session",
@@ -129,6 +137,14 @@ class _TxFakeSchwabClient(FakeSchwabClient):
     windows_by_call: list[tuple[datetime | None, datetime | None]] = field(
         default_factory=list
     )
+    # 06-03 Task 1's own rollback-survival proof: `fail_on_call` is the
+    # 0-based index of the `get_transactions` call that raises
+    # `fail_exception` instead of returning data -- lets a test land at
+    # least one window's writes inside the ingest transaction before a
+    # later window's call fails, so the failure's rollback has something
+    # real to undo.
+    fail_on_call: int | None = None
+    fail_exception: Exception | None = None
 
     async def get_transactions(
         self,
@@ -138,7 +154,14 @@ class _TxFakeSchwabClient(FakeSchwabClient):
         end_date: datetime | None = None,
         symbol: str | None = None,
     ) -> JsonValue:
+        call_index = len(self.windows_by_call)
         self.windows_by_call.append((start_date, end_date))
+        if (
+            self.fail_on_call is not None
+            and call_index == self.fail_on_call
+            and self.fail_exception is not None
+        ):
+            raise self.fail_exception
         if (
             self.payload_by_window is not None
             and start_date is not None
@@ -180,6 +203,10 @@ class TxFakeSchwabAuth(FakeSchwabAuth):
         default_factory=dict
     )
     payload_by_window: dict[tuple[datetime, datetime], JsonValue] | None = None
+    # Threaded straight through to the `_TxFakeSchwabClient` this auth
+    # builds -- see that class's own docstring for what these do.
+    fail_on_call: int | None = None
+    fail_exception: Exception | None = None
     last_client: _TxFakeSchwabClient | None = field(default=None, init=False)
 
     async def build_client(
@@ -212,6 +239,8 @@ class TxFakeSchwabAuth(FakeSchwabAuth):
             account_entries=self.account_entries,
             transactions=response,
             payload_by_window=self.payload_by_window,
+            fail_on_call=self.fail_on_call,
+            fail_exception=self.fail_exception,
         )
         self.last_client = client
         return client

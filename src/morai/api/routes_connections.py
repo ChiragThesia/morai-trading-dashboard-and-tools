@@ -1,4 +1,5 @@
-"""The Schwab connection routes (CONN-01, CONN-02, CONN-04, CONN-07).
+"""The Schwab connection routes (CONN-01, CONN-02, CONN-04, CONN-07,
+INGEST-04, INGEST-06).
 
 Every route declares its contract by return type annotation, never
 `response_model=` (D-11), matching `api/routes_identity.py`.
@@ -9,6 +10,14 @@ bearer-equivalent secrets. Nothing in this module ever logs the received
 URL, the raw code, or the state, and none of the three is ever put into an
 exception message -- `api/errors.py`'s unhandled handler logs only
 `request.url.path`, never the query string, and that stays true here too.
+
+**The same boundary, restated for `POST /schwab/sync` and `GET
+/schwab/sync-runs` (task 2, task 3).** Neither route renders a vendor
+response body, an exception message, or a token fragment. The sync-trigger
+response is deliberately near-empty; the sync-run response exposes a
+classified code from a fixed, enumerated set (`morai.ingest.sync_runs.SyncError`)
+and never an exception's own text -- there is no path from a vendor error
+body to a rendered response through either route.
 
 **Warning for a future reader who wants to debug a production request:**
 Hypercorn's default access-log format (`Config.access_log_format`) includes
@@ -31,15 +40,19 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.api.job_queue import defer_manual_sync
 from morai.api.models_connections import (
     CallbackResponse,
     ConnectionResponse,
     ConnectResponse,
+    SyncRunResponse,
+    SyncTriggeredResponse,
 )
 from morai.db.session import get_db_session
 from morai.identity.rls import require_rls_context
 from morai.identity.sessions import AuthenticatedUser, get_current_user
 from morai.identity.setup_tokens import TokenPurpose, consume_token, issue_token
+from morai.ingest.sync_runs import read_sync_runs
 from morai.settings import get_settings
 from morai.vendor.connections import (
     derive_connection_health,
@@ -56,6 +69,11 @@ router = APIRouter()
 # user's browser round-trip through Schwab's login/2FA/consent flow;
 # not a measured constant (Assumptions Log A1, 04-RESEARCH.md).
 _OAUTH_STATE_TTL = timedelta(minutes=15)
+
+# Task 3: bounds GET /schwab/sync-runs so a caller cannot ask for an
+# unbounded scan. Chosen, not measured -- generous for a handful of
+# trusted users each running one 30-minute cycle.
+_SYNC_RUNS_LIMIT = 50
 
 
 def get_schwab_auth() -> SchwabAuth:
@@ -149,3 +167,74 @@ async def connection(
         last_synced_at=record.last_synced_at,
         reauth_notified_at=record.reauth_notified_at,
     )
+
+
+@router.post("/schwab/sync")
+async def sync(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> SyncTriggeredResponse:
+    """Defers the same `sync_user` job the scheduler defers (INGEST-04) --
+    never a second write path. 404 for a user with no connection: nothing
+    to sync. 429, deferring nothing, for a caller inside the configured
+    cooldown.
+
+    The cooldown is not decoration. The deployed worker runs jobs strictly
+    serially at Procrastinate's default concurrency of one (`06-RESEARCH.md`),
+    so an unthrottled manual trigger lets one user queue enough jobs to
+    starve every other user's scheduled cycle -- a denial of service
+    against the other tenants, not merely against the caller's own
+    connection (T-06-17). Read off this user's own most recent `sync_runs`
+    row, which this plan already records, so no new state is needed. The
+    honest ceiling: this throttles by run *start* time, so it does not
+    bound a caller who triggers exactly at each cooldown boundary forever
+    -- accepted at this project's scale, a handful of trusted users.
+    """
+    record = await read_connection(session, user.user_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="not found")
+
+    cooldown = timedelta(seconds=get_settings().schwab_sync_cooldown_seconds)
+    recent = await read_sync_runs(session, user.user_id, limit=1)
+    if recent and datetime.now(UTC) - recent[0].started_at < cooldown:
+        raise HTTPException(status_code=429, detail="cooldown active")
+
+    await defer_manual_sync(user.user_id)
+    return SyncTriggeredResponse()
+
+
+@router.get("/schwab/sync-runs")
+async def sync_runs(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[SyncRunResponse]:
+    """This user's own sync history, most recent first -- a thin shell
+    over `morai.ingest.sync_runs.read_sync_runs` (task 3, INGEST-06). An
+    empty list is a real answer here, unlike a missing connection: a user
+    who has never synced gets `200` and `[]`, never `404`.
+
+    RLS (`sync_runs`' own `user_isolation` policy, migration 0012) is what
+    makes a wrong `app.current_user_id` context return fewer rows than
+    exist -- not a `WHERE` clause a caller could forget, the same
+    isolation mechanism every other user-scoped read in this system uses.
+
+    The body is composed field by field from `SyncRunRecord`, never by
+    handing the ORM row to the serialiser -- `Optional` counts and error
+    code stay `Optional` on the wire (`NN-16` at the API boundary, not
+    only at the column task 1 already enforced).
+    """
+    records = await read_sync_runs(session, user.user_id, limit=_SYNC_RUNS_LIMIT)
+    return [
+        SyncRunResponse(
+            started_at=record.started_at,
+            finished_at=record.finished_at,
+            trigger=record.trigger.value,
+            status=record.status.value,
+            fills_landed=record.fills_landed,
+            broker_transactions_landed=record.broker_transactions_landed,
+            error_code=(
+                record.error_code.value if record.error_code is not None else None
+            ),
+        )
+        for record in records
+    ]

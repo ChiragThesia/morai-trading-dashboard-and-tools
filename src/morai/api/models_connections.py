@@ -26,3 +26,25 @@ class ConnectionResponse(ApiModel):
     expires_at: datetime
     last_synced_at: datetime | None
     reauth_notified_at: datetime | None
+
+
+class SyncTriggeredResponse(ApiModel):
+    """Deliberately near-empty, matching `CallbackResponse`'s own
+    discipline (task 2, `NN-34`) -- no job id, no window, no vendor
+    detail. Success is the only thing this response body communicates."""
+
+
+class SyncRunResponse(ApiModel):
+    """One sync run (task 3, `GET /schwab/sync-runs`). The two landed
+    counts and `error_code` are `Optional`, load-bearing rather than
+    defensive -- a failed run's counts are unknown, and serialising them
+    as `0` would report a broken cycle as an empty one, the same `NN-16`
+    failure task 1 already refused at the column."""
+
+    started_at: datetime
+    finished_at: datetime
+    trigger: str
+    status: str
+    fills_landed: int | None
+    broker_transactions_landed: int | None
+    error_code: str | None
