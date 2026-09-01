@@ -26,3 +26,9 @@ class ConnectionResponse(ApiModel):
     expires_at: datetime
     last_synced_at: datetime | None
     reauth_notified_at: datetime | None
+
+
+class SyncTriggeredResponse(ApiModel):
+    """Deliberately near-empty, matching `CallbackResponse`'s own
+    discipline (task 2, `NN-34`) -- no job id, no window, no vendor
+    detail. Success is the only thing this response body communicates."""

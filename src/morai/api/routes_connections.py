@@ -31,15 +31,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.api.job_queue import defer_manual_sync
 from morai.api.models_connections import (
     CallbackResponse,
     ConnectionResponse,
     ConnectResponse,
+    SyncTriggeredResponse,
 )
 from morai.db.session import get_db_session
 from morai.identity.rls import require_rls_context
 from morai.identity.sessions import AuthenticatedUser, get_current_user
 from morai.identity.setup_tokens import TokenPurpose, consume_token, issue_token
+from morai.ingest.sync_runs import read_sync_runs
 from morai.settings import get_settings
 from morai.vendor.connections import (
     derive_connection_health,
@@ -149,3 +152,37 @@ async def connection(
         last_synced_at=record.last_synced_at,
         reauth_notified_at=record.reauth_notified_at,
     )
+
+
+@router.post("/schwab/sync")
+async def sync(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> SyncTriggeredResponse:
+    """Defers the same `sync_user` job the scheduler defers (INGEST-04) --
+    never a second write path. 404 for a user with no connection: nothing
+    to sync. 429, deferring nothing, for a caller inside the configured
+    cooldown.
+
+    The cooldown is not decoration. The deployed worker runs jobs strictly
+    serially at Procrastinate's default concurrency of one (`06-RESEARCH.md`),
+    so an unthrottled manual trigger lets one user queue enough jobs to
+    starve every other user's scheduled cycle -- a denial of service
+    against the other tenants, not merely against the caller's own
+    connection (T-06-17). Read off this user's own most recent `sync_runs`
+    row, which this plan already records, so no new state is needed. The
+    honest ceiling: this throttles by run *start* time, so it does not
+    bound a caller who triggers exactly at each cooldown boundary forever
+    -- accepted at this project's scale, a handful of trusted users.
+    """
+    record = await read_connection(session, user.user_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="not found")
+
+    cooldown = timedelta(seconds=get_settings().schwab_sync_cooldown_seconds)
+    recent = await read_sync_runs(session, user.user_id, limit=1)
+    if recent and datetime.now(UTC) - recent[0].started_at < cooldown:
+        raise HTTPException(status_code=429, detail="cooldown active")
+
+    await defer_manual_sync(user.user_id)
+    return SyncTriggeredResponse()
