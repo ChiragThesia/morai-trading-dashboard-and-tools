@@ -100,6 +100,15 @@ class SnapshotGapReason(StrEnum):
     SLOT_NOT_CAPTURED = "slot_not_captured"
 
 
+class SnapshotVendorError(RuntimeError):
+    """Raised by `capture_user_snapshot` after it has committed
+    `vendor_error` gap rows for every open leg (plan 08-02, orchestrator-
+    resolved research question A3). Carries no vendor text of its own
+    (`NN-20`, `NN-34`) -- the original exception is chained via `raise ...
+    from exc` so a later classifier can still branch on its type and status
+    code; nothing in this module stores or logs the message string."""
+
+
 @dataclass(frozen=True)
 class ParsedQuote:
     """One leg's parsed quote, or an honest gap. `gap_reason` is `None`
@@ -518,6 +527,32 @@ async def write_snapshot_marks(
     return landed
 
 
+def gap_writes_for_legs(
+    legs: Sequence[OpenLeg],
+    *,
+    slot_time: datetime,
+    observed_at: datetime,
+    gap_reason: SnapshotGapReason,
+) -> tuple[SnapshotWrite, ...]:
+    """Pure -- no session, no clock read. One `SnapshotWrite` per leg, both
+    money fields `None`, `raw_payload` `None`. The one place a whole-slot
+    gap fan-out is built, so `capture_user_snapshot`'s `connection_expired`
+    and `vendor_error` branches produce structurally identical rows
+    differing only in their `gap_reason` (D8-14, A3)."""
+    return tuple(
+        SnapshotWrite(
+            leg_id=leg.leg_id,
+            slot_time=slot_time,
+            observed_at=observed_at,
+            raw_payload=None,
+            mark_usd=None,
+            spot_usd=None,
+            gap_reason=gap_reason,
+        )
+        for leg in legs
+    )
+
+
 async def capture_user_snapshot(
     session: AsyncSession,
     user_id: UUID,
@@ -535,14 +570,28 @@ async def capture_user_snapshot(
     this user's own `pg_advisory_xact_lock` next, the same ordering
     `sync_user`/`create_positions` already use -- this is what serialises
     two overlapping capture runs for one user (SNAP-05's own concurrency
-    half, plan 08-02).
+    half).
 
-    An expired connection, or no connection at all, writes nothing for
-    this plan and returns a zero-marks outcome -- an explicit
-    `connection_expired` gap row per leg is plan 08-02's own SNAP-05 scope
-    (D8-14). This plan's own tracer proves the healthy path end to end;
-    leaving the gap-writing branch to its owner rather than a silent
-    absence is the reason this comment exists.
+    Three gap branches, each producing an honest row rather than a skipped
+    one (criterion 5, `L043`):
+
+    - A missing connection or an expired one (`D8-14`) writes a
+      `connection_expired` gap per leg and returns *without* entering
+      `schwab_client_for_user` at all -- no vendor call is attempted.
+    - A whole-`get_quotes`-call failure (orchestrator-resolved research
+      question A3) writes a `vendor_error` gap per leg, **commits them
+      immediately**, and then raises `SnapshotVendorError`. The commit here
+      is deliberate and the one place this function departs from "the
+      caller owns the transaction": this branch raises instead of
+      returning, so `worker/app.py::snapshot_user_task`'s own commit line is
+      never reached, and an uncommitted transaction rolls back on the
+      session's own exception exit (`AsyncSession`'s default context-
+      manager behaviour). Criterion 5's "the row must exist" is false if it
+      does not survive past this function.
+    - A malformed or missing element for one symbol inside an otherwise
+      successful response degrades to a `no_market_data` gap for that leg
+      alone -- `parse_quote_payload` never raises, so this is D8-16's
+      per-symbol isolation grain and needs no boundary of its own here.
     """
     await session.execute(
         text("SELECT set_config('app.current_user_id', :uid, true)"),
@@ -560,35 +609,61 @@ async def capture_user_snapshot(
         )
 
     connection = await read_connection(session, user_id)
-    if connection is None:
-        # No connection at all -- the same "no vendor call possible" shape
-        # as an expired connection, owned by plan 08-02 (see this
-        # function's own docstring).
-        return CaptureOutcome(
-            slot_time=slot_time,
-            legs_attempted=len(legs),
-            marks_written=0,
-            gaps_by_reason={},
-        )
-
-    health, _expires_at = derive_connection_health(
-        connection.token_created_at, now=observed_at
+    health = (
+        derive_connection_health(connection.token_created_at, now=observed_at)[0]
+        if connection is not None
+        else None
     )
-    if health is ConnectionHealth.EXPIRED:
+    if connection is None or health is ConnectionHealth.EXPIRED:
+        # D8-14, criterion 5: a missing connection and an expired one both
+        # mean "no vendor call is possible" -- both get an honest
+        # connection_expired gap per leg rather than a skipped row, so the
+        # slot does not later read as though the position did not exist.
+        gap_writes = gap_writes_for_legs(
+            legs,
+            slot_time=slot_time,
+            observed_at=observed_at,
+            gap_reason=SnapshotGapReason.CONNECTION_EXPIRED,
+        )
+        await write_snapshot_observations(session, user_id, gap_writes)
+        marks_written = await write_snapshot_marks(session, user_id, gap_writes)
         return CaptureOutcome(
             slot_time=slot_time,
             legs_attempted=len(legs),
-            marks_written=0,
-            gaps_by_reason={},
+            marks_written=marks_written,
+            gaps_by_reason={SnapshotGapReason.CONNECTION_EXPIRED.value: len(legs)},
         )
 
     wire_symbols = {leg.leg_id: to_schwab_wire_symbol(leg.occ_symbol) for leg in legs}
-    async with schwab_client_for_user(session, user_id, auth) as client:
-        raw = await client.get_quotes(list(wire_symbols.values()))
+    try:
+        async with schwab_client_for_user(session, user_id, auth) as client:
+            raw = await client.get_quotes(list(wire_symbols.values()))
+    except Exception as exc:
+        # Do not widen this boundary to cover the writers themselves -- a
+        # write failure must roll the transaction back, not become a gap.
+        gap_writes = gap_writes_for_legs(
+            legs,
+            slot_time=slot_time,
+            observed_at=observed_at,
+            gap_reason=SnapshotGapReason.VENDOR_ERROR,
+        )
+        await write_snapshot_observations(session, user_id, gap_writes)
+        await write_snapshot_marks(session, user_id, gap_writes)
+        # See this function's own docstring for why this commit is here,
+        # not left to the caller.
+        await session.commit()
+        raise SnapshotVendorError(
+            f"get_quotes failed for user_id={user_id} slot_time={slot_time.isoformat()}"
+        ) from exc
 
     writes: list[SnapshotWrite] = []
     gaps_by_reason: dict[str, int] = {}
     for leg in legs:
+        # D8-16's per-symbol isolation grain: parse_quote_payload never
+        # raises, so a malformed or missing element degrades to a
+        # no_market_data gap for its own leg and leaves every other leg
+        # untouched. Do not add a try/except around this call -- that would
+        # destroy the guarantee this loop already has for free.
         parsed = parse_quote_payload(raw, wire_symbols[leg.leg_id])
         if parsed.gap_reason is not None:
             gaps_by_reason[parsed.gap_reason.value] = (
