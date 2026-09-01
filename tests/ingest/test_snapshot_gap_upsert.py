@@ -271,6 +271,64 @@ async def test_real_over_nothing_inserts_one_row(
 @pytest.mark.parametrize(
     ("write_fn", "table", "ciphertext_col", "nonce_col", "decrypt"), _WRITERS
 )
+async def test_all_gap_batch_writes_without_a_dek(
+    write_fn: _WriteFn,
+    table: str,
+    ciphertext_col: str,
+    nonce_col: str,
+    decrypt: _DecryptFn,
+    app_db_session: AsyncSession,
+    superuser_db_session: AsyncSession,
+    seeded_users: SeededUsers,
+) -> None:
+    """WR-01: a batch made entirely of gap rows must not require the user's
+    DEK to be resolvable. `seeded_users` deliberately provisions no
+    `user_data_keys` row (unlike `provisioned_users`) -- exactly the
+    crypto-shredded shape `capture_user_snapshot`'s `connection_expired`/
+    `vendor_error` branches must still be able to write an honest gap for
+    (criterion 5: the row must exist rather than the slot reading as though
+    the position never existed)."""
+    user_id = seeded_users.user_a
+    leg_id = (
+        await superuser_db_session.execute(
+            insert(Leg)
+            .values(
+                position_id=seeded_users.position_a,
+                user_id=user_id,
+                leg_role="front",
+                occ_symbol="SPXW260618P07275000",
+                root="SPXW",
+            )
+            .returning(Leg.id)
+        )
+    ).scalar_one()
+    await superuser_db_session.commit()
+    await _set_current_user(app_db_session, user_id)
+    slot_time = _SLOTS[0]
+
+    landed = await write_fn(
+        app_db_session, user_id, [_gap_write(leg_id, slot_time, slot_time)]
+    )
+    assert landed == 1
+
+    row = await _read_row(
+        app_db_session,
+        table=table,
+        ciphertext_col=ciphertext_col,
+        nonce_col=nonce_col,
+        leg_id=leg_id,
+        slot_time=slot_time,
+    )
+    assert row is not None
+    assert row.gap_reason == SnapshotGapReason.NO_MARKET_DATA.value
+    assert row.ciphertext is None
+    assert row.nonce is None
+    del decrypt  # unused in this cell -- shared parametrize tuple
+
+
+@pytest.mark.parametrize(
+    ("write_fn", "table", "ciphertext_col", "nonce_col", "decrypt"), _WRITERS
+)
 async def test_real_over_gap_heals_the_row(
     write_fn: _WriteFn,
     table: str,

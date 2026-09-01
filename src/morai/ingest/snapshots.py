@@ -376,7 +376,15 @@ async def write_snapshot_observations(
     if not rows:
         return 0
 
-    dek, key_version = await current_dek(session, user_id)
+    # WR-01: a pure-gap batch needs no cryptographic material at all -- the
+    # connection_expired/vendor_error branches in capture_user_snapshot
+    # build exactly this shape (gap_writes_for_legs), and a crypto-shredded
+    # account must still be able to record an honest gap row. Only resolve
+    # the DEK when at least one row in this batch is a real observation.
+    dek: bytes | None = None
+    key_version: int | None = None
+    if any(row.gap_reason is None for row in rows):
+        dek, key_version = await current_dek(session, user_id)
     landed = 0
 
     for chunk_start in range(0, len(rows), _SNAPSHOT_CHUNK_SIZE):
@@ -397,6 +405,7 @@ async def write_snapshot_observations(
                     }
                 )
                 continue
+            assert dek is not None  # gap_reason is None implies the DEK was resolved
             raw_ciphertext, raw_nonce = encrypt_field(
                 json.dumps(row.raw_payload).encode("utf-8"),
                 dek,
@@ -452,7 +461,12 @@ async def write_snapshot_marks(
     if not rows:
         return 0
 
-    dek, key_version = await current_dek(session, user_id)
+    # WR-01: same reasoning as write_snapshot_observations above -- only
+    # resolve the DEK when this batch actually contains a real row.
+    dek: bytes | None = None
+    key_version: int | None = None
+    if any(row.gap_reason is None for row in rows):
+        dek, key_version = await current_dek(session, user_id)
     landed = 0
 
     for chunk_start in range(0, len(rows), _SNAPSHOT_CHUNK_SIZE):
@@ -475,6 +489,7 @@ async def write_snapshot_marks(
                     }
                 )
                 continue
+            assert dek is not None  # gap_reason is None implies the DEK was resolved
             assert row.mark_usd is not None  # gap_reason is None implies a real mark
             mark_usd_ciphertext, mark_usd_nonce = encrypt_field(
                 _encode_decimal(row.mark_usd),
