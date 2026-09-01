@@ -43,19 +43,24 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import JsonValue, TypeAdapter
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.crypto.data_keys import dek_for_version
 from morai.crypto.envelope import decrypt_field
+from morai.db.models import SnapshotObservation
 from morai.ingest.snapshots import (
     SnapshotGapReason,
     SnapshotWrite,
     _snapshot_associated_data,  # pyright: ignore[reportPrivateUsage]  # why: the repair must decrypt each stored raw payload using the exact AAD helper the writer used to bind ciphertext to its own row -- a copied AAD would fail the tag (D8-04's own point), not a coincidence to route around.
     parse_quote_payload,
+    rth_slots_between,
     to_schwab_wire_symbol,
     write_snapshot_marks,
+    write_snapshot_observations,
 )
+from morai.ledger.positions import PositionState, read_position_state
+from morai.ledger.settlements import LegRecord, read_legs
 
 _JSON_VALUE: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 # Raw `text()` results type every column as `Any` -- same untyped-boundary
@@ -97,6 +102,14 @@ class RepairOutcome:
     observations_read: int
     marks_written: int
     gaps_by_reason: Mapping[str, int]
+
+
+@dataclass(frozen=True)
+class BackfillOutcome:
+    """One backfill run's own result, for one user over one window."""
+
+    slots_examined: int
+    gap_rows_written: int
 
 
 async def read_snapshot_observations(
@@ -261,3 +274,108 @@ async def repair_snapshot_marks(
         marks_written=marks_written,
         gaps_by_reason=gaps_by_reason,
     )
+
+
+async def backfill_uncaptured_slot_gaps(
+    session: AsyncSession, user_id: UUID, *, start: datetime, end: datetime
+) -> BackfillOutcome:
+    """Writes an honest `slot_not_captured` gap for every RTH slot in
+    `[start, end]` that has no stored row at all, for every leg that was
+    open at that slot.
+
+    Procrastinate's own `PeriodicDeferrer` (`periodic.py`) backfills only
+    the single most recent missed tick, and only when it is under ten
+    minutes old (`MAX_DELAY`); the dictionary tracking how far it has
+    caught up lives in process memory, so every worker restart resets it.
+    A worker down longer than that ceiling across a slot boundary
+    produces no job at all for the missed slot -- not a failed job, not a
+    gap-writing job, none -- so the slot is absent from both snapshot
+    tables rather than present as a gap. This function turns that
+    absence into an honest, queryable gap. It never writes a mark for
+    such a slot: there is no observation to derive one from, and
+    inventing one is exactly what `L041` forbids.
+
+    Computes the expected slots with `rth_slots_between` -- the same grid
+    the live writer uses, never a second implementation. Resolves the
+    user's legs and their positions' derived state through
+    `read_position_state`, and for each expected slot keeps a leg only
+    when its position's `opened_at` is known and not after the slot, and
+    its `closed_at` is either unknown or not before the slot -- a
+    position whose `is_closed` is `None` (a gapped leg) is kept, the same
+    reasoning `read_open_legs` already applies: not known closed is not
+    the same as known absent.
+
+    Queries the existing `(leg_id, slot_time)` pairs in one statement,
+    and writes only for a pair with no row of either kind yet. This is
+    what makes a second run over the same window idempotent, and what
+    lets a slot with a real mark already stand untouched with no special
+    case of its own -- `write_snapshot_observations`/
+    `write_snapshot_marks`'s own asymmetric clause would block a gap over
+    a real value regardless, but pre-filtering here also means a second
+    run's `gap_rows_written` is genuinely zero rather than a same-value
+    no-op update.
+
+    `observed_at` is set to the slot instant itself: there was no
+    observation, so there is no observation time, and using the slot
+    keeps the column honest and non-null without implying a measurement
+    that never happened.
+    """
+    slots = rth_slots_between(start, end)
+    legs = await read_legs(session, user_id)
+    if not slots or not legs:
+        return BackfillOutcome(slots_examined=len(slots), gap_rows_written=0)
+
+    position_states: dict[UUID, PositionState] = {}
+    for leg in legs:
+        if leg.position_id not in position_states:
+            position_states[leg.position_id] = await read_position_state(
+                session, leg.position_id, user_id
+            )
+
+    expected_pairs: set[tuple[UUID, datetime]] = set()
+    leg_by_id: dict[UUID, LegRecord] = {leg.id: leg for leg in legs}
+    for leg in legs:
+        state = position_states[leg.position_id]
+        if state.opened_at is None:
+            continue
+        for slot in slots:
+            if state.opened_at > slot:
+                continue
+            if state.closed_at is not None and state.closed_at < slot:
+                continue
+            expected_pairs.add((leg.id, slot))
+
+    if not expected_pairs:
+        return BackfillOutcome(slots_examined=len(slots), gap_rows_written=0)
+
+    leg_ids = list(leg_by_id)
+    existing_rows = (
+        await session.execute(
+            select(SnapshotObservation.leg_id, SnapshotObservation.slot_time).where(
+                SnapshotObservation.leg_id.in_(leg_ids)
+            )
+        )
+    ).all()
+    existing_pairs = {(row[0], row[1]) for row in existing_rows}
+
+    missing_pairs = sorted(
+        expected_pairs - existing_pairs, key=lambda pair: (pair[1], str(pair[0]))
+    )
+
+    writes = [
+        SnapshotWrite(
+            leg_id=leg_id,
+            slot_time=slot_time,
+            observed_at=slot_time,
+            raw_payload=None,
+            mark_usd=None,
+            spot_usd=None,
+            gap_reason=SnapshotGapReason.SLOT_NOT_CAPTURED,
+        )
+        for leg_id, slot_time in missing_pairs
+    ]
+
+    await write_snapshot_observations(session, user_id, writes)
+    gap_rows_written = await write_snapshot_marks(session, user_id, writes)
+
+    return BackfillOutcome(slots_examined=len(slots), gap_rows_written=gap_rows_written)

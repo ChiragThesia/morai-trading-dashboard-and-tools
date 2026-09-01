@@ -97,6 +97,21 @@ async def _repair_one_user(user_id: UUID, *, since: datetime | None) -> None:
     )
 
 
+async def _backfill_one_user(user_id: UUID, *, start: datetime, end: datetime) -> None:
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        await assert_connection_cannot_bypass_rls(session)
+        await _set_current_user(session, user_id)
+        outcome = await snapshot_repair.backfill_uncaptured_slot_gaps(
+            session, user_id, start=start, end=end
+        )
+        await session.commit()
+    print(
+        f"user_id={user_id} slots_examined={outcome.slots_examined} "
+        f"gap_rows_written={outcome.gap_rows_written}"
+    )
+
+
 async def _every_user_with_stored_observations() -> list[UUID]:
     """A superuser, listing-only read of exactly one column -- the same
     two-tier shape `sync_all_connected_users`'s own docstring justifies:
@@ -122,10 +137,24 @@ async def main(argv: Sequence[str]) -> int:
             print("repair_snapshots: user id must be a valid UUID", file=sys.stderr)
             return 2
 
-    # `--backfill-gaps` itself is accepted here (so `--help` names it and the
-    # CLI is written once) but not dispatched yet -- plan 08-03 Task 3 wires
-    # this branch onto `snapshot_repair.backfill_uncaptured_slot_gaps`,
-    # which does not exist until that task lands.
+    if args.backfill_gaps is not None:
+        if user_id is None:
+            print(
+                "repair_snapshots: --backfill-gaps requires a user id",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            start = datetime.fromisoformat(args.backfill_gaps[0])
+            end = datetime.fromisoformat(args.backfill_gaps[1])
+        except ValueError:
+            print(
+                "repair_snapshots: --backfill-gaps requires two ISO timestamps",
+                file=sys.stderr,
+            )
+            return 2
+        await _backfill_one_user(user_id, start=start, end=end)
+        return 0
 
     since: datetime | None = None
     if args.since is not None:

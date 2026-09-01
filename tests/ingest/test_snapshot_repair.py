@@ -45,7 +45,12 @@ from morai.identity.rls import (
     assert_connection_cannot_bypass_rls as real_assert_connection_cannot_bypass_rls,
 )
 from morai.ingest import snapshot_repair
-from morai.ingest.snapshot_repair import RepairOutcome, repair_snapshot_marks
+from morai.ingest.snapshot_repair import (
+    BackfillOutcome,
+    RepairOutcome,
+    backfill_uncaptured_slot_gaps,
+    repair_snapshot_marks,
+)
 from morai.ingest.snapshots import (
     SnapshotGapReason,
     SnapshotWrite,
@@ -53,6 +58,8 @@ from morai.ingest.snapshots import (
     write_snapshot_marks,
     write_snapshot_observations,
 )
+from morai.ledger.fills import FillWrite, insert_fills
+from morai.ledger.pairing import sync_events
 from morai.settings import get_settings
 from morai.worker.app import app
 from tests.identity.conftest import SeededUsers
@@ -70,6 +77,15 @@ _SLOT_TIME = datetime(2026, 6, 15, 14, 30, tzinfo=UTC)
 # carries for `seeded_position`'s own two legs.
 _FRONT_MARK = Decimal("44.8567")
 _BACK_MARK = Decimal("30.1233")
+
+# Four consecutive RTH slots on the same Monday (D8-06) -- the backfill
+# window Task 3's own tests examine.
+_BACKFILL_SLOTS = (
+    datetime(2026, 6, 15, 14, 0, tzinfo=UTC),
+    datetime(2026, 6, 15, 14, 30, tzinfo=UTC),
+    datetime(2026, 6, 15, 15, 0, tzinfo=UTC),
+    datetime(2026, 6, 15, 15, 30, tzinfo=UTC),
+)
 
 
 async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
@@ -216,6 +232,72 @@ async def _seed_leg_for_user(session: AsyncSession, user_id: UUID) -> UUID:
             .returning(Leg.id)
         )
     ).scalar_one()
+    await session.commit()
+    return leg_id
+
+
+async def _seed_leg_with_lifetime(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    occ_symbol: str,
+    root: str,
+    opened_at: datetime,
+    closed_at: datetime | None = None,
+) -> UUID:
+    """A position and one leg with a real, derived `opened_at` (and,
+    optionally, `closed_at`) -- through `insert_fills` and `sync_events`,
+    the real write paths, never a hand-written `events` insert. Each
+    caller uses its own distinct `occ_symbol` so `resolve_fill_positions`
+    has nothing ambiguous to resolve against a sibling test's rows."""
+    await _set_current_user(session, user_id)
+    position_id = (
+        await session.execute(
+            insert(Position).values(user_id=user_id).returning(Position.id)
+        )
+    ).scalar_one()
+    leg_id = (
+        await session.execute(
+            insert(Leg)
+            .values(
+                position_id=position_id,
+                user_id=user_id,
+                leg_role="front",
+                occ_symbol=occ_symbol,
+                root=root,
+            )
+            .returning(Leg.id)
+        )
+    ).scalar_one()
+
+    fills = [
+        FillWrite(
+            order_id=f"backfill-open-{leg_id}",
+            occ_symbol=occ_symbol,
+            leg_index=0,
+            execution_time=opened_at,
+            position_effect="OPENING",
+            side="BUY",
+            quantity=Decimal("1"),
+            price_usd=Decimal("10.0000"),
+        )
+    ]
+    if closed_at is not None:
+        fills.append(
+            FillWrite(
+                order_id=f"backfill-close-{leg_id}",
+                occ_symbol=occ_symbol,
+                leg_index=0,
+                execution_time=closed_at,
+                position_effect="CLOSING",
+                side="SELL",
+                quantity=Decimal("1"),
+                price_usd=Decimal("12.0000"),
+            )
+        )
+    await insert_fills(session, user_id, fills)
+    as_of = (closed_at or opened_at) + timedelta(days=1)
+    await sync_events(session, user_id, as_of=as_of)
     await session.commit()
     return leg_id
 
@@ -794,3 +876,252 @@ def test_cli_module_reimplements_no_parser() -> None:
         if isinstance(node, ast.FunctionDef) and node.name.startswith("parse_quote")
     ]
     assert offenders == []
+
+
+async def test_backfill_writes_slot_not_captured_gaps_for_missing_slots_only(
+    clean_snapshot_tables: None,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """Over a window containing four RTH slots where only two have any
+    snapshot row, the backfill writes `slot_not_captured` gap rows for
+    the two missing slots, leaves the two existing rows untouched, and
+    writes a row in both `snapshot_observations` and `snapshot_marks` for
+    each missing slot -- every written row's mark and spot are both
+    null."""
+    user_id = provisioned_users.user_a
+    leg_id = await _seed_leg_with_lifetime(
+        app_db_session,
+        user_id,
+        occ_symbol="SPXW261016P07000000",
+        root="SPXW",
+        opened_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    await _seed_observation(
+        app_db_session,
+        user_id,
+        leg_id=leg_id,
+        slot_time=_BACKFILL_SLOTS[0],
+        observed_at=_BACKFILL_SLOTS[0],
+        raw_payload=QUOTE_PAYLOAD,
+    )
+    await _seed_mark(
+        app_db_session,
+        user_id,
+        leg_id=leg_id,
+        slot_time=_BACKFILL_SLOTS[0],
+        observed_at=_BACKFILL_SLOTS[0],
+        mark_usd=Decimal("5.0000"),
+    )
+    await _seed_observation(
+        app_db_session,
+        user_id,
+        leg_id=leg_id,
+        slot_time=_BACKFILL_SLOTS[2],
+        observed_at=_BACKFILL_SLOTS[2],
+        raw_payload=QUOTE_PAYLOAD,
+    )
+    await _seed_mark(
+        app_db_session,
+        user_id,
+        leg_id=leg_id,
+        slot_time=_BACKFILL_SLOTS[2],
+        observed_at=_BACKFILL_SLOTS[2],
+        mark_usd=Decimal("6.0000"),
+    )
+    before_mark_0 = await _read_mark_row(
+        app_db_session, user_id, leg_id, _BACKFILL_SLOTS[0]
+    )
+    before_ciphertext_0 = before_mark_0.mark_usd_ciphertext
+    before_nonce_0 = before_mark_0.mark_usd_nonce
+
+    await _set_current_user(app_db_session, user_id)
+    outcome = await backfill_uncaptured_slot_gaps(
+        app_db_session, user_id, start=_BACKFILL_SLOTS[0], end=_BACKFILL_SLOTS[-1]
+    )
+    await app_db_session.commit()
+
+    assert outcome.slots_examined == 4
+    assert outcome.gap_rows_written == 2
+
+    after_mark_0 = await _read_mark_row(
+        app_db_session, user_id, leg_id, _BACKFILL_SLOTS[0]
+    )
+    assert after_mark_0.mark_usd_ciphertext == before_ciphertext_0
+    assert after_mark_0.mark_usd_nonce == before_nonce_0
+
+    for missing_slot in (_BACKFILL_SLOTS[1], _BACKFILL_SLOTS[3]):
+        mark = await _read_mark_row(app_db_session, user_id, leg_id, missing_slot)
+        assert mark.gap_reason == "slot_not_captured"
+        assert mark.mark_usd_ciphertext is None
+        assert mark.spot_usd_ciphertext is None
+
+        await _set_current_user(app_db_session, user_id)
+        observation = (
+            await app_db_session.execute(
+                select(SnapshotObservation).where(
+                    SnapshotObservation.leg_id == leg_id,
+                    SnapshotObservation.slot_time == missing_slot,
+                )
+            )
+        ).scalar_one()
+        assert observation.gap_reason == "slot_not_captured"
+        assert observation.raw_ciphertext is None
+
+
+async def test_backfill_skips_a_slot_before_the_legs_position_opened(
+    clean_snapshot_tables: None,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    user_id = provisioned_users.user_a
+    opened_at = _BACKFILL_SLOTS[1] + timedelta(minutes=1)
+    leg_id = await _seed_leg_with_lifetime(
+        app_db_session,
+        user_id,
+        occ_symbol="SPXW261017P07000000",
+        root="SPXW",
+        opened_at=opened_at,
+    )
+
+    await _set_current_user(app_db_session, user_id)
+    outcome = await backfill_uncaptured_slot_gaps(
+        app_db_session, user_id, start=_BACKFILL_SLOTS[0], end=_BACKFILL_SLOTS[-1]
+    )
+    await app_db_session.commit()
+
+    assert outcome.gap_rows_written == 2
+
+    await _set_current_user(app_db_session, user_id)
+    for excluded_slot in (_BACKFILL_SLOTS[0], _BACKFILL_SLOTS[1]):
+        row = (
+            await app_db_session.execute(
+                select(SnapshotMark).where(
+                    SnapshotMark.leg_id == leg_id,
+                    SnapshotMark.slot_time == excluded_slot,
+                )
+            )
+        ).scalar_one_or_none()
+        assert row is None
+
+
+async def test_backfill_skips_a_slot_after_the_legs_position_closed(
+    clean_snapshot_tables: None,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    user_id = provisioned_users.user_a
+    closed_at = _BACKFILL_SLOTS[1] + timedelta(minutes=1)
+    leg_id = await _seed_leg_with_lifetime(
+        app_db_session,
+        user_id,
+        occ_symbol="SPXW261018P07000000",
+        root="SPXW",
+        opened_at=datetime(2026, 6, 1, tzinfo=UTC),
+        closed_at=closed_at,
+    )
+
+    await _set_current_user(app_db_session, user_id)
+    outcome = await backfill_uncaptured_slot_gaps(
+        app_db_session, user_id, start=_BACKFILL_SLOTS[0], end=_BACKFILL_SLOTS[-1]
+    )
+    await app_db_session.commit()
+
+    assert outcome.gap_rows_written == 2
+
+    await _set_current_user(app_db_session, user_id)
+    for excluded_slot in (_BACKFILL_SLOTS[2], _BACKFILL_SLOTS[3]):
+        row = (
+            await app_db_session.execute(
+                select(SnapshotMark).where(
+                    SnapshotMark.leg_id == leg_id,
+                    SnapshotMark.slot_time == excluded_slot,
+                )
+            )
+        ).scalar_one_or_none()
+        assert row is None
+
+
+async def test_backfill_is_idempotent_on_a_second_run(
+    clean_snapshot_tables: None,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    user_id = provisioned_users.user_a
+    leg_id = await _seed_leg_with_lifetime(
+        app_db_session,
+        user_id,
+        occ_symbol="SPXW261019P07000000",
+        root="SPXW",
+        opened_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+
+    await _set_current_user(app_db_session, user_id)
+    first = await backfill_uncaptured_slot_gaps(
+        app_db_session, user_id, start=_BACKFILL_SLOTS[0], end=_BACKFILL_SLOTS[-1]
+    )
+    await app_db_session.commit()
+    assert first.gap_rows_written == 4
+
+    await _set_current_user(app_db_session, user_id)
+    created_before = (
+        (
+            await app_db_session.execute(
+                select(SnapshotMark.created_at).where(SnapshotMark.leg_id == leg_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    await _set_current_user(app_db_session, user_id)
+    second = await backfill_uncaptured_slot_gaps(
+        app_db_session, user_id, start=_BACKFILL_SLOTS[0], end=_BACKFILL_SLOTS[-1]
+    )
+    await app_db_session.commit()
+
+    assert second.gap_rows_written == 0
+
+    await _set_current_user(app_db_session, user_id)
+    created_after = (
+        (
+            await app_db_session.execute(
+                select(SnapshotMark.created_at).where(SnapshotMark.leg_id == leg_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert sorted(created_before) == sorted(created_after)
+
+
+async def test_cli_backfill_gaps_flag_reaches_the_shared_function(
+    clean_snapshot_tables: None,
+    provisioned_users: SeededUsers,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Patches `backfill_uncaptured_slot_gaps` at its defining module and
+    asserts the CLI's `--backfill-gaps` flag reaches it -- the same
+    anti-drift discipline Task 2's own patch test applies to
+    `repair_snapshot_marks` (D8-13)."""
+    calls: list[tuple[UUID, datetime, datetime]] = []
+
+    async def fake_backfill(
+        session: AsyncSession, user_id: UUID, *, start: datetime, end: datetime
+    ) -> BackfillOutcome:
+        calls.append((user_id, start, end))
+        return BackfillOutcome(slots_examined=0, gap_rows_written=0)
+
+    monkeypatch.setattr(snapshot_repair, "backfill_uncaptured_slot_gaps", fake_backfill)
+
+    user_id = provisioned_users.user_a
+    exit_code = await tools_main(
+        [
+            str(user_id),
+            "--backfill-gaps",
+            _BACKFILL_SLOTS[0].isoformat(),
+            _BACKFILL_SLOTS[-1].isoformat(),
+        ]
+    )
+    assert exit_code == 0
+    assert calls == [(user_id, _BACKFILL_SLOTS[0], _BACKFILL_SLOTS[-1])]
