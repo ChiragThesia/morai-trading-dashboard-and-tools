@@ -122,7 +122,7 @@ async def _sync_over_own_engine(barrier: asyncio.Barrier, user_id: UUID) -> None
         await engine.dispose()
 
 
-async def test_two_concurrent_sync_events_calls_for_one_user_write_exactly_one_event_set(
+async def test_two_concurrent_sync_events_calls_write_exactly_one_event_set(
     app_db_session: AsyncSession,
     superuser_db_session: AsyncSession,
     provisioned_users: SeededUsers,
