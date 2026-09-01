@@ -37,7 +37,7 @@ and a 429 call for different operator responses.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -49,6 +49,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.db.models import SnapshotRun
+from morai.ingest.snapshots import rth_slots_between
 from morai.vendor.connections import ConnectionDataKeyMissing, ConnectionNotFound
 
 
@@ -223,3 +224,54 @@ async def read_snapshot_runs(
         )
         for row in rows
     ]
+
+
+def missing_capture_slots(
+    runs: Sequence[SnapshotRunRecord], *, start: datetime, end: datetime
+) -> tuple[datetime, ...]:
+    """Every RTH slot in `[start, end]` that no row in `runs` claims, in
+    ascending order -- the query that makes Procrastinate's own scheduler
+    hole visible.
+
+    Pure: no session, no clock read, no import that could reach a broker.
+    Computes the expected grid with `rth_slots_between`, imported from
+    `morai.ingest.snapshots` and never reimplemented, so this ledger's
+    idea of a slot and the writer's are the same object. A record counts
+    as present regardless of its own status -- a failed run still means
+    the job fired and said so, which is a different fact from an absence
+    and conflating them is `L042`'s exact ambiguity in reverse.
+
+    ## The hole this function names (Procrastinate's own `MAX_DELAY`)
+
+    `procrastinate.periodic.PeriodicDeferrer` (verified against the
+    installed 3.9.0 source, `periodic.py`) backfills only the single most
+    recent missed tick, and only when it is under `MAX_DELAY` -- ten
+    minutes -- old. The dictionary tracking how far it has caught up lives
+    in the running process's own memory, so a worker restart resets it and
+    is indistinguishable, from Procrastinate's own point of view, from a
+    cron registered for the first time. A worker down longer than that
+    ceiling across a slot boundary therefore produces **no job at all**
+    for the missed slot: not a failed job, not a gap-writing job, none.
+    That slot has no row in `snapshot_observations`, none in
+    `snapshot_marks` and none in `snapshot_runs` -- invisible in the two
+    data tables by construction. This function is the only thing in the
+    system that names it: what it returns is what
+    `snapshot_repair.backfill_uncaptured_slot_gaps` takes as its window,
+    and the honest outcome there is a `slot_not_captured` gap, never a
+    reconstructed mark.
+
+    This is also `L042` itself, read the other way: a slot carrying a
+    succeeded run row and a full tally of empty-quote gaps is a real
+    vendor outage; a slot carrying no run row is a job that never fired.
+    Before this function, both looked like missing data.
+
+    Deliberately does not add a threshold, an alert or a notification
+    channel -- `08-CONTEXT.md`'s deferred list names that out of scope for
+    this phase; this function only makes staleness queryable. Deliberately
+    does not query the database itself -- its input is whatever
+    `read_snapshot_runs` returned, so it stays testable without Postgres
+    and cannot acquire a hidden RLS dependency.
+    """
+    expected = rth_slots_between(start, end)
+    present = {run.slot_time for run in runs}
+    return tuple(slot for slot in expected if slot not in present)

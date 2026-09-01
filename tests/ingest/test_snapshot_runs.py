@@ -1,6 +1,6 @@
-"""Task 1-2 (08-04-PLAN.md): the snapshot-run ledger's write/read path,
-its classified error codes, and the two-session run accounting through a
-real drained worker (D8-15, `L042`, `L043`).
+"""Task 1-3 (08-04-PLAN.md): the snapshot-run ledger -- what ran, what
+landed, what errored -- and the query that surfaces Procrastinate's own
+scheduler hole (D8-15, `L042`, `L043`).
 
 Task 1's cases carry their own `@pytest.mark.db` decorator or none at
 all, the same per-test convention `test_snapshot_capture.py` already
@@ -9,18 +9,21 @@ cases go through the real deferred `snapshot_user` task and a drained
 worker, mirroring `test_sync_runs.py`'s own discipline: the two-session
 failure-record split lives in the worker wrapper itself, so only a real
 task run exercises it (Phase 7's own code-review lesson -- an
-unreachable feature is worse than a missing one). Task 3 extends this
-file with `missing_capture_slots`.
+unreachable feature is worse than a missing one). Task 3's
+`missing_capture_slots` cases are pure except for the final end-to-end
+case, which simulates a worker outage against real Postgres.
 """
 
 from __future__ import annotations
 
+import ast
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import UUID
+from pathlib import Path
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import HTTPStatusError, Request, Response
@@ -31,14 +34,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import morai.worker.app as worker_app
 from morai.db.models import SnapshotMark
+from morai.ingest.snapshot_repair import backfill_uncaptured_slot_gaps
 from morai.ingest.snapshot_runs import (
     SnapshotError,
+    SnapshotRunRecord,
     SnapshotRunStatus,
     SnapshotTrigger,
     classify_snapshot_error,
+    missing_capture_slots,
     read_snapshot_runs,
     record_snapshot_run,
 )
+from morai.ingest.snapshots import rth_slots_between
 from morai.ledger.fills import FillWrite, insert_fills
 from morai.ledger.pairing import sync_events
 from morai.vendor.connections import (
@@ -58,10 +65,11 @@ from tests.vendor.conftest import (
     FakeSchwabClient,
 )
 
-# Monday, 10:30 ET (EDT, UTC-4) -- on the RTH grid (D8-06), mirroring
-# test_snapshot_capture.py's own slot constants.
+# Monday, 10:30/11:00/11:30 ET (EDT, UTC-4) -- on the RTH grid (D8-06),
+# mirroring test_snapshot_capture.py's own slot constants.
 _SLOT_TIME = datetime(2026, 6, 15, 14, 30, tzinfo=UTC)
 _SLOT_TIME_2 = datetime(2026, 6, 15, 15, 0, tzinfo=UTC)
+_SLOT_TIME_3 = datetime(2026, 6, 15, 15, 30, tzinfo=UTC)
 
 # Years past the seven-day refresh-token lifetime, not days, so this
 # stays correct regardless of the real wall clock the suite runs under.
@@ -803,3 +811,184 @@ async def test_manual_trigger_is_recorded_when_passed_through(
     runs = await read_snapshot_runs(app_db_session, user_id, limit=10)
     assert len(runs) == 1
     assert runs[0].trigger == SnapshotTrigger.MANUAL
+
+
+# --- Task 3: missing_capture_slots -----------------------------------------
+
+
+def _fake_run(
+    slot_time: datetime, *, status: SnapshotRunStatus = SnapshotRunStatus.SUCCEEDED
+) -> SnapshotRunRecord:
+    """A `SnapshotRunRecord` built directly, no session -- Task 3's pure
+    `missing_capture_slots` cases need records, not rows."""
+    return SnapshotRunRecord(
+        id=uuid4(),
+        user_id=uuid4(),
+        slot_time=slot_time,
+        started_at=slot_time,
+        finished_at=slot_time,
+        trigger=SnapshotTrigger.SCHEDULED,
+        status=status,
+        legs_attempted=0,
+        marks_written=0,
+        gaps_by_reason={},
+        error_code=None,
+    )
+
+
+def test_missing_capture_slots_returns_nothing_when_every_slot_has_a_run() -> None:
+    """Test 1: given run records covering every RTH slot in a window, the
+    function returns nothing."""
+    start = datetime(2026, 6, 15, 13, 30, tzinfo=UTC)  # 09:30 ET
+    end = datetime(2026, 6, 15, 20, 0, tzinfo=UTC)  # 16:00 ET
+    slots = rth_slots_between(start, end)
+    runs = [_fake_run(slot) for slot in slots]
+    assert missing_capture_slots(runs, start=start, end=end) == ()
+
+
+def test_missing_capture_slots_names_a_two_hour_hole_exactly() -> None:
+    """Test 2: given records with a two-hour hole across four consecutive
+    slots, it returns exactly those four slot instants, in ascending
+    order -- asserted by value against `rth_slots_between`'s own output,
+    not by count alone."""
+    start = datetime(2026, 6, 15, 13, 30, tzinfo=UTC)
+    end = datetime(2026, 6, 15, 20, 0, tzinfo=UTC)
+    slots = rth_slots_between(start, end)
+    hole = slots[2:6]
+    assert len(hole) == 4
+    present = [slot for slot in slots if slot not in hole]
+    runs = [_fake_run(slot) for slot in present]
+    result = missing_capture_slots(runs, start=start, end=end)
+    assert result == tuple(hole)
+
+
+def test_a_failed_runs_slot_still_counts_as_present() -> None:
+    """Test 3: a failed run row still counts as present -- the job fired
+    and said so; a failure is a different fact from an absence."""
+    start = datetime(2026, 6, 15, 13, 30, tzinfo=UTC)
+    end = datetime(2026, 6, 15, 14, 30, tzinfo=UTC)
+    slots = rth_slots_between(start, end)
+    runs = [_fake_run(slot, status=SnapshotRunStatus.FAILED) for slot in slots]
+    assert missing_capture_slots(runs, start=start, end=end) == ()
+
+
+def test_a_window_with_no_rth_slots_reports_nothing() -> None:
+    """Test 4: a window that contains no RTH slots at all, such as a
+    weekend, returns nothing rather than reporting every minute as
+    missing."""
+    # A Saturday.
+    start = datetime(2026, 6, 20, 0, 0, tzinfo=UTC)
+    end = datetime(2026, 6, 21, 0, 0, tzinfo=UTC)
+    assert missing_capture_slots([], start=start, end=end) == ()
+
+
+def test_missing_capture_slots_is_structurally_pure() -> None:
+    """Test 5: the function is pure -- it takes its records and its
+    window as parameters, reads no clock and opens no session. Runs the
+    acceptance criteria's own AST check here too, so the pytest suite
+    fails loudly, not only a separate shell invocation."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    source = (repo_root / "src/morai/ingest/snapshot_runs.py").read_text()
+    tree = ast.parse(source)
+    func = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "missing_capture_slots"
+    )
+    assert not [n for n in ast.walk(func) if isinstance(n, ast.Await)]
+
+
+def test_missing_capture_slots_matches_the_grid_across_a_dst_transition() -> None:
+    """Test 6: over a window spanning a daylight-saving transition, the
+    returned instants match the Eastern grid on both sides, because the
+    function delegates to `rth_slots_between` rather than adding thirty
+    minutes repeatedly. 2026-03-08 is the US spring-forward Sunday; the
+    window spans the Friday before through the Monday after."""
+    start = datetime(2026, 3, 6, 0, 0, tzinfo=UTC)
+    end = datetime(2026, 3, 10, 0, 0, tzinfo=UTC)
+    slots = rth_slots_between(start, end)
+    dropped = {slots[5], slots[-3]}
+    present = [slot for slot in slots if slot not in dropped]
+    runs = [_fake_run(slot) for slot in present]
+    result = missing_capture_slots(runs, start=start, end=end)
+    assert set(result) == dropped
+    assert result == tuple(sorted(dropped))
+
+
+@pytest.mark.db
+async def test_missing_capture_slots_names_a_simulated_outage_and_hands_off_to_backfill(
+    clean_snapshot_tables: None,
+    superuser_db_session: AsyncSession,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+    quote_fake_auth: QuoteFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test 7 (end to end): three real `snapshot_user` jobs land three
+    real slots, then a contiguous worker-outage hole is simulated by
+    deleting the middle slot's own rows from all three snapshot tables --
+    the exact shape a worker down longer than Procrastinate's own
+    `MAX_DELAY` produces, no row anywhere. `read_snapshot_runs` plus
+    `missing_capture_slots` names exactly the deleted slot, and
+    `backfill_uncaptured_slot_gaps` then writes `slot_not_captured` gaps
+    for it -- the hole is first visible, then repairable, and no mark is
+    fabricated for any of it."""
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: quote_fake_auth)
+    user_id = provisioned_users.user_a
+    await _seed_connection(superuser_db_session, user_id)
+    await _open_the_seeded_position(superuser_db_session, user_id)
+
+    for slot in (_SLOT_TIME, _SLOT_TIME_2, _SLOT_TIME_3):
+        status = await _drain_snapshot(user_id, slot)
+        assert status is Status.SUCCEEDED
+
+    await _set_current_user(app_db_session, user_id)
+    await app_db_session.execute(
+        text(
+            "DELETE FROM snapshot_runs WHERE user_id = :user_id AND slot_time = :slot"
+        ),
+        {"user_id": user_id, "slot": _SLOT_TIME_2},
+    )
+    await app_db_session.execute(
+        text(
+            "DELETE FROM snapshot_marks WHERE user_id = :user_id AND slot_time = :slot"
+        ),
+        {"user_id": user_id, "slot": _SLOT_TIME_2},
+    )
+    await app_db_session.execute(
+        text(
+            "DELETE FROM snapshot_observations WHERE user_id = :user_id "
+            "AND slot_time = :slot"
+        ),
+        {"user_id": user_id, "slot": _SLOT_TIME_2},
+    )
+    await app_db_session.commit()
+
+    await _set_current_user(app_db_session, user_id)
+    runs = await read_snapshot_runs(app_db_session, user_id, limit=10)
+    missing = missing_capture_slots(runs, start=_SLOT_TIME, end=_SLOT_TIME_3)
+    assert missing == (_SLOT_TIME_2,)
+
+    outcome = await backfill_uncaptured_slot_gaps(
+        app_db_session, user_id, start=_SLOT_TIME, end=_SLOT_TIME_3
+    )
+    assert outcome.gap_rows_written == 2
+    await app_db_session.commit()
+
+    await _set_current_user(app_db_session, user_id)
+    mark_rows = (
+        (
+            await app_db_session.execute(
+                select(SnapshotMark).where(
+                    SnapshotMark.user_id == user_id,
+                    SnapshotMark.slot_time == _SLOT_TIME_2,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(mark_rows) == 2
+    assert {row.gap_reason for row in mark_rows} == {"slot_not_captured"}
+    assert all(row.mark_usd_ciphertext is None for row in mark_rows)
