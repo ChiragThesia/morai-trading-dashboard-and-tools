@@ -174,7 +174,12 @@ async def test_three_position_chain_returns_depths_0_1_2_at_one_root(
     await _set_current_user(app_db_session, provisioned_users.user_a)
     chain = await read_campaign_chain(app_db_session, provisioned_users.user_a)
 
-    assert chain == [
+    # `provisioned_users` (via `seeded_users`) already seeds one bare,
+    # ROLL-less position for user_a -- its own trivial campaign at depth
+    # 0. Filtered out here so this assertion is about the chain this test
+    # itself seeded, not every campaign the fixture stack happens to own.
+    own_chain = [link for link in chain if link.campaign_root_id == position_ids[0]]
+    assert own_chain == [
         CampaignLink(
             campaign_root_id=position_ids[0], position_id=position_ids[0], depth=0
         ),
@@ -199,7 +204,10 @@ async def test_position_with_no_roll_anywhere_is_its_own_campaign_at_depth_0(
     await _set_current_user(app_db_session, provisioned_users.user_a)
     chain = await read_campaign_chain(app_db_session, provisioned_users.user_a)
 
-    assert chain == [
+    # See the equivalent filter comment in the three-position test above --
+    # `provisioned_users` seeds its own bare position for user_a.
+    own_chain = [link for link in chain if link.campaign_root_id == position_ids[0]]
+    assert own_chain == [
         CampaignLink(
             campaign_root_id=position_ids[0], position_id=position_ids[0], depth=0
         )
@@ -221,9 +229,14 @@ async def test_two_independent_chains_for_one_user_never_interleave(
     await _set_current_user(app_db_session, provisioned_users.user_a)
     chain = await read_campaign_chain(app_db_session, provisioned_users.user_a)
 
-    roots = {link.campaign_root_id for link in chain}
+    # Scoped to the two roots this test itself seeded -- `provisioned_users`
+    # seeds a third, unrelated bare-position campaign for user_a.
+    own_chain = [
+        link for link in chain if link.campaign_root_id in {chain_one[0], chain_two[0]}
+    ]
+    roots = {link.campaign_root_id for link in own_chain}
     assert roots == {chain_one[0], chain_two[0]}
-    for link in chain:
+    for link in own_chain:
         expected_members = (
             chain_one if link.campaign_root_id == chain_one[0] else chain_two
         )
@@ -300,13 +313,23 @@ async def test_cyclic_chain_terminates_instead_of_hanging(
     )
     await app_db_session.commit()
 
+    # `commit()` ends the transaction the prior `_set_current_user` call's
+    # `SET LOCAL`-equivalent GUC lived in -- re-set before the next query
+    # in this session, the same requirement every other test in this file
+    # satisfies by calling `_set_current_user` again right before its own
+    # read, immediately after `_seed_chain`'s own internal commit.
+    await _set_current_user(app_db_session, user_id)
+
     started = time.monotonic()
     chain = await read_campaign_chain(app_db_session, user_id)
     elapsed = time.monotonic() - started
 
     assert elapsed < 10.0
-    assert len(chain) == 4
-    assert [link.position_id for link in chain].count(p1) == 2
+    # Scoped to this test's own root -- `provisioned_users` seeds an
+    # unrelated bare-position campaign for user_a too.
+    own_chain = [link for link in chain if link.campaign_root_id == p0]
+    assert len(own_chain) == 4
+    assert [link.position_id for link in own_chain].count(p1) == 2
 
 
 # --- Task 2: the two proofs ----------------------------------------------
@@ -327,9 +350,13 @@ async def test_recompute_from_events_matches_original_row_for_row(
     )
     await _set_current_user(app_db_session, provisioned_users.user_a)
     chain_before = await read_campaign_chain(app_db_session, provisioned_users.user_a)
+    # Releases the `AccessShareLock` the SELECT above holds on
+    # `campaign_chain` -- otherwise `DROP VIEW` below blocks on this same
+    # session's own still-open read transaction and the test hangs.
+    await app_db_session.commit()
 
     migration = _load_migration_0014()
-    view_sql = _STR.validate_python(migration._CAMPAIGN_CHAIN_VIEW_SQL)  # pyright: ignore[reportPrivateUsage]  # why: re-issuing the migration's own CREATE VIEW verbatim (criterion 4), not retyping it, so a future edit to the migration cannot leave this test comparing against a stale copy.
+    view_sql = _STR.validate_python(migration._CAMPAIGN_CHAIN_VIEW_SQL)  # pyright: ignore[reportPrivateUsage, reportAny]  # why: re-issuing the migration's own CREATE VIEW verbatim (criterion 4), not retyping it, so a future edit to the migration cannot leave this test comparing against a stale copy. `ModuleType.__getattr__` is untyped -- the same boundary `schwab_adapter.py`'s own `resp.json()` suppression names -- and `_STR.validate_python` immediately narrows it, never `cast`.
 
     await superuser_db_session.execute(text("DROP VIEW campaign_chain"))
     view_restored = False
@@ -341,6 +368,11 @@ async def test_recompute_from_events_matches_original_row_for_row(
         await superuser_db_session.commit()
         view_restored = True
 
+        # `app_db_session`'s own commit above ended the `SET LOCAL`
+        # `app.current_user_id` scope -- re-set before the next query, the
+        # same requirement every read after a commit satisfies elsewhere
+        # in this file.
+        await _set_current_user(app_db_session, provisioned_users.user_a)
         chain_after = await read_campaign_chain(
             app_db_session, provisioned_users.user_a
         )
@@ -375,14 +407,21 @@ async def test_campaign_view_respects_rls(
     applies the *owner's* privileges by default, and the owner carries
     `rolbypassrls`; without `security_invoker = true` (migration 0014)
     this query would return every row of user_a's chain to user_b, past a
-    green single-user test suite that never noticed."""
-    await _seed_chain(
+    green single-user test suite that never noticed.
+
+    Asserts disjointness rather than a blanket empty result:
+    `provisioned_users` already seeds one bare, ROLL-less position for
+    user_b -- its own legitimate campaign at depth 0 -- so a correct,
+    RLS-respecting query as user_b returns that one row, not zero rows
+    overall. What must be exactly zero is user_a's seeded chain."""
+    position_ids = await _seed_chain(
         superuser_db_session, app_db_session, provisioned_users.user_a, length=3
     )
 
     await _set_current_user(app_db_session, provisioned_users.user_b)
     rows = (await app_db_session.execute(_CROSS_TENANT_CAMPAIGN_SELECT)).all()
-    assert rows == []
+    seen_position_ids = {_UUID.validate_python(row[1]) for row in rows}
+    assert seen_position_ids.isdisjoint(position_ids)
 
 
 async def test_campaign_view_returns_own_chain_not_vacuously_empty(
@@ -394,7 +433,7 @@ async def test_campaign_view_returns_own_chain_not_vacuously_empty(
     this, a view returning nothing to anyone -- a broken join, a wrong
     column -- would pass the isolation test above while being entirely
     useless."""
-    await _seed_chain(
+    position_ids_a = await _seed_chain(
         superuser_db_session, app_db_session, provisioned_users.user_a, length=2
     )
     position_ids_b = await _seed_chain(
@@ -404,5 +443,6 @@ async def test_campaign_view_returns_own_chain_not_vacuously_empty(
     await _set_current_user(app_db_session, provisioned_users.user_b)
     rows = (await app_db_session.execute(_CROSS_TENANT_CAMPAIGN_SELECT)).all()
     assert rows != []
-    position_ids = {_UUID.validate_python(row[1]) for row in rows}
-    assert position_ids == set(position_ids_b)
+    seen_position_ids = {_UUID.validate_python(row[1]) for row in rows}
+    assert set(position_ids_b) <= seen_position_ids
+    assert seen_position_ids.isdisjoint(position_ids_a)
