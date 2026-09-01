@@ -177,6 +177,13 @@ None - no external service configuration required.
 - `plan_positions`/`create_positions` establish the pure-function + thin-shell pattern later Phase 7 modules (`settlements.py`, `campaigns.py`) should copy verbatim.
 - No blockers for 07-02/07-03/07-04/07-05.
 
+## Self-Check: PASSED
+
+All created files verified present on disk (`src/morai/ledger/positions.py`,
+`tests/ledger/test_position_creation.py`, `tests/gate/test_ledger_write_boundary.py`,
+this SUMMARY). All four commit hashes (`7fbda17`, `6e1ffc3`, `5b5b6da`, `68ea38b`)
+verified present in `git log --oneline --all`.
+
 ---
 *Phase: 07-position-and-campaign-read-models*
 *Completed: 2026-09-01*
