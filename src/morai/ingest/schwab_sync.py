@@ -388,6 +388,14 @@ async def sync_user(
     production-empty forever: `sync_events` had zero call sites under
     `src/` before this phase, and nothing under `src/` ever created a
     `positions`/`legs` row either.
+
+    `sync_events` is called with `as_of=now` (CR-01, `07-REVIEW.md`) -- the
+    same clock `sync_windows` already used a few lines above, not a second
+    one. Without threading it through, `sync_events`'s own default
+    (`as_of=None`) skips settlement derivation entirely, so every piece of
+    this phase's SETTLEMENT machinery would stay fully implemented and
+    unit-tested but unreachable from the one path a real user's data
+    travels.
     """
     await session.execute(
         text("SELECT set_config('app.current_user_id', :uid, true)"),
@@ -450,7 +458,7 @@ async def sync_user(
             fills_landed += await insert_fills(session, user_id, fill_rows)
 
     await create_positions(session, user_id)
-    await sync_events(session, user_id)
+    await sync_events(session, user_id, as_of=now)
 
     return SyncOutcome(
         broker_transactions_landed=broker_transactions_landed,

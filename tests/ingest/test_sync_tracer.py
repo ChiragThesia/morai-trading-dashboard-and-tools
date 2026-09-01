@@ -214,6 +214,51 @@ async def test_sync_user_job_lands_one_broker_transaction_and_two_fills(
     assert len(open_event_rows) >= 1
 
 
+async def test_sync_user_job_derives_settlement_for_an_expired_open_leg(
+    clean_ingest_tables: None,
+    superuser_db_session: AsyncSession,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01 (`07-REVIEW.md`): `sync_user` must thread its own `now`
+    through to `sync_events`'s `as_of`, or SETTLEMENT derivation -- fully
+    implemented and unit-tested in `tests/ledger/test_settlements.py` --
+    never runs from the one path a real user's data travels. A unit test
+    on `derive_settlements` cannot catch this; only a test through the
+    real `sync_user` call path can.
+
+    `TX_PAYLOAD`'s two legs (front expiry 2026-06-18, back expiry
+    2026-07-17) are both in the past by the time this test runs, and
+    nothing in this payload closes the position they open -- a
+    genuinely-expired, still-open leg, the positive case CR-02's
+    closed-position gate must not suppress alongside CR-01's fix."""
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+    user_id = provisioned_users.user_a
+    await _seed_connection(superuser_db_session, user_id)
+
+    async with app.open_async():
+        job_id = await app.configure_task("sync_user").defer_async(user_id=str(user_id))
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status_after = await app.job_manager.get_job_status_async(job_id)
+        assert status_after is Status.SUCCEEDED
+
+    await _set_current_user(app_db_session, user_id)
+    settlement_rows = (
+        (
+            await app_db_session.execute(
+                select(Event).where(
+                    Event.user_id == user_id, Event.event_type == "SETTLEMENT"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(settlement_rows) == 2
+
+
 def test_position_and_leg_reject_construction_without_the_write_token() -> None:
     """D7-12/D7-14: the sentinel gate on `Position`/`Leg`, mirroring
     `Fill.__init__`'s own gate. Constructing either with a wrong token
