@@ -42,12 +42,12 @@ API, a job, or a stored invariant.
 
 ### Ingest
 
-- [ ] **INGEST-01**: The system pulls each connected user's fills from Schwab on a schedule
-- [ ] **INGEST-02**: A raw fill is stored immutably as the broker reported it, including its signed amount and its position effect
-- [ ] **INGEST-03**: Re-running ingest over an overlapping window is a no-op past the first successful write
-- [ ] **INGEST-04**: User can trigger a re-sync manually, and running it repeatedly is safe
-- [ ] **INGEST-05**: A user connecting for the first time gets existing open positions and recent history backfilled, not only fills from that moment forward
-- [ ] **INGEST-06**: User can see what a sync did — when it ran, how many fills landed, and what errored
+- [x] **INGEST-01**: The system pulls each connected user's fills from Schwab on a schedule
+- [x] **INGEST-02**: A raw fill is stored immutably as the broker reported it, including its signed amount and its position effect
+- [x] **INGEST-03**: Re-running ingest over an overlapping window is a no-op past the first successful write
+- [x] **INGEST-04**: User can trigger a re-sync manually, and running it repeatedly is safe
+- [x] **INGEST-05**: A user connecting for the first time gets existing open positions and recent history backfilled, not only fills from that moment forward
+- [x] **INGEST-06**: User can see what a sync did — when it ran, how many fills landed, and what errored
 
 ### The ledger
 
@@ -106,7 +106,7 @@ API, a job, or a stored invariant.
 - [x] **OPS-02**: Every test is written before the implementation it covers
 - [x] **OPS-03**: Money values round-trip Python ↔ Postgres ↔ JSON with no precision loss
 - [x] **OPS-04**: The system runs as separate web and worker processes in Railway containers against Postgres
-- [ ] **OPS-05**: A batch insert never exceeds the Postgres bind-parameter ceiling
+- [x] **OPS-05**: A batch insert never exceeds the Postgres bind-parameter ceiling
 - [x] **OPS-06**: Mutation testing runs against the ledger and reports surviving mutants
 
 ---
@@ -188,12 +188,12 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | CONN-05 | Phase 4 | Complete |
 | CONN-06 | Phase 4 | Complete |
 | CONN-07 | Phase 4 | Complete |
-| INGEST-01 | Phase 6 | Pending |
-| INGEST-02 | Phase 6 | Pending |
-| INGEST-03 | Phase 6 | Pending |
-| INGEST-04 | Phase 6 | Pending |
-| INGEST-05 | Phase 6 | Pending |
-| INGEST-06 | Phase 6 | Pending |
+| INGEST-01 | Phase 6 | Complete |
+| INGEST-02 | Phase 6 | Complete |
+| INGEST-03 | Phase 6 | Complete |
+| INGEST-04 | Phase 6 | Complete |
+| INGEST-05 | Phase 6 | Complete |
+| INGEST-06 | Phase 6 | Complete |
 | LEDGER-01 | Phase 5 | Complete |
 | LEDGER-02 | Phase 5 | Complete |
 | LEDGER-03 | Phase 5 | Complete |
@@ -234,7 +234,7 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | OPS-02 | Phase 1 | Complete |
 | OPS-03 | Phase 1 | Complete |
 | OPS-04 | Phase 1 | Complete |
-| OPS-05 | Phase 6 | Pending |
+| OPS-05 | Phase 6 | Complete |
 | OPS-06 | Phase 5 | Complete |
 
 **Coverage:**

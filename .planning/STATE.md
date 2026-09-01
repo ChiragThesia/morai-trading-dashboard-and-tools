@@ -146,6 +146,23 @@ from a development machine and is deferred by explicit user decision (2026-08-31
 | 2 | verification_deferred_human | /gsd-verify-work 2 |
 | 3 | verification_deferred_human | /gsd-verify-work 3 |
 | 4 | verification_deferred_human | /gsd-verify-work 4 |
+| 6 | verification_deferred_human | /gsd-verify-work 6 |
+
+Phase 6's code is complete and all five of its success criteria are verified against live
+code and a live database (383 passed, gate exit 0, clean on 114 files). Its one open item is
+the same Railway blocker Phases 2, 3 and 4 carry, and it unblocks from the same action.
+
+Phase 6 adds one NEW prerequisite to that action, and it is a security fix rather than a
+convenience: `MORAI_APP_DB_PASSWORD` is now required on the Railway **worker** service, which
+never needed it before. `worker/app.py` previously held only a Procrastinate pool on the
+superuser DSN; an ingest job writing user-scoped rows over that role would have made every RLS
+policy inert for exactly the rows this phase adds -- silently, with the whole suite green. The
+`sync_user` job now opens its session as `morai_app` and calls
+`assert_connection_cannot_bypass_rls` before touching a protected table, so the worker cannot
+start without that password. See `06-USER-SETUP.md`.
+
+`06-VERIFICATION.md` keeps `status: human_needed`; it was NOT rewritten to `passed`.
+
 
 Phase 4's code is complete and all five of its success criteria are verified against live
 code, a live database, and live test runs (283 passed, gate exit 0). The one open item is
