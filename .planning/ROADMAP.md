@@ -188,7 +188,7 @@ Concretely: Schwab reports four unrelated rows for a calendar (buy back leg, sel
   4. Re-running derivation over the same `(user, order_id)` scope produces an identical event set, and the whole derivation completes with no broker call made from the process.
   5. A mutation-testing pass against the ledger module reports zero surviving mutants for seeded sign-flip, rounding, and off-by-one faults.
 
-**Plans**: 2/4 plans executed, 3 waves
+**Plans**: 3/4 plans executed, 3 waves
 
 Plans:
 
@@ -196,7 +196,7 @@ Plans:
 
 - [x] 05-01-PLAN.md — Wave 1. Tracer: `ledger/pairing.py` holding the promoted disambiguation SQL, the pure derivation core and the session shell, with one real calendar proved end to end at 32.35 and 36.35; the purity and no-broker-call gates; idempotent re-derivation over a `(user, order_id)` scope
 - [x] 05-02-PLAN.md — Wave 2. The two hard cases: the shared front leg in both layers including the read that must never narrow to one calendar's own legs, the explicitly-unresolved negative case, cross-user isolation, position state mutated and proved inert, the 14th synthetic control, and `detect_roll` as a negative-only guard
-- [ ] 05-03-PLAN.md — Wave 3. The gate: 13 parametrized oracle cases named by their real broker order ids, the global invariants counted from Postgres, and the three seeded faults proved fatal
+- [x] 05-03-PLAN.md — Wave 3. The gate: 13 parametrized oracle cases named by their real broker order ids, the global invariants counted from Postgres, and the three seeded faults proved fatal
 
 **UI hint**: no
 
@@ -351,7 +351,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Identity, Sessions, and Tenant Isolation | 6/6 | In Progress|  |
 | 3. Envelope Encryption and the Schema Contract | 7/7 | In Progress|  |
 | 4. Schwab Connection and Token Lifecycle | 4/4 | In Progress|  |
-| 5. Fill Pairing and the Oracle Gate | 2/4 | In Progress|  |
+| 5. Fill Pairing and the Oracle Gate | 3/4 | In Progress|  |
 | 6. Raw Ingest and Backfill | 0/TBD | Not started | - |
 | 7. Position and Campaign Read Models | 0/TBD | Not started | - |
 | 8. Snapshot Capture | 0/TBD | Not started | - |

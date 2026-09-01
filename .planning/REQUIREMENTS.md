@@ -51,18 +51,18 @@ API, a job, or a stored invariant.
 
 ### The ledger
 
-- [ ] **LEDGER-01**: Events are derived from stored fills and are never the primary source of truth
-- [ ] **LEDGER-02**: A fill's OPEN/CLOSE role is classified from the broker's own `positionEffect`, never from a position's current status
-- [ ] **LEDGER-03**: A fill on a contract shared by two positions resolves via the other legs in the same broker order, and stays unresolved rather than guessed when no single anchor exists
+- [x] **LEDGER-01**: Events are derived from stored fills and are never the primary source of truth
+- [x] **LEDGER-02**: A fill's OPEN/CLOSE role is classified from the broker's own `positionEffect`, never from a position's current status
+- [x] **LEDGER-03**: A fill on a contract shared by two positions resolves via the other legs in the same broker order, and stays unresolved rather than guessed when no single anchor exists
 - [ ] **LEDGER-04**: A ROLL stores its open debit and its close credit as two separate fields, with a database constraint making a netted-only value impossible to store
 - [ ] **LEDGER-05**: A position's closed state is derived from net quantity per leg, never from a stored status column
 - [ ] **LEDGER-06**: A SETTLEMENT event is generated from a leg's expiry and strike, with no fill required
 - [ ] **LEDGER-07**: Settlement style is recorded per leg, so a PM-settled SPXW front leg and an AM-settled SPX back leg coexist inside one position
 - [x] **LEDGER-08**: Every money field's unit is fixed by its type, so passing index points where dollars are expected fails type-check
-- [ ] **LEDGER-09**: Re-deriving the events for a broker order is idempotent and produces the same result as the first derivation
+- [x] **LEDGER-09**: Re-deriving the events for a broker order is idempotent and produces the same result as the first derivation
 - [ ] **LEDGER-10**: A campaign — a chain of rolled positions — is a read model computed from events, not a separately maintained table
-- [ ] **LEDGER-11**: The 13-calendar oracle passes, including the shared-front-leg case and the stale-status case
-- [ ] **LEDGER-12**: Recompute is a pure function of stored fills and makes no broker call
+- [x] **LEDGER-11**: The 13-calendar oracle passes, including the shared-front-leg case and the stale-status case
+- [x] **LEDGER-12**: Recompute is a pure function of stored fills and makes no broker call
 
 ### Reconciliation
 
@@ -107,7 +107,7 @@ API, a job, or a stored invariant.
 - [x] **OPS-03**: Money values round-trip Python ↔ Postgres ↔ JSON with no precision loss
 - [x] **OPS-04**: The system runs as separate web and worker processes in Railway containers against Postgres
 - [ ] **OPS-05**: A batch insert never exceeds the Postgres bind-parameter ceiling
-- [ ] **OPS-06**: Mutation testing runs against the ledger and reports surviving mutants
+- [x] **OPS-06**: Mutation testing runs against the ledger and reports surviving mutants
 
 ---
 
@@ -194,18 +194,18 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | INGEST-04 | Phase 6 | Pending |
 | INGEST-05 | Phase 6 | Pending |
 | INGEST-06 | Phase 6 | Pending |
-| LEDGER-01 | Phase 5 | Pending |
-| LEDGER-02 | Phase 5 | Pending |
-| LEDGER-03 | Phase 5 | Pending |
+| LEDGER-01 | Phase 5 | Complete |
+| LEDGER-02 | Phase 5 | Complete |
+| LEDGER-03 | Phase 5 | Complete |
 | LEDGER-04 | Phase 3 | Pending |
 | LEDGER-05 | Phase 7 | Pending |
 | LEDGER-06 | Phase 7 | Pending |
 | LEDGER-07 | Phase 7 | Pending |
 | LEDGER-08 | Phase 1 | Complete |
-| LEDGER-09 | Phase 5 | Pending |
+| LEDGER-09 | Phase 5 | Complete |
 | LEDGER-10 | Phase 7 | Pending |
-| LEDGER-11 | Phase 5 | Pending |
-| LEDGER-12 | Phase 5 | Pending |
+| LEDGER-11 | Phase 5 | Complete |
+| LEDGER-12 | Phase 5 | Complete |
 | RECON-01 | Phase 9 | Pending |
 | RECON-02 | Phase 9 | Pending |
 | RECON-03 | Phase 9 | Pending |
@@ -235,7 +235,7 @@ Mapped during roadmap creation. See `.planning/ROADMAP.md` for phase goals and s
 | OPS-03 | Phase 1 | Complete |
 | OPS-04 | Phase 1 | Complete |
 | OPS-05 | Phase 6 | Pending |
-| OPS-06 | Phase 5 | Pending |
+| OPS-06 | Phase 5 | Complete |
 
 **Coverage:**
 
