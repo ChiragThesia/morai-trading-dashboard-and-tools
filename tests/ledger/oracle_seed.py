@@ -554,3 +554,112 @@ async def seed_oracle(
     await insert_fills(app_session, user_id, fill_writes)
 
     return position_ids
+
+
+# --- The 14th, synthetic fixture -------------------------------------------
+#
+# Not one of `_CALENDAR_SPECS`: those 13 all model an open-and-close pair,
+# and this one is a single OPENING order by design -- the live negative
+# control D5-02 needs, `salvage/oracle-fixtures.md`'s own "The 14th,
+# synthetic fixture" section.
+
+SYNTHETIC_OPEN_POSITION_ID = UUID("00000000-0000-4000-8000-000000000099")
+SYNTHETIC_OPEN_STRIKE = _d("7500")
+SYNTHETIC_OPEN_FRONT_EXPIRY = date(2026, 9, 4)
+SYNTHETIC_OPEN_BACK_EXPIRY = date(2026, 10, 2)
+SYNTHETIC_OPEN_ORDER_ID = "9990000001"
+SYNTHETIC_OPEN_ORDER_DATE = date(2026, 7, 4)
+# 100 paid for the back leg minus 60 received for the front -- the
+# fixture's own expected figure, exposed as data the way ORACLE_CALENDARS
+# already exposes the 13 real ones, so a test asserts against data rather
+# than a literal.
+SYNTHETIC_OPEN_DEBIT_USD = _d("40.00")
+
+
+async def seed_synthetic_open_calendar(
+    superuser_session: AsyncSession,
+    app_session: AsyncSession,
+    user_id: UUID,
+) -> UUID:
+    """The 14th, synthetic fixture: one OPENING order, no CLOSE order
+    anywhere. Not one of `_CALENDAR_SPECS` -- those 13 all model an
+    open-and-close pair, and this one is a single OPENING order by
+    design, the whole point of it as D5-02's live negative control.
+
+    Inserts the `positions` row at the fixture file's own literal id
+    (`00000000-0000-4000-8000-000000000099`), so the row is identifiable
+    in any failure message, with `opened_at` set to the order's own date
+    and `closed_at` left `None`. Its two `legs` rows are built through
+    `occ_symbol_for`/`_root_for_expiry`, never a hand-typed OCC symbol --
+    the same discipline `seed_oracle` already applies across 52 symbols.
+    Its two fills go through `insert_fills` -- the one write path (D3-13,
+    D3-14), never a fixture-only path: two implementations of the same
+    write is the shape of the bug that made a +$395 trade read as
+    -$319,850 (`LEDGER-01`).
+
+    Returns the position id.
+    """
+    opened_at = _at_noon_utc(SYNTHETIC_OPEN_ORDER_DATE)
+    front_symbol = occ_symbol_for(SYNTHETIC_OPEN_FRONT_EXPIRY, SYNTHETIC_OPEN_STRIKE)
+    back_symbol = occ_symbol_for(SYNTHETIC_OPEN_BACK_EXPIRY, SYNTHETIC_OPEN_STRIKE)
+
+    await superuser_session.execute(
+        insert(Position).values(
+            id=SYNTHETIC_OPEN_POSITION_ID,
+            user_id=user_id,
+            opened_at=opened_at,
+            closed_at=None,
+        )
+    )
+    await superuser_session.execute(
+        insert(Leg).values(
+            position_id=SYNTHETIC_OPEN_POSITION_ID,
+            user_id=user_id,
+            leg_role="front",
+            occ_symbol=front_symbol,
+            root=_root_for_expiry(SYNTHETIC_OPEN_FRONT_EXPIRY),
+        )
+    )
+    await superuser_session.execute(
+        insert(Leg).values(
+            position_id=SYNTHETIC_OPEN_POSITION_ID,
+            user_id=user_id,
+            leg_role="back",
+            occ_symbol=back_symbol,
+            root=_root_for_expiry(SYNTHETIC_OPEN_BACK_EXPIRY),
+        )
+    )
+    await superuser_session.commit()
+
+    await app_session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+    )
+    await insert_fills(
+        app_session,
+        user_id,
+        [
+            FillWrite(
+                order_id=SYNTHETIC_OPEN_ORDER_ID,
+                occ_symbol=back_symbol,
+                leg_index=0,
+                execution_time=opened_at,
+                position_effect="OPENING",
+                side="BUY",
+                quantity=Decimal("1"),
+                price_usd=Decimal("100.00"),
+            ),
+            FillWrite(
+                order_id=SYNTHETIC_OPEN_ORDER_ID,
+                occ_symbol=front_symbol,
+                leg_index=0,
+                execution_time=opened_at,
+                position_effect="OPENING",
+                side="SELL",
+                quantity=Decimal("1"),
+                price_usd=Decimal("60.00"),
+            ),
+        ],
+    )
+
+    return SYNTHETIC_OPEN_POSITION_ID
