@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from morai.db.models import Leg, Position
 from morai.ledger.events import EventWrite, insert_events, read_events
 from morai.ledger.fills import FillWrite, insert_fills, read_fills
+from morai.ledger.pairing import RESOLVE_FILL_POSITIONS_SQL
 from tests.identity.conftest import SeededUsers
 from tests.ledger.conftest import (
     app_db_session,
@@ -66,46 +67,9 @@ _DATETIME: TypeAdapter[datetime] = TypeAdapter(datetime)
 _UUID_OR_NONE: TypeAdapter[UUID | None] = TypeAdapter(UUID | None)
 
 # --- Query 1: shared-front-leg disambiguation (order-anchor resolution, --
-# Rule 3 of salvage/oracle-fixtures.md). Adapted from 03-RESEARCH.md's Code
-# Examples: `position_legs` selects over `legs` (this schema's real table)
-# instead of a scratch schema's `front_occ_symbol`/`back_occ_symbol`
-# position columns -- the one required adaptation the plan names.
-_DISAMBIGUATION_QUERY = """
-WITH position_legs AS (
-    SELECT position_id, user_id, occ_symbol FROM legs
-),
-fill_candidates AS (
-    SELECT f.user_id, f.order_id, f.occ_symbol, f.leg_index, f.execution_time,
-           pl.position_id
-    FROM fills f
-    JOIN position_legs pl
-      ON pl.user_id = f.user_id AND pl.occ_symbol = f.occ_symbol
-),
-anchors AS (
-    -- Postgres has no MIN(uuid) aggregate; the text-cast round trip picks
-    -- an arbitrary representative, which is safe here only because
-    -- HAVING already restricts this group to exactly one distinct value.
-    SELECT user_id, order_id, occ_symbol, MIN(position_id::text)::uuid AS position_id
-    FROM fill_candidates
-    GROUP BY user_id, order_id, occ_symbol
-    HAVING COUNT(DISTINCT position_id) = 1
-),
-order_anchors AS (
-    SELECT DISTINCT user_id, order_id, position_id FROM anchors
-)
-SELECT fc.order_id, fc.occ_symbol, fc.leg_index, fc.execution_time,
-    (SELECT oa.position_id FROM order_anchors oa
-      WHERE oa.user_id = fc.user_id AND oa.order_id = fc.order_id
-        AND oa.position_id IN (
-          SELECT position_id FROM fill_candidates fc2
-          WHERE fc2.user_id = fc.user_id AND fc2.order_id = fc.order_id
-            AND fc2.occ_symbol = fc.occ_symbol AND fc2.leg_index = fc.leg_index
-            AND fc2.execution_time = fc.execution_time
-        )
-    ) AS resolved_position_id
-FROM fill_candidates fc
-GROUP BY fc.user_id, fc.order_id, fc.occ_symbol, fc.leg_index, fc.execution_time
-"""
+# Rule 3 of salvage/oracle-fixtures.md). Promoted to
+# `morai.ledger.pairing.RESOLVE_FILL_POSITIONS_SQL` (05-01) -- this module
+# now proves that production constant rather than a private copy.
 
 # --- Query 2: reconciliation window (row selection only; the sum happens
 # in Python after decrypt, D3-04). Unchanged from 03-RESEARCH.md's Code
@@ -341,7 +305,12 @@ async def test_disambiguation_query_resolves_shared_front_leg_calendars(
         calendar_ids=["8a63aa81", "6303e6af"],
     )
 
-    rows = (await app_db_session.execute(text(_DISAMBIGUATION_QUERY))).all()
+    rows = (
+        await app_db_session.execute(
+            text(RESOLVE_FILL_POSITIONS_SQL),
+            {"user_id": provisioned_users.user_a},
+        )
+    ).all()
     resolved: dict[tuple[str, str], UUID | None] = {
         (
             _STR.validate_python(row[0]),
@@ -379,7 +348,12 @@ async def test_disambiguation_query_leaves_unanchored_order_unresolved(
         superuser_db_session, app_db_session, provisioned_users.user_a
     )
 
-    rows = (await app_db_session.execute(text(_DISAMBIGUATION_QUERY))).all()
+    rows = (
+        await app_db_session.execute(
+            text(RESOLVE_FILL_POSITIONS_SQL),
+            {"user_id": provisioned_users.user_a},
+        )
+    ).all()
     synthetic_rows = [
         row for row in rows if _STR.validate_python(row[0]) == _SYNTH_ORDER_ID
     ]
@@ -489,5 +463,5 @@ async def test_neither_query_names_a_ciphertext_or_nonce_column(
     bytea_columns = await _bytea_column_names(superuser_db_session)
     assert bytea_columns  # sanity: the schema does have some, or this proves nothing
     for column_name in bytea_columns:
-        assert column_name not in _DISAMBIGUATION_QUERY
+        assert column_name not in RESOLVE_FILL_POSITIONS_SQL
         assert column_name not in _RECONCILIATION_WINDOW_QUERY
