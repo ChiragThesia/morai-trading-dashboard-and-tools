@@ -48,6 +48,7 @@ from morai.identity.sessions import (
 from morai.identity.setup_tokens import TokenPurpose, consume_token, issue_token
 from morai.identity.tokens import generate_token, hash_token
 from morai.ledger.fills import provision_data_key
+from morai.ledger.positions import read_position_state
 
 router = APIRouter()
 
@@ -83,7 +84,7 @@ class PositionResponse(ApiModel):
 
 @router.get("/gate/positions")
 async def list_positions(
-    _: AuthenticatedUser = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[PositionResponse]:
     """No `WHERE user_id` -- RLS is the filter (`identity/sessions.py`'s
@@ -91,33 +92,42 @@ async def list_positions(
     Do not "fix" it; a future reader's instinct will be to add one.
 
     Returns plaintext columns only -- the position id and its `opened_at`.
-    This route exists to prove isolation on the deployed service, exactly
-    the role `gate_user_scoped_probe`'s own docstring assigned to whatever
-    replaced it (AUTH-07, moved onto real trading data in Phase 3); it must
-    not grow into Phase 5's decrypting read API.
+    `opened_at` is derived from the event stream (`morai.ledger.positions`),
+    not read off a `positions` column -- migration 0014 drops that column
+    entirely (D7-01, D7-04). This route exists to prove isolation on the
+    deployed service, exactly the role `gate_user_scoped_probe`'s own
+    docstring assigned to whatever replaced it (AUTH-07, moved onto real
+    trading data in Phase 3); it must not grow into Phase 5's decrypting
+    read API.
     """
     rows = (await session.execute(select(Position))).scalars().all()
-    return [
-        PositionResponse(position_id=row.id, opened_at=row.opened_at) for row in rows
-    ]
+    responses: list[PositionResponse] = []
+    for row in rows:
+        state = await read_position_state(session, row.id, user.user_id)
+        responses.append(
+            PositionResponse(position_id=row.id, opened_at=state.opened_at)
+        )
+    return responses
 
 
 @router.get("/gate/positions/{position_id}")
 async def get_position(
     position_id: UUID,
-    _: AuthenticatedUser = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> PositionResponse:
     """Again no `WHERE user_id`. A row belonging to another user is filtered
     out by the policy and is therefore *absent* -- so the not-found path is
     reached with no extra code (`02-RESEARCH.md`'s comparison table calls
-    this out as falling out of RLS naturally)."""
+    this out as falling out of RLS naturally). `opened_at` is derived, same
+    as `list_positions` above (D7-01, D7-04)."""
     row = (
         await session.execute(select(Position).where(Position.id == position_id))
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="not found")
-    return PositionResponse(position_id=row.id, opened_at=row.opened_at)
+    state = await read_position_state(session, row.id, user.user_id)
+    return PositionResponse(position_id=row.id, opened_at=state.opened_at)
 
 
 @router.post("/admin/users")

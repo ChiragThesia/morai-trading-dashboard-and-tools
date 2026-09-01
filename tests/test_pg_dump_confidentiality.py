@@ -212,6 +212,7 @@ async def _seed_encrypted_ledger_data(
                 fill_ids_hash=None,
                 open_debit_usd=_OPEN_DEBIT_USD,
                 close_credit_usd=_CLOSE_CREDIT_USD,
+                rolled_from_position_id=position_id,
             )
         ],
     )
