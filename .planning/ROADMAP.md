@@ -267,7 +267,15 @@ Plans:
   4. The repair path is runnable and rebuilds marks from the raw observations actually stored, and it ships in this phase alongside the writer rather than a phase later.
   5. A user whose connection is expired gets an honest gap row for that slot rather than a skipped row that later reads as if the position did not exist.
 
-**Plans**: TBD
+**Plans**: 4 plans, 3 waves
+
+Plans:
+
+- [ ] 08-01-PLAN.md — Wave 1. Tracer: migration 0015, the Schwab wire-symbol codec nothing existed to reuse, the never-raising quote parser, and one open leg repriced end to end through a real periodic tick and a real deferred job
+- [ ] 08-02-PLAN.md — Wave 2. Gap semantics: the four-cell asymmetric-upsert truth table against real Postgres, three distinguishable gap causes, isolation at both grains, and the Eastern grid across both daylight-saving transitions
+- [ ] 08-03-PLAN.md — Wave 2. The repair path, shipped beside the writer per criterion 4 and `L040`: one function, a Procrastinate task and a CLI, plus an honest gap for a slot the scheduler never fired
+- [ ] 08-04-PLAN.md — Wave 3. `snapshot_runs` and the query that separates a stalled job from a vendor outage — including the slots Procrastinate's ten-minute backfill ceiling drops entirely
+
 **UI hint**: no
 
 ### Phase 9: Reconciliation Invariant and Status Endpoint
