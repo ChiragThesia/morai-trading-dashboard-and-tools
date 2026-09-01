@@ -43,9 +43,13 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import procrastinate
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.db.session import get_session_maker
+from morai.db.session import get_engine, get_session_maker
 from morai.identity.rls import assert_connection_cannot_bypass_rls
+from morai.ingest.schwab_sync import (
+    sync_all_connected_users as run_sync_all_connected_users,
+)
 from morai.ingest.schwab_sync import sync_user as run_sync_user
 from morai.settings import get_settings
 from morai.vendor.protocol import SchwabAuth
@@ -74,6 +78,27 @@ async def heartbeat(timestamp: int) -> None:
     """Logs its own run and returns. No table of its own -- this task's
     durable evidence is its own row in `procrastinate_jobs`."""
     logger.info("heartbeat run at %s", datetime.now(UTC).isoformat())
+
+
+@app.periodic(cron="* * * * *")  # Phase 1's own heartbeat cadence, not the
+# 30-minute RTH cadence Phases 6 and 8 own (D6-01) -- the execution model
+# behind that real cadence is settled here; a one-minute cron on it is a
+# placeholder cadence on a settled model, not a preview of the real one.
+@app.task(name="sync_all_connected_users")
+async def sync_all_connected_users_task(timestamp: int) -> None:
+    """Fans out one `sync_user` job per connected user, every tick (D6-01).
+
+    Opens its own session on the superuser engine (`get_engine()`), not
+    `get_session_maker()`'s `morai_app` role -- `sync_all_connected_users`'s
+    own docstring explains why this one cross-tenant read is the one place
+    in the ingest path where that is correct. Every job it defers then
+    runs under `sync_user_task`'s own `morai_app` session and that user's
+    own RLS context, where the isolation this phase exists to prove
+    actually lives.
+    """
+    async with AsyncSession(get_engine()) as session:
+        await run_sync_all_connected_users(session)
+        await session.commit()
 
 
 def get_schwab_auth() -> SchwabAuth:

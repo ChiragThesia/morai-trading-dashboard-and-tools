@@ -65,7 +65,9 @@ async def _seed_connection(
     await upsert_connection(
         superuser_db_session,
         user_id,
-        ExchangedToken(token={"refresh_token": refresh_token}, created_at=_TOKEN_CREATED_AT),
+        ExchangedToken(
+            token={"refresh_token": refresh_token}, created_at=_TOKEN_CREATED_AT
+        ),
         account_hash=f"fake-account-hash-{refresh_token}",
     )
     await superuser_db_session.commit()
@@ -79,7 +81,7 @@ async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
 
 
 @pytest.mark.db
-async def test_fan_out_defers_one_job_per_connected_user_and_none_for_the_unconnected_third(
+async def test_fan_out_defers_one_job_per_connected_user_and_none_for_unconnected(
     clean_ingest_tables: None,
     superuser_db_session: AsyncSession,
     provisioned_users: SeededUsers,
@@ -88,10 +90,14 @@ async def test_fan_out_defers_one_job_per_connected_user_and_none_for_the_unconn
     `admin`) -- only `user_a`/`user_b` get a `schwab_connections` row here,
     `admin` gets none."""
     await _seed_connection(
-        superuser_db_session, provisioned_users.user_a, refresh_token="fake-refresh-user-a"
+        superuser_db_session,
+        provisioned_users.user_a,
+        refresh_token="fake-refresh-user-a",
     )
     await _seed_connection(
-        superuser_db_session, provisioned_users.user_b, refresh_token="fake-refresh-user-b"
+        superuser_db_session,
+        provisioned_users.user_b,
+        refresh_token="fake-refresh-user-b",
     )
 
     async with app.open_async():
@@ -106,7 +112,10 @@ async def test_fan_out_defers_one_job_per_connected_user_and_none_for_the_unconn
     # whole test session and is not truncated by any fixture here (it is
     # Procrastinate's own internal schema, not this project's app schema).
     job_user_ids = {_STR.validate_python(job.task_kwargs["user_id"]) for job in jobs}
-    assert {str(provisioned_users.user_a), str(provisioned_users.user_b)} <= job_user_ids
+    assert {
+        str(provisioned_users.user_a),
+        str(provisioned_users.user_b),
+    } <= job_user_ids
     assert str(provisioned_users.admin) not in job_user_ids
 
 
@@ -125,7 +134,7 @@ async def test_fan_out_defers_nothing_with_no_connected_users(
 
 
 @pytest.mark.db
-async def test_one_users_vendor_failure_leaves_the_other_users_job_succeeded_with_rows_landed(
+async def test_one_users_vendor_failure_leaves_the_other_succeeded_with_rows_landed(
     clean_ingest_tables: None,
     superuser_db_session: AsyncSession,
     app_db_session: AsyncSession,
@@ -136,17 +145,23 @@ async def test_one_users_vendor_failure_leaves_the_other_users_job_succeeded_wit
     its rows land -- one broken token cannot starve the rest (Pitfall 7,
     06-RESEARCH.md; T-06-09)."""
     await _seed_connection(
-        superuser_db_session, provisioned_users.user_a, refresh_token=str(provisioned_users.user_a)
+        superuser_db_session,
+        provisioned_users.user_a,
+        refresh_token=str(provisioned_users.user_a),
     )
     await _seed_connection(
-        superuser_db_session, provisioned_users.user_b, refresh_token=str(provisioned_users.user_b)
+        superuser_db_session,
+        provisioned_users.user_b,
+        refresh_token=str(provisioned_users.user_b),
     )
 
     failing_auth = TxFakeSchwabAuth(
         fixed_created_at=_TOKEN_CREATED_AT,
         account_entries=[],
         transactions=TX_PAYLOAD,
-        responses_by_user_id={provisioned_users.user_a: RuntimeError("vendor exploded")},
+        responses_by_user_id={
+            provisioned_users.user_a: RuntimeError("vendor exploded")
+        },
     )
     monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: failing_auth)
 
@@ -173,7 +188,7 @@ async def test_one_users_vendor_failure_leaves_the_other_users_job_succeeded_wit
 
 
 @pytest.mark.db
-async def test_periodic_defers_unique_constraint_rejects_duplicate_and_accepts_differing_timestamp(
+async def test_periodic_defers_unique_constraint_rejects_duplicate_accepts_differing(
     clean_ingest_tables: None,
     superuser_db_session: AsyncSession,
 ) -> None:
@@ -185,7 +200,8 @@ async def test_periodic_defers_unique_constraint_rejects_duplicate_and_accepts_d
     must never collide with this one."""
     periodic_id = str(uuid4())
     insert_sql = text(
-        "INSERT INTO procrastinate_periodic_defers (task_name, periodic_id, defer_timestamp) "
+        "INSERT INTO procrastinate_periodic_defers "
+        "(task_name, periodic_id, defer_timestamp) "
         "VALUES ('sync_all_connected_users', :periodic_id, :defer_timestamp)"
     )
     try:
@@ -212,7 +228,8 @@ async def test_periodic_defers_unique_constraint_rejects_duplicate_and_accepts_d
     finally:
         await superuser_db_session.execute(
             text(
-                "DELETE FROM procrastinate_periodic_defers WHERE periodic_id = :periodic_id"
+                "DELETE FROM procrastinate_periodic_defers "
+                "WHERE periodic_id = :periodic_id"
             ),
             {"periodic_id": periodic_id},
         )
