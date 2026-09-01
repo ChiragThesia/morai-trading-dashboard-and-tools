@@ -43,14 +43,22 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import procrastinate
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.db.models import SchwabConnection
 from morai.db.session import get_engine, get_session_maker
 from morai.identity.rls import assert_connection_cannot_bypass_rls
 from morai.ingest.schwab_sync import (
     sync_all_connected_users as run_sync_all_connected_users,
 )
 from morai.ingest.schwab_sync import sync_user as run_sync_user
+from morai.ingest.sync_runs import (
+    SyncStatus,
+    SyncTrigger,
+    classify_sync_error,
+    record_sync_run,
+)
 from morai.settings import get_settings
 from morai.vendor.protocol import SchwabAuth
 from morai.vendor.schwab_adapter import SchwabAuthAdapter
@@ -113,25 +121,85 @@ def get_schwab_auth() -> SchwabAuth:
 
 
 @app.task(name="sync_user")
-async def sync_user_task(user_id: str) -> None:
+async def sync_user_task(
+    user_id: str, *, trigger: str = SyncTrigger.SCHEDULED.value
+) -> None:
     """Pulls one connected user's raw Schwab transactions and lands them
-    in `broker_transactions` and `fills` (Phase 6, D6-01).
+    in `broker_transactions` and `fills` (Phase 6, D6-01), and records a
+    `sync_runs` row for the attempt either way (INGEST-06).
 
     Opens one session from `get_session_maker()` -- `morai_app`, not this
     module's own superuser Procrastinate pool -- and calls
     `assert_connection_cannot_bypass_rls` on it before touching a
     protected table (see this module's own docstring: this call is the
-    whole security finding this phase exists to close). Awaits
-    `morai.ingest.schwab_sync.sync_user`, which does not commit and does
-    not swallow exceptions -- a raised `ConnectionNotFound` or vendor
-    failure propagates here uncaught, so Procrastinate records the job as
-    `failed` and this transaction is never committed, leaving no partial
-    cycle behind.
+    whole security finding this phase exists to close).
+
+    `trigger` defaults to the scheduled value, so the periodic fan-out's
+    own `defer_async(user_id=...)` call needs no change. `POST
+    /schwab/sync` (task 2) passes `trigger=SyncTrigger.MANUAL.value`
+    through this same task, so no second writer into `sync_runs` ever
+    comes into existence.
+
+    A failure record written inside the transaction that failed rolls
+    back with it -- that is the whole reason this function is not a
+    single `try`/`except` around one session. On success, the run row and
+    the `last_synced_at` update are written and committed on the same
+    session the ingest itself used, one transaction. On failure, that
+    session is rolled back first, then a **second, fresh** session records
+    the failed run row and commits *that* alone -- so the failure record
+    survives the very rollback that erased everything else the run
+    attempted. `now=started_at`, not the finish time, both for the ingest
+    window boundary and for `last_synced_at`: a fill executed while the
+    vendor call was in flight then falls inside the next window rather
+    than between two. After recording, this function re-raises so
+    Procrastinate still marks the job `failed` -- swallowing the exception
+    would make `procrastinate_jobs` disagree with `sync_runs` about what
+    happened.
     """
+    started_at = datetime.now(UTC)
+    sync_trigger = SyncTrigger(trigger)
     session_maker = get_session_maker()
     async with session_maker() as session:
         await assert_connection_cannot_bypass_rls(session)
-        await run_sync_user(
-            session, UUID(user_id), auth=get_schwab_auth(), now=datetime.now(UTC)
+        try:
+            outcome = await run_sync_user(
+                session, UUID(user_id), auth=get_schwab_auth(), now=started_at
+            )
+        except Exception as exc:
+            await session.rollback()
+            error_code = classify_sync_error(exc)
+            async with session_maker() as failure_session:
+                await failure_session.execute(
+                    text("SELECT set_config('app.current_user_id', :uid, true)"),
+                    {"uid": user_id},
+                )
+                await record_sync_run(
+                    failure_session,
+                    UUID(user_id),
+                    started_at=started_at,
+                    finished_at=datetime.now(UTC),
+                    trigger=sync_trigger,
+                    status=SyncStatus.FAILED,
+                    fills_landed=None,
+                    broker_transactions_landed=None,
+                    error_code=error_code,
+                )
+                await failure_session.commit()
+            raise
+        await record_sync_run(
+            session,
+            UUID(user_id),
+            started_at=started_at,
+            finished_at=datetime.now(UTC),
+            trigger=sync_trigger,
+            status=SyncStatus.SUCCEEDED,
+            fills_landed=outcome.fills_landed,
+            broker_transactions_landed=outcome.broker_transactions_landed,
+            error_code=None,
+        )
+        await session.execute(
+            update(SchwabConnection)
+            .where(SchwabConnection.user_id == UUID(user_id))
+            .values(last_synced_at=started_at)
         )
         await session.commit()

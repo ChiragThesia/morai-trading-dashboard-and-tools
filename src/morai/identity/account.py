@@ -39,6 +39,7 @@ from morai.db.models import (
     Leg,
     Position,
     SchwabConnection,
+    SyncRun,
 )
 from morai.db.models import Session as SessionRow
 from morai.db.models import SetupToken, User, UserDataKey
@@ -65,17 +66,22 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
        reason `fills` does -- this file's own docstring already records
        what happens when a new table with that foreign key is added
        without doing this.
-    3. Identity rows (`sessions`, `setup_tokens`, `schwab_connections`) --
-       revokes any live session, any outstanding setup or reset token, and
-       any live Schwab connection for this user (Phase 4). A Schwab
-       connection's stored token is a bearer credential against a real
-       brokerage account, so removing the row revokes that access too --
-       but exactly as with the trade rows in step 2, the encrypted token
-       is already made unreadable by step 1 destroying the wrapped data
-       key. This delete exists so the final `DELETE FROM users` has no
-       dangling child, and for storage, not for confidentiality. See the
-       module docstring for why this step used to also clear
-       `gate_user_scoped_probe`, and no longer needs to.
+    3. Identity rows (`sessions`, `setup_tokens`, `schwab_connections`,
+       `sync_runs`) -- revokes any live session, any outstanding setup or
+       reset token, and any live Schwab connection for this user (Phase
+       4). A Schwab connection's stored token is a bearer credential
+       against a real brokerage account, so removing the row revokes that
+       access too -- but exactly as with the trade rows in step 2, the
+       encrypted token is already made unreadable by step 1 destroying the
+       wrapped data key. `sync_runs` carries an uncascaded
+       `user_id -> users.id` foreign key exactly like `schwab_connections`
+       does (Phase 6, migration 0012), and is plaintext operational
+       metadata rather than ciphertext, so it belongs in this block for
+       storage reasons, not confidentiality ones. This delete exists so
+       the final `DELETE FROM users` has no dangling child, and for
+       storage, not for confidentiality. See the module docstring for why
+       this step used to also clear `gate_user_scoped_probe`, and no
+       longer needs to.
     4. `users` itself, last -- every foreign key above points at this row.
     """
     await session.execute(delete(UserDataKey).where(UserDataKey.user_id == user_id))
@@ -93,5 +99,6 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
     await session.execute(
         delete(SchwabConnection).where(SchwabConnection.user_id == user_id)
     )
+    await session.execute(delete(SyncRun).where(SyncRun.user_id == user_id))
 
     await session.execute(delete(User).where(User.id == user_id))

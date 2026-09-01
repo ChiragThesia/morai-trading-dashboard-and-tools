@@ -27,6 +27,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Integer,
     LargeBinary,
     SmallInteger,
     String,
@@ -374,6 +375,46 @@ class BrokerTransaction(Base):
                 "exists to guarantee."
             )
         super().__init__(**kwargs)
+
+
+class SyncRun(Base):
+    """One row per completed `sync_user` run -- what ran, what landed, what
+    errored (INGEST-06, migration 0012).
+
+    No `_write_token` constructor gate, unlike `Fill`/`BrokerTransaction`.
+    `06-RESEARCH.md`'s Open Question 3 settles this deliberately: the
+    manual re-sync (`POST /schwab/sync`, task 2) routes through the same
+    `sync_user` job the scheduler defers, so a second writer into this
+    table never comes into existence -- the identical reasoning `Event`'s
+    own docstring below already gives for its own identical omission.
+    Written by `morai.worker.app.sync_user_task`'s own two-session split,
+    never by application code directly.
+    """
+
+    __tablename__ = "sync_runs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    finished_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    trigger: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    fills_landed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    broker_transactions_landed: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    error_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class Event(Base):
