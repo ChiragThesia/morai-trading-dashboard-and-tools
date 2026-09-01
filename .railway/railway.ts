@@ -45,6 +45,17 @@ export default defineRailway(() => {
       // `ledger/fills.py`, `ledger/events.py` and `vendor/connections.py`.
       MORAI_APP_DB_PASSWORD: preserve(),
       MORAI_MASTER_KEY: preserve(),
+      // Phase 4: `settings.schwab_credentials` requires all three of these,
+      // and `SchwabAuthAdapter` raises if any is missing -- but the fields
+      // are Optional on `Settings`, so the app still boots and passes
+      // healthcheck without them. Absent them, the failure surfaces later
+      // and silently: a 500 on the first real user's "Connect Schwab"
+      // click, not a healthcheck timeout. Same `preserve()` reasoning as
+      // MORAI_APP_DB_PASSWORD/MORAI_MASTER_KEY above -- these are secrets,
+      // set once out of band, never in a tracked file.
+      SCHWAB_API_KEY: preserve(),
+      SCHWAB_APP_SECRET: preserve(),
+      SCHWAB_CALLBACK_URL: preserve(),
     },
   });
 

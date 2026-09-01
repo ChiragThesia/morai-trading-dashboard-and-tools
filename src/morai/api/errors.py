@@ -10,9 +10,14 @@ the submitted values. `ResponseValidationError.errors()` attaches an `input` key
 holding the offending value, and on the response path that value is an object this
 system built, which in Phase 4 holds a Schwab access token. Logging the error list
 whole would put it in the Railway log, and `NN-34` forbids that outright. See
-`_redacted_error_locations`, and note that `exc_info` is omitted on that handler for
-the same reason: a formatted traceback ends with `str(exc)`, which re-renders the very
-inputs being suppressed.
+`_redacted_error_locations`, and note that `exc_info` is omitted on **both** handlers
+for the same reason: a formatted traceback ends with `str(exc)`, which re-renders the
+very inputs being suppressed. `unhandled_exception_handler` is the one that actually
+matters most for this: it is what catches a real vendor exception out of
+`SchwabAuthAdapter.exchange_callback`, and `str()` of a vendor exception (e.g.
+`httpx.HTTPStatusError`) is not under this codebase's control -- it can and does embed
+the OAuth code/URL. A 04-REVIEW.md finding (CR-02) caught this handler passing
+`exc_info=exc` while the sibling handler already got it right; fixed to match.
 
 The 422 path (`RequestValidationError`) is deliberately untouched. That detail names
 the *client's* own field and its own submitted value -- nothing server-side is in
@@ -169,9 +174,18 @@ async def response_validation_exception_handler(
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Anything else that escapes a route -- same opaque shape, same log
     discipline. Whatever was in scope when this fired might be a secret; the body
-    must never be able to carry it."""
+    must never be able to carry it.
+
+    `exc_info` is deliberately omitted (CR-02, `04-REVIEW.md`): this is the
+    handler that actually catches a real vendor exception out of
+    `SchwabAuthAdapter.exchange_callback`, and a formatted traceback ends with
+    `str(exc)`, which for a vendor exception can and does embed the OAuth
+    code/URL this handler exists to protect. The exception type is enough to
+    find the failure alongside the request id; the message is not needed."""
     request_id = _current_request_id()
-    logger.error("unhandled exception request_id=%s", request_id, exc_info=exc)
+    logger.error(
+        "unhandled exception request_id=%s type=%s", request_id, type(exc).__name__
+    )
     # Only the path -- never the query string, which routinely carries tokens.
     capture_exception(exc, request_id=request_id, context={"path": request.url.path})
     return _opaque_500(request_id)

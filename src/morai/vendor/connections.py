@@ -20,11 +20,16 @@ at the end of the transaction that set it, so an internal commit would
 silently break `app.current_user_id` for whatever RLS-protected query the
 caller runs next on the same session (confirmed live in Phase 3).
 
-It serves both first connect and re-auth with one function: an
-`UPDATE ... WHERE user_id = :uid` first, falling back to `INSERT` only when
-`rowcount` is zero, matching `/setup`'s own explicit `rowcount` guard
-(D4-09) rather than `ON CONFLICT DO UPDATE`. That is what makes the
-per-user row count stay exactly one, by construction.
+It serves both first connect and re-auth with one function: a single
+`INSERT ... ON CONFLICT (user_id) DO UPDATE` (D4-09) -- race-free by
+construction, unlike an `UPDATE` followed by a fallback `INSERT`, which
+lets two concurrent first-time connects for the same user (e.g. two
+browser tabs) both see zero rows affected and both attempt the `INSERT`,
+raising `IntegrityError` for the loser (`WR-01`, `04-REVIEW.md`). No
+`.returning()` -- `V092` records how an implicit `RETURNING` collides with
+a restricted `SELECT` policy; this table happens to grant `SELECT`, but the
+convention is kept regardless. That is what makes the per-user row count
+stay exactly one, by construction.
 
 `derive_connection_health` is a pure function, `now` as an explicit
 parameter -- the same idiom `tests/identity/test_setup_tokens.py`'s own
@@ -67,7 +72,7 @@ from uuid import UUID
 
 from pydantic import JsonValue, TypeAdapter
 from sqlalchemy import select, text, update
-from sqlalchemy.engine import CursorResult
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.crypto.envelope import decrypt_field, encrypt_field, unwrap_dek
@@ -245,35 +250,29 @@ async def upsert_connection(
         _connection_associated_data("account_hash_ciphertext", user_id=user_id),
     )
 
-    result = await session.execute(
-        update(SchwabConnection)
-        .where(SchwabConnection.user_id == user_id)
-        .values(
-            account_hash_ciphertext=account_hash_ciphertext,
-            account_hash_nonce=account_hash_nonce,
-            token_ciphertext=token_ciphertext,
-            token_nonce=token_nonce,
-            key_version=key_version,
-            token_created_at=exchanged_token.created_at,
+    insert_stmt = pg_insert(SchwabConnection).values(
+        user_id=user_id,
+        account_hash_ciphertext=account_hash_ciphertext,
+        account_hash_nonce=account_hash_nonce,
+        token_ciphertext=token_ciphertext,
+        token_nonce=token_nonce,
+        key_version=key_version,
+        token_created_at=exchanged_token.created_at,
+    )
+    # No `.returning()` -- see this module's own docstring (V092).
+    await session.execute(
+        insert_stmt.on_conflict_do_update(
+            index_elements=[SchwabConnection.user_id],
+            set_={
+                "account_hash_ciphertext": insert_stmt.excluded.account_hash_ciphertext,
+                "account_hash_nonce": insert_stmt.excluded.account_hash_nonce,
+                "token_ciphertext": insert_stmt.excluded.token_ciphertext,
+                "token_nonce": insert_stmt.excluded.token_nonce,
+                "key_version": insert_stmt.excluded.key_version,
+                "token_created_at": insert_stmt.excluded.token_created_at,
+            },
         )
     )
-    # `update(...)` with no `.returning()` types as the base `Result[Any]`,
-    # which carries no `rowcount` -- that attribute is `CursorResult`'s own.
-    # `isinstance` narrows without `cast`/`Any` (D-06), matching
-    # `api/routes_identity.py`'s own identical guard.
-    if not isinstance(result, CursorResult) or result.rowcount == 0:
-        session.add(
-            SchwabConnection(
-                user_id=user_id,
-                account_hash_ciphertext=account_hash_ciphertext,
-                account_hash_nonce=account_hash_nonce,
-                token_ciphertext=token_ciphertext,
-                token_nonce=token_nonce,
-                key_version=key_version,
-                token_created_at=exchanged_token.created_at,
-            )
-        )
-        await session.flush()
 
 
 async def read_connection(
