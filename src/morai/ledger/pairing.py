@@ -191,10 +191,16 @@ def _signed_leg_amount(fill: FillRecord, event_type: EventType) -> Decimal | Non
     `salvage/oracle-fixtures.md` states as `openNetDebit = buy - sell`,
     `closeNetCredit = sell - buy`.
 
-    Returns `None` when either `quantity` or `price_usd` is `None` -- a
-    gap is `None`, never `0` (NN-16).
+    Returns `None` when either `quantity` or `price_usd` is `None`, or
+    when `side` is neither `"BUY"` nor `"SELL"` (WR-01, `05-REVIEW.md`) --
+    a gap is `None`, never `0` and never a guess (NN-16). `side` is an
+    unconstrained `Text` column sourced from the vendor's own field; an
+    unrecognized value here must surface as a gap, not silently sign the
+    amount as though it were the opposite of whatever the vendor sent.
     """
     if fill.quantity is None or fill.price_usd is None:
+        return None
+    if fill.side not in ("BUY", "SELL"):
         return None
     amount = fill.price_usd * fill.quantity
     if event_type is EventType.OPEN:
