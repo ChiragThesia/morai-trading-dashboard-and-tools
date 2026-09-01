@@ -286,6 +286,24 @@ def sync_windows(
     from `last_synced_at IS NULL` rather than a second stored boolean, the
     same reasoning `Position`'s own docstring gives for carrying no status
     column.
+
+    **Owed to the first live run, not guessed here (D6-03).** The real
+    per-call range limit and the real rate limit on `get_transactions` are
+    both unmeasured -- `settings.schwab_tx_max_range_days` and
+    `settings.schwab_tx_lookback_max_days` carry forward as named,
+    injectable constants, not as verified facts. `sync_user` logs every
+    window's requested bounds and returned element count; that logging is
+    the instrument the first live run reads to settle both, and no delay
+    or backoff is added ahead of a limit nobody has observed
+    (`06-RESEARCH.md`'s own recommendation).
+
+    **What the lookback does and does not guarantee for `INGEST-05`.** A
+    position opened before the lookback window and still open has no
+    fills inside the window this function returns, so a first-connect
+    backfill does not recover it. 365 days covers every front leg this
+    project's own structure uses by a wide margin -- a reasoned bound, not
+    a measured one. Said here rather than assumed silently: a silent
+    assumption is how a still-open calendar disappears.
     """
     if last_synced_at is not None:
         start = last_synced_at - timedelta(days=settings.schwab_tx_sync_overlap_days)
