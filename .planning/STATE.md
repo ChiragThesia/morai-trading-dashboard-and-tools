@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-current_phase: 04
-current_phase_name: Schwab Connection and Token Lifecycle
-status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-08-31T20:48:57.482Z"
-last_activity: 2026-08-31
-last_activity_desc: Phase 04 execution resumed (wave continue)
-state_head: 5ef8c18bf2e6bc929857fb06ef4a93e391eefba6
+current_phase: 1
+current_phase_name: Walking Skeleton
+status: planning
+stopped_at: Phase 05 complete, ready to plan Phase 1
+last_updated: "2026-09-01T11:45:49.363Z"
+last_activity: 2026-09-01
+last_activity_desc: Phase 05 complete, transitioned to Phase 1
+state_head: 67240872c721e554b0c02c6c073360f052a95734
 progress:
   total_phases: 11
-  completed_phases: 0
-  total_plans: 27
-  completed_plans: 21
-  percent: 0
+  completed_phases: 1
+  total_plans: 30
+  completed_plans: 27
+  percent: 9
 ---
 
 # Project State
@@ -28,10 +28,10 @@ window equals the broker's cash delta over that window, checked every ingest cyc
 
 ## Current Position
 
-Phase: 04 (Schwab Connection and Token Lifecycle) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 04
-Last activity: 2026-08-31 — Phase 04 execution resumed (wave continue)
+Phase: 1 — Walking Skeleton
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-01 — Phase 05 complete, transitioned to Phase 1
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -39,7 +39,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 3
 - Average duration: —
 - Total execution time: —
 
@@ -47,7 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 05 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -159,7 +159,6 @@ create one. Deferred by explicit user decision (2026-08-31). `04-VERIFICATION.md
 Phase 5 does not depend on any of this — the ROADMAP marks it "Parallel with Phase 4"
 because fill pairing is derivation logic that needs no broker connection.
 
-
 Owed on live Railway:
 
 1. `docs/operations/phase-2-operator-steps.md` steps 1-4 (set `MORAI_APP_DB_PASSWORD`, deploy,
@@ -201,5 +200,5 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-08-31T05:25:23.839Z
-Stopped at: Completed 02-04-PLAN.md
+Stopped at: Phase 05 complete, ready to plan Phase 1
 Resume file: None

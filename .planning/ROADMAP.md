@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: Identity, Sessions, and Tenant Isolation** - Accounts, server-side sessions, and no path from one user to another user's data
 - [ ] **Phase 3: Envelope Encryption and the Schema Contract** - Per-user data keys, a documented plaintext column set, and a database that cannot store a netted ROLL
 - [ ] **Phase 4: Schwab Connection and Token Lifecycle** - Self-service OAuth, per-user refresh locks, and queryable connection health
-- [ ] **Phase 5: Fill Pairing and the Oracle Gate** - Broker leg fills paired into OPEN/CLOSE/ROLL/SETTLE events with correct net debit and credit, proven against the 13-calendar oracle before any broker connection exists
+- [x] **Phase 5: Fill Pairing and the Oracle Gate** - Broker leg fills paired into OPEN/CLOSE/ROLL/SETTLE events with correct net debit and credit, proven against the 13-calendar oracle before any broker connection exists (completed 2026-09-01)
 - [ ] **Phase 6: Raw Ingest and Backfill** - Immutable fills and independent broker transactions landing on a schedule, idempotently
 - [ ] **Phase 7: Position and Campaign Read Models** - Open/closed state, per-leg settlement, and rolled-position chains computed from events
 - [ ] **Phase 8: Snapshot Capture** - Every open position repriced on the 30-minute RTH cadence, with honest gaps and a repair path
@@ -351,7 +351,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Identity, Sessions, and Tenant Isolation | 6/6 | In Progress|  |
 | 3. Envelope Encryption and the Schema Contract | 7/7 | In Progress|  |
 | 4. Schwab Connection and Token Lifecycle | 4/4 | In Progress|  |
-| 5. Fill Pairing and the Oracle Gate | 3/4 | In Progress|  |
+| 5. Fill Pairing and the Oracle Gate | 3/3 | Complete    | 2026-09-01 |
 | 6. Raw Ingest and Backfill | 0/TBD | Not started | - |
 | 7. Position and Campaign Read Models | 0/TBD | Not started | - |
 | 8. Snapshot Capture | 0/TBD | Not started | - |
