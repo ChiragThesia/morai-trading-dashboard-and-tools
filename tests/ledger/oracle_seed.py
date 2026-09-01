@@ -15,7 +15,7 @@ pytest's own fixture name resolution (this plan's own instruction).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -25,7 +25,8 @@ from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.db.models import Leg, Position
-from morai.ledger.fills import FillWrite, insert_fills
+from morai.ledger.fills import FillRecord, FillWrite, insert_fills
+from morai.ledger.pairing import DerivedEvent, EventType, FillKey
 
 
 def _root_for_expiry(expiry: date) -> str:
@@ -461,6 +462,107 @@ def _build_fills() -> tuple[OracleFill, ...]:
 
 ORACLE_CALENDARS: tuple[OracleCalendar, ...] = _build_calendars()
 ORACLE_FILLS: tuple[OracleFill, ...] = _build_fills()
+
+# A fixed stand-in for `oracle_fill_records`'s built `FillRecord`s. Its
+# value is never read by `derive_events` (LEDGER-12: no fill field but
+# `order_id`/`occ_symbol`/`leg_index`/`execution_time`/`position_effect`/
+# `side`/`quantity`/`price_usd` ever reaches the pure core) -- it exists
+# only because `FillRecord` is a required field, and one fixed value
+# rather than a fresh one per record keeps every in-memory fill visibly
+# tied to this one synthetic, no-database scope.
+_PURE_FILL_USER_ID = UUID("00000000-0000-4000-8000-000000000098")
+
+
+def oracle_fill_records(
+    position_ids: Mapping[str, UUID],
+) -> tuple[list[FillRecord], dict[FillKey, UUID]]:
+    """The in-memory equivalent of what `seed_oracle` plus
+    `resolve_fill_positions` produces against real Postgres: one
+    `FillRecord` per `ORACLE_FILLS` entry -- `leg_index` 0, `quantity`
+    one, `key_version` 1, every other field taken from the `OracleFill` --
+    together with the resolution mapping that sends each fill's key
+    straight to its own calendar's position id in `position_ids`. This is
+    what makes `derive_events`'s pure-derivation proof (LEDGER-12) and the
+    seeded-fault suite (OPS-06, `tests/ledger/
+    test_pairing_seeded_faults.py`) both runnable with no database at
+    all.
+
+    `position_ids` need not be real stored position ids -- the caller
+    supplies whatever `UUID`s it wants (synthetic ones for a pure case,
+    real ones for a test that also checks stored rows), keyed by each
+    calendar's own `calendar_id` from `ORACLE_CALENDARS`.
+    """
+    records: list[FillRecord] = []
+    resolutions: dict[FillKey, UUID] = {}
+    for fill in ORACLE_FILLS:
+        records.append(
+            FillRecord(
+                user_id=_PURE_FILL_USER_ID,
+                order_id=fill.order_id,
+                occ_symbol=fill.occ_symbol,
+                leg_index=0,
+                execution_time=fill.execution_time,
+                position_effect=fill.position_effect,
+                side=fill.side,
+                quantity=Decimal("1"),
+                price_usd=fill.price_usd,
+                key_version=1,
+            )
+        )
+        key: FillKey = (fill.order_id, fill.occ_symbol, 0, fill.execution_time)
+        resolutions[key] = position_ids[fill.calendar_id]
+    return records, resolutions
+
+
+def assert_matches_oracle(
+    events: Iterable[DerivedEvent], position_ids: Mapping[str, UUID]
+) -> None:
+    """Indexes `events` by `(position_id, event_type)` and asserts, for
+    every calendar in `ORACLE_CALENDARS` reachable through `position_ids`
+    (present there as a key), that the OPEN event's `open_debit_usd` and
+    the CLOSE event's `close_credit_usd` equal that calendar's own
+    recorded `open_net_debit`/`close_net_credit` exactly. Raises
+    `AssertionError` naming the calendar id and both figures -- never a
+    bare `False`.
+
+    This one function is what both `tests/ledger/test_oracle_gate.py`'s
+    pure case and `tests/ledger/test_pairing_seeded_faults.py`'s whole
+    suite call, so a fault proved fatal here is proved fatal there.
+
+    Exact `Decimal` equality, not a tolerance. The original TypeScript
+    suite used `toBeCloseTo(expected, 2)` because JS numbers are IEEE-754
+    floats; this codebase is `Decimal` end to end, every oracle price is
+    quoted to two places and every quantity is one, so the arithmetic is
+    exact -- exact equality is strictly the stronger check. Criterion 1's
+    two-decimal-place contract is the documented floor this satisfies,
+    not the assertion this makes.
+    """
+    by_position_and_type: dict[tuple[UUID, EventType], DerivedEvent] = {
+        (event.position_id, event.event_type): event for event in events
+    }
+    for calendar in ORACLE_CALENDARS:
+        position_id = position_ids.get(calendar.calendar_id)
+        if position_id is None:
+            continue
+        open_event = by_position_and_type.get((position_id, EventType.OPEN))
+        assert open_event is not None, (
+            f"{calendar.calendar_id}: no OPEN event derived (expected "
+            f"open_debit_usd={calendar.open_net_debit})"
+        )
+        assert open_event.open_debit_usd == calendar.open_net_debit, (
+            f"{calendar.calendar_id}: open_debit_usd "
+            f"{open_event.open_debit_usd} != expected {calendar.open_net_debit}"
+        )
+        close_event = by_position_and_type.get((position_id, EventType.CLOSE))
+        assert close_event is not None, (
+            f"{calendar.calendar_id}: no CLOSE event derived (expected "
+            f"close_credit_usd={calendar.close_net_credit})"
+        )
+        assert close_event.close_credit_usd == calendar.close_net_credit, (
+            f"{calendar.calendar_id}: close_credit_usd "
+            f"{close_event.close_credit_usd} != expected "
+            f"{calendar.close_net_credit}"
+        )
 
 
 async def seed_oracle(
