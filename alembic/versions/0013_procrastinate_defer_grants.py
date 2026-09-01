@@ -71,6 +71,19 @@ depends_on: Sequence[str] | str | None = None
 
 def upgrade() -> None:
     bind = op.get_bind()
+    # IN-01 (06-REVIEW.md): `RETURNING id` forces this `SELECT` to be
+    # table-wide -- Postgres has no primitive that scopes a `RETURNING`-only
+    # grant to just the rows one `INSERT` produced, and `procrastinate_jobs`
+    # carries no RLS policy of its own (Procrastinate's internal schema, not
+    # one this project owns). Any code running as `morai_app` is therefore
+    # capable of reading every user's queued/historical `sync_user` job
+    # arguments (`user_id`, `trigger`) here, not only its own -- the same
+    # accepted, bounded cross-tenant read `sync_all_connected_users`
+    # (`ingest/schwab_sync.py`) already discloses in its own docstring: a
+    # UUID and an enum value, no secrets, no ciphertext. Nothing broader
+    # than `RETURNING` requires was granted; this comment exists so a future
+    # reader does not have to re-derive that the scope is accepted rather
+    # than an oversight.
     bind.execute(sa.text("GRANT INSERT, SELECT ON procrastinate_jobs TO morai_app"))
     bind.execute(
         sa.text(
