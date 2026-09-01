@@ -11,12 +11,17 @@ calendars in `salvage/oracle-fixtures.md` plus the 14th synthetic negative
 control and the seeded-fault suite. It is not proven against Schwab's live
 payload shape, which Phase 6 first exercises for real.
 
-Scope this phase (D5-01): OPEN and CLOSE only. Positive ROLL and SETTLE
-derivation are deferred to a phase with a real fixture for them. This
-module does add `detect_roll` -- the negative guard proving that one real
-order (`1006797510202`) which shares two calendars is NOT a roll -- but
-no derivation path calls it and nothing here emits a ROLL/SETTLEMENT
-event.
+Scope, by phase. Phase 5 (D5-01) shipped OPEN and CLOSE only, deferring
+positive ROLL derivation because no real oracle fixture existed for it --
+`detect_roll` shipped that phase as a negative guard only, proving one
+real order (`1006797510202`) that shares two calendars is NOT a roll.
+Phase 7 resolves that deferral (D7-09): ROLL is now derived by
+`_roll_pairs`/`derive_events`'s roll pass below, reusing
+`_signed_leg_amount`/`_net_amount` unmodified -- no new money arithmetic
+is introduced, which is the whole basis on which the deferral is
+resolved rather than overridden. SETTLEMENT (D7-05/D7-06) is derived
+separately, by `ledger/settlements.py::derive_settlements`, and folded
+into `sync_events` below -- no fill, no broker call.
 """
 
 from __future__ import annotations
@@ -125,15 +130,18 @@ class FillRole(StrEnum):
 
 class EventType(StrEnum):
     """The event types this module derives. Values are exactly the
-    strings migration 0008's `events_event_type_check` permits. `ROLL` is
-    also permitted by that CHECK but is out of this phase's scope (D5-01)
-    and has no member here. `SETTLEMENT` (D7-05/D7-06) is derived by
+    strings migration 0008's `events_event_type_check` permits.
+    `SETTLEMENT` (D7-05/D7-06) is derived by
     `ledger/settlements.py::derive_settlements` and folded into
-    `sync_events` below -- no fill, no broker call."""
+    `sync_events` below -- no fill, no broker call. `ROLL` (D7-09) is
+    derived by `_roll_pairs`/`derive_events`'s roll pass below, reusing
+    `_signed_leg_amount`/`_net_amount` unmodified -- see `detect_roll`'s
+    own docstring for what changed and on what condition."""
 
     OPEN = "OPEN"
     CLOSE = "CLOSE"
     SETTLEMENT = "SETTLEMENT"
+    ROLL = "ROLL"
 
 
 @dataclass(frozen=True)
@@ -154,6 +162,13 @@ class DerivedEvent:
     # invariant is what has to confront it, at this typed boundary,
     # rather than rediscovering the gap itself.
     commission_usd: Decimal | None
+    # `None` for OPEN/CLOSE/SETTLEMENT. Set for ROLL only, to the closed
+    # position's id (D7-10) -- a ROLL hangs on the newly opened position
+    # (`position_id` above) and points back at the closed one through
+    # this field, mirroring `EventWrite.rolled_from_position_id`
+    # (`ledger/events.py`) exactly, which `sync_events` below copies this
+    # field onto.
+    rolled_from_position_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -182,6 +197,133 @@ def classify_fill(position_effect: str) -> FillRole:
     if position_effect == "CLOSING":
         return FillRole.CLOSE
     return FillRole.UNKNOWN
+
+
+@dataclass(frozen=True)
+class RollPair:
+    """One candidate ROLL: a CLOSING fill and an OPENING fill that
+    `detect_roll` has already proved share a broker order and a contract
+    (root, strike, option type) differing only in expiry, resolved to two
+    different positions (D7-09)."""
+
+    closing: FillRecord
+    opening: FillRecord
+    closed_position_id: UUID
+    opened_position_id: UUID
+
+
+def _roll_pairs(
+    fills: Sequence[FillRecord],
+    resolutions: Mapping[FillKey, UUID | None],
+) -> tuple[RollPair, ...]:
+    """Finds every candidate ROLL pair before the ordinary OPEN/CLOSE
+    grouping in `derive_events` runs (D7-09). Groups resolved fills by
+    `order_id`; within each order, a CLOSING fill pairs with an OPENING
+    fill only when `detect_roll(closing, opening)` is `True` and the two
+    resolve to different position ids. `detect_roll` already encodes the
+    full strict predicate -- same order, roles from each fill's own
+    `position_effect`, matching root/strike/option type, differing
+    expiries -- so this function calls it rather than restating any part
+    of it.
+
+    A fill may belong to at most one pair. When a CLOSING fill matches
+    more than one candidate OPENING fill, or an OPENING fill matches more
+    than one candidate CLOSING fill, within the same order, that is an
+    ambiguity and the pair is left unformed rather than guessed (NN-11):
+    those fills then fall through to the ordinary OPEN/CLOSE path,
+    exactly as they do today.
+    """
+    by_order: dict[str, list[FillRecord]] = {}
+    for fill in fills:
+        key: FillKey = (
+            fill.order_id,
+            fill.occ_symbol,
+            fill.leg_index,
+            fill.execution_time,
+        )
+        if resolutions.get(key) is None:
+            continue
+        by_order.setdefault(fill.order_id, []).append(fill)
+
+    def _position_id(fill: FillRecord) -> UUID | None:
+        return resolutions.get(
+            (fill.order_id, fill.occ_symbol, fill.leg_index, fill.execution_time)
+        )
+
+    pairs: list[RollPair] = []
+    for order_fills in by_order.values():
+        closing_fills = [
+            fill
+            for fill in order_fills
+            if classify_fill(fill.position_effect) is FillRole.CLOSE
+        ]
+        opening_fills = [
+            fill
+            for fill in order_fills
+            if classify_fill(fill.position_effect) is FillRole.OPEN
+        ]
+
+        candidates: dict[FillKey, list[FillRecord]] = {}
+        for closing in closing_fills:
+            closing_key: FillKey = (
+                closing.order_id,
+                closing.occ_symbol,
+                closing.leg_index,
+                closing.execution_time,
+            )
+            candidates[closing_key] = [
+                opening
+                for opening in opening_fills
+                if detect_roll(closing, opening)
+                and _position_id(opening) != _position_id(closing)
+            ]
+
+        opening_match_counts: dict[FillKey, int] = {}
+        for matches in candidates.values():
+            for opening in matches:
+                opening_key: FillKey = (
+                    opening.order_id,
+                    opening.occ_symbol,
+                    opening.leg_index,
+                    opening.execution_time,
+                )
+                opening_match_counts[opening_key] = (
+                    opening_match_counts.get(opening_key, 0) + 1
+                )
+
+        for closing in closing_fills:
+            closing_key = (
+                closing.order_id,
+                closing.occ_symbol,
+                closing.leg_index,
+                closing.execution_time,
+            )
+            matches = candidates[closing_key]
+            if len(matches) != 1:
+                continue
+            opening = matches[0]
+            opening_key = (
+                opening.order_id,
+                opening.occ_symbol,
+                opening.leg_index,
+                opening.execution_time,
+            )
+            if opening_match_counts[opening_key] != 1:
+                continue
+            closed_position_id = _position_id(closing)
+            opened_position_id = _position_id(opening)
+            if closed_position_id is None or opened_position_id is None:
+                continue
+            pairs.append(
+                RollPair(
+                    closing=closing,
+                    opening=opening,
+                    closed_position_id=closed_position_id,
+                    opened_position_id=opened_position_id,
+                )
+            )
+
+    return tuple(pairs)
 
 
 def _signed_leg_amount(fill: FillRecord, event_type: EventType) -> Decimal | None:
@@ -251,11 +393,28 @@ def derive_events(
     established, so the one call serves both the oracle suite and the
     shell below and the two cannot drift.
 
-    For each fill: look up its key in `resolutions`. A `None` or absent
-    value leaves the fill explicitly unresolved and it contributes to
-    nothing (NN-11 -- never guessed, never orphan-parked silently).
-    Classify the resolved fill from its own `position_effect`; an unknown
-    role goes to the unclassified tuple and contributes to nothing either.
+    Runs the roll pass first (D7-09): `_roll_pairs` finds every candidate
+    ROLL, and each is priced by calling `_net_amount` once per half --
+    the opening half with `EventType.OPEN`, the closing half with
+    `EventType.CLOSE` -- the same oracle-validated function the ordinary
+    path below calls, never a new formula. If either half returns `None`
+    the pair forms no ROLL at all and both its fills are left for the
+    ordinary path below (NN-16: a half-priced ROLL is worse than no
+    ROLL). Otherwise one `DerivedEvent` is emitted with `event_type`
+    ROLL, `position_id` the *opened* position, and
+    `rolled_from_position_id` the *closed* one (D7-10); its two amounts
+    are stored split across `open_debit_usd`/`close_credit_usd`, never
+    netted (LEDGER-04). The fills of every pair that did form a ROLL are
+    then removed from the set that reaches the ordinary grouping below,
+    so no fill ever contributes to both a ROLL and a separate OPEN or
+    CLOSE.
+
+    For each remaining fill: look up its key in `resolutions`. A `None`
+    or absent value leaves the fill explicitly unresolved and it
+    contributes to nothing (NN-11 -- never guessed, never orphan-parked
+    silently). Classify the resolved fill from its own `position_effect`;
+    an unknown role goes to the unclassified tuple and contributes to
+    nothing either.
 
     Survivors are grouped by `(position_id, role, order_id)`. Grouping by
     `order_id` is deliberate: each derived event then corresponds to one
@@ -272,11 +431,51 @@ def derive_events(
     sets `open_debit_usd` from `_net_amount` and leaves `close_credit_usd`
     `None`; the close-role group does the reverse.
 
-    Events are returned sorted by `(position_id, event_type, fill_ids_hash)`
-    so two runs over the same input are comparable element-wise.
+    Events are returned sorted by `(position_id, event_type, fill_ids_hash)`;
+    the ROLL pass above never produces two events sharing that key for
+    one input, since `fill_ids_hash` is a digest over both of a ROLL's
+    own fills, so two runs over the same input remain comparable
+    element-wise.
     """
     unresolved: list[FillKey] = []
     unclassified: list[FillKey] = []
+    events: list[DerivedEvent] = []
+    paired_keys: set[FillKey] = set()
+
+    for pair in _roll_pairs(fills, resolutions):
+        opening_amount = _net_amount([pair.opening], EventType.OPEN)
+        closing_amount = _net_amount([pair.closing], EventType.CLOSE)
+        if opening_amount is None or closing_amount is None:
+            continue
+        closing_key: FillKey = (
+            pair.closing.order_id,
+            pair.closing.occ_symbol,
+            pair.closing.leg_index,
+            pair.closing.execution_time,
+        )
+        opening_key: FillKey = (
+            pair.opening.order_id,
+            pair.opening.occ_symbol,
+            pair.opening.leg_index,
+            pair.opening.execution_time,
+        )
+        event_time = min(pair.closing.execution_time, pair.opening.execution_time)
+        fill_ids_hash = hash_fill_ids((closing_key, opening_key))
+        events.append(
+            DerivedEvent(
+                position_id=pair.opened_position_id,
+                event_type=EventType.ROLL,
+                event_time=event_time,
+                fill_ids_hash=fill_ids_hash,
+                open_debit_usd=opening_amount,
+                close_credit_usd=closing_amount,
+                commission_usd=None,
+                rolled_from_position_id=pair.closed_position_id,
+            )
+        )
+        paired_keys.add(closing_key)
+        paired_keys.add(opening_key)
+
     groups: dict[tuple[UUID, FillRole, str], list[FillRecord]] = {}
 
     for fill in fills:
@@ -286,6 +485,8 @@ def derive_events(
             fill.leg_index,
             fill.execution_time,
         )
+        if key in paired_keys:
+            continue
         position_id = resolutions.get(key)
         if position_id is None:
             unresolved.append(key)
@@ -296,7 +497,6 @@ def derive_events(
             continue
         groups.setdefault((position_id, role, fill.order_id), []).append(fill)
 
-    events: list[DerivedEvent] = []
     for (position_id, role, _order_id), group_fills in groups.items():
         event_type = EventType.OPEN if role is FillRole.OPEN else EventType.CLOSE
         event_time = min(fill.execution_time for fill in group_fills)
@@ -457,6 +657,7 @@ async def sync_events(
             fill_ids_hash=event.fill_ids_hash,
             open_debit_usd=event.open_debit_usd,
             close_credit_usd=event.close_credit_usd,
+            rolled_from_position_id=event.rolled_from_position_id,
         )
         for event in derivation.events
         if (
@@ -492,7 +693,8 @@ async def sync_events(
     return derivation
 
 
-# --- detect_roll's negative guard (D5-01) -----------------------------------
+# --- detect_roll: the ROLL predicate, negative-only through Phase 5, ------
+# --- given its first caller by _roll_pairs in Phase 7 (D5-01, D7-09) ------
 #
 # Inverts `tests/ledger/oracle_seed.py::occ_symbol_for`'s own stated
 # convention: root ("SPXW" or "SPX" -- this project's two roots, tried
@@ -552,18 +754,27 @@ def detect_roll(closing: FillRecord, opening: FillRecord) -> bool:
     strike and an option type, and their expiries differ. Anything else
     is False.
 
-    Per D5-01 this ships as the negative guard only: it is proved False
-    on the one real order that shares a broker order across two
+    Per D5-01 this shipped as the negative guard only, Phase 5: proved
+    False on the one real order that shares a broker order across two
     calendars (`1006797510202`, closing `60c46a57` at strike 7425 and
-    opening `24f1e72e` at strike 7475), and no positive ROLL derivation
-    exists this phase because the oracle contains no ROLL and no SETTLE
-    at all. Building the positive path now, verified only against
-    fixtures written by the same reasoning that wrote the code, would
-    reproduce the exact conditions of the -$319,850 loss. `insert_events`
+    opening `24f1e72e` at strike 7475), with no positive ROLL derivation
+    that phase because the oracle contains no ROLL and no SETTLE at all.
+    Building the positive path then, verified only against fixtures
+    written by the same reasoning that wrote the code, would have
+    reproduced the exact conditions of the -$319,850 loss. `insert_events`
     already refuses a ROLL missing either amount and migration 0008's
     `roll_has_both_legs` CHECK is the database-level backstop; this
     predicate is the third guard and the only one that runs before a
     draft is built.
+
+    Phase 7 (D7-09) gives this predicate its first caller: `_roll_pairs`
+    calls it, unmodified, to find every candidate ROLL before
+    `derive_events`'s ordinary OPEN/CLOSE grouping runs. What changed is
+    only that a caller now exists -- the predicate's own logic is
+    untouched, and the money it enables is priced by
+    `_signed_leg_amount`/`_net_amount`, the same oracle-proven functions,
+    also unmodified. That is the condition D7-09 resolves the deferral
+    on: no new arithmetic, only a new caller for an already-strict guard.
     """
     if closing.order_id != opening.order_id:
         return False
