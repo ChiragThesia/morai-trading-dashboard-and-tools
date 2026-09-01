@@ -39,7 +39,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.ledger.events import EventWrite, insert_events, read_events
+from morai.ledger.events import EventRecord, EventWrite, insert_events, read_events
 from morai.ledger.fills import FillRecord, read_fills
 
 # Raw `text()` results type every column as `Any` -- same untyped-boundary
@@ -585,7 +585,14 @@ async def sync_events(
     (`ledger/settlements.py`) run after the OPEN/CLOSE derivation, over
     the same `existing` events already read below, and their drafts join
     the same `insert_events` call -- still the one write path into
-    `events`.
+    `events`. Before calling `derive_settlements`, this function also
+    computes each referenced position's own `derive_position_state`
+    (`ledger/positions.py`) from the whole-user `all_fills`/`existing`
+    already in hand, and hands the result in as `closed_positions` (CR-02,
+    `07-REVIEW.md`) -- a leg whose position was already closed by real
+    fills before its own expiry must never mint a SETTLEMENT, or the
+    derived `closed_at` would silently move from the real close date to
+    the leg's nominal expiry.
 
     Idempotency (LEDGER-09, widened by D7-05/Pitfall 2): before inserting,
     reads existing `events` for the user and builds the set of
@@ -636,7 +643,12 @@ async def sync_events(
     )
 
     resolutions = await resolve_fill_positions(session, user_id)
-    fills = await read_fills(session, user_id)
+    # `all_fills` stays whole-user, unnarrowed by `order_ids` -- CR-02's
+    # closed-position gate (below) needs every fill a position has, not
+    # only the subset a narrow resync happens to be scoped to, or a leg
+    # closed by a fill outside that scope would read as still open.
+    all_fills = await read_fills(session, user_id)
+    fills = all_fills
     if order_ids is not None:
         wanted = set(order_ids)
         fills = [fill for fill in fills if fill.order_id in wanted]
@@ -674,7 +686,49 @@ async def sync_events(
         # `(position_id, event_time)` matches an existing SETTLEMENT row in
         # `existing` (D7-06) -- no second idempotency check needed here.
         legs = await read_legs(session, user_id)
-        settlement_drafts = derive_settlements(legs, existing, as_of=as_of)
+
+        # CR-02 (`07-REVIEW.md`): compute each referenced position's own
+        # derived closed state from the same fills/events already read
+        # above, and pass it to `derive_settlements` rather than letting
+        # it query -- the function stays pure (D7-06); this shell owns
+        # the one DB read each of its inputs needs.
+        from morai.ledger.positions import LegRow, derive_position_state
+
+        legs_by_position: dict[UUID, list[LegRow]] = {}
+        for leg in legs:
+            legs_by_position.setdefault(leg.position_id, []).append(
+                LegRow(
+                    id=leg.id,
+                    position_id=leg.position_id,
+                    occ_symbol=leg.occ_symbol,
+                )
+            )
+
+        fills_by_position: dict[UUID, list[FillRecord]] = {}
+        for fill in all_fills:
+            position_id = resolutions.get(
+                (fill.order_id, fill.occ_symbol, fill.leg_index, fill.execution_time)
+            )
+            if position_id is not None:
+                fills_by_position.setdefault(position_id, []).append(fill)
+
+        events_by_position: dict[UUID, list[EventRecord]] = {}
+        for record in existing:
+            events_by_position.setdefault(record.position_id, []).append(record)
+
+        closed_positions: dict[UUID, bool | None] = {
+            position_id: derive_position_state(
+                position_id,
+                position_legs,
+                fills_by_position.get(position_id, []),
+                events_by_position.get(position_id, []),
+            ).is_closed
+            for position_id, position_legs in legs_by_position.items()
+        }
+
+        settlement_drafts = derive_settlements(
+            legs, existing, as_of=as_of, closed_positions=closed_positions
+        )
         drafts.extend(
             EventWrite(
                 position_id=draft.position_id,

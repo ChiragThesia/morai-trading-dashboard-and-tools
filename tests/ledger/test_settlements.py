@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import inspect
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -27,6 +28,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.ledger.events import EventRecord, read_events
+from morai.ledger.fills import FillWrite, insert_fills
 from morai.ledger.pairing import EventType, sync_events
 from morai.ledger.settlements import (
     AM_SETTLEMENT_TIME,
@@ -118,6 +120,51 @@ def _settlement_event_record(*, position_id: UUID, event_time: datetime) -> Even
     )
 
 
+async def _seed_opening_fills(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    order_id: str = "1006681717677",
+    front_symbol: str = "SPXW260618P07275000",
+    back_symbol: str = "SPX260717P07275000",
+) -> None:
+    """Two OPENING fills, one per leg, through `insert_fills` -- the real
+    write path (D3-14's own discipline). CR-02 (`07-REVIEW.md`): without
+    this, `seeded_position`'s legs have zero fills, so
+    `net_quantity_for_leg` nets both to `Decimal("0")` and
+    `derive_position_state` reads the position as vacuously *closed*
+    before it ever traded -- which would wrongly suppress the settlement
+    these `sync_events`-level tests assert on. `front_symbol`/`back_symbol`
+    default to `seeded_position`'s own occ symbols so `resolve_fill_positions`
+    anchors both fills to it."""
+    await insert_fills(
+        session,
+        user_id,
+        [
+            FillWrite(
+                order_id=order_id,
+                occ_symbol=front_symbol,
+                leg_index=0,
+                execution_time=datetime(2026, 6, 1, 14, 30, tzinfo=UTC),
+                position_effect="OPENING",
+                side="SELL",
+                quantity=Decimal("1"),
+                price_usd=Decimal("44.8567"),
+            ),
+            FillWrite(
+                order_id=order_id,
+                occ_symbol=back_symbol,
+                leg_index=1,
+                execution_time=datetime(2026, 6, 1, 14, 30, tzinfo=UTC),
+                position_effect="OPENING",
+                side="BUY",
+                quantity=Decimal("1"),
+                price_usd=Decimal("30.1233"),
+            ),
+        ],
+    )
+
+
 # --- settlement_instant (Tests 1-4) -----------------------------------------
 
 
@@ -162,7 +209,9 @@ def test_derive_settlements_produces_no_draft_before_expiry() -> None:
         hour=8, minute=0
     )  # earlier the same day, still before the 09:30 AM instant
 
-    drafts = derive_settlements([leg], [], as_of=as_of)
+    drafts = derive_settlements(
+        [leg], [], as_of=as_of, closed_positions={leg.position_id: False}
+    )
 
     assert drafts == ()
 
@@ -171,7 +220,9 @@ def test_derive_settlements_produces_one_draft_at_or_after_expiry() -> None:
     leg = _leg(root="SPX", expiry=date(2026, 6, 18))
     instant = settlement_instant(date(2026, 6, 18), root="SPX")
 
-    drafts = derive_settlements([leg], [], as_of=instant)
+    drafts = derive_settlements(
+        [leg], [], as_of=instant, closed_positions={leg.position_id: False}
+    )
 
     assert drafts == (
         DerivedSettlement(position_id=leg.position_id, event_time=instant),
@@ -183,7 +234,9 @@ def test_derive_settlements_skips_a_leg_with_an_existing_settlement_row() -> Non
     instant = settlement_instant(date(2026, 6, 18), root="SPX")
     existing = _settlement_event_record(position_id=leg.position_id, event_time=instant)
 
-    drafts = derive_settlements([leg], [existing], as_of=instant)
+    drafts = derive_settlements(
+        [leg], [existing], as_of=instant, closed_positions={leg.position_id: False}
+    )
 
     assert drafts == ()
 
@@ -201,7 +254,9 @@ def test_derive_settlements_mixed_style_position_produces_two_distinct_drafts() 
     )
     as_of = datetime(2026, 12, 31, tzinfo=UTC)  # well past both expiries
 
-    drafts = derive_settlements([front, back], [], as_of=as_of)
+    drafts = derive_settlements(
+        [front, back], [], as_of=as_of, closed_positions={_POSITION_A: False}
+    )
 
     assert len(drafts) == 2
     event_times = {draft.event_time for draft in drafts}
@@ -209,13 +264,50 @@ def test_derive_settlements_mixed_style_position_produces_two_distinct_drafts() 
     assert {draft.position_id for draft in drafts} == {_POSITION_A}
 
 
+def test_derive_settlements_skips_a_leg_whose_position_is_already_closed() -> None:
+    """CR-02 (`07-REVIEW.md`): a leg whose position's own derived state is
+    already closed (`True`) must not settle, even though it is well past
+    its own expiry -- settling it would silently move the position's
+    derived `closed_at` from its real close date to this leg's nominal
+    expiry."""
+    leg = _leg(root="SPX", expiry=date(2026, 6, 18))
+    as_of = datetime(2026, 12, 31, tzinfo=UTC)  # well past expiry
+
+    drafts = derive_settlements(
+        [leg], [], as_of=as_of, closed_positions={leg.position_id: True}
+    )
+
+    assert drafts == ()
+
+
+def test_derive_settlements_skips_a_leg_whose_position_state_is_unknown() -> None:
+    """CR-02: an unknown position state (`None` -- a gapped leg
+    elsewhere in the position, or simply absent from the mapping) is
+    withheld exactly like an already-closed one -- never assumed settled
+    (`NN-16`)."""
+    leg = _leg(root="SPX", expiry=date(2026, 6, 18))
+    as_of = datetime(2026, 12, 31, tzinfo=UTC)  # well past expiry
+
+    drafts = derive_settlements(
+        [leg], [], as_of=as_of, closed_positions={leg.position_id: None}
+    )
+    assert drafts == ()
+
+    drafts_absent = derive_settlements([leg], [], as_of=as_of, closed_positions={})
+    assert drafts_absent == ()
+
+
 def test_derive_settlements_takes_no_session_and_reads_no_clock() -> None:
-    """D7-06: `as_of` is the only time input. No `AsyncSession` parameter,
-    keyword-only `as_of`."""
+    """D7-06: `as_of`/`closed_positions` are the only time/state inputs.
+    No `AsyncSession` parameter, both keyword-only."""
     signature = inspect.signature(derive_settlements)
     parameter_names = list(signature.parameters)
-    assert parameter_names == ["legs", "events", "as_of"]
+    assert parameter_names == ["legs", "events", "as_of", "closed_positions"]
     assert signature.parameters["as_of"].kind == inspect.Parameter.KEYWORD_ONLY
+    assert (
+        signature.parameters["closed_positions"].kind
+        == inspect.Parameter.KEYWORD_ONLY
+    )
     for name, parameter in signature.parameters.items():
         # `str(parameter)` (not `.annotation`, which typeshed types as
         # `Any`) renders the parameter's full "name: annotation" text --
@@ -238,9 +330,14 @@ async def test_sync_events_mixed_style_position_lands_two_settlement_rows(
     back (`occ_symbol="SPX260717P07275000"`, expiry 2026-07-17) under one
     position -- exactly criterion 3's fixture. Both expiries are past
     `as_of`; the sync must land exactly TWO settlement rows, not one
-    (Pitfall 2's regression, asserted at the `sync_events` level)."""
+    (Pitfall 2's regression, asserted at the `sync_events` level).
+    `_seed_opening_fills` (CR-02, `07-REVIEW.md`) gives the position a
+    genuinely nonzero net on both legs -- with `seeded_position`'s own
+    zero fills, `derive_position_state` would read it as vacuously
+    closed and CR-02's fix would wrongly withhold both settlements."""
     as_of = datetime(2026, 12, 31, tzinfo=UTC)
     await _set_current_user(app_db_session, provisioned_users.user_a)
+    await _seed_opening_fills(app_db_session, user_id=provisioned_users.user_a)
 
     await sync_events(app_db_session, provisioned_users.user_a, as_of=as_of)
     await app_db_session.commit()
@@ -262,9 +359,11 @@ async def test_sync_events_settlement_resync_adds_no_further_rows(
     seeded_position: SeededPosition,
 ) -> None:
     """Test 2 (db): syncing the same position a second time adds no
-    further settlement rows."""
+    further settlement rows. `_seed_opening_fills` (CR-02): a genuinely
+    open position, not `seeded_position`'s own vacuous zero-fill one."""
     as_of = datetime(2026, 12, 31, tzinfo=UTC)
     await _set_current_user(app_db_session, provisioned_users.user_a)
+    await _seed_opening_fills(app_db_session, user_id=provisioned_users.user_a)
 
     await sync_events(app_db_session, provisioned_users.user_a, as_of=as_of)
     await app_db_session.commit()
@@ -288,9 +387,11 @@ async def test_sync_events_settlement_rows_have_null_money_and_hash(
     seeded_position: SeededPosition,
 ) -> None:
     """Test 3 (db): each settlement row's `fill_ids_hash` and both money
-    fields are `None` -- never zero (D7-05, D7-07, NN-16)."""
+    fields are `None` -- never zero (D7-05, D7-07, NN-16).
+    `_seed_opening_fills` (CR-02): a genuinely open position."""
     as_of = datetime(2026, 12, 31, tzinfo=UTC)
     await _set_current_user(app_db_session, provisioned_users.user_a)
+    await _seed_opening_fills(app_db_session, user_id=provisioned_users.user_a)
 
     await sync_events(app_db_session, provisioned_users.user_a, as_of=as_of)
     await app_db_session.commit()
@@ -321,6 +422,65 @@ async def test_sync_events_no_settlement_row_before_expiry(
 
     records = await read_events(superuser_db_session, provisioned_users.user_a)
     assert [r for r in records if r.event_type == "SETTLEMENT"] == []
+
+
+@pytest.mark.db
+async def test_sync_events_closed_early_position_produces_no_settlement(
+    app_db_session: AsyncSession,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    """CR-02 (`07-REVIEW.md`), the negative direction: `seeded_position`'s
+    two legs are opened, then fully closed by real fills well before
+    either leg's own expiry -- exactly this project's normal trading
+    style (front legs actively managed, `CLAUDE.md`). Syncing with
+    `as_of` well past both expiries must land ZERO settlement rows; a
+    settlement here would silently move the position's derived
+    `closed_at` from its real close date to a leg's nominal expiry
+    (D7-01). Paired with `test_sync_events_mixed_style_position_lands_
+    two_settlement_rows` above (the positive control, a genuinely
+    expired *open* leg) so this fix cannot degenerate into "never settle
+    anything" -- a one-sided test here would be a vacuous pass."""
+    user_id = provisioned_users.user_a
+    await _set_current_user(app_db_session, user_id)
+    await _seed_opening_fills(app_db_session, user_id=user_id, order_id="OPEN-ORDER")
+    await insert_fills(
+        app_db_session,
+        user_id,
+        [
+            FillWrite(
+                order_id="CLOSE-ORDER",
+                occ_symbol="SPXW260618P07275000",
+                leg_index=0,
+                execution_time=datetime(2026, 6, 10, 14, 30, tzinfo=UTC),
+                position_effect="CLOSING",
+                side="BUY",
+                quantity=Decimal("1"),
+                price_usd=Decimal("10.00"),
+            ),
+            FillWrite(
+                order_id="CLOSE-ORDER",
+                occ_symbol="SPX260717P07275000",
+                leg_index=1,
+                execution_time=datetime(2026, 6, 10, 14, 30, tzinfo=UTC),
+                position_effect="CLOSING",
+                side="SELL",
+                quantity=Decimal("1"),
+                price_usd=Decimal("35.00"),
+            ),
+        ],
+    )
+
+    as_of = datetime(2026, 12, 31, tzinfo=UTC)  # well past both expiries
+    await sync_events(app_db_session, user_id, as_of=as_of)
+    await app_db_session.commit()
+
+    records = await read_events(superuser_db_session, user_id)
+    assert [r for r in records if r.event_type == "SETTLEMENT"] == []
+    # The position really did close early -- proves the fixture, not only
+    # the absence of a settlement.
+    assert {r.event_type for r in records} == {"OPEN", "CLOSE"}
 
 
 @pytest.mark.db

@@ -23,7 +23,7 @@ convention.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from uuid import UUID
@@ -101,17 +101,37 @@ def derive_settlements(
     events: Sequence[EventRecord],
     *,
     as_of: datetime,
+    closed_positions: Mapping[UUID, bool | None],
 ) -> tuple[DerivedSettlement, ...]:
     """Pure: no `AsyncSession` parameter, no clock read inside -- `as_of`
-    is the caller's only time input (D7-06).
+    is the caller's only time input (D7-06). `closed_positions` is the
+    caller's own second time-independent input: each position id this
+    leg set could belong to, mapped to that position's own derived
+    `is_closed` (`derive_position_state`, `ledger/positions.py`) --
+    `True`/`False`/`None`, computed by the caller from the same
+    fills/events already in hand. This function never queries for it
+    (D7-06's purity contract extends to this parameter too).
+
+    CR-02 (`07-REVIEW.md`): a leg whose position was already closed by
+    real fills before its own nominal expiry must never settle. Settling
+    it anyway would silently move the position's derived `closed_at`
+    (`derive_position_state`) from the real close date to the leg's
+    nominal expiry -- the exact "a stored/derived fact disagreeing with
+    the fills" failure `D7-01` dropped `positions.closed_at` to prevent.
+    So a leg is only offered a draft when `closed_positions.get
+    (leg.position_id)` is exactly `False` -- an already-closed position
+    (`True`) and an unknown one (`None`, or simply absent from the
+    mapping -- a gapped leg, `NN-16`) are both withheld, never assumed
+    settled.
 
     Builds the set of already-settled `(position_id, event_time)` pairs
-    from `events` whose `event_type` is `"SETTLEMENT"`. For each leg,
-    parses its `occ_symbol` through `parse_occ_symbol` to get the expiry,
-    computes its settlement instant through `settlement_instant` using the
-    leg's own stored `root`, skips it if that instant is later than
-    `as_of` (not expired yet), skips it if its `(position_id, event_time)`
-    pair is already present (idempotency), otherwise emits one draft.
+    from `events` whose `event_type` is `"SETTLEMENT"`. For each leg whose
+    position is confirmed still open, parses its `occ_symbol` through
+    `parse_occ_symbol` to get the expiry, computes its settlement instant
+    through `settlement_instant` using the leg's own stored `root`, skips
+    it if that instant is later than `as_of` (not expired yet), skips it
+    if its `(position_id, event_time)` pair is already present
+    (idempotency), otherwise emits one draft.
 
     Returned sorted by `(str(position_id), event_time)` so two runs over
     the same input are comparable element-wise.
@@ -124,6 +144,8 @@ def derive_settlements(
 
     drafts: list[DerivedSettlement] = []
     for leg in legs:
+        if closed_positions.get(leg.position_id) is not False:
+            continue
         contract = parse_occ_symbol(leg.occ_symbol)
         instant = settlement_instant(contract.expiry, root=leg.root)
         if instant > as_of:
