@@ -195,11 +195,21 @@ def _to_decimal(value: JsonValue) -> Decimal | None:
     Any shape that is not a real number (a nested mapping, a list, a
     boolean, `None`, or a malformed numeral) returns `None` rather than
     raising, which is what lets `parse_quote_payload` never raise without
-    a type-dispatch branch of its own."""
+    a type-dispatch branch of its own.
+
+    CR-01: `Decimal(str(value))` does not raise for the JSON `NaN`/
+    `Infinity`/`-Infinity` tokens -- `json.loads` accepts them by default
+    and `decimal.Decimal` supports them natively -- so a non-finite result
+    is rejected explicitly here rather than trusted as a real mark
+    (`L041`, D8-09: a gap is `mark_usd IS NULL`, never a fabricated or
+    non-finite value)."""
     try:
-        return Decimal(str(value))
+        result = Decimal(str(value))
     except ArithmeticError:
         return None
+    if not result.is_finite():
+        return None
+    return result
 
 
 def parse_quote_payload(raw: JsonValue, wire_symbol: str) -> ParsedQuote:

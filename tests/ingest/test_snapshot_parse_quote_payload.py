@@ -16,16 +16,18 @@ function.
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 from hypothesis import given
 from hypothesis import strategies as st
-from pydantic import JsonValue
+from pydantic import JsonValue, TypeAdapter
 
 from morai.ingest.snapshots import SnapshotGapReason, parse_quote_payload
 from tests.ingest.conftest import QUOTE_PAYLOAD
 
 _WIRE_SYMBOL = "SPXW  260618P07275000"
+_JSON_VALUE: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 
 
 def test_a_fully_populated_element_returns_the_exact_mark_and_spot() -> None:
@@ -116,8 +118,24 @@ def test_mark_precision_survives_both_string_and_high_precision_forms() -> None:
     )
 
 
+def test_nan_and_infinite_mark_tokens_degrade_to_a_gap_not_a_stored_mark() -> None:
+    """CR-01: a vendor payload carrying the bare `NaN`/`Infinity`/`-Infinity`
+    JSON tokens (which Python's own `json.loads` accepts by default) must
+    degrade to `NO_MARKET_DATA`, never a stored non-finite `Decimal` mark
+    (`L041`, D8-09 -- a gap is `mark_usd IS NULL`, and `Decimal('NaN')` is
+    not `None`)."""
+    for token in ("NaN", "Infinity", "-Infinity"):
+        raw = _JSON_VALUE.validate_python(
+            json.loads(f'{{"{_WIRE_SYMBOL}": {{"quote": {{"mark": {token}}}}}}}')
+        )
+        parsed = parse_quote_payload(raw, _WIRE_SYMBOL)
+        assert parsed.gap_reason is SnapshotGapReason.NO_MARKET_DATA, token
+        assert parsed.mark_usd is None, token
+        assert parsed.spot_usd is None, token
+
+
 _json_scalars = st.none() | st.booleans() | st.integers() | st.text()
-_json_numeric = st.floats(allow_nan=False, allow_infinity=False)
+_json_numeric = st.floats()
 _json_leaves = _json_scalars | _json_numeric
 _json_values = st.recursive(
     _json_leaves,
