@@ -73,7 +73,7 @@ _DATETIME_OR_NONE: TypeAdapter[datetime | None] = TypeAdapter(datetime | None)
 _SENTINEL_TIMESTAMP = datetime(2099, 1, 1, tzinfo=UTC)
 
 
-async def test_mutating_position_state_and_rederiving_from_scratch_reproduces_identical_events(
+async def test_mutating_position_state_and_rederiving_reproduces_identical_events(
     app_db_session: AsyncSession,
     superuser_db_session: AsyncSession,
     provisioned_users: SeededUsers,
@@ -108,13 +108,20 @@ async def test_mutating_position_state_and_rederiving_from_scratch_reproduces_id
     )
     await superuser_db_session.commit()
 
-    # Truncating events between the two derivations is what makes the
+    # Deleting the events between the two derivations is what makes the
     # second derivation a fresh computation rather than an idempotency
     # skip -- without this, sync_events' own read-compare-skip path would
     # see every draft's hash already present and insert nothing, which
-    # would prove nothing about whether the mutation leaked in.
-    await superuser_db_session.execute(text("TRUNCATE TABLE events"))
-    await superuser_db_session.commit()
+    # would prove nothing about whether the mutation leaked in. Deleted
+    # on app_db_session itself (the app role's DELETE grant on `events`,
+    # migration 0008), not TRUNCATE on a second session: a cross-session
+    # TRUNCATE would need an ACCESS EXCLUSIVE lock that app_db_session's
+    # own still-open transaction (holding a lock from the first
+    # sync_events/read_events calls above) would block until commit.
+    await app_db_session.execute(
+        text("DELETE FROM events WHERE user_id = :uid"),
+        {"uid": provisioned_users.user_a},
+    )
 
     second = await sync_events(app_db_session, provisioned_users.user_a)
     assert second.unresolved == ()
@@ -159,13 +166,15 @@ async def test_synthetic_open_calendar_derives_to_one_open_event_and_stays_open(
     close_events = [e for e in derivation.events if e.event_type is EventType.CLOSE]
     assert close_events == []
 
-    row = (
-        await superuser_db_session.execute(
-            text("SELECT closed_at FROM positions WHERE id = :id"),
-            {"id": SYNTHETIC_OPEN_POSITION_ID},
-        )
-    ).scalar_one()
-    assert _DATETIME_OR_NONE.validate_python(row) is None
+    closed_at = _DATETIME_OR_NONE.validate_python(
+        (
+            await superuser_db_session.execute(
+                text("SELECT closed_at FROM positions WHERE id = :id"),
+                {"id": SYNTHETIC_OPEN_POSITION_ID},
+            )
+        ).scalar_one()
+    )
+    assert closed_at is None
 
 
 async def test_synthetic_open_calendar_stays_open_alongside_the_13_real_calendars(
