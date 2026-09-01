@@ -109,6 +109,9 @@ WITH all_nonces AS (
     UNION ALL
     SELECT user_id, key_version, account_hash_nonce AS nonce
     FROM schwab_connections WHERE account_hash_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, raw_nonce AS nonce
+    FROM broker_transactions WHERE raw_nonce IS NOT NULL
 )
 SELECT user_id, key_version, nonce, COUNT(*) AS collision_count
 FROM all_nonces
@@ -121,7 +124,8 @@ HAVING COUNT(*) > 1
 # `schwab_connections.token_nonce`/`account_hash_nonce` -- both encrypted
 # under the connecting user's own Phase 3 DEK (D4-11, same domain as
 # fills/events), so both belong in this union, not the KEK-scoped query
-# below.
+# below. Phase 6 adds `broker_transactions.raw_nonce` -- same domain, same
+# reasoning (D6-02).
 _EXPECTED_NONCE_COLUMNS: frozenset[tuple[str, str]] = frozenset(
     {
         ("fills", "quantity_nonce"),
@@ -130,6 +134,7 @@ _EXPECTED_NONCE_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("events", "close_credit_usd_nonce"),
         ("schwab_connections", "token_nonce"),
         ("schwab_connections", "account_hash_nonce"),
+        ("broker_transactions", "raw_nonce"),
     }
 )
 

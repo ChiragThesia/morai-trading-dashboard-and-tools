@@ -22,6 +22,7 @@ from uuid import UUID
 
 from pydantic import TypeAdapter
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.crypto.envelope import (
@@ -156,7 +157,7 @@ async def _current_dek(session: AsyncSession, user_id: UUID) -> tuple[bytes, int
 
 async def insert_fills(
     session: AsyncSession, user_id: UUID, fills: list[FillWrite]
-) -> None:
+) -> int:
     """The only write path into the `fills` table (D3-13). Encrypts
     `quantity`/`price_usd` inside this function -- callers hand it
     `Decimal` and never touch AES (D3-15).
@@ -169,11 +170,28 @@ async def insert_fills(
     set it, so a commit issued from inside this function would silently
     break `app.current_user_id` for whatever RLS-protected query the
     caller runs next on the same session.
+
+    Chunks at `_CHUNK_SIZE` (NN-5, D3-16). Each chunk goes through
+    `pg_insert(...).on_conflict_do_nothing()` targeting the table's full
+    five-column composite primary key with a `RETURNING` clause, so
+    re-running over an overlapping window (INGEST-03) is a no-op past the
+    first successful write rather than an `IntegrityError`. The conflict
+    clause is safe here only because that primary key already carries
+    every discriminating column (`NN-1`); a key missing one column plus a
+    do-nothing clause is exactly the shape of the production bug that
+    silently dropped real fills (WR-A3, `salvage/invariants.md`). Returns
+    the landed count -- the number of rows that actually became durable,
+    never the number handed in.
     """
+    if not fills:
+        return 0
+
     dek, key_version = await _current_dek(session, user_id)
+    landed = 0
 
     for chunk_start in range(0, len(fills), _CHUNK_SIZE):
         chunk = fills[chunk_start : chunk_start + _CHUNK_SIZE]
+        values: list[dict[str, object]] = []
         for fill in chunk:
             quantity_ciphertext: bytes | None = None
             quantity_nonce: bytes | None = None
@@ -205,24 +223,49 @@ async def insert_fills(
                         execution_time=fill.execution_time,
                     ),
                 )
-            session.add(
-                Fill(
-                    _write_token=_FILL_WRITE_TOKEN,
-                    user_id=user_id,
-                    order_id=fill.order_id,
-                    occ_symbol=fill.occ_symbol,
-                    leg_index=fill.leg_index,
-                    execution_time=fill.execution_time,
-                    position_effect=fill.position_effect,
-                    side=fill.side,
-                    quantity_ciphertext=quantity_ciphertext,
-                    quantity_nonce=quantity_nonce,
-                    price_usd_ciphertext=price_usd_ciphertext,
-                    price_usd_nonce=price_usd_nonce,
-                    key_version=key_version,
-                )
+            values.append(
+                {
+                    "user_id": user_id,
+                    "order_id": fill.order_id,
+                    "occ_symbol": fill.occ_symbol,
+                    "leg_index": fill.leg_index,
+                    "execution_time": fill.execution_time,
+                    "position_effect": fill.position_effect,
+                    "side": fill.side,
+                    "quantity_ciphertext": quantity_ciphertext,
+                    "quantity_nonce": quantity_nonce,
+                    "price_usd_ciphertext": price_usd_ciphertext,
+                    "price_usd_nonce": price_usd_nonce,
+                    "key_version": key_version,
+                }
             )
-        await session.flush()
+
+        # Because a Core insert below bypasses `Fill.__init__` entirely,
+        # construct one gated instance per chunk purely so the sentinel
+        # gate is exercised on the live path and cannot silently rot --
+        # the same honest-ceiling gap `Fill`'s own docstring names. This
+        # constructed object is never added to the session; only the Core
+        # statement below actually writes.
+        Fill(_write_token=_FILL_WRITE_TOKEN, **values[0])
+
+        stmt = (
+            pg_insert(Fill)
+            .values(values)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    "user_id",
+                    "order_id",
+                    "occ_symbol",
+                    "leg_index",
+                    "execution_time",
+                ]
+            )
+            .returning(Fill.order_id)
+        )
+        result = await session.execute(stmt)
+        landed += len(result.fetchall())
+
+    return landed
 
 
 async def read_fills(session: AsyncSession, user_id: UUID) -> list[FillRecord]:

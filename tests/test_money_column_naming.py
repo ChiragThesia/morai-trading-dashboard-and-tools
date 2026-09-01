@@ -45,6 +45,13 @@ _UNIT_EXEMPT_BINARY_COLUMNS = frozenset(
         "schwab_connections.account_hash_nonce",
         "schwab_connections.token_ciphertext",
         "schwab_connections.token_nonce",
+        # Phase 6, D6-02: the whole raw vendor element (activity type, time,
+        # order id, and every transfer item -- money and non-money alike),
+        # serialized as one JSON document and encrypted as one opaque blob.
+        # No single unit applies to it, the same reasoning that exempts
+        # `schwab_connections.token_ciphertext` above.
+        "broker_transactions.raw_ciphertext",
+        "broker_transactions.raw_nonce",
     }
 )
 

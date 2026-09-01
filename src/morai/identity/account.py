@@ -32,7 +32,14 @@ from uuid import UUID
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.db.models import Event, Fill, Leg, Position, SchwabConnection
+from morai.db.models import (
+    BrokerTransaction,
+    Event,
+    Fill,
+    Leg,
+    Position,
+    SchwabConnection,
+)
 from morai.db.models import Session as SessionRow
 from morai.db.models import SetupToken, User, UserDataKey
 
@@ -48,10 +55,16 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
        row delete. Every trade row this user ever wrote becomes unreadable
        the instant this statement commits, even if the process crashes
        before any later step runs.
-    2. Trade rows (`events`, `legs`, `positions`, `fills`, children before
-       parents so no foreign key is violated) -- now provably inert
-       ciphertext. Deleted for storage and RLS-simplicity reasons, not for
-       confidentiality; confidentiality was already won by step 1.
+    2. Trade rows (`events`, `legs`, `positions`, `fills`,
+       `broker_transactions`, children before parents so no foreign key is
+       violated) -- now provably inert ciphertext. Deleted for storage and
+       RLS-simplicity reasons, not for confidentiality; confidentiality was
+       already won by step 1. `broker_transactions` carries an uncascaded
+       `user_id -> users.id` foreign key exactly like `fills` does (D6-02,
+       migration 0011), so it belongs in this same block for the same
+       reason `fills` does -- this file's own docstring already records
+       what happens when a new table with that foreign key is added
+       without doing this.
     3. Identity rows (`sessions`, `setup_tokens`, `schwab_connections`) --
        revokes any live session, any outstanding setup or reset token, and
        any live Schwab connection for this user (Phase 4). A Schwab
@@ -71,6 +84,9 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
     await session.execute(delete(Leg).where(Leg.user_id == user_id))
     await session.execute(delete(Position).where(Position.user_id == user_id))
     await session.execute(delete(Fill).where(Fill.user_id == user_id))
+    await session.execute(
+        delete(BrokerTransaction).where(BrokerTransaction.user_id == user_id)
+    )
 
     await session.execute(delete(SessionRow).where(SessionRow.user_id == user_id))
     await session.execute(delete(SetupToken).where(SetupToken.user_id == user_id))

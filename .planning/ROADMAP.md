@@ -216,7 +216,14 @@ Plans:
   4. Running ingest twice over an overlapping window, and running a manual re-sync repeatedly, changes nothing past the first successful write.
   5. A user connecting for the first time gets existing open positions and recent history backfilled; a sync run is queryable for when it ran, how many fills landed and what errored; and a batch insert chunks at or below 2,000 rows so the Postgres bind-parameter ceiling is never reached (`NN-5`).
 
-**Plans**: TBD
+**Plans**: 3 plans, 3 waves
+
+Plans:
+
+- [ ] 06-01-PLAN.md — Wave 1. Tracer: one deferred job pulling one Schwab transaction into the broker's own raw table and its fills, plus the raw-fidelity proofs, the 2,000-row ceiling, and the single-writer gate
+- [ ] 06-02-PLAN.md — Wave 2. The cycle: one job per connected user, the no-double-fire constraint proved against the installed schema, idempotent re-ingest, and the chunked first-connect backfill
+- [ ] 06-03-PLAN.md — Wave 3. The sync record, `last_synced_at`, and the manual re-sync — enqueued from the web process without a superuser connection
+
 **UI hint**: no
 
 ### Phase 7: Position and Campaign Read Models

@@ -133,6 +133,18 @@ CASES = [
         id="mypy-second_fill_writer-call-arg",
     ),
     pytest.param(
+        "violation_second_broker_transactions_writer.py",
+        ["uv", "run", "basedpyright"],
+        "reportCallIssue",
+        id="basedpyright-second_broker_transactions_writer-reportCallIssue",
+    ),
+    pytest.param(
+        "violation_second_broker_transactions_writer.py",
+        ["uv", "run", "mypy"],
+        "call-arg",
+        id="mypy-second_broker_transactions_writer-call-arg",
+    ),
+    pytest.param(
         "violation_schwab_json_boundary.py",
         ["uv", "run", "basedpyright"],
         "reportAny",

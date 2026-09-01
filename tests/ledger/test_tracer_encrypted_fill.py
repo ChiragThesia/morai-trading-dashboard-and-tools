@@ -15,7 +15,6 @@ from uuid import UUID
 import pytest
 from pydantic import TypeAdapter
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.ledger.fills import FillWrite, insert_fills, read_fills
@@ -150,14 +149,27 @@ async def test_user_data_keys_holds_only_the_wrapped_dek(
     }
 
 
-async def test_duplicate_composite_key_raises_integrity_error(
+async def test_duplicate_composite_key_is_a_no_op(
     app_db_session: AsyncSession, provisioned_users: SeededUsers
 ) -> None:
+    """Phase 6 retrofit (INGEST-03): `insert_fills` now carries `ON
+    CONFLICT DO NOTHING` on the full five-column primary key (WR-A3), so a
+    duplicate composite key is silently a no-op past the first successful
+    write -- never an `IntegrityError` -- which is what makes re-running
+    ingest over an overlapping window safe."""
     await _set_current_user(app_db_session, provisioned_users.user_a)
-    await insert_fills(app_db_session, provisioned_users.user_a, [_make_fill()])
+    first_landed = await insert_fills(
+        app_db_session, provisioned_users.user_a, [_make_fill()]
+    )
+    assert first_landed == 1
 
-    with pytest.raises(IntegrityError):
-        await insert_fills(app_db_session, provisioned_users.user_a, [_make_fill()])
+    second_landed = await insert_fills(
+        app_db_session, provisioned_users.user_a, [_make_fill()]
+    )
+    assert second_landed == 0
+
+    records = await read_fills(app_db_session, provisioned_users.user_a)
+    assert len(records) == 1
 
 
 async def test_differing_only_in_leg_index_is_a_distinct_row(
