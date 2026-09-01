@@ -305,8 +305,7 @@ def test_derive_settlements_takes_no_session_and_reads_no_clock() -> None:
     assert parameter_names == ["legs", "events", "as_of", "closed_positions"]
     assert signature.parameters["as_of"].kind == inspect.Parameter.KEYWORD_ONLY
     assert (
-        signature.parameters["closed_positions"].kind
-        == inspect.Parameter.KEYWORD_ONLY
+        signature.parameters["closed_positions"].kind == inspect.Parameter.KEYWORD_ONLY
     )
     for name, parameter in signature.parameters.items():
         # `str(parameter)` (not `.annotation`, which typeshed types as
