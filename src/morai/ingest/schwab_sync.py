@@ -48,9 +48,10 @@ from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.db.models import SchwabConnection
 from morai.ingest.broker_transactions import (
     BrokerTransactionWrite,
     insert_broker_transactions,
@@ -234,6 +235,43 @@ def extract_fills(transaction: _Transaction) -> tuple[list[FillWrite], list[str]
     return fills, skip_reasons
 
 
+async def sync_all_connected_users(session: AsyncSession) -> list[UUID]:
+    """Fans out one `sync_user` job per row in `schwab_connections`
+    (D6-01, Pattern 1, 06-RESEARCH.md). Returns the list of user ids it
+    deferred, in `schwab_connections`' own row order -- empty, with no
+    error, when no user is connected.
+
+    Runs on whatever session it is given, and that session must be the
+    superuser one -- this is the one place in the ingest path where that
+    is correct. The fan-out is a cross-tenant read by definition: it is
+    asking which users exist, and no RLS context can be set for "all
+    users" without either bypassing the policy (what a superuser session
+    already does, honestly) or setting a context that is a lie. This
+    function reads exactly one column, `user_id`, and touches no
+    encrypted value, so a cross-tenant read here discloses only the set
+    of connected users to a process that already holds the database
+    credentials. Every per-user job it defers then runs under that user's
+    own RLS context (`sync_user`'s own `set_config` call), which is where
+    the isolation this phase exists to prove actually lives.
+
+    Imports `app` from `morai.worker.app` inside the function body, not at
+    module scope: `worker/app.py` already imports `sync_user` from this
+    module at module scope, so a module-level `from morai.worker.app
+    import app` here would cycle. By the time this function is actually
+    called, both modules have finished loading -- the same local-import
+    shape `Fill.__init__`/`BrokerTransaction.__init__` already use to
+    break their own equivalent cycle.
+    """
+    from morai.worker.app import app
+
+    user_ids = list(
+        (await session.execute(select(SchwabConnection.user_id))).scalars().all()
+    )
+    for user_id in user_ids:
+        await app.configure_task("sync_user").defer_async(user_id=str(user_id))
+    return user_ids
+
+
 def sync_windows(
     last_synced_at: datetime | None, now: datetime, settings: Settings
 ) -> list[tuple[datetime, datetime]]:
@@ -248,6 +286,24 @@ def sync_windows(
     from `last_synced_at IS NULL` rather than a second stored boolean, the
     same reasoning `Position`'s own docstring gives for carrying no status
     column.
+
+    **Owed to the first live run, not guessed here (D6-03).** The real
+    per-call range limit and the real rate limit on `get_transactions` are
+    both unmeasured -- `settings.schwab_tx_max_range_days` and
+    `settings.schwab_tx_lookback_max_days` carry forward as named,
+    injectable constants, not as verified facts. `sync_user` logs every
+    window's requested bounds and returned element count; that logging is
+    the instrument the first live run reads to settle both, and no delay
+    or backoff is added ahead of a limit nobody has observed
+    (`06-RESEARCH.md`'s own recommendation).
+
+    **What the lookback does and does not guarantee for `INGEST-05`.** A
+    position opened before the lookback window and still open has no
+    fills inside the window this function returns, so a first-connect
+    backfill does not recover it. 365 days covers every front leg this
+    project's own structure uses by a wide margin -- a reasoned bound, not
+    a measured one. Said here rather than assumed silently: a silent
+    assumption is how a still-open calendar disappears.
     """
     if last_synced_at is not None:
         start = last_synced_at - timedelta(days=settings.schwab_tx_sync_overlap_days)
