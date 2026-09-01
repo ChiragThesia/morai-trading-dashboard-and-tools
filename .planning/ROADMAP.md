@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Schwab Connection and Token Lifecycle** - Self-service OAuth, per-user refresh locks, and queryable connection health
 - [x] **Phase 5: Fill Pairing and the Oracle Gate** - Broker leg fills paired into OPEN/CLOSE/ROLL/SETTLE events with correct net debit and credit, proven against the 13-calendar oracle before any broker connection exists (completed 2026-09-01)
 - [ ] **Phase 6: Raw Ingest and Backfill** - Immutable fills and independent broker transactions landing on a schedule, idempotently
-- [ ] **Phase 7: Position and Campaign Read Models** - Open/closed state, per-leg settlement, and rolled-position chains computed from events
+- [x] **Phase 7: Position and Campaign Read Models** - Open/closed state, per-leg settlement, and rolled-position chains computed from events
 - [ ] **Phase 8: Snapshot Capture** - Every open position repriced on the 30-minute RTH cadence, with honest gaps and a repair path
 - [ ] **Phase 9: Reconciliation Invariant and Status Endpoint** - Realised P&L checked against the broker's cash delta every cycle, and queryable
 - [ ] **Phase 10: The Pre-commitment Record** - What the user said they would do, captured before the position opens and unable to change afterwards
@@ -243,11 +243,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Tracer: one Schwab order becomes a position, its legs and an OPEN event, end to end through the real worker (D7-12, Pitfall 3)
-- [ ] 07-02-PLAN.md — Closed state derived from net quantity per leg, and migration 0014 drops the stored timestamps, adds the roll link and creates the campaign view (LEDGER-05, D7-01, D7-15)
-- [ ] 07-03-PLAN.md — Per-leg SETTLEMENT derivation with AM/PM style from `legs.root`, and the broadened idempotency key (LEDGER-06, LEDGER-07)
-- [ ] 07-04-PLAN.md — Campaign chain read model over the view, with the drop-and-recompute and cross-user isolation proofs (LEDGER-10, Pitfall 1)
-- [ ] 07-05-PLAN.md — Positive ROLL derivation reusing the oracle-proven money functions, closing the campaign chain end to end (LEDGER-10, D7-09)
+- [x] 07-01-PLAN.md — Tracer: one Schwab order becomes a position, its legs and an OPEN event, end to end through the real worker (D7-12, Pitfall 3)
+- [x] 07-02-PLAN.md — Closed state derived from net quantity per leg, and migration 0014 drops the stored timestamps, adds the roll link and creates the campaign view (LEDGER-05, D7-01, D7-15)
+- [x] 07-03-PLAN.md — Per-leg SETTLEMENT derivation with AM/PM style from `legs.root`, and the broadened idempotency key (LEDGER-06, LEDGER-07)
+- [x] 07-04-PLAN.md — Campaign chain read model over the view, with the drop-and-recompute and cross-user isolation proofs (LEDGER-10, Pitfall 1)
+- [x] 07-05-PLAN.md — Positive ROLL derivation reusing the oracle-proven money functions, closing the campaign chain end to end (LEDGER-10, D7-09)
 
 **UI hint**: no
 
@@ -368,7 +368,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 4. Schwab Connection and Token Lifecycle | 4/4 | In Progress|  |
 | 5. Fill Pairing and the Oracle Gate | 3/3 | Complete    | 2026-09-01 |
 | 6. Raw Ingest and Backfill | 2/3 | In Progress|  |
-| 7. Position and Campaign Read Models | 0/TBD | Not started | - |
+| 7. Position and Campaign Read Models | 5/5 | Executed | 2026-09-01 |
 | 8. Snapshot Capture | 0/TBD | Not started | - |
 | 9. Reconciliation Invariant and Status Endpoint | 0/TBD | Not started | - |
 | 10. The Pre-commitment Record | 0/TBD | Not started | - |

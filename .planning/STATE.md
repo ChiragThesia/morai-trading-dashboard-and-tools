@@ -147,6 +147,20 @@ from a development machine and is deferred by explicit user decision (2026-08-31
 | 3 | verification_deferred_human | /gsd-verify-work 3 |
 | 4 | verification_deferred_human | /gsd-verify-work 4 |
 | 6 | verification_deferred_human | /gsd-verify-work 6 |
+| 7 | verification_deferred_human | /gsd-verify-work 7 |
+
+Phase 7's code is complete and all four of its success criteria are verified against live code
+and a live database (459 passed, gate exit 0). Deferred by explicit user decision (2026-09-01)
+to keep the autonomous run moving; `07-VERIFICATION.md` keeps `status: human_needed` and was NOT
+rewritten to `passed`.
+
+Its one open item is narrower than the other four and is new in kind: `ZoneInfo("America/New_York")`
+must be confirmed to construct on the real Railway container. macOS always ships system tz data, so
+a local pass proves nothing about the deployed image — the failure, if it exists, is production-only.
+`tzdata==2026.3` is now pinned explicitly in `pyproject.toml`/`uv.lock` as the fix. `07-VALIDATION.md`
+lists this as Manual-Only. It closes with the same deploy as items 1-4 below: deploy this phase, run
+`sync_user` for a user whose legs are past expiry, confirm no `ZoneInfoNotFoundError` and that
+SETTLEMENT rows are written.
 
 Phase 6's code is complete and all five of its success criteria are verified against live
 code and a live database (383 passed, gate exit 0, clean on 114 files). Its one open item is
