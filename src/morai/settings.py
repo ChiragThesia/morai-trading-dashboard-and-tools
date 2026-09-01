@@ -73,6 +73,20 @@ class Settings(BaseSettings):
     schwab_app_secret: SecretStr | None = None
     schwab_callback_url: str | None = None
 
+    # Phase 6, D6-03: neither of the next two is verified against Schwab's
+    # real API -- the first live run is the experiment that measures them.
+    # 365 and 90 came forward from v1 marked UNJUSTIFIED in
+    # salvage/measured-constants.md; the installed schwab-py 1.5.1 source
+    # defaults `get_transactions` to a 60-day lookback with a docstring
+    # claiming a 60-day range constraint, which is why the chunk width below
+    # lands at 60 rather than v1's 90.
+    schwab_tx_lookback_max_days: int = 365
+    schwab_tx_max_range_days: int = 60
+    # Chosen, not measured -- safe only because re-reading a window is free
+    # once insert_fills/insert_broker_transactions carry ON CONFLICT DO
+    # NOTHING on their full primary keys.
+    schwab_tx_sync_overlap_days: int = 1
+
     @property
     def schwab_credentials(self) -> SchwabCredentials:
         """Raises before composing anything if any of the three is unset,

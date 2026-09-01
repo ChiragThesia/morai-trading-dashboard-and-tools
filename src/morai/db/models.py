@@ -309,6 +309,73 @@ class SchwabConnection(Base):
     )
 
 
+class BrokerTransaction(Base):
+    """The broker's own raw transaction record, independent of the
+    derivation pipeline by construction (D6-02, migration 0011). Composite
+    primary key is the natural `(user_id, activity_id)` pair -- never a
+    hashed surrogate: `salvage/invariants.md`'s WR-A3 entry records v1's
+    `hexToUuid` dropping a hex nibble and silently colliding two real
+    transactions onto one identifier, which its `onConflictDoNothing`
+    clause then dropped (`NN-1`).
+
+    `insert_broker_transactions()` in `morai.ingest.broker_transactions` is
+    the only intended way into this table -- see `__init__` below for the
+    enforcement, mirroring `Fill.__init__` exactly, including its own
+    honest ceiling: a Core `insert(BrokerTransaction.__table__)` statement
+    naming the table bypasses this constructor entirely, so this blocks
+    the ergonomic second path, not every conceivable one. This table is
+    Phase 9's comparison source precisely when the derived numbers are in
+    doubt, so a second writer has to be a type error rather than something
+    review catches (D6-02).
+    """
+
+    __tablename__ = "broker_transactions"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True
+    )
+    activity_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    transaction_type: Mapped[str] = mapped_column(Text, nullable=False)
+    transaction_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    order_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    raw_nonce: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    key_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __init__(self, *, _write_token: object, **kwargs: object) -> None:
+        """`_write_token` has no default -- omitting it is a missing-argument
+        error at the call site under basedpyright/mypy, not a silently
+        accepted `None`. Passing anything but the sentinel
+        `insert_broker_transactions()` holds raises here, at runtime --
+        mirrors `Fill.__init__`'s identical split exactly (D6-02): type
+        checkers verify shapes, not provenance.
+
+        SQLAlchemy's ORM does not call `__init__` when reconstructing a row
+        from a query result -- it uses `__new__` plus direct attribute
+        restoration, so an ordinary `SELECT` is unaffected by this guard.
+        The honest ceiling: a Core `insert(BrokerTransaction.__table__)`
+        statement bypasses this constructor entirely, so this blocks the
+        ergonomic second path, not every conceivable one.
+        """
+        from morai.ingest.broker_transactions import (
+            _BROKER_TRANSACTION_WRITE_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: the sentinel and its only legitimate holder (insert_broker_transactions) live in one module by design (D6-02); the leading underscore marks it module-private in intent, not a real access boundary between these two cooperating modules -- same convention Fill.__init__ already uses.
+        )
+
+        if _write_token is not _BROKER_TRANSACTION_WRITE_TOKEN:
+            raise RuntimeError(
+                "BrokerTransaction must be constructed by "
+                "insert_broker_transactions() -- constructing one directly "
+                "bypasses the derivation-pipeline independence D6-02 "
+                "exists to guarantee."
+            )
+        super().__init__(**kwargs)
+
+
 class Event(Base):
     """One derived ledger event -- OPEN, CLOSE, ROLL or SETTLEMENT
     (migration 0008, CRYPT-02). A ROLL's `open_debit_usd`/`close_credit_usd`
