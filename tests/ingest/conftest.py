@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
@@ -113,9 +114,21 @@ class _TxFakeSchwabClient(FakeSchwabClient):
     """`FakeSchwabClient` with a constructor field for the
     `get_transactions` payload it returns -- the base fake's own
     `get_transactions` unconditionally returns `[]` (Phase 4's own tests
-    never needed more)."""
+    never needed more).
+
+    `windows_by_call` records every `(start_date, end_date)` pair this
+    instance is asked for, in call order -- 06-02 Task 3's own proof that
+    `sync_user` never leaves either date unset (Pitfall 2, 06-RESEARCH.md).
+    `payload_by_window`, if set, returns that window's own payload (or `[]`
+    for a window with no entry) instead of the flat `transactions` field --
+    06-02 Task 3's own proof that overlapping per-window payloads still
+    land once."""
 
     transactions: JsonValue = field(default_factory=list)
+    payload_by_window: dict[tuple[datetime, datetime], JsonValue] | None = None
+    windows_by_call: list[tuple[datetime | None, datetime | None]] = field(
+        default_factory=list
+    )
 
     async def get_transactions(
         self,
@@ -125,6 +138,13 @@ class _TxFakeSchwabClient(FakeSchwabClient):
         end_date: datetime | None = None,
         symbol: str | None = None,
     ) -> JsonValue:
+        self.windows_by_call.append((start_date, end_date))
+        if (
+            self.payload_by_window is not None
+            and start_date is not None
+            and end_date is not None
+        ):
+            return self.payload_by_window.get((start_date, end_date), [])
         return self.transactions
 
 
@@ -134,9 +154,33 @@ class TxFakeSchwabAuth(FakeSchwabAuth):
     `_TxFakeSchwabClient` carrying this fixture's own `transactions`
     payload, instead of the base `FakeSchwabClient`. Reproduces
     `FakeSchwabAuth.build_client`'s own rotation body exactly -- only the
-    returned client type differs."""
+    returned client type differs.
+
+    `responses_by_user_id`, if set, selects the returned client's payload
+    (or raises the mapped exception) keyed by the user id embedded in the
+    connection's own refresh token -- the honest ceiling here: `build_client`
+    is `SchwabAuth`'s own `Protocol` method (Phase 4, D4-02) and carries no
+    `user_id` parameter, so the refresh token `token_read_func()` yields is
+    the only value that can distinguish one user's connection from
+    another's inside this method. A caller using this field must seed each
+    connection's refresh token as `str(user_id)` (06-02 Task 1's own
+    `_seed_connection`) for the lookup to resolve; a token that is not a
+    valid UUID, or that has no entry, falls back to the flat `transactions`
+    field, so a single-user test needs no mapping at all.
+
+    `last_client`, set on every call, is the one `_TxFakeSchwabClient`
+    instance this call actually returned -- `sync_user` opens exactly one
+    client per invocation and drives every window's `get_transactions`
+    call through it, so a test reads `windows_by_call` back off this
+    reference after the call, since no other reference to that instance
+    ever leaves `schwab_client_for_user`'s own context manager."""
 
     transactions: JsonValue = field(default_factory=list)
+    responses_by_user_id: dict[UUID, JsonValue | Exception] = field(
+        default_factory=dict
+    )
+    payload_by_window: dict[tuple[datetime, datetime], JsonValue] | None = None
+    last_client: _TxFakeSchwabClient | None = field(default=None, init=False)
 
     async def build_client(
         self,
@@ -152,9 +196,25 @@ class TxFakeSchwabAuth(FakeSchwabAuth):
                 "token": {"refresh_token": rotated_refresh_token},
             }
         )
-        return _TxFakeSchwabClient(
-            account_entries=self.account_entries, transactions=self.transactions
+
+        response: JsonValue | Exception = self.transactions
+        if self.responses_by_user_id:
+            try:
+                selector = UUID(current.refresh_token)
+            except ValueError:
+                selector = None
+            if selector is not None and selector in self.responses_by_user_id:
+                response = self.responses_by_user_id[selector]
+        if isinstance(response, Exception):
+            raise response
+
+        client = _TxFakeSchwabClient(
+            account_entries=self.account_entries,
+            transactions=response,
+            payload_by_window=self.payload_by_window,
         )
+        self.last_client = client
+        return client
 
 
 @pytest.fixture
