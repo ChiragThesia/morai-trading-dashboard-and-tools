@@ -17,6 +17,7 @@ dependencies = [
   "argon2-cffi==25.1.0",
   "cryptography==50.0.1",
   "schwab-py==1.5.1",
+  "tzdata==2026.3",
 ]
 
 [dependency-groups]

@@ -720,6 +720,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "schwab-py" },
     { name = "sqlalchemy", extra = ["postgresql-asyncpg"] },
+    { name = "tzdata" },
 ]
 
 [package.dev-dependencies]
@@ -748,6 +749,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = "==2.15.0" },
     { name = "schwab-py", specifier = "==1.5.1" },
     { name = "sqlalchemy", extras = ["postgresql-asyncpg"], specifier = "==2.0.52" },
+    { name = "tzdata", specifier = "==2026.3" },
 ]
 
 [package.metadata.requires-dev]
