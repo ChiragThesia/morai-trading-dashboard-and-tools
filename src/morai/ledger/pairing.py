@@ -90,7 +90,17 @@ order_anchors AS (
     SELECT DISTINCT user_id, order_id, position_id FROM anchors
 )
 SELECT fc.order_id, fc.occ_symbol, fc.leg_index, fc.execution_time,
-    (SELECT oa.position_id FROM order_anchors oa
+    -- CR-01 (05-REVIEW.md): one order can anchor to more than one
+    -- position (each via a different leg), so a plain scalar subquery
+    -- here can return more than one row for a genuinely shared leg and
+    -- Postgres raises instead of leaving the fill unresolved. Aggregating
+    -- with COUNT(*) = 1 collapses that conflict to NULL -- explicitly
+    -- unresolved (NN-11) -- rather than crashing the whole sync. Same
+    -- text-cast MIN(uuid) trick as the `anchors` CTE above: Postgres has
+    -- no MIN(uuid) aggregate, and COUNT(*) = 1 already guarantees the
+    -- single surviving row makes MIN a no-op pick, never an arbitrary one.
+    (SELECT CASE WHEN COUNT(*) = 1 THEN MIN(oa.position_id::text)::uuid END
+     FROM order_anchors oa
       WHERE oa.user_id = fc.user_id AND oa.order_id = fc.order_id
         AND oa.position_id IN (
           SELECT position_id FROM fill_candidates fc2
@@ -181,10 +191,16 @@ def _signed_leg_amount(fill: FillRecord, event_type: EventType) -> Decimal | Non
     `salvage/oracle-fixtures.md` states as `openNetDebit = buy - sell`,
     `closeNetCredit = sell - buy`.
 
-    Returns `None` when either `quantity` or `price_usd` is `None` -- a
-    gap is `None`, never `0` (NN-16).
+    Returns `None` when either `quantity` or `price_usd` is `None`, or
+    when `side` is neither `"BUY"` nor `"SELL"` (WR-01, `05-REVIEW.md`) --
+    a gap is `None`, never `0` and never a guess (NN-16). `side` is an
+    unconstrained `Text` column sourced from the vendor's own field; an
+    unrecognized value here must surface as a gap, not silently sign the
+    amount as though it were the opposite of whatever the vendor sent.
     """
     if fill.quantity is None or fill.price_usd is None:
+        return None
+    if fill.side not in ("BUY", "SELL"):
         return None
     amount = fill.price_usd * fill.quantity
     if event_type is EventType.OPEN:
@@ -372,7 +388,22 @@ async def sync_events(
     delete-then-reinsert this phase deliberately does not own. Fills are
     immutable, so this phase cannot reach that path; naming it here is
     what stops a later reader from assuming it was handled.
+
+    Concurrency (CR-02, `05-REVIEW.md`): takes this user's own
+    `pg_advisory_xact_lock` before the read-compare-skip window below, the
+    same per-user-lock shape `vendor/connections.py::schwab_client_for_user`
+    already uses for the identical class of race (`CLAUDE.md`'s own
+    "per-user single-writer lock" constraint). Transaction-scoped, so it
+    releases on the caller's own commit or rollback -- no separate unlock
+    to forget. Without it, two overlapping calls for the same user could
+    both read the same `existing_triples` under read-committed isolation
+    and both insert, duplicating an OPEN or CLOSE event.
     """
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:uid))"),
+        {"uid": str(user_id)},
+    )
+
     resolutions = await resolve_fill_positions(session, user_id)
     fills = await read_fills(session, user_id)
     if order_ids is not None:

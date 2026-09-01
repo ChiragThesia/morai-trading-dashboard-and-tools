@@ -142,6 +142,30 @@ def test_fill_whose_role_the_broker_did_not_report_contributes_to_nothing() -> N
     assert derivation.events == ()
 
 
+def test_signed_leg_amount_returns_none_for_unrecognized_side() -> None:
+    """WR-01 (`05-REVIEW.md`). A `side` that is neither `"BUY"` nor
+    `"SELL"` -- a vendor typo, a new value Schwab's API introduces, a
+    malformed ingestion row -- must not be silently signed as though it
+    carried the opposite value. A gap is `None`, never a guess (`NN-16`),
+    the same convention `_signed_leg_amount`'s own missing-quantity/price
+    handling already follows one paragraph above it."""
+    fill = _fill_record(
+        "ORDER-3",
+        "SPXW260618P07275000",
+        ORACLE_FILLS[0].execution_time,
+        "OPENING",
+        "MYSTERY",
+    )
+    assert (
+        pairing._signed_leg_amount(fill, EventType.OPEN)  # pyright: ignore[reportPrivateUsage]  # why: this module already imports `pairing` directly to prove LEDGER-12's no-broker-call gate; testing the private sign-convention helper it names in its own docstring is the same in-suite access, not a real boundary crossing.
+        is None
+    )
+    assert (
+        pairing._signed_leg_amount(fill, EventType.CLOSE)  # pyright: ignore[reportPrivateUsage]  # why: see above.
+        is None
+    )
+
+
 def test_hash_fill_ids_is_order_independent() -> None:
     keys: list[FillKey] = [
         (f.order_id, f.occ_symbol, 0, f.execution_time)

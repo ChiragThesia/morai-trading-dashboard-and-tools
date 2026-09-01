@@ -19,14 +19,18 @@ BOTH legs stay explicitly unresolved, `NN-11`) and cross-user isolation
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
 from pydantic import TypeAdapter
-from sqlalchemy import text
+from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.db.models import Leg, Position
 from morai.ledger.events import EventRecord, read_events
+from morai.ledger.fills import FillWrite, insert_fills
 from morai.ledger.pairing import EventType, sync_events
 from tests.identity.conftest import SeededUsers
 from tests.ledger.conftest import (
@@ -75,6 +79,119 @@ def _event(
         for r in records
         if r.position_id == position_id and r.event_type == event_type
     )
+
+
+# CR-01 (`05-REVIEW.md`) regression shape: dates far outside any real
+# oracle calendar so a collision with real data is structurally
+# impossible, mirroring `test_plaintext_queries.py`'s own
+# `_SYNTH_SYM_A`/`_SYNTH_SYM_B` convention.
+_CONFLICT_SYM_X = "SPXW269901P09990000"
+_CONFLICT_SYM_Y = "SPXW269901P09991000"
+_CONFLICT_SYM_Z = "SPXW269901P09992000"
+_CONFLICT_ORDER_ID = "SYNTH-TWO-ANCHOR-CONFLICT-0000000001"
+_CONFLICT_TIME = datetime(2026, 12, 2, 12, 0, tzinfo=UTC)
+
+
+async def _seed_two_anchor_conflict_order(
+    superuser_session: AsyncSession,
+    app_session: AsyncSession,
+    user_id: UUID,
+) -> tuple[UUID, UUID]:
+    """CR-01's regression shape: one order with three legs. Leg X anchors
+    uniquely to position 1, leg Y anchors uniquely to position 2, and leg
+    Z is shared by both positions -- the genuinely ambiguous leg Rule 3
+    exists to resolve. Before the fix, `order_anchors` holds both
+    positions for this order (from X's and Y's own unique anchors), so
+    resolving leg Z's fill returns two rows from a scalar subquery and
+    Postgres raises. Returns `(position_1_id, position_2_id)`.
+    """
+    position_1_id = (
+        await superuser_session.execute(
+            insert(Position).values(user_id=user_id).returning(Position.id)
+        )
+    ).scalar_one()
+    position_2_id = (
+        await superuser_session.execute(
+            insert(Position).values(user_id=user_id).returning(Position.id)
+        )
+    ).scalar_one()
+    await superuser_session.execute(
+        insert(Leg).values(
+            position_id=position_1_id,
+            user_id=user_id,
+            leg_role="front",
+            occ_symbol=_CONFLICT_SYM_X,
+            root="SPXW",
+        )
+    )
+    await superuser_session.execute(
+        insert(Leg).values(
+            position_id=position_1_id,
+            user_id=user_id,
+            leg_role="back",
+            occ_symbol=_CONFLICT_SYM_Z,
+            root="SPXW",
+        )
+    )
+    await superuser_session.execute(
+        insert(Leg).values(
+            position_id=position_2_id,
+            user_id=user_id,
+            leg_role="front",
+            occ_symbol=_CONFLICT_SYM_Y,
+            root="SPXW",
+        )
+    )
+    await superuser_session.execute(
+        insert(Leg).values(
+            position_id=position_2_id,
+            user_id=user_id,
+            leg_role="back",
+            occ_symbol=_CONFLICT_SYM_Z,
+            root="SPXW",
+        )
+    )
+    await superuser_session.commit()
+
+    await _set_current_user(app_session, user_id)
+    await insert_fills(
+        app_session,
+        user_id,
+        [
+            FillWrite(
+                order_id=_CONFLICT_ORDER_ID,
+                occ_symbol=_CONFLICT_SYM_X,
+                leg_index=0,
+                execution_time=_CONFLICT_TIME,
+                position_effect="OPENING",
+                side="BUY",
+                quantity=Decimal("1"),
+                price_usd=Decimal("50.00"),
+            ),
+            FillWrite(
+                order_id=_CONFLICT_ORDER_ID,
+                occ_symbol=_CONFLICT_SYM_Y,
+                leg_index=0,
+                execution_time=_CONFLICT_TIME,
+                position_effect="OPENING",
+                side="BUY",
+                quantity=Decimal("1"),
+                price_usd=Decimal("30.00"),
+            ),
+            FillWrite(
+                order_id=_CONFLICT_ORDER_ID,
+                occ_symbol=_CONFLICT_SYM_Z,
+                leg_index=0,
+                execution_time=_CONFLICT_TIME,
+                position_effect="OPENING",
+                side="SELL",
+                quantity=Decimal("1"),
+                price_usd=Decimal("20.00"),
+            ),
+        ],
+    )
+
+    return position_1_id, position_2_id
 
 
 async def test_unscoped_sweep_resolves_both_shared_front_leg_calendars_correctly(
@@ -275,3 +392,35 @@ async def test_cross_user_derivation_never_resolves_to_the_other_users_position(
     close_event = next(e for e in derivation.events if e.event_type is EventType.CLOSE)
     assert open_event.open_debit_usd == cal_8a63aa81.open_net_debit
     assert close_event.close_credit_usd == cal_8a63aa81.close_net_credit
+
+
+async def test_two_anchor_conflict_leaves_shared_leg_unresolved_without_raising(
+    app_db_session: AsyncSession,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """CR-01 (`05-REVIEW.md`). One order with three legs: X anchors
+    uniquely to position 1, Y anchors uniquely to position 2, Z is shared
+    by both. Before the fix, resolving Z's fill hit a scalar subquery that
+    returned two rows and Postgres raised `ProgrammingError` -- the whole
+    `sync_events` call for the user aborted instead of leaving Z's fill
+    explicitly unresolved (`NN-11`). The fix collapses the two-anchor
+    conflict to `NULL`; X and Y still resolve to their own positions and
+    land as OPEN events."""
+    position_1_id, position_2_id = await _seed_two_anchor_conflict_order(
+        superuser_db_session, app_db_session, provisioned_users.user_a
+    )
+
+    derivation = await sync_events(app_db_session, provisioned_users.user_a)
+
+    assert len(derivation.unresolved) == 1
+    unresolved_key = derivation.unresolved[0]
+    assert unresolved_key[1] == _CONFLICT_SYM_Z
+
+    assert len(derivation.events) == 2
+    event_1 = next(e for e in derivation.events if e.position_id == position_1_id)
+    event_2 = next(e for e in derivation.events if e.position_id == position_2_id)
+    assert event_1.event_type is EventType.OPEN
+    assert event_2.event_type is EventType.OPEN
+    assert event_1.open_debit_usd == Decimal("50.00")
+    assert event_2.open_debit_usd == Decimal("30.00")
