@@ -382,7 +382,22 @@ async def sync_events(
     delete-then-reinsert this phase deliberately does not own. Fills are
     immutable, so this phase cannot reach that path; naming it here is
     what stops a later reader from assuming it was handled.
+
+    Concurrency (CR-02, `05-REVIEW.md`): takes this user's own
+    `pg_advisory_xact_lock` before the read-compare-skip window below, the
+    same per-user-lock shape `vendor/connections.py::schwab_client_for_user`
+    already uses for the identical class of race (`CLAUDE.md`'s own
+    "per-user single-writer lock" constraint). Transaction-scoped, so it
+    releases on the caller's own commit or rollback -- no separate unlock
+    to forget. Without it, two overlapping calls for the same user could
+    both read the same `existing_triples` under read-committed isolation
+    and both insert, duplicating an OPEN or CLOSE event.
     """
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:uid))"),
+        {"uid": str(user_id)},
+    )
+
     resolutions = await resolve_fill_positions(session, user_id)
     fills = await read_fills(session, user_id)
     if order_ids is not None:
