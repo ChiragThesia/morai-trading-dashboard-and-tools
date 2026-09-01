@@ -188,7 +188,14 @@ Concretely: Schwab reports four unrelated rows for a calendar (buy back leg, sel
   4. Re-running derivation over the same `(user, order_id)` scope produces an identical event set, and the whole derivation completes with no broker call made from the process.
   5. A mutation-testing pass against the ledger module reports zero surviving mutants for seeded sign-flip, rounding, and off-by-one faults.
 
-**Plans**: TBD
+**Plans**: 3 plans, 3 waves
+
+Plans:
+
+- [ ] 05-01-PLAN.md — Wave 1. Tracer: `ledger/pairing.py` holding the promoted disambiguation SQL, the pure derivation core and the session shell, with one real calendar proved end to end at 32.35 and 36.35; the purity and no-broker-call gates; idempotent re-derivation over a `(user, order_id)` scope
+- [ ] 05-02-PLAN.md — Wave 2. The two hard cases: the shared front leg in both layers including the read that must never narrow to one calendar's own legs, the explicitly-unresolved negative case, cross-user isolation, position state mutated and proved inert, the 14th synthetic control, and `detect_roll` as a negative-only guard
+- [ ] 05-03-PLAN.md — Wave 3. The gate: 13 parametrized oracle cases named by their real broker order ids, the global invariants counted from Postgres, and the three seeded faults proved fatal
+
 **UI hint**: no
 
 ### Phase 6: Raw Ingest and Backfill
