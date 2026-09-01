@@ -989,3 +989,18 @@ guarantee, the more confidently the wrong conclusion gets recorded.
 **Source.** Measured in this repo 2026-08-31, Phase 4 wave 2, plans 04-02 and 04-03 against
 native Postgres 18. Both agents reported the collision from opposite sides before either
 identified it.
+
+**Resolved 2026-09-01, and it needed no code change.** Give each parallel agent its own
+database on the same cluster: `createdb morai_agent_<id>`, point that agent's `DATABASE_URL`
+at it, `dropdb` when the agent returns. The suite reads `DATABASE_URL` from the environment
+and nothing else, so isolation is a dispatch-time concern, not a source-code one.
+
+The one thing that could have blocked this does not: Postgres roles are cluster-wide, not
+per-database, so a second database re-running the migrations would hit `CREATE ROLE morai_app`
+a second time. Migration 0003 already guards that with a `SELECT 1 FROM pg_roles WHERE rolname
+= 'morai_app'` check, so the role is reused and each database applies its own grants.
+
+**Measured, not reasoned:** the full 383-test suite was run twice simultaneously against
+`morai_isolation_probe` and `morai_isolation_probe2` on one cluster. Both exited 0. That is the
+same shape — same machine, same cluster, two concurrent suites — that produced scattered
+phantom failures when both pointed at one database.
