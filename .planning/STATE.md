@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-current_phase: 07
-current_phase_name: Position and Campaign Read Models
+current_phase: 08
+current_phase_name: Snapshot Capture
 status: executing
 stopped_at: Phase 05 complete, ready to plan Phase 1
-last_updated: "2026-09-01T16:10:27.705Z"
+last_updated: "2026-09-01T21:39:56.619Z"
 last_activity: 2026-09-01
-last_activity_desc: Phase 07 execution started
-state_head: 8246f3519ba803b7e1bdc69536661a5100d2eb6c
+last_activity_desc: Phase 08 execution started
+state_head: ec82776d14d4d1961e8c8c5f5f7b77bb294465ee
 progress:
   total_phases: 11
   completed_phases: 1
-  total_plans: 38
-  completed_plans: 30
+  total_plans: 42
+  completed_plans: 35
   percent: 9
 ---
 
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** The ledger is correct across rolls and settlements — the sum of realised P&L over any
 window equals the broker's cash delta over that window, checked every ingest cycle.
-**Current focus:** Phase 07 — Position and Campaign Read Models
+**Current focus:** Phase 08 — Snapshot Capture
 
 ## Current Position
 
-Phase: 07 (Position and Campaign Read Models) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 07
-Last activity: 2026-09-01 — Phase 07 execution started
+Phase: 08 (Snapshot Capture) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 08
+Last activity: 2026-09-01 — Phase 08 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
