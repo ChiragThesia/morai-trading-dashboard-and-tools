@@ -145,6 +145,20 @@ from a development machine and is deferred by explicit user decision (2026-08-31
 |-------|-------|--------|
 | 2 | verification_deferred_human | /gsd-verify-work 2 |
 | 3 | verification_deferred_human | /gsd-verify-work 3 |
+| 4 | verification_deferred_human | /gsd-verify-work 4 |
+
+Phase 4's code is complete and all five of its success criteria are verified against live
+code, a live database, and live test runs (283 passed, gate exit 0). The one open item is
+the same Railway blocker Phases 2 and 3 carry, and it unblocks from the same action: set
+the secrets on the `web` service, then `railway config apply`. Phase 4 adds three to the
+list — `SCHWAB_API_KEY`, `SCHWAB_APP_SECRET`, `SCHWAB_CALLBACK_URL` — now declared with
+`preserve()` in `.railway/railway.ts`, which keeps a value that is already set but cannot
+create one. Deferred by explicit user decision (2026-08-31). `04-VERIFICATION.md` keeps
+`status: human_needed`; it was NOT rewritten to `passed`. Items in `04-UAT.md`.
+
+Phase 5 does not depend on any of this — the ROADMAP marks it "Parallel with Phase 4"
+because fill pairing is derivation logic that needs no broker connection.
+
 
 Owed on live Railway:
 
