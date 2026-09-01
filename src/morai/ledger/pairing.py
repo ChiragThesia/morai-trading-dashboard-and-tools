@@ -90,7 +90,17 @@ order_anchors AS (
     SELECT DISTINCT user_id, order_id, position_id FROM anchors
 )
 SELECT fc.order_id, fc.occ_symbol, fc.leg_index, fc.execution_time,
-    (SELECT oa.position_id FROM order_anchors oa
+    -- CR-01 (05-REVIEW.md): one order can anchor to more than one
+    -- position (each via a different leg), so a plain scalar subquery
+    -- here can return more than one row for a genuinely shared leg and
+    -- Postgres raises instead of leaving the fill unresolved. Aggregating
+    -- with COUNT(*) = 1 collapses that conflict to NULL -- explicitly
+    -- unresolved (NN-11) -- rather than crashing the whole sync. Same
+    -- text-cast MIN(uuid) trick as the `anchors` CTE above: Postgres has
+    -- no MIN(uuid) aggregate, and COUNT(*) = 1 already guarantees the
+    -- single surviving row makes MIN a no-op pick, never an arbitrary one.
+    (SELECT CASE WHEN COUNT(*) = 1 THEN MIN(oa.position_id::text)::uuid END
+     FROM order_anchors oa
       WHERE oa.user_id = fc.user_id AND oa.order_id = fc.order_id
         AND oa.position_id IN (
           SELECT position_id FROM fill_candidates fc2
