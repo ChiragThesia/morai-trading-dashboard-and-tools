@@ -148,6 +148,37 @@ from a development machine and is deferred by explicit user decision (2026-08-31
 | 4 | verification_deferred_human | /gsd-verify-work 4 |
 | 6 | verification_deferred_human | /gsd-verify-work 6 |
 | 7 | verification_deferred_human | /gsd-verify-work 7 |
+| 8 | verification_deferred_human | /gsd-verify-work 8 |
+
+Phase 8's code is complete and all five of its success criteria are verified against live code and
+a live database (587 passed, gate exit 0). Deferred by explicit user decision (2026-09-01) to keep
+the autonomous run moving; `08-VERIFICATION.md` keeps `status: human_needed` and was NOT rewritten
+to `passed`.
+
+Phase 8 carries TWO open items, both pre-declared Manual-Only in `08-VALIDATION.md` before
+execution — neither is a surprise finding:
+
+1. **The live Schwab `get_quotes` OPTION response schema.** This project has never called
+   `get_quotes` live, and `08-RESEARCH.md` rates the exact response shape LOW confidence. The design
+   absorbs the risk rather than assuming it away: raw payloads are stored independently (`D8-01`,
+   `D8-04`) and `parse_quote_payload` never raises — so a wrong field path yields honest gaps, never
+   a wrong number. Closing it needs one real capture slot against a live connection, comparing the
+   stored `snapshot_observations` payload against the parser's output.
+
+2. **Procrastinate's `MAX_DELAY` on a real worker outage.** `PeriodicDeferrer.MAX_DELAY = 600` (read
+   from the installed 3.9.0 source): a worker down more than ten minutes across a slot boundary
+   produces no job at all for that slot — not even a failed one. The *mechanism* is proven locally
+   (`missing_capture_slots` surfaces the hole and `backfill_uncaptured_slot_gaps` writes an honest
+   `slot_not_captured` gap), but the real trigger needs a deployed worker actually stopped.
+
+Both close with the same Railway deploy items 1-4 below.
+
+**Known test-infrastructure flake, not a production defect:**
+`test_expired_connection_writes_gap` can fail intermittently when run as a narrow subset. Root
+caused during verification to Phase 1's heartbeat periodic task (`cron="* * * * *"`) sharing the
+same Procrastinate `app` and monkeypatched auth seam. Confirmed three independent ways as test
+isolation, not Phase 8 behaviour, and it does not manifest under the gating command
+(`bash tools/gate.sh`). Worth fixing when the worker test harness is next touched.
 
 Phase 7's code is complete and all four of its success criteria are verified against live code
 and a live database (459 passed, gate exit 0). Deferred by explicit user decision (2026-09-01)
