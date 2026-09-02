@@ -42,6 +42,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 9: Reconciliation Invariant and Status Endpoint** - Realised P&L checked against the broker's cash delta every cycle, and queryable
 - [ ] **Phase 10: The Pre-commitment Record** - What the user said they would do, captured before the position opens and unable to change afterwards
 - [ ] **Phase 11: Review API Surface** - Campaigns, drift, cohort baselines, and lossless export
+- [ ] **Phase 12: Settlement Closes the Position** - A position whose legs expire is closed by the same derivation that closes one sold out (found by the 2026-09-02 sweep, not by a failing test)
+- [ ] **Phase 13: Re-auth Notification Delivery** - The notification half of the re-auth constraint, unowned since `D4-13` deferred it
 
 ## Phase Details
 
