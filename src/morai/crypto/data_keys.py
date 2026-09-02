@@ -1,0 +1,118 @@
+"""The promoted `_current_dek`/`_dek_for_version` helper (this plan, 08-01).
+
+Four copies of this exact query pair already existed before this phase --
+`morai.ledger.fills._current_dek`, `morai.ledger.events._current_dek`
+(mirroring `fills.py`'s own), `morai.vendor.connections._current_dek`/
+`_dek_for_version`, and `morai.ingest.broker_transactions._current_dek`.
+`broker_transactions.py`'s own docstring already named the rule: "a fourth
+copy is the signal to promote this into a shared helper, not a reason to
+duplicate a fourth time." Four already existed when this phase started, so
+this module is that promotion, done once, here.
+
+This phase adds a **fifth call site** into this one module --
+`morai.ingest.snapshots` -- not a fifth copy. The four pre-existing copies
+in `fills.py`, `events.py`, `connections.py` and `broker_transactions.py`
+are deliberately left untouched: migrating them onto this module is a
+drive-by refactor of four money-path modules from inside a snapshot-capture
+phase, and this repo's own change-hygiene rule ("minimal impact... no
+drive-by refactors mixed into other work") forbids exactly that. Out of
+scope for this phase, named here so the omission reads as a decision, not
+an oversight.
+
+## Contract (WR-02): both functions raise `DataKeyMissing`, never let
+## `NoResultFound` escape
+
+`current_dek` and `dek_for_version` answer the identical question --
+"does this user have a usable DEK" -- over the identical table. Both raise
+this module's own `DataKeyMissing` when the row is absent; neither lets
+`sqlalchemy.exc.NoResultFound` propagate. A caller that needs to tell
+"crypto-shredded" apart from every other failure catches `DataKeyMissing`
+around either call, uniformly.
+"""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from pydantic import TypeAdapter
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from morai.crypto.envelope import unwrap_dek
+from morai.settings import get_settings
+
+# Raw `text()` results type every column as `Any` -- same untyped-boundary
+# shape `ledger/fills.py`/`vendor/connections.py` already established.
+# `TypeAdapter` narrows at that boundary (D-06).
+_INT: TypeAdapter[int] = TypeAdapter(int)
+_BYTES: TypeAdapter[bytes] = TypeAdapter(bytes)
+
+
+class DataKeyMissing(RuntimeError):
+    """Raised by both `current_dek` and `dek_for_version` when the user's
+    `user_data_keys` row does not exist -- the account's data key has been
+    crypto-shredded (D3-08, AUTH-06). WR-02: the two functions answer the
+    identical question ("does this user have a usable DEK") over the
+    identical table, so both raise this domain error rather than letting
+    SQLAlchemy's own `NoResultFound` leak from only one of them -- a caller
+    can `except DataKeyMissing` around either and get the same contract.
+    Mirrors `vendor.connections.ConnectionDataKeyMissing`/
+    `ledger.fills.DataKeyMissing` exactly; kept local rather than imported
+    so this shared module does not depend on either caller's own package
+    for an unrelated error type."""
+
+
+async def current_dek(session: AsyncSession, user_id: UUID) -> tuple[bytes, int]:
+    """The user's highest-`key_version` DEK, unwrapped in-process only.
+    Raises `DataKeyMissing` (WR-02) rather than the `.one()` shape's own
+    `sqlalchemy.exc.NoResultFound` -- a crypto-shredded account must
+    classify as `DATA_KEY_MISSING`, not `UNKNOWN`, wherever a caller does
+    need a DEK."""
+    row = (
+        await session.execute(
+            text(
+                "SELECT key_version, wrapped_dek, wrap_nonce FROM user_data_keys "
+                "WHERE user_id = :user_id ORDER BY key_version DESC LIMIT 1"
+            ),
+            {"user_id": user_id},
+        )
+    ).one_or_none()
+    if row is None:
+        raise DataKeyMissing(
+            f"No user_data_keys row for user_id={user_id} -- the account's "
+            "data key has been destroyed (crypto-shred, D3-08)."
+        )
+    key_version = _INT.validate_python(row[0])
+    wrapped_dek = _BYTES.validate_python(row[1])
+    wrap_nonce = _BYTES.validate_python(row[2])
+    dek = unwrap_dek(wrapped_dek, wrap_nonce, get_settings().master_key_bytes)
+    return dek, key_version
+
+
+async def dek_for_version(
+    session: AsyncSession, user_id: UUID, key_version: int
+) -> bytes:
+    """The DEK for one specific `key_version` -- mirrors
+    `morai.vendor.connections._dek_for_version`'s body verbatim, so a row's
+    own stored `key_version` is always what unwraps it, even in a
+    hypothetical future where a user's DEK has been rotated."""
+    key_row = (
+        await session.execute(
+            text(
+                "SELECT wrapped_dek, wrap_nonce FROM user_data_keys "
+                "WHERE user_id = :user_id AND key_version = :key_version"
+            ),
+            {"user_id": user_id, "key_version": key_version},
+        )
+    ).one_or_none()
+    if key_row is None:
+        raise DataKeyMissing(
+            f"No user_data_keys row for user_id={user_id} "
+            f"key_version={key_version} -- the account's data key has been "
+            "destroyed (crypto-shred, D3-08)."
+        )
+    return unwrap_dek(
+        _BYTES.validate_python(key_row[0]),
+        _BYTES.validate_python(key_row[1]),
+        get_settings().master_key_bytes,
+    )

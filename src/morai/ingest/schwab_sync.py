@@ -57,6 +57,9 @@ from morai.ingest.broker_transactions import (
     insert_broker_transactions,
 )
 from morai.ledger.fills import FillWrite, insert_fills
+from morai.ledger.pairing import sync_events
+from morai.ledger.positions import create_positions
+from morai.ledger.reconciliation import run_reconciliation
 from morai.settings import Settings, get_settings
 from morai.vendor.connections import (
     ConnectionNotFound,
@@ -376,6 +379,34 @@ async def sync_user(
     `ConnectionNotFound` or vendor failure propagates so the caller's
     transaction rolls back whole, which is what `schwab_client_for_user`'s
     own context manager already relies on.
+
+    After every window's fills have landed, calls `create_positions` and
+    then `sync_events`, in that order, on this same session, inside this
+    same transaction -- neither opens a second session and neither commits
+    (D7-12, 07-RESEARCH.md's Pitfall 3). Position and leg rows must exist
+    before `sync_events` runs, because `resolve_fill_positions` joins fills
+    against `legs`. Without this, `positions`/`legs`/`events` stay
+    production-empty forever: `sync_events` had zero call sites under
+    `src/` before this phase, and nothing under `src/` ever created a
+    `positions`/`legs` row either.
+
+    `sync_events` is called with `as_of=now` (CR-01, `07-REVIEW.md`) -- the
+    same clock `sync_windows` already used a few lines above, not a second
+    one. Without threading it through, `sync_events`'s own default
+    (`as_of=None`) skips settlement derivation entirely, so every piece of
+    this phase's SETTLEMENT machinery would stay fully implemented and
+    unit-tested but unreachable from the one path a real user's data
+    travels.
+
+    `run_reconciliation` (Phase 9, `ledger/reconciliation.py`) runs last,
+    immediately after `sync_events` and before this function's own
+    `return`, on the same `now` those two calls already use -- never a
+    third clock read. This is the exact seam CR-01 names: Phase 7 shipped
+    `sync_events` fully built, unit-tested, merged and unreachable because
+    this one call site was missed, and the core value's own check must run
+    at the end of every ingest cycle (criterion 2) or the same failure
+    repeats. Runs on this same `morai_app` session, inside this same
+    transaction -- neither opens a second session nor commits (`D7-12`).
     """
     await session.execute(
         text("SELECT set_config('app.current_user_id', :uid, true)"),
@@ -436,6 +467,10 @@ async def sync_user(
                 session, user_id, broker_rows
             )
             fills_landed += await insert_fills(session, user_id, fill_rows)
+
+    await create_positions(session, user_id)
+    await sync_events(session, user_id, as_of=now)
+    await run_reconciliation(session, user_id, as_of=now)
 
     return SyncOutcome(
         broker_transactions_landed=broker_transactions_landed,

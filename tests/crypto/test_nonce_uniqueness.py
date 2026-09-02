@@ -112,6 +112,15 @@ WITH all_nonces AS (
     UNION ALL
     SELECT user_id, key_version, raw_nonce AS nonce
     FROM broker_transactions WHERE raw_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, raw_nonce AS nonce
+    FROM snapshot_observations WHERE raw_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, mark_usd_nonce AS nonce
+    FROM snapshot_marks WHERE mark_usd_nonce IS NOT NULL
+    UNION ALL
+    SELECT user_id, key_version, spot_usd_nonce AS nonce
+    FROM snapshot_marks WHERE spot_usd_nonce IS NOT NULL
 )
 SELECT user_id, key_version, nonce, COUNT(*) AS collision_count
 FROM all_nonces
@@ -135,6 +144,9 @@ _EXPECTED_NONCE_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("schwab_connections", "token_nonce"),
         ("schwab_connections", "account_hash_nonce"),
         ("broker_transactions", "raw_nonce"),
+        ("snapshot_observations", "raw_nonce"),
+        ("snapshot_marks", "mark_usd_nonce"),
+        ("snapshot_marks", "spot_usd_nonce"),
     }
 )
 
@@ -232,6 +244,11 @@ async def _seed_many_roll_events(
             fill_ids_hash=None,
             open_debit_usd=Decimal(f"{i}.1100"),
             close_credit_usd=Decimal(f"{i}.2200"),
+            # D7-10: a ROLL requires a non-NULL rolled_from_position_id;
+            # this module's own claim is about nonce uniqueness, not
+            # roll-chain semantics, so the FK target need not differ from
+            # position_id itself.
+            rolled_from_position_id=position_id,
         )
         for i in range(count)
     ]
@@ -318,6 +335,7 @@ async def test_union_query_returns_exactly_the_planted_cross_column_collision(
                 fill_ids_hash=None,
                 open_debit_usd=Decimal("50.0000"),
                 close_credit_usd=Decimal("25.0000"),
+                rolled_from_position_id=seeded_position.position_id,
             )
         ],
     )

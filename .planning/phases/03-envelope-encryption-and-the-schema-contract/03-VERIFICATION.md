@@ -56,7 +56,7 @@ against SUMMARY.md prose:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Real `pg_dump` restored w/o master key yields no readable price/qty/P&L/free-text; no two ciphertext rows share `(key, nonce)` | ✓ VERIFIED | `tests/test_pg_dump_confidentiality.py` restores a real dump into a scratch DB, reads `bytea` back as real Python `bytes` through a real `AsyncEngine` with `MORAI_MASTER_KEY` unset, asserts no plaintext (incl. a free-text marker) is a substring of any ciphertext, and independently asserts no plaintext's **hex encoding** appears in the dump text — the correct test shape per 03-VALIDATION.md's own trap. A named negative control (`test_naive_literal_grep_passes_but_hex_grep_catches_unencrypted_marker`) demonstrates the naive literal-grep false pass live. Nonce uniqueness: `tests/crypto/test_nonce_uniqueness.py` now runs **two** queries — a per-user `(user_id, key_version, nonce)` UNION over `fills`/`events`, and a separate `GROUP BY wrap_nonce` over `user_data_keys` for the KEK domain — each with its own planted-collision positive control, and the schema-drift guard's expected-column set now includes `user_data_keys.wrap_nonce`. This is the WR-01 review fix, applied: the module's own docstring narrates "an earlier version of this module drew the wrong conclusion... Found in Phase 3's code review as WR-01," and the fixed code matches. All tests pass. |
+| 1 | Real `pg_dump` restored w/o master key yields no readable per-user trade detail — price/qty/per-trade P&L/free-text — with the four `reconciliation_runs` aggregates the named plaintext exception; no two ciphertext rows share `(key, nonce)` | ✓ VERIFIED (criterion narrowed 2026-09-02 — see below) | `tests/test_pg_dump_confidentiality.py` restores a real dump into a scratch DB, reads `bytea` back as real Python `bytes` through a real `AsyncEngine` with `MORAI_MASTER_KEY` unset, asserts no plaintext (incl. a free-text marker) is a substring of any ciphertext, and independently asserts no plaintext's **hex encoding** appears in the dump text — the correct test shape per 03-VALIDATION.md's own trap. A named negative control (`test_naive_literal_grep_passes_but_hex_grep_catches_unencrypted_marker`) demonstrates the naive literal-grep false pass live. Nonce uniqueness: `tests/crypto/test_nonce_uniqueness.py` now runs **two** queries — a per-user `(user_id, key_version, nonce)` UNION over `fills`/`events`, and a separate `GROUP BY wrap_nonce` over `user_data_keys` for the KEK domain — each with its own planted-collision positive control, and the schema-drift guard's expected-column set now includes `user_data_keys.wrap_nonce`. This is the WR-01 review fix, applied: the module's own docstring narrates "an earlier version of this module drew the wrong conclusion... Found in Phase 3's code review as WR-01," and the fixed code matches. All tests pass. |
 | 2 | Plaintext-by-design columns documented in the migration with the query each serves; both disambiguation and reconciliation queries run in SQL against it | ✓ VERIFIED | `alembic/versions/0007_data_key_and_fills.py` and `0008_positions_legs_events.py` each carry a `## Plaintext-by-design columns... and the query each serves` docstring section naming every plaintext column and its serving query, confirmed by direct read of the migration files (not a paraphrase). `tests/ledger/test_plaintext_queries.py` runs `_DISAMBIGUATION_QUERY` and `_RECONCILIATION_WINDOW_QUERY` as real SQL against real Postgres, seeded with all 13 oracle calendars' 52 real fills through `insert_fills()` (`tests/ledger/oracle_seed.py`). The disambiguation query resolves both calendars sharing front-leg `SPXW260618P07275000`; an unanchored order resolves to `NULL`, not a guess. The window query selects the correct real June-2026 events by `event_time` alone; the total is summed in Python from decrypted `Decimal`s, never in SQL. `test_neither_query_names_a_ciphertext_or_nonce_column` proves this mechanically against `information_schema.columns`, not by inspection. |
 | 3 | KEK rotation re-wraps every DEK without touching trade ciphertext; versioned rows still read under the key they were written with | ✓ VERIFIED | `src/morai/crypto/rotation.py`'s `rotate_kek()` contains no statement naming a trade table — read directly, confirmed. `tests/test_key_rotation.py::test_rotation_touches_no_trade_ciphertext` captures **every** fill/event ciphertext+nonce value into a dict keyed by row identity, before and after rotation, and asserts the **whole dict** is unchanged (`after_ciphertext == before_ciphertext`) — not a sample, closing 03-VALIDATION.md's own named trap ("it still decrypts" would pass even if every row were rewritten). The same test confirms every wrapped DEK changed while its unwrapped bytes did not, and that a `key_version=1` row still decrypts correctly after rotating to a brand-new KEK, through the normal `read_fills`/`read_events` path. `test_rotating_with_the_wrong_old_key_raises_without_writing` confirms a bad old key raises `InvalidTag` before any row is touched — `rotate_kek()`'s single `session.flush()` at the end of the loop (not per-row) makes this structurally all-or-nothing, confirmed by reading the function body. |
 | 4 | Netted-only ROLL insert rejected by a database `CHECK`, not application code | ✓ VERIFIED | Live query against Postgres confirms `roll_has_both_legs` exists on `events`: `CHECK (((event_type <> 'ROLL') OR ((open_debit_usd_ciphertext IS NOT NULL) AND (close_credit_usd_ciphertext IS NOT NULL))))`. `tests/ledger/test_roll_check_constraint.py` inserts via raw `sa.text()` on the superuser session — never through the ORM or a write path — and both one-sided-ROLL shapes raise `IntegrityError` naming the constraint; a both-populated ROLL, a one-sided OPEN, and an all-NULL SETTLEMENT all insert cleanly. `insert_events()` separately raises before reaching the DB for a one-sided ROLL, so the CHECK is a backstop, not the only guard. The migration's own docstring states plainly what the CHECK can and cannot catch (presence, never the decrypted value) — no overclaim. |
@@ -117,10 +117,10 @@ because it reflects on the phase's own work.
 | Requirement | Description | Status | Evidence |
 |-------------|-------------|--------|----------|
 | CRYPT-01 | Per-user data key at account creation, wrapped by an env-held master key | ✓ SATISFIED | `provision_data_key()`, tested in `tests/identity/test_account_deletion.py` (creation tests) |
-| CRYPT-02 | Prices/quantities/P&L/free-text stored encrypted | ✓ SATISFIED | `fills`/`events` ciphertext columns; pg_dump confidentiality proof |
+| CRYPT-02 | Per-user trade detail (prices/quantities/per-trade P&L/free-text) stored encrypted; the four `reconciliation_runs` aggregates deliberately plaintext | ✓ SATISFIED | `fills`/`events` ciphertext columns; pg_dump confidentiality proof; allow-list guard on the plaintext set |
 | CRYPT-03 | Plaintext column set explicit, documented, with reason | ✓ SATISFIED | Migration docstrings; both SQL queries proven against real data |
 | CRYPT-04 | Master key rotatable without re-encrypting trade data | ✓ SATISFIED | Byte-identical rotation proof |
-| CRYPT-05 | Dump without master key yields no readable price/qty/P&L | ✓ SATISFIED | Real pg_dump + scratch restore + hex-grep proof |
+| CRYPT-05 | Dump without master key yields no readable price/qty/per-trade P&L, outside the four allow-listed `reconciliation_runs` aggregates | ✓ SATISFIED | Real pg_dump + scratch restore + hex-grep proof, over the whole database; catalog-derived allow-list guard |
 | AUTH-06 | Account deletion purges data, destroys data key | ✓ SATISFIED | Crypto-shred middle-state proof; `DELETE /me` |
 | LEDGER-04 | ROLL stores two separate fields; DB constraint blocks netted-only | ✓ SATISFIED | `roll_has_both_legs` CHECK, live-verified |
 
@@ -187,7 +187,35 @@ weakened, in the process. The two items in Human Verification are pre-existing, 
 acknowledged deferrals (not discovered defects) that require access to Railway's live
 configuration to close — hence `status: human_needed` rather than `passed`.
 
+### Criterion 1 narrowed — 2026-09-02
+
+This report verified criterion 1 as written on 2026-08-31. Migration 0016 landed with Phase 9
+and made the criterion's original wording false. `reconciliation_runs` stores
+`realised_pnl_usd`, `commissions_usd`, `cash_delta_usd` and `signed_difference_usd` as
+plaintext `NUMERIC(14,4)`. A real `pg_dump` of a seeded row, no master key involved, yields
+readable P&L. The verification sweep measured it; it did not infer it.
+
+The plaintext is deliberate. `D9-13` requires the stored row to answer "how far off, and in
+which direction" on its own. `D9-15` requires `GET /reconciliation/status` to be cheap enough
+to poll before rendering. A wrapped data key in the path defeats both.
+
+The owner ruled on 2026-09-02: narrow criterion 1, keep the columns plaintext, leave
+`/reconciliation/status` alone. The criterion's row above now says what is true — per-user trade
+detail is unreadable without the master key, and the four reconciliation aggregates are the
+named exception.
+
+The narrowed line is enforced, not just written down.
+`tests/test_pg_dump_confidentiality.py::test_only_the_reconciliation_aggregates_store_plaintext_money`
+derives every plaintext money column in the schema from `pg_attribute` and compares it to a
+four-entry allow-list. A fifth plaintext money column fails that test on the migration that adds
+it. The same file's dump now covers the whole database instead of five named tables, and reads
+back every ciphertext column the catalog reports instead of the four it used to name.
+
+**This narrowing changes no `status`.** `human_needed` stands, and both live-infrastructure
+items above remain open. A local pass proves nothing about a deployed container.
+
 ---
 
 _Verified: 2026-08-31T17:35:06Z_
 _Verifier: Claude (gsd-verifier)_
+_Criterion 1 narrowed on owner ruling: 2026-09-02_

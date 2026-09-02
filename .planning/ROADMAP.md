@@ -37,11 +37,40 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Schwab Connection and Token Lifecycle** - Self-service OAuth, per-user refresh locks, and queryable connection health
 - [x] **Phase 5: Fill Pairing and the Oracle Gate** - Broker leg fills paired into OPEN/CLOSE/ROLL/SETTLE events with correct net debit and credit, proven against the 13-calendar oracle before any broker connection exists (completed 2026-09-01)
 - [ ] **Phase 6: Raw Ingest and Backfill** - Immutable fills and independent broker transactions landing on a schedule, idempotently
-- [ ] **Phase 7: Position and Campaign Read Models** - Open/closed state, per-leg settlement, and rolled-position chains computed from events
-- [ ] **Phase 8: Snapshot Capture** - Every open position repriced on the 30-minute RTH cadence, with honest gaps and a repair path
-- [ ] **Phase 9: Reconciliation Invariant and Status Endpoint** - Realised P&L checked against the broker's cash delta every cycle, and queryable
-- [ ] **Phase 10: The Pre-commitment Record** - What the user said they would do, captured before the position opens and unable to change afterwards
-- [ ] **Phase 11: Review API Surface** - Campaigns, drift, cohort baselines, and lossless export
+- [x] **Phase 7: Position and Campaign Read Models** - Open/closed state, per-leg settlement, and rolled-position chains computed from events
+- [x] **Phase 8: Snapshot Capture** - Every open position repriced on the 30-minute RTH cadence, with honest gaps and a repair path
+- [x] **Phase 9: Reconciliation Invariant and Status Endpoint** - Realised P&L checked against the broker's cash delta every cycle, and queryable
+- ⏸ **Phase 10: The Pre-commitment Record** — **PARKED 2026-09-02, out of scope**
+- ⏸ **Phase 11: Review API Surface** — **PARKED 2026-09-02, out of scope**
+- ◆ **Phase 12: Settlement Closes the Position** — **UNPARKED 2026-09-02, in progress as a direct fix.** The owner reversed the park the same day: this is journal correctness, not a feature, and a front short put expiring worthless is the normal exit for these calendars. Being fixed as ledger work rather than run as a phase.
+- ⏸ **Phase 13: Re-auth Notification Delivery** — **PARKED 2026-09-02, out of scope**
+
+### Why these four are parked
+
+The owner restated the scope on 2026-09-02: **the only two features this project needs are (1) a
+trading journal that pulls their own trades from Schwab and shows them, and (2) a skew finder using
+the skewness formula.** Phases 10 through 13 serve neither.
+
+They are parked, not deleted. Every planning artifact stays on disk — Phase 10 has a full
+CONTEXT/RESEARCH/PATTERNS/VALIDATION set and three finished plans, and Phases 12 and 13 carry the
+reasoning behind defects found by the 2026-09-02 re-verification sweep. If the scope widens again,
+none of that has to be rediscovered.
+
+**One defect does NOT get parked with its phase — and it was unparked hours later.** Phase 12 existed
+because `is_closed` reads only `FillRecord`s, so a position whose legs expire stays net-nonzero
+forever — reproduced, not theorised. That is a **journal correctness bug**, not a feature: a trader
+looking at their journal would see expired calendars listed as open positions, and `read_open_legs`
+would keep requesting quotes for dead contracts.
+
+The owner reversed the park the same day and it is **being fixed directly** as ledger work rather
+than run as a phase. The Phase 12 section below stays as the spec — its four success criteria are
+what the fix is held to. Phases 10, 11 and 13 remain parked.
+
+**Fixed 2026-09-02**, ahead of that milestone. Migration 0017 adds `events.leg_id`, so a SETTLEMENT
+records which leg it settles and `derive_position_state` closes that leg from the event stream it
+already reads — no `as_of` clock input, so the purity contract stands unchanged. Phase 12's
+criteria 1, 2 and 3 are met; its criterion 4 (Phase 10's INTENT-07 at-close capture) stays parked
+with Phase 10.
 
 ## Phase Details
 
@@ -122,7 +151,7 @@ criteria met in substance.
 **Requirements**: CRYPT-01, CRYPT-02, CRYPT-03, CRYPT-04, CRYPT-05, AUTH-06, LEDGER-04
 **Success Criteria** (what must be TRUE):
 
-  1. A real `pg_dump` restored with the master key unavailable yields no readable price, quantity, P&L, or free-text entry field, and no two ciphertext rows share a `(key, nonce)` pair.
+  1. A real `pg_dump` restored with the master key unavailable yields no readable per-user trade detail — price, quantity, per-trade P&L, or free-text entry field — and no two ciphertext rows share a `(key, nonce)` pair. **The `reconciliation_runs` aggregates are the one exception, and they are plaintext on purpose**: `realised_pnl_usd`, `commissions_usd`, `cash_delta_usd` and `signed_difference_usd` are readable in a dump so `GET /reconciliation/status` can report drift without unwrapping a data key (`D9-13`, `D9-15`, migration 0016). The owner ruled on 2026-09-02 to narrow this criterion rather than encrypt those columns. The line is an allow-list, enforced mechanically: `tests/test_pg_dump_confidentiality.py::test_only_the_reconciliation_aggregates_store_plaintext_money` derives every plaintext money column from the catalog and fails on a fifth.
   2. The plaintext-by-design column set — `user_id`, `order_id`, `occ_symbol`, timestamps, join keys — is documented in the migration with the query each column exists to serve, and both the shared-front-leg disambiguation query and the reconciliation window query run in SQL against it.
   3. Rotating the master key re-wraps every user's data key without touching a single row of trade ciphertext, and versioned rows still read under the key they were written with.
   4. Inserting a ROLL row carrying only a netted amount is rejected by a database `CHECK` constraint, not by application code that a later caller could bypass.
@@ -240,7 +269,15 @@ Plans:
   3. A PM-settled SPXW front leg and an AM-settled SPX back leg sit inside one position, each settling on its own style and its own date.
   4. A campaign returns as a chain of rolled positions computed from events, and dropping the campaign read model and recomputing it from events yields the identical chain.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [x] 07-01-PLAN.md — Tracer: one Schwab order becomes a position, its legs and an OPEN event, end to end through the real worker (D7-12, Pitfall 3)
+- [x] 07-02-PLAN.md — Closed state derived from net quantity per leg, and migration 0014 drops the stored timestamps, adds the roll link and creates the campaign view (LEDGER-05, D7-01, D7-15)
+- [x] 07-03-PLAN.md — Per-leg SETTLEMENT derivation with AM/PM style from `legs.root`, and the broadened idempotency key (LEDGER-06, LEDGER-07)
+- [x] 07-04-PLAN.md — Campaign chain read model over the view, with the drop-and-recompute and cross-user isolation proofs (LEDGER-10, Pitfall 1)
+- [x] 07-05-PLAN.md — Positive ROLL derivation reusing the oracle-proven money functions, closing the campaign chain end to end (LEDGER-10, D7-09)
+
 **UI hint**: no
 
 ### Phase 8: Snapshot Capture
@@ -259,7 +296,15 @@ Plans:
   4. The repair path is runnable and rebuilds marks from the raw observations actually stored, and it ships in this phase alongside the writer rather than a phase later.
   5. A user whose connection is expired gets an honest gap row for that slot rather than a skipped row that later reads as if the position did not exist.
 
-**Plans**: TBD
+**Plans**: 4 plans, 3 waves
+
+Plans:
+
+- [x] 08-01-PLAN.md — Wave 1. Tracer: migration 0015, the Schwab wire-symbol codec nothing existed to reuse, the never-raising quote parser, and one open leg repriced end to end through a real periodic tick and a real deferred job
+- [x] 08-02-PLAN.md — Wave 2. Gap semantics: the four-cell asymmetric-upsert truth table against real Postgres, three distinguishable gap causes, isolation at both grains, and the Eastern grid across both daylight-saving transitions
+- [x] 08-03-PLAN.md — Wave 2. The repair path, shipped beside the writer per criterion 4 and `L040`: one function, a Procrastinate task and a CLI, plus an honest gap for a slot the scheduler never fired
+- [x] 08-04-PLAN.md — Wave 3. `snapshot_runs` and the query that separates a stalled job from a vendor outage — including the slots Procrastinate's ten-minute backfill ceiling drops entirely
+
 **UI hint**: no
 
 ### Phase 9: Reconciliation Invariant and Status Endpoint
@@ -277,7 +322,14 @@ Plans:
   3. A failure names the failing window, not a bare boolean, so the next question is answerable without re-running anything.
   4. Reconciliation status is its own endpoint, cheap enough to poll before rendering anything, and while it is failing the API marks the dependent numbers untrustworthy rather than serving them plain.
 
-**Plans**: TBD
+**Plans**: 3 plans, 2 waves
+
+Plans:
+
+- [x] 09-01-PLAN.md — Wave 1. Tracer: migration 0016, the pure/shell reconciliation pair, the commission read at read-time so the oracle's fee-free fields never move (`D5-04`/`D9-05`), and one real deferred `sync_user` job landing a verdict row under RLS — the CR-01 guard
+- [x] 09-02-PLAN.md — Wave 2. The arithmetic proven: exact agreement passes, a seeded one-cent discrepancy fails, a four-point sweep rules out any tolerance, all five `indeterminate` causes get their own case, and every instant belongs to exactly one window across both daylight-saving states
+- [x] 09-03-PLAN.md — Wave 2. `GET /reconciliation/status` as one indexed row read that provably never recomputes, and `trustworthy` carried inside the envelope of every response holding a ledger-derived number
+
 **UI hint**: no
 
 ### Phase 10: The Pre-commitment Record
@@ -295,7 +347,13 @@ Plans:
   3. At close the user records plan-followed yes or no plus one sentence, and the close is not complete without it.
   4. A tag outside the closed vocabulary of four is rejected, and a free-text value submitted into a tag field is rejected rather than stored.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Tracer: one pre-commitment recorded over HTTP, encrypted, linked, and frozen by a trigger (INTENT-01..06)
+- [ ] 10-02-PLAN.md — The close record, its service-layer gate, and the outstanding-note obligation on the envelope (INTENT-07, INTENT-08)
+- [ ] 10-03-PLAN.md — The `entry_trigger` vocabulary, blocked on developer input (INTENT-08)
+
 **UI hint**: no
 
 ### Phase 11: Review API Surface
@@ -312,6 +370,54 @@ Plans:
   3. A cohort's numbers come back alongside the user's own trailing baseline, in the same response.
   4. No response attaches a confidence interval, a p-value, or a significance claim to any ratio.
   5. An export returns the user's complete data losslessly as JSON and tabular objects as CSV, and re-reading the JSON reproduces every stored value with no precision loss.
+
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 12: Settlement Closes the Position
+
+**Goal**: A position whose legs expire is closed by the same derivation that closes a position sold out, so nothing downstream keeps treating a dead contract as live.
+
+**Mode:** mvp
+**Depends on**: Phase 7 (the derivation this changes), Phase 8 (its open-leg set moves as a result)
+**Parallel with**: Nothing — it changes a contract three phases read
+**Origin**: Found 2026-09-02 by the parallel re-verification sweep, not by a failing test. Recorded as `D10-16`; Phase 10 shipped around it by explicit user decision.
+**Requirements**: TBD — carve from LEDGER-05's existing scope rather than minting new IDs
+
+**Why this is not a bug fix**: `is_closed` reads only `FillRecord`s. A SETTLEMENT is an `Event`, never a `Fill`, so a leg that expires stays net-nonzero forever. Reproduced against the real functions: after both legs settled, `is_closed=False`, `closed_at=None`. A front short put expiring worthless is a **normal** exit for these calendars, so this is the common case, not an edge.
+
+**Live consequences already running**: `snapshots.read_open_legs` returns expired legs forever, so quote lookups run against dead contracts and write perpetual gap rows; `snapshot_repair` keeps back-filling slots for them.
+
+**Why it is phase-sized**: `DerivedSettlement` carries only `(position_id, event_time)` and no leg id, so the fix cannot read which leg settled off the event — it must re-derive from expiry. That gives `derive_position_state` an `as_of` clock input, which breaks the purity contract `tests/test_pairing_pure.py` gates, rippling to four call sites and changing Phase 8's open-leg set. It is also a money decision: `D7-07` deliberately deferred settlement value to Phase 8's SOQ.
+
+**Success Criteria** (what must be TRUE):
+
+  1. A position whose every leg is past expiry reports `is_closed` true and a non-null `closed_at`, derived — not written by a second writer.
+  2. `read_open_legs` stops returning a leg once that leg has settled, so no quote is requested for a dead contract.
+  3. The purity contract is either preserved or replaced by an equally mechanical guard, and the choice is recorded with its reason — not silently dropped.
+  4. Phase 10's INTENT-07 at-close capture fires for an expiry-closed position, closing the `D10-16` gap.
+
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 13: Re-auth Notification Delivery
+
+**Goal**: A user whose Schwab refresh token is about to die is told, without an operator being involved.
+
+**Mode:** mvp
+**Depends on**: Phase 4 (`reauth_notified_at` and the health derivation already exist)
+**Parallel with**: Phase 12 — different subsystem entirely
+**Origin**: Found 2026-09-02 by the parallel re-verification sweep. `D4-13` deferred delivery to "a later phase"; six phases later no phase had claimed it.
+**Requirements**: TBD — belongs with AUTH/CONN, carve from the existing re-auth requirement
+
+**Why this is owed**: the project constraint is that re-auth be self-service **with a notification**, because the refresh token expires after 7 days, server-side and hard, forever, per user. The self-service half works. `reauth_notified_at` has no writer anywhere in `src/` — the column exists and nothing sets it. Until this ships, a user finds out their connection died by noticing their data stopped.
+
+**Success Criteria** (what must be TRUE):
+
+  1. A connection crossing roughly 6.5 days of token age produces exactly one notification, and `reauth_notified_at` records when.
+  2. Re-running the notifier does not re-notify — the write is idempotent per connection per expiry cycle.
+  3. The notification names the reconnect action and carries no OAuth code, token, or redirect URL (`NN-34`).
+  4. A delivery failure is recorded and retried, and never silently swallows the obligation.
 
 **Plans**: TBD
 **UI hint**: no
@@ -350,7 +456,13 @@ Named here so they are settled inside a phase rather than floating.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9. Phases 10–13 are PARKED
+(scope restated 2026-09-02 — see "Why these four are parked" above). This milestone's remaining
+work is the live-Railway/live-Schwab proof the deferred verifications all wait on.
+
+Phases 12 and 13 were added on 2026-09-02 from the parallel re-verification sweep. Both were found
+by re-reading shipped phases against current code, not by a failing test. They sit after Phase 11 by
+explicit user decision, so the backend milestone finishes on its existing scope first.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -360,11 +472,13 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 4. Schwab Connection and Token Lifecycle | 4/4 | In Progress|  |
 | 5. Fill Pairing and the Oracle Gate | 3/3 | Complete    | 2026-09-01 |
 | 6. Raw Ingest and Backfill | 2/3 | In Progress|  |
-| 7. Position and Campaign Read Models | 0/TBD | Not started | - |
-| 8. Snapshot Capture | 0/TBD | Not started | - |
-| 9. Reconciliation Invariant and Status Endpoint | 0/TBD | Not started | - |
-| 10. The Pre-commitment Record | 0/TBD | Not started | - |
-| 11. Review API Surface | 0/TBD | Not started | - |
+| 7. Position and Campaign Read Models | 5/5 | Executed | 2026-09-01 |
+| 8. Snapshot Capture | 4/4 | Executed | 2026-09-01 |
+| 9. Reconciliation Invariant and Status Endpoint | 3/3 | Executed | 2026-09-02 |
+| 10. The Pre-commitment Record | 0/TBD | ⏸ Parked | - |
+| 11. Review API Surface | 0/TBD | ⏸ Parked | - |
+| 12. Settlement Closes the Position | — | ◆ In progress (direct fix) | - |
+| 13. Re-auth Notification Delivery | 0/TBD | ⏸ Parked | - |
 
 ## Coverage
 

@@ -5,12 +5,19 @@ execution model and closing `T-06-01`'s security finding end to end.
 
 `@pytest.mark.db` -- runs only where Postgres is reachable, same convention
 as `tests/test_worker_heartbeat.py`.
+
+**07-01-PLAN.md Task 1's own tracer coverage (D7-12, Pitfall 3,
+07-RESEARCH.md):** the same drained job additionally proves the position/leg
+creation path and the (previously unwired) `sync_events` call both run
+inside `sync_user`'s transaction -- before this phase, nothing under `src/`
+ever created a `positions`/`legs` row and `sync_events` had zero call sites
+outside `tests/`, so `positions`/`legs`/`events` stayed production-empty.
 """
 
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -22,10 +29,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import morai.worker.app as worker_app
 from morai.crypto.envelope import decrypt_field
-from morai.db.models import BrokerTransaction
+from morai.identity.rls import (
+    assert_connection_cannot_bypass_rls as real_assert_connection_cannot_bypass_rls,
+)
+from morai.db.models import BrokerTransaction, Event, Leg, Position, ReconciliationRun
 from morai.ingest.broker_transactions import (
+    BrokerTransactionWrite,
     _broker_transaction_associated_data,  # pyright: ignore[reportPrivateUsage]  # why: this test decrypts the raw copy back to prove byte-for-byte fidelity with the sent payload -- it needs the exact AAD helper insert_broker_transactions uses, the same convention test_pg_dump_confidentiality.py already uses for ledger.fills._current_dek.
     _current_dek,  # pyright: ignore[reportPrivateUsage]  # why: see _broker_transaction_associated_data above -- same cooperating-test convention.
+    insert_broker_transactions,
 )
 from morai.ledger.fills import read_fills
 from morai.vendor.connections import ConnectionNotFound, upsert_connection
@@ -146,6 +158,233 @@ async def test_sync_user_job_lands_one_broker_transaction_and_two_fills(
     assert by_leg[1].position_effect == "OPENING"
     assert by_leg[1].occ_symbol == "SPX260717P07275000"
 
+    # --- positions/legs: the missing creation path this phase adds
+    # (D7-12) -- proving sync_user's transaction now writes them, not
+    # only a test seed. `provisioned_users.position_a` is a pre-existing,
+    # legless row `seeded_users` (tests/identity/conftest.py) always seeds
+    # per user -- a Phase 2/3 isolation-testing artifact, unrelated to and
+    # predating this plan's creation path -- so the new position this sync
+    # creates is the one *other* row, not the only row. ---
+    position_rows = (
+        (
+            await app_db_session.execute(
+                select(Position).where(Position.user_id == user_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    new_position_ids = {row.id for row in position_rows} - {
+        provisioned_users.position_a
+    }
+    assert len(position_rows) == 2
+    assert len(new_position_ids) == 1
+
+    leg_rows = (
+        (
+            await app_db_session.execute(
+                select(Leg).where(Leg.user_id == user_id).order_by(Leg.leg_role)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(leg_rows) == 2
+    assert leg_rows[0].position_id in new_position_ids
+    assert leg_rows[1].position_id in new_position_ids
+    assert (leg_rows[0].leg_role, leg_rows[0].occ_symbol, leg_rows[0].root) == (
+        "back",
+        "SPX260717P07275000",
+        "SPX",
+    )
+    assert (leg_rows[1].leg_role, leg_rows[1].occ_symbol, leg_rows[1].root) == (
+        "front",
+        "SPXW260618P07275000",
+        "SPXW",
+    )
+
+    # --- events: derive_events wired through sync_events (Pitfall 3 --
+    # sync_events had zero call sites under src/ before this phase). ---
+    open_event_rows = (
+        (
+            await app_db_session.execute(
+                select(Event).where(
+                    Event.user_id == user_id, Event.event_type == "OPEN"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(open_event_rows) >= 1
+
+
+async def test_sync_user_job_derives_settlement_for_an_expired_open_leg(
+    clean_ingest_tables: None,
+    superuser_db_session: AsyncSession,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01 (`07-REVIEW.md`): `sync_user` must thread its own `now`
+    through to `sync_events`'s `as_of`, or SETTLEMENT derivation -- fully
+    implemented and unit-tested in `tests/ledger/test_settlements.py` --
+    never runs from the one path a real user's data travels. A unit test
+    on `derive_settlements` cannot catch this; only a test through the
+    real `sync_user` call path can.
+
+    `TX_PAYLOAD`'s two legs (front expiry 2026-06-18, back expiry
+    2026-07-17) are both in the past by the time this test runs, and
+    nothing in this payload closes the position they open -- a
+    genuinely-expired, still-open leg, the positive case CR-02's
+    closed-position gate must not suppress alongside CR-01's fix."""
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+    user_id = provisioned_users.user_a
+    await _seed_connection(superuser_db_session, user_id)
+
+    async with app.open_async():
+        job_id = await app.configure_task("sync_user").defer_async(user_id=str(user_id))
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status_after = await app.job_manager.get_job_status_async(job_id)
+        assert status_after is Status.SUCCEEDED
+
+    await _set_current_user(app_db_session, user_id)
+    settlement_rows = (
+        (
+            await app_db_session.execute(
+                select(Event).where(
+                    Event.user_id == user_id, Event.event_type == "SETTLEMENT"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(settlement_rows) == 2
+
+
+async def test_sync_user_job_writes_a_reconciliation_run(
+    clean_reconciliation_tables: None,
+    superuser_db_session: AsyncSession,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01, this plan's own repeat of the lesson Phase 7 already taught:
+    `sync_events` shipped fully built, unit-tested, merged, and unreachable
+    in production because `sync_user` never called it. `run_reconciliation`
+    is the identical shape of risk, so this test proves it the identical
+    way -- through the real production call path, deferred by name and
+    drained by a real worker, never by calling `reconcile_window` or
+    `run_reconciliation` directly. A unit test of the pure function cannot
+    catch `sync_user` failing to call `run_reconciliation`, and did not, in
+    Phase 7.
+
+    `TX_PAYLOAD`'s own transaction lands at 2026-06-18T14:30:00+00:00
+    (10:30 ET) -- the trading day its OPEN event belongs to. Seeds one
+    extra broker transaction on a strictly later Eastern trading day,
+    through `insert_broker_transactions` (the real write path, never a
+    test-only fast path), so 2026-06-18 is closed (`D9-02`) and a
+    reconciliation row is actually due once the job runs.
+    """
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+    user_id = provisioned_users.user_a
+    await _seed_connection(superuser_db_session, user_id)
+
+    await _set_current_user(app_db_session, user_id)
+    await insert_broker_transactions(
+        app_db_session,
+        user_id,
+        [
+            BrokerTransactionWrite(
+                activity_id="close-window-marker",
+                transaction_type="JOURNAL",
+                transaction_time=datetime(2026, 6, 19, 14, 30, tzinfo=UTC),
+                order_id=None,
+                raw_payload={},
+            )
+        ],
+    )
+    await app_db_session.commit()
+
+    async with app.open_async():
+        job_id = await app.configure_task("sync_user").defer_async(user_id=str(user_id))
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status_after = await app.job_manager.get_job_status_async(job_id)
+        assert status_after is Status.SUCCEEDED
+
+    await _set_current_user(app_db_session, user_id)
+    run_rows = (
+        (
+            await app_db_session.execute(
+                select(ReconciliationRun).where(
+                    ReconciliationRun.user_id == user_id,
+                    ReconciliationRun.trading_day == date(2026, 6, 18),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(run_rows) == 1
+    row = run_rows[0]
+    assert row.verdict in {"passed", "failed", "indeterminate"}
+    if row.verdict == "indeterminate":
+        assert row.reason is not None
+    else:
+        assert row.reason is None
+
+    # Running the same drained job twice writes no second row for an
+    # unchanged window -- the second cycle is a no-op, not a duplicate.
+    async with app.open_async():
+        job_id_2 = await app.configure_task("sync_user").defer_async(
+            user_id=str(user_id)
+        )
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status_after_2 = await app.job_manager.get_job_status_async(job_id_2)
+        assert status_after_2 is Status.SUCCEEDED
+
+    await _set_current_user(app_db_session, user_id)
+    run_rows_after_second_cycle = (
+        (
+            await app_db_session.execute(
+                select(ReconciliationRun).where(
+                    ReconciliationRun.user_id == user_id,
+                    ReconciliationRun.trading_day == date(2026, 6, 18),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(run_rows_after_second_cycle) == 1
+
+
+def test_position_and_leg_reject_construction_without_the_write_token() -> None:
+    """D7-12/D7-14: the sentinel gate on `Position`/`Leg`, mirroring
+    `Fill.__init__`'s own gate. Constructing either with a wrong token
+    raises `RuntimeError` at runtime -- the compile-time half (omitting
+    `_write_token` is a missing-argument error) is proved by
+    `bash tools/gate.sh`'s basedpyright/mypy steps, not by this test.
+    No database needed -- construction fails before any I/O."""
+    stray_token = object()
+    dummy_id = UUID("00000000-0000-4000-8000-000000000000")
+
+    with pytest.raises(RuntimeError):
+        Position(_write_token=stray_token, user_id=dummy_id)
+
+    with pytest.raises(RuntimeError):
+        Leg(
+            _write_token=stray_token,
+            position_id=dummy_id,
+            user_id=dummy_id,
+            leg_role="front",
+            occ_symbol="SPXW260618P07275000",
+            root="SPXW",
+        )
+
 
 async def test_missing_connection_fails_the_job_and_writes_nothing(
     clean_ingest_tables: None,
@@ -176,6 +415,48 @@ async def test_missing_connection_fails_the_job_and_writes_nothing(
         )
     ).all()
     assert tx_rows == []
+
+
+async def test_sync_user_task_asserts_rls_before_touching_a_protected_table(
+    clean_ingest_tables: None,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`sync_user_task` opens a `morai_app` session and asserts it cannot
+    bypass RLS before touching a protected table -- the whole security
+    finding this phase exists to close (`worker/app.py`'s own module
+    docstring).
+
+    Nothing caught the deletion of that one line before this test existed.
+    Every other test in this suite already runs on a `morai_app` session,
+    so the assertion passes silently and removing it changes no observable
+    behaviour anywhere else -- exactly the silent regression the finding
+    names. `tests/ingest/test_snapshot_repair.py::
+    test_repair_task_asserts_rls_before_touching_a_protected_table` is the
+    identical guard for Phase 8's own task, written first; this is the
+    same guard for the task the finding is actually about.
+    """
+    calls: list[bool] = []
+
+    async def spy(session: AsyncSession) -> None:
+        calls.append(True)
+        await real_assert_connection_cannot_bypass_rls(session)
+
+    monkeypatch.setattr(worker_app, "assert_connection_cannot_bypass_rls", spy)
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+
+    user_id = provisioned_users.user_a
+    await _seed_connection(superuser_db_session, user_id)
+
+    async with app.open_async():
+        job_id = await app.configure_task("sync_user").defer_async(user_id=str(user_id))
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status = await app.job_manager.get_job_status_async(job_id)
+        assert status is Status.SUCCEEDED
+
+    assert calls == [True]
 
 
 def test_missing_connection_raises_connection_not_found_directly() -> None:

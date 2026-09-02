@@ -558,27 +558,115 @@ async def test_a_write_for_another_user_is_rejected_on_every_new_table(
         await app_db_session.execute(statement)
 
 
-@pytest.mark.parametrize("table_name", _NEW_TRADING_TABLES)
-async def test_no_policy_on_a_new_table_names_the_admin_setting(
-    superuser_db_session: AsyncSession, table_name: str
+# Carrying a `user_id` column is what makes a table user-scoped, and every
+# user-scoped table must be RLS-protected -- with two deliberate exceptions.
+# Possession of the opaque token IS the authorization for both, and the
+# `sessions` lookup is the very thing that establishes the identity a policy
+# would filter on (`identity/sessions.py`'s own module docstring). Exempting
+# a table is an edit to this set that a reviewer has to justify; adding one
+# to the schema is not -- which is the whole point of reading the list below
+# from the catalog instead of restating it by hand.
+_RLS_EXEMPT_TABLES = frozenset({"sessions", "setup_tokens"})
+
+
+async def _user_scoped_tables(session: AsyncSession) -> list[str]:
+    """Every `public` base table with a `user_id` column, minus the two
+    documented exemptions. Read from `pg_attribute` rather than written
+    down, so a table added by a later phase enters the guards below on the
+    next run with no list to remember to update."""
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.relname FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "JOIN pg_attribute a ON a.attrelid = c.oid "
+                "WHERE n.nspname = 'public' AND c.relkind = 'r' "
+                "AND a.attname = 'user_id' AND a.attnum > 0 "
+                "AND NOT a.attisdropped ORDER BY c.relname"
+            )
+        )
+    ).all()
+    return [
+        name
+        for row in rows
+        if (name := _STR.validate_python(row[0])) not in _RLS_EXEMPT_TABLES
+    ]
+
+
+async def test_every_user_scoped_table_has_rls_enabled_forced_and_a_policy(
+    superuser_db_session: AsyncSession,
 ) -> None:
-    """`users` is the one deliberate admin-clause exception in this schema
-    (migration 0003) -- a data table inheriting it makes this phase's
-    encryption boundary decorative (`identity/audit.py`'s own docstring,
-    D3-18). Now that the encrypted tables exist, this check is mechanical
-    rather than a review convention, matching
-    `tests/ledger/test_schema_contract.py`'s identical assertion for
-    `positions`/`legs`/`events` -- widened here to include `fills` and
-    `user_data_keys` too, which that file's own scope never covered."""
+    """The one guard in this file whose table list is read rather than
+    written down.
+
+    `_NEW_TRADING_TABLES` above, and the per-phase copies in
+    `tests/identity/test_app_role.py`, `tests/ledger/test_schema_contract.py`
+    and `tests/ingest/test_reconciliation_schema.py`, are all hand-maintained
+    -- and by Phase 9 six user-scoped tables existed that none of them names:
+    `broker_transactions`, `schwab_connections`, `snapshot_marks`,
+    `snapshot_observations`, `snapshot_runs` and `sync_runs`. All six do
+    carry ENABLE+FORCE and a policy, so nothing ever leaked. Nothing in the
+    suite would have caught it if one had not.
+    """
+    tables = await _user_scoped_tables(superuser_db_session)
+    # Guards the guard: an empty result makes every assertion below vacuous,
+    # the same failure shape the superuser positive control above exists to
+    # rule out. Twelve is the count at Phase 9 -- `>=` never needs bumping
+    # when a table is added, and a drop below it is itself a real signal.
+    assert len(tables) >= 12
+
     rows = (
         await superuser_db_session.execute(
             text(
-                "SELECT qual, with_check FROM pg_policies WHERE tablename = :table_name"
+                "SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, "
+                "EXISTS (SELECT 1 FROM pg_policies p "
+                "WHERE p.schemaname = 'public' AND p.tablename = c.relname) "
+                "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE n.nspname = 'public' AND c.relname::text = ANY(:tables)"
             ),
-            {"table_name": table_name},
+            {"tables": tables},
         )
     ).all()
-    combined = " ".join(
-        f"{_STR.validate_python(row[0])} {_STR.validate_python(row[1])}" for row in rows
+    observed = {
+        _STR.validate_python(row[0]): (
+            _BOOL.validate_python(row[1]),
+            _BOOL.validate_python(row[2]),
+            _BOOL.validate_python(row[3]),
+        )
+        for row in rows
+    }
+    assert observed == {name: (True, True, True) for name in tables}
+
+
+async def test_no_user_scoped_table_policy_names_the_admin_setting(
+    superuser_db_session: AsyncSession,
+) -> None:
+    """`users` is the one deliberate admin-clause exception in this schema
+    (migration 0003), and it never enters this set -- its own column is
+    `id`, not `user_id`. A *data* table inheriting that clause makes this
+    phase's encryption boundary decorative (`identity/audit.py`'s own
+    docstring, D3-18).
+
+    Derived from the catalog for the same reason the guard above is: the
+    hardcoded five-table version this replaces covered `user_data_keys`,
+    `positions`, `legs`, `fills` and `events`, and said nothing about the
+    six tables Phases 4, 6 and 8 added after it was written."""
+    tables = await _user_scoped_tables(superuser_db_session)
+    assert len(tables) >= 12
+
+    rows = (
+        await superuser_db_session.execute(
+            text(
+                "SELECT tablename, coalesce(qual, '') || ' ' "
+                "|| coalesce(with_check, '') FROM pg_policies "
+                "WHERE schemaname = 'public' AND tablename::text = ANY(:tables)"
+            ),
+            {"tables": tables},
+        )
+    ).all()
+    offenders = sorted(
+        _STR.validate_python(row[0])
+        for row in rows
+        if "is_admin" in _STR.validate_python(row[1])
     )
-    assert "is_admin" not in combined
+    assert offenders == []

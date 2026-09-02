@@ -20,15 +20,18 @@ outlives this phase, and a UUID means no sequence to grant.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     LargeBinary,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -37,6 +40,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy import text as sa_text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -207,11 +211,20 @@ class Fill(Base):
 class Position(Base):
     """One traded structure -- a calendar or diagonal, front and back legs
     grouped under this row (CRYPT-02, migration 0008). No stored status
-    column: a position's closed state is derived from net quantity per leg
-    (LEDGER-05), the exact thing a status column's absence guards against
-    -- calendar `65aac62e` reported open after its real close order fully
-    unwound both legs, because the status column had drifted from the
-    fills that actually closed it.
+    column, and no stored `opened_at`/`closed_at` either as of migration
+    0014 -- a position's closed state, including its own open/close
+    timestamps, is derived from net quantity per leg
+    (`morai.ledger.positions.derive_position_state`, LEDGER-05, D7-01),
+    the exact thing a status column's absence guards against. Calendar
+    `65aac62e` reported open after its real close order fully unwound both
+    legs, because the status column had drifted from the fills that
+    actually closed it -- `closed_at` was that same column wearing a
+    different type, and keeping it while merely not writing it would have
+    been weaker: the column would still exist to disagree.
+
+    `create_positions()` in `morai.ledger.positions` is the only intended
+    way into this table -- see `__init__` below for the enforcement,
+    mirroring `Fill.__init__` exactly (D7-12, D7-14).
     """
 
     __tablename__ = "positions"
@@ -222,15 +235,38 @@ class Position(Base):
     user_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    opened_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    closed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    def __init__(self, *, _write_token: object, **kwargs: object) -> None:
+        """`_write_token` has no default -- omitting it is a missing-argument
+        error at the call site under basedpyright/mypy, not a silently
+        accepted `None` (D7-12, D7-14). Passing anything but the sentinel
+        `create_positions()` holds raises here, at runtime -- mirrors
+        `Fill.__init__`'s identical split exactly: type checkers verify
+        shapes, not provenance.
+
+        SQLAlchemy's ORM does not call `__init__` when reconstructing a
+        `Position` from a query result -- it uses `__new__` plus direct
+        attribute restoration, so an ordinary `SELECT` is unaffected by
+        this guard. The honest ceiling: a Core `insert(Position)` statement
+        naming the table bypasses this constructor entirely, so this
+        blocks the ergonomic second path, not every conceivable one --
+        which is why `tests/ledger/conftest.py` and
+        `tests/ledger/oracle_seed.py` keep working unchanged.
+        """
+        from morai.ledger.positions import (
+            _POSITION_WRITE_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: the sentinel and its only legitimate holder (create_positions) live in one module by design (D7-12); the leading underscore marks it module-private in intent, not a real access boundary between these two cooperating modules -- same convention Fill.__init__ already uses.
+        )
+
+        if _write_token is not _POSITION_WRITE_TOKEN:
+            raise RuntimeError(
+                "Position must be constructed by create_positions() -- "
+                "constructing one directly bypasses the single-writer "
+                "guarantee D7-12/D7-14 exist to enforce."
+            )
+        super().__init__(**kwargs)
 
 
 class Leg(Base):
@@ -242,6 +278,10 @@ class Leg(Base):
     discriminator (`SPX` AM vs `SPXW` PM) at the grain LEDGER-07 needs it:
     per leg, not per position, since a PM-settled front and an AM-settled
     back can coexist inside one calendar.
+
+    `create_positions()` in `morai.ledger.positions` is the only intended
+    way into this table -- see `__init__` below for the enforcement,
+    mirroring `Fill.__init__` exactly (D7-12, D7-14).
     """
 
     __tablename__ = "legs"
@@ -263,6 +303,35 @@ class Leg(Base):
     leg_role: Mapped[str] = mapped_column(Text, nullable=False)
     occ_symbol: Mapped[str] = mapped_column(Text, nullable=False)
     root: Mapped[str] = mapped_column(Text, nullable=False)
+
+    def __init__(self, *, _write_token: object, **kwargs: object) -> None:
+        """`_write_token` has no default -- omitting it is a missing-argument
+        error at the call site under basedpyright/mypy, not a silently
+        accepted `None` (D7-12, D7-14). Passing anything but the sentinel
+        `create_positions()` holds raises here, at runtime -- mirrors
+        `Fill.__init__`'s identical split exactly: type checkers verify
+        shapes, not provenance.
+
+        SQLAlchemy's ORM does not call `__init__` when reconstructing a
+        `Leg` from a query result -- it uses `__new__` plus direct
+        attribute restoration, so an ordinary `SELECT` is unaffected by
+        this guard. The honest ceiling: a Core `insert(Leg)` statement
+        naming the table bypasses this constructor entirely, so this
+        blocks the ergonomic second path, not every conceivable one --
+        which is why `tests/ledger/conftest.py` and
+        `tests/ledger/oracle_seed.py` keep working unchanged.
+        """
+        from morai.ledger.positions import (
+            _LEG_WRITE_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: the sentinel and its only legitimate holder (create_positions) live in one module by design (D7-12); the leading underscore marks it module-private in intent, not a real access boundary between these two cooperating modules -- same convention Fill.__init__ already uses.
+        )
+
+        if _write_token is not _LEG_WRITE_TOKEN:
+            raise RuntimeError(
+                "Leg must be constructed by create_positions() -- "
+                "constructing one directly bypasses the single-writer "
+                "guarantee D7-12/D7-14 exist to enforce."
+            )
+        super().__init__(**kwargs)
 
 
 class SchwabConnection(Base):
@@ -427,12 +496,29 @@ class Event(Base):
     that never opens or never closes leaves the relevant pair `NULL`,
     never a sentinel, never zero (NN-16, D3-11).
 
-    `morai.ledger.events.insert_events()` is this phase's write path into
-    this table. Unlike `Fill`, this model carries no `_write_token`
-    sentinel gate -- 03-RESEARCH.md's Open Question 2 treats a
-    compile-time-checked single-writer gate on `events` as Phase 5's
-    concern, once Phase 5 actually derives events from fills and a second
-    writer becomes a real temptation.
+    `rolled_from_position_id` (migration 0014, D7-10) is non-NULL if and
+    only if `event_type = 'ROLL'` -- enforced both by the
+    `roll_has_rolled_from_position` CHECK and by `insert_events`' own
+    pre-database guard. A ROLL row hangs on the newly opened position and
+    points back at the closed one, making the newest position in a chain
+    its own campaign head.
+
+    `leg_id` (migration 0017) names the leg a SETTLEMENT settles, and is
+    NULL on every other event type -- an implication, not the
+    biconditional `rolled_from_position_id` carries, because a SETTLEMENT
+    written before 0017 has no leg to name. It is the fact that lets
+    `derive_position_state` close an expired leg from the event stream it
+    already reads, with no clock input: a settlement is not a fill, so
+    net quantity alone can never see it.
+
+    `morai.ledger.events.insert_events()` is this table's one write path,
+    and as of migration 0014 that is enforced the same way `Fill`/
+    `Position`/`Leg` already are -- see `__init__` below. This is a
+    changed decision, not the original one: 03-RESEARCH.md's Open Question
+    2 deliberately left `events` ungated at migration 0008, on the
+    reasoning that a second writer was not yet a real temptation. Phase 7
+    adds ROLL and SETTLEMENT writers, which is exactly the trigger that
+    Open Question 2 named for revisiting it.
     """
 
     __tablename__ = "events"
@@ -464,6 +550,244 @@ class Event(Base):
         LargeBinary, nullable=True
     )
     key_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    rolled_from_position_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("positions.id"), nullable=True
+    )
+    leg_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("legs.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __init__(self, *, _write_token: object, **kwargs: object) -> None:
+        """`_write_token` has no default -- omitting it is a missing-argument
+        error at the call site under basedpyright/mypy, not a silently
+        accepted `None` (D7-14). Passing anything but the sentinel
+        `insert_events()` holds raises here, at runtime -- mirrors
+        `Fill.__init__`'s identical split exactly: type checkers verify
+        shapes, not provenance.
+
+        SQLAlchemy's ORM does not call `__init__` when reconstructing an
+        `Event` from a query result -- it uses `__new__` plus direct
+        attribute restoration, so an ordinary `SELECT` is unaffected by
+        this guard. The honest ceiling: a Core `insert(Event.__table__)`
+        statement naming the table bypasses this constructor entirely, so
+        this blocks the ergonomic second path, not every conceivable one.
+        """
+        from morai.ledger.events import (
+            _EVENT_WRITE_TOKEN,  # pyright: ignore[reportPrivateUsage]  # why: the sentinel and its only legitimate holder (insert_events) live in one module by design (D7-14); the leading underscore marks it module-private in intent, not a real access boundary between these two cooperating modules -- same convention Fill.__init__ already uses.
+        )
+
+        if _write_token is not _EVENT_WRITE_TOKEN:
+            raise RuntimeError(
+                "Event must be constructed by insert_events() -- "
+                "constructing one directly bypasses the single-writer "
+                "guarantee D7-14 exists to enforce."
+            )
+        super().__init__(**kwargs)
+
+
+class SnapshotObservation(Base):
+    """The raw layer: one vendor `get_quotes` element, verbatim and
+    encrypted, per leg per RTH slot (migration 0015, D8-01, D8-04,
+    SNAP-01/SNAP-02). `(leg_id, slot_time)` is the composite key -- never
+    `occ_symbol`: `leg_id` already functionally determines `user_id` and
+    `root` through the existing foreign-key chain, and a trader re-entering
+    a closed contract in a new position would silently collide two
+    positions' history onto one `occ_symbol` key (`NN-1`, Pitfall 4,
+    08-RESEARCH.md).
+
+    `gap_reason` non-NULL and every payload column NULL, or the reverse --
+    never both, never neither (`snapshot_observations_gap_xor_payload_check`,
+    D8-09, `L041`). A gap is honest, never a sentinel (`NN-16`).
+
+    No `_write_token` constructor gate, unlike `Fill`/`Event`. This table
+    has two legitimate entry points sharing one write path each --
+    `write_snapshot_observations` (this plan) and the repair path (plan
+    08-04) -- the same shape `insert_events` already ships without a
+    sentinel (`sync_runs`' own docstring sets the precedent: a sentinel is
+    reserved for a table where a *second* writer would be a bug, not where
+    two entry points share one function). See `08-PATTERNS.md`.
+    """
+
+    __tablename__ = "snapshot_observations"
+    __table_args__: tuple[UniqueConstraint] = (
+        UniqueConstraint(
+            "leg_id", "slot_time", name="snapshot_observations_leg_slot_key"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    leg_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("legs.id"), nullable=False
+    )
+    slot_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    gap_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    raw_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    key_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SnapshotMark(Base):
+    """The derived layer: one parsed mark and spot per leg per RTH slot
+    (migration 0015, D8-01, D8-09/D8-10, SNAP-01/SNAP-02/SNAP-03). Same
+    composite key as `SnapshotObservation`, same gap-xor discipline
+    (`snapshot_marks_gap_xor_mark_check`) -- except the spot pair sits
+    outside the "real row" branch: a real mark whose payload carried no
+    underlying price is a real mark with an honest missing spot, not a gap
+    for the whole row (`NN-16`).
+
+    This table's own asymmetric `ON CONFLICT ... DO UPDATE ... WHERE`
+    (D8-10, `write_snapshot_marks`) is the one write path this migration's
+    grant list adds `UPDATE` for -- a real observation may heal a gap, a
+    gap may never overwrite a real observation.
+
+    No `_write_token` constructor gate, for the identical reasoning
+    `SnapshotObservation`'s own docstring gives.
+    """
+
+    __tablename__ = "snapshot_marks"
+    __table_args__: tuple[UniqueConstraint] = (
+        UniqueConstraint("leg_id", "slot_time", name="snapshot_marks_leg_slot_key"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    leg_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("legs.id"), nullable=False
+    )
+    slot_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    gap_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mark_usd_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    mark_usd_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    spot_usd_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    spot_usd_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    key_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SnapshotRun(Base):
+    """One row per attempted `snapshot_user` run -- what ran, what landed,
+    what errored (migration 0015, D8-15, `L042`). Mirrors `SyncRun` exactly:
+    same plaintext-by-design call (operational metadata, not trading data),
+    same nullable count columns (a failed run landed an unknown number of
+    rows, not zero -- `NN-16` applied to a count), same two `CHECK`
+    constraints on `trigger`/`status`.
+
+    No unique constraint on `(user_id, slot_time)`: a repair run
+    legitimately produces a second row for a slot already captured, and
+    this table's whole job is telling those two runs apart.
+
+    This migration lands the table only. No `_write_token` gate, mirroring
+    `SyncRun`'s own reasoning: its writer is plan 08-04's own two-session
+    split (`snapshot_user_task`), never application code directly.
+    """
+
+    __tablename__ = "snapshot_runs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    slot_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    finished_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    trigger: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    legs_attempted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    marks_written: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gaps_by_reason: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ReconciliationRun(Base):
+    """One reconciliation verdict for one user's settlement-date
+    trading-day window (Phase 9, migration 0016, `D9-01`..`D9-15`). The
+    core value's own check: realised P&L, net of commissions, equals the
+    broker's own cash delta for that window, or the check honestly could
+    not tell (`indeterminate`, never a fabricated `passed`).
+
+    Append-only, no `_write_token` gate -- `D9-03` makes a reopened
+    window's re-check a new row, never an `UPDATE`, and this table's one
+    writer is `morai.ledger.reconciliation.run_reconciliation`, called
+    from `sync_user`'s own already-guarded `morai_app` session -- never
+    application code directly, the same reasoning `SyncRun`'s own
+    docstring gives for its identical omission.
+
+    Every money column is plaintext `Numeric(14, 4)`, unlike the encrypted
+    trading tables -- these are aggregate operational figures about a
+    check (the same class as `sync_runs`' row counts), not trading data
+    (`D9-13`/assumption A3), and `D9-15` requires the status endpoint to
+    stay a cheap indexed read with no DEK unwrap on every poll.
+    """
+
+    __tablename__ = "reconciliation_runs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    trading_day: Mapped[date] = mapped_column(Date, nullable=False)
+    window_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    window_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    realised_pnl_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 4), nullable=True
+    )
+    commissions_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 4), nullable=True
+    )
+    cash_delta_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 4), nullable=True
+    )
+    signed_difference_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 4), nullable=True
+    )
+    verdict: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_reopening: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

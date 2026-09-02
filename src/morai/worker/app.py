@@ -49,10 +49,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from morai.db.models import SchwabConnection
 from morai.db.session import get_engine, get_session_maker
 from morai.identity.rls import assert_connection_cannot_bypass_rls
+from morai.ingest import snapshot_repair
 from morai.ingest.schwab_sync import (
     sync_all_connected_users as run_sync_all_connected_users,
 )
 from morai.ingest.schwab_sync import sync_user as run_sync_user
+from morai.ingest.snapshot_runs import (
+    SnapshotRunStatus,
+    SnapshotTrigger,
+    classify_snapshot_error,
+    record_snapshot_run,
+)
+from morai.ingest.snapshots import (
+    capture_all_connected_users as run_capture_all_connected_users,
+)
+from morai.ingest.snapshots import capture_user_snapshot as run_capture_user_snapshot
+from morai.ingest.snapshots import rth_slot_for
 from morai.ingest.sync_runs import (
     SyncStatus,
     SyncTrigger,
@@ -106,6 +118,38 @@ async def sync_all_connected_users_task(timestamp: int) -> None:
     """
     async with AsyncSession(get_engine()) as session:
         await run_sync_all_connected_users(session)
+        await session.commit()
+
+
+@app.periodic(cron="0,30 * * * *")
+@app.task(name="capture_all_connected_users")
+async def capture_all_connected_users_task(timestamp: int) -> None:
+    """Fires every thirty minutes in UTC, on every day (D8-06) -- Eastern
+    RTH membership is the *runtime* filter, computed by `rth_slot_for`
+    below, because a cron expression carrying its own hour range drifts an
+    hour twice a year. A tick outside the grid returns immediately: it
+    defers nothing and writes nothing, not even a `snapshot_runs` row,
+    because it was never a slot to begin with (D8-05).
+
+    Honest ceiling, read directly from the installed `procrastinate` 3.9.0
+    source (`periodic.py`'s own `MAX_DELAY = 60 * 10`): a worker down for
+    more than ten minutes across a slot boundary produces **no job at all**
+    for that slot, not even a gap-writing one -- Procrastinate never gives
+    this task a chance to run for it. That hole is invisible in
+    `snapshot_observations`/`snapshot_marks` and visible only in
+    `snapshot_runs` (plan 08-04's own table), named here so a reader meets
+    the gap where the mechanism lives, not only in a research doc.
+
+    Opens its own session on the superuser engine, exactly as
+    `sync_all_connected_users_task` does -- see that task's own docstring
+    for why this one cross-tenant read is correct.
+    """
+    moment = datetime.fromtimestamp(timestamp, tz=UTC)
+    slot = rth_slot_for(moment)
+    if slot is None:
+        return
+    async with AsyncSession(get_engine()) as session:
+        await run_capture_all_connected_users(session, slot_time=slot)
         await session.commit()
 
 
@@ -201,5 +245,151 @@ async def sync_user_task(
             update(SchwabConnection)
             .where(SchwabConnection.user_id == UUID(user_id))
             .values(last_synced_at=started_at)
+        )
+        await session.commit()
+
+
+@app.task(name="snapshot_user")
+async def snapshot_user_task(
+    user_id: str, slot_time: str, *, trigger: str = SnapshotTrigger.SCHEDULED.value
+) -> None:
+    """Reprices one connected user's open legs for one RTH slot, and
+    records a `snapshot_runs` row for the attempt either way (Phase 8,
+    SNAP-01, D8-15).
+
+    Opens one session from `get_session_maker()` -- `morai_app`, never
+    this module's own superuser Procrastinate pool -- and calls
+    `assert_connection_cannot_bypass_rls` on it before touching a
+    protected table, mirroring `sync_user_task`'s own call exactly (this
+    module's own docstring: the whole security finding Phase 6 exists to
+    close). `capture_user_snapshot` itself sets `app.current_user_id` as
+    its first action, the same split `sync_user`/`sync_user_task` already
+    use.
+
+    `observed_at` is read once here, at task start, and threaded through
+    to `capture_user_snapshot` -- never read again inside the shell, so
+    every leg in one run shares one wall-clock reading. `slot_time` on the
+    run row comes from this task's own deferred argument, never from a
+    clock read inside the task (`D8-05`) -- a run row that dated itself
+    from execution time would drift from the rows it describes on exactly
+    the late-execution case this ledger exists to expose.
+
+    `trigger` defaults to the scheduled value, so the periodic fan-out's
+    own `defer_async(user_id=..., slot_time=...)` call needs no change. A
+    future manual re-capture passes `trigger=SnapshotTrigger.MANUAL.value`
+    through this same task, so no second writer into `snapshot_runs` ever
+    comes into existence -- the identical shape `sync_user_task` already
+    establishes for `sync_runs`.
+
+    Two sessions, exactly like `sync_user_task`'s own split, and for the
+    identical reason: a failure record written inside the transaction that
+    failed rolls back with it, and then the one row that would have
+    explained the failure is the one row that does not exist. On success,
+    the run row is written and committed on the same session the capture
+    itself used, one transaction. On failure, that session is rolled back
+    first (a no-op when `capture_user_snapshot`'s own `vendor_error`
+    branch has already committed its gap rows and raised -- see that
+    function's own docstring), then a **second, fresh** session records
+    the failed run row and commits *that* alone, so the failure record
+    survives the very rollback that erased everything else the run
+    attempted. After recording, this function re-raises so Procrastinate
+    still marks the job `failed` -- swallowing the exception would make
+    `procrastinate_jobs` disagree with `snapshot_runs` about what
+    happened.
+
+    Records what it does and does not cover: every attempt the worker
+    actually made, and nothing about an attempt Procrastinate never
+    deferred at all -- `morai.ingest.snapshot_runs.missing_capture_slots`
+    is what names that second case.
+    """
+    started_at = datetime.now(UTC)
+    snapshot_trigger = SnapshotTrigger(trigger)
+    parsed_slot_time = datetime.fromisoformat(slot_time)
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        await assert_connection_cannot_bypass_rls(session)
+        try:
+            outcome = await run_capture_user_snapshot(
+                session,
+                UUID(user_id),
+                slot_time=parsed_slot_time,
+                observed_at=started_at,
+                auth=get_schwab_auth(),
+            )
+        except Exception as exc:
+            await session.rollback()
+            error_code = classify_snapshot_error(exc)
+            async with session_maker() as failure_session:
+                await failure_session.execute(
+                    text("SELECT set_config('app.current_user_id', :uid, true)"),
+                    {"uid": user_id},
+                )
+                await record_snapshot_run(
+                    failure_session,
+                    UUID(user_id),
+                    slot_time=parsed_slot_time,
+                    started_at=started_at,
+                    finished_at=datetime.now(UTC),
+                    trigger=snapshot_trigger,
+                    status=SnapshotRunStatus.FAILED,
+                    legs_attempted=None,
+                    marks_written=None,
+                    gaps_by_reason=None,
+                    error_code=error_code,
+                )
+                await failure_session.commit()
+            raise
+        await record_snapshot_run(
+            session,
+            UUID(user_id),
+            slot_time=parsed_slot_time,
+            started_at=started_at,
+            finished_at=datetime.now(UTC),
+            trigger=snapshot_trigger,
+            status=SnapshotRunStatus.SUCCEEDED,
+            legs_attempted=outcome.legs_attempted,
+            marks_written=outcome.marks_written,
+            gaps_by_reason=outcome.gaps_by_reason,
+            error_code=None,
+        )
+        await session.commit()
+
+
+@app.task(name="repair_snapshot_marks")
+async def repair_snapshot_marks_task(user_id: str, since: str | None = None) -> None:
+    """Rebuilds one user's `snapshot_marks` from the raw observations
+    already stored, with no vendor call (Phase 8, plan 08-03, SNAP-04,
+    `D8-13`).
+
+    A thin wrapper over `snapshot_repair.repair_snapshot_marks` -- it holds
+    no logic of its own, exactly as `sync_user_task` is a thin wrapper over
+    `sync_user`. Opens one session from `get_session_maker()` -- `morai_app`,
+    never this module's own superuser Procrastinate pool -- and calls
+    `assert_connection_cannot_bypass_rls` before touching a protected table,
+    mirroring `snapshot_user_task`'s own call exactly (this module's own
+    docstring: the whole security finding Phase 6 exists to close).
+
+    Calls `snapshot_repair.repair_snapshot_marks` through the module
+    object, not an aliased import -- this is what lets both entry points
+    (this task and `tools/repair_snapshots.py`) be proven to reach the
+    identical function by patching it at its own defining module
+    (`morai.ingest.snapshot_repair`); an aliased `from ... import X as Y`
+    binds a separate name at import time that a later patch on the
+    defining module would not reach.
+
+    No `@app.periodic` decorator: repair is triggered on demand, not on a
+    cadence -- a scheduled repair would compete with the live writer for
+    the same per-user advisory lock on every slot for no benefit.
+    """
+    parsed_since = datetime.fromisoformat(since) if since is not None else None
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        await assert_connection_cannot_bypass_rls(session)
+        await session.execute(
+            text("SELECT set_config('app.current_user_id', :uid, true)"),
+            {"uid": user_id},
+        )
+        await snapshot_repair.repair_snapshot_marks(
+            session, UUID(user_id), since=parsed_since
         )
         await session.commit()

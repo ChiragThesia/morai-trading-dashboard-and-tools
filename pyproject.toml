@@ -17,6 +17,7 @@ dependencies = [
   "argon2-cffi==25.1.0",
   "cryptography==50.0.1",
   "schwab-py==1.5.1",
+  "tzdata==2026.3",
 ]
 
 [dependency-groups]
@@ -28,6 +29,7 @@ dev = [
   "ruff==0.16.5",
   "uvicorn==0.52.4",
   "httpx>=0.28.1",
+  "hypothesis==6.166.0",
 ]
 
 [build-system]

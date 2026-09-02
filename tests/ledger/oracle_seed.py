@@ -574,7 +574,11 @@ async def seed_oracle(
 ) -> dict[str, UUID]:
     """Seed real oracle calendars for one user: a `positions` row and two
     `legs` rows per calendar (front/back), and every fill through
-    `insert_fills()` -- the one write path (D3-13, D3-14).
+    `insert_fills()` -- the one write path (D3-13, D3-14). The `positions`
+    row carries no `opened_at`/`closed_at` (migration 0014, D7-01) --
+    `OracleCalendar.opened_at`/`closed_at` stay as fixture data only, read
+    by other tests to assert derived `event_time` values, never written to
+    this row.
 
     `superuser_session` inserts `positions`/`legs` directly -- this phase
     lands their DDL only; no dedicated write path exists yet
@@ -605,13 +609,7 @@ async def seed_oracle(
     for calendar in calendars:
         position_id = (
             await superuser_session.execute(
-                insert(Position)
-                .values(
-                    user_id=user_id,
-                    opened_at=calendar.opened_at,
-                    closed_at=calendar.closed_at,
-                )
-                .returning(Position.id)
+                insert(Position).values(user_id=user_id).returning(Position.id)
             )
         ).scalar_one()
         position_ids[calendar.calendar_id] = position_id
@@ -690,13 +688,14 @@ async def seed_synthetic_open_calendar(
 
     Inserts the `positions` row at the fixture file's own literal id
     (`00000000-0000-4000-8000-000000000099`), so the row is identifiable
-    in any failure message, with `opened_at` set to the order's own date
-    and `closed_at` left `None`. Its two `legs` rows are built through
-    `occ_symbol_for`/`_root_for_expiry`, never a hand-typed OCC symbol --
-    the same discipline `seed_oracle` already applies across 52 symbols.
-    Its two fills go through `insert_fills` -- the one write path (D3-13,
-    D3-14), never a fixture-only path: two implementations of the same
-    write is the shape of the bug that made a +$395 trade read as
+    in any failure message -- `opened_at`/`closed_at` are no longer
+    columns on this row (migration 0014, D7-01); the position's open state
+    is derived from its own OPEN event instead. Its two `legs` rows are
+    built through `occ_symbol_for`/`_root_for_expiry`, never a hand-typed
+    OCC symbol -- the same discipline `seed_oracle` already applies across
+    52 symbols. Its two fills go through `insert_fills` -- the one write
+    path (D3-13, D3-14), never a fixture-only path: two implementations of
+    the same write is the shape of the bug that made a +$395 trade read as
     -$319,850 (`LEDGER-01`).
 
     Returns the position id.
@@ -709,8 +708,6 @@ async def seed_synthetic_open_calendar(
         insert(Position).values(
             id=SYNTHETIC_OPEN_POSITION_ID,
             user_id=user_id,
-            opened_at=opened_at,
-            closed_at=None,
         )
     )
     await superuser_session.execute(

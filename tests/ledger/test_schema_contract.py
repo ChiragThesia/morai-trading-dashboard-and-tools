@@ -21,6 +21,7 @@ pytestmark = pytest.mark.db
 # established. `TypeAdapter` narrows it (D-06).
 _BOOL: TypeAdapter[bool] = TypeAdapter(bool)
 _STR: TypeAdapter[str] = TypeAdapter(str)
+_INT: TypeAdapter[int] = TypeAdapter(int)
 
 _NEW_TABLES = ("positions", "legs", "events")
 
@@ -139,3 +140,103 @@ async def test_events_has_the_roll_check_constraint(
         )
     ).one_or_none()
     assert row is not None
+
+
+# --- Migration 0014 (07-02-PLAN.md Task 4): D7-01, D7-10, D7-11 ------------
+
+
+@pytest.mark.parametrize("column_name", ("opened_at", "closed_at"))
+async def test_positions_no_longer_has_the_dropped_timestamp_columns(
+    superuser_db_session: AsyncSession, column_name: str
+) -> None:
+    row = _INT.validate_python(
+        (
+            await superuser_db_session.execute(
+                text(
+                    "SELECT count(*) FROM information_schema.columns "
+                    "WHERE table_name = 'positions' AND column_name = :column_name"
+                ),
+                {"column_name": column_name},
+            )
+        ).scalar_one()
+    )
+    assert row == 0
+
+
+async def test_events_has_rolled_from_position_id_column(
+    superuser_db_session: AsyncSession,
+) -> None:
+    row = (
+        await superuser_db_session.execute(
+            text(
+                "SELECT is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'events' "
+                "AND column_name = 'rolled_from_position_id'"
+            )
+        )
+    ).one_or_none()
+    assert row is not None
+    assert _STR.validate_python(row[0]) == "YES"
+
+
+async def test_events_has_the_rolled_from_position_check_constraint(
+    superuser_db_session: AsyncSession,
+) -> None:
+    row = (
+        await superuser_db_session.execute(
+            text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conrelid = 'events'::regclass "
+                "AND conname = 'roll_has_rolled_from_position'"
+            )
+        )
+    ).one_or_none()
+    assert row is not None
+    definition = _STR.validate_python(row[0])
+    assert "event_type" in definition
+    assert "rolled_from_position_id" in definition
+
+
+async def test_campaign_chain_view_exists(
+    superuser_db_session: AsyncSession,
+) -> None:
+    row = (
+        await superuser_db_session.execute(
+            text("SELECT relkind FROM pg_class WHERE relname = 'campaign_chain'")
+        )
+    ).one_or_none()
+    assert row is not None
+    assert _STR.validate_python(row[0]) == "v"
+
+
+async def test_campaign_chain_view_carries_security_invoker(
+    superuser_db_session: AsyncSession,
+) -> None:
+    """Pitfall 1's structural assertion -- the highest-severity item in
+    this phase. `security_invoker=true` must be present in the view's own
+    `reloptions`, or every user querying `campaign_chain` through
+    `morai_app` silently reads every other user's chain (07-04 proves this
+    behaviourally with a real second user; this test only proves the
+    clause is present)."""
+    row = (
+        await superuser_db_session.execute(
+            text(
+                "SELECT array_to_string(reloptions, ',') FROM pg_class "
+                "WHERE relname = 'campaign_chain'"
+            )
+        )
+    ).one_or_none()
+    assert row is not None
+    reloptions = _STR.validate_python(row[0]) if row[0] is not None else ""
+    assert "security_invoker=true" in reloptions
+
+
+async def test_campaign_chain_view_grants_select_to_morai_app(
+    app_db_session: AsyncSession,
+) -> None:
+    row = (
+        await app_db_session.execute(
+            text("SELECT has_table_privilege('morai_app', 'campaign_chain', 'SELECT')")
+        )
+    ).one()
+    assert _BOOL.validate_python(row[0]) is True

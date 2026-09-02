@@ -14,11 +14,16 @@ and `events.py` keeps that same split rather than reaching for a shared
 "latest" helper on the read side, where it would be the wrong query the
 moment a user's DEK is ever rotated to a second `key_version`.
 
-`events` has no single-write-path type-gate (no `_write_token` sentinel on
-`Event.__init__`, unlike `Fill`). 03-RESEARCH.md's Open Question 2 treats
-that gate as Phase 5's concern, once Phase 5 actually derives events from
-fills and a second writer becomes a real temptation; this phase lands the
-table and this one write path, nothing gates a second one yet.
+`_EVENT_WRITE_TOKEN` (migration 0014, D7-14) is `events`' own write-token
+sentinel, mirroring `_FILL_WRITE_TOKEN` (`ledger/fills.py`) and
+`_POSITION_WRITE_TOKEN`/`_LEG_WRITE_TOKEN` (`ledger/positions.py`) exactly
+-- imported by `db/models.py`'s `Event.__init__` with a local
+(function-body) import to break the circular import, since this module
+imports `Event` from `db/models.py` itself. 03-RESEARCH.md's Open
+Question 2 originally treated a compile-time-checked single-writer gate on
+`events` as a later phase's concern, once a second writer became a real
+temptation; Phase 7 adds ROLL and SETTLEMENT writers, which is exactly
+that trigger.
 
 A ROLL's two amounts are never netted, never summed here. `read_events()`
 returns `open_debit_usd`/`close_credit_usd` separately; whatever needs
@@ -56,6 +61,8 @@ _BYTES: TypeAdapter[bytes] = TypeAdapter(bytes)
 # before an intermediate flush.
 _CHUNK_SIZE = 2000
 
+_EVENT_WRITE_TOKEN = object()
+
 
 @dataclass(frozen=True)
 class EventWrite:
@@ -63,7 +70,20 @@ class EventWrite:
     `Decimal | None` -- encryption happens inside `insert_events`, never at
     the call site (D3-15). A ROLL must supply both; `insert_events` raises
     before reaching the database if it doesn't, and the database `CHECK`
-    (migration 0008) remains the backstop, not the only guard."""
+    (migration 0008) remains the backstop, not the only guard.
+
+    `rolled_from_position_id` (migration 0014, D7-10) defaults to `None`
+    so existing call sites need no change; it must be non-`None` if and
+    only if `event_type == "ROLL"`, checked by `insert_events` before any
+    row is added, with the database's `roll_has_rolled_from_position`
+    CHECK as the backstop for a caller that bypasses this function.
+
+    `leg_id` (migration 0017) names the leg a SETTLEMENT settles. It
+    defaults to `None` for the same reason, and only a SETTLEMENT may
+    carry one -- `insert_events` raises otherwise, with the database's
+    `only_settlement_names_a_leg` CHECK as that guard's backstop. The
+    reverse is deliberately not required: a SETTLEMENT with no `leg_id`
+    is storable, closes no leg, and is what a pre-0017 row looks like."""
 
     position_id: UUID
     event_type: str
@@ -71,6 +91,8 @@ class EventWrite:
     fill_ids_hash: str | None
     open_debit_usd: Decimal | None
     close_credit_usd: Decimal | None
+    rolled_from_position_id: UUID | None = None
+    leg_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +108,8 @@ class EventRecord:
     open_debit_usd: Decimal | None
     close_credit_usd: Decimal | None
     key_version: int
+    rolled_from_position_id: UUID | None
+    leg_id: UUID | None = None
 
 
 def _event_associated_data(column: str, *, event_id: UUID) -> bytes:
@@ -128,7 +152,10 @@ async def insert_events(
     A ROLL missing either amount raises `ValueError` before any row is
     added -- the database `CHECK` constraint (migration 0008) is the
     backstop for a caller that bypasses this function, not the only guard
-    for a caller that uses it.
+    for a caller that uses it. A ROLL with a `None` `rolled_from_position_id`,
+    or a non-ROLL draft with a non-`None` one, raises the same way
+    (migration 0014, D7-10) -- the database's `roll_has_rolled_from_position`
+    CHECK is that guard's own backstop.
 
     Does not commit -- same convention as `insert_fills`/
     `identity/audit.py::open_audited_read`: the caller's own transaction
@@ -148,6 +175,17 @@ async def insert_events(
                     "A ROLL event requires both open_debit_usd and "
                     "close_credit_usd -- a compound event keeps its split "
                     "(LEDGER-04, D3-09)."
+                )
+            if (event.event_type == "ROLL") != (
+                event.rolled_from_position_id is not None
+            ):
+                raise ValueError(
+                    "rolled_from_position_id must be set if and only if "
+                    "event_type is ROLL (D7-10)."
+                )
+            if event.leg_id is not None and event.event_type != "SETTLEMENT":
+                raise ValueError(
+                    "Only a SETTLEMENT event may name a leg_id (migration 0017)."
                 )
 
             event_id = uuid4()
@@ -170,6 +208,7 @@ async def insert_events(
                 )
             session.add(
                 Event(
+                    _write_token=_EVENT_WRITE_TOKEN,
                     id=event_id,
                     user_id=user_id,
                     position_id=event.position_id,
@@ -181,6 +220,8 @@ async def insert_events(
                     close_credit_usd_ciphertext=close_credit_usd_ciphertext,
                     close_credit_usd_nonce=close_credit_usd_nonce,
                     key_version=key_version,
+                    rolled_from_position_id=event.rolled_from_position_id,
+                    leg_id=event.leg_id,
                 )
             )
         await session.flush()
@@ -258,6 +299,8 @@ async def read_events(session: AsyncSession, user_id: UUID) -> list[EventRecord]
                 open_debit_usd=open_debit_usd,
                 close_credit_usd=close_credit_usd,
                 key_version=row.key_version,
+                rolled_from_position_id=row.rolled_from_position_id,
+                leg_id=row.leg_id,
             )
         )
     return records

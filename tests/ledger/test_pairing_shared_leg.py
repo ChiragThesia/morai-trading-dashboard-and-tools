@@ -24,7 +24,6 @@ from decimal import Decimal
 from uuid import UUID
 
 import pytest
-from pydantic import TypeAdapter
 from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,8 +58,6 @@ __all__ = [
 ]
 
 pytestmark = pytest.mark.db
-
-_UUID: TypeAdapter[UUID] = TypeAdapter(UUID)
 
 
 async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
@@ -250,11 +247,18 @@ async def test_per_position_replay_in_real_processing_order_converges_with_zero_
     even when the derivation itself is scoped to one calendar's own two
     orders. This test replays the real processing order (positions
     descending by `opened_at`, which the fixture dates put as `8a63aa81`
-    before `6303e6af`) and asserts both still converge. A future change
-    that narrows `RESOLVE_FILL_POSITIONS_SQL`'s `position_legs` CTE to one
-    position's own legs is exactly hard case 1's second layer, and it is
-    what the real production correction script did -- this test turns red
-    the moment that happens.
+    before `6303e6af`) and asserts both still converge. `opened_at` is no
+    longer a `positions` column (migration 0014, D7-01) -- the ordering is
+    computed here from `ORACLE_CALENDARS`' own fixture `opened_at` fields
+    in Python, not `ORDER BY created_at DESC`: `seed_oracle` inserts in
+    `ORACLE_CALENDARS` declaration order and `8a63aa81` is declared before
+    `6303e6af`, so a descending `created_at` sort would reverse the
+    intended order and silently prove a weaker claim (07-02-PLAN.md
+    assumption A3). A future change that narrows
+    `RESOLVE_FILL_POSITIONS_SQL`'s `position_legs` CTE to one position's
+    own legs is exactly hard case 1's second layer, and it is what the
+    real production correction script did -- this test turns red the
+    moment that happens.
     """
     position_ids = await seed_oracle(
         superuser_db_session,
@@ -263,15 +267,12 @@ async def test_per_position_replay_in_real_processing_order_converges_with_zero_
         calendar_ids=["8a63aa81", "6303e6af"],
     )
 
-    rows = (
-        await superuser_db_session.execute(
-            text(
-                "SELECT id FROM positions WHERE id IN (:a, :b) ORDER BY opened_at DESC"
-            ),
-            {"a": position_ids["8a63aa81"], "b": position_ids["6303e6af"]},
-        )
-    ).all()
-    ordered_position_ids = [_UUID.validate_python(row[0]) for row in rows]
+    ordered_calendars = sorted(
+        (c for c in ORACLE_CALENDARS if c.calendar_id in position_ids),
+        key=lambda c: c.opened_at,
+        reverse=True,
+    )
+    ordered_position_ids = [position_ids[c.calendar_id] for c in ordered_calendars]
     # Fails loudly if the fixture dates ever change, rather than silently
     # proving a weaker thing.
     assert ordered_position_ids == [

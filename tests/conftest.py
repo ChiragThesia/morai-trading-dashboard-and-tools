@@ -34,10 +34,52 @@ import pytest_asyncio
 from alembic import command
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
+from procrastinate import periodic
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from morai.settings import get_settings
+
+
+@pytest.fixture(autouse=True)
+def no_periodic_deferrer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never let Procrastinate's periodic deferrer run inside a test.
+
+    Every test that drains a job with `app.run_worker_async(wait=False)` runs a real
+    Procrastinate worker against the real module-level `morai.worker.app.app`, and a
+    real worker starts a real periodic deferrer as a side task. That deferrer fires on
+    its *first* pass, not only on a minute boundary: with no prior defer recorded,
+    `PeriodicDeferrer.get_timestamps` yields the previous cron tick whenever that tick
+    is within `MAX_DELAY` (600s), which for Phase 1's `* * * * *` crons it always is.
+    Across runs only `procrastinate_periodic_defers`' unique constraint suppresses the
+    repeat -- so the first worker-driving test in each wall-clock minute fires them and
+    the rest do not, which is what made the resulting contamination intermittent.
+
+    What it contaminates: `sync_all_connected_users` fans out a genuine `sync_user` job
+    for whatever connection the test just seeded, and `sync_user_task` resolves
+    `get_schwab_auth()` at call time -- so it runs through whatever vendor seam that
+    test monkeypatched, for a task the test never invoked. Measured cost: roughly
+    1-in-20 spurious failures of
+    `tests/ingest/test_snapshot_capture.py::test_expired_connection_writes_gap`, whose
+    `fake_auth.last_client is None` is its proof that no vendor call was attempted.
+
+    Disabling the deferrer's loop rather than emptying `app.periodic_registry` is
+    deliberate: the registrations are themselves under test
+    (`test_worker_heartbeat.py::test_heartbeat_is_registered_as_a_periodic_task`,
+    `tests/ingest/test_fanout.py::test_sync_all_connected_users_is_registered_as_a_periodic_task`),
+    and those two must keep reading the live registry rather than a snapshot. Returning
+    immediately is also the vendor's own no-op path -- `PeriodicDeferrer.worker` returns
+    exactly this way when the registry is empty, so the worker's side-task monitor
+    already treats a completed deferrer as normal.
+
+    A test that wants a periodic tick defers it explicitly by name, as every test here
+    already does; none relies on the deferrer's clock.
+    """
+
+    async def _do_not_defer(_self: periodic.PeriodicDeferrer) -> None:
+        return None
+
+    monkeypatch.setattr(periodic.PeriodicDeferrer, "worker", _do_not_defer)
 
 
 @pytest.fixture(autouse=True)

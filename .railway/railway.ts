@@ -59,15 +59,37 @@ export default defineRailway(() => {
     },
   });
 
-  // The worker deliberately gets neither secret yet. It holds its own psycopg
-  // v3 pool built straight from DATABASE_URL (see `worker/app.py`), never
-  // `get_app_engine`, and nothing it runs touches the crypto path today. Both
-  // become required here when Phase 6's ingest starts writing encrypted fills
-  // from a background job -- add them at that point, not speculatively now.
+  // That point has arrived. This block used to carry DATABASE_URL alone, with
+  // a comment saying the secrets "become required here when Phase 6's ingest
+  // starts writing encrypted fills from a background job -- add them at that
+  // point". Phases 6, 8 and 9 landed and the block was never updated, so
+  // `railway config apply` would have stripped every one of them off the
+  // worker. The failure would not have been loud: `get_schwab_auth()` raises
+  // out of `Settings.schwab_credentials`, `sync_user_task` classifies it,
+  // records a failed `sync_runs` row and re-raises -- every scheduled sync
+  // failing forever, no token ever refreshed, every connection dying at seven
+  // days with the code itself correct. `tests/test_railway_iac.py` is the
+  // guard that stops this drifting a third time.
+  //
+  // DATABASE_URL: the Procrastinate connector's own superuser psycopg v3 pool.
+  // MORAI_APP_DB_PASSWORD: `sync_user_task` opens its session from
+  //   `get_session_maker()` (the least-privilege `morai_app` role), never the
+  //   superuser pool above -- that is the RLS finding Phase 6 exists to close.
+  // MORAI_MASTER_KEY: `read_connection` and `insert_fills` both go through the
+  //   envelope, so the worker is on the crypto path now.
+  // SCHWAB_*: `worker/app.py::get_schwab_auth` builds a real
+  //   `SchwabAuthAdapter` on every scheduled sync and every snapshot capture.
   const worker = service("worker", {
     source: github(REPO, { rootDirectory: "." }),
     start: "procrastinate --app morai.worker.app.app worker",
-    env: { DATABASE_URL: Postgres.env.DATABASE_URL },
+    env: {
+      DATABASE_URL: Postgres.env.DATABASE_URL,
+      MORAI_APP_DB_PASSWORD: preserve(),
+      MORAI_MASTER_KEY: preserve(),
+      SCHWAB_API_KEY: preserve(),
+      SCHWAB_APP_SECRET: preserve(),
+      SCHWAB_CALLBACK_URL: preserve(),
+    },
   });
 
   return project("morai-journal", {
