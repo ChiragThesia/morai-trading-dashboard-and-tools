@@ -6,7 +6,7 @@ score: 5/5 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
-  - test: "Confirm the Railway `worker` service actually has `MORAI_APP_DB_PASSWORD` set in the dashboard (not just declared in .railway/railway.ts) and that a deployed `sync_user` job reaches `succeeded`."
+  - test: "Confirm the Railway `worker` service actually has `MORAI_APP_DB_PASSWORD` set in the dashboard. The .railway/railway.ts declaration (absent until PR #33 -- see the corrected Known Disclosed Limits bullet) only preserves a value that already exists; it never creates one. Then confirm a deployed `sync_user` job reaches `succeeded`."
     expected: "`railway logs --service worker` shows no `RuntimeError` naming `morai_app_db_password`; a deferred `sync_user` job reaches `succeeded`."
     why_human: "No live Railway dashboard/deploy access in this session; 06-USER-SETUP.md is itself marked Incomplete."
 ---
@@ -142,17 +142,29 @@ earlier, doesn't remove or widen anything); the IN-01 fix is comment-only.
 - `D6-03`'s 60-day chunk / 365-day lookback constants remain explicitly UNMEASURED, as designed.
 - The `POST /schwab/sync` cooldown throttles by run *start* time only, as disclosed in its own
   docstring — wasteful in an edge case, not unsafe.
-- `MORAI_APP_DB_PASSWORD` on the Railway worker service: `.railway/railway.ts` declares it with
-  `preserve()` for the worker service (confirmed present in the file), but no live Railway access
-  exists in this session to confirm the actual dashboard value is set. Marked `human_needed` below
-  per the phase's own instruction.
+- `MORAI_APP_DB_PASSWORD` on the Railway worker service. **Corrected 2026-09-02 — the original
+  text of this bullet was false.** It claimed `.railway/railway.ts` "declares it with `preserve()`
+  for the worker service (confirmed present in the file)". It did not. The `worker` block carried
+  only `DATABASE_URL` and had not been touched since Phase 4's `96eb8c4`, under a stale comment
+  saying the secrets "become required here when Phase 6's ingest starts writing encrypted fills
+  from a background job — add them at that point." Phase 6 made them required and nobody added
+  them. The cost is real, not clerical: `railway config apply` strips any variable the IaC does
+  not name, so the deployed worker would have lost all five it needs —
+  `MORAI_APP_DB_PASSWORD` (this phase's whole RLS finding: `sync_user_task` opens its session
+  through `get_session_maker()` as `morai_app`), `MORAI_MASTER_KEY`, and the three `SCHWAB_*`
+  that `worker/app.py::get_schwab_auth` reads on every scheduled sync. The declaration is
+  supplied by the Phase 4 verification agent's PR #33 (`e152d7c`, with `tests/test_railway_iac.py`
+  written test-first); it is not this document's to re-fix. What remains true and unchanged: no
+  live Railway access exists to confirm the actual dashboard value is set, so this item stays
+  `human_needed` below.
 
 ### Human Verification Required
 
 1. **Railway worker `MORAI_APP_DB_PASSWORD` dashboard value**
-   **Test:** Confirm the `worker` service on Railway actually has `MORAI_APP_DB_PASSWORD` set
-   (not just declared in `.railway/railway.ts`) and that a deployed `sync_user` job reaches
-   `succeeded` rather than failing at `get_app_engine()` construction.
+   **Test:** Confirm the `worker` service on Railway actually has `MORAI_APP_DB_PASSWORD` set —
+   the declaration in `.railway/railway.ts` (absent until PR #33, see the corrected bullet above)
+   only preserves a value that already exists; it never creates one — and that a deployed
+   `sync_user` job reaches `succeeded` rather than failing at `get_app_engine()` construction.
    **Expected:** `railway logs --service worker` shows no `RuntimeError` naming
    `morai_app_db_password`.
    **Why human:** No live Railway access in this session; `06-USER-SETUP.md` itself is marked
@@ -170,7 +182,51 @@ marked Incomplete), and per this task's own instructions that item routes to hum
 rather than being assumed. This is an infrastructure deployment fact outside code, not a defect
 in what was built.
 
+## Re-verification — 2026-09-02
+
+Re-ran every claim above against the code as it stands after Phases 7, 8 and 9 landed. Status
+stays `human_needed`: the Railway item is unchanged and still cannot be closed from this machine.
+
+**Gate, this machine, this date:** `bash tools/gate.sh` → exit 0. ruff `All checks passed!`,
+basedpyright `0 errors, 0 warnings, 0 notes`, mypy `Success: no issues found in 142 source
+files`, pytest `660 passed`. The 383 above is stale only because three phases added tests.
+
+**All 5 criteria still hold.** Two were re-proved against the live database rather than re-read:
+
+- Criterion 3's structural immutability is now confirmed from Postgres itself, not from the
+  migration text: `information_schema.role_table_grants` shows `morai_app` holding
+  `DELETE, INSERT, SELECT` on `fills` and on `broker_transactions` — no `UPDATE` on either, and
+  no later migration granted one.
+- Criterion 4 was re-proved end to end at the shape it has *now*. `sync_user` grew three write
+  paths since this phase (`create_positions`, `sync_events`, `run_reconciliation`), and the
+  existing idempotency test only compares `fills`/`broker_transactions` ciphertext. A throwaway
+  probe ran `sync_user` twice over the same window and counted every downstream table:
+  `{Position: 2, Leg: 2, Event: 2, ReconciliationRun: 0}` before and after the second run,
+  identical. `plan_positions` returns `()` on the second pass because every fill already
+  resolves to a position — the no-op is structural, not incidental.
+
+**One defect found and fixed: the guard this phase exists to enforce had no test.**
+`worker/app.py::sync_user_task` calls `assert_connection_cannot_bypass_rls` before touching a
+protected table — the whole security finding of Phase 6. Nothing failed if that line were
+deleted. Every test in the suite already runs on a `morai_app` session, so the assertion passes
+silently and its removal changes no observable behaviour anywhere. Phase 8 wrote exactly this
+guard for its own `repair_snapshot_marks_task` (`tests/ingest/test_snapshot_repair.py::
+test_repair_task_asserts_rls_before_touching_a_protected_table`, citing "Phase 6's own finding")
+and the task the finding is actually about was left unprotected.
+`tests/ingest/test_sync_tracer.py::test_sync_user_task_asserts_rls_before_touching_a_protected_table`
+closes that: it spies on the call through the real deferred job, drained by a real worker.
+
+Stated plainly, per this project's own evidence rule: the mutation run that would have shown the
+suite green with the guard deleted **was not completed** — this environment's permission layer
+refused to run the suite while the line was removed. The gap is established statically instead:
+`rg assert_connection_cannot_bypass_rls tests/` returns exactly one worker-task assertion before
+this change, and it is Phase 8's.
+
+**Still owed, unchanged:** the live-Railway item below, plus the six vendor-payload facts owed to
+a first live Schwab run.
+
 ---
 
 _Verified: 2026-09-01_
 _Verifier: Claude (gsd-verifier)_
+_Re-verified: 2026-09-02 — gate exit 0, 660 passed, 5/5 criteria hold, one test gap closed_

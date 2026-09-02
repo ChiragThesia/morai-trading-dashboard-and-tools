@@ -29,6 +29,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import morai.worker.app as worker_app
 from morai.crypto.envelope import decrypt_field
+from morai.identity.rls import (
+    assert_connection_cannot_bypass_rls as real_assert_connection_cannot_bypass_rls,
+)
 from morai.db.models import BrokerTransaction, Event, Leg, Position, ReconciliationRun
 from morai.ingest.broker_transactions import (
     BrokerTransactionWrite,
@@ -412,6 +415,48 @@ async def test_missing_connection_fails_the_job_and_writes_nothing(
         )
     ).all()
     assert tx_rows == []
+
+
+async def test_sync_user_task_asserts_rls_before_touching_a_protected_table(
+    clean_ingest_tables: None,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`sync_user_task` opens a `morai_app` session and asserts it cannot
+    bypass RLS before touching a protected table -- the whole security
+    finding this phase exists to close (`worker/app.py`'s own module
+    docstring).
+
+    Nothing caught the deletion of that one line before this test existed.
+    Every other test in this suite already runs on a `morai_app` session,
+    so the assertion passes silently and removing it changes no observable
+    behaviour anywhere else -- exactly the silent regression the finding
+    names. `tests/ingest/test_snapshot_repair.py::
+    test_repair_task_asserts_rls_before_touching_a_protected_table` is the
+    identical guard for Phase 8's own task, written first; this is the
+    same guard for the task the finding is actually about.
+    """
+    calls: list[bool] = []
+
+    async def spy(session: AsyncSession) -> None:
+        calls.append(True)
+        await real_assert_connection_cannot_bypass_rls(session)
+
+    monkeypatch.setattr(worker_app, "assert_connection_cannot_bypass_rls", spy)
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+
+    user_id = provisioned_users.user_a
+    await _seed_connection(superuser_db_session, user_id)
+
+    async with app.open_async():
+        job_id = await app.configure_task("sync_user").defer_async(user_id=str(user_id))
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status = await app.job_manager.get_job_status_async(job_id)
+        assert status is Status.SUCCEEDED
+
+    assert calls == [True]
 
 
 def test_missing_connection_raises_connection_not_found_directly() -> None:
