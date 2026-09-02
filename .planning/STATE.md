@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 current_phase: 09
 current_phase_name: Reconciliation Invariant and Status Endpoint
-status: executing
-stopped_at: Phase 05 complete, ready to plan Phase 1
+status: awaiting_live_data
+stopped_at: Both features code-complete; awaiting Railway deploy + first live Schwab sync
 last_updated: "2026-09-02T04:00:27.876Z"
-last_activity: 2026-09-01
-last_activity_desc: Phase 09 execution started
+last_activity: 2026-09-02
+last_activity_desc: "Scope restated to two features; both now code-complete, neither proven on live data"
 state_head: c8c851d9bd0d015a048d112ee02f0087cee18831
 progress:
   total_phases: 11
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** The ledger is correct across rolls and settlements — the sum of realised P&L over any
 window equals the broker's cash delta over that window, checked every ingest cycle.
-**Current focus:** Phase 09 — Reconciliation Invariant and Status Endpoint
+**Current focus:** Proving both features against live Schwab data. All backend code is written.
 
 ## Current Position
 
-Phase: 09 (Reconciliation Invariant and Status Endpoint) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 09
-Last activity: 2026-09-01 — Phase 09 execution started
+Scope: two features (trading journal, skew finder) — see "Scope Restated" below
+Phases 1-9: code complete. Phases 10, 11, 13 parked; Phase 12 fixed directly (PR #40).
+Status: BLOCKED on a Railway deploy — nothing here has ever seen a real Schwab response
+Last activity: 2026-09-02 - Completed quick task 260902-b96: vertical skew finder; settlement-closes-position fix (PR #40); 7-phase re-verification sweep (PRs #33-#39)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -106,6 +106,42 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 None yet.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260902-b96 | Vertical skew finder — pure skew logic in `src/morai/analytics/skew.py`, CLI in `tools/skew.py` | 2026-09-02 | d8ec510 | [260902-b96-vertical-skew-finder](./quick/260902-b96-vertical-skew-finder-pure-skew-logic-in-/) |
+
+### Scope Restated — 2026-09-02
+
+The owner restated the project's scope: **exactly two features are needed.**
+
+1. **A trading journal** that pulls their own trades from Schwab and shows them.
+2. **A skew finder** — vertical skew at one expiry, live chain, standalone script.
+
+Phases 10, 11 and 13 are parked as out of scope (see ROADMAP.md). Phase 12 was parked and then
+unparked the same day, because the settlement defect it named is journal correctness rather than a
+feature — a front short put expiring worthless is the normal exit for these calendars, and the
+journal would have shown dead calendars as open positions.
+
+**Both features now have complete code, and neither has run against live data.**
+
+| Feature | Code | Proven |
+|---------|------|--------|
+| 1. Journal | complete; expired positions now close (PR #40) | **needs a live Schwab connection** |
+| 2. Skew finder | complete (PR #41) | **needs a live option chain** |
+
+The gap in both cases is the same one every deferred verification names: nothing in this system has
+ever seen a real Schwab response. That closes with one Railway deploy setting `MORAI_APP_DB_PASSWORD`,
+`MORAI_MASTER_KEY` and the three `SCHWAB_*` on **both** `web` and `worker`, followed by one real sync.
+
+Two things to watch on that first deploy, neither blocking:
+
+1. Migration `0017`'s settlement backfill is proven only against local Postgres 18. An unmatched row
+   stays `NULL` and closes no leg — the safe direction — but it is unverified against production data.
+2. `morai.analytics.skew` has never parsed a real `get_option_chain` response. Same class of unknown
+   Phase 8 carries for `get_quotes`.
 
 ### Blockers/Concerns
 
