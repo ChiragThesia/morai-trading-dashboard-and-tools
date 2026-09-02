@@ -293,7 +293,14 @@ Plans:
   3. A failure names the failing window, not a bare boolean, so the next question is answerable without re-running anything.
   4. Reconciliation status is its own endpoint, cheap enough to poll before rendering anything, and while it is failing the API marks the dependent numbers untrustworthy rather than serving them plain.
 
-**Plans**: TBD
+**Plans**: 3 plans, 2 waves
+
+Plans:
+
+- [ ] 09-01-PLAN.md — Wave 1. Tracer: migration 0016, the pure/shell reconciliation pair, the commission read at read-time so the oracle's fee-free fields never move (`D5-04`/`D9-05`), and one real deferred `sync_user` job landing a verdict row under RLS — the CR-01 guard
+- [ ] 09-02-PLAN.md — Wave 2. The arithmetic proven: exact agreement passes, a seeded one-cent discrepancy fails, a four-point sweep rules out any tolerance, all five `indeterminate` causes get their own case, and every instant belongs to exactly one window across both daylight-saving states
+- [ ] 09-03-PLAN.md — Wave 2. `GET /reconciliation/status` as one indexed row read that provably never recomputes, and `trustworthy` carried inside the envelope of every response holding a ledger-derived number
+
 **UI hint**: no
 
 ### Phase 10: The Pre-commitment Record
