@@ -597,7 +597,7 @@ def test_adjacent_windows_share_no_instant() -> None:
 
 def test_a_single_observed_day_closes_nothing() -> None:
     broker_cash = [_cash(transaction_time=datetime(2026, 6, 18, 14, 30, tzinfo=UTC))]
-    assert closed_trading_days(broker_cash) == ()
+    assert closed_trading_days([], broker_cash) == ()
 
 
 def test_closed_days_are_every_day_before_the_newest() -> None:
@@ -612,7 +612,10 @@ def test_closed_days_are_every_day_before_the_newest() -> None:
             activity_id="c", transaction_time=datetime(2026, 6, 18, 14, 30, tzinfo=UTC)
         ),
     ]
-    assert closed_trading_days(broker_cash) == (date(2026, 6, 16), date(2026, 6, 17))
+    assert closed_trading_days([], broker_cash) == (
+        date(2026, 6, 16),
+        date(2026, 6, 17),
+    )
 
 
 def test_closure_does_not_depend_on_arrival_order() -> None:
@@ -630,13 +633,14 @@ def test_closure_does_not_depend_on_arrival_order() -> None:
         ),
     ]
     out_of_order = [ordered[2], ordered[0], ordered[1]]
-    assert closed_trading_days(ordered) == closed_trading_days(out_of_order)
+    assert closed_trading_days([], ordered) == closed_trading_days([], out_of_order)
 
 
 def test_a_day_with_no_activity_is_never_a_candidate_window() -> None:
-    """A day with no broker activity never enters the observed set, so no
-    window ever has to reason about whether that day was a market holiday
-    -- the argument for adding no calendar dependency."""
+    """A day with no broker activity and no ledger event never enters the
+    candidate set, so no window ever has to reason about whether that day
+    was a market holiday -- the argument for adding no calendar
+    dependency."""
     broker_cash = [
         _cash(
             activity_id="a", transaction_time=datetime(2026, 6, 16, 14, 30, tzinfo=UTC)
@@ -645,9 +649,41 @@ def test_a_day_with_no_activity_is_never_a_candidate_window() -> None:
             activity_id="b", transaction_time=datetime(2026, 6, 18, 14, 30, tzinfo=UTC)
         ),
     ]
-    closed = closed_trading_days(broker_cash)
+    closed = closed_trading_days([], broker_cash)
     assert date(2026, 6, 17) not in closed
     assert closed == (date(2026, 6, 16),)
+
+
+def test_an_event_only_day_becomes_a_candidate_and_closes() -> None:
+    """CR-01 regression: a trading day whose only activity is a ledger
+    `Event` -- the leading case being a SETTLEMENT on an option's expiry,
+    with no same-day broker-cash transaction at all -- must still become a
+    candidate window once a later day's broker transaction closes it. Before
+    this fix, `closed_trading_days` derived its candidate set from
+    `broker_cash` alone, so June 18 (event-only) was never a candidate even
+    though June 30's broker activity is later -- this test proves it now is.
+    Closure itself stays broker-driven per `D9-02`: it is the broker's later
+    transaction on June 30 that closes June 18, not the event itself."""
+    events = [
+        _event(
+            event_type="SETTLEMENT",
+            event_time=datetime(2026, 6, 18, 20, 0, tzinfo=UTC),
+            open_debit_usd=None,
+            close_credit_usd=None,
+        )
+    ]
+    broker_cash = [
+        _cash(
+            activity_id="tx-close",
+            transaction_time=datetime(2026, 6, 30, 14, 30, tzinfo=UTC),
+        )
+    ]
+    closed = closed_trading_days(events, broker_cash)
+    assert date(2026, 6, 18) in closed
+
+    result = reconcile_window(events, broker_cash, trading_day=date(2026, 6, 18))
+    assert result.verdict is ReconciliationVerdict.INDETERMINATE
+    assert result.reason is IndeterminateReason.SETTLEMENT_UNPRICED
 
 
 @pytest.mark.parametrize(

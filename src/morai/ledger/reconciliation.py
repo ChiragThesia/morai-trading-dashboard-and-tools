@@ -169,22 +169,32 @@ def window_bounds(trading_day: date) -> tuple[datetime, datetime]:
     return start, end
 
 
-def closed_trading_days(broker_cash: Sequence[BrokerCashRecord]) -> tuple[date, ...]:
+def closed_trading_days(
+    events: Sequence[EventRecord], broker_cash: Sequence[BrokerCashRecord]
+) -> tuple[date, ...]:
     """`D9-02`: a window closes when a later trading day's broker
-    transaction has landed -- not on a clock timeout. Returns every
-    observed day strictly earlier than the newest observed day, sorted
-    ascending; empty when zero or one day has been observed. The newest
-    observed day stays open because the broker may still be writing into
-    it.
+    transaction has landed -- not on a clock timeout. The candidate set is
+    the union of every day observed in `events` and every day observed in
+    `broker_cash`: a day with ledger activity but no same-day broker
+    transaction (a SETTLEMENT/expiry with nothing exercised or assigned is
+    the leading case) still needs an answer, so it must become a candidate
+    window even though `broker_cash` alone never names it. Closure itself
+    stays broker-driven, per `D9-02`: a day closes only once it is strictly
+    earlier than the newest day observed in `broker_cash` -- the broker's
+    own later activity, not an event, is the evidence a prior day is final.
+    Returns every such day, sorted ascending; empty when `broker_cash` has
+    observed zero or one day, since closure has nothing to anchor to yet.
 
-    Market holidays and weekends need no calendar: a day with no broker
-    activity never enters the observed set, so no window ever has to
-    reason about whether that day was open."""
-    days = {trading_day_for(record.transaction_time) for record in broker_cash}
-    if not days:
+    Market holidays and weekends need no calendar: a day with no activity
+    on either side never enters the candidate set, so no window ever has
+    to reason about whether that day was open."""
+    broker_days = {trading_day_for(record.transaction_time) for record in broker_cash}
+    if not broker_days:
         return ()
-    newest = max(days)
-    return tuple(sorted(day for day in days if day < newest))
+    newest = max(broker_days)
+    event_days = {trading_day_for(event.event_time) for event in events}
+    candidate_days = broker_days | event_days
+    return tuple(sorted(day for day in candidate_days if day < newest))
 
 
 _DECIMAL: TypeAdapter[Decimal] = TypeAdapter(Decimal)
@@ -543,7 +553,7 @@ async def run_reconciliation(
     broker_cash = await read_broker_cash_records(session, user_id)
 
     results: list[ReconciliationResult] = []
-    for trading_day in closed_trading_days(broker_cash):
+    for trading_day in closed_trading_days(events, broker_cash):
         result = reconcile_window(events, broker_cash, trading_day=trading_day)
         prior = await read_latest_run_for_trading_day(session, user_id, trading_day)
         if prior is not None and (
