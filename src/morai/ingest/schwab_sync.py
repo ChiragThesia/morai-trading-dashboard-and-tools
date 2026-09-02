@@ -59,6 +59,7 @@ from morai.ingest.broker_transactions import (
 from morai.ledger.fills import FillWrite, insert_fills
 from morai.ledger.pairing import sync_events
 from morai.ledger.positions import create_positions
+from morai.ledger.reconciliation import run_reconciliation
 from morai.settings import Settings, get_settings
 from morai.vendor.connections import (
     ConnectionNotFound,
@@ -396,6 +397,16 @@ async def sync_user(
     this phase's SETTLEMENT machinery would stay fully implemented and
     unit-tested but unreachable from the one path a real user's data
     travels.
+
+    `run_reconciliation` (Phase 9, `ledger/reconciliation.py`) runs last,
+    immediately after `sync_events` and before this function's own
+    `return`, on the same `now` those two calls already use -- never a
+    third clock read. This is the exact seam CR-01 names: Phase 7 shipped
+    `sync_events` fully built, unit-tested, merged and unreachable because
+    this one call site was missed, and the core value's own check must run
+    at the end of every ingest cycle (criterion 2) or the same failure
+    repeats. Runs on this same `morai_app` session, inside this same
+    transaction -- neither opens a second session nor commits (`D7-12`).
     """
     await session.execute(
         text("SELECT set_config('app.current_user_id', :uid, true)"),
@@ -459,6 +470,7 @@ async def sync_user(
 
     await create_positions(session, user_id)
     await sync_events(session, user_id, as_of=now)
+    await run_reconciliation(session, user_id, as_of=now)
 
     return SyncOutcome(
         broker_transactions_landed=broker_transactions_landed,
