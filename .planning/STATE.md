@@ -143,6 +143,58 @@ REQUIREMENTS.md recorded 62 v1 requirements; the actual count is 68. Corrected i
 
 ## Deferred Verification
 
+### Parallel re-verification sweep — 2026-09-02
+
+All seven deferred phases (2, 3, 4, 6, 7, 8, 9) were re-verified in parallel against current HEAD,
+each in its own worktree and its own database. **Every phase's original verdict still holds. Six of
+the seven carried a defect that had accumulated since, and every one was silent** — nothing failing,
+nothing red, all seven marked "code complete."
+
+| Phase | Re-verified | Defect found | PR |
+|-------|-------------|--------------|-----|
+| 2 | 4/5 (3b still blocked) | Isolation guards' table lists were hardcoded; by Phase 9 six user-scoped tables were unwatched (`broker_transactions`, `schwab_connections`, `snapshot_marks`, `snapshot_observations`, `snapshot_runs`, `sync_runs`). Had not leaked — all six carry ENABLE+FORCE and a `user_isolation` policy — but nothing was watching. Now derived from `pg_attribute` with a `>= 12` vacuity guard. | #34 |
+| 3 | 6/6 after fix | **`DELETE /me` was broken.** `delete_account()` deleted eleven tables; migrations 0015/0016 added four more with uncascaded `user_id` FKs (two also uncascaded `leg_id`). Any user who had ever had a snapshot captured got a `ForeignKeyViolationError`, the transaction rolled back, and the crypto-shred never committed either. None of the seventeen FKs on user-scoped tables has `ON DELETE CASCADE`. | #37 |
+| 4 | 5/5 (criterion 5 upgraded from PARTIAL — Phase 6 supplied `last_synced_at`) | `.railway/railway.ts`'s worker block still carried only `DATABASE_URL` under a stale comment deferring the secrets to "when Phase 6's ingest starts writing". `railway config apply` strips unnamed variables, so the deployed worker would have lost all five it now needs. Silent: every scheduled sync fails forever, no token refreshes, every connection dies at 7 days, with Phase 4's code perfectly correct. | #33 |
+| 6 | 5/5 | The RLS bypass guard this phase exists to enforce **had no test** — deleting `assert_connection_cannot_bypass_rls` from `sync_user_task` changed no observable behaviour, because every test already runs on a `morai_app` session. Phase 8 had written exactly this test for its own task, citing "Phase 6's own finding". | #35 |
+| 7 | 4/4 | None. No second writer crept in across Phases 8/9. | — |
+| 8 | 5/5 | The known flake, root-caused and fixed (see above). | #36 |
+| 9 | 4/4 | `closed_trading_days`' docstring still claimed the pre-CR-01 rule ("empty when broker_cash has zero or one day"), contradicting a test shipped in the same commit. Prose only — but it points the next reader at the rule whose removal is the road back to the silently-skipped event-only day. | #38 |
+
+**No phase's `status: human_needed` was rewritten.** Every live-infrastructure item below remains
+open; a local pass proves nothing about a deployed container.
+
+### OPEN DECISION — Phase 3 criterion 1 vs. Phase 9 `D9-13`/`D9-15`
+
+Measured, not inferred, during the sweep. Migration 0016 stores `realised_pnl_usd`,
+`commissions_usd`, `cash_delta_usd` and `signed_difference_usd` as **plaintext** `NUMERIC(14,4)`.
+A real `pg_dump` of a seeded row, no master key involved, yields readable P&L.
+
+Phase 3 criterion 1 says a stolen dump "yields no readable ... P&L". Phase 9's `D9-13`/`D9-15` say
+the status endpoint must answer "how far off, in which direction" without unwrapping a key. Both are
+deliberate. Both cannot stand as written. **This needs an owner ruling** — it was not resolved by
+the verifying agent, which correctly declined to re-litigate another phase's decision.
+
+Related coverage gap, not a live defect: `test_pg_dump_confidentiality.py` still dumps only
+`users`/`positions`/`fills`/`events`/`user_data_keys`, and `test_key_rotation.py`'s byte-identical
+capture still covers only `fills`/`events`. Both are narrower than the schema they now describe.
+
+### UNOWNED WORK — surfaced by the sweep, assigned to no phase
+
+1. **Re-auth notification delivery.** `reauth_notified_at` has no writer anywhere in `src/`, and no
+   ROADMAP phase claims it. `D4-13` deferred delivery to "a later phase"; six phases later nobody
+   picked it up. The project constraint requires re-auth be self-service **with a notification** —
+   the self-service half works, the notification half is unowned.
+2. **Settlement never closes a position.** `is_closed` reads only `FillRecord`s; a SETTLEMENT is an
+   `Event`, never a `Fill`, so a position whose legs expire stays net-nonzero forever. Reproduced:
+   after both legs settled, `is_closed=False`, `closed_at=None`. Consequences live now —
+   `snapshots.read_open_legs` returns expired legs forever, and `snapshot_repair` keeps back-filling
+   slots for them. Phase-sized: `DerivedSettlement` carries no leg id, so the fix must re-derive from
+   expiry, giving `derive_position_state` an `as_of` clock input and breaking the purity contract
+   `test_pairing_pure.py` gates, rippling to four call sites and Phase 8's open-leg set. Recorded as
+   `D10-16`; Phase 10 ships without it by explicit user decision.
+
+---
+
 Phase 2's code is complete and its other four success criteria are verified. Criterion 3b —
 "the isolation suite passes against the real Railway pooling configuration" — cannot be closed
 from a development machine and is deferred by explicit user decision (2026-08-31), not skipped.
@@ -214,12 +266,21 @@ execution — neither is a surprise finding:
 
 Both close with the same Railway deploy items 1-4 below.
 
-**Known test-infrastructure flake, not a production defect:**
-`test_expired_connection_writes_gap` can fail intermittently when run as a narrow subset. Root
-caused during verification to Phase 1's heartbeat periodic task (`cron="* * * * *"`) sharing the
-same Procrastinate `app` and monkeypatched auth seam. Confirmed three independent ways as test
-isolation, not Phase 8 behaviour, and it does not manifest under the gating command
-(`bash tools/gate.sh`). Worth fixing when the worker test harness is next touched.
+**Known test-infrastructure flake — FIXED 2026-09-02 (PR #36).**
+`test_expired_connection_writes_gap` failed intermittently when run as a narrow subset. The
+original diagnosis named the right mechanism (Phase 1's heartbeat periodic task sharing the
+Procrastinate `app`) but the wrong trigger: it does not need a wall-clock minute boundary.
+`PeriodicDeferrer.get_timestamps`, given no prior defer, yields the *previous* cron tick whenever
+that is inside `MAX_DELAY` (600s) — which for a `* * * * *` cron is always. It therefore fires on
+its **first pass**, and only `procrastinate_periodic_defers`' unique constraint suppresses the
+repeat, so the first worker-driving test each wall-clock minute fired the fan-out.
+
+Reproduced at 2 failures / 21 runs, fixed with one autouse fixture in `tests/conftest.py` patching
+`PeriodicDeferrer.worker` to return immediately, then proved at 0 failures / 40 runs. **No
+production code changed.** Fixed at the deferrer rather than per-test because eight test files
+drive a real worker and all were exposed; the deferrer's *loop* is disabled rather than
+`app.periodic_registry` emptied, because two tests assert on those registrations and emptying it
+would demote a real production assertion to reading a snapshot.
 
 Phase 7's code is complete and all four of its success criteria are verified against live code
 and a live database (459 passed, gate exit 0). Deferred by explicit user decision (2026-09-01)
