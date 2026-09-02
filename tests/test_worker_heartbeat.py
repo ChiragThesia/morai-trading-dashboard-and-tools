@@ -16,6 +16,7 @@ import time
 
 import procrastinate
 import pytest
+from procrastinate import periodic
 from procrastinate.jobs import Status
 
 from morai.settings import Settings
@@ -37,6 +38,35 @@ def test_heartbeat_is_registered_as_a_periodic_task() -> None:
     # in the vendor's own source, confirmed by reading it, not this file's doing.
     periodic_task = app.periodic_registry.periodic_tasks[("heartbeat", "")]  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]  # why: vendor's PeriodicTask value type is unparameterized (D-06)
     assert periodic_task.cron == "* * * * *"
+
+
+async def test_the_suite_neutralises_procrastinates_periodic_deferrer() -> None:
+    """`tests/conftest.py::no_periodic_deferrer` keeps Procrastinate's periodic
+    deferrer from ever running inside a test. This is the check that it still does.
+
+    Both periodic tasks registered above live on the module-level `app` that every
+    worker-driving test drains with `app.run_worker_async(wait=False)` -- eight test
+    files do. The deferrer fires on its *first* pass, not only on a minute boundary:
+    `PeriodicDeferrer.get_timestamps` with no prior defer yields the *previous* cron
+    tick whenever that tick is inside `MAX_DELAY` (600s), which for a `* * * * *`
+    cron it always is. Across runs only `procrastinate_periodic_defers`' unique
+    constraint suppresses the repeat, which is why the contamination was
+    intermittent rather than constant.
+
+    Left alone, then, a worker-driving test fans out a real `sync_all_connected_users`
+    -> `sync_user` chain for whatever connection it just seeded, through whatever
+    seam it just monkeypatched. That is exactly how
+    `tests/ingest/test_snapshot_capture.py::test_expired_connection_writes_gap`
+    intermittently observed a vendor client built by a task it never invoked.
+
+    The registrations themselves stay intact -- the two tests above still read the
+    live registry, not a snapshot. Only the deferrer's loop is disabled.
+    """
+    deferrer = periodic.PeriodicDeferrer(registry=app.periodic_registry)
+
+    await asyncio.wait_for(deferrer.worker(), timeout=5)
+
+    assert deferrer.last_defers == {}
 
 
 def test_settings_expose_a_single_database_url() -> None:
