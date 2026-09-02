@@ -49,7 +49,7 @@ in this journal does not do one of those two things, delete it."* That test gove
 
 - [ ] Every user's trading data is encrypted at rest under a per-user data key
 - [ ] Per-user data keys are wrapped by a master key held outside the database
-- [ ] A stolen database dump or backup yields no readable trading history
+- [ ] A stolen database dump or backup yields no readable trading history. The `reconciliation_runs` aggregates are the one exception, plaintext on purpose so the status endpoint reports drift without a key (`D9-13`, `D9-15`; owner ruling, 2026-09-02)
 
 **Ingest and ledger**
 

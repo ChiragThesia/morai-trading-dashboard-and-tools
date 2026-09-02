@@ -122,7 +122,7 @@ criteria met in substance.
 **Requirements**: CRYPT-01, CRYPT-02, CRYPT-03, CRYPT-04, CRYPT-05, AUTH-06, LEDGER-04
 **Success Criteria** (what must be TRUE):
 
-  1. A real `pg_dump` restored with the master key unavailable yields no readable price, quantity, P&L, or free-text entry field, and no two ciphertext rows share a `(key, nonce)` pair.
+  1. A real `pg_dump` restored with the master key unavailable yields no readable per-user trade detail — price, quantity, per-trade P&L, or free-text entry field — and no two ciphertext rows share a `(key, nonce)` pair. **The `reconciliation_runs` aggregates are the one exception, and they are plaintext on purpose**: `realised_pnl_usd`, `commissions_usd`, `cash_delta_usd` and `signed_difference_usd` are readable in a dump so `GET /reconciliation/status` can report drift without unwrapping a data key (`D9-13`, `D9-15`, migration 0016). The owner ruled on 2026-09-02 to narrow this criterion rather than encrypt those columns. The line is an allow-list, enforced mechanically: `tests/test_pg_dump_confidentiality.py::test_only_the_reconciliation_aggregates_store_plaintext_money` derives every plaintext money column from the catalog and fails on a fifth.
   2. The plaintext-by-design column set — `user_id`, `order_id`, `occ_symbol`, timestamps, join keys — is documented in the migration with the query each column exists to serve, and both the shared-front-leg disambiguation query and the reconciliation window query run in SQL against it.
   3. Rotating the master key re-wraps every user's data key without touching a single row of trade ciphertext, and versioned rows still read under the key they were written with.
   4. Inserting a ROLL row carrying only a netted amount is rejected by a database `CHECK` constraint, not by application code that a later caller could bypass.
@@ -318,7 +318,13 @@ Plans:
   3. At close the user records plan-followed yes or no plus one sentence, and the close is not complete without it.
   4. A tag outside the closed vocabulary of four is rejected, and a free-text value submitted into a tag field is rejected rather than stored.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Tracer: one pre-commitment recorded over HTTP, encrypted, linked, and frozen by a trigger (INTENT-01..06)
+- [ ] 10-02-PLAN.md — The close record, its service-layer gate, and the outstanding-note obligation on the envelope (INTENT-07, INTENT-08)
+- [ ] 10-03-PLAN.md — The `entry_trigger` vocabulary, blocked on developer input (INTENT-08)
+
 **UI hint**: no
 
 ### Phase 11: Review API Surface

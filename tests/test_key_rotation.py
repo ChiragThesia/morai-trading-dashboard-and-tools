@@ -23,6 +23,7 @@ from uuid import UUID
 
 import pytest
 from cryptography.exceptions import InvalidTag
+from pydantic import TypeAdapter
 from sqlalchemy import insert, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,6 +62,13 @@ pytestmark = pytest.mark.db
 _EXECUTION_TIME = datetime(2026, 6, 18, 14, 30, tzinfo=UTC)
 _EVENT_TIME = datetime(2026, 6, 18, 20, 0, tzinfo=UTC)
 
+# The capture below reads raw SQL, so every value crosses an untyped
+# boundary -- narrowed the same way `morai.ledger.fills` and every raw-SQL
+# test in this suite already narrows one.
+_STR: TypeAdapter[str] = TypeAdapter(str)
+_BOOL: TypeAdapter[bool] = TypeAdapter(bool)
+_BYTES_OR_NONE: TypeAdapter[bytes | None] = TypeAdapter(bytes | None)
+
 
 @pytest.fixture(autouse=True)
 def restore_settings_cache() -> Iterator[None]:
@@ -83,41 +91,87 @@ async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
     )
 
 
+async def _ciphertext_columns_by_table(
+    session: AsyncSession,
+) -> dict[str, tuple[list[str], list[str]]]:
+    """Per table: its primary-key columns and its ciphertext/nonce columns,
+    read from `pg_attribute` and `pg_index`.
+
+    Derived rather than written down, following PR #34's fix to
+    `tests/test_isolation.py`. The hand-written `fills`/`events` pair this
+    replaced named two of the six tables that carry ciphertext by Phase 9 --
+    `broker_transactions`, `schwab_connections`, `snapshot_marks` and
+    `snapshot_observations` were the four nothing watched.
+
+    `user_data_keys` is excluded by name, and only it: rotation is *supposed*
+    to rewrite `wrapped_dek`/`wrap_nonce`, and the test below asserts exactly
+    that separately. Everything else must come out byte-identical."""
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.relname, a.attname, i.indisprimary IS NOT NULL "
+                "FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "JOIN pg_attribute a ON a.attrelid = c.oid "
+                "LEFT JOIN pg_index i ON i.indrelid = c.oid "
+                "AND i.indisprimary AND a.attnum = ANY(i.indkey::smallint[]) "
+                "WHERE n.nspname = 'public' AND c.relkind = 'r' "
+                "AND c.relname <> 'user_data_keys' "
+                "AND a.attnum > 0 AND NOT a.attisdropped "
+                "AND EXISTS (SELECT 1 FROM pg_attribute x "
+                "WHERE x.attrelid = c.oid AND x.attname ~ '_ciphertext$') "
+                "AND (i.indisprimary OR a.attname ~ '_(ciphertext|nonce)$') "
+                "ORDER BY c.relname, a.attnum"
+            )
+        )
+    ).all()
+
+    by_table: dict[str, tuple[list[str], list[str]]] = {}
+    for row in rows:
+        table = _STR.validate_python(row[0])
+        column = _STR.validate_python(row[1])
+        keys, values = by_table.setdefault(table, ([], []))
+        (keys if _BOOL.validate_python(row[2]) else values).append(column)
+    return by_table
+
+
 async def _capture_trade_ciphertext(
     session: AsyncSession,
 ) -> dict[tuple[str, ...], bytes | None]:
-    """Every trade-table ciphertext and nonce value, keyed by its own row
-    identity plus column name -- a full dict compare, not a sample. ORM
-    `select()` over the mapped models, not raw SQL, so every value read
-    here is already typed `bytes | None` -- no untyped-boundary narrowing
-    needed for this comparison."""
+    """Every ciphertext and nonce value in the schema, keyed by table,
+    primary key and column name -- a full dict compare, not a sample
+    (03-VALIDATION.md's own trap).
+
+    Only `fills` and `events` carry seeded rows here, so the four tables this
+    widening adds prove the shape of the claim, not more data. That is the
+    right scope: rotation's guarantee is structural -- `rotate_kek()` names no
+    trade table at all -- and the capture should describe the schema it runs
+    against, not the two tables Phase 3 happened to have."""
+    by_table = await _ciphertext_columns_by_table(session)
+    # Guards the guard. An empty derivation makes the whole-dict compare in
+    # the test below a comparison of two empty dicts.
+    assert len(by_table) >= 6
+
     captured: dict[tuple[str, ...], bytes | None] = {}
-
-    for fill in (await session.execute(select(Fill))).scalars().all():
-        fill_key: tuple[str, ...] = (
-            "fills",
-            str(fill.user_id),
-            fill.order_id,
-            fill.occ_symbol,
-            str(fill.leg_index),
-            fill.execution_time.isoformat(),
+    for table, (key_columns, value_columns) in sorted(by_table.items()):
+        assert key_columns and value_columns
+        # Every identifier came out of the catalog, never out of a test
+        # parameter -- but interpolating one at all earns the check.
+        assert all(
+            name.isidentifier() for name in (table, *key_columns, *value_columns)
         )
-        captured[(*fill_key, "quantity_ciphertext")] = fill.quantity_ciphertext
-        captured[(*fill_key, "quantity_nonce")] = fill.quantity_nonce
-        captured[(*fill_key, "price_usd_ciphertext")] = fill.price_usd_ciphertext
-        captured[(*fill_key, "price_usd_nonce")] = fill.price_usd_nonce
-
-    for event in (await session.execute(select(Event))).scalars().all():
-        event_key: tuple[str, ...] = ("events", str(event.id))
-        captured[(*event_key, "open_debit_usd_ciphertext")] = (
-            event.open_debit_usd_ciphertext
-        )
-        captured[(*event_key, "open_debit_usd_nonce")] = event.open_debit_usd_nonce
-        captured[(*event_key, "close_credit_usd_ciphertext")] = (
-            event.close_credit_usd_ciphertext
-        )
-        captured[(*event_key, "close_credit_usd_nonce")] = event.close_credit_usd_nonce
-
+        selected = [f"{name}::text" for name in key_columns] + value_columns
+        rows = (
+            await session.execute(text(f"SELECT {', '.join(selected)} FROM {table}"))
+        ).all()
+        for row in rows:
+            row_key = tuple(
+                _STR.validate_python(row[index]) for index in range(len(key_columns))
+            )
+            for offset, column in enumerate(value_columns):
+                captured[(table, *row_key, column)] = _BYTES_OR_NONE.validate_python(
+                    row[len(key_columns) + offset]
+                )
     return captured
 
 
@@ -203,6 +257,10 @@ async def test_rotation_touches_no_trade_ciphertext(
     await superuser_db_session.commit()
 
     before_ciphertext = await _capture_trade_ciphertext(superuser_db_session)
+    # Guards the guard: two fills and two events, four ciphertext/nonce
+    # columns each. Two empty dicts compare equal, and the assertion below
+    # would certify nothing.
+    assert len(before_ciphertext) >= 16
 
     key_rows_before = (
         (
