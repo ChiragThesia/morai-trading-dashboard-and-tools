@@ -193,7 +193,27 @@ This does not violate the phase's success criteria: criterion 2 demands a struct
 record, and does not require a database-level mechanism. State the asymmetry in the plan rather than
 implying criterion 3 is structurally enforced.
 
-### D10-18 — `entry_trigger`'s member values are supplied by the user, pending at plan time
+### D10-18a — `entry_trigger`'s member values, supplied by the owner 2026-09-02
+
+**RESOLVED.** The vocabulary is:
+
+```
+iv_rank, term_structure, technical_level, event_catalyst
+```
+
+**Provenance, stated exactly:** these are the **owner's own choice**, given directly during planning.
+They are NOT derived from `docs/learnings/`, `knowledge-base/`, `salvage/`, or
+`docs/rebuild-research/` — the research confirmed the record is silent on this. `D10-08` forbade
+*inventing* domain terms; the trader choosing their own vocabulary is authoritative in a way an
+invented set never is. Record them as owner-supplied, never cite them to a document.
+
+**Consequence — the pending-value workaround is no longer needed.** `D10-18`'s "one `StrEnum` the
+migration imports" existed only to make an unknown value fillable in one line. With the values known,
+the migration hardcodes them like all 16 existing migrations do (self-contained, no application
+import), and a contract test asserting each live `CHECK` definition equals its enum's members
+supplies the same anti-drift guarantee `D10-05` requires. Fold the third migration into the first.
+
+### D10-18 — [SUPERSEDED by D10-18a] `entry_trigger`'s member values were pending at plan time
 
 `D10-08` requires the vocabularies come from the project's own record and forbids inventing domain
 terms. The research confirmed `entry_trigger`'s values are absent from `docs/learnings/`,
