@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-current_phase: 08
-current_phase_name: Snapshot Capture
+current_phase: 09
+current_phase_name: Reconciliation Invariant and Status Endpoint
 status: executing
 stopped_at: Phase 05 complete, ready to plan Phase 1
-last_updated: "2026-09-01T21:39:56.619Z"
+last_updated: "2026-09-02T04:00:27.876Z"
 last_activity: 2026-09-01
-last_activity_desc: Phase 08 execution started
-state_head: ec82776d14d4d1961e8c8c5f5f7b77bb294465ee
+last_activity_desc: Phase 09 execution started
+state_head: c8c851d9bd0d015a048d112ee02f0087cee18831
 progress:
   total_phases: 11
   completed_phases: 1
-  total_plans: 42
-  completed_plans: 35
+  total_plans: 45
+  completed_plans: 39
   percent: 9
 ---
 
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** The ledger is correct across rolls and settlements — the sum of realised P&L over any
 window equals the broker's cash delta over that window, checked every ingest cycle.
-**Current focus:** Phase 08 — Snapshot Capture
+**Current focus:** Phase 09 — Reconciliation Invariant and Status Endpoint
 
 ## Current Position
 
-Phase: 08 (Snapshot Capture) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 08
-Last activity: 2026-09-01 — Phase 08 execution started
+Phase: 09 (Reconciliation Invariant and Status Endpoint) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 09
+Last activity: 2026-09-01 — Phase 09 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -130,7 +130,14 @@ Five open decisions are assigned to owning phases rather than left floating — 
   `model_validate()` at every call site. Recorded as `D4-01`..`D4-05` in `04-CONTEXT.md`.
 
 - Phase 6: Railway execution model, cron container vs long-running worker — Phase 8 inherits it
-- Phase 9: Reconciliation window boundary — RECON-01 is untestable until it is fixed
+- Phase 9: Reconciliation window boundary — **SETTLED 2026-09-01 in `09-CONTEXT.md` (`D9-01`..`D9-04`).**
+  A window is a **settlement-date trading day in ET**, because cash moves on the broker's settlement
+  calendar; a rolling 24-hour window would split a single trading day and manufacture a false
+  mismatch every day, and calendar days do the same across every weekend. A window closes when a
+  later trading day's broker transaction lands — the broker's own later activity is the evidence it
+  considers the prior day final, where a clock timeout would close a window the vendor may still be
+  writing into. Late data reopens a closed window and the reopening is itself recorded as a finding,
+  never silently absorbed. RECON-01 is now testable.
 
 REQUIREMENTS.md recorded 62 v1 requirements; the actual count is 68. Corrected in that file.
 
