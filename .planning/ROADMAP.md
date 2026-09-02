@@ -40,10 +40,27 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Position and Campaign Read Models** - Open/closed state, per-leg settlement, and rolled-position chains computed from events
 - [x] **Phase 8: Snapshot Capture** - Every open position repriced on the 30-minute RTH cadence, with honest gaps and a repair path
 - [x] **Phase 9: Reconciliation Invariant and Status Endpoint** - Realised P&L checked against the broker's cash delta every cycle, and queryable
-- [ ] **Phase 10: The Pre-commitment Record** - What the user said they would do, captured before the position opens and unable to change afterwards
-- [ ] **Phase 11: Review API Surface** - Campaigns, drift, cohort baselines, and lossless export
-- [ ] **Phase 12: Settlement Closes the Position** - A position whose legs expire is closed by the same derivation that closes one sold out (found by the 2026-09-02 sweep, not by a failing test)
-- [ ] **Phase 13: Re-auth Notification Delivery** - The notification half of the re-auth constraint, unowned since `D4-13` deferred it
+- ⏸ **Phase 10: The Pre-commitment Record** — **PARKED 2026-09-02, out of scope**
+- ⏸ **Phase 11: Review API Surface** — **PARKED 2026-09-02, out of scope**
+- ⏸ **Phase 12: Settlement Closes the Position** — **PARKED 2026-09-02**; the underlying defect carries forward into the next milestone, see below
+- ⏸ **Phase 13: Re-auth Notification Delivery** — **PARKED 2026-09-02, out of scope**
+
+### Why these four are parked
+
+The owner restated the scope on 2026-09-02: **the only two features this project needs are (1) a
+trading journal that pulls their own trades from Schwab and shows them, and (2) a skew finder using
+the skewness formula.** Phases 10 through 13 serve neither.
+
+They are parked, not deleted. Every planning artifact stays on disk — Phase 10 has a full
+CONTEXT/RESEARCH/PATTERNS/VALIDATION set and three finished plans, and Phases 12 and 13 carry the
+reasoning behind defects found by the 2026-09-02 re-verification sweep. If the scope widens again,
+none of that has to be rediscovered.
+
+**One defect does NOT get parked with its phase.** Phase 12 existed because `is_closed` reads only
+`FillRecord`s, so a position whose legs expire stays net-nonzero forever — reproduced, not theorised.
+That is a **journal correctness bug**, not a feature: a trader looking at their journal would see
+expired calendars listed as open positions, and `read_open_legs` would keep requesting quotes for
+dead contracts. It belongs to feature 1 and moves to the next milestone's scope.
 
 ## Phase Details
 
@@ -429,7 +446,9 @@ Named here so they are settled inside a phase rather than floating.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9. Phases 10–13 are PARKED
+(scope restated 2026-09-02 — see "Why these four are parked" above). This milestone's remaining
+work is the live-Railway/live-Schwab proof the deferred verifications all wait on.
 
 Phases 12 and 13 were added on 2026-09-02 from the parallel re-verification sweep. Both were found
 by re-reading shipped phases against current code, not by a failing test. They sit after Phase 11 by
@@ -446,10 +465,10 @@ explicit user decision, so the backend milestone finishes on its existing scope 
 | 7. Position and Campaign Read Models | 5/5 | Executed | 2026-09-01 |
 | 8. Snapshot Capture | 4/4 | Executed | 2026-09-01 |
 | 9. Reconciliation Invariant and Status Endpoint | 3/3 | Executed | 2026-09-02 |
-| 10. The Pre-commitment Record | 0/TBD | Not started | - |
-| 11. Review API Surface | 0/TBD | Not started | - |
-| 12. Settlement Closes the Position | 0/TBD | Not started | - |
-| 13. Re-auth Notification Delivery | 0/TBD | Not started | - |
+| 10. The Pre-commitment Record | 0/TBD | ⏸ Parked | - |
+| 11. Review API Surface | 0/TBD | ⏸ Parked | - |
+| 12. Settlement Closes the Position | 0/TBD | ⏸ Parked | - |
+| 13. Re-auth Notification Delivery | 0/TBD | ⏸ Parked | - |
 
 ## Coverage
 
