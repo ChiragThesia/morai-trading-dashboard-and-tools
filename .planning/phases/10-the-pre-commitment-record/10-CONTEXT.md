@@ -155,6 +155,59 @@ not a loophole, and freezing it would only encourage leaving it blank.
 on review. INTENT-08 already places `plan-followed` in the closed vocabulary, so the boolean carries
 the aggregation and the sentence carries the reason.
 
+### D10-16 — INTENT-07 gates fill-closed positions only; the expiry hole is recorded, not closed
+
+**Decided 2026-09-02, during planning, by the user.**
+
+Phase 7's re-verification found that `is_closed` reads only `FillRecord`s. A SETTLEMENT is an
+`Event`, never a `Fill`, so a position whose legs expire stays net-nonzero forever — reproduced
+against the real functions: after both legs settled, `is_closed=False`, `closed_at=None`. A front
+short put expiring worthless is a normal exit for these calendars, so at-close capture built on
+`is_closed` will never fire for that class of close.
+
+**Decision:** ship Phase 10 anyway. INTENT-07's gate applies to fill-closed positions. Expiry-closed
+positions get no at-close capture, and that gap is documented as a known limitation in this phase's
+SUMMARY and VERIFICATION rather than papered over.
+
+**Why this is a real cost, stated plainly:** this is the same failure shape as Phase 9's CR-01
+blocker — work that is not failed and not indeterminate, just silently skipped. It is accepted here
+as a scoping decision, not because it is harmless.
+
+**What closes it:** the settlement-to-closed fix is phase-sized and belongs to its own work item.
+`DerivedSettlement` carries only `(position_id, event_time)` and no leg id, so the fix cannot read
+which leg settled off the event — it must re-derive from expiry, which gives `derive_position_state`
+an `as_of` clock input and breaks the purity contract `test_pairing_pure.py` gates, rippling to four
+call sites and Phase 8's open-leg set.
+
+**Do NOT attempt that fix in this phase.** It is outside the stated boundary ("touches no fill,
+event, or position write path").
+
+### D10-17 — INTENT-07's gate is service-layer, and that is within criteria
+
+`is_closed` is pure Python over *decrypted* quantities (`fills.quantity` is ciphertext), so no
+Postgres trigger can compute it. INTENT-07's "the close is not complete without it" is therefore a
+service-layer gate, unlike INTENT-06's structural trigger.
+
+This does not violate the phase's success criteria: criterion 2 demands a structural constraint for
+**entry-intent immutability** only. Criterion 3 asks that the close not be complete without the
+record, and does not require a database-level mechanism. State the asymmetry in the plan rather than
+implying criterion 3 is structurally enforced.
+
+### D10-18 — `entry_trigger`'s member values are supplied by the user, pending at plan time
+
+`D10-08` requires the vocabularies come from the project's own record and forbids inventing domain
+terms. The research confirmed `entry_trigger`'s values are absent from `docs/learnings/`,
+`knowledge-base/`, `salvage/`, and `docs/rebuild-research/`. The user elected to supply them
+directly rather than accept a proposed set.
+
+**Consequence for planning:** the vocabulary's member values MUST live in exactly one place — a
+single `StrEnum` that the Pydantic layer and the migration's `CHECK` constraint both derive from —
+so that filling in the real values is a one-line change and cannot drift between the two layers
+(`D10-05` already requires both layers enforce the same closed set).
+
+The task that writes those values is blocked on user input and must be marked as such. The other
+three vocabularies are sourced and are not blocked.
+
 ### Claude's Discretion
 
 Left to implementation, guided by the codebase's established patterns:
