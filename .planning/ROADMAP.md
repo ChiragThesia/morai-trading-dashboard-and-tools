@@ -345,6 +345,54 @@ Plans:
 **Plans**: TBD
 **UI hint**: no
 
+### Phase 12: Settlement Closes the Position
+
+**Goal**: A position whose legs expire is closed by the same derivation that closes a position sold out, so nothing downstream keeps treating a dead contract as live.
+
+**Mode:** mvp
+**Depends on**: Phase 7 (the derivation this changes), Phase 8 (its open-leg set moves as a result)
+**Parallel with**: Nothing — it changes a contract three phases read
+**Origin**: Found 2026-09-02 by the parallel re-verification sweep, not by a failing test. Recorded as `D10-16`; Phase 10 shipped around it by explicit user decision.
+**Requirements**: TBD — carve from LEDGER-05's existing scope rather than minting new IDs
+
+**Why this is not a bug fix**: `is_closed` reads only `FillRecord`s. A SETTLEMENT is an `Event`, never a `Fill`, so a leg that expires stays net-nonzero forever. Reproduced against the real functions: after both legs settled, `is_closed=False`, `closed_at=None`. A front short put expiring worthless is a **normal** exit for these calendars, so this is the common case, not an edge.
+
+**Live consequences already running**: `snapshots.read_open_legs` returns expired legs forever, so quote lookups run against dead contracts and write perpetual gap rows; `snapshot_repair` keeps back-filling slots for them.
+
+**Why it is phase-sized**: `DerivedSettlement` carries only `(position_id, event_time)` and no leg id, so the fix cannot read which leg settled off the event — it must re-derive from expiry. That gives `derive_position_state` an `as_of` clock input, which breaks the purity contract `tests/test_pairing_pure.py` gates, rippling to four call sites and changing Phase 8's open-leg set. It is also a money decision: `D7-07` deliberately deferred settlement value to Phase 8's SOQ.
+
+**Success Criteria** (what must be TRUE):
+
+  1. A position whose every leg is past expiry reports `is_closed` true and a non-null `closed_at`, derived — not written by a second writer.
+  2. `read_open_legs` stops returning a leg once that leg has settled, so no quote is requested for a dead contract.
+  3. The purity contract is either preserved or replaced by an equally mechanical guard, and the choice is recorded with its reason — not silently dropped.
+  4. Phase 10's INTENT-07 at-close capture fires for an expiry-closed position, closing the `D10-16` gap.
+
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 13: Re-auth Notification Delivery
+
+**Goal**: A user whose Schwab refresh token is about to die is told, without an operator being involved.
+
+**Mode:** mvp
+**Depends on**: Phase 4 (`reauth_notified_at` and the health derivation already exist)
+**Parallel with**: Phase 12 — different subsystem entirely
+**Origin**: Found 2026-09-02 by the parallel re-verification sweep. `D4-13` deferred delivery to "a later phase"; six phases later no phase had claimed it.
+**Requirements**: TBD — belongs with AUTH/CONN, carve from the existing re-auth requirement
+
+**Why this is owed**: the project constraint is that re-auth be self-service **with a notification**, because the refresh token expires after 7 days, server-side and hard, forever, per user. The self-service half works. `reauth_notified_at` has no writer anywhere in `src/` — the column exists and nothing sets it. Until this ships, a user finds out their connection died by noticing their data stopped.
+
+**Success Criteria** (what must be TRUE):
+
+  1. A connection crossing roughly 6.5 days of token age produces exactly one notification, and `reauth_notified_at` records when.
+  2. Re-running the notifier does not re-notify — the write is idempotent per connection per expiry cycle.
+  3. The notification names the reconnect action and carries no OAuth code, token, or redirect URL (`NN-34`).
+  4. A delivery failure is recorded and retried, and never silently swallows the obligation.
+
+**Plans**: TBD
+**UI hint**: no
+
 ## Parallelisation
 
 Per `research/ARCHITECTURE.md` §7. Phases execute in numeric order by default; these are the pairs
@@ -379,7 +427,11 @@ Named here so they are settled inside a phase rather than floating.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
+
+Phases 12 and 13 were added on 2026-09-02 from the parallel re-verification sweep. Both were found
+by re-reading shipped phases against current code, not by a failing test. They sit after Phase 11 by
+explicit user decision, so the backend milestone finishes on its existing scope first.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -394,6 +446,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 9. Reconciliation Invariant and Status Endpoint | 3/3 | Executed | 2026-09-02 |
 | 10. The Pre-commitment Record | 0/TBD | Not started | - |
 | 11. Review API Surface | 0/TBD | Not started | - |
+| 12. Settlement Closes the Position | 0/TBD | Not started | - |
+| 13. Re-auth Notification Delivery | 0/TBD | Not started | - |
 
 ## Coverage
 
