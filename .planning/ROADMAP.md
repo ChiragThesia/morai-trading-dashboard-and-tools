@@ -62,6 +62,12 @@ That is a **journal correctness bug**, not a feature: a trader looking at their 
 expired calendars listed as open positions, and `read_open_legs` would keep requesting quotes for
 dead contracts. It belongs to feature 1 and moves to the next milestone's scope.
 
+**Fixed 2026-09-02**, ahead of that milestone. Migration 0017 adds `events.leg_id`, so a SETTLEMENT
+records which leg it settles and `derive_position_state` closes that leg from the event stream it
+already reads — no `as_of` clock input, so the purity contract stands unchanged. Phase 12's
+criteria 1, 2 and 3 are met; its criterion 4 (Phase 10's INTENT-07 at-close capture) stays parked
+with Phase 10.
+
 ## Phase Details
 
 ### Phase 1: Walking Skeleton

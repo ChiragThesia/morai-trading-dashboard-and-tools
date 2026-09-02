@@ -101,10 +101,12 @@ async def _set_current_user(session: AsyncSession, user_id: UUID) -> None:
     )
 
 
-def _settlement_event_record(*, position_id: UUID, event_time: datetime) -> EventRecord:
+def _settlement_event_record(
+    *, position_id: UUID, event_time: datetime, leg_id: UUID | None = None
+) -> EventRecord:
     """A synthetic already-stored SETTLEMENT row, for the idempotency
-    test below -- every field but `position_id`/`event_time` is a
-    placeholder since `derive_settlements` only inspects those two plus
+    test below -- every field but `position_id`/`leg_id`/`event_time` is a
+    placeholder since `derive_settlements` only inspects those three plus
     `event_type`."""
     return EventRecord(
         id=uuid4(),
@@ -117,6 +119,7 @@ def _settlement_event_record(*, position_id: UUID, event_time: datetime) -> Even
         close_credit_usd=None,
         key_version=1,
         rolled_from_position_id=None,
+        leg_id=leg_id,
     )
 
 
@@ -225,20 +228,46 @@ def test_derive_settlements_produces_one_draft_at_or_after_expiry() -> None:
     )
 
     assert drafts == (
-        DerivedSettlement(position_id=leg.position_id, event_time=instant),
+        DerivedSettlement(
+            position_id=leg.position_id, leg_id=leg.id, event_time=instant
+        ),
     )
 
 
 def test_derive_settlements_skips_a_leg_with_an_existing_settlement_row() -> None:
     leg = _leg(root="SPX", expiry=date(2026, 6, 18))
     instant = settlement_instant(date(2026, 6, 18), root="SPX")
-    existing = _settlement_event_record(position_id=leg.position_id, event_time=instant)
+    existing = _settlement_event_record(
+        position_id=leg.position_id, leg_id=leg.id, event_time=instant
+    )
 
     drafts = derive_settlements(
         [leg], [existing], as_of=instant, closed_positions={leg.position_id: False}
     )
 
     assert drafts == ()
+
+
+def test_a_settlement_naming_no_leg_does_not_block_the_leg_it_could_not_name() -> None:
+    """Migration 0017's own edge: a SETTLEMENT row written before the
+    `leg_id` column existed names no leg, so it closes no leg. It must
+    not block a fresh draft either, or the leg it silently stood for
+    would never close. The migration backfills those rows, so this is the
+    behaviour under a backfill that could not match, not the expected
+    path."""
+    leg = _leg(root="SPX", expiry=date(2026, 6, 18))
+    instant = settlement_instant(date(2026, 6, 18), root="SPX")
+    legacy = _settlement_event_record(position_id=leg.position_id, event_time=instant)
+
+    drafts = derive_settlements(
+        [leg], [legacy], as_of=instant, closed_positions={leg.position_id: False}
+    )
+
+    assert drafts == (
+        DerivedSettlement(
+            position_id=leg.position_id, leg_id=leg.id, event_time=instant
+        ),
+    )
 
 
 def test_derive_settlements_mixed_style_position_produces_two_distinct_drafts() -> None:

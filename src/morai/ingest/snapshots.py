@@ -350,7 +350,12 @@ async def read_open_legs(session: AsyncSession, user_id: UUID) -> tuple[OpenLeg,
     one whose `is_closed` is `None` has a gapped leg and is not *known* to
     be closed -- skipping either would make the slot read as though the
     position did not exist, which criterion 5's own reasoning forbids.
-    Returned sorted by `occ_symbol` so two runs are comparable
+
+    A leg with a `settled_at` is dropped even when its position is still
+    open -- the normal mid-life calendar, front expired and back still
+    live. The contract no longer exists, so quoting it would ask the
+    broker about a dead symbol every slot forever and bank a gap row each
+    time. Returned sorted by `occ_symbol` so two runs are comparable
     element-wise."""
     positions = (await session.execute(select(Position))).scalars().all()
     legs: list[OpenLeg] = []
@@ -365,6 +370,7 @@ async def read_open_legs(session: AsyncSession, user_id: UUID) -> tuple[OpenLeg,
                 occ_symbol=leg_net.occ_symbol,
             )
             for leg_net in state.leg_nets
+            if leg_net.settled_at is None
         )
     return tuple(sorted(legs, key=lambda leg: leg.occ_symbol))
 

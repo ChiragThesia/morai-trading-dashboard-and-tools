@@ -76,7 +76,14 @@ class EventWrite:
     so existing call sites need no change; it must be non-`None` if and
     only if `event_type == "ROLL"`, checked by `insert_events` before any
     row is added, with the database's `roll_has_rolled_from_position`
-    CHECK as the backstop for a caller that bypasses this function."""
+    CHECK as the backstop for a caller that bypasses this function.
+
+    `leg_id` (migration 0017) names the leg a SETTLEMENT settles. It
+    defaults to `None` for the same reason, and only a SETTLEMENT may
+    carry one -- `insert_events` raises otherwise, with the database's
+    `only_settlement_names_a_leg` CHECK as that guard's backstop. The
+    reverse is deliberately not required: a SETTLEMENT with no `leg_id`
+    is storable, closes no leg, and is what a pre-0017 row looks like."""
 
     position_id: UUID
     event_type: str
@@ -85,6 +92,7 @@ class EventWrite:
     open_debit_usd: Decimal | None
     close_credit_usd: Decimal | None
     rolled_from_position_id: UUID | None = None
+    leg_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -101,6 +109,7 @@ class EventRecord:
     close_credit_usd: Decimal | None
     key_version: int
     rolled_from_position_id: UUID | None
+    leg_id: UUID | None = None
 
 
 def _event_associated_data(column: str, *, event_id: UUID) -> bytes:
@@ -174,6 +183,10 @@ async def insert_events(
                     "rolled_from_position_id must be set if and only if "
                     "event_type is ROLL (D7-10)."
                 )
+            if event.leg_id is not None and event.event_type != "SETTLEMENT":
+                raise ValueError(
+                    "Only a SETTLEMENT event may name a leg_id (migration 0017)."
+                )
 
             event_id = uuid4()
 
@@ -208,6 +221,7 @@ async def insert_events(
                     close_credit_usd_nonce=close_credit_usd_nonce,
                     key_version=key_version,
                     rolled_from_position_id=event.rolled_from_position_id,
+                    leg_id=event.leg_id,
                 )
             )
         await session.flush()
@@ -286,6 +300,7 @@ async def read_events(session: AsyncSession, user_id: UUID) -> list[EventRecord]
                 close_credit_usd=close_credit_usd,
                 key_version=row.key_version,
                 rolled_from_position_id=row.rolled_from_position_id,
+                leg_id=row.leg_id,
             )
         )
     return records

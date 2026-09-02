@@ -146,7 +146,14 @@ async def _open_the_seeded_position(
     check only needs the fills (net quantity), but Task 3's
     `backfill_uncaptured_slot_gaps` also needs `opened_at`, which
     `derive_position_state` derives from real `OPEN`/`ROLL` events, not
-    from fills directly."""
+    from fills directly.
+
+    `as_of` is `_SLOT_TIME` itself, not a later date: the front leg
+    expires 2026-06-18, so any `as_of` past it settles that leg, and a
+    settled leg correctly leaves the open-leg set (migration 0017). These
+    tests count legs attempted and gaps tallied at slots on 2026-06-15,
+    when neither leg has expired -- the seed's clock must agree with the
+    slots' or it seeds a half-expired position by accident."""
     await insert_fills(
         superuser_db_session,
         user_id,
@@ -173,9 +180,7 @@ async def _open_the_seeded_position(
             ),
         ],
     )
-    await sync_events(
-        superuser_db_session, user_id, as_of=datetime(2026, 6, 20, tzinfo=UTC)
-    )
+    await sync_events(superuser_db_session, user_id, as_of=_SLOT_TIME)
     await superuser_db_session.commit()
 
 

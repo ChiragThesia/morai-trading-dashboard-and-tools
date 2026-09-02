@@ -90,9 +90,15 @@ class DerivedSettlement:
     """One SETTLEMENT event, derived but not yet written. Deliberately
     carries no money fields -- a SETTLEMENT's amounts are always `None`
     (D7-07), and the type is the place that makes that unmistakable
-    rather than a caller convention."""
+    rather than a caller convention.
+
+    `leg_id` (migration 0017) is the leg this settles. Without it the
+    event stream said a position settled but not which of its legs did,
+    so `derive_position_state` had nothing to close a leg with and an
+    expired calendar stayed open forever."""
 
     position_id: UUID
+    leg_id: UUID
     event_time: datetime
 
 
@@ -124,20 +130,26 @@ def derive_settlements(
     mapping -- a gapped leg, `NN-16`) are both withheld, never assumed
     settled.
 
-    Builds the set of already-settled `(position_id, event_time)` pairs
-    from `events` whose `event_type` is `"SETTLEMENT"`. For each leg whose
-    position is confirmed still open, parses its `occ_symbol` through
-    `parse_occ_symbol` to get the expiry, computes its settlement instant
-    through `settlement_instant` using the leg's own stored `root`, skips
-    it if that instant is later than `as_of` (not expired yet), skips it
-    if its `(position_id, event_time)` pair is already present
-    (idempotency), otherwise emits one draft.
+    Builds the set of already-settled `(position_id, leg_id, event_time)`
+    triples from `events` whose `event_type` is `"SETTLEMENT"`. For each
+    leg whose position is confirmed still open, parses its `occ_symbol`
+    through `parse_occ_symbol` to get the expiry, computes its settlement
+    instant through `settlement_instant` using the leg's own stored
+    `root`, skips it if that instant is later than `as_of` (not expired
+    yet), skips it if its triple is already present (idempotency),
+    otherwise emits one draft.
+
+    The idempotency key gained `leg_id` with migration 0017. On
+    `(position_id, event_time)` alone, two legs of one position sharing a
+    root and expiry collapsed to one settlement and the second leg never
+    got one -- the same collision the `event_time` widening (D7-05) fixed
+    for the common case and left standing for the equal-expiry one.
 
     Returned sorted by `(str(position_id), event_time)` so two runs over
     the same input are comparable element-wise.
     """
-    existing_settlement_times = {
-        (event.position_id, event.event_time)
+    existing_settlements = {
+        (event.position_id, event.leg_id, event.event_time)
         for event in events
         if event.event_type == "SETTLEMENT"
     }
@@ -150,10 +162,12 @@ def derive_settlements(
         instant = settlement_instant(contract.expiry, root=leg.root)
         if instant > as_of:
             continue
-        if (leg.position_id, instant) in existing_settlement_times:
+        if (leg.position_id, leg.id, instant) in existing_settlements:
             continue
         drafts.append(
-            DerivedSettlement(position_id=leg.position_id, event_time=instant)
+            DerivedSettlement(
+                position_id=leg.position_id, leg_id=leg.id, event_time=instant
+            )
         )
 
     drafts.sort(key=lambda draft: (str(draft.position_id), draft.event_time))

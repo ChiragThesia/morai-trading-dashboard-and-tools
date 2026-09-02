@@ -759,6 +759,7 @@ async def sync_events(
                 fill_ids_hash=None,
                 open_debit_usd=None,
                 close_credit_usd=None,
+                leg_id=draft.leg_id,
             )
             for draft in settlement_drafts
         )

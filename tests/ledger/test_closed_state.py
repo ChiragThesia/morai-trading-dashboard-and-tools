@@ -82,7 +82,13 @@ def _fill(
     )
 
 
-def _event(*, position_id: UUID, event_type: str, event_time: datetime) -> EventRecord:
+def _event(
+    *,
+    position_id: UUID,
+    event_type: str,
+    event_time: datetime,
+    leg_id: UUID | None = None,
+) -> EventRecord:
     return EventRecord(
         id=uuid4(),
         user_id=_USER_ID,
@@ -94,6 +100,7 @@ def _event(*, position_id: UUID, event_type: str, event_time: datetime) -> Event
         close_credit_usd=None,
         key_version=1,
         rolled_from_position_id=None,
+        leg_id=leg_id,
     )
 
 
@@ -252,6 +259,120 @@ def test_opened_at_treats_a_roll_as_an_opening_event_too() -> None:
     ]
     mixed_state = derive_position_state(position_id, legs, fills, mixed_events)
     assert mixed_state.opened_at == t_open
+
+
+def test_settlement_events_close_the_legs_they_name() -> None:
+    """The Phase 12 defect, as a test. A SETTLEMENT is an `Event`, never a
+    `Fill`, so both legs of an expired calendar keep a non-zero net
+    forever. The nets stay exactly what the fills say -- nothing is
+    written back or zeroed (NN-16) -- and the position is still closed,
+    at the later of the two settlement instants."""
+    position_id = uuid4()
+    front_id, back_id = uuid4(), uuid4()
+    t_open = datetime(2026, 1, 1, tzinfo=UTC)
+    t_front = datetime(2026, 6, 18, 20, tzinfo=UTC)
+    t_back = datetime(2026, 7, 17, 13, 30, tzinfo=UTC)
+    legs = (
+        LegRow(id=front_id, position_id=position_id, occ_symbol="LEGA"),
+        LegRow(id=back_id, position_id=position_id, occ_symbol="LEGB"),
+    )
+    fills = [
+        _fill(
+            occ_symbol="LEGA", side="SELL", quantity=Decimal("1"), execution_time=t_open
+        ),
+        _fill(
+            occ_symbol="LEGB", side="BUY", quantity=Decimal("1"), execution_time=t_open
+        ),
+    ]
+    events = [
+        _event(position_id=position_id, event_type="OPEN", event_time=t_open),
+        _event(
+            position_id=position_id,
+            event_type="SETTLEMENT",
+            event_time=t_front,
+            leg_id=front_id,
+        ),
+        _event(
+            position_id=position_id,
+            event_type="SETTLEMENT",
+            event_time=t_back,
+            leg_id=back_id,
+        ),
+    ]
+
+    state = derive_position_state(position_id, legs, fills, events)
+
+    assert state.is_closed is True
+    assert state.closed_at == t_back
+    assert [leg_net.net_quantity for leg_net in state.leg_nets] == [
+        Decimal("-1"),
+        Decimal("1"),
+    ]
+    assert [leg_net.settled_at for leg_net in state.leg_nets] == [t_front, t_back]
+
+
+def test_front_leg_settled_with_a_live_back_leg_stays_open() -> None:
+    """The normal mid-life state of a calendar: the front expires
+    worthless, the back is still live. Closing the position here would be
+    worse than leaving it open, so only the settled leg carries a
+    `settled_at`."""
+    position_id = uuid4()
+    front_id, back_id = uuid4(), uuid4()
+    t_open = datetime(2026, 1, 1, tzinfo=UTC)
+    t_front = datetime(2026, 6, 18, 20, tzinfo=UTC)
+    legs = (
+        LegRow(id=front_id, position_id=position_id, occ_symbol="LEGA"),
+        LegRow(id=back_id, position_id=position_id, occ_symbol="LEGB"),
+    )
+    fills = [
+        _fill(
+            occ_symbol="LEGA", side="SELL", quantity=Decimal("1"), execution_time=t_open
+        ),
+        _fill(
+            occ_symbol="LEGB", side="BUY", quantity=Decimal("1"), execution_time=t_open
+        ),
+    ]
+    events = [
+        _event(position_id=position_id, event_type="OPEN", event_time=t_open),
+        _event(
+            position_id=position_id,
+            event_type="SETTLEMENT",
+            event_time=t_front,
+            leg_id=front_id,
+        ),
+    ]
+
+    state = derive_position_state(position_id, legs, fills, events)
+
+    assert state.is_closed is False
+    assert state.closed_at is None
+    assert [leg_net.settled_at for leg_net in state.leg_nets] == [t_front, None]
+
+
+def test_a_settlement_naming_no_leg_closes_nothing() -> None:
+    """A SETTLEMENT row written before migration 0017 carries no
+    `leg_id`. It names no leg, so it closes no leg -- an honest gap
+    (NN-16), never an assumption that it must have been one of them."""
+    position_id = uuid4()
+    t_open = datetime(2026, 1, 1, tzinfo=UTC)
+    legs = (LegRow(id=uuid4(), position_id=position_id, occ_symbol="LEGA"),)
+    fills = [
+        _fill(
+            occ_symbol="LEGA", side="SELL", quantity=Decimal("1"), execution_time=t_open
+        )
+    ]
+    events = [
+        _event(
+            position_id=position_id,
+            event_type="SETTLEMENT",
+            event_time=datetime(2026, 6, 18, 20, tzinfo=UTC),
+        )
+    ]
+
+    state = derive_position_state(position_id, legs, fills, events)
+
+    assert state.is_closed is False
+    assert state.leg_nets[0].settled_at is None
 
 
 def test_sign_convention_never_uses_absolute_value() -> None:
