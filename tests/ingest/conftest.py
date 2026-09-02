@@ -62,6 +62,7 @@ __all__ = [
     "clean_identity_tables",
     "clean_ingest_tables",
     "clean_ledger_tables",
+    "clean_reconciliation_tables",
     "clean_snapshot_tables",
     "logged_in_client",
     "provisioned_users",
@@ -120,6 +121,20 @@ async def clean_ingest_tables(
     engine = create_async_engine(get_settings().async_dsn)
     async with engine.begin() as conn:
         await conn.execute(text("TRUNCATE TABLE broker_transactions CASCADE"))
+    await engine.dispose()
+    yield
+
+
+@pytest_asyncio.fixture
+async def clean_reconciliation_tables(
+    clean_ingest_tables: None,
+) -> AsyncGenerator[None, None]:
+    """Truncate `reconciliation_runs` before each db-marked test, on the
+    superuser engine -- same shape as `clean_ingest_tables`/
+    `clean_snapshot_tables`."""
+    engine = create_async_engine(get_settings().async_dsn)
+    async with engine.begin() as conn:
+        await conn.execute(text("TRUNCATE TABLE reconciliation_runs CASCADE"))
     await engine.dispose()
     yield
 

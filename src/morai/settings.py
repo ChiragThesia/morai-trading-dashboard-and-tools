@@ -94,6 +94,20 @@ class Settings(BaseSettings):
     # sync_runs row, not new state.
     schwab_sync_cooldown_seconds: int = 60
 
+    # Phase 9, D9-06/A1: the two keys a live Schwab transaction element is
+    # assumed to carry its signed net cash amount and its commission at.
+    # Neither is verified -- the installed schwab-py 1.5.1 source names
+    # neither anywhere, and this project's own fixtures (`TX_PAYLOAD`,
+    # `tests/ingest/conftest.py`) never populate them. Named, injectable
+    # settings rather than inlined literals, following
+    # `schwab_tx_max_range_days`'s own discipline above: a key that is
+    # absent or unparseable from the real payload makes the affected
+    # reconciliation window `indeterminate` (`D9-08`), never a wrong
+    # number, and the first live payload is the instrument that settles
+    # both values, correcting one place rather than a scattered literal.
+    schwab_tx_net_amount_field: str = "netAmount"
+    schwab_tx_commission_field: str = "commission"
+
     @property
     def schwab_credentials(self) -> SchwabCredentials:
         """Raises before composing anything if any of the three is unset,

@@ -20,15 +20,18 @@ outlives this phase, and a UUID means no sequence to grant.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     LargeBinary,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -715,6 +718,65 @@ class SnapshotRun(Base):
     marks_written: Mapped[int | None] = mapped_column(Integer, nullable=True)
     gaps_by_reason: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
     error_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ReconciliationRun(Base):
+    """One reconciliation verdict for one user's settlement-date
+    trading-day window (Phase 9, migration 0016, `D9-01`..`D9-15`). The
+    core value's own check: realised P&L, net of commissions, equals the
+    broker's own cash delta for that window, or the check honestly could
+    not tell (`indeterminate`, never a fabricated `passed`).
+
+    Append-only, no `_write_token` gate -- `D9-03` makes a reopened
+    window's re-check a new row, never an `UPDATE`, and this table's one
+    writer is `morai.ledger.reconciliation.run_reconciliation`, called
+    from `sync_user`'s own already-guarded `morai_app` session -- never
+    application code directly, the same reasoning `SyncRun`'s own
+    docstring gives for its identical omission.
+
+    Every money column is plaintext `Numeric(14, 4)`, unlike the encrypted
+    trading tables -- these are aggregate operational figures about a
+    check (the same class as `sync_runs`' row counts), not trading data
+    (`D9-13`/assumption A3), and `D9-15` requires the status endpoint to
+    stay a cheap indexed read with no DEK unwrap on every poll.
+    """
+
+    __tablename__ = "reconciliation_runs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    trading_day: Mapped[date] = mapped_column(Date, nullable=False)
+    window_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    window_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    realised_pnl_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 4), nullable=True
+    )
+    commissions_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 4), nullable=True
+    )
+    cash_delta_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 4), nullable=True
+    )
+    signed_difference_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 4), nullable=True
+    )
+    verdict: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_reopening: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

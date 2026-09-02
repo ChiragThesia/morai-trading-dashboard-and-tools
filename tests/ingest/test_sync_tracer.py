@@ -17,7 +17,7 @@ outside `tests/`, so `positions`/`legs`/`events` stayed production-empty.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -29,10 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import morai.worker.app as worker_app
 from morai.crypto.envelope import decrypt_field
-from morai.db.models import BrokerTransaction, Event, Leg, Position
+from morai.db.models import BrokerTransaction, Event, Leg, Position, ReconciliationRun
 from morai.ingest.broker_transactions import (
+    BrokerTransactionWrite,
     _broker_transaction_associated_data,  # pyright: ignore[reportPrivateUsage]  # why: this test decrypts the raw copy back to prove byte-for-byte fidelity with the sent payload -- it needs the exact AAD helper insert_broker_transactions uses, the same convention test_pg_dump_confidentiality.py already uses for ledger.fills._current_dek.
     _current_dek,  # pyright: ignore[reportPrivateUsage]  # why: see _broker_transaction_associated_data above -- same cooperating-test convention.
+    insert_broker_transactions,
 )
 from morai.ledger.fills import read_fills
 from morai.vendor.connections import ConnectionNotFound, upsert_connection
@@ -257,6 +259,104 @@ async def test_sync_user_job_derives_settlement_for_an_expired_open_leg(
         .all()
     )
     assert len(settlement_rows) == 2
+
+
+async def test_sync_user_job_writes_a_reconciliation_run(
+    clean_reconciliation_tables: None,
+    superuser_db_session: AsyncSession,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    tx_fake_auth: TxFakeSchwabAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01, this plan's own repeat of the lesson Phase 7 already taught:
+    `sync_events` shipped fully built, unit-tested, merged, and unreachable
+    in production because `sync_user` never called it. `run_reconciliation`
+    is the identical shape of risk, so this test proves it the identical
+    way -- through the real production call path, deferred by name and
+    drained by a real worker, never by calling `reconcile_window` or
+    `run_reconciliation` directly. A unit test of the pure function cannot
+    catch `sync_user` failing to call `run_reconciliation`, and did not, in
+    Phase 7.
+
+    `TX_PAYLOAD`'s own transaction lands at 2026-06-18T14:30:00+00:00
+    (10:30 ET) -- the trading day its OPEN event belongs to. Seeds one
+    extra broker transaction on a strictly later Eastern trading day,
+    through `insert_broker_transactions` (the real write path, never a
+    test-only fast path), so 2026-06-18 is closed (`D9-02`) and a
+    reconciliation row is actually due once the job runs.
+    """
+    monkeypatch.setattr(worker_app, "get_schwab_auth", lambda: tx_fake_auth)
+    user_id = provisioned_users.user_a
+    await _seed_connection(superuser_db_session, user_id)
+
+    await _set_current_user(app_db_session, user_id)
+    await insert_broker_transactions(
+        app_db_session,
+        user_id,
+        [
+            BrokerTransactionWrite(
+                activity_id="close-window-marker",
+                transaction_type="JOURNAL",
+                transaction_time=datetime(2026, 6, 19, 14, 30, tzinfo=UTC),
+                order_id=None,
+                raw_payload={},
+            )
+        ],
+    )
+    await app_db_session.commit()
+
+    async with app.open_async():
+        job_id = await app.configure_task("sync_user").defer_async(user_id=str(user_id))
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status_after = await app.job_manager.get_job_status_async(job_id)
+        assert status_after is Status.SUCCEEDED
+
+    await _set_current_user(app_db_session, user_id)
+    run_rows = (
+        (
+            await app_db_session.execute(
+                select(ReconciliationRun).where(
+                    ReconciliationRun.user_id == user_id,
+                    ReconciliationRun.trading_day == date(2026, 6, 18),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(run_rows) == 1
+    row = run_rows[0]
+    assert row.verdict in {"passed", "failed", "indeterminate"}
+    if row.verdict == "indeterminate":
+        assert row.reason is not None
+    else:
+        assert row.reason is None
+
+    # Running the same drained job twice writes no second row for an
+    # unchanged window -- the second cycle is a no-op, not a duplicate.
+    async with app.open_async():
+        job_id_2 = await app.configure_task("sync_user").defer_async(
+            user_id=str(user_id)
+        )
+        await asyncio.wait_for(app.run_worker_async(wait=False), timeout=30)
+        status_after_2 = await app.job_manager.get_job_status_async(job_id_2)
+        assert status_after_2 is Status.SUCCEEDED
+
+    await _set_current_user(app_db_session, user_id)
+    run_rows_after_second_cycle = (
+        (
+            await app_db_session.execute(
+                select(ReconciliationRun).where(
+                    ReconciliationRun.user_id == user_id,
+                    ReconciliationRun.trading_day == date(2026, 6, 18),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(run_rows_after_second_cycle) == 1
 
 
 def test_position_and_leg_reject_construction_without_the_write_token() -> None:
