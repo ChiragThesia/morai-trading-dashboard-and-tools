@@ -18,7 +18,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from morai.api.models import ApiModel
+from morai.api.models import ApiModel, DependentNumbersModel
 from morai.api.models_identity import (
     AdminCreateUserRequest,
     AdminCreateUserResponse,
@@ -28,6 +28,7 @@ from morai.api.models_identity import (
     SetupRequest,
     SetupResponse,
 )
+from morai.api.routes_reconciliation import reconciliation_trustworthy
 from morai.db.models import Position, User
 from morai.db.models import Session as SessionRow
 from morai.db.session import get_db_session
@@ -77,7 +78,12 @@ _UUID: TypeAdapter[UUID] = TypeAdapter(UUID)
 _OPTIONAL_STR: TypeAdapter[str | None] = TypeAdapter(str | None)
 
 
-class PositionResponse(ApiModel):
+class PositionResponse(DependentNumbersModel):
+    """`opened_at` is derived from the event stream, not read off a
+    `positions` column (D7-01, D7-04) -- exactly the class of number
+    `RECON-04` is about, which is why this derives from
+    `DependentNumbersModel` rather than `ApiModel` directly (`D9-14`)."""
+
     position_id: UUID
     opened_at: datetime | None
 
@@ -99,13 +105,21 @@ async def list_positions(
     docstring assigned to whatever replaced it (AUTH-07, moved onto real
     trading data in Phase 3); it must not grow into Phase 5's decrypting
     read API.
+
+    `trustworthy` is computed once, from one call to
+    `reconciliation_trustworthy`, not once per position -- this route
+    already loops over positions, and a per-row call would turn one
+    indexed read into N (`D9-15`).
     """
     rows = (await session.execute(select(Position))).scalars().all()
+    trustworthy = await reconciliation_trustworthy(session, user.user_id)
     responses: list[PositionResponse] = []
     for row in rows:
         state = await read_position_state(session, row.id, user.user_id)
         responses.append(
-            PositionResponse(position_id=row.id, opened_at=state.opened_at)
+            PositionResponse(
+                position_id=row.id, opened_at=state.opened_at, trustworthy=trustworthy
+            )
         )
     return responses
 
@@ -120,14 +134,18 @@ async def get_position(
     out by the policy and is therefore *absent* -- so the not-found path is
     reached with no extra code (`02-RESEARCH.md`'s comparison table calls
     this out as falling out of RLS naturally). `opened_at` is derived, same
-    as `list_positions` above (D7-01, D7-04)."""
+    as `list_positions` above (D7-01, D7-04). `trustworthy` is the same one
+    call `list_positions` makes, not a per-row cost."""
     row = (
         await session.execute(select(Position).where(Position.id == position_id))
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="not found")
     state = await read_position_state(session, row.id, user.user_id)
-    return PositionResponse(position_id=row.id, opened_at=state.opened_at)
+    trustworthy = await reconciliation_trustworthy(session, user.user_id)
+    return PositionResponse(
+        position_id=row.id, opened_at=state.opened_at, trustworthy=trustworthy
+    )
 
 
 @router.post("/admin/users")
