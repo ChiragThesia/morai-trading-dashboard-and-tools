@@ -42,7 +42,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 9: Reconciliation Invariant and Status Endpoint** - Realised P&L checked against the broker's cash delta every cycle, and queryable
 - ⏸ **Phase 10: The Pre-commitment Record** — **PARKED 2026-09-02, out of scope**
 - ⏸ **Phase 11: Review API Surface** — **PARKED 2026-09-02, out of scope**
-- ⏸ **Phase 12: Settlement Closes the Position** — **PARKED 2026-09-02**; the underlying defect carries forward into the next milestone, see below
+- ◆ **Phase 12: Settlement Closes the Position** — **UNPARKED 2026-09-02, in progress as a direct fix.** The owner reversed the park the same day: this is journal correctness, not a feature, and a front short put expiring worthless is the normal exit for these calendars. Being fixed as ledger work rather than run as a phase.
 - ⏸ **Phase 13: Re-auth Notification Delivery** — **PARKED 2026-09-02, out of scope**
 
 ### Why these four are parked
@@ -56,11 +56,15 @@ CONTEXT/RESEARCH/PATTERNS/VALIDATION set and three finished plans, and Phases 12
 reasoning behind defects found by the 2026-09-02 re-verification sweep. If the scope widens again,
 none of that has to be rediscovered.
 
-**One defect does NOT get parked with its phase.** Phase 12 existed because `is_closed` reads only
-`FillRecord`s, so a position whose legs expire stays net-nonzero forever — reproduced, not theorised.
-That is a **journal correctness bug**, not a feature: a trader looking at their journal would see
-expired calendars listed as open positions, and `read_open_legs` would keep requesting quotes for
-dead contracts. It belongs to feature 1 and moves to the next milestone's scope.
+**One defect does NOT get parked with its phase — and it was unparked hours later.** Phase 12 existed
+because `is_closed` reads only `FillRecord`s, so a position whose legs expire stays net-nonzero
+forever — reproduced, not theorised. That is a **journal correctness bug**, not a feature: a trader
+looking at their journal would see expired calendars listed as open positions, and `read_open_legs`
+would keep requesting quotes for dead contracts.
+
+The owner reversed the park the same day and it is **being fixed directly** as ledger work rather
+than run as a phase. The Phase 12 section below stays as the spec — its four success criteria are
+what the fix is held to. Phases 10, 11 and 13 remain parked.
 
 ## Phase Details
 
@@ -467,7 +471,7 @@ explicit user decision, so the backend milestone finishes on its existing scope 
 | 9. Reconciliation Invariant and Status Endpoint | 3/3 | Executed | 2026-09-02 |
 | 10. The Pre-commitment Record | 0/TBD | ⏸ Parked | - |
 | 11. Review API Surface | 0/TBD | ⏸ Parked | - |
-| 12. Settlement Closes the Position | 0/TBD | ⏸ Parked | - |
+| 12. Settlement Closes the Position | — | ◆ In progress (direct fix) | - |
 | 13. Re-auth Notification Delivery | 0/TBD | ⏸ Parked | - |
 
 ## Coverage
