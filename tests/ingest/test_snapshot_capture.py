@@ -62,10 +62,13 @@ from morai.ingest.snapshots import (
     SnapshotVendorError,
     capture_all_connected_users,
     capture_user_snapshot,
+    read_open_legs,
     rth_slot_for,
     rth_slots_between,
 )
 from morai.ledger.fills import FillWrite, insert_fills
+from morai.ledger.pairing import sync_events
+from morai.ledger.positions import read_position_state
 from morai.settings import get_settings
 from morai.vendor.connections import upsert_connection
 from morai.vendor.protocol import ExchangedToken, SchwabClient
@@ -1230,3 +1233,69 @@ async def test_periodic_tick_with_no_open_positions_defers_and_writes_nothing(
         ).scalar_one()
     )
     assert count == 0
+
+
+@pytest.mark.db
+async def test_a_settled_leg_leaves_the_open_leg_set_and_the_position_closes(
+    clean_snapshot_tables: None,
+    superuser_db_session: AsyncSession,
+    app_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    """The Phase 12 defect, end to end through the real derivation and
+    the real write path -- no hand-built event rows.
+
+    The seeded position is a calendar: an SPXW front expiring 2026-06-18
+    (PM, 16:00 ET) and an SPX back expiring 2026-07-17 (AM, 09:30 ET).
+    Synced with an `as_of` between the two expiries, only the front
+    settles: the position stays open, and `read_open_legs` returns the
+    back leg alone, so no quote is ever requested for the dead front
+    contract. Synced again past the second expiry, both legs have settled
+    and the position derives closed with a non-null `closed_at` -- from
+    the event stream, with no second writer and no stored status column.
+    """
+    user_id = provisioned_users.user_a
+    front_leg_id, back_leg_id = await _seed_open_position(superuser_db_session, user_id)
+    await _set_current_user(app_db_session, user_id)
+
+    position_id = (
+        await app_db_session.execute(
+            select(Leg.position_id).where(Leg.id == front_leg_id)
+        )
+    ).scalar_one()
+
+    state_before = await read_position_state(app_db_session, position_id, user_id)
+    assert state_before.is_closed is False
+    assert {leg.leg_id for leg in await read_open_legs(app_db_session, user_id)} == {
+        front_leg_id,
+        back_leg_id,
+    }
+
+    # After the front's expiry (2026-06-18 16:00 ET), before the back's.
+    await sync_events(app_db_session, user_id, as_of=datetime(2026, 6, 19, tzinfo=UTC))
+    await app_db_session.commit()
+    await _set_current_user(app_db_session, user_id)
+
+    mid_life = await read_position_state(app_db_session, position_id, user_id)
+    assert mid_life.is_closed is False
+    assert mid_life.closed_at is None
+    assert [leg.leg_id for leg in await read_open_legs(app_db_session, user_id)] == [
+        back_leg_id
+    ]
+
+    # Past the back's expiry too (2026-07-17 09:30 ET).
+    await sync_events(app_db_session, user_id, as_of=datetime(2026, 7, 18, tzinfo=UTC))
+    await app_db_session.commit()
+    await _set_current_user(app_db_session, user_id)
+
+    expired = await read_position_state(app_db_session, position_id, user_id)
+    assert expired.is_closed is True
+    assert expired.closed_at == datetime(2026, 7, 17, 13, 30, tzinfo=UTC)
+    assert await read_open_legs(app_db_session, user_id) == ()
+
+    # Nothing was written back to the fills: the nets still say what was
+    # bought and sold, and the position closed anyway (NN-16).
+    assert sorted(str(leg_net.net_quantity) for leg_net in expired.leg_nets) == [
+        "-1",
+        "1",
+    ]

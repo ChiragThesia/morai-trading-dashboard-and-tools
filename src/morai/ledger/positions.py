@@ -29,6 +29,14 @@ design, the same way `plan_positions` above is recomputed rather than
 cached. Acquiring a stored copy for performance is a decision that has to
 be taken explicitly, not slipped in -- storing it is the exact drift this
 phase exists to prevent (calendar `65aac62e`, ROADMAP criterion 1).
+
+That read model now reads SETTLEMENT events too, and that change was
+taken explicitly. Net quantity comes only from fills, and a settlement is
+not a fill, so a leg that expired stayed net-nonzero forever and its
+position never closed -- a front short put expiring worthless is the most
+common exit these calendars have. `events.leg_id` (migration 0017) is
+what makes the fix a read of the event stream rather than a clock: this
+function takes no `as_of`, and the purity contract is untouched.
 """
 
 from __future__ import annotations
@@ -213,11 +221,19 @@ class LegRow:
 
 @dataclass(frozen=True)
 class LegNet:
-    """One leg's net quantity, signed and gap-honest."""
+    """One leg's net quantity, signed and gap-honest, plus the instant it
+    settled if a SETTLEMENT event names it (migration 0017).
+
+    `settled_at` is not a second opinion about `net_quantity` -- the net
+    stays exactly what the fills say, and an expired leg keeps whatever
+    non-zero net it opened with. The two answer different questions: the
+    net says what was bought and sold, `settled_at` says the contract
+    stopped existing."""
 
     leg_id: UUID
     occ_symbol: str
     net_quantity: Decimal | None
+    settled_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -268,11 +284,26 @@ def derive_position_state(
     is the thin shell that supplies real data.
 
     Computes one `LegNet` per leg by grouping `fills` on `occ_symbol` and
-    calling `net_quantity_for_leg`. Derives `is_closed` as `True` when
-    every leg's net is exactly `Decimal("0")`, `False` when every net is
-    known and at least one is non-zero, and `None` when any leg's net is
-    `None` -- a position with any gapped leg is not reported closed, and
-    is not reported open either (D7-03). Derives `opened_at` from the
+    calling `net_quantity_for_leg`, and reads each leg's `settled_at`
+    from the SETTLEMENT events that name it (`events.leg_id`, migration
+    0017). A leg is closed when it settled *or* its net is exactly
+    `Decimal("0")`; `is_closed` is `True` when every leg is closed,
+    `False` when every leg's state is known and at least one is open, and
+    `None` when any still-unsettled leg's net is `None` -- a position with
+    any gapped leg is not reported closed, and is not reported open either
+    (D7-03).
+
+    Settlement is read from the event stream rather than re-derived from
+    each leg's expiry against a clock, and that is the whole design: this
+    function stays pure, keeps its `AsyncSession`-free/clock-free
+    contract, and its four call sites are unchanged. A leg that expired
+    keeps its non-zero net -- nothing is written back or zeroed (NN-16) --
+    and the position closes anyway, because an expired contract has
+    stopped existing whatever its net says. A SETTLEMENT that names no
+    leg (any row written before 0017) closes no leg: it is a gap, not an
+    assumption about which leg it must have been.
+
+    Derives `opened_at` from the
     earliest `event_time` among events whose `event_type` is `"OPEN"` or
     `"ROLL"` (WR-01, `07-REVIEW.md`) -- a position opened by a ROLL has no
     `"OPEN"` event at all, only the ROLL itself (D7-10: a ROLL hangs on
@@ -285,6 +316,14 @@ def derive_position_state(
     `None` otherwise. `leg_nets` is sorted by `occ_symbol` so two runs are
     comparable element-wise.
     """
+    settled_at_by_leg: dict[UUID, datetime] = {}
+    for event in events:
+        if event.event_type != "SETTLEMENT" or event.leg_id is None:
+            continue
+        earlier = settled_at_by_leg.get(event.leg_id)
+        if earlier is None or event.event_time < earlier:
+            settled_at_by_leg[event.leg_id] = event.event_time
+
     leg_nets = tuple(
         sorted(
             (
@@ -294,6 +333,7 @@ def derive_position_state(
                     net_quantity=net_quantity_for_leg(
                         [fill for fill in fills if fill.occ_symbol == leg.occ_symbol]
                     ),
+                    settled_at=settled_at_by_leg.get(leg.id),
                 )
                 for leg in legs
             ),
@@ -301,11 +341,20 @@ def derive_position_state(
         )
     )
 
-    nets = [leg_net.net_quantity for leg_net in leg_nets]
+    leg_closed = [
+        True
+        if leg_net.settled_at is not None
+        else (
+            None
+            if leg_net.net_quantity is None
+            else leg_net.net_quantity == Decimal("0")
+        )
+        for leg_net in leg_nets
+    ]
     is_closed: bool | None
-    if any(net is None for net in nets):
+    if any(closed is None for closed in leg_closed):
         is_closed = None
-    elif all(net == Decimal("0") for net in nets):
+    elif all(leg_closed):
         is_closed = True
     else:
         is_closed = False

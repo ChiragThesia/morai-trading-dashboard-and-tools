@@ -503,6 +503,14 @@ class Event(Base):
     points back at the closed one, making the newest position in a chain
     its own campaign head.
 
+    `leg_id` (migration 0017) names the leg a SETTLEMENT settles, and is
+    NULL on every other event type -- an implication, not the
+    biconditional `rolled_from_position_id` carries, because a SETTLEMENT
+    written before 0017 has no leg to name. It is the fact that lets
+    `derive_position_state` close an expired leg from the event stream it
+    already reads, with no clock input: a settlement is not a fill, so
+    net quantity alone can never see it.
+
     `morai.ledger.events.insert_events()` is this table's one write path,
     and as of migration 0014 that is enforced the same way `Fill`/
     `Position`/`Leg` already are -- see `__init__` below. This is a
@@ -544,6 +552,9 @@ class Event(Base):
     key_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     rolled_from_position_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("positions.id"), nullable=True
+    )
+    leg_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("legs.id"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

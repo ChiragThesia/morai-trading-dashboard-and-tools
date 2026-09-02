@@ -303,7 +303,11 @@ async def backfill_uncaptured_slot_gaps(
     its `closed_at` is either unknown or not before the slot -- a
     position whose `is_closed` is `None` (a gapped leg) is kept, the same
     reasoning `read_open_legs` already applies: not known closed is not
-    the same as known absent.
+    the same as known absent. A leg is also dropped for every slot after
+    its own `settled_at` (migration 0017), which the position's
+    `closed_at` cannot express while the other leg is still live:
+    back-filling a settled front leg would mint gap rows for a contract
+    that stopped existing, forever.
 
     Queries the existing `(leg_id, slot_time)` pairs in one statement,
     and writes only for a pair with no row of either kind yet. This is
@@ -338,10 +342,20 @@ async def backfill_uncaptured_slot_gaps(
         state = position_states[leg.position_id]
         if state.opened_at is None:
             continue
+        settled_at = next(
+            (
+                leg_net.settled_at
+                for leg_net in state.leg_nets
+                if leg_net.leg_id == leg.id
+            ),
+            None,
+        )
         for slot in slots:
             if state.opened_at > slot:
                 continue
             if state.closed_at is not None and state.closed_at < slot:
+                continue
+            if settled_at is not None and settled_at < slot:
                 continue
             expected_pairs.add((leg.id, slot))
 

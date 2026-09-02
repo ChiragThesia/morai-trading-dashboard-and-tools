@@ -66,6 +66,12 @@ The owner reversed the park the same day and it is **being fixed directly** as l
 than run as a phase. The Phase 12 section below stays as the spec — its four success criteria are
 what the fix is held to. Phases 10, 11 and 13 remain parked.
 
+**Fixed 2026-09-02**, ahead of that milestone. Migration 0017 adds `events.leg_id`, so a SETTLEMENT
+records which leg it settles and `derive_position_state` closes that leg from the event stream it
+already reads — no `as_of` clock input, so the purity contract stands unchanged. Phase 12's
+criteria 1, 2 and 3 are met; its criterion 4 (Phase 10's INTENT-07 at-close capture) stays parked
+with Phase 10.
+
 ## Phase Details
 
 ### Phase 1: Walking Skeleton
