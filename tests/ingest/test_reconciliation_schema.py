@@ -283,6 +283,58 @@ async def test_passed_with_a_missing_amount_is_rejected(
     await superuser_db_session.rollback()
 
 
+async def test_an_unrecognised_reason_is_rejected(
+    clean_reconciliation_tables: None,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    with pytest.raises(IntegrityError) as exc_info:
+        await superuser_db_session.execute(
+            insert(ReconciliationRun).values(
+                user_id=provisioned_users.user_a,
+                trading_day=_TRADING_DAY,
+                window_start=_WINDOW_START,
+                window_end=_WINDOW_END,
+                realised_pnl_usd=None,
+                commissions_usd=None,
+                cash_delta_usd=None,
+                signed_difference_usd=None,
+                verdict="indeterminate",
+                reason="not_a_real_reason",
+                is_reopening=False,
+                checked_at=_CHECKED_AT,
+            )
+        )
+    assert "reconciliation_runs_reason_check" in str(exc_info.value)
+    await superuser_db_session.rollback()
+
+
+async def test_window_end_at_or_before_start_is_rejected(
+    clean_reconciliation_tables: None,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+) -> None:
+    with pytest.raises(IntegrityError) as exc_info:
+        await superuser_db_session.execute(
+            insert(ReconciliationRun).values(
+                user_id=provisioned_users.user_a,
+                trading_day=_TRADING_DAY,
+                window_start=_WINDOW_START,
+                window_end=_WINDOW_START,  # not strictly greater
+                realised_pnl_usd=Decimal("10.0000"),
+                commissions_usd=Decimal("1.0000"),
+                cash_delta_usd=Decimal("9.0000"),
+                signed_difference_usd=Decimal("0.0000"),
+                verdict="passed",
+                reason=None,
+                is_reopening=False,
+                checked_at=_CHECKED_AT,
+            )
+        )
+    assert "reconciliation_runs_window_order_check" in str(exc_info.value)
+    await superuser_db_session.rollback()
+
+
 async def test_an_unrecognised_verdict_is_rejected(
     clean_reconciliation_tables: None,
     superuser_db_session: AsyncSession,
