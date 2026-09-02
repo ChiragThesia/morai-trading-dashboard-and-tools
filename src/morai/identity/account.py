@@ -38,7 +38,11 @@ from morai.db.models import (
     Fill,
     Leg,
     Position,
+    ReconciliationRun,
     SchwabConnection,
+    SnapshotMark,
+    SnapshotObservation,
+    SnapshotRun,
     SyncRun,
 )
 from morai.db.models import Session as SessionRow
@@ -56,19 +60,35 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
        row delete. Every trade row this user ever wrote becomes unreadable
        the instant this statement commits, even if the process crashes
        before any later step runs.
-    2. Trade rows (`events`, `legs`, `positions`, `fills`,
-       `broker_transactions`, children before parents so no foreign key is
-       violated) -- now provably inert ciphertext. Deleted for storage and
-       RLS-simplicity reasons, not for confidentiality; confidentiality was
-       already won by step 1. `broker_transactions` carries an uncascaded
-       `user_id -> users.id` foreign key exactly like `fills` does (D6-02,
-       migration 0011), so it belongs in this same block for the same
-       reason `fills` does -- this file's own docstring already records
-       what happens when a new table with that foreign key is added
-       without doing this.
+    2. Trade rows (`snapshot_marks`, `snapshot_observations`, `events`,
+       `legs`, `positions`, `fills`, `broker_transactions`,
+       `reconciliation_runs`, children before parents so no foreign key is
+       violated) -- now provably inert ciphertext, with one exception named
+       below. Deleted for storage and RLS-simplicity reasons, not for
+       confidentiality; confidentiality was already won by step 1.
+       `broker_transactions` carries an uncascaded `user_id -> users.id`
+       foreign key exactly like `fills` does (D6-02, migration 0011), so it
+       belongs in this same block for the same reason `fills` does -- this
+       file's own docstring already records what happens when a new table
+       with that foreign key is added without doing this.
+
+       The two snapshot tables (D8-01, migration 0015) carry a second
+       uncascaded foreign key, `leg_id -> legs.id`, so they must be deleted
+       **before** `legs`, not merely somewhere in this block. Ordering here
+       is load-bearing twice over, then: once for the crypto-shred, once
+       for this foreign key.
+
+       `reconciliation_runs` (D9-13, migration 0016) is the exception to
+       "confidentiality was already won by step 1". Its four money columns
+       are plaintext `Numeric` on purpose -- the status endpoint has to
+       answer "how far off, and in which direction" without unwrapping a
+       data key -- so step 1 does not make them unreadable. Deleting the
+       row is the only thing that removes a deleted account's realised P&L
+       from the database.
     3. Identity rows (`sessions`, `setup_tokens`, `schwab_connections`,
-       `sync_runs`) -- revokes any live session, any outstanding setup or
-       reset token, and any live Schwab connection for this user (Phase
+       `sync_runs`, `snapshot_runs`) -- revokes any live session, any
+       outstanding setup or reset token, and any live Schwab connection
+       for this user (Phase
        4). A Schwab connection's stored token is a bearer credential
        against a real brokerage account, so removing the row revokes that
        access too -- but exactly as with the trade rows in step 2, the
@@ -77,21 +97,31 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
        `user_id -> users.id` foreign key exactly like `schwab_connections`
        does (Phase 6, migration 0012), and is plaintext operational
        metadata rather than ciphertext, so it belongs in this block for
-       storage reasons, not confidentiality ones. This delete exists so
-       the final `DELETE FROM users` has no dangling child, and for
-       storage, not for confidentiality. See the module docstring for why
-       this step used to also clear `gate_user_scoped_probe`, and no
-       longer needs to.
+       storage reasons, not confidentiality ones. `snapshot_runs` (Phase
+       8, migration 0015) is the same shape as `sync_runs` -- counts, a
+       status and an error code about one capture cycle, no money and no
+       ciphertext -- and belongs here for the identical reason. This
+       delete exists so the final `DELETE FROM users` has no dangling
+       child, and for storage, not for confidentiality. See the module
+       docstring for why this step used to also clear
+       `gate_user_scoped_probe`, and no longer needs to.
     4. `users` itself, last -- every foreign key above points at this row.
     """
     await session.execute(delete(UserDataKey).where(UserDataKey.user_id == user_id))
 
+    await session.execute(delete(SnapshotMark).where(SnapshotMark.user_id == user_id))
+    await session.execute(
+        delete(SnapshotObservation).where(SnapshotObservation.user_id == user_id)
+    )
     await session.execute(delete(Event).where(Event.user_id == user_id))
     await session.execute(delete(Leg).where(Leg.user_id == user_id))
     await session.execute(delete(Position).where(Position.user_id == user_id))
     await session.execute(delete(Fill).where(Fill.user_id == user_id))
     await session.execute(
         delete(BrokerTransaction).where(BrokerTransaction.user_id == user_id)
+    )
+    await session.execute(
+        delete(ReconciliationRun).where(ReconciliationRun.user_id == user_id)
     )
 
     await session.execute(delete(SessionRow).where(SessionRow.user_id == user_id))
@@ -100,5 +130,6 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
         delete(SchwabConnection).where(SchwabConnection.user_id == user_id)
     )
     await session.execute(delete(SyncRun).where(SyncRun.user_id == user_id))
+    await session.execute(delete(SnapshotRun).where(SnapshotRun.user_id == user_id))
 
     await session.execute(delete(User).where(User.id == user_id))
