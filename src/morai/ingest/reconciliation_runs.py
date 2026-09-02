@@ -21,8 +21,14 @@ caller asking "when was I last checked" takes the member with the greatest
 newest row is the newest row for its own window. One query answers both
 questions, which is why there is one function here and not two. Uses
 Postgres's `DISTINCT ON (trading_day)` with `ORDER BY trading_day,
-checked_at DESC` -- exactly `ix_reconciliation_runs_user_id_trading_day_checked_at`'s
+checked_at DESC` -- `ix_reconciliation_runs_user_id_trading_day_checked_at`'s
 own order, which is why this needs no window function and no second index.
+Both this and `read_latest_run_for_trading_day` add `created_at DESC` as a
+final tiebreaker after `checked_at DESC`: nothing in the schema stops two
+rows for the same window from sharing a `checked_at` (no unique constraint
+on `(user_id, trading_day)`, `D9-03`), and without a deterministic
+tiebreaker which row "most recent" means would be whatever order Postgres
+happens to return a tie in.
 
 Both read functions state, as `read_sync_runs` does, that RLS and not a
 `WHERE user_id` clause is what confines the result -- the explicit bind is
@@ -129,7 +135,9 @@ async def read_latest_run_for_trading_day(
                 ReconciliationRun.user_id == user_id,
                 ReconciliationRun.trading_day == trading_day,
             )
-            .order_by(ReconciliationRun.checked_at.desc())
+            .order_by(
+                ReconciliationRun.checked_at.desc(), ReconciliationRun.created_at.desc()
+            )
             .limit(1)
         )
     ).scalar_one_or_none()
@@ -147,7 +155,11 @@ async def read_window_verdicts(
         select(ReconciliationRun)
         .where(ReconciliationRun.user_id == user_id)
         .distinct(ReconciliationRun.trading_day)
-        .order_by(ReconciliationRun.trading_day, ReconciliationRun.checked_at.desc())
+        .order_by(
+            ReconciliationRun.trading_day,
+            ReconciliationRun.checked_at.desc(),
+            ReconciliationRun.created_at.desc(),
+        )
         .subquery()
     )
     windowed = aliased(ReconciliationRun, inner)
