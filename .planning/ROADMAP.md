@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 6: Raw Ingest and Backfill** - Immutable fills and independent broker transactions landing on a schedule, idempotently
 - [x] **Phase 7: Position and Campaign Read Models** - Open/closed state, per-leg settlement, and rolled-position chains computed from events
 - [x] **Phase 8: Snapshot Capture** - Every open position repriced on the 30-minute RTH cadence, with honest gaps and a repair path
-- [ ] **Phase 9: Reconciliation Invariant and Status Endpoint** - Realised P&L checked against the broker's cash delta every cycle, and queryable
+- [x] **Phase 9: Reconciliation Invariant and Status Endpoint** - Realised P&L checked against the broker's cash delta every cycle, and queryable
 - [ ] **Phase 10: The Pre-commitment Record** - What the user said they would do, captured before the position opens and unable to change afterwards
 - [ ] **Phase 11: Review API Surface** - Campaigns, drift, cohort baselines, and lossless export
 
@@ -297,9 +297,9 @@ Plans:
 
 Plans:
 
-- [ ] 09-01-PLAN.md — Wave 1. Tracer: migration 0016, the pure/shell reconciliation pair, the commission read at read-time so the oracle's fee-free fields never move (`D5-04`/`D9-05`), and one real deferred `sync_user` job landing a verdict row under RLS — the CR-01 guard
-- [ ] 09-02-PLAN.md — Wave 2. The arithmetic proven: exact agreement passes, a seeded one-cent discrepancy fails, a four-point sweep rules out any tolerance, all five `indeterminate` causes get their own case, and every instant belongs to exactly one window across both daylight-saving states
-- [ ] 09-03-PLAN.md — Wave 2. `GET /reconciliation/status` as one indexed row read that provably never recomputes, and `trustworthy` carried inside the envelope of every response holding a ledger-derived number
+- [x] 09-01-PLAN.md — Wave 1. Tracer: migration 0016, the pure/shell reconciliation pair, the commission read at read-time so the oracle's fee-free fields never move (`D5-04`/`D9-05`), and one real deferred `sync_user` job landing a verdict row under RLS — the CR-01 guard
+- [x] 09-02-PLAN.md — Wave 2. The arithmetic proven: exact agreement passes, a seeded one-cent discrepancy fails, a four-point sweep rules out any tolerance, all five `indeterminate` causes get their own case, and every instant belongs to exactly one window across both daylight-saving states
+- [x] 09-03-PLAN.md — Wave 2. `GET /reconciliation/status` as one indexed row read that provably never recomputes, and `trustworthy` carried inside the envelope of every response holding a ledger-derived number
 
 **UI hint**: no
 
@@ -385,7 +385,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 6. Raw Ingest and Backfill | 2/3 | In Progress|  |
 | 7. Position and Campaign Read Models | 5/5 | Executed | 2026-09-01 |
 | 8. Snapshot Capture | 4/4 | Executed | 2026-09-01 |
-| 9. Reconciliation Invariant and Status Endpoint | 0/TBD | Not started | - |
+| 9. Reconciliation Invariant and Status Endpoint | 3/3 | Executed | 2026-09-02 |
 | 10. The Pre-commitment Record | 0/TBD | Not started | - |
 | 11. Review API Surface | 0/TBD | Not started | - |
 

@@ -156,6 +156,40 @@ from a development machine and is deferred by explicit user decision (2026-08-31
 | 6 | verification_deferred_human | /gsd-verify-work 6 |
 | 7 | verification_deferred_human | /gsd-verify-work 7 |
 | 8 | verification_deferred_human | /gsd-verify-work 8 |
+| 9 | verification_deferred_human | /gsd-verify-work 9 |
+
+Phase 9's code is complete and all four of its success criteria are verified against live code and a
+live database (659 passed, gate exit 0). Deferred by explicit user decision (2026-09-02) to keep the
+autonomous run moving; `09-VERIFICATION.md` keeps `status: human_needed` and was NOT rewritten to
+`passed`.
+
+**Phase 9 enforces the project's core value**, and `D5-04`'s deferred contradiction is resolved. Phase
+5 recorded that the oracle's fee-free convention (`avgPrice × qty`) and the fee-inclusive cash delta
+could not both be true of the same field, set `commission_usd = None`, and wrote that it did so "so
+Phase 9 does not have to rediscover it." The resolution fills that `None` from the broker's own
+transaction data at reconciliation read-time and leaves every fee-free field on `events` untouched —
+`src/morai/ledger/pairing.py` and `tests/ledger/test_oracle_gate.py` are byte-identical across the
+whole phase, confirmed by `git diff --exit-code`.
+
+Phase 9's two open items both need live Schwab data and are pre-declared Manual-Only in
+`09-VALIDATION.md`:
+
+1. **The real `netAmount` / commission field names.** `schwab-py` 1.5.1's installed source contains
+   zero references to `netAmount`, `fees` or `commission`, and this project's fixtures never populate
+   them. The names live in injectable settings (`schwab_tx_net_amount_field`,
+   `schwab_tx_commission_field`), not inlined literals, so the first live payload corrects them in
+   one place.
+2. **Whether an OTM SETTLEMENT posts its own broker-cash row.** Unknown without live data.
+
+Both degrade to `indeterminate`, never a false `passed` (`D9-08`, `D9-11`) — a wrong guess cannot
+produce a wrong number, only an unanswerable window.
+
+**A blocker found and fixed during review, worth remembering:** `closed_trading_days` originally
+derived candidate windows from broker-cash days alone, so a trading day whose only activity was a
+ledger event — an OTM expiration's SETTLEMENT with no same-day broker transaction — was never
+reconciled at all. Not failed, not indeterminate: silently skipped, against a phase goal of "checked
+every ingest cycle." Candidate days are now the union of event days and broker-cash days, while
+closure stays broker-driven per `D9-02`.
 
 Phase 8's code is complete and all five of its success criteria are verified against live code and
 a live database (587 passed, gate exit 0). Deferred by explicit user decision (2026-09-01) to keep
