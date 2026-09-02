@@ -48,6 +48,7 @@ from pydantic import ValidationError
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from morai.crypto.data_keys import DataKeyMissing
 from morai.db.models import SnapshotRun
 from morai.ingest.snapshots import rth_slots_between
 from morai.vendor.connections import ConnectionDataKeyMissing, ConnectionNotFound
@@ -93,6 +94,13 @@ def _classify_by_type_and_status(exc: BaseException) -> SnapshotError | None:
     if isinstance(exc, ConnectionNotFound):
         return SnapshotError.CONNECTION_NOT_FOUND
     if isinstance(exc, ConnectionDataKeyMissing):
+        return SnapshotError.DATA_KEY_MISSING
+    # WR-02 (08-review-fix): current_dek/dek_for_version (morai.crypto.data_keys)
+    # now raise this module's own DataKeyMissing for the identical
+    # crypto-shredded shape ConnectionDataKeyMissing already covers above --
+    # same cause, same classification, so a real (non-gap) write hitting a
+    # missing DEK reports data_key_missing instead of collapsing to unknown.
+    if isinstance(exc, DataKeyMissing):
         return SnapshotError.DATA_KEY_MISSING
     if isinstance(exc, ValidationError):
         return SnapshotError.VENDOR_PAYLOAD_UNPARSEABLE

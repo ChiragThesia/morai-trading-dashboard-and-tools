@@ -33,6 +33,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import morai.worker.app as worker_app
+from morai.crypto.data_keys import DataKeyMissing
 from morai.db.models import SnapshotMark
 from morai.ingest.snapshot_repair import backfill_uncaptured_slot_gaps
 from morai.ingest.snapshot_runs import (
@@ -334,6 +335,19 @@ def _status_error(status_code: int) -> HTTPStatusError:
     request = Request("GET", "https://api.schwabapi.com/marketdata/v1/quotes")
     response = Response(status_code, request=request)
     return HTTPStatusError("vendor error", request=request, response=response)
+
+
+def test_classify_snapshot_error_maps_data_keys_missing_to_data_key_missing() -> None:
+    """WR-02 follow-up: `current_dek`/`dek_for_version`
+    (`morai.crypto.data_keys`) now raise this module's own `DataKeyMissing`
+    for the same crypto-shredded shape `ConnectionDataKeyMissing` already
+    covers -- a real (non-gap) write hitting a genuinely missing DEK must
+    classify as `DATA_KEY_MISSING`, not collapse to `UNKNOWN` (`L042`/`L043`:
+    a stalled job and a classified failure must not look identical)."""
+    assert (
+        classify_snapshot_error(DataKeyMissing("shredded"))
+        == SnapshotError.DATA_KEY_MISSING
+    )
 
 
 def test_classify_snapshot_error_maps_seven_distinct_classes() -> None:
