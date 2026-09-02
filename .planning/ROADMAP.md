@@ -318,7 +318,13 @@ Plans:
   3. At close the user records plan-followed yes or no plus one sentence, and the close is not complete without it.
   4. A tag outside the closed vocabulary of four is rejected, and a free-text value submitted into a tag field is rejected rather than stored.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Tracer: one pre-commitment recorded over HTTP, encrypted, linked, and frozen by a trigger (INTENT-01..06)
+- [ ] 10-02-PLAN.md — The close record, its service-layer gate, and the outstanding-note obligation on the envelope (INTENT-07, INTENT-08)
+- [ ] 10-03-PLAN.md — The `entry_trigger` vocabulary, blocked on developer input (INTENT-08)
+
 **UI hint**: no
 
 ### Phase 11: Review API Surface
