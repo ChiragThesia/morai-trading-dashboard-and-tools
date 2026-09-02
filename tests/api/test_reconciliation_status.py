@@ -40,6 +40,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import BaseRoute
 
+from morai.api.models import DependentNumbersModel
+from morai.api.routes_identity import PositionResponse
 from morai.api.routes_reconciliation import ReconciliationStatusResponse
 from morai.ingest.reconciliation_runs import record_reconciliation_run
 from morai.ledger.reconciliation import (
@@ -48,8 +50,13 @@ from morai.ledger.reconciliation import (
     ReconciliationVerdict,
 )
 from tests.identity.conftest import SeededUsers
+from tests.ledger.conftest import SeededPosition
 
 pytestmark = pytest.mark.db
+
+_POSITION_LIST: TypeAdapter[list[PositionResponse]] = TypeAdapter(
+    list[PositionResponse]
+)
 
 # Repo-root-relative, resolved from this file's own location -- robust
 # regardless of the process cwd (`tests/conftest.py`'s own
@@ -616,3 +623,167 @@ def test_reconciliation_standing_makes_exactly_one_awaited_read() -> None:
     )
     awaits = [n for n in ast.walk(fn) if isinstance(n, ast.Await)]
     assert len(awaits) == 1, len(awaits)
+
+
+# =========================================================================
+# Task 2: every response carrying a ledger-derived number says whether to
+# trust it (`D9-14`, `/gate/positions`, `/gate/positions/{position_id}`).
+# =========================================================================
+
+
+# --- Test 1 (task 2) -----------------------------------------------------
+
+
+async def test_positions_list_carries_trustworthy_false_while_latest_verdict_failed(
+    logged_in_client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    await _seed_failed(
+        superuser_db_session,
+        provisioned_users.user_a,
+        trading_day=date(2026, 6, 18),
+        checked_at=datetime(2026, 6, 18, 20, 0, tzinfo=UTC),
+        difference=Decimal("0.0100"),
+    )
+    response = await logged_in_client.get("/gate/positions")
+    assert response.status_code == 200
+    rows = _POSITION_LIST.validate_json(response.content)
+    assert rows
+    assert all(row.trustworthy is False for row in rows)
+
+
+# --- Test 2 (task 2) -----------------------------------------------------
+
+
+async def test_positions_list_carries_trustworthy_true_once_latest_verdict_passed(
+    logged_in_client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    await _seed_passed(
+        superuser_db_session,
+        provisioned_users.user_a,
+        trading_day=date(2026, 6, 18),
+        checked_at=datetime(2026, 6, 18, 20, 0, tzinfo=UTC),
+    )
+    response = await logged_in_client.get("/gate/positions")
+    assert response.status_code == 200
+    rows = _POSITION_LIST.validate_json(response.content)
+    assert rows
+    assert all(row.trustworthy is True for row in rows)
+
+
+# --- Test 3 (task 2) -----------------------------------------------------
+
+
+async def test_positions_list_carries_trustworthy_false_with_no_reconciliation_run(
+    logged_in_client: AsyncClient,
+    seeded_position: SeededPosition,
+) -> None:
+    """A position rendered before the ledger was ever checked is not
+    certified."""
+    response = await logged_in_client.get("/gate/positions")
+    assert response.status_code == 200
+    rows = _POSITION_LIST.validate_json(response.content)
+    assert rows
+    assert all(row.trustworthy is False for row in rows)
+
+
+# --- Test 4 (task 2) -----------------------------------------------------
+
+
+async def test_positions_list_carries_trustworthy_false_while_indeterminate(
+    logged_in_client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    await _seed_indeterminate(
+        superuser_db_session,
+        provisioned_users.user_a,
+        trading_day=date(2026, 6, 18),
+        checked_at=datetime(2026, 6, 18, 20, 0, tzinfo=UTC),
+    )
+    response = await logged_in_client.get("/gate/positions")
+    assert response.status_code == 200
+    rows = _POSITION_LIST.validate_json(response.content)
+    assert rows
+    assert all(row.trustworthy is False for row in rows)
+
+
+# --- Test 5 (task 2) -----------------------------------------------------
+
+
+async def test_position_detail_matches_list_trustworthy_value(
+    logged_in_client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    await _seed_failed(
+        superuser_db_session,
+        provisioned_users.user_a,
+        trading_day=date(2026, 6, 18),
+        checked_at=datetime(2026, 6, 18, 20, 0, tzinfo=UTC),
+        difference=Decimal("0.0100"),
+    )
+    list_response = await logged_in_client.get("/gate/positions")
+    list_rows = _POSITION_LIST.validate_json(list_response.content)
+    matching = next(
+        row for row in list_rows if row.position_id == seeded_position.position_id
+    )
+
+    detail_response = await logged_in_client.get(
+        f"/gate/positions/{seeded_position.position_id}"
+    )
+    assert detail_response.status_code == 200
+    detail_row = PositionResponse.model_validate_json(detail_response.content)
+    assert detail_row.trustworthy == matching.trustworthy
+
+
+# --- Test 6 (task 2) -----------------------------------------------------
+
+
+async def test_positions_trustworthy_is_computed_from_the_callers_own_runs(
+    logged_in_client: AsyncClient,
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    """User A failing does not mark user B untrustworthy, and the reverse:
+    user B's failure never leaks into user A's own `trustworthy` value."""
+    await _seed_failed(
+        superuser_db_session,
+        provisioned_users.user_b,
+        trading_day=date(2026, 6, 18),
+        checked_at=datetime(2026, 6, 18, 20, 0, tzinfo=UTC),
+        difference=Decimal("0.0500"),
+    )
+    await _seed_passed(
+        superuser_db_session,
+        provisioned_users.user_a,
+        trading_day=date(2026, 6, 18),
+        checked_at=datetime(2026, 6, 18, 20, 0, tzinfo=UTC),
+    )
+    response = await logged_in_client.get("/gate/positions")
+    assert response.status_code == 200
+    rows = _POSITION_LIST.validate_json(response.content)
+    assert rows
+    assert all(row.trustworthy is True for row in rows)
+
+
+# --- Test 7 (task 2) -----------------------------------------------------
+
+
+def test_ledger_derived_response_models_derive_from_dependent_numbers_model() -> None:
+    """Checked programmatically, by name, rather than by eye -- a check
+    that tried to infer "ledger-derived" from a field name would pass
+    vacuously the day someone names a field differently. The next author
+    adding a review-surface response (Phase 11) extends this list."""
+    assert issubclass(PositionResponse, DependentNumbersModel)
+    assert issubclass(ReconciliationStatusResponse, DependentNumbersModel)
+    assert "trustworthy" in PositionResponse.model_fields
+    assert "trustworthy" in ReconciliationStatusResponse.model_fields

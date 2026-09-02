@@ -26,6 +26,7 @@ from tests.ingest.conftest import (
     clean_reconciliation_tables,
     logged_in_client,
     provisioned_users,
+    seeded_position,
     seeded_users,
     superuser_db_session,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "clean_reconciliation_tables",
     "logged_in_client",
     "provisioned_users",
+    "seeded_position",
     "seeded_users",
     "superuser_db_session",
 ]
