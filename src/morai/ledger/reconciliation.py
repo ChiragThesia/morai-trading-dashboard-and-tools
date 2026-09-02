@@ -182,8 +182,14 @@ def closed_trading_days(
     stays broker-driven, per `D9-02`: a day closes only once it is strictly
     earlier than the newest day observed in `broker_cash` -- the broker's
     own later activity, not an event, is the evidence a prior day is final.
-    Returns every such day, sorted ascending; empty when `broker_cash` has
-    observed zero or one day, since closure has nothing to anchor to yet.
+    Returns every such day, sorted ascending; empty only when `broker_cash`
+    has observed no day at all, since closure then has nothing to anchor
+    to. A *single* observed broker day still closes every earlier
+    event-only day -- that one transaction is itself the later broker
+    activity `D9-02` asks for. (Before CR-01 the candidate set was
+    `broker_cash` alone, so one observed day did close nothing; that is no
+    longer true, and `test_an_event_only_day_becomes_a_candidate_and_closes`
+    pins the difference with exactly one broker day.)
 
     Market holidays and weekends need no calendar: a day with no activity
     on either side never enters the candidate set, so no window ever has
